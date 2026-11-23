@@ -111,10 +111,17 @@ struct Outcome {
 }
 
 fn run(quantum: usize, blocks: bool, windows: &[u64]) -> Outcome {
-    run_with(quantum, blocks, windows, false, true)
+    run_with(quantum, blocks, windows, false, true, ExecutionPolicy::Exact)
 }
 
-fn run_with(quantum: usize, blocks: bool, windows: &[u64], stable: bool, fast_forward: bool) -> Outcome {
+fn run_with(
+    quantum: usize,
+    blocks: bool,
+    windows: &[u64],
+    stable: bool,
+    fast_forward: bool,
+    policy: ExecutionPolicy,
+) -> Outcome {
     use factory::*;
     let arm32 = |r| Register::Arm32(fujimod_emulator_cpu::arm::Register::R(r));
     let graph = Graph {
@@ -161,6 +168,7 @@ fn run_with(quantum: usize, blocks: bool, windows: &[u64], stable: bool, fast_fo
             None,
         )
         .unwrap();
+    board.set_execution_policy(policy).unwrap();
     board.set_block_execution(blocks);
     board.set_poll_loops(fast_forward);
     let words = |words: &[u32]| words.iter().flat_map(|w| w.to_le_bytes()).collect::<Vec<_>>();
@@ -224,7 +232,7 @@ fn a_poll_loop_on_a_stable_register_is_fast_forwarded_with_the_same_result() {
     for quantum in [1, 7, 100] {
         let reference = run(quantum, false, &[5000]);
         for windows in [&[5000][..], &[333, 334, 2111, 5000][..], &[1, 2, 3, 4, 5, 6, 7, 5000][..]] {
-            let got = run_with(quantum, true, windows, true, true);
+            let got = run_with(quantum, true, windows, true, true, ExecutionPolicy::Exact);
             assert_eq!(got.registers, reference.registers, "quantum {quantum}");
             assert!(got.state == reference.state, "quantum {quantum}: board state differs");
             // Every read counts as serviced; the device served a few per wait.
@@ -238,7 +246,7 @@ fn a_poll_loop_on_a_stable_register_is_fast_forwarded_with_the_same_result() {
             );
             // Switched off, or with the instruction observer, every read is served.
             for (blocks, fast_forward) in [(true, false), (false, true)] {
-                let all = run_with(quantum, blocks, windows, true, fast_forward);
+                let all = run_with(quantum, blocks, windows, true, fast_forward, ExecutionPolicy::Exact);
                 assert!(all.state == reference.state);
                 assert_eq!((all.served, all.left_out), (reference.served, 0));
                 // The portable checkpoint is the same bytes with and without
@@ -249,6 +257,18 @@ fn a_poll_loop_on_a_stable_register_is_fast_forwarded_with_the_same_result() {
             }
         }
     }
+}
+
+#[test]
+fn interactive_stable_poll_preserves_the_checkpoint_and_read_count() {
+    let windows = &[333, 334, 2111, 5000];
+    let policy = ExecutionPolicy::Interactive;
+    let reference = run_with(100, true, windows, true, false, policy);
+    let accelerated = run_with(100, true, windows, true, true, policy);
+    assert!(accelerated.left_out > 0);
+    assert_eq!(accelerated.accesses, reference.accesses);
+    assert_eq!(accelerated.served + accelerated.left_out, reference.served);
+    assert!(accelerated.checkpoint == reference.checkpoint);
 }
 
 /// An AArch64 processor polls the same device through a read helper:

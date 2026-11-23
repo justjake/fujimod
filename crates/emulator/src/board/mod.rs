@@ -1794,9 +1794,6 @@ impl Board {
         if fast && let Some(profile) = s.mprofile[core].as_mut() {
             profile.watch_reservations();
         }
-        let poll_enabled = wanted
-            && s.execution_policy == ExecutionPolicy::Exact
-            && self.poll_loops.get();
         let blocks = s.blocks[core].as_mut().unwrap();
         blocks.active = wanted;
         blocks.fast_stores = fast;
@@ -1809,7 +1806,7 @@ impl Board {
         blocks.resume = false;
         // Anything may have happened since the last run.
         blocks.poll = None;
-        blocks.poll_enabled = poll_enabled;
+        blocks.poll_enabled = wanted && self.poll_loops.get();
         Ok(wanted)
     }
     /// Discard a processor's translations when its instruction observer
