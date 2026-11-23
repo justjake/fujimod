@@ -2,6 +2,7 @@ import { getRequestEvent } from '@solidjs/web';
 import { For } from 'solid-js';
 import { SiteFrame } from '../ui/SiteFrame';
 import { DocsLayout } from './DocsLayout';
+import { ManualSearch } from './ManualSearch';
 import { ManualFeature } from './ManualFeature';
 import { ManualMenus } from './ManualMenus';
 import { manualChapters, manualPageAt } from './manual-data';
@@ -59,7 +60,7 @@ export default function Manual() {
         chapters={sidebar}
         path={canonical}
         index={{ title: 'Menu index', href: manualMenus }}
-        searchLabel="Search the manual"
+        search={<ManualSearch label="Search the manual" />}
       >
         {canonical === manualMenus ? (
           <ManualMenus />
