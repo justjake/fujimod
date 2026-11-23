@@ -128,10 +128,8 @@ impl Engine {
         let origin = self.state.idle_since?;
         self.at(origin, self.cycles(32).ok()?).ok()
     }
-    fn advance(&mut self, now: u64) -> Result<bool, String> {
-        let mut changed = false;
+    fn advance(&mut self, now: u64) -> Result<(), String> {
         while self.state.pending.as_ref().is_some_and(|p| p.at <= now) {
-            changed = true;
             let pending = self.state.pending.take().unwrap();
             let word = match pending.token {
                 Some(token) => match self.wire.finish(token, pending.frame, pending.at) {
@@ -155,9 +153,8 @@ impl Engine {
         }
         if self.timeout_at().is_some_and(|at| at <= now) {
             self.state.timeout = true;
-            changed = true;
         }
-        Ok(changed)
+        Ok(())
     }
     fn ris(&self) -> u8 {
         u8::from(self.state.overrun)
@@ -419,10 +416,8 @@ impl Controller {
         let offset = address.checked_sub(self.base)?;
         (matches!(size, 2 | 4) && offset <= 0x24 && offset & 3 == 0).then_some(offset)
     }
-    fn publish(&self, e: &mut Engine, cx: &mut Cx<'_>, registers_changed: bool) {
-        if registers_changed {
-            e.publish_registers();
-        }
+    fn publish(&self, e: &mut Engine, cx: &mut Cx<'_>) {
+        e.publish_registers();
         let high = e.irq();
         if high == e.state.irq_published {
             return;
@@ -448,12 +443,8 @@ impl Device for Controller {
             return 0;
         };
         let mut e = self.engine.lock().unwrap();
-        let advance = e.advance(cx.now());
-        // The data register consumes an RX word. Other reads leave the
-        // published registers as advance left them.
-        let registers_changed = offset == 8 || !matches!(advance, Ok(false));
-        let result = advance.and_then(|_| e.read(offset, cx.now()));
-        self.publish(&mut e, cx, registers_changed);
+        let result = e.advance(cx.now()).and_then(|_| e.read(offset, cx.now()));
+        self.publish(&mut e, cx);
         match result {
             Ok(value) => value,
             Err(error) => {
@@ -471,19 +462,17 @@ impl Device for Controller {
         let result = e
             .advance(cx.now())
             .and_then(|_| e.write(offset, value, cx.now()));
-        self.publish(&mut e, cx, true);
+        self.publish(&mut e, cx);
         if let Err(error) = result {
             cx.unsupported(error);
         }
     }
     fn advance(&mut self, cx: &mut Cx<'_>) {
         let mut e = self.engine.lock().unwrap();
-        let advance = e.advance(cx.now());
-        let registers_changed = !matches!(advance, Ok(false));
-        if let Err(error) = advance {
+        if let Err(error) = e.advance(cx.now()) {
             cx.unsupported(error);
         }
-        self.publish(&mut e, cx, registers_changed);
+        self.publish(&mut e, cx);
     }
     fn next_deadline(&self, now: u64) -> Option<u64> {
         self.engine.lock().unwrap().next(now)
