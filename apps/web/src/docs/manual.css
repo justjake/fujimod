@@ -271,3 +271,17 @@
     padding-left: 12px;
   }
 }
+
+/* The setting a link or search result opened. */
+.manual-entry:target {
+  animation: manual-target 1.6s ease-out;
+}
+
+@keyframes manual-target {
+  from {
+    background: rgb(10 132 255 / 0.22);
+  }
+  to {
+    background: transparent;
+  }
+}
