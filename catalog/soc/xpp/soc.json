@@ -368,7 +368,17 @@
       "base": 4026531840,
       "size": 268435456,
       "kind": "address-window",
-      "clock_id": null
+      "clock_id": null,
+      "views": [
+        {
+          "core": "core0",
+          "address": 4026531840
+        },
+        {
+          "core": "core1",
+          "address": 4026531840
+        }
+      ]
     },
     {
       "id": "dram-controller-1",
@@ -571,18 +581,6 @@
     }
   ],
   "decoders": [],
-  "peripherals": [
-    {
-      "core": "core0",
-      "block_id": "peripheral-window-f0000000",
-      "address": 4026531840
-    },
-    {
-      "core": "core1",
-      "block_id": "peripheral-window-f0000000",
-      "address": 4026531840
-    }
-  ],
   "reset": {
     "release": null,
     "coprocessor_writes": []
@@ -960,7 +958,14 @@
             "basis": "Twelve-channel ADC with the X-T20 2.11 kernel contract (0x5ac00..0x5adf8): control +0 with start bit 0, continuous-mode bit 1 and channel enables in bits 16-25, clock divider +4, and 10-bit results at +0x10 + 4*channel. Reader 0x5ad8c requires bit 0 and the channel enable; a single conversion clears bit 0 when done (stage 2 0x13d8 waits for it). The conversion clock is unmeasured; sample_ticks is a declared input."
           },
           "display_frames": {
-            "irq_routes": [112, 113, 114, 117, 118, 119],
+            "irq_routes": [
+              112,
+              113,
+              114,
+              117,
+              118,
+              119
+            ],
             "period_ticks": 800000,
             "basis": "Frame interrupts of the display controller, as an interrupt law without its registers. Seg5 source table 0xed4720 rows 73-78 connect lines 112-114 and 117-119 (edge) to handlers that run the callbacks queued by 0xc9dc38 for output 0 or 1 and event 0-2 (0xc9d854, 0xc9d994); the handlers read no controller register. The X-T20 2.11 vglib thread clears bit 16 of 0xfff65000 or 0xfff5a000, queues such a callback and yields at priority 7 until it runs (0xcad290), which starves flashload before section 7 loads. The period is an assumed 60 Hz in 48 MHz timer ticks (the 10 ms system tick reloads 480000); the panel rate is not measured."
           },
@@ -1016,12 +1021,30 @@
               "base": 4293980160,
               "size": 4096,
               "idle_bits": [
-                { "offset": 332, "mask": 8 },
-                { "offset": 1556, "mask": 3801088 }
+                {
+                  "offset": 332,
+                  "mask": 8
+                },
+                {
+                  "offset": 1556,
+                  "mask": 3801088
+                }
               ],
               "commands": [
-                { "word": 184, "value": 1778516482, "status": 188, "mask": 63, "state": 39 },
-                { "word": 184, "value": 16908802, "status": 188, "mask": 63, "state": 32 }
+                {
+                  "word": 184,
+                  "value": 1778516482,
+                  "status": 188,
+                  "mask": 63,
+                  "state": 39
+                },
+                {
+                  "word": 184,
+                  "value": 16908802,
+                  "status": 188,
+                  "mask": 63,
+                  "state": 32
+                }
               ],
               "basis": "Second DRAM controller of X-T20 2.11 section 5: start-up waits for +0x14c bit 3 (done) and reads the calibration result 0x3a from +0x614 bits 23:16. After a still, reccont (0xc6c64c) writes +0xb8 = 0x6a020202 and waits for +0xbc bits 5..0 = 0x27, and 0xc6c700 writes 0x01020202 and waits for 0x20; these are the only +0xb8 commands (REC deinit and re-init). What the states mean is not known."
             },
@@ -1112,8 +1135,14 @@
                 }
               ],
               "frames": {
-                "start": { "offset": 200, "mask": 268435456 },
-                "stopped": { "offset": 216, "mask": 256 },
+                "start": {
+                  "offset": 200,
+                  "mask": 268435456
+                },
+                "stopped": {
+                  "offset": 216,
+                  "mask": 256
+                },
                 "irq_route": 107,
                 "period_ticks": 800000
               },
@@ -1129,8 +1158,14 @@
                 }
               ],
               "frames": {
-                "start": { "offset": 200, "mask": 268435456 },
-                "stopped": { "offset": 216, "mask": 256 },
+                "start": {
+                  "offset": 200,
+                  "mask": 268435456
+                },
+                "stopped": {
+                  "offset": 216,
+                  "mask": 256
+                },
                 "irq_route": 108,
                 "period_ticks": 800000
               },
@@ -1140,16 +1175,28 @@
               "base": 4294434816,
               "size": 4096,
               "idle_bits": [
-                { "offset": 0, "mask": 2147483648 }
+                {
+                  "offset": 0,
+                  "mask": 2147483648
+                }
               ],
               "job": {
-                "start": { "offset": 0, "mask": 1 },
-                "status": { "offset": 32, "mask": 1 },
+                "start": {
+                  "offset": 0,
+                  "mask": 1
+                },
+                "status": {
+                  "offset": 32,
+                  "mask": 1
+                },
                 "irq_route": 127,
                 "ticks": 144000
               },
               "fixed_words": [
-                { "offset": 28, "value": 16777472 }
+                {
+                  "offset": 28,
+                  "value": 16777472
+                }
               ],
               "basis": "Still development engine of X-T20 2.11 (step marker 0x06023300): started by +0x00 bit 0, finishes with status +0x20 bit 0 and interrupt 127; +0x00 bit 31 reads set when idle and +0x1c reads 0x01000100 (ready). run ticks are xpro-lab's 3 ms engine step. The engine computes nothing; its buffers come from RAM job descriptors that are not decoded."
             },
@@ -1167,8 +1214,14 @@
                 }
               ],
               "job": {
-                "start": { "offset": 4, "mask": 1 },
-                "status": { "offset": 68, "mask": 1 },
+                "start": {
+                  "offset": 4,
+                  "mask": 1
+                },
+                "status": {
+                  "offset": 68,
+                  "mask": 1
+                },
                 "irq_route": 128,
                 "ticks": 880000
               },
@@ -1178,11 +1231,20 @@
               "base": 4294541312,
               "size": 4096,
               "idle_bits": [
-                { "offset": 0, "mask": 1 }
+                {
+                  "offset": 0,
+                  "mask": 1
+                }
               ],
               "job": {
-                "start": { "offset": 4, "mask": 5 },
-                "stop": { "offset": 0, "mask": 1 },
+                "start": {
+                  "offset": 4,
+                  "mask": 5
+                },
+                "stop": {
+                  "offset": 0,
+                  "mask": 1
+                },
                 "irq_route": 130,
                 "ticks": 144000
               },
@@ -1246,12 +1308,24 @@
               "base": 4294717440,
               "size": 4096,
               "idle_bits": [
-                { "offset": 0, "mask": 1 },
-                { "offset": 220, "mask": 16777472 }
+                {
+                  "offset": 0,
+                  "mask": 1
+                },
+                {
+                  "offset": 220,
+                  "mask": 16777472
+                }
               ],
               "job": {
-                "start": { "offset": 4, "mask": 1 },
-                "status": { "offset": 220, "mask": 1 },
+                "start": {
+                  "offset": 4,
+                  "mask": 1
+                },
+                "status": {
+                  "offset": 220,
+                  "mask": 1
+                },
                 "irq_route": 131,
                 "ticks": 144000
               },
@@ -1261,12 +1335,24 @@
               "base": 4294721536,
               "size": 4096,
               "idle_bits": [
-                { "offset": 0, "mask": 268435456 },
-                { "offset": 60, "mask": 1048576 }
+                {
+                  "offset": 0,
+                  "mask": 268435456
+                },
+                {
+                  "offset": 60,
+                  "mask": 1048576
+                }
               ],
               "job": {
-                "start": { "offset": 0, "mask": 1 },
-                "status": { "offset": 60, "mask": 1 },
+                "start": {
+                  "offset": 0,
+                  "mask": 1
+                },
+                "status": {
+                  "offset": 60,
+                  "mask": 1
+                },
                 "irq_route": 132,
                 "ticks": 144000
               },
@@ -1276,8 +1362,14 @@
               "base": 4294787072,
               "size": 4096,
               "idle_bits": [
-                { "offset": 0, "mask": 1 },
-                { "offset": 136, "mask": 65537 }
+                {
+                  "offset": 0,
+                  "mask": 1
+                },
+                {
+                  "offset": 136,
+                  "mask": 65537
+                }
               ],
               "basis": "Unit at 0xfffd4000 of X-T20 2.11 section 6: a field-writer family covers +0x000..+0x098 (0x155d7c4 writes +0x00 bit 0, then 0x155d820..0x155e158 write +0x004, +0x008, +0x010..+0x02c, +0x040..+0x06c and +0x080..+0x098 with 14-, 3- and 1-bit fields). Three words are read only as status: +0x088 (0x155df64 takes bits 20..21, 16, 4..5 and 0), +0x090 (0x155dfa0) and +0x094 (0x155e09c), six flags each. The recording pipeline enters it through 0x155d16c (callers 0x1615ce4 and 0x16b1b7c), which first calls 0x155d0ec: that writes the +0x00 bit and polls it through 0x155d7f8 until it reads 1. 0x155d40c then polls +0x088 through 0x155df64 until bit 0 and bit 16 both read 1. The AUTO position of the auto mode selector lever is one path into this call chain (strict graph board, 2026-11-04). Its name and what it computes are unknown. The words read back their last write and start at 0; +0x00 bit 0 and +0x088 bits 0 and 16 are the only status bits the driver waits for and are declared idle. No interrupt, DMA or data is modeled."
             },
@@ -1285,7 +1377,10 @@
               "base": 4294430720,
               "size": 4096,
               "idle_bits": [
-                { "offset": 0, "mask": 1 }
+                {
+                  "offset": 0,
+                  "mask": 1
+                }
               ],
               "basis": "Unit at 0xfff7d000 of X-T20 2.11 section 6: the driver's stop 0x156704c writes 0 to +0x00 and polls +0x00 through 0x1567064 until it reads 1, and 0x156707c follows it. The unit is stopped inside the section-6 worker whose state block is 0x1a5c444 (0x1566d6c from 0x16b2aa4 and 0x1566f54 from 0x16b2adc); moving the auto mode selector lever to AUTO stops it (strict graph board, 2026-11-04). Its name and what it computes are unknown. The words read back their last write and start at 0; +0x00 bit 0 is the only status bit seen waited for and is declared idle. No interrupt, DMA or data is modeled."
             }
@@ -1371,7 +1466,10 @@
             "base": 4294045696,
             "stride": 4096,
             "size": 4096,
-            "irq_routes": [68, 69],
+            "irq_routes": [
+              68,
+              69
+            ],
             "fifo_depth": 8,
             "clock_hz": 266000000,
             "tick_hz": 48000000,
@@ -1392,17 +1490,38 @@
             {
               "base": 4294328320,
               "size": 12288,
-              "set_bits": [{ "offset": 0, "mask": 65536 }],
-              "clear_bits": [{ "offset": 8192, "mask": 268435456 }],
-              "scanout": { "output": 0, "period_ticks": 800000 },
+              "set_bits": [
+                {
+                  "offset": 0,
+                  "mask": 65536
+                }
+              ],
+              "clear_bits": [
+                {
+                  "offset": 8192,
+                  "mask": 268435456
+                }
+              ],
+              "scanout": {
+                "output": 0,
+                "period_ticks": 800000
+              },
               "basis": "Output 1 of the display controller, 0xfff64000-0xfff67000, as word registers that read back their last write. Two status laws from X-T20 2.11 seg5: 0xca37ac saves +0, writes bit 16, clears it and polls until bit 16 reads set before restoring the saved word with bit 16; 0xca9df0 sets bit 28 of +0x2000 and polls until it reads clear. Both requests complete at once; the controller's real latency (likely one frame) is not measured. Output 0 at 0xfff59000 follows the same bit-16 law in 0xca37ac but is not exercised up to REC and is not declared. Scanout: the commit routine 0xca5a0c copies its shadow block to the OSD layer group (+0x200 layer enable bits; four origins +0x210, sizes +0x220 and buffers +0x230). Camera RAM (live-service reads 2026-10-29) holds the same layer as enable 1, size 0x2cf01df and buffer 0x384d000 in REC and 0x354d000 in the menu, with 720 x 480 premultiplied RGBA buffers at a 2880-byte pitch. The same routine copies the video layer: format +0x010, size +0x02c, buffer +0x030. Camera REC holds format 0x333 (packed 4:2:2 Y0 Y1 Cb Cr, 720 x 480) with the live-view buffer 0xa7d6000 and control word +0 = 0x1010105; the emulated firmware writes 0x1010101 before REC and 0x1010105 on entering REC while +0x030 cycles through the live-view buffers, so +0 bit 2 is the video enable. The output is captured as host output 0 (the rear panel) at the frame period: OSD layers over the video layer when bit 2 is set, otherwise over black. The video conversion is BT.601 limited range (the shared raster law, not measured) and keeps the OSD buffers' blue-first byte order."
             },
             {
               "base": 4294283264,
               "size": 4096,
-              "set_bits": [{ "offset": 0, "mask": 65536 }],
+              "set_bits": [
+                {
+                  "offset": 0,
+                  "mask": 65536
+                }
+              ],
               "clear_bits": [],
-              "scanout": { "output": 1, "period_ticks": 800000 },
+              "scanout": {
+                "output": 1,
+                "period_ticks": 800000
+              },
               "basis": "Output 0 of the X-T20 display controller at 0xfff59000. The register window covers the output-0 accesses in X-T20 2.11, with the highest observed offset +0xc0c (0xca29c8); the separate body register block at 0xfff5b000 is outside this window. The stock output-0 path waits for bit 16 at +0 to read set (0xca37ac). No output-0 bit-28 status at +0x2000 is modeled. Status requests complete immediately; controller latency is not measured. Registers start at their default values and change only through firmware MMIO, so this path remains inactive until firmware programs it. Scanout is attached to host output 1 to observe it separately; physical panel identity and panel-specific color behavior are unchecked."
             }
           ]

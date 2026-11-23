@@ -4143,13 +4143,6 @@ class PayloadDeadline(TypedDict, total=False):
     unit: Required[DeadlineUnit]
 
 
-class PeripheralMapping(TypedDict, total=False):
-    address: Required[int]
-    block_id: Required[str]
-    core: Required[str]
-    offset: NotRequired[int | None]
-
-
 type PeripheralPart = (
     PeripheralPartVariant0
     | PeripheralPartVariant1
@@ -5751,7 +5744,6 @@ Soc = TypedDict(
         "interrupts": Required["list[InterruptRoute]"],
         "mappings": Required["list[AddressMapping]"],
         "memory_regions": Required["list[MemoryRegion]"],
-        "peripherals": Required["list[PeripheralMapping]"],
         "processors": Required["list[ProcessorCore]"],
         "reset": Required["SocReset"],
         "schema": Required["int"],
@@ -5767,6 +5759,7 @@ class SocBlock(TypedDict, total=False):
     kind: Required[SocBlockKind]
     processor_core_id: NotRequired[str | None]
     size: Required[int]
+    views: NotRequired[list[SocBlockView]]
 
 
 type SocBlockKind = Literal[
@@ -5787,6 +5780,12 @@ type SocBlockKind = Literal[
     "memory-controller",
     "address-window",
 ]
+
+
+class SocBlockView(TypedDict, total=False):
+    address: Required[int]
+    core: Required[str]
+    offset: NotRequired[int | None]
 
 
 class SocHardware(TypedDict, total=False):

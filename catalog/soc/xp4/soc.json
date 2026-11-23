@@ -350,7 +350,6 @@
   "mappings": [],
   "dma_mappings": [],
   "decoders": [],
-  "peripherals": [],
   "reset": {
     "release": null,
     "coprocessor_writes": []

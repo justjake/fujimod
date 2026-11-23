@@ -77,8 +77,6 @@ pub struct Soc {
     pub dma_mappings: Vec<DmaMapping>,
     /// Named hardware-decoder states and supported selections.
     pub decoders: Vec<AddressDecoder>,
-    /// Per-core peripheral mappings into named SoC blocks.
-    pub peripherals: Vec<PeripheralMapping>,
     /// Hardware reset and coprocessor setup facts.
     pub reset: SocReset,
 }
@@ -155,17 +153,18 @@ impl Soc {
                 ));
             }
         }
-        let mut peripheral_addresses = BTreeSet::new();
-        for mapping in &self.peripherals {
-            if !cores.contains(mapping.core.as_str()) || !blocks.contains(mapping.block_id.as_str())
-            {
-                return Err(format!(
-                    "SoC {} peripheral mapping has an unresolved core or block",
-                    self.id
-                ));
-            }
-            if !peripheral_addresses.insert((mapping.core.as_str(), mapping.address)) {
-                return Err(format!("SoC {} repeats a peripheral address", self.id));
+        let mut view_addresses = BTreeSet::new();
+        for block in &self.blocks {
+            for view in &block.views {
+                if !cores.contains(view.core.as_str()) {
+                    return Err(format!(
+                        "SoC {} block {} view names absent core {}",
+                        self.id, block.id, view.core
+                    ));
+                }
+                if !view_addresses.insert((view.core.as_str(), view.address)) {
+                    return Err(format!("SoC {} repeats a block view address", self.id));
+                }
             }
         }
         for decoder in &self.decoders {
@@ -497,6 +496,33 @@ pub struct SocBlock {
     /// Clock domain supplying this block, when specified.
     #[serde(default)]
     pub clock_id: Option<String>,
+    /// Per-core addresses where processors see this block.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub views: Vec<SocBlockView>,
+}
+
+/// One processor core's address window into a SoC block.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(deny_unknown_fields)]
+#[cfg_attr(feature = "schema", schemars(deny_unknown_fields))]
+#[cfg_attr(
+    all(target_arch = "wasm32", not(target_os = "emscripten")),
+    derive(tsify::Tsify),
+    tsify(hashmap_as_object, missing_as_null)
+)]
+pub struct SocBlockView {
+    /// Processor core using this view.
+    pub core: String,
+    /// Processor-visible address.
+    pub address: u64,
+    /// Offset in the block for a subwindow, when nonzero.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(
+        all(target_arch = "wasm32", not(target_os = "emscripten")),
+        tsify(type = "number | null")
+    )]
+    pub offset: Option<u64>,
 }
 
 /// Hardware block categories represented in the catalog.
@@ -685,32 +711,6 @@ pub struct DecoderChoice {
     pub id: String,
     /// Routes enabled by this choice.
     pub selection: DecoderSelection,
-}
-
-/// A per-core view into a named SoC block.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
-#[serde(deny_unknown_fields)]
-#[cfg_attr(feature = "schema", schemars(deny_unknown_fields))]
-#[cfg_attr(
-    all(target_arch = "wasm32", not(target_os = "emscripten")),
-    derive(tsify::Tsify),
-    tsify(hashmap_as_object, missing_as_null)
-)]
-pub struct PeripheralMapping {
-    /// Processor core using this peripheral window.
-    pub core: String,
-    /// SoC block identity exposed through this window.
-    pub block_id: String,
-    /// Processor-visible address.
-    pub address: u64,
-    /// Offset in the selected block for a subwindow, when nonzero.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    #[cfg_attr(
-        all(target_arch = "wasm32", not(target_os = "emscripten")),
-        tsify(type = "number | null")
-    )]
-    pub offset: Option<u64>,
 }
 
 /// Hardware state applied when a SoC leaves reset.

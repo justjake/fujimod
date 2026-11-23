@@ -20480,41 +20480,6 @@
       ],
       "type": "object"
     },
-    "PeripheralMapping": {
-      "additionalProperties": false,
-      "description": "A per-core view into a named SoC block.",
-      "properties": {
-        "address": {
-          "description": "Processor-visible address.",
-          "format": "uint64",
-          "minimum": 0,
-          "type": "integer"
-        },
-        "block_id": {
-          "description": "SoC block identity exposed through this window.",
-          "type": "string"
-        },
-        "core": {
-          "description": "Processor core using this peripheral window.",
-          "type": "string"
-        },
-        "offset": {
-          "description": "Offset in the selected block for a subwindow, when nonzero.",
-          "format": "uint64",
-          "minimum": 0,
-          "type": [
-            "integer",
-            "null"
-          ]
-        }
-      },
-      "required": [
-        "core",
-        "block_id",
-        "address"
-      ],
-      "type": "object"
-    },
     "PeripheralPart": {
       "description": "Reusable endpoint protocols with no processor addresses or startup state.",
       "oneOf": [
@@ -27657,13 +27622,6 @@
           },
           "type": "array"
         },
-        "peripherals": {
-          "description": "Per-core peripheral mappings into named SoC blocks.",
-          "items": {
-            "$ref": "#/$defs/PeripheralMapping"
-          },
-          "type": "array"
-        },
         "processors": {
           "description": "Processor cores and their hardware reset configuration.",
           "items": {
@@ -27695,7 +27653,6 @@
         "mappings",
         "dma_mappings",
         "decoders",
-        "peripherals",
         "reset"
       ],
       "type": "object"
@@ -27738,6 +27695,13 @@
           "format": "uint64",
           "minimum": 0,
           "type": "integer"
+        },
+        "views": {
+          "description": "Per-core addresses where processors see this block.",
+          "items": {
+            "$ref": "#/$defs/SocBlockView"
+          },
+          "type": "array"
         }
       },
       "required": [
@@ -27832,6 +27796,36 @@
           "type": "string"
         }
       ]
+    },
+    "SocBlockView": {
+      "additionalProperties": false,
+      "description": "One processor core's address window into a SoC block.",
+      "properties": {
+        "address": {
+          "description": "Processor-visible address.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "core": {
+          "description": "Processor core using this view.",
+          "type": "string"
+        },
+        "offset": {
+          "description": "Offset in the block for a subwindow, when nonzero.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "core",
+        "address"
+      ],
+      "type": "object"
     },
     "SocHardware": {
       "additionalProperties": false,
