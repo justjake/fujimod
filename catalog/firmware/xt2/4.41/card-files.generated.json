@@ -1,0 +1,111 @@
+{
+  "$schema": "https://fujimod.com/schemas/card-files.generated.schema.json",
+  "schema": 1,
+  "firmware_id": "xt2-441",
+  "product": "X-T2",
+  "internal_version": "2.70",
+  "code_checks": [
+    {
+      "name": "storage_open",
+      "address": 13554656,
+      "size": 212,
+      "sha256": "e5cf84a68fb4feedc1ca366f37e25f42eb0addd3ad286bb662bbe0c99c93d77b"
+    },
+    {
+      "name": "storage_drive_select",
+      "address": 13548700,
+      "size": 100,
+      "sha256": "e8d8817f35756296442497cbdc2634cd93d270bfcd5a5cc18decf2f808271ba8"
+    },
+    {
+      "name": "storage_file_information",
+      "address": 13549392,
+      "size": 500,
+      "sha256": "9585660b549b27a96c49ed04a99d942d85e8ccf96cedb1a3528d9f8d602823ab"
+    },
+    {
+      "name": "storage_window_90",
+      "address": 13554868,
+      "size": 80,
+      "sha256": "1346d8b14d4d64171f37d043462c1a3333a8cf5d890ad9e6addab2d9da5a34c6"
+    },
+    {
+      "name": "storage_window_94",
+      "address": 13554948,
+      "size": 80,
+      "sha256": "68774c97c5a1150ad4b4551e3730f4721a899c39cefcaa7a0f4459249cb4d7b7"
+    },
+    {
+      "name": "storage_window_98",
+      "address": 13555028,
+      "size": 80,
+      "sha256": "c939b0f9197c4271bb25424163eae6e14ae0bc4757a4b88ddf5aa3a953c235f5"
+    },
+    {
+      "name": "storage_window_9c",
+      "address": 13555108,
+      "size": 96,
+      "sha256": "be0fc7fc92e36f8e3827862adaa6b90e0094a4233f30610bbc68a6f337aaf17b"
+    },
+    {
+      "name": "storage_window_a0",
+      "address": 13555204,
+      "size": 96,
+      "sha256": "19545e8c7577fd22d7a3413b09749d43be7388fd7b1fb868c949055f5c834fb6"
+    },
+    {
+      "name": "storage_request_packet",
+      "address": 9871140,
+      "size": 80,
+      "sha256": "76023eb5f60b851bda9473cb20fe00c1c23215eb3d1d6c857873131a0e62b8b6"
+    },
+    {
+      "name": "storage_queue_send",
+      "address": 13564176,
+      "size": 408,
+      "sha256": "22651bb87f7322b96cf801a9616cd2277317bac563af262ff3874ad2f8fc1416"
+    },
+    {
+      "name": "storage_media_ready",
+      "address": 9860240,
+      "size": 256,
+      "sha256": "2d5318b62f0615d59942aa9fed37d6d9392f43bb73f0fc1ae9b592865c2fe19d"
+    }
+  ],
+  "mechanism": {
+    "kind": "driver_table",
+    "address_alias": 1073741824,
+    "windows": [
+      {
+        "address": 13554868,
+        "slot": 144
+      },
+      {
+        "address": 13554948,
+        "slot": 148
+      },
+      {
+        "address": 13555028,
+        "slot": 152
+      },
+      {
+        "address": 13555108,
+        "slot": 156
+      },
+      {
+        "address": 13555204,
+        "slot": 160
+      }
+    ],
+    "open": 13554656,
+    "drive_select": 13548700,
+    "drive_map": 18391812,
+    "driver_table": 18387620,
+    "context_slot": 10232416,
+    "media_queue": 10237252,
+    "media_ready": 9860240,
+    "request_packet": 9871140,
+    "queue_send": 13564176,
+    "packet_bytes": 16
+  }
+}

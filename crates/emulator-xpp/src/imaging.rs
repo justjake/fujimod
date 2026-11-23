@@ -301,7 +301,7 @@ impl Control {
     }
     /// Lines of the declared sensor frame into the programmed buffer.
     fn write_frame(&self, cx: &mut Cx<'_>, r: Readout) {
-        let lines = u64::from(self.word(r.offset + READOUT_LINES));
+        let lines = u64::from(self.word(r.offset + READOUT_LINES) & 0x3fff);
         let stride = u64::from(self.word(r.offset + READOUT_STRIDE));
         let destination = u64::from(self.word(r.offset + READOUT_DESTINATION));
         if !(6..=8192).contains(&lines) || !(12..=0x8000).contains(&stride) || stride & 1 != 0 {

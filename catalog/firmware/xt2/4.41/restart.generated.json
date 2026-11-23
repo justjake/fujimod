@@ -1,0 +1,149 @@
+{
+  "$schema": "https://fujimod.com/schemas/restart.generated.schema.json",
+  "schema": 2,
+  "id": "xt2-441-restart",
+  "firmware_id": "xt2-441",
+  "product": "X-T2",
+  "internal_version": "2.70",
+  "code_alias": 1073741824,
+  "code_checks": [
+    {
+      "name": "query_dispatch",
+      "address": 22561560,
+      "size": 136,
+      "sha256": "aca4ba8d77e90ae9007ce21d205d01a889e94c74fe38b0d98dc9917ab3225563"
+    },
+    {
+      "name": "query_forwarder",
+      "address": 22571080,
+      "size": 144,
+      "sha256": "484ecce8cfae51a6b37e641fe7f8572dac5cffbf50ac9e3a5a602de566575e55"
+    },
+    {
+      "name": "query_table_writer",
+      "address": 22570076,
+      "size": 92,
+      "sha256": "d25361adb8133730b7915b34ad8c428dc2d7c8da424cc66d8b9b3105bbc4a581"
+    },
+    {
+      "name": "query_stock_callback",
+      "address": 22964360,
+      "size": 896,
+      "sha256": "f2bf1595c4d123438b19b353d61455a73f35dbdc007461726fa3b021b1adc66a"
+    },
+    {
+      "name": "query_service_dispatcher",
+      "address": 22562512,
+      "size": 628,
+      "sha256": "0179ea20b1dfe0efaaf3bebef2af51afe510c60e82700f425b68ab38589e91cb"
+    },
+    {
+      "name": "power_off_sender",
+      "address": 22838480,
+      "size": 232,
+      "sha256": "319a1536a12381dea0b9f1d3404724f81acea114fd28931a91873007b50f673d"
+    },
+    {
+      "name": "service_command",
+      "address": 22836964,
+      "size": 64,
+      "sha256": "ca7ffed5d3c970b9d4bce1554e484377380212966bfaf3205c2b544727405a2a"
+    },
+    {
+      "name": "message_send",
+      "address": 13564176,
+      "size": 408,
+      "sha256": "22651bb87f7322b96cf801a9616cd2277317bac563af262ff3874ad2f8fc1416"
+    },
+    {
+      "name": "request_decoder",
+      "address": 24060668,
+      "size": 344,
+      "sha256": "785dab31e929e0c5c5e465352c1611558f59c82a7527ad0bc021be1e8d029d6a"
+    },
+    {
+      "name": "power_off",
+      "address": 24075572,
+      "size": 216,
+      "sha256": "d56f90d368cfca398edec351551103aa8c3b685f72bc9d68953e1bfa46732ec7"
+    },
+    {
+      "name": "alarm_setter",
+      "address": 13082648,
+      "size": 236,
+      "sha256": "5e806162f4ac8d2c9ed6233afac53261747e4aa42d7b442450a560826679c3b0"
+    },
+    {
+      "name": "power_cut",
+      "address": 12938472,
+      "size": 148,
+      "sha256": "5a36aa1232be7b99ba2554a69faff7781c0958439d08373d2534a7919c6bb6a1"
+    },
+    {
+      "name": "deferred_timer_start",
+      "address": 13497948,
+      "size": 572,
+      "sha256": "5a16b01d719a289340c17e9a3dc105fe3b5c25a43ff810ff2726d5899546b4e8"
+    },
+    {
+      "name": "deferred_timer_cancel",
+      "address": 13498528,
+      "size": 196,
+      "sha256": "6d197e3b02f4ce57bd4cc7f2c0dd92108078661024bf251f884c0bc0344feae7"
+    }
+  ],
+  "mechanism": {
+    "transport": {
+      "kind": "borrowed_query",
+      "callback_table": 30546668,
+      "callback_offset": 12,
+      "stock_callback": 22964360,
+      "output_fields": 31515040,
+      "output_bytes": 8
+    },
+    "sender": 22838480,
+    "request": 134,
+    "request_offset": 0,
+    "deadline_offset": 4,
+    "parameter_bytes": 8,
+    "ui": {
+      "mode_address": 18975344,
+      "mode_size": 1,
+      "rec_mode": 3,
+      "pending_mode_address": 18975347,
+      "menu_active_address": 18352928
+    },
+    "power_off": {
+      "entry": 24075572,
+      "halt": 24075784,
+      "power_cut": 12938472,
+      "request_deadline_offset": 8,
+      "alarm": {
+        "seconds": [
+          105,
+          106
+        ],
+        "enable": 104,
+        "enable_value": 1
+      },
+      "deadline_parameter": 0,
+      "rollover_parameter": 13,
+      "fixed_interval": null
+    },
+    "deferred_timer": {
+      "kind": "software-timer-callback-v1",
+      "period_unit": "milliseconds",
+      "one_shot_periodic": 0,
+      "periodic_nonzero": true,
+      "callback_arguments": 0,
+      "start": {
+        "address": 13497948,
+        "size": 572
+      },
+      "cancel": {
+        "address": 13498528,
+        "size": 196
+      }
+    }
+  }
+}

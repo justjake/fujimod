@@ -1053,6 +1053,23 @@ pub struct ZoneStatistics {
     /// pair the firmware writes to an imaging-side chip.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub exposure: Option<ZoneExposure>,
+    /// Focus-dependent contrast peak shared with the lens port's focus
+    /// position.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub contrast_focus: Option<ZoneContrastFocus>,
+}
+
+/// Focus-dependent contrast curve parameters for declared statistics buffers.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(deny_unknown_fields)]
+pub struct ZoneContrastFocus {
+    /// Declared basis.
+    pub basis: String,
+    /// Lens focus position at which contrast peaks.
+    pub peak_position: u32,
+    /// Gaussian width in focus-position units.
+    pub sigma: f64,
 }
 
 /// Integration value of the zone sums: the chip register pair (low byte,
@@ -1253,6 +1270,12 @@ pub struct StatisticsBuffer {
     /// zone sums. Empty: every word is written as declared.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub light_words: Vec<u32>,
+    /// `u32` word indices of the buffer that peak at `ZoneContrastFocus`.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub contrast_indices: Vec<u32>,
+    /// Peak (in-focus) values for `contrast_indices`.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub contrast_peak_words: Vec<u32>,
 }
 
 /// Declared hardware reset facts.

@@ -1593,6 +1593,11 @@ class DmaMapping(TypedDict, total=False):
     size: Required[RegionSize]
 
 
+class DriverWindow(TypedDict, total=False):
+    address: Required[int]
+    slot: Required[int]
+
+
 class EarlyBootConstants(TypedDict, total=False):
     exr2_restart_alarm_enable: Required[int]
     exr2_restart_alarm_high: Required[int]
@@ -3597,7 +3602,7 @@ class ManualReference(TypedDict, total=False):
     url: Required[str]
 
 
-type Mechanism = MechanismVariant0 | MechanismVariant1
+type Mechanism = MechanismVariant0 | MechanismVariant1 | MechanismVariant2
 
 
 class MechanismVariant0(TypedDict, total=False):
@@ -3652,6 +3657,22 @@ class MechanismVariant1(TypedDict, total=False):
     unlink: Required[int]
     value: Required[int]
     write: Required[int]
+
+
+class MechanismVariant2(TypedDict, total=False):
+    address_alias: Required[int]
+    context_slot: Required[int]
+    drive_map: Required[int]
+    drive_select: Required[int]
+    driver_table: Required[int]
+    kind: Required[Literal["driver_table"]]
+    media_queue: Required[int]
+    media_ready: Required[int]
+    open: Required[int]
+    packet_bytes: Required[int]
+    queue_send: Required[int]
+    request_packet: Required[int]
+    windows: Required[list[DriverWindow]]
 
 
 type MemoryKind = Literal["dram", "rom", "sram", "tcm"]

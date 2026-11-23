@@ -135,6 +135,7 @@ pub struct Engine {
     picture: Option<Picture>,
     exposure: Option<Exposure>,
     light: Option<SceneLight>,
+    contrast_focus: Option<ContrastFocus>,
     buffers: Vec<Buffer>,
     state: State,
 }
@@ -155,6 +156,21 @@ struct Buffer {
     output: u64,
     words: Vec<u32>,
     light: Vec<u32>,
+    contrast: Vec<(u32, u32)>,
+}
+/// Lens focus position shared with the lens port and the Gaussian contrast
+/// curve parameters for declared AF contrast buffers.
+pub struct ContrastFocus {
+    pub position: std::sync::Arc<std::sync::atomic::AtomicU32>,
+    pub peak_position: u32,
+    pub sigma: f64,
+}
+impl ContrastFocus {
+    fn weight(&self) -> f64 {
+        let pos = f64::from(self.position.load(std::sync::atomic::Ordering::Relaxed));
+        let delta = (pos - f64::from(self.peak_position)) / self.sigma;
+        (-delta * delta).exp()
+    }
 }
 /// The integration value another device publishes (0 = not yet set) and the
 /// value at which the declared zone sums hold: the sums scale by
@@ -302,6 +318,7 @@ impl Engine {
             picture: None,
             exposure: None,
             light: None,
+            contrast_focus: None,
             buffers: Vec::new(),
             state: State::default(),
         })
@@ -403,7 +420,46 @@ impl Engine {
             output,
             words: words.to_vec(),
             light: Vec::new(),
+            contrast: Vec::new(),
         });
+        Ok(self)
+    }
+    /// Focus-dependent contrast curve shared with the lens port's focus
+    /// position.
+    pub fn with_contrast_focus(mut self, contrast: ContrastFocus) -> Result<Self, String> {
+        if self.contrast_focus.is_some() || !contrast.sigma.is_finite() || contrast.sigma <= 0. {
+            return Err("Invalid X-Processor Pro statistics contrast focus".into());
+        }
+        self.contrast_focus = Some(contrast);
+        Ok(self)
+    }
+    /// Peak (in-focus) values for selected `u32` indices of a declared buffer,
+    /// interpolated against the buffer's baseline words by [`ContrastFocus`].
+    pub fn with_buffer_contrast_words(
+        mut self,
+        output: u64,
+        indices: &[u32],
+        peak_words: &[u32],
+    ) -> Result<Self, String> {
+        let buffer = self
+            .buffers
+            .iter_mut()
+            .find(|buffer| buffer.output == output)
+            .ok_or("Invalid X-Processor Pro statistics buffer contrast words")?;
+        if indices.is_empty()
+            || indices.len() != peak_words.len()
+            || !buffer.contrast.is_empty()
+            || indices
+                .iter()
+                .any(|word| *word as usize >= buffer.words.len())
+        {
+            return Err("Invalid X-Processor Pro statistics buffer contrast words".into());
+        }
+        buffer.contrast = indices
+            .iter()
+            .copied()
+            .zip(peak_words.iter().copied())
+            .collect();
         Ok(self)
     }
     /// The words of a declared buffer that are linear light sums: `words` are
@@ -475,6 +531,7 @@ impl Engine {
         } else {
             None
         };
+        let contrast_weight = self.contrast_focus.as_ref().map(ContrastFocus::weight);
         for buffer in &self.buffers {
             let data: Vec<u8> = buffer
                 .words
@@ -482,15 +539,27 @@ impl Engine {
                 .enumerate()
                 .flat_map(|(index, word)| {
                     let index = index as u32;
+                    let base = if let Some(weight) = contrast_weight
+                        && let Some((_, peak)) =
+                            buffer.contrast.iter().find(|(i, _)| *i == index)
+                    {
+                        let lo = f64::from(*word);
+                        let hi = f64::from(*peak);
+                        (lo + (hi - lo) * weight)
+                            .round()
+                            .clamp(0., f64::from(u32::MAX)) as u32
+                    } else {
+                        *word
+                    };
                     let word = match &self.picture {
                         Some(picture)
                             if buffer.output == WINDOW_OUTPUT && WINDOW_CENTRE.contains(&index) =>
                         {
                             let c = (index / 2) as usize;
-                            scaled(f64::from(*word) * picture.centre[c] / picture.reference[c])
+                            scaled(f64::from(base) * picture.centre[c] / picture.reference[c])
                         }
-                        _ if buffer.light.contains(&index) => scaled(f64::from(*word)),
-                        _ => *word,
+                        _ if buffer.light.contains(&index) => scaled(f64::from(base)),
+                        _ => base,
                     };
                     word.to_le_bytes()
                 })

@@ -34,6 +34,18 @@
 //! 0x56) or command 0x40 holds the pin low while the lens moves. The pin
 //! reaches the interrupt controller through an external interrupt line.
 //! Commands the profile does not answer are answered with 0 and counted.
+//!
+//! Lens state, from X-T2 4.41 captures of two lenses (a third-party 25mm F1.8 and a zoom with
+//! a variable maximum aperture), the body's message words and the lens's replies logged on
+//! the camera. Both lenses echo the body's data for the set commands in [`ECHOES`]. The focus
+//! group sits at a position the lens reports for command 0x21. Command 0x56 sets a target, and
+//! the lens reaches it when its drive ends. The status reply (0x20) carries bit 3 while a drive
+//! runs. Command 0x62 sets the iris: 0x1000 is open, each further 0x40 one step closed, 0x7000
+//! (sent at exposure) opens it again. The 0x22 reply is the step count times 0x100. Every iris
+//! command and the step count the lens returned on the following 0x22 read stay in the lens
+//! state, as the focus drives do. Drive speed, zoom and the focus scale are not modeled: the
+//! drive takes the declared drive time,
+//! whatever the distance.
 //! The lens's delays are declared inputs, not measurements; the lens samples
 //! the power output once per declared poll period.
 use crate::resets::ExternalLines;
@@ -44,6 +56,7 @@ use fujimod_emulator_ip_arm::pl330;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use std::collections::BTreeMap;
+use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::{Arc, Mutex};
 
 /// Largest information page.
@@ -64,7 +77,24 @@ const PAGE_SIZE: u32 = 0x18;
 const DATA_SESSION: u32 = 0xc0;
 const DATA_PAGE_BYTES: usize = 0x800;
 /// Commands after which the lens moves and holds the ready line low.
-const MOVES: [u32; 2] = [0x40, 0x56];
+const MOVES: [u32; 3] = [0x40, 0x56, 0x62];
+/// Focus drives kept in the lens state.
+const MOVE_HISTORY: usize = 64;
+/// Set commands whose reply carries the body's data back, as both captured lenses answer.
+const ECHOES: [u32; 12] = [
+    0x18, 0x54, 0x55, 0x56, 0x58, 0x61, 0x62, 0x80, 0xa0, 0xa8, 0xa9, 0xff,
+];
+const STATUS: u32 = 0x20;
+/// Status bit set while a drive runs.
+const STATUS_MOVING: u32 = 0x08;
+const FOCUS_POSITION: u32 = 0x21;
+const FOCUS_TARGET: u32 = 0x56;
+const IRIS_POSITION: u32 = 0x22;
+const IRIS_DRIVE: u32 = 0x62;
+const IRIS_OPEN: u32 = 0x1000;
+const IRIS_STEP: u32 = 0x40;
+/// The iris word the body sends at exposure; afterwards the lens reports the iris open.
+const IRIS_EXPOSURE: u32 = 0x7000;
 
 fn checksum(word: u32) -> u32 {
     ([7, 12, 17, 22, 27]
@@ -149,6 +179,48 @@ struct Line {
     poll_at: u64,
     drives: u64,
     unknown: BTreeMap<u32, u64>,
+    /// Focus group position, the 0x21 reply.
+    #[serde(default)]
+    focus: u16,
+    /// The 0x56 target the running drive moves to.
+    #[serde(default)]
+    focus_target: Option<u16>,
+    /// Iris steps closed from open, the 0x22 reply over 0x100.
+    #[serde(default)]
+    iris_steps: u16,
+    /// The latest focus drives: each target and where its drive ended, `None` when a newer
+    /// target replaced it first. `moves_total` counts every drive, so a reader can take the
+    /// ones after a point.
+    #[serde(default)]
+    moves: Vec<FocusMove>,
+    #[serde(default)]
+    moves_total: u64,
+    /// The latest iris drives: each step count the body commanded and the step count the lens
+    /// returned on the first 0x22 read after it, `None` when the body commanded another iris
+    /// position first. `iris_total` counts every command, so a reader can take the ones after a
+    /// point.
+    #[serde(default)]
+    iris: Vec<IrisMove>,
+    #[serde(default)]
+    iris_total: u64,
+}
+
+/// One iris drive: the commanded step count and the step count the lens reported back.
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct IrisMove {
+    sequence: u64,
+    commanded: u16,
+    reported: Option<u16>,
+}
+
+/// One focus drive: the body's target and the position the drive ended at.
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct FocusMove {
+    sequence: u64,
+    target: u16,
+    reached: Option<u16>,
 }
 
 /// The link state shared by the port and the PL330, which reaches the
@@ -208,6 +280,7 @@ pub struct LensPort {
     wiring: Wiring,
     pins: SharedPins,
     lines: ExternalLines,
+    focus_position: Arc<AtomicU32>,
 }
 impl LensPort {
     pub fn new(
@@ -251,7 +324,15 @@ impl LensPort {
             wiring,
             pins,
             lines,
+            focus_position: Arc::new(AtomicU32::new(0)),
         })
+    }
+    /// Share the lens's current focus position with other devices (such as
+    /// imaging statistics).
+    pub fn with_focus_position(mut self, focus_position: Arc<AtomicU32>) -> Self {
+        focus_position.store(u32::from(self.line.focus), Ordering::Relaxed);
+        self.focus_position = focus_position;
+        self
     }
     fn set_ready(&mut self, cx: &mut Cx<'_>, high: bool) {
         let (port, pin) = self.wiring.ready;
@@ -349,6 +430,19 @@ impl LensPort {
         }
         self.close(cx, link);
     }
+    /// Record a commanded iris position, waiting for the 0x22 read that confirms it. The iris
+    /// rests where the body last set it: the lens drives it while the body's frame runs.
+    fn command_iris(&mut self, commanded: u16) {
+        self.line.iris_total += 1;
+        if self.line.iris.len() == MOVE_HISTORY {
+            self.line.iris.remove(0);
+        }
+        self.line.iris.push(IrisMove {
+            sequence: self.line.iris_total,
+            commanded,
+            reported: None,
+        });
+    }
     fn close(&mut self, cx: &mut Cx<'_>, link: &mut Link) {
         link.closing = false;
         let Ok(bytes) = <[u8; 4]>::try_from(link.transmitted.as_slice()) else {
@@ -376,12 +470,54 @@ impl LensPort {
                     }
                     self.line.drive_until = cx.now().checked_add(self.timing.drive);
                 }
-                let data = match self.profile.replies.get(&id) {
-                    Some(&data) => u32::from(data),
-                    None => {
-                        *self.line.unknown.entry(id).or_default() += 1;
-                        0
+                let body = received >> 16;
+                if self.line.released {
+                    if id == FOCUS_TARGET {
+                        self.line.focus_target = Some(body as u16);
+                        self.line.moves_total += 1;
+                        if self.line.moves.len() == MOVE_HISTORY {
+                            self.line.moves.remove(0);
+                        }
+                        self.line.moves.push(FocusMove {
+                            sequence: self.line.moves_total,
+                            target: body as u16,
+                            reached: None,
+                        });
+                    } else if id == IRIS_DRIVE && matches!(body & !0x0fff, IRIS_OPEN | IRIS_EXPOSURE)
+                    {
+                        let steps = ((body & 0x0fff) / IRIS_STEP) as u16;
+                        self.line.iris_steps = steps;
+                        self.command_iris(steps);
                     }
+                }
+                if id == IRIS_POSITION {
+                    // The read answers the newest command whose position the body has not read
+                    // yet; a command the body replaced before reading it keeps no report, as a
+                    // replaced focus target does.
+                    if let Some(drive) = self.line.iris.iter_mut().rev().find(|drive| drive.reported.is_none())
+                    {
+                        drive.reported = Some(self.line.iris_steps);
+                    }
+                }
+                let data = match id {
+                    FOCUS_POSITION => u32::from(self.line.focus),
+                    IRIS_POSITION => u32::from(self.line.iris_steps) << 8,
+                    STATUS => {
+                        let moving = if self.line.drive_until.is_some() {
+                            STATUS_MOVING
+                        } else {
+                            0
+                        };
+                        u32::from(self.profile.replies.get(&id).copied().unwrap_or(0)) | moving
+                    }
+                    id if ECHOES.contains(&id) => body,
+                    _ => match self.profile.replies.get(&id) {
+                        Some(&data) => u32::from(data),
+                        None => {
+                            *self.line.unknown.entry(id).or_default() += 1;
+                            0
+                        }
+                    },
                 };
                 link.reply = seal(data << 16 | id << 6);
             }
@@ -454,10 +590,16 @@ impl Device for LensPort {
                     self.line.ready_at = now.checked_add(self.timing.ready);
                 }
                 (false, true) => {
+                    // The focus group stays where it was; the iris rests open.
                     self.line = Line {
                         poll_at: self.line.poll_at,
                         drives: self.line.drives,
                         unknown: std::mem::take(&mut self.line.unknown),
+                        focus: self.line.focus,
+                        moves: std::mem::take(&mut self.line.moves),
+                        moves_total: self.line.moves_total,
+                        iris: std::mem::take(&mut self.line.iris),
+                        iris_total: self.line.iris_total,
                         ..Line::default()
                     };
                     self.set_ready(cx, true);
@@ -477,6 +619,14 @@ impl Device for LensPort {
         }
         if self.line.drive_until.is_some_and(|at| now >= at) {
             self.line.drive_until = None;
+            if let Some(target) = self.line.focus_target.take() {
+                self.line.focus = target;
+                self.focus_position
+                    .store(u32::from(target), Ordering::Relaxed);
+                if let Some(last) = self.line.moves.last_mut() {
+                    last.reached = Some(target);
+                }
+            }
             self.set_ready(cx, true);
         }
     }
@@ -512,6 +662,8 @@ impl Device for LensPort {
         self.port.restore(&value["port"])?;
         *self.link.lock().map_err(|_| "Lens link poisoned")? = link;
         self.line = line;
+        self.focus_position
+            .store(u32::from(self.line.focus), Ordering::Relaxed);
         Ok(())
     }
     /// The port is a child; the link shared with the PL330 source is restored
@@ -544,6 +696,8 @@ impl Device for LensPort {
         self.port.restore_checkpoint(&saved.children()[0])?;
         *self.link.lock().map_err(|_| "Lens link poisoned")? = link;
         self.line = line;
+        self.focus_position
+            .store(u32::from(self.line.focus), Ordering::Relaxed);
         Ok(())
     }
     fn fingerprint(&self) -> Result<Value, String> {
@@ -653,8 +807,8 @@ mod tests {
         let saved = lens.save();
         lens.restore(&saved).unwrap();
         // An unanswered command is answered with 0 and counted.
-        transfer(&mut lens, &mut h, seal(0xa0 << 6));
-        assert_eq!(lens.line.unknown.get(&0xa0), Some(&1));
+        transfer(&mut lens, &mut h, seal(0x30 << 6));
+        assert_eq!(lens.line.unknown.get(&0x30), Some(&1));
     }
 
     #[test]
@@ -725,6 +879,103 @@ mod tests {
         advance(&mut lens, &mut h, 1160);
         assert!(pins.lock().unwrap().input(14, 1));
         assert_eq!(lens.line.drives, 1);
+    }
+
+    /// A powered lens past its start-up, with the GPIO the body drives.
+    fn released() -> (LensPort, TestHost) {
+        let (mut lens, pins) = lens();
+        let mut h = TestHost::new();
+        let gpio = &mut fujimod_emulator_ip::socionext::gpio::Gpio::new(0xfff0_c000, pins).unwrap();
+        write(gpio, &mut h, 0xfff0_c000 + 14 * 0x40 + 4, 0x0001_0001);
+        for at in [10, 110, 1110] {
+            advance(&mut lens, &mut h, at);
+        }
+        assert!(lens.line.released);
+        (lens, h)
+    }
+    /// The lens's reply to one message: the message, the acknowledge frame, the frame that
+    /// carries the reply, and the body's acknowledge of it.
+    fn reply(lens: &mut LensPort, h: &mut TestHost, id: u32, data: u32) -> u32 {
+        transfer(lens, h, seal(data << 16 | id << 6));
+        transfer(lens, h, seal(ACK | id << 6));
+        let answer = transfer(lens, h, 0);
+        assert_eq!(command(answer), id);
+        transfer(lens, h, seal(ACK));
+        answer >> 16
+    }
+
+    #[test]
+    fn set_commands_echo_the_body_data() {
+        let (mut lens, mut h) = released();
+        // Body data the captured lenses echoed: 0x54 0x7ef4, 0x55 0x203, 0xa9 1, 0xa0 0x8004.
+        for (id, data) in [(0x54, 0x7ef4), (0x55, 0x203), (0xa9, 1), (0xa0, 0x8004)] {
+            assert_eq!(reply(&mut lens, &mut h, id, data), data, "{id:#x}");
+        }
+        assert!(lens.line.unknown.is_empty());
+    }
+
+    #[test]
+    fn a_focus_target_is_reached_when_the_drive_ends_and_status_shows_the_move() {
+        let (mut lens, mut h) = released();
+        assert_eq!(reply(&mut lens, &mut h, FOCUS_POSITION, 1), 0);
+        assert_eq!(reply(&mut lens, &mut h, FOCUS_TARGET, 0x1855), 0x1855);
+        assert_eq!(reply(&mut lens, &mut h, STATUS, 0), 0x300 | STATUS_MOVING);
+        assert_eq!(reply(&mut lens, &mut h, FOCUS_POSITION, 1), 0);
+        advance(&mut lens, &mut h, 1200);
+        assert_eq!(reply(&mut lens, &mut h, STATUS, 0), 0x300);
+        assert_eq!(reply(&mut lens, &mut h, FOCUS_POSITION, 1), 0x1855);
+        // A target replaced before its drive ends is kept without a position.
+        reply(&mut lens, &mut h, FOCUS_TARGET, 0xd20);
+        reply(&mut lens, &mut h, FOCUS_TARGET, 0x16f8);
+        advance(&mut lens, &mut h, 2400);
+        let moves: Vec<_> = lens.line.moves.iter().map(|m| (m.sequence, m.target, m.reached)).collect();
+        assert_eq!(moves, [(1, 0x1855, Some(0x1855)), (2, 0xd20, None), (3, 0x16f8, Some(0x16f8))]);
+        assert_eq!(lens.line.moves_total, 3);
+    }
+
+    #[test]
+    fn the_iris_reports_its_steps_and_opens_at_exposure() {
+        let (mut lens, mut h) = released();
+        // The captured shot: 0x1040, 0x1080, 0x10c0 (replies 0x100, 0x200, 0x300), then 0x7000.
+        // Exposure drives also carry steps under 0x7000 and pulse the ready line.
+        for (word, steps) in [(0x1040, 0x100), (0x1080, 0x200), (0x10c0, 0x300), (0x7040, 0x100)] {
+            reply(&mut lens, &mut h, IRIS_DRIVE, word);
+            assert_eq!(reply(&mut lens, &mut h, IRIS_POSITION, 1), steps);
+        }
+        assert!(lens.line.drive_until.is_some());
+        reply(&mut lens, &mut h, IRIS_DRIVE, IRIS_EXPOSURE);
+        assert_eq!(reply(&mut lens, &mut h, IRIS_POSITION, 1), 0);
+        assert!(lens.line.drives >= 2);
+    }
+
+    #[test]
+    fn iris_drives_keep_the_commanded_and_reported_steps() {
+        let (mut lens, mut h) = released();
+        // The same captured shot, read back: each 0x62 command and the 0x22 step count that
+        // follows it, so a reader can pair what the body asked for with what the lens answered.
+        for word in [0x1040, 0x1080, 0x10c0] {
+            reply(&mut lens, &mut h, IRIS_DRIVE, word);
+            reply(&mut lens, &mut h, IRIS_POSITION, 1);
+        }
+        // A command the body never reads back stays without a report.
+        reply(&mut lens, &mut h, IRIS_DRIVE, IRIS_EXPOSURE);
+        let drives: Vec<_> = lens
+            .line
+            .iris
+            .iter()
+            .map(|drive| (drive.sequence, drive.commanded, drive.reported))
+            .collect();
+        assert_eq!(
+            drives,
+            [(1, 1, Some(1)), (2, 2, Some(2)), (3, 3, Some(3)), (4, 0, None)]
+        );
+        assert_eq!(lens.line.iris_total, 4);
+        // A read answers the newest command the body has not read yet, so a command replaced
+        // before the body read it keeps no report.
+        reply(&mut lens, &mut h, IRIS_DRIVE, 0x1100);
+        assert_eq!(reply(&mut lens, &mut h, IRIS_POSITION, 1), 4 << 8);
+        assert_eq!(lens.line.iris[3].reported, None);
+        assert_eq!(lens.line.iris[4].reported, Some(4));
     }
 
     #[test]

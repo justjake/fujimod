@@ -1680,6 +1680,7 @@ impl Devices {
             model = model.with_job(fujimod_emulator_xpp::blocks::Job {
                 start: j.start,
                 status: j.status,
+                clear: None,
                 stop: j.stop,
                 irq: j.irq,
                 ticks: j.ticks,

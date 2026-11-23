@@ -534,6 +534,7 @@ fn nodes(
         });
         model["job"] = json!(block.job.as_ref().map(|job| json!({
             "start": bits(&job.start), "status": job.status.as_ref().map(bits),
+            "clear": job.clear.as_ref().map(bits),
             "stop": job.stop.as_ref().map(bits), "irq": job.irq_route, "ticks": job.ticks,
         })));
         model["fixed"] = json!(
@@ -641,6 +642,25 @@ fn nodes(
                 .collect();
             if !light_words.is_empty() {
                 model["buffer_light_words"] = json!(light_words);
+            }
+            if let Some(cf) = &scene.contrast_focus {
+                let contrast_buffers: Vec<Value> = scene
+                    .buffers
+                    .iter()
+                    .filter(|b| !b.contrast_indices.is_empty())
+                    .map(|b| {
+                        json!({
+                            "output": b.output,
+                            "indices": b.contrast_indices,
+                            "peak_words": b.contrast_peak_words,
+                        })
+                    })
+                    .collect();
+                model["contrast_focus"] = json!({
+                    "peak_position": cf.peak_position,
+                    "sigma": cf.sigma,
+                    "buffers": contrast_buffers,
+                });
             }
         }
         node("statistics".into(), model);

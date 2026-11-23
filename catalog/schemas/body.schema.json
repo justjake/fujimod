@@ -6687,6 +6687,17 @@
       "additionalProperties": false,
       "description": "Job law of a register block: each start finishes one job after the\ndeclared ticks; the status bit is set and the level interrupt line is high\nuntil the status bit is written.",
       "properties": {
+        "clear": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/HardwareRegisterIdleBits"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Separate write-to-clear register for `status`, if not cleared by writing\n`status` itself."
+        },
         "irq_route": {
           "description": "Level interrupt line of the job status.",
           "format": "uint32",
@@ -6706,7 +6717,7 @@
               "type": "null"
             }
           ],
-          "description": "Status bit the job sets; writing it clears it. Without one the job\nends with an interrupt edge."
+          "description": "Status bit the job sets; writing it (or `clear`) clears it. Without one\nthe job ends with an interrupt edge."
         },
         "stop": {
           "anyOf": [

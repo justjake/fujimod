@@ -366,6 +366,15 @@
             }
           ]
         },
+        "restart": {
+          "status": "unavailable",
+          "errors": [
+            {
+              "locator": "restart",
+              "reason": "FileNotFoundError: [Errno 2] No such file or directory: '<input>'"
+            }
+          ]
+        },
         "service": {
           "status": "unavailable",
           "errors": [
@@ -7073,26 +7082,16 @@
           "errors": []
         },
         "card-files": {
-          "status": "unavailable",
-          "errors": [
-            {
-              "locator": "card_files.locate",
-              "reason": "ValueError: No stock card-call mechanism for this processor"
-            }
-          ]
+          "status": "available",
+          "errors": []
         },
         "controls": {
           "status": "available",
           "errors": []
         },
         "facts": {
-          "status": "unavailable",
-          "errors": [
-            {
-              "locator": "framebuffer",
-              "reason": "Runtime scanout is required; static inspection cannot confirm a live framebuffer"
-            }
-          ]
+          "status": "available",
+          "errors": []
         },
         "first-start": {
           "status": "unavailable",
@@ -7119,6 +7118,10 @@
               "reason": "ValueError: No catalog firmware and body record is published"
             }
           ]
+        },
+        "restart": {
+          "status": "available",
+          "errors": []
         },
         "service": {
           "status": "unavailable",
@@ -7201,6 +7204,10 @@
           "errors": []
         },
         "progress": {
+          "status": "available",
+          "errors": []
+        },
+        "restart": {
           "status": "available",
           "errors": []
         },

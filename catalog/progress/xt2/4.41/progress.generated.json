@@ -236,12 +236,12 @@
         {
           "id": "sd-boot-v1-stock-boots-in-emulator",
           "title": "SD boot v1: stock firmware boots from an SD card in the emulator",
-          "result": "not-run"
+          "result": "pass"
         },
         {
           "id": "firmware-update-stock-installs-in-emulator",
           "title": "Firmware update: stock updater installs an update from an SD card in the emulator",
-          "result": "not-run"
+          "result": "pass"
         },
         {
           "id": "sd-boot-v2-fujimod-boots-in-emulator",
@@ -315,9 +315,10 @@
           "id": "stock/focus",
           "label": "Focus",
           "stage": "stock",
-          "result": "stale",
-          "passed": 0,
-          "total": 1
+          "result": "partial",
+          "passed": 3,
+          "total": 4,
+          "detail": "3 of 4"
         },
         {
           "id": "stock/lens",
@@ -382,9 +383,9 @@
           "id": "firmware-update-stock-installs-in-emulator",
           "label": "Firmware update: stock updater installs an update from an SD card in the emulator",
           "stage": "firmware-update-stock-installs-in-emulator",
-          "result": "not-run",
-          "passed": 0,
-          "total": 0
+          "result": "pass",
+          "passed": 1,
+          "total": 1
         }
       ]
     },
@@ -818,14 +819,6 @@
           "total": 1
         },
         {
-          "id": "walkthroughs/grain-texture",
-          "label": "grain-texture",
-          "stage": "walkthroughs",
-          "result": "not-run",
-          "passed": 0,
-          "total": 1
-        },
-        {
           "id": "walkthroughs/color-chrome",
           "label": "color-chrome",
           "stage": "walkthroughs",
@@ -1114,40 +1107,8 @@
           "total": 1
         },
         {
-          "id": "walkthroughs/iso-auto-min-shutter",
-          "label": "iso-auto-min-shutter",
-          "stage": "walkthroughs",
-          "result": "not-run",
-          "passed": 0,
-          "total": 1
-        },
-        {
           "id": "walkthroughs/custom-settings-bkt",
           "label": "custom-settings-bkt",
-          "stage": "walkthroughs",
-          "result": "not-run",
-          "passed": 0,
-          "total": 1
-        },
-        {
-          "id": "walkthroughs/ae-bkt-setting",
-          "label": "ae-bkt-setting",
-          "stage": "walkthroughs",
-          "result": "not-run",
-          "passed": 0,
-          "total": 1
-        },
-        {
-          "id": "walkthroughs/multiple-exposure-control",
-          "label": "multiple-exposure-control",
-          "stage": "walkthroughs",
-          "result": "not-run",
-          "passed": 0,
-          "total": 1
-        },
-        {
-          "id": "walkthroughs/interval-timer",
-          "label": "interval-timer",
           "stage": "walkthroughs",
           "result": "not-run",
           "passed": 0,
@@ -1924,18 +1885,18 @@
       "total": 2
     },
     "control-input": {
-      "result": "stale",
-      "passed": 60,
+      "result": "partial",
+      "passed": 27,
       "total": 60
     },
     "focus": {
-      "result": "stale",
+      "result": "partial",
       "passed": 3,
       "total": 4
     },
     "lens": {
       "result": "stale",
-      "passed": 0,
+      "passed": 3,
       "total": 3
     },
     "film-simulations": {
@@ -1955,7 +1916,7 @@
     },
     "develop-raw": {
       "result": "stale",
-      "passed": 0,
+      "passed": 3,
       "total": 3
     },
     "sd": {
@@ -1985,7 +1946,6 @@
     "multipass-curves": "not-run",
     "film-editor": "not-run",
     "film-grain": "not-run",
-    "grain-texture": "not-run",
     "color-chrome": "not-run",
     "halation": "not-run",
     "light-leaks": "not-run",
@@ -2022,11 +1982,7 @@
     "sd-volume-name": "not-run",
     "date-folders": "not-run",
     "software-nd": "not-run",
-    "iso-auto-min-shutter": "not-run",
     "custom-settings-bkt": "not-run",
-    "ae-bkt-setting": "not-run",
-    "multiple-exposure-control": "not-run",
-    "interval-timer": "not-run",
     "sd-boot-v2-runtime": "not-run",
     "sd-boot-v2-stage1-internal-flash-install": "not-run",
     "ota-update": "not-run",

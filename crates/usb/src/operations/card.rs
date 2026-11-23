@@ -310,6 +310,9 @@ pub async fn execute(
             .await
         }
         Mechanism::StockSdk(profile) => sdk::execute(host, profile, request).await,
+        Mechanism::DriverTable { .. } => Err(fail(
+            "The X-Processor Pro storage calls in the driver_table mechanism are catalogued, but this host stack has no file service for that mechanism",
+        )),
     }
 }
 

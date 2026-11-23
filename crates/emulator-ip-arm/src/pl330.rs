@@ -76,6 +76,8 @@ struct Thread {
     bytes: u64,
     source: Option<u32>,
     destination: Option<u32>,
+    #[serde(default)]
+    peripheral: bool,
 }
 
 /// Outcome of one program run: bytes stored, first load and store address,
@@ -86,6 +88,7 @@ struct Transfer {
     source: u32,
     destination: u32,
     paced_ticks: Option<u64>,
+    peripheral: bool,
 }
 
 /// A run stops at DMAEND or at a DMAWFE whose event has not arrived. A paced
@@ -117,6 +120,7 @@ pub struct Pl330 {
     inten: u32,
     events: u32,
     debug: [u32; 2],
+    peripheral_ticks_per_byte: u64,
 }
 
 impl Pl330 {
@@ -145,7 +149,13 @@ impl Pl330 {
             inten: 0,
             events: 0,
             debug: [0; 2],
+            peripheral_ticks_per_byte: 0,
         })
+    }
+
+    pub fn with_peripheral_ticks_per_byte(mut self, ticks: u64) -> Self {
+        self.peripheral_ticks_per_byte = ticks;
+        self
     }
 
     fn signal(&mut self, cx: &mut Cx<'_>, event: u32) -> Result<(), String> {
@@ -391,6 +401,7 @@ impl Pl330 {
                         source: t.source.unwrap_or(0),
                         destination: t.destination.unwrap_or(0),
                         paced_ticks: self.paced_ticks(&paced),
+                        peripheral: t.peripheral,
                     };
                     t.running = false;
                     t.due = None;
@@ -475,7 +486,11 @@ impl Pl330 {
                 // DMARMB, DMAWMB, DMANOP
                 0x12 | 0x13 | 0x18 => {}
                 // DMAWFP<S|P|B>, DMAFLUSHP
-                0x30..=0x32 | 0x35 => len = 2,
+                0x30..=0x32 => {
+                    len = 2;
+                    t.peripheral = true;
+                }
+                0x35 => len = 2,
                 // DMALP lc0/lc1
                 0x20 | 0x22 => {
                     len = 2;
@@ -506,6 +521,7 @@ impl Pl330 {
                             source: t.source.unwrap_or(0),
                             destination: t.destination.unwrap_or(0),
                             paced_ticks: self.paced_ticks(&paced),
+                            peripheral: t.peripheral,
                         };
                         if apply {
                             self.threads[n] = t;
@@ -534,6 +550,7 @@ impl Pl330 {
                             source: t.source.unwrap_or(0),
                             destination: t.destination.unwrap_or(0),
                             paced_ticks: self.paced_ticks(&paced),
+                            peripheral: t.peripheral,
                         };
                         if apply {
                             self.threads[n] = t;
@@ -591,6 +608,7 @@ impl Pl330 {
                 t.bytes = 0;
                 t.source = None;
                 t.destination = None;
+                t.peripheral = false;
                 self.setup_registers(cx, &mut t)?;
                 self.threads[n] = t;
                 let transfer = match self.run(cx, n, false) {
@@ -604,7 +622,12 @@ impl Pl330 {
                         return Err(e);
                     }
                 };
-                let at = cx.now() + self.timing.setup_ticks + self.data_ticks(&transfer);
+                let data_ticks = if transfer.peripheral && self.peripheral_ticks_per_byte != 0 {
+                    transfer.bytes.saturating_mul(self.peripheral_ticks_per_byte)
+                } else {
+                    self.data_ticks(&transfer)
+                };
+                let at = cx.now() + self.timing.setup_ticks + data_ticks;
                 self.threads[n].running = true;
                 self.threads[n].due = Some(at);
                 cx.schedule(at, n as u64);
