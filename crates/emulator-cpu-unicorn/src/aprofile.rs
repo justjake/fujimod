@@ -240,13 +240,22 @@ impl Core {
     /// value MRC p15,0,Rt,c0,c0,5 returns): the engine then reads MPIDR
     /// itself instead of exiting before the instruction.
     pub fn set_owner_mpidr(&self, mpidr: u32) -> Result<(), String> {
-        self.owner_option(|e| &e.owner_mpidr, true)?;
+        let actual = self.install_mpidr(mpidr)?;
+        if actual != u64::from(mpidr) {
+            return Err(format!("processor affinity did not take: {actual:#x}"));
+        }
+        Ok(())
+    }
+    fn install_mpidr(&self, mpidr: u32) -> Result<u64, String> {
+        self.owner_option(|e| &e.owner_mpidr, false)?;
         let selector = arm::Coprocessor { cp: 15, wide: false, secure: 0, opc1: 0, crn: 0, crm: 0, opc2: 5 };
         self.execution.cpu.coprocessor(selector, Some(u64::from(mpidr)))?;
-        if self.execution.cpu.coprocessor(selector, None)? != u64::from(mpidr) {
-            return Err(format!("processor affinity did not take: {:#x}", self.execution.cpu.coprocessor(selector, None)?));
-        }
-        self.execution.cpu.invalidate_code(None)
+        let actual = self.execution.cpu.coprocessor(selector, None)?;
+        // Cortex-A7 hardwires some bits. Retain board emulation for a
+        // configured value the engine cannot represent.
+        self.execution.owner_mpidr.set(actual == u64::from(mpidr));
+        self.execution.cpu.invalidate_code(None)?;
+        Ok(actual)
     }
     /// ARMv7-A owners that enter IRQs at their own instruction boundaries:
     /// an asserted, unmasked IRQ stops the run before the next block instead
@@ -446,6 +455,7 @@ impl Execution {
         let framework = self.framework(word);
         let boundary = if self.a32 {
             armv7a::block_boundary(word)
+                && !(self.owner_mpidr.get() && armv7a::mpidr_read(word))
         } else {
             word & 0xfff00000 == 0xd5100000
                 || word & 0xfffff0df == 0xd50340df
