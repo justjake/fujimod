@@ -18,7 +18,7 @@ pub enum Op {
     Snapshot,
     Restore(Registers),
     Interrupt(Interrupt, bool),
-    Run(Run, ExecutionPolicy, bool, mpsc::Sender<Event>),
+    Run(Run, ExecutionPolicy, bool),
     RunToNativeExit,
     Resume(bool),
     /// Retire a parked guest MMIO access: write these registers (loaded
@@ -84,14 +84,7 @@ pub enum Value {
     Bytes(Vec<u8>),
     Address(u64),
     Registers(Registers),
-    Exit(Result<Exit, ExecutionError>),
     NativeExit(NativeExit),
-}
-pub struct Command {
-    pub op: Op,
-    /// A run retains its own reply while synchronous requests may be serviced
-    /// inside callbacks. Those requests use the worker's reusable queue.
-    pub run_reply: Option<mpsc::Sender<Result<Value, String>>>,
 }
 pub enum Event {
     Before(u64),
@@ -99,7 +92,7 @@ pub enum Event {
     Trap,
     /// A data abort with its instruction already decoded by the worker.
     Mmio(Trap, Box<MmioAccess>),
-    Done,
+    Done(Result<Exit, ExecutionError>),
 }
 #[derive(Clone)]
 pub struct Registers {
@@ -922,41 +915,33 @@ impl Processor {
         self.set_reg(ffi::PC, self.sys(0xc600)?.wrapping_add(offset))?;
         self.set_reg(ffi::PSTATE, (pstate & 0xf0000000) | 0x3c5)
     }
-    fn send_reply(
-        &self,
-        run_reply: Option<mpsc::Sender<Result<Value, String>>>,
-        result: Result<Value, String>,
-    ) {
-        if let Some(reply) = run_reply {
-            let _ = reply.send(result);
-        } else {
-            let _ = self.reply.send(result);
-        }
-    }
-    fn paused(&mut self, commands: &mpsc::Receiver<Command>) -> Result<bool, String> {
+    fn paused(&mut self, commands: &mpsc::Receiver<Op>) -> Result<bool, String> {
         loop {
-            let c = commands
+            let op = commands
                 .recv()
                 .map_err(|_| "HVF owner disconnected in callback")?;
-            if let Op::Resume(handled) = c.op {
-                self.send_reply(c.run_reply, Ok(Value::Empty));
+            if let Op::Resume(handled) = op {
+                let _ = self.reply.send(Ok(Value::Empty));
                 return Ok(handled);
             }
-            if let Op::CompleteMmio(updates) = c.op {
+            if let Op::CompleteMmio(updates) = op {
                 let result = updates
                     .iter()
                     .try_for_each(|&(register, value)| self.write(register, &value.to_le_bytes()));
-                self.send_reply(c.run_reply, result.clone().map(|()| Value::Empty));
+                let _ = self.reply.send(result.clone().map(|()| Value::Empty));
                 result?;
                 return Ok(true);
             }
-            if matches!(c.op, Op::Run(..) | Op::Shutdown) {
-                self.send_reply(c.run_reply, Err("cannot run/destroy a CPU inside its callback".into()));
-            } else {
-                let result = self.execute(c.op);
-                self.publish_parked();
-                self.send_reply(c.run_reply, result);
+            if matches!(op, Op::Run(..)) {
+                return Err("cannot run a CPU inside its callback".into());
             }
+            let result = if matches!(op, Op::Shutdown) {
+                Err("cannot destroy a CPU inside its callback".into())
+            } else {
+                self.execute(op)
+            };
+            self.publish_parked();
+            let _ = self.reply.send(result);
         }
     }
     fn run(
@@ -964,8 +949,8 @@ impl Processor {
         request: Run,
         policy: ExecutionPolicy,
         observe: bool,
-        events: &mpsc::Sender<Event>,
-        commands: &mpsc::Receiver<Command>,
+        events: &mpsc::SyncSender<Event>,
+        commands: &mpsc::Receiver<Op>,
     ) -> Result<Exit, ExecutionError> {
         match policy {
             ExecutionPolicy::Exact => {
@@ -1098,7 +1083,7 @@ impl Processor {
     }
     fn send_event(
         &self,
-        events: &mpsc::Sender<Event>,
+        events: &mpsc::SyncSender<Event>,
         event: Event,
         disconnected: &'static str,
     ) -> Result<(), ExecutionError> {
@@ -1113,8 +1098,8 @@ impl Processor {
         &mut self,
         request: Run,
         observe: bool,
-        events: &mpsc::Sender<Event>,
-        commands: &mpsc::Receiver<Command>,
+        events: &mpsc::SyncSender<Event>,
+        commands: &mpsc::Receiver<Op>,
     ) -> Result<Exit, ExecutionError> {
         self.shared.progress.store(0, Ordering::Relaxed);
         self.shared.measured.store(true, Ordering::Relaxed);
@@ -1330,8 +1315,8 @@ impl Processor {
     fn run_interactive(
         &mut self,
         request: Run,
-        events: &mpsc::Sender<Event>,
-        commands: &mpsc::Receiver<Command>,
+        events: &mpsc::SyncSender<Event>,
+        commands: &mpsc::Receiver<Op>,
     ) -> Result<Exit, ExecutionError> {
         self.shared.progress.store(0, Ordering::Relaxed);
         self.shared.measured.store(true, Ordering::Relaxed);
@@ -1503,8 +1488,9 @@ impl Drop for Processor {
 pub fn serve(
     vm: Arc<Machine>,
     shared: Arc<Shared>,
-    commands: mpsc::Receiver<Command>,
+    commands: mpsc::Receiver<Op>,
     reply: mpsc::SyncSender<Result<Value, String>>,
+    events: mpsc::SyncSender<Event>,
     ready: mpsc::Sender<Result<u64, String>>,
 ) {
     let mut p = match Processor::create(vm, shared, reply) {
@@ -1515,23 +1501,22 @@ pub fn serve(
         }
     };
     let _ = ready.send(Ok(p.cpu));
-    while let Ok(c) = commands.recv() {
-        match c.op {
+    while let Ok(op) = commands.recv() {
+        match op {
             Op::Shutdown => {
-                p.send_reply(c.run_reply, Ok(Value::Empty));
+                let _ = p.reply.send(Ok(Value::Empty));
                 break;
             }
-            Op::Run(request, policy, observe, events) => {
+            Op::Run(request, policy, observe) => {
                 let result = p.run(request, policy, observe, &events, &commands);
                 p.publish_parked();
-                p.send_reply(c.run_reply, Ok(Value::Exit(result)));
-                let _ = events.send(Event::Done);
+                let _ = events.send(Event::Done(result));
                 p.shared.notify_run_wakeup();
             }
             op => {
                 let result = p.execute(op);
                 p.publish_parked();
-                p.send_reply(c.run_reply, result);
+                let _ = p.reply.send(result);
             }
         }
     }

@@ -20,7 +20,7 @@ use std::rc::Rc;
 use std::sync::{Arc, atomic::Ordering, mpsc};
 use std::thread::JoinHandle;
 use std::{any::Any, ptr::NonNull};
-use worker::{Command, Event, MmioAccess, Op, Value};
+use worker::{Event, MmioAccess, Op, Value};
 
 /// One process-wide HVF VM; create every processor through this value.
 /// Map/host-memory mutations require all its CPUs to be stopped. Backing
@@ -73,7 +73,8 @@ enum MmioOutcome {
 pub struct Core {
     worker: Option<JoinHandle<()>>,
     budget_timer: Option<worker::BudgetTimer>,
-    commands: mpsc::Sender<Command>,
+    commands: mpsc::Sender<Op>,
+    events: mpsc::Receiver<Event>,
     replies: mpsc::Receiver<Result<Value, String>>,
     machine: Arc<Machine>,
     shared: Arc<worker::Shared>,
@@ -98,8 +99,6 @@ struct State {
 }
 struct ActiveRun {
     token: RunToken,
-    events: mpsc::Receiver<Event>,
-    reply: mpsc::Receiver<Result<Value, String>>,
     pending_callback: Option<Event>,
     callback_error: Option<ExecutionError>,
     result: Option<Result<Exit, ExecutionError>>,
@@ -120,13 +119,14 @@ impl Core {
     fn create(machine: Arc<Machine>) -> Result<Self, String> {
         let (commands, rx) = mpsc::channel();
         let (reply, replies) = mpsc::sync_channel(1);
+        let (event_tx, events) = mpsc::sync_channel(1);
         let (ready_tx, ready) = mpsc::channel();
         let shared = Arc::new(worker::Shared::default());
         let vm = machine.clone();
         let state = shared.clone();
         let worker = std::thread::Builder::new()
             .name("camera-hvf-vcpu".into())
-            .spawn(move || worker::serve(vm, state, rx, reply, ready_tx))
+            .spawn(move || worker::serve(vm, state, rx, reply, event_tx, ready_tx))
             .map_err(|e| e.to_string())?;
         match ready
             .recv()
@@ -145,6 +145,7 @@ impl Core {
                     worker: Some(worker),
                     budget_timer: Some(budget_timer),
                     commands,
+                    events,
                     replies,
                     machine,
                     shared,
@@ -198,7 +199,7 @@ impl Core {
         let resumes = matches!(op, Op::Resume(_) | Op::CompleteMmio(_));
         self.parked.set(false);
         self.commands
-            .send(Command { op, run_reply: None })
+            .send(op)
             .map_err(|_| "HVF worker disconnected")?;
         let result = self.replies.recv().map_err(|_| "HVF worker reply disconnected")?;
         self.parked.set(!resumes);
@@ -736,49 +737,36 @@ impl Cpu for Core {
         self.shared.stop.store(false, Ordering::Release);
         self.shared.deadline.store(false, Ordering::Release);
         let _watchdog = Watchdog::new(self.native_cpu, request.watchdog_us, self.shared.clone());
-        let (events, event_rx) = mpsc::channel();
-        let (reply, rx) = mpsc::channel();
         let observe = self.has_instruction_hooks();
         self.parked.set(false);
         self.commands
-            .send(Command {
-                op: Op::Run(request, policy, observe, events),
-                run_reply: Some(reply),
-            })
+            .send(Op::Run(request, policy, observe))
             .map_err(|_| ExecutionError::Backend("HVF worker disconnected".into()))?;
         let mut error = None;
-        while let Ok(event) = event_rx.recv() {
+        loop {
+            let event = self.events.recv()
+                .map_err(|_| ExecutionError::Backend("HVF worker disconnected during run".into()))?;
             self.parked.set(true);
-            match event {
+            let result = match event {
                 Event::Before(pc) => {
                     self.before(pc);
-                    self.rpc(Op::Resume(true))
-                        .map_err(ExecutionError::Backend)?;
+                    self.rpc(Op::Resume(true)).map(|_| ()).map_err(ExecutionError::Backend)
                 }
                 Event::Trap => {
-                    self.rpc(Op::Resume(false))
-                        .map_err(ExecutionError::Backend)?;
+                    self.rpc(Op::Resume(false)).map(|_| ()).map_err(ExecutionError::Backend)
                 }
                 Event::Mmio(trap, access) => {
                     let outcome = self.mmio_trap(trap, &access, false).unwrap_or_else(|e| {
                         error = Some(e);
                         MmioOutcome::Resume(false)
                     });
-                    self.resume(outcome)?;
+                    self.resume(outcome)
                 }
-                Event::Done => break,
+                Event::Done(result) => return error.map_or(result, Err),
+            };
+            if let Err(err) = result {
+                error.get_or_insert(err);
             }
-        }
-        if let Some(e) = error {
-            return Err(e);
-        }
-        match rx
-            .recv()
-            .map_err(|_| ExecutionError::Backend("HVF run reply disconnected".into()))?
-            .map_err(ExecutionError::Backend)?
-        {
-            Value::Exit(exit) => exit,
-            _ => unreachable!(),
         }
     }
     fn start_run(&self, request: Run) -> Result<RunToken, ExecutionError> {
@@ -807,15 +795,10 @@ impl Cpu for Core {
         self.shared.progress.store(0, Ordering::Relaxed);
         self.shared.measured.store(false, Ordering::Relaxed);
         let watchdog = Watchdog::new(self.native_cpu, request.watchdog_us, self.shared.clone());
-        let (events, event_rx) = mpsc::channel();
-        let (reply, reply_rx) = mpsc::channel();
         self.parked.set(false);
         if self
             .commands
-            .send(Command {
-                op: Op::Run(request, ExecutionPolicy::Interactive, false, events),
-                run_reply: Some(reply),
-            })
+            .send(Op::Run(request, ExecutionPolicy::Interactive, false))
             .is_err()
         {
             self.running.set(false);
@@ -824,8 +807,6 @@ impl Cpu for Core {
         }
         *self.active_run.borrow_mut() = Some(ActiveRun {
             token,
-            events: event_rx,
-            reply: reply_rx,
             pending_callback: None,
             callback_error: None,
             result: None,
@@ -843,27 +824,14 @@ impl Cpu for Core {
         if let Some(result) = &state.result {
             return Ok(RunStatus::Complete(result.clone()));
         }
-        match state.events.try_recv() {
+        match self.events.try_recv() {
             Ok(event @ (Event::Before(_) | Event::Trap | Event::Mmio(..))) => {
                 state.pending_callback = Some(event);
                 self.parked.set(true);
                 Ok(RunStatus::CallbackPending)
             }
-            Ok(Event::Done) => {
+            Ok(Event::Done(result)) => {
                 self.parked.set(true);
-                let result = match state.reply.try_recv() {
-                    Ok(Ok(Value::Exit(result))) => result,
-                    Ok(Ok(_)) => Err(ExecutionError::Backend(
-                        "HVF run returned an invalid completion value".into(),
-                    )),
-                    Ok(Err(error)) => Err(ExecutionError::Backend(error)),
-                    Err(mpsc::TryRecvError::Empty) => Err(ExecutionError::Backend(
-                        "HVF completion arrived before its run result".into(),
-                    )),
-                    Err(mpsc::TryRecvError::Disconnected) => {
-                        Err(ExecutionError::Backend("HVF run reply disconnected".into()))
-                    }
-                };
                 let result = state.callback_error.take().map_or(result, Err);
                 state.result = Some(result.clone());
                 state.watchdog.take();
@@ -915,7 +883,7 @@ impl Cpu for Core {
                     MmioOutcome::Resume(false)
                 }
             },
-            Event::Done => unreachable!("completion events cannot become callbacks"),
+            Event::Done(_) => unreachable!("completion events cannot become callbacks"),
         };
         self.resume(outcome)
     }
@@ -1138,14 +1106,13 @@ impl Drop for Core {
                     let _ = self.rpc(Op::Resume(false));
                 }
                 loop {
-                    match active.events.recv() {
+                    match self.events.recv() {
                         Ok(Event::Before(_) | Event::Trap | Event::Mmio(..)) => {
                             let _ = self.rpc(Op::Resume(false));
                         }
-                        Ok(Event::Done) | Err(_) => break,
+                        Ok(Event::Done(_)) | Err(_) => break,
                     }
                 }
-                let _ = active.reply.recv();
             }
             active.watchdog.take();
         }
