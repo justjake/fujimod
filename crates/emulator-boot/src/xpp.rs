@@ -8,9 +8,9 @@
 
 use crate::graph::{self, ProcessorStart};
 use fujimod_catalog::{
-    profiles::{BodyProfile, RegisterIdleBits, RegisterLayouts, SocProfile},
-    reference::{Body, ConnectionSignal, MemoryKind, MemoryRegion, RegionSize},
-    soc::ApplicationHardware,
+    profiles::{BlockOverride, BodyProfile, RegisterIdleBits, RegisterLayouts, SocProfile},
+    reference::{Body, ConnectionSignal, MemoryKind, MemoryRegion, RegionSize, Soc, SocBlock},
+    soc::{ApplicationHardware, BlockDevice, InterruptControllerHardware},
 };
 use fujimod_catalog_configuration::RunInstructionRate;
 use fujimod_catalog_resolution::ResolvedConfiguration;
@@ -18,7 +18,7 @@ use fujimod_catalog_run_inputs::HardwareReset;
 use fujimod_emulator::board::factory;
 use fujimod_emulator_cpu::Register;
 use serde_json::{Value, json};
-use std::{borrow::Cow, collections::BTreeMap};
+use std::collections::BTreeMap;
 
 /// Performance-counter cycles per board tick of each application core.
 const CYCLES_PER_TICK: u64 = 64;
@@ -137,33 +137,585 @@ fn body_profile(resolved: &ResolvedConfiguration) -> Result<&BodyProfile, String
         })
 }
 
-/// Add body-specific registers to the shared SoC profile. The shared profile
-/// wins every field it declares; a body may add a register block and the
-/// H.264 layout that block belongs to (X-T20 2.11 is the only such body).
-fn register_maps<'a>(
-    soc: &'a RegisterLayouts,
-    body: Option<&RegisterLayouts>,
-) -> Cow<'a, RegisterLayouts> {
-    let Some(body) = body else {
-        return Cow::Borrowed(soc);
-    };
-    if body.h264_encoder.is_none() && body.register_blocks.is_empty() {
-        return Cow::Borrowed(soc);
-    }
-    let mut maps = soc.clone();
-    if maps.h264_encoder.is_none() {
-        maps.h264_encoder = body.h264_encoder.clone();
-    }
-    for block in &body.register_blocks {
-        if !maps
-            .register_blocks
-            .iter()
-            .any(|existing| existing.base == block.base)
-        {
-            maps.register_blocks.push(block.clone());
+/// The device model of a block, after the selected body's overrides; the last
+/// override naming the block wins.
+fn device_for<'a>(block: &'a SocBlock, overrides: &'a [BlockOverride]) -> Option<&'a BlockDevice> {
+    overrides
+        .iter()
+        .rev()
+        .find(|item| item.block_id == block.id)
+        .map(|item| &item.device)
+        .or(block.device.as_ref())
+}
+
+/// Build the register layout the legacy board builder consumes from the
+/// processor blocks, applying the selected body's device overrides.
+fn block_register_layouts(
+    soc: &Soc,
+    overrides: &[BlockOverride],
+) -> Result<RegisterLayouts, String> {
+    use fujimod_catalog::profiles::*;
+
+    let blocks: BTreeMap<&str, &SocBlock> =
+        soc.blocks.iter().map(|block| (block.id.as_str(), block)).collect();
+    for override_ in overrides {
+        if !blocks.contains_key(override_.block_id.as_str()) {
+            return Err(format!(
+                "body override names absent SoC {} block {}",
+                soc.id, override_.block_id
+            ));
         }
     }
-    Cow::Owned(maps)
+    let first_irq = |block: &SocBlock| block.interrupts.first().map(|item| item.line as u64);
+    let named_irq = |block: &SocBlock, output: &str| {
+        block
+            .interrupts
+            .iter()
+            .find(|item| item.output == output)
+            .map(|item| item.line as u64)
+    };
+    let irqs = |block: &SocBlock| block.interrupts.iter().map(|item| item.line as u64).collect::<Vec<_>>();
+
+    let mut maps = RegisterLayouts::default();
+    let mut sd_clocks = Vec::new();
+    let mut control_requests = Vec::new();
+    let mut display_outputs = Vec::new();
+    let mut register_blocks = Vec::new();
+    let mut lcdc = Vec::new();
+    let mut movdc = Vec::new();
+    let mut sd_hosts = Vec::new();
+    let mut serial_bases = Vec::new();
+    let mut spi = BTreeMap::new();
+    let mut i2c = Vec::new();
+    let mut usb_core = None;
+    let mut usb_phy = None;
+
+    for block in &soc.blocks {
+        let Some(device) = device_for(block, overrides) else {
+            continue;
+        };
+        match device {
+            BlockDevice::ControlBus { offsets, modes } => {
+                maps.control_bus0 = Some(PrimaryBusRegisters {
+                    base: block.base,
+                    irq: first_irq(block).unwrap_or_default(),
+                    modes: modes.clone(),
+                    offsets: offsets.clone(),
+                });
+            }
+            BlockDevice::SecondaryBus {} => {
+                maps.control_bus1 = Some(SecondaryBusRegistersAddress {
+                    base: block.base,
+                    irq: first_irq(block).unwrap_or_default(),
+                });
+            }
+            BlockDevice::Nand {} => maps.nand = Some(LoaderDma { base: block.base }),
+            BlockDevice::LoaderDma {} => maps.loader_dma = Some(LoaderDma { base: block.base }),
+            BlockDevice::Decompressor { basis } => {
+                maps.decompressor = Some(Decompressor {
+                    base: block.base,
+                    basis: basis.clone(),
+                    irq_route: first_irq(block),
+                });
+            }
+            BlockDevice::Usb { basis } => usb_core = Some((block, basis.clone())),
+            BlockDevice::UsbPhy { basis } => {
+                usb_phy = Some((block, basis.clone()));
+            }
+            BlockDevice::SdHostClock { settle_ticks, basis } => {
+                sd_clocks.push((block.base, *settle_ticks, basis.clone()));
+            }
+            BlockDevice::Gpio { basis } => {
+                maps.gpio = Some(Gpio {
+                    base: block.base,
+                    basis: basis.clone(),
+                    size: block.size,
+                });
+            }
+            BlockDevice::Adc { sample_ticks, basis } => {
+                let value = Adc {
+                    base: block.base,
+                    basis: basis.clone(),
+                    sample_ticks: *sample_ticks,
+                    size: block.size,
+                };
+                if block.id == "temperature" {
+                    maps.temperature = Some(value);
+                } else {
+                    maps.adc = Some(value);
+                }
+            }
+            BlockDevice::Dmp { basis } => {
+                maps.dmp = Some(Dmp {
+                    base: block.base,
+                    basis: basis.clone(),
+                    irq_route: first_irq(block).unwrap_or_default(),
+                    size: block.size,
+                });
+            }
+            BlockDevice::Movdc { reset_ticks } => movdc.push(Movdc {
+                base: block.base,
+                irq: first_irq(block).unwrap_or_default(),
+                reset_ticks: *reset_ticks,
+            }),
+            BlockDevice::ControlRequest { ack_ticks, basis } => {
+                let register = if block.size == 0x84 { block.base + 0x80 } else { block.base };
+                control_requests.push((register, *ack_ticks, basis.clone()));
+            }
+            BlockDevice::IoGroups { basis } => {
+                maps.io_groups = Some(IoGroups {
+                    base: block.base,
+                    basis: basis.clone(),
+                });
+            }
+            BlockDevice::Spi { parent_clock_ticks, basis } => {
+                if let Some(name) = block.id.strip_prefix("spi") {
+                    spi.insert(
+                        name.into(),
+                        Spi {
+                            base: block.base,
+                            basis: basis.clone(),
+                            parent_clock_ticks: *parent_clock_ticks,
+                        },
+                    );
+                }
+            }
+            BlockDevice::SerialFlash {
+                aperture_block_id,
+                aperture_size,
+                timing,
+                native_dependencies,
+                basis,
+            } => {
+                let aperture = blocks.get(aperture_block_id.as_str()).ok_or_else(|| {
+                    format!("serial flash {} names absent aperture {}", block.id, aperture_block_id)
+                })?;
+                let size = aperture_size.unwrap_or(aperture.size);
+                if timing.is_some() || !native_dependencies.is_empty() {
+                    maps.serial_flash = Some(SerialFlash {
+                        aperture: aperture.base,
+                        base: block.base,
+                        basis: basis.clone().unwrap_or_default(),
+                        irq_route: first_irq(block).unwrap_or_default(),
+                        native_dependencies: native_dependencies.clone(),
+                        size,
+                        timing: timing.clone().unwrap_or_default(),
+                    });
+                } else {
+                    maps.flash_controller = Some(FlashController {
+                        aperture: aperture.base,
+                        base: block.base,
+                        basis: basis.clone().unwrap_or_default(),
+                        irq_route: first_irq(block),
+                        size,
+                    });
+                }
+            }
+            BlockDevice::Dma {
+                channels,
+                request_mux_block_id,
+                timing,
+                native_dependencies,
+                basis,
+            } => {
+                let mux = blocks.get(request_mux_block_id.as_str()).ok_or_else(|| {
+                    format!("DMA {} names absent request mux {}", block.id, request_mux_block_id)
+                })?;
+                maps.dma = Some(Dma {
+                    base: block.base,
+                    basis: basis.clone().unwrap_or_default(),
+                    channels: u64::from(*channels),
+                    irq_routes: irqs(block),
+                    native_dependencies: native_dependencies.clone(),
+                    request_mux: mux.base,
+                    timing: timing.clone().unwrap_or_default(),
+                });
+            }
+            BlockDevice::IntervalTimer { layout, clock, basis } => {
+                maps.interval_timer = Some(IntervalTimer {
+                    base: block.base,
+                    basis: basis.clone(),
+                    clock: clock.clone(),
+                    layout: *layout,
+                    routes: irqs(block)
+                        .into_iter()
+                        .enumerate()
+                        .map(|(channel, irq)| TimerRoute { channel: channel as u64, irq })
+                        .collect(),
+                });
+            }
+            BlockDevice::RegisterBlock {
+                idle_bits,
+                fixed_words,
+                commands,
+                frames,
+                job,
+                basis,
+                order,
+            } => {
+                let frames = frames.as_ref().map(|frames| RegisterBlockFrames {
+                    start: frames.start.clone(),
+                    stopped: frames.stopped.clone(),
+                    irq_route: first_irq(block).unwrap_or_default() as u32,
+                    period_ticks: frames.period_ticks,
+                });
+                let job = job.as_ref().map(|job| RegisterBlockJob {
+                    start: job.start.clone(),
+                    status: job.status.clone(),
+                    stop: job.stop.clone(),
+                    irq_route: first_irq(block).unwrap_or_default() as u32,
+                    ticks: job.ticks,
+                });
+                register_blocks.push((
+                    order.unwrap_or(u32::MAX),
+                    RegisterBlock {
+                        base: block.base,
+                        basis: basis.clone(),
+                        idle_bits: idle_bits.clone(),
+                        frames,
+                        job,
+                        fixed_words: fixed_words.clone(),
+                        commands: commands.clone(),
+                        size: block.size,
+                    },
+                ));
+            }
+            BlockDevice::Pl330 { setup_ticks, bytes_per_tick, timing, basis } => {
+                maps.pl330 = Some(Pl330 {
+                    base: block.base,
+                    irq_routes: irqs(block),
+                    setup_ticks: *setup_ticks,
+                    bytes_per_tick: *bytes_per_tick,
+                    timing: timing.clone(),
+                    basis: basis.clone(),
+                });
+            }
+            BlockDevice::SerialPort { basis } => serial_bases.push((block.base, basis.clone())),
+            BlockDevice::JpegCodec { run_ticks, basis } => {
+                let value = JpegCodec {
+                    base: block.base,
+                    basis: basis.clone(),
+                    irq_route: first_irq(block).unwrap_or_default() as u32,
+                    run_ticks: *run_ticks,
+                    size: block.size,
+                };
+                if block.id.contains("decoder") {
+                    maps.jpeg_decoder = Some(value);
+                } else {
+                    maps.jpeg_encoder = Some(value);
+                }
+            }
+            BlockDevice::FaceDetection { run_ticks, basis } => {
+                maps.face_detection = Some(FaceDetection {
+                    base: block.base,
+                    basis: basis.clone(),
+                    irq_route: first_irq(block).unwrap_or_default() as u32,
+                    run_ticks: *run_ticks,
+                    size: block.size,
+                });
+            }
+            BlockDevice::SdHost { capabilities, capabilities_2, clock_ticks, slot_and_version, transfer_ticks, vendor_offsets, basis } => {
+                sd_hosts.push(SdHost {
+                    base: block.base,
+                    basis: basis.clone(),
+                    capabilities: *capabilities,
+                    capabilities_2: *capabilities_2,
+                    clock_ticks: *clock_ticks,
+                    irq_route: first_irq(block).map(|line| line as u32),
+                    size: block.size,
+                    slot_and_version: *slot_and_version,
+                    transfer_ticks: *transfer_ticks,
+                    vendor_offsets: vendor_offsets.clone(),
+                });
+            }
+            BlockDevice::XppUsb { command_ticks, transaction_ticks, basis } => {
+                maps.xpp_usb = Some(XppUsb {
+                    base: block.base,
+                    basis: basis.clone(),
+                    command_ticks: *command_ticks,
+                    irq_route: first_irq(block).unwrap_or_default() as u32,
+                    size: block.size,
+                    transaction_ticks: *transaction_ticks,
+                });
+            }
+            BlockDevice::DisplayOutput { set_bits, clear_bits, handshake_ticks, scanout, basis, order } => {
+                display_outputs.push((
+                    order.unwrap_or(u32::MAX),
+                    DisplayOutput {
+                        handshake_ticks: *handshake_ticks,
+                        base: block.base,
+                        basis: basis.clone(),
+                        clear_bits: clear_bits.clone(),
+                        set_bits: set_bits.clone(),
+                        size: block.size,
+                        scanout: scanout.clone(),
+                    },
+                ));
+            }
+            BlockDevice::PllClocks { lock_ticks, basis } => {
+                maps.pll_clocks = Some(PllClocks {
+                    base: block.base,
+                    basis: basis.clone(),
+                    lock_ticks: *lock_ticks,
+                    size: block.size,
+                });
+            }
+            BlockDevice::ImagingControl { readout, basis } => {
+                maps.imaging_control = Some(ImagingControl {
+                    base: block.base,
+                    basis: basis.clone(),
+                    readout: readout.as_ref().map(|readout| SensorReadout {
+                        basis: readout.basis.clone(),
+                        irq_route: named_irq(block, "readout").unwrap_or_default() as u32,
+                        offset: readout.offset,
+                        ticks: readout.ticks,
+                        starts_on_frame: readout.starts_on_frame,
+                    }),
+                    size: block.size,
+                });
+            }
+            BlockDevice::ImagingStatistics { period_ticks, basis } => {
+                maps.imaging_statistics = Some(ImagingStatistics {
+                    base: block.base,
+                    basis: basis.clone(),
+                    irq_route: first_irq(block).unwrap_or_default() as u32,
+                    period_ticks: *period_ticks,
+                    size: block.size,
+                });
+            }
+            BlockDevice::HdmiTx { basis } => {
+                maps.hdmi_tx = Some(HdmiTransmitter {
+                    base: block.base,
+                    basis: basis.clone(),
+                    size: block.size,
+                });
+            }
+            BlockDevice::FrameSync { interrupts, period_ticks, sources, basis } => {
+                maps.frame_sync = Some(FrameSync {
+                    base: block.base,
+                    basis: basis.clone(),
+                    interrupts: *interrupts,
+                    period_ticks: *period_ticks,
+                    size: block.size,
+                    sources: sources
+                        .iter()
+                        .map(|source| FrameSource {
+                            irq_route: named_irq(block, &format!("frame-status-{}", source.status_bit))
+                                .or_else(|| first_irq(block))
+                                .unwrap_or_default() as u32,
+                            status_bit: source.status_bit,
+                        })
+                        .collect(),
+                });
+            }
+            BlockDevice::ResetGates { basis } => {
+                maps.reset_gates = Some(ResetGates {
+                    base: block.base,
+                    basis: basis.clone(),
+                    size: block.size,
+                });
+            }
+            BlockDevice::DramController { basis } => {
+                maps.dram_controller = Some(DramController {
+                    base: block.base,
+                    basis: basis.clone(),
+                    size: block.size,
+                });
+            }
+            BlockDevice::PowerControl { basis } => {
+                maps.power_control = Some(PowerControl {
+                    base: block.base,
+                    basis: basis.clone(),
+                    size: block.size,
+                });
+            }
+            BlockDevice::I2c { fifo_depth, clock_hz, tick_hz, basis } => i2c.push((
+                block.base,
+                basis.clone(),
+                *clock_hz,
+                *fifo_depth,
+                first_irq(block).unwrap_or_default() as u32,
+                block.size,
+                *tick_hz,
+            )),
+            BlockDevice::XppSd { register_offset, reset_channel, transfer_ticks, clock_ticks, reset_ticks, basis } => {
+                maps.xpp_sd = Some(XppSdHost {
+                    base: block.base,
+                    basis: basis.clone(),
+                    clock_ticks: *clock_ticks,
+                    irq_route: first_irq(block).unwrap_or_default() as u32,
+                    register_offset: *register_offset,
+                    reset_channel: *reset_channel,
+                    reset_ticks: *reset_ticks,
+                    size: block.size,
+                    transfer_ticks: *transfer_ticks,
+                });
+            }
+            BlockDevice::H264Encoder { run_ticks, basis } => {
+                maps.h264_encoder = Some(H264Encoder {
+                    base: block.base,
+                    basis: basis.clone(),
+                    irq_route: first_irq(block).unwrap_or_default() as u32,
+                    run_ticks: *run_ticks,
+                    size: block.size,
+                });
+            }
+            BlockDevice::SensorCommand { command_ticks, reset_ticks, basis } => {
+                let _ = (command_ticks, reset_ticks, basis);
+            }
+            BlockDevice::ImagingReceiver { basis } => {
+                let _ = basis;
+            }
+            BlockDevice::Display {
+                picture_layout,
+                video_layout,
+                pixel_clock_ticks,
+                basis,
+                frame_basis,
+                period_ticks,
+                timing,
+                set_bits,
+                clear_bits,
+                handshake_ticks,
+                scanout,
+                order,
+            } => {
+                if let Some(pixel_clock_ticks) = pixel_clock_ticks {
+                    lcdc.push(Lcdc {
+                        base: block.base,
+                        basis: basis.clone().unwrap_or_default(),
+                        irq_routes: irqs(block),
+                        picture_layout: picture_layout.as_ref().map(|_| "abgr8888-straight".into()),
+                        pixel_clock_ticks: *pixel_clock_ticks,
+                        video_layout: video_layout.as_ref().map(|_| "yycbcr422".into()),
+                    });
+                }
+                if let Some(period_ticks) = period_ticks {
+                    maps.display_frames = Some(DisplayFrames {
+                        timing: timing.clone(),
+                        basis: frame_basis.clone().unwrap_or_default(),
+                        irq_routes: irqs(block),
+                        period_ticks: *period_ticks,
+                    });
+                }
+                if !set_bits.is_empty() || !clear_bits.is_empty() || scanout.is_some() || handshake_ticks.is_some() {
+                    display_outputs.push((
+                        order.unwrap_or(u32::MAX),
+                        DisplayOutput {
+                            handshake_ticks: *handshake_ticks,
+                            base: block.base,
+                            basis: basis.clone().unwrap_or_default(),
+                            clear_bits: clear_bits.clone(),
+                            set_bits: set_bits.clone(),
+                            size: block.size,
+                            scanout: scanout.clone(),
+                        },
+                    ));
+                }
+            }
+            BlockDevice::ImagingInputBuffer { reset_ticks, basis, .. } => {
+                let _ = (reset_ticks, basis);
+            }
+            BlockDevice::SerialDma { .. } | BlockDevice::CompanionDma { .. } => {}
+        }
+    }
+
+    if let Some((block, basis)) = usb_core {
+        let phy_base = usb_phy.map(|(phy, _)| phy.base).unwrap_or_default();
+        maps.usb = Some(UsbRegisters {
+            basis,
+            core: block.base,
+            dma_irq: named_irq(block, "host").unwrap_or_default(),
+            irq: named_irq(block, "device").unwrap_or_default(),
+            phy: phy_base,
+        });
+    }
+    if let Some((_, _, basis)) = sd_clocks.first() {
+        maps.sd_host_clocks = Some(SdHostClocks {
+            basis: basis.clone(),
+            settle_ticks: sd_clocks.first().map(|item| item.1).unwrap_or_default(),
+            words: sd_clocks.iter().map(|item| item.0).collect(),
+        });
+    }
+    if let Some((ack_ticks, basis)) = control_requests.first().map(|item| (item.1, item.2.clone())) {
+        control_requests.sort_by_key(|item| item.0);
+        maps.control_requests = Some(ControlRequests {
+            ack_ticks,
+            basis,
+            registers: control_requests.into_iter().map(|item| item.0).collect(),
+        });
+    }
+    display_outputs.sort_by_key(|item| item.0);
+    if !display_outputs.is_empty() {
+        maps.display_outputs = Some(display_outputs.into_iter().map(|item| item.1).collect());
+    }
+    register_blocks.sort_by_key(|item| item.0);
+    maps.register_blocks = register_blocks.into_iter().map(|item| item.1).collect();
+    lcdc.sort_by_key(|item| item.base);
+    if !lcdc.is_empty() {
+        maps.lcdc = Some(lcdc);
+    }
+    movdc.sort_by_key(|item| item.base);
+    if !movdc.is_empty() {
+        maps.movdc = Some(movdc);
+    }
+    sd_hosts.sort_by_key(|item| item.base);
+    maps.sd_hosts = sd_hosts;
+    serial_bases.sort_by_key(|item| item.0);
+    if !serial_bases.is_empty() {
+        maps.serial_ports = Some(SerialPorts {
+            bases: serial_bases.iter().map(|item| item.0).collect(),
+            basis: serial_bases.first().map(|item| item.1.clone()).unwrap_or_default(),
+        });
+    }
+    if !spi.is_empty() {
+        maps.spi = Some(spi);
+    }
+    i2c.sort_by_key(|item| item.0);
+    maps.xpp_i2c = i2c.first().map(|first| XppI2cBuses {
+        base: first.0,
+        basis: first.1.clone(),
+        clock_hz: first.2,
+        fifo_depth: first.3,
+        irq_routes: i2c.iter().map(|item| item.4).collect(),
+        size: first.5,
+        stride: i2c.get(1).map(|second| second.0 - first.0).unwrap_or(first.5),
+        tick_hz: first.6,
+    });
+    Ok(maps)
+}
+
+/// The GIC node of the selected SoC: distributor and CPU-interface windows
+/// located through the block identities the interrupt-controller hardware
+/// names, plus its implemented line count.
+fn gic_node(soc: &Soc) -> Result<Value, String> {
+    let controller = soc
+        .hardware
+        .as_ref()
+        .and_then(|hardware| hardware.interrupt_controller.as_ref())
+        .ok_or("X-Processor Pro assembly requires an interrupt controller")?;
+    let block_base = |id: &str| {
+        soc.blocks
+            .iter()
+            .find(|block| block.id == id)
+            .map(|block| block.base)
+            .ok_or_else(|| format!("interrupt controller names absent block {id}"))
+    };
+    match controller {
+        InterruptControllerHardware::GicV2 {
+            distributor_block_id,
+            cpu_interface_block_id,
+            lines,
+            ..
+        } => Ok(json!({
+            "distributor": block_base(distributor_block_id)?,
+            "cpu_interface": block_base(cpu_interface_block_id)?,
+            "lines": lines,
+        })),
+        InterruptControllerHardware::GicV3 { .. } => {
+            Err("X-Processor Pro assembly requires a GICv2 interrupt controller".into())
+        }
+    }
 }
 
 /// Command-dial encoder nodes of the selected body profile. Each declaration
@@ -471,7 +1023,7 @@ fn nodes(
             }),
         );
     }
-    for serial in serial_nodes(maps, reset, inputs.sub_cpu_registers)? {
+    for serial in serial_nodes(&maps, reset, inputs.sub_cpu_registers)? {
         out.push(serial);
     }
     let mut node = |name: String, model: Value| out.push(json!({ "name": name, "model": model }));
@@ -960,16 +1512,8 @@ pub fn assemble(resolved: &ResolvedConfiguration, inputs: &Inputs<'_>) -> Result
         .reset;
     let body = &selection.body;
     let profile = body_profile(resolved)?;
-    let maps = register_maps(
-        soc.register_maps
-            .as_ref()
-            .ok_or("X-Processor Pro assembly requires the SoC register maps")?,
-        profile.register_maps.as_ref(),
-    );
-    let gic = maps
-        .gic
-        .as_ref()
-        .ok_or("X-Processor Pro assembly requires the GIC map")?;
+    let maps = block_register_layouts(&selection.soc, &profile.block_overrides)?;
+    let gic = gic_node(&selection.soc)?;
     let (numerator, denominator) = reset
         .execution_clock
         .as_ref()
@@ -987,7 +1531,7 @@ pub fn assemble(resolved: &ResolvedConfiguration, inputs: &Inputs<'_>) -> Result
     )?;
     let cores = execution.processors.len() as u64;
     let mut node_list = nodes(
-        maps.as_ref(),
+        &maps,
         &reset,
         dram_address_space_limit_bytes,
         &ram_banks(&selection.soc.memory_regions),
@@ -1003,7 +1547,7 @@ pub fn assemble(resolved: &ResolvedConfiguration, inputs: &Inputs<'_>) -> Result
             "cycles_per_tick": CYCLES_PER_TICK,
             "cache_sizes": [caches.l1_data_bytes, caches.l1_instruction_bytes, caches.l2_bytes],
         })).collect::<Vec<_>>(),
-        "gic": { "distributor": gic.distributor, "cpu_interface": gic.cpu_interface, "lines": gic.lines },
+        "gic": gic,
         "nodes": node_list,
     });
     Ok(Assembly {
@@ -1132,13 +1676,11 @@ mod tests {
             ("xt20-211", true),
         ] {
             let resolved = ResolvedConfiguration::bundled(configuration).unwrap();
-            let soc = soc_profile(&resolved)
-                .unwrap()
-                .register_maps
-                .as_ref()
-                .unwrap();
-            let body = body_profile(&resolved).unwrap().register_maps.as_ref();
-            let maps = register_maps(soc, body);
+            let maps = block_register_layouts(
+                &resolved.reference.soc,
+                &body_profile(&resolved).unwrap().block_overrides,
+            )
+            .unwrap();
             assert_eq!(
                 maps.h264_encoder.is_some(),
                 expected,
@@ -1350,11 +1892,11 @@ mod tests {
     #[test]
     fn a_live_view_film_reaches_its_unit_and_needs_the_still_color_unit() {
         let resolved = ResolvedConfiguration::bundled("xt20-211").unwrap();
-        let maps = soc_profile(&resolved)
-            .unwrap()
-            .register_maps
-            .as_ref()
-            .unwrap();
+        let maps = block_register_layouts(
+            &resolved.reference.soc,
+            &body_profile(&resolved).unwrap().block_overrides,
+        )
+        .unwrap();
         let selection = &resolved.reference;
         let banks = ram_banks(&selection.soc.memory_regions);
         let reset = resolved.hardware_inputs().unwrap().unwrap().reset;
@@ -1368,7 +1910,7 @@ mod tests {
                 sensor_image: None,
             };
             nodes(
-                maps,
+                &maps,
                 reset,
                 selection.body.dram_bytes.unwrap(),
                 &banks,
@@ -1444,11 +1986,11 @@ mod tests {
     fn a_live_view_host_image_is_checked_and_passed_to_its_unit() {
         use fujimod_catalog_run_inputs::hardware_inputs::LiveViewHostImage;
         let resolved = ResolvedConfiguration::bundled("xt20-211").unwrap();
-        let maps = soc_profile(&resolved)
-            .unwrap()
-            .register_maps
-            .as_ref()
-            .unwrap();
+        let maps = block_register_layouts(
+            &resolved.reference.soc,
+            &body_profile(&resolved).unwrap().block_overrides,
+        )
+        .unwrap();
         let selection = &resolved.reference;
         let banks = ram_banks(&selection.soc.memory_regions);
         let mut reset = resolved.hardware_inputs().unwrap().unwrap().reset;
@@ -1474,7 +2016,7 @@ mod tests {
                 sensor_image: None,
             };
             nodes(
-                maps,
+                &maps,
                 reset,
                 selection.body.dram_bytes.unwrap(),
                 &banks,
@@ -1503,11 +2045,11 @@ mod tests {
     fn a_caller_sensor_image_needs_a_declared_frame_and_matching_rows() {
         use fujimod_catalog_run_inputs::hardware_inputs::SensorFrame;
         let resolved = ResolvedConfiguration::bundled("xt20-211").unwrap();
-        let maps = soc_profile(&resolved)
-            .unwrap()
-            .register_maps
-            .as_ref()
-            .unwrap();
+        let maps = block_register_layouts(
+            &resolved.reference.soc,
+            &body_profile(&resolved).unwrap().block_overrides,
+        )
+        .unwrap();
         let selection = &resolved.reference;
         let banks = ram_banks(&selection.soc.memory_regions);
         let starts = starts();
@@ -1520,7 +2062,7 @@ mod tests {
                 sensor_image: Some(image),
             };
             nodes(
-                maps,
+                &maps,
                 reset,
                 resolved.dram_address_space_limit_bytes().unwrap(),
                 &banks,
@@ -1567,16 +2109,16 @@ mod tests {
         reset: &HardwareReset,
         picture: Option<&SensorImage>,
     ) -> Result<Vec<Value>, String> {
-        let maps = soc_profile(resolved)
-            .unwrap()
-            .register_maps
-            .as_ref()
-            .unwrap();
+        let maps = block_register_layouts(
+            &resolved.reference.soc,
+            &body_profile(resolved).unwrap().block_overrides,
+        )
+        .unwrap();
         let selection = &resolved.reference;
         let banks = ram_banks(&selection.soc.memory_regions);
         let (starts, assets) = (starts(), assets());
         nodes(
-            maps,
+            &maps,
             reset,
             resolved.dram_address_space_limit_bytes().unwrap(),
             &banks,
@@ -1733,11 +2275,11 @@ mod tests {
     #[test]
     fn a_declared_zone_exposure_reaches_the_imaging_and_statistics_nodes() {
         let resolved = ResolvedConfiguration::bundled("xt20-211").unwrap();
-        let maps = soc_profile(&resolved)
-            .unwrap()
-            .register_maps
-            .as_ref()
-            .unwrap();
+        let maps = block_register_layouts(
+            &resolved.reference.soc,
+            &body_profile(&resolved).unwrap().block_overrides,
+        )
+        .unwrap();
         let reset = resolved.hardware_inputs().unwrap().unwrap().reset;
         let (starts, assets) = (starts(), assets());
         let inputs = Inputs {
@@ -1748,7 +2290,7 @@ mod tests {
         };
         let banks = ram_banks(&resolved.reference.soc.memory_regions);
         let nodes = nodes(
-            maps,
+            &maps,
             &reset,
             resolved.dram_address_space_limit_bytes().unwrap(),
             &banks,
@@ -1767,11 +2309,11 @@ mod tests {
     fn a_declared_sensor_frame_reaches_the_read_out_unit() {
         use fujimod_catalog_run_inputs::hardware_inputs::SensorFrame;
         let resolved = ResolvedConfiguration::bundled("xt20-211").unwrap();
-        let maps = soc_profile(&resolved)
-            .unwrap()
-            .register_maps
-            .as_ref()
-            .unwrap();
+        let maps = block_register_layouts(
+            &resolved.reference.soc,
+            &body_profile(&resolved).unwrap().block_overrides,
+        )
+        .unwrap();
         let mut reset = resolved.hardware_inputs().unwrap().unwrap().reset;
         reset.sensor_frame = Some(SensorFrame {
             basis: "test".into(),
@@ -1786,7 +2328,7 @@ mod tests {
         };
         let banks = ram_banks(&resolved.reference.soc.memory_regions);
         let nodes = nodes(
-            maps,
+            &maps,
             &reset,
             resolved.dram_address_space_limit_bytes().unwrap(),
             &banks,
@@ -1809,11 +2351,11 @@ mod tests {
     fn declared_still_development_reaches_the_developer_and_the_resizer() {
         use fujimod_catalog_run_inputs::hardware_inputs::StillDevelopment;
         let resolved = ResolvedConfiguration::bundled("xt20-211").unwrap();
-        let maps = soc_profile(&resolved)
-            .unwrap()
-            .register_maps
-            .as_ref()
-            .unwrap();
+        let maps = block_register_layouts(
+            &resolved.reference.soc,
+            &body_profile(&resolved).unwrap().block_overrides,
+        )
+        .unwrap();
         let mut reset = resolved.hardware_inputs().unwrap().unwrap().reset;
         reset.live_view_image.as_mut().unwrap().film = None;
         reset.still_development = Some(StillDevelopment {
@@ -1834,7 +2376,7 @@ mod tests {
             sensor_image: None,
         };
         let banks = ram_banks(&resolved.reference.soc.memory_regions);
-        let nodes = nodes(maps, &reset, 0, &banks, &inputs).unwrap();
+        let nodes = nodes(&maps, &reset, 0, &banks, &inputs).unwrap();
         let block = |base: u64| {
             nodes
                 .iter()
@@ -1852,14 +2394,14 @@ mod tests {
         );
         assert!(block(0xfff7_e000)["model"].get("work").is_none());
         reset.still_development.as_mut().unwrap().color = Some(0xfff4_7000);
-        let nodes = super::nodes(maps, &reset, 0, &banks, &inputs).unwrap();
+        let nodes = super::nodes(&maps, &reset, 0, &banks, &inputs).unwrap();
         let developer = nodes
             .iter()
             .find(|node| node["model"]["base"] == 0xfff9_8000u64)
             .unwrap();
         assert_eq!(developer["model"]["work"]["color"], 0xfff4_7000u64);
         reset.still_development.as_mut().unwrap().tone = Some(0xfffa_c000);
-        let nodes = super::nodes(maps, &reset, 0, &banks, &inputs).unwrap();
+        let nodes = super::nodes(&maps, &reset, 0, &banks, &inputs).unwrap();
         let developer = nodes
             .iter()
             .find(|node| node["model"]["base"] == 0xfff9_8000u64)
@@ -1867,18 +2409,18 @@ mod tests {
         assert_eq!(developer["model"]["work"]["tone"], 0xfffa_c000u64);
         reset.still_development.as_mut().unwrap().color = None;
         assert_eq!(
-            super::nodes(maps, &reset, 0, &banks, &inputs)
+            super::nodes(&maps, &reset, 0, &banks, &inputs)
                 .err()
                 .unwrap(),
             "a still tone unit needs the still color unit"
         );
         reset.still_development.as_mut().unwrap().color = Some(0xfff4_8000);
         reset.still_development.as_mut().unwrap().tone = None;
-        assert!(super::nodes(maps, &reset, 0, &banks, &inputs).is_err());
+        assert!(super::nodes(&maps, &reset, 0, &banks, &inputs).is_err());
         reset.still_development.as_mut().unwrap().color = None;
         reset.still_development.as_mut().unwrap().resizer = 0xfff7_f004;
         assert_eq!(
-            super::nodes(maps, &reset, 0, &banks, &inputs)
+            super::nodes(&maps, &reset, 0, &banks, &inputs)
                 .err()
                 .unwrap(),
             "still development units must be register blocks with jobs"
@@ -1965,4 +2507,5 @@ mod tests {
             "reset registers name 1 cores; SoC xpp has 2"
         );
     }
+
 }

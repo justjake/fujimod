@@ -58,6 +58,7 @@ impl Profile {
                 let BlockDevice::Display {
                     picture_layout,
                     video_layout,
+                    ..
                 } = b
                 else {
                     return None;
