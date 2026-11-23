@@ -114,6 +114,24 @@ impl Capability for dyn HdmiOutput {
     }
 }
 
+/// A bus condition a USB host waits for before its next transaction.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum UsbHostWait {
+    /// The device has enabled its controller and pulled up the bus.
+    Enabled,
+    /// No transaction is pending at the device.
+    Idle,
+    /// The device consumed the last setup packet.
+    SetupTaken,
+    /// The device consumed a control OUT data packet of this many bytes.
+    ControlOutTaken(usize),
+    /// The device consumed the last OUT packet on this endpoint, so it can
+    /// take another.
+    OutTaken(u8),
+    /// This IN endpoint holds a packet.
+    InPacket(u8),
+}
+
 /// A USB device port the host drives.
 pub trait UsbPort {
     fn cable_connected(&self) -> bool;
@@ -123,6 +141,12 @@ pub trait UsbPort {
     fn host_out(&mut self, cx: &mut Cx<'_>, endpoint: u8, packet: &[u8]) -> Result<(), String>;
     fn host_in(&mut self, cx: &mut Cx<'_>, endpoint: u8, size: usize) -> Result<Vec<u8>, String>;
     fn host_in_token(&mut self, cx: &mut Cx<'_>, endpoint: u8) -> Result<(), String>;
+    /// Whether the bus is in `wait`'s condition.
+    fn host_ready(&self, wait: UsbHostWait) -> Result<bool, String>;
+    /// Whether an empty IN endpoint needs an IN token before the device fills it.
+    fn host_in_wants_token(&self, endpoint: u8) -> Result<bool, String>;
+    /// The largest bulk packet.
+    fn packet_bytes(&self) -> Result<usize, String>;
 }
 impl Capability for dyn UsbPort {
     fn of(device: &dyn Device) -> Option<&Self> {

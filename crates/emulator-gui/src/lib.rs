@@ -9,6 +9,7 @@
 pub mod launch;
 mod protocol;
 mod server;
+mod usb;
 
 pub use server::{Endpoint, Room, Run, Viewer, serve};
 
@@ -22,6 +23,9 @@ impl Run for RunHost {
         RunHost::session_mut(self)
     }
     fn step(&mut self) -> Result<(), String> {
+        RunHost::step(self)
+    }
+    fn settle(&mut self) -> Result<(), String> {
         RunHost::step(self)
     }
     fn frames(&mut self) -> Result<Vec<fujimod_emulator_devices::graphics::scanout::Frame>, String> {
@@ -66,6 +70,11 @@ impl Run for Live {
         // About one LCD frame of guest time per slice keeps the window responsive.
         let session = &mut self.camera.session;
         let until = session.board.now() + (self.camera.ticks_per_second / 60).max(1);
+        session.run_window(u64::MAX, self.camera.quantum, None, Some(until))
+    }
+    fn settle(&mut self) -> Result<(), String> {
+        let session = &mut self.camera.session;
+        let until = session.board.now() + (self.camera.ticks_per_second / 1000).max(1);
         session.run_window(u64::MAX, self.camera.quantum, None, Some(until))
     }
     fn frames(&mut self) -> Result<Vec<fujimod_emulator_devices::graphics::scanout::Frame>, String> {

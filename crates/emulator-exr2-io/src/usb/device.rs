@@ -192,4 +192,13 @@ impl fujimod_emulator_devices::capability::UsbPort for UsbController {
     fn host_in_token(&mut self, cx: &mut fujimod_emulator_devices::Cx<'_>, endpoint: u8) -> std::result::Result<(), String> {
         self.endpoint_mut()?.host_in_token(cx, endpoint)
     }
+    fn host_ready(&self, wait: fujimod_emulator_devices::capability::UsbHostWait) -> std::result::Result<bool, String> {
+        self.endpoint()?.host_ready(wait)
+    }
+    fn host_in_wants_token(&self, endpoint: u8) -> std::result::Result<bool, String> {
+        self.endpoint()?.host_in_wants_token(endpoint)
+    }
+    fn packet_bytes(&self) -> std::result::Result<usize, String> {
+        Ok(self.endpoint()?.packet_bytes())
+    }
 }

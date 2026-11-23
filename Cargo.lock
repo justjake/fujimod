@@ -2815,11 +2815,14 @@ dependencies = [
 name = "fujimod-emulator-gui"
 version = "0.1.0"
 dependencies = [
+ "async-channel",
  "fujimod-catalog",
  "fujimod-emulator-boot",
  "fujimod-emulator-controls",
  "fujimod-emulator-devices",
  "fujimod-emulator-session",
+ "fujimod-usb",
+ "fujimod-usb-proxy",
  "fujimod-webrtc",
  "fujimod-workspace-hack",
  "futures-lite",

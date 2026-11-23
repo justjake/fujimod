@@ -91,6 +91,10 @@ impl fujimod_emulator_gui::Run for Camera {
         let until = self.session.board.now() + (self.ticks_per_second / 60).max(1);
         self.session.run_window(u64::MAX, self.quantum, None, Some(until))
     }
+    fn settle(&mut self) -> Result<(), String> {
+        let until = self.session.board.now() + (self.ticks_per_second / 1000).max(1);
+        self.session.run_window(u64::MAX, self.quantum, None, Some(until))
+    }
     fn frames(
         &mut self,
     ) -> Result<Vec<fujimod_emulator_devices::graphics::scanout::Frame>, String> {
@@ -277,7 +281,7 @@ impl Camera {
             std::thread::sleep(std::time::Duration::from_secs(30));
             timer.store(true, std::sync::atomic::Ordering::Release);
         });
-        let viewer = match room.join(self, &expired) {
+        let viewer = match room.join(&expired) {
             Ok(viewer) => viewer,
             Err(error) => {
                 let _ = app.kill();

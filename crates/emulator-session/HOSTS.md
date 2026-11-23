@@ -77,6 +77,17 @@ this one loop; no host keeps its own copy.
   reached through a TURN relay gets controls without video. The control
   catalog, positions, inputs, touches and replies share one ordered data
   channel. The viewer has no processor-specific code.
+- The room also shares the camera's emulated USB port as its one USB
+  device. A controller that opens with the USB share protocol's `Hello` gets
+  the share owner's protocol (`crates/usb` `share_owner`), so Dev Tools and
+  every native tool talk to the emulated camera over its USB port exactly as
+  they talk to a shared real camera. The room enumerates the port when the
+  first such controller joins. `usb_host::UsbHost` runs the transactions on
+  the run thread through the board's `UsbPort` capability; between packets
+  it waits for the bus condition the controller model reports
+  (`UsbHostWait`) by advancing guest time, never by reading firmware state.
+  A run shares USB only when its configuration models the endpoints (X70:
+  the `x70-110-browser-usb` overlay).
 - Every joined controller may send input. A button is pressed while any
   controller holds it and released when the last one lets go; a dial or
   switch takes the position any controller set most recently.

@@ -10,6 +10,10 @@ pub(super) enum Source {
         owner: Arc<DeviceOwner>,
         exporter: Exporter,
     },
+    Device {
+        device: Arc<dyn super::SharedDevice>,
+        claim: Mutex<Option<String>>,
+    },
     Proxy {
         device: Box<RemoteDevice>,
         ready: Option<std::path::PathBuf>,
@@ -22,6 +26,12 @@ impl Source {
         Self::Native {
             exporter: Exporter::new([owner.clone()]),
             owner,
+        }
+    }
+    pub fn device(device: Arc<dyn super::SharedDevice>) -> Self {
+        Self::Device {
+            device,
+            claim: Mutex::new(None),
         }
     }
     pub async fn configured_proxy(selector: Option<&str>) -> crate::Result<Option<Self>> {
@@ -50,24 +60,29 @@ impl Source {
     pub fn descriptor(&self) -> &fujimod_usb_proxy::Device {
         match self {
             Self::Native { owner, .. } => &owner.descriptor,
+            Self::Device { device, .. } => device.descriptor(),
             Self::Proxy { device, .. } => &device.descriptor,
         }
     }
     pub fn present(&self) -> bool {
         match self {
             Self::Native { owner, .. } => owner.status().present,
+            Self::Device { .. } => true,
             Self::Proxy { ready, .. } => ready.as_ref().is_none_or(|path| path.is_file()),
         }
     }
     pub fn fenced(&self) -> bool {
         match self {
             Self::Native { owner, .. } => owner.status().fenced,
-            Self::Proxy { .. } => false,
+            Self::Device { .. } | Self::Proxy { .. } => false,
         }
     }
     pub fn owns(&self, id: &str, device: &str) -> bool {
         match self {
             Self::Native { exporter, .. } => exporter.owns(id, device),
+            Self::Device { claim, .. } => {
+                self.descriptor().id == device && claim.lock().unwrap().as_deref() == Some(id)
+            }
             Self::Proxy { claimed, .. } => {
                 self.descriptor().id == device && claimed.lock().unwrap().contains(id)
             }
@@ -76,6 +91,14 @@ impl Source {
     pub fn abandon(&self, id: &str) -> bool {
         match self {
             Self::Native { exporter, .. } => exporter.abandon(id),
+            Self::Device { claim, .. } => {
+                let mut claim = claim.lock().unwrap();
+                let held = claim.as_deref() == Some(id);
+                if held {
+                    *claim = None;
+                }
+                held
+            }
             Self::Proxy {
                 clients, claimed, ..
             } => {
@@ -95,6 +118,33 @@ impl Source {
                         Message::Result { completion, .. } => Ok(completion),
                         _ => Err(error("Invalid exporter reply")),
                     }
+                }
+                Self::Device { device, claim } => {
+                    let Message::Execute { op, .. } = message else {
+                        return Err(error("Expected USB execute message"));
+                    };
+                    let opening = matches!(op, Operation::Open { .. });
+                    let closing = matches!(op, Operation::Close);
+                    {
+                        let holder = claim.lock().unwrap();
+                        match (holder.as_deref(), opening) {
+                            (Some(holder), _) if holder != id => {
+                                return Err(error("Shared camera is in use"));
+                            }
+                            (None, false) => return Err(error("Shared camera is not claimed")),
+                            _ => (),
+                        }
+                    }
+                    let reply = device.execute(op).await;
+                    if reply.error.is_none() {
+                        if opening {
+                            *claim.lock().unwrap() = Some(id.into());
+                        }
+                        if closing {
+                            *claim.lock().unwrap() = None;
+                        }
+                    }
+                    Ok(reply)
                 }
                 Self::Proxy {
                     device,

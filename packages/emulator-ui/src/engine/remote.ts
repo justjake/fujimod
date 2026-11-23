@@ -110,6 +110,7 @@ export class RemoteEngine implements Engine {
     if (this.unavailable) return Promise.reject(this.unavailable);
     this.peer ??= connectPeer(this.url, { video: true }).then((peer) => {
       peer.onclose = () => this.fail(Error('Native emulator connection closed.'));
+      void peer.send(text.encode(JSON.stringify({ type: 'hello' })));
       void this.receiveMessages(peer);
       void peer.video?.then((track) => this.showVideo(track));
       return peer;

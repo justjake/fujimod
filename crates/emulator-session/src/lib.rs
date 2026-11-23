@@ -13,6 +13,7 @@ pub mod state;
 #[cfg(test)]
 mod tests;
 pub mod usb;
+pub mod usb_host;
 
 use fujimod_emulator::board::Board;
 use fujimod_emulator_devices::parts::card_contacts::Contacts;

@@ -1786,6 +1786,107 @@ fn gpio_levels(
     Ok((levels, output_values))
 }
 
+/// The SoC and body hardware profiles a run selects, if it selects any.
+fn hardware_profiles<'a>(
+    selection: &'a ResolvedSelection,
+    configuration: &RunConfiguration,
+) -> Option<(
+    &'a fujimod_catalog::profiles::SocProfile,
+    &'a fujimod_catalog::profiles::BodyProfile,
+)> {
+    let choice = configuration.preset.as_ref()?.hardware_selection.as_ref()?;
+    Some((
+        selection.soc.hardware.as_ref()?.profiles.get(&choice.soc_profile_id)?,
+        selection.body.hardware.as_ref()?.profiles.get(&choice.body_profile_id)?,
+    ))
+}
+
+/// A connected cable with selected hardware profiles: the USB endpoint engine
+/// (layout from the body profile, interrupt lines from the SoC profile) and
+/// the secondary bus's cable-powered register replies.
+fn apply_connected_usb(
+    recipe: &mut Value,
+    name: &str,
+    selection: &ResolvedSelection,
+    soc: &fujimod_catalog::profiles::SocProfile,
+    body: &fujimod_catalog::profiles::BodyProfile,
+) -> Result<(), String> {
+    /// The largest single endpoint DMA the controller model accepts.
+    const DMA_LIMIT: u32 = 1 << 20;
+    let controllers = body.controllers.as_ref();
+    match name {
+        "usb" => {
+            let layout = controllers.and_then(|controllers| controllers.usb.as_ref());
+            let registers = soc.register_maps.as_ref().and_then(|maps| maps.usb.as_ref());
+            let (Some(layout), Some(registers)) = (layout, registers) else {
+                return Ok(());
+            };
+            let pairs = |rows: &[Vec<u64>]| -> Result<Vec<(u8, u32)>, String> {
+                rows.iter()
+                    .map(|row| match row.as_slice() {
+                        [address, port] => Ok((
+                            u8::try_from(*address).map_err(|e| e.to_string())?,
+                            u32::try_from(*port).map_err(|e| e.to_string())?,
+                        )),
+                        _ => Err("USB endpoint rows are address and port pairs".into()),
+                    })
+                    .collect()
+            };
+            recipe["options"]["endpoints"] = json!({
+                "transfer_ticks": layout.transfer_ticks,
+                "packet_bytes": layout.packet_bytes,
+                "dma_limit": DMA_LIMIT,
+                "out_endpoints": pairs(&layout.out_endpoints)?,
+                "in_endpoints": pairs(&layout.in_endpoints)?,
+            });
+            recipe["endpoints"] = json!({
+                "irq": {"Core": {"core": 0, "line": registers.irq}},
+                "dma_irq": {"Core": {"core": 0, "line": registers.dma_irq}},
+                "ram_bytes": selection
+                    .body
+                    .dram_bytes
+                    .ok_or("X70 USB endpoints need the installed DRAM size")?,
+            });
+        }
+        "control_bus1" => {
+            let Some(bus) = controllers.and_then(|controllers| controllers.control_bus1.as_ref())
+            else {
+                return Ok(());
+            };
+            let replies = &bus.replies;
+            let prefixes = replies
+                .pwic_read_prefixes
+                .iter()
+                .map(|(register, hex)| {
+                    let bytes = (0..hex.len())
+                        .step_by(2)
+                        .map(|at| {
+                            hex.get(at..at + 2)
+                                .and_then(|pair| u8::from_str_radix(pair, 16).ok())
+                                .ok_or_else(|| format!("PWIC read prefix {hex} is not hex bytes"))
+                        })
+                        .collect::<Result<Vec<u8>, String>>()?;
+                    Ok(json!([register, bytes]))
+                })
+                .collect::<Result<Vec<Value>, String>>()?;
+            recipe["options"]["profile"] = json!(bus.profile);
+            recipe["options"]["transfer_ticks"] = json!(bus.transfer_ticks);
+            let parts = &mut recipe["options"]["parts"];
+            parts["register_address"] = json!(replies.register_address);
+            parts["pwic_address"] = json!(replies.pwic_address);
+            parts["register_modes"] = json!(replies.register_modes);
+            parts["pwic_modes"] = json!(replies.pwic_modes);
+            parts["register_values"] = json!(replies.register_values);
+            parts["register_masks"] = json!(replies.register_write_masks);
+            parts["pwic_values"] = json!(replies.pwic_values);
+            parts["pwic_masks"] = json!(replies.pwic_write_masks);
+            parts["pwic_read_prefixes"] = json!(prefixes);
+        }
+        _ => {}
+    }
+    Ok(())
+}
+
 fn apply_run_inputs(
     recipe: &mut Value,
     name: &str,
@@ -2131,6 +2232,11 @@ pub(super) fn assemble(
             scene_input,
             browser.is_some(),
         )?;
+        if inputs.usb.connected
+            && let Some((soc, body)) = hardware_profiles(selection, configuration)
+        {
+            apply_connected_usb(&mut recipe, rule.name, selection, soc, body)?;
+        }
         if rule.name == "statistics"
             && let Some(ticks) = configuration
                 .preset

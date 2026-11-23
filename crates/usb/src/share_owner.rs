@@ -71,6 +71,48 @@ impl Shared {
     }
 }
 
+/// A USB device a share serves that is not a device on this machine's USB,
+/// such as an emulated camera's port. `execute` performs one operation;
+/// the share owner keeps claims, so an operation arrives only from the
+/// controller that opened the device.
+pub trait SharedDevice: Send + Sync {
+    fn descriptor(&self) -> &fujimod_usb_proxy::Device;
+    fn execute(
+        &self,
+        op: Operation,
+    ) -> std::pin::Pin<Box<dyn Future<Output = Completion> + Send + '_>>;
+}
+
+/// One [`SharedDevice`] served to controllers that join a room the caller
+/// owns, with the same protocol a shared camera speaks.
+#[derive(Clone)]
+pub struct DeviceShare(Arc<Shared>);
+impl DeviceShare {
+    /// `link` is the room's share link; controllers authenticate with its key.
+    pub fn new(device: Arc<dyn SharedDevice>, link: &str) -> crate::Result<Self> {
+        let link = Ticket::from_url(link)?.ok_or_else(|| error("invalid share link"))?;
+        Ok(Self(Arc::new(Shared {
+            source: Source::device(device),
+            hooks: OwnerHooks::default(),
+            link_key: link.key,
+            battery: Mutex::new(None),
+        })))
+    }
+    /// Whether a controller's first message opens this protocol.
+    pub fn opens(first: &[u8]) -> bool {
+        matches!(Message::decode(first), Ok(Message::Hello { .. }))
+    }
+    /// Serve one controller whose first message was `hello`, on its own thread.
+    pub fn serve(&self, id: String, peer: PeerSocket, hello: Vec<u8>) -> crate::Result<()> {
+        let shared = self.0.clone();
+        std::thread::Builder::new()
+            .name("fujimod-share-controller".into())
+            .spawn(move || futures_lite::future::block_on(session(shared, id, peer, hello)))
+            .map_err(error)?;
+        Ok(())
+    }
+}
+
 fn log(line: impl AsRef<str>) {
     println!("{}", line.as_ref());
 }
@@ -183,11 +225,17 @@ async fn serve_room(ticket: OwnerTicket, shared: Arc<Shared>) -> crate::Result<(
         log(format!("sharing on {}", ticket.link));
         loop {
             match room.next_event().await {
-                Ok(HostEvent::Controller(id, peer)) => {
+                Ok(HostEvent::Controller(id, mut peer)) => {
                     let shared = shared.clone();
                     std::thread::Builder::new()
                         .name("fujimod-share-controller".into())
-                        .spawn(move || futures_lite::future::block_on(session(shared, id, peer)))
+                        .spawn(move || {
+                            futures_lite::future::block_on(async move {
+                                if let Ok(hello) = peer.receive().await {
+                                    session(shared, id, peer, hello).await
+                                }
+                            })
+                        })
                         .map_err(error)?;
                 }
                 Ok(HostEvent::Left(_)) => (),
@@ -203,9 +251,9 @@ async fn serve_room(ticket: OwnerTicket, shared: Arc<Shared>) -> crate::Result<(
 }
 
 /// One controller connection, as `web/peer.ts` ShareHost serves it.
-async fn session(shared: Arc<Shared>, id: String, mut peer: PeerSocket) {
+async fn session(shared: Arc<Shared>, id: String, mut peer: PeerSocket, hello: Vec<u8>) {
     let mut goodbye = None;
-    let result = run_session(&shared, &id, &mut peer, &mut goodbye).await;
+    let result = run_session(&shared, &id, &mut peer, hello, &mut goodbye).await;
     let reason = match (&result, goodbye) {
         (_, Some(reason)) => reason,
         (Err(failure), None) => failure.to_string(),
@@ -223,9 +271,10 @@ async fn run_session(
     shared: &Shared,
     id: &str,
     peer: &mut PeerSocket,
+    hello: Vec<u8>,
     goodbye: &mut Option<String>,
 ) -> crate::Result<()> {
-    let hello = Message::decode(&peer.receive().await?)?;
+    let hello = Message::decode(&hello)?;
     let Message::Hello {
         version,
         role,

@@ -4,6 +4,8 @@ use serde_json::{Value, json};
 #[derive(Deserialize)]
 #[serde(tag = "type", rename_all = "lowercase", deny_unknown_fields)]
 pub(crate) enum Request {
+    /// A viewer controller's first message.
+    Hello,
     Rpc {
         serial: u64,
         action: String,
@@ -78,7 +80,9 @@ mod tests {
         let request: Request =
             serde_json::from_str(r#"{"type":"rpc","serial":7,"action":"press","args":{"id":"shutter"}}"#)
                 .unwrap();
-        let Request::Rpc { serial, action, args } = request;
+        let Request::Rpc { serial, action, args } = request else {
+            panic!("rpc expected");
+        };
         assert_eq!((serial, action.as_str()), (7, "press"));
         assert_eq!(args["id"], "shutter");
         assert_eq!(args.clone(), command_args(args).unwrap());

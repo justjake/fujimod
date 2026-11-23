@@ -1,7 +1,7 @@
 //! Opaque USB endpoint/FIFO transport with declared access widths and DMA
 //! behavior. No descriptors or higher-level host commands are interpreted.
 //! Packet capacities, delay and IRQ wiring are inputs.
-use fujimod_emulator_devices::{Cx, Device, bus::InterruptLine};
+use fujimod_emulator_devices::{Cx, Device, bus::InterruptLine, capability::UsbHostWait};
 use serde::{Deserialize, Serialize};
 use std::collections::VecDeque;
 pub const CORE: u64 = 0xfff54000;
@@ -245,6 +245,54 @@ impl Endpoint {
             active_dma: self.active.is_some(),
         }
     }
+    fn in_port(&self, endpoint: u8) -> Result<usize, String> {
+        Ok(self
+            .options
+            .in_endpoints
+            .iter()
+            .find(|r| r.0 == endpoint)
+            .ok_or("Unknown USB IN endpoint")?
+            .1)
+    }
+    fn out_port(&self, endpoint: u8) -> Result<usize, String> {
+        Ok(self
+            .options
+            .out_endpoints
+            .iter()
+            .find(|r| r.0 == endpoint)
+            .ok_or("Unknown USB OUT endpoint")?
+            .1)
+    }
+    /// No raised interrupt flag is left unmasked and no status stage is pending.
+    fn drained(&self) -> bool {
+        [(0x2c, 0x40), (0x30, 0x44), (0x34, 0x48)]
+            .iter()
+            .all(|&(flag, mask)| self.reg(flag) & !self.reg(mask) & 0xffff == 0)
+            && self.reg(0x40) & 0x2000 == 0
+            && self.reg(0x48) & 2 == 0
+    }
+    pub fn host_ready(&self, wait: UsbHostWait) -> Result<bool, String> {
+        Ok(match wait {
+            UsbHostWait::Enabled => self.reg(0x90) & 6 == 6,
+            UsbHostWait::Idle => self.drained(),
+            UsbHostWait::SetupTaken => self.setup_position == 8 && self.reg(0x2c) & 0x2000 == 0,
+            UsbHostWait::ControlOutTaken(length) => {
+                self.rx_position[0] == length && self.drained()
+            }
+            UsbHostWait::OutTaken(endpoint) => {
+                let port = self.out_port(endpoint)?;
+                self.rx_position[port] >= self.rx_length[port]
+            }
+            UsbHostWait::InPacket(endpoint) => !self.tx[self.in_port(endpoint)?].packets.is_empty(),
+        })
+    }
+    pub fn host_in_wants_token(&self, endpoint: u8) -> Result<bool, String> {
+        let port = self.in_port(endpoint)?;
+        Ok(port == 1 && self.tx[port].packets.is_empty() && self.reg(0x30) & 4 == 0)
+    }
+    pub fn packet_bytes(&self) -> usize {
+        self.options.packet_bytes
+    }
     pub fn host_reset(&mut self, cx: &mut Cx<'_>) -> Result<(), String> {
         if self.active.is_some() {
             return Err("USB bus reset during active DMA unsupported".into());
@@ -269,13 +317,7 @@ impl Endpoint {
         self.flag(cx, 0x2c, 0x2000)
     }
     pub fn host_out(&mut self, cx: &mut Cx<'_>, endpoint: u8, packet: &[u8]) -> Result<(), String> {
-        let channel = self
-            .options
-            .out_endpoints
-            .iter()
-            .find(|r| r.0 == endpoint)
-            .ok_or("Unknown USB OUT endpoint")?
-            .1;
+        let channel = self.out_port(endpoint)?;
         let capacity = if channel == 0 {
             64
         } else {
@@ -314,13 +356,7 @@ impl Endpoint {
         endpoint: u8,
         size: usize,
     ) -> Result<Vec<u8>, String> {
-        let port = self
-            .options
-            .in_endpoints
-            .iter()
-            .find(|r| r.0 == endpoint)
-            .ok_or("Unknown USB IN endpoint")?
-            .1;
+        let port = self.in_port(endpoint)?;
         if size == 0 {
             return Err("USB IN extent must be positive".into());
         }
@@ -336,13 +372,7 @@ impl Endpoint {
         Ok(packet)
     }
     pub fn host_in_token(&mut self, cx: &mut Cx<'_>, endpoint: u8) -> Result<(), String> {
-        let port = self
-            .options
-            .in_endpoints
-            .iter()
-            .find(|r| r.0 == endpoint)
-            .ok_or("Unknown USB IN endpoint")?
-            .1;
+        let port = self.in_port(endpoint)?;
         if port != 1 || !self.tx[port].packets.is_empty() {
             return Err("USB IN token requires empty bulk FIFO".into());
         }

@@ -1,4 +1,6 @@
 use crate::protocol::{Event, Request, command_args};
+use crate::usb::UsbShare;
+use fujimod_usb::share_owner::DeviceShare;
 use fujimod_emulator_devices::graphics::scanout::Frame;
 use fujimod_emulator_session::Session;
 use fujimod_webrtc::{HostEvent, LoopbackRoom, PeerSocket, VideoFrame, VideoSender};
@@ -30,6 +32,8 @@ pub trait Run {
     fn session_mut(&mut self) -> &mut Session;
     /// Advance the guest by one bounded slice.
     fn step(&mut self) -> Result<(), String>;
+    /// Advance the guest about a millisecond while a host waits on a device.
+    fn settle(&mut self) -> Result<(), String>;
     /// LCD images shown since the last call.
     fn frames(&mut self) -> Result<Vec<Frame>, String>;
     /// End the run and report it.
@@ -85,9 +89,12 @@ impl Room {
     }
 
     /// Wait for the first controller to join, then attach the room to `run`.
-    pub fn join(self, run: &dyn Run, stop: &AtomicBool) -> Result<Viewer, String> {
+    pub fn join(self, stop: &AtomicBool) -> Result<Viewer, String> {
         let mut viewer = Viewer {
             room: self,
+            joining: Vec::new(),
+            usb: None,
+            usb_controllers: BTreeSet::new(),
             controllers: Vec::new(),
             holds: BTreeMap::new(),
             latest: None,
@@ -95,12 +102,12 @@ impl Room {
             catalog: None,
             pending_releases: Vec::new(),
         };
-        while viewer.controllers.is_empty() {
+        while viewer.joining.is_empty() {
             if stop.load(Ordering::Acquire) {
                 return Err("desktop window closed".into());
             }
             match viewer.room.events.recv_timeout(Duration::from_millis(10)) {
-                Ok(event) => viewer.event(event, run.session())?,
+                Ok(event) => viewer.event(event),
                 Err(mpsc::RecvTimeoutError::Timeout) => {}
                 Err(mpsc::RecvTimeoutError::Disconnected) => {
                     return Err("share room closed".into());
@@ -113,7 +120,7 @@ impl Room {
 
 /// Serve `run` in its room until the last controller leaves or `stop` is set.
 pub fn serve<R: Run>(mut run: R, room: Room, stop: &AtomicBool) -> Result<Value, String> {
-    let mut viewer = room.join(&run, stop)?;
+    let mut viewer = room.join(stop)?;
     while !stop.load(Ordering::Acquire) && viewer.service(&mut run)? {
         run.step()?;
         let frames = run.frames()?;
@@ -150,6 +157,12 @@ struct Controller {
 /// with new images.
 pub struct Viewer {
     room: Room,
+    /// Controllers whose first message has not arrived; it names their protocol.
+    joining: Vec<(String, PeerSocket)>,
+    /// The camera's USB port, shared once a controller asks for it.
+    usb: Option<UsbShare>,
+    /// Controllers speaking the USB share protocol.
+    usb_controllers: BTreeSet<String>,
     controllers: Vec<Controller>,
     /// For each held button, the controllers holding it.
     holds: BTreeMap<String, BTreeSet<String>>,
@@ -162,10 +175,34 @@ pub struct Viewer {
 }
 
 impl Viewer {
-    fn event(&mut self, event: HostEvent, session: &Session) -> Result<(), String> {
+    fn event(&mut self, event: HostEvent) {
         match event {
-            HostEvent::Controller(id, socket) => {
-                let video = socket.video().map(|sender| {
+            HostEvent::Controller(id, socket) => self.joining.push((id, socket)),
+            HostEvent::Left(id) => self.leave(&id),
+        }
+    }
+
+    /// Admit a controller whose first message was `first`: the USB share
+    /// protocol goes to the camera's USB port, anything else is the viewer's.
+    fn admit(&mut self, run: &mut dyn Run, id: String, socket: PeerSocket, first: Vec<u8>) -> Result<(), String> {
+        if DeviceShare::opens(&first) {
+            if self.usb.is_none() {
+                match UsbShare::connect(run, &self.room.endpoint.url) {
+                    Ok(usb) => self.usb = Some(usb),
+                    Err(error) => {
+                        eprintln!("emulated USB port unavailable: {error}");
+                        return Ok(());
+                    }
+                }
+            }
+            let usb = self.usb.as_ref().expect("USB port shared");
+            usb.share
+                .serve(id.clone(), socket, first)
+                .map_err(|error| error.to_string())?;
+            self.usb_controllers.insert(id);
+            return Ok(());
+        }
+        let video = socket.video().map(|sender| {
                     Ok::<_, String>(Video {
                         sender,
                         encoder: encoder()?,
@@ -182,15 +219,17 @@ impl Viewer {
                     catalog_sent: false,
                     last_state: None,
                 });
-                self.publish_state(session);
-            }
-            HostEvent::Left(id) => self.leave(&id),
-        }
-        Ok(())
+                let index = self.controllers.len() - 1;
+                if let Some(event) = self.receive(run, index, &first) {
+                    self.send(index, event);
+                }
+                Ok(())
     }
 
     /// A controller has gone: drop it and let go of every button it held.
     fn leave(&mut self, id: &str) {
+        self.joining.retain(|(joining, _)| joining != id);
+        self.usb_controllers.remove(id);
         self.controllers.retain(|controller| controller.id != id);
         let held: Vec<String> = self
             .holds
@@ -229,10 +268,20 @@ impl Viewer {
     /// control state. False once every controller has left.
     pub fn service(&mut self, run: &mut dyn Run) -> Result<bool, String> {
         while let Ok(event) = self.room.events.try_recv() {
-            self.event(event, run.session())?;
+            self.event(event);
         }
         for control in std::mem::take(&mut self.pending_releases) {
             run.session_mut().contact_input(&control, None, true)?;
+        }
+        for (id, mut socket) in std::mem::take(&mut self.joining) {
+            match socket.try_receive() {
+                None => self.joining.push((id, socket)),
+                Some(Ok(first)) => self.admit(run, id, socket, first)?,
+                Some(Err(_)) => {}
+            }
+        }
+        if let Some(usb) = &mut self.usb {
+            usb.service(run);
         }
         let mut gone = Vec::new();
         for index in 0..self.controllers.len() {
@@ -240,8 +289,9 @@ impl Viewer {
                 match self.controllers[index].socket.try_receive() {
                     None => break,
                     Some(Ok(bytes)) => {
-                        let event = self.receive(run, index, &bytes);
-                        self.send(index, event);
+                        if let Some(event) = self.receive(run, index, &bytes) {
+                            self.send(index, event);
+                        }
                     }
                     Some(Err(_)) => {
                         gone.push(self.controllers[index].id.clone());
@@ -257,7 +307,7 @@ impl Viewer {
             run.session_mut().contact_input(&control, None, true)?;
         }
         self.publish_state(run.session());
-        Ok(!self.controllers.is_empty())
+        Ok(!(self.controllers.is_empty() && self.usb_controllers.is_empty() && self.joining.is_empty()))
     }
 
     /// Keep the newest of `frames` and encode it for each controller whose
@@ -331,21 +381,29 @@ impl Viewer {
         }
     }
 
-    fn receive(&mut self, run: &mut dyn Run, index: usize, bytes: &[u8]) -> Event {
+    fn receive(&mut self, run: &mut dyn Run, index: usize, bytes: &[u8]) -> Option<Event> {
         let request = match serde_json::from_slice(bytes) {
             Ok(request) => request,
-            Err(error) => return Event::error(None, error.to_string()),
+            Err(error) => return Some(Event::error(None, error.to_string())),
         };
-        let Request::Rpc {
-            serial,
-            action,
-            args,
-        } = request;
+        let (serial, action, args) = match request {
+            Request::Hello => {
+                self.publish_state(run.session());
+                return None;
+            }
+            Request::Rpc {
+                serial,
+                action,
+                args,
+            } => (serial, action, args),
+        };
         let id = self.controllers[index].id.clone();
-        command_args(args)
-            .and_then(|args| self.command(run.session_mut(), &id, &action, args))
-            .map(|value| Event::reply(serial, value))
-            .unwrap_or_else(|error| Event::error(Some(serial), error))
+        Some(
+            command_args(args)
+                .and_then(|args| self.command(run.session_mut(), &id, &action, args))
+                .map(|value| Event::reply(serial, value))
+                .unwrap_or_else(|error| Event::error(Some(serial), error)),
+        )
     }
 
     fn send(&mut self, index: usize, event: Event) {
