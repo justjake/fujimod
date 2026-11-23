@@ -32,7 +32,12 @@ pub struct Profile {
     pub heartbeat_register: u16,
     /// Register that gates reporting: nonzero enables, zero disables.
     pub mode_register: u16,
-    /// Registers that accept writes, including the mode register.
+    /// Register that restarts the chip when it is written with `restart_value`; the chip answers
+    /// with a new input-ready edge.
+    pub restart_register: u16,
+    /// Value that restarts the chip when written to the restart register.
+    pub restart_value: u8,
+    /// Registers that accept writes, including the mode and restart registers.
     pub writable_registers: Vec<u16>,
     /// Slot IDs reported for contacts 0 and 1.
     pub contact_ids: [u8; 2],
@@ -72,6 +77,7 @@ impl TouchChip {
             .with_contact_ids(profile.contact_ids)?;
         if !(8..=0x77).contains(&profile.address)
             || !profile.writable_registers.contains(&profile.mode_register)
+            || !profile.writable_registers.contains(&profile.restart_register)
         {
             return Err("Invalid touch chip address or mode register".into());
         }
@@ -202,6 +208,9 @@ impl TouchChip {
                 self.registers.insert(pointer, byte);
                 if pointer == self.profile.mode_register {
                     self.enabled = byte != 0;
+                }
+                if pointer == self.profile.restart_register && byte == self.profile.restart_value {
+                    self.initial_ready_pending = true;
                 }
                 self.pointer = Some(pointer.wrapping_add(1));
             }

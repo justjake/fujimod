@@ -11,12 +11,14 @@ const STARTUP: [(u16, u8); 30] = [
 
 fn chip() -> TouchChip {
     let mut writable: Vec<u16> = STARTUP.iter().map(|(r, _)| *r).collect();
-    writable.extend([0x1c00, 0x1c08]);
+    writable.extend([0x1c00, 0x1c08, 0x1c09]);
     TouchChip::new(Profile {
         address: 0x55,
         report_register: 0x0000,
         heartbeat_register: 0x1c06,
         mode_register: 0x1c00,
+        restart_register: 0x1c09,
+        restart_value: 0xc1,
         writable_registers: writable,
         contact_ids: [1, 2],
         input_ready_irq: 153,
@@ -134,4 +136,16 @@ fn unknown_registers_refuse_without_effect() {
     after["phase"] = before["phase"].clone();
     assert_eq!(before["registers"], after["registers"]);
     assert_eq!(before["heartbeat"], after["heartbeat"]);
+}
+
+#[test]
+fn restart_register_answers_with_a_new_ready_edge() {
+    let mut c = chip();
+    assert!(c.advance(0).unwrap());
+    assert!(!c.advance(1).unwrap());
+    write_register(&mut c, 0x1c09, &[0xc0]).unwrap();
+    assert!(!c.advance(2).unwrap());
+    write_register(&mut c, 0x1c09, &[0xc1]).unwrap();
+    assert!(c.advance(2).unwrap());
+    assert!(!c.advance(3).unwrap());
 }

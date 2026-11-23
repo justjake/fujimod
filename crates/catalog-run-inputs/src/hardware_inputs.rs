@@ -375,7 +375,12 @@ pub struct TouchChipInput {
     pub heartbeat_register: u16,
     /// Register that gates reporting: nonzero enables, zero disables.
     pub mode_register: u16,
-    /// Registers that accept writes, including the mode register.
+    /// Register that restarts the chip when it is written with `restart_value`; the chip answers
+    /// with a new input-ready edge.
+    pub restart_register: u16,
+    /// Value that restarts the chip when written to the restart register.
+    pub restart_value: u8,
+    /// Registers that accept writes, including the mode and restart registers.
     pub writable_registers: Vec<u16>,
     /// Slot IDs reported for contacts 0 and 1.
     pub contact_ids: [u8; 2],
