@@ -551,6 +551,7 @@ impl Device for Controller {
         let mut e = self.engine.lock().map_err(|_| "PL022 state poisoned")?;
         e.wire.restore_checkpoint(&saved.children()[0])?;
         e.state = state;
+        e.publish_registers();
         Ok(())
     }
     fn save(&self) -> Value {

@@ -380,6 +380,10 @@ fn published_registers_match_reads_after_every_state_change() {
     let mut restored = controller();
     restored.restore(&saved).unwrap();
     assert_eq!(published(&restored), published(&c));
+
+    let mut restored = controller();
+    restored.restore_checkpoint(&c.checkpoint().unwrap()).unwrap();
+    assert_eq!(published(&restored), published(&c));
 }
 #[test]
 fn data_and_clear_registers_are_never_published() {
