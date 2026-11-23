@@ -65,7 +65,7 @@ impl Board {
     pub fn register_access_snapshot(&self) -> Option<RegisterAccessSnapshot> {
         let mut totals = BTreeMap::new();
         for (core, address, write, calls, service_samples, sampled_service_ns) in
-            super::super::access_histogram::snapshot()?
+            super::super::access_histogram::snapshot(self.access_histogram.as_ref()?)
         {
             totals.insert(
                 RegisterAccessKey {

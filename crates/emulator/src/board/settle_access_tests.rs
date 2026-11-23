@@ -130,6 +130,9 @@ struct Outcome {
     left_out: u64,
     /// The portable checkpoint of the final state.
     checkpoint: Vec<u8>,
+    /// Exact board access histogram calls and the published subset.
+    register_access_calls: u64,
+    published_fast_read_hits: u64,
 }
 
 fn run(quantum: usize, blocks: bool, windows: &[u64]) -> Outcome {
@@ -144,6 +147,21 @@ fn run_with(
     fast_forward: bool,
     policy: ExecutionPolicy,
     publish: bool,
+) -> Outcome {
+    run_with_diagnostic(
+        quantum, blocks, windows, stable, fast_forward, policy, publish, false,
+    )
+}
+
+fn run_with_diagnostic(
+    quantum: usize,
+    blocks: bool,
+    windows: &[u64],
+    stable: bool,
+    fast_forward: bool,
+    policy: ExecutionPolicy,
+    publish: bool,
+    access_histogram: bool,
 ) -> Outcome {
     use factory::*;
     let arm32 = |r| Register::Arm32(fujimod_emulator_cpu::arm::Register::R(r));
@@ -191,6 +209,11 @@ fn run_with(
             None,
         )
         .unwrap();
+    if access_histogram {
+        let statistics = super::access_histogram::new_for_test();
+        board.access_histogram = Some(statistics.clone());
+        board.state.borrow_mut().access_histogram = Some(statistics);
+    }
     board.set_execution_policy(policy).unwrap();
     board.set_block_execution(blocks);
     board.set_poll_loops(fast_forward);
@@ -209,6 +232,18 @@ fn run_with(
     let mut registers: Vec<u64> = (0..5).map(|r| scalar(m4, arm32(r)).unwrap()).collect();
     registers.push(scalar(m4, Register::Pc).unwrap());
     let checkpoint = board.checkpoint(None).unwrap().export().unwrap().to_bytes().unwrap();
+    let (register_access_calls, published_fast_read_hits) = board
+        .register_access_snapshot()
+        .map_or((0, 0), |snapshot| {
+            let calls = snapshot.totals.values().fold(0u64, |total, access| {
+                total.saturating_add(access.calls)
+            });
+            let published = snapshot
+                .published_fast_read_hits
+                .values()
+                .fold(0u64, |total, &hits| total.saturating_add(hits));
+            (calls, published)
+        });
     let s = board.state.borrow();
     let state = board.state();
     let probe = probe.lock().unwrap();
@@ -222,6 +257,8 @@ fn run_with(
         read_ticks: probe.read_ticks.clone(),
         left_out: s.blocks[0].as_ref().map_or(0, |blocks| blocks.poll_reads),
         checkpoint,
+        register_access_calls,
+        published_fast_read_hits,
     }
 }
 
@@ -311,6 +348,53 @@ fn m4_published_reads_observe_the_same_bus_ticks_across_transfer_deadlines() {
         assert!(published.served * 10 < reference.served);
         assert_eq!(run(ExecutionPolicy::Exact, true).served, reference.served);
     }
+}
+
+#[test]
+fn access_histogram_calls_match_board_callbacks_and_published_subset() {
+    let windows = &[300, 301, 625, 2111, 5000];
+    let reference = run_with_diagnostic(
+        63,
+        false,
+        windows,
+        false,
+        false,
+        ExecutionPolicy::Interactive,
+        false,
+        true,
+    );
+    let published = run_with_diagnostic(
+        63,
+        false,
+        windows,
+        false,
+        false,
+        ExecutionPolicy::Interactive,
+        true,
+        true,
+    );
+    assert_eq!(reference.register_access_calls, reference.accesses);
+    assert_eq!(published.register_access_calls, published.accesses);
+    assert_eq!(
+        published.published_fast_read_hits,
+        reference.served - published.served
+    );
+    assert!(published.published_fast_read_hits <= published.register_access_calls);
+
+    let fast_forwarded = run_with_diagnostic(
+        100,
+        true,
+        &[333, 334, 2111, 5000],
+        true,
+        true,
+        ExecutionPolicy::Exact,
+        false,
+        true,
+    );
+    assert_eq!(
+        fast_forwarded.register_access_calls + fast_forwarded.left_out,
+        fast_forwarded.accesses
+    );
 }
 
 /// An AArch64 processor polls the same device through a read helper:
