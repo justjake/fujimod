@@ -529,6 +529,93 @@ fn mprofile_systick_wakes_wfi_and_executes_a_real_exception_handler() {
     assert_eq!(run(8), run(64));
 }
 
+#[test]
+fn device_reset_cancels_a_released_mprofile_timer_deadline() {
+    use factory::*;
+    struct ResetAtDeadline(bool);
+    impl Device for ResetAtDeadline {
+        fn name(&self) -> &'static str {
+            "reset-at-deadline"
+        }
+        fn read(&mut self, _: &mut Cx<'_>, _: u64, _: u8) -> u64 {
+            0
+        }
+        fn write(&mut self, _: &mut Cx<'_>, _: u64, _: u8, _: u64) {}
+        fn next_deadline(&self, _: u64) -> Option<u64> {
+            (!self.0).then_some(108)
+        }
+        fn advance(&mut self, cx: &mut Cx<'_>) {
+            self.0 = true;
+            cx.reset_core(0, true).unwrap();
+        }
+    }
+    let graph = Graph {
+        decoders: vec![],
+        processors: vec![Processor {
+            model: Model::CortexM4,
+            registers: vec![],
+            released: true,
+            parked_until_sgi: false,
+            rprofile: None,
+            mprofile: Some(super::mprofile::Config {
+                clock_hz: 1_000_000_000,
+                board_ticks_per_second: 1_000_000_000,
+                vector_base: 0,
+            }),
+        }],
+        dma_mappings: vec![crate::board::memory::BusMapping::ram(0, 0x4000)],
+        ram: vec![Ram {
+            base: 0,
+            size: 0x4000,
+        }],
+        mappings: vec![MemoryMap {
+            core: 0,
+            address: 0,
+            physical: 0,
+            size: 0x4000,
+            permissions: 7,
+        }],
+        peripherals: vec![],
+        instructions_per_tick: Ratio::new(1, 1).unwrap(),
+    };
+    let mut bus = Bus::new(bus::Mode::Strict);
+    bus.register(0x5000, 4, Box::new(ResetAtDeadline(false)))
+        .unwrap();
+    let mut board = graph
+        .build(
+            Options::new(RunEngine::Unicorn).with_translation_cache_size_bytes(1024 * 1024),
+            bus,
+            None,
+        )
+        .unwrap();
+    let cpu = board.cpu(0).unwrap();
+    cpu.write_memory(0, &0x3000u32.to_le_bytes()).unwrap();
+    cpu.write_memory(4, &0x1001u32.to_le_bytes()).unwrap();
+    let code = [
+        0x4e, 0xf2, 0x14, 0x00, 0xce, 0xf2, 0x00, 0x00, 0x63, 0x21, 0x01, 0x60, 0x4e, 0xf2, 0x10,
+        0x00, 0xce, 0xf2, 0x00, 0x00, 0x07, 0x21, 0x01, 0x60, 0xfe, 0xe7,
+    ];
+    cpu.write_memory(0x1000, &code).unwrap();
+    board.run_until(15, 100).unwrap();
+    assert!(board.instruction_counts()[0] >= 10);
+    let state = board.state();
+    assert!(
+        state["timeline"]["events"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|event| event[2] == "processor-deadline")
+    );
+    board.run_until(120, 100).unwrap();
+    assert!(
+        !board.state()["timeline"]["events"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|event| event[2] == "processor-deadline")
+    );
+}
+
 fn per_core_irq_board() -> (Board, Arc<Mutex<Vec<u64>>>) {
     per_core_irq_board_with_backend(false)
 }

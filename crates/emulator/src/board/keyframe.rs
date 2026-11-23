@@ -108,6 +108,7 @@ impl State {
             core_interrupts: _,
             interrupt_changed,
             released,
+            release_state_changed: _,
             waiting,
             waiting_event,
             events,

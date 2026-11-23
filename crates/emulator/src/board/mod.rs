@@ -184,6 +184,7 @@ struct State {
     core_interrupts: Vec<Option<CoreInterruptMap>>,
     interrupt_changed: Vec<bool>,
     released: Vec<bool>,
+    release_state_changed: bool,
     waiting: Vec<bool>,
     /// Released cores that wait in WFI until an SGI is pending for them (see factory).
     parked_until_sgi: Vec<bool>,
@@ -558,6 +559,7 @@ impl Board {
             core_interrupts: (0..n).map(|_| None).collect(),
             interrupt_changed: vec![false; n],
             released,
+            release_state_changed: false,
             waiting: vec![false; n],
             parked_until_sgi: vec![false; n],
             waiting_event: vec![false; n],
@@ -2445,6 +2447,7 @@ impl State {
                 )?;
             }
         }
+        self.release_state_changed = false;
         Ok(())
     }
     fn due(&mut self, cpus: &[Rc<dyn Cpu>]) -> Result<(), String> {
@@ -2488,6 +2491,9 @@ impl State {
             };
             self.with_host(cpus, |bus, host| bus.event(host, id, token))?;
             self.refresh_deadlines()?;
+            if self.release_state_changed {
+                self.refresh_processors()?;
+            }
         }
         Ok(())
     }
@@ -2508,6 +2514,7 @@ impl State {
             core_interrupts,
             interrupt_changed,
             released,
+            release_state_changed,
             waiting,
             error,
             records,
@@ -2537,6 +2544,7 @@ impl State {
             core_interrupts,
             interrupt_changed,
             released,
+            release_state_changed,
             waiting,
             error,
             records,
@@ -3124,6 +3132,7 @@ struct Services<'a> {
     core_interrupts: &'a [Option<CoreInterruptMap>],
     interrupt_changed: &'a mut [bool],
     released: &'a mut [bool],
+    release_state_changed: &'a mut bool,
     waiting: &'a mut [bool],
     error: &'a mut Option<String>,
     records: &'a mut Vec<Record>,
@@ -3262,14 +3271,18 @@ impl Host for Services<'_> {
                 p.clear_exclusive()?;
                 p.needs_reset = true;
             }
-            *r = !asserted;
+            let next_released = !asserted;
+            *self.release_state_changed |= *r != next_released;
+            *r = next_released;
             self.waiting[cpu] = false;
             return Ok(());
         }
         if asserted && *r {
             return Err("live CPU reset requires a declared reset context".into());
         }
-        *r = !asserted;
+        let next_released = !asserted;
+        *self.release_state_changed |= *r != next_released;
+        *r = next_released;
         self.waiting[cpu] = false;
         Ok(())
     }
