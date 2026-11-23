@@ -19,11 +19,14 @@ export function featureMediaFiles(media: FeatureMedia, shownCards: Iterable<stri
     .filter(([id]) => shown.has(id))
     .map(([, recording]) => recording);
   return new Set(
-    [...cards, ...Object.values(media.reels ?? {})].flatMap(({ video, still, photos = [] }) => [
-      video,
-      still,
-      ...photos.flatMap(({ image, full }) => [image, full]),
-    ]),
+    [
+      ...cards.flatMap(({ video, still, photos = [] }) => [
+        video,
+        still,
+        ...photos.flatMap(({ image, full }) => [image, full]),
+      ]),
+      ...Object.values(media.reels ?? {}).flatMap(({ video, still }) => [video, still]),
+    ],
   );
 }
 
