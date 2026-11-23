@@ -4,6 +4,7 @@ pub mod armv7a;
 pub mod bus;
 mod code_shadow;
 mod mprofile_blocks;
+mod thumb_accounting;
 mod poll_loops;
 #[cfg(test)]
 mod mprofile_blocks_tests;
@@ -1429,6 +1430,14 @@ impl Board {
             // Block execution has no engine counter: the board debits entries.
             let mut limit = budget;
             self.state.borrow_mut().run_entries[core] = 0;
+            let _thumb_slice = {
+                let mut state = self.state.borrow_mut();
+                let interactive = state.execution_policy == ExecutionPolicy::Interactive
+                    && state.settled.verify == 0;
+                state.blocks[core].as_mut().and_then(|b| {
+                    b.inline.begin(&**cpu, interactive && blocks && b.fast_stores)
+                })
+            };
             let mut result = cpu.run(Run {
                 begin: if cpu.model() == fujimod_emulator_cpu::Model::CortexM4
                     || matches!(
@@ -1712,7 +1721,7 @@ impl Board {
                 unsafe {
                     // With a translation filter installed the engine restarts
                     // a hooked store or device access as a block of its own.
-                    // The filter itself is not consulted for Thumb code.
+                    // In Thumb accounting mode it also classifies register-only blocks.
                     cpu.translation_hooks(Some(fujimod_emulator_cpu::TranslationHooks {
                         classify: block_classify,
                         restart: block_restarted,
@@ -1915,7 +1924,7 @@ impl Drop for Board {
             for (core, blocks) in s.blocks.iter().enumerate() {
                 if let Some(blocks) = blocks {
                     eprintln!(
-                        "FUJIMOD execution counters: CPU{core} blocks observed={} admitted-entries={} shortened={} (unsettled, instruction, run, peer, deadline: {:?}) fast-stores={} watched-pages={} poll-fast-forwards={} poll-reads-left-out={}",
+                        "FUJIMOD execution counters: CPU{core} blocks observed={} admitted-entries={} shortened={} (unsettled, instruction, run, peer, deadline: {:?}) fast-stores={} watched-pages={} poll-fast-forwards={} poll-reads-left-out={} inline-entries={}",
                         blocks.observed,
                         blocks.admitted,
                         blocks.shortened,
@@ -1923,7 +1932,8 @@ impl Drop for Board {
                         blocks.fast_stores,
                         blocks.watched.len(),
                         blocks.poll_skips,
-                        blocks.poll_reads
+                        blocks.poll_reads,
+                        blocks.inline.entries
                     );
                 }
             }
@@ -2080,11 +2090,18 @@ impl State {
         let Some(blocks) = self.blocks[core].as_mut() else {
             return Ok(());
         };
-        let Some((_, _, entries, _)) = blocks.pending.take() else {
+        let inline = blocks.inline.take()?;
+        let admitted = blocks.pending.take().map_or(0, |(_, _, entries, _)| entries);
+        if inline != 0 && entered.is_some() {
+            return Err("restarted observed block after translated Thumb entries".into());
+        }
+        let observed = entered.unwrap_or(admitted).min(admitted);
+        blocks.room += admitted - observed;
+        blocks.room = blocks.room.checked_sub(inline).ok_or("Thumb block exceeded run budget")?;
+        let entered = observed + inline;
+        if entered == 0 {
             return Ok(());
-        };
-        let entered = entered.unwrap_or(entries).min(entries);
-        blocks.room += entries - entered;
+        }
         blocks.admitted += entered;
         self.account(core, entered)?;
         self.instructions[core] = self.instructions[core]
@@ -3360,12 +3377,11 @@ unsafe fn before(pc: u64, _: u32, data: *mut c_void) {
         let _ = cpus[b.core].stop();
     }
 }
-/// Block execution's translation filter. The engine does not consult it for
-/// Thumb code; its presence makes hooked accesses restart as their own block.
-unsafe fn block_classify(_: *mut c_void, _: u64, _: u32) -> fujimod_emulator_cpu::Translation {
+/// Classify Thumb instructions from their encoding when the accelerator opts in.
+unsafe fn block_classify(_: *mut c_void, _: u64, word: u32) -> fujimod_emulator_cpu::Translation {
     fujimod_emulator_cpu::Translation {
         instruction: fujimod_emulator_cpu::InstructionDisposition::Execute,
-        observe_block: true,
+        observe_block: !mprofile_blocks::can_run_inline(word),
     }
 }
 /// Covers device pages so that an access to one ends its block.
@@ -3478,18 +3494,18 @@ unsafe fn block_entered(block: fujimod_emulator_cpu::Block, data: *mut c_void) {
             scan.unit
         };
         let scheduler_room = settled.then(|| s.scheduler_room(core));
-        let limit = if let Some(scheduler_room) = scheduler_room {
+        let window_room = if let Some(scheduler_room) = scheduler_room {
             // Until the next device deadline, the end of the run window, the
             // next generic-timer output change and the peer's turn.
             let until = s.clock_limit.unwrap_or(u64::MAX).min(s.settled.until);
-            unit.min(room)
-                .min(s.timeline.processor_budget(core, u64::MAX, Some(until))?)
+            room.min(s.timeline.processor_budget(core, u64::MAX, Some(until))?)
                 .min(scheduler_room)
         } else {
             // The pin push and deadline refresh below are not yet known to be
             // a fixed point: the next instruction needs them again.
             1
         };
+        let limit = unit.min(window_room);
         if limit == 0 {
             // No entry fits before the run window ends or the peer's turn.
             cpu.stop()?;
@@ -3589,10 +3605,17 @@ unsafe fn block_entered(block: fujimod_emulator_cpu::Block, data: *mut c_void) {
             }
             return cpu.stop();
         }
+        // The translated guard admits subsequent register-only blocks on this
+        // checked page. Hooked memory accesses settle and disarm the window.
+        let inline = settled && s.settled.armed && !ready && fetched.is_some()
+            && s.code_run == Some(core);
         // Admit the block: its first entry is already debited.
         let blocks = s.blocks[core].as_mut().unwrap();
         blocks.room -= entries - 1;
         blocks.pending = Some((pc, bytes, entries, pc + last));
+        if inline {
+            blocks.inline.arm(pc, window_room - entries);
+        }
         Ok::<(), String>(())
     })();
     if let Err(e) = result {

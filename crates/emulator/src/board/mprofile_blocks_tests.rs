@@ -178,6 +178,33 @@ fn interactive_ordered_blocks_equal_the_instruction_observer() {
     assert_eq!(blocks.state, reference.state);
 }
 
+/// Repeated mixed-width Thumb blocks end partway through a guest loop when a
+/// peer gets its turn or the caller's board-clock deadline expires.
+#[test]
+fn translated_thumb_budget_matches_the_observer_at_each_stop() {
+    let mut reference = board(false);
+    let mut translated = board(true);
+    for b in [&mut reference, &mut translated] {
+        b.set_execution_policy(ExecutionPolicy::Interactive).unwrap();
+        b.state.borrow_mut().settled.verify = 0;
+        // adds r0,#1; and.w r1,r0,#7; eors r2,r0; b 0x10100
+        let code = [0x3001u16, 0xf000, 0x0107, 0x4042, 0xe7fa];
+        let bytes: Vec<u8> = code.iter().flat_map(|h| h.to_le_bytes()).collect();
+        b.write_physical(0x10100, &bytes).unwrap();
+    }
+    for stop in [61, 64, 127, 211, 257, 2047] {
+        reference.run_until(stop, 63).unwrap();
+        translated.run_until(stop, 63).unwrap();
+        let a = outcome(&reference);
+        let b = outcome(&translated);
+        assert_eq!(a.registers, b.registers, "registers at {stop}");
+        assert_eq!(a.state, b.state, "board at {stop}");
+        assert_eq!(a.memory, b.memory, "memory at {stop}");
+    }
+    let s = translated.state.borrow();
+    assert!(s.blocks[0].as_ref().unwrap().inline.entries > 0);
+}
+
 /// Which hooks the execution core holds at an instant is a host choice. A
 /// keyframe taken before block execution set its hooks up restores after it,
 /// one taken in block execution restores with the instruction observer, and
