@@ -1820,7 +1820,14 @@
           "upper": 0
         }
       },
-      "electrical": null
+      "electrical": {
+        "kind": "gpio",
+        "connection_id": "controls-gpio-0-11",
+        "expected_level": false,
+        "scanner": {
+          "kind": "direct"
+        }
+      }
     },
     {
       "id": "row-1",
@@ -1858,7 +1865,14 @@
           "upper": 0
         }
       },
-      "electrical": null
+      "electrical": {
+        "kind": "gpio",
+        "connection_id": "controls-gpio-10-4",
+        "expected_level": false,
+        "scanner": {
+          "kind": "direct"
+        }
+      }
     },
     {
       "id": "row-3",
@@ -1877,7 +1891,14 @@
           "upper": 0
         }
       },
-      "electrical": null
+      "electrical": {
+        "kind": "gpio",
+        "connection_id": "controls-gpio-10-8",
+        "expected_level": false,
+        "scanner": {
+          "kind": "direct"
+        }
+      }
     },
     {
       "id": "row-4",
@@ -2187,7 +2208,14 @@
           "upper": 0
         }
       },
-      "electrical": null
+      "electrical": {
+        "kind": "gpio",
+        "connection_id": "controls-gpio-8-6",
+        "expected_level": false,
+        "scanner": {
+          "kind": "direct"
+        }
+      }
     },
     {
       "id": "row-15",
@@ -2207,7 +2235,14 @@
           "upper": 0
         }
       },
-      "electrical": null
+      "electrical": {
+        "kind": "gpio",
+        "connection_id": "controls-gpio-8-5",
+        "expected_level": false,
+        "scanner": {
+          "kind": "direct"
+        }
+      }
     },
     {
       "id": "row-16",
@@ -2880,7 +2915,8 @@
       "event": 32,
       "debug_key": "FUNCTION",
       "target": {
-        "kind": "unclaimed"
+        "kind": "control",
+        "control_id": "fn1_button"
       },
       "scanner": {
         "index": 38,
@@ -2892,7 +2928,14 @@
           "upper": 0
         }
       },
-      "electrical": null
+      "electrical": {
+        "kind": "gpio",
+        "connection_id": "controls-gpio-0-14",
+        "expected_level": false,
+        "scanner": {
+          "kind": "direct"
+        }
+      }
     },
     {
       "id": "row-39",
@@ -4874,7 +4917,14 @@
           "upper": 0
         }
       },
-      "electrical": null
+      "electrical": {
+        "kind": "gpio",
+        "connection_id": "controls-gpio-2-13",
+        "expected_level": false,
+        "scanner": {
+          "kind": "direct"
+        }
+      }
     },
     {
       "id": "row-104",
@@ -4953,7 +5003,14 @@
           "upper": 0
         }
       },
-      "electrical": null
+      "electrical": {
+        "kind": "gpio",
+        "connection_id": "controls-gpio-6-4",
+        "expected_level": false,
+        "scanner": {
+          "kind": "direct"
+        }
+      }
     },
     {
       "id": "row-108",
@@ -4972,7 +5029,14 @@
           "upper": 1
         }
       },
-      "electrical": null
+      "electrical": {
+        "kind": "gpio",
+        "connection_id": "controls-gpio-8-4",
+        "expected_level": true,
+        "scanner": {
+          "kind": "direct"
+        }
+      }
     },
     {
       "id": "row-109",
@@ -5516,17 +5580,6 @@
       "target": {
         "kind": "control",
         "control_id": "view_mode_button"
-      },
-      "scanner": null,
-      "electrical": null
-    },
-    {
-      "id": "debug-32",
-      "event": 32,
-      "debug_key": "FUNCTION",
-      "target": {
-        "kind": "control",
-        "control_id": "fn1_button"
       },
       "scanner": null,
       "electrical": null

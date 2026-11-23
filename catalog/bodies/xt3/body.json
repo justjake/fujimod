@@ -155,6 +155,114 @@
           "threshold": null
         }
       ]
+    },
+    {
+      "id": "controls-gpio-0-11",
+      "kind": "control",
+      "signals": [
+        {
+          "kind": "gpio",
+          "port": 0,
+          "pin": 11,
+          "active_level": false
+        }
+      ]
+    },
+    {
+      "id": "controls-gpio-0-14",
+      "kind": "control",
+      "signals": [
+        {
+          "kind": "gpio",
+          "port": 0,
+          "pin": 14,
+          "active_level": false
+        }
+      ]
+    },
+    {
+      "id": "controls-gpio-10-4",
+      "kind": "control",
+      "signals": [
+        {
+          "kind": "gpio",
+          "port": 10,
+          "pin": 4,
+          "active_level": false
+        }
+      ]
+    },
+    {
+      "id": "controls-gpio-10-8",
+      "kind": "control",
+      "signals": [
+        {
+          "kind": "gpio",
+          "port": 10,
+          "pin": 8,
+          "active_level": false
+        }
+      ]
+    },
+    {
+      "id": "controls-gpio-2-13",
+      "kind": "control",
+      "signals": [
+        {
+          "kind": "gpio",
+          "port": 2,
+          "pin": 13,
+          "active_level": false
+        }
+      ]
+    },
+    {
+      "id": "controls-gpio-6-4",
+      "kind": "control",
+      "signals": [
+        {
+          "kind": "gpio",
+          "port": 6,
+          "pin": 4,
+          "active_level": false
+        }
+      ]
+    },
+    {
+      "id": "controls-gpio-8-4",
+      "kind": "control",
+      "signals": [
+        {
+          "kind": "gpio",
+          "port": 8,
+          "pin": 4,
+          "active_level": true
+        }
+      ]
+    },
+    {
+      "id": "controls-gpio-8-5",
+      "kind": "control",
+      "signals": [
+        {
+          "kind": "gpio",
+          "port": 8,
+          "pin": 5,
+          "active_level": false
+        }
+      ]
+    },
+    {
+      "id": "controls-gpio-8-6",
+      "kind": "control",
+      "signals": [
+        {
+          "kind": "gpio",
+          "port": 8,
+          "pin": 6,
+          "active_level": false
+        }
+      ]
     }
   ],
   "parts": [

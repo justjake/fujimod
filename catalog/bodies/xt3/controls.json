@@ -167,7 +167,9 @@
       "manual_page": 50,
       "face": null,
       "icon": "delete",
-      "connection_ids": [],
+      "connection_ids": [
+        "controls-gpio-8-5"
+      ],
       "assignable": false,
       "default_function": "Delete pictures during playback.",
       "role": null,
@@ -490,7 +492,9 @@
       "manual_page": 226,
       "face": "Fn1",
       "icon": null,
-      "connection_ids": [],
+      "connection_ids": [
+        "controls-gpio-0-14"
+      ],
       "assignable": true,
       "default_function": "Face/eye detection setting.",
       "role": null,
@@ -796,7 +800,9 @@
       "manual_page": 49,
       "face": null,
       "icon": "playback",
-      "connection_ids": [],
+      "connection_ids": [
+        "controls-gpio-8-6"
+      ],
       "assignable": false,
       "default_function": "Start playback.",
       "role": null,
