@@ -90,6 +90,8 @@ pub(super) struct CodeShadow {
     changed: bool,
     /// The running slice must stop, discard translations and resume.
     resync: bool,
+    /// The single page that changed, when no other cause requires a full discard.
+    resync_page: Option<u64>,
     /// Entries after a peer ran that kept the translations, discards of the
     /// translations, and discards because code changed behind the engine.
     retained: u64,
@@ -112,6 +114,7 @@ impl Default for CodeShadow {
             unproven: false,
             changed: false,
             resync: false,
+            resync_page: None,
             retained: 0,
             discards: 0,
             changes: 0,
@@ -128,7 +131,7 @@ pub(super) enum Touch {
     Proven,
     /// A touched page changed behind the engine: translations must go before
     /// execution.
-    Changed,
+    Changed(u64),
     /// The page is not readable checked RAM: fall back to always discarding.
     Unchecked,
 }
@@ -175,6 +178,7 @@ impl CodeShadow {
         self.unproven = false;
         self.changed = false;
         self.resync = false;
+        self.resync_page = None;
         self.slice += 1;
     }
     /// A peer ran, or the host or a device wrote RAM, since this processor's
@@ -190,9 +194,36 @@ impl CodeShadow {
         self.slice += 1;
         self.last = None;
     }
-    pub(super) fn request_resync(&mut self) {
+    pub(super) fn request_resync(&mut self, page: Option<u64>) {
+        self.resync_page = page.filter(|&address| {
+            !self.changed && address <= u64::from(u32::MAX) - PAGE
+        });
         self.changed = true;
         self.resync = true;
+    }
+
+    /// Invalidate only the proven changed page when no other cause made the
+    /// engine's translations uncertain. Unicorn invalidates every block that
+    /// overlaps this range, including blocks starting in the preceding page.
+    pub(super) fn resync(&mut self, cpu: &dyn Cpu) -> Result<bool, String> {
+        if !self.resync {
+            return Ok(false);
+        }
+        if let Some(page) = self.resync_page {
+            cpu.invalidate_code(Some((page, page + PAGE)))?;
+            self.pages.remove(&page);
+            self.touched.retain(|&address| address != page);
+            self.last = None;
+            self.changed = false;
+            self.resync = false;
+            self.resync_page = None;
+            self.changes += 1;
+        } else {
+            cpu.invalidate_code(None)?;
+            self.discarded();
+            self.begin_slice();
+        }
+        Ok(true)
     }
     /// Something other than a peer's or the host's write to RAM may have
     /// outdated the translations: a store this processor made through an
@@ -200,13 +231,11 @@ impl CodeShadow {
     /// decoding or a reset. Only a discard resynchronizes those.
     pub(super) fn invalidate(&mut self) {
         self.changed = true;
+        self.resync_page = None;
     }
     /// Code outside checked RAM was entered.
     pub(super) fn entered_unchecked(&mut self) {
         self.unproven = true;
-    }
-    pub(super) fn take_resync(&mut self) -> bool {
-        std::mem::take(&mut self.resync)
     }
     /// The 16-bit word at `pc`, read from host memory, when the page of the
     /// instruction just touched is mapped from external backing. It is the
@@ -296,7 +325,7 @@ impl CodeShadow {
                     .get_or_insert_with(|| Box::new([0; PAGE as usize]));
                 if page.differs(cpu, address, scratch) {
                     *self.changed_pages.entry(address).or_default() += 1;
-                    return (Touch::Changed, None);
+                    return (Touch::Changed(address), None);
                 }
                 page.verified = epoch;
             }
@@ -362,7 +391,7 @@ impl CodeShadow {
                     .get_or_insert_with(|| Box::new([0; PAGE as usize]));
                 if page.differs(cpu, address, scratch) {
                     *self.changed_pages.entry(address).or_default() += 1;
-                    self.changed = true;
+                    self.invalidate();
                     return;
                 }
                 page.verified = epoch;
@@ -386,7 +415,7 @@ impl CodeShadow {
             Some(Touch::Proven) => (),
             Some(Touch::Unchecked) => self.unproven = true,
             // An unknown stop PC proves nothing about its translation.
-            Some(Touch::Changed) | None => self.changed = true,
+            Some(Touch::Changed(_)) | None => self.invalidate(),
         }
         for address in self.touched.drain(..) {
             let Some(page) = self.pages.get_mut(&address) else {
@@ -394,6 +423,7 @@ impl CodeShadow {
             };
             if !Page::read(cpu, address, page.host, &mut page.bytes) {
                 self.changed = true;
+                self.resync_page = None;
             }
         }
         self.last = None;

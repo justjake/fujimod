@@ -1819,12 +1819,9 @@ impl Board {
         let Some(shadow) = s.code_shadow[core].as_mut() else {
             return Ok(false);
         };
-        if !shadow.take_resync() {
+        if !shadow.resync(&*self.cpus[core])? {
             return Ok(false);
         }
-        self.cpus[core].invalidate_code(None)?;
-        shadow.discarded();
-        shadow.begin_slice();
         s.settled.clear();
         Ok(true)
     }
@@ -2176,7 +2173,7 @@ impl State {
         if shadow.changed() {
             // A store of this processor found its page changed behind the
             // engine. Nothing stale may be entered.
-            shadow.request_resync();
+            shadow.request_resync(None);
             cpu.stop()?;
             return Ok(true);
         }
@@ -2187,8 +2184,8 @@ impl State {
                 shadow.entered_unchecked();
                 Ok(false)
             }
-            code_shadow::Touch::Changed => {
-                shadow.request_resync();
+            code_shadow::Touch::Changed(page) => {
+                shadow.request_resync(Some(page));
                 cpu.stop()?;
                 Ok(true)
             }
