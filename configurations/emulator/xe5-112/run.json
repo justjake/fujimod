@@ -36,7 +36,7 @@
      4095,
      4095,
      4095,
-     2241,
+     4095,
      4095,
      4095,
      2712,
@@ -50,12 +50,7 @@
     "kind": "gpio",
     "block_id": "gpio",
     "levels": [],
-    "outputs": [
-     {
-      "port": 12,
-      "levels": 256
-     }
-    ]
+    "outputs": []
    },
    {
     "kind": "flash",
