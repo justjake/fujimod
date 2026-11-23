@@ -224,6 +224,8 @@ export class PeerChannel {
   queued = 0;
   ended: boolean;
   onclose?: () => void;
+  /** The owner's video track, when the connection asked for one. */
+  video?: Promise<MediaStreamTrack>;
   constructor(channel: RTCDataChannel, pc: RTCPeerConnection) {
     this.channel = channel;
     this.pc = pc;
@@ -325,11 +327,18 @@ export class PeerChannel {
 function configuration(stun: string[]) {
   return { iceServers: stun.map((urls) => ({ urls })) };
 }
-export async function connectPeer(url: string) {
+/** Join a share room. With `video`, the offer also asks the owner for one video track. */
+export async function connectPeer(url: string, { video = false } = {}) {
   const ticket = parseShare(url),
     pc = new RTCPeerConnection(configuration(ticket.stun || []));
   const channel = pc.createDataChannel('fujimod-usb', { ordered: true });
   const peer = new PeerChannel(channel, pc);
+  if (video) {
+    pc.addTransceiver('video', { direction: 'recvonly' });
+    peer.video = new Promise((resolve) =>
+      pc.addEventListener('track', (event) => resolve(event.track), { once: true }),
+    );
+  }
   let rejectOpen: (error: Error) => void = () => {};
   const opened = new Promise<void>((resolve, reject) => {
     rejectOpen = reject;

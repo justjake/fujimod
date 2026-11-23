@@ -1,3 +1,4 @@
+import { connectPeer, type PeerChannel } from '../../../../crates/usb-proxy/web/peer.ts';
 import type { LoadingProgress } from './download-progress';
 import type { ReportSubmission } from './report';
 import type { CameraPerformance } from './performance';
@@ -61,12 +62,16 @@ class Listeners<T> {
   }
 }
 
-const FRAME_HEADER_BYTES = 20;
-const FRAME_MAGIC = 'FJMF';
+const text = new TextEncoder();
+const decoder = new TextDecoder();
 
-/** Engine API client for a native session hosted by a development machine. */
+/**
+ * Engine API client for a native session served in a share room: commands
+ * and state on the room's data channel, the LCD as its video track.
+ */
 export class RemoteEngine implements Engine {
-  private socket?: WebSocket;
+  private peer?: Promise<PeerChannel>;
+  private video?: HTMLVideoElement;
   private serial = 0;
   private pending = new Map<
     number,
@@ -89,8 +94,6 @@ export class RemoteEngine implements Engine {
   private disposed = false;
   private disposePromise?: Promise<void>;
   private frameSequence = 0;
-  private latestFrame?: ArrayBuffer;
-  private processingFrames = false;
 
   constructor(
     private readonly url: string,
@@ -102,64 +105,60 @@ export class RemoteEngine implements Engine {
     await this.connect();
   }
 
-  private async connect(): Promise<WebSocket> {
-    if (this.disposed) throw Error('Emulator closed.');
-    if (this.unavailable) throw this.unavailable;
-    if (this.socket?.readyState === WebSocket.OPEN) return this.socket;
-    if (this.socket?.readyState === WebSocket.CONNECTING) {
-      const socket = this.socket;
-      await new Promise<void>((resolve, reject) => {
-        socket.addEventListener('open', () => resolve(), { once: true });
-        socket.addEventListener(
-          'error',
-          () => reject(Error('Native emulator connection failed.')),
-          {
-            once: true,
-          },
-        );
-      });
-      return socket;
-    }
-    const socket = new WebSocket(this.url);
-    socket.binaryType = 'arraybuffer';
-    this.socket = socket;
-    socket.addEventListener('message', (event: MessageEvent<ArrayBuffer | string>) => {
-      if (typeof event.data === 'string') this.receiveJson(event.data);
-      else this.queueFrame(event.data);
+  private connect(): Promise<PeerChannel> {
+    if (this.disposed) return Promise.reject(Error('Emulator closed.'));
+    if (this.unavailable) return Promise.reject(this.unavailable);
+    this.peer ??= connectPeer(this.url, { video: true }).then((peer) => {
+      peer.onclose = () => this.fail(Error('Native emulator connection closed.'));
+      void this.receiveMessages(peer);
+      void peer.video?.then((track) => this.showVideo(track));
+      return peer;
     });
-    socket.addEventListener('error', () => this.fail(Error('Native emulator connection failed.')));
-    socket.addEventListener('close', () => this.fail(Error('Native emulator connection closed.')));
-    await new Promise<void>((resolve, reject) => {
-      socket.addEventListener('open', () => resolve(), { once: true });
-      socket.addEventListener(
-        'error',
-        () => reject(this.unavailable ?? Error('Native emulator connection failed.')),
-        { once: true },
-      );
-    });
-    return socket;
+    this.peer.catch((error: unknown) =>
+      this.fail(error instanceof Error ? error : Error(String(error))),
+    );
+    return this.peer;
   }
 
-  private queueFrame(packet: ArrayBuffer) {
-    this.latestFrame = packet;
-    if (this.processingFrames) return;
-    this.processingFrames = true;
-    void this.drainFrames();
-  }
-
-  private async drainFrames() {
-    try {
-      while (this.latestFrame) {
-        const packet = this.latestFrame;
-        this.latestFrame = undefined;
-        await this.receiveFrame(packet);
+  private async receiveMessages(peer: PeerChannel) {
+    while (!this.disposed) {
+      let bytes: Uint8Array;
+      try {
+        bytes = await peer.receive();
+      } catch {
+        return;
       }
-    } catch (error) {
-      this.fail(error instanceof Error ? error : Error(String(error)));
-    } finally {
-      this.processingFrames = false;
-      if (this.latestFrame) this.queueFrame(this.latestFrame);
+      this.receiveJson(decoder.decode(bytes));
     }
+  }
+
+  /** Publish each decoded video frame as an LCD image, at the display's own pace. */
+  private showVideo(track: MediaStreamTrack) {
+    const video = document.createElement('video');
+    video.muted = true;
+    video.playsInline = true;
+    video.srcObject = new MediaStream([track]);
+    this.video = video;
+    const next = () => {
+      if (this.disposed) return;
+      video.requestVideoFrameCallback(async () => {
+        if (video.videoWidth && video.videoHeight) {
+          const bitmap = await createImageBitmap(video);
+          try {
+            const sequence = ++this.frameSequence;
+            const frame = { bitmap, width: bitmap.width, height: bitmap.height, sequence };
+            for (const listener of this.framesListeners) listener(frame);
+          } finally {
+            bitmap.close();
+          }
+        }
+        next();
+      });
+    };
+    next();
+    void video.play().catch((error: unknown) =>
+      this.fail(error instanceof Error ? error : Error(String(error))),
+    );
   }
 
   private fail(error: Error) {
@@ -216,43 +215,20 @@ export class RemoteEngine implements Engine {
     request?.resolve(message.result);
   }
 
-  private async receiveFrame(packet: ArrayBuffer) {
-    if (this.disposed || packet.byteLength < FRAME_HEADER_BYTES) return;
-    const bytes = new Uint8Array(packet);
-    if (String.fromCharCode(...bytes.subarray(0, 4)) !== FRAME_MAGIC) {
-      this.fail(Error('Native emulator sent an invalid LCD frame.'));
-      return;
-    }
-    const header = new DataView(packet);
-    const width = header.getUint32(4, false);
-    const height = header.getUint32(8, false);
-    const sequence = Number(header.getBigUint64(12, false));
-    if (sequence <= this.frameSequence) return;
-    const bitmap = await createImageBitmap(
-      new Blob([bytes.subarray(FRAME_HEADER_BYTES)], { type: 'image/jpeg' }),
-    );
-    try {
-      for (const listener of this.framesListeners) listener({ bitmap, width, height, sequence });
-      this.frameSequence = sequence;
-    } finally {
-      bitmap.close();
-    }
-  }
-
   private async rpc<T>(action: string, args: Record<string, unknown> = {}): Promise<T> {
-    const socket = await this.connect();
+    const peer = await this.connect();
     const serial = ++this.serial;
     return new Promise<T>((resolve, reject) => {
       this.pending.set(serial, {
         resolve: (value) => resolve(value as T),
         reject,
       });
-      try {
-        socket.send(JSON.stringify({ type: 'rpc', serial, action, args }));
-      } catch (error) {
-        this.pending.delete(serial);
-        reject(error instanceof Error ? error : Error(String(error)));
-      }
+      peer
+        .send(text.encode(JSON.stringify({ type: 'rpc', serial, action, args })))
+        .catch((error: unknown) => {
+          this.pending.delete(serial);
+          reject(error instanceof Error ? error : Error(String(error)));
+        });
     });
   }
 
@@ -400,25 +376,21 @@ export class RemoteEngine implements Engine {
     if (this.disposePromise) return this.disposePromise;
     if (this.disposed) return Promise.resolve();
     this.disposed = true;
-    const socket = this.socket;
-    if (socket?.readyState !== WebSocket.OPEN) {
-      socket?.close(1000, 'Preview closed');
-      return Promise.resolve();
-    }
-    const serial = ++this.serial;
-    this.disposePromise = new Promise<void>((resolve) => {
-      const timeout = window.setTimeout(() => socket.close(1000, 'Preview closed'), 3000);
-      const finish = () => {
-        window.clearTimeout(timeout);
-        resolve();
-      };
-      socket.addEventListener('close', finish, { once: true });
-      socket.addEventListener('error', finish, { once: true });
-      socket.send(JSON.stringify({ type: 'rpc', serial, action: 'close', args: {} }));
-    });
     const error = Error('Emulator closed.');
     for (const request of this.pending.values()) request.reject(error);
     this.pending.clear();
+    this.video?.pause();
+    if (this.video) this.video.srcObject = null;
+    this.disposePromise = (this.peer ?? Promise.reject(error)).then(
+      async (peer) => {
+        const serial = ++this.serial;
+        await peer
+          .send(text.encode(JSON.stringify({ type: 'rpc', serial, action: 'close', args: {} })))
+          .catch(() => {});
+        peer.close();
+      },
+      () => {},
+    );
     return this.disposePromise;
   }
 }
