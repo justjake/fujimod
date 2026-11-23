@@ -2934,18 +2934,13 @@ impl State {
         self.blocks[core].as_mut().unwrap().poll = Some(poll);
         Ok(())
     }
-    /// After a device access of an M-profile processor: when the pin push
-    /// that ended the access left every value as it found it, the observer of
-    /// the processor's next instruction would repeat that push and the
-    /// deadline refresh on unchanged inputs. Do the refresh here, in the
-    /// observer's order, and record the fixed point, so that the next entry
-    /// is a settled one. Most device accesses of a servo loop are status
-    /// reads that change nothing.
+    /// Called after processor deadlines have been refreshed and pins pushed.
+    /// A fixed-point pin push leaves the timer inputs and clock unchanged,
+    /// so the next instruction can reuse the refreshed deadlines.
     fn settle_access(&mut self, core: usize) -> Result<(), String> {
         if !self.settled.pass || self.mprofile[core].is_none() || self.decoders.pending() {
             return Ok(());
         }
-        self.refresh_processors()?;
         self.arm_settled()?;
         if self.settled.armed
             && let Some(p) = self.mprofile[core].as_mut()
