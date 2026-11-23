@@ -106,8 +106,15 @@ fn board(blocks: bool) -> Board {
     board
 }
 
-fn run(quantum: usize, blocks: bool, until: u64, windows: &[u64]) -> Outcome {
+fn run(
+    quantum: usize,
+    blocks: bool,
+    until: u64,
+    windows: &[u64],
+    policy: ExecutionPolicy,
+) -> Outcome {
     let mut board = board(blocks);
+    board.set_execution_policy(policy).unwrap();
     for &window in windows {
         board.run_until(window, quantum).unwrap();
     }
@@ -139,8 +146,8 @@ fn outcome(board: &Board) -> Outcome {
 fn block_execution_equals_the_instruction_observer() {
     for quantum in [1, 2, 3, 7, 16, 64, 100] {
         for (until, windows) in [(2500, &[][..]), (4000, &[211, 212, 900, 2333][..])] {
-            let reference = run(quantum, false, until, windows);
-            let blocks = run(quantum, true, until, windows);
+            let reference = run(quantum, false, until, windows, ExecutionPolicy::Exact);
+            let blocks = run(quantum, true, until, windows, ExecutionPolicy::Exact);
             assert_eq!(reference.observed, 0);
             assert!(blocks.observed > 0, "quantum {quantum}: block execution never ran");
             assert!(blocks.fast_stores, "quantum {quantum}: the store hook stayed on every store");
@@ -157,6 +164,18 @@ fn block_execution_equals_the_instruction_observer() {
             assert!(reference.registers[10] > 0, "quantum {quantum}: STREX never failed");
         }
     }
+}
+
+#[test]
+fn interactive_ordered_blocks_equal_the_instruction_observer() {
+    let policy = ExecutionPolicy::Interactive;
+    let windows = &[211, 212, 900, 2333];
+    let reference = run(16, false, 4000, windows, policy);
+    let blocks = run(16, true, 4000, windows, policy);
+    assert!(blocks.observed > 0);
+    assert_eq!(blocks.registers, reference.registers);
+    assert_eq!(blocks.memory, reference.memory);
+    assert_eq!(blocks.state, reference.state);
 }
 
 /// Which hooks the execution core holds at an instant is a host choice. A

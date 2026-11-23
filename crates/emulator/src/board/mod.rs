@@ -1664,8 +1664,8 @@ impl Board {
     }
     /// Choose, before a processor runs, between the per-instruction observer
     /// and block execution (`mprofile_blocks`), and set the engine up for the
-    /// choice. Block execution needs exact execution, an M-profile
-    /// controller, and no observer the board's execution core did not install
+    /// choice. Block execution needs an M-profile controller running in an
+    /// ordered slice, and no observer the board's execution core did not install
     /// itself (PC witnesses, instruction points, discovery stubs, write
     /// watches): those read counters at their own instructions. Returns
     /// whether the processor runs in block execution, with `budget` entries.
@@ -1682,8 +1682,7 @@ impl Board {
             } else {
                 usize::from(self.observer_hooks[core].is_some())
             };
-            let wanted = s.execution_policy == ExecutionPolicy::Exact
-                && self.block_execution.get()
+            let wanted = self.block_execution.get()
                 && s.entry_points[core].is_empty()
                 && !s.memory.watching_writes()
                 && self.cpus[core].features().translation_filter
@@ -1795,6 +1794,9 @@ impl Board {
         if fast && let Some(profile) = s.mprofile[core].as_mut() {
             profile.watch_reservations();
         }
+        let poll_enabled = wanted
+            && s.execution_policy == ExecutionPolicy::Exact
+            && self.poll_loops.get();
         let blocks = s.blocks[core].as_mut().unwrap();
         blocks.active = wanted;
         blocks.fast_stores = fast;
@@ -1807,7 +1809,7 @@ impl Board {
         blocks.resume = false;
         // Anything may have happened since the last run.
         blocks.poll = None;
-        blocks.poll_enabled = wanted && self.poll_loops.get();
+        blocks.poll_enabled = poll_enabled;
         Ok(wanted)
     }
     /// Discard a processor's translations when its instruction observer
