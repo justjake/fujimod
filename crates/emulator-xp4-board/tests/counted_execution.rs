@@ -682,3 +682,35 @@ mod boot_rom {
         assert!(message.contains("exact execution"), "{message}");
     }
 }
+
+#[test]
+fn a_definition_selects_counted_execution_without_the_environment_variable() {
+    let _environment = ENVIRONMENT.lock().unwrap();
+    // SAFETY: sessions in this binary are opened under the lock above.
+    unsafe { std::env::remove_var("FUJIMOD_XP4_COUNTED") };
+    let declared = |counted: bool| -> Definition {
+        serde_json::from_value(json!({
+            "ram_size": 65536, "cores": 2, "discovery": false, "cbar": CBAR,
+            "labels": [BUMP], "counted_execution": counted,
+            "initial_registers": [[["Pc", CORE0]], [["Pc", CORE1]]]
+        }))
+        .unwrap()
+    };
+    assert!(Session::new(declared(true), None, vec![]).unwrap().counted_execution());
+    assert!(!Session::new(declared(false), None, vec![]).unwrap().counted_execution());
+}
+
+#[test]
+fn a_declared_counted_execution_is_refused_where_the_hook_is_kept() {
+    let _environment = ENVIRONMENT.lock().unwrap();
+    // SAFETY: sessions in this binary are opened under the lock above.
+    unsafe { std::env::remove_var("FUJIMOD_XP4_COUNTED") };
+    let definition: Definition = serde_json::from_value(json!({
+        "ram_size": 65536, "cores": 2, "discovery": false, "cbar": CBAR,
+        "labels": [BUMP], "counted_execution": true, "pmu_cycles_per_tick": 24,
+        "initial_registers": [[["Pc", CORE0]], [["Pc", CORE1]]]
+    }))
+    .unwrap();
+    let error = Session::new(definition, None, vec![]).err().expect("the PMU profile keeps the hook");
+    assert!(error.contains("counted execution, which does not support the PMU profile"), "{error}");
+}
