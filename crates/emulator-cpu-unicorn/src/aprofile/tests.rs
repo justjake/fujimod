@@ -429,12 +429,30 @@ fn high_code_aliases_keep_shared_backing_dependencies() {
     }
     cpu.write_memory(0x1000, &0xd2800020u32.to_le_bytes())
         .unwrap();
+    cpu.write_memory(0x3000, &0x91000421u32.to_le_bytes())
+        .unwrap(); // add x1,x1,#1 on a separate backing page
     run(&cpu, high, 1);
     assert_eq!(value(&cpu, Register::X(0)), 1);
+    run(&cpu, 0x3000, 1);
+    assert_eq!(value(&cpu, Register::X(1)), 1);
+    let counter = |name| cpu.raw().exit_counters().unwrap()[name];
+    let translations = counter("translations");
+    let flushes = counter("translation_flushes");
+
+    // Rewrite the low alias; the high alias must observe the new code.
     cpu.write_memory(0x1000, &0xd2800040u32.to_le_bytes())
         .unwrap();
     run(&cpu, high, 1);
     assert_eq!(value(&cpu, Register::X(0)), 2);
+    let after_alias = counter("translations");
+    assert!(after_alias > translations);
+    assert_eq!(counter("translation_flushes"), flushes);
+
+    // The independent backing page must retain its warmed translation.
+    run(&cpu, 0x3000, 1);
+    assert_eq!(value(&cpu, Register::X(1)), 2);
+    assert_eq!(counter("translations"), after_alias);
+    assert_eq!(counter("translation_flushes"), flushes);
 }
 
 fn a32_code_rewritten_in_place_runs_the_new_code(base: u64) {
