@@ -52,6 +52,12 @@ pub(super) struct Blocks {
     /// Host-only counters: observed block entries, admitted entries, and
     /// blocks retranslated to a shorter admission.
     pub observed: u64,
+    // Host-only counts of actual callback invocations, including retries.
+    pub instruction_callbacks: u64,
+    pub block_callbacks: u64,
+    pub restart_callbacks: u64,
+    pub store_callbacks: u64,
+    pub mmio_callbacks: u64,
     pub admitted: u64,
     pub shortened: u64,
     /// The last device read of this run, while it may repeat as a poll loop

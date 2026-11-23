@@ -1955,6 +1955,15 @@ impl Drop for Board {
             for (core, blocks) in s.blocks.iter().enumerate() {
                 if let Some(blocks) = blocks {
                     eprintln!(
+                        "FUJIMOD execution counters: CPU{core} callbacks instruction={} block={} restart={} store={} mmio={} instructions={}",
+                        blocks.instruction_callbacks,
+                        blocks.block_callbacks,
+                        blocks.restart_callbacks,
+                        blocks.store_callbacks,
+                        blocks.mmio_callbacks,
+                        s.instructions[core],
+                    );
+                    eprintln!(
                         "FUJIMOD execution counters: CPU{core} blocks observed={} admitted-entries={} shortened={} (unsettled, instruction, run, peer, deadline: {:?}) fast-stores={} watched-pages={} poll-fast-forwards={} poll-reads-left-out={} inline-entries={}",
                         blocks.observed,
                         blocks.admitted,
@@ -3348,6 +3357,9 @@ unsafe fn before(pc: u64, _: u32, data: *mut c_void) {
     let result = (|| {
         let cpu = &*cpus[b.core];
         let mut s = b.state.borrow_mut();
+        if let Some(blocks) = s.blocks[b.core].as_mut() {
+            blocks.instruction_callbacks += 1;
+        }
         s.run_entries[b.core] += 1;
         s.sync(cpu, b.core)?;
         s.due(&cpus)?;
@@ -3495,7 +3507,13 @@ unsafe fn block_restarted(data: *mut c_void, pc: u64) {
     let Some(cpus) = b.cpus.upgrade() else {
         return;
     };
-    let result = b.state.borrow_mut().settle_interrupted_block(&*cpus[b.core], b.core, pc, false);
+    let result = {
+        let mut state = b.state.borrow_mut();
+        if let Some(blocks) = state.blocks[b.core].as_mut() {
+            blocks.restart_callbacks += 1;
+        }
+        state.settle_interrupted_block(&*cpus[b.core], b.core, pc, false)
+    };
     if let Err(e) = result {
         b.state.borrow_mut().fail(e);
         let _ = cpus[b.core].stop();
@@ -3513,6 +3531,9 @@ unsafe fn block_entered(block: fujimod_emulator_cpu::Block, data: *mut c_void) {
     let result = (|| {
         let cpu = &*cpus[core];
         let mut s = b.state.borrow_mut();
+        if let Some(blocks) = s.blocks[core].as_mut() {
+            blocks.block_callbacks += 1;
+        }
         let pc = block.address;
         let bytes = block.bytes & 0x3fff_ffff;
         // The block before this one ran whole.
@@ -3746,6 +3767,9 @@ unsafe fn written(
     };
     let result = {
         let mut state = b.state.borrow_mut();
+        if let Some(blocks) = state.blocks[b.core].as_mut() {
+            blocks.store_callbacks += 1;
+        }
         usize::try_from(size)
             .map_err(|_| "invalid memory-store width".into())
             .and_then(|size| {
@@ -3827,6 +3851,9 @@ unsafe fn access(data: *mut c_void, offset: u64, size: u32, value: Option<u64>) 
             *count = count.saturating_add(1);
         }
         let mut state = b.state.borrow_mut();
+        if let Some(blocks) = state.blocks[b.core].as_mut() {
+            blocks.mmio_callbacks += 1;
+        }
         let result = state.access(&cpus, b, address, size, value);
         // Reads a poll loop fast-forward left out count as serviced.
         let skipped = std::mem::take(&mut state.polls.skipped_reads)
