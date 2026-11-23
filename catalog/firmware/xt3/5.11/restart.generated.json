@@ -1,0 +1,218 @@
+{
+  "$schema": "https://fujimod.com/schemas/restart.generated.schema.json",
+  "schema": 3,
+  "id": "xt3-511-restart",
+  "firmware_id": "xt3-511",
+  "product": "X-T3",
+  "internal_version": "2.58",
+  "code_alias": 0,
+  "code_checks": [
+    {
+      "name": "sender",
+      "address": 31265136,
+      "size": 236,
+      "sha256": "9a8e9aebdbf22f3cd17d4a9313fdb4bb05f53105855526d3ccaab999d95be7b5"
+    },
+    {
+      "name": "queue_sender",
+      "address": 31263264,
+      "size": 64,
+      "sha256": "f0bcb87748495a09182def223f73af2a15a643edc982f5423ad81e0237783de9"
+    },
+    {
+      "name": "clock_reader",
+      "address": 17445700,
+      "size": 84,
+      "sha256": "66970186ee267be7382ef8169702be9107ced1b0e84ee467862c54d70564ee3a"
+    },
+    {
+      "name": "clock_writer",
+      "address": 17445784,
+      "size": 80,
+      "sha256": "ff7790a11898efa953f32f51a04d374a542f8e85258cc44e5c1fae204f79214c"
+    },
+    {
+      "name": "register_reader",
+      "address": 17440064,
+      "size": 80,
+      "sha256": "60a994eb05850476d6c63280bbcced8b0f7fcc3470f8dc46516603feb1676c2c"
+    },
+    {
+      "name": "register_writer",
+      "address": 17440980,
+      "size": 72,
+      "sha256": "e4df463e2c1f6c89264fe43e81c73a98eda9236dd1892b92db13e537165c2fa0"
+    },
+    {
+      "name": "bulk_poll",
+      "address": 30991108,
+      "size": 252,
+      "sha256": "72944df7784f350a5a9c467b9adb13a3a41b1dbe0bd292465ab1ca3eb1364a2d"
+    },
+    {
+      "name": "bulk_e1",
+      "address": 30994024,
+      "size": 196,
+      "sha256": "c26f2693c4e5e84ffff257405abde75c503bfd3de5a4169b40e9657c09a45a1a"
+    },
+    {
+      "name": "bulk_query",
+      "address": 30997360,
+      "size": 144,
+      "sha256": "fffeb89e72783e39d3fefaa292574e463b2c1a2da01b23eb409f14ecd8913f99"
+    },
+    {
+      "name": "bulk_forward",
+      "address": 31007072,
+      "size": 40,
+      "sha256": "e47f6af52fa0c592c15b33c2be43727ad74071be22194abd943ba232b35d8bbe"
+    },
+    {
+      "name": "bulk_source",
+      "address": 31314524,
+      "size": 40,
+      "sha256": "20ad83ffaae32b4a620a2ed5bf103bed8a3f4829d1fa4b6b937dfcc766c44d10"
+    },
+    {
+      "name": "bulk_be32",
+      "address": 30992088,
+      "size": 52,
+      "sha256": "82d680da35e199be8abad7f4180a111dd128fc64e91c6153a3b040da5bff664d"
+    },
+    {
+      "name": "bulk_selector_0",
+      "address": 31363904,
+      "size": 624,
+      "sha256": "b5562d31d06d3bde771da8e23129dc616144a909ef0ad52fe9cc8ce12a7d3c10"
+    },
+    {
+      "name": "bulk_opcode_compare",
+      "address": 30998660,
+      "size": 16,
+      "sha256": "f52d8aa121164b6c5ba2e55a666c3570de9f476c6c30cada02d4e09e9294aa99"
+    },
+    {
+      "name": "bulk_opcode_case",
+      "address": 30998836,
+      "size": 20,
+      "sha256": "30eb8bed3919c91a537a85f67620dfbf37a78803dbb579d2546137fa7dc9107e"
+    },
+    {
+      "name": "restart_query_tag_u32",
+      "address": 30992140,
+      "size": 52,
+      "sha256": "fd8d195a69e3ab7f1ea4fb72ba93c30a87131e866fa973f2fd509d0b05c87a1c"
+    },
+    {
+      "name": "restart_query_full_forward",
+      "address": 31007072,
+      "size": 144,
+      "sha256": "cb76c830651f601e7a53b7eeb388abea4b4a79398a4795fd08da23f4f47fa2aa"
+    },
+    {
+      "name": "deferred_timer_start",
+      "address": 17929176,
+      "size": 608,
+      "sha256": "3b2ff1cd25028754b2026d003f7c8b55b1b40a428d3b92916e31df3605046c55"
+    },
+    {
+      "name": "deferred_timer_cancel",
+      "address": 17929800,
+      "size": 188,
+      "sha256": "de375bff07a27ae0a30910ad1e86e1a3cce1ecad7c0952aaf9c741ee4e645133"
+    }
+  ],
+  "mechanism": {
+    "kind": "xp4-wake-deadline",
+    "transport": {
+      "kind": "borrowed_query",
+      "callback_table": 47742220,
+      "callback_offset": 12,
+      "stock_callback": 31363904,
+      "output_fields": 48878332,
+      "output_bytes": 8,
+      "tag_decoder": 30992140,
+      "forward": 31007072
+    },
+    "sender": 31265136,
+    "request": 134,
+    "request_offset": 0,
+    "deadline_offset": 4,
+    "parameter_bytes": 12,
+    "deadline": {
+      "payload_offset": 8,
+      "unit": "epoch-seconds"
+    },
+    "queue": {
+      "id": 2,
+      "sender": 31263264,
+      "enqueue": 18042320,
+      "payload_bytes": 16,
+      "parameters": {
+        "0": 0,
+        "8": 4,
+        "12": 8
+      },
+      "uninitialized_payload_offsets": [
+        4
+      ]
+    },
+    "request_conversion": {
+      "source": 281,
+      "target": 134
+    },
+    "configuration_override": {
+      "enable_key": 949,
+      "delay_keys": [
+        946,
+        947,
+        948
+      ]
+    },
+    "clock": {
+      "reader": 17445700,
+      "writer": 17445784,
+      "register_reader": 17440064,
+      "register_writer": 17440980,
+      "transaction": 17435132,
+      "bank_pointer": 22423000,
+      "registers": {
+        "control": 32,
+        "low": 34,
+        "high": 35
+      },
+      "read_order": [
+        34,
+        35,
+        34
+      ],
+      "start_value": 32768,
+      "stop_value": 0
+    },
+    "ui": {
+      "mode_address": 25985544,
+      "mode_size": 1,
+      "rec_mode": 3,
+      "pending_mode_address": 25985547,
+      "menu_active_address": 25048068
+    },
+    "power_off": null,
+    "parameter_storage": null,
+    "runtime_qualified": false,
+    "deferred_timer": {
+      "kind": "software-timer-callback-v1",
+      "period_unit": "milliseconds",
+      "one_shot_periodic": 0,
+      "periodic_nonzero": true,
+      "callback_arguments": 0,
+      "start": {
+        "address": 17929176,
+        "size": 608
+      },
+      "cancel": {
+        "address": 17929800,
+        "size": 188
+      }
+    }
+  }
+}
