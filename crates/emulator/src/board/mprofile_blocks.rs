@@ -383,7 +383,7 @@ pub(super) fn can_run_inline(word: u32) -> bool {
     // helper. The controller emulates xPSR-family selectors 1/3/5/7; permit
     // only the exact PRIMASK, BASEPRI, and FAULTMASK selectors here.
     if first == 0xf3ef {
-        return rd <= 12 && matches!(second & 0xf0ff, 0x8010 | 0x8011 | 0x8013);
+        return rd <= 12 && matches!(second & 0xf0ff, 0x8008 | 0x8009 | 0x8010 | 0x8011 | 0x8013);
     }
     // MOVW/MOVT (A7.7.80, A7.7.84). Their immediate fields have no
     // reserved values; limit the destination to ordinary R0-R12.
@@ -477,14 +477,13 @@ pub(super) fn can_run_inline(word: u32) -> bool {
     let rn = first & 15;
     let rd = (second >> 8) & 15;
     match opcode {
-        // AND/ANDS, including the flag-only TST alias.
-        0 => rn <= 12 && (rd <= 12 || (set_flags && rd == 15)),
-        // ORR/ORRS with Rn=PC is MOV/MOVS immediate. No other ORR form is
-        // admitted here, and the destination must remain a general register.
-        2 => rn == 15 && rd <= 12,
-        // ADD/ADDS and SUB/SUBS. Rd=PC is accepted only for the flag-only
-        // CMN/CMP aliases; SP and PC are never arithmetic operands.
-        8 | 13 => rn <= 12 && (rd <= 12 || (set_flags && rd == 15)),
+        // AND/EOR and their flag-only TST/TEQ aliases. ADD and SUB
+        // use the same destination restriction for CMN/CMP.
+        0 | 4 | 8 | 13 => rn <= 12 && (rd <= 12 || set_flags && rd == 15),
+        // BIC uses ordinary registers. ORR/ORN also permit Rn=15
+        // for the MOV/MVN immediate aliases.
+        1 => rn <= 12 && rd <= 12,
+        2 | 3 => (rn <= 12 || rn == 15) && rd <= 12,
         // ADC/ADCS and SBC/SBCS use APSR.C as an input and may update APSR
         // flags, but have no control-state effects with ordinary registers.
         10 | 11 => rn <= 12 && rd <= 12,
@@ -588,6 +587,10 @@ mod tests {
         assert!(can_run_inline(0xf1b1_0007)); // subs.w r0,r1,#7
         assert!(can_run_inline(0xf1b1_0f07)); // cmp r1,#7
         assert!(can_run_inline(0xf04f_0007)); // mov.w r0,#7
+        assert!(can_run_inline(0xf041_0101)); // orr r1,r1,#1
+        assert!(can_run_inline(0xf021_0007)); // bic r0,r1,#7
+        assert!(can_run_inline(0xf3ef_8c09)); // mrs r12,psp
+        assert!(!can_run_inline(0xf041_0f01)); // ORR destination PC
         assert!(can_run_inline(0xf05f_0cff)); // movs.w r12,#255
         assert!(can_run_inline(0xf173_36ff)); // sbcs.w r6,r3,#255
         assert!(can_run_inline(0xf179_3cff)); // sbcs.w r12,r9,#255
@@ -675,7 +678,6 @@ mod tests {
             0xf000_2100, // replicated-zero submode 10 is reserved
             0xf000_3100, // replicated-zero submode 11 is reserved
             0xf121_0007, // ADC opcode
-            0xf021_0007, // BIC opcode
             0xf04f_0f07, // MOV destination PC
             0xf04d_0007, // MOV alias with SP in Rn field
         ] {
