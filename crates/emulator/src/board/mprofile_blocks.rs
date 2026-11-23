@@ -29,6 +29,7 @@
 /// One M-profile processor's block execution state.
 #[derive(Default)]
 pub(super) struct Blocks {
+    pub inline: super::thumb_accounting::Window,
     /// The engine is set up for block execution (hooks and translations).
     pub active: bool,
     /// Instruction entries this run may still begin.
@@ -268,6 +269,43 @@ fn thumb_size(word: u16) -> usize {
     if word >> 11 >= 0x1d { 4 } else { 2 }
 }
 
+/// Whether a Thumb instruction is safe to execute without an observation.
+/// A 16-bit instruction is zero-extended; for 32-bit instructions, the first
+/// halfword is in bits 31..16. This deliberately recognizes only encodings
+/// whose effects are confined to general registers and APSR flags.
+pub(super) fn can_run_inline(word: u32) -> bool {
+    if word <= u32::from(u16::MAX) {
+        let instruction = word as u16;
+        return matches!(instruction, 0x0000..=0x43ff | 0xb200..=0xb2ff)
+            // High-register ADD, CMP and MOV, provided neither operand or
+            // destination is SP or PC. BX/BLX (operation 3) are excluded.
+            || (instruction & 0xfc00 == 0x4400
+                && (instruction >> 8) & 3 != 3
+                && {
+                    let rd = ((instruction >> 4) & 8) | (instruction & 7);
+                    let rm = (instruction >> 3) & 15;
+                    rd < 13 && rm < 13
+                })
+            // Conditional and unconditional immediate branches do not link.
+            || matches!(instruction, 0xd000..=0xddff | 0xe000..=0xe7ff);
+    }
+
+    let first = (word >> 16) as u16;
+    let second = word as u16;
+    // Thumb-2 modified-immediate data processing (the F0xx group). Branches,
+    // system instructions and memory instructions have different prefixes.
+    if first & 0xff00 != 0xf000 || second & 0x8000 != 0 {
+        return false;
+    }
+    let rd = (second >> 8) & 15;
+    // TST, TEQ, CMN and CMP encode Rd=PC, but only update flags. All other
+    // forms must write R0-R12; SP and PC are not inline destinations.
+    let compares = rd == 15
+        && first & 0x0210 == 0x0010
+        && matches!((first >> 5) & 15, 0 | 4 | 8 | 13);
+    rd <= 12 || compares
+}
+
 /// Count the executed instruction prefix reported by a memory-hook restart.
 /// Admission constraints on those already executed entries need no rescan.
 pub(super) fn count_entries(mut code: &[u8]) -> Result<u64, String> {
@@ -333,6 +371,29 @@ mod tests {
     use super::*;
     fn code(words: &[u16]) -> Vec<u8> {
         words.iter().flat_map(|w| w.to_le_bytes()).collect()
+    }
+    #[test]
+    fn inline_classifier_accepts_only_register_alu_and_immediate_branches() {
+        for instruction in [
+            0x0001, 0x180a, 0x4008, 0x42a1, 0xb2ad, 0x4481, 0x45b0, 0x4605, 0x46b1, 0xd001, 0xddff,
+            0xe7ff,
+        ] {
+            assert!(can_run_inline(instruction), "{instruction:#06x}");
+        }
+        for instruction in [
+            0x4400, 0x4485, 0x4478, 0x4700, 0x4770, 0xb000, 0xb280, 0xbe00, 0xbf00, 0xde00, 0xdf00,
+            0xe800,
+        ] {
+            assert!(!can_run_inline(instruction), "{instruction:#06x}");
+        }
+
+        // The first halfword of a 32-bit encoding occupies the upper half.
+        assert!(can_run_inline(0xf001_0504)); // ands.w r5,r1,#4
+        assert!(!can_run_inline(0xf001_0d04)); // destination SP
+        assert!(!can_run_inline(0xf001_0f04)); // PC destination without compare semantics
+        assert!(!can_run_inline(0xf000_f800)); // BL
+        assert!(!can_run_inline(0xf8c0_1000)); // str.w
+        assert!(!can_run_inline(0x0001_0001)); // unrecognized prefix
     }
     fn parts(words: &[u16]) -> (u64, u64, u64, bool) {
         let scan = scan(&code(words)).unwrap();
