@@ -14,6 +14,7 @@ pub const FEATURE_INLINE_INSTRUCTION_COUNTER: u32 = 1 << 7;
 pub const FEATURE_INLINE_BLOCK_ACCOUNTING: u32 = 1 << 8;
 pub const FEATURE_TLBI_OWNER: u32 = 1 << 9;
 pub const FEATURE_THUMB_BLOCK_ACCOUNTING: u32 = 1 << 10;
+pub const FEATURE_THUMB_BLOCK_RECOVERY: u32 = 1 << 11;
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct TlbiEvent {
@@ -188,6 +189,16 @@ pub struct Accounting {
 pub struct ThumbAccounting {
     pub accounting: Accounting,
     pub thumb_page: u64,
+}
+/// Recovery extension to the Thumb accounting layout. Read only when the
+/// linked library reports `FEATURE_THUMB_BLOCK_RECOVERY`.
+#[repr(C)]
+pub struct ThumbRecoveryAccounting {
+    pub thumb_accounting: ThumbAccounting,
+    pub last_block_start: u64,
+    pub last_block_remaining_budget: i64,
+    pub last_block_bytes: u32,
+    pub last_block_icount: u32,
 }
 pub type InsnFilter = unsafe extern "C" fn(*mut c_void, u64, u32) -> c_int;
 pub type Restart = unsafe extern "C" fn(*mut c_void, u64);

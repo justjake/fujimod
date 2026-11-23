@@ -687,6 +687,8 @@ impl Cpu for Core {
             && e.features & ffi::FEATURE_PARALLEL_TCG != 0
             && e.set_parallel_cpus.is_some()
             && e.accounting.is_some();
+        let thumb_block_accounting = block_accounting
+            && e.features & ffi::FEATURE_THUMB_BLOCK_ACCOUNTING != 0;
         Features {
             asynchronous_runs: false,
             guest_clock: false,
@@ -702,8 +704,9 @@ impl Cpu for Core {
             // The R-profile backend writes the appended pause pointer. Require
             // its ABI bit before exposing the accounting record to that backend.
             block_accounting,
-            thumb_block_accounting: block_accounting
-                && e.features & ffi::FEATURE_THUMB_BLOCK_ACCOUNTING != 0,
+            thumb_block_accounting,
+            thumb_block_recovery: thumb_block_accounting
+                && e.features & ffi::FEATURE_THUMB_BLOCK_RECOVERY != 0,
             watched_stores: e.hook_watched.is_some() && e.watch.is_some(),
             backing_observation: e.observe_backings.is_some(),
             store_pc_control: e.write_hook_pc_sync.is_some(),
@@ -1301,6 +1304,15 @@ impl Cpu for Core {
         })?;
         Some(record.cast())
     }
+    fn thumb_recovery_accounting(&self) -> Option<NonNull<ThumbBlockRecoveryAccounting>> {
+        if !self.features().thumb_block_recovery {
+            return None;
+        }
+        let record = NonNull::<ffi::ThumbRecoveryAccounting>::new(unsafe {
+            self.api.extensions.accounting.unwrap()(self.raw).cast()
+        })?;
+        Some(record.cast())
+    }
     unsafe fn observe_backings(&self, ranges: &[BackingObserver]) -> Result<(), String> {
         self.check_tlbi_mutation()?;
         let observe = self
@@ -1515,6 +1527,13 @@ mod tests {
         stop_after: usize,
         classifications: usize,
     }
+    struct ThumbRecoveryProbe {
+        cpu: *const Core,
+        accounting: *const ThumbBlockRecoveryAccounting,
+        restart_pc: Option<u64>,
+        restart_span: Option<(u64, i64, u32, u32)>,
+        memory_events: usize,
+    }
     unsafe fn instruction_probe(_: u64, _: u32, data: *mut c_void) {
         unsafe {
             (*data.cast::<Probe>()).instructions += 1;
@@ -1534,7 +1553,14 @@ mod tests {
             observe_block: false,
         }
     }
+    unsafe fn thumb_memory_execute(_: *mut c_void, _: u64, _: u32) -> Translation {
+        Translation {
+            instruction: InstructionDisposition::Execute,
+            observe_block: false,
+        }
+    }
     unsafe fn thumb_restart(_: *mut c_void, _: u64) {}
+    unsafe fn thumb_block_noop(_: Block, _: *mut c_void) {}
     unsafe fn thumb_block_seen(block: Block, data: *mut c_void) {
         let probe = unsafe { &mut *data.cast::<ThumbBlockProbe>() };
         if block.address & !1 == 0x1000 {
@@ -1543,6 +1569,25 @@ mod tests {
                 unsafe { &*probe.cpu }.stop().unwrap();
             }
         }
+    }
+    unsafe fn thumb_memory_restart(data: *mut c_void, pc: u64) {
+        let probe = unsafe { &mut *data.cast::<ThumbRecoveryProbe>() };
+        let accounting = unsafe { &*probe.accounting };
+        probe.restart_pc = Some(pc);
+        probe.restart_span = Some((
+            accounting.last_block_start,
+            accounting.last_block_remaining_budget,
+            accounting.last_block_bytes,
+            accounting.last_block_icount,
+        ));
+    }
+    unsafe fn thumb_memory_stop(access: Access, address: u64, _: i32, _: i64, data: *mut c_void) {
+        if access != Access::Write || address != 0x2000 {
+            return;
+        }
+        let probe = unsafe { &mut *data.cast::<ThumbRecoveryProbe>() };
+        probe.memory_events += 1;
+        unsafe { &*probe.cpu }.stop().unwrap();
     }
     use crate::test_support::library;
     fn reg(cpu: &dyn Cpu, register: Register) -> u32 {
@@ -1900,6 +1945,76 @@ mod tests {
         assert_eq!(blocks.callbacks, 6);
         assert_eq!(unsafe { (*accounting_ptr).accounting.budget }, 0);
         assert_eq!(blocks.classifications, classifications);
+    }
+    #[test]
+    fn thumb_memory_restart_exposes_exact_precharged_mixed_width_span() {
+        let cpu = library().open(Model::CortexM4, 4 * 1024 * 1024).unwrap();
+        assert!(cpu.features().thumb_block_recovery);
+        cpu.map_zeroed(0x1000, 0x1000, 7).unwrap();
+        cpu.map_zeroed(0x2000, 0x1000, 7).unwrap();
+        // MOVS R0,#0x2a; MOVW R1,#0x2000 (32-bit); STR R0,[R1];
+        // ADDS R2,#1; B 0x1000. The store restarts out of this 12-byte TB.
+        cpu.write_memory(
+            0x1000,
+            &[
+                0x2a, 0x20, 0x42, 0xf2, 0x00, 0x01, 0x08, 0x60, 0x01, 0x32, 0xf9, 0xe7,
+            ],
+        )
+        .unwrap();
+        let accounting = cpu.thumb_recovery_accounting().unwrap();
+        let accounting_ptr = accounting.as_ptr();
+        unsafe {
+            (*accounting_ptr).thumb_accounting.accounting.enabled = 4;
+            (*accounting_ptr).thumb_accounting.accounting.budget = 20;
+            (*accounting_ptr).thumb_accounting.thumb_page = 0x1000;
+            (*accounting_ptr).last_block_bytes = 0;
+        }
+        let mut probe = ThumbRecoveryProbe {
+            cpu: &cpu,
+            accounting: accounting_ptr,
+            restart_pc: None,
+            restart_span: None,
+            memory_events: 0,
+        };
+        let data = (&mut probe as *mut ThumbRecoveryProbe).cast();
+        unsafe {
+            cpu.translation_hooks(Some(TranslationHooks {
+                classify: thumb_memory_execute,
+                restart: thumb_memory_restart,
+                data,
+            }))
+            .unwrap();
+            cpu.install_hook(Hook::Block {
+                callback: thumb_block_noop,
+                data: std::ptr::null_mut(),
+                range: HookRange::All,
+            })
+            .unwrap();
+            cpu.install_hook(Hook::Memory {
+                callback: thumb_memory_stop,
+                data,
+                read: false,
+                write: true,
+                range: HookRange::Inclusive {
+                    begin: 0x2000,
+                    end: 0x2003,
+                },
+            })
+            .unwrap();
+        }
+        cpu.run(Run {
+            begin: 0x1001,
+            until: None,
+            watchdog_us: 1_000_000,
+            instructions: None,
+        })
+        .unwrap();
+        assert_eq!(probe.restart_pc, Some(0x1006));
+        assert_eq!(probe.restart_span, Some((0x1000, 15, 12, 5)));
+        assert_eq!(probe.memory_events, 1);
+        assert_eq!(reg(&cpu, arm::PC), 0x1006);
+        assert_eq!(reg(&cpu, arm::CORE[0]), 0x2a);
+        assert_eq!(reg(&cpu, arm::CORE[1]), 0x2000);
     }
     #[test]
     fn a7_page_tables_translate_and_read_across_virtual_sections() {

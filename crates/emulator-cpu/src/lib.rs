@@ -411,6 +411,8 @@ pub struct Features {
     pub block_accounting: bool,
     /// The block accounting record includes the opt-in Thumb coarse page.
     pub thumb_block_accounting: bool,
+    /// Thumb precharged blocks publish exact span metadata for recovery.
+    pub thumb_block_recovery: bool,
     pub watched_stores: bool,
     pub backing_observation: bool,
     pub store_pc_control: bool,
@@ -538,6 +540,17 @@ pub struct BlockAccounting {
 pub struct ThumbBlockAccounting {
     pub accounting: BlockAccounting,
     pub thumb_page: u64,
+}
+/// Optional append-only record for recovering precharged Thumb blocks.
+/// Available only when [`Features::thumb_block_recovery`] is true; a zero
+/// `last_block_bytes` means there is no current recovery record.
+#[repr(C)]
+pub struct ThumbBlockRecoveryAccounting {
+    pub thumb_accounting: ThumbBlockAccounting,
+    pub last_block_start: u64,
+    pub last_block_remaining_budget: i64,
+    pub last_block_bytes: u32,
+    pub last_block_icount: u32,
 }
 /// A checkpoint associated with an owning processor. Durable export carries
 /// data only; `Cpu::import_snapshot` binds that data to a receiving processor.
@@ -890,6 +903,11 @@ pub trait Cpu {
     /// Returns the extended accounting record only when the backend reports
     /// `thumb_block_accounting`.
     fn thumb_accounting(&self) -> Option<NonNull<ThumbBlockAccounting>> {
+        None
+    }
+    /// Returns the recovery extension only when the backend reports
+    /// `thumb_block_recovery`.
+    fn thumb_recovery_accounting(&self) -> Option<NonNull<ThumbBlockRecoveryAccounting>> {
         None
     }
     /// # Safety
