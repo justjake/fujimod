@@ -93563,5 +93563,68 @@
       "selector_id": 23,
       "setting_id": 589
     }
+  ],
+  "items": [
+    {
+      "anchor": "digital_teleconverter",
+      "record_ids": [
+        "0x01a23b24:0x01b5c7bc",
+        "0x01a23b24:0x01b5c818",
+        "0x01a23b24:0x01b5c874",
+        "0x01a23b24:0x01b5c8d0",
+        "0x01b0d77c:0x01c73840",
+        "0x01b0d77c:0x01c7389c",
+        "0x01b0d77c:0x01c738f8",
+        "0x01b0d77c:0x01c73954"
+      ],
+      "artwork_ids": [
+        4278190111,
+        4278190112,
+        4278190113,
+        4278190114
+      ],
+      "setting_id": 567,
+      "boxes": {
+        "standard": {
+          "x": 70,
+          "y": 7,
+          "width": 36,
+          "height": 36
+        },
+        "INFO": {
+          "x": 294,
+          "y": 174,
+          "width": 36,
+          "height": 36
+        }
+      }
+    },
+    {
+      "anchor": "wide_conversion_lens",
+      "record_ids": [
+        "0x01aa4234:0x01bef274",
+        "0x01aa5ad8:0x01bf0e20",
+        "0x01aa7238:0x01bf28b8",
+        "0x01b0d77c:0x01c73a0c"
+      ],
+      "artwork_ids": [
+        4278190311
+      ],
+      "setting_id": 589,
+      "boxes": {
+        "standard": {
+          "x": 131,
+          "y": 0,
+          "width": 47,
+          "height": 83
+        },
+        "INFO": {
+          "x": 334,
+          "y": 174,
+          "width": 36,
+          "height": 36
+        }
+      }
+    }
   ]
 }
