@@ -1948,11 +1948,27 @@
       "additionalProperties": false,
       "description": "The stock clock the wake deadline is compared against.",
       "properties": {
+        "absent_reason": {
+          "description": "Explanation for an absent counter writer.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "bank_pointer": {
           "description": "Byte both register helpers read as their bank.",
           "format": "uint64",
           "minimum": 0,
           "type": "integer"
+        },
+        "live_reader": {
+          "description": "Routine that reads the live register shadow when no bus writer is known.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
         },
         "read_order": {
           "description": "Register selectors read, in order, to take one counter reading.",
@@ -1979,7 +1995,10 @@
           "description": "Stock routine that writes one counter register.",
           "format": "uint64",
           "minimum": 0,
-          "type": "integer"
+          "type": [
+            "integer",
+            "null"
+          ]
         },
         "registers": {
           "$ref": "#/$defs/ClockRegisters",
@@ -1989,38 +2008,45 @@
           "description": "Value the writer stores in the control register to start the counter.",
           "format": "uint32",
           "minimum": 0,
-          "type": "integer"
+          "type": [
+            "integer",
+            "null"
+          ]
         },
         "stop_value": {
           "description": "Value the writer stores in the control register to stop it.",
           "format": "uint32",
           "minimum": 0,
-          "type": "integer"
+          "type": [
+            "integer",
+            "null"
+          ]
         },
         "transaction": {
           "description": "Serial transaction both register helpers target.",
           "format": "uint64",
           "minimum": 0,
-          "type": "integer"
+          "type": [
+            "integer",
+            "null"
+          ]
         },
         "writer": {
           "description": "Stock routine that writes the counter.",
           "format": "uint64",
           "minimum": 0,
-          "type": "integer"
+          "type": [
+            "integer",
+            "null"
+          ]
         }
       },
       "required": [
         "reader",
-        "writer",
         "register_reader",
-        "register_writer",
-        "transaction",
         "bank_pointer",
         "registers",
-        "read_order",
-        "start_value",
-        "stop_value"
+        "read_order"
       ],
       "type": "object"
     },
@@ -2032,7 +2058,10 @@
           "description": "Control register the start and stop values are written to.",
           "format": "uint32",
           "minimum": 0,
-          "type": "integer"
+          "type": [
+            "integer",
+            "null"
+          ]
         },
         "high": {
           "description": "High halfword of the counter.",
@@ -2048,7 +2077,6 @@
         }
       },
       "required": [
-        "control",
         "low",
         "high"
       ],
@@ -20934,6 +20962,16 @@
               "format": "uint64",
               "minimum": 0,
               "type": "integer"
+            },
+            "command": {
+              "description": "Diagnostic query command byte, when located.",
+              "format": "uint8",
+              "maximum": 255,
+              "minimum": 0,
+              "type": [
+                "integer",
+                "null"
+              ]
             },
             "forward": {
               "description": "Stock routine that forwards a decoded tag to the callback table,\nwhere the image locates that routine (X-Processor 4).",

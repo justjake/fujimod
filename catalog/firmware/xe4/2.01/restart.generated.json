@@ -1,0 +1,208 @@
+{
+  "$schema": "https://fujimod.com/schemas/restart.generated.schema.json",
+  "schema": 3,
+  "id": "xe4-201-restart",
+  "firmware_id": "xe4-201",
+  "product": "X-E4",
+  "internal_version": "1.43",
+  "code_alias": 0,
+  "code_checks": [
+    {
+      "name": "sender",
+      "address": 33897948,
+      "size": 236,
+      "sha256": "aa593bcf18c80f0d4a6f89bc9b3f0f633dc9757e41d48d1d6dde5521c979ce78"
+    },
+    {
+      "name": "queue_sender",
+      "address": 33895900,
+      "size": 64,
+      "sha256": "7221126aae826d13cbb9ea0f7945934dc44fb998979b1fc6502808019a7f194d"
+    },
+    {
+      "name": "clock_reader",
+      "address": 18833204,
+      "size": 56,
+      "sha256": "fd2a04027c7b2cc7cff20e0125efaa5759b879f0e71e06fab8db69e47fd9aaa9"
+    },
+    {
+      "name": "register_reader",
+      "address": 18827144,
+      "size": 192,
+      "sha256": "8b4cfe9df337a7b9ea09181d0e00600f53094d3e8501a0f48e24604327e34be5"
+    },
+    {
+      "name": "bulk_poll",
+      "address": 33587056,
+      "size": 252,
+      "sha256": "209a50b3ac706539b955e5328ef3cef9dfbb4ff31e65014338e4fb40b25201a7"
+    },
+    {
+      "name": "bulk_e1",
+      "address": 33589972,
+      "size": 196,
+      "sha256": "3da1b9306ce51b071370af86411f5b0dc36c7fd6d091ca5f379ad3f7eff2ff08"
+    },
+    {
+      "name": "bulk_query",
+      "address": 33593308,
+      "size": 144,
+      "sha256": "e81c9df44fb91c43a08d19b7abd453833812cd853c1e4faf372fbcfecd2dcd25"
+    },
+    {
+      "name": "bulk_forward",
+      "address": 33603020,
+      "size": 40,
+      "sha256": "b9762e8b02daa485a5609fe54ba0c891ac5f4a7193f82ae65ca2e720e81ea517"
+    },
+    {
+      "name": "bulk_source",
+      "address": 33948888,
+      "size": 40,
+      "sha256": "daae8f4a90feb37d6aff1c629034c479d3fd3d2850d78d6f89cf99ffdbe80441"
+    },
+    {
+      "name": "bulk_be32",
+      "address": 33588036,
+      "size": 52,
+      "sha256": "82d680da35e199be8abad7f4180a111dd128fc64e91c6153a3b040da5bff664d"
+    },
+    {
+      "name": "bulk_selector_0",
+      "address": 33999352,
+      "size": 660,
+      "sha256": "4c1e97681632b02178a1384ef77b5fd476f635fc8442b5bfc398a54e792637e3"
+    },
+    {
+      "name": "bulk_opcode_compare",
+      "address": 33594608,
+      "size": 16,
+      "sha256": "f52d8aa121164b6c5ba2e55a666c3570de9f476c6c30cada02d4e09e9294aa99"
+    },
+    {
+      "name": "bulk_opcode_case",
+      "address": 33594784,
+      "size": 20,
+      "sha256": "1cbe6bc2d57cc108e1d47332351a1c92b583df4ba0bb385a1d6099237c809dbb"
+    },
+    {
+      "name": "restart_query_tag_u32",
+      "address": 33588088,
+      "size": 52,
+      "sha256": "fd8d195a69e3ab7f1ea4fb72ba93c30a87131e866fa973f2fd509d0b05c87a1c"
+    },
+    {
+      "name": "restart_query_full_forward",
+      "address": 33603020,
+      "size": 144,
+      "sha256": "daaf40e0013355c9e04ea4847ef72fc7da79226ded37e3ddd783bb232663373e"
+    },
+    {
+      "name": "deferred_timer_start",
+      "address": 19320128,
+      "size": 608,
+      "sha256": "d9a45e82919da1c8137ee71e164d5a9215a32d52acc41815f26163029b7be2ac"
+    },
+    {
+      "name": "deferred_timer_cancel",
+      "address": 19320752,
+      "size": 188,
+      "sha256": "666336e900f76e92ed1cb69d623f90ab01a4e092047437836b45e425fa3d082b"
+    }
+  ],
+  "mechanism": {
+    "kind": "xp4-wake-deadline",
+    "transport": {
+      "kind": "borrowed_query",
+      "callback_table": 51429356,
+      "callback_offset": 12,
+      "stock_callback": 33999352,
+      "output_fields": 52623140,
+      "output_bytes": 8,
+      "tag_decoder": 33588088,
+      "forward": 33603020,
+      "command": 60
+    },
+    "sender": 33897948,
+    "request": 134,
+    "request_offset": 0,
+    "deadline_offset": 4,
+    "parameter_bytes": 12,
+    "deadline": {
+      "payload_offset": 8,
+      "unit": "epoch-seconds"
+    },
+    "queue": {
+      "id": 2,
+      "sender": 33895900,
+      "enqueue": 19436040,
+      "payload_bytes": 16,
+      "parameters": {
+        "0": 0,
+        "8": 4,
+        "12": 8
+      },
+      "uninitialized_payload_offsets": [
+        4
+      ]
+    },
+    "request_conversion": {
+      "source": 281,
+      "target": 134
+    },
+    "configuration_override": {
+      "enable_key": 949,
+      "delay_keys": [
+        946,
+        947,
+        948
+      ]
+    },
+    "clock": {
+      "reader": 18833204,
+      "writer": null,
+      "register_reader": 18827144,
+      "register_writer": null,
+      "transaction": null,
+      "bank_pointer": 23795308,
+      "registers": {
+        "control": null,
+        "low": 34,
+        "high": 35
+      },
+      "read_order": [
+        34,
+        35
+      ],
+      "start_value": null,
+      "stop_value": null,
+      "absent_reason": "No checked counter writer or control register has been located.",
+      "live_reader": 18826928
+    },
+    "ui": {
+      "mode_address": 28243672,
+      "mode_size": 1,
+      "rec_mode": 3,
+      "pending_mode_address": 28243675,
+      "menu_active_address": 27033160
+    },
+    "power_off": null,
+    "parameter_storage": null,
+    "runtime_qualified": false,
+    "deferred_timer": {
+      "kind": "software-timer-callback-v1",
+      "period_unit": "milliseconds",
+      "one_shot_periodic": 0,
+      "periodic_nonzero": true,
+      "callback_arguments": 0,
+      "start": {
+        "address": 19320128,
+        "size": 608
+      },
+      "cancel": {
+        "address": 19320752,
+        "size": 188
+      }
+    }
+  }
+}
