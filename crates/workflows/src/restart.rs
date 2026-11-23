@@ -15,12 +15,14 @@ use crate::{
     bulk::{Access, BulkError, Result, check_camera, hex},
 };
 use fujimod_catalog_restart::{
-    BootFlag, DeferredTimer, FirmwareRestart, RecIdle, RequestTransport, WordValue,
+    BootFlag, ConfigurationCheck, DeferredTimer, FirmwareRestart, RecIdle, RequestTransport,
+    WordValue,
 };
 use fujimod_usb::{
     ff80::{
         Session, SessionState,
         commands::{
+            configuration::{ConfigurationLocation, ConfigurationView, ReadConfiguration},
             diagnostic::DiagnosticTag,
             memory::{Address, MemoryRange},
             research::{CommandCode, Request},
@@ -219,6 +221,38 @@ async fn require_words(access: &mut Access<'_>, words: &[WordValue], message: &s
     Ok(())
 }
 
+/// Configuration mismatches stop before callback/output/boot-flag mutation.
+/// Recovery changes the idle-state rule, never these prerequisites.
+async fn require_configuration(
+    access: &mut Access<'_>,
+    checks: &[ConfigurationCheck],
+) -> Result<()> {
+    for check in checks {
+        let length = NonZeroU32::new(check.expected.len() as u32)
+            .ok_or_else(|| BulkError::Check("Empty restart configuration prerequisite".into()))?;
+        for view in [ConfigurationView::Ram, ConfigurationView::Storage] {
+            let command = ReadConfiguration::new(
+                ConfigurationLocation {
+                    view,
+                    page: 0,
+                    offset: check.offset,
+                },
+                length,
+                access.limits.configuration,
+            )?;
+            let actual = access.session.read_configuration(command).await?;
+            require(
+                actual == check.expected,
+                &format!(
+                    "Restart configuration prerequisite differs: {} ({view:?}, offset {:#x})",
+                    check.name, check.offset,
+                ),
+            )?;
+        }
+    }
+    Ok(())
+}
+
 /// Request a restart. Without `recover`, the camera must be idle in REC.
 /// Nothing is written unless identity, stock code and the stock callback match.
 pub async fn request(
@@ -244,6 +278,7 @@ pub async fn request(
             &format!("Stock code differs: {}", check.name),
         )?;
     }
+    require_configuration(&mut access, &m.configuration_checks).await?;
     match &m.transport {
         None => Err(BulkError::Check(
             "This firmware's power-off arms a fixed alarm interval and takes no request".into(),
@@ -420,6 +455,203 @@ mod tests {
         };
         let step = block_on(set_boot_flag(&mut access, flag));
         (step, script.remaining())
+    }
+
+    fn configuration_limits() -> Limits {
+        let mut value = limits();
+        value.configuration = NonZeroU32::new(64).unwrap();
+        value
+    }
+
+    fn configuration_check() -> ConfigurationCheck {
+        ConfigurationCheck {
+            name: "wake policy".into(),
+            offset: 8,
+            expected: vec![1, 1],
+        }
+    }
+
+    fn configuration_read(view: u32, bytes: &[u8]) -> Vec<fujimod_usb::testing::Exchange> {
+        let request: Vec<u8> = [0x1a0002, 0, 0, 0, 2, view, 0, 8, bytes.len() as u32]
+            .into_iter()
+            .flat_map(u32::to_le_bytes)
+            .collect();
+        let mut reply = request.clone();
+        reply.extend_from_slice(bytes);
+        crate::bulk::tests::exchange(request, reply)
+    }
+
+    #[test]
+    fn configuration_checks_read_both_views_and_empty_checks_touch_nothing() {
+        for checks in [vec![], vec![configuration_check()]] {
+            let mut steps = Vec::new();
+            if !checks.is_empty() {
+                steps.extend(configuration_read(1, &[1, 1]));
+                steps.extend(configuration_read(0, &[1, 1]));
+            }
+            let (mut session, script) = opened(steps);
+            let mut access = Access {
+                session: &mut session,
+                limits: configuration_limits(),
+            };
+            block_on(require_configuration(&mut access, &checks)).unwrap();
+            assert_eq!(script.remaining(), 0);
+        }
+    }
+
+    #[test]
+    fn configuration_mismatch_stops_at_the_first_bad_view() {
+        for storage in [false, true] {
+            let mut steps = Vec::new();
+            if storage {
+                steps.extend(configuration_read(1, &[1, 1]));
+            }
+            steps.extend(configuration_read(if storage { 0 } else { 1 }, &[1, 0]));
+            let (mut session, script) = opened(steps);
+            let mut access = Access {
+                session: &mut session,
+                limits: configuration_limits(),
+            };
+            let error = block_on(require_configuration(&mut access, &[configuration_check()]));
+            assert!(
+                matches!(error, Err(BulkError::Check(message)) if message.contains("wake policy"))
+            );
+            assert_eq!(script.remaining(), 0);
+        }
+    }
+
+    fn configuration_restart() -> FirmwareRestart {
+        let mut restart: FirmwareRestart = serde_json::from_str(include_str!(
+            "../../../catalog/firmware/x70/1.10/restart.generated.json"
+        ))
+        .unwrap();
+        restart.mechanism.deferred_timer = None;
+        restart.mechanism.early_boot = None;
+        restart.mechanism.configuration_checks = vec![configuration_check()];
+        restart
+    }
+
+    #[test]
+    fn request_and_recovery_refuse_bad_stored_configuration_before_callback_access() {
+        for recover in [false, true] {
+            let mut restart = configuration_restart();
+            let code = [1, 2, 3, 4];
+            restart.code_checks = vec![fujimod_catalog_bulk::CodeCheck {
+                name: "request code".into(),
+                address: 0x8000,
+                size: 4,
+                sha256: hex(&checks::sha256_bytes(&code)),
+            }];
+            let mut steps = crate::bulk::tests::info(
+                fujimod_usb::ff80::commands::info::InfoSelector::Product as u32,
+                &restart.product,
+            );
+            steps.extend(crate::bulk::tests::info(
+                fujimod_usb::ff80::commands::info::InfoSelector::InternalVersion as u32,
+                &restart.internal_version,
+            ));
+            steps.extend(read((0x8000 + restart.code_alias) as u32, &code));
+            steps.extend(configuration_read(1, &[1, 1]));
+            steps.extend(configuration_read(0, &[0, 0]));
+            let (mut session, script) = opened(steps);
+            let error = block_on(request(
+                &mut session,
+                &restart,
+                configuration_limits(),
+                recover,
+            ));
+            assert!(
+                matches!(error, Err(BulkError::Check(message)) if message.contains("wake policy"))
+            );
+            assert_eq!(script.remaining(), 0);
+        }
+    }
+
+    #[test]
+    fn malformed_stored_configuration_reply_stops_the_check() {
+        let mut steps = configuration_read(1, &[1, 1]);
+        let mut stored = configuration_read(0, &[1, 1]);
+        let Some(fujimod_usb::testing::Exchange::Read { data, .. }) = stored.last_mut() else {
+            panic!("configuration fixture ends with a reply");
+        };
+        data.pop();
+        steps.extend(stored);
+        let (mut session, script) = opened(steps);
+        let mut access = Access {
+            session: &mut session,
+            limits: configuration_limits(),
+        };
+        assert!(block_on(require_configuration(&mut access, &[configuration_check()])).is_err());
+        assert_eq!(script.remaining(), 0);
+    }
+
+    #[test]
+    fn configuration_profiles_reject_ambiguous_unbounded_or_unchecked_mechanisms() {
+        let valid = configuration_restart();
+        valid.validate().unwrap();
+        let mut invalid = Vec::new();
+        let mut changed = valid.clone();
+        changed.mechanism.configuration_checks[0].expected.clear();
+        invalid.push(changed);
+        let mut changed = valid.clone();
+        changed.mechanism.configuration_checks[0].expected = vec![0; 65];
+        invalid.push(changed);
+        let mut changed = valid.clone();
+        changed.mechanism.configuration_checks[0].offset = u32::MAX;
+        invalid.push(changed);
+        let mut changed = valid.clone();
+        changed.mechanism.configuration_checks[0].name.clear();
+        invalid.push(changed);
+        let mut changed = valid.clone();
+        changed
+            .mechanism
+            .configuration_checks
+            .push(configuration_check());
+        invalid.push(changed);
+        let mut changed = valid.clone();
+        changed
+            .mechanism
+            .configuration_checks
+            .push(ConfigurationCheck {
+                name: "overlap".into(),
+                offset: 9,
+                expected: vec![1],
+            });
+        invalid.push(changed);
+        let mut changed = valid.clone();
+        changed.mechanism.configuration_checks = (0..17)
+            .map(|n| ConfigurationCheck {
+                name: format!("check {n}"),
+                offset: n,
+                expected: vec![0],
+            })
+            .collect();
+        invalid.push(changed);
+        let mut changed = valid.clone();
+        changed.mechanism.configuration_checks = (0..3)
+            .map(|n| ConfigurationCheck {
+                name: format!("check {n}"),
+                offset: n * 64,
+                expected: vec![0; 64],
+            })
+            .collect();
+        invalid.push(changed);
+        let mut changed = valid.clone();
+        changed.mechanism.transport = None;
+        invalid.push(changed);
+        let original: FirmwareRestart = serde_json::from_str(include_str!(
+            "../../../catalog/firmware/x70/1.10/restart.generated.json"
+        ))
+        .unwrap();
+        let mut changed = valid.clone();
+        changed.mechanism.deferred_timer = Some(original.mechanism.deferred_timer.unwrap());
+        invalid.push(changed);
+        let mut changed = valid.clone();
+        changed.mechanism.early_boot = Some(original.mechanism.early_boot.unwrap());
+        invalid.push(changed);
+        for restart in invalid {
+            assert!(restart.validate().is_err());
+        }
     }
 
     #[test]

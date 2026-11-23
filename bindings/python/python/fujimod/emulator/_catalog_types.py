@@ -584,6 +584,12 @@ class ConfigurationCheck(TypedDict, total=False):
     value: Required[int]
 
 
+class ConfigurationCheck2(TypedDict, total=False):
+    expected: Required[list[int]]
+    name: Required[str]
+    offset: Required[int]
+
+
 type ConfigurationLocation = (
     ConfigurationLocationVariant0 | ConfigurationLocationVariant1
 )

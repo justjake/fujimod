@@ -2260,6 +2260,38 @@
       ],
       "type": "object"
     },
+    "ConfigurationCheck2": {
+      "additionalProperties": false,
+      "description": "One exact configuration prerequisite, checked in RAM and storage on page 0.",
+      "properties": {
+        "expected": {
+          "description": "Required bytes, between 1 and 64 bytes long.",
+          "items": {
+            "format": "uint8",
+            "maximum": 255,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "type": "array"
+        },
+        "name": {
+          "description": "Name used to identify a failed prerequisite.",
+          "type": "string"
+        },
+        "offset": {
+          "description": "Byte offset within configuration page 0.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "name",
+        "offset",
+        "expected"
+      ],
+      "type": "object"
+    },
     "ConfigurationLocation": {
       "description": "A configuration block addressed directly or through a firmware pointer.",
       "oneOf": [
