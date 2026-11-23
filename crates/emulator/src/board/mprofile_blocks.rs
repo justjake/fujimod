@@ -320,8 +320,9 @@ pub(super) fn is_single_transfer(word: u32) -> bool {
 
 /// Whether a Thumb instruction is safe to execute without an observation.
 /// A 16-bit instruction is zero-extended; for 32-bit instructions, the first
-/// halfword is in bits 31..16. This deliberately recognizes only encodings
-/// whose effects are confined to general registers and APSR flags.
+/// halfword is in bits 31..16. Accepted operations use general registers,
+/// limited SP arithmetic/moves, APSR flags, mask-register reads, or ordinary
+/// immediate branches.
 pub(super) fn can_run_inline(word: u32) -> bool {
     if word <= u32::from(u16::MAX) {
         let instruction = word as u16;
@@ -336,6 +337,21 @@ pub(super) fn can_run_inline(word: u32) -> bool {
                     let low_register_cmp = (instruction >> 8) & 3 == 1 && rd < 8 && rm < 8;
                     rd < 13 && rm < 13 && !low_register_cmp
                 })
+            // CBZ/CBNZ are immediate, non-linking branches with no flag or
+            // control-state effects.
+            || instruction & 0xf500 == 0xb100
+            // ADD/SUB SP,#imm and ADD Rd,SP,#imm are register-only and cannot
+            // fault.
+            || instruction & 0xff00 == 0xb000
+            || instruction & 0xf800 == 0xa800
+            // High-register MOV can move to/from SP without touching PC.
+            || (instruction & 0xfc00 == 0x4400
+                && (instruction >> 8) & 3 == 2
+                && {
+                    let rd = ((instruction >> 4) & 8) | (instruction & 7);
+                    let rm = (instruction >> 3) & 15;
+                    rd != 15 && rm != 15 && rd <= 13 && rm <= 13
+                })
             // Conditional and unconditional immediate branches do not link.
             || matches!(instruction, 0xd000..=0xddff | 0xe000..=0xe7ff);
     }
@@ -343,6 +359,12 @@ pub(super) fn can_run_inline(word: u32) -> bool {
     let first = (word >> 16) as u16;
     let second = word as u16;
     let rd = (second >> 8) & 15;
+    // Native MRS reads mask state from Unicorn's M-profile architectural
+    // helper. The controller emulates xPSR-family selectors 1/3/5/7; permit
+    // only the exact PRIMASK, BASEPRI, and FAULTMASK selectors here.
+    if first == 0xf3ef {
+        return rd <= 12 && matches!(second & 0xf0ff, 0x8010 | 0x8011 | 0x8013);
+    }
     // MOVW/MOVT (A7.7.80, A7.7.84). Their immediate fields have no
     // reserved values; limit the destination to ordinary R0-R12.
     if matches!(first & 0xfbf0, 0xf240 | 0xf2c0) {
@@ -458,12 +480,13 @@ mod tests {
     fn inline_classifier_accepts_only_register_alu_and_immediate_branches() {
         for instruction in [
             0x0001, 0x180a, 0x4008, 0x42a1, 0xb2ad, 0x4400, 0x4481, 0x45b0, 0x4605, 0x46b1, 0xd001,
-            0xddff, 0xe7ff,
+            0xddff, 0xe7ff, 0xb000, 0xb080, 0xa800, 0xafff, 0x46bd, 0x466f, 0xb170, 0xb169,
+            0xb300, 0xb37f, 0xb970, 0xb969, 0xbb00, 0xbb7f,
         ] {
             assert!(can_run_inline(instruction), "{instruction:#06x}");
         }
         for instruction in [
-            0x4485, 0x4478, 0x4501, 0x4700, 0x4770, 0xb000, 0xb400, 0xbe00, 0xbf00, 0xde00, 0xdf00,
+            0x4485, 0x4478, 0x4501, 0x4700, 0x4770, 0xb400, 0xbe00, 0xbf00, 0xde00, 0xdf00,
             0xe800,
         ] {
             assert!(!can_run_inline(instruction), "{instruction:#06x}");
@@ -492,6 +515,9 @@ mod tests {
         assert!(can_run_inline(0xeb11_1042)); // adds.w r0,r1,r2,lsl #5
         assert!(can_run_inline(0xeba1_0002)); // sub.w r0,r1,r2
         assert!(can_run_inline(0xebb1_1042)); // subs.w r0,r1,r2,lsl #5
+        assert!(can_run_inline(0xf3ef_8110)); // mrs r1,primask
+        assert!(can_run_inline(0xf3ef_8211)); // mrs r2,basepri
+        assert!(can_run_inline(0xf3ef_8313)); // mrs r3,faultmask
         for instruction in [
             0xf101_0d07, // destination SP
             0xf101_0f07, // PC destination without compare semantics
@@ -517,6 +543,21 @@ mod tests {
             0xeb01_8002, // reserved second-halfword bit
             0xeb41_0002, // ADC opcode
             0xeba1_000d, // SUB shifted source SP
+            0xf3ef_8112, // BASEPRI_MAX not included in the native read subset
+            0xf3ef_8114, // CONTROL not included in the native read subset
+            0xf3ef_8d10, // MRS destination SP
+            0xf3ef_8f10, // MRS destination PC
+            0xf3ef_9110, // reserved MRS prefix bits
+            0xf3ee_8110, // not the MRS mask-register encoding
+            0xf3ef_8001, // emulated xPSR selector
+            0xf3ef_8003, // emulated xPSR selector
+            0xf3ef_8005, // emulated xPSR selector
+            0xf3ef_8007, // emulated xPSR selector
+            0xf3ef_8000, // APSR selector outside the emulated xPSR subset
+            0x46bf, // MOV SP,PC
+            0x4677, // MOV R7,LR
+            0xb500, // PUSH including LR, not CBZ
+            0xbd00, // POP including PC, not CBNZ
             0xf000_1100, // replicated-zero submode 01 is reserved
             0xf000_2100, // replicated-zero submode 10 is reserved
             0xf000_3100, // replicated-zero submode 11 is reserved
