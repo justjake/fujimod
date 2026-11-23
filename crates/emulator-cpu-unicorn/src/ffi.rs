@@ -15,6 +15,7 @@ pub const FEATURE_INLINE_BLOCK_ACCOUNTING: u32 = 1 << 8;
 pub const FEATURE_TLBI_OWNER: u32 = 1 << 9;
 pub const FEATURE_THUMB_BLOCK_ACCOUNTING: u32 = 1 << 10;
 pub const FEATURE_THUMB_BLOCK_RECOVERY: u32 = 1 << 11;
+pub const FEATURE_WATCHED_STORE_COUNTERS: u32 = 1 << 13;
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct TlbiEvent {

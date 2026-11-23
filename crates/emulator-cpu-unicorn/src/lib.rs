@@ -1385,8 +1385,21 @@ impl Cpu for Core {
             "translation_invalidations_restart",
             "translation_invalidations_physical_write",
         ];
-        let values = unsafe { std::slice::from_raw_parts(read(self.raw), names.len()) };
-        Ok(names.into_iter().zip(values.iter().copied()).collect())
+        let watched = [
+            "watched_store_sites",
+            "watched_store_terminal_requests",
+            "watched_store_cap_misses",
+        ];
+        let extra: &[&str] = if self.api.extensions.features & ffi::FEATURE_WATCHED_STORE_COUNTERS != 0 {
+            &watched
+        } else {
+            &[]
+        };
+        let values = unsafe { std::slice::from_raw_parts(read(self.raw), names.len() + extra.len()) };
+        Ok(names.into_iter()
+            .chain(extra.iter().copied())
+            .zip(values.iter().copied())
+            .collect())
     }
 }
 

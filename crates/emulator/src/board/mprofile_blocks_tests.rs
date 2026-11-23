@@ -248,6 +248,14 @@ fn translated_transfers_match_at_watched_stores_and_data_faults() {
         if !advance && address == 0x12000 {
             assert!(translated.state.borrow().blocks[0].as_ref().unwrap().inline.entries > 500);
         }
+        if address == 0x10800 {
+            // Only the first nonterminal store at this site needs a retry.
+            // Other cached block shapes may encounter it before retranslation.
+            let counters = translated.cpu(0).unwrap().exit_counters().unwrap();
+            assert_eq!(counters["watched_store_sites"], 1);
+            assert!(counters["restart_requests"] < 16, "{counters:?}");
+            assert_eq!(counters["watched_store_cap_misses"], 0);
+        }
         if advance {
             assert!(reference.state.borrow().timeline.now() < 2031, "loop never reached unmapped memory");
         }
