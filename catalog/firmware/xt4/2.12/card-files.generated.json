@@ -1,0 +1,258 @@
+{
+  "$schema": "https://fujimod.com/schemas/card-files.generated.schema.json",
+  "schema": 1,
+  "firmware_id": "xt4-212",
+  "product": "X-T4",
+  "internal_version": "2.16",
+  "code_checks": [
+    {
+      "name": "card_sdk_init",
+      "address": 19370344,
+      "size": 376,
+      "sha256": "4a32d22b55e351fd076528e1da8756e0cc0c4a562172b3065e288dd5906f5254"
+    },
+    {
+      "name": "card_dispatcher",
+      "address": 36059360,
+      "size": 136,
+      "sha256": "94056c242fbd0bf0212d8e1e97c5a9048e32fddbd12fbc1674a1ecfe07df769c"
+    },
+    {
+      "name": "card_completion",
+      "address": 19354596,
+      "size": 44,
+      "sha256": "66ffb094b6b2a1c337aeece860849c1790bc1c86b2a0bec5c6c7757654880cb1"
+    },
+    {
+      "name": "card_allocate",
+      "address": 19399372,
+      "size": 184,
+      "sha256": "f2ca89ca3376e96b7a30832705761bf6a607da3585b707c01a26b63a949c017c"
+    },
+    {
+      "name": "card_release",
+      "address": 19399556,
+      "size": 72,
+      "sha256": "4606e6d98b915d427a992b3d0c86a88605921a8e4963e284b446ed240c1be05a"
+    },
+    {
+      "name": "card_pool",
+      "address": 19394292,
+      "size": 296,
+      "sha256": "934d0b4c7d077bc3e468d6cc2e45bf00bd7d06ae1328b134563a73b7670c8e98"
+    },
+    {
+      "name": "card_module_open",
+      "address": 14873580,
+      "size": 204,
+      "sha256": "0028885cdd615cc4b69619ada12595102869d76177271afee330c0a39ee5ec3d"
+    },
+    {
+      "name": "card_first",
+      "address": 14876956,
+      "size": 164,
+      "sha256": "ea96a3894f17af6ef75a99a7b453413ae9acc3d3c627943589b0a12e26a79fab"
+    },
+    {
+      "name": "card_next",
+      "address": 14877120,
+      "size": 124,
+      "sha256": "f548d1874ed62eaaca69f3db95da2a72c3de884540e8759b31c6ea35bf9dc50f"
+    },
+    {
+      "name": "card_directory_first",
+      "address": 14877244,
+      "size": 156,
+      "sha256": "27345ed908ff650fbf5098cda5099807a2927dfc76b656c951c768066d191926"
+    },
+    {
+      "name": "card_directory_next",
+      "address": 14877400,
+      "size": 124,
+      "sha256": "1027a71ce8d15fd1e822319a2fc886cea334e8d5fa56f60fccfaf7d69e6e35ac"
+    },
+    {
+      "name": "card_sender",
+      "address": 14886948,
+      "size": 80,
+      "sha256": "5e4084ed4c42d7ee16e702034ed1eb67355102c61efbf078b7f58745a92e9c75"
+    },
+    {
+      "name": "card_first_worker",
+      "address": 14843232,
+      "size": 236,
+      "sha256": "73c4256b9db98889b14800d42d7accf5e60ee4dc530d2b52b7b60da0035635c7"
+    },
+    {
+      "name": "card_next_worker",
+      "address": 14843468,
+      "size": 188,
+      "sha256": "716e37673c72095168451c886af7c8ccc63232c7056556b85575334e8a71fb3c"
+    },
+    {
+      "name": "card_find_next",
+      "address": 14896316,
+      "size": 340,
+      "sha256": "138f69f8840bf9ea6d9e4809dd45291c639a7c831810555cc9f4692a5b3235f2"
+    },
+    {
+      "name": "card_decode_directory",
+      "address": 14900092,
+      "size": 160,
+      "sha256": "18be48971c5b7cc3e41de1735eb798401bf64660c40d1582dd4e619fe80f61e5"
+    },
+    {
+      "name": "card_status",
+      "address": 14878336,
+      "size": 544,
+      "sha256": "155ad46285912d13565f87d777ddcef6f7404919c3f5452beedf7df97aec46eb"
+    },
+    {
+      "name": "card_sdk_table",
+      "address": 14812160,
+      "size": 212,
+      "sha256": "97474ef22c189edf93405159c8bc4d37d6ddb1a6db78c031698c2dc01da73793"
+    },
+    {
+      "name": "card_thunk_6c",
+      "address": 19373936,
+      "size": 84,
+      "sha256": "69aeaa6e8725df7e07e0e6b240e0f0012b3f56cd583b2c09d7e3af0b8d5dd67e"
+    },
+    {
+      "name": "card_thunk_80",
+      "address": 19374384,
+      "size": 96,
+      "sha256": "f690eecec010c2c7727bf6f7245c53e649d541b68efde3ec7ac1e25046632994"
+    },
+    {
+      "name": "card_drive_parser",
+      "address": 19368372,
+      "size": 96,
+      "sha256": "9bba70e8df3a67176d20ce8f49bd0f8b75899415f0ddd281b0a93e2f212baf8a"
+    },
+    {
+      "name": "card_read",
+      "address": 19373852,
+      "size": 84,
+      "sha256": "9a6dd384d2516b8583e6b2033cf59b2311e38b638727fa96bad48ebbc3db5bde"
+    },
+    {
+      "name": "card_close",
+      "address": 19374020,
+      "size": 84,
+      "sha256": "ed20d9a1be7693c8ca0b5799b2ba8bfb2ee4be7cc271944d1fca01e9cec2388a"
+    },
+    {
+      "name": "card_seek",
+      "address": 19374204,
+      "size": 100,
+      "sha256": "2786601eb9f0a520fe73f8cb7d541fbf8c11cccbfc98f7928914193ace1198be"
+    },
+    {
+      "name": "bulk_poll",
+      "address": 34213052,
+      "size": 252,
+      "sha256": "8329fafbb9a146823d68e2142d31cbaec6b1576f70830a456a6ea647e5a6819e"
+    },
+    {
+      "name": "bulk_e1",
+      "address": 34215968,
+      "size": 196,
+      "sha256": "4174e7478daf2f17cbf3f9ef6f598c084153695edc93034f24186aee649b5e00"
+    },
+    {
+      "name": "bulk_query",
+      "address": 34219304,
+      "size": 144,
+      "sha256": "dc58dcf72de451e719d6704342cff590bbf02779709b187bc7010909142ddfc4"
+    },
+    {
+      "name": "bulk_forward",
+      "address": 34229016,
+      "size": 40,
+      "sha256": "a5a760ff920b787798516fd44a7835dc6421a3e1468b46714cf0deaee1cf7f8b"
+    },
+    {
+      "name": "bulk_source",
+      "address": 34599036,
+      "size": 64,
+      "sha256": "9c998e66e67e92a9a92196dd41ca561175cf5d21e8c9a6181f38d05941a54031"
+    },
+    {
+      "name": "bulk_be32",
+      "address": 34214032,
+      "size": 52,
+      "sha256": "82d680da35e199be8abad7f4180a111dd128fc64e91c6153a3b040da5bff664d"
+    },
+    {
+      "name": "bulk_selector_0",
+      "address": 34684360,
+      "size": 1136,
+      "sha256": "140a6520a4219e884af2b6b71fae2acc76a7492c57e1b6f95f7ed4076fe77e13"
+    },
+    {
+      "name": "bulk_opcode_compare",
+      "address": 34220604,
+      "size": 16,
+      "sha256": "f52d8aa121164b6c5ba2e55a666c3570de9f476c6c30cada02d4e09e9294aa99"
+    },
+    {
+      "name": "bulk_opcode_case",
+      "address": 34220780,
+      "size": 20,
+      "sha256": "c2a399fd627c22927a2892361e6ad236d67a52f8afa75d76534b3d026ef1b148"
+    },
+    {
+      "name": "card_cache",
+      "address": 19401704,
+      "size": 40,
+      "sha256": "0c8bdb135ad0d5a9a448079b56ac46bcf29e3300b4f551626f7dea6be1c937d5"
+    }
+  ],
+  "mechanism": {
+    "kind": "stock_sdk",
+    "callback_table_pointer": 53127436,
+    "callback_offset": 12,
+    "stock_callback": 34684360,
+    "table_bytes": 76,
+    "table_sha256": "84e78809bdf104e98b616ac3e963e6855ec0ab39073d6ee8968f198ccb1235d9",
+    "query_output": 54325040,
+    "bulk_source": 54325040,
+    "dispatcher": 36059360,
+    "request": 54277832,
+    "completion": 19354596,
+    "status": 26126796,
+    "value": 26126832,
+    "error": 26128620,
+    "pool_id": 27404496,
+    "pool_begin": 26749136,
+    "pool_bytes": 655360,
+    "allocate": 19399372,
+    "release": 19399556,
+    "cache": 19401704,
+    "sdk_table_cell": 26127576,
+    "sdk_table": 14812160,
+    "drive_map": 26126892,
+    "ui_address": 28810936,
+    "normal_ui": 3,
+    "open": 14873580,
+    "read": 19373852,
+    "write": 19373936,
+    "close": 19374020,
+    "seek": 19374204,
+    "unlink": 19374384,
+    "send": 14886948,
+    "list_first_code": 4975,
+    "list_next_code": 4976,
+    "directory_first_code": 4977,
+    "directory_next_code": 4978,
+    "receiver_cell": 15215877,
+    "directory_context_bytes": 120,
+    "directory_attribute_offset": 59,
+    "directory_size_offset": 80,
+    "directory_size_bytes": 8,
+    "chunk_bytes": 65536,
+    "end_of_directory_status": 6
+  }
+}
