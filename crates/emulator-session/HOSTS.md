@@ -65,12 +65,20 @@ this one loop; no host keeps its own copy.
 
 ## Hosts
 
-- The desktop host serves any `Camera` on a loopback WebSocket using the
-  protocol in `crates/emulator-gui`. It reads the control catalog and
-  positions from the session and sends inputs to it; it has no
-  processor-specific control code. Socket reads never block guest execution,
-  and an LCD frame is encoded only after it is known to differ from the last
-  one sent.
+- The viewer serves any `Camera` over WebRTC from `crates/emulator-gui`, to
+  the desktop window, a browser or a phone on another machine. A WebSocket
+  carries only the offer, answer and session lifetime. The LCD is one video
+  track (H.264 Baseline with zero latency and no B-frames, VP8 where a peer
+  lacks H.264). The control catalog, positions, inputs, touches and replies
+  share one ordered data channel. ICE uses host candidates only, so the
+  viewer reaches LAN and Tailscale peers without public STUN or TURN. The
+  viewer has no processor-specific code.
+- Frames flow without backlog: the display's publication counter skips
+  unchanged front buffers, a one-slot mailbox replaces frames not yet sent,
+  and the encoder runs only when the sender asks for the next frame. Socket
+  and network work never blocks guest execution, which runs on absolute
+  virtual-time deadlines paced to wall time; a late slice catches up and
+  never skips camera time.
 - The MCP camera module opens every configuration `open` accepts, and
   `camera_show` puts any open camera in the desktop window.
 - `fujimod_emulator_gui::Run` is what a window needs from a host: the
