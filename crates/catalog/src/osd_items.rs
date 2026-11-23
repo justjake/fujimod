@@ -40,10 +40,10 @@ impl OsdItems {
         if self.schema_uri != OSD_ITEMS_SCHEMA_URI
             || self.schema != 1
             || self.id != format!("{}-osd-items", self.firmware_id)
-            || self.source.row_bytes != 28
-            || self.source.row_count != 508
-            || self.source.index != "event_id - 1"
-            || self.source.canvas_packet_bytes != 92
+            || self.source.row_bytes == 0
+            || self.source.row_count == 0
+            || self.source.index.is_empty()
+            || self.source.canvas_packet_bytes == 0
         {
             return Err("invalid generated OSD identity or source layout".into());
         }
