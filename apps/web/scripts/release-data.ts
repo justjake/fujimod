@@ -2,6 +2,7 @@ import { execFileSync } from 'node:child_process';
 import { readdir, readFile, stat } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import type { SiteRelease, SiteReleaseData } from '../src/release-data.ts';
+import { personalNoteDate } from '../src/personal-note.ts';
 import credits from '../src/text/credits.generated.json' with { type: 'json' };
 
 const releasesUrl = 'https://api.github.com/repos/justjake/fujimod/releases';
@@ -97,8 +98,9 @@ export async function loadReleaseData(
     current,
     past,
     personalNote: {
-      daysSinceFirstRelease:
-        current && start ? Math.max(0, utcDay(current.publishedAt) - utcDay(start.publishedAt)) : 0,
+      daysSinceFirstRelease: start
+        ? Math.max(0, utcDay(personalNoteDate) - utcDay(start.publishedAt))
+        : 0,
       contributorCount: names.length,
       contributorNames: names,
     },

@@ -3,7 +3,12 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { expect, test, vi } from 'vite-plus/test';
 import { loadReleaseData } from '../scripts/release-data';
+import { personalNoteDate } from '../src/personal-note';
 import credits from '../src/text/credits.generated.json' with { type: 'json' };
+
+/** Whole UTC days from a release to the day the personal note is dated. */
+const daysToNote = (date: string) =>
+  Math.floor(Date.parse(personalNoteDate) / 86_400_000) - Math.floor(Date.parse(date) / 86_400_000);
 
 test('reads every page and counts from 0.0.1, including published prereleases', async () => {
   const newest = {
@@ -44,7 +49,7 @@ test('reads every page and counts from 0.0.1, including published prereleases', 
     { version: 'v0.0.1', publishedAt: '2026-03-31T23:55:00.000Z', notes: '' },
     { version: '0.0.0', publishedAt: '2026-03-01T00:00:00.000Z', notes: '' },
   ]);
-  expect(data.personalNote.daysSinceFirstRelease).toBe(2);
+  expect(data.personalNote.daysSinceFirstRelease).toBe(daysToNote('2026-03-31T23:55:00Z'));
 });
 
 test('chooses the newest local version and counts the credited contributors offline', async () => {
@@ -78,7 +83,7 @@ test('chooses the newest local version and counts the credited contributors offl
     const names = credits.contributors.map(({ name }) => name);
     expect(names.length).toBeGreaterThan(0);
     expect(data.personalNote).toEqual({
-      daysSinceFirstRelease: 6,
+      daysSinceFirstRelease: daysToNote('2026-03-01'),
       contributorCount: names.length,
       contributorNames: names,
     });
