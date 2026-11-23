@@ -23,6 +23,8 @@ struct Probe {
     reads: Vec<(u64, u64)>,
     /// All reads; not part of the saved state.
     count: u64,
+    publish: bool,
+    read_ticks: Vec<u64>,
 }
 /// A write starts a transfer that ends 300 to 302 ticks later; the status register
 /// then reads one more. Reads have no effect.
@@ -36,6 +38,7 @@ impl Device for Transfer {
         let status = p.status;
         let now = cx.now();
         p.count += 1;
+        p.read_ticks.push(now);
         if p.reads.last().is_none_or(|&(value, _)| value != status) {
             p.reads.push((status, now));
         }
@@ -46,6 +49,24 @@ impl Device for Transfer {
         // three-instruction poll loop, also exactly on a read.
         let mut p = self.0.lock().unwrap();
         p.due = Some(cx.now() + 300 + p.status % 3);
+    }
+    fn fast_reads(&self, _: u64, _: u64) -> Vec<fujimod_emulator_devices::bus::FastReadWord> {
+        if !self.0.lock().unwrap().publish {
+            return Vec::new();
+        }
+        let probe = self.0.clone();
+        vec![fujimod_emulator_devices::bus::FastReadWord::clocked_u32(
+            0,
+            Arc::new(move |tick| {
+                let mut probe = probe.lock().unwrap();
+                // The first read of each new state belongs to the device.
+                if tick >= probe.due? || probe.reads.last()?.0 != probe.status {
+                    return None;
+                }
+                probe.read_ticks.push(tick);
+                Some(probe.status as u32)
+            }),
+        )]
     }
     fn next_deadline(&self, _: u64) -> Option<u64> {
         self.0.lock().unwrap().due
@@ -105,13 +126,14 @@ struct Outcome {
     /// a fast-forward left out.
     accesses: u64,
     served: u64,
+    read_ticks: Vec<u64>,
     left_out: u64,
     /// The portable checkpoint of the final state.
     checkpoint: Vec<u8>,
 }
 
 fn run(quantum: usize, blocks: bool, windows: &[u64]) -> Outcome {
-    run_with(quantum, blocks, windows, false, true, ExecutionPolicy::Exact)
+    run_with(quantum, blocks, windows, false, true, ExecutionPolicy::Exact, false)
 }
 
 fn run_with(
@@ -121,6 +143,7 @@ fn run_with(
     stable: bool,
     fast_forward: bool,
     policy: ExecutionPolicy,
+    publish: bool,
 ) -> Outcome {
     use factory::*;
     let arm32 = |r| Register::Arm32(fujimod_emulator_cpu::arm::Register::R(r));
@@ -157,7 +180,7 @@ fn run_with(
         }],
         instructions_per_tick: Ratio::new(1, 1).unwrap(),
     };
-    let probe = Arc::new(Mutex::new(Probe::default()));
+    let probe = Arc::new(Mutex::new(Probe { publish, ..Probe::default() }));
     let mut bus = Bus::new(bus::Mode::Strict);
     bus.register(0xff910000, 4, Box::new(Transfer(probe.clone(), stable)))
         .unwrap();
@@ -187,13 +210,16 @@ fn run_with(
     registers.push(scalar(m4, Register::Pc).unwrap());
     let checkpoint = board.checkpoint(None).unwrap().export().unwrap().to_bytes().unwrap();
     let s = board.state.borrow();
+    let state = board.state();
+    let probe = probe.lock().unwrap();
     Outcome {
-        state: board.state(),
+        state,
         registers,
         skips: s.settled.skips,
         full: s.settled.full,
         accesses: board.mmio_callback_counts.borrow()[0],
-        served: probe.lock().unwrap().count,
+        served: probe.count,
+        read_ticks: probe.read_ticks.clone(),
         left_out: s.blocks[0].as_ref().map_or(0, |blocks| blocks.poll_reads),
         checkpoint,
     }
@@ -232,7 +258,7 @@ fn a_poll_loop_on_a_stable_register_is_fast_forwarded_with_the_same_result() {
     for quantum in [1, 7, 100] {
         let reference = run(quantum, false, &[5000]);
         for windows in [&[5000][..], &[333, 334, 2111, 5000][..], &[1, 2, 3, 4, 5, 6, 7, 5000][..]] {
-            let got = run_with(quantum, true, windows, true, true, ExecutionPolicy::Exact);
+            let got = run_with(quantum, true, windows, true, true, ExecutionPolicy::Exact, false);
             assert_eq!(got.registers, reference.registers, "quantum {quantum}");
             assert!(got.state == reference.state, "quantum {quantum}: board state differs");
             // Every read counts as serviced; the device served a few per wait.
@@ -246,7 +272,7 @@ fn a_poll_loop_on_a_stable_register_is_fast_forwarded_with_the_same_result() {
             );
             // Switched off, or with the instruction observer, every read is served.
             for (blocks, fast_forward) in [(true, false), (false, true)] {
-                let all = run_with(quantum, blocks, windows, true, fast_forward, ExecutionPolicy::Exact);
+                let all = run_with(quantum, blocks, windows, true, fast_forward, ExecutionPolicy::Exact, false);
                 assert!(all.state == reference.state);
                 assert_eq!((all.served, all.left_out), (reference.served, 0));
                 // The portable checkpoint is the same bytes with and without
@@ -263,12 +289,28 @@ fn a_poll_loop_on_a_stable_register_is_fast_forwarded_with_the_same_result() {
 fn interactive_stable_poll_preserves_the_checkpoint_and_read_count() {
     let windows = &[333, 334, 2111, 5000];
     let policy = ExecutionPolicy::Interactive;
-    let reference = run_with(100, true, windows, true, false, policy);
-    let accelerated = run_with(100, true, windows, true, true, policy);
+    let reference = run_with(100, true, windows, true, false, policy, false);
+    let accelerated = run_with(100, true, windows, true, true, policy, false);
     assert!(accelerated.left_out > 0);
     assert_eq!(accelerated.accesses, reference.accesses);
     assert_eq!(accelerated.served + accelerated.left_out, reference.served);
     assert!(accelerated.checkpoint == reference.checkpoint);
+}
+
+#[test]
+fn m4_published_reads_observe_the_same_bus_ticks_across_transfer_deadlines() {
+    let windows = &[300, 301, 625, 2111, 5000];
+    for blocks in [false, true] {
+        let run = |policy, publish| run_with(63, blocks, windows, false, false, policy, publish);
+        let reference = run(ExecutionPolicy::Interactive, false);
+        let published = run(ExecutionPolicy::Interactive, true);
+        assert_eq!(published.read_ticks, reference.read_ticks);
+        assert_eq!(published.registers, reference.registers);
+        assert_eq!(published.accesses, reference.accesses);
+        assert_eq!(published.checkpoint, reference.checkpoint);
+        assert!(published.served * 10 < reference.served);
+        assert_eq!(run(ExecutionPolicy::Exact, true).served, reference.served);
+    }
 }
 
 /// An AArch64 processor polls the same device through a read helper:
@@ -345,13 +387,16 @@ fn run_a64(quantum: usize, windows: &[u64], stable: bool, fast_forward: bool) ->
         .collect();
     let checkpoint = board.checkpoint(None).unwrap().export().unwrap().to_bytes().unwrap();
     let s = board.state.borrow();
+    let state = board.state();
+    let probe = probe.lock().unwrap();
     Outcome {
-        state: board.state(),
+        state,
         registers,
         skips: s.settled.skips,
         full: s.settled.full,
         accesses: board.mmio_callback_counts.borrow()[0],
-        served: probe.lock().unwrap().count,
+        served: probe.count,
+        read_ticks: probe.read_ticks.clone(),
         left_out: s.polls.reads[0],
         checkpoint,
     }

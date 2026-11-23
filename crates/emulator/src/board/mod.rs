@@ -308,6 +308,10 @@ struct Binding {
     mmio_callback_counts: Rc<RefCell<Vec<u64>>>,
     core: usize,
     base: u64,
+    // This backend's clock is owned by the ordered board. Its descriptors
+    // are evaluated after the access reaches the bus timeline.
+    published_reads: Vec<fujimod_emulator_cpu::FastMmioRead>,
+    published_hits: Cell<u64>,
 }
 /// Devices and callbacks have one owner. Interactive native processors run
 /// concurrently between barriers; exact execution uses ordered slices.
@@ -645,6 +649,8 @@ impl Board {
                 mmio_callback_counts: board.mmio_callback_counts.clone(),
                 core,
                 base: 0,
+                published_reads: vec![],
+                published_hits: Cell::new(0),
             });
             let data = (&*binding as *const Binding).cast_mut().cast();
             let features = board.cpus[core].features();
@@ -1029,14 +1035,6 @@ impl Board {
         physical: u64,
     ) -> Result<(), String> {
         let cpu = self.cpus.get(core).ok_or("absent processor")?;
-        let binding = Box::new(Binding {
-            state: self.state.clone(),
-            cpus: Rc::downgrade(&self.cpus),
-            mmio_callback_counts: self.mmio_callback_counts.clone(),
-            core,
-            base: physical,
-        });
-        let data = (&*binding as *const Binding).cast_mut().cast();
         let fast_reads = self
             .state
             .borrow()
@@ -1062,8 +1060,26 @@ impl Board {
             .borrow_mut()
             .mprofile_loops
             .add_reads(core, address, &fast_reads);
+        let mut engine_reads = fast_reads;
+        let published_reads = if cpu.model() == fujimod_emulator_cpu::Model::CortexM4 {
+            // Each synchronous M-profile access settles its own mixed-width
+            // block in the board. Only then is its device tick known.
+            std::mem::take(&mut engine_reads)
+        } else {
+            Vec::new()
+        };
+        let binding = Box::new(Binding {
+            state: self.state.clone(),
+            cpus: Rc::downgrade(&self.cpus),
+            mmio_callback_counts: self.mmio_callback_counts.clone(),
+            core,
+            base: physical,
+            published_reads,
+            published_hits: Cell::new(0),
+        });
+        let data = (&*binding as *const Binding).cast_mut().cast();
         unsafe {
-            cpu.map_mmio_fast(address, bytes, Mmio { read, write, data }, fast_reads)?;
+            cpu.map_mmio_fast(address, bytes, Mmio { read, write, data }, engine_reads)?;
         }
         self.bindings.push(binding);
         self.mmio.push((core, address, bytes, physical));
@@ -1923,6 +1939,12 @@ impl Drop for Board {
                 s.settled.full,
                 self.store_hook_installs.get()
             );
+            for b in &self.bindings {
+                if b.published_hits.get() != 0 {
+                    eprintln!("FUJIMOD execution counters: CPU{} MMIO {:#x} published-reads={}",
+                        b.core, b.base, b.published_hits.get());
+                }
+            }
             for (core, shadow) in s.code_shadow.iter().enumerate() {
                 if let Some(shadow) = shadow {
                     eprintln!("FUJIMOD execution counters: CPU{core} code {}", shadow.counters());
@@ -2729,11 +2751,12 @@ impl State {
     fn access(
         &mut self,
         cpus: &[Rc<dyn Cpu>],
-        core: usize,
+        binding: &Binding,
         address: u64,
         size: u8,
         value: Option<u64>,
     ) -> Result<u64, String> {
+        let core = binding.core;
         if self.decoders.pending() {
             return Err("MMIO requires committed memory decoding".into());
         }
@@ -2768,7 +2791,22 @@ impl State {
         }
         self.memory_access = value.is_some();
         self.timeline.synchronize(core)?;
+        let use_publication = value.is_none()
+            && !binding.published_reads.is_empty()
+            && self.execution_policy == ExecutionPolicy::Interactive
+            && self.bus.loop_window();
         let result = self.with_host(cpus, |bus, host| {
+            if use_publication {
+                let tick = host.now();
+                let offset = address - binding.base;
+                if let Some(word) = binding.published_reads.iter().find_map(|read|
+                    read.published_at(offset, u32::from(size), Some(tick)))
+                {
+                    bus.finish_published_read(host, address, size)?;
+                    binding.published_hits.set(binding.published_hits.get() + 1);
+                    return Ok(word);
+                }
+            }
             bus.access(host, core, pc, address, size, value)
         });
         self.memory_access = false;
@@ -3775,7 +3813,7 @@ unsafe fn access(data: *mut c_void, offset: u64, size: u32, value: Option<u64>) 
             *count = count.saturating_add(1);
         }
         let mut state = b.state.borrow_mut();
-        let result = state.access(&cpus, b.core, address, size, value);
+        let result = state.access(&cpus, b, address, size, value);
         // Reads a poll loop fast-forward left out count as serviced.
         let skipped = std::mem::take(&mut state.polls.skipped_reads)
             + state.blocks[b.core]

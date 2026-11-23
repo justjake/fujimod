@@ -299,10 +299,15 @@ impl FastMmioRead {
     /// Return a fast value for the declared access width in the enabled policy.
     /// Clocked descriptors receive the backend's approximate guest tick.
     pub fn read_at(&self, offset: u64, size: u32, tick: Option<u64>) -> Option<u64> {
-        if !self.enabled.load(Ordering::Acquire)
-            || offset != self.register_offset
-            || size != self.width()
-        {
+        if !self.enabled.load(Ordering::Acquire) {
+            return None;
+        }
+        self.published_at(offset, size, tick)
+    }
+    /// Evaluate the publication after an execution owner has checked its
+    /// interactive policy, access observation and guest clock.
+    pub fn published_at(&self, offset: u64, size: u32, tick: Option<u64>) -> Option<u64> {
+        if offset != self.register_offset || size != self.width() {
             return None;
         }
         match &self.kind {

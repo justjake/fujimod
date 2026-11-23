@@ -750,6 +750,15 @@ impl Bus {
         }
         result
     }
+    /// The register supplied the value at the settled bus tick. Its ordinary
+    /// access would still wake dependent devices and refresh their deadlines.
+    pub(super) fn finish_published_read(
+        &mut self, host: &mut dyn Host, address: u64, size: u8,
+    ) -> Result<(), String> {
+        let source = self.window_at(address, size).ok_or("published MMIO mapping disappeared")?;
+        self.touch(source);
+        self.wake_dependents(host, source)
+    }
     /// Whether repeated reads of this register in a poll loop may be left
     /// out (`Device::poll_stable`). Never while accesses are logged or outside
     /// strict mode.
