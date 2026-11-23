@@ -1353,6 +1353,7 @@ impl Board {
                 return Err("M-profile processor requires its architectural controller".into());
             }
             if s.mprofile[core].as_ref().is_some_and(|p| p.needs_reset) {
+                s.settled.clear();
                 s.code_run = None;
                 if let Some(shadow) = s.code_shadow[core].as_mut() {
                     shadow.invalidate();
@@ -1398,7 +1399,17 @@ impl Board {
             }
             s.code_run = Some(core);
             s.code_write_deferred = false;
+            let pins_settled = s.mprofile[core].is_some()
+                && self.block_execution.get()
+                && s.settled.pass;
             s.settled.clear();
+            if pins_settled {
+                // The scheduler just refreshed deadlines and pushed pins.
+                // Start this ordered slice with that fixed point, but make
+                // the first observer check the controller for an exception.
+                s.settled.pass = true;
+                s.arm_settled()?;
+            }
             s.active_slice = Some(slice);
             let entered = s.instructions[core];
             s.mprofile_loops.begin_run(core, entered + budget as u64);
