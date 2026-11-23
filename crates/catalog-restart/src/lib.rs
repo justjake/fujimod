@@ -558,6 +558,7 @@ pub struct PowerOff {
     pub fixed_interval: Option<AlarmInterval>,
     /// Wake header bit the alarm boot tests before a normal boot, where the
     /// power-off tests one.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub boot_flag: Option<BootFlag>,
 }
 
