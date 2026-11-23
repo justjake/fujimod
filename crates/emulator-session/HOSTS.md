@@ -65,16 +65,21 @@ this one loop; no host keeps its own copy.
 
 ## Hosts
 
-- The viewer serves any `Camera` over WebRTC from `crates/emulator-gui`, to
-  the desktop window, a browser or a phone on another machine. A WebSocket
-  carries only the offer, answer and session lifetime. The LCD is one video
-  track (H.264 Baseline with zero latency and no B-frames, VP8 where a peer
-  lacks H.264). The control catalog, positions, inputs, touches and replies
-  share one ordered data channel. ICE uses host candidates only, so the
-  viewer reaches LAN and Tailscale peers without public STUN or TURN. The
-  viewer has no processor-specific code. Peers and candidate policy come
-  from `crates/webrtc`, which USB sharing also uses; it gains the video
-  track. Frames are encoded with the workspace's `openh264`.
+- The viewer owns a share room (`crates/webrtc`): the same sealed
+  `#?remotecontrol=` rooms, `HostRoom` and `PeerSocket` that camera sharing
+  uses, so Dev Tools controls an emulated camera exactly as it controls a
+  real one. Other devices join through the room's share link. The desktop
+  window joins a loopback room on the same machine, with the same protocol
+  and no signaling service.
+- The LCD is one outgoing video track on the controller's `PeerSocket`:
+  H.264 Baseline from the workspace's `openh264`, with zero latency and no
+  B-frames. Video is sent only over a direct candidate pair; a controller
+  reached through a TURN relay gets controls without video. The control
+  catalog, positions, inputs, touches and replies share one ordered data
+  channel. The viewer has no processor-specific code.
+- Every joined controller may send input. A button is pressed while any
+  controller holds it and released when the last one lets go; a dial or
+  switch takes the position any controller set most recently.
 - Frames flow without backlog: the display's publication counter skips
   unchanged front buffers, a one-slot mailbox replaces frames not yet sent,
   and the encoder runs only when the sender asks for the next frame. Socket
