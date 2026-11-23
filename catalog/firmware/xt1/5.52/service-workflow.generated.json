@@ -1,0 +1,319 @@
+{
+  "$schema": "https://fujimod.com/schemas/service-workflow.generated.schema.json",
+  "schema": 1,
+  "firmware_id": "xt1-552",
+  "firmware_sha256": "4cf56ba6abb4298a844422c016289228bb0acce0a2ae2c6755c05fffb38e92db",
+  "identity": {
+    "products": [
+      "X-T1"
+    ],
+    "internal_versions": [
+      "2.39"
+    ],
+    "code_checks": [
+      {
+        "name": "identity_0",
+        "address": 7865344,
+        "size": 32,
+        "sha256": "b242398fdf02e6069fc456dbf4de66e702e30fb74067f98a153dc7e610e64619"
+      },
+      {
+        "name": "identity_1",
+        "address": 15724832,
+        "size": 32,
+        "sha256": "ca443c401b6f0c3ac6fc2c4fc7902794ec8d0a6c43be5a089322629cefefb0fd"
+      }
+    ]
+  },
+  "setup": {
+    "ram_alias": 1073741824,
+    "configuration": {
+      "address": 1106106368,
+      "cached_address": 32364544,
+      "size": 4325376,
+      "page_bytes": 256,
+      "memory_read_bytes": 248
+    },
+    "debug_offset": 247,
+    "guard": {
+      "offset": 163,
+      "value": 1,
+      "aliases": [
+        1106106531,
+        32364707
+      ],
+      "code_checks": [
+        {
+          "name": "configuration_write",
+          "address": 17732344,
+          "size": 172,
+          "sha256": "4bccc02f502f834ff6e9a6ebbc15a5d37fe4736b87f6be3ed2a8c7558f67089c"
+        },
+        {
+          "name": "configuration_read",
+          "address": 17732516,
+          "size": 484,
+          "sha256": "e1cfcbc268d4bc82863680d3bdde2304531e4fae6e7226b1af5eba6b3c1df8dc"
+        },
+        {
+          "name": "configuration_initialize",
+          "address": 8866852,
+          "size": 256,
+          "sha256": "b28429aa16c7d258f4c9cb9b04b4927a82369330436da3687b4c2533dfb86add"
+        },
+        {
+          "name": "profile_main",
+          "address": 8901908,
+          "size": 1260,
+          "sha256": "12689c2848b3619fd07a2faa8445f7c25fe938948e9a9015f0d83f82d240d13d"
+        },
+        {
+          "name": "profile_custom",
+          "address": 8908460,
+          "size": 1000,
+          "sha256": "eb83a11a8e65c3a340bd7e3a5ff6b31238b55b2862cb1f27ab55bccd4576d8ab"
+        },
+        {
+          "name": "system_initializer",
+          "address": 9581236,
+          "size": 48,
+          "sha256": "f8a620d1e141aedbf3d2d69aad72daa12c97a42a4a93b94727a8f3a28cbfca66"
+        },
+        {
+          "name": "register_debug",
+          "address": 8675140,
+          "size": 196,
+          "sha256": "7bc2bc4ae2188e5b4d394fcdf9ce11990381e2514153da1a5995d24ef2708feb"
+        },
+        {
+          "name": "open",
+          "address": 17446080,
+          "size": 92,
+          "sha256": "b374fe51d0179facd61a51bee3c64d996de9ec08aa6e249e992f44613000d78c"
+        },
+        {
+          "name": "service_open",
+          "address": 18769120,
+          "size": 92,
+          "sha256": "cbfc3eb20e9c0c516d712c16ced08faef2ccac2bab862e42a2291331451da4ee"
+        },
+        {
+          "name": "completion",
+          "address": 18735480,
+          "size": 52,
+          "sha256": "eb97345c4a643125d7e3563500513ddec97e664523233622598f6e61347c75c1"
+        },
+        {
+          "name": "configuration_byte_reader",
+          "address": 8868624,
+          "size": 36,
+          "sha256": "d310ef8dc4d97d9bd668a3c22a544de5c671ebf9fbcd5cdd84c4337b17ee1a4c"
+        },
+        {
+          "name": "configuration_setter",
+          "address": 8869544,
+          "size": 36,
+          "sha256": "239ac0fb315b564f3887d7bfe0925d20ea1bd44e3e7b06008d2c30b24700a51c"
+        },
+        {
+          "name": "defaults_guard",
+          "address": 8903852,
+          "size": 332,
+          "sha256": "9eb8505b506131d5009b1b0ae34c110f62216dd117182171e484b69792e263e2"
+        },
+        {
+          "name": "ui_system_settings_builder",
+          "address": 8589432,
+          "size": 1880,
+          "sha256": "bb55cadc61c4a4c8a6cc7052f28cf5ef955ae38e201b4903b01152cd55a3a244"
+        },
+        {
+          "name": "debug_dispatcher",
+          "address": 17437036,
+          "size": 588,
+          "sha256": "3246e2c4c0d36a692cdba5a5b3f85d72a4fe2ad196d7a7c291ecab713b38e73f"
+        }
+      ],
+      "state_words": [
+        {
+          "name": "ui_mode",
+          "address": 12872332,
+          "value": 12
+        },
+        {
+          "name": "system_mode",
+          "address": 12790812,
+          "value": 7
+        },
+        {
+          "name": "configuration_pointer",
+          "address": 12748220,
+          "value": 1106106368
+        },
+        {
+          "name": "callback_pointer",
+          "address": 23524908,
+          "value": 24497084
+        },
+        {
+          "name": "debug_callback_0",
+          "address": 11981832,
+          "value": 0
+        },
+        {
+          "name": "debug_callback_1",
+          "address": 11981836,
+          "value": 0
+        }
+      ],
+      "callback_table": {
+        "address": 24497084,
+        "words": [
+          17732344,
+          17732516,
+          17733000,
+          17733044,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "output_state": {
+        "address": 24502804,
+        "size": 8
+      },
+      "payloads": [
+        {
+          "name": "main",
+          "address": 13318852,
+          "size": 464
+        },
+        {
+          "name": "custom",
+          "address": 13319316,
+          "size": 448
+        }
+      ]
+    }
+  },
+  "persistence": {
+    "callback": {
+      "address": 24497096,
+      "stock": 17733044
+    },
+    "output_fields": 24502804,
+    "adapter": {
+      "address": 32364672,
+      "bytes": [
+        1,
+        0,
+        80,
+        227,
+        0,
+        0,
+        160,
+        19,
+        30,
+        255,
+        47,
+        17,
+        247,
+        0,
+        160,
+        227,
+        1,
+        16,
+        160,
+        227,
+        0,
+        192,
+        159,
+        229,
+        28,
+        255,
+        47,
+        225,
+        60,
+        90,
+        135,
+        0
+      ]
+    },
+    "cache": {
+      "clean": 271932,
+      "instruction_invalidate": 272160,
+      "barrier": 277300,
+      "instruction_barrier": 271908
+    },
+    "code_checks": [
+      {
+        "name": "storage_loader",
+        "address": 8915664,
+        "size": 116,
+        "sha256": "713836a9511d014547ddde9fe243d8e842451c2273ae86ae02dfabbb15cf5bd3"
+      },
+      {
+        "name": "range_wrapper",
+        "address": 8870460,
+        "size": 44,
+        "sha256": "b7d4c7f249b84db218cd3d0aa95a3a48d60c1efd307c3e0b0cc100da331c09fd"
+      },
+      {
+        "name": "storage_range_writer",
+        "address": 8925028,
+        "size": 444,
+        "sha256": "b8c0e69e03298b89a6d22efed9c4603fae7b6cb34df43f4223ae0c128c9c758e"
+      },
+      {
+        "name": "cache_helpers",
+        "address": 271908,
+        "size": 516,
+        "sha256": "6a9b04929026a61dcc0f263c98bed555df1cb361fdf0e1d812b25072d7281547"
+      },
+      {
+        "name": "barrier_helper",
+        "address": 277300,
+        "size": 40,
+        "sha256": "4f5e46f3fcacb11933fd0f5e8fc33ae5837f738e38902a0e475c040ac5897890"
+      }
+    ],
+    "storage": {
+      "geometry": {
+        "address": 1084697708,
+        "words": [
+          40,
+          931,
+          null,
+          1,
+          971
+        ]
+      },
+      "banks": [
+        {
+          "address": 1133234176,
+          "size": 5242880
+        },
+        {
+          "address": 1138477056,
+          "size": 131072
+        }
+      ]
+    },
+    "preferences": {
+      "address": 1087060676,
+      "size": 912
+    }
+  }
+}

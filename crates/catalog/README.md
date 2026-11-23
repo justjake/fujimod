@@ -160,6 +160,13 @@ read side effects are excluded.
 Both formats are generated facts, have JSON Schemas derived from their Rust
 value types, and are checked when the catalog is loaded.
 
+`ReferenceCatalog::workflow(firmware_id)` returns an optional
+`service-workflow.generated.json` definition. It carries the located service
+setup and, when available, debug persistence. `fujimod-catalog-workflows`
+validates the closed fields, address ranges and declared firmware identity;
+review and execution authorization remain caller policy. Its JSON Schema is
+generated from the same Rust types.
+
 Parallel NAND facts use a byte-offset source window and a page-based reader
 ABI. `reader.nand` records the 512-byte or 2 KiB page contract, destination
 alignment, correction and polling modes, timeout and driver lock pair. Calls read one

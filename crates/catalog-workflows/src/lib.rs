@@ -2,6 +2,8 @@
 //! Documents contain numeric addresses and bounded data. Human review and
 //! execution authorization are caller policy, separate from these contracts.
 use fujimod_catalog_firmware_identity::{Digest, FirmwareIdentity, IdentityError};
+#[cfg(feature = "schema")]
+use schemars::JsonSchema;
 use serde::{Deserialize, Deserializer};
 
 pub const SCHEMA_URI: &str = "https://fujimod.com/schemas/service-workflow.generated.schema.json";
@@ -20,6 +22,7 @@ pub enum WorkflowError {
     Missing(&'static str),
 }
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Deserialize)]
+#[cfg_attr(feature = "schema", derive(JsonSchema))]
 #[serde(deny_unknown_fields)]
 pub struct Range {
     pub address: u32,
@@ -37,15 +40,18 @@ fn digest<'de, D: Deserializer<'de>>(input: D) -> Result<Digest, D::Error> {
     Digest::parse(&String::deserialize(input)?).map_err(serde::de::Error::custom)
 }
 #[derive(Clone, Debug, Eq, PartialEq, Deserialize)]
+#[cfg_attr(feature = "schema", derive(JsonSchema))]
 #[serde(deny_unknown_fields)]
 pub struct RegionCheck {
     pub name: String,
     #[serde(flatten)]
     pub range: Range,
     #[serde(deserialize_with = "digest")]
+    #[cfg_attr(feature = "schema", schemars(with = "String"))]
     pub sha256: Digest,
 }
 #[derive(Clone, Debug, Eq, PartialEq, Deserialize)]
+#[cfg_attr(feature = "schema", derive(JsonSchema))]
 #[serde(deny_unknown_fields)]
 pub struct StateWord {
     pub name: String,
@@ -53,6 +59,7 @@ pub struct StateWord {
     pub value: u32,
 }
 #[derive(Clone, Debug, Eq, PartialEq, Deserialize)]
+#[cfg_attr(feature = "schema", derive(JsonSchema))]
 #[serde(deny_unknown_fields)]
 pub struct NamedRange {
     pub name: String,
@@ -60,6 +67,7 @@ pub struct NamedRange {
     pub range: Range,
 }
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Deserialize)]
+#[cfg_attr(feature = "schema", derive(JsonSchema))]
 #[serde(deny_unknown_fields)]
 pub struct Configuration {
     pub address: u32,
@@ -69,6 +77,7 @@ pub struct Configuration {
     pub memory_read_bytes: u32,
 }
 #[derive(Clone, Debug, Default, Eq, PartialEq, Deserialize)]
+#[cfg_attr(feature = "schema", derive(JsonSchema))]
 #[serde(deny_unknown_fields)]
 pub struct DeviceIdentity {
     pub products: Vec<String>,
@@ -93,7 +102,16 @@ fn callbacks<'de, D: Deserializer<'de>>(input: D) -> Result<(u32, Vec<u8>), D::E
         value.words.into_iter().flat_map(u32::to_le_bytes).collect(),
     ))
 }
+#[cfg(feature = "schema")]
+#[derive(JsonSchema)]
+#[schemars(deny_unknown_fields)]
+#[allow(dead_code)]
+struct CallbackTable {
+    address: u32,
+    words: Vec<u32>,
+}
 #[derive(Clone, Debug, Eq, PartialEq, Deserialize)]
+#[cfg_attr(feature = "schema", derive(JsonSchema))]
 #[serde(deny_unknown_fields)]
 pub struct Guard {
     pub offset: u32,
@@ -102,11 +120,13 @@ pub struct Guard {
     pub code_checks: Vec<RegionCheck>,
     pub state_words: Vec<StateWord>,
     #[serde(deserialize_with = "callbacks")]
+    #[cfg_attr(feature = "schema", schemars(with = "CallbackTable"))]
     pub callback_table: (u32, Vec<u8>),
     pub output_state: Range,
     pub payloads: Vec<NamedRange>,
 }
 #[derive(Clone, Debug, Deserialize)]
+#[cfg_attr(feature = "schema", derive(JsonSchema))]
 #[serde(deny_unknown_fields)]
 pub struct ServiceSetup {
     #[serde(skip)]
@@ -132,18 +152,21 @@ pub struct DebugPersistence {
     pub preferences: Range,
 }
 #[derive(Deserialize)]
+#[cfg_attr(feature = "schema", derive(JsonSchema))]
 #[serde(deny_unknown_fields)]
 struct Callback {
     address: u32,
     stock: u32,
 }
 #[derive(Deserialize)]
+#[cfg_attr(feature = "schema", derive(JsonSchema))]
 #[serde(deny_unknown_fields)]
 struct Adapter {
     address: u32,
     bytes: Vec<u8>,
 }
 #[derive(Deserialize)]
+#[cfg_attr(feature = "schema", derive(JsonSchema))]
 #[serde(deny_unknown_fields)]
 struct Cache {
     clean: u32,
@@ -152,18 +175,21 @@ struct Cache {
     instruction_barrier: u32,
 }
 #[derive(Deserialize)]
+#[cfg_attr(feature = "schema", derive(JsonSchema))]
 #[serde(deny_unknown_fields)]
 struct Geometry {
     address: u32,
     words: Vec<Option<u32>>,
 }
 #[derive(Deserialize)]
+#[cfg_attr(feature = "schema", derive(JsonSchema))]
 #[serde(deny_unknown_fields)]
 struct Storage {
     geometry: Geometry,
     banks: Vec<Range>,
 }
 #[derive(Deserialize)]
+#[cfg_attr(feature = "schema", derive(JsonSchema))]
 #[serde(deny_unknown_fields)]
 struct Persistence {
     callback: Callback,
@@ -175,8 +201,9 @@ struct Persistence {
     preferences: Range,
 }
 #[derive(Deserialize)]
+#[cfg_attr(feature = "schema", derive(JsonSchema))]
 #[serde(deny_unknown_fields)]
-struct Document {
+pub struct Document {
     #[serde(rename = "$schema")]
     schema_uri: String,
     schema: u32,
@@ -193,6 +220,17 @@ pub struct WorkflowDefinition {
     persistence: Option<DebugPersistence>,
 }
 impl WorkflowDefinition {
+    /// Decode a document using the firmware identity it declares.
+    ///
+    /// Catalog loaders use this to validate every field before storing the
+    /// definition; callers matching a connected camera still select the
+    /// expected identity themselves.
+    pub fn from_document_json(json: &str) -> Result<Self, WorkflowError> {
+        let raw: Document = serde_json::from_str(json)?;
+        let identity = FirmwareIdentity::new(raw.firmware_id.clone(), &raw.firmware_sha256)?;
+        Self::from_json(json, &identity)
+    }
+
     pub fn from_json(json: &str, expected: &FirmwareIdentity) -> Result<Self, WorkflowError> {
         let mut raw: Document = serde_json::from_str(json)?;
         if raw.schema != 1 || raw.schema_uri != SCHEMA_URI {

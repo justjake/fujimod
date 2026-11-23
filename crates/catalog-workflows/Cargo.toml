@@ -15,5 +15,9 @@ doctest = false
 fujimod-catalog-firmware-identity.workspace = true
 serde = { workspace = true, features = ["derive"] }
 serde_json.workspace = true
+schemars = { workspace = true, optional = true }
 thiserror.workspace = true
 fujimod-workspace-hack.workspace = true
+
+[features]
+schema = ["dep:schemars"]
