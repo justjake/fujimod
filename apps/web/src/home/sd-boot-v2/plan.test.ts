@@ -72,6 +72,8 @@ test('store names and release manifests follow the camera update layer', () => {
   expect(validateOtaRelease({ firmware: 'X70-110', version: '1', fs }, 'X70-110').fs).toEqual(fs);
   for (const value of [
     { firmware: 'XE2-411', version: '1', fs },
+    { firmware: 'X70-110', version: '1', date: '21 Nov', fs },
+    { firmware: 'X70-110', version: '1', commit: 'not-hex', fs },
     { firmware: 'X70-110', version: '1', fs: { 'firmware.patch': fs['/firmware.patch'] } },
     { firmware: 'X70-110', version: '1', fs: { '/a/../b': fs['/firmware.patch'] } },
     // Two contents under one store name would overwrite each other on the card.
@@ -103,6 +105,8 @@ test('the plan writes boot files, chosen card files, both manifests and one copy
       {
         firmware: 'XE2-411',
         version: '1',
+        date: '2026-11-21',
+        commit: 'c'.repeat(40),
         fs: { '/etc/ssl/cert.pem': shared, '/firmware.patch': { sha256: digest('7'), size: 5 } },
       },
     ],
@@ -130,6 +134,8 @@ test('the plan writes boot files, chosen card files, both manifests and one copy
   expect(manifest.from === 'data' && JSON.parse(new TextDecoder().decode(manifest.data))).toEqual({
     gen: 1,
     version: '1',
+    date: '2026-11-21',
+    commit: 'c'.repeat(40),
     fs: { '/etc/ssl/cert.pem': digest('6'), '/firmware.patch': digest('7') },
   });
 });
