@@ -494,6 +494,18 @@ impl Core {
     fn check(&self, status: i32) -> Result<(), String> {
         check(&self.api, status)
     }
+    /// Invalidate code backed by a host address range in this native engine.
+    /// `pointer` is a host address, not a guest or physical address.
+    pub(crate) fn invalidate_backing(&self, pointer: usize, bytes: usize) -> Result<(), String> {
+        self.check_tlbi_mutation()?;
+        self.check(unsafe {
+            ffi::uc_embedder_invalidate_backing(
+                self.raw,
+                pointer as *const c_void,
+                bytes,
+            )
+        })
+    }
     fn inspect(&self, operation: impl FnOnce() -> i32) -> Result<(), String> {
         if self.inspection.depth.get() == 0 {
             self.inspection.blocked.set(false);
@@ -990,14 +1002,7 @@ impl Cpu for Core {
         backing: NonNull<u8>,
         bytes: usize,
     ) -> Result<(), String> {
-        // Refuse exactly where a full invalidation refuses.
-        self.check_tlbi_mutation()?;
-        // This engine translates only memory it maps. A write to backing it
-        // does not map cannot have changed any of its translations.
-        if !frozen::touches(self.identity, backing.as_ptr() as usize, bytes) {
-            return Ok(());
-        }
-        self.invalidate_code(None)
+        self.invalidate_backing(backing.as_ptr() as usize, bytes)
     }
     unsafe fn map_backing(
         &self,
