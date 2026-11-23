@@ -292,20 +292,6 @@ pub(super) fn is_single_transfer(word: u32) -> bool {
 
     let first = (word >> 16) as u16;
     let second = word as u16;
-    let rd = (second >> 8) & 15;
-    // MOVW/MOVT (A7.7.80, A7.7.84). Their immediate fields have no
-    // reserved values; limit the destination to ordinary R0-R12.
-    if matches!(first & 0xfbf0, 0xf240 | 0xf2c0) {
-        return second & 0x8000 == 0 && rd <= 12;
-    }
-    // ADD/SUB (shifted register), with a register-controlled pure arithmetic
-    // result. Exclude SP and PC in all three register fields and reserved bit
-    // 15 of the second halfword. Every immediate shift amount/type is defined.
-    if matches!(first & 0xffe0, 0xeb00 | 0xeba0) {
-        let rn = first & 15;
-        let rm = second & 15;
-        return second & 0x8000 == 0 && rn <= 12 && rd <= 12 && rm <= 12;
-    }
     let operation = first & 0xfff0;
     if matches!(
         operation,
@@ -356,6 +342,20 @@ pub(super) fn can_run_inline(word: u32) -> bool {
 
     let first = (word >> 16) as u16;
     let second = word as u16;
+    let rd = (second >> 8) & 15;
+    // MOVW/MOVT (A7.7.80, A7.7.84). Their immediate fields have no
+    // reserved values; limit the destination to ordinary R0-R12.
+    if matches!(first & 0xfbf0, 0xf240 | 0xf2c0) {
+        return second & 0x8000 == 0 && rd <= 12;
+    }
+    // ADD/SUB (shifted register), with a register-controlled pure arithmetic
+    // result. Exclude SP and PC in all three register fields and reserved bit
+    // 15 of the second halfword. Every immediate shift amount/type is defined.
+    if matches!(first & 0xffe0, 0xeb00 | 0xeba0) {
+        let rn = first & 15;
+        let rm = second & 15;
+        return second & 0x8000 == 0 && rn <= 12 && rd <= 12 && rm <= 12;
+    }
     // ThumbExpandImm uses i:imm3:imm8. The top five bits identify this
     // instruction family; bit 10 is the immediate's high bit, not an opcode
     // bit. Bit 15 of the second halfword is reserved, while bits 14:12 are
