@@ -3470,13 +3470,14 @@ unsafe fn block_entered(block: fujimod_emulator_cpu::Block, data: *mut c_void) {
         } else {
             scan.unit
         };
-        let limit = if settled {
+        let scheduler_room = settled.then(|| s.scheduler_room(core));
+        let limit = if let Some(scheduler_room) = scheduler_room {
             // Until the next device deadline, the end of the run window, the
             // next generic-timer output change and the peer's turn.
             let until = s.clock_limit.unwrap_or(u64::MAX).min(s.settled.until);
             unit.min(room)
                 .min(s.timeline.processor_budget(core, u64::MAX, Some(until))?)
-                .min(s.scheduler_room(core))
+                .min(scheduler_room)
         } else {
             // The pin push and deadline refresh below are not yet known to be
             // a fixed point: the next instruction needs them again.
@@ -3494,7 +3495,7 @@ unsafe fn block_entered(block: fujimod_emulator_cpu::Block, data: *mut c_void) {
                 1
             } else if limit == room {
                 2
-            } else if limit == s.scheduler_room(core) {
+            } else if scheduler_room == Some(limit) {
                 3
             } else {
                 4
@@ -3519,7 +3520,10 @@ unsafe fn block_entered(block: fujimod_emulator_cpu::Block, data: *mut c_void) {
                 return Ok(());
             }
         }
-        if s.error.is_some() || s.scheduler_room(core) == 0 || s.code_run != Some(core) {
+        if s.error.is_some()
+            || (!settled && s.scheduler_room(core) == 0)
+            || s.code_run != Some(core)
+        {
             cpu.stop()?;
             return Ok(());
         }

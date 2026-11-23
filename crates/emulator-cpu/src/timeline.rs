@@ -282,6 +282,9 @@ impl Timeline {
         let beyond = entries.saturating_sub(lag);
         self.advance_instructions(beyond)?;
         self.lags[core] = lag.saturating_sub(entries);
+        if beyond == 0 {
+            return Ok(());
+        }
         for (other, lag) in self.lags.iter_mut().enumerate() {
             if other != core && runnable(other) {
                 *lag = lag.checked_add(beyond).ok_or("processor lag overflow")?;
