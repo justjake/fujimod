@@ -2402,8 +2402,10 @@ impl State {
             self.generations[id] = self.generations[id]
                 .checked_add(1)
                 .ok_or("device deadline generation exhausted")?;
-            self.deadlines[id] = at;
-            self.timeline.cancel_target(Target::DeviceDeadline(id));
+            // A deadline that just fired was removed by pop_due.
+            if std::mem::replace(&mut self.deadlines[id], at).is_some() {
+                self.timeline.cancel_target(Target::DeviceDeadline(id));
+            }
             if let Some(at) = at {
                 self.timeline
                     .schedule(Target::DeviceDeadline(id), at, self.generations[id])?;
