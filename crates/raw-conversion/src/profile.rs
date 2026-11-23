@@ -265,6 +265,15 @@ impl Settings {
                 Err(format!("{name} {v} is outside {lo}..={hi}"))
             }
         };
+        // White-balance shifts are plain menu steps: the camera's own as-shot profiles carry a RAF's R+1 B-4 as 1
+        // and -4, and it ignored shifts sent as tenths (40, 90).
+        let steps = |v: i32, lo: i32, hi: i32, name: &str| {
+            if (lo..=hi).contains(&v) {
+                Ok(v as u32)
+            } else {
+                Err(format!("{name} {v} is outside {lo}..={hi}"))
+            }
+        };
         if let Some(v) = self.image_size {
             out.push((
                 Field::ImageSize,
@@ -356,13 +365,13 @@ impl Settings {
         if let Some(v) = self.white_balance_shift_red {
             out.push((
                 Field::WhiteBalanceShiftRed,
-                tenths(v, -9, 9, "white balance shift red")?,
+                steps(v, -9, 9, "white balance shift red")?,
             ));
         }
         if let Some(v) = self.white_balance_shift_blue {
             out.push((
                 Field::WhiteBalanceShiftBlue,
-                tenths(v, -9, 9, "white balance shift blue")?,
+                steps(v, -9, 9, "white balance shift blue")?,
             ));
         }
         if let Some(v) = self.highlight {
@@ -569,6 +578,17 @@ mod tests {
         let quarter: Settings =
             serde_json::from_str(r#"{"film":"PROVIA","highlight":0.25}"#).unwrap();
         assert!(quarter.words().is_err());
+    }
+
+    #[test]
+    fn white_balance_shifts_are_plain_steps() {
+        let s: Settings = serde_json::from_str(
+            r#"{"white_balance":"DAYLIGHT","white_balance_shift_red":4,"white_balance_shift_blue":-4}"#,
+        )
+        .unwrap();
+        let words = s.words().unwrap();
+        assert!(words.contains(&(Field::WhiteBalanceShiftRed, 4)));
+        assert!(words.contains(&(Field::WhiteBalanceShiftBlue, -4i32 as u32)));
     }
 
     #[test]

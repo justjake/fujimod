@@ -170,6 +170,10 @@ Confirmed on an X100VI (firmware 1.31), from the output MakerNotes:
   MakerNote records the step as BWAdjustment `0x1049` and BWMagentaGreen
   `0x104b` (int8). Positive magenta/green is green: +90 records `0x104b` = 9
   and tints green.
+- White-balance shifts (words 12 and 13) are plain menu steps, -9 to 9: the
+  camera's own as-shot profiles carry a RAF shot at R+1 B-4 as 1 and -4, and
+  it left the output unchanged for shifts sent as tenths (40 and 90; MakerNote
+  `0x100a` read 0, 0).
 
 Not yet confirmed on a camera:
 
