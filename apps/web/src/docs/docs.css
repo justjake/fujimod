@@ -1,3 +1,103 @@
+.fluid-kit-index ul {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 12px;
+  margin: 20px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.fluid-kit-index li a {
+  display: block;
+  padding: 14px 16px;
+  border: 1px solid var(--line, #333);
+  border-radius: 10px;
+}
+
+.fluid-kit-index li h2 {
+  margin: 0;
+  font-size: 16px;
+}
+
+.fluid-kit-panes {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 20px;
+  align-items: start;
+  margin: 20px 0 8px;
+}
+
+.fluid-kit-pane-title {
+  margin: 0 0 8px;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  opacity: 0.7;
+}
+
+.fluid-kit-frame {
+  border: 1px solid var(--line, #333);
+  border-radius: 12px;
+  overflow: hidden;
+  background: #000;
+}
+
+.fluid-kit-frame iframe {
+  display: block;
+  width: 100%;
+  border: 0;
+  background: #000;
+}
+
+.fluid-kit-upstream {
+  height: 420px;
+}
+
+.fluid-kit-preview {
+  width: 100%;
+}
+
+.fluid-kit-preview iframe {
+  height: 100%;
+}
+
+.fluid-kit-focal {
+  margin: 0;
+}
+
+.fluid-kit-focal figcaption {
+  display: grid;
+  gap: 2px;
+  padding: 10px 12px;
+  font-size: 13px;
+  opacity: 0.85;
+}
+
+.fluid-kit-note {
+  margin: 0;
+  padding: 18px;
+  font-size: 14px;
+  opacity: 0.75;
+}
+
+.fluid-kit-status {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 6px 16px;
+  margin: 24px 0 0;
+  font-size: 14px;
+}
+
+.fluid-kit-status dt {
+  font-weight: 600;
+  opacity: 0.7;
+}
+
+.fluid-kit-status dd {
+  margin: 0;
+}
+
 .sdk-component-header {
   display: flex;
   flex-wrap: wrap;
