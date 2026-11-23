@@ -332,6 +332,185 @@ fn shifted_register_offset_loads_match_in_ram_and_on_fault() {
     }
 }
 
+fn indexed_transfer_pair(
+    blocks: bool,
+    pre_base: u32,
+    post_base: u32,
+    lr_value: u32,
+    first: [u16; 2],
+    second: [u16; 2],
+) -> Board {
+    let mut b = board(blocks);
+    b.set_execution_policy(ExecutionPolicy::Interactive).unwrap();
+    b.state.borrow_mut().settled.verify = 0;
+    // Load both bases and LR from literals, then execute the two supplied
+    // transfers in a loop.
+    let code = [
+        0x4b04u16,
+        0x4805,
+        0x4684,
+        0x4805,
+        0x4686,
+        first[0],
+        first[1],
+        second[0],
+        second[1],
+        0xbf30,
+    ];
+    let bytes: Vec<u8> = code.iter().flat_map(|half| half.to_le_bytes()).collect();
+    let mut bytes = bytes;
+    bytes.extend_from_slice(&pre_base.to_le_bytes());
+    bytes.extend_from_slice(&post_base.to_le_bytes());
+    bytes.extend_from_slice(&lr_value.to_le_bytes());
+    b.write_physical(0x10100, &bytes).unwrap();
+    b.write_physical(
+        0x12000,
+        &[0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88, 0x99, 0xaa, 0xbb, 0xcc],
+    )
+    .unwrap();
+    b
+}
+
+#[test]
+fn indexed_loads_match_for_ram_mmio_and_faults() {
+    for (pre_base, post_base) in [(0x12004, 0x12008), (0xe000_e104, 0xe000_e100)] {
+        let make = |blocks| {
+            indexed_transfer_pair(
+                blocks,
+                pre_base,
+                post_base,
+                0x1357_9bdf,
+                [0xf853, 0x3c04],
+                [0xf85c, 0xeb04],
+            )
+        };
+        let mut reference = make(false);
+        let mut translated = make(true);
+        let r = |n| Register::Arm32(fujimod_emulator_cpu::arm::Register::R(n));
+        let a = reference.run_until(100, 64);
+        let b = translated.run_until(100, 64);
+        assert_eq!(a.is_err(), b.is_err(), "{pre_base:#x}/{post_base:#x}: {a:?} {b:?}");
+        assert!(a.is_ok(), "unexpected indexed-load result: {a:?}");
+        assert_eq!(outcome(&translated).registers, outcome(&reference).registers);
+        assert_eq!(outcome(&translated).memory, outcome(&reference).memory);
+        assert_eq!(translated.state(), reference.state());
+        assert_eq!(
+            translated.state.borrow().instructions,
+            reference.state.borrow().instructions
+        );
+        assert_eq!(
+            translated.state.borrow().timeline.now(),
+            reference.state.borrow().timeline.now()
+        );
+        assert_eq!(
+            translated.read_register(0, r(14)).unwrap(),
+            reference.read_register(0, r(14)).unwrap()
+        );
+        assert_eq!(
+            translated.read_register(0, r(12)).unwrap(),
+            reference.read_register(0, r(12)).unwrap()
+        );
+        if pre_base == 0x12004 {
+            assert!(a.is_ok(), "unexpected RAM load result {a:?}");
+            assert_eq!(translated.read_register(0, r(3)).unwrap(), 0x4433_2211);
+            assert_eq!(translated.read_register(0, r(14)).unwrap(), 0xccbb_aa99);
+            assert_eq!(translated.read_register(0, r(12)).unwrap(), 0x1200c);
+        } else {
+            let blocks = translated.state.borrow();
+            let blocks = blocks.blocks[0].as_ref().unwrap();
+            assert!(blocks.restart_callbacks > 0, "device accesses were not restarted");
+            assert!(blocks.mmio_callbacks > 0, "device callbacks did not run");
+        }
+    }
+
+    for (pre_base, post_base, faulting_pc) in [
+        (0x10000, 0x12008, 0x1010a),
+        (0x12004, 0x18000, 0x1010e),
+    ] {
+        let make = |blocks| {
+            indexed_transfer_pair(
+                blocks,
+                pre_base,
+                post_base,
+                0x1357_9bdf,
+                [0xf853, 0x3c04],
+                [0xf85c, 0xeb04],
+            )
+        };
+        let mut reference = make(false);
+        let mut translated = make(true);
+        let a = reference.run_until(100, 64);
+        let b = translated.run_until(100, 64);
+        assert!(
+            a.as_ref().err().is_some_and(|error| error.to_lowercase().contains("unmapped")),
+            "expected reference indexed load fault: {a:?}"
+        );
+        assert!(
+            b.as_ref().err().is_some_and(|error| error.to_lowercase().contains("unmapped")),
+            "expected translated indexed load fault: {b:?}"
+        );
+        assert_eq!(outcome(&translated).registers, outcome(&reference).registers);
+        assert_eq!(outcome(&translated).memory, outcome(&reference).memory);
+        assert_eq!(translated.state(), reference.state());
+        assert_eq!(
+            translated.state.borrow().instructions,
+            reference.state.borrow().instructions
+        );
+        assert_eq!(
+            translated.state.borrow().timeline.now(),
+            reference.state.borrow().timeline.now()
+        );
+        let r = |n| Register::Arm32(fujimod_emulator_cpu::arm::Register::R(n));
+        if faulting_pc == 0x1010a {
+            assert_eq!(translated.read_register(0, r(3)).unwrap(), 0x10000);
+        } else {
+            assert_eq!(translated.read_register(0, r(3)).unwrap(), 0x4433_2211);
+            assert_eq!(translated.read_register(0, r(12)).unwrap(), 0x18000);
+            assert_eq!(translated.read_register(0, r(14)).unwrap(), 0x1357_9bdf);
+        }
+    }
+}
+
+#[test]
+fn indexed_stores_match_on_watched_code_pages() {
+    let make = |blocks| {
+        indexed_transfer_pair(
+            blocks,
+            0x10804,
+            0x10804,
+            0xdead_beef,
+            [0xf843, 0x3c04],
+            [0xf84c, 0xeb04],
+        )
+    };
+    let mut reference = make(false);
+    let mut translated = make(true);
+    reference.run_until(100, 64).unwrap();
+    translated.run_until(100, 64).unwrap();
+    assert_eq!(outcome(&translated).registers, outcome(&reference).registers);
+    assert_eq!(outcome(&translated).memory, outcome(&reference).memory);
+    assert_eq!(translated.state(), reference.state());
+    assert_eq!(
+        translated.state.borrow().instructions,
+        reference.state.borrow().instructions
+    );
+    assert_eq!(
+        translated.state.borrow().timeline.now(),
+        reference.state.borrow().timeline.now()
+    );
+    let mut actual = [0; 8];
+    let mut expected = [0; 8];
+    translated.read_physical(0x10800, &mut actual).unwrap();
+    reference.read_physical(0x10800, &mut expected).unwrap();
+    assert_eq!(actual, expected);
+    assert_eq!(&actual[..4], &0x10804u32.to_le_bytes());
+    assert_eq!(&actual[4..], &0xdead_beefu32.to_le_bytes());
+    let blocks = translated.state.borrow();
+    let blocks = blocks.blocks[0].as_ref().unwrap();
+    assert!(blocks.restart_callbacks > 0, "watched stores were not restarted");
+    assert!(blocks.fast_stores);
+}
+
 /// Which hooks the execution core holds at an instant is a host choice. A
 /// keyframe taken before block execution set its hooks up restores after it,
 /// one taken in block execution restores with the instruction observer, and

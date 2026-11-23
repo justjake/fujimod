@@ -300,10 +300,26 @@ pub(super) fn is_single_transfer(word: u32) -> bool {
         let rn = first & 15;
         let rt = second >> 12;
         let rm = second & 15;
-        // T32 register-offset forms have no writeback. Bits 11:6 are
-        // reserved; bits 5:4 encode the legal LSL amount, including the
-        // scaled halfword load used by the M-core table scan.
-        return second & 0x0fc0 == 0 && rt <= 12 && rn < 15 && rm <= 12;
+        if second & 0x0fc0 == 0 {
+            // Register-offset forms have no writeback. Bits 5:4 encode the
+            // legal LSL amount, including the scaled halfword table scan.
+            return rt <= 12 && rn < 15 && rm <= 12;
+        }
+        // Immediate-indexed forms set bit 11, then use P/U/W in bits 10:8
+        // and imm8 in bits 7:0. P=0,W=0 is unprivileged or reserved on these
+        // encodings, so admit only pre-index and post-index.
+        let pre_index = second & 0x0400 != 0;
+        let writeback = second & 0x0100 != 0;
+        if second & 0x0800 == 0
+            || (!pre_index && !writeback)
+            || rn > 12
+            || rt > 14
+            || rt == 13
+            || (writeback && rn == rt)
+        {
+            return false;
+        }
+        return true;
     }
     if !matches!(
         operation,
@@ -422,6 +438,9 @@ pub(super) fn can_run_inline(word: u32) -> bool {
         // ADD/ADDS and SUB/SUBS. Rd=PC is accepted only for the flag-only
         // CMN/CMP aliases; SP and PC are never arithmetic operands.
         8 | 13 => rn <= 12 && (rd <= 12 || (set_flags && rd == 15)),
+        // ADC/ADCS and SBC/SBCS use APSR.C as an input and may update APSR
+        // flags, but have no control-state effects with ordinary registers.
+        10 | 11 => rn <= 12 && rd <= 12,
         _ => false,
     }
 }
@@ -523,6 +542,8 @@ mod tests {
         assert!(can_run_inline(0xf1b1_0f07)); // cmp r1,#7
         assert!(can_run_inline(0xf04f_0007)); // mov.w r0,#7
         assert!(can_run_inline(0xf05f_0cff)); // movs.w r12,#255
+        assert!(can_run_inline(0xf173_36ff)); // sbcs.w r6,r3,#255
+        assert!(can_run_inline(0xf179_3cff)); // sbcs.w r12,r9,#255
         assert!(can_run_inline(0xf240_0001)); // movw r0,#1
         assert!(can_run_inline(0xf2c0_0001)); // movt r0,#1
         assert!(can_run_inline(0xf640_0c01)); // movw r12 with i=1
@@ -550,6 +571,9 @@ mod tests {
             0xf1a1_0f07, // PC destination without CMP flag semantics
             0xf1bd_0f07, // CMP source SP
             0xf1bf_0f07, // CMP source PC
+            0xf173_3fff, // SBCS destination PC
+            0xf17d_36ff, // SBCS source SP
+            0xf17f_36ff, // SBCS source PC
             0xf240_0d01, // MOVW destination SP
             0xf240_0f01, // MOVW destination PC
             0xf2c0_0d01, // MOVT destination SP
@@ -615,8 +639,30 @@ mod tests {
         // Positive-offset Thumb-2 LDR/STR word, byte and halfword, signed
         // byte/halfword loads, and a legal PC-relative word literal read.
         for instruction in [
-            0xf8c1_0004, 0xf8dd_200c, 0xf885_40ff, 0xf896_7004, 0xf8a6_5006,
-            0xf8b3_2008, 0xf992_1003, 0xf9b4_3004, 0xf8df_0004,
+            0xf8c1_0004,
+            0xf8dd_200c,
+            0xf885_40ff,
+            0xf896_7004,
+            0xf8a6_5006,
+            0xf8b3_2008,
+            0xf992_1003,
+            0xf9b4_3004,
+            0xf8df_0004,
+        ] {
+            assert!(is_single_transfer(instruction), "{instruction:#010x}");
+        }
+        // T32 immediate-indexed transfers, including the sampled negative
+        // pre-index load and post-index load into LR.
+        for instruction in [
+            0xf853_3c04, // LDR r3,[r3,#-4]
+            0xf85c_eb04, // LDR lr,[r12],#4
+            0xf841_0f04, // STR r0,[r1,#4]!
+            0xf851_0f04, // LDR r0,[r1,#4]!
+            0xf812_3b08, // LDRB r3,[r2],#8
+            0xf82a_2d04, // LDRH r2,[r10,#-4]
+            0xf83a_3c13, // LDRH r3,[r10,#-19]
+            0xf843_3c04, // STR r3,[r3,#-4]
+            0xf84c_eb04, // STR lr,[r12],#4
         ] {
             assert!(is_single_transfer(instruction), "{instruction:#010x}");
         }
@@ -653,8 +699,15 @@ mod tests {
             0xf83a_f013, // register-offset LDRH to PC
             0xf83f_3013, // register-offset LDRH from PC base
             0xf83a_301f, // register-offset LDRH with PC offset
-            0xf83a_3c13, // reserved register-offset bits
-            0x0001_6000, 0xffff_5000,
+            0xf853_3404, // bit 11 must identify the indexed immediate form
+            0xf853_3a04, // invalid P=0,W=0 indexed mode
+            0xf853_dc04, // indexed load to SP
+            0xf853_fc04, // indexed load to PC
+            0xf85d_eb04, // indexed base SP
+            0xf85f_eb04, // indexed base PC
+            0xf853_3d04, // indexed load with base writeback and Rt=Rn
+            0x0001_6000,
+            0xffff_5000,
         ] {
             assert!(!is_single_transfer(instruction), "{instruction:#010x}");
         }
