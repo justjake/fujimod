@@ -71,6 +71,7 @@ fn main() {
             ("Firmware", "ui-scene-names.generated.json") => "UiSceneNames",
             ("Firmware", "ui-setting-names.generated.json") => "UiSettingNames",
             ("Firmware", "ui-event-codes.generated.json") => "UiEventCodes",
+            ("Firmware", "osd-items.generated.json") => "OsdItems",
             ("Firmware", "bulk.generated.json") => "Bulk",
             ("Firmware", "sd-boot-v2-autostart.generated.json") => "NandBoot",
             ("Firmware", "boot-patch.generated.json") => "BootPatch",

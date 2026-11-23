@@ -3352,6 +3352,7 @@ pub struct ReferenceCatalog {
     ui_scene_names: BTreeMap<String, crate::ui_scene_names::UiSceneNames>,
     ui_setting_names: BTreeMap<String, crate::ui_setting_names::UiSettingNames>,
     ui_event_codes: BTreeMap<String, crate::ui_event_codes::UiEventCodes>,
+    osd_items: BTreeMap<String, crate::osd_items::OsdItems>,
     bulk: BTreeMap<String, fujimod_catalog_bulk::FirmwareBulk>,
     execution: BTreeMap<String, fujimod_catalog_execution::FirmwareExecution>,
     nand_boot: BTreeMap<String, crate::nand_boot::FirmwareNandBoot>,
@@ -3596,6 +3597,11 @@ impl ReferenceCatalog {
         self.ui_setting_names.get(firmware_id)
     }
 
+    /// Located OSD scene, sprite, and selector records for a firmware.
+    pub fn osd_items(&self, firmware_id: &str) -> Option<&crate::osd_items::OsdItems> {
+        self.osd_items.get(firmware_id)
+    }
+
     /// Return the bulk profile for a firmware release.
     pub fn bulk(&self, firmware_id: &str) -> Option<&fujimod_catalog_bulk::FirmwareBulk> {
         self.bulk.get(firmware_id)
@@ -3711,6 +3717,11 @@ impl ReferenceCatalog {
                 let value: crate::ui_setting_names::UiSettingNames = decode(bytes, path)?;
                 value.validate()?;
                 insert_unique(&mut self.ui_setting_names, value.firmware_id.clone(), value, path)
+            }
+            ReferenceKind::OsdItems => {
+                let value: crate::osd_items::OsdItems = decode(bytes, path)?;
+                value.validate()?;
+                insert_unique(&mut self.osd_items, value.firmware_id.clone(), value, path)
             }
             ReferenceKind::FirstStart => {
                 let value: crate::first_start::FirstStartMenu = decode(bytes, path)?;
@@ -3857,6 +3868,28 @@ impl ReferenceCatalog {
                     .map(|release| release.update_sha256.as_str()));
             if update != Some(settings.firmware_sha256.as_str()) {
                 return Err(format!("setting names differ from update identity {firmware_id}"));
+            }
+        }
+        for (firmware_id, osd_items) in &self.osd_items {
+            let update = self
+                .firmwares
+                .get(firmware_id)
+                .and_then(|firmware| {
+                    firmware
+                        .update
+                        .as_ref()
+                        .map(|update| update.sha256.as_str())
+                })
+                .or_else(|| {
+                    self.firmware_versions
+                        .iter()
+                        .find(|release| &release.firmware_id == firmware_id)
+                        .map(|release| release.update_sha256.as_str())
+                });
+            if update != Some(osd_items.firmware_sha256.as_str()) {
+                return Err(format!(
+                    "OSD items differ from update identity {firmware_id}"
+                ));
             }
         }
         for firmware_id in self.first_start.keys() {
@@ -4759,6 +4792,7 @@ enum ReferenceKind {
     UiSceneNames,
     UiSettingNames,
     UiEventCodes,
+    OsdItems,
     Bulk,
     Execution,
     NandBoot,
@@ -4800,6 +4834,7 @@ impl ReferenceKind {
             Some("ui-scene-names.generated.json") => Ok(Self::UiSceneNames),
             Some("ui-setting-names.generated.json") => Ok(Self::UiSettingNames),
             Some("ui-event-codes.generated.json") => Ok(Self::UiEventCodes),
+            Some("osd-items.generated.json") => Ok(Self::OsdItems),
             Some("bulk.generated.json") => Ok(Self::Bulk),
             Some("execution.generated.json") => Ok(Self::Execution),
             Some("sd-boot-v2-autostart.generated.json") => Ok(Self::NandBoot),
@@ -5244,5 +5279,19 @@ mod layout_tests {
             ),
         );
         assert!(catalog.validate_references().is_err());
+    }
+}
+
+#[cfg(test)]
+mod osd_items_tests {
+    use super::*;
+
+    #[test]
+    fn bundles_x70_scene_sprites_and_disp_custom_selectors() {
+        let catalog = ReferenceCatalog::bundled().unwrap();
+        let osd_items = catalog.osd_items("x70-110").unwrap();
+        assert_eq!(osd_items.scene_variants.len(), 40);
+        assert_eq!(osd_items.sprite_records.len(), 4_804);
+        assert_eq!(osd_items.disp_custom_selectors.len(), 24);
     }
 }

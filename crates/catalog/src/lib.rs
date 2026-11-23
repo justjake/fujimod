@@ -13,6 +13,7 @@ pub mod ui_event_codes;
 pub mod generation;
 pub mod nand_boot;
 pub mod nand_boot_rom;
+pub mod osd_items;
 pub mod progress;
 pub mod reference;
 pub mod rom_start;
