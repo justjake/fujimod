@@ -282,16 +282,15 @@ impl BudgetRun {
 
 impl Drop for BudgetRun {
     fn drop(&mut self) {
-        {
-            let _guard = self
-                .0
-                .budget_lock
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner);
-            self.0.budget_active.store(false, Ordering::Release);
-            self.0.budget_generation.fetch_add(1, Ordering::AcqRel);
-        }
-        let _ = self.0.notify_budget_change();
+        let _guard = self
+            .0
+            .budget_lock
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        // An expiry for this generation is now harmless. The next run or
+        // shutdown wakes the timer to replace or remove any pending event.
+        self.0.budget_active.store(false, Ordering::Release);
+        self.0.budget_generation.fetch_add(1, Ordering::AcqRel);
     }
 }
 
@@ -1287,8 +1286,7 @@ impl Processor {
     /// Stop at the execution budget. A wall timer that fired while the thread
     /// was not running only interrupts the vCPU; the worker re-arms it for the
     /// budget that execution has not consumed yet.
-    fn interactive_budget_spent(&self, started: u64) -> Result<bool, ExecutionError> {
-        let progress = self.update_interactive_progress(started)?;
+    fn interactive_budget_spent(&self, progress: u64) -> Result<bool, ExecutionError> {
         let limit = self.shared.limit.load(Ordering::Acquire);
         if progress >= limit {
             return Ok(true);
@@ -1340,6 +1338,8 @@ impl Processor {
         self.shared.limit.store(limit, Ordering::Release);
 
         let started = self.exec_time()?;
+        // Cumulative vCPU execution time changes only across a native run.
+        let mut progress = 0;
         let clock = *self
             .shared
             .guest_clock
@@ -1352,10 +1352,9 @@ impl Processor {
         self.set_reg(ffi::PSTATE, pstate & !(1 << 21))?;
         loop {
             if self.shared.stop.load(Ordering::Acquire) {
-                self.update_interactive_progress(started)?;
                 return Ok(Exit::Stopped);
             }
-            if self.interactive_budget_spent(started)? {
+            if self.interactive_budget_spent(progress)? {
                 return Ok(Exit::Stopped);
             }
 
@@ -1367,19 +1366,17 @@ impl Processor {
             self.shared.native_active.store(true, Ordering::Release);
             if self.shared.stop.load(Ordering::Acquire) {
                 self.shared.native_active.store(false, Ordering::Release);
-                self.update_interactive_progress(started)?;
                 return Ok(Exit::Stopped);
             }
             let run_result = unsafe { ffi::check(ffi::hv_vcpu_run(self.cpu), "run") };
             self.shared.native_active.store(false, Ordering::Release);
             run_result?;
+            progress = self.update_interactive_progress(started)?;
             let exit = unsafe { *self.exit };
             if self.shared.stop.load(Ordering::Acquire) {
-                // A paused core keeps the guest time it executed.
-                self.update_interactive_progress(started)?;
                 return Ok(Exit::Stopped);
             }
-            if self.interactive_budget_spent(started)? {
+            if self.interactive_budget_spent(progress)? {
                 return Ok(Exit::Stopped);
             }
             match exit.reason {
@@ -1404,10 +1401,8 @@ impl Processor {
                     };
                     let event = self.trap_event(trap);
                     if let Event::Mmio(_, access) = &event {
-                        let progress = self.exec_time().ok().and_then(|now| now.checked_sub(started));
                         let tick = clock
-                            .zip(progress)
-                            .and_then(|(clock, progress)| clock.after(progress).ok())
+                            .and_then(|clock| clock.after(progress).ok())
                             .map(|clock| clock.now);
                         if self.fast_mmio(&trap, access, tick)? {
                             continue;
@@ -1415,7 +1410,6 @@ impl Processor {
                     }
                     self.send_event(events, event, "HVF trap owner disconnected")?;
                     let handled = self.paused(commands)?;
-                    let _ = self.update_interactive_progress(started);
                     if !handled {
                         return Ok(Exit::Trap(trap));
                     }
