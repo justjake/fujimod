@@ -4044,7 +4044,7 @@ unsafe fn written(
         return;
     };
     let _callback_sample = callback_service_sample(b, &cpus, callback_timing::CallbackKind::Store);
-    let mut diagnostic_m4 = false;
+    let diagnostic_m4;
     let mut observed_reasons = 0u8;
     let mut classification_finished = false;
     let result = {
