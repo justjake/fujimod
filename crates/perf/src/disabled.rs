@@ -19,6 +19,17 @@ pub fn register_devices(_names: &[&'static str]) {}
 
 pub fn begin_guide(_id: &str) {}
 
+#[must_use = "the scope guard must live until guide recording should stop"]
+pub struct GuideScope(std::marker::PhantomData<std::rc::Rc<()>>);
+
+pub fn guide_scope(_id: &str) -> GuideScope {
+    GuideScope(std::marker::PhantomData)
+}
+
+pub fn guide_performance_snapshot() -> Option<GuidePerformanceSnapshot> {
+    None
+}
+
 pub fn end_guide() -> GuideSummary {
     GuideSummary::empty()
 }

@@ -405,6 +405,16 @@ pub struct EngineSummary {
 }
 
 #[derive(Clone, Debug, Serialize)]
+pub struct GuidePerformanceSnapshot {
+    pub guide: String,
+    pub elapsed_ns: u64,
+    pub process_cpu_ns: Option<u64>,
+    pub owner_cpu_ns: Option<u64>,
+    pub engines: Vec<EngineSummary>,
+    pub devices: Vec<DeviceSummary>,
+}
+
+#[derive(Clone, Debug, Serialize)]
 pub struct InstructionHistogramBucket {
     pub lower_bound: u64,
     pub upper_bound: u64,

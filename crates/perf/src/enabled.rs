@@ -13,6 +13,7 @@ use std::io;
 use std::path::Path;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Mutex, OnceLock};
+use std::thread::ThreadId;
 
 const MAX_DEVICES: usize = 128;
 const MAX_CORES: usize = 16;
@@ -140,10 +141,13 @@ impl SpanCounts {
 }
 
 static ACTIVE: AtomicBool = AtomicBool::new(false);
+static GUIDE_GENERATION: AtomicU64 = AtomicU64::new(0);
+static GUIDE_LIFECYCLE: Mutex<()> = Mutex::new(());
 static GUIDE: Mutex<Option<String>> = Mutex::new(None);
 static START_RAW: AtomicU64 = AtomicU64::new(0);
 static START_PROCESS: Mutex<Option<f64>> = Mutex::new(None);
 static START_THREAD: Mutex<Option<f64>> = Mutex::new(None);
+static START_THREAD_OWNER: Mutex<Option<ThreadId>> = Mutex::new(None);
 static SPANS: [SpanCounts; SpanKind::COUNT] =
     [const { SpanCounts::new() }; SpanKind::COUNT];
 static DEVICES: [[CellCounts; PHASE_COUNT]; MAX_DEVICES] =
@@ -347,6 +351,7 @@ fn reset_ledger() {
         .lock()
         .unwrap_or_else(|e| e.into_inner())
         .clear();
+    *START_THREAD_OWNER.lock().unwrap_or_else(|e| e.into_inner()) = None;
 }
 
 #[cfg(not(target_arch = "wasm32"))]
@@ -361,11 +366,22 @@ fn install_reporter() {
 fn install_reporter() {}
 
 pub fn begin_guide(id: &str) {
+    let _lifecycle = GUIDE_LIFECYCLE.lock().unwrap_or_else(|e| e.into_inner());
+    begin_guide_locked(id);
+}
+
+fn begin_guide_locked(id: &str) {
+    if ACTIVE.load(Ordering::Acquire) {
+        let _ = end_guide_locked();
+    }
+    GUIDE_GENERATION.fetch_add(1, Ordering::Relaxed);
     reset_ledger();
     *GUIDE.lock().unwrap_or_else(|e| e.into_inner()) = Some(id.to_owned());
     START_RAW.store(raw_now(), Ordering::Relaxed);
     *START_PROCESS.lock().unwrap_or_else(|e| e.into_inner()) = process_cpu_seconds();
     *START_THREAD.lock().unwrap_or_else(|e| e.into_inner()) = thread_cpu_seconds();
+    *START_THREAD_OWNER.lock().unwrap_or_else(|e| e.into_inner()) =
+        Some(std::thread::current().id());
     ACTIVE.store(true, Ordering::Relaxed);
     sample_memory();
     install_reporter();
@@ -380,6 +396,42 @@ pub fn begin_guide(id: &str) {
         });
     }
     begin_span(SpanKind::Guide, GuestProgress::default(), None);
+}
+
+/// Start a guide only when no other guide owns the process-wide ledger.
+#[must_use = "the scope guard must live until guide recording should stop"]
+pub struct GuideScope {
+    generation: Option<u64>,
+    _owner_thread: std::marker::PhantomData<std::rc::Rc<()>>,
+}
+
+pub fn guide_scope(id: &str) -> GuideScope {
+    let _lifecycle = GUIDE_LIFECYCLE.lock().unwrap_or_else(|e| e.into_inner());
+    if ACTIVE.load(Ordering::Acquire) {
+        return GuideScope {
+            generation: None,
+            _owner_thread: std::marker::PhantomData,
+        };
+    }
+    begin_guide_locked(id);
+    GuideScope {
+        generation: Some(GUIDE_GENERATION.load(Ordering::Acquire)),
+        _owner_thread: std::marker::PhantomData,
+    }
+}
+
+impl Drop for GuideScope {
+    fn drop(&mut self) {
+        let Some(generation) = self.generation else {
+            return;
+        };
+        let _lifecycle = GUIDE_LIFECYCLE.lock().unwrap_or_else(|e| e.into_inner());
+        let still_owner =
+            ACTIVE.load(Ordering::Acquire) && GUIDE_GENERATION.load(Ordering::Acquire) == generation;
+        if still_owner {
+            let _ = end_guide_locked();
+        }
+    }
 }
 
 /// Count a predicate evaluation for an interned wait description.
@@ -428,58 +480,39 @@ pub fn record_wait_stop(index: usize, cause: &str, device: Option<&str>) {
     }
 }
 
-pub fn end_guide() -> GuideSummary {
-    if !ACTIVE.swap(false, Ordering::Relaxed) {
-        return GuideSummary::empty();
-    }
-    let ended = raw_now();
-    sample_memory();
-    let process_cpu = (*START_PROCESS.lock().unwrap_or_else(|e| e.into_inner()))
+fn guide_process_cpu_seconds() -> Option<f64> {
+    (*START_PROCESS.lock().unwrap_or_else(|e| e.into_inner()))
         .zip(process_cpu_seconds())
-        .map(|(start, end)| (end - start).max(0.0));
-    let thread_cpu = (*START_THREAD.lock().unwrap_or_else(|e| e.into_inner()))
-        .zip(thread_cpu_seconds())
-        .map(|(start, end)| (end - start).max(0.0));
-    let guide = GUIDE
+        .map(|(start, end)| (end - start).max(0.0))
+}
+
+fn guide_owner_cpu_seconds() -> Option<f64> {
+    let current = std::thread::current().id();
+    if START_THREAD_OWNER
         .lock()
         .unwrap_or_else(|e| e.into_inner())
-        .take()
-        .unwrap_or_default();
-    let spans = (0..SpanKind::COUNT)
-        .filter_map(|index| {
-            let counts = &SPANS[index];
-            let count = counts.count.load(Ordering::Relaxed);
-            if count == 0 {
-                return None;
-            }
-            let (kind, wait) = span_labels(index);
-            Some(SpanSummary {
-                kind: kind.to_owned(),
-                wait: wait.map(str::to_owned),
-                count,
-                elapsed_ns: scale(counts.raw.load(Ordering::Relaxed)),
-                thread_cpu_ns: counts.thread_cpu.load(Ordering::Relaxed),
-                instructions: counts.instructions.load(Ordering::Relaxed),
-                ticks: counts.ticks.load(Ordering::Relaxed),
-            })
-        })
-        .collect();
-    let waits = WAITS.lock().unwrap_or_else(|e| e.into_inner()).waits.iter()
-        .map(|counts| {
-            let mut stops = counts.stops.clone();
-            for (device, count) in &counts.device_stops {
-                stops.insert(format!("device:{device}"), *count);
-            }
-            WaitSummary {
-                description: counts.description.clone(),
-                predicate_evaluations: counts.predicate_evaluations,
-                continuations: counts.continuations,
-                instructions: counts.instructions,
-                ticks: counts.ticks,
-                thread_cpu_ns: counts.thread_cpu_ns,
-                stops,
-            }
-        }).collect();
+        .as_ref()
+        .is_none_or(|owner| owner != &current)
+    {
+        return None;
+    }
+    (*START_THREAD.lock().unwrap_or_else(|e| e.into_inner()))
+        .zip(thread_cpu_seconds())
+        .map(|(start, end)| (end - start).max(0.0))
+}
+
+fn seconds_to_ns(seconds: Option<f64>) -> Option<u64> {
+    seconds.map(|seconds| {
+        let nanoseconds = (seconds.max(0.0) * 1_000_000_000.0).round();
+        if nanoseconds >= u64::MAX as f64 {
+            u64::MAX
+        } else {
+            nanoseconds as u64
+        }
+    })
+}
+
+fn device_summaries() -> Vec<DeviceSummary> {
     let names = DEVICE_NAMES.lock().unwrap_or_else(|e| e.into_inner());
     let mut devices = Vec::new();
     for (index, phases) in DEVICES.iter().enumerate() {
@@ -502,8 +535,11 @@ pub fn end_guide() -> GuideSummary {
             });
         }
     }
-    drop(names);
-    let engines = ENGINES
+    devices
+}
+
+fn engine_summaries() -> Vec<EngineSummary> {
+    ENGINES
         .iter()
         .enumerate()
         .filter_map(|(core, cell)| {
@@ -550,7 +586,81 @@ pub fn end_guide() -> GuideSummary {
                 }
             })
         })
+        .collect()
+}
+
+/// Read cumulative timing from the active guide without taking ownership of it.
+pub fn guide_performance_snapshot() -> Option<GuidePerformanceSnapshot> {
+    let _lifecycle = GUIDE_LIFECYCLE.lock().unwrap_or_else(|e| e.into_inner());
+    if !ACTIVE.load(Ordering::Acquire) {
+        return None;
+    }
+    let guide = GUIDE.lock().unwrap_or_else(|e| e.into_inner()).clone()?;
+    Some(GuidePerformanceSnapshot {
+        guide,
+        elapsed_ns: scale(elapsed_raw(START_RAW.load(Ordering::Relaxed))),
+        process_cpu_ns: seconds_to_ns(guide_process_cpu_seconds()),
+        owner_cpu_ns: seconds_to_ns(guide_owner_cpu_seconds()),
+        engines: engine_summaries(),
+        devices: device_summaries(),
+    })
+}
+
+pub fn end_guide() -> GuideSummary {
+    let _lifecycle = GUIDE_LIFECYCLE.lock().unwrap_or_else(|e| e.into_inner());
+    end_guide_locked()
+}
+
+fn end_guide_locked() -> GuideSummary {
+    if !ACTIVE.swap(false, Ordering::Relaxed) {
+        return GuideSummary::empty();
+    }
+    let ended = raw_now();
+    sample_memory();
+    let process_cpu = guide_process_cpu_seconds();
+    let thread_cpu = guide_owner_cpu_seconds();
+    let guide = GUIDE
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .take()
+        .unwrap_or_default();
+    let spans = (0..SpanKind::COUNT)
+        .filter_map(|index| {
+            let counts = &SPANS[index];
+            let count = counts.count.load(Ordering::Relaxed);
+            if count == 0 {
+                return None;
+            }
+            let (kind, wait) = span_labels(index);
+            Some(SpanSummary {
+                kind: kind.to_owned(),
+                wait: wait.map(str::to_owned),
+                count,
+                elapsed_ns: scale(counts.raw.load(Ordering::Relaxed)),
+                thread_cpu_ns: counts.thread_cpu.load(Ordering::Relaxed),
+                instructions: counts.instructions.load(Ordering::Relaxed),
+                ticks: counts.ticks.load(Ordering::Relaxed),
+            })
+        })
         .collect();
+    let waits = WAITS.lock().unwrap_or_else(|e| e.into_inner()).waits.iter()
+        .map(|counts| {
+            let mut stops = counts.stops.clone();
+            for (device, count) in &counts.device_stops {
+                stops.insert(format!("device:{device}"), *count);
+            }
+            WaitSummary {
+                description: counts.description.clone(),
+                predicate_evaluations: counts.predicate_evaluations,
+                continuations: counts.continuations,
+                instructions: counts.instructions,
+                ticks: counts.ticks,
+                thread_cpu_ns: counts.thread_cpu_ns,
+                stops,
+            }
+        }).collect();
+    let devices = device_summaries();
+    let engines = engine_summaries();
     let bytes = ByteCounter::ALL
         .iter()
         .zip(BYTES.iter())
@@ -1521,6 +1631,36 @@ mod tests {
         assert_eq!(second.bytes["hashed-bytes"], 0);
         assert!(second.devices.is_empty());
         assert!(second.spans.is_empty());
+    }
+
+    #[test]
+    fn guide_scopes_borrow_active_guides_and_preserve_replacements() {
+        let _lock = TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        let scope = guide_scope("phase-owner");
+        assert_eq!(guide_performance_snapshot().unwrap().guide, "phase-owner");
+
+        std::thread::scope(|threads| {
+            for _ in 0..4 {
+                threads.spawn(|| {
+                    let borrowed = guide_scope("nested-phase");
+                    let snapshot = guide_performance_snapshot().unwrap();
+                    assert_eq!(snapshot.guide, "phase-owner");
+                    assert!(snapshot.owner_cpu_ns.is_none());
+                    drop(borrowed);
+                });
+            }
+        });
+        assert_eq!(guide_performance_snapshot().unwrap().guide, "phase-owner");
+
+        begin_guide("replacement");
+        drop(scope);
+        assert_eq!(guide_performance_snapshot().unwrap().guide, "replacement");
+        assert_eq!(end_guide().guide, "replacement");
+
+        let owned = guide_scope("owned");
+        assert!(guide_performance_snapshot().is_some());
+        drop(owned);
+        assert!(guide_performance_snapshot().is_none());
     }
 
     #[test]
