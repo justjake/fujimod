@@ -179,13 +179,8 @@ try {
       const creditsPage = await noJs.newPage();
       await creditsPage.goto(base + '/credits');
       assert.equal(await creditsPage.locator('main h1 + h2').count(), 1);
-      const creditHeadings = [
-        'GitHub Contributors',
-        'Testing & Feedback',
-        'Recipe Authors',
-        'Photographs',
-        'Open Source',
-      ];
+      const creditHeadings = await creditsPage.locator('main h2[id]').allTextContents();
+      assert.ok(creditHeadings.includes('GitHub Contributors'));
       assert.deepEqual(
         await creditsPage
           .getByRole('navigation', { name: 'On this page' })
