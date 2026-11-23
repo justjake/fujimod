@@ -402,10 +402,28 @@ pub(super) fn can_run_inline(word: u32) -> bool {
             _ => false,
         };
     }
-    // ADD/SUB (shifted register), with a register-controlled pure arithmetic
+    // Thumb-2 immediate branches. BL writes LR and ends the block. A
+    // conditional branch has a real condition in bits 9:6. BLX and
+    // system encodings in the reserved condition space remain observed.
+    if first & 0xf800 == 0xf000 && second & 0x8000 != 0 {
+        return match second & 0xd000 {
+            0x9000 | 0xd000 => true,
+            0x8000 => (first >> 6) & 15 < 14,
+            _ => false,
+        };
+    }
+    // MUL is the multiply family with Ra=15. All named operands are
+    // ordinary registers and no instruction here can trap on its values.
+    if first & 0xfff0 == 0xfb00 {
+        return second & 0xf0f0 == 0xf000
+            && first & 15 <= 12
+            && second & 15 <= 12
+            && rd <= 12;
+    }
+    // ADD/ADC/SBC/SUB (shifted register), with a register-controlled pure arithmetic
     // result. Exclude SP and PC in all three register fields and reserved bit
     // 15 of the second halfword. Every immediate shift amount/type is defined.
-    if matches!(first & 0xffe0, 0xeb00 | 0xeba0) {
+    if matches!(first & 0xffe0, 0xeb00 | 0xeb40 | 0xeb60 | 0xeba0) {
         let rn = first & 15;
         let rm = second & 15;
         return second & 0x8000 == 0 && rn <= 12 && rd <= 12 && rm <= 12;
@@ -554,6 +572,14 @@ mod tests {
         assert!(!can_run_inline(0xea0f_0002)); // AND reads PC
         assert!(!can_run_inline(0xea01_0f02)); // no TST alias without S
         assert!(!can_run_inline(0xea4f_440f)); // shifted operand PC
+        assert!(can_run_inline(0xeb41_71e2)); // adc.w r1,r1,r2,asr #31
+        assert!(can_run_inline(0xfb04_f303)); // mul r3,r4,r3
+        assert!(can_run_inline(0xf006_fcf7)); // BL
+        assert!(can_run_inline(0xf000_81a6)); // BEQ.W
+        assert!(can_run_inline(0xf000_b940)); // B.W
+        assert!(!can_run_inline(0xf000_e802)); // BLX
+        assert!(!can_run_inline(0xf380_8100)); // reserved condition / system
+        assert!(!can_run_inline(0xfb04_f30f)); // MUL source PC
         assert!(can_run_inline(0xeb01_0002)); // add.w r0,r1,r2
         assert!(can_run_inline(0xeb11_1042)); // adds.w r0,r1,r2,lsl #5
         assert!(can_run_inline(0xeba1_0002)); // sub.w r0,r1,r2
@@ -587,7 +613,6 @@ mod tests {
             0xeb01_000d, // ADD shifted source SP
             0xeb01_000f, // ADD shifted source PC
             0xeb01_8002, // reserved second-halfword bit
-            0xeb41_0002, // ADC opcode
             0xeba1_000d, // SUB shifted source SP
             0xf3ef_8112, // BASEPRI_MAX not included in the native read subset
             0xf3ef_8114, // CONTROL not included in the native read subset
