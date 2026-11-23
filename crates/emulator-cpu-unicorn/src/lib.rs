@@ -1509,6 +1509,12 @@ mod tests {
         instructions: u64,
         stores: Vec<(Access, u64, i32, i64)>,
     }
+    struct ThumbBlockProbe {
+        cpu: *const Core,
+        callbacks: usize,
+        stop_after: usize,
+        classifications: usize,
+    }
     unsafe fn instruction_probe(_: u64, _: u32, data: *mut c_void) {
         unsafe {
             (*data.cast::<Probe>()).instructions += 1;
@@ -1519,6 +1525,23 @@ mod tests {
             (*data.cast::<Probe>())
                 .stores
                 .push((access, address, size, value));
+        }
+    }
+    unsafe fn thumb_execute(data: *mut c_void, _: u64, _: u32) -> Translation {
+        unsafe { (*data.cast::<ThumbBlockProbe>()).classifications += 1 };
+        Translation {
+            instruction: InstructionDisposition::Execute,
+            observe_block: false,
+        }
+    }
+    unsafe fn thumb_restart(_: *mut c_void, _: u64) {}
+    unsafe fn thumb_block_seen(block: Block, data: *mut c_void) {
+        let probe = unsafe { &mut *data.cast::<ThumbBlockProbe>() };
+        if block.address & !1 == 0x1000 {
+            probe.callbacks += 1;
+            if probe.callbacks == probe.stop_after {
+                unsafe { &*probe.cpu }.stop().unwrap();
+            }
         }
     }
     use crate::test_support::library;
@@ -1792,6 +1815,91 @@ mod tests {
         .unwrap();
         assert_eq!(reg(&cpu, arm::PC), 0x1002);
         assert_eq!(reg(&cpu, arm::CORE[0]), 7);
+    }
+    #[test]
+    fn thumb_coarse_guard_reuses_cached_mixed_width_block_only_on_its_page() {
+        let cpu = library().open(Model::CortexM4, 4 * 1024 * 1024).unwrap();
+        assert!(cpu.features().thumb_block_accounting);
+        cpu.map_zeroed(0x1000, 0x1000, 7).unwrap();
+        // MOVS R0,#1; MOVW R1,#0x1234 (32-bit); ADDS R0,#1 twice; B 0x1000.
+        cpu.write_memory(
+            0x1000,
+            &[0x01, 0x20, 0x41, 0xf2, 0x34, 0x21, 0x01, 0x30, 0x01, 0x30, 0xf9, 0xe7],
+        )
+        .unwrap();
+        let mut blocks = ThumbBlockProbe {
+            cpu: &cpu,
+            callbacks: 0,
+            stop_after: 1,
+            classifications: 0,
+        };
+        unsafe {
+            cpu.translation_hooks(Some(TranslationHooks {
+                classify: thumb_execute,
+                restart: thumb_restart,
+                data: (&mut blocks as *mut ThumbBlockProbe).cast(),
+            }))
+            .unwrap();
+        }
+        unsafe {
+            cpu.install_hook(Hook::Block {
+                callback: thumb_block_seen,
+                data: (&mut blocks as *mut ThumbBlockProbe).cast(),
+                range: HookRange::All,
+            })
+            .unwrap();
+        }
+
+        let accounting = cpu.thumb_accounting().unwrap();
+        let accounting_ptr = accounting.as_ptr();
+        let run_block = || {
+            cpu.write_register(arm::CORE[0], &0u32.to_le_bytes())
+                .unwrap();
+            cpu.write_register(arm::CORE[1], &0u32.to_le_bytes())
+                .unwrap();
+            cpu.run(Run {
+                begin: 0x1001,
+                until: None,
+                watchdog_us: 0,
+                instructions: None,
+            })
+            .unwrap();
+            assert_eq!(reg(&cpu, arm::CORE[0]), 3);
+            assert_eq!(reg(&cpu, arm::CORE[1]), 0x1234);
+        };
+        let set_accounting = |enabled, page, budget| unsafe {
+            (*accounting_ptr).accounting.enabled = enabled;
+            (*accounting_ptr).accounting.budget = budget;
+            (*accounting_ptr).thumb_page = page;
+        };
+
+        // Translate the TB with the Thumb fast path enabled and the matching
+        // page, then reuse that cached translation under all three conditions.
+        set_accounting(3, 0x1000, 5);
+        run_block();
+        assert_eq!(blocks.callbacks, 1);
+        assert_eq!(unsafe { (*accounting_ptr).accounting.budget }, 0);
+        let classifications = blocks.classifications;
+        assert!(classifications > 0);
+
+        set_accounting(0, 0x1000, 5);
+        blocks.stop_after = blocks.callbacks + 2;
+        run_block();
+        assert_eq!(blocks.callbacks, 3);
+        assert_eq!(unsafe { (*accounting_ptr).accounting.budget }, 5);
+
+        set_accounting(3, 0x2000, 5);
+        blocks.stop_after = blocks.callbacks + 2;
+        run_block();
+        assert_eq!(blocks.callbacks, 5);
+        assert_eq!(unsafe { (*accounting_ptr).accounting.budget }, 5);
+
+        set_accounting(3, 0x1000, 5);
+        blocks.stop_after = blocks.callbacks + 1;
+        run_block();
+        assert_eq!(blocks.callbacks, 6);
+        assert_eq!(unsafe { (*accounting_ptr).accounting.budget }, 0);
+        assert_eq!(blocks.classifications, classifications);
     }
     #[test]
     fn a7_page_tables_translate_and_read_across_virtual_sections() {
