@@ -1482,8 +1482,14 @@ impl Board {
             let mut s = self.state.borrow_mut();
             s.active_slice = None;
             s.mprofile_loops.end_run();
-            // A block still pending when the run ends ran whole.
-            s.settle_block(core, None)?;
+            use fujimod_emulator_cpu::{ExecutionError, Fault};
+            if blocks && matches!(&result, Err(ExecutionError::Memory {
+                fault: Fault::ReadUnmapped | Fault::WriteUnmapped | Fault::ReadProtected | Fault::WriteProtected, ..
+            })) {
+                s.settle_interrupted_block(&**cpu, core, scalar(&**cpu, Register::Pc)? & !1, true)?;
+            } else {
+                s.settle_block(core, None)?;
+            }
             s.end_code_slice(&**cpu, core);
             if std::mem::take(&mut s.code_write_deferred) {
                 s.code_run = None;
@@ -1719,7 +1725,11 @@ impl Board {
                     // a hooked store or device access as a block of its own.
                     // In Thumb accounting mode it also classifies register-only blocks.
                     cpu.translation_hooks(Some(fujimod_emulator_cpu::TranslationHooks {
-                        classify: block_classify,
+                        classify: if cpu.thumb_recovery_accounting().is_some() {
+                            block_classify_transfers
+                        } else {
+                            block_classify
+                        },
                         restart: block_restarted,
                         data,
                     }))?;
@@ -2106,6 +2116,38 @@ impl State {
             .ok_or("instruction counter overflow")?;
         Ok(())
     }
+    /// Stop inside either the last translated block or the observed block
+    /// preceding the grant. A faulting data access has entered its instruction.
+    /// An isolated retry will enter it again, so only its prefix counts here.
+    fn settle_interrupted_block(
+        &mut self,
+        cpu: &dyn Cpu,
+        core: usize,
+        pc: u64,
+        include_instruction: bool,
+    ) -> Result<(), String> {
+        let Some(blocks) = self.blocks[core].as_ref() else { return Ok(()) };
+        let charged = blocks.inline.charged_block();
+        let pending = blocks.pending.map(|(address, bytes, entries, _)| (address, bytes, entries));
+        let Some((address, bytes, entries)) = charged.or(pending) else { return Ok(()) };
+        let offset = pc.checked_sub(address).filter(|offset| *offset < u64::from(bytes))
+            .ok_or("interrupted Thumb instruction is outside its block")?;
+        let prefix = if offset == 0 {
+            0
+        } else {
+            let mut buffer = Vec::new();
+            mprofile_blocks::count_entries(self.block_code(cpu, core, address, offset as usize, &mut buffer)?)?
+        };
+        let entered = prefix + u64::from(include_instruction);
+        if charged.is_some() {
+            let tail = entries.checked_sub(entered).ok_or("invalid interrupted Thumb instruction count")?;
+            self.blocks[core].as_mut().unwrap().inline.refund_tail(tail)?;
+            self.settle_block(core, None)
+        } else {
+            self.settle_block(core, Some(entered))
+        }
+    }
+
     /// The Thumb code of a block, from host memory when the code shadow has
     /// the page, else through the engine.
     fn block_code<'a>(
@@ -3381,6 +3423,17 @@ unsafe fn block_classify(_: *mut c_void, _: u64, word: u32) -> fujimod_emulator_
         observe_block: !mprofile_blocks::can_run_inline(word),
     }
 }
+/// Recoverable blocks can also execute ordinary memory transfers. Device and
+/// watched accesses still enter the board at the instruction that made them.
+unsafe fn block_classify_transfers(
+    data: *mut c_void,
+    pc: u64,
+    word: u32,
+) -> fujimod_emulator_cpu::Translation {
+    let mut classification = unsafe { block_classify(data, pc, word) };
+    classification.observe_block &= !mprofile_blocks::is_single_transfer(word);
+    classification
+}
 /// Covers device pages so that an access to one ends its block.
 unsafe fn block_device_access(_: fujimod_emulator_cpu::Access, _: u64, _: i32, _: i64, _: *mut c_void) {}
 /// The engine is about to redo the instruction at `pc` as a block of its own:
@@ -3390,24 +3443,7 @@ unsafe fn block_restarted(data: *mut c_void, pc: u64) {
     let Some(cpus) = b.cpus.upgrade() else {
         return;
     };
-    let result = (|| {
-        let mut s = b.state.borrow_mut();
-        let Some((address, bytes, _, _)) =
-            s.blocks[b.core].as_ref().and_then(|blocks| blocks.pending)
-        else {
-            return Ok(());
-        };
-        let entered = match pc.checked_sub(address) {
-            Some(0) => 0,
-            Some(prefix) if prefix < u64::from(bytes) => {
-                let mut buffer = Vec::new();
-                let code = s.block_code(&*cpus[b.core], b.core, address, prefix as usize, &mut buffer)?;
-                mprofile_blocks::count_entries(code)?
-            }
-            _ => return Err("restarted instruction is outside its block".into()),
-        };
-        s.settle_block(b.core, Some(entered))
-    })();
+    let result = b.state.borrow_mut().settle_interrupted_block(&*cpus[b.core], b.core, pc, false);
     if let Err(e) = result {
         b.state.borrow_mut().fail(e);
         let _ = cpus[b.core].stop();
@@ -3602,7 +3638,7 @@ unsafe fn block_entered(block: fujimod_emulator_cpu::Block, data: *mut c_void) {
             }
             return cpu.stop();
         }
-        // The translated guard admits subsequent register-only blocks on this
+        // The translated guard admits subsequent eligible blocks on this
         // checked page. Hooked memory accesses settle and disarm the window.
         let inline = settled && s.settled.armed && !ready && fetched.is_some()
             && s.code_run == Some(core);
@@ -3666,12 +3702,19 @@ unsafe fn written(
                 // only watched pages, a hooked store may be inside a block:
                 // have the engine redo it as a block of its own, and do this
                 // hook's work then. The restart accounts the entered prefix.
-                if let Some(blocks) = state.blocks[b.core].as_ref()
-                    && blocks.fast_stores
-                    && let Some((_, _, _, last)) = blocks.pending
-                    && scalar(&*cpus[b.core], Register::Pc)? & !1 != last
-                {
-                    return cpus[b.core].request_restart();
+                if let Some(blocks) = state.blocks[b.core].as_ref().filter(|b| b.fast_stores) {
+                    let cpu = &*cpus[b.core];
+                    if let Some((start, bytes, _)) = blocks.inline.charged_block() {
+                        let pc = scalar(cpu, Register::Pc)? & !1;
+                        // All recoverable store encodings currently have one halfword.
+                        if pc + 2 != start + u64::from(bytes) {
+                            return cpu.request_restart();
+                        }
+                    } else if let Some((_, _, _, last)) = blocks.pending
+                        && scalar(cpu, Register::Pc)? & !1 != last
+                    {
+                        return cpu.request_restart();
+                    }
                 }
                 state.settle_block(b.core, None)?;
                 // A store this hook sees ends a poll loop candidate.

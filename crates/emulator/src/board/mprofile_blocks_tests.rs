@@ -205,6 +205,55 @@ fn translated_thumb_budget_matches_the_observer_at_each_stop() {
     assert!(s.blocks[0].as_ref().unwrap().inline.entries > 0);
 }
 
+/// The same mixed-width loop through ordinary RAM, a watched code page, or
+/// the end of mapped RAM. The last case faults on the store partway through
+/// a translated block after several successful iterations.
+fn transfer_loop(blocks: bool, address: u32, advance: bool) -> Board {
+    let mut b = board(blocks);
+    b.set_execution_policy(ExecutionPolicy::Interactive).unwrap();
+    b.state.borrow_mut().settled.verify = 0;
+    // ldr r1,literal; b loop; loop: adds r0,#1; str r0,[r1];
+    // and.w r2,r0,#7; ldr r3,[r1]; adds r1,#0/4; b loop; literal (aligned)
+    let code: [u16; 10] = [
+        0x4904, 0xe7ff, 0x3001, 0x6008, 0xf000, 0x0207, 0x680b,
+        if advance { 0x3104 } else { 0x3100 }, 0xe7f8, 0xbf00,
+    ];
+    let mut bytes: Vec<u8> = code.iter().flat_map(|word| word.to_le_bytes()).collect();
+    bytes.extend_from_slice(&address.to_le_bytes());
+    b.write_physical(0x10100, &bytes).unwrap();
+    b
+}
+
+#[test]
+fn translated_transfers_match_at_watched_stores_and_data_faults() {
+    for (address, advance) in [(0x12000, false), (0x10800, false), (0x17ff0, true)] {
+        let mut reference = transfer_loop(false, address, advance);
+        let mut translated = transfer_loop(true, address, advance);
+        for stop in [11, 51, 139, 2031] {
+            let a = reference.run_until(stop, 63);
+            let b = translated.run_until(stop, 63);
+            assert_eq!(a.is_err(), b.is_err(), "{address:#x} at {stop}: {a:?} {b:?}");
+            let expected = outcome(&reference);
+            let actual = outcome(&translated);
+            assert_eq!(actual.registers, expected.registers, "{address:#x} registers at {stop}");
+            assert_eq!(actual.memory, expected.memory, "{address:#x} RAM at {stop}");
+            assert_eq!(translated.state.borrow().instructions, reference.state.borrow().instructions);
+            assert_eq!(translated.state.borrow().timeline.now(), reference.state.borrow().timeline.now());
+            if let Err(error) = b {
+                assert!(advance && error.contains("unmapped"), "{error}");
+                break;
+            }
+            assert_eq!(actual.state, expected.state, "{address:#x} at {stop}");
+        }
+        if !advance && address == 0x12000 {
+            assert!(translated.state.borrow().blocks[0].as_ref().unwrap().inline.entries > 500);
+        }
+        if advance {
+            assert!(reference.state.borrow().timeline.now() < 2031, "loop never reached unmapped memory");
+        }
+    }
+}
+
 /// Which hooks the execution core holds at an instant is a host choice. A
 /// keyframe taken before block execution set its hooks up restores after it,
 /// one taken in block execution restores with the instruction observer, and
