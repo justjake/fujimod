@@ -190,7 +190,7 @@ fn staged_prologue(original: [u8; 12]) -> Vec<fujimod_usb::testing::Exchange> {
     s.extend(write(0x1400, &words(&[0, 0, 32])));
     s.extend(memory_read(0x1400, &words(&[0, 0, 32])));
     s.extend(memory_read(0x1000, b"stoc"));
-    s.extend(data(0x1000, b"stoc"));
+    s.extend(borrowed_bulk_chunks(0x1000, b"stoc", 32));
     s.extend(memory_read(0x1800, &[0; 16]));
     s.extend(memory_read(0x1000, b"stock code"));
     s.extend(memory_read(0x1600, &1u32.to_le_bytes()));
@@ -220,7 +220,7 @@ fn interrupted_run_recovery_refuses_a_foreign_callback_or_executable() {
             other.resize(0x2000, 0);
             other[image.len()] = 1; // past the image: not this executable
             s.extend(memory_read(0x1700, &0x4080u64.to_le_bytes()));
-            s.extend(bulk_chunks(0x4000, &other));
+            s.extend(borrowed_bulk_chunks(0x4000, &other, 32));
         }
         s.extend(staged_epilogue(original));
         let (mut session, script) = opened(s);
@@ -313,23 +313,23 @@ fn staged_backup_checks_staging_is_empty_reads_through_it_and_clears_it() {
             left[0x40..0x78].fill(3); // the result object is mutable
             left.resize(0x2000, 0);
             s.extend(memory_read(0x1700, &0x4080u64.to_le_bytes()));
-            s.extend(bulk_chunks(0x4000, &left));
+            s.extend(borrowed_bulk_chunks(0x4000, &left, 32));
             s.extend(write_verified(0x1700, &[0; 8]));
             s.extend(memory_read(0x1700, &[0; 8]));
-            s.extend(bulk_chunks(0x4000, &left));
+            s.extend(borrowed_bulk_chunks(0x4000, &left, 32));
             for (i, piece) in vec![0; image.len()].chunks(64).enumerate() {
                 s.extend(write(0x4000 + (i * 64) as u32, piece));
             }
             s.extend(raw_chunks(0x4000, &vec![0; image.len()]));
-            s.extend(bulk_chunks(0x4000, &vec![0; 0x2000]));
+            s.extend(borrowed_bulk_chunks(0x4000, &vec![0; 0x2000], 32));
         } else {
             s.extend(memory_read(0x1700, &[0; 8]));
         }
-        s.extend(bulk_chunks(0x4000, &vec![0; 0x2000]));
+        s.extend(borrowed_bulk_chunks(0x4000, &vec![0; 0x2000], 32));
         for (i, piece) in image.chunks(64).enumerate() {
             s.extend(write_verified(0x4000 + (i * 64) as u32, piece));
         }
-        s.extend(bulk_chunks(0x4000, &image));
+        s.extend(borrowed_bulk_chunks(0x4000, &image, 32));
         s.extend(invoke(0x1800, 7));
         s.extend(memory_read(0x1700, &[0; 8]));
         s.extend(write_verified(0x1700, &0x4080u64.to_le_bytes()));
@@ -367,7 +367,7 @@ fn staged_backup_checks_staging_is_empty_reads_through_it_and_clears_it() {
                         break; // refused before any bulk read
                     }
                 }
-                s.extend(bulk_chunks(0x10000, &vec![5; n as usize]));
+                s.extend(borrowed_bulk_chunks(0x10000, &vec![5; n as usize], 32));
             }
             calls += 1;
             call(
@@ -381,12 +381,12 @@ fn staged_backup_checks_staging_is_empty_reads_through_it_and_clears_it() {
         s.extend(memory_read(0x1700, &[0; 8]));
         let mut arena = observed;
         arena.resize(0x2000, 0);
-        s.extend(bulk_chunks(0x4000, &arena));
+        s.extend(borrowed_bulk_chunks(0x4000, &arena, 32));
         for (i, piece) in vec![0; image.len()].chunks(64).enumerate() {
             s.extend(write(0x4000 + (i * 64) as u32, piece));
         }
         s.extend(raw_chunks(0x4000, &vec![0; image.len()]));
-        s.extend(bulk_chunks(0x4000, &vec![0; 0x2000]));
+        s.extend(borrowed_bulk_chunks(0x4000, &vec![0; 0x2000], 32));
         s.extend(memory_read(0x1400, &words(&[0, 0, 32])));
         s.extend(write(0x1400, &original));
         s.extend(memory_read(0x1400, &original));

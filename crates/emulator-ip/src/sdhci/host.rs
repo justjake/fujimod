@@ -1256,6 +1256,7 @@ impl SdHost {
             quantity: 0,
             cursor: 0,
             address: self.regs.word(0),
+            address_high: self.address_high,
             phase: Phase::Command,
             due: None,
             command,
@@ -1370,7 +1371,7 @@ impl SdHost {
                         return Err("SDIO ADMA mode unsupported".into());
                     }
                     if dma {
-                        self.physical(request.address, quantity, false)?;
+                        self.physical(request.address_high, request.address, quantity, false)?;
                         let boundary = 4096usize << (self.regs.get(4) >> 12 & 7);
                         let signalled = if self.regs.get(0x38) == 0 {
                             self.regs.get(0x34)

@@ -2021,6 +2021,7 @@ mod tests {
             .with_job(Job {
                 start: (DEVELOP_CONTROL, 5),
                 status: None,
+                clear: None,
                 stop: Some((0, 1)),
                 irq: 130,
                 ticks: 10,

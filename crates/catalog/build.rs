@@ -63,6 +63,11 @@ fn main() {
             .file_name()
             .and_then(|name| name.to_str())
             .unwrap_or_default();
+        // Hand-written anchors beside the generated OSD item catalog are its
+        // recorded inputs, not catalog documents.
+        if (*kind, name) == ("Firmware", "osd-anchors.json") {
+            continue;
+        }
         let kind = match (*kind, name) {
             ("Body", "controls.json") => "PhysicalControls",
             ("Firmware", "control-ids.generated.json") => "ControlIds",

@@ -216,9 +216,6 @@ pub fn register_all(
         if w.base != STATISTICS_BASE || w.size != (STATISTICS_BANK_SIZE * 2) as u64 {
             return Err("invalid statistics SRAM window".into());
         }
-        if ram_backed {
-            continue;
-        }
         bus.register(w.base, w.size, Box::new(statistics.clone()))?;
     }
     for w in windows.iter().filter(|w| {

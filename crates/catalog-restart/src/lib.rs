@@ -763,8 +763,8 @@ impl FirmwareRestart {
         if m.runtime_qualified.is_none() {
             return fail("an X-Processor 4 restart states its runtime qualification");
         }
-        if m.deferred_timer.is_some() || m.early_boot.is_some() {
-            return fail("this restart publishes no callback timer or early boot");
+        if m.early_boot.is_some() {
+            return fail("this restart publishes no early boot");
         }
         let (
             Some(transport),
@@ -882,7 +882,8 @@ impl FirmwareRestart {
         {
             return fail("the clock publishes its routines, registers and read order");
         }
-        Ok(())
+        // A located callback timer lets the deferred restart guard queue this request.
+        self.validate_optional_mechanisms()
     }
 
     /// Early boot and deferred timer facts a wake-deadline mechanism may carry.

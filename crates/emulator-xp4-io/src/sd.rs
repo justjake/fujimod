@@ -50,6 +50,7 @@ impl Controller {
         irq: Option<fujimod_emulator_devices::bus::InterruptLine>,
     ) -> Result<Self, String> {
         let host_options = host::Options {
+            name: host::SlotName::MemoryCard,
             base: options.base,
             protocol: host::Protocol::Sdhc,
             transfer_ticks: options.transfer_ticks,
