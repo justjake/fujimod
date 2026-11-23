@@ -25,7 +25,7 @@ mod turn;
 #[cfg(not(target_arch = "wasm32"))]
 pub use host::{HostEvent, HostRoom};
 #[cfg(not(target_arch = "wasm32"))]
-pub use native::PeerSocket;
+pub use native::{PeerSocket, VideoFrame, VideoSender};
 
 #[cfg(all(feature = "signaling", not(target_arch = "wasm32")))]
 pub mod signaling;

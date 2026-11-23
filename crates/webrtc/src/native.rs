@@ -22,6 +22,18 @@ use std::{
     thread,
     time::{Duration, Instant},
 };
+use rtc::{
+    media::Sample,
+    media_stream::MediaStreamTrack,
+    peer_connection::configuration::media_engine::{MIME_TYPE_H264, MediaEngine},
+    rtp_transceiver::rtp_sender::{
+        RTCRtpCodec, RTCRtpCodecParameters, RTCRtpCodingParameters, RTCRtpEncodingParameters,
+        RtpCodecKind,
+    },
+};
+use webrtc::media_stream::Track;
+use webrtc::media_stream::track_local::{TrackLocal, static_sample::TrackLocalStaticSample};
+use webrtc::rtp_transceiver::RtpSender;
 use webrtc::{
     data_channel::{DataChannel, DataChannelEvent, RTCDataChannelInit, RTCDataChannelState},
     peer_connection::{
@@ -92,12 +104,37 @@ fn unseal(ticket: &Ticket, peer: &str, value: &str) -> Result<Value> {
         .map_err(|_| error("signaling authentication failed"))?;
     serde_json::from_slice(&decoded).map_err(error)
 }
+/// One encoded H.264 access unit (Annex B) for a controller's video track.
+pub struct VideoFrame {
+    pub data: Vec<u8>,
+    /// How long the frame is shown, which sets the next RTP timestamp.
+    pub duration: Duration,
+}
+
+/// Sends encoded frames to one controller's video track. At most one frame
+/// waits to be written, so a caller encodes only when `wants_frame` is true
+/// and never builds a backlog.
+#[derive(Clone)]
+pub struct VideoSender(Sender<VideoFrame>);
+impl VideoSender {
+    /// Whether the track has written the last frame and takes another.
+    pub fn wants_frame(&self) -> bool {
+        self.0.is_empty() && !self.0.is_closed()
+    }
+    pub fn send(&self, frame: VideoFrame) -> Result<()> {
+        self.0
+            .try_send(frame)
+            .map_err(|_| error("video track is busy or closed"))
+    }
+}
+
 pub struct PeerSocket {
     send: Sender<Vec<u8>>,
     receive: Receiver<Result<Vec<u8>>>,
     path: Receiver<String>,
     /// Closed when the I/O thread has flushed and exited.
     finished: Receiver<()>,
+    video: Option<VideoSender>,
 }
 impl PeerSocket {
     pub(crate) async fn start<F, Fut>(name: &'static str, task: F) -> Result<Self>
@@ -113,6 +150,8 @@ impl PeerSocket {
         let (ready, wait) = async_channel::bounded(1);
         let (path, path_summary) = async_channel::bounded(1);
         let (finish, finished) = async_channel::bounded::<()>(1);
+        let (video_tx, video_rx) = async_channel::bounded(1);
+        let (video_state, video_ready) = async_channel::bounded(1);
         thread::Builder::new()
             .name(name.into())
             .spawn(move || {
@@ -122,6 +161,8 @@ impl PeerSocket {
                         incoming: incoming.clone(),
                         ready: ready.clone(),
                         path,
+                        video: video_rx,
+                        video_state,
                     })
                     .await
                     {
@@ -133,11 +174,16 @@ impl PeerSocket {
             })
             .map_err(error)?;
         wait.recv().await.map_err(error)?.map_err(error)?;
+        let video = video_ready
+            .try_recv()
+            .unwrap_or(false)
+            .then(|| VideoSender(video_tx));
         Ok(Self {
             send: tx,
             receive: rx,
             path: path_summary,
             finished,
+            video,
         })
     }
 
@@ -204,6 +250,12 @@ impl PeerSocket {
     pub fn path(&self) -> Option<String> {
         self.path.try_recv().ok()
     }
+    /// The controller's video track: present when its offer asked for video
+    /// and the selected candidate pair is direct. A relayed controller gets
+    /// no video.
+    pub fn video(&self) -> Option<VideoSender> {
+        self.video.clone()
+    }
 }
 
 pub(crate) struct PeerChannels {
@@ -211,6 +263,8 @@ pub(crate) struct PeerChannels {
     incoming: Sender<Result<Vec<u8>>>,
     ready: Sender<std::result::Result<(), String>>,
     path: Sender<String>,
+    video: Receiver<VideoFrame>,
+    video_state: Sender<bool>,
 }
 impl Drop for PeerSocket {
     fn drop(&mut self) {
@@ -419,8 +473,13 @@ async fn connection(
             RTCIceTransportPolicy::All
         })
         .build();
+    let mut media = MediaEngine::default();
+    media
+        .register_codec(h264_codec(), RtpCodecKind::Video)
+        .map_err(error)?;
     PeerConnectionBuilder::new()
         .with_configuration(configuration)
+        .with_media_engine(media)
         .with_handler(Arc::new(Events(events)))
         .with_runtime(PeerRuntime::shared(ice.pacing))
         .with_udp_addrs(local.into_iter().map(|ip| SocketAddr::new(ip, 0)).collect())
@@ -428,6 +487,85 @@ async fn connection(
         .build()
         .await
         .map_err(error)
+}
+
+/// H.264 Constrained Baseline in non-interleaved packetization, which every
+/// browser decodes in hardware.
+fn h264_codec() -> RTCRtpCodecParameters {
+    RTCRtpCodecParameters {
+        rtp_codec: RTCRtpCodec {
+            mime_type: MIME_TYPE_H264.to_owned(),
+            clock_rate: 90000,
+            channels: 0,
+            sdp_fmtp_line: "level-asymmetry-allowed=1;packetization-mode=1;profile-level-id=42e01f"
+                .to_owned(),
+            rtcp_feedback: vec![],
+        },
+        payload_type: 102,
+        ..Default::default()
+    }
+}
+
+type VideoTrack = (Arc<TrackLocalStaticSample>, Arc<dyn RtpSender>);
+
+/// Attach the outgoing video track to the transceiver the offer asked for.
+async fn add_video<P: PeerConnection>(connection: &P) -> Result<VideoTrack> {
+    let track = Arc::new(
+        TrackLocalStaticSample::new(
+            Instant::now(),
+            MediaStreamTrack::new(
+                "fujimod".to_owned(),
+                "lcd".to_owned(),
+                "LCD".to_owned(),
+                RtpCodecKind::Video,
+                vec![RTCRtpEncodingParameters {
+                    rtp_coding_parameters: RTCRtpCodingParameters {
+                        ssrc: Some(rand::rng().random()),
+                        ..Default::default()
+                    },
+                    codec: h264_codec().rtp_codec,
+                    ..Default::default()
+                }],
+            ),
+        )
+        .map_err(error)?,
+    );
+    let sender = connection
+        .add_track(Arc::clone(&track) as Arc<dyn TrackLocal>)
+        .await
+        .map_err(error)?;
+    Ok((track, sender))
+}
+
+/// Write each frame the owner hands over until the owner drops its sender.
+async fn write_video(track: VideoTrack, frames: Receiver<VideoFrame>) -> Result<()> {
+    let (track, sender) = track;
+    let payload_type = sender
+        .get_parameters()
+        .await
+        .map_err(error)?
+        .rtp_parameters
+        .codecs
+        .first()
+        .map(|codec| codec.payload_type)
+        .ok_or_else(|| error("video track has no negotiated codec"))?;
+    let ssrc = *track
+        .ssrcs()
+        .await
+        .first()
+        .ok_or_else(|| error("video track has no SSRC"))?;
+    while let Ok(frame) = frames.recv().await {
+        track
+            .sample_writer(ssrc, payload_type)
+            .write_sample(&Sample {
+                data: frame.data.into(),
+                duration: frame.duration,
+                ..Sample::new(Instant::now())
+            })
+            .await
+            .map_err(error)?;
+    }
+    std::future::pending().await
 }
 
 /// Set the local description and wait for ICE gathering to finish, so the
@@ -558,6 +696,7 @@ async fn run(
     pump(
         connection,
         Some(channel),
+        None,
         events,
         channels,
         progress,
@@ -585,17 +724,23 @@ async fn run_answer(
             offer["sdp"].as_str().ok_or_else(|| error("missing SDP"))?,
             ice.policy,
         );
+        let wants_video = sdp.lines().any(|line| line.starts_with("m=video"));
         let connection = connection(&ticket, &ice, events_tx).await?;
         connection
             .set_remote_description(RTCSessionDescription::offer(sdp).map_err(error)?)
             .await
             .map_err(error)?;
+        let video = if wants_video {
+            Some(add_video(&connection).await?)
+        } else {
+            None
+        };
         let answer = connection.create_answer(None).await.map_err(error)?;
         let answer = gathered(&connection, answer, &events, ice.policy, &progress).await?;
-        Ok::<_, Error>((connection, answer))
+        Ok::<_, Error>((connection, answer, video))
     }
     .await;
-    let (connection, sdp) = match prepared {
+    let (connection, sdp, video) = match prepared {
         Ok(prepared) => prepared,
         Err(failure) => {
             let frame = json!({
@@ -618,7 +763,7 @@ async fn run_answer(
         }))
         .await
         .map_err(error)?;
-    pump(connection, None, events, channels, progress, None).await
+    pump(connection, None, video, events, channels, progress, None).await
 }
 
 /// Wait for the data channel (the answerer receives it from the peer) to open.
@@ -668,6 +813,7 @@ async fn open(
 async fn pump<P: PeerConnection>(
     connection: P,
     channel: Option<Arc<dyn DataChannel>>,
+    video: Option<VideoTrack>,
     events: Receiver<PeerEvent>,
     channels: PeerChannels,
     progress: crate::Progress,
@@ -678,6 +824,8 @@ async fn pump<P: PeerConnection>(
         incoming,
         ready,
         path,
+        video: frames,
+        video_state,
     } = channels;
     let channel = futures_lite::future::or(open(channel, &events), async {
         futures_timer::Delay::new(OPEN_TIMEOUT).await;
@@ -685,9 +833,14 @@ async fn pump<P: PeerConnection>(
     })
     .await?;
     progress("WebRTC data channel open");
-    if let Some(summary) = selected_path(&connection).await {
+    let selected = selected_path(&connection).await;
+    let relayed = selected.as_ref().is_none_or(|(_, relayed)| *relayed);
+    if let Some((summary, _)) = selected {
         let _ = path.try_send(summary);
     }
+    // Video never crosses a TURN relay.
+    let video = video.filter(|_| !relayed);
+    let _ = video_state.try_send(video.is_some());
     if ready.send(Ok(())).await.is_err() {
         let _ = connection.close().await;
         return Ok(());
@@ -763,16 +916,26 @@ async fn pump<P: PeerConnection>(
             }
         }
     };
+    let streaming = async {
+        match video {
+            Some(track) => write_video(track, frames).await,
+            None => std::future::pending().await,
+        }
+    };
     let result = futures_lite::future::or(
         sending,
-        futures_lite::future::or(receiving, futures_lite::future::or(failed, ended)),
+        futures_lite::future::or(
+            receiving,
+            futures_lite::future::or(failed, futures_lite::future::or(ended, streaming)),
+        ),
     )
     .await;
     let _ = connection.close().await;
     result
 }
 
-async fn selected_path<P: PeerConnection>(connection: &P) -> Option<String> {
+/// The selected candidate pair, and whether either end of it is a TURN relay.
+async fn selected_path<P: PeerConnection>(connection: &P) -> Option<(String, bool)> {
     let sctp = connection.sctp().await?;
     let pair = sctp
         .transport()
@@ -780,14 +943,20 @@ async fn selected_path<P: PeerConnection>(connection: &P) -> Option<String> {
         .get_selected_candidate_pair()
         .await
         .ok()??;
-    Some(format!(
-        "path {} {}:{} <-> {} {}:{}",
-        pair.local().typ,
-        pair.local().address,
-        pair.local().port,
-        pair.remote().typ,
-        pair.remote().address,
-        pair.remote().port
+    let relayed = [pair.local().typ.to_string(), pair.remote().typ.to_string()]
+        .iter()
+        .any(|kind| kind == "relay");
+    Some((
+        format!(
+            "path {} {}:{} <-> {} {}:{}",
+            pair.local().typ,
+            pair.local().address,
+            pair.local().port,
+            pair.remote().typ,
+            pair.remote().address,
+            pair.remote().port
+        ),
+        relayed,
     ))
 }
 

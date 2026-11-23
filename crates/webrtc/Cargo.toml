@@ -24,6 +24,7 @@ fujimod-workspace-hack.workspace = true
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 webrtc = { version = "0.21.1", default-features = false, features = ["runtime-smol", "crypto-ring"] }
+rtc = { version = "0.21.1", default-features = false }
 async-trait = "0.1"
 bytes = "1"
 async-channel = "2"
