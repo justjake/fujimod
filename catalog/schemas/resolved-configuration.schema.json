@@ -23024,6 +23024,13 @@
           ],
           "description": "Browser camera attachments declared by a selected overlay."
         },
+        "debug_usb_overlays": {
+          "description": "Further overlays that connect the camera's USB in debug mode, for a\nhost that shares the camera with Dev Tools.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
         "dram_address_space": {
           "anyOf": [
             {

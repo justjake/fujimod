@@ -1858,8 +1858,25 @@ pub fn status(session: &Session) -> Result<RecReport, String> {
 }
 
 /// The device node whose scanout presents the camera's display.
+/// Resolving a configuration reads the whole catalog, so a session's display
+/// node is resolved once per configuration and overlay set.
 pub fn scanout_node(session: &Session) -> Result<String, String> {
-    Ok(session_prepared(session)?.observation.scanout)
+    use std::collections::HashMap;
+    use std::sync::{LazyLock, Mutex};
+    static NODES: LazyLock<Mutex<HashMap<String, String>>> = LazyLock::new(Default::default);
+    let key = format!(
+        "{}{}",
+        session.definition["configuration_id"], session.definition["overlays"]
+    );
+    if let Some(node) = NODES.lock().map_err(|e| e.to_string())?.get(&key) {
+        return Ok(node.clone());
+    }
+    let node = session_prepared(session)?.observation.scanout;
+    NODES
+        .lock()
+        .map_err(|e| e.to_string())?
+        .insert(key, node.clone());
+    Ok(node)
 }
 
 /// Capture the first active native scanout output without advancing guest time.
@@ -1899,14 +1916,14 @@ pub fn lcd_frames(
     if !published.is_empty() {
         return Ok(published);
     }
-    let Ok(spec) = session_prepared(session) else {
+    let Ok(scanout) = scanout_node(session) else {
         return Ok(Vec::new());
     };
-    let display = session.scanout_state(&spec.observation.scanout)?;
+    let display = session.scanout_state(&scanout)?;
     let Some(instance) = presented_instances(&display).into_iter().next() else {
         return Ok(Vec::new());
     };
-    let Some(frame) = session.scanout(&spec.observation.scanout, instance, true, false)? else {
+    let Some(frame) = session.scanout(&scanout, instance, true, false)? else {
         return Ok(Vec::new());
     };
     let rgb = frame.rgb.ok_or("scanout did not return RGB")?;

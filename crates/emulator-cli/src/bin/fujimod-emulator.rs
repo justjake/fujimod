@@ -211,7 +211,19 @@ impl Boot {
                     .map_err(|error| format!("--engine: {error}"))
             })
             .transpose()?;
-        let mut resolved = ResolvedConfiguration::with_overlays(configuration_id, &self.overlays)?;
+        let mut overlays = self.overlays.clone();
+        if self.gui {
+            // The window's camera is shared with Dev Tools: connect its USB in
+            // debug mode where the configuration can.
+            for overlay in fujimod_catalog_configuration::RunConfiguration::bundled(configuration_id)?
+                .debug_usb_overlays
+            {
+                if !overlays.contains(&overlay) {
+                    overlays.push(overlay);
+                }
+            }
+        }
+        let mut resolved = ResolvedConfiguration::with_overlays(configuration_id, &overlays)?;
         if let Some(engine) = engine {
             resolved.override_engine(engine)?;
         }

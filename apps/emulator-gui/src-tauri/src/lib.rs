@@ -164,7 +164,12 @@ fn checked_update(configuration: &ResolvedConfiguration, update: &str) -> Result
 }
 
 fn launch_camera(request: LaunchRequest) -> Result<(LaunchedCamera, Running), String> {
-    let mut resolved = ResolvedConfiguration::bundled(&request.configuration)?;
+    // The window's camera is shared with Dev Tools, so it starts connected
+    // over USB in debug mode where its configuration can.
+    let debug_usb =
+        fujimod_catalog_configuration::RunConfiguration::bundled(&request.configuration)?
+            .debug_usb_overlays;
+    let mut resolved = ResolvedConfiguration::with_overlays(&request.configuration, &debug_usb)?;
     if let Some(engine) = request.engine {
         resolved.override_engine(engine)?;
     }

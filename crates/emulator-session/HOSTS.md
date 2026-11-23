@@ -86,10 +86,11 @@ this one loop; no host keeps its own copy.
   the run thread through the board's `UsbPort` capability; between packets
   it waits for the bus condition the controller model reports
   (`UsbHostWait`) by advancing guest time, never by reading firmware state.
-  A run shares USB only when its configuration models the endpoints (X70:
-  the `x70-110-browser-usb` overlay); Dev Tools needs the camera in debug
-  mode (X70: add the `x70-110-usb-debug` overlay, which turns on the stock
-  debug setting).
+  A run shares USB only when its configuration models the endpoints, and
+  Dev Tools needs the camera in debug mode. A run configuration lists the
+  overlays that give both as `debug_usb_overlays` (X70: `x70-110-browser-usb`
+  and `x70-110-usb-debug`, which turns on the stock debug setting); the
+  desktop app and `fujimod-emulator --gui` apply them.
 - The run lasts as long as its host keeps it open (the desktop window's
   process, the MCP camera's window); controllers joining and leaving, such as
   Dev Tools' brief discovery connections, do not end it.

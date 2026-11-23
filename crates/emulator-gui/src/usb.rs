@@ -96,9 +96,10 @@ impl UsbShare {
         })
     }
 
-    /// Run the operations controllers have sent.
+    /// Run the next operation a controller has sent. One per slice keeps
+    /// the camera's input and video responsive during long transfers.
     pub(crate) fn service(&mut self, run: &mut dyn Run) {
-        while let Ok((op, reply)) = self.requests.try_recv() {
+        if let Ok((op, reply)) = self.requests.try_recv() {
             let completion = self
                 .execute(run, op)
                 .unwrap_or_else(failed);
