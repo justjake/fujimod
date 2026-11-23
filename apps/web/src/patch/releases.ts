@@ -22,9 +22,13 @@ export function validateReleaseInfo(value: unknown): ReleaseInfo {
     throw Error('The current release metadata is invalid.');
   return info;
 }
-export type ReleaseRoute = { kind: 'current' } | { kind: 'asset'; tag: string; file: string };
+export type ReleaseRoute =
+  | { kind: 'current' }
+  | { kind: 'list' }
+  | { kind: 'asset'; tag: string; file: string };
 export function releaseRoute(path: string): ReleaseRoute | undefined {
   if (path === '/releases/current') return { kind: 'current' };
+  if (path === '/releases/list') return { kind: 'list' };
   const match = /^\/releases\/([^/]+)\/([^/]+)$/.exec(path);
   if (!match) return;
   try {

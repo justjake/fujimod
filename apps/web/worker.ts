@@ -5,6 +5,7 @@ import type { AuthEnv } from './src/auth/options.ts';
 import { serveDeviceToken, serveGoogleToken, type ProviderTokenApi } from './src/devices/routes.ts';
 import { serveDownloadEvent } from './src/downloads/routes.ts';
 import { byteRange, otaRoute } from './src/ota/routes.ts';
+import { siteRelease, sortReleases, type SiteRelease } from './src/site-releases.ts';
 
 const repository = 'justjake/fujimod';
 const api = `https://api.github.com/repos/${repository}/releases`;
@@ -16,6 +17,7 @@ interface GitHubRelease {
   draft: boolean;
   prerelease: boolean;
   published_at: string | null;
+  body: string | null;
   assets: { name: string; state: string }[];
 }
 interface Context {
@@ -50,6 +52,7 @@ interface AuthHandler {
 }
 type AuthFactory = (env: AuthEnv, baseURL: string) => AuthHandler;
 const currentKey = 'current';
+const listKey = 'list';
 const storeBytesKey = (name: string) => `ota/store/${name}`;
 const manifestBytesKey = (firmware: string) => `ota/manifest/${firmware}`;
 const site = 'https://fujimod.com';
@@ -66,11 +69,15 @@ class UpstreamError extends Error {
     this.status = status;
   }
 }
-async function currentRelease(
-  fetcher: typeof fetch,
-  token?: string,
-): Promise<ReleaseInfo | undefined> {
+/** One read of GitHub's release list: the newest patch release, and every
+ * published release with its notes for the site's pages. */
+interface Releases {
+  current: ReleaseInfo | undefined;
+  list: SiteRelease[];
+}
+async function fetchReleases(fetcher: typeof fetch, token?: string): Promise<Releases> {
   let newest: GitHubRelease | undefined;
+  const list: SiteRelease[] = [];
   const requestHeaders = token ? { ...headers, Authorization: `Bearer ${token}` } : headers;
   // GitHub orders by creation rather than publication time. Inspect every page,
   // including prereleases and releases published from older tags.
@@ -82,6 +89,8 @@ async function currentRelease(
     const releases = (await response.json()) as GitHubRelease[];
     if (!Array.isArray(releases)) throw new UpstreamError(502);
     for (const release of releases) {
+      const published = siteRelease(release);
+      if (published) list.push(published);
       if (
         !release.draft &&
         release.published_at &&
@@ -94,31 +103,51 @@ async function currentRelease(
     }
     if (!response.headers.get('link')?.includes('rel="next"')) break;
   }
-  return newest
-    ? {
-        tag: newest.tag_name,
-        name: newest.name || newest.tag_name,
-        published_at: newest.published_at!,
-        prerelease: newest.prerelease,
-      }
-    : undefined;
+  return {
+    current: newest
+      ? {
+          tag: newest.tag_name,
+          name: newest.name || newest.tag_name,
+          published_at: newest.published_at!,
+          prerelease: newest.prerelease,
+        }
+      : undefined,
+    list: sortReleases(list),
+  };
 }
 async function saveChanged(store: ReleaseStore, key: string, value: Uint8Array) {
   const known = await store.get(key, 'arrayBuffer');
   if (known && equalBytes(new Uint8Array(known), value)) return;
   await store.put(key, value);
 }
+interface ReleaseBytes {
+  current: Uint8Array<ArrayBuffer> | undefined;
+  list: Uint8Array<ArrayBuffer>;
+}
+function encodeReleases(releases: Releases): ReleaseBytes {
+  const encode = (value: unknown) => new TextEncoder().encode(JSON.stringify(value));
+  return {
+    current: releases.current ? encode(releases.current) : undefined,
+    list: encode(releases.list),
+  };
+}
+/** Keep both stored copies; a list with no patch release leaves the stored
+ * current release in place. */
+async function saveReleases(store: ReleaseStore, bytes: ReleaseBytes) {
+  await Promise.all([
+    bytes.current ? saveChanged(store, currentKey, bytes.current) : undefined,
+    saveChanged(store, listKey, bytes.list),
+  ]);
+}
 /** Fetch or refresh the release metadata shared by every proxy route. */
-async function refreshCurrent(
+async function refreshReleases(
   store: ReleaseStore,
   fetcher: typeof fetch,
   token?: string,
-): Promise<Uint8Array<ArrayBuffer> | undefined> {
-  const release = await currentRelease(fetcher, token);
-  if (!release) return undefined;
-  const text = new TextEncoder().encode(JSON.stringify(release));
-  await saveChanged(store, currentKey, text);
-  return text;
+): Promise<ReleaseBytes> {
+  const bytes = encodeReleases(await fetchReleases(fetcher, token));
+  await saveReleases(store, bytes);
+  return bytes;
 }
 function releaseAsset(tag: string, name: string) {
   return `${downloads}/${encodeURIComponent(tag)}/${encodeURIComponent(name)}`;
@@ -195,16 +224,17 @@ export async function serveRelease(
   if (cached) return head(cached);
   try {
     let body: Uint8Array<ArrayBuffer>;
-    if (route.kind === 'current') {
+    if (route.kind === 'current' || route.kind === 'list') {
       // Answer from the stored copy and refresh it in the background; only the
-      // first lookup after a deployment waits on GitHub.
-      const refresh = () => refreshCurrent(store, fetcher, token);
-      const known = await store.get(currentKey, 'arrayBuffer');
+      // first lookup after a deployment waits on GitHub, and a refused
+      // refresh keeps the stored copy.
+      const refresh = () => refreshReleases(store, fetcher, token);
+      const known = await store.get(route.kind === 'current' ? currentKey : listKey, 'arrayBuffer');
       if (known) {
         context.waitUntil(refresh().catch(() => undefined));
         body = new Uint8Array(known);
       } else {
-        const fetched = await refresh();
+        const fetched = (await refresh())[route.kind];
         if (!fetched) return head(failure(404, 'No patch release has been published.'));
         body = fetched;
       }
@@ -225,7 +255,7 @@ export async function serveRelease(
       }
     }
     const contentType =
-      route.kind === 'current' || route.file.endsWith('.json')
+      route.kind !== 'asset' || route.file.endsWith('.json')
         ? 'application/json'
         : route.file.endsWith('.md')
           ? 'text/markdown; charset=utf-8'
@@ -235,7 +265,7 @@ export async function serveRelease(
     response.headers.set('X-Content-Type-Options', 'nosniff');
     response.headers.set(
       'Cache-Control',
-      `public, max-age=0, s-maxage=${route.kind === 'current' ? 300 : 31536000}`,
+      `public, max-age=0, s-maxage=${route.kind === 'asset' ? 31536000 : 300}`,
     );
     context.waitUntil(cache.put(key, response.clone()));
     return head(response);
@@ -270,14 +300,14 @@ async function currentTag(
     if (known) stale = new Uint8Array(known);
   }
   try {
-    const release = await currentRelease(fetcher, token);
-    if (!release) return undefined;
-    const bytes = new TextEncoder().encode(JSON.stringify(release));
+    const releases = await fetchReleases(fetcher, token);
+    const bytes = encodeReleases(releases);
+    if (!releases.current || !bytes.current) return undefined;
     context.waitUntil(
-      cache.put(new Request(releaseCacheUrl), edgeEntry(bytes, 'application/json')),
+      cache.put(new Request(releaseCacheUrl), edgeEntry(bytes.current, 'application/json')),
     );
-    context.waitUntil(saveChanged(store, currentKey, bytes));
-    return release.tag;
+    context.waitUntil(saveReleases(store, bytes));
+    return releases.current.tag;
   } catch (error) {
     const tag = stale ? releaseTag(stale) : undefined;
     if (stale && tag) {

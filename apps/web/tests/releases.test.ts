@@ -51,6 +51,7 @@ function release(
     tag_name: tag,
     name: `Release ${tag}`,
     published_at: date,
+    body: `Notes ${tag}`,
     draft: options.draft ?? false,
     prerelease: options.prerelease ?? false,
     assets: options.patch === false ? [] : [{ name: 'patches.json', state: 'uploaded' }],
@@ -142,6 +143,42 @@ test('stored copies answer while GitHub refuses, and refreshes replace changed r
   const refreshed = harness(fetcher, ok.known);
   expect(await (await refreshed.request('/releases/current')).json()).toEqual(v1);
   expect(JSON.parse(new TextDecoder().decode(ok.known.get('current'))).tag).toBe('v2');
+});
+test('the release list carries every published release with notes from the same GitHub read', async () => {
+  const fetcher = vi.fn<typeof fetch>(async () =>
+    Response.json([
+      release('v1', '2026-10-20T00:00:00Z'),
+      release('draft', '2026-10-22T00:00:00Z', { draft: true }),
+      release('notes-only', '2026-10-21T00:00:00Z', { patch: false }),
+    ]),
+  );
+  const h = harness(fetcher);
+  const response = await h.request('/releases/list');
+  expect(response.headers.get('cache-control')).toBe('public, max-age=0, s-maxage=300');
+  expect(await response.json()).toEqual([
+    { version: 'notes-only', publishedAt: '2026-10-21T00:00:00.000Z', notes: 'Notes notes-only' },
+    { version: 'v1', publishedAt: '2026-10-20T00:00:00.000Z', notes: 'Notes v1' },
+  ]);
+  expect(JSON.parse(new TextDecoder().decode(h.known.get('current'))).tag).toBe('v1');
+  expect(fetcher).toHaveBeenCalledOnce();
+});
+test('a stored release list answers while GitHub refuses, and a refresh replaces it', async () => {
+  const ok = harness(async () => Response.json([release('v1', '2026-10-20T00:00:00Z')]));
+  await ok.request('/releases/list');
+  for (const status of [403, 429, 500]) {
+    const limited = harness(async () => new Response(null, { status }), ok.known);
+    const list = await limited.request('/releases/list');
+    expect(list.status).toBe(200);
+    expect((await list.json()).map(({ version }: { version: string }) => version)).toEqual(['v1']);
+  }
+  const refreshed = harness(
+    async () =>
+      Response.json([release('v2', '2026-10-21T00:00:00Z'), release('v1', '2026-10-20T00:00:00Z')]),
+    ok.known,
+  );
+  await refreshed.request('/releases/list');
+  const stored = JSON.parse(new TextDecoder().decode(ok.known.get('list')));
+  expect(stored.map(({ version }: { version: string }) => version)).toEqual(['v2', 'v1']);
 });
 test('malformed and traversing paths and non-read methods never reach GitHub', async () => {
   const fetcher = vi.fn<typeof fetch>(),

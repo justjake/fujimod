@@ -1,6 +1,7 @@
 import { For, Show } from 'solid-js';
 import { ManualFeatureLink } from './ManualFeatureLink';
-import { releaseData, releaseDate, type SiteReleaseData } from '../release-data';
+import { releaseData, releaseDate } from '../release-data';
+import type { SiteReleaseData } from '../site-releases';
 import { personalNoteDate } from '../personal-note';
 import './release-personal-note.css';
 
@@ -45,7 +46,7 @@ function UnderConstruction() {
 }
 
 export function ReleasePersonalNote(props: { data?: SiteReleaseData }) {
-  const data = () => props.data ?? releaseData;
+  const data = () => props.data ?? releaseData();
   const note = () => data().personalNote;
   const announced = () => {
     const current = data().current;

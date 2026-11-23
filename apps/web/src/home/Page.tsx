@@ -11,7 +11,7 @@ import { cameraProgress } from '../ui/catalog-progress';
 import generations from '../../devices/generations.generated.json';
 import owners from '../../devices/owners.json';
 import { ReleaseNotes } from '../cameras/ReleaseNotes';
-import { releaseData, releaseDate } from '../release-data';
+import { loadLiveReleases, releaseData, releaseDate } from '../release-data';
 import { SiteFrame } from '../ui/SiteFrame';
 import { manualMenus } from '../docs/manual-routes';
 import { FeatureReels } from './FeatureReels';
@@ -46,6 +46,7 @@ export default function Home() {
   });
   let viewer!: HTMLDivElement, workspace!: HTMLElement, lcd!: HTMLCanvasElement;
   onSettled(() => {
+    void loadLiveReleases();
     const app = startHome(state, setState, { viewer, workspace, lcd }, library);
     setRuntime(app);
     if (new URLSearchParams(location.search).has('feedback')) setFeedback({ event: 'feedback' });
@@ -72,7 +73,7 @@ export default function Home() {
           <ReleasePersonalNote />
           <FeatureReels recipeCount={recipeCatalog(state.release?.sd_card_files).length} />
           <section class="home-release">
-            <Show when={releaseData.current}>
+            <Show when={releaseData().current}>
               {(release) => (
                 <h2 class="home-release-title">
                   Fujimod {release().version}
@@ -83,7 +84,7 @@ export default function Home() {
               )}
             </Show>
             <SdBootV2Download release={state.release} catalog={state.catalog.firmwares} />
-            <Show when={releaseData.current}>
+            <Show when={releaseData().current}>
               {(release) => (
                 <article class="home-release-notes">
                   <p class="home-release-scope">
