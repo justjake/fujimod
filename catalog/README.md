@@ -19,6 +19,85 @@ identical lens, sensor and control facts are not copied between bodies.
 Firmware identity includes its body and version; existing explicit
 firmware IDs remain selectors, never file locations.
 
+## Processor blocks
+
+Every processor uses the same record shape. A processor's hardware is one
+`blocks` list, and each block is the only place its facts appear:
+
+| Field | Holds |
+| --- | --- |
+| `id`, `kind`, `base`, `size` | Identity and the register window |
+| `clock_id` | The clock domain that drives it |
+| `interrupts` | Each named output and the interrupt-controller line it raises |
+| `device` | Typed parameters of the device model for its `kind` |
+| `registers` | Optional register layout: named registers at offsets, with width, reset value, access and named bit fields with their values |
+| `evidence` | How the facts were established |
+
+There are no separate peripheral, interrupt-input, per-block parameter or
+register-map lists, and no per-profile window lists. A device model reads its
+parameters from its block's `device` and its register behavior from its
+block's `registers`; an untyped object is never a substitute for either.
+
+`evidence` is typed, not prose. Its `kind` is one of:
+
+- `measured`: read on a camera;
+- `located`: found in firmware code or tables;
+- `inferred`: deduced from the behavior of other facts;
+- `stand-in`: a declared input with no known hardware value, such as a
+  latency an emulator needs.
+
+It names the firmware IDs and code or data addresses the fact rests on.
+Explanations longer than a sentence belong in research notes, not in the
+record.
+
+## Bodies
+
+A body record lists the chips on its buses, its wiring to processor blocks,
+its panels, its DRAM and its controls. It adds to or changes a processor block
+only through typed fields: `block_overrides` entries name a processor block ID
+and replace individual `device` parameters or `registers` entries, merged field
+by field over the processor's block. A body never redeclares a processor
+block's window, and lists processor blocks the body leaves unconnected under
+`absent_blocks`. Control and dial wiring, including command dials, lives in
+`controls.json` connections, so every consumer reads one record.
+
+## Firmware
+
+A firmware directory holds its identity record and generated files only. It
+declares no device windows, device models or register behavior. Facts that
+agree across every firmware of a processor are generated once into
+`soc/<id>/<name>.generated.json`; their generator runs over every catalogued
+firmware of that processor and fails when they disagree, naming the
+disagreeing firmwares.
+
+Mods read register addresses and firmware numbers from C headers generated
+from these records, never from hand-copied constants.
+
+## Writing records
+
+Hand-authored records and generated records never share a file. Hand-authored
+records have one canonical formatting, written by the catalog formatter; CI
+fails on a record that differs from its formatted form, so machine edits and
+hand edits produce the same bytes.
+
+Catalog validation refuses:
+
+- a firmware record that declares a device window or device model;
+- a body that redeclares a processor block instead of overriding its typed
+  fields;
+- a block whose `device` parameters do not match its `kind`;
+- a block without `evidence`.
+
+## Board construction
+
+`fujimod-emulator-board-graph` assembles every processor's board from its
+processor, body and firmware records, selecting each block's device model by
+its `kind`. Callers supply only the update file, an optional boot ROM and
+persistent images, and a run configuration; they never supply register
+addresses, device lists or wiring. `fujimod-emulator-boot` opens every
+processor as the same `Camera`, with the same session, checkpoint and control
+interface.
+
 `firmware-versions.generated.json` maps service-interface product/internal
 versions to public release versions and official update pages. Each mapping is
 qualified by its update's SHA-256. The map covers known updates independently
