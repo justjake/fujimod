@@ -9,10 +9,9 @@
 //!
 //! The owner touches the pages of each instruction before that instruction is
 //! entered, and the pages of the stop PC when a slice ends, so every page that
-//! can hold a live translation has been touched. A page touched in a slice is
-//! copied when that slice ends, after the processor's own stores, which its
-//! engine already tracks; a store of its own into a copied page touches that
-//! page too, so its copy follows. The first touch after a peer ran, or after the host
+//! can hold a live translation has been touched. The shadow copies a page
+//! when it first sees it and refreshes the copy at the end of any slice that
+//! wrote to the page. The first touch after a peer ran, or after the host
 //! or a device wrote RAM, compares the copy with guest memory; a difference
 //! means code changed behind the engine and the owner must discard the
 //! translations before the instruction is entered.
@@ -32,15 +31,15 @@ fn filter_bit(page: u64) -> (usize, u64) {
 }
 
 struct Page {
-    /// Bytes at the end of the last slice that touched the page.
+    /// Bytes from when the page was first seen or last written.
     bytes: Box<Bytes>,
     /// The page in host memory, when the processor maps it from external
     /// backing. Valid until the processor's maps change, which discards.
     host: Option<NonNull<u8>>,
     /// Peer epoch in which the bytes were last known equal to guest memory.
     verified: u64,
-    /// Slice in which the page was last queued for a copy.
-    touched: u64,
+    /// An observed store queued this page for a copy.
+    dirty: bool,
 }
 impl Page {
     /// Copy the page's present guest bytes; false when they cannot be read.
@@ -75,12 +74,11 @@ pub(super) struct CodeShadow {
     /// most stores without a lookup.
     filter: [u64; FILTER_WORDS],
     /// Pages to copy when the current slice ends.
-    touched: Vec<u64>,
+    dirty_pages: Vec<u64>,
     /// The page of the previous instruction, with its host address; its touch
     /// already covered the next page too.
     last: Option<(u64, Option<NonNull<u8>>)>,
     epoch: u64,
-    slice: u64,
     /// Executed code lies outside checked RAM: translations made since the
     /// last discard cannot be proven, so the next entry after a peer ran must
     /// discard them, as an owner without this shadow always does.
@@ -107,10 +105,9 @@ impl Default for CodeShadow {
         Self {
             pages: HashMap::new(),
             filter: [0; FILTER_WORDS],
-            touched: Vec::new(),
+            dirty_pages: Vec::new(),
             last: None,
             epoch: 0,
-            slice: 0,
             unproven: false,
             changed: false,
             resync: false,
@@ -173,13 +170,12 @@ impl CodeShadow {
         self.changes += u64::from(self.changed);
         self.pages.clear();
         self.filter = [0; FILTER_WORDS];
-        self.touched.clear();
+        self.dirty_pages.clear();
         self.last = None;
         self.unproven = false;
         self.changed = false;
         self.resync = false;
         self.resync_page = None;
-        self.slice += 1;
     }
     /// A peer ran, or the host or a device wrote RAM, since this processor's
     /// last slice: every copy needs a new comparison before its code is
@@ -191,7 +187,6 @@ impl CodeShadow {
     }
     /// A slice begins.
     pub(super) fn begin_slice(&mut self) {
-        self.slice += 1;
         self.last = None;
     }
     pub(super) fn request_resync(&mut self, page: Option<u64>) {
@@ -212,7 +207,7 @@ impl CodeShadow {
         if let Some(page) = self.resync_page {
             cpu.invalidate_code(Some((page, page + PAGE)))?;
             self.pages.remove(&page);
-            self.touched.retain(|&address| address != page);
+            self.dirty_pages.retain(|&address| address != page);
             self.last = None;
             self.changed = false;
             self.resync = false;
@@ -317,7 +312,7 @@ impl CodeShadow {
         address: u64,
         checked: &dyn Fn(u64) -> bool,
     ) -> (Touch, Option<NonNull<u8>>) {
-        let (epoch, slice) = (self.epoch, self.slice);
+        let epoch = self.epoch;
         if let Some(page) = self.pages.get_mut(&address) {
             if page.verified != epoch {
                 let scratch = self
@@ -328,10 +323,6 @@ impl CodeShadow {
                     return (Touch::Changed(address), None);
                 }
                 page.verified = epoch;
-            }
-            if page.touched != slice {
-                page.touched = slice;
-                self.touched.push(address);
             }
             return (Touch::Proven, page.host);
         }
@@ -349,12 +340,11 @@ impl CodeShadow {
                 bytes,
                 host,
                 verified: epoch,
-                touched: slice,
+                dirty: false,
             },
         );
         let (word, bit) = filter_bit(address);
         self.filter[word] |= bit;
-        self.touched.push(address);
         (Touch::Proven, host)
     }
     /// This processor is about to store `bytes` at `address`; the bytes are
@@ -380,7 +370,7 @@ impl CodeShadow {
     }
     #[cold]
     fn stored_slow(&mut self, cpu: &dyn Cpu, first: u64, last: u64) {
-        let (epoch, slice) = (self.epoch, self.slice);
+        let epoch = self.epoch;
         for address in [Some(first), (last != first).then_some(last)].into_iter().flatten() {
             let Some(page) = self.pages.get_mut(&address) else {
                 continue;
@@ -396,15 +386,15 @@ impl CodeShadow {
                 }
                 page.verified = epoch;
             }
-            if page.touched != slice {
-                page.touched = slice;
-                self.touched.push(address);
+            if !page.dirty {
+                page.dirty = true;
+                self.dirty_pages.push(address);
             }
         }
     }
     /// A slice ended with the processor stopped before `pc`. The engine may
-    /// already hold a translation for it. Copy every touched page: the copies
-    /// then equal the bytes every live translation was made from.
+    /// already hold a translation for it. Refresh copies of pages written
+    /// during this slice.
     pub(super) fn end_slice(
         &mut self,
         cpu: &dyn Cpu,
@@ -417,10 +407,11 @@ impl CodeShadow {
             // An unknown stop PC proves nothing about its translation.
             Some(Touch::Changed(_)) | None => self.invalidate(),
         }
-        for address in self.touched.drain(..) {
+        for address in self.dirty_pages.drain(..) {
             let Some(page) = self.pages.get_mut(&address) else {
                 continue;
             };
+            page.dirty = false;
             if !Page::read(cpu, address, page.host, &mut page.bytes) {
                 self.changed = true;
                 self.resync_page = None;
