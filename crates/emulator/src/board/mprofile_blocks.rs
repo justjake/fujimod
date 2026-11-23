@@ -269,6 +269,18 @@ fn thumb_size(word: u16) -> usize {
     if word >> 11 >= 0x1d { 4 } else { 2 }
 }
 
+/// Whether a zero-extended 16-bit Thumb instruction transfers one register
+/// to or from memory using an ordinary single-register addressing mode.
+/// Literal loads, multiple transfers and stack push/pop encodings are excluded.
+pub(super) fn is_single_transfer(word: u32) -> bool {
+    if word > u32::from(u16::MAX) {
+        return false;
+    }
+    let instruction = word as u16;
+    matches!(instruction & 0xf000, 0x5000 | 0x8000 | 0x9000)
+        || instruction & 0xe000 == 0x6000
+}
+
 /// Whether a Thumb instruction is safe to execute without an observation.
 /// A 16-bit instruction is zero-extended; for 32-bit instructions, the first
 /// halfword is in bits 31..16. This deliberately recognizes only encodings
@@ -396,6 +408,34 @@ mod tests {
         assert!(!can_run_inline(0xf000_f800)); // BL
         assert!(!can_run_inline(0xf8c0_1000)); // str.w
         assert!(!can_run_inline(0x0001_0001)); // unrecognized prefix
+    }
+    #[test]
+    fn single_transfer_classifier_accepts_only_single_register_memory_forms() {
+        // Register-offset transfers, covering word/byte/halfword and signed
+        // byte/halfword loads.
+        for instruction in [
+            0x5000, 0x5200, 0x5400, 0x5600, 0x5800, 0x5a00, 0x5c00, 0x5e00,
+            0x5fff,
+        ] {
+            assert!(is_single_transfer(instruction), "{instruction:#06x}");
+        }
+        // Immediate word/byte/halfword forms and SP-relative STR/LDR.
+        for instruction in [
+            0x6000, 0x6800, 0x7000, 0x7800, 0x8000, 0x8800, 0x9000, 0x9800,
+            0x9fff,
+        ] {
+            assert!(is_single_transfer(instruction), "{instruction:#06x}");
+        }
+        // PC-relative literal load, PUSH/POP, LDM/STM, undefined and
+        // special encodings, and 32-bit memory or exclusive operations have
+        // different architectural effects.
+        for instruction in [
+            0x4800, 0x4fff, 0xb400, 0xbc00, 0xc000, 0xc800, 0xde00, 0xdf00,
+            0xf3bf_8f4f, 0xe850_1f00, 0xf8c0_1000, 0xf8d0_1000, 0x0001_6000,
+            0xffff_5000,
+        ] {
+            assert!(!is_single_transfer(instruction), "{instruction:#06x}");
+        }
     }
     fn parts(words: &[u16]) -> (u64, u64, u64, bool) {
         let scan = scan(&code(words)).unwrap();
