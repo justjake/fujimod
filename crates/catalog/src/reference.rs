@@ -3852,6 +3852,9 @@ mod osd_items_tests {
     fn bundles_x70_scene_sprites_and_disp_custom_selectors() {
         let catalog = ReferenceCatalog::bundled().unwrap();
         let osd_items = catalog.osd_items("x70-110").unwrap();
+        assert_eq!(osd_items.source.row_bytes, 28);
+        assert_eq!(osd_items.source.row_count, 508);
+        assert_eq!(osd_items.source.canvas_packet_bytes, 92);
         assert_eq!(osd_items.scene_variants.len(), 40);
         assert_eq!(osd_items.sprite_records.len(), 4_804);
         assert_eq!(osd_items.disp_custom_selectors.len(), 24);
