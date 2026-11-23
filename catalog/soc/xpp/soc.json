@@ -60,14 +60,86 @@
       "base": 4294025216,
       "size": 512,
       "kind": "timer",
-      "clock_id": null
+      "clock_id": null,
+      "interrupts": [
+        {
+          "output": "channel0",
+          "line": 48
+        },
+        {
+          "output": "channel1",
+          "line": 49
+        },
+        {
+          "output": "channel2",
+          "line": 50
+        },
+        {
+          "output": "channel3",
+          "line": 51
+        },
+        {
+          "output": "channel4",
+          "line": 52
+        },
+        {
+          "output": "channel5",
+          "line": 53
+        },
+        {
+          "output": "channel6",
+          "line": 54
+        },
+        {
+          "output": "channel7",
+          "line": 55
+        },
+        {
+          "output": "channel8",
+          "line": 56
+        },
+        {
+          "output": "channel9",
+          "line": 57
+        },
+        {
+          "output": "channel10",
+          "line": 58
+        },
+        {
+          "output": "channel11",
+          "line": 59
+        },
+        {
+          "output": "channel12",
+          "line": 60
+        },
+        {
+          "output": "channel13",
+          "line": 61
+        },
+        {
+          "output": "channel14",
+          "line": 62
+        },
+        {
+          "output": "channel15",
+          "line": 63
+        }
+      ]
     },
     {
       "id": "flash-controller",
       "base": 4294000640,
       "size": 64,
       "kind": "address-window",
-      "clock_id": null
+      "clock_id": null,
+      "interrupts": [
+        {
+          "output": "interrupt",
+          "line": 35
+        }
+      ]
     },
     {
       "id": "flash-aperture",
@@ -81,21 +153,67 @@
       "base": 4294017024,
       "size": 4096,
       "kind": "dma",
-      "clock_id": null
+      "clock_id": null,
+      "interrupts": [
+        {
+          "output": "event0",
+          "line": 207
+        },
+        {
+          "output": "event1",
+          "line": 208
+        },
+        {
+          "output": "event2",
+          "line": 209
+        },
+        {
+          "output": "event3",
+          "line": 210
+        },
+        {
+          "output": "event4",
+          "line": 211
+        },
+        {
+          "output": "event5",
+          "line": 212
+        },
+        {
+          "output": "event6",
+          "line": 213
+        },
+        {
+          "output": "event7",
+          "line": 214
+        }
+      ]
     },
     {
       "id": "decompressor",
       "base": 4294443008,
       "size": 108,
       "kind": "imaging-controller",
-      "clock_id": null
+      "clock_id": null,
+      "interrupts": [
+        {
+          "output": "interrupt",
+          "line": 129
+        }
+      ]
     },
     {
       "id": "dmp",
       "base": 4294475776,
       "size": 12288,
       "kind": "display-controller",
-      "clock_id": null
+      "clock_id": null,
+      "interrupts": [
+        {
+          "output": "interrupt",
+          "line": 92
+        }
+      ]
     },
     {
       "id": "gpio",
@@ -214,28 +332,52 @@
       "base": 4294266880,
       "size": 4096,
       "kind": "imaging-controller",
-      "clock_id": null
+      "clock_id": null,
+      "interrupts": [
+        {
+          "output": "frame",
+          "line": 107
+        }
+      ]
     },
     {
       "id": "imaging-unit-1",
       "base": 4294270976,
       "size": 4096,
       "kind": "imaging-controller",
-      "clock_id": null
+      "clock_id": null,
+      "interrupts": [
+        {
+          "output": "frame",
+          "line": 108
+        }
+      ]
     },
     {
       "id": "imaging-statistics",
       "base": 4294262784,
       "size": 512,
       "kind": "imaging-controller",
-      "clock_id": null
+      "clock_id": null,
+      "interrupts": [
+        {
+          "output": "status",
+          "line": 106
+        }
+      ]
     },
     {
       "id": "face-detection",
       "base": 4294381568,
       "size": 4096,
       "kind": "imaging-controller",
-      "clock_id": null
+      "clock_id": null,
+      "interrupts": [
+        {
+          "output": "status",
+          "line": 124
+        }
+      ]
     },
     {
       "id": "hdmi-tx",
@@ -249,7 +391,17 @@
       "base": 4294148096,
       "size": 4096,
       "kind": "imaging-controller",
-      "clock_id": null
+      "clock_id": null,
+      "interrupts": [
+        {
+          "output": "frame-status-0",
+          "line": 102
+        },
+        {
+          "output": "frame-status-8",
+          "line": 100
+        }
+      ]
     },
     {
       "id": "dram-controller",
@@ -277,21 +429,39 @@
       "base": 4294045696,
       "size": 4096,
       "kind": "control-bus",
-      "clock_id": null
+      "clock_id": null,
+      "interrupts": [
+        {
+          "output": "interrupt",
+          "line": 68
+        }
+      ]
     },
     {
       "id": "i2c1",
       "base": 4294049792,
       "size": 4096,
       "kind": "control-bus",
-      "clock_id": null
+      "clock_id": null,
+      "interrupts": [
+        {
+          "output": "interrupt",
+          "line": 69
+        }
+      ]
     },
     {
       "id": "sd0",
       "base": 4294516736,
       "size": 4096,
       "kind": "sd-card-controller",
-      "clock_id": null
+      "clock_id": null,
+      "interrupts": [
+        {
+          "output": "status",
+          "line": 83
+        }
+      ]
     },
     {
       "id": "imaging-control",
@@ -312,7 +482,33 @@
       "base": 4294328320,
       "size": 12288,
       "kind": "display-controller",
-      "clock_id": null
+      "clock_id": null,
+      "interrupts": [
+        {
+          "output": "output0-event0",
+          "line": 112
+        },
+        {
+          "output": "output0-event1",
+          "line": 113
+        },
+        {
+          "output": "output0-event2",
+          "line": 114
+        },
+        {
+          "output": "output1-event0",
+          "line": 117
+        },
+        {
+          "output": "output1-event1",
+          "line": 118
+        },
+        {
+          "output": "output1-event2",
+          "line": 119
+        }
+      ]
     },
     {
       "id": "serial0",
@@ -493,7 +689,6 @@
       "clock_id": null
     }
   ],
-  "interrupts": [],
   "clocks": [],
   "mappings": [
     {
@@ -601,218 +796,6 @@
       "cpu_interface_block_id": "gic-cpu-interface",
       "lines": 512
     },
-    "interrupt_inputs": [
-      {
-        "source_block_id": "interval-timer",
-        "output_id": "channel0",
-        "line": 48
-      },
-      {
-        "source_block_id": "interval-timer",
-        "output_id": "channel1",
-        "line": 49
-      },
-      {
-        "source_block_id": "interval-timer",
-        "output_id": "channel2",
-        "line": 50
-      },
-      {
-        "source_block_id": "interval-timer",
-        "output_id": "channel3",
-        "line": 51
-      },
-      {
-        "source_block_id": "interval-timer",
-        "output_id": "channel4",
-        "line": 52
-      },
-      {
-        "source_block_id": "interval-timer",
-        "output_id": "channel5",
-        "line": 53
-      },
-      {
-        "source_block_id": "interval-timer",
-        "output_id": "channel6",
-        "line": 54
-      },
-      {
-        "source_block_id": "interval-timer",
-        "output_id": "channel7",
-        "line": 55
-      },
-      {
-        "source_block_id": "interval-timer",
-        "output_id": "channel8",
-        "line": 56
-      },
-      {
-        "source_block_id": "interval-timer",
-        "output_id": "channel9",
-        "line": 57
-      },
-      {
-        "source_block_id": "interval-timer",
-        "output_id": "channel10",
-        "line": 58
-      },
-      {
-        "source_block_id": "interval-timer",
-        "output_id": "channel11",
-        "line": 59
-      },
-      {
-        "source_block_id": "interval-timer",
-        "output_id": "channel12",
-        "line": 60
-      },
-      {
-        "source_block_id": "interval-timer",
-        "output_id": "channel13",
-        "line": 61
-      },
-      {
-        "source_block_id": "interval-timer",
-        "output_id": "channel14",
-        "line": 62
-      },
-      {
-        "source_block_id": "interval-timer",
-        "output_id": "channel15",
-        "line": 63
-      },
-      {
-        "source_block_id": "flash-controller",
-        "output_id": "interrupt",
-        "line": 35
-      },
-      {
-        "source_block_id": "dma",
-        "output_id": "event0",
-        "line": 207
-      },
-      {
-        "source_block_id": "dma",
-        "output_id": "event1",
-        "line": 208
-      },
-      {
-        "source_block_id": "dma",
-        "output_id": "event2",
-        "line": 209
-      },
-      {
-        "source_block_id": "dma",
-        "output_id": "event3",
-        "line": 210
-      },
-      {
-        "source_block_id": "dma",
-        "output_id": "event4",
-        "line": 211
-      },
-      {
-        "source_block_id": "dma",
-        "output_id": "event5",
-        "line": 212
-      },
-      {
-        "source_block_id": "dma",
-        "output_id": "event6",
-        "line": 213
-      },
-      {
-        "source_block_id": "dma",
-        "output_id": "event7",
-        "line": 214
-      },
-      {
-        "source_block_id": "decompressor",
-        "output_id": "interrupt",
-        "line": 129
-      },
-      {
-        "source_block_id": "dmp",
-        "output_id": "interrupt",
-        "line": 92
-      },
-      {
-        "source_block_id": "sd0",
-        "output_id": "status",
-        "line": 83
-      },
-      {
-        "source_block_id": "imaging-statistics",
-        "output_id": "status",
-        "line": 106
-      },
-      {
-        "source_block_id": "face-detection",
-        "output_id": "status",
-        "line": 124
-      },
-      {
-        "source_block_id": "imaging-unit-0",
-        "output_id": "frame",
-        "line": 107
-      },
-      {
-        "source_block_id": "imaging-unit-1",
-        "output_id": "frame",
-        "line": 108
-      },
-      {
-        "source_block_id": "frame-sync",
-        "output_id": "frame-status-0",
-        "line": 102
-      },
-      {
-        "source_block_id": "frame-sync",
-        "output_id": "frame-status-8",
-        "line": 100
-      },
-      {
-        "source_block_id": "i2c0",
-        "output_id": "interrupt",
-        "line": 68
-      },
-      {
-        "source_block_id": "i2c1",
-        "output_id": "interrupt",
-        "line": 69
-      },
-      {
-        "source_block_id": "display",
-        "output_id": "output0-event0",
-        "line": 112
-      },
-      {
-        "source_block_id": "display",
-        "output_id": "output0-event1",
-        "line": 113
-      },
-      {
-        "source_block_id": "display",
-        "output_id": "output0-event2",
-        "line": 114
-      },
-      {
-        "source_block_id": "display",
-        "output_id": "output1-event0",
-        "line": 117
-      },
-      {
-        "source_block_id": "display",
-        "output_id": "output1-event1",
-        "line": 118
-      },
-      {
-        "source_block_id": "display",
-        "output_id": "output1-event2",
-        "line": 119
-      }
-    ],
     "companion": null,
     "blocks": {
       "flash-controller": {

@@ -718,14 +718,19 @@ fn browser_card_can_store_boot_files_and_a_raw_jpeg_pair() {
 #[test]
 fn capture_chain_uses_catalog_windows_interrupts_and_sensor_phase() {
     let mut resolved = ResolvedConfiguration::bundled("x70-110-rec").unwrap();
-    let route = resolved
+    let block = resolved
         .reference
         .soc
+        .blocks
+        .iter_mut()
+        .find(|block| block.id == "jpeg-encoder")
+        .unwrap();
+    let interrupt = block
         .interrupts
         .iter_mut()
-        .find(|route| route.source_block == "jpeg-encoder")
+        .find(|interrupt| interrupt.output == "complete")
         .unwrap();
-    route.line = 78;
+    interrupt.line = 78;
     let prepared = prepared(resolved).unwrap();
     assert_eq!(model(&prepared, "jpeg_encoder")["irq"]["line"], 78);
     assert_eq!(

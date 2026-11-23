@@ -27,8 +27,6 @@ pub struct SocHardware {
     /// Hardware interrupt-controller interfaces.
     #[serde(default)]
     pub interrupt_controller: Option<InterruptControllerHardware>,
-    /// Inputs to a programmable interrupt controller; core routing is selected by its registers.
-    pub interrupt_inputs: Vec<ControllerInterruptInput>,
     /// Companion-processor clock and mailbox connections, when present.
     #[serde(default)]
     pub companion: Option<CompanionHardware>,
@@ -106,16 +104,6 @@ impl SocHardware {
             clock(&companion.clock_id)?;
             block(&companion.mailbox_block_id)?;
         }
-        let mut interrupt_outputs = std::collections::BTreeSet::new();
-        for input in &self.interrupt_inputs {
-            block(&input.source_block_id)?;
-            if !interrupt_outputs.insert((&input.source_block_id, &input.output_id)) {
-                return Err(format!(
-                    "SoC {} repeats an interrupt producer output",
-                    soc.id
-                ));
-            }
-        }
         for (id, parameters) in &self.blocks {
             block(id)?;
             match parameters {
@@ -152,25 +140,6 @@ impl SocHardware {
         }
         Ok(())
     }
-}
-
-/// A producer output connected to an input of the programmable interrupt controller.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
-#[serde(deny_unknown_fields)]
-#[cfg_attr(feature = "schema", schemars(deny_unknown_fields))]
-#[cfg_attr(
-    all(target_arch = "wasm32", not(target_os = "emscripten")),
-    derive(tsify::Tsify),
-    tsify(hashmap_as_object, missing_as_null)
-)]
-pub struct ControllerInterruptInput {
-    /// Register block producing the interrupt.
-    pub source_block_id: String,
-    /// Producer output identity, such as a channel or error output.
-    pub output_id: String,
-    /// Interrupt-controller input line.
-    pub line: u32,
 }
 
 /// Family-specific application-processor identification.

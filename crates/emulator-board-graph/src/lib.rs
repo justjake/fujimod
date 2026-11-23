@@ -760,7 +760,6 @@ mod tests {
                 kind: MemoryKind::Dram,
             }],
             blocks: vec![],
-            interrupts: vec![],
             clocks: vec![],
             hardware: None,
             mappings: vec![

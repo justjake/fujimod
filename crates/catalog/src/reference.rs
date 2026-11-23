@@ -60,8 +60,6 @@ pub struct Soc {
     pub memory_regions: Vec<MemoryRegion>,
     /// Address and register blocks exposed by the SoC.
     pub blocks: Vec<SocBlock>,
-    /// Interrupt routes between SoC blocks and processor cores.
-    pub interrupts: Vec<InterruptRoute>,
     /// Clock domains exposed by the SoC.
     pub clocks: Vec<ClockDomain>,
     /// Additional family-specific hardware parameters, when specified.
@@ -123,34 +121,24 @@ impl Soc {
                 ));
             }
         }
-        let mut routes = BTreeSet::new();
-        for route in &self.interrupts {
-            if !cores.contains(route.core.as_str()) || !blocks.contains(route.source_block.as_str())
-            {
-                return Err(format!(
-                    "SoC {} interrupt route has an unresolved core or block",
-                    self.id
-                ));
-            }
-            if let Some(output_id) = &route.output_id {
-                validate_id(output_id)?;
-            }
-            if !routes.insert((
-                route.source_block.as_str(),
-                route.output_id.as_deref(),
-                route.core.as_str(),
-                route.line,
-            )) {
-                return Err(format!(
-                    "SoC {} repeats interrupt output {} line {} for core {}",
-                    self.id,
-                    route
-                        .output_id
-                        .as_deref()
-                        .unwrap_or(route.source_block.as_str()),
-                    route.line,
-                    route.core
-                ));
+        for block in &self.blocks {
+            let mut interrupt_outputs = BTreeSet::new();
+            for interrupt in &block.interrupts {
+                validate_id(&interrupt.output)?;
+                if let Some(core) = &interrupt.core
+                    && !cores.contains(core.as_str())
+                {
+                    return Err(format!(
+                        "SoC {} block {} interrupt output {} names absent core {}",
+                        self.id, block.id, interrupt.output, core
+                    ));
+                }
+                if !interrupt_outputs.insert(interrupt.output.as_str()) {
+                    return Err(format!(
+                        "SoC {} block {} repeats interrupt output {}",
+                        self.id, block.id, interrupt.output
+                    ));
+                }
             }
         }
         let mut view_addresses = BTreeSet::new();
@@ -499,6 +487,9 @@ pub struct SocBlock {
     /// Per-core addresses where processors see this block.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub views: Vec<SocBlockView>,
+    /// Interrupt outputs raised by this block.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub interrupts: Vec<SocBlockInterrupt>,
 }
 
 /// One processor core's address window into a SoC block.
@@ -523,6 +514,30 @@ pub struct SocBlockView {
         tsify(type = "number | null")
     )]
     pub offset: Option<u64>,
+}
+
+/// One interrupt output raised by a SoC block.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(deny_unknown_fields)]
+#[cfg_attr(feature = "schema", schemars(deny_unknown_fields))]
+#[cfg_attr(
+    all(target_arch = "wasm32", not(target_os = "emscripten")),
+    derive(tsify::Tsify),
+    tsify(hashmap_as_object, missing_as_null)
+)]
+pub struct SocBlockInterrupt {
+    /// Named output or channel within the block.
+    pub output: String,
+    /// Interrupt-controller line raised by the output.
+    pub line: u32,
+    /// Processor core receiving a fixed route; absent when the controller selects it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(
+        all(target_arch = "wasm32", not(target_os = "emscripten")),
+        tsify(type = "string | null")
+    )]
+    pub core: Option<String>,
 }
 
 /// Hardware block categories represented in the catalog.
@@ -567,28 +582,6 @@ pub enum SocBlockKind {
     MemoryController,
     /// Addressable register window with no assigned functional category.
     AddressWindow,
-}
-
-/// A routed interrupt line.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
-#[serde(deny_unknown_fields)]
-#[cfg_attr(feature = "schema", schemars(deny_unknown_fields))]
-#[cfg_attr(
-    all(target_arch = "wasm32", not(target_os = "emscripten")),
-    derive(tsify::Tsify),
-    tsify(hashmap_as_object, missing_as_null)
-)]
-pub struct InterruptRoute {
-    /// Processor core receiving the interrupt.
-    pub core: String,
-    /// Interrupt line number on the processor core.
-    pub line: u32,
-    /// SoC block producing the interrupt.
-    pub source_block: String,
-    /// Named output or channel within the source block, when known.
-    #[serde(default)]
-    pub output_id: Option<String>,
 }
 
 /// A SoC clock domain.

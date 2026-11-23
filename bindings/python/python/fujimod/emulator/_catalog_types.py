@@ -1391,12 +1391,6 @@ type ControlRole = Literal["command_control"]
 type ControlSurface = Literal["top", "rear", "front", "bottom", "lens", "left", "right"]
 
 
-class ControllerInterruptInput(TypedDict, total=False):
-    line: Required[int]
-    output_id: Required[str]
-    source_block_id: Required[str]
-
-
 class CoprocessorWrite(TypedDict, total=False):
     core: Required[str]
     cp: Required[int]
@@ -3465,13 +3459,6 @@ class InterruptControllerHardwareVariant1(TypedDict, total=False):
     lines: Required[int]
     redistributor_block_id: Required[str]
     redistributor_stride: Required[int]
-
-
-class InterruptRoute(TypedDict, total=False):
-    core: Required[str]
-    line: Required[int]
-    output_id: NotRequired[str | None]
-    source_block: Required[str]
 
 
 class IrisOptics(TypedDict, total=False):
@@ -5741,7 +5728,6 @@ Soc = TypedDict(
         "dma_mappings": Required["list[DmaMapping]"],
         "hardware": NotRequired["SocHardware | None"],
         "id": Required["str"],
-        "interrupts": Required["list[InterruptRoute]"],
         "mappings": Required["list[AddressMapping]"],
         "memory_regions": Required["list[MemoryRegion]"],
         "processors": Required["list[ProcessorCore]"],
@@ -5756,10 +5742,17 @@ class SocBlock(TypedDict, total=False):
     base: Required[int]
     clock_id: NotRequired[str | None]
     id: Required[str]
+    interrupts: NotRequired[list[SocBlockInterrupt]]
     kind: Required[SocBlockKind]
     processor_core_id: NotRequired[str | None]
     size: Required[int]
     views: NotRequired[list[SocBlockView]]
+
+
+class SocBlockInterrupt(TypedDict, total=False):
+    core: NotRequired[str | None]
+    line: Required[int]
+    output: Required[str]
 
 
 type SocBlockKind = Literal[
@@ -5793,7 +5786,6 @@ class SocHardware(TypedDict, total=False):
     blocks: Required[dict[str, BlockHardware]]
     companion: NotRequired[CompanionHardware | None]
     interrupt_controller: NotRequired[InterruptControllerHardware | None]
-    interrupt_inputs: Required[list[ControllerInterruptInput]]
     power_on_ram_fill: NotRequired[int | None]
     profiles: NotRequired[dict[str, SocProfile]]
 

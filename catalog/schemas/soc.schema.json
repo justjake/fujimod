@@ -464,32 +464,6 @@
       ],
       "type": "object"
     },
-    "ControllerInterruptInput": {
-      "additionalProperties": false,
-      "description": "A producer output connected to an input of the programmable interrupt controller.",
-      "properties": {
-        "line": {
-          "description": "Interrupt-controller input line.",
-          "format": "uint32",
-          "minimum": 0,
-          "type": "integer"
-        },
-        "output_id": {
-          "description": "Producer output identity, such as a channel or error output.",
-          "type": "string"
-        },
-        "source_block_id": {
-          "description": "Register block producing the interrupt.",
-          "type": "string"
-        }
-      },
-      "required": [
-        "source_block_id",
-        "output_id",
-        "line"
-      ],
-      "type": "object"
-    },
     "CoprocessorWrite": {
       "additionalProperties": false,
       "description": "A CP15 or CP14 coprocessor register write during reset.",
@@ -4012,40 +3986,6 @@
         }
       ]
     },
-    "InterruptRoute": {
-      "additionalProperties": false,
-      "description": "A routed interrupt line.",
-      "properties": {
-        "core": {
-          "description": "Processor core receiving the interrupt.",
-          "type": "string"
-        },
-        "line": {
-          "description": "Interrupt line number on the processor core.",
-          "format": "uint32",
-          "minimum": 0,
-          "type": "integer"
-        },
-        "output_id": {
-          "default": null,
-          "description": "Named output or channel within the source block, when known.",
-          "type": [
-            "string",
-            "null"
-          ]
-        },
-        "source_block": {
-          "description": "SoC block producing the interrupt.",
-          "type": "string"
-        }
-      },
-      "required": [
-        "core",
-        "line",
-        "source_block"
-      ],
-      "type": "object"
-    },
     "MProfileState": {
       "additionalProperties": false,
       "description": "M-profile processor identification state.",
@@ -4378,6 +4318,13 @@
           "description": "Block identity used by bodies and run inputs.",
           "type": "string"
         },
+        "interrupts": {
+          "description": "Interrupt outputs raised by this block.",
+          "items": {
+            "$ref": "#/$defs/SocBlockInterrupt"
+          },
+          "type": "array"
+        },
         "kind": {
           "$ref": "#/$defs/SocBlockKind",
           "description": "Block's modeled hardware category."
@@ -4408,6 +4355,34 @@
         "base",
         "size",
         "kind"
+      ],
+      "type": "object"
+    },
+    "SocBlockInterrupt": {
+      "additionalProperties": false,
+      "description": "One interrupt output raised by a SoC block.",
+      "properties": {
+        "core": {
+          "description": "Processor core receiving a fixed route; absent when the controller selects it.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "line": {
+          "description": "Interrupt-controller line raised by the output.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "output": {
+          "description": "Named output or channel within the block.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "output",
+        "line"
       ],
       "type": "object"
     },
@@ -4573,13 +4548,6 @@
           "default": null,
           "description": "Hardware interrupt-controller interfaces."
         },
-        "interrupt_inputs": {
-          "description": "Inputs to a programmable interrupt controller; core routing is selected by its registers.",
-          "items": {
-            "$ref": "#/$defs/ControllerInterruptInput"
-          },
-          "type": "array"
-        },
         "power_on_ram_fill": {
           "description": "The byte every RAM cell holds at power-on, as read on a camera. Absent\nwhen unmeasured; the emulator then starts RAM zeroed.",
           "format": "uint8",
@@ -4599,7 +4567,6 @@
         }
       },
       "required": [
-        "interrupt_inputs",
         "blocks"
       ],
       "type": "object"
@@ -4880,13 +4847,6 @@
       "description": "Stable SoC identity.",
       "type": "string"
     },
-    "interrupts": {
-      "description": "Interrupt routes between SoC blocks and processor cores.",
-      "items": {
-        "$ref": "#/$defs/InterruptRoute"
-      },
-      "type": "array"
-    },
     "mappings": {
       "description": "CPU address-space mappings used to construct a processor graph.",
       "items": {
@@ -4927,7 +4887,6 @@
     "processors",
     "memory_regions",
     "blocks",
-    "interrupts",
     "clocks",
     "mappings",
     "dma_mappings",

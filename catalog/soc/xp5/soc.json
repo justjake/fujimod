@@ -875,7 +875,6 @@
       ]
     }
   ],
-  "interrupts": [],
   "clocks": [
     {
       "id": "counter",
@@ -961,7 +960,6 @@
       "redistributor_stride": 131072,
       "lines": 512
     },
-    "interrupt_inputs": [],
     "companion": {
       "processor_id": "core4",
       "clock_id": "companion",
