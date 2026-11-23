@@ -893,6 +893,9 @@ impl Processor {
         Ok(())
     }
     fn deliver_interrupt(&self) -> Result<(), String> {
+        if self.interrupts == [false; 2] {
+            return Ok(());
+        }
         let pstate = self.reg(ffi::PSTATE)? & !(1 << 21);
         let fiq = self.interrupts[1] && pstate & (1 << 6) == 0;
         let irq = self.interrupts[0] && pstate & (1 << 7) == 0;
@@ -1342,7 +1345,9 @@ impl Processor {
         }
         self.set_reg(ffi::PC, request.begin)?;
         self.deliver_interrupt()?;
-        if request.until == Some(self.reg(ffi::PC)?) {
+        if let Some(until) = request.until
+            && self.reg(ffi::PC)? == until
+        {
             return Ok(Exit::Stopped);
         }
         let limit = request.instructions.map(|n| n as u64).unwrap_or(u64::MAX);
