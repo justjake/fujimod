@@ -71,7 +71,12 @@ struct Shown {
     app: std::process::Child,
     /// Why live running stopped; the window still shows the last image.
     stopped: Option<String>,
+    /// When the LCD was last read for the window.
+    read_at: std::time::Instant,
 }
+
+/// Shortest wall time between LCD reads for the window, about 30 images a second.
+const WINDOW_FRAME_INTERVAL: std::time::Duration = std::time::Duration::from_millis(33);
 
 /// The window's commands and images reach the camera between guest slices.
 impl fujimod_emulator_gui::Run for Camera {
@@ -283,6 +288,7 @@ impl Camera {
             viewer,
             app,
             stopped: None,
+            read_at: std::time::Instant::now(),
         });
         Ok(json!({ "endpoint": endpoint }))
     }
@@ -330,7 +336,13 @@ impl Camera {
         }
         if shown.stopped.is_none() {
             let before = self.progress();
-            let shown_frames = self.step().and_then(|()| self.frames());
+            let read = shown.read_at.elapsed() >= WINDOW_FRAME_INTERVAL;
+            let shown_frames = self
+                .step()
+                .and_then(|()| if read { self.frames() } else { Ok(Vec::new()) });
+            if read {
+                shown.read_at = std::time::Instant::now();
+            }
             match shown_frames {
                 Ok(frames) => {
                     if let Err(error) = shown.viewer.show(&frames) {
