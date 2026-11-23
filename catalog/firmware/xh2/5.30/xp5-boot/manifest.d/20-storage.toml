@@ -20,3 +20,11 @@ size = 0x1000
 kind = "flash-storage-controller"
 [device.options]
 jedec_id = 0x2c5b1b
+# The part as the boot ROM and setup stage leave it; the board starts at the kernel,
+# after both. The application takes the ID from the retained tuple (0x1386714), not
+# through the fresh-ID initializer 0x1387c94 that calls device initializer 0x1388288,
+# whose volatile-register write (WREN, 0x81, byte 0x14 at register 1) selects 20.
+# Read setup 0x13875b0 programs aperture read 0xfd with 20 dummy cycles (+0x44,
+# +0x74 = 0x14), and the board reaches the first aperture read with no write to the
+# part: its volatile register already selects 20 dummy cycles.
+inherited_dummy_cycles = 20
