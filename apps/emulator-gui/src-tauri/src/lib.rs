@@ -1,6 +1,6 @@
 use fujimod_catalog_configuration::{RunInputs, RunStart};
 use fujimod_catalog_resolution::ResolvedConfiguration;
-use fujimod_emulator_gui::RunHost;
+use fujimod_emulator_boot::xp5::RunHost;
 use serde::{Deserialize, Serialize};
 use std::{
     path::PathBuf,
@@ -225,9 +225,7 @@ fn launch_camera(request: LaunchRequest) -> Result<(LaunchedCamera, Running), St
             let run =
                 RunHost::open(run).inspect_err(|error| log_session(format!("session: {error}")))?;
             log_session("session: camera opened");
-            socket
-                .serve(run)
-                .run_until(&thread_stop)
+            fujimod_emulator_gui::serve(run, socket, &thread_stop)
                 .inspect_err(|error| log_session(format!("session: {error}")))
         })
         .map_err(|error| error.to_string())?;

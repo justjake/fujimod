@@ -618,7 +618,7 @@ fn run_xp5(mut boot_options: Boot, resolved: ResolvedConfiguration) -> Result<Ou
         let endpoint = socket.endpoint().url.clone();
         let host = xp5::RunHost::open(run)?;
         let mut app = fujimod_emulator_gui::launch::connect(&endpoint)?;
-        let report = fujimod_emulator_gui::host(host, socket)?;
+        let report = fujimod_emulator_gui::serve(host, socket, &std::sync::atomic::AtomicBool::new(false))?;
         app.wait().map_err(|error| error.to_string())?;
         println!(
             "{}",

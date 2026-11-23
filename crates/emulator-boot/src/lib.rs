@@ -1814,5 +1814,40 @@ pub fn screenshot(session: &Session) -> Result<Vec<u8>, String> {
     .map(|p| p.to_vec())
 }
 
+/// The LCD images a session showed since the last call: the frames its
+/// display devices published, or, for a display read by scanout, the image
+/// it presents now. Hosts compare images; this never advances guest time.
+pub fn lcd_frames(
+    session: &mut Session,
+) -> Result<Vec<fujimod_emulator_devices::graphics::scanout::Frame>, String> {
+    let published = session.board.take_frames();
+    if !published.is_empty() {
+        return Ok(published);
+    }
+    let Ok(spec) = session_prepared(session) else {
+        return Ok(Vec::new());
+    };
+    let display = session.scanout_state(&spec.observation.scanout)?;
+    let Some(instance) = presented_instances(&display).into_iter().next() else {
+        return Ok(Vec::new());
+    };
+    let Some(frame) = session.scanout(&spec.observation.scanout, instance, true, false)? else {
+        return Ok(Vec::new());
+    };
+    let rgb = frame.rgb.ok_or("scanout did not return RGB")?;
+    let mut rgba = Vec::with_capacity(rgb.len() / 3 * 4);
+    for pixel in rgb.as_chunks::<3>().0 {
+        rgba.extend_from_slice(pixel);
+        rgba.push(255);
+    }
+    Ok(vec![fujimod_emulator_devices::graphics::scanout::Frame {
+        output: instance,
+        sequence: 0,
+        width: frame.width.try_into().map_err(|_| "frame width exceeds u32")?,
+        height: frame.height.try_into().map_err(|_| "frame height exceeds u32")?,
+        rgba,
+    }])
+}
+
 #[cfg(test)]
 mod tests;

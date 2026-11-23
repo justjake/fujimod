@@ -1,5 +1,6 @@
-use crate::RunHost;
 use crate::protocol::{Event, Request, command_args};
+use fujimod_emulator_devices::graphics::scanout::Frame;
+use fujimod_emulator_session::Session;
 use serde_json::Value;
 use std::{
     io::ErrorKind,
@@ -14,17 +15,24 @@ use tungstenite::{
 
 const MAX_MESSAGES_PER_TICK: usize = 64;
 
+/// A camera session a desktop window drives: any processor, any host.
+pub trait Run {
+    fn session(&self) -> &Session;
+    fn session_mut(&mut self) -> &mut Session;
+    /// Advance the guest by one bounded slice.
+    fn step(&mut self) -> Result<(), String>;
+    /// LCD images shown since the last call.
+    fn frames(&mut self) -> Result<Vec<Frame>, String>;
+    /// End the run and report it.
+    fn finish(self) -> Result<Value, String>
+    where
+        Self: Sized;
+}
+
 /// Address a desktop webview joins for commands and LCD frames.
 #[derive(Clone, Debug)]
 pub struct Endpoint {
     pub url: String,
-}
-
-/// One native camera prepared to serve its frontend.
-pub struct Host {
-    endpoint: Endpoint,
-    listener: TcpListener,
-    run: RunHost,
 }
 
 /// A listener whose endpoint is known before the camera session is opened.
@@ -38,29 +46,21 @@ impl Socket {
         &self.endpoint
     }
 
-    pub fn serve(self, run: RunHost) -> Host {
-        Host {
-            endpoint: self.endpoint,
-            listener: self.listener,
-            run,
-        }
+    /// Wait for the desktop window to join, then attach it to `run`.
+    pub fn join(self, run: &dyn Run, stop: &AtomicBool) -> Result<Viewer, String> {
+        Viewer::open(accept(&self.listener, stop)?, run.session())
     }
 }
 
-impl Host {
-    pub fn endpoint(&self) -> &Endpoint {
-        &self.endpoint
+/// Serve `run` to its desktop window until the window closes or `stop` is set.
+pub fn serve<R: Run>(mut run: R, socket: Socket, stop: &AtomicBool) -> Result<Value, String> {
+    let mut viewer = socket.join(&run, stop)?;
+    while !stop.load(Ordering::Acquire) && viewer.service(&mut run)? {
+        run.step()?;
+        let frames = run.frames()?;
+        viewer.show(&frames)?;
     }
-
-    /// Run the camera until its frontend closes the socket.
-    pub fn run(self) -> Result<Value, String> {
-        let stop = AtomicBool::new(false);
-        self.run_until(&stop)
-    }
-
-    pub fn run_until(self, stop: &AtomicBool) -> Result<Value, String> {
-        GuiSession::open(self.run, self.listener, stop)?.run(stop)
-    }
+    run.finish()
 }
 
 /// Reserve an endpoint before opening the camera.
@@ -110,41 +110,89 @@ fn accept(listener: &TcpListener, stop: &AtomicBool) -> Result<WebSocket<TcpStre
     }
 }
 
-struct GuiSession {
-    configuration_id: String,
-    body: String,
-    firmware: String,
-    controls: Value,
-    run: RunHost,
+fn identity(session: &Session, key: &str) -> String {
+    session.definition[key].as_str().unwrap_or_default().to_owned()
+}
+
+/// One joined desktop window. It never owns the session: its host calls
+/// [`Viewer::service`] between guest slices and [`Viewer::show`] with new images.
+pub struct Viewer {
     socket: WebSocket<TcpStream>,
     frame_number: u64,
-    last_rgba: Option<Vec<u8>>,
+    last: Option<Frame>,
     last_state: Option<String>,
 }
 
-impl GuiSession {
-    fn open(run: RunHost, listener: TcpListener, stop: &AtomicBool) -> Result<Self, String> {
-        let socket = accept(&listener, stop)?;
-        let state = run.session().control_state()?;
-        let mut session = Self {
-            configuration_id: run.configuration_id().to_owned(),
-            body: run.body_id().to_owned(),
-            firmware: run.firmware_id().to_owned(),
-            controls: serde_json::to_value(&state.inputs).map_err(|error| error.to_string())?,
-            run,
+impl Viewer {
+    fn open(socket: WebSocket<TcpStream>, session: &Session) -> Result<Self, String> {
+        let mut viewer = Self {
             socket,
             frame_number: 0,
-            last_rgba: None,
+            last: None,
             last_state: None,
         };
-        session.publish_catalog()?;
-        session.publish_session()?;
-        session.publish_latest()?;
-        Ok(session)
+        let state = session.control_state()?;
+        viewer.send_json(Event::Catalog {
+            configuration: identity(session, "configuration_id"),
+            body: identity(session, "body_id"),
+            model: identity(session, "firmware_id"),
+            firmware: identity(session, "firmware_id"),
+            controls: serde_json::to_value(&state.inputs).map_err(|error| error.to_string())?,
+        })?;
+        viewer.publish_state(session)?;
+        Ok(viewer)
     }
 
-    fn publish_session(&mut self) -> Result<(), String> {
-        let state = self.run.session().control_state()?;
+    /// Apply the window's pending commands to `run` and send its control
+    /// state. False once the window has closed.
+    pub fn service(&mut self, run: &mut dyn Run) -> Result<bool, String> {
+        for _ in 0..MAX_MESSAGES_PER_TICK {
+            let message = match self.socket.read() {
+                Ok(message) => message,
+                Err(tungstenite::Error::Io(error)) if error.kind() == ErrorKind::WouldBlock => {
+                    break;
+                }
+                Err(tungstenite::Error::ConnectionClosed)
+                | Err(tungstenite::Error::Protocol(
+                    tungstenite::error::ProtocolError::ResetWithoutClosingHandshake,
+                )) => return Ok(false),
+                Err(error) => return Err(error.to_string()),
+            };
+            match message {
+                Message::Text(text) => self.receive(run, text.as_str())?,
+                Message::Close(_) => return Ok(false),
+                Message::Ping(_) | Message::Pong(_) | Message::Binary(_) | Message::Frame(_) => {}
+            }
+        }
+        self.publish_state(run.session())?;
+        Ok(true)
+    }
+
+    /// Send the newest of `frames` when it differs from the last image sent.
+    pub fn show(&mut self, frames: &[Frame]) -> Result<(), String> {
+        let Some(frame) = frames.iter().max_by_key(|frame| frame.sequence) else {
+            return Ok(());
+        };
+        if self.last.as_ref().is_some_and(|last| last.rgba == frame.rgba) {
+            return Ok(());
+        }
+        let jpeg = encode_jpeg(frame)?;
+        self.frame_number = self.frame_number.saturating_add(1);
+        let mut packet = Vec::with_capacity(20 + jpeg.len());
+        packet.extend_from_slice(b"FJMF");
+        packet.extend_from_slice(&frame.width.to_be_bytes());
+        packet.extend_from_slice(&frame.height.to_be_bytes());
+        packet.extend_from_slice(&self.frame_number.to_be_bytes());
+        packet.extend_from_slice(&jpeg);
+        self.socket
+            .send(Message::Binary(packet.into()))
+            .map_err(|error| error.to_string())?;
+        self.last = Some(frame.clone());
+        Ok(())
+    }
+
+    fn publish_state(&mut self, session: &Session) -> Result<(), String> {
+        let state = session.control_state()?;
         let event = Event::State {
             // A native session has no cold power-off; the firmware reads the power switch.
             powered_on: true,
@@ -161,62 +209,14 @@ impl GuiSession {
         Ok(())
     }
 
-    fn publish_catalog(&mut self) -> Result<(), String> {
-        self.send_json(Event::Catalog {
-            configuration: self.configuration_id.clone(),
-            body: self.body.clone(),
-            model: self.firmware.clone(),
-            firmware: self.firmware.clone(),
-            controls: self.controls.clone(),
-        })
-    }
-
-    fn run(mut self, stop: &AtomicBool) -> Result<Value, String> {
-        loop {
-            if stop.load(Ordering::Acquire) {
-                return self.finish();
-            }
-            for _ in 0..MAX_MESSAGES_PER_TICK {
-                let message = match self.socket.read() {
-                    Ok(message) => message,
-                    Err(tungstenite::Error::Io(error)) if error.kind() == ErrorKind::WouldBlock => {
-                        break;
-                    }
-                    Err(tungstenite::Error::ConnectionClosed) => {
-                        return self.finish();
-                    }
-                    Err(tungstenite::Error::Protocol(
-                        tungstenite::error::ProtocolError::ResetWithoutClosingHandshake,
-                    )) => return self.finish(),
-                    Err(error) => return Err(error.to_string()),
-                };
-                match message {
-                    Message::Text(text) => self.receive(text.as_str())?,
-                    Message::Close(_) => return self.finish(),
-                    Message::Ping(_)
-                    | Message::Pong(_)
-                    | Message::Binary(_)
-                    | Message::Frame(_) => {}
-                }
-            }
-            self.advance()?;
-            self.publish()?;
-            self.publish_session()?;
-        }
-    }
-
-    fn finish(self) -> Result<Value, String> {
-        self.run.finish()
-    }
-
-    fn receive(&mut self, source: &str) -> Result<(), String> {
+    fn receive(&mut self, run: &mut dyn Run, source: &str) -> Result<(), String> {
         let Request::Rpc {
             serial,
             action,
             args,
         } = serde_json::from_str(source).map_err(|error| error.to_string())?;
-        let event = self
-            .command(&action, command_args(args)?)
+        let event = command_args(args)
+            .and_then(|args| command(run.session_mut(), &action, args))
             .map(|value| Event::reply(serial, value))
             .unwrap_or_else(|error| Event::error(Some(serial), error));
         self.send_json(event)
@@ -228,101 +228,47 @@ impl GuiSession {
             .send(Message::Text(text.into()))
             .map_err(|error| error.to_string())
     }
+}
 
-    fn advance(&mut self) -> Result<(), String> {
-        self.run.step()
-    }
-
-    fn publish(&mut self) -> Result<(), String> {
-        let frame = self
-            .run
-            .take_frames()
-            .into_iter()
-            .max_by_key(|frame| frame.sequence);
-        if let Some(frame) = frame.as_ref() {
-            self.publish_frame(frame)?;
+fn command(session: &mut Session, action: &str, args: Value) -> Result<Value, String> {
+    match action {
+        "boot" => {
+            let state = session.control_state()?;
+            serde_json::to_value(state.inputs).map_err(|error| error.to_string())
         }
-        Ok(())
-    }
-
-    fn publish_frame(
-        &mut self,
-        frame: &fujimod_emulator_devices::graphics::scanout::Frame,
-    ) -> Result<(), String> {
-        if self.last_rgba.as_deref() == Some(frame.rgba.as_slice()) {
-            return Ok(());
+        "press" => {
+            let id = string(&args, "id")?;
+            let stage = args.get("stage").and_then(Value::as_str);
+            session.contact_input(id, stage, false)?;
+            Ok(Value::Null)
         }
-        let jpeg = encode_jpeg(frame)?;
-        self.frame_number = self.frame_number.saturating_add(1);
-        let mut packet = Vec::with_capacity(20 + jpeg.len());
-        packet.extend_from_slice(b"FJMF");
-        packet.extend_from_slice(&frame.width.to_be_bytes());
-        packet.extend_from_slice(&frame.height.to_be_bytes());
-        packet.extend_from_slice(&self.frame_number.to_be_bytes());
-        packet.extend_from_slice(&jpeg);
-        self.socket
-            .send(Message::Binary(packet.into()))
-            .map_err(|error| error.to_string())?;
-        self.last_rgba = Some(frame.rgba.clone());
-        Ok(())
-    }
-
-    /// Send the held LCD image after a frontend joins a running session.
-    fn publish_latest(&mut self) -> Result<(), String> {
-        if let Some(frame) = self.run.latest_frame() {
-            self.publish_frame(&frame)?;
+        "release" => {
+            session.contact_input(string(&args, "id")?, None, true)?;
+            Ok(Value::Null)
         }
-        Ok(())
-    }
-
-    fn command(&mut self, action: &str, args: Value) -> Result<Value, String> {
-        match action {
-            "boot" => {
-                self.publish_session()?;
-                let state = self.run.session().control_state()?;
-                serde_json::to_value(state.inputs).map_err(|error| error.to_string())
-            }
-            "press" => {
-                let id = string(&args, "id")?;
-                let stage = args.get("stage").and_then(Value::as_str);
-                self.run.session_mut().contact_input(id, stage, false)?;
-                Ok(Value::Null)
-            }
-            "release" => {
-                let id = string(&args, "id")?;
-                self.run.session_mut().contact_input(id, None, true)?;
-                Ok(Value::Null)
-            }
-            "set_position" => {
-                let (id, position) = (string(&args, "id")?, string(&args, "position")?);
-                self.run.session_mut().set_position(id, position)?;
-                Ok(Value::Null)
-            }
-            "rotate" => {
-                let steps = i32::try_from(integer(&args, "steps")?)
-                    .map_err(|_| "rotate steps exceed i32".to_owned())?;
-                let session = self.run.session_mut();
-                let (node, edges) = session.rotation(string(&args, "id")?, steps)?;
-                session.rotate_edges(&node, edges)?;
-                Ok(Value::Null)
-            }
-            "touch" => {
-                let x = u16::try_from(integer(&args, "x")?)
-                    .map_err(|_| "touch x exceeds 16 bits".to_owned())?;
-                let y = u16::try_from(integer(&args, "y")?)
-                    .map_err(|_| "touch y exceeds 16 bits".to_owned())?;
-                let (node, script) = self.run.session().touch_input(
-                    string(&args, "id")?,
-                    string(&args, "phase")?,
-                    x,
-                    y,
-                )?;
-                self.run.session_mut().touch(&node, &script)?;
-                Ok(Value::Null)
-            }
-            "close" => Ok(Value::Null),
-            other => Err(format!("unknown native command: {other}")),
+        "set_position" => {
+            session.set_position(string(&args, "id")?, string(&args, "position")?)?;
+            Ok(Value::Null)
         }
+        "rotate" => {
+            let steps = i32::try_from(integer(&args, "steps")?)
+                .map_err(|_| "rotate steps exceed i32".to_owned())?;
+            let (node, edges) = session.rotation(string(&args, "id")?, steps)?;
+            session.rotate_edges(&node, edges)?;
+            Ok(Value::Null)
+        }
+        "touch" => {
+            let x = u16::try_from(integer(&args, "x")?)
+                .map_err(|_| "touch x exceeds 16 bits".to_owned())?;
+            let y = u16::try_from(integer(&args, "y")?)
+                .map_err(|_| "touch y exceeds 16 bits".to_owned())?;
+            let (node, script) =
+                session.touch_input(string(&args, "id")?, string(&args, "phase")?, x, y)?;
+            session.touch(&node, &script)?;
+            Ok(Value::Null)
+        }
+        "close" => Ok(Value::Null),
+        other => Err(format!("unknown native command: {other}")),
     }
 }
 

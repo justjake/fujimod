@@ -1,19 +1,32 @@
 //! The native session behind the emulator UI.
 //!
 //! The browser and desktop frontends use the same `RemoteEngine` command and
-//! frame protocol. Guest execution stays on this process's session thread;
-//! WebSocket clients submit host input and receive the latest LCD image.
+//! frame protocol. Guest execution stays on the host's session thread; a
+//! [`Viewer`] applies a window's input to any [`Run`] between guest slices and
+//! sends it the latest LCD image.
 
 pub mod launch;
 mod protocol;
 mod server;
 
-pub use server::{Endpoint, Host, Socket, bind};
+pub use server::{Endpoint, Run, Socket, Viewer, bind, serve};
 
-/// A prepared XP5 run, stopped at the boundary a desktop frontend drives.
-pub use fujimod_emulator_boot::xp5::RunHost;
+use fujimod_emulator_boot::xp5::RunHost;
 
-/// Serve a prepared run once its desktop frontend has joined the endpoint.
-pub fn host(run: RunHost, socket: Socket) -> Result<serde_json::Value, String> {
-    socket.serve(run).run()
+impl Run for RunHost {
+    fn session(&self) -> &fujimod_emulator_session::Session {
+        RunHost::session(self)
+    }
+    fn session_mut(&mut self) -> &mut fujimod_emulator_session::Session {
+        RunHost::session_mut(self)
+    }
+    fn step(&mut self) -> Result<(), String> {
+        RunHost::step(self)
+    }
+    fn frames(&mut self) -> Result<Vec<fujimod_emulator_devices::graphics::scanout::Frame>, String> {
+        Ok(self.take_frames())
+    }
+    fn finish(self) -> Result<serde_json::Value, String> {
+        RunHost::finish(self)
+    }
 }
