@@ -521,6 +521,16 @@ impl Device for Timers {
     fn name(&self) -> &'static str {
         "xpp-timers"
     }
+    fn read_without_advance(&self, address: u64, size: u8, now: u64) -> Option<u64> {
+        let offset = address.checked_sub(self.base)?;
+        if size != 4 || offset < 0x100 || offset & 0xf != 0
+            || self.scheduled.is_none_or(|at| now >= at)
+        {
+            return None;
+        }
+        let channel = usize::try_from((offset - 0x100) / 0x10).ok()?;
+        self.model.count_at(channel, now).map(u64::from)
+    }
     fn read(&mut self, cx: &mut Cx<'_>, address: u64, size: u8) -> u64 {
         self.advance(cx);
         match self.model.access(
@@ -1895,6 +1905,35 @@ mod tests {
             error(json!([unit(Value::Null)])),
             "Invalid X-Processor Pro live-view image"
         );
+    }
+
+    #[test]
+    fn countdown_read_without_advance_matches_mmio_until_expiry() {
+        use fujimod_emulator_devices::test_host::{TestHost, write};
+        let base = 0xfff30000;
+        let mut timers = Timers {
+            base,
+            model: timer::TickTimers::new(&[(0, 48)]).unwrap(),
+            scheduled: None,
+        };
+        let mut host = TestHost::new();
+        let count = base + 0x100;
+        assert_eq!(timers.read_without_advance(count, 4, 0), None);
+        write(&mut timers, &mut host, count, 40);
+        write(&mut timers, &mut host, base, 0xfffe_0001);
+        let expiry = timers.scheduled.unwrap();
+        let before = timers.checkpoint().unwrap();
+        for now in [0, expiry / 2, expiry - 1] {
+            host.now = now;
+            assert_eq!(
+                timers.read_without_advance(count, 4, now),
+                Some(timers.read(&mut host.cx(), count, 4))
+            );
+        }
+        assert_eq!(timers.checkpoint().unwrap().state(), before.state());
+        assert_eq!(timers.read_without_advance(count + 4, 4, 0), None);
+        assert_eq!(timers.read_without_advance(count, 2, 0), None);
+        assert_eq!(timers.read_without_advance(count, 4, expiry), None);
     }
 
     #[test]
