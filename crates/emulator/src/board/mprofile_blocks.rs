@@ -426,7 +426,7 @@ mod tests {
             0xf10f_0007, // source PC / ADR alias
             0xf1ad_0007, // SUB source SP
             0xf1af_0007, // SUB source PC
-            0xf1b1_0007, // CMP encoding without S
+            0xf1a1_0f07, // PC destination without CMP flag semantics
             0xf1bd_0f07, // CMP source SP
             0xf1bf_0f07, // CMP source PC
             0xf101_1007, // nonzero imm3
