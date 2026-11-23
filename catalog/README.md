@@ -4,74 +4,119 @@ The catalog records reusable hardware and firmware facts, keyed by identity.
 Each fact has one owner. Consumers resolve references by ID; documents never
 store another document's file path. Input file locations belong to callers.
 
-| Layer | Location | Owns |
+Each fact lives with the thing it describes. To place a fact, ask what would
+have to differ in the world for its value to differ:
+
+| The value differs with | Layer | Location |
 | --- | --- | --- |
-| SoC | `soc/<id>/` | CPU/reset architecture, address/block maps, interrupt lines, clock domains and processor interconnects |
-| Body | `bodies/<id>/` | SoC ID, NAND geometry, sensor, lens, controls/pins, display and physical wiring to SoC blocks |
-| Firmware | `firmware/<body>/<version>/` | Body/version identity, update and ROM hashes, installation/decoding layout and generated facts consumed by published tools |
-| Run configuration | `../configurations/emulator/<id>/` | Body/firmware selection, start inputs, execution mode, scene and small named overlays |
+| an IP design used by several processors | IP | `ip/<id>.json` |
+| the processor design | Processor | `soc/<id>/` |
+| an attached chip, panel, sensor or lens | Part | `parts/<id>/` |
+| the circuit board | Body | `bodies/<id>/` |
+| the firmware build | Firmware | `firmware/<body>/<version>/` |
+| our emulator's choices, not the hardware | Emulation | `../configurations/emulator/processors/<soc>.json` |
+| one run: selection, start inputs, overlays | Run configuration | `../configurations/emulator/<id>/` |
 
-SoC and body records describe the hardware independently of an emulator.
-Body records refer to SoC block IDs instead of copying block maps or IRQs.
-Firmware records refer to their body ID instead of repeating physical wiring.
-Reusable components live in `parts/<id>/` and are referenced by part ID, so
-identical lens, sensor and control facts are not copied between bodies.
-Firmware identity includes its body and version; existing explicit
-firmware IDs remain selectors, never file locations.
+A fact is recorded in exactly one place and referenced by ID everywhere else,
+even where an earlier layout happened to hold a copy. A stand-in for an
+unmeasured value (a latency, a conversion time) belongs to the device it
+stands in for, marked as a stand-in, not to the emulation layer.
 
-## Processor blocks
+## IP
 
-Every processor uses the same record shape. A processor's hardware is one
-`blocks` list, and each block is the only place its facts appear:
+An IP record describes a block design that several processors contain, such
+as an interrupt controller, an SD host, an I2C or DMA controller or a GPIO
+bank: its device model, its register layout and the parameters an instance
+must supply. A processor block that contains the IP names it, and records only
+what differs per instance: window, interrupts, clock and instance parameters.
+A register layout is written once, in the IP record, however many processors
+use it.
+
+## Processors
+
+`soc/<id>/soc.json` holds the processor's cores, memory regions, address and
+DMA mappings, decoders, clocks and boot ROM behavior. Each core holds its own
+architecture, CPU model, identification registers, caches, reset state,
+affinity and timer interrupt lines. An alias of DRAM or another region at a
+second address is an address mapping, not a block.
+
+Each hardware block is one file, `soc/<id>/blocks/<block-id>.json`, and is the
+only place its facts appear:
 
 | Field | Holds |
 | --- | --- |
 | `id`, `kind`, `base`, `size` | Identity and the register window |
+| `ip` | The IP record the block instantiates, when it is shared |
 | `clock_id` | The clock domain that drives it |
 | `views` | Per-core addresses where a core sees the block somewhere other than `base` |
 | `interrupts` | Each named output, the interrupt-controller line it raises and, for fixed routing, the core |
 | `device` | The device model, tagged by `model`, with its typed parameters |
-| `registers` | Optional register layout: named registers at offsets, with width, reset value, access and named bit fields with their values |
+| `registers` | The register layout of a block without an IP record: named registers at offsets, with width, reset value, access and named bit fields with their values |
 | `evidence` | How the facts were established |
 
-There are no separate peripheral, interrupt-route, interrupt-input, per-block
-parameter or register-map lists, and no per-profile window lists. The board
-builder selects each block's implementation by its `device` model; the model
-reads its parameters from `device` and its register behavior from `registers`.
-An untyped object is never a substitute for either, and each `kind` allows a
-fixed set of models.
+An interrupt controller's line count and partner interfaces are its block's
+`device` parameters. A companion processor is a core, and its mailbox is a
+block. A register that lives inside another block is an entry in that block's
+layout; a device that uses it names the block and register. There are no
+separate peripheral, interrupt-route, interrupt-input, interrupt-controller,
+per-block parameter or register-map lists, and no processor-level window lists.
+
+The board builder selects each block's implementation by its `device` model;
+the model reads its parameters from `device` and its register behavior from
+the IP's or block's layout. An untyped object is never a substitute for
+either, and each `kind` allows a fixed set of models.
 
 `evidence` is typed, not prose. Its `kind` is one of:
 
 - `measured`: read on a camera;
 - `located`: found in firmware code or tables;
 - `inferred`: deduced from the behavior of other facts;
-- `stand-in`: a declared input with no known hardware value, such as a
-  latency an emulator needs.
+- `stand-in`: a declared input with no known hardware value.
 
 It names the firmware IDs and code or data addresses the fact rests on.
 Explanations longer than a sentence belong in research notes, not in the
-record.
+record. Cores, mappings and body chips carry evidence the same way.
 
-## Bodies
+A processor fact found by reading firmware is generated into
+`soc/<id>/<name>.generated.json` by a generator that runs over every
+catalogued firmware of that processor and fails, naming them, when firmwares
+disagree. The catalog loader joins generated processor facts to their blocks
+and cores by ID; a field is either generated or hand-authored, never both.
 
-A body record lists the chips on its buses, its wiring to processor blocks,
-its panels, its DRAM and its controls. It adds to or changes a processor block
-only through typed fields: a `block_overrides` entry names a processor block ID
-and replaces its `device` with another value of the same model, or replaces
-individual `registers` entries by name. A body never redeclares a processor
-block's window, and lists processor blocks the body leaves unconnected under
-`absent_blocks`. Control and dial wiring, including command dials, lives in
-`controls.json` connections, so every consumer reads one record.
+## Parts and bodies
+
+A part record describes a chip, panel, sensor or lens that several bodies use:
+its behavior and the pins and bus addresses it answers on. A body record
+(`bodies/<id>/body.json`) holds the processor ID and what this circuit board
+connects: each chip as a part reference with its bus block and address, wiring
+from processor pins and blocks to part pins, panels, DRAM size and regions
+(including the power-on RAM contents when measured), NAND geometry, card
+slots and power control. Processor blocks the board leaves unconnected are
+listed under `absent_blocks`. `bodies/<id>/controls.json` holds buttons, dials
+and switches: their positions, the pins or ADC channels they drive, including
+command dials, and startup combinations.
+
+A body changes a processor block only through `block_overrides`, which names a
+block ID and replaces its `device` with another value of the same model or
+replaces individual `registers` entries by name. The same processor behaves the
+same in every body, so an override is rare: a per-body difference is usually an
+attached part or an incomplete processor model, and is recorded there instead.
 
 ## Firmware
 
-A firmware directory holds its identity record and generated files only. It
-declares no device windows, device models or register behavior. Facts that
-agree across every firmware of a processor are generated once into
-`soc/<id>/<name>.generated.json`; their generator runs over every catalogued
-firmware of that processor and fails when they disagree, naming the
-disagreeing firmwares.
+A firmware directory holds `firmware.json` (body, version, update and ROM
+hashes, and the layout for decoding the update) and generated files only, one
+per generator. It declares no device windows, device models, register behavior
+or stubs. Firmware identity includes its body and version; firmware IDs are
+selectors, never file locations.
+
+## Emulation
+
+`../configurations/emulator/processors/<soc>.json` holds what the emulator
+chooses for a processor rather than what the hardware is: execution engines,
+the CPU model standing in for an unavailable one, instruction and tick rates
+and the runtime ABI. Run configurations select it with the hardware records;
+it holds no hardware facts.
 
 Mods read register addresses and firmware numbers from C headers generated
 from these records, never from hand-copied constants.
@@ -85,9 +130,11 @@ hand edits produce the same bytes.
 
 Catalog validation refuses:
 
-- a firmware record that declares a device window or device model;
+- a firmware record that declares a device window, device model or stub;
 - a body that redeclares a processor block instead of overriding its typed
   fields;
+- a field set both by hand and by a generator;
+- a register layout on a block whose IP record already has one;
 - a block whose `device` model its `kind` does not allow;
 - a block without `evidence`.
 
