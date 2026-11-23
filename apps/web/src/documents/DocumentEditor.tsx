@@ -78,6 +78,7 @@ function DocumentEditor(props: { schema: Schema }) {
     problems: found,
     references: (id) => references()[id],
     disabled: () => isLocked(),
+    lock: locked && `/${locked}`,
   };
 
   const load = (raw: string, from: Source) => {
@@ -281,7 +282,7 @@ function DocumentEditor(props: { schema: Schema }) {
             <button
               type="button"
               class="doc-save"
-              disabled={isLocked() || found().size > 0 || (saveLabel() === 'Save' && !changed())}
+              disabled={found().size > 0 || (saveLabel() === 'Save' && !changed())}
               onClick={save}
             >
               {saveLabel()}

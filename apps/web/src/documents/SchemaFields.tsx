@@ -16,6 +16,8 @@ export type FieldContext = {
   /** Names of documents an `x-reference` may name, by document id. */
   references: (id: string) => readonly string[] | undefined;
   disabled: () => boolean;
+  /** Pointer of the switch that locks the document: it stays usable. */
+  lock?: string;
 };
 
 type FieldProps = {
@@ -74,7 +76,8 @@ function Problem(props: { context: FieldContext; pointer: string }) {
 /** The control for one value: a switch, a list, a number or text. */
 function Control(props: FieldProps & { id: string }) {
   const schema = () => props.schema;
-  const disabled = () => props.context.disabled() || !!schema().readOnly;
+  const disabled = () =>
+    (props.context.disabled() && props.pointer !== props.context.lock) || !!schema().readOnly;
   const unset = () => (schema().default === undefined ? [{ value: null, label: '—' }] : []);
   const choices = (): { value: JsonValue; label: string }[] | undefined => {
     const node = schema();
@@ -215,6 +218,9 @@ export function Field(props: FieldProps & { depth: number }) {
   const context: FieldContext = {
     problems: () => props.context.problems(),
     references: (id) => props.context.references(id),
+    get lock() {
+      return props.context.lock;
+    },
     disabled: () => props.context.disabled() || !!props.schema.readOnly,
   };
   return (
