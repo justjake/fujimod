@@ -25,7 +25,9 @@ export function localReleaseMiddleware(options: LocalReleaseOptions): Connect.Ne
       return;
     }
     const route = releaseRoute(path);
-    if (!options.artifacts || !route) {
+    // Local pages are built from the local notes, so the release list is the
+    // Worker's only.
+    if (!options.artifacts || !route || route.kind === 'list') {
       response.statusCode = 404;
       response.end();
       return;

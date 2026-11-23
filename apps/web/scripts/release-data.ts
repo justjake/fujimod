@@ -1,19 +1,18 @@
 import { execFileSync } from 'node:child_process';
 import { readdir, readFile, stat } from 'node:fs/promises';
 import { resolve } from 'node:path';
-import type { SiteRelease, SiteReleaseData } from '../src/release-data.ts';
+import {
+  siteRelease,
+  sortReleases,
+  type GitHubReleaseNotes,
+  type SiteRelease,
+  type SiteReleaseData,
+} from '../src/site-releases.ts';
 import { personalNoteDate } from '../src/personal-note.ts';
 import credits from '../src/text/credits.generated.json' with { type: 'json' };
 
 const releasesUrl = 'https://api.github.com/repos/justjake/fujimod/releases';
 const personalNoteStartVersion = '0.0.1';
-
-interface GitHubRelease {
-  tag_name: string;
-  published_at: string | null;
-  body: string | null;
-  draft: boolean;
-}
 
 async function githubReleases(request: typeof fetch, token?: string): Promise<SiteRelease[]> {
   const releases: SiteRelease[] = [];
@@ -28,18 +27,14 @@ async function githubReleases(request: typeof fetch, token?: string): Promise<Si
       },
     });
     if (!response.ok) throw Error(`GitHub releases request failed (HTTP ${response.status})`);
-    const page: GitHubRelease[] = await response.json();
+    const page: GitHubReleaseNotes[] = await response.json();
     for (const release of page) {
-      if (release.draft || !release.published_at) continue;
-      releases.push({
-        version: release.tag_name,
-        publishedAt: new Date(release.published_at).toISOString(),
-        notes: release.body ?? '',
-      });
+      const published = siteRelease(release);
+      if (published) releases.push(published);
     }
     url = response.headers.get('link')?.match(/<([^>]+)>; rel="next"/)?.[1];
   }
-  return releases.sort((a, b) => b.publishedAt.localeCompare(a.publishedAt));
+  return sortReleases(releases);
 }
 
 async function localReleases(directory: string): Promise<SiteRelease[]> {
