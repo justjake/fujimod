@@ -483,6 +483,8 @@ fn run_a64(quantum: usize, windows: &[u64], stable: bool, fast_forward: bool) ->
         read_ticks: probe.read_ticks.clone(),
         left_out: s.polls.reads[0],
         checkpoint,
+        register_access_calls: 0,
+        published_fast_read_hits: 0,
     }
 }
 
