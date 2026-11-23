@@ -3394,7 +3394,7 @@ unsafe fn block_restarted(data: *mut c_void, pc: u64) {
             Some(prefix) if prefix < u64::from(bytes) => {
                 let mut buffer = Vec::new();
                 let code = s.block_code(&*cpus[b.core], b.core, address, prefix as usize, &mut buffer)?;
-                mprofile_blocks::scan(code)?.entries
+                mprofile_blocks::count_entries(code)?
             }
             _ => return Err("restarted instruction is outside its block".into()),
         };

@@ -264,6 +264,25 @@ pub(super) struct Scan {
     pub returns_through_lr: bool,
 }
 
+fn thumb_size(word: u16) -> usize {
+    if word >> 11 >= 0x1d { 4 } else { 2 }
+}
+
+/// Count the executed instruction prefix reported by a memory-hook restart.
+/// Admission constraints on those already executed entries need no rescan.
+pub(super) fn count_entries(mut code: &[u8]) -> Result<u64, String> {
+    let mut entries = 0;
+    while !code.is_empty() {
+        let Some(&[first, second, ..]) = code.get(..2) else {
+            return Err("M-profile block ends inside an instruction".into());
+        };
+        let size = thumb_size(u16::from_le_bytes([first, second]));
+        code = code.get(size..).ok_or("M-profile block ends inside an instruction")?;
+        entries += 1;
+    }
+    Ok(entries)
+}
+
 /// Scan a translated Thumb block.
 pub(super) fn scan(code: &[u8]) -> Result<Scan, String> {
     let (mut offset, mut entries, mut unit, mut last) = (0, 0u64, None, 0);
@@ -276,7 +295,7 @@ pub(super) fn scan(code: &[u8]) -> Result<Scan, String> {
             return Err("M-profile block ends inside an instruction".into());
         };
         let word = u16::from_le_bytes([halfword[0], halfword[1]]);
-        let size = if word >> 11 >= 0x1d { 4 } else { 2 };
+        let size = thumb_size(word);
         if offset + size > code.len() {
             return Err("M-profile block ends inside an instruction".into());
         }
@@ -318,6 +337,16 @@ mod tests {
     fn parts(words: &[u16]) -> (u64, u64, u64, bool) {
         let scan = scan(&code(words)).unwrap();
         (scan.entries, scan.unit, scan.last, scan.returns_through_lr)
+    }
+    #[test]
+    fn restart_count_uses_the_same_thumb_widths_as_admission() {
+        let mixed = code(&[0x3001, 0xf240, 0x4770, 0x4770]);
+        for end in [2, 6, 8] {
+            assert_eq!(count_entries(&mixed[..end]).unwrap(), scan(&mixed[..end]).unwrap().entries);
+        }
+        for end in [1, 3, 4, 5, 7] {
+            assert!(count_entries(&mixed[..end]).is_err());
+        }
     }
     #[test]
     fn poll_period_accepts_only_register_computation_between_a_load_and_its_branch() {
