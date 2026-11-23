@@ -13,6 +13,7 @@ pub const FEATURE_AARCH64_ACCOUNTING: u32 = 1 << 6;
 pub const FEATURE_INLINE_INSTRUCTION_COUNTER: u32 = 1 << 7;
 pub const FEATURE_INLINE_BLOCK_ACCOUNTING: u32 = 1 << 8;
 pub const FEATURE_TLBI_OWNER: u32 = 1 << 9;
+pub const FEATURE_THUMB_BLOCK_ACCOUNTING: u32 = 1 << 10;
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct TlbiEvent {
@@ -180,6 +181,13 @@ pub struct Accounting {
     pub mask: u64,
     pub enabled: u64,
     pub pause_requested: *const u32,
+}
+/// Extended accounting layout, available only when
+/// `FEATURE_THUMB_BLOCK_ACCOUNTING` is reported by the linked library.
+#[repr(C)]
+pub struct ThumbAccounting {
+    pub accounting: Accounting,
+    pub thumb_page: u64,
 }
 pub type InsnFilter = unsafe extern "C" fn(*mut c_void, u64, u32) -> c_int;
 pub type Restart = unsafe extern "C" fn(*mut c_void, u64);

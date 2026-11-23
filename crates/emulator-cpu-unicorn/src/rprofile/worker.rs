@@ -858,8 +858,11 @@ fn serve(
     };
     context.core.set(&*cpu);
     let pause_requested = cpu.pause_handle();
+    let mut features = cpu.features();
+    // The worker exposes commands rather than the raw accounting record.
+    features.thumb_block_accounting = false;
     if ready
-        .send(Ok((cpu.identity(), cpu.features(), pause_requested)))
+        .send(Ok((cpu.identity(), features, pause_requested)))
         .is_err()
     {
         return;

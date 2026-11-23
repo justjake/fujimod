@@ -409,6 +409,8 @@ pub struct Features {
     pub tighten_instruction_limit: bool,
     pub translation_filter: bool,
     pub block_accounting: bool,
+    /// The block accounting record includes the opt-in Thumb coarse page.
+    pub thumb_block_accounting: bool,
     pub watched_stores: bool,
     pub backing_observation: bool,
     pub store_pc_control: bool,
@@ -516,7 +518,9 @@ pub struct TranslationHooks {
 /// lifetime belong to the runtime. Fields match the published accelerator ABI;
 /// the runtime accesses this record only while execution is stopped/in a hook.
 /// `enabled` selects exact ring accounting (1), coarse interactive accounting
-/// without ring writes (2), or disabled accounting (0).
+/// without ring writes (2), or disabled accounting (0). Thumb coarse mode (3)
+/// is available through [`ThumbBlockAccounting`] when the backend advertises
+/// that capability.
 #[repr(C)]
 pub struct BlockAccounting {
     pub budget: i64,
@@ -525,6 +529,15 @@ pub struct BlockAccounting {
     pub mask: u64,
     pub enabled: u64,
     pub pause_requested: *const AtomicU32,
+}
+/// Optional extension to [`BlockAccounting`] for Thumb coarse accounting.
+/// The nested prefix preserves the existing block accounting layout; backends
+/// expose this larger record only when `Features::thumb_block_accounting` is
+/// true.
+#[repr(C)]
+pub struct ThumbBlockAccounting {
+    pub accounting: BlockAccounting,
+    pub thumb_page: u64,
 }
 /// A checkpoint associated with an owning processor. Durable export carries
 /// data only; `Cpu::import_snapshot` binds that data to a receiving processor.
@@ -874,6 +887,11 @@ pub trait Cpu {
     fn retry_block(&self, instructions: u32) -> Result<(), String>;
     fn request_restart(&self) -> Result<(), String>;
     fn accounting(&self) -> Option<NonNull<BlockAccounting>>;
+    /// Returns the extended accounting record only when the backend reports
+    /// `thumb_block_accounting`.
+    fn thumb_accounting(&self) -> Option<NonNull<ThumbBlockAccounting>> {
+        None
+    }
     /// # Safety
     /// The bitmap is writable and covers every backing page; both buffers
     /// outlive observation and are accessed only under the owner's CPU rules.

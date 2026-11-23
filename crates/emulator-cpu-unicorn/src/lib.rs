@@ -680,8 +680,13 @@ impl Cpu for Core {
     }
     fn features(&self) -> Features {
         let e = &self.api.extensions;
-        let frontend =
-            self.model != Model::ArmV8A || e.features & ffi::FEATURE_AARCH64_ACCOUNTING != 0;
+        let frontend = self.model != Model::ArmV8A
+            || e.features & ffi::FEATURE_AARCH64_ACCOUNTING != 0;
+        let block_accounting = frontend && e.features & 2 != 0
+            && e.features & ffi::FEATURE_PAUSE_ACCOUNTING_LAYOUT != 0
+            && e.features & ffi::FEATURE_PARALLEL_TCG != 0
+            && e.set_parallel_cpus.is_some()
+            && e.accounting.is_some();
         Features {
             asynchronous_runs: false,
             guest_clock: false,
@@ -696,12 +701,9 @@ impl Cpu for Core {
                 && e.request_restart.is_some(),
             // The R-profile backend writes the appended pause pointer. Require
             // its ABI bit before exposing the accounting record to that backend.
-            block_accounting: frontend
-                && e.features & 2 != 0
-                && e.features & ffi::FEATURE_PAUSE_ACCOUNTING_LAYOUT != 0
-                && e.features & ffi::FEATURE_PARALLEL_TCG != 0
-                && e.set_parallel_cpus.is_some()
-                && e.accounting.is_some(),
+            block_accounting,
+            thumb_block_accounting: block_accounting
+                && e.features & ffi::FEATURE_THUMB_BLOCK_ACCOUNTING != 0,
             watched_stores: e.hook_watched.is_some() && e.watch.is_some(),
             backing_observation: e.observe_backings.is_some(),
             store_pc_control: e.write_hook_pc_sync.is_some(),
@@ -1289,6 +1291,15 @@ impl Cpu for Core {
             return None;
         }
         NonNull::new(unsafe { self.api.extensions.accounting.unwrap()(self.raw) }.cast())
+    }
+    fn thumb_accounting(&self) -> Option<NonNull<ThumbBlockAccounting>> {
+        if !self.features().thumb_block_accounting {
+            return None;
+        }
+        let record = NonNull::<ffi::ThumbAccounting>::new(unsafe {
+            self.api.extensions.accounting.unwrap()(self.raw).cast()
+        })?;
+        Some(record.cast())
     }
     unsafe fn observe_backings(&self, ranges: &[BackingObserver]) -> Result<(), String> {
         self.check_tlbi_mutation()?;
