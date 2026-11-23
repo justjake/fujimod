@@ -448,42 +448,29 @@ pub fn assemble_with_starts(
             })
         })
         .collect::<Result<_, _>>()?;
-    let peripherals = soc
-        .peripherals
-        .iter()
-        .map(|mapping| {
-            let core = *cores
-                .get(mapping.core.as_str())
-                .ok_or_else(|| format!("peripheral mapping names absent core {}", mapping.core))?;
-            let block = soc
-                .blocks
-                .iter()
-                .find(|block| block.id == mapping.block_id)
-                .ok_or_else(|| {
-                    format!("peripheral mapping names absent block {}", mapping.block_id)
-                })?;
-            let offset = mapping.offset.unwrap_or(0);
+    let mut peripherals = Vec::new();
+    for block in &soc.blocks {
+        for view in &block.views {
+            let core = *cores.get(view.core.as_str()).ok_or_else(|| {
+                format!("block {} view names absent core {}", block.id, view.core)
+            })?;
+            let offset = view.offset.unwrap_or(0);
             if offset >= block.size {
-                return Err(format!(
-                    "peripheral mapping offset exceeds block {}",
-                    block.id
-                ));
+                return Err(format!("block {} view offset exceeds the block", block.id));
             }
-            Ok(factory::Peripheral {
+            peripherals.push(factory::Peripheral {
                 core,
-                address: mapping.address,
+                address: view.address,
                 physical: block
                     .base
                     .checked_add(offset)
-                    .ok_or("peripheral physical address overflows")?,
-                size: usize::try_from(block.size - offset).map_err(|_| {
-                    format!("peripheral block {} exceeds host address space", block.id)
-                })?,
-            })
-        })
-        .collect::<Result<_, String>>()?;
+                    .ok_or("block view physical address overflows")?,
+                size: usize::try_from(block.size - offset)
+                    .map_err(|_| format!("block {} exceeds host address space", block.id))?,
+            });
+        }
+    }
     let (numerator, denominator) = (rate.numerator, rate.denominator);
-    let mut peripherals: Vec<factory::Peripheral> = peripherals;
     if let Some(drain) = body
         .hardware
         .as_ref()
@@ -824,7 +811,6 @@ mod tests {
                     },
                 }],
             }],
-            peripherals: vec![],
             reset: SocReset {
                 release: None,
                 coprocessor_writes: vec![],
