@@ -224,5 +224,9 @@ erase-block boundaries. Failed nonblank or partial bursts are reread page by
 page. Completed erased ECC bursts flag every covered page; the returned
 `uncorrectable_granularity_bytes` reports the maximum observation span. The
 command-callback reader uses a 60 KiB buffer inside its 64 KiB executable
-reservation. The native backup example records elapsed workflow time, progress
+reservation, or, when the callback profile declares `staging` RAM, reads a
+whole staging range per call (reader ABI 2). The builder checks the staging
+translation walk from the root table (identity-mapped, writable, the declared
+memory attribute) and pins each descriptor as a live word check; the workflow
+requires the range to be zero before the first read and clears it afterward. The native backup example records elapsed workflow time, progress
 and command counts/timings alongside the verified file coverage and hash.

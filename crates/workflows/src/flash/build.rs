@@ -183,6 +183,65 @@ fn symbol(manifest: &Value, name: &str, size: Option<u64>, base: u64, count: u64
     Ok(address)
 }
 
+/// The callback profile's staging RAM for reader ABI 2. Its translation walk
+/// starts at the root table and must end in an identity-mapped, writable
+/// block or page with the profile's memory attribute index; every walked
+/// descriptor becomes a live word check.
+fn staging_range(staging: &Value, root: u64, words: &mut Vec<WordCheck>) -> Result<Range> {
+    const OUTPUT: u64 = 0x0000_ffff_ffff_f000;
+    let address = num(staging, "address")?;
+    let size = num(staging, "size")?;
+    let attribute = num(staging, "attribute_index")?;
+    let path = list(staging, "path")?;
+    check(
+        size != 0 && attribute < 8 && !path.is_empty() && path.len() <= 3,
+        "staging range or walk is empty",
+    )?;
+    let mut table = root;
+    for (level, row) in path.iter().enumerate() {
+        let shift = 30 - 9 * level as u64;
+        let at = num(row, "address")?;
+        let value = num(row, "value")?;
+        check(
+            at == table + 8 * ((address >> shift) & 0x1ff),
+            "staging walk does not follow the root table",
+        )?;
+        if level + 1 < path.len() {
+            check(
+                row["kind"] == "table" && value & 3 == 3,
+                "staging walk has a non-table step",
+            )?;
+            table = value & OUTPUT;
+        } else {
+            let span = 1u64 << shift;
+            let start = address & !(span - 1);
+            let (kind, low) = if level == 2 {
+                ("page", 3)
+            } else {
+                ("block", 1)
+            };
+            check(
+                row["kind"] == kind
+                    && value & 3 == low
+                    && (value >> 2) & 7 == attribute
+                    && value & (1 << 10) != 0
+                    && value & (1 << 7) == 0
+                    && value & OUTPUT & !(span - 1) == start
+                    && address
+                        .checked_add(size)
+                        .is_some_and(|end| end <= start + span),
+                "staging mapping is not identity, writable and of the profile's attribute",
+            )?;
+        }
+        words.push(WordCheck {
+            address: at,
+            size: 8,
+            value,
+        });
+    }
+    Ok(Range { address, size })
+}
+
 /// Verify source identities, executable mappings, symbols and the initial
 /// update-backed control without constructing a CPU or opening a device.
 pub fn prepare(input: &Selection, selected: &ResolvedSelection) -> Result<(Artifact, Vec<u8>)> {
@@ -340,6 +399,14 @@ pub fn prepare(input: &Selection, selected: &ResolvedSelection) -> Result<(Artif
         size: 4,
         value: 7,
     });
+    let staging = match profile.get("staging") {
+        None => None,
+        Some(staging) => Some(staging_range(
+            staging,
+            num(translation, "root")?,
+            &mut words,
+        )?),
+    };
     let stock_reader = flash
         .reader
         .as_ref()
@@ -400,14 +467,14 @@ pub fn prepare(input: &Selection, selected: &ResolvedSelection) -> Result<(Artif
         request: symbol(
             &manifest,
             "flash_reader_request",
-            Some(24),
+            Some(40),
             base,
             image.len() as u64,
         )?,
         result: symbol(
             &manifest,
             "flash_reader_result",
-            Some(40),
+            Some(56),
             base,
             image.len() as u64,
         )?,
@@ -442,6 +509,7 @@ pub fn prepare(input: &Selection, selected: &ResolvedSelection) -> Result<(Artif
         checks,
         control_sha256: sha256(control),
         update_size: update_bytes.len() as u64,
+        staging,
     };
     payload.validate(flash, bulk, &image)?;
     Ok((
@@ -949,4 +1017,57 @@ pub fn stage(recipe: &Stage) -> Result<()> {
     fs::write(&temporary, bytes)?;
     fs::rename(temporary, path)?;
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn staging(path: Value) -> Value {
+        json!({"address":"0x44000000","size":0x1000000,"attribute_index":1,"path":path})
+    }
+    fn block(address: &str, value: &str) -> Value {
+        json!([{"address":address,"value":value,"kind":"block"}])
+    }
+
+    #[test]
+    fn staging_walk_from_the_root_becomes_live_word_checks() {
+        let mut words = Vec::new();
+        let range = staging_range(
+            &staging(block("0xbe008", "0x0060000040000605")),
+            0xbe000,
+            &mut words,
+        )
+        .unwrap();
+        assert_eq!((range.address, range.size), (0x4400_0000, 0x100_0000));
+        assert_eq!(words.len(), 1);
+        assert_eq!(
+            (words[0].address, words[0].value),
+            (0xbe008, 0x0060_0000_4000_0605)
+        );
+    }
+
+    #[test]
+    fn staging_walk_refuses_other_entries_mappings_and_attributes() {
+        for (path, why) in [
+            (block("0xbe000", "0x0060000040000605"), "another root entry"),
+            (block("0xbe008", "0x0060000080000605"), "not identity"),
+            (block("0xbe008", "0x0060000040000609"), "attribute index 2"),
+            (block("0xbe008", "0x0060000040000685"), "read-only"),
+            (block("0xbe008", "0x0060000040000205"), "access flag clear"),
+            (block("0xbe008", "0x0060000040000607"), "table, not block"),
+            (json!([]), "empty walk"),
+        ] {
+            assert!(
+                staging_range(&staging(path), 0xbe000, &mut Vec::new()).is_err(),
+                "{why} must be refused"
+            );
+        }
+        let mut wide = staging(block("0xbe008", "0x0060000040000605"));
+        wide["address"] = json!("0x7f800000");
+        assert!(
+            staging_range(&wide, 0xbe000, &mut Vec::new()).is_err(),
+            "a range crossing the mapped block must be refused"
+        );
+    }
 }

@@ -167,8 +167,274 @@ fn fixture() -> (FirmwareBulk, FirmwareFlash, Payload, Vec<u8>) {
         }],
         control_sha256: bulk::hex(&sha256_bytes(&[5; 64])),
         update_size: 5000,
+        staging: None,
     };
     (bulk, flash, payload, image)
+}
+/// The sample with reader ABI 2: 40-byte request, 56-byte result and one
+/// flash chunk of staging RAM outside the executable reservation.
+/// Exchanges of a staged backup up to the callback-slot read: identity, the
+/// reset guard and debug gate, the qualified source and the code checks.
+fn staged_prologue(original: [u8; 12]) -> Vec<fujimod_usb::testing::Exchange> {
+    let mut s = info(4, "X-M5");
+    s.extend(info(8, "2.06"));
+    s.extend(cfg(163, 1, false));
+    s.extend(cfg(247, 0, false));
+    s.extend(cfg(247, 1, true));
+    s.extend(cfg(247, 1, false));
+    s.extend(memory_read(0x1300, &words(&[0x100000, 0, 32])));
+    s.extend(memory_read(0x1900, &0x2000u64.to_le_bytes()));
+    s.extend(crate::bulk::tests::qualified());
+    s.extend(memory_read(0x1300, &words(&[0x100000, 0, 32])));
+    s.extend(memory_read(0x1400, &original));
+    s.extend(write(0x1400, &words(&[0, 0, 32])));
+    s.extend(memory_read(0x1400, &words(&[0, 0, 32])));
+    s.extend(memory_read(0x1000, b"stoc"));
+    s.extend(data(0x1000, b"stoc"));
+    s.extend(memory_read(0x1800, &[0; 16]));
+    s.extend(memory_read(0x1000, b"stock code"));
+    s.extend(memory_read(0x1600, &1u32.to_le_bytes()));
+    s
+}
+/// Exchanges that restore the source state and the debug gate after a run.
+fn staged_epilogue(original: [u8; 12]) -> Vec<fujimod_usb::testing::Exchange> {
+    let mut s = memory_read(0x1400, &words(&[0, 0, 32]));
+    s.extend(write(0x1400, &original));
+    s.extend(memory_read(0x1400, &original));
+    s.extend(cfg(163, 1, false));
+    s.extend(cfg(247, 1, false));
+    s.extend(cfg(247, 0, true));
+    s.extend(cfg(247, 0, false));
+    s
+}
+#[test]
+fn interrupted_run_recovery_refuses_a_foreign_callback_or_executable() {
+    for foreign_slot in [true, false] {
+        let (bulk, flash, payload, image) = staged_fixture();
+        let original = [7; 12];
+        let mut s = staged_prologue(original);
+        if foreign_slot {
+            s.extend(memory_read(0x1700, &0x4100u64.to_le_bytes()));
+        } else {
+            let mut other = image.clone();
+            other.resize(0x2000, 0);
+            other[image.len()] = 1; // past the image: not this executable
+            s.extend(memory_read(0x1700, &0x4080u64.to_le_bytes()));
+            s.extend(bulk_chunks(0x4000, &other));
+        }
+        s.extend(staged_epilogue(original));
+        let (mut session, script) = opened(s);
+        let error = block_on(read(
+            &mut session,
+            &bulk,
+            &flash,
+            &payload,
+            &image,
+            limits(),
+            crate::flash::Selection::Whole,
+            &mut crate::flash::Callbacks {
+                chunk: &mut |_, _| panic!("nothing is read"),
+                progress: &mut |_, _| Ok(()),
+            },
+        ))
+        .unwrap_err()
+        .to_string();
+        let expected = if foreign_slot {
+            "Service callback is occupied"
+        } else {
+            "occupied by a different executable"
+        };
+        assert!(error.contains(expected), "{error}");
+        assert_eq!(script.remaining(), 0, "the slot and arena stay untouched");
+        assert_eq!(session.state(), SessionState::Ready);
+    }
+}
+fn staged_fixture() -> (FirmwareBulk, FirmwareFlash, Payload, Vec<u8>) {
+    let (bulk, flash, mut payload, image) = fixture();
+    payload.result = 0x4040;
+    payload.mutable[0].size = 0x80;
+    payload.staging = Some(Range {
+        address: 0x10000,
+        size: 4096,
+    });
+    (bulk, flash, payload, image)
+}
+fn reader_words(values: &[u64]) -> Vec<u8> {
+    values.iter().copied().flat_map(u64::to_le_bytes).collect()
+}
+#[test]
+fn staging_must_be_aligned_inside_the_window_and_clear_of_owned_state() {
+    let (bulk, flash, payload, image) = staged_fixture();
+    payload.validate(&flash, &bulk, &image).unwrap();
+    for (address, size) in [
+        (0x10020, 4096),     // unaligned
+        (0x10000, 0),        // empty
+        (0x10000, 32),       // smaller than the control chunk
+        (0x5000, 4096),      // inside the executable reservation
+        (0x100000, 4096),    // over the registered scratch
+        (0x1f0000, 0x20000), // past the bulk window
+        (0x1700, 64),        // over the callback
+    ] {
+        let mut bad = payload.clone();
+        bad.staging = Some(Range { address, size });
+        assert!(
+            bad.validate(&flash, &bulk, &image)
+                .unwrap_err()
+                .to_string()
+                .contains("staging"),
+            "{address:#x}+{size:#x} must be refused"
+        );
+    }
+    let mut short = payload.clone();
+    short.result = 0x4018;
+    assert!(
+        short.validate(&flash, &bulk, &image).is_err(),
+        "ABI 2 objects overlap"
+    );
+}
+#[test]
+fn staged_backup_checks_staging_is_empty_reads_through_it_and_clears_it() {
+    // leftover: an earlier session died after publishing this reader, leaving
+    // its entry in the callback slot and its image in the arena. landed:
+    // memory reads of the staged control chunk show the stock DMA's bytes.
+    for (occupied, leftover, landed) in [
+        (false, false, true),
+        (true, false, true),
+        (false, true, true),
+        (false, false, false),
+    ] {
+        let (bulk, flash, payload, image) = staged_fixture();
+        payload.validate(&flash, &bulk, &image).unwrap();
+        let original = [7; 12];
+        let mut s = staged_prologue(original);
+        if leftover {
+            // Proven ours: unpublish, then clear the arena as a restore would.
+            let mut left = image.clone();
+            left[0x40..0x78].fill(3); // the result object is mutable
+            left.resize(0x2000, 0);
+            s.extend(memory_read(0x1700, &0x4080u64.to_le_bytes()));
+            s.extend(bulk_chunks(0x4000, &left));
+            s.extend(write_verified(0x1700, &[0; 8]));
+            s.extend(memory_read(0x1700, &[0; 8]));
+            s.extend(bulk_chunks(0x4000, &left));
+            for (i, piece) in vec![0; image.len()].chunks(64).enumerate() {
+                s.extend(write(0x4000 + (i * 64) as u32, piece));
+            }
+            s.extend(raw_chunks(0x4000, &vec![0; image.len()]));
+            s.extend(bulk_chunks(0x4000, &vec![0; 0x2000]));
+        } else {
+            s.extend(memory_read(0x1700, &[0; 8]));
+        }
+        s.extend(bulk_chunks(0x4000, &vec![0; 0x2000]));
+        for (i, piece) in image.chunks(64).enumerate() {
+            s.extend(write_verified(0x4000 + (i * 64) as u32, piece));
+        }
+        s.extend(bulk_chunks(0x4000, &image));
+        s.extend(invoke(0x1800, 7));
+        s.extend(memory_read(0x1700, &[0; 8]));
+        s.extend(write_verified(0x1700, &0x4080u64.to_le_bytes()));
+        s.extend(memory_read(0x4050, &[0; 8]));
+        let mut observed = image.clone();
+        let mut calls = 0;
+        let mut call = |s: &mut Vec<_>, request: Vec<u8>, result: Vec<u8>| {
+            s.extend(write_verified(0x4000, &request));
+            s.extend(memory_read(0x1700, &0x4080u64.to_le_bytes()));
+            s.extend(invoke(0x4080, 0)[12..16].iter().cloned());
+            s.extend(memory_read(0x4040, &result));
+            observed[..40].copy_from_slice(&request);
+            observed[0x40..0x78].copy_from_slice(&result);
+        };
+        calls += 1;
+        let (status, offset) = if occupied { (2, 0x18) } else { (0, 4096) };
+        call(
+            &mut s,
+            reader_words(&[2, 0, 4096, 0x10000, 1]),
+            reader_words(&[2, status, calls, offset, 4096, 5, 1000]),
+        );
+        if !occupied {
+            for (offset, n) in [(0, 64), (4096, 4096), (0, 4096)] {
+                calls += 1;
+                call(
+                    &mut s,
+                    reader_words(&[2, 0xf0000000 + offset, n, 0x10000, 0]),
+                    reader_words(&[2, 0, calls, 0xf0000000 + offset, n, 100, 1000]),
+                );
+                if calls == 2 {
+                    // The control chunk is read back over memory reads first.
+                    let byte = if landed { 5 } else { 0 };
+                    s.extend(raw_chunks(0x10000, &vec![byte; n as usize]));
+                    if !landed {
+                        break; // refused before any bulk read
+                    }
+                }
+                s.extend(bulk_chunks(0x10000, &vec![5; n as usize]));
+            }
+            calls += 1;
+            call(
+                &mut s,
+                reader_words(&[2, 0, 4096, 0x10000, 2]),
+                reader_words(&[2, 0, calls, 4096, 4096, 7, 1000]),
+            );
+        }
+        s.extend(memory_read(0x1700, &0x4080u64.to_le_bytes()));
+        s.extend(write_verified(0x1700, &[0; 8]));
+        s.extend(memory_read(0x1700, &[0; 8]));
+        let mut arena = observed;
+        arena.resize(0x2000, 0);
+        s.extend(bulk_chunks(0x4000, &arena));
+        for (i, piece) in vec![0; image.len()].chunks(64).enumerate() {
+            s.extend(write(0x4000 + (i * 64) as u32, piece));
+        }
+        s.extend(raw_chunks(0x4000, &vec![0; image.len()]));
+        s.extend(bulk_chunks(0x4000, &vec![0; 0x2000]));
+        s.extend(memory_read(0x1400, &words(&[0, 0, 32])));
+        s.extend(write(0x1400, &original));
+        s.extend(memory_read(0x1400, &original));
+        s.extend(cfg(163, 1, false));
+        s.extend(cfg(247, 1, false));
+        s.extend(cfg(247, 0, true));
+        s.extend(cfg(247, 0, false));
+        let (mut session, script) = opened(s);
+        let mut chunks = Vec::new();
+        let result = block_on(read(
+            &mut session,
+            &bulk,
+            &flash,
+            &payload,
+            &image,
+            limits(),
+            crate::flash::Selection::Whole,
+            &mut crate::flash::Callbacks {
+                chunk: &mut |o, d| {
+                    chunks.push((o, d));
+                    Ok(())
+                },
+                progress: &mut |_, _| Ok(()),
+            },
+        ));
+        if !landed {
+            let error = result.unwrap_err().to_string();
+            assert!(error.contains("did not land"), "{error}");
+            assert!(chunks.is_empty());
+        } else if occupied {
+            let error = result.unwrap_err().to_string();
+            assert!(error.contains("staging range is not empty"), "{error}");
+            assert!(error.contains("0x18"), "{error}");
+            assert!(chunks.is_empty(), "nothing is read through occupied RAM");
+        } else {
+            let backup = result.unwrap();
+            assert_eq!(
+                chunks.iter().map(|(o, _)| *o).collect::<Vec<_>>(),
+                vec![4096, 0]
+            );
+            assert_eq!(backup.sha256, bulk::hex(&sha256_bytes(&vec![5; 8192])));
+            assert_eq!(backup.stock_read_seconds, Some(0.3));
+            assert_eq!(backup.recovered_interrupted_run, leftover);
+            assert_eq!(backup.mapped_probe, None, "no mapped window in this flash");
+        }
+        assert_eq!(script.remaining(), 0);
+        assert_eq!(session.state(), SessionState::Ready);
+    }
 }
 fn cfg(offset: u32, value: u8, writing: bool) -> Vec<fujimod_usb::testing::Exchange> {
     use fujimod_usb::ff80::commands::configuration::*;
