@@ -189,6 +189,7 @@ pub struct Core {
 struct InstalledTranslationHooks {
     hooks: TranslationHooks,
     native_execute_end: bool,
+    native_it_accounting: bool,
 }
 impl Core {
     fn capture_context(&self) -> Result<Context, String> {
@@ -1332,6 +1333,9 @@ impl Cpu for Core {
                 native_execute_end: self.api.extensions.features
                     & ffi::FEATURE_THUMB_EXECUTE_END
                     != 0,
+                native_it_accounting: self.api.extensions.features
+                    & ffi::FEATURE_THUMB_IT_ACCOUNTING
+                    != 0,
             })
         });
         let data = context.as_mut().map_or(std::ptr::null_mut(), |h| {
@@ -1629,6 +1633,7 @@ unsafe extern "C" fn classify(data: *mut c_void, address: u64, word: u32) -> i32
     let decision = unsafe { (hooks.classify)(hooks.data, address, word) };
     let action = match decision.instruction {
         InstructionDisposition::Execute => 0,
+        InstructionDisposition::ExecuteItSafe => 0,
         InstructionDisposition::Observe => 1,
         InstructionDisposition::ObserveAndEndBlock => 2,
         InstructionDisposition::ExecuteAndEndBlock if context.native_execute_end => 8,
@@ -1636,6 +1641,13 @@ unsafe extern "C" fn classify(data: *mut c_void, address: u64, word: u32) -> i32
         InstructionDisposition::Replace => 3,
     };
     action
+        | if matches!(decision.instruction, InstructionDisposition::ExecuteItSafe)
+            && context.native_it_accounting
+        {
+            16
+        } else {
+            0
+        }
         | if decision.observe_block
             || (matches!(decision.instruction, InstructionDisposition::ExecuteAndEndBlock)
                 && !context.native_execute_end)
@@ -1707,6 +1719,33 @@ mod tests {
             observe_block: false,
         }
     }
+    unsafe fn thumb_execute_it_safe(_: *mut c_void, _: u64, _: u32) -> Translation {
+        Translation {
+            instruction: InstructionDisposition::ExecuteItSafe,
+            observe_block: false,
+        }
+    }
+    struct ThumbItProbe {
+        cpu: *const Core,
+        seen: Vec<(u64, u32)>,
+    }
+    unsafe fn thumb_it_filter(data: *mut c_void, pc: u64, word: u32) -> Translation {
+        if pc < 0x1006 {
+            unsafe { (*data.cast::<ThumbItProbe>()).seen.push((pc, word)) };
+        }
+        Translation {
+            instruction: if matches!(word, 0xbf08 | 0x4608) {
+                InstructionDisposition::ExecuteItSafe
+            } else {
+                InstructionDisposition::Execute
+            },
+            observe_block: false,
+        }
+    }
+    unsafe fn thumb_it_block_stop(_: Block, data: *mut c_void) {
+        let probe = unsafe { &*data.cast::<ThumbItProbe>() };
+        unsafe { &*probe.cpu }.stop().unwrap();
+    }
     #[test]
     fn execute_and_end_uses_native_bit_or_observed_fallback() {
         let native = InstalledTranslationHooks {
@@ -1716,6 +1755,7 @@ mod tests {
                 data: std::ptr::null_mut(),
             },
             native_execute_end: true,
+            native_it_accounting: false,
         };
         let fallback = InstalledTranslationHooks {
             native_execute_end: false,
@@ -1723,6 +1763,139 @@ mod tests {
         };
         assert_eq!(unsafe { classify(&native as *const _ as *mut c_void, 0x1000, 0xb480) }, 8);
         assert_eq!(unsafe { classify(&fallback as *const _ as *mut c_void, 0x1000, 0xb480) }, 6);
+    }
+    #[test]
+    fn it_safe_disposition_requires_native_feature() {
+        let native = InstalledTranslationHooks {
+            hooks: TranslationHooks {
+                classify: thumb_execute_it_safe,
+                restart: thumb_restart,
+                data: std::ptr::null_mut(),
+            },
+            native_execute_end: false,
+            native_it_accounting: true,
+        };
+        let fallback = InstalledTranslationHooks {
+            native_it_accounting: false,
+            ..native
+        };
+        assert_eq!(unsafe { classify(&native as *const _ as *mut c_void, 0x1000, 0xbf08) }, 16);
+        assert_eq!(unsafe { classify(&fallback as *const _ as *mut c_void, 0x1000, 0xbf08) }, 0);
+    }
+    #[test]
+    fn mode4_it_pure_instructions_use_native_accounting() {
+        let cpu = library().open(Model::CortexM4, 4 * 1024 * 1024).unwrap();
+        cpu.set_guard_diagnostics(true).unwrap();
+        assert_ne!(cpu.api.extensions.features & ffi::FEATURE_THUMB_IT_ACCOUNTING, 0);
+        cpu.map_zeroed(0x1000, 0x1000, 7).unwrap();
+        // IT EQ; MOV R0,R1; B . The fast TB contains only pure IT work before
+        // its terminal branch, then the exhausted guard stops the next entry.
+        cpu.write_memory(0x1000, &[0x08, 0xbf, 0x08, 0x46, 0xfe, 0xe7]).unwrap();
+        cpu.write_register(arm::CORE[0], &0u32.to_le_bytes()).unwrap();
+        cpu.write_register(arm::CORE[1], &0x1234u32.to_le_bytes()).unwrap();
+        cpu.write_register(
+            Register::Arm32(arm::Register::Cpsr),
+            &0x4100_0020u32.to_le_bytes(),
+        )
+        .unwrap();
+        let mut it_probe = ThumbItProbe {
+            cpu: &cpu,
+            seen: Vec::new(),
+        };
+        unsafe {
+            cpu.translation_hooks(Some(TranslationHooks {
+                classify: thumb_it_filter,
+                restart: thumb_restart,
+                data: (&mut it_probe as *mut ThumbItProbe).cast(),
+            }))
+            .unwrap();
+            cpu.install_hook(Hook::Block {
+                callback: thumb_it_block_stop,
+                data: (&mut it_probe as *mut ThumbItProbe).cast(),
+                range: HookRange::All,
+            })
+            .unwrap();
+        }
+        let accounting = cpu.thumb_accounting().unwrap();
+        let accounting_ptr = accounting.as_ptr();
+        unsafe {
+            (*accounting_ptr).accounting.enabled = 4;
+            (*accounting_ptr).accounting.budget = 3;
+            (*accounting_ptr).thumb_page = 0x1000;
+        }
+
+        cpu.run(Run {
+            begin: 0x1001,
+            until: None,
+            watchdog_us: 0,
+            instructions: None,
+        })
+        .unwrap();
+        assert_eq!(reg(&cpu, arm::CORE[0]), 0x1234);
+        assert_eq!(reg(&cpu, Register::Pc), 0x1004);
+        let cpsr = reg(&cpu, Register::Arm32(arm::Register::Cpsr)) as u32;
+        let itstate = ((cpsr >> 25) & 3) | ((cpsr >> 8) & 0xfc);
+        assert_eq!(itstate, 0);
+        let counters = cpu.exit_counters().unwrap();
+        assert_eq!(&it_probe.seen[..3], [(0x1000, 0xbf08), (0x1002, 0x4608), (0x1004, 0xe7fe)]);
+        assert_eq!(counters["guard_budget_callbacks"], 1);
+        assert_eq!(counters["guard_classifier_slow_callbacks"], 0);
+        assert_eq!(counters["guard_other_slow_callbacks"], 0);
+        assert_eq!(unsafe { (*accounting_ptr).accounting.budget }, 0);
+    }
+    #[test]
+    fn mode4_itstate_is_preserved_when_instruction_limit_splits_the_it_block() {
+        let cpu = library().open(Model::CortexM4, 4 * 1024 * 1024).unwrap();
+        cpu.set_guard_diagnostics(true).unwrap();
+        cpu.map_zeroed(0x1000, 0x1000, 7).unwrap();
+        cpu.write_memory(0x1000, &[0x08, 0xbf, 0x08, 0x46]).unwrap();
+        cpu.write_register(arm::CORE[0], &0u32.to_le_bytes()).unwrap();
+        cpu.write_register(arm::CORE[1], &0x1234u32.to_le_bytes()).unwrap();
+        cpu.write_register(
+            Register::Arm32(arm::Register::Cpsr),
+            &0x4100_0020u32.to_le_bytes(),
+        )
+        .unwrap();
+        let mut it_probe = ThumbItProbe {
+            cpu: &cpu,
+            seen: Vec::new(),
+        };
+        unsafe {
+            cpu.translation_hooks(Some(TranslationHooks {
+                classify: thumb_it_filter,
+                restart: thumb_restart,
+                data: (&mut it_probe as *mut ThumbItProbe).cast(),
+            }))
+            .unwrap();
+            cpu.install_hook(Hook::Block {
+                callback: thumb_block_noop,
+                data: std::ptr::null_mut(),
+                range: HookRange::All,
+            })
+            .unwrap();
+        }
+        let accounting = cpu.thumb_accounting().unwrap();
+        let accounting_ptr = accounting.as_ptr();
+        unsafe {
+            (*accounting_ptr).accounting.enabled = 4;
+            (*accounting_ptr).accounting.budget = 2;
+            (*accounting_ptr).thumb_page = 0x1000;
+        }
+        for (begin, expected_pc) in [(0x1001, 0x1002), (0x1003, 0x1004)] {
+            cpu.run(Run {
+                begin,
+                until: None,
+                watchdog_us: 0,
+                instructions: Some(1),
+            })
+            .unwrap();
+            assert_eq!(reg(&cpu, Register::Pc), expected_pc);
+        }
+        assert_eq!(reg(&cpu, arm::CORE[0]), 0x1234);
+        let cpsr = reg(&cpu, Register::Arm32(arm::Register::Cpsr)) as u32;
+        assert_eq!(((cpsr >> 25) & 3) | ((cpsr >> 8) & 0xfc), 0);
+        assert_eq!(unsafe { (*accounting_ptr).accounting.budget }, 2);
+        assert_eq!(it_probe.seen[..2], [(0x1000, 0xbf08), (0x1002, 0x4608)]);
     }
     unsafe fn thumb_restart(_: *mut c_void, _: u64) {}
     unsafe fn thumb_block_noop(_: Block, _: *mut c_void) {}
