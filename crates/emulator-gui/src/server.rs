@@ -139,17 +139,24 @@ impl Viewer {
 
     /// The control catalog, once the session's controls are connected.
     fn publish_catalog(&mut self, session: &Session) -> Result<(), String> {
-        let Ok(state) = session.control_state() else {
+        let Ok(_) = session.control_state() else {
             return Ok(());
         };
-        self.catalog_sent = true;
+        let firmware = identity(session, "firmware_id");
+        let selection = fujimod_catalog::reference::ReferenceCatalog::bundled()?
+            .resolve_firmware(&firmware)?;
+        let controls = selection.physical_controls.ok_or_else(|| {
+            format!("{} has no physical controls catalog", selection.body.id)
+        })?;
         self.send_json(Event::Catalog {
             configuration: identity(session, "configuration_id"),
-            body: identity(session, "body_id"),
-            model: identity(session, "firmware_id"),
-            firmware: identity(session, "firmware_id"),
-            controls: serde_json::to_value(&state.inputs).map_err(|error| error.to_string())?,
-        })
+            model: selection.body.id.to_uppercase(),
+            body: selection.body.id,
+            firmware,
+            controls,
+        })?;
+        self.catalog_sent = true;
+        Ok(())
     }
 
     /// Apply the window's pending commands to `run` and send its control
