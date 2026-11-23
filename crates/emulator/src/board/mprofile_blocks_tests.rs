@@ -205,8 +205,8 @@ fn translated_thumb_budget_matches_the_observer_at_each_stop() {
     assert!(s.blocks[0].as_ref().unwrap().inline.entries > 0);
 }
 
-/// The same mixed-width loop through ordinary RAM, a watched code page, or
-/// the end of mapped RAM. The last case faults on the store partway through
+/// The same mixed-width loop through ordinary RAM, a watched code page, the
+/// NVIC enable register, or the end of mapped RAM. The last case faults partway through
 /// a translated block after several successful iterations.
 fn transfer_loop(blocks: bool, address: u32, advance: bool) -> Board {
     let mut b = board(blocks);
@@ -226,7 +226,7 @@ fn transfer_loop(blocks: bool, address: u32, advance: bool) -> Board {
 
 #[test]
 fn translated_transfers_match_at_watched_stores_and_data_faults() {
-    for (address, advance) in [(0x12000, false), (0x10800, false), (0x17ff0, true)] {
+    for (address, advance) in [(0x12000, false), (0x10800, false), (0xe000_e100, false), (0x17ff0, true)] {
         let mut reference = transfer_loop(false, address, advance);
         let mut translated = transfer_loop(true, address, advance);
         for stop in [11, 51, 139, 2031] {
@@ -240,7 +240,7 @@ fn translated_transfers_match_at_watched_stores_and_data_faults() {
             assert_eq!(translated.state.borrow().instructions, reference.state.borrow().instructions);
             assert_eq!(translated.state.borrow().timeline.now(), reference.state.borrow().timeline.now());
             if let Err(error) = b {
-                assert!(advance && error.contains("unmapped"), "{error}");
+                assert!(advance && error.to_ascii_lowercase().contains("unmapped"), "{error}");
                 break;
             }
             assert_eq!(actual.state, expected.state, "{address:#x} at {stop}");

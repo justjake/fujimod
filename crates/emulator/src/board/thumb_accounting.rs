@@ -35,7 +35,7 @@ impl Window {
             // The extension begins with the existing Thumb accounting record.
             let record = unsafe { pointer.as_mut() };
             record.last_block_bytes = 0;
-            Some(NonNull::from(&mut record.thumb_accounting))
+            Some(pointer.cast())
         } else if enabled {
             cpu.thumb_accounting()
         } else {
