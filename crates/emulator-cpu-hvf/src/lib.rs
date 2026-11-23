@@ -73,7 +73,7 @@ enum MmioOutcome {
 pub struct Core {
     worker: Option<JoinHandle<()>>,
     budget_timer: Option<worker::BudgetTimer>,
-    commands: mpsc::Sender<Op>,
+    commands: mpsc::SyncSender<Op>,
     events: mpsc::Receiver<Event>,
     replies: mpsc::Receiver<Result<Value, String>>,
     machine: Arc<Machine>,
@@ -117,7 +117,9 @@ impl Snapshot for State {
 }
 impl Core {
     fn create(machine: Arc<Machine>) -> Result<Self, String> {
-        let (commands, rx) = mpsc::channel();
+        // The owner issues one command at a time. A run consumes its start
+        // command before asking the owner to service a callback.
+        let (commands, rx) = mpsc::sync_channel(1);
         let (reply, replies) = mpsc::sync_channel(1);
         let (event_tx, events) = mpsc::sync_channel(1);
         let (ready_tx, ready) = mpsc::channel();
