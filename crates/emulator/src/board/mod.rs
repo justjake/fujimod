@@ -1416,7 +1416,7 @@ impl Board {
             s.mprofile_loops.begin_run(core, entered + budget as u64);
             drop(s);
             self.sync_store_hook(core)?;
-            let blocks = self.sync_block_mode(core, budget as u64)?;
+            let (blocks, _thumb_slice) = self.sync_block_mode(core, budget as u64)?;
             self.sync_poll_loops(core, entered, budget as u64);
             let cpu = &self.cpus[core];
             // The exact budget ends at the first device/DMA/processor event
@@ -1430,14 +1430,6 @@ impl Board {
             // Block execution has no engine counter: the board debits entries.
             let mut limit = budget;
             self.state.borrow_mut().run_entries[core] = 0;
-            let _thumb_slice = {
-                let mut state = self.state.borrow_mut();
-                let interactive = state.execution_policy == ExecutionPolicy::Interactive
-                    && state.settled.verify == 0;
-                state.blocks[core].as_mut().and_then(|b| {
-                    b.inline.begin(&**cpu, interactive && blocks && b.fast_stores)
-                })
-            };
             let mut result = cpu.run(Run {
                 begin: if cpu.model() == fujimod_emulator_cpu::Model::CortexM4
                     || matches!(
@@ -1689,11 +1681,15 @@ impl Board {
     /// itself (PC witnesses, instruction points, discovery stubs, write
     /// watches): those read counters at their own instructions. Returns
     /// whether the processor runs in block execution, with `budget` entries.
-    fn sync_block_mode(&mut self, core: usize, budget: u64) -> Result<bool, String> {
+    fn sync_block_mode(
+        &mut self,
+        core: usize,
+        budget: u64,
+    ) -> Result<(bool, Option<thumb_accounting::Slice>), String> {
         let (active, wanted) = {
             let s = self.state.borrow();
             let Some(blocks) = s.blocks[core].as_ref() else {
-                return Ok(false);
+                return Ok((false, None));
             };
             // The hooks the execution core keeps on this processor: its store
             // hook, and the instruction observer or the block-mode hooks.
@@ -1814,6 +1810,7 @@ impl Board {
         if fast && let Some(profile) = s.mprofile[core].as_mut() {
             profile.watch_reservations();
         }
+        let inline = fast && s.execution_policy == ExecutionPolicy::Interactive && s.settled.verify == 0;
         let blocks = s.blocks[core].as_mut().unwrap();
         blocks.active = wanted;
         blocks.fast_stores = fast;
@@ -1827,7 +1824,7 @@ impl Board {
         // Anything may have happened since the last run.
         blocks.poll = None;
         blocks.poll_enabled = wanted && self.poll_loops.get();
-        Ok(wanted)
+        Ok((wanted, blocks.inline.begin(&*self.cpus[core], inline)))
     }
     /// Discard a processor's translations when its instruction observer
     /// asked for it. Returns whether the stopped slice must resume.
