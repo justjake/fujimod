@@ -7949,20 +7949,15 @@
       "internal_version": "2.16",
       "tables": {
         "bulk": {
-          "status": "unavailable",
-          "errors": [
-            {
-              "locator": "bulk",
-              "reason": "ValueError: Missing service facts: read_gate"
-            }
-          ]
+          "status": "available",
+          "errors": []
         },
         "card-files": {
           "status": "unavailable",
           "errors": [
             {
               "locator": "card_files.locate",
-              "reason": "ValueError: module_open: 0 checked card bindings"
+              "reason": "firmware image not available"
             }
           ]
         },
@@ -7973,38 +7968,6 @@
         "facts": {
           "status": "unavailable",
           "errors": [
-            {
-              "locator": "ui_modes",
-              "reason": "ui_hdmi_allowed_in_current_mode: 1 candidates, 0 verified results (0x1123fcc: HDMI predicate lacks one checked playback/SETUP playback pair)"
-            },
-            {
-              "locator": "menu_cursor",
-              "reason": "menu_cursor_set_node: 0 candidates, 0 verified results"
-            },
-            {
-              "locator": "remote_menu",
-              "reason": "menu_cursor_set_node: 0 candidates, 0 verified results"
-            },
-            {
-              "locator": "ff80_limits",
-              "reason": "usb_service_debug_dispatch: 0 candidates, 0 verified results"
-            },
-            {
-              "locator": "usb_normal_ids",
-              "reason": "Factory flash/DAT bias lacks a unique checked section table"
-            },
-            {
-              "locator": "app80",
-              "reason": "App80 writer lacks the mailbox offset check"
-            },
-            {
-              "locator": "debug_enable",
-              "reason": "usb_service_configuration_write: 0 verified results from 67 candidates (Configuration callback lacks its checked offset-1+count span; Not the service callback with the offset-80 special case)"
-            },
-            {
-              "locator": "service_entry.usb_condition",
-              "reason": "JIGBOOT producer or its complete USB/MCU conditions did not verify"
-            },
             {
               "locator": "service_exit.jig_deinit_link",
               "reason": "Defaults completion/action slot verified; full UI/SYS deinit routing is not yet located"
