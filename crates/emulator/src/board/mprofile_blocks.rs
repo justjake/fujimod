@@ -416,6 +416,23 @@ pub(super) fn can_run_inline(word: u32) -> bool {
             _ => false,
         };
     }
+    // Byte/halfword extension with an optional rotation. Rn=15 is
+    // the extend-only alias. Also admit the fixed-register REV family.
+    if matches!(first & 0xfff0, 0xfa00 | 0xfa10 | 0xfa40 | 0xfa50)
+        && second & 0xf0c0 == 0xf080
+    {
+        let rn = first & 15;
+        return (rn <= 12 || rn == 15) && rd <= 12 && second & 15 <= 12;
+    }
+    if first & 0xfff0 == 0xfa90 && second & 0xf0c0 == 0xf080 {
+        return first & 15 == second & 15 && rd <= 12 && second & 15 <= 12;
+    }
+    // SMULL/UMULL write two distinct ordinary registers.
+    if matches!(first & 0xfff0, 0xfb80 | 0xfba0) {
+        let rd_lo = second >> 12;
+        return second & 0xf0 == 0 && first & 15 <= 12 && second & 15 <= 12
+            && rd_lo <= 12 && rd <= 12 && rd_lo != rd;
+    }
     // Register-specified LSL, LSR, ASR and ROR. The shift count
     // and destination are ordinary registers.
     if first & 0xff80 == 0xfa00 {
@@ -585,6 +602,12 @@ mod tests {
         assert!(!can_run_inline(0xea01_0f02)); // no TST alias without S
         assert!(!can_run_inline(0xea4f_440f)); // shifted operand PC
         assert!(can_run_inline(0xeb41_71e2)); // adc.w r1,r1,r2,asr #31
+        assert!(can_run_inline(0xfba5_2302)); // umull r2,r3,r5,r2
+        assert!(can_run_inline(0xfb85_2302)); // smull r2,r3,r5,r2
+        assert!(can_run_inline(0xfa5f_f389)); // uxtb.w r3,r9
+        assert!(can_run_inline(0xfa93_f3a3)); // rbit r3,r3
+        assert!(!can_run_inline(0xfba5_2202)); // repeated destination
+        assert!(!can_run_inline(0xfa93_f3a4)); // inconsistent REV operands
         assert!(can_run_inline(0xfb04_f303)); // mul r3,r4,r3
         assert!(can_run_inline(0xfb03_4401)); // mla r4,r3,r1,r4
         assert!(can_run_inline(0xfb03_4411)); // mls r4,r3,r1,r4
