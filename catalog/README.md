@@ -74,8 +74,9 @@ either, and each `kind` allows a fixed set of models.
 - `stand-in`: a declared input with no known hardware value.
 
 It names the firmware IDs and code or data addresses the fact rests on.
-Explanations longer than a sentence belong in research notes, not in the
-record. Cores, mappings and body chips carry evidence the same way.
+Prose explanations and citations live outside the record, in caller-supplied
+catalog annotations (`CatalogAnnotations`) keyed by record and field. Cores,
+mappings and body chips carry evidence the same way.
 
 A processor fact found by reading firmware is generated into
 `soc/<id>/<name>.generated.json` by a generator that runs over every

@@ -112,8 +112,10 @@ one whose bindings read them, so native builds skip them: derive with
 `#[cfg_attr(all(target_arch = "wasm32", not(target_os = "emscripten")), derive(tsify::Tsify))]`
 and write tsify attributes under the same condition.
 
-Hardware profiles preserve qualified device graphs and controller settings while
-reference records continue to own identity, memory, and physical attachments.
+The record layout and the home of each fact are defined in the
+[catalog README](../../catalog/README.md); this crate implements it. Hardware
+profiles hold emulator choices and qualified device graphs, not hardware facts,
+and move to the emulation layer that README describes.
 `fujimod_catalog_construction::HardwareSelection` selects one entry from `Soc.hardware.profiles`
 and one from `Body.hardware.profiles`. Profile IDs distinguish REC, service,
 and discovery hardware configurations. Resolution refuses unknown profiles.
