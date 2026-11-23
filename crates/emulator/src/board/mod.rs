@@ -1187,6 +1187,14 @@ impl Board {
         }
         self.state.borrow_mut().code_run = None;
         self.state.borrow_mut().clock_limit = until;
+        {
+            let state = self.state.borrow();
+            for (cpu, profile) in self.cpus.iter().zip(&state.armv7a) {
+                if profile.is_some() {
+                    cpu.select_armv7a_affinity_policy(state.execution_policy)?;
+                }
+            }
+        }
         if self.execution_policy() != ExecutionPolicy::Exact {
             // Concurrent windows do not pass the per-slice check.
             for core in 0..self.cpus.len() {
@@ -2868,10 +2876,9 @@ impl State {
     }
     fn tighten(&self, cpu: &dyn Cpu, core: usize) -> Result<(), String> {
         if cpu.features().tighten_instruction_limit {
-            // The MMIO path already synchronized this processor. Device
-            // work can change deadlines, but the processor remains stopped
-            // in the same access while the new budget is calculated.
-            let entered = self.accounted[core];
+            let entered = cpu
+                .instruction_progress()
+                .ok_or("active entry count is unavailable")?;
             let remaining = match self.parallel.as_ref() {
                 Some(epoch) => epoch.room(core),
                 None => self.timeline.processor_budget(

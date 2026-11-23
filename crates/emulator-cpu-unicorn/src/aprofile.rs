@@ -71,6 +71,7 @@ struct Execution {
     // following setters).
     exclusive_exits: Cell<bool>,
     owner_mpidr: Cell<bool>,
+    board_mpidr: Cell<bool>,
     owner_interrupts: Cell<bool>,
     owner_aborts: Cell<bool>,
     // The owner's in-run performer of board instructions (see
@@ -151,6 +152,7 @@ impl Core {
             stores: RefCell::new(vec![]),
             exclusive_exits: Cell::new(false),
             owner_mpidr: Cell::new(false),
+            board_mpidr: Cell::new(false),
             owner_interrupts: Cell::new(false),
             owner_aborts: Cell::new(false),
             inline: Cell::new(None),
