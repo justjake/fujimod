@@ -2488,7 +2488,6 @@ impl State {
             };
             self.with_host(cpus, |bus, host| bus.event(host, id, token))?;
             self.refresh_deadlines()?;
-            self.refresh_processors()?;
         }
         Ok(())
     }
