@@ -292,6 +292,20 @@ pub(super) fn is_single_transfer(word: u32) -> bool {
 
     let first = (word >> 16) as u16;
     let second = word as u16;
+    let rd = (second >> 8) & 15;
+    // MOVW/MOVT (A7.7.80, A7.7.84). Their immediate fields have no
+    // reserved values; limit the destination to ordinary R0-R12.
+    if matches!(first & 0xfbf0, 0xf240 | 0xf2c0) {
+        return second & 0x8000 == 0 && rd <= 12;
+    }
+    // ADD/SUB (shifted register), with a register-controlled pure arithmetic
+    // result. Exclude SP and PC in all three register fields and reserved bit
+    // 15 of the second halfword. Every immediate shift amount/type is defined.
+    if matches!(first & 0xffe0, 0xeb00 | 0xeba0) {
+        let rn = first & 15;
+        let rm = second & 15;
+        return second & 0x8000 == 0 && rn <= 12 && rd <= 12 && rm <= 12;
+    }
     let operation = first & 0xfff0;
     if matches!(
         operation,
@@ -470,6 +484,14 @@ mod tests {
         assert!(can_run_inline(0xf1b1_0f07)); // cmp r1,#7
         assert!(can_run_inline(0xf04f_0007)); // mov.w r0,#7
         assert!(can_run_inline(0xf05f_0cff)); // movs.w r12,#255
+        assert!(can_run_inline(0xf240_0001)); // movw r0,#1
+        assert!(can_run_inline(0xf2c0_0001)); // movt r0,#1
+        assert!(can_run_inline(0xf640_0c01)); // movw r12 with i=1
+        assert!(can_run_inline(0xf6c0_0c01)); // movt r12 with i=1
+        assert!(can_run_inline(0xeb01_0002)); // add.w r0,r1,r2
+        assert!(can_run_inline(0xeb11_1042)); // adds.w r0,r1,r2,lsl #5
+        assert!(can_run_inline(0xeba1_0002)); // sub.w r0,r1,r2
+        assert!(can_run_inline(0xebb1_1042)); // subs.w r0,r1,r2,lsl #5
         for instruction in [
             0xf101_0d07, // destination SP
             0xf101_0f07, // PC destination without compare semantics
@@ -480,6 +502,21 @@ mod tests {
             0xf1a1_0f07, // PC destination without CMP flag semantics
             0xf1bd_0f07, // CMP source SP
             0xf1bf_0f07, // CMP source PC
+            0xf240_0d01, // MOVW destination SP
+            0xf240_0f01, // MOVW destination PC
+            0xf2c0_0d01, // MOVT destination SP
+            0xf2c0_0f01, // MOVT destination PC
+            0xf240_8001, // reserved bit 15
+            0xf250_0001, // undefined MOVW-neighbor opcode
+            0xeb0d_0002, // ADD source SP
+            0xeb0f_0002, // ADD source PC
+            0xeb01_0d02, // ADD destination SP
+            0xeb01_0f02, // ADD destination PC
+            0xeb01_000d, // ADD shifted source SP
+            0xeb01_000f, // ADD shifted source PC
+            0xeb01_8002, // reserved second-halfword bit
+            0xeb41_0002, // ADC opcode
+            0xeba1_000d, // SUB shifted source SP
             0xf000_1100, // replicated-zero submode 01 is reserved
             0xf000_2100, // replicated-zero submode 10 is reserved
             0xf000_3100, // replicated-zero submode 11 is reserved
