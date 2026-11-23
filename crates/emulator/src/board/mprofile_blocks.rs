@@ -273,12 +273,29 @@ fn thumb_size(word: u16) -> usize {
 /// to or from memory using an ordinary single-register addressing mode.
 /// Literal loads, multiple transfers and stack push/pop encodings are excluded.
 pub(super) fn is_single_transfer(word: u32) -> bool {
-    if word > u32::from(u16::MAX) {
+    if word <= u32::from(u16::MAX) {
+        let instruction = word as u16;
+        return matches!(instruction & 0xf000, 0x5000 | 0x8000 | 0x9000)
+            || instruction & 0xe000 == 0x6000
+            // PC-relative LDR (literal), with the destination encoded in
+            // R0-R7. The word read is recoverable on the new path.
+            || instruction & 0xf800 == 0x4800;
+    }
+
+    let first = (word >> 16) as u16;
+    let second = word as u16;
+    let operation = first & 0xfff0;
+    if !matches!(
+        operation,
+        0xf8c0 | 0xf8d0 | 0xf880 | 0xf890 | 0xf8a0 | 0xf8b0 | 0xf990 | 0xf9b0
+    ) {
         return false;
     }
-    let instruction = word as u16;
-    matches!(instruction & 0xf000, 0x5000 | 0x8000 | 0x9000)
-        || instruction & 0xe000 == 0x6000
+    let rn = first & 15;
+    let rt = second >> 12;
+    // Keep transfers to R0-R12. Rn=PC is legal only for the immediate word
+    // LDR literal form; all other bases may be R0-R14, including SP and LR.
+    rt <= 12 && (rn < 15 || operation == 0xf8d0)
 }
 
 /// Whether a Thumb instruction is safe to execute without an observation.
@@ -456,19 +473,35 @@ mod tests {
         // Immediate word/byte/halfword forms and SP-relative STR/LDR.
         for instruction in [
             0x6000, 0x6800, 0x7000, 0x7800, 0x8000, 0x8800, 0x9000, 0x9800,
-            0x9fff,
+            0x9fff, 0x4800, 0x4fff,
         ] {
             assert!(is_single_transfer(instruction), "{instruction:#06x}");
         }
-        // PC-relative literal load, PUSH/POP, LDM/STM, undefined and
-        // special encodings, and 32-bit memory or exclusive operations have
-        // different architectural effects.
+        // Positive-offset Thumb-2 LDR/STR word, byte and halfword, signed
+        // byte/halfword loads, and a legal PC-relative word literal read.
         for instruction in [
-            0x4800, 0x4fff, 0xb400, 0xbc00, 0xc000, 0xc800, 0xde00, 0xdf00,
-            0xf3bf_8f4f, 0xe850_1f00, 0xf8c0_1000, 0xf8d0_1000, 0x0001_6000,
-            0xffff_5000,
+            0xf8c1_0004, 0xf8dd_200c, 0xf885_40ff, 0xf896_7004, 0xf8a6_5006,
+            0xf8b3_2008, 0xf992_1003, 0xf9b4_3004, 0xf8df_0004,
         ] {
-            assert!(!is_single_transfer(instruction), "{instruction:#06x}");
+            assert!(is_single_transfer(instruction), "{instruction:#010x}");
+        }
+        // PUSH/POP, LDM/STM, undefined and special encodings, and unsupported
+        // 32-bit memory or exclusive operations have different effects.
+        for instruction in [
+            0xb400, 0xbc00, 0xc000, 0xc800, 0xde00, 0xdf00, 0xf3bf_8f4f,
+            0xe850_1f00, // LDREX
+            0xf841_0f04, // STR with writeback
+            0xf851_0f04, // LDR with writeback
+            0xf8e1_0004, // translation variant
+            0xf8c1_f004, // STR from PC
+            0xf8d1_d004, // LDR to SP
+            0xf8d1_f004, // LDR to PC
+            0xf8cf_0004, // STR with PC base
+            0xf8df_d004, // literal LDR to SP
+            0xf8df_f004, // literal LDR to PC
+            0x0001_6000, 0xffff_5000,
+        ] {
+            assert!(!is_single_transfer(instruction), "{instruction:#010x}");
         }
     }
     fn parts(words: &[u16]) -> (u64, u64, u64, bool) {
