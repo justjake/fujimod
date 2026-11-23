@@ -1763,16 +1763,12 @@ impl Board {
                     // sees only watched pages) for stores.
                     for &(owner, address, bytes, _) in &self.mmio {
                         if owner == core && bytes != 0 {
-                            let hook = cpu.install_hook(Hook::Memory {
-                                callback: block_device_access,
-                                data: std::ptr::null_mut(),
-                                read: true,
-                                write: true,
-                                range: HookRange::Inclusive {
+                            let hook = cpu.install_memory_restart_boundary(
+                                HookRange::Inclusive {
                                     begin: address,
                                     end: address + bytes as u64 - 1,
                                 },
-                            })?;
+                            )?;
                             self.block_hooks[core].push(hook);
                         }
                     }
@@ -3498,8 +3494,6 @@ unsafe fn block_classify_transfers(
     classification.observe_block &= !mprofile_blocks::is_single_transfer(word);
     classification
 }
-/// Covers device pages so that an access to one ends its block.
-unsafe fn block_device_access(_: fujimod_emulator_cpu::Access, _: u64, _: i32, _: i64, _: *mut c_void) {}
 /// The engine is about to redo the instruction at `pc` as a block of its own:
 /// of the admitted block, only the instructions before it were entered.
 unsafe fn block_restarted(data: *mut c_void, pc: u64) {

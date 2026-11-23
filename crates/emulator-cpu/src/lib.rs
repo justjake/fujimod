@@ -500,6 +500,15 @@ pub enum Hook {
         data: *mut c_void,
     },
 }
+unsafe fn memory_restart_boundary_noop(
+    _: Access,
+    _: u64,
+    _: i32,
+    _: i64,
+    _: *mut c_void,
+) {
+}
+
 #[derive(Clone, Copy, Debug)]
 pub enum InstructionDisposition {
     Execute,
@@ -873,6 +882,20 @@ pub trait Cpu {
     /// is destroyed; callbacks must not unwind and must obey the owner's
     /// bounded reentrancy rules.
     unsafe fn install_hook(&self, hook: Hook) -> Result<HookId, String>;
+    /// Install a mapped memory boundary that ends translated blocks before
+    /// the selected accesses. Backends with native restart-only hooks can
+    /// avoid a host callback; other backends use an inert memory hook.
+    fn install_memory_restart_boundary(&self, range: HookRange) -> Result<HookId, String> {
+        unsafe {
+            self.install_hook(Hook::Memory {
+                callback: memory_restart_boundary_noop,
+                data: std::ptr::null_mut(),
+                read: true,
+                write: true,
+                range,
+            })
+        }
+    }
     fn remove_hook(&self, hook: HookId) -> Result<(), String>;
     /// Install one observer group without running the processor between hooks.
     /// On failure, remove the observers already installed by this call.
