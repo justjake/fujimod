@@ -284,7 +284,8 @@ pub(super) fn can_run_inline(word: u32) -> bool {
                 && {
                     let rd = ((instruction >> 4) & 8) | (instruction & 7);
                     let rm = (instruction >> 3) & 15;
-                    rd < 13 && rm < 13
+                    let low_register_cmp = (instruction >> 8) & 3 == 1 && rd < 8 && rm < 8;
+                    rd < 13 && rm < 13 && !low_register_cmp
                 })
             // Conditional and unconditional immediate branches do not link.
             || matches!(instruction, 0xd000..=0xddff | 0xe000..=0xe7ff);
@@ -292,18 +293,13 @@ pub(super) fn can_run_inline(word: u32) -> bool {
 
     let first = (word >> 16) as u16;
     let second = word as u16;
-    // Thumb-2 modified-immediate data processing (the F0xx group). Branches,
-    // system instructions and memory instructions have different prefixes.
-    if first & 0xff00 != 0xf000 || second & 0x8000 != 0 {
-        return false;
-    }
+    // Only non-flag-setting AND (immediate) with an unexpanded imm8 is
+    // admitted from the 32-bit data-processing encodings. Requiring zero
+    // imm3 rejects the ThumbExpandImm replication and rotation forms; exact
+    // opcode bits reject reserved operations and flag-writing aliases.
+    let rn = first & 15;
     let rd = (second >> 8) & 15;
-    // TST, TEQ, CMN and CMP encode Rd=PC, but only update flags. All other
-    // forms must write R0-R12; SP and PC are not inline destinations.
-    let compares = rd == 15
-        && first & 0x0210 == 0x0010
-        && matches!((first >> 5) & 15, 0 | 4 | 8 | 13);
-    rd <= 12 || compares
+    first & 0xfff0 == 0xf000 && rn <= 12 && second & 0xf000 == 0 && rd <= 12
 }
 
 /// Count the executed instruction prefix reported by a memory-hook restart.
@@ -381,16 +377,22 @@ mod tests {
             assert!(can_run_inline(instruction), "{instruction:#06x}");
         }
         for instruction in [
-            0x4400, 0x4485, 0x4478, 0x4700, 0x4770, 0xb000, 0xb280, 0xbe00, 0xbf00, 0xde00, 0xdf00,
-            0xe800,
+            0x4400, 0x4485, 0x4478, 0x4501, 0x4700, 0x4770, 0xb000, 0xb280, 0xbe00, 0xbf00, 0xde00,
+            0xdf00, 0xe800,
         ] {
             assert!(!can_run_inline(instruction), "{instruction:#06x}");
         }
 
         // The first halfword of a 32-bit encoding occupies the upper half.
-        assert!(can_run_inline(0xf001_0504)); // ands.w r5,r1,#4
+        assert!(can_run_inline(0xf000_0107)); // and.w r1,r0,#7
+        assert!(can_run_inline(0xf001_0504)); // and.w r5,r1,#4
         assert!(!can_run_inline(0xf001_0d04)); // destination SP
-        assert!(!can_run_inline(0xf001_0f04)); // PC destination without compare semantics
+        assert!(!can_run_inline(0xf00d_0104)); // source SP
+        assert!(!can_run_inline(0xf00f_0104)); // source PC
+        assert!(!can_run_inline(0xf001_0f04)); // destination PC
+        assert!(!can_run_inline(0xf001_1104)); // nonzero imm3
+        assert!(!can_run_inline(0xf010_0104)); // S bit / different operation
+        assert!(!can_run_inline(0xf020_0104)); // different operation
         assert!(!can_run_inline(0xf000_f800)); // BL
         assert!(!can_run_inline(0xf8c0_1000)); // str.w
         assert!(!can_run_inline(0x0001_0001)); // unrecognized prefix
