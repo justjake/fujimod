@@ -1,0 +1,121 @@
+{
+  "$schema": "https://fujimod.com/schemas/settings.generated.schema.json",
+  "schema": 1,
+  "id": "xt4-212-settings",
+  "firmware_id": "xt4-212",
+  "source": {
+    "flash_offset": 2490368,
+    "address": 16912384,
+    "size": 7420408,
+    "sha256": "0b5b0fb0ee5fe6b109dae9964b5cddfe18edab46b4a0c195f9da194448906eeb"
+  },
+  "defaults": {
+    "address": 23558460,
+    "size": 576,
+    "sha256": "9d592bd154eb756965b563523e56ed1863564a516886eda72d3a7d261cbbd998"
+  },
+  "fields": [],
+  "profile": {
+    "header": {
+      "address": 23560244,
+      "size": 8,
+      "sha256": "baa4e819665811543af626bb2a8b79992e3073b34ce29576b912883baa52d555"
+    },
+    "loader_offset": 328,
+    "power_register": 31,
+    "records": {
+      "main": {
+        "block": 1018,
+        "bytes": 32768,
+        "defaults_offset": 260,
+        "parity_offset": 31740,
+        "defaults": {
+          "address": 23748608,
+          "size": 31444,
+          "sha256": "998f2c672354ff5ffe87598793c3f6181d84a6a093af8ad055af2a18e423f2f2"
+        },
+        "fields": [
+          {
+            "offset": 31736,
+            "bytes": [
+              2,
+              18
+            ],
+            "basis": "Stock main journal writer stamps the update version."
+          },
+          {
+            "offset": 572,
+            "bytes": [
+              2
+            ],
+            "basis": "Stock UI migration commits backup version 2; this virtual profile is current."
+          },
+          {
+            "offset": 3729,
+            "bytes": [
+              1
+            ],
+            "basis": "Stock startup checks setup setting 8; this virtual profile has finished setup."
+          }
+        ]
+      },
+      "custom": {
+        "block": 992,
+        "bytes": 32768,
+        "defaults_offset": 260,
+        "parity_offset": 31740,
+        "defaults": {
+          "address": 23560252,
+          "size": 7168,
+          "sha256": "5c572a2cdf156d5a47d9e3e8584a37897b82a9dcd77a2b578b1a6f0b752cff84"
+        },
+        "fields": []
+      },
+      "format": {
+        "block": 1016,
+        "bytes": 16,
+        "defaults": {
+          "address": 24317980,
+          "size": 8,
+          "sha256": "ec243aa91cf1dcd155864e695f721f7dd309c6edbd142b36a340718d5c4f5f72"
+        },
+        "defaults_offset": 0,
+        "parity_offset": 8,
+        "fields": []
+      }
+    }
+  },
+  "settings": {
+    "debug": {
+      "store": "ram",
+      "offset": 247,
+      "values": {
+        "off": [
+          0
+        ],
+        "on": [
+          1
+        ]
+      }
+    },
+    "setup": {
+      "store": "header",
+      "offset": 4,
+      "values": {
+        "done": [
+          30
+        ]
+      }
+    },
+    "language": {
+      "store": "main",
+      "offset": 678,
+      "values": {
+        "en": [
+          1
+        ]
+      }
+    }
+  },
+  "sections": []
+}
