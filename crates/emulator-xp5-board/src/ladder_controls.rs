@@ -714,10 +714,10 @@ mod tests {
 
     #[test]
     fn bodies_without_ladders_have_no_ladder_model() {
-        assert!(
-            ladders(&ResolvedConfiguration::bundled("xe5-112").unwrap())
-                .unwrap()
-                .is_none()
-        );
+        let mut resolved = xt5();
+        let mut document = resolved.reference.physical_controls.take().unwrap();
+        document.as_object_mut().unwrap().remove("ladders");
+        resolved.reference.physical_controls = Some(document);
+        assert!(ladders(&resolved).unwrap().is_none());
     }
 }
