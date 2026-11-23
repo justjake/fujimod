@@ -42,7 +42,10 @@ impl Frame {
             || height > 8192
             || !stride.is_multiple_of(4)
             || stride < width as usize * 4
-            || data.len() != (height as usize - 1) * stride + width as usize * 4
+            || (height as usize - 1)
+                .checked_mul(stride)
+                .and_then(|extent| extent.checked_add(width as usize * 4))
+                != Some(data.len())
         {
             return Err("Invalid BGRA frame dimensions, stride or extent".into());
         }
@@ -55,6 +58,33 @@ impl Frame {
                 for channel in [2, 1, 0] {
                     rgb.push(((u32::from(pixel[channel]) * u32::from(pixel[3]) + 127) / 255) as u8);
                 }
+            }
+        }
+        Self::rgb(width, height, rgb)
+    }
+    /// Premultiplied RGBA8888 on black, with padding omitted from the last row.
+    pub fn rgba_premultiplied(width: u32, height: u32, stride: usize, data: &[u8]) -> Result<Self> {
+        if width == 0
+            || height == 0
+            || width > 8192
+            || height > 8192
+            || !stride.is_multiple_of(4)
+            || stride < width as usize * 4
+            || (height as usize - 1)
+                .checked_mul(stride)
+                .and_then(|extent| extent.checked_add(width as usize * 4))
+                != Some(data.len())
+        {
+            return Err("Invalid premultiplied RGBA frame dimensions, stride or extent".into());
+        }
+        let mut rgb = Vec::with_capacity(width as usize * height as usize * 3);
+        for row in 0..height as usize {
+            for pixel in data[row * stride..row * stride + width as usize * 4]
+                .as_chunks::<4>()
+                .0
+            {
+                // RGB is already premultiplied, so black compositing preserves it as-is.
+                rgb.extend_from_slice(&pixel[..3]);
             }
         }
         Self::rgb(width, height, rgb)

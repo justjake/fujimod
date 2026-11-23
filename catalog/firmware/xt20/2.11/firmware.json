@@ -16,5 +16,215 @@
     }
   },
   "installation": null,
-  "generated_facts": null
+  "generated_facts": {
+    "identity_checks": [
+      {
+        "address": 13464712,
+        "size": 36,
+        "sha256": "3d104acd09fd9debf072488fdd3f75e8391d25e36f12b5eef1d5efb0bc138ce2"
+      },
+      {
+        "address": 23660892,
+        "size": 180,
+        "sha256": "6b2a5be4968f173fe60c0f6e6b51b92928241a3cc0cfd64a544e4e1c4df5dabe"
+      }
+    ],
+    "remote": {
+      "$schema": "https://fujimod.com/schemas/remote-firmware.generated.schema.json",
+      "schema": 1,
+      "firmware_id": "xt20-211",
+      "firmware_sha256": "b37faf524e6e2c72410e615a48feff05d6d2236f73f5cc6027c25863d7d48fad",
+      "body_id": "xt20",
+      "uncached_alias": 1073741824,
+      "identity_checks": [
+        {
+          "address": 13464712,
+          "size": 36,
+          "sha256": "3d104acd09fd9debf072488fdd3f75e8391d25e36f12b5eef1d5efb0bc138ce2"
+        },
+        {
+          "address": 23660892,
+          "size": 180,
+          "sha256": "6b2a5be4968f173fe60c0f6e6b51b92928241a3cc0cfd64a544e4e1c4df5dabe"
+        }
+      ],
+      "configuration": {
+        "kind": "pointer",
+        "address": 16757092
+      },
+      "state": {
+        "ui_mode": 18673732,
+        "system_mode": 18673737,
+        "menu_active": 18067664,
+        "pending_mode": 18673735,
+        "menu_node": 18065536,
+        "rec_mode": 3,
+        "setup_mode": 5,
+        "widths": {
+          "ui_mode": 1,
+          "system_mode": 1,
+          "pending_mode": 1,
+          "menu_active": 1,
+          "menu_node": 4
+        },
+        "readiness": {
+          "category_one": 18672056,
+          "category_two": 18672064,
+          "input_pending": 18674646,
+          "input_pending_width": 1,
+          "excluded_mask": 8200,
+          "operation_alert_timer": 18672240,
+          "override_address": 18676282,
+          "override_width": 1
+        }
+      },
+      "menus": {
+        "roots_address": 15484476,
+        "root_count": 148,
+        "root_layout": {
+          "kind": "keyed_entries",
+          "stride": 8,
+          "key_offset": 0,
+          "key_width": 1,
+          "pointer_offset": 4
+        },
+        "roles": {
+          "shooting": 46,
+          "setup": 51
+        },
+        "root_titles": {},
+        "root_routes": {
+          "46": {
+            "entry": "shooting_menu",
+            "tab": 192
+          },
+          "51": {
+            "entry": "setup_menu",
+            "tab": 198
+          }
+        },
+        "page_tabs": {
+          "46": 192,
+          "51": 198
+        },
+        "navigation": {
+          "shooting_first_tab": 192,
+          "shooting_last_tab": 197,
+          "setup_first_tab": 198
+        },
+        "layout": {
+          "size": 28,
+          "fields": {
+            "menu_id": 0,
+            "setting_id": 2,
+            "rows_per_page": 4,
+            "flags_word": 8,
+            "parent_pointer": 12,
+            "item_array": 16,
+            "handlers_pointer": 20,
+            "type_code": null
+          },
+          "field_widths": {
+            "menu_id": 1,
+            "setting_id": 2,
+            "rows_per_page": 4,
+            "flags_word": 4,
+            "parent_pointer": 4,
+            "item_array": 4,
+            "handlers_pointer": 4,
+            "type_code": 1
+          },
+          "row_size": 8,
+          "row_key": 0,
+          "row_key_width": 4,
+          "row_child": 4,
+          "row_child_width": 4,
+          "caption_words": 12,
+          "caption_word_order": [
+            1,
+            2
+          ],
+          "sentinel": 2147483646,
+          "max_kind": 0,
+          "nowrap_flags": 0
+        },
+        "cursor_address": 18065536,
+        "cursor": {
+          "size": 32,
+          "fields": {
+            "pointer": 0,
+            "cursor": 8,
+            "subcursor": null,
+            "visible_count": null,
+            "value_cursor": null,
+            "raw_count": 24,
+            "filtered_count": null
+          },
+          "status_offset": 32,
+          "status_stride": 1,
+          "status_width": 1
+        },
+        "q_grid": null
+      },
+      "scanout": {
+        "address": null,
+        "instance": null,
+        "layer": null,
+        "channel": null,
+        "width": 720,
+        "height": 480,
+        "stride_bytes": 2880,
+        "pixel_format": "rgba8888_premultiplied",
+        "pointer_address": 18747472,
+        "address_mask": 4294967295
+      },
+      "resources": {
+        "language": {
+          "kind": "pointer",
+          "address": 43143096
+        },
+        "text_record_size": 8,
+        "text_variants_offset": 2,
+        "text_metrics_offset": 4,
+        "text_pointer_offset": 0,
+        "text_unit_bytes": 2,
+        "text_max_units": 512,
+        "private_text_first": 57600,
+        "private_text_last": 57855,
+        "private_text_bias": 57600,
+        "glyph_first": 61440,
+        "glyph_last": 63743,
+        "supplementary_address": 5579040,
+        "supplementary_first": 3047,
+        "last_caption": 3047,
+        "supplementary_stride": 66,
+        "supplementary_max_units": 28,
+        "bitmaps": {
+          "table": 3360124,
+          "final_table": 5579784,
+          "final_first_index": 2780,
+          "last_record": 5579784,
+          "last_index": 2780,
+          "stride": 12,
+          "layout": {
+            "width_offset": 0,
+            "height_offset": 2,
+            "kind_offset": 4,
+            "data_offset": 8,
+            "width_bytes": 2,
+            "height_bytes": 2,
+            "kind_bytes": 1,
+            "data_bytes": 4
+          }
+        },
+        "glyphs": {
+          "registry_address": 40484484,
+          "record_size": 24,
+          "icon_index": 7,
+          "data_address_offset": 8,
+          "data_size_offset": 12
+        }
+      }
+    }
+  }
 }

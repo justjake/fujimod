@@ -3,7 +3,8 @@
     "PixelFormat": {
       "description": "Implemented scanout encodings.",
       "enum": [
-        "bgra8888"
+        "bgra8888",
+        "rgba8888_premultiplied"
       ],
       "type": "string"
     }
@@ -14,10 +15,17 @@
   "description": "A located framebuffer and its live selection pointer.",
   "properties": {
     "address": {
-      "description": "Address.",
-      "format": "uint64",
-      "minimum": 0,
-      "type": "integer"
+      "anyOf": [
+        {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "Observed framebuffer address, or null when this metadata is not established."
     },
     "address_mask": {
       "description": "Address mask.",
@@ -26,10 +34,17 @@
       "type": "integer"
     },
     "channel": {
-      "description": "Channel.",
-      "format": "uint32",
-      "minimum": 0,
-      "type": "integer"
+      "anyOf": [
+        {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "Observed display channel, or null when this metadata is not established."
     },
     "height": {
       "description": "Height.",
@@ -38,16 +53,30 @@
       "type": "integer"
     },
     "instance": {
-      "description": "Instance.",
-      "format": "uint32",
-      "minimum": 0,
-      "type": "integer"
+      "anyOf": [
+        {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "Display instance required by board-backed frame capture, or null when unavailable."
     },
     "layer": {
-      "description": "Layer.",
-      "format": "uint32",
-      "minimum": 0,
-      "type": "integer"
+      "anyOf": [
+        {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "Observed display layer, or null when this metadata is not established."
     },
     "pixel_format": {
       "$ref": "#/$defs/PixelFormat",

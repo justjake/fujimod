@@ -442,7 +442,11 @@ class BulkRange(TypedDict, total=False):
 
 
 type BulkSource = (
-    BulkSourceVariant0 | BulkSourceVariant1 | BulkSourceVariant2 | BulkSourceVariant3
+    BulkSourceVariant0
+    | BulkSourceVariant1
+    | BulkSourceVariant2
+    | BulkSourceVariant3
+    | BulkSourceVariant4
 )
 
 
@@ -470,12 +474,18 @@ class BulkSourceVariant1(TypedDict, total=False):
 
 class BulkSourceVariant2(TypedDict, total=False):
     capacity: Required[int]
+    mechanism: Required[Literal["publication"]]
+    source_state: Required[int]
+
+
+class BulkSourceVariant3(TypedDict, total=False):
+    capacity: Required[int]
     mechanism: Required[Literal["pattern"]]
     registered_buffer: Required[int]
     source_state: Required[int]
 
 
-class BulkSourceVariant3(TypedDict, total=False):
+class BulkSourceVariant4(TypedDict, total=False):
     capacity: Required[int]
     configuration_bytes: Required[int]
     configuration_pointer: Required[int]
@@ -1416,12 +1426,12 @@ class CoreRelease(TypedDict, total=False):
 
 class CursorFields(TypedDict, total=False):
     cursor: Required[int]
-    filtered_count: Required[int]
-    pointer: Required[int]
-    raw_count: Required[int]
-    subcursor: Required[int]
-    value_cursor: Required[int]
-    visible_count: Required[int]
+    filtered_count: Required[int | None]
+    pointer: Required[int | None]
+    raw_count: Required[int | None]
+    subcursor: Required[int | None]
+    value_cursor: Required[int | None]
+    visible_count: Required[int | None]
 
 
 class CursorLayout(TypedDict, total=False):
@@ -2112,6 +2122,7 @@ class FirmwareObservation(TypedDict, total=False):
     setup_mode: Required[int]
     system_mode: Required[int]
     ui_mode: Required[int]
+    widths: NotRequired[ObservationWidths]
 
 
 class FirmwarePersistentAssetLayout(TypedDict, total=False):
@@ -3647,6 +3658,17 @@ class MemoryRegion(TypedDict, total=False):
     size: Required[RegionSize]
 
 
+class MenuFieldWidths(TypedDict, total=False):
+    flags_word: NotRequired[int]
+    handlers_pointer: NotRequired[int]
+    item_array: NotRequired[int]
+    menu_id: NotRequired[int]
+    parent_pointer: NotRequired[int]
+    rows_per_page: NotRequired[int]
+    setting_id: NotRequired[int]
+    type_code: NotRequired[int]
+
+
 class MenuFields(TypedDict, total=False):
     flags_word: Required[int]
     handlers_pointer: Required[int]
@@ -3655,7 +3677,7 @@ class MenuFields(TypedDict, total=False):
     parent_pointer: Required[int]
     rows_per_page: Required[int]
     setting_id: Required[int]
-    type_code: Required[int]
+    type_code: Required[int | None]
 
 
 class MenuKeys(TypedDict, total=False):
@@ -3666,12 +3688,16 @@ class MenuKeys(TypedDict, total=False):
 
 
 class MenuLayout(TypedDict, total=False):
+    caption_word_order: NotRequired[list[int] | None]
     caption_words: Required[int]
+    field_widths: NotRequired[MenuFieldWidths]
     fields: Required[MenuFields]
     max_kind: Required[int]
     nowrap_flags: Required[int]
     row_child: Required[int]
+    row_child_width: NotRequired[int]
     row_key: Required[int]
+    row_key_width: NotRequired[int]
     row_size: Required[int]
     sentinel: Required[int]
     size: Required[int]
@@ -3689,9 +3715,10 @@ class MenuTables(TypedDict, total=False):
     layout: Required[MenuLayout]
     navigation: Required[MenuNavigation]
     page_tabs: Required[MenuTablesVariant0]
-    q_grid: Required[QuickGrid]
+    q_grid: Required[QuickGrid | None]
     roles: Required[dict[str, int]]
     root_count: Required[int]
+    root_layout: NotRequired[RootLayout]
     root_routes: Required[MenuTablesVariant1]
     root_titles: Required[MenuTablesVariant2]
     roots_address: Required[int]
@@ -3922,6 +3949,14 @@ type NativeVectorGpuInputsClearProfile = Literal["declared-vg-ui-primitives-unme
 
 
 type NativeVectorGpuInputsCopyProfile = Literal["vg-32bpp-untile-unrotated"]
+
+
+class ObservationWidths(TypedDict, total=False):
+    menu_active: Required[int]
+    menu_node: Required[int]
+    pending_mode: Required[int]
+    system_mode: Required[int]
+    ui_mode: Required[int]
 
 
 type OpticalQuantity = Literal["lens_focus", "lens_aperture"]
@@ -4309,7 +4344,7 @@ class PhysicalControlsVariant0(TypedDict, total=False):
 type PictureLayout = Literal["abgr8888-straight"]
 
 
-type PixelFormat = Literal["bgra8888"]
+type PixelFormat = Literal["bgra8888", "rgba8888_premultiplied"]
 
 
 class PowerControlAssembly(TypedDict, total=False):
@@ -4441,8 +4476,10 @@ class ReadinessAddresses(TypedDict, total=False):
     category_two: Required[int]
     excluded_mask: Required[int]
     input_pending: Required[int]
+    input_pending_width: NotRequired[int]
     operation_alert_timer: Required[int]
     override_address: Required[int]
+    override_width: NotRequired[int]
 
 
 class RecIdle(TypedDict, total=False):
@@ -4581,6 +4618,21 @@ class RestartMechanism(TypedDict, total=False):
     sender: NotRequired[int | None]
     transport: NotRequired[RequestTransport | None]
     ui: Required[RecIdle]
+
+
+type RootLayout = RootLayoutVariant0 | RootLayoutVariant1
+
+
+class RootLayoutVariant0(TypedDict, total=False):
+    kind: Required[Literal["pointer_array"]]
+
+
+class RootLayoutVariant1(TypedDict, total=False):
+    key_offset: Required[int]
+    key_width: Required[int]
+    kind: Required[Literal["keyed_entries"]]
+    pointer_offset: Required[int]
+    stride: Required[int]
 
 
 class RootRoute(TypedDict, total=False):
@@ -5568,12 +5620,12 @@ class ScannerTable(TypedDict, total=False):
 
 
 class Scanout(TypedDict, total=False):
-    address: Required[int]
+    address: Required[int | None]
     address_mask: Required[int]
-    channel: Required[int]
+    channel: Required[int | None]
     height: Required[int]
-    instance: Required[int]
-    layer: Required[int]
+    instance: Required[int | None]
+    layer: Required[int | None]
     pixel_format: Required[PixelFormat]
     pointer_address: Required[int]
     stride_bytes: Required[int]

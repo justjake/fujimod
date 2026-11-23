@@ -198,49 +198,91 @@
     },
     "CursorFields": {
       "additionalProperties": false,
-      "description": "Live cursor word offsets.",
+      "description": "Offsets for declared cursor fields; unknown unused offsets remain null.",
       "properties": {
         "cursor": {
-          "description": "Cursor.",
+          "description": "Current cursor field offset.",
           "format": "uint32",
           "minimum": 0,
           "type": "integer"
         },
         "filtered_count": {
-          "description": "Filtered count.",
-          "format": "uint32",
-          "minimum": 0,
-          "type": "integer"
+          "anyOf": [
+            {
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Filtered-count field offset, or null when this offset is not established."
         },
         "pointer": {
-          "description": "Pointer.",
-          "format": "uint32",
-          "minimum": 0,
-          "type": "integer"
+          "anyOf": [
+            {
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Pointer field offset, or null when this offset is not established."
         },
         "raw_count": {
-          "description": "Raw count.",
-          "format": "uint32",
-          "minimum": 0,
-          "type": "integer"
+          "anyOf": [
+            {
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Raw-count field offset, or null when this offset is not established."
         },
         "subcursor": {
-          "description": "Subcursor.",
-          "format": "uint32",
-          "minimum": 0,
-          "type": "integer"
+          "anyOf": [
+            {
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Subcursor field offset, or null when this offset is not established."
         },
         "value_cursor": {
-          "description": "Value cursor.",
-          "format": "uint32",
-          "minimum": 0,
-          "type": "integer"
+          "anyOf": [
+            {
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Value-cursor field offset, or null when this offset is not established."
         },
         "visible_count": {
-          "description": "Visible count.",
-          "format": "uint32",
-          "minimum": 0,
-          "type": "integer"
+          "anyOf": [
+            {
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Visible-count field offset, or null when this offset is not established."
         }
       },
       "required": [
@@ -260,7 +302,7 @@
       "properties": {
         "fields": {
           "$ref": "#/$defs/CursorFields",
-          "description": "Cursor word offsets."
+          "description": "Offsets for declared cursor fields."
         },
         "size": {
           "description": "Cursor byte size.",
@@ -269,19 +311,19 @@
           "type": "integer"
         },
         "status_offset": {
-          "description": "Status offset.",
+          "description": "Status byte offset from the cursor base; begins after `size`.",
           "format": "uint32",
           "minimum": 0,
           "type": "integer"
         },
         "status_stride": {
-          "description": "Status stride.",
+          "description": "Byte stride between row statuses.",
           "format": "uint32",
           "minimum": 0,
           "type": "integer"
         },
         "status_width": {
-          "description": "Status width.",
+          "description": "Status scalar width in bytes (1, 2, 4 or 8).",
           "format": "uint32",
           "minimum": 0,
           "type": "integer"
@@ -345,6 +387,17 @@
           "format": "uint64",
           "minimum": 0,
           "type": "integer"
+        },
+        "widths": {
+          "$ref": "#/$defs/ObservationWidths",
+          "default": {
+            "menu_active": 4,
+            "menu_node": 4,
+            "pending_mode": 4,
+            "system_mode": 4,
+            "ui_mode": 4
+          },
+          "description": "Width, in bytes, for each state value read by the remote observer."
         }
       },
       "required": [
@@ -403,9 +456,80 @@
       ],
       "type": "object"
     },
+    "MenuFieldWidths": {
+      "additionalProperties": false,
+      "description": "Width of each native menu descriptor field, in bytes.",
+      "properties": {
+        "flags_word": {
+          "default": 4,
+          "description": "Width of the flags field.",
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "handlers_pointer": {
+          "default": 4,
+          "description": "Width of the handlers pointer.",
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "item_array": {
+          "default": 4,
+          "description": "Width of the item-array pointer.",
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "menu_id": {
+          "default": 4,
+          "description": "Width of the root key decoded from the descriptor.",
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "parent_pointer": {
+          "default": 4,
+          "description": "Width of the parent pointer.",
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "rows_per_page": {
+          "default": 4,
+          "description": "Width of the rows-per-page count.",
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "setting_id": {
+          "default": 4,
+          "description": "Width of the setting identifier.",
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "type_code": {
+          "default": 4,
+          "description": "Width of the descriptor type code.",
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "type": "object"
+    },
     "MenuFields": {
       "additionalProperties": false,
-      "description": "Native menu descriptor word offsets.",
+      "description": "Native menu descriptor field offsets.",
       "properties": {
         "flags_word": {
           "description": "Flags word.",
@@ -426,7 +550,7 @@
           "type": "integer"
         },
         "menu_id": {
-          "description": "Menu id.",
+          "description": "Root key decoded from the descriptor.",
           "format": "uint32",
           "minimum": 0,
           "type": "integer"
@@ -450,10 +574,17 @@
           "type": "integer"
         },
         "type_code": {
-          "description": "Type code.",
-          "format": "uint32",
-          "minimum": 0,
-          "type": "integer"
+          "anyOf": [
+            {
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Declared type-code offset, or `null` when descriptors have no type field."
         }
       },
       "required": [
@@ -472,18 +603,45 @@
       "additionalProperties": false,
       "description": "Offsets within a native menu descriptor and row.",
       "properties": {
+        "caption_word_order": {
+          "default": null,
+          "description": "Caption word indices to try in priority order. Omission keeps the legacy\norder: word 1 then word 0 when at least two words are present, otherwise\nword 0.",
+          "items": {
+            "format": "uint32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
         "caption_words": {
           "description": "Caption words.",
           "format": "uint32",
           "minimum": 0,
           "type": "integer"
         },
+        "field_widths": {
+          "$ref": "#/$defs/MenuFieldWidths",
+          "default": {
+            "flags_word": 4,
+            "handlers_pointer": 4,
+            "item_array": 4,
+            "menu_id": 4,
+            "parent_pointer": 4,
+            "rows_per_page": 4,
+            "setting_id": 4,
+            "type_code": 4
+          },
+          "description": "Width of each node field in bytes. Omission retains four-byte fields."
+        },
         "fields": {
           "$ref": "#/$defs/MenuFields",
-          "description": "Node word offsets."
+          "description": "Node field offsets."
         },
         "max_kind": {
-          "description": "Max kind.",
+          "description": "Maximum declared type code; ignored when no type-code field is declared.",
           "format": "uint32",
           "minimum": 0,
           "type": "integer"
@@ -500,9 +658,25 @@
           "minimum": 0,
           "type": "integer"
         },
+        "row_child_width": {
+          "default": 4,
+          "description": "Width of the row child pointer in bytes.",
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0,
+          "type": "integer"
+        },
         "row_key": {
           "description": "Row key.",
           "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "row_key_width": {
+          "default": 4,
+          "description": "Width of the row key in bytes.",
+          "format": "uint8",
+          "maximum": 255,
           "minimum": 0,
           "type": "integer"
         },
@@ -592,7 +766,7 @@
         },
         "page_tabs": {
           "additionalProperties": false,
-          "description": "Root indices mapped to first tab keys.",
+          "description": "Root keys mapped to first tab keys.",
           "patternProperties": {
             "^\\d+$": {
               "format": "uint32",
@@ -603,8 +777,15 @@
           "type": "object"
         },
         "q_grid": {
-          "$ref": "#/$defs/QuickGrid",
-          "description": "Quick menu geometry and menu ID."
+          "anyOf": [
+            {
+              "$ref": "#/$defs/QuickGrid"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Quick menu geometry and menu ID, or null when this metadata is unknown."
         },
         "roles": {
           "additionalProperties": {
@@ -612,14 +793,21 @@
             "minimum": 0,
             "type": "integer"
           },
-          "description": "Named root indices.",
+          "description": "Named root keys (array indices for a pointer array).",
           "type": "object"
         },
         "root_count": {
-          "description": "Number of root pointers.",
+          "description": "Number of entries in the root table.",
           "format": "uint32",
           "minimum": 0,
           "type": "integer"
+        },
+        "root_layout": {
+          "$ref": "#/$defs/RootLayout",
+          "default": {
+            "kind": "pointer_array"
+          },
+          "description": "How root entries are represented. Omission retains the 32-bit pointer\narray, with the entry index serving as its root key."
         },
         "root_routes": {
           "additionalProperties": false,
@@ -633,7 +821,7 @@
         },
         "root_titles": {
           "additionalProperties": false,
-          "description": "Root indices mapped to caption resource IDs.",
+          "description": "Root keys mapped to caption resource IDs.",
           "patternProperties": {
             "^\\d+$": {
               "format": "uint32",
@@ -644,7 +832,7 @@
           "type": "object"
         },
         "roots_address": {
-          "description": "Address of the root pointer table.",
+          "description": "Address of the root table.",
           "format": "uint64",
           "minimum": 0,
           "type": "integer"
@@ -665,10 +853,55 @@
       ],
       "type": "object"
     },
+    "ObservationWidths": {
+      "additionalProperties": false,
+      "description": "Byte widths for firmware state values used by remote observations.",
+      "properties": {
+        "menu_active": {
+          "description": "Menu-active field width.",
+          "format": "uint",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "menu_node": {
+          "description": "Menu-node pointer field width.",
+          "format": "uint",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "pending_mode": {
+          "description": "Pending mode field width.",
+          "format": "uint",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "system_mode": {
+          "description": "System mode field width.",
+          "format": "uint",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "ui_mode": {
+          "description": "UI mode field width.",
+          "format": "uint",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "ui_mode",
+        "system_mode",
+        "menu_active",
+        "pending_mode",
+        "menu_node"
+      ],
+      "type": "object"
+    },
     "PixelFormat": {
       "description": "Implemented scanout encodings.",
       "enum": [
-        "bgra8888"
+        "bgra8888",
+        "rgba8888_premultiplied"
       ],
       "type": "string"
     },
@@ -730,6 +963,13 @@
           "minimum": 0,
           "type": "integer"
         },
+        "input_pending_width": {
+          "default": 4,
+          "description": "Width, in bytes, of the pending input state field.",
+          "format": "uint",
+          "minimum": 0,
+          "type": "integer"
+        },
         "operation_alert_timer": {
           "description": "Firmware address for the operation-alert timer.",
           "format": "uint64",
@@ -739,6 +979,13 @@
         "override_address": {
           "description": "Firmware address used to override readiness.",
           "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "override_width": {
+          "default": 4,
+          "description": "Width, in bytes, of the readiness override field.",
+          "format": "uint",
           "minimum": 0,
           "type": "integer"
         }
@@ -889,6 +1136,68 @@
       ],
       "type": "object"
     },
+    "RootLayout": {
+      "description": "Representation of the live root table.",
+      "oneOf": [
+        {
+          "additionalProperties": false,
+          "description": "A 32-bit pointer array; the array index is the root key.",
+          "properties": {
+            "kind": {
+              "const": "pointer_array",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Entries contain a sized integer key and a 32-bit pointer.",
+          "properties": {
+            "key_offset": {
+              "description": "Byte offset of the key within each entry.",
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "key_width": {
+              "description": "Key width in bytes.",
+              "format": "uint8",
+              "maximum": 255,
+              "minimum": 0,
+              "type": "integer"
+            },
+            "kind": {
+              "const": "keyed_entries",
+              "type": "string"
+            },
+            "pointer_offset": {
+              "description": "Byte offset of the 32-bit pointer within each entry.",
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "stride": {
+              "description": "Entry stride in bytes.",
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          "required": [
+            "kind",
+            "stride",
+            "key_offset",
+            "key_width",
+            "pointer_offset"
+          ],
+          "type": "object"
+        }
+      ]
+    },
     "RootRoute": {
       "additionalProperties": false,
       "description": "A root menu entry strategy.",
@@ -918,10 +1227,17 @@
       "description": "A located framebuffer and its live selection pointer.",
       "properties": {
         "address": {
-          "description": "Address.",
-          "format": "uint64",
-          "minimum": 0,
-          "type": "integer"
+          "anyOf": [
+            {
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Observed framebuffer address, or null when this metadata is not established."
         },
         "address_mask": {
           "description": "Address mask.",
@@ -930,10 +1246,17 @@
           "type": "integer"
         },
         "channel": {
-          "description": "Channel.",
-          "format": "uint32",
-          "minimum": 0,
-          "type": "integer"
+          "anyOf": [
+            {
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Observed display channel, or null when this metadata is not established."
         },
         "height": {
           "description": "Height.",
@@ -942,16 +1265,30 @@
           "type": "integer"
         },
         "instance": {
-          "description": "Instance.",
-          "format": "uint32",
-          "minimum": 0,
-          "type": "integer"
+          "anyOf": [
+            {
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Display instance required by board-backed frame capture, or null when unavailable."
         },
         "layer": {
-          "description": "Layer.",
-          "format": "uint32",
-          "minimum": 0,
-          "type": "integer"
+          "anyOf": [
+            {
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Observed display layer, or null when this metadata is not established."
         },
         "pixel_format": {
           "$ref": "#/$defs/PixelFormat",

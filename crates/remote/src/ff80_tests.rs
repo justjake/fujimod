@@ -55,6 +55,72 @@ fn options() -> Options {
         output: "lcd".into(),
     }
 }
+
+#[test]
+fn owned_transport_uses_the_same_alias_limits_and_event_bindings() {
+    struct Recorded {
+        reads: Vec<(MemoryRange, DebugMemoryLimits)>,
+        events: Vec<(DebugEvent, NonZeroU32)>,
+    }
+    struct Owned(std::rc::Rc<std::cell::RefCell<Recorded>>);
+    impl Transport for Owned {
+        fn memory<'a>(
+            &'a mut self,
+            range: MemoryRange,
+            limits: DebugMemoryLimits,
+        ) -> LocalFuture<'a, Vec<u8>> {
+            self.0.as_ref().borrow_mut().reads.push((range, limits));
+            Box::pin(async move { Ok(vec![7; range.length().get() as usize]) })
+        }
+        fn event<'a>(&'a mut self, event: DebugEvent, limit: NonZeroU32) -> LocalFuture<'a, ()> {
+            self.0.as_ref().borrow_mut().events.push((event, limit));
+            Box::pin(async { Ok(()) })
+        }
+    }
+    futures_lite::future::block_on(async {
+        let recorded = std::rc::Rc::new(std::cell::RefCell::new(Recorded {
+            reads: vec![],
+            events: vec![],
+        }));
+        let mut facts = facts();
+        facts.firmware.uncached_alias = 0x40000000;
+        let mut remote =
+            Ff80Remote::with_transport(Owned(recorded.clone()), facts.clone(), options()).unwrap();
+        let mut reads = ReadSet::default();
+        assert_eq!(
+            remote.backend.memory(0x1000, 6, &mut reads).await.unwrap(),
+            [7; 6]
+        );
+        remote
+            .backend
+            .input(
+                &Input {
+                    control: control("wifi_button"),
+                    state: InputState::Released,
+                },
+                &facts,
+            )
+            .await
+            .unwrap();
+        let recorded = recorded.borrow();
+        assert_eq!(recorded.reads.len(), 1);
+        assert_eq!(recorded.reads[0].0.address().0, 0x40001000);
+        assert_eq!(recorded.reads[0].0.length().get(), 6);
+        assert_eq!(recorded.reads[0].1.read.get(), 4);
+        assert_eq!(reads.stores, [(0x40001000, 0x40001006)]);
+        assert_eq!(
+            recorded.events,
+            [(
+                DebugEvent::Key {
+                    name: EventName::new("FN").unwrap(),
+                    state: KeyState::Off,
+                },
+                NonZeroU32::new(64).unwrap()
+            )]
+        );
+    });
+}
+
 #[test]
 fn range_reads_use_alias_and_chunk_limits() {
     futures_lite::future::block_on(async {
@@ -82,6 +148,42 @@ fn range_reads_use_alias_and_chunk_limits() {
             .await
             .unwrap();
         assert_eq!(bytes, [1, 2, 3, 4, 5, 6]);
+        assert_eq!(script.remaining(), 0);
+    });
+}
+
+#[test]
+fn shared_ff80_frame_decodes_premultiplied_rgba_without_reprocessing_alpha() {
+    futures_lite::future::block_on(async {
+        let pointer = 0x1000u32;
+        let rgba = [17, 29, 43, 128];
+        let mut steps = vec![];
+        for (address, data) in [
+            (832u32, pointer.to_le_bytes().to_vec()),
+            (pointer, rgba.to_vec()),
+            (832, pointer.to_le_bytes().to_vec()),
+        ] {
+            let mut parameters = [0; 16];
+            parameters[8..12].copy_from_slice(&address.to_le_bytes());
+            parameters[12..16].copy_from_slice(&(data.len() as u32).to_le_bytes());
+            steps.extend(exchanges(
+                command(2, parameters, &[]),
+                command(2, parameters, &data),
+            ));
+        }
+        let script = opened(steps);
+        let session = script.begin_session(1024, None).await.unwrap();
+        let mut facts = facts();
+        facts.firmware.scanout.pixel_format =
+            fujimod_catalog_remote::PixelFormat::Rgba8888Premultiplied;
+        facts.firmware.scanout.address = None;
+        facts.firmware.scanout.instance = None;
+        facts.firmware.scanout.layer = None;
+        facts.firmware.scanout.channel = None;
+        let mut remote = Ff80Remote::new(session, facts, options()).unwrap();
+        let capture = crate::RemoteReader::frame(&mut remote).await.unwrap();
+        assert_eq!(capture.frame.pixels(), &[17, 29, 43]);
+        assert_eq!(capture.sequence, u64::from(pointer));
         assert_eq!(script.remaining(), 0);
     });
 }

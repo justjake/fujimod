@@ -3,6 +3,35 @@ use serde_json::Value;
 use std::fs;
 use std::path::{Path, PathBuf};
 
+#[test]
+fn borrowed_publication_shape_is_in_the_generated_bulk_schema() {
+    let schemas = fujimod_catalog_schemas::generated_documents();
+    let validator = validator_for(schemas.get("bulk.generated.schema.json").unwrap()).unwrap();
+    let mut document = serde_json::json!({
+        "$schema": "https://fujimod.com/schemas/bulk.generated.schema.json",
+        "schema": 1, "id": "sample-bulk", "firmware_id": "sample-1",
+        "product": "sample", "internal_version": "1", "code_alias": 0,
+        "source": {"mechanism": "publication", "source_state": 0x1200, "capacity": 32},
+        "window": {"address": 0x1000, "size": 0x1000},
+        "code_checks": [{"name": "checked", "address": 0x1000, "size": 4,
+                         "sha256": "0".repeat(64)}],
+        "probes": [{"address": 0x1800, "size": 4}],
+        "mapped_probe": null, "scopes": []
+    });
+    assert!(validator.is_valid(&document));
+    document["source"]["registered_buffer"] = 0x1300.into();
+    assert!(!validator.is_valid(&document));
+    document["source"]
+        .as_object_mut()
+        .unwrap()
+        .remove("registered_buffer");
+    document["source"]
+        .as_object_mut()
+        .unwrap()
+        .remove("capacity");
+    assert!(!validator.is_valid(&document));
+}
+
 fn json_files(directory: &Path) -> Vec<PathBuf> {
     let mut files = Vec::new();
     for entry in fs::read_dir(directory).expect("catalog directory") {

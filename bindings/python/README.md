@@ -153,6 +153,17 @@ Neither operation can stop camera execution. Creating an unawaited coroutine
 sends nothing; discarding or canceling it before dispatch leaves the session
 available.
 
+`fujimod.remote.Camera.from_memory(memory, facts, event_bytes=...)` runs a remote
+camera over an already open native `usb.Memory` loan. Keep the memory handle
+for explicit `await memory.aclose()`: closing or dropping the camera releases
+only its adapter. Ordinary ranges use bounded range reads, and only
+declared, DMA-admitted ranges larger than the loan's slow-read limit use the
+staged bulk mapping. Canceled reads and events leave the mapping unresolved
+and send no cleanup traffic.
+The remote facts' uncached alias can select a continuous canonical range only
+inside the existing bulk profile. Other reads keep their aliased addresses and
+ordinary limits; the profile window is never expanded.
+
 The native binding uses PyO3's `experimental-async` coroutine support and nusb's
 wakeups directly, without a background Python worker or an added Rust runtime.
 I/O polling releases the GIL. These native coroutines work with `await`,
@@ -178,6 +189,28 @@ Configuration writes
 are distinct from persistent saves. `diagnostic_query`, `prepare_data_read`,
 `prepare_data_write`, `read_data`, `write_data` and `empty_response` expose separate
 stages without implicit preparation, firmware retries or cleanup.
+
+`await session.memory(profile)` qualifies one firmware's stock bulk-read path
+and keeps the borrowed source for many reads. `profile` is either a frozen
+`usb.BulkProfile.from_json(text)` or one exact bundled firmware ID; a wrong
+type, an unknown ID or facts that fail validation are refused before the
+session is used, and no other source is consulted. The handle is read-only:
+`await memory.read(address, length)` uses the qualified path for any length,
+`await memory.aclose()` restores the borrowed source, and `async with` does the
+same on exit while preserving a body exception (a failed restore becomes a note
+on it). Ordinary session methods, range readers, remote leases and a second
+memory handle report `SessionBusyError` while the loan is active. Once
+completion is unknown they report `CompletionUnknownError` and send no more
+traffic. The session reports `SessionState.MemoryOwned` while the loan is
+active, rather than `Ready`. `session.memory_state`
+(when a loan is attached) and `memory.state` return `phase`, `in_flight`,
+`closed`, `abandoned`, `loan_available` and a `loan` dictionary with the
+borrowed `address`, its `original` bytes and, once selected, the `selected`
+bytes; `loan_available` is false and `loan` is `None` only while the resource is
+in flight, so a settled canceled setup keeps its report. Abandoning the session
+keeps that report, refuses all further requests and never restores or reopens
+anything; dropping a `Memory` handle releases nothing. This handle is native
+only for now; the Pyodide adapter has no fallback for it.
 
 Camera errors have a separate exception type from protocol/transport failures.
 Device-command exceptions retain `command`, `primary` and `secondary` fields;

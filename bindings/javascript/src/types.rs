@@ -33,6 +33,8 @@ pub enum SessionState {
     CompletionUnknown,
     Closed,
     Abandoned,
+    /// An open memory loan owns the session until `memory.close()`.
+    MemoryOwned,
 }
 #[wasm_bindgen]
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]

@@ -86,6 +86,7 @@ class SessionState(Enum):
     Closed = auto()
     Abandoned = auto()
     ReadingRange = auto()
+    MemoryOwned = auto()
 
 
 class CommandStatus(Enum):

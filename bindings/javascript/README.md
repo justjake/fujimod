@@ -165,12 +165,51 @@ bytes are copied across the Wasm boundary rather than exposing a borrowed view.
 
 ## Commands and composed operations
 
-Memory of any size goes through `session.memory(firmwareId)`. It qualifies
-the firmware's stock bulk path once; `read` uses it for anything larger than one
-packet, `write` splits larger writes into packet-sized commands, and `close`
-restores any bulk source override. `readSinglePacket` and `writeSinglePacket`
-send exactly one memory command of at most `packetBytes` (256 on the X70) and
-refuse anything longer.
+Memory of any size goes through `session.memory(profile)`. The profile is either
+one exact bundled firmware ID or a `usb.BulkProfile` descriptor. It qualifies
+the firmware's stock bulk path once, before its Promise settles; `read` uses the
+qualified mapping for anything larger than one packet, `write` keeps the bounded
+packet-sized write path, and `close` restores any bulk source override.
+
+A `BulkProfile` is built from strict JSON with `usb.BulkProfile.fromJson(text)`;
+unknown fields, invalid windows, sources and digests are refused before a
+session is touched. `id`, `firmwareId` and the canonical `json` are read-only.
+A supplied descriptor is not authority: its `json` string is validated exactly
+as `fromJson` input, and an unreadable descriptor sends no transfer.
+
+One loan owns the session from `memory()` until `close()` succeeds or the
+session is abandoned. While it is owned, ordinary commands, readers and a
+second `memory()` refuse with `Busy`; `Session.state` reports `MemoryOwned`,
+`InFlight` for a pending operation, or `CompletionUnknown` once completion or
+source ownership is uncertain. `session.memoryState` and `memory.state` return
+a read-only `MemoryReport` (`phase`, `inFlight`, `closed`, `abandoned`,
+`loanAvailable`, optional `loan` with the source `address` and the copied
+`original`/`selected` bytes); the report is diagnostic even when opening failed
+and returned no handle. A report never sends a transfer.
+
+Only an explicit successful `close()` returns the session to `Ready`; a
+repeated close on that handle does nothing and sends nothing. There is no
+implicit restore, retry or C4 on drop, error, cancel or abandon. A canceled or
+failed operation keeps the pair attached and fences the mapping
+(`CompletionUnknown`); an explicit restore then refuses. `cancelPending()`
+routes to the loan's pending operation, and `abandon()` marks the loan
+abandoned while keeping its originals reportable and sending no cleanup. A
+canceled raw read or write is treated as uncertain, because dispatch may have
+happened. A cancel or abandon before the first exchange of a guarded setup
+leaves the mapping staged and, for `memory()` itself, the session slot owned by
+a loan that returned no handle: `session.memoryState` reports `Staged` without a
+loan, ordinary work refuses, and this change has no resume or close API for that
+owner. `session.abandon()` is the only exit; nothing was sent and the loan is
+not released automatically. If cleanup after a failed restore also fails, the
+primary error is kept and the loan stays unresolved.
+
+Dropping the returned handle does not restore the source; the loan stays with
+the session slot. That retention is bounded by the session owner: it needs the
+session handle (or the returned handle) to stay alive. The final session drop
+and the camera-mount ownership above it are separate work, not solved here.
+
+`readSinglePacket` and `writeSinglePacket` send exactly one memory command of at
+most `packetBytes` (256 on the X70) and refuse anything longer.
 
 Session methods such as `readSinglePacket`, `readConfiguration`,
 `diagnosticQuery`, `submitConsole` and `pollConsole` each perform one command.
@@ -194,7 +233,8 @@ Higher-level operations live in their own groups:
   bodies with an explicit reply capacity. Only the common header is validated.
 
 ```ts
-const memory = await session.memory('x70-110');
+const profile = usb.BulkProfile.fromJson(profileJson);
+const memory = await session.memory(profile);
 try {
   const bytes = await memory.read(address, length);
   await sink.write(bytes);

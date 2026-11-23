@@ -65,7 +65,9 @@ impl<'a> Transport<'a> {
                 .min()
                 .unwrap_or(1),
             Some(
-                BulkSource::Pattern { capacity, .. } | BulkSource::PatternZeroBase { capacity, .. },
+                BulkSource::Pattern { capacity, .. }
+                | BulkSource::PatternZeroBase { capacity, .. }
+                | BulkSource::Publication { capacity, .. },
             ) => *capacity,
             None => 1,
         };
@@ -116,8 +118,11 @@ impl<'a> Transport<'a> {
             + facts.mapped_probe.as_ref().map_or(0, |p| bulk(p.size))
     }
     pub async fn restore(&mut self, session: &mut Session) -> Result<()> {
-        if let Some(mapping) = self.mapping.take() {
+        if let Some(mapping) = self.mapping.as_mut() {
             mapping.restore(session).await.map_err(error)?;
+            // Keep the mapping when restoration failed or was canceled, so its
+            // original source bytes stay available for reporting.
+            self.mapping = None;
         }
         Ok(())
     }
@@ -321,18 +326,17 @@ impl BufferIo for Transport<'_> {
     ) -> fujimod_usb::emulator::EndpointFuture<'a, Result<Vec<u8>>> {
         Box::pin(async move {
             if self.mapping.is_none() {
-                self.mapping = Some(
-                    BulkMapping::prepare_preserving(
-                        session,
-                        self.facts.ok_or(Error::OutsideDataWindow)?,
-                        Limits {
-                            memory: self.limits,
-                            configuration: NonZeroU32::new(256).expect("constant"),
-                        },
-                    )
-                    .await
-                    .map_err(error)?,
-                );
+                let facts = self.facts.ok_or(Error::OutsideDataWindow)?;
+                let limits = Limits {
+                    memory: self.limits,
+                    configuration: NonZeroU32::new(256).expect("constant"),
+                };
+                // Stage the mapping in the transport before the first await so
+                // a canceled read keeps its original source bytes.
+                self.mapping = Some(BulkMapping::new(facts, limits).map_err(error)?);
+                if let Some(mapping) = self.mapping.as_mut() {
+                    mapping.prepare_preserving(session).await.map_err(error)?;
+                }
             }
             BufferIo::read(
                 self.mapping.as_mut().expect("prepared"),
@@ -393,6 +397,10 @@ mod tests {
             },
             BulkSource::Pattern {
                 registered_buffer: 0x1300,
+                source_state: 0x1400,
+                capacity: 65536,
+            },
+            BulkSource::Publication {
                 source_state: 0x1400,
                 capacity: 65536,
             },
