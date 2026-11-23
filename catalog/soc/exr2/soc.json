@@ -139,7 +139,14 @@
       "size": 4096,
       "kind": "interrupt-controller",
       "clock_id": null,
-      "processor_core_id": "core1"
+      "processor_core_id": "core1",
+      "interrupts": [
+        {
+          "output": "software-release",
+          "line": 120,
+          "core": "core1"
+        }
+      ]
     },
     {
       "id": "system-timers",
@@ -153,7 +160,24 @@
       "base": 4294479872,
       "size": 1052,
       "kind": "gpio",
-      "clock_id": null
+      "clock_id": null,
+      "interrupts": [
+        {
+          "output": "port-0-pin-0",
+          "line": 8,
+          "core": "core0"
+        },
+        {
+          "output": "port-0-pin-2",
+          "line": 10,
+          "core": "core0"
+        },
+        {
+          "output": "port-0-pin-3",
+          "line": 11,
+          "core": "core0"
+        }
+      ]
     },
     {
       "id": "gpio-aux",
@@ -244,14 +268,28 @@
       "base": 4293992448,
       "size": 256,
       "kind": "imaging-controller",
-      "clock_id": null
+      "clock_id": null,
+      "interrupts": [
+        {
+          "output": "output",
+          "line": 44,
+          "core": "core0"
+        }
+      ]
     },
     {
       "id": "image-output-1",
       "base": 4293996544,
       "size": 256,
       "kind": "imaging-controller",
-      "clock_id": null
+      "clock_id": null,
+      "interrupts": [
+        {
+          "output": "output",
+          "line": 45,
+          "core": "core0"
+        }
+      ]
     },
     {
       "id": "face-detector-0",
@@ -279,7 +317,14 @@
       "base": 4294246400,
       "size": 48,
       "kind": "sd-card-controller",
-      "clock_id": null
+      "clock_id": null,
+      "interrupts": [
+        {
+          "output": "host",
+          "line": 78,
+          "core": "core0"
+        }
+      ]
     },
     {
       "id": "sdhci-card-2",
@@ -300,7 +345,14 @@
       "base": 4294250496,
       "size": 64,
       "kind": "address-window",
-      "clock_id": null
+      "clock_id": null,
+      "interrupts": [
+        {
+          "output": "host",
+          "line": 79,
+          "core": "core0"
+        }
+      ]
     },
     {
       "id": "sdio-1",
@@ -349,7 +401,19 @@
       "base": 4294262784,
       "size": 4096,
       "kind": "usb-controller",
-      "clock_id": null
+      "clock_id": null,
+      "interrupts": [
+        {
+          "output": "device",
+          "line": 84,
+          "core": "core0"
+        },
+        {
+          "output": "host",
+          "line": 85,
+          "core": "core0"
+        }
+      ]
     },
     {
       "id": "usb-phy",
@@ -405,35 +469,130 @@
       "base": 4294610944,
       "size": 3328,
       "kind": "address-window",
-      "clock_id": null
+      "clock_id": null,
+      "interrupts": [
+        {
+          "output": "output-0",
+          "line": 20,
+          "core": "core0"
+        },
+        {
+          "output": "output-1",
+          "line": 21,
+          "core": "core0"
+        },
+        {
+          "output": "output-2",
+          "line": 22,
+          "core": "core0"
+        },
+        {
+          "output": "output-3",
+          "line": 23,
+          "core": "core0"
+        },
+        {
+          "output": "output-4",
+          "line": 24,
+          "core": "core0"
+        },
+        {
+          "output": "output-5",
+          "line": 25,
+          "core": "core0"
+        },
+        {
+          "output": "output-6",
+          "line": 26,
+          "core": "core0"
+        },
+        {
+          "output": "output-7",
+          "line": 27,
+          "core": "core0"
+        },
+        {
+          "output": "output-8",
+          "line": 28,
+          "core": "core0"
+        },
+        {
+          "output": "output-9",
+          "line": 29,
+          "core": "core0"
+        },
+        {
+          "output": "output-10",
+          "line": 30,
+          "core": "core0"
+        },
+        {
+          "output": "output-11",
+          "line": 31,
+          "core": "core0"
+        }
+      ]
     },
     {
       "id": "serial-spi2",
       "base": 4294459520,
       "size": 32,
       "kind": "serial-controller",
-      "clock_id": null
+      "clock_id": null,
+      "interrupts": [
+        {
+          "output": "complete-0",
+          "line": 14,
+          "core": "core0"
+        },
+        {
+          "output": "complete-1",
+          "line": 12,
+          "core": "core0"
+        }
+      ]
     },
     {
       "id": "control-bus0",
       "base": 4294463488,
       "size": 64,
       "kind": "control-bus",
-      "clock_id": null
+      "clock_id": null,
+      "interrupts": [
+        {
+          "output": "controller",
+          "line": 101,
+          "core": "core0"
+        }
+      ]
     },
     {
       "id": "control-bus1",
       "base": 4294463552,
       "size": 64,
       "kind": "control-bus",
-      "clock_id": null
+      "clock_id": null,
+      "interrupts": [
+        {
+          "output": "controller",
+          "line": 102,
+          "core": "core0"
+        }
+      ]
     },
     {
       "id": "companion-fe80",
       "base": 4264656896,
       "size": 4096,
       "kind": "address-window",
-      "clock_id": null
+      "clock_id": null,
+      "interrupts": [
+        {
+          "output": "processing",
+          "line": 88,
+          "core": "core0"
+        }
+      ]
     },
     {
       "id": "companion-fe3b",
@@ -461,7 +620,34 @@
       "base": 4293984256,
       "size": 1024,
       "kind": "imaging-controller",
-      "clock_id": null
+      "clock_id": null,
+      "interrupts": [
+        {
+          "output": "phase-0",
+          "line": 39,
+          "core": "core0"
+        },
+        {
+          "output": "phase-1",
+          "line": 41,
+          "core": "core0"
+        },
+        {
+          "output": "record-phase",
+          "line": 40,
+          "core": "core0"
+        },
+        {
+          "output": "raw",
+          "line": 36,
+          "core": "core0"
+        },
+        {
+          "output": "readback",
+          "line": 38,
+          "core": "core0"
+        }
+      ]
     },
     {
       "id": "input-auxiliary-control",
@@ -489,7 +675,14 @@
       "base": 4294402048,
       "size": 4096,
       "kind": "address-window",
-      "clock_id": null
+      "clock_id": null,
+      "interrupts": [
+        {
+          "output": "hot-plug",
+          "line": 9,
+          "core": "core0"
+        }
+      ]
     },
     {
       "id": "hdmi-2",
@@ -569,6 +762,13 @@
           "core": "core1",
           "address": 4294328320
         }
+      ],
+      "interrupts": [
+        {
+          "output": "complete",
+          "line": 73,
+          "core": "core0"
+        }
       ]
     },
     {
@@ -583,14 +783,28 @@
       "base": 4294314752,
       "size": 1280,
       "kind": "imaging-controller",
-      "clock_id": null
+      "clock_id": null,
+      "interrupts": [
+        {
+          "output": "complete",
+          "line": 75,
+          "core": "core0"
+        }
+      ]
     },
     {
       "id": "image-combination",
       "base": 4294213632,
       "size": 1280,
       "kind": "imaging-controller",
-      "clock_id": null
+      "clock_id": null,
+      "interrupts": [
+        {
+          "output": "complete",
+          "line": 68,
+          "core": "core0"
+        }
+      ]
     },
     {
       "id": "peripheral-window-fe318000",
@@ -971,14 +1185,28 @@
       "base": 4294025216,
       "size": 560,
       "kind": "address-window",
-      "clock_id": null
+      "clock_id": null,
+      "interrupts": [
+        {
+          "output": "complete",
+          "line": 49,
+          "core": "core0"
+        }
+      ]
     },
     {
       "id": "raw-statistics",
       "base": 4294033408,
       "size": 4096,
       "kind": "address-window",
-      "clock_id": null
+      "clock_id": null,
+      "interrupts": [
+        {
+          "output": "complete",
+          "line": 50,
+          "core": "core0"
+        }
+      ]
     },
     {
       "id": "raw-conversion",
@@ -992,35 +1220,70 @@
       "base": 4294209536,
       "size": 132,
       "kind": "address-window",
-      "clock_id": null
+      "clock_id": null,
+      "interrupts": [
+        {
+          "output": "complete",
+          "line": 67,
+          "core": "core0"
+        }
+      ]
     },
     {
       "id": "warp",
       "base": 4294332416,
       "size": 332,
       "kind": "address-window",
-      "clock_id": null
+      "clock_id": null,
+      "interrupts": [
+        {
+          "output": "complete",
+          "line": 74,
+          "core": "core0"
+        }
+      ]
     },
     {
       "id": "jpeg-encoder",
       "base": 4294320128,
       "size": 300,
       "kind": "address-window",
-      "clock_id": null
+      "clock_id": null,
+      "interrupts": [
+        {
+          "output": "complete",
+          "line": 77,
+          "core": "core0"
+        }
+      ]
     },
     {
       "id": "jpeg-decoder",
       "base": 4294324224,
       "size": 300,
       "kind": "address-window",
-      "clock_id": null
+      "clock_id": null,
+      "interrupts": [
+        {
+          "output": "complete",
+          "line": 76,
+          "core": "core0"
+        }
+      ]
     },
     {
       "id": "still-processor-0",
       "base": 4294115328,
       "size": 4,
       "kind": "address-window",
-      "clock_id": null
+      "clock_id": null,
+      "interrupts": [
+        {
+          "output": "complete",
+          "line": 61,
+          "core": "core0"
+        }
+      ]
     },
     {
       "id": "still-processor-1",
@@ -1359,266 +1622,6 @@
           "address": 4294332416
         }
       ]
-    }
-  ],
-  "interrupts": [
-    {
-      "core": "core0",
-      "line": 73,
-      "source_block": "image-transfer",
-      "output_id": "complete"
-    },
-    {
-      "core": "core0",
-      "line": 101,
-      "source_block": "control-bus0",
-      "output_id": "controller"
-    },
-    {
-      "core": "core0",
-      "line": 102,
-      "source_block": "control-bus1",
-      "output_id": "controller"
-    },
-    {
-      "core": "core0",
-      "line": 84,
-      "source_block": "usb-core",
-      "output_id": "device"
-    },
-    {
-      "core": "core0",
-      "line": 85,
-      "source_block": "usb-core",
-      "output_id": "host"
-    },
-    {
-      "core": "core0",
-      "line": 8,
-      "source_block": "gpio",
-      "output_id": "port-0-pin-0"
-    },
-    {
-      "core": "core0",
-      "line": 9,
-      "source_block": "hdmi-1",
-      "output_id": "hot-plug"
-    },
-    {
-      "core": "core0",
-      "line": 10,
-      "source_block": "gpio",
-      "output_id": "port-0-pin-2"
-    },
-    {
-      "core": "core0",
-      "line": 11,
-      "source_block": "gpio",
-      "output_id": "port-0-pin-3"
-    },
-    {
-      "core": "core0",
-      "line": 20,
-      "source_block": "pulse-outputs",
-      "output_id": "output-0"
-    },
-    {
-      "core": "core0",
-      "line": 21,
-      "source_block": "pulse-outputs",
-      "output_id": "output-1"
-    },
-    {
-      "core": "core0",
-      "line": 22,
-      "source_block": "pulse-outputs",
-      "output_id": "output-2"
-    },
-    {
-      "core": "core0",
-      "line": 23,
-      "source_block": "pulse-outputs",
-      "output_id": "output-3"
-    },
-    {
-      "core": "core0",
-      "line": 24,
-      "source_block": "pulse-outputs",
-      "output_id": "output-4"
-    },
-    {
-      "core": "core0",
-      "line": 25,
-      "source_block": "pulse-outputs",
-      "output_id": "output-5"
-    },
-    {
-      "core": "core0",
-      "line": 26,
-      "source_block": "pulse-outputs",
-      "output_id": "output-6"
-    },
-    {
-      "core": "core0",
-      "line": 27,
-      "source_block": "pulse-outputs",
-      "output_id": "output-7"
-    },
-    {
-      "core": "core0",
-      "line": 28,
-      "source_block": "pulse-outputs",
-      "output_id": "output-8"
-    },
-    {
-      "core": "core0",
-      "line": 29,
-      "source_block": "pulse-outputs",
-      "output_id": "output-9"
-    },
-    {
-      "core": "core0",
-      "line": 30,
-      "source_block": "pulse-outputs",
-      "output_id": "output-10"
-    },
-    {
-      "core": "core0",
-      "line": 31,
-      "source_block": "pulse-outputs",
-      "output_id": "output-11"
-    },
-    {
-      "core": "core0",
-      "line": 14,
-      "source_block": "serial-spi2",
-      "output_id": "complete-0"
-    },
-    {
-      "core": "core0",
-      "line": 12,
-      "source_block": "serial-spi2",
-      "output_id": "complete-1"
-    },
-    {
-      "core": "core0",
-      "line": 39,
-      "source_block": "image-input",
-      "output_id": "phase-0"
-    },
-    {
-      "core": "core0",
-      "line": 41,
-      "source_block": "image-input",
-      "output_id": "phase-1"
-    },
-    {
-      "core": "core0",
-      "line": 40,
-      "source_block": "image-input",
-      "output_id": "record-phase"
-    },
-    {
-      "core": "core0",
-      "line": 36,
-      "source_block": "image-input",
-      "output_id": "raw"
-    },
-    {
-      "core": "core0",
-      "line": 38,
-      "source_block": "image-input",
-      "output_id": "readback"
-    },
-    {
-      "core": "core0",
-      "line": 44,
-      "source_block": "image-output-0",
-      "output_id": "output"
-    },
-    {
-      "core": "core0",
-      "line": 45,
-      "source_block": "image-output-1",
-      "output_id": "output"
-    },
-    {
-      "core": "core0",
-      "line": 68,
-      "source_block": "image-combination",
-      "output_id": "complete"
-    },
-    {
-      "core": "core0",
-      "line": 78,
-      "source_block": "sdhci-card-0",
-      "output_id": "host"
-    },
-    {
-      "core": "core0",
-      "line": 79,
-      "source_block": "sdio-host",
-      "output_id": "host"
-    },
-    {
-      "core": "core0",
-      "line": 88,
-      "source_block": "companion-fe80",
-      "output_id": "processing"
-    },
-    {
-      "core": "core1",
-      "line": 120,
-      "source_block": "interrupt-core1",
-      "output_id": "software-release"
-    },
-    {
-      "core": "core0",
-      "line": 49,
-      "source_block": "prefilter",
-      "output_id": "complete"
-    },
-    {
-      "core": "core0",
-      "line": 50,
-      "source_block": "raw-statistics",
-      "output_id": "complete"
-    },
-    {
-      "core": "core0",
-      "line": 61,
-      "source_block": "still-processor-0",
-      "output_id": "complete"
-    },
-    {
-      "core": "core0",
-      "line": 67,
-      "source_block": "image-scaler",
-      "output_id": "complete"
-    },
-    {
-      "core": "core0",
-      "line": 74,
-      "source_block": "warp",
-      "output_id": "complete"
-    },
-    {
-      "core": "core0",
-      "line": 77,
-      "source_block": "jpeg-encoder",
-      "output_id": "complete"
-    },
-    {
-      "core": "core0",
-      "line": 76,
-      "source_block": "jpeg-decoder",
-      "output_id": "complete"
-    },
-    {
-      "core": "core0",
-      "line": 75,
-      "source_block": "avc-codec-control",
-      "output_id": "complete"
     }
   ],
   "clocks": [],
@@ -1986,7 +1989,6 @@
   },
   "hardware": {
     "blocks": {},
-    "interrupt_inputs": [],
     "power_on_ram_fill": 255,
     "profiles": {
       "exr2-service-transports": {

@@ -536,33 +536,41 @@ fn irq(
     source_block: &str,
     output_id: &str,
 ) -> Result<Value, String> {
-    let mut routes = selection.soc.interrupts.iter().filter(|route| {
-        route.source_block == source_block && route.output_id.as_deref() == Some(output_id)
-    });
-    let route = routes.next().ok_or_else(|| {
+    let block = block(selection, source_block)?;
+    let mut interrupts = block
+        .interrupts
+        .iter()
+        .filter(|interrupt| interrupt.output == output_id);
+    let interrupt = interrupts.next().ok_or_else(|| {
         format!(
             "SoC {} has no {source_block} interrupt output {output_id}",
             selection.soc.id
         )
     })?;
-    if routes.next().is_some() {
+    if interrupts.next().is_some() {
         return Err(format!(
             "SoC {} has ambiguous {source_block} interrupt output {output_id}",
             selection.soc.id
         ));
     }
+    let route_core = interrupt.core.as_ref().ok_or_else(|| {
+        format!(
+            "SoC {} {source_block} interrupt output {output_id} has no fixed core",
+            selection.soc.id
+        )
+    })?;
     let core = selection
         .soc
         .processors
         .iter()
-        .position(|processor| processor.id == route.core)
+        .position(|processor| processor.id == *route_core)
         .ok_or_else(|| {
             format!(
                 "interrupt output {output_id} targets absent core {}",
-                route.core
+                route_core
             )
         })?;
-    Ok(json!({"Core":{"core":core,"line":route.line}}))
+    Ok(json!({"Core":{"core":core,"line":interrupt.line}}))
 }
 
 fn apply_interrupts(

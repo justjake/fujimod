@@ -97,7 +97,13 @@
       "base": 4294770688,
       "size": 12288,
       "kind": "display-controller",
-      "clock_id": null
+      "clock_id": null,
+      "interrupts": [
+        {
+          "output": "interrupt",
+          "line": 92
+        }
+      ]
     },
     {
       "id": "sd-host-clock-0",
@@ -132,49 +138,115 @@
       "base": 4294385664,
       "size": 268,
       "kind": "imaging-controller",
-      "clock_id": null
+      "clock_id": null,
+      "interrupts": [
+        {
+          "output": "interrupt",
+          "line": 107
+        }
+      ]
     },
     {
       "id": "movdc1",
       "base": 4294389760,
       "size": 268,
       "kind": "imaging-controller",
-      "clock_id": null
+      "clock_id": null,
+      "interrupts": [
+        {
+          "output": "interrupt",
+          "line": 108
+        }
+      ]
     },
     {
       "id": "lcdc0",
       "base": 4294418432,
       "size": 1540,
       "kind": "display-controller",
-      "clock_id": null
+      "clock_id": null,
+      "interrupts": [
+        {
+          "output": "channel0",
+          "line": 112
+        },
+        {
+          "output": "channel1",
+          "line": 113
+        }
+      ]
     },
     {
       "id": "lcdc1",
       "base": 4294610944,
       "size": 1540,
       "kind": "display-controller",
-      "clock_id": null
+      "clock_id": null,
+      "interrupts": [
+        {
+          "output": "channel0",
+          "line": 117
+        },
+        {
+          "output": "channel1",
+          "line": 118
+        }
+      ]
     },
     {
       "id": "sensor-command",
       "base": 4294361088,
       "size": 580,
       "kind": "imaging-controller",
-      "clock_id": null
+      "clock_id": null,
+      "interrupts": [
+        {
+          "output": "timing0",
+          "line": 102
+        },
+        {
+          "output": "timing1",
+          "line": 100
+        }
+      ]
     },
     {
       "id": "imaging-receiver",
       "base": 4294348800,
       "size": 596,
       "kind": "imaging-controller",
-      "clock_id": null
+      "clock_id": null,
+      "interrupts": [
+        {
+          "output": "normal0",
+          "line": 296
+        },
+        {
+          "output": "normal1",
+          "line": 298
+        },
+        {
+          "output": "error0",
+          "line": 297
+        },
+        {
+          "output": "error1",
+          "line": 297
+        }
+      ]
     },
     {
       "id": "input-buffer",
       "base": 4294377472,
       "size": 748,
       "kind": "imaging-controller",
-      "clock_id": null
+      "clock_id": null,
+      "interrupts": [
+        {
+          "output": "interrupt",
+          "line": 106
+        }
+      ]
     },
     {
       "id": "control-request-0",
@@ -279,7 +351,13 @@
       "base": 4294414336,
       "size": 108,
       "kind": "imaging-controller",
-      "clock_id": null
+      "clock_id": null,
+      "interrupts": [
+        {
+          "output": "interrupt",
+          "line": 128
+        }
+      ]
     },
     {
       "id": "spi1",
@@ -307,7 +385,13 @@
       "base": 4294803456,
       "size": 256,
       "kind": "address-window",
-      "clock_id": null
+      "clock_id": null,
+      "interrupts": [
+        {
+          "output": "interrupt",
+          "line": 37
+        }
+      ]
     },
     {
       "id": "flash-aperture",
@@ -321,7 +405,73 @@
       "base": 4294836224,
       "size": 65536,
       "kind": "dma",
-      "clock_id": null
+      "clock_id": null,
+      "interrupts": [
+        {
+          "output": "channel0",
+          "line": 207
+        },
+        {
+          "output": "channel1",
+          "line": 208
+        },
+        {
+          "output": "channel2",
+          "line": 209
+        },
+        {
+          "output": "channel3",
+          "line": 210
+        },
+        {
+          "output": "channel4",
+          "line": 211
+        },
+        {
+          "output": "channel5",
+          "line": 212
+        },
+        {
+          "output": "channel6",
+          "line": 213
+        },
+        {
+          "output": "channel7",
+          "line": 214
+        },
+        {
+          "output": "channel8",
+          "line": 215
+        },
+        {
+          "output": "channel9",
+          "line": 216
+        },
+        {
+          "output": "channel10",
+          "line": 217
+        },
+        {
+          "output": "channel11",
+          "line": 218
+        },
+        {
+          "output": "channel12",
+          "line": 219
+        },
+        {
+          "output": "channel13",
+          "line": 220
+        },
+        {
+          "output": "channel14",
+          "line": 221
+        },
+        {
+          "output": "channel15",
+          "line": 222
+        }
+      ]
     },
     {
       "id": "dma-request-mux",
@@ -335,17 +485,56 @@
       "base": 4294165248,
       "size": 80,
       "kind": "timer",
-      "clock_id": null
+      "clock_id": null,
+      "interrupts": [
+        {
+          "output": "channel0",
+          "line": 57
+        },
+        {
+          "output": "channel1",
+          "line": 58
+        },
+        {
+          "output": "channel2",
+          "line": 59
+        },
+        {
+          "output": "channel3",
+          "line": 60
+        },
+        {
+          "output": "channel4",
+          "line": 61
+        },
+        {
+          "output": "channel5",
+          "line": 62
+        },
+        {
+          "output": "channel6",
+          "line": 63
+        },
+        {
+          "output": "channel7",
+          "line": 64
+        }
+      ]
     },
     {
       "id": "jpeg-encoder",
       "base": 4294574080,
       "size": 4096,
       "kind": "imaging-controller",
-      "clock_id": null
+      "clock_id": null,
+      "interrupts": [
+        {
+          "output": "interrupt",
+          "line": 135
+        }
+      ]
     }
   ],
-  "interrupts": [],
   "clocks": [],
   "mappings": [],
   "dma_mappings": [],
@@ -370,213 +559,6 @@
       "cpu_interface_block_id": "gic-cpu-interface",
       "lines": 512
     },
-    "interrupt_inputs": [
-      {
-        "source_block_id": "dmp",
-        "output_id": "interrupt",
-        "line": 92
-      },
-      {
-        "source_block_id": "movdc0",
-        "output_id": "interrupt",
-        "line": 107
-      },
-      {
-        "source_block_id": "movdc1",
-        "output_id": "interrupt",
-        "line": 108
-      },
-      {
-        "source_block_id": "lcdc0",
-        "output_id": "channel0",
-        "line": 112
-      },
-      {
-        "source_block_id": "lcdc0",
-        "output_id": "channel1",
-        "line": 113
-      },
-      {
-        "source_block_id": "lcdc1",
-        "output_id": "channel0",
-        "line": 117
-      },
-      {
-        "source_block_id": "lcdc1",
-        "output_id": "channel1",
-        "line": 118
-      },
-      {
-        "source_block_id": "imaging-receiver",
-        "output_id": "normal0",
-        "line": 296
-      },
-      {
-        "source_block_id": "imaging-receiver",
-        "output_id": "normal1",
-        "line": 298
-      },
-      {
-        "source_block_id": "imaging-receiver",
-        "output_id": "error0",
-        "line": 297
-      },
-      {
-        "source_block_id": "imaging-receiver",
-        "output_id": "error1",
-        "line": 297
-      },
-      {
-        "source_block_id": "sensor-command",
-        "output_id": "timing0",
-        "line": 102
-      },
-      {
-        "source_block_id": "sensor-command",
-        "output_id": "timing1",
-        "line": 100
-      },
-      {
-        "source_block_id": "input-buffer",
-        "output_id": "interrupt",
-        "line": 106
-      },
-      {
-        "source_block_id": "decompressor",
-        "output_id": "interrupt",
-        "line": 128
-      },
-      {
-        "source_block_id": "jpeg-encoder",
-        "output_id": "interrupt",
-        "line": 135
-      },
-      {
-        "source_block_id": "serial-flash",
-        "output_id": "interrupt",
-        "line": 37
-      },
-      {
-        "source_block_id": "dma",
-        "output_id": "channel0",
-        "line": 207
-      },
-      {
-        "source_block_id": "dma",
-        "output_id": "channel1",
-        "line": 208
-      },
-      {
-        "source_block_id": "dma",
-        "output_id": "channel2",
-        "line": 209
-      },
-      {
-        "source_block_id": "dma",
-        "output_id": "channel3",
-        "line": 210
-      },
-      {
-        "source_block_id": "dma",
-        "output_id": "channel4",
-        "line": 211
-      },
-      {
-        "source_block_id": "dma",
-        "output_id": "channel5",
-        "line": 212
-      },
-      {
-        "source_block_id": "dma",
-        "output_id": "channel6",
-        "line": 213
-      },
-      {
-        "source_block_id": "dma",
-        "output_id": "channel7",
-        "line": 214
-      },
-      {
-        "source_block_id": "dma",
-        "output_id": "channel8",
-        "line": 215
-      },
-      {
-        "source_block_id": "dma",
-        "output_id": "channel9",
-        "line": 216
-      },
-      {
-        "source_block_id": "dma",
-        "output_id": "channel10",
-        "line": 217
-      },
-      {
-        "source_block_id": "dma",
-        "output_id": "channel11",
-        "line": 218
-      },
-      {
-        "source_block_id": "dma",
-        "output_id": "channel12",
-        "line": 219
-      },
-      {
-        "source_block_id": "dma",
-        "output_id": "channel13",
-        "line": 220
-      },
-      {
-        "source_block_id": "dma",
-        "output_id": "channel14",
-        "line": 221
-      },
-      {
-        "source_block_id": "dma",
-        "output_id": "channel15",
-        "line": 222
-      },
-      {
-        "source_block_id": "interval-timer",
-        "output_id": "channel0",
-        "line": 57
-      },
-      {
-        "source_block_id": "interval-timer",
-        "output_id": "channel1",
-        "line": 58
-      },
-      {
-        "source_block_id": "interval-timer",
-        "output_id": "channel2",
-        "line": 59
-      },
-      {
-        "source_block_id": "interval-timer",
-        "output_id": "channel3",
-        "line": 60
-      },
-      {
-        "source_block_id": "interval-timer",
-        "output_id": "channel4",
-        "line": 61
-      },
-      {
-        "source_block_id": "interval-timer",
-        "output_id": "channel5",
-        "line": 62
-      },
-      {
-        "source_block_id": "interval-timer",
-        "output_id": "channel6",
-        "line": 63
-      },
-      {
-        "source_block_id": "interval-timer",
-        "output_id": "channel7",
-        "line": 64
-      }
-    ],
     "companion": null,
     "blocks": {
       "lcdc0": {
