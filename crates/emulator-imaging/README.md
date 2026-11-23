@@ -49,7 +49,7 @@ Examples, with `fe` the X-T5 launcher
 
 ```sh
 # MacBook camera (device 1)
-XT5_SCENE=video:avf:1@1080x720@30 fe --output run-cam --seconds 30 --viewer-port 8090
+XT5_SCENE=video:avf:1@1080x720@30 fe --output run-cam --seconds 30
 # A video file, looped
 XT5_SCENE=video:$HOME/clips/street.mp4@1080x720 fe --output run-clip --seconds 30
 # Any producer through a FIFO

@@ -18,7 +18,7 @@ NAND accepts a committed image or 128 MiB main-area image without OOB/spare.\n\
 Settings accepts a sixteen-byte MCU persistent packet.\n\
 First-start menus are accepted through MENU/OK ADC input.\n\
 EXR II options: --nand IMAGE --settings MCU.BIN --camera DIR --language TAG --clock-seconds-2000 N.\n\
-Run output and limits: --output DIR, --seconds N (guest time), --wall-seconds N (host time), --status-every N (guest time), --viewer-port PORT.\n\
+Run output and limits: --output DIR, --seconds N (guest time), --wall-seconds N (host time), --status-every N (guest time).\n\
 Session inputs: --quantum N, --keys SCRIPT,\n\
 --discovery, --stub NAME@ADDR=VALUE, --patch FILE, --mod MANIFEST, --scene PATH,\n\
 --card-image IMAGE, --card-file NAME=PATH, --card-image-2 IMAGE, --card-file-2 NAME=PATH.\n\
@@ -41,7 +41,7 @@ Native GUI: --gui opens the desktop window connected to this session.\n\
 Prints a JSON boot report; exits 0 at REC (EXR II) or at the end of the run (XP5), 2 at a stopped frontier.\n";
 
 /// Options that take a value, in help order; `--discovery` and `--gui` are flags.
-const VALUED: [&str; 43] = [
+const VALUED: [&str; 42] = [
     "--configuration",
     "--overlay",
     "--engine",
@@ -59,7 +59,6 @@ const VALUED: [&str; 43] = [
     "--seconds",
     "--wall-seconds",
     "--status-every",
-    "--viewer-port",
     "--quantum",
     "--keys",
     "--stub",
@@ -280,15 +279,6 @@ impl Boot {
             .transpose()
     }
 
-    fn viewer_port(&mut self) -> Result<Option<u16>, String> {
-        self.text("--viewer-port")?
-            .map(|value| {
-                value
-                    .parse()
-                    .map_err(|_| "--viewer-port needs a 16-bit port number".into())
-            })
-            .transpose()
-    }
     fn execution_policy(&mut self, tracing: bool) -> Result<ExecutionPolicy, String> {
         Ok(self
             .text("--execution-policy")?
@@ -450,12 +440,9 @@ fn run_exr2(
     let duration = boot_options.duration("--seconds")?;
     let status = boot_options.duration("--status-every")?;
     let directory = boot_options.path("--output");
-    let viewer_port = boot_options.viewer_port()?;
     let outputs = boot::output::Outputs::default();
     if let Some(directory) = &directory {
-        outputs.attach(0, directory.clone(), viewer_port)?;
-    } else if viewer_port.is_some() {
-        return Err("--viewer-port requires --output".into());
+        outputs.add(0, directory.clone())?;
     }
     let mut patches =
         boot::patch::Schedule::from_path(boot_options.path("--patch").as_deref(), &[])?;
@@ -570,7 +557,6 @@ fn run_xp5(mut boot_options: Boot, resolved: ResolvedConfiguration) -> Result<Ou
         watch_writes: boot_options.text("--watch-writes")?,
         pc_trace,
         screenshot: boot_options.path("--screenshot"),
-        viewer_port: boot_options.viewer_port()?,
         dump: boot_options.text("--dump")?,
         hash: boot_options.text("--hash")?,
         update: boot_options.required("--update")?.into(),
@@ -653,7 +639,6 @@ fn run_application(mut options: Boot, resolved: ResolvedConfiguration) -> Result
     let duration = options.duration("--seconds")?;
     let output = options.path("--output");
     let screenshot = options.path("--screenshot");
-    let viewer_port = options.viewer_port()?;
     let status = options.duration("--status-every")?;
     let load_snapshot = options.path("--load-snapshot");
     let save_snapshot = options.path("--save-snapshot");
@@ -730,9 +715,7 @@ fn run_application(mut options: Boot, resolved: ResolvedConfiguration) -> Result
     }
     let frames = boot::output::Outputs::default();
     if let Some(directory) = &output {
-        frames.attach(0, directory.clone(), viewer_port)?;
-    } else if viewer_port.is_some() {
-        return Err("--viewer-port requires --output".into());
+        frames.add(0, directory.clone())?;
     }
     let (_, start) = started.progress();
     let status_period =

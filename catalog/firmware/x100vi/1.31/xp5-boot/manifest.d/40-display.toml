@@ -28,7 +28,6 @@ base = 0xff990000
 size = 0x1000
 kind = "display"
 [device.options]
-viewer_port = 0
 [[device]]
 base = 0xff9a0000
 size = 0x1000

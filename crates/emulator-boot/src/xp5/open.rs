@@ -115,7 +115,6 @@ fn devices_and_resources(
     firmware: &Firmware,
     run_directory: Option<&Path>,
     outputs: &crate::output::Outputs,
-    viewer_keys: Option<crate::frame_viewer::KeyHandler>,
     mut windows: Vec<DeviceWindow>,
     assets: &BTreeMap<String, Vec<u8>>,
     card_images: &[(u64, &fujimod_emulator_devices::parts::sd_card::Card)],
@@ -156,11 +155,6 @@ fn devices_and_resources(
             .ok_or_else(|| format!("a card image needs the SD slot at {base:#x}"))?;
         slot.card = Some(card.clone());
     }
-    // With the viewer on, every display bank publishes into the primary display's directory,
-    // which is the one directory the viewer serves (latest-bank0.png and latest-bank1.png).
-    let viewer_directory = windows.iter()
-        .find(|window| window.kind == "display" && window.options.contains_key("viewer_port"))
-        .map(|window| window.base);
     for window in &mut windows {
         match window.kind.as_str() {
             "interprocessor-mailbox" => window.options.clear(),
@@ -202,14 +196,13 @@ fn devices_and_resources(
                 let mut options = window.options.clone();
                 if let Some(directory) = run_directory {
                     options.entry("frame_dir").or_insert_with(|| {
-                        let base = viewer_directory.unwrap_or(window.base);
-                        toml::Value::String(directory.join(format!("display-{base:x}"))
+                        toml::Value::String(directory.join(format!("display-{:x}", window.base))
                             .to_string_lossy().into_owned())
                     });
                 } else {
                     options.remove("frame_dir");
                 }
-                let display = super::display_output::configure(outputs, window.base, &options, viewer_keys.clone())?;
+                let display = super::display_output::configure(outputs, window.base, &options)?;
                 resources.displays.insert(window.base, display);
                 window.options.clear();
             }
@@ -559,7 +552,6 @@ pub(crate) fn open_from(
     quantum_override: Option<usize>,
     rom: Option<&RomStart>,
     loader_cards: &[super::loader_card::LoaderCard],
-    viewer_keys: Option<crate::frame_viewer::KeyHandler>,
     profile: Option<&super::profile::Placed>,
 ) -> Result<Opened, String> {
     let mask_rom = rom.is_some_and(|start| matches!(start.entry, Entry::MaskRom(_)));
@@ -976,7 +968,6 @@ pub(crate) fn open_from(
         firmware,
         run_directory,
         &outputs,
-        viewer_keys,
         windows,
         &rom.map(RomStart::assets).unwrap_or_else(|| {
             loader_cards.iter().flat_map(|card| card.assets.clone()).collect()
@@ -1008,13 +999,7 @@ pub(crate) fn open_from(
     }
     let run_scene = serde_json::to_value(run_scene).map_err(|error| error.to_string())?;
     let scene = scene_override.map(crate::host::read_scene).transpose()?;
-    let mut checkpoint_wiring = state.clone();
-    for window in &mut checkpoint_wiring.device {
-        // Host frame publication does not change the modeled boot graph.
-        window.options.remove("viewer_port");
-        window.options.remove("viewer_bind");
-    }
-    let wiring = serde_json::to_vec(&checkpoint_wiring).map_err(|error| error.to_string())?;
+    let wiring = serde_json::to_vec(state).map_err(|error| error.to_string())?;
     let wiring_sha256 = format!("{:x}", Sha256::digest(wiring));
     let mut definition = json!({
         "schema": 1,

@@ -1,5 +1,5 @@
 //! Shared native frame publication, status and screenshots.
-use super::{frame_viewer::Viewer, png_writer};
+use super::png_writer;
 use fujimod_emulator_devices::graphics::scanout::Frame;
 use serde_json::Value;
 use std::{collections::BTreeMap, path::{Path, PathBuf}, sync::{Arc, Mutex}};
@@ -11,10 +11,10 @@ struct Output {
     writer: png_writer::Writer,
     next_archive: u64,
     status: String,
-    _viewer: Option<Viewer>,
 }
 impl Outputs {
-    pub(crate) fn add(&self, bank: usize, directory: PathBuf, viewer: Option<Viewer>) -> Result<(), String> {
+    /// Publish display bank `bank` into `directory`.
+    pub fn add(&self, bank: usize, directory: PathBuf) -> Result<(), String> {
         let mut outputs = self.0.lock().unwrap();
         if outputs.contains_key(&bank) {
             return Err(format!("display output {bank} is already configured"));
@@ -26,7 +26,6 @@ impl Outputs {
                 directory,
                 next_archive: 0,
                 status: String::new(),
-                _viewer: viewer,
             },
         );
         drop(outputs);
@@ -35,16 +34,6 @@ impl Outputs {
             serde_json::json!({"bank":bank,"enabled":false,"sequence":0}),
         )?;
         Ok(())
-    }
-    /// Register a host output whose model has no device-side output settings.
-    pub fn attach(&self, bank: usize, directory: PathBuf, viewer_port: Option<u16>) -> Result<(), String> {
-        let viewer = viewer_port.map(|port| {
-            Viewer::with_bind(directory.clone(), std::net::Ipv4Addr::LOCALHOST.into(), port, None, None)
-        }).transpose()?;
-        if let Some(viewer) = &viewer {
-            eprintln!("display viewer: {}", viewer.url());
-        }
-        self.add(bank, directory, viewer)
     }
 
     /// Flush all frames and copy the latest capture of the first active output.
@@ -92,7 +81,7 @@ impl Outputs {
                 continue;
             }
             if !self.0.lock().unwrap().contains_key(&bank) {
-                self.attach(bank, directory.to_owned(), None)?;
+                self.add(bank, directory.to_owned())?;
             }
             self.frame(frame)?;
             self.status(bank, serde_json::json!({"bank":bank,"enabled":true,"sequence":sequence}))?;
@@ -102,7 +91,7 @@ impl Outputs {
     }
 
     pub fn write_screenshot(path: &Path, frame: &Frame) -> Result<(), String> {
-        let bytes = crate::frame_viewer::rgba_png(frame.width, frame.height, &frame.rgba)?;
+        let bytes = png_writer::rgba_png(frame.width, frame.height, &frame.rgba)?;
         std::fs::write(path, bytes).map_err(|error| format!("{}: {error}", path.display()))
     }
 
@@ -175,25 +164,28 @@ mod tests {
         std::fs::create_dir_all(&directory).unwrap();
         std::fs::write(directory.join("bank0-000001.png"), b"preserved").unwrap();
         let outputs = Outputs::default();
-        outputs.add(0, directory.clone(), None).unwrap();
+        outputs.add(0, directory.clone()).unwrap();
         let rgba = vec![127; 130 * 130 * 4];
-        for _ in 0..2 {
-            outputs
-                .frame(Frame {
-                    output: 0,
-                    sequence: 1,
-                    width: 130,
-                    height: 130,
-                    rgba: rgba.clone(),
-                })
-                .unwrap();
-        }
+        let archive_sequences = (0..2)
+            .map(|_| {
+                outputs
+                    .frame(Frame {
+                        output: 0,
+                        sequence: 1,
+                        width: 130,
+                        height: 130,
+                        rgba: rgba.clone(),
+                    })
+                    .unwrap()
+            })
+            .collect::<Vec<_>>();
+        assert_eq!(archive_sequences, [2, 3]);
         outputs.finish().unwrap();
         assert_eq!(
             std::fs::read(directory.join("bank0-000001.png")).unwrap(),
             b"preserved"
         );
-        let expected = crate::frame_viewer::rgba_png(130, 130, &rgba).unwrap();
+        let expected = png_writer::rgba_png(130, 130, &rgba).unwrap();
         let publication: Value = serde_json::from_slice(
             &std::fs::read(directory.join("bank0-publication.json")).unwrap(),
         )

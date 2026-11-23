@@ -34,9 +34,6 @@ pub struct Startup {
     pub second_card_files: Vec<(String, PathBuf)>,
     pub scene: Option<PathBuf>,
     pub output: Option<PathBuf>,
-    pub viewer_port: Option<u16>,
-    /// Physical key requests from the frame viewer (POST /key); None disables them.
-    pub viewer_keys: Option<crate::frame_viewer::KeyHandler>,
     pub mode: Mode,
     pub quantum: Option<usize>,
     /// Named camera settings (`setup=done`, `language=en`) the loader start boots with, from
@@ -58,7 +55,7 @@ pub(super) fn open_startup(
     startup: Startup,
 ) -> Result<crate::Camera, String> {
     let Startup { update, manifest, boot_rom: rom_path, card_image: sd_image, card_files,
-        second_card_image, second_card_files, scene, output: run_directory, viewer_port, viewer_keys, mode, quantum: quantum_override,
+        second_card_image, second_card_files, scene, output: run_directory, mode, quantum: quantum_override,
         camera_settings } = startup;
     let start = configuration.configuration.start;
     if start == RunStart::SdCard && sd_image.is_none()
@@ -74,14 +71,6 @@ pub(super) fn open_startup(
         .and_then(|profile| profile.preload.as_deref())
         .unwrap_or_default();
     state.preload.splice(..0, preloads.iter().cloned());
-    if let Some(port) = viewer_port {
-        if run_directory.is_none() {
-            return Err("the frame viewer needs a run output directory".into());
-        }
-        let display = state.device.iter_mut().find(|window| window.base == 0xff99_0000 && window.kind == "display")
-            .ok_or("configuration declares no primary display window")?;
-        display.options.insert("viewer_port".into(), toml::Value::Integer(port.into()));
-    }
     let update_bytes = std::fs::read(&update).map_err(|e| format!("{}: {e}", update.display()))?;
     let firmware = firmware::Firmware::from_update(&firmware_id, update_bytes, true)?;
     if let Some(directory) = &run_directory {
@@ -151,7 +140,6 @@ pub(super) fn open_startup(
         quantum_override,
         rom.as_ref(),
         &loader,
-        viewer_keys,
         profile.as_ref(),
     )?;
     let card_write_back = loader.into_iter().filter_map(|card| card.write_back).collect();

@@ -86,82 +86,6 @@ fn shared_boot_summary(
     })
 }
 
-
-/// One physical input requested through the frame viewer.
-#[derive(Clone, Debug, PartialEq, Eq)]
-enum ViewerInput {
-    /// A key of the body's key model.
-    Key(Key),
-    /// The shutter release: half (S1) or full (S2) press.
-    Shutter { full: bool },
-    /// A dial or switch position (viewer `POST /set`, sent as `SET CONTROL=POSITION`).
-    Set { control: String, position: String },
-}
-
-impl ViewerInput {
-    /// Validate a viewer key name. The names are the `--press` key names; `SET CONTROL=POSITION`
-    /// is a position change in the `--set` syntax, without a time.
-    fn parse(name: &str) -> Result<Self, String> {
-        if let Some(setting) = name.strip_prefix("SET ") {
-            let mut changes = crate::host::parse_settings(setting)?;
-            return match (changes.pop(), changes.is_empty()) {
-                (Some(change), true) if change.at_ms == 0 && !setting.contains('@') => {
-                    Ok(Self::Set { control: change.control, position: change.position })
-                }
-                _ => Err("viewer position changes take one CONTROL=POSITION and no time".into()),
-            };
-        }
-        Ok(match Key::parse(name)? {
-            Key::ShutterHalf => Self::Shutter { full: false },
-            Key::ShutterFull => Self::Shutter { full: true },
-            key => Self::Key(key),
-        })
-    }
-}
-
-/// Viewer key requests waiting for the next run slice. The viewer's client threads push them;
-/// the run loop applies them at the guest time it reaches between slices.
-type ViewerQueue = std::sync::Arc<std::sync::Mutex<std::collections::VecDeque<(ViewerInput, bool)>>>;
-
-fn viewer_key_handler(queue: ViewerQueue) -> crate::frame_viewer::KeyHandler {
-    std::sync::Arc::new(move |name: &str, pressed: bool| {
-        let input = ViewerInput::parse(name)?;
-        queue.lock().map_err(|_| "viewer key queue is poisoned".to_string())?.push_back((input, pressed));
-        Ok(())
-    })
-}
-
-/// Apply one viewer input at guest time `now`. A body whose panel has no shutter wiring gets the
-/// shutter as its GPIO release lines: half press drives 0:0 low, full press drives 0:1 low and
-/// holds 0:0 low while it is down.
-fn apply_viewer_input(
-    inputs: &fujimod_emulator_xp5_board::session::Inputs,
-    session: &mut fujimod_emulator_session::Session,
-    now: u64,
-    shutter: &mut [bool; 2],
-    (input, pressed): (ViewerInput, bool),
-) -> Result<(), String> {
-    match input {
-        ViewerInput::Key(key) => inputs.key(session, now, key, pressed),
-        ViewerInput::Set { control, position } => inputs.set_position(session, now, &control, &position),
-        ViewerInput::Shutter { full } => {
-            let key = if full { Key::ShutterFull } else { Key::ShutterHalf };
-            if inputs.key(session, now, key, pressed).is_ok() {
-                return Ok(());
-            }
-            let (half_high, full_high) = shutter_levels(shutter, full, pressed);
-            inputs.gpio(session, 0, 0, half_high)?;
-            inputs.gpio(session, 0, 1, full_high)
-        }
-    }
-}
-
-/// Record a shutter edge and return the active-low GPIO levels of 0:0 (S1) and 0:1 (S2).
-fn shutter_levels(shutter: &mut [bool; 2], full: bool, pressed: bool) -> (bool, bool) {
-    shutter[usize::from(full)] = pressed;
-    (!(shutter[0] || shutter[1]), !shutter[1])
-}
-
 /// One XP5 boot: the run configuration plus the caller's input files.
 pub struct Run {
     pub configuration: ResolvedConfiguration,
@@ -175,7 +99,6 @@ pub struct Run {
     pub watch_writes: Option<String>,
     pub pc_trace: Option<crate::TraceOutput>,
     pub screenshot: Option<PathBuf>,
-    pub viewer_port: Option<u16>,
     pub dump: Option<String>,
     pub hash: Option<String>,
     /// The boot ROM, for a configuration that starts from it.
@@ -241,7 +164,6 @@ impl Run {
             watch_writes: None,
             pc_trace: None,
             screenshot: None,
-            viewer_port: None,
             dump: None,
             hash: None,
             boot_rom: None,
@@ -306,8 +228,6 @@ pub struct RunHost {
     watch_pcs: Vec<u64>,
     watch_writes: Vec<(u64, u64)>,
     watch_after: Option<(u64, u64)>,
-    viewer_queue: ViewerQueue,
-    viewer_shutter: [bool; 2],
     frames: Vec<Frame>,
     latest_frame: Option<Frame>,
 }
@@ -325,7 +245,6 @@ impl RunHost {
             watch_writes,
             pc_trace,
             screenshot,
-            viewer_port,
             dump,
             hash,
             boot_rom: rom_path,
@@ -421,7 +340,6 @@ impl RunHost {
             }
         }
         timed_pokes.sort_by_key(|(at_ms, _)| *at_ms);
-        let viewer_queue = ViewerQueue::default();
         let request = Startup {
             update,
             manifest,
@@ -432,8 +350,6 @@ impl RunHost {
             second_card_files,
             scene,
             output: Some(run_directory.clone()),
-            viewer_port,
-            viewer_keys: viewer_port.map(|_| viewer_key_handler(viewer_queue.clone())),
             mode,
             quantum: quantum_override,
             camera_settings,
@@ -579,8 +495,6 @@ impl RunHost {
             watch_pcs,
             watch_writes,
             watch_after,
-            viewer_queue,
-            viewer_shutter: [false; 2],
             frames: Vec::new(),
             latest_frame: None,
         })
@@ -612,8 +526,6 @@ impl RunHost {
             watch_pcs,
             watch_writes,
             watch_after,
-            viewer_queue,
-            viewer_shutter,
             policy,
             ..
         } = self;
@@ -643,25 +555,6 @@ impl RunHost {
             timed_pokes.pop_front();
             poke_word(&session.board, address, value)?;
             eprintln!("FUJIMOD XP5 poke: {address:#x}={value:#x} at {at_ms} ms (tick {now})");
-        }
-        let requested: Vec<_> = viewer_queue
-            .lock()
-            .map_err(|_| "viewer key queue is poisoned".to_string())?
-            .drain(..)
-            .collect();
-        for request in requested {
-            // A key the body does not wire is the user's request failing, not the run's.
-            if let Err(error) = apply_viewer_input(
-                inputs,
-                session,
-                now,
-                viewer_shutter,
-                request.clone(),
-            ) {
-                eprintln!("FUJIMOD XP5 viewer key {request:?}: {error}");
-            } else {
-                eprintln!("FUJIMOD XP5 viewer key {request:?} at tick {now}");
-            }
         }
         if let Some((at, after_ms)) = *watch_after
             && at <= now
@@ -1007,27 +900,6 @@ mod tests {
     use super::*;
 
     #[test]
-    fn viewer_key_names_map_to_physical_inputs() {
-        assert_eq!(ViewerInput::parse("SHUTTER_HALF"), Ok(ViewerInput::Shutter { full: false }));
-        assert_eq!(ViewerInput::parse("shutter_full"), Ok(ViewerInput::Shutter { full: true }));
-        assert_eq!(ViewerInput::parse("OK"), Ok(ViewerInput::Key(Key::Menu)));
-        assert_eq!(ViewerInput::parse("DISP"), Ok(ViewerInput::Key(Key::Back)));
-        assert_eq!(ViewerInput::parse("STICK_PUSH"), Ok(ViewerInput::Key(Key::StickPush)));
-        assert_eq!(ViewerInput::parse("PLAY"), Ok(ViewerInput::Key(Key::Play)));
-        assert_eq!(ViewerInput::parse("REAR+"), Ok(ViewerInput::Key(Key::RearPlus)));
-        assert!(ViewerInput::parse("POWER").is_err());
-        assert_eq!(ViewerInput::parse("AEL"), Ok(ViewerInput::Key(Key::AeLock)));
-        assert_eq!(ViewerInput::parse("FRONT_PUSH"), Ok(ViewerInput::Key(Key::FrontPush)));
-        assert_eq!(
-            ViewerInput::parse("SET iso=800"),
-            Ok(ViewerInput::Set { control: "iso".into(), position: "800".into() })
-        );
-        assert!(ViewerInput::parse("SET iso=800@10").is_err());
-        assert!(ViewerInput::parse("SET iso=800,ss=A").is_err());
-        assert!(ViewerInput::parse("SET iso").is_err());
-    }
-
-    #[test]
     fn new_control_key_names_parse() {
         for (name, key) in [
             ("AEL", Key::AeLock),
@@ -1046,30 +918,5 @@ mod tests {
         let edges = crate::host::parse_keys(None, Some("100:REAR+,200:AEL:300")).unwrap();
         let names: Vec<_> = edges.iter().map(|edge| (edge.delay.as_millis(), edge.name.as_str(), edge.pressed)).collect();
         assert_eq!(names, [(100, "REAR+", true), (200, "AEL", true), (250, "REAR+", false), (500, "AEL", false)]);
-    }
-
-    #[test]
-    fn viewer_handler_queues_valid_keys_and_refuses_unknown_names() {
-        let queue = ViewerQueue::default();
-        let handler = viewer_key_handler(queue.clone());
-        handler("UP", true).unwrap();
-        handler("SHUTTER_FULL", false).unwrap();
-        assert!(handler("NOT_A_KEY", true).is_err());
-        let queued: Vec<_> = queue.lock().unwrap().drain(..).collect();
-        assert_eq!(queued, [
-            (ViewerInput::Key(Key::Up), true),
-            (ViewerInput::Shutter { full: true }, false),
-        ]);
-    }
-
-    #[test]
-    fn full_shutter_press_holds_half_press_line_low() {
-        let mut shutter = [false; 2];
-        assert_eq!(shutter_levels(&mut shutter, false, true), (false, true));
-        assert_eq!(shutter_levels(&mut shutter, true, true), (false, false));
-        assert_eq!(shutter_levels(&mut shutter, false, false), (false, false));
-        assert_eq!(shutter_levels(&mut shutter, true, false), (true, true));
-        assert_eq!(shutter_levels(&mut shutter, true, true), (false, false));
-        assert_eq!(shutter_levels(&mut shutter, true, false), (true, true));
     }
 }

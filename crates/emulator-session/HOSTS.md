@@ -47,7 +47,7 @@ registers drive its `SerialStatus` registers; shutter and push pads drive
 installed with `Session::install_panel`, the same call the browser and
 Python bindings use for a caller-described board.
 
-XP5 key scripts (`--press`, `--keys`) and the frame viewer name physical keys
+XP5 key scripts (`--press`, `--keys`) name physical keys
 (`MENU`, `STICK_UP`, `REAR+`); `Inputs::key` maps each to its catalog control
 and schedules it on the session. There is no second key model.
 

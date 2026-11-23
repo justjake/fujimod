@@ -1,5 +1,5 @@
 //! XP5-specific scanout model configuration and host output wiring.
-use crate::{frame_viewer::{KeyHandler, Viewer}, output::Outputs};
+use crate::output::Outputs;
 use fujimod_emulator_xp5_display::display::Config;
 use fujimod_framebuffer::raster::PixelOrder;
 use std::path::PathBuf;
@@ -8,7 +8,6 @@ pub(crate) fn configure(
     outputs: &Outputs,
         base: u64,
         options: &toml::Table,
-        keys: Option<KeyHandler>,
     ) -> Result<Config, String> {
         let valid = [
             "frame_dir",
@@ -17,9 +16,6 @@ pub(crate) fn configure(
             "raw_format1",
             "raw_format2",
             "raw_format3",
-            "viewer_port",
-            "serve_bind",
-            "serve_hostname",
         ];
         if let Some(key) = options.keys().find(|k| !valid.contains(&k.as_str())) {
             return Err(format!("unknown display option {key}"));
@@ -55,40 +51,6 @@ pub(crate) fn configure(
             return Ok(config);
         };
         let directory = PathBuf::from(directory.as_str().ok_or("frame_dir must be a path")?);
-        let viewer = if let Some(port) = number("viewer_port")? {
-            if bank != 0 {
-                return Err("start viewer only on display bank0".into());
-            }
-            let bind = options
-                .get("serve_bind")
-                .map(|v| {
-                    v.as_str()
-                        .ok_or("serve_bind must be an IP address")?
-                        .parse::<std::net::IpAddr>()
-                        .map_err(|e| e.to_string())
-                })
-                .transpose()?
-                .unwrap_or(std::net::Ipv4Addr::LOCALHOST.into());
-            let hostname = options
-                .get("serve_hostname")
-                .map(|v| v.as_str().ok_or("serve_hostname must be a DNS name"))
-                .transpose()?;
-            let viewer = Viewer::with_bind(
-                directory.clone(),
-                bind,
-                u16::try_from(port).map_err(|e| e.to_string())?,
-                hostname,
-                keys,
-            )?;
-            eprintln!(
-                "display viewer: {} (bind {})",
-                viewer.url(),
-                viewer.address()
-            );
-            Some(viewer)
-        } else {
-            None
-        };
-    outputs.add(bank, directory, viewer)?;
+    outputs.add(bank, directory)?;
     Ok(config)
 }

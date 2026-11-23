@@ -1,5 +1,4 @@
 //! Host-only frame publication. No guest RAM access occurs on this worker.
-use super::frame_viewer::rgba_png;
 use std::io::Write;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -107,4 +106,58 @@ impl Drop for Writer {
             let _ = thread.join();
         }
     }
+}
+
+/// PNG RGBA8 with a zlib stream of stored DEFLATE blocks; no codec dependency.
+pub fn rgba_png(width: u32, height: u32, rgba: &[u8]) -> Result<Vec<u8>, String> {
+    if width == 0
+        || height == 0
+        || width > 8192
+        || height > 8192
+        || rgba.len() != width as usize * height as usize * 4
+    {
+        return Err("invalid RGBA frame dimensions".into());
+    }
+    let mut raw = Vec::with_capacity(rgba.len() + height as usize);
+    for row in rgba.chunks_exact(width as usize * 4) {
+        raw.push(0);
+        raw.extend_from_slice(row);
+    }
+    let mut z = vec![0x78, 0x01];
+    let count = raw.len().div_ceil(65535);
+    for (n, b) in raw.chunks(65535).enumerate() {
+        z.push(u8::from(n + 1 == count));
+        let len = b.len() as u16;
+        z.extend_from_slice(&len.to_le_bytes());
+        z.extend_from_slice(&(!len).to_le_bytes());
+        z.extend_from_slice(b);
+    }
+    let (mut a, mut b) = (1u32, 0u32);
+    for &v in &raw {
+        a = (a + v as u32) % 65521;
+        b = (b + a) % 65521;
+    }
+    z.extend_from_slice(&((b << 16) | a).to_be_bytes());
+    let mut png = b"\x89PNG\r\n\x1a\n".to_vec();
+    let mut ihdr = Vec::new();
+    ihdr.extend_from_slice(&width.to_be_bytes());
+    ihdr.extend_from_slice(&height.to_be_bytes());
+    ihdr.extend_from_slice(&[8, 6, 0, 0, 0]);
+    chunk(&mut png, b"IHDR", &ihdr);
+    chunk(&mut png, b"IDAT", &z);
+    chunk(&mut png, b"IEND", &[]);
+    Ok(png)
+}
+fn chunk(out: &mut Vec<u8>, kind: &[u8; 4], bytes: &[u8]) {
+    out.extend_from_slice(&(bytes.len() as u32).to_be_bytes());
+    out.extend_from_slice(kind);
+    out.extend_from_slice(bytes);
+    let mut crc = !0u32;
+    for &b in kind.iter().chain(bytes) {
+        crc ^= b as u32;
+        for _ in 0..8 {
+            crc = (crc >> 1) ^ if crc & 1 != 0 { 0xedb88320 } else { 0 };
+        }
+    }
+    out.extend_from_slice(&(!crc).to_be_bytes());
 }

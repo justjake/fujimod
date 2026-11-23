@@ -1086,7 +1086,7 @@ fn common_open_checks_generation_before_loading_startup_files() {
         second_card_image: None,
         second_card_files: vec![],
         scene: None,
-        output: None, viewer_port: None, viewer_keys: None,
+        output: None,
         mode: Mode::Strict,
         quantum: None,
         camera_settings: Default::default(),
