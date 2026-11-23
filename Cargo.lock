@@ -2416,6 +2416,7 @@ dependencies = [
 name = "fujimod-emulator-cpu"
 version = "0.1.0"
 dependencies = [
+ "arrayvec",
  "fujimod-perf",
  "fujimod-workspace-hack",
  "serde",
@@ -2426,6 +2427,7 @@ dependencies = [
 name = "fujimod-emulator-cpu-hvf"
 version = "0.1.0"
 dependencies = [
+ "arrayvec",
  "cc",
  "fujimod-catalog-configuration",
  "fujimod-emulator",

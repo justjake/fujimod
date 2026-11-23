@@ -309,7 +309,7 @@ pub struct Transfer {
 pub struct LoadStore {
     pub load: bool,
     pub simd: bool,
-    pub transfers: Vec<Transfer>,
+    pub transfers: arrayvec::ArrayVec<Transfer, 2>,
     pub writeback: Option<(u8, u64)>,
 }
 fn sx(v: u64, b: u32) -> i64 {
@@ -333,7 +333,7 @@ pub fn decode_load_store(
     let mut out = LoadStore {
         load: false,
         simd: w & (1 << 26) != 0,
-        transfers: Vec::new(),
+        transfers: arrayvec::ArrayVec::new(),
         writeback: None,
     };
     let (address, signed, wide, bytes);

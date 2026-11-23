@@ -11,6 +11,9 @@ use std::thread::{self, JoinHandle};
 use std::time::{Duration, Instant};
 mod portable;
 
+/// Two loaded registers, optional base writeback, and the next PC.
+pub type MmioUpdates = arrayvec::ArrayVec<(Register, u64), 4>;
+
 pub enum Op {
     Read(Register),
     Write(Register, Vec<u8>),
@@ -23,7 +26,7 @@ pub enum Op {
     Resume(bool),
     /// Retire a parked guest MMIO access: write these registers (loaded
     /// values, base writeback and the next PC), then continue the run.
-    CompleteMmio(Vec<(Register, u64)>),
+    CompleteMmio(MmioUpdates),
     /// Device-published reads this vCPU may serve without its owner.
     FastWindows(Vec<FastWindow>),
     Shutdown,
@@ -57,7 +60,7 @@ pub struct MmioAccess {
     pub pc: u64,
     pub load: bool,
     pub simd: bool,
-    pub transfers: Vec<MmioTransfer>,
+    pub transfers: arrayvec::ArrayVec<MmioTransfer, 2>,
     pub writeback: Option<(u8, u64)>,
     pub failure: Option<ExecutionError>,
 }
@@ -91,7 +94,7 @@ pub enum Event {
     /// Any other architectural trap; the worker returns it from the run.
     Trap,
     /// A data abort with its instruction already decoded by the worker.
-    Mmio(Trap, Box<MmioAccess>),
+    Mmio(Trap, MmioAccess),
     Done(Result<Exit, ExecutionError>),
 }
 #[derive(Clone)]
@@ -969,7 +972,7 @@ impl Processor {
             pc: 0,
             load: false,
             simd: false,
-            transfers: Vec::new(),
+            transfers: arrayvec::ArrayVec::new(),
             writeback: None,
             failure: None,
         };
@@ -1076,7 +1079,7 @@ impl Processor {
     /// Report an architectural trap; data aborts carry their decoded access.
     fn trap_event(&self, trap: Trap) -> Event {
         if matches!(trap.syndrome >> 26, 0x24 | 0x25) {
-            Event::Mmio(trap, Box::new(self.prepare_mmio()))
+            Event::Mmio(trap, self.prepare_mmio())
         } else {
             Event::Trap
         }

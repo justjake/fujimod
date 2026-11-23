@@ -20,7 +20,7 @@ use std::rc::Rc;
 use std::sync::{Arc, atomic::Ordering, mpsc};
 use std::thread::JoinHandle;
 use std::{any::Any, ptr::NonNull};
-use worker::{Event, MmioAccess, Op, Value};
+use worker::{Event, MmioAccess, MmioUpdates, Op, Value};
 
 /// One process-wide HVF VM; create every processor through this value.
 /// Map/host-memory mutations require all its CPUs to be stopped. Backing
@@ -68,7 +68,7 @@ enum MmioOutcome {
     /// access, so the instruction stays at its PC.
     Resume(bool),
     /// Registers to write on the worker: loads, writeback and the next PC.
-    Complete(Vec<(Register, u64)>),
+    Complete(MmioUpdates),
 }
 pub struct Core {
     worker: Option<JoinHandle<()>>,
@@ -323,7 +323,7 @@ impl Core {
         } else {
             Access::Write
         };
-        let mut transfers = Vec::new();
+        let mut transfers = arrayvec::ArrayVec::<_, 2>::new();
         for t in &access.transfers {
             if t.ram {
                 return Ok(MmioOutcome::Resume(false));
@@ -358,7 +358,7 @@ impl Core {
                 "HVF data-abort address disagrees with decoded instruction".into(),
             ));
         }
-        let mut updates = Vec::new();
+        let mut updates = MmioUpdates::new();
         // An async pause can arrive while a device callback is already in
         // flight. Finish that guest access so the next run cannot repeat its
         // side effect or lose a loaded value.
