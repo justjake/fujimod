@@ -2090,7 +2090,7 @@ mod access_histogram {
                 key,
                 started: Instant::now(),
             })
-        });
+        })
     }
 
     pub(super) fn snapshot() -> Option<Vec<(usize, u64, bool, u64, u64, u64)>> {
