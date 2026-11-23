@@ -21,6 +21,7 @@ pub const FEATURE_NATIVE_RESTART_BOUNDARY: u32 = 1 << 24;
 pub const FEATURE_THUMB_EXECUTE_END: u32 = 1 << 25;
 pub const FEATURE_THUMB_IT_ACCOUNTING: u32 = 1 << 26;
 pub const FEATURE_TRANSLATION_TIMING_COUNTERS: u32 = 1 << 27;
+pub const FEATURE_M4_CLASSIFIER_HISTOGRAM: u32 = 1 << 28;
 pub const FEATURE_TRANSLATION_REPEAT_DETAILS: u32 = 1 << 29;
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
