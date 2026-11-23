@@ -3491,7 +3491,18 @@ unsafe fn block_classify_transfers(
     word: u32,
 ) -> fujimod_emulator_cpu::Translation {
     let mut classification = unsafe { block_classify(data, pc, word) };
-    classification.observe_block &= !mprofile_blocks::is_single_transfer(word);
+    // PUSH can make several independent writes. Keeping it last lets each
+    // MMIO or watched store complete without restarting an earlier write.
+    let short_push = word & 0xffff_fe00 == 0xb400 && word & 0x01ff != 0;
+    let wide_push = word >> 16 == 0xe92d
+        && word & 0xa000 == 0
+        && (word as u16).count_ones() >= 2;
+    if short_push || wide_push {
+        classification.instruction = fujimod_emulator_cpu::InstructionDisposition::ExecuteAndEndBlock;
+        classification.observe_block = false;
+    } else {
+        classification.observe_block &= !mprofile_blocks::is_single_transfer(word);
+    }
     classification
 }
 /// The engine is about to redo the instruction at `pc` as a block of its own:
