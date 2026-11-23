@@ -70,14 +70,14 @@
     }
   ],
   "parts": [
-    "xt3-serial-nor",
+    "xt4-serial-nor",
     "xt3-power-registers",
     "xt3-image-sensor"
   ],
   "wiring": [
     {
       "source_id": "serial-flash",
-      "target_id": "xt3-serial-nor",
+      "target_id": "xt4-serial-nor",
       "signal": "storage"
     },
     {

@@ -62,7 +62,7 @@
       {
         "kind": "flash",
         "block_id": "flash-aperture",
-        "part_id": "xt3-serial-nor",
+        "part_id": "xt4-serial-nor",
         "source": "firmware_update",
         "erased_tail": null,
         "seeds": []
@@ -277,7 +277,7 @@
       },
       {
         "kind": "storage_programming",
-        "part_id": "xt3-serial-nor",
+        "part_id": "xt4-serial-nor",
         "erase_ticks": 4096,
         "page_ticks": 512
       }
