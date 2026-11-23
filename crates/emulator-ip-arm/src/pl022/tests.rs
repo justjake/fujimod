@@ -344,6 +344,18 @@ fn assert_published(c: &mut Controller, h: &mut RecordingHost, step: &str) {
 }
 #[test]
 fn published_registers_match_reads_after_every_state_change() {
+    let controller = || {
+        Controller::new(
+            BASE,
+            Clock {
+                source_hz: 48_000_000,
+                ticks_per_second: 1_000_000_000,
+            },
+            vec![InterruptLine::Shared(77)],
+            Box::new(fujimod_emulator_parts_io::serial::InputLevel(false)),
+        )
+        .unwrap()
+    };
     let mut h = RecordingHost::default();
     let mut c = controller();
     assert_published(&mut c, &mut h, "reset");
