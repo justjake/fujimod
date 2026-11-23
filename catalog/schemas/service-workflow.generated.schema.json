@@ -1,0 +1,492 @@
+{
+  "$defs": {
+    "Adapter": {
+      "additionalProperties": false,
+      "properties": {
+        "address": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "bytes": {
+          "items": {
+            "format": "uint8",
+            "maximum": 255,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "address",
+        "bytes"
+      ],
+      "type": "object"
+    },
+    "Cache": {
+      "additionalProperties": false,
+      "properties": {
+        "barrier": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "clean": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "instruction_barrier": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "instruction_invalidate": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "clean",
+        "instruction_invalidate",
+        "barrier",
+        "instruction_barrier"
+      ],
+      "type": "object"
+    },
+    "Callback": {
+      "additionalProperties": false,
+      "properties": {
+        "address": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "stock": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "address",
+        "stock"
+      ],
+      "type": "object"
+    },
+    "CallbackTable": {
+      "additionalProperties": false,
+      "properties": {
+        "address": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "words": {
+          "items": {
+            "format": "uint32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "address",
+        "words"
+      ],
+      "type": "object"
+    },
+    "Configuration": {
+      "additionalProperties": false,
+      "properties": {
+        "address": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "cached_address": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "memory_read_bytes": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "page_bytes": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "size": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "address",
+        "cached_address",
+        "size",
+        "page_bytes",
+        "memory_read_bytes"
+      ],
+      "type": "object"
+    },
+    "DeviceIdentity": {
+      "additionalProperties": false,
+      "properties": {
+        "code_checks": {
+          "items": {
+            "$ref": "#/$defs/RegionCheck"
+          },
+          "type": "array"
+        },
+        "internal_versions": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "products": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "products",
+        "internal_versions",
+        "code_checks"
+      ],
+      "type": "object"
+    },
+    "Geometry": {
+      "additionalProperties": false,
+      "properties": {
+        "address": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "words": {
+          "items": {
+            "format": "uint32",
+            "minimum": 0,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "address",
+        "words"
+      ],
+      "type": "object"
+    },
+    "Guard": {
+      "additionalProperties": false,
+      "properties": {
+        "aliases": {
+          "items": {
+            "format": "uint32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "type": "array"
+        },
+        "callback_table": {
+          "$ref": "#/$defs/CallbackTable"
+        },
+        "code_checks": {
+          "items": {
+            "$ref": "#/$defs/RegionCheck"
+          },
+          "type": "array"
+        },
+        "offset": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "output_state": {
+          "$ref": "#/$defs/Range"
+        },
+        "payloads": {
+          "items": {
+            "$ref": "#/$defs/NamedRange"
+          },
+          "type": "array"
+        },
+        "state_words": {
+          "items": {
+            "$ref": "#/$defs/StateWord"
+          },
+          "type": "array"
+        },
+        "value": {
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "offset",
+        "value",
+        "aliases",
+        "code_checks",
+        "state_words",
+        "callback_table",
+        "output_state",
+        "payloads"
+      ],
+      "type": "object"
+    },
+    "NamedRange": {
+      "additionalProperties": false,
+      "properties": {
+        "address": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "name": {
+          "type": "string"
+        },
+        "size": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "name",
+        "address",
+        "size"
+      ],
+      "type": "object"
+    },
+    "Persistence": {
+      "additionalProperties": false,
+      "properties": {
+        "adapter": {
+          "$ref": "#/$defs/Adapter"
+        },
+        "cache": {
+          "$ref": "#/$defs/Cache"
+        },
+        "callback": {
+          "$ref": "#/$defs/Callback"
+        },
+        "code_checks": {
+          "items": {
+            "$ref": "#/$defs/RegionCheck"
+          },
+          "type": "array"
+        },
+        "output_fields": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "preferences": {
+          "$ref": "#/$defs/Range"
+        },
+        "storage": {
+          "$ref": "#/$defs/Storage"
+        }
+      },
+      "required": [
+        "callback",
+        "output_fields",
+        "adapter",
+        "cache",
+        "code_checks",
+        "storage",
+        "preferences"
+      ],
+      "type": "object"
+    },
+    "Range": {
+      "additionalProperties": false,
+      "properties": {
+        "address": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "size": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "address",
+        "size"
+      ],
+      "type": "object"
+    },
+    "RegionCheck": {
+      "additionalProperties": false,
+      "properties": {
+        "address": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "name": {
+          "type": "string"
+        },
+        "sha256": {
+          "type": "string"
+        },
+        "size": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "name",
+        "address",
+        "size",
+        "sha256"
+      ],
+      "type": "object"
+    },
+    "ServiceSetup": {
+      "additionalProperties": false,
+      "properties": {
+        "configuration": {
+          "$ref": "#/$defs/Configuration"
+        },
+        "debug_offset": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "guard": {
+          "$ref": "#/$defs/Guard"
+        },
+        "ram_alias": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "ram_alias",
+        "configuration",
+        "debug_offset",
+        "guard"
+      ],
+      "type": "object"
+    },
+    "StateWord": {
+      "additionalProperties": false,
+      "properties": {
+        "address": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "name": {
+          "type": "string"
+        },
+        "value": {
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "name",
+        "address",
+        "value"
+      ],
+      "type": "object"
+    },
+    "Storage": {
+      "additionalProperties": false,
+      "properties": {
+        "banks": {
+          "items": {
+            "$ref": "#/$defs/Range"
+          },
+          "type": "array"
+        },
+        "geometry": {
+          "$ref": "#/$defs/Geometry"
+        }
+      },
+      "required": [
+        "geometry",
+        "banks"
+      ],
+      "type": "object"
+    }
+  },
+  "$id": "https://fujimod.com/schemas/service-workflow.generated.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "$schema": {
+      "const": "https://fujimod.com/schemas/service-workflow.generated.schema.json",
+      "description": "Stable schema identifier for this document.",
+      "type": "string"
+    },
+    "firmware_id": {
+      "type": "string"
+    },
+    "firmware_sha256": {
+      "type": "string"
+    },
+    "identity": {
+      "$ref": "#/$defs/DeviceIdentity"
+    },
+    "persistence": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/Persistence"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "schema": {
+      "format": "uint32",
+      "minimum": 0,
+      "type": "integer"
+    },
+    "setup": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/ServiceSetup"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    }
+  },
+  "required": [
+    "$schema",
+    "schema",
+    "firmware_id",
+    "firmware_sha256",
+    "identity"
+  ],
+  "title": "Document",
+  "type": "object"
+}

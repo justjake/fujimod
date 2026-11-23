@@ -2635,6 +2635,7 @@ pub struct ReferenceCatalog {
     settings: BTreeMap<String, fujimod_catalog_settings::FirmwareSettings>,
     flash: BTreeMap<String, crate::capture::FirmwareFlash>,
     state: BTreeMap<String, crate::capture::FirmwareState>,
+    workflows: BTreeMap<String, fujimod_catalog_workflows::WorkflowDefinition>,
 }
 
 impl ReferenceCatalog {
@@ -2891,6 +2892,14 @@ impl ReferenceCatalog {
         self.card_files.get(firmware_id)
     }
 
+    /// Optional located service setup and debug-persistence contract.
+    pub fn workflow(
+        &self,
+        firmware_id: &str,
+    ) -> Option<&fujimod_catalog_workflows::WorkflowDefinition> {
+        self.workflows.get(firmware_id)
+    }
+
     fn insert_document(
         &mut self,
         kind: ReferenceKind,
@@ -2983,6 +2992,14 @@ impl ReferenceCatalog {
                 let value: fujimod_catalog_card::FirmwareCard = decode(bytes, path)?;
                 value.validate()?;
                 insert_unique(&mut self.card_files, value.firmware_id.clone(), value, path)
+            }
+            ReferenceKind::Workflow => {
+                let text = std::str::from_utf8(bytes)
+                    .map_err(|error| format!("{}: {error}", path.display()))?;
+                let value = fujimod_catalog_workflows::WorkflowDefinition::from_document_json(text)
+                    .map_err(|error| format!("{}: {error}", path.display()))?;
+                let firmware_id = value.identity().id().to_owned();
+                insert_unique(&mut self.workflows, firmware_id, value, path)
             }
             ReferenceKind::Body => {
                 let value: Body = decode(bytes, path)?;
@@ -3156,6 +3173,19 @@ impl ReferenceCatalog {
             if !self.firmwares.contains_key(firmware_id) {
                 return Err(format!(
                     "capture facts refer to missing firmware {firmware_id}"
+                ));
+            }
+        }
+        for (firmware_id, workflow) in &self.workflows {
+            let firmware = self.firmwares.get(firmware_id).ok_or_else(|| {
+                format!("service workflow refers to missing firmware {firmware_id}")
+            })?;
+            let update = firmware.update.as_ref().ok_or_else(|| {
+                format!("service workflow firmware {firmware_id} has no update identity")
+            })?;
+            if workflow.identity().digest().hex() != update.sha256 {
+                return Err(format!(
+                    "service workflow identity differs from firmware {firmware_id}"
                 ));
             }
         }
@@ -3655,6 +3685,7 @@ enum ReferenceKind {
     Settings,
     Flash,
     State,
+    Workflow,
 }
 
 impl ReferenceKind {
@@ -3684,6 +3715,7 @@ impl ReferenceKind {
             Some("settings.generated.json") => Ok(Self::Settings),
             Some("flash.generated.json") => Ok(Self::Flash),
             Some("state.generated.json") => Ok(Self::State),
+            Some("service-workflow.generated.json") => Ok(Self::Workflow),
             _ => Err(format!("{} is not a firmware document", path.display())),
         }
     }

@@ -1,0 +1,329 @@
+{
+  "$schema": "https://fujimod.com/schemas/service-workflow.generated.schema.json",
+  "schema": 1,
+  "firmware_id": "x70-110",
+  "firmware_sha256": "7dd5b358a66f38d1fc7dad899a77d35fe4e6ed0edd0ed1d04fbca512d5dc8fd6",
+  "identity": {
+    "products": [
+      "X70"
+    ],
+    "internal_versions": [
+      "1.39"
+    ],
+    "code_checks": [
+      {
+        "name": "identity_0",
+        "address": 9044992,
+        "size": 32,
+        "sha256": "d160e691d156494b7dc67e887cb6ffc1fa8a5bf6281e6d20cae2e812a608dd03"
+      },
+      {
+        "name": "identity_1",
+        "address": 16090784,
+        "size": 32,
+        "sha256": "ce12cd2eaa19cb38a7b73d57d23532ca456fcf6f8acf13042a9d8cf6ebe8b231"
+      }
+    ]
+  },
+  "setup": {
+    "ram_alias": 1073741824,
+    "configuration": {
+      "address": 1107722240,
+      "cached_address": 33980416,
+      "size": 4325376,
+      "page_bytes": 256,
+      "memory_read_bytes": 256
+    },
+    "debug_offset": 247,
+    "guard": {
+      "offset": 163,
+      "value": 1,
+      "aliases": [
+        1107722403,
+        33980579
+      ],
+      "code_checks": [
+        {
+          "name": "configuration_write",
+          "address": 17755764,
+          "size": 172,
+          "sha256": "d5a3f353302dd2e0474d46c0c1762e84ac83d66720f16414df471c01cae660e4"
+        },
+        {
+          "name": "configuration_read",
+          "address": 17755936,
+          "size": 484,
+          "sha256": "bdaf666daa4f187377a4e3274f8465faf238d6e333bad53356ccf3b13441bce5"
+        },
+        {
+          "name": "configuration_initialize",
+          "address": 9722192,
+          "size": 244,
+          "sha256": "0c709225fa0b288ea0ff3b172372b137493b5c4340eec81f0cacc44fc9f376a3"
+        },
+        {
+          "name": "profile_main",
+          "address": 9734544,
+          "size": 604,
+          "sha256": "5a42b57cfc353c7c8b3944b3b197e271c8133e50705e7ee236cdb5bd7def81f4"
+        },
+        {
+          "name": "profile_custom",
+          "address": 9740048,
+          "size": 292,
+          "sha256": "a7508d516a4432733e41f9f9c6539afd62b33b74c351d405d195d545d1a700af"
+        },
+        {
+          "name": "system_initializer",
+          "address": 10333028,
+          "size": 48,
+          "sha256": "696a9f19f95ab842499bc2f6710d3bc738c67c53fc7f77f3e80f6466dea93e2e"
+        },
+        {
+          "name": "register_debug",
+          "address": 9523412,
+          "size": 196,
+          "sha256": "1ae03a62a1a0452ad2a368bbf684cb5380eed714559d46eee72306ceea235ccc"
+        },
+        {
+          "name": "open",
+          "address": 17498228,
+          "size": 92,
+          "sha256": "4a91ca56a213bcd494635141de82e76811418a8bb6091a1c0afac9be2db9b253"
+        },
+        {
+          "name": "service_open",
+          "address": 18777480,
+          "size": 92,
+          "sha256": "a1a4c063693f9b7c773a0c36ed2dd1befbb8d6f82c504b2afa04be32c7f35762"
+        },
+        {
+          "name": "completion",
+          "address": 18748556,
+          "size": 52,
+          "sha256": "156d1f0cd81c50797896469a6e59c610e6974107fcbc69c8fd3e93b9a19a198d"
+        },
+        {
+          "name": "configuration_byte_reader",
+          "address": 9720600,
+          "size": 32,
+          "sha256": "c47970b9741973b3b808cca197ab7811feffec60ffc7aaec802b43a9a8c8befc"
+        },
+        {
+          "name": "configuration_setter",
+          "address": 9721024,
+          "size": 36,
+          "sha256": "da2fb6d0ce28635a59bea4de727e0fa7fd6eec84ef79307dcd09725aae61f44e"
+        },
+        {
+          "name": "configuration_key_mapper",
+          "address": 9720364,
+          "size": 136,
+          "sha256": "e1463111b72ebda184e97aefd9b45e0f7a737d8704585a49442f5fd885fda511"
+        },
+        {
+          "name": "defaults_guard",
+          "address": 9735832,
+          "size": 284,
+          "sha256": "f1171e30e64d3245f34bbc0e7a009528fa3cb239c96b9cdbc470c43349b09d70"
+        },
+        {
+          "name": "ui_system_settings_builder",
+          "address": 9456092,
+          "size": 1708,
+          "sha256": "9169ef753327d938a08dc69ef2f238cf0fb3a6c9aafe358d1748d3ef2a567479"
+        },
+        {
+          "name": "debug_dispatcher",
+          "address": 17489780,
+          "size": 728,
+          "sha256": "462517e9684ef451bc2f9116a295837913ce395dd97a953e53a3ffb234f37b56"
+        }
+      ],
+      "state_words": [
+        {
+          "name": "ui_mode",
+          "address": 13358048,
+          "value": 12
+        },
+        {
+          "name": "system_mode",
+          "address": 13272292,
+          "value": 7
+        },
+        {
+          "name": "configuration_pointer",
+          "address": 12466684,
+          "value": 1107722240
+        },
+        {
+          "name": "callback_pointer",
+          "address": 23298964,
+          "value": 24979728
+        },
+        {
+          "name": "debug_callback_0",
+          "address": 12464028,
+          "value": 0
+        },
+        {
+          "name": "debug_callback_1",
+          "address": 12464032,
+          "value": 0
+        }
+      ],
+      "callback_table": {
+        "address": 24979728,
+        "words": [
+          17755764,
+          17755936,
+          17756420,
+          17756464,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "output_state": {
+        "address": 24990860,
+        "size": 8
+      },
+      "payloads": [
+        {
+          "name": "main",
+          "address": 13665112,
+          "size": 3844
+        },
+        {
+          "name": "custom",
+          "address": 13668956,
+          "size": 1792
+        }
+      ]
+    }
+  },
+  "persistence": {
+    "callback": {
+      "address": 24979740,
+      "stock": 17756464
+    },
+    "output_fields": 24990860,
+    "adapter": {
+      "address": 33980544,
+      "bytes": [
+        1,
+        0,
+        80,
+        227,
+        0,
+        0,
+        160,
+        19,
+        30,
+        255,
+        47,
+        17,
+        247,
+        0,
+        160,
+        227,
+        1,
+        16,
+        160,
+        227,
+        0,
+        192,
+        159,
+        229,
+        28,
+        255,
+        47,
+        225,
+        68,
+        90,
+        148,
+        0
+      ]
+    },
+    "cache": {
+      "clean": 271932,
+      "instruction_invalidate": 272160,
+      "barrier": 277300,
+      "instruction_barrier": 271908
+    },
+    "code_checks": [
+      {
+        "name": "storage_loader",
+        "address": 9745024,
+        "size": 116,
+        "sha256": "1b146322c348ac608d223891ebbc001011dcb4cbb9bbbbdcfaf9ad9382818f8a"
+      },
+      {
+        "name": "range_wrapper",
+        "address": 9722436,
+        "size": 40,
+        "sha256": "59fbb48ce0763f86e2756016f4b4a489fe2345b70655767bfa85374f85b65da8"
+      },
+      {
+        "name": "storage_range_writer",
+        "address": 9753700,
+        "size": 444,
+        "sha256": "fc2e6bb3371a5ed2492bd3bcc2a5730e5832fc68fb068f321e44936f64fface3"
+      },
+      {
+        "name": "cache_helpers",
+        "address": 271908,
+        "size": 516,
+        "sha256": "6a9b04929026a61dcc0f263c98bed555df1cb361fdf0e1d812b25072d7281547"
+      },
+      {
+        "name": "barrier_helper",
+        "address": 277300,
+        "size": 40,
+        "sha256": "4f5e46f3fcacb11933fd0f5e8fc33ae5837f738e38902a0e475c040ac5897890"
+      },
+      {
+        "name": "configuration_base_getter",
+        "address": 9721104,
+        "size": 32,
+        "sha256": "aa5f999611eb8642e1cd50b48b05a2c8ba32ad7b3d94ca8a33cf42d04df416a4"
+      }
+    ],
+    "storage": {
+      "geometry": {
+        "address": 1085189012,
+        "words": [
+          40,
+          931,
+          null,
+          1,
+          971
+        ]
+      },
+      "banks": [
+        {
+          "address": 1134313472,
+          "size": 5242880
+        },
+        {
+          "address": 1139556352,
+          "size": 131072
+        }
+      ]
+    },
+    "preferences": {
+      "address": 1087406936,
+      "size": 5636
+    }
+  }
+}

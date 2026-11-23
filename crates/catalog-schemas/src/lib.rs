@@ -101,6 +101,10 @@ pub fn generated_documents() -> BTreeMap<&'static str, Value> {
         ),
     );
     documents.insert(
+        "service-workflow.generated.schema.json",
+        schema::<fujimod_catalog_workflows::Document>(fujimod_catalog_workflows::SCHEMA_URI),
+    );
+    documents.insert(
         "boot-patch.generated.schema.json",
         schema::<fujimod_catalog::boot_patch::FirmwareBootPatch>(
             fujimod_catalog::boot_patch::BOOT_PATCH_SCHEMA_URI,

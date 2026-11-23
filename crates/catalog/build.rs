@@ -81,6 +81,7 @@ fn main() {
             ("Firmware", "settings.generated.json") => "Settings",
             ("Firmware", "flash.generated.json") => "Flash",
             ("Firmware", "state.generated.json") => "State",
+            ("Firmware", "service-workflow.generated.json") => "Workflow",
             ("Body", "body.json") | ("Firmware", "firmware.json") => kind,
             ("Body" | "Firmware", _) => panic!("unknown catalog document {}", path.display()),
             _ => kind,

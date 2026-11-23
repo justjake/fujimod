@@ -22,6 +22,7 @@ fujimod-catalog-identity.workspace = true
 fujimod-catalog-controls = { workspace = true, optional = true }
 fujimod-catalog-remote = { workspace = true, optional = true }
 fujimod-catalog-settings.workspace = true
+fujimod-catalog-workflows.workspace = true
 serde = { workspace = true, features = ["derive"] }
 serde_json.workspace = true
 schemars.workspace = true
@@ -39,7 +40,7 @@ zstd = "0.13"
 
 [features]
 # JSON Schema derives, used only to generate and check the committed schemas.
-schema = ["fujimod-catalog-bulk/schema", "fujimod-catalog-card/schema", "fujimod-catalog-execution/schema", "fujimod-catalog-restart/schema", "fujimod-catalog-memory-reservations/schema", "fujimod-catalog-construction/schema", "fujimod-catalog-controls/schema", "fujimod-catalog-remote/schema", "fujimod-catalog-settings/schema"]
+schema = ["fujimod-catalog-bulk/schema", "fujimod-catalog-card/schema", "fujimod-catalog-execution/schema", "fujimod-catalog-restart/schema", "fujimod-catalog-memory-reservations/schema", "fujimod-catalog-construction/schema", "fujimod-catalog-controls/schema", "fujimod-catalog-remote/schema", "fujimod-catalog-settings/schema", "fujimod-catalog-workflows/schema"]
 
 [dev-dependencies]
 fujimod-catalog-controls.workspace = true

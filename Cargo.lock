@@ -1475,6 +1475,7 @@ dependencies = [
  "fujimod-catalog-remote",
  "fujimod-catalog-restart",
  "fujimod-catalog-settings",
+ "fujimod-catalog-workflows",
  "fujimod-workspace-hack",
  "ruzstd",
  "schemars",
@@ -1699,6 +1700,7 @@ dependencies = [
  "fujimod-catalog-restart",
  "fujimod-catalog-run-inputs",
  "fujimod-catalog-settings",
+ "fujimod-catalog-workflows",
  "fujimod-workspace-hack",
  "jsonschema",
  "schemars",
@@ -1749,6 +1751,7 @@ version = "0.1.0"
 dependencies = [
  "fujimod-catalog-firmware-identity",
  "fujimod-workspace-hack",
+ "schemars",
  "serde",
  "serde_json",
  "thiserror 2.0.21",

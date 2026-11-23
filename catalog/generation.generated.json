@@ -3090,7 +3090,7 @@
           "errors": [
             {
               "locator": "service",
-              "reason": "ValueError: No service-workflow locator for unassessed"
+              "reason": "ValueError: No checked EXR II uncached DRAM alias"
             }
           ]
         },
@@ -3600,13 +3600,8 @@
           "errors": []
         },
         "service": {
-          "status": "unavailable",
-          "errors": [
-            {
-              "locator": "service",
-              "reason": "ValueError: profile_custom: expected one checked implementation, found 0"
-            }
-          ]
+          "status": "available",
+          "errors": []
         },
         "settings": {
           "status": "available",
