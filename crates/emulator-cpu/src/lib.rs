@@ -574,6 +574,10 @@ pub trait Cpu {
     fn set_armv7a_affinity(&self, _mpidr: u32) -> Result<(), String> {
         Ok(())
     }
+    /// Select the board's MPIDR execution path before a scheduler run.
+    fn select_armv7a_affinity_policy(&self, _policy: ExecutionPolicy) -> Result<(), String> {
+        Ok(())
+    }
     /// Configure instruction-proven loops; statistics remain observational.
     fn set_loop_mode(&self, mode: loops::LoopMode) -> Result<(), String> {
         if mode == loops::LoopMode::Disabled {
