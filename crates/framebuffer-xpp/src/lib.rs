@@ -200,27 +200,33 @@ impl Capture {
             for (y, row) in pixels.chunks_exact(stride * 4).enumerate() {
                 let row = &row[..shown_w * 4];
                 let line = &mut rgba[y * width as usize * 4..][..shown_w * 4];
-                for (out, src) in line
-                    .as_chunks_mut::<4>()
-                    .0
-                    .iter_mut()
-                    .zip(row.as_chunks::<4>().0)
-                {
-                    if *src == [0; 4] {
-                        continue;
-                    }
-                    if src[3] == 255 {
-                        *out = *src;
-                        continue;
-                    }
-                    let keep = 255 - u32::from(src[3]);
-                    for n in 0..3 {
-                        let value = u32::from(src[n]) + (u32::from(out[n]) * keep + 127) / 255;
-                        out[n] = value.min(255) as u8;
+                let (source, tail) = row.as_chunks::<4>().0.as_chunks::<16>();
+                let (destination, tail_out) = line.as_chunks_mut::<4>().0.as_chunks_mut::<16>();
+                for (out, src) in destination.iter_mut().zip(source) {
+                    if *src != [[0; 4]; 16] {
+                        blend_osd(out, src);
                     }
                 }
+                blend_osd(tail_out, tail);
             }
         }
         Ok(rgba)
+    }
+}
+
+fn blend_osd(output: &mut [[u8; 4]], source: &[[u8; 4]]) {
+    for (out, src) in output.iter_mut().zip(source) {
+        if *src == [0; 4] {
+            continue;
+        }
+        if src[3] == 255 {
+            *out = *src;
+            continue;
+        }
+        let keep = 255 - u32::from(src[3]);
+        for n in 0..3 {
+            let value = u32::from(src[n]) + (u32::from(out[n]) * keep + 127) / 255;
+            out[n] = value.min(255) as u8;
+        }
     }
 }
