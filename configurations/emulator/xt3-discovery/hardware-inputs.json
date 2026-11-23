@@ -253,6 +253,8 @@
           "report_register": 0,
           "heartbeat_register": 7174,
           "mode_register": 7168,
+          "restart_register": 7177,
+          "restart_value": 193,
           "writable_registers": [
             7170,
             7171,

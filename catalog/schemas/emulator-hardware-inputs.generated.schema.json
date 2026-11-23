@@ -3271,6 +3271,20 @@
           "minimum": 0,
           "type": "integer"
         },
+        "restart_register": {
+          "description": "Register that restarts the chip when it is written with `restart_value`; the chip answers\nwith a new input-ready edge.",
+          "format": "uint16",
+          "maximum": 65535,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "restart_value": {
+          "description": "Value that restarts the chip when written to the restart register.",
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0,
+          "type": "integer"
+        },
         "ticks_per_second": {
           "description": "Host virtual ticks per second; a positive multiple of 100.",
           "format": "uint64",
@@ -3278,7 +3292,7 @@
           "type": "integer"
         },
         "writable_registers": {
-          "description": "Registers that accept writes, including the mode register.",
+          "description": "Registers that accept writes, including the mode and restart registers.",
           "items": {
             "format": "uint16",
             "maximum": 65535,
@@ -3293,6 +3307,8 @@
         "report_register",
         "heartbeat_register",
         "mode_register",
+        "restart_register",
+        "restart_value",
         "writable_registers",
         "contact_ids",
         "input_ready_irq",
