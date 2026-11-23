@@ -1069,7 +1069,29 @@ impl Cpu for Core {
         Err("HVF store observation is unsupported".into())
     }
     fn exit_counters(&self) -> Result<BTreeMap<&'static str, u64>, String> {
-        Ok(BTreeMap::new())
+        let Some(counters) = self.shared.execution_counters.as_ref() else {
+            return Ok(BTreeMap::new());
+        };
+        let mut result = BTreeMap::new();
+        for (index, name) in [
+            "hv_vcpu_run_exit_canceled",
+            "hv_vcpu_run_exit_exception",
+            "hv_vcpu_run_exit_vtimer_activated",
+            "hv_vcpu_run_exit_unknown",
+        ]
+        .into_iter()
+        .enumerate()
+        {
+            result.insert(name, counters.exit_reason(index));
+        }
+        for (ec, name) in worker::EXCEPTION_CLASS_COUNTER_NAMES.iter().enumerate() {
+            let count = counters.exception_class(ec);
+            if count != 0 {
+                result.insert(*name, count);
+            }
+        }
+        result.insert("hv_vcpu_run_elapsed_ns", counters.elapsed_ns());
+        Ok(result)
     }
 }
 /// The SDK permits cancellation from another thread. Join the watchdog before

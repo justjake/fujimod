@@ -116,6 +116,7 @@ const SYSTEM: &[u16] = &[
     0xc3a0, 0xc510, 0xc518, 0xc600, 0xc681, 0xc684, 0xc708, 0xd000, 0xde82, 0xde83, 0xe208,
 ];
 pub struct Shared {
+    pub(super) execution_counters: Option<ExecutionCounters>,
     pub stop: AtomicBool,
     pub native_active: AtomicBool,
     pub deadline: AtomicBool,
@@ -143,9 +144,60 @@ pub struct Shared {
     pub parked_valid: AtomicBool,
     run_wakeup: Mutex<Option<RunWakeup>>,
 }
+pub(super) struct ExecutionCounters {
+    exit_reasons: [AtomicU64; 4],
+    exception_classes: [AtomicU64; 64],
+    elapsed_ns: AtomicU64,
+}
+macro_rules! exception_class_counter_names {
+    ($($ec:literal),+ $(,)?) => {
+        [$(concat!("hv_vcpu_run_exit_reason_1_esr_ec_", stringify!($ec))),+]
+    };
+}
+pub(super) const EXCEPTION_CLASS_COUNTER_NAMES: [&str; 64] = exception_class_counter_names![
+    0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f,
+    0x10, 0x11, 0x12, 0x13, 0x14, 0x15, 0x16, 0x17, 0x18, 0x19, 0x1a, 0x1b, 0x1c, 0x1d, 0x1e, 0x1f,
+    0x20, 0x21, 0x22, 0x23, 0x24, 0x25, 0x26, 0x27, 0x28, 0x29, 0x2a, 0x2b, 0x2c, 0x2d, 0x2e, 0x2f,
+    0x30, 0x31, 0x32, 0x33, 0x34, 0x35, 0x36, 0x37, 0x38, 0x39, 0x3a, 0x3b, 0x3c, 0x3d, 0x3e, 0x3f,
+];
+impl Default for ExecutionCounters {
+    fn default() -> Self {
+        Self {
+            exit_reasons: std::array::from_fn(|_| AtomicU64::new(0)),
+            exception_classes: std::array::from_fn(|_| AtomicU64::new(0)),
+            elapsed_ns: AtomicU64::new(0),
+        }
+    }
+}
+impl ExecutionCounters {
+    fn record_exit(&self, reason: u32, exception_class: Option<u8>) {
+        let index = match reason {
+            0 => 0,
+            1 => 1,
+            2 => 2,
+            _ => 3,
+        };
+        self.exit_reasons[index].fetch_add(1, Ordering::Relaxed);
+        if let Some(ec) = exception_class {
+            self.exception_classes[usize::from(ec)].fetch_add(1, Ordering::Relaxed);
+        }
+    }
+    pub(super) fn exit_reason(&self, index: usize) -> u64 {
+        self.exit_reasons[index].load(Ordering::Relaxed)
+    }
+    pub(super) fn exception_class(&self, ec: usize) -> u64 {
+        self.exception_classes[ec].load(Ordering::Relaxed)
+    }
+    pub(super) fn elapsed_ns(&self) -> u64 {
+        self.elapsed_ns.load(Ordering::Relaxed)
+    }
+}
 impl Default for Shared {
     fn default() -> Self {
         Self {
+            execution_counters: std::env::var_os("FUJIMOD_EXECUTION_COUNTERS")
+                .is_some()
+                .then(ExecutionCounters::default),
             stop: AtomicBool::new(false),
             native_active: AtomicBool::new(false),
             deadline: AtomicBool::new(false),
@@ -611,6 +663,27 @@ impl Processor {
                 "write system register",
             )
         }
+    }
+    #[inline]
+    fn run_vcpu(&self, operation: &'static str) -> Result<(), String> {
+        let Some(counters) = self.shared.execution_counters.as_ref() else {
+            return unsafe { ffi::check(ffi::hv_vcpu_run(self.cpu), operation) };
+        };
+
+        // This interval brackets only hv_vcpu_run, including time spent executing guest code.
+        let started = Instant::now();
+        let result = unsafe { ffi::hv_vcpu_run(self.cpu) };
+        let elapsed_ns = started.elapsed().as_nanos().min(u64::MAX as u128) as u64;
+        counters.elapsed_ns.fetch_add(elapsed_ns, Ordering::Relaxed);
+        ffi::check(result, operation)?;
+        let reason = unsafe { (*self.exit).reason };
+        let exception_class = if reason == 1 {
+            Some(((unsafe { (*self.exit).exception.syndrome } >> 26) & 0x3f) as u8)
+        } else {
+            None
+        };
+        counters.record_exit(reason, exception_class);
+        Ok(())
     }
     fn sp(&self) -> Result<u16, String> {
         Ok(if self.reg(ffi::PSTATE)? & 1 == 0 {
@@ -1243,9 +1316,7 @@ impl Processor {
             let exit = loop {
                 let pstate = self.reg(ffi::PSTATE)?;
                 self.set_reg(ffi::PSTATE, pstate | (1 << 21))?;
-                unsafe {
-                    ffi::check(ffi::hv_vcpu_run(self.cpu), "run")?;
-                }
+                self.run_vcpu("run")?;
                 self.set_reg(ffi::PSTATE, self.reg(ffi::PSTATE)? & !(1 << 21))?;
                 let exit = unsafe { *self.exit };
                 // The SDK latches cancellation issued while stopped for the
@@ -1403,7 +1474,7 @@ impl Processor {
                 self.shared.native_active.store(false, Ordering::Release);
                 return Ok(Exit::Stopped);
             }
-            let run_result = unsafe { ffi::check(ffi::hv_vcpu_run(self.cpu), "run") };
+            let run_result = self.run_vcpu("run");
             self.shared.native_active.store(false, Ordering::Release);
             run_result?;
             progress = self.update_interactive_progress(started)?;
@@ -1463,7 +1534,7 @@ impl Processor {
         if self.shared.stop.load(Ordering::Acquire) {
             return Ok(NativeExit::Canceled);
         }
-        unsafe { ffi::check(ffi::hv_vcpu_run(self.cpu), "run diagnostic")? };
+        self.run_vcpu("run diagnostic")?;
         let exit = unsafe { *self.exit };
         match exit.reason {
             0 => Ok(NativeExit::Canceled),
