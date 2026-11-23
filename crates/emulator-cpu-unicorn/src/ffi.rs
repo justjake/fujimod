@@ -18,6 +18,7 @@ pub const FEATURE_THUMB_BLOCK_RECOVERY: u32 = 1 << 11;
 pub const FEATURE_WATCHED_STORE_COUNTERS: u32 = 1 << 13;
 pub const FEATURE_GUARD_REFUSAL_COUNTERS: u32 = 1 << 14;
 pub const FEATURE_NATIVE_RESTART_BOUNDARY: u32 = 1 << 15;
+pub const FEATURE_THUMB_EXECUTE_END: u32 = 1 << 16;
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct TlbiEvent {

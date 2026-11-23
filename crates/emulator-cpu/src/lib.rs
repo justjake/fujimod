@@ -508,12 +508,14 @@ unsafe fn memory_restart_boundary_noop(
     _: *mut c_void,
 ) {
 }
-
 #[derive(Clone, Copy, Debug)]
 pub enum InstructionDisposition {
     Execute,
     Observe,
     ObserveAndEndBlock,
+    /// Execute the instruction in translated code, then end its translated
+    /// block. Backends without native support must observe and end instead.
+    ExecuteAndEndBlock,
     /// The instruction observer performs the instruction, including a failed
     /// condition's no-op, and leaves the PC at the instruction only to stop
     /// before it. The backend translates no body and ends the block after it.

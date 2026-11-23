@@ -167,7 +167,7 @@ pub struct Core {
     identity: Identity,
     hooks: RefCell<BTreeMap<usize, StoredHook>>,
     next_hook: Cell<usize>,
-    translation: RefCell<Option<Box<TranslationHooks>>>,
+    translation: RefCell<Option<Box<InstalledTranslationHooks>>>,
     thumb_metadata: Rc<Cell<bool>>,
     instruction_active: Rc<Cell<bool>>,
     callback_error: Rc<RefCell<Option<String>>>,
@@ -184,6 +184,11 @@ pub struct Core {
     #[allow(clippy::vec_box)]
     mmio_contexts: RefCell<Vec<Box<MmioData>>>,
     mmio: RefCell<BTreeMap<u64, MmioMapping>>,
+}
+
+struct InstalledTranslationHooks {
+    hooks: TranslationHooks,
+    native_execute_end: bool,
 }
 impl Core {
     fn capture_context(&self) -> Result<Context, String> {
@@ -1321,9 +1326,16 @@ impl Cpu for Core {
             return Err("CPU backend has no translation observer".into());
         }
         let install = self.api.extensions.insn_filter.unwrap();
-        let mut context = hooks.map(Box::new);
+        let mut context = hooks.map(|hooks| {
+            Box::new(InstalledTranslationHooks {
+                hooks,
+                native_execute_end: self.api.extensions.features
+                    & ffi::FEATURE_THUMB_EXECUTE_END
+                    != 0,
+            })
+        });
         let data = context.as_mut().map_or(std::ptr::null_mut(), |h| {
-            (&mut **h as *mut TranslationHooks).cast()
+            (&mut **h as *mut InstalledTranslationHooks).cast()
         });
         let on = context.is_some();
         self.check(unsafe {
@@ -1612,18 +1624,30 @@ unsafe extern "C" fn fault(
     }
 }
 unsafe extern "C" fn classify(data: *mut c_void, address: u64, word: u32) -> i32 {
-    let hooks = unsafe { &*data.cast::<TranslationHooks>() };
+    let context = unsafe { &*data.cast::<InstalledTranslationHooks>() };
+    let hooks = &context.hooks;
     let decision = unsafe { (hooks.classify)(hooks.data, address, word) };
     let action = match decision.instruction {
         InstructionDisposition::Execute => 0,
         InstructionDisposition::Observe => 1,
         InstructionDisposition::ObserveAndEndBlock => 2,
+        InstructionDisposition::ExecuteAndEndBlock if context.native_execute_end => 8,
+        InstructionDisposition::ExecuteAndEndBlock => 2,
         InstructionDisposition::Replace => 3,
     };
-    action | if decision.observe_block { 4 } else { 0 }
+    action
+        | if decision.observe_block
+            || (matches!(decision.instruction, InstructionDisposition::ExecuteAndEndBlock)
+                && !context.native_execute_end)
+        {
+            4
+        } else {
+            0
+        }
 }
 unsafe extern "C" fn restart(data: *mut c_void, pc: u64) {
-    let hooks = unsafe { &*data.cast::<TranslationHooks>() };
+    let context = unsafe { &*data.cast::<InstalledTranslationHooks>() };
+    let hooks = &context.hooks;
     unsafe {
         (hooks.restart)(hooks.data, pc);
     }
@@ -1676,6 +1700,29 @@ mod tests {
             instruction: InstructionDisposition::Execute,
             observe_block: false,
         }
+    }
+    unsafe fn thumb_execute_and_end(_: *mut c_void, _: u64, _: u32) -> Translation {
+        Translation {
+            instruction: InstructionDisposition::ExecuteAndEndBlock,
+            observe_block: false,
+        }
+    }
+    #[test]
+    fn execute_and_end_uses_native_bit_or_observed_fallback() {
+        let native = InstalledTranslationHooks {
+            hooks: TranslationHooks {
+                classify: thumb_execute_and_end,
+                restart: thumb_restart,
+                data: std::ptr::null_mut(),
+            },
+            native_execute_end: true,
+        };
+        let fallback = InstalledTranslationHooks {
+            native_execute_end: false,
+            ..native
+        };
+        assert_eq!(unsafe { classify(&native as *const _ as *mut c_void, 0x1000, 0xb480) }, 8);
+        assert_eq!(unsafe { classify(&fallback as *const _ as *mut c_void, 0x1000, 0xb480) }, 6);
     }
     unsafe fn thumb_restart(_: *mut c_void, _: u64) {}
     unsafe fn thumb_block_noop(_: Block, _: *mut c_void) {}
