@@ -190,15 +190,17 @@ const rowHeadings = ['h2', 'h3', 'h4', 'h5', 'h6'] as const;
 /** A heading that copies a link to itself when clicked. */
 function CopyLinkHeading(props: {
   level: 'h1' | (typeof rowHeadings)[number];
+  /** The page's path, and the heading's anchor on it. */
+  path: string;
   anchor?: string;
   children: JSX.Element;
 }) {
   const [copied, setCopied] = createSignal(false);
   let timer: ReturnType<typeof setTimeout> | undefined;
-  const href = () => (props.anchor ? `#${props.anchor}` : location.pathname);
+  const href = () => (props.anchor ? `${props.path}#${props.anchor}` : props.path);
   const copy = async (event: MouseEvent) => {
     event.preventDefault();
-    const url = new URL(href(), location.href);
+    const url = new URL(href(), location.origin);
     history.replaceState(history.state, '', url);
     await navigator.clipboard.writeText(url.href);
     setCopied(true);
@@ -208,7 +210,7 @@ function CopyLinkHeading(props: {
   onCleanup(() => clearTimeout(timer));
   return (
     <Dynamic component={props.level} class="manual-heading">
-      <a href={props.anchor ? `#${props.anchor}` : ''} onClick={copy}>
+      <a href={href()} onClick={copy}>
         {props.children}
       </a>
       <span
@@ -224,6 +226,7 @@ function CopyLinkHeading(props: {
 
 function ManualEntry(props: {
   row: ManualRow;
+  path: string;
   base: MenuPath;
   cameras: readonly string[];
   depth: number;
@@ -235,6 +238,7 @@ function ManualEntry(props: {
     <section class={['manual-entry', { 'manual-subentry': props.depth > 0 }]} id={section().anchor}>
       <CopyLinkHeading
         level={rowHeadings[Math.min(props.depth, rowHeadings.length - 1)]}
+        path={props.path}
         anchor={section().anchor}
       >
         {section().title}
@@ -251,6 +255,7 @@ function ManualEntry(props: {
         {(child) => (
           <ManualEntry
             row={child}
+            path={props.path}
             base={props.base}
             cameras={props.cameras}
             depth={props.depth + 1}
@@ -275,7 +280,9 @@ export function ManualFeature(props: { page: ManualPage; path: string; chapter?:
           {props.chapter}
         </Show>
       </p>
-      <CopyLinkHeading level="h1">{props.page.title}</CopyLinkHeading>
+      <CopyLinkHeading level="h1" path={props.path}>
+        {props.page.title}
+      </CopyLinkHeading>
       <Show when={layout().base.length}>
         <p class="manual-page-path">
           {layout().base.slice(0, -1).join(' › ')} {' › '}
@@ -307,7 +314,13 @@ export function ManualFeature(props: { page: ManualPage; path: string; chapter?:
       </Show>
       <For each={layout().top}>
         {(row) => (
-          <ManualEntry row={row} base={layout().base} cameras={layout().cameras} depth={0} />
+          <ManualEntry
+            row={row}
+            path={props.path}
+            base={layout().base}
+            cameras={layout().cameras}
+            depth={0}
+          />
         )}
       </For>
     </article>
