@@ -10,6 +10,7 @@ pub mod generation;
 pub mod ip;
 pub mod nand_boot;
 pub mod nand_boot_rom;
+pub mod osd_items;
 pub mod progress;
 pub mod reference;
 pub mod rom_start;
