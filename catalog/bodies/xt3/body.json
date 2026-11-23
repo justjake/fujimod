@@ -263,6 +263,30 @@
           "active_level": false
         }
       ]
+    },
+    {
+      "id": "controls-gpio-0-0",
+      "kind": "control",
+      "signals": [
+        {
+          "kind": "gpio",
+          "port": 0,
+          "pin": 0,
+          "active_level": false
+        }
+      ]
+    },
+    {
+      "id": "controls-gpio-0-1",
+      "kind": "control",
+      "signals": [
+        {
+          "kind": "gpio",
+          "port": 0,
+          "pin": 1,
+          "active_level": false
+        }
+      ]
     }
   ],
   "parts": [

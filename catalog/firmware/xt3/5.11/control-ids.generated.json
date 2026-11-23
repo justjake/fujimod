@@ -1905,7 +1905,8 @@
       "event": 7,
       "debug_key": "S1",
       "target": {
-        "kind": "unclaimed"
+        "kind": "control",
+        "control_id": "shutter_button"
       },
       "scanner": {
         "index": 4,
@@ -1917,14 +1918,25 @@
           "upper": 1
         }
       },
-      "electrical": null
+      "electrical": {
+        "kind": "gpio",
+        "connection_id": "controls-gpio-0-0",
+        "expected_level": false,
+        "scanner": {
+          "kind": "combined",
+          "source": 0,
+          "lower": 1,
+          "upper": 1
+        }
+      }
     },
     {
       "id": "row-5",
       "event": 8,
       "debug_key": "S2",
       "target": {
-        "kind": "unclaimed"
+        "kind": "control",
+        "control_id": "shutter_button"
       },
       "scanner": {
         "index": 5,
@@ -1936,7 +1948,17 @@
           "upper": 2
         }
       },
-      "electrical": null
+      "electrical": {
+        "kind": "gpio",
+        "connection_id": "controls-gpio-0-1",
+        "expected_level": false,
+        "scanner": {
+          "kind": "combined",
+          "source": 1,
+          "lower": 1,
+          "upper": 2
+        }
+      }
     },
     {
       "id": "row-6",
@@ -5549,28 +5571,6 @@
           "upper": 1
         }
       },
-      "electrical": null
-    },
-    {
-      "id": "debug-7",
-      "event": 7,
-      "debug_key": "S1",
-      "target": {
-        "kind": "control",
-        "control_id": "shutter_button"
-      },
-      "scanner": null,
-      "electrical": null
-    },
-    {
-      "id": "debug-8",
-      "event": 8,
-      "debug_key": "S2",
-      "target": {
-        "kind": "control",
-        "control_id": "shutter_button"
-      },
-      "scanner": null,
       "electrical": null
     },
     {

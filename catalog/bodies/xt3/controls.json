@@ -989,7 +989,10 @@
       "manual_page": 48,
       "face": null,
       "icon": null,
-      "connection_ids": [],
+      "connection_ids": [
+        "controls-gpio-0-0",
+        "controls-gpio-0-1"
+      ],
       "assignable": false,
       "default_function": "Half-press to focus and lock focus/exposure; press the rest of the way to take a picture.",
       "role": null,
