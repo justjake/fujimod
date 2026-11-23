@@ -10,6 +10,7 @@ mod loader_card;
 pub mod firmware;
 mod manifest;
 mod open;
+mod phase;
 mod profile;
 mod rom_start;
 mod run;

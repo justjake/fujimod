@@ -230,11 +230,13 @@ pub struct RunHost {
     watch_after: Option<(u64, u64)>,
     frames: Vec<Frame>,
     latest_frame: Option<Frame>,
+    phase: super::phase::PhaseRecorder,
 }
 
 impl RunHost {
     /// Open and prepare every input of an XP5 run without executing the guest.
     pub fn open(run: Run) -> Result<Self, String> {
+        let wall_start = Instant::now();
         let Run {
             configuration,
             load_snapshot,
@@ -416,6 +418,17 @@ impl RunHost {
             poke_word(&session.board, address, value)?;
         }
         let start = session.board.now();
+        let mut phase = super::phase::PhaseRecorder::open(
+            &run_directory,
+            wall_start,
+            start,
+            ticks_per_second,
+            &configuration_id,
+            &firmware.id,
+            policy.name(),
+            session.definition["engine"].clone(),
+        )?;
+        phase.record("guest_start", &session.board, None)?;
         for (delay, key, pressed) in keys {
             let delay_ticks = crate::host::duration_ticks(delay, ticks_per_second);
             inputs.key(
@@ -497,6 +510,7 @@ impl RunHost {
             watch_after,
             frames: Vec::new(),
             latest_frame: None,
+            phase,
         })
     }
 
@@ -527,6 +541,7 @@ impl RunHost {
             watch_writes,
             watch_after,
             policy,
+            phase,
             ..
         } = self;
         if limits.reached(session) || interrupted.load(Ordering::Acquire) {
@@ -580,9 +595,16 @@ impl RunHost {
         }
         print_write_notes(&session.board, *ticks_per_second);
         for frame in session.board.take_frames() {
+            let bank = frame.output;
+            let modeled_sequence = frame.sequence;
             *latest_frame = Some(frame.clone());
             frames.push(frame.clone());
-            outputs.frame(frame)?;
+            let archive_sequence = outputs.frame(frame)?;
+            phase.record(
+                "frame",
+                &session.board,
+                Some((bank, archive_sequence, modeled_sequence)),
+            )?;
         }
         let advanced = match result {
             Ok(advanced) => advanced,
@@ -595,6 +617,7 @@ impl RunHost {
         let now = session.board.now();
         // A guest-time cadence goes quiet when the guest advances slowly; report on host time too.
         if Instant::now() >= *next_wall_status {
+            phase.record("status", &session.board, None)?;
             let state = session.board.state();
             eprintln!(
                 "FUJIMOD XP5 status: {}",
@@ -603,6 +626,7 @@ impl RunHost {
             *next_wall_status = Instant::now() + WALL_STATUS_EVERY;
         }
         if *status_every != Duration::ZERO && now >= *next_status {
+            phase.record("status", &session.board, None)?;
             let state = session.board.state();
             eprintln!(
                 "FUJIMOD XP5 status: {}",
@@ -699,6 +723,7 @@ impl RunHost {
             interrupted,
             limits,
             ticks_per_second,
+            mut phase,
             ..
         } = self;
         let stop_reason = if interrupted.load(Ordering::Acquire) {
@@ -707,6 +732,12 @@ impl RunHost {
             limits.stop_reason(&session).unwrap_or(crate::host::StopReason::Other)
         };
         eprintln!("FUJIMOD XP5 end: {}", stop_reason.name());
+        let phase_write = phase.record_end(
+            &session.board,
+            outcome.is_ok(),
+            stop_reason.name(),
+            outcome.as_ref().err().map(String::as_str),
+        );
         print_write_notes(&session.board, ticks_per_second);
         let trace_write = pc_trace.map_or(Ok(()), |(output, trace)| output.write(trace));
         let snapshot_write = save_snapshot
@@ -738,6 +769,7 @@ impl RunHost {
             }
         }
         let cleanup = [
+            ("phase timing", phase_write),
             ("snapshot", snapshot_write),
             ("PC trace", trace_write),
             ("board", board_finish),

@@ -95,7 +95,7 @@ impl Outputs {
         std::fs::write(path, bytes).map_err(|error| format!("{}: {error}", path.display()))
     }
 
-    pub fn frame(&self, frame: Frame) -> Result<(), String> {
+    pub fn frame(&self, frame: Frame) -> Result<u64, String> {
         let mut outputs = self.0.lock().unwrap();
         let output = outputs
             .get_mut(&frame.output)
@@ -124,7 +124,8 @@ impl Outputs {
             width: frame.width,
             height: frame.height,
             rgba: frame.rgba,
-        })
+        })?;
+        Ok(output.next_archive)
     }
     pub fn status(&self, bank: usize, value: Value) -> Result<(), String> {
         let mut outputs = self.0.lock().unwrap();
