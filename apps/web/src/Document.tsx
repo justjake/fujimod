@@ -20,7 +20,7 @@ export default function Document(props: { children: JSX.Element; developmentEntr
           <meta name="description" content={metadata.description} />
           <link rel="canonical" href={metadata.canonical} />
           <meta property="og:type" content="website" />
-          <meta property="og:site_name" content="FujiMod" />
+          <meta property="og:site_name" content="Fujimod" />
           <meta property="og:title" content={metadata.title} />
           <meta property="og:description" content={metadata.description} />
           <meta property="og:url" content={metadata.canonical} />
@@ -39,7 +39,7 @@ export default function Document(props: { children: JSX.Element; developmentEntr
                 <meta property="og:image:height" content="480" />
                 <meta
                   property="og:image:alt"
-                  content="FujiMod’s 65:24 XPan crop with a 50% darkened surround."
+                  content="Fujimod’s 65:24 XPan crop with a 50% darkened surround."
                 />
                 <meta
                   name="twitter:image"
@@ -47,7 +47,7 @@ export default function Document(props: { children: JSX.Element; developmentEntr
                 />
                 <meta
                   name="twitter:image:alt"
-                  content="FujiMod’s 65:24 XPan crop with a 50% darkened surround."
+                  content="Fujimod’s 65:24 XPan crop with a 50% darkened surround."
                 />
               </>
             )}
