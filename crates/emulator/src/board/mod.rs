@@ -212,8 +212,9 @@ impl StoreObserverCounters {
                 self.callbacks_with_any_observed_reason.saturating_add(1);
         }
         if reasons > 1 {
-            self.callbacks_with_multiple_observed_reasons =
-                self.callbacks_with_multiple_observed_reasons.saturating_add(1);
+            self.callbacks_with_multiple_observed_reasons = self
+                .callbacks_with_multiple_observed_reasons
+                .saturating_add(1);
         }
         if complete {
             self.completed_callbacks = self.completed_callbacks.saturating_add(1);
@@ -4035,10 +4036,7 @@ unsafe fn written(
                 .lock()
                 .is_ok_and(|monitors| monitors.active());
             if reservation_live {
-                state.observe_store_reason(
-                    b.core,
-                    StoreObserverReason::LiveExclusiveReservation,
-                );
+                state.observe_store_reason(b.core, StoreObserverReason::LiveExclusiveReservation);
                 observed_reasons = observed_reasons.saturating_add(1);
             }
         }
@@ -4075,11 +4073,7 @@ unsafe fn written(
                                     StoreObserverReason::RestartAttempt,
                                 );
                                 observed_reasons = observed_reasons.saturating_add(1);
-                                state.finish_store_observation(
-                                    b.core,
-                                    observed_reasons,
-                                    false,
-                                );
+                                state.finish_store_observation(b.core, observed_reasons, false);
                                 classification_finished = true;
                             }
                             return cpu.request_restart();
@@ -4088,10 +4082,7 @@ unsafe fn written(
                         && scalar(cpu, Register::Pc)? & !1 != last
                     {
                         if diagnostic_m4 {
-                            state.observe_store_reason(
-                                b.core,
-                                StoreObserverReason::RestartAttempt,
-                            );
+                            state.observe_store_reason(b.core, StoreObserverReason::RestartAttempt);
                             observed_reasons = observed_reasons.saturating_add(1);
                             state.finish_store_observation(b.core, observed_reasons, false);
                             classification_finished = true;
@@ -4128,10 +4119,7 @@ unsafe fn written(
                     .is_some_and(|p| p.writes_an_alias(address, size));
                 if mprofile_alias_write {
                     if diagnostic_m4 {
-                        state.observe_store_reason(
-                            b.core,
-                            StoreObserverReason::MProfileAliasWrite,
-                        );
+                        state.observe_store_reason(b.core, StoreObserverReason::MProfileAliasWrite);
                         observed_reasons = observed_reasons.saturating_add(1);
                     }
                     state.code_run = None;
