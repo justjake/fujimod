@@ -397,6 +397,80 @@ fn access_histogram_calls_match_board_callbacks_and_published_subset() {
     );
 }
 
+#[test]
+fn store_observer_counts_explicit_write_watch_hits_at_the_m4_store_hook() {
+    use factory::*;
+
+    let graph = Graph {
+        decoders: vec![],
+        processors: vec![Processor {
+            model: Model::CortexM4,
+            registers: vec![],
+            released: true,
+            parked_until_sgi: false,
+            rprofile: None,
+            mprofile: Some(super::mprofile::Config {
+                clock_hz: 1_000_000_000,
+                board_ticks_per_second: 1_000_000_000,
+                vector_base: 0x10000,
+            }),
+        }],
+        dma_mappings: vec![crate::board::memory::BusMapping::ram(0x10000, 0x8000)],
+        ram: vec![Ram {
+            base: 0x10000,
+            size: 0x8000,
+        }],
+        mappings: vec![MemoryMap {
+            core: 0,
+            address: 0x10000,
+            physical: 0x10000,
+            size: 0x8000,
+            permissions: 7,
+        }],
+        peripherals: vec![],
+        instructions_per_tick: Ratio::new(1, 1).unwrap(),
+    };
+    let mut board = graph
+        .build(
+            Options::new(RunEngine::Unicorn).with_translation_cache_size_bytes(1024 * 1024),
+            Bus::new(bus::Mode::Strict),
+            None,
+        )
+        .unwrap();
+    board.state.borrow_mut().store_observer = Some(vec![Default::default()]);
+    board.set_execution_policy(ExecutionPolicy::Exact).unwrap();
+    board
+        .write_physical(0x10000, &[0x00, 0x70, 0x01, 0x00, 0x01, 0x01, 0x01, 0x00])
+        .unwrap();
+    let halfwords = [0x4801u16, 0x4902, 0x6001, 0xe7fe];
+    let mut program = halfwords
+        .into_iter()
+        .flat_map(u16::to_le_bytes)
+        .collect::<Vec<_>>();
+    program.extend_from_slice(&0x12000u32.to_le_bytes());
+    program.extend_from_slice(&0x1234_5678u32.to_le_bytes());
+    board.write_physical(0x10100, &program).unwrap();
+    *board.state.borrow().memory.write_watch.borrow_mut() = Some(
+        super::write_watch::Watch::new(&[(0x12000, 4)]).unwrap(),
+    );
+
+    board.run_until(32, 64).unwrap();
+
+    let metrics = board.execution_metrics();
+    let observer = &metrics["cortex_m4_by_core"][0]["store_observer"];
+    let stores = observer["callbacks_total"].as_u64().unwrap();
+    assert!(stores > 0, "guest did not reach a RAM store");
+    assert_eq!(observer["completed_callbacks"], stores);
+    assert_eq!(observer["explicit_write_watch_overlaps"], stores);
+    assert_eq!(observer["callbacks_with_any_observed_reason"], stores);
+    assert_eq!(observer["no_recorded_reason"], 0);
+    assert_eq!(observer["reason_counts_are_nonexclusive"], true);
+
+    let mut stored = [0; 4];
+    board.read_physical(0x12000, &mut stored).unwrap();
+    assert_eq!(u32::from_le_bytes(stored), 0x1234_5678);
+}
+
 /// An AArch64 processor polls the same device through a read helper:
 /// 0x14000: ldr w20,[x19]; loop: str w1,[x19]; poll: mov x0,x19; bl read;
 /// cmp w0,w20; b.eq poll; mov w20,w0; add x21,x21,#1; b loop.
