@@ -430,6 +430,12 @@ pub trait Device: Send + std::any::Any {
     }
     /// A read of `size` bytes at `address` (absolute, so one model can own
     /// several windows).
+    /// A read whose value at `now` is available without advancing the device.
+    /// Returning a value guarantees that advancing and reading would leave
+    /// device state, output signals, and its published deadlines unchanged.
+    fn read_without_advance(&self, _address: u64, _size: u8, _now: u64) -> Option<u64> {
+        None
+    }
     fn read(&mut self, cx: &mut Cx<'_>, address: u64, size: u8) -> u64;
     /// Whether a read of `size` bytes at `address` is a stable status read:
     /// it changes nothing in the model, and every later read returns the same

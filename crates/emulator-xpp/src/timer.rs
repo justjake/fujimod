@@ -63,6 +63,9 @@ impl TickTimers {
     pub fn next_event_tick(&self, _now: u64) -> Option<u64> {
         self.counters.iter().filter_map(|c| c.next).min()
     }
+    pub fn count_at(&self, channel: usize, now: u64) -> Option<u32> {
+        self.counters.get(channel).map(|counter| counter.value(now))
+    }
     pub fn next_interrupt_tick(&self, mut admits: impl FnMut(usize) -> bool) -> Option<u64> {
         self.counters
             .iter()
