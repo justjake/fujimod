@@ -5453,7 +5453,7 @@ mod osd_items_tests {
         assert_eq!(osd_items.source.row_count, 508);
         assert_eq!(osd_items.source.canvas_packet_bytes, 92);
         assert_eq!(osd_items.scene_variants.len(), 40);
-        assert_eq!(osd_items.sprite_records.len(), 4_804);
+        assert_eq!(osd_items.sprite_records.len(), 6_190);
         assert_eq!(osd_items.disp_custom_selectors.len(), 24);
     }
 }
