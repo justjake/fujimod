@@ -258,8 +258,8 @@ fn register_address_width_is_validated_and_one_byte_peers_keep_their_form(){
 }
 
 fn touch_profile()->TouchProfile {
-    TouchProfile{address:0x55,report_register:0,heartbeat_register:0x1c06,mode_register:0x1c00,
-        writable_registers:vec![0x1c00,0x1c02],contact_ids:[1,2],input_ready_irq:153,ticks_per_second:1000}
+    TouchProfile{address:0x55,report_register:0,heartbeat_register:0x1c06,mode_register:0x1c00,restart_register:0x1c09,restart_value:0xc1,
+        writable_registers:vec![0x1c00,0x1c02,0x1c09],contact_ids:[1,2],input_ready_irq:153,ticks_per_second:1000}
 }
 fn touch(m:&mut ByteI2c)->&mut TouchChip {m.state.transport.touch.as_mut().unwrap()}
 /// Write one register of the touch chip through the bus, ending with STOP.
