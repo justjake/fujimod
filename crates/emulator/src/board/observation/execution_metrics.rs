@@ -62,6 +62,14 @@ impl Board {
                         .expect("M4 metrics row is a JSON object")
                         .insert("store_observer".into(), counters.json());
                 }
+                if let Some(statistics) = &state.callback_service_time {
+                    row.as_object_mut()
+                        .expect("M4 metrics row is a JSON object")
+                        .insert(
+                            "callback_service_time".into(),
+                            super::super::callback_timing::json(statistics, core),
+                        );
+                }
                 row
             })
             .collect::<Vec<_>>();
