@@ -323,10 +323,19 @@ pub(super) fn can_run_inline(word: u32) -> bool {
 
     let first = (word >> 16) as u16;
     let second = word as u16;
-    // Accept only the modified-immediate encodings with i=imm3=0, so the
-    // value is an ordinary imm8. This excludes ThumbExpandImm rotations and
-    // replication patterns, including their reserved zero forms.
-    if first & 0xfc00 != 0xf000 || second & 0xf000 != 0 {
+    // ThumbExpandImm uses i:imm3:imm8. The top five bits identify this
+    // instruction family; bit 10 is the immediate's high bit, not an opcode
+    // bit. Bit 15 of the second halfword is reserved, while bits 14:12 are
+    // imm3.
+    if first & 0xf800 != 0xf000 || second & 0x8000 != 0 {
+        return false;
+    }
+    let imm12 = ((u32::from(first >> 10) & 1) << 11)
+        | ((u32::from(second >> 12) & 7) << 8)
+        | u32::from(second & 0xff);
+    // ThumbExpandImm's replicated-byte submodes reserve zero. All rotate
+    // submodes are valid because they prepend the implicit leading one.
+    if imm12 >> 10 == 0 && (imm12 >> 8) & 3 != 0 && imm12 & 0xff == 0 {
         return false;
     }
     let opcode = (first >> 5) & 0x1f;
@@ -429,6 +438,11 @@ mod tests {
 
         // The first halfword of a 32-bit encoding occupies the upper half.
         assert!(can_run_inline(0xf000_0107)); // and.w r1,r0,#7
+        assert!(can_run_inline(0xf000_1101)); // and.w with byte replicated at 0/16
+        assert!(can_run_inline(0xf000_2101)); // and.w with byte replicated at 8/24
+        assert!(can_run_inline(0xf000_3101)); // and.w with byte replicated four times
+        assert!(can_run_inline(0xf500_0101)); // add.w with a rotated immediate
+        assert!(can_run_inline(0xf1b1_4f00)); // cmp.w r1,#0x80000000
         assert!(can_run_inline(0xf011_0504)); // ands.w r5,r1,#4
         assert!(can_run_inline(0xf101_0007)); // add.w r0,r1,#7
         assert!(can_run_inline(0xf111_0007)); // adds.w r0,r1,#7
@@ -447,9 +461,10 @@ mod tests {
             0xf1a1_0f07, // PC destination without CMP flag semantics
             0xf1bd_0f07, // CMP source SP
             0xf1bf_0f07, // CMP source PC
-            0xf101_1007, // nonzero imm3
-            0xf501_0007, // i bit selects ThumbExpandImm
-            0xf011_1007, // nonzero imm3 with S
+            0xf000_1100, // replicated-zero submode 01 is reserved
+            0xf000_2100, // replicated-zero submode 10 is reserved
+            0xf000_3100, // replicated-zero submode 11 is reserved
+            0xf001_8107, // reserved bit 15 of the second halfword
             0xf121_0007, // ADC opcode
             0xf021_0007, // BIC opcode
             0xf04f_0f07, // MOV destination PC
