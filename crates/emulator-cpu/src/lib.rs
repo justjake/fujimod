@@ -511,6 +511,9 @@ unsafe fn memory_restart_boundary_noop(
 #[derive(Clone, Copy, Debug)]
 pub enum InstructionDisposition {
     Execute,
+    /// Execute normally, and permit native mode-4 accounting while ITSTATE
+    /// is active. The instruction must be pure register/flag computation.
+    ExecuteItSafe,
     Observe,
     ObserveAndEndBlock,
     /// Execute the instruction in translated code, then end its translated
