@@ -72,7 +72,9 @@ this one loop; no host keeps its own copy.
   lacks H.264). The control catalog, positions, inputs, touches and replies
   share one ordered data channel. ICE uses host candidates only, so the
   viewer reaches LAN and Tailscale peers without public STUN or TURN. The
-  viewer has no processor-specific code.
+  viewer has no processor-specific code. Peers and candidate policy come
+  from `crates/webrtc`, which USB sharing also uses; it gains the video
+  track. Frames are encoded with the workspace's `openh264`.
 - Frames flow without backlog: the display's publication counter skips
   unchanged front buffers, a one-slot mailbox replaces frames not yet sent,
   and the encoder runs only when the sender asks for the next frame. Socket
