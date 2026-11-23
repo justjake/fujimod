@@ -463,6 +463,8 @@ fn launch_connection(state: tauri::State<'_, AppState>) -> Option<LaunchRequest>
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() -> Result<(), Box<dyn std::error::Error>> {
     let startup = window_launch()?;
+    fujimod_emulator_exr2_board::register_board_builder();
+    fujimod_emulator_models::register();
     tauri::Builder::default()
         .manage(AppState {
             running: Mutex::new(None),
