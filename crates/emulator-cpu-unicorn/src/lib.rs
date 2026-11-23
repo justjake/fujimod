@@ -1500,18 +1500,46 @@ impl Cpu for Core {
             } else {
                 &[]
             };
+        let translation_timing = [
+            "translation_first_lookup_key_count",
+            "translation_first_lookup_key_tb_gen_code_elapsed_ns",
+            "translation_repeated_lookup_key_count",
+            "translation_repeated_lookup_key_tb_gen_code_elapsed_ns",
+            "translation_untracked_lookup_key_count",
+            "translation_untracked_lookup_key_tb_gen_code_elapsed_ns",
+        ];
+        let translation_timing_extra: &[&str] =
+            if self.api.extensions.features & ffi::FEATURE_TRANSLATION_TIMING_COUNTERS != 0 {
+                &translation_timing
+            } else {
+                &[]
+            };
         let values = unsafe {
             std::slice::from_raw_parts(
                 read(self.raw),
-                names.len() + extra.len() + guard_extra.len() + guard_samples.len(),
+                names.len()
+                    + extra.len()
+                    + guard_extra.len()
+                    + guard_samples.len()
+                    + translation_timing_extra.len(),
             )
         };
-        Ok(names.into_iter()
+        let counters: BTreeMap<_, _> = names.into_iter()
             .chain(extra.iter().copied())
             .chain(guard_extra.iter().copied())
             .chain(guard_samples.iter().copied())
+            .chain(translation_timing_extra.iter().copied())
             .zip(values.iter().copied())
-            .collect())
+            .collect();
+        if translation_timing_extra.len() == translation_timing.len() {
+            let classified = counters["translation_first_lookup_key_count"]
+                .saturating_add(counters["translation_repeated_lookup_key_count"])
+                .saturating_add(counters["translation_untracked_lookup_key_count"]);
+            if classified > counters["translations"] {
+                return Err("translation key classifications exceed translation attempts".into());
+            }
+        }
+        Ok(counters)
     }
 }
 

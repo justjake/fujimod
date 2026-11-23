@@ -20,6 +20,7 @@ pub const FEATURE_GUARD_REFUSAL_COUNTERS: u32 = 1 << 14;
 pub const FEATURE_NATIVE_RESTART_BOUNDARY: u32 = 1 << 15;
 pub const FEATURE_THUMB_EXECUTE_END: u32 = 1 << 16;
 pub const FEATURE_THUMB_IT_ACCOUNTING: u32 = 1 << 17;
+pub const FEATURE_TRANSLATION_TIMING_COUNTERS: u32 = 1 << 19;
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct TlbiEvent {
