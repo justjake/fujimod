@@ -36,6 +36,7 @@
   },
   "dependencies": {
     "@better-auth/drizzle-adapter": "^1.7.18",
+    "@cfworker/json-schema": "4.1.6",
     "@fujimod/emulator-ui": "workspace:*",
     "@solidjs/web": "2.0.0-rc.20",
     "better-auth": "1.7.18",
