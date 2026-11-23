@@ -481,46 +481,159 @@ fn injected_initial_protection_failure_with_successful_rollback_releases_reserva
     }
     cpu.write_memory(ROM, &[1]).unwrap();
 }
+fn run_one(cpu: &Core, address: u64) {
+    cpu.run(Run {
+        begin: address,
+        until: None,
+        watchdog_us: 0,
+        instructions: Some(1),
+    })
+    .unwrap();
+}
+
+fn register_u32(cpu: &Core, register: Register) -> u32 {
+    let mut bytes = [0; 4];
+    cpu.read_register(register, &mut bytes).unwrap();
+    u32::from_le_bytes(bytes)
+}
+
+fn run_r0(cpu: &Core, address: u64) -> u32 {
+    cpu.write_register(arm::CORE[0], &0u32.to_le_bytes())
+        .unwrap();
+    run_one(cpu, address);
+    register_u32(cpu, arm::CORE[0])
+}
+
+fn counter(cpu: &Core, name: &'static str) -> u64 {
+    cpu.exit_counters().unwrap()[name]
+}
+
+unsafe fn write_word(backing: &Backing, word: u32) {
+    let bytes = word.to_le_bytes();
+    unsafe { std::ptr::copy_nonoverlapping(bytes.as_ptr(), backing.as_ptr(), bytes.len()) };
+}
+
 #[test]
-fn a_backing_write_discards_translations_only_when_this_processor_maps_the_backing() {
-    const RAM: u64 = 0x10000;
-    // add r0,r0,#1; b .-4
-    let mapped = words(&[0xe2800001, 0xeafffffd]);
-    let foreign = words(&[0]);
-    let cpu = test_support::library().open(Model::CortexA7, 1024 * 1024).unwrap();
-    unsafe { cpu.map_backing(RAM, 4096, 7, pointer(&mapped)).unwrap() };
-    cpu.write_register(arm::CPSR, &0xd3u32.to_le_bytes()).unwrap();
-    // The pointer names the mapped host bytes, and only ranges one mapping covers.
-    assert_eq!(cpu.backing_pointer(RAM, 4096), Some(pointer(&mapped)));
-    assert_eq!(
-        cpu.backing_pointer(RAM + 8, 16).map(|p| p.as_ptr() as usize),
-        Some(mapped.as_ptr() as usize + 8)
-    );
-    assert_eq!(cpu.backing_pointer(RAM, 4097), None);
-    assert_eq!(cpu.backing_pointer(RAM - 4096, 4096), None);
-    let run = |begin| {
-        cpu.run(Run { begin, until: None, watchdog_us: 0, instructions: Some(10) }).unwrap();
-    };
-    let counter = |name| cpu.exit_counters().unwrap()[name];
-    run(RAM);
-    let (flushes, translations) = (counter("translation_flushes"), counter("translations"));
-    assert!(translations > 0);
-    // A write to backing this processor does not map leaves its translations alone.
-    unsafe { cpu.backing_written(0x9000_0000, pointer(&foreign), 4096).unwrap() };
-    assert_eq!(counter("translation_flushes"), flushes);
-    let mut pc = [0; 4];
-    cpu.read_register(Register::Pc, &mut pc).unwrap();
-    run(u64::from(u32::from_le_bytes(pc)));
-    assert_eq!(counter("translations"), translations);
-    // A write to its own backing discards them, wherever in the mapping it lands.
+fn backing_writes_update_every_live_alias_without_flushing_independent_code() {
+    const FIRST: u64 = 0x10000;
+    const ALIAS: u64 = 0x20000;
+    const INDEPENDENT: u64 = 0x30000;
+    let shared = words(&[0xe3a00001]); // mov r0,#1
+    let independent = words(&[0xe3a01009]); // mov r1,#9
+    let cpu = test_support::library()
+        .open(Model::CortexA7, 1024 * 1024)
+        .unwrap();
     unsafe {
-        cpu.backing_written(RAM + 0x800, NonNull::new(mapped.as_ptr().add(0x800)).unwrap(), 4)
-            .unwrap()
-    };
-    assert_eq!(counter("translation_flushes"), flushes + 1);
-    // After an unmap the backing is foreign again.
-    cpu.unmap(RAM, 4096).unwrap();
-    unsafe { cpu.backing_written(RAM, pointer(&mapped), 4096).unwrap() };
-    assert_eq!(counter("translation_flushes"), flushes + 1);
-    assert_eq!(cpu.backing_pointer(RAM, 4096), None);
+        cpu.map_backing(FIRST, 4096, 7, pointer(&shared)).unwrap();
+        cpu.map_backing(ALIAS, 4096, 7, pointer(&shared)).unwrap();
+        cpu.map_backing(INDEPENDENT, 4096, 7, pointer(&independent))
+            .unwrap();
+    }
+    assert_eq!(cpu.backing_pointer(FIRST, 4096), Some(pointer(&shared)));
+    assert_eq!(
+        cpu.backing_pointer(FIRST + 8, 16).map(|p| p.as_ptr() as usize),
+        Some(shared.as_ptr() as usize + 8)
+    );
+    assert_eq!(cpu.backing_pointer(FIRST, 4097), None);
+    assert_eq!(cpu.backing_pointer(FIRST - 4096, 4096), None);
+    cpu.write_register(arm::CPSR, &0xd3u32.to_le_bytes())
+        .unwrap();
+
+    assert_eq!(run_r0(&cpu, FIRST), 1);
+    assert_eq!(run_r0(&cpu, ALIAS), 1);
+    run_one(&cpu, INDEPENDENT);
+    assert_eq!(register_u32(&cpu, arm::CORE[1]), 9);
+    let flushes = counter(&cpu, "translation_flushes");
+
+    unsafe {
+        write_word(&shared, 0xe3a00002); // mov r0,#2
+        cpu.backing_written(FIRST, pointer(&shared), 4).unwrap();
+    }
+    assert_eq!(counter(&cpu, "translation_flushes"), flushes);
+    assert_eq!(run_r0(&cpu, FIRST), 2);
+    assert_eq!(run_r0(&cpu, ALIAS), 2);
+
+    let translations = counter(&cpu, "translations");
+    run_one(&cpu, INDEPENDENT);
+    assert_eq!(register_u32(&cpu, arm::CORE[1]), 9);
+    assert_eq!(counter(&cpu, "translations"), translations);
+    assert_eq!(counter(&cpu, "translation_flushes"), flushes);
+}
+
+#[test]
+fn foreign_and_data_backing_writes_keep_independent_translations_cached() {
+    const FIRST: u64 = 0x10000;
+    const SECOND: u64 = 0x20000;
+    const DATA: u64 = 0x30000;
+    let first = words(&[0xe3a00011]); // mov r0,#17
+    let second = words(&[0xe3a01022]); // mov r1,#34
+    let data = words(&[0]);
+    let foreign = words(&[0]);
+    let cpu = test_support::library()
+        .open(Model::CortexA7, 1024 * 1024)
+        .unwrap();
+    unsafe {
+        cpu.map_backing(FIRST, 4096, 7, pointer(&first)).unwrap();
+        cpu.map_backing(SECOND, 4096, 7, pointer(&second)).unwrap();
+        cpu.map_backing(DATA, 4096, 3, pointer(&data)).unwrap();
+    }
+    cpu.write_register(arm::CPSR, &0xd3u32.to_le_bytes())
+        .unwrap();
+    run_one(&cpu, FIRST);
+    run_one(&cpu, SECOND);
+    assert_eq!(register_u32(&cpu, arm::CORE[0]), 17);
+    assert_eq!(register_u32(&cpu, arm::CORE[1]), 34);
+    let translations = counter(&cpu, "translations");
+    let flushes = counter(&cpu, "translation_flushes");
+
+    unsafe {
+        write_word(&data, 1);
+        cpu.backing_written(DATA, pointer(&data), 4).unwrap();
+        write_word(&foreign, 1);
+        cpu.backing_written(0x90000000, pointer(&foreign), 4)
+            .unwrap();
+    }
+    assert_eq!(counter(&cpu, "translation_flushes"), flushes);
+    run_one(&cpu, FIRST);
+    run_one(&cpu, SECOND);
+    assert_eq!(register_u32(&cpu, arm::CORE[0]), 17);
+    assert_eq!(register_u32(&cpu, arm::CORE[1]), 34);
+    assert_eq!(counter(&cpu, "translations"), translations);
+}
+
+#[test]
+fn unmapping_an_alias_removes_it_from_later_backing_write_invalidation() {
+    const FIRST: u64 = 0x10000;
+    const ALIAS: u64 = 0x20000;
+    let shared = words(&[0xe3a00001]); // mov r0,#1
+    let replacement = words(&[0xe3a00007]); // mov r0,#7
+    let cpu = test_support::library()
+        .open(Model::CortexA7, 1024 * 1024)
+        .unwrap();
+    unsafe {
+        cpu.map_backing(FIRST, 4096, 7, pointer(&shared)).unwrap();
+        cpu.map_backing(ALIAS, 4096, 7, pointer(&shared)).unwrap();
+    }
+    cpu.write_register(arm::CPSR, &0xd3u32.to_le_bytes())
+        .unwrap();
+    run_one(&cpu, FIRST);
+    run_one(&cpu, ALIAS);
+
+    cpu.unmap(ALIAS, 4096).unwrap();
+    assert_eq!(cpu.backing_pointer(ALIAS, 4096), None);
+    unsafe { cpu.map_backing(ALIAS, 4096, 7, pointer(&replacement)).unwrap() };
+    assert_eq!(run_r0(&cpu, ALIAS), 7);
+    let translations = counter(&cpu, "translations");
+    let flushes = counter(&cpu, "translation_flushes");
+
+    unsafe {
+        write_word(&shared, 0xe3a00003); // mov r0,#3
+        cpu.backing_written(FIRST, pointer(&shared), 4).unwrap();
+    }
+    assert_eq!(run_r0(&cpu, FIRST), 3);
+    let after_first = counter(&cpu, "translations");
+    assert_eq!(run_r0(&cpu, ALIAS), 7);
+    assert_eq!(counter(&cpu, "translations"), after_first);
+    assert!(after_first > translations);
+    assert_eq!(counter(&cpu, "translation_flushes"), flushes);
 }

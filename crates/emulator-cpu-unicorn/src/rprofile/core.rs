@@ -1231,8 +1231,8 @@ impl crate::memory::CodeOwner for Execution {
     fn watch_code(&self, address: u64, bytes: u64) -> Result<(), String> {
         self.cpu.watch_stores(address, bytes)
     }
-    fn invalidate_code_page(&self, address: u64) -> Result<(), String> {
-        self.cpu.invalidate_code(Some((address, address + 4096)))
+    fn invalidate_backing_page(&self, backing_page: usize) -> Result<(), String> {
+        self.cpu.invalidate_backing(backing_page, 4096)
     }
     fn prepare_code_write(&self) -> Result<(), String> {
         self.prepare_flush()
