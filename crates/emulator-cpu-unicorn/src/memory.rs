@@ -3,7 +3,7 @@
 //! device with program inspection or private RAM predicates.
 pub(crate) trait CodeOwner {
     fn watch_code(&self, address: u64, bytes: u64) -> Result<(), String>;
-    fn invalidate_code_page(&self, address: u64) -> Result<(), String>;
+    fn invalidate_backing_page(&self, backing_page: usize) -> Result<(), String>;
     fn prepare_code_write(&self) -> Result<(), String>;
 }
 use fujimod_emulator_cpu::ExecutionPolicy;
@@ -114,7 +114,6 @@ struct Page {
 #[derive(Clone, Copy, PartialEq)]
 struct Invalidation {
     core: usize,
-    address: u64,
     backing: usize,
 }
 #[derive(Default)]
@@ -368,6 +367,9 @@ impl Memory {
         let mut s = self.state();
         let id = s.cores.len();
         s.cores.push(true);
+        let capacity = s.cores.len().saturating_mul(s.pages.len());
+        let len = s.invalidations.len();
+        s.invalidations.reserve(capacity.saturating_sub(len));
         self.local.cores.borrow_mut().insert(id, core);
         id
     }
@@ -486,14 +488,6 @@ impl Memory {
             Self::aliases(&[view], page, watches);
         }
         s.views.push(view);
-        // Translation-time reservation bounds all later code-write queues.
-        let capacity = s
-            .pages
-            .len()
-            .saturating_mul(s.views.len())
-            .saturating_mul(2);
-        let len = s.invalidations.len();
-        s.invalidations.reserve(capacity.saturating_sub(len));
         let capacity = s.views.len() * 4;
         let len = s.watches.len();
         s.watches.reserve(capacity.saturating_sub(len));
@@ -555,19 +549,14 @@ impl Memory {
             if begin >= end {
                 continue;
             }
-            let first = (v.address + (begin - v.pointer) as u64) >> 12;
-            let last = (v.address + (end - v.pointer - 1) as u64) >> 12;
-            for page in first..=last {
-                let invalidation = Invalidation {
-                    core: v.core,
-                    address: page << 12,
-                    backing,
-                };
-                // One queued invalidation covers every translation made
-                // before its processor flushes; do not grow the bounded queue.
-                if !out.contains(&invalidation) {
-                    out.push(invalidation);
-                }
+            let invalidation = Invalidation {
+                core: v.core,
+                backing,
+            };
+            // One backing-page invalidation covers every guest alias and every
+            // translation made before its processor flushes.
+            if !out.contains(&invalidation) {
+                out.push(invalidation);
             }
         }
     }
@@ -640,6 +629,7 @@ impl Memory {
             views,
             pages,
             watches,
+            cores,
             invalidations,
             ..
         } = &mut *s;
@@ -675,7 +665,7 @@ impl Memory {
                 };
                 if inserted {
                     Self::aliases(views, base, watches);
-                    let capacity = pages.len() * views.len() * 2;
+                    let capacity = pages.len().saturating_mul(cores.len());
                     invalidations.reserve(capacity.saturating_sub(invalidations.len()));
                 }
                 cursor = page_end;
@@ -880,7 +870,13 @@ impl Memory {
                 break;
             };
             if let Some(core) = core {
-                core.invalidate_code_page(invalidation.address)?;
+                if let Err(error) = core.invalidate_backing_page(invalidation.backing) {
+                    let mut state = self.state();
+                    if !state.invalidations.contains(&invalidation) {
+                        state.invalidations.push(invalidation);
+                    }
+                    return Err(error);
+                }
             }
         }
         Ok(())
@@ -890,6 +886,125 @@ impl Memory {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::cell::{Cell, RefCell};
+
+    #[derive(Default)]
+    struct RecordingOwner {
+        watches: RefCell<Vec<(u64, u64)>>,
+        invalidation_attempts: RefCell<Vec<usize>>,
+        fail_next_invalidation: Cell<bool>,
+    }
+
+    impl CodeOwner for RecordingOwner {
+        fn watch_code(&self, address: u64, bytes: u64) -> Result<(), String> {
+            self.watches.borrow_mut().push((address, bytes));
+            Ok(())
+        }
+
+        fn invalidate_backing_page(&self, backing_page: usize) -> Result<(), String> {
+            self.invalidation_attempts
+                .borrow_mut()
+                .push(backing_page);
+            if self.fail_next_invalidation.replace(false) {
+                return Err("injected backing invalidation failure".into());
+            }
+            Ok(())
+        }
+
+        fn prepare_code_write(&self) -> Result<(), String> {
+            Ok(())
+        }
+    }
+
+    fn register_owner(memory: &Memory, owner: &Rc<RecordingOwner>) -> (usize, Rc<dyn CodeOwner>) {
+        let owner_ref: Rc<dyn CodeOwner> = owner.clone();
+        let id = memory.register(Rc::downgrade(&owner_ref));
+        (id, owner_ref)
+    }
+
+    #[test]
+    fn backing_invalidations_deduplicate_aliases_per_core_and_keep_alias_watches() {
+        const BACKING: usize = 0x80000;
+        let shared = SharedMemory::default();
+        let first = shared.processor();
+        let second = shared.processor();
+        let first_owner = Rc::new(RecordingOwner::default());
+        let second_owner = Rc::new(RecordingOwner::default());
+        let (first_id, _first_owner_ref) = register_owner(&first, &first_owner);
+        let (second_id, _second_owner_ref) = register_owner(&second, &second_owner);
+
+        first.map(first_id, 0x1000, BACKING, 4096, None);
+        first.map(first_id, 0x3000, BACKING, 4096, None);
+        second.map(second_id, 0x5000, BACKING, 4096, None);
+        second.map(second_id, 0x7000, BACKING, 4096, None);
+        first.note_code(first_id, 0x1000, 4).unwrap();
+        second.note_code(second_id, 0x5000, 4).unwrap();
+        first.apply_watches().unwrap();
+        second.apply_watches().unwrap();
+        let first_watches = first_owner.watches.borrow();
+        assert_eq!(first_watches.len(), 2);
+        assert!(first_watches.contains(&(0x1000, 4096)));
+        assert!(first_watches.contains(&(0x3000, 4096)));
+        let second_watches = second_owner.watches.borrow();
+        assert_eq!(second_watches.len(), 2);
+        assert!(second_watches.contains(&(0x5000, 4096)));
+        assert!(second_watches.contains(&(0x7000, 4096)));
+
+        assert!(first.backing_written(0, BACKING, 4).unwrap());
+        {
+            let state = shared.state.lock().unwrap();
+            assert_eq!(state.invalidations.len(), 2);
+            assert!(
+                state.invalidations.capacity() >= state.cores.len() * state.pages.len()
+            );
+            assert!(state.invalidations.iter().any(|entry| {
+                entry.core == first_id && entry.backing == BACKING
+            }));
+            assert!(state.invalidations.iter().any(|entry| {
+                entry.core == second_id && entry.backing == BACKING
+            }));
+        }
+
+        first.flush().unwrap();
+        assert_eq!(*first_owner.invalidation_attempts.borrow(), [BACKING]);
+        assert!(second.flush_pending());
+        second.flush().unwrap();
+        assert_eq!(*second_owner.invalidation_attempts.borrow(), [BACKING]);
+        assert!(!second.flush_pending());
+    }
+
+    #[test]
+    fn failed_backing_invalidation_delivery_remains_queued_for_retry() {
+        const BACKING: usize = 0x90000;
+        let shared = SharedMemory::default();
+        let memory = shared.processor();
+        let owner = Rc::new(RecordingOwner::default());
+        let (id, _owner_ref) = register_owner(&memory, &owner);
+        memory.map(id, 0x1000, BACKING, 4096, None);
+        memory.note_code(id, 0x1000, 4).unwrap();
+        memory.apply_watches().unwrap();
+        owner.fail_next_invalidation.set(true);
+        assert!(memory.backing_written(0, BACKING, 4).unwrap());
+
+        assert!(matches!(
+            memory.flush(),
+            Err(error) if error.contains("injected backing invalidation failure")
+        ));
+        assert!(memory.flush_pending());
+        {
+            let state = shared.state.lock().unwrap();
+            assert_eq!(state.invalidations.len(), 1);
+            assert_eq!(state.invalidations[0].core, id);
+            assert_eq!(state.invalidations[0].backing, BACKING);
+        }
+
+        memory.flush().unwrap();
+        assert_eq!(
+            *owner.invalidation_attempts.borrow(),
+            [BACKING, BACKING]
+        );
+        assert!(!memory.flush_pending());
+    }
 
     #[test]
     fn stopped_mapping_barrier_accepts_parked_cores_only() {

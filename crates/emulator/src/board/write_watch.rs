@@ -193,19 +193,28 @@ pub(super) fn core_tick(state: &State, cpu: &dyn Cpu, core: usize) -> u64 {
 /// Record a store by `core` at processor address `physical` (already translated) if it
 /// overlaps a watched range. The memory hook runs before the store lands, so the backing still
 /// holds the prior bytes and `value` is the stored value.
-pub(super) fn observe_store(state: &State, cpu: &dyn Cpu, core: usize, physical: u64, size: usize, value: i64) {
+pub(super) fn observe_store(
+    state: &State,
+    cpu: &dyn Cpu,
+    core: usize,
+    physical: u64,
+    size: usize,
+    value: i64,
+) -> bool {
     let physical = match &state.mprofile[core] {
         // M-profile aliases resolve to the shared RAM; peripheral stores are not RAM writes.
         Some(profile) => match profile.physical(physical, size) {
             Ok(address) => address,
-            Err(_) => return,
+            Err(_) => return false,
         },
         None => physical,
     };
     let mut slot = state.memory.write_watch.borrow_mut();
-    let Some(watch) = slot.as_mut() else { return };
+    let Some(watch) = slot.as_mut() else {
+        return false;
+    };
     if watch.overlap(physical, size as u64).is_none() {
-        return;
+        return false;
     }
     let kept = size.min(VALUE_BYTES);
     let value = if size <= 8 { value.to_le_bytes()[..size].to_vec() } else { vec![] };
@@ -230,6 +239,7 @@ pub(super) fn observe_store(state: &State, cpu: &dyn Cpu, core: usize, physical:
         old,
         tick: core_tick(state, cpu, core),
     });
+    true
 }
 
 /// Store hook for processors that have no board store hook: it only feeds the write watch.

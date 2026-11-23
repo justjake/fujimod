@@ -57,6 +57,57 @@ const GUARD_SAMPLE_NAMES: [&str; 96] = guard_sample_names!(
     00, 01, 02, 03, 04, 05, 06, 07, 08, 09, 10, 11, 12, 13, 14, 15,
     16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31
 );
+macro_rules! m4_classifier_counter_names {
+    ($($class:literal),* $(,)?) => {
+        [$(
+            concat!("guard_classifier_", $class, "_callbacks"),
+            concat!("guard_classifier_", $class, "_translated_tb_instruction_opportunities"),
+        )*]
+    };
+}
+const M4_CLASSIFIER_COUNTER_NAMES: [&str; 94] = m4_classifier_counter_names!(
+    "thumb16_hi_0", "thumb16_hi_1", "thumb16_hi_2", "thumb16_hi_3",
+    "thumb16_4_register_data", "thumb16_4_bx_blx", "thumb16_4_literal_ldr",
+    "thumb16_hi_5", "thumb16_hi_6", "thumb16_hi_7", "thumb16_hi_8",
+    "thumb16_hi_9", "thumb16_hi_a", "thumb16_b_it_hints", "thumb16_b_push",
+    "thumb16_b_pop", "thumb16_b_cbz_cbnz", "thumb16_b_misc",
+    "thumb16_hi_c", "thumb16_hi_d", "thumb16_hi_e", "thumb16_hi_f",
+    "thumb32_1d_major_0", "thumb32_1d_major_1", "thumb32_1d_major_2",
+    "thumb32_1d_major_3", "thumb32_1d_major_4", "thumb32_1d_major_5",
+    "thumb32_1d_major_6", "thumb32_1d_major_7", "thumb32_1e_major_0",
+    "thumb32_1e_major_1", "thumb32_1e_major_2", "thumb32_1e_major_3",
+    "thumb32_1e_major_4", "thumb32_1e_major_5", "thumb32_1e_major_6",
+    "thumb32_1e_major_7", "thumb32_1f_major_0", "thumb32_1f_major_1",
+    "thumb32_1f_major_2", "thumb32_1f_major_3", "thumb32_1f_major_4",
+    "thumb32_1f_major_5", "thumb32_1f_major_6", "thumb32_1f_major_7",
+    "other_or_non_thumb",
+);
+const TRANSLATION_REPEAT_COUNTER_NAMES: [&str; 24] = [
+    "translation_repeat_across_global_flush_count",
+    "translation_repeat_across_global_flush_tb_gen_code_elapsed_ns",
+    "translation_repeat_same_generation_count",
+    "translation_repeat_same_generation_tb_gen_code_elapsed_ns",
+    "translation_repeat_same_generation_unknown_cause_count",
+    "translation_repeat_same_generation_unknown_cause_tb_gen_code_elapsed_ns",
+    "translation_repeat_same_generation_invalidation_restore_nocache_count",
+    "translation_repeat_same_generation_invalidation_restore_nocache_tb_gen_code_elapsed_ns",
+    "translation_repeat_same_generation_invalidation_exec_nocache_count",
+    "translation_repeat_same_generation_invalidation_exec_nocache_tb_gen_code_elapsed_ns",
+    "translation_repeat_same_generation_invalidation_io_recompile_count",
+    "translation_repeat_same_generation_invalidation_io_recompile_tb_gen_code_elapsed_ns",
+    "translation_repeat_same_generation_invalidation_guest_store_count",
+    "translation_repeat_same_generation_invalidation_guest_store_tb_gen_code_elapsed_ns",
+    "translation_repeat_same_generation_invalidation_exit_address_count",
+    "translation_repeat_same_generation_invalidation_exit_address_tb_gen_code_elapsed_ns",
+    "translation_repeat_same_generation_invalidation_embedder_count",
+    "translation_repeat_same_generation_invalidation_embedder_tb_gen_code_elapsed_ns",
+    "translation_repeat_same_generation_invalidation_watchpoint_count",
+    "translation_repeat_same_generation_invalidation_watchpoint_tb_gen_code_elapsed_ns",
+    "translation_repeat_same_generation_invalidation_restart_count",
+    "translation_repeat_same_generation_invalidation_restart_tb_gen_code_elapsed_ns",
+    "translation_repeat_same_generation_invalidation_physical_write_count",
+    "translation_repeat_same_generation_invalidation_physical_write_tb_gen_code_elapsed_ns",
+];
 
 pub struct Library {
     api: Rc<ffi::Api>,
@@ -443,6 +494,18 @@ impl Core {
     fn check(&self, status: i32) -> Result<(), String> {
         check(&self.api, status)
     }
+    /// Invalidate code backed by a host address range in this native engine.
+    /// `pointer` is a host address, not a guest or physical address.
+    pub(crate) fn invalidate_backing(&self, pointer: usize, bytes: usize) -> Result<(), String> {
+        self.check_tlbi_mutation()?;
+        self.check(unsafe {
+            ffi::uc_embedder_invalidate_backing(
+                self.raw,
+                pointer as *const c_void,
+                bytes,
+            )
+        })
+    }
     fn inspect(&self, operation: impl FnOnce() -> i32) -> Result<(), String> {
         if self.inspection.depth.get() == 0 {
             self.inspection.blocked.set(false);
@@ -709,6 +772,42 @@ impl Core {
         }
         Ok(self.hooks.borrow().get(&hook.key).unwrap().native)
     }
+    fn translation_repeat_counter_snapshot(
+        &self,
+    ) -> Result<BTreeMap<&'static str, u64>, String> {
+        if self.api.extensions.features & ffi::FEATURE_TRANSLATION_REPEAT_DETAILS == 0 {
+            return Ok(BTreeMap::new());
+        }
+        let read = self
+            .api
+            .extensions
+            .translation_repeat_counters
+            .ok_or("CPU backend has no translation repeat counters")?;
+        let mut count = 0;
+        let values = unsafe { read(self.raw, &mut count) };
+        if count != TRANSLATION_REPEAT_COUNTER_NAMES.len() || values.is_null() {
+            return Err(format!(
+                "CPU backend returned {count} translation repeat counters; expected {}",
+                TRANSLATION_REPEAT_COUNTER_NAMES.len()
+            ));
+        }
+        let values = unsafe { std::slice::from_raw_parts(values, count) };
+        let counters: BTreeMap<_, _> = TRANSLATION_REPEAT_COUNTER_NAMES
+            .into_iter()
+            .zip(values.iter().copied())
+            .collect();
+        let attributed_same_generation = std::iter::once(
+            counters["translation_repeat_same_generation_unknown_cause_count"],
+        )
+        .chain((6..TRANSLATION_REPEAT_COUNTER_NAMES.len()).step_by(2).map(|index| values[index]))
+        .fold(0u64, u64::saturating_add);
+        if attributed_same_generation
+            != counters["translation_repeat_same_generation_count"]
+        {
+            return Err("same-generation translation repeat causes do not reconcile".into());
+        }
+        Ok(counters)
+    }
 }
 impl Cpu for Core {
     fn identity(&self) -> Identity {
@@ -903,14 +1002,7 @@ impl Cpu for Core {
         backing: NonNull<u8>,
         bytes: usize,
     ) -> Result<(), String> {
-        // Refuse exactly where a full invalidation refuses.
-        self.check_tlbi_mutation()?;
-        // This engine translates only memory it maps. A write to backing it
-        // does not map cannot have changed any of its translations.
-        if !frozen::touches(self.identity, backing.as_ptr() as usize, bytes) {
-            return Ok(());
-        }
-        self.invalidate_code(None)
+        self.invalidate_backing(backing.as_ptr() as usize, bytes)
     }
     unsafe fn map_backing(
         &self,
@@ -1514,6 +1606,12 @@ impl Cpu for Core {
             } else {
                 &[]
             };
+        let classifier_histogram_extra: &[&str] =
+            if self.api.extensions.features & ffi::FEATURE_M4_CLASSIFIER_HISTOGRAM != 0 {
+                &M4_CLASSIFIER_COUNTER_NAMES
+            } else {
+                &[]
+            };
         let values = unsafe {
             std::slice::from_raw_parts(
                 read(self.raw),
@@ -1521,14 +1619,16 @@ impl Cpu for Core {
                     + extra.len()
                     + guard_extra.len()
                     + guard_samples.len()
-                    + translation_timing_extra.len(),
+                    + translation_timing_extra.len()
+                    + classifier_histogram_extra.len(),
             )
         };
-        let counters: BTreeMap<_, _> = names.into_iter()
+        let mut counters: BTreeMap<_, _> = names.into_iter()
             .chain(extra.iter().copied())
             .chain(guard_extra.iter().copied())
             .chain(guard_samples.iter().copied())
             .chain(translation_timing_extra.iter().copied())
+            .chain(classifier_histogram_extra.iter().copied())
             .zip(values.iter().copied())
             .collect();
         if translation_timing_extra.len() == translation_timing.len() {
@@ -1539,6 +1639,20 @@ impl Cpu for Core {
                 return Err("translation key classifications exceed translation attempts".into());
             }
         }
+        if !classifier_histogram_extra.is_empty() {
+            if !guard_extra.contains(&"guard_classifier_slow_callbacks") {
+                return Err("M4 classifier histogram requires guard refusal counters".into());
+            }
+            let class_callbacks = M4_CLASSIFIER_COUNTER_NAMES
+                .iter()
+                .step_by(2)
+                .map(|name| counters[*name])
+                .fold(0u64, u64::saturating_add);
+            if class_callbacks != counters["guard_classifier_slow_callbacks"] {
+                return Err("M4 classifier buckets do not match guard classifier callbacks".into());
+            }
+        }
+        counters.extend(self.translation_repeat_counter_snapshot()?);
         Ok(counters)
     }
 }
@@ -2347,6 +2461,16 @@ mod tests {
         assert_eq!(after_classifier["guard_sample_00_sequence"], 1);
         assert_eq!(after_classifier["guard_sample_00_pc"], 0x1000);
         assert_eq!(after_classifier["guard_sample_00_word"], 0x2001);
+        assert!(after_classifier["guard_classifier_thumb16_hi_2_callbacks"] > 0);
+        assert!(after_classifier[
+            "guard_classifier_thumb16_hi_2_translated_tb_instruction_opportunities"
+        ] > 0);
+        let class_callbacks = M4_CLASSIFIER_COUNTER_NAMES
+            .iter()
+            .step_by(2)
+            .map(|name| after_classifier[*name])
+            .fold(0u64, u64::saturating_add);
+        assert_eq!(class_callbacks, after_classifier["guard_classifier_slow_callbacks"]);
     }
     #[test]
     fn thumb_memory_restart_exposes_exact_precharged_mixed_width_span() {
