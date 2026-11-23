@@ -74,6 +74,7 @@ pub struct Core {
     worker: Option<JoinHandle<()>>,
     budget_timer: Option<worker::BudgetTimer>,
     commands: mpsc::Sender<Command>,
+    replies: mpsc::Receiver<Result<Value, String>>,
     machine: Arc<Machine>,
     shared: Arc<worker::Shared>,
     identity: Identity,
@@ -118,13 +119,14 @@ impl Snapshot for State {
 impl Core {
     fn create(machine: Arc<Machine>) -> Result<Self, String> {
         let (commands, rx) = mpsc::channel();
+        let (reply, replies) = mpsc::sync_channel(1);
         let (ready_tx, ready) = mpsc::channel();
         let shared = Arc::new(worker::Shared::default());
         let vm = machine.clone();
         let state = shared.clone();
         let worker = std::thread::Builder::new()
             .name("camera-hvf-vcpu".into())
-            .spawn(move || worker::serve(vm, state, rx, ready_tx))
+            .spawn(move || worker::serve(vm, state, rx, reply, ready_tx))
             .map_err(|e| e.to_string())?;
         match ready
             .recv()
@@ -143,6 +145,7 @@ impl Core {
                     worker: Some(worker),
                     budget_timer: Some(budget_timer),
                     commands,
+                    replies,
                     machine,
                     shared,
                     identity: Identity::allocate(),
@@ -194,11 +197,10 @@ impl Core {
         // Every other reply follows the worker publishing its parked state.
         let resumes = matches!(op, Op::Resume(_) | Op::CompleteMmio(_));
         self.parked.set(false);
-        let (reply, rx) = mpsc::channel();
         self.commands
-            .send(Command { op, reply })
+            .send(Command { op, run_reply: None })
             .map_err(|_| "HVF worker disconnected")?;
-        let result = rx.recv().map_err(|_| "HVF worker reply disconnected")?;
+        let result = self.replies.recv().map_err(|_| "HVF worker reply disconnected")?;
         self.parked.set(!resumes);
         result
     }
@@ -741,7 +743,7 @@ impl Cpu for Core {
         self.commands
             .send(Command {
                 op: Op::Run(request, policy, observe, events),
-                reply,
+                run_reply: Some(reply),
             })
             .map_err(|_| ExecutionError::Backend("HVF worker disconnected".into()))?;
         let mut error = None;
@@ -812,7 +814,7 @@ impl Cpu for Core {
             .commands
             .send(Command {
                 op: Op::Run(request, ExecutionPolicy::Interactive, false, events),
-                reply,
+                run_reply: Some(reply),
             })
             .is_err()
         {

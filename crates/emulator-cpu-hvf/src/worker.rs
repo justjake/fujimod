@@ -89,7 +89,9 @@ pub enum Value {
 }
 pub struct Command {
     pub op: Op,
-    pub reply: mpsc::Sender<Result<Value, String>>,
+    /// A run retains its own reply while synchronous requests may be serviced
+    /// inside callbacks. Those requests use the worker's reusable queue.
+    pub run_reply: Option<mpsc::Sender<Result<Value, String>>>,
 }
 pub enum Event {
     Before(u64),
@@ -518,9 +520,14 @@ struct Processor {
     interrupts: [bool; 2],
     fast_windows: Vec<FastWindow>,
     timebase: ffi::MachTimebaseInfo,
+    reply: mpsc::SyncSender<Result<Value, String>>,
 }
 impl Processor {
-    fn create(vm: Arc<Machine>, shared: Arc<Shared>) -> Result<Self, String> {
+    fn create(
+        vm: Arc<Machine>,
+        shared: Arc<Shared>,
+        reply: mpsc::SyncSender<Result<Value, String>>,
+    ) -> Result<Self, String> {
         let mut timebase = ffi::MachTimebaseInfo::default();
         let result = unsafe { ffi::mach_timebase_info(&mut timebase) };
         if result != 0 || timebase.numer == 0 || timebase.denom == 0 {
@@ -557,6 +564,7 @@ impl Processor {
             interrupts: [false; 2],
             fast_windows: Vec::new(),
             timebase,
+            reply,
         };
         unsafe {
             ffi::check(
@@ -914,31 +922,40 @@ impl Processor {
         self.set_reg(ffi::PC, self.sys(0xc600)?.wrapping_add(offset))?;
         self.set_reg(ffi::PSTATE, (pstate & 0xf0000000) | 0x3c5)
     }
+    fn send_reply(
+        &self,
+        run_reply: Option<mpsc::Sender<Result<Value, String>>>,
+        result: Result<Value, String>,
+    ) {
+        if let Some(reply) = run_reply {
+            let _ = reply.send(result);
+        } else {
+            let _ = self.reply.send(result);
+        }
+    }
     fn paused(&mut self, commands: &mpsc::Receiver<Command>) -> Result<bool, String> {
         loop {
             let c = commands
                 .recv()
                 .map_err(|_| "HVF owner disconnected in callback")?;
             if let Op::Resume(handled) = c.op {
-                let _ = c.reply.send(Ok(Value::Empty));
+                self.send_reply(c.run_reply, Ok(Value::Empty));
                 return Ok(handled);
             }
             if let Op::CompleteMmio(updates) = c.op {
                 let result = updates
                     .iter()
                     .try_for_each(|&(register, value)| self.write(register, &value.to_le_bytes()));
-                let _ = c.reply.send(result.clone().map(|()| Value::Empty));
+                self.send_reply(c.run_reply, result.clone().map(|()| Value::Empty));
                 result?;
                 return Ok(true);
             }
             if matches!(c.op, Op::Run(..) | Op::Shutdown) {
-                let _ = c
-                    .reply
-                    .send(Err("cannot run/destroy a CPU inside its callback".into()));
+                self.send_reply(c.run_reply, Err("cannot run/destroy a CPU inside its callback".into()));
             } else {
                 let result = self.execute(c.op);
                 self.publish_parked();
-                let _ = c.reply.send(result);
+                self.send_reply(c.run_reply, result);
             }
         }
     }
@@ -1487,9 +1504,10 @@ pub fn serve(
     vm: Arc<Machine>,
     shared: Arc<Shared>,
     commands: mpsc::Receiver<Command>,
+    reply: mpsc::SyncSender<Result<Value, String>>,
     ready: mpsc::Sender<Result<u64, String>>,
 ) {
-    let mut p = match Processor::create(vm, shared) {
+    let mut p = match Processor::create(vm, shared, reply) {
         Ok(p) => p,
         Err(e) => {
             let _ = ready.send(Err(e));
@@ -1500,20 +1518,20 @@ pub fn serve(
     while let Ok(c) = commands.recv() {
         match c.op {
             Op::Shutdown => {
-                let _ = c.reply.send(Ok(Value::Empty));
+                p.send_reply(c.run_reply, Ok(Value::Empty));
                 break;
             }
             Op::Run(request, policy, observe, events) => {
                 let result = p.run(request, policy, observe, &events, &commands);
                 p.publish_parked();
-                let _ = c.reply.send(Ok(Value::Exit(result)));
+                p.send_reply(c.run_reply, Ok(Value::Exit(result)));
                 let _ = events.send(Event::Done);
                 p.shared.notify_run_wakeup();
             }
             op => {
                 let result = p.execute(op);
                 p.publish_parked();
-                let _ = c.reply.send(result);
+                p.send_reply(c.run_reply, result);
             }
         }
     }
