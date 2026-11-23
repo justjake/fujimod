@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { expect, test, vi } from 'vite-plus/test';
 import { loadReleaseData } from '../scripts/release-data';
+import credits from '../src/text/credits.generated.json' with { type: 'json' };
 
 test('reads every page and counts from 0.0.1, including published prereleases', async () => {
   const newest = {
@@ -46,12 +47,11 @@ test('reads every page and counts from 0.0.1, including published prereleases', 
   expect(data.personalNote.daysSinceFirstRelease).toBe(2);
 });
 
-test('chooses the newest local version and reads the contributor roster offline', async () => {
+test('chooses the newest local version and counts the credited contributors offline', async () => {
   const root = await mkdtemp(join(tmpdir(), 'site-release-data-'));
   try {
     const notesDirectory = join(root, 'release-notes');
-    const contributorsDirectory = join(root, 'contributors');
-    await Promise.all([mkdir(notesDirectory), mkdir(contributorsDirectory)]);
+    await mkdir(notesDirectory);
     const start = join(notesDirectory, '0.0.1.md');
     const old = join(notesDirectory, '0.9.0.md');
     const current = join(notesDirectory, '0.10.0.md');
@@ -60,9 +60,6 @@ test('chooses the newest local version and reads the contributor roster offline'
       writeFile(old, '# Earlier'),
       writeFile(current, '# Latest'),
       writeFile(join(notesDirectory, 'README.md'), 'Ignored'),
-      writeFile(join(contributorsDirectory, 'z.json'), '{"attributionName":"@zoe"}'),
-      writeFile(join(contributorsDirectory, 'a.json'), '{"attributionName":"Ada Example"}'),
-      writeFile(join(contributorsDirectory, 'README.md'), 'Ignored'),
     ]);
     await Promise.all([
       utimes(start, new Date('2026-03-01'), new Date('2026-03-01')),
@@ -70,10 +67,7 @@ test('chooses the newest local version and reads the contributor roster offline'
       utimes(current, new Date('2026-03-07'), new Date('2026-03-07')),
     ]);
     const request = vi.fn<typeof fetch>().mockRejectedValue(new Error('Offline'));
-    const data = await loadReleaseData(
-      { preview: true, notesDirectory, contributorsDirectory },
-      request,
-    );
+    const data = await loadReleaseData({ preview: true, notesDirectory }, request);
     expect(request).not.toHaveBeenCalled();
     expect(data.current).toEqual({
       version: '0.10.0',
@@ -81,10 +75,12 @@ test('chooses the newest local version and reads the contributor roster offline'
       notes: '# Latest',
     });
     expect(data.past.map(({ version }) => version)).toEqual(['0.9.0', '0.0.1']);
+    const names = credits.contributors.map(({ name }) => name);
+    expect(names.length).toBeGreaterThan(0);
     expect(data.personalNote).toEqual({
       daysSinceFirstRelease: 6,
-      contributorCount: 2,
-      contributorNames: ['Ada Example', '@zoe'],
+      contributorCount: names.length,
+      contributorNames: names,
     });
   } finally {
     await rm(root, { recursive: true, force: true });

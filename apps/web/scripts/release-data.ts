@@ -2,6 +2,7 @@ import { execFileSync } from 'node:child_process';
 import { readdir, readFile, stat } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import type { SiteRelease, SiteReleaseData } from '../src/release-data.ts';
+import credits from '../src/text/credits.generated.json' with { type: 'json' };
 
 const releasesUrl = 'https://api.github.com/repos/justjake/fujimod/releases';
 const personalNoteStartVersion = '0.0.1';
@@ -71,27 +72,9 @@ async function localReleases(directory: string): Promise<SiteRelease[]> {
   );
 }
 
-async function contributorNames(directory: string): Promise<string[]> {
-  const entries = await readdir(directory, { withFileTypes: true });
-  return Promise.all(
-    entries
-      .filter((entry) => entry.isFile() && entry.name.endsWith('.json'))
-      .sort((a, b) => a.name.localeCompare(b.name, 'en'))
-      .map(async ({ name }) => {
-        const person: { attributionName?: string } = JSON.parse(
-          await readFile(resolve(directory, name), 'utf8'),
-        );
-        if (typeof person.attributionName !== 'string' || !person.attributionName.trim())
-          throw Error(`Missing attributionName in ${name}`);
-        return person.attributionName;
-      }),
-  );
-}
-
 interface ReleaseDataOptions {
   preview: boolean;
   notesDirectory?: string;
-  contributorsDirectory?: string;
   token?: string;
 }
 
@@ -99,14 +82,12 @@ export async function loadReleaseData(
   options: ReleaseDataOptions,
   request = fetch,
 ): Promise<SiteReleaseData> {
-  const [releases, names] = await Promise.all([
-    options.preview
-      ? options.notesDirectory
-        ? localReleases(options.notesDirectory)
-        : []
-      : githubReleases(request, options.token),
-    options.contributorsDirectory ? contributorNames(options.contributorsDirectory) : [],
-  ]);
+  const releases = options.preview
+    ? options.notesDirectory
+      ? await localReleases(options.notesDirectory)
+      : []
+    : await githubReleases(request, options.token);
+  const names = credits.contributors.map(({ name }) => name);
   const [current = null, ...past] = releases;
   const start = releases.find(
     ({ version }) => version.replace(/^v/, '') === personalNoteStartVersion,
