@@ -267,6 +267,11 @@ api! {
 mod linked {
     use super::*;
     unsafe extern "C" {
+        pub(crate) fn uc_embedder_invalidate_backing(
+            engine: Engine,
+            host: *const c_void,
+            size: usize,
+        ) -> Error;
         fn uc_embedder_tlbi_attach(engine: Engine, abi: u32, owner: u64) -> Error;
         fn uc_embedder_tlbi_status(engine: Engine, abi: u32, info: *mut TlbiInfo) -> Error;
         fn uc_embedder_tlbi_ack(engine: Engine, abi: u32, owner: u64, sequence: u64) -> Error;
@@ -344,3 +349,5 @@ mod linked {
         }
     }
 }
+
+pub(super) use linked::uc_embedder_invalidate_backing;
