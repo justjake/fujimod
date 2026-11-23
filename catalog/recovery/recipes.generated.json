@@ -11538,20 +11538,1100 @@
     "source_sha256": "ca1c02452f8eb7763a5a4d2b042665dd10156d63dfa63b8da316e0385889ea8b",
     "update_filename": "FWUP0031.DAT",
     "generation": "xp5",
-    "plan": null,
+    "plan": {
+      "size": 97009664,
+      "entry": 0,
+      "regions": [
+        {
+          "name": "reset stage",
+          "address": 0,
+          "source": {
+            "dat_offset": 164468,
+            "size": 131072,
+            "compression": "raw",
+            "decoded_size": 131072,
+            "sha256": "9b8665ba2d9873dfb6e5beef827403fc745967ace60029db3682f97aefc94396"
+          }
+        },
+        {
+          "name": "cold section table",
+          "address": 17563648,
+          "source": {
+            "dat_offset": 1704564,
+            "size": 2048,
+            "compression": "raw",
+            "decoded_size": 2048,
+            "sha256": "6f1175972a0cecf84cea6c68dee1755a631c5910503ac805ddfef7bfd5c17620"
+          }
+        },
+        {
+          "name": "section0",
+          "address": 262144,
+          "source": {
+            "dat_offset": 393844,
+            "size": 123520,
+            "compression": "raw",
+            "decoded_size": 123520,
+            "sha256": "84a2cfa813d6ce289a4dbd86488da73d943bc22661d72ef14d305a8a35f5f8d3"
+          }
+        },
+        {
+          "name": "section1",
+          "address": 5767168,
+          "source": {
+            "dat_offset": 38404724,
+            "size": 3801088,
+            "compression": "method4",
+            "decoded_size": 7395384,
+            "sha256": "ef5cb916fb4bfb50f238d772f167bb53fd3bd4dee5aae6e8a299a9a60c606d7b"
+          }
+        },
+        {
+          "name": "section2",
+          "address": 15335424,
+          "source": {
+            "dat_offset": 43254388,
+            "size": 688086,
+            "compression": "raw",
+            "decoded_size": 688086,
+            "sha256": "da5ad2a9b725b51d0f4162bbf5cd680194a84c898bb1e49008853d418c0d5a28"
+          }
+        },
+        {
+          "name": "section4",
+          "address": 17829888,
+          "source": {
+            "dat_offset": 3146356,
+            "size": 5505024,
+            "compression": "method4",
+            "decoded_size": 12011836,
+            "sha256": "0bce45c8bdf0b0e6f245431f61f42ecda87d69cf9fe761afe44a2719f7e55e06"
+          }
+        },
+        {
+          "name": "section5",
+          "address": 43102208,
+          "source": {
+            "dat_offset": 8651380,
+            "size": 7340032,
+            "compression": "method4",
+            "decoded_size": 15470592,
+            "sha256": "9a0104aef3fa6a5579edb2cc06cd3f35e6e7044f33fdf1ebc1103a06ae405462"
+          }
+        },
+        {
+          "name": "overlays",
+          "address": 82460672,
+          "source": {
+            "dat_offset": 15991412,
+            "size": 7602176,
+            "compression": "method4",
+            "decoded_size": 14548992,
+            "sha256": "29bd25b1c620e593239506ff6f54340e6511b188213fae97caed2139d1c2c319"
+          }
+        },
+        {
+          "name": "controller payload cache",
+          "address": 17565696,
+          "source": {
+            "dat_offset": 2884212,
+            "size": 221472,
+            "compression": "raw",
+            "decoded_size": 221472,
+            "sha256": "d4e4196f03908730504c4f6e57f6579b7f86637de848e845838a4300a5d01fa4"
+          }
+        }
+      ],
+      "bss": [
+        {
+          "name": "section0",
+          "address": 385664,
+          "size": 4586880
+        },
+        {
+          "name": "section4",
+          "address": 29843456,
+          "size": 13258752
+        },
+        {
+          "name": "section5",
+          "address": 58572800,
+          "size": 23887872
+        }
+      ],
+      "edits": [
+        {
+          "address": 72080,
+          "old": 1,
+          "new": 0,
+          "what": "select stock preloaded table/sections and skip reset load wait"
+        }
+      ]
+    },
     "packaging": null,
     "exr": null,
     "setup": null,
-    "xp5": null,
+    "xp5": {
+      "prefix": {
+        "dat_offset": 628,
+        "size": 163840,
+        "compression": "raw",
+        "decoded_size": 163840,
+        "sha256": "3d5de3b64582004ce74a57a0d595de86aa493b8a1ba3b801286c9c4540e9f242"
+      },
+      "low_length": 73728,
+      "length_flags": 0,
+      "base": 4286578688,
+      "stack": 4286666752,
+      "bootstrap_offset": 2128,
+      "initialize_offset": 2184,
+      "continuation": 4026691920,
+      "gate_offset": 2168,
+      "initializer": {
+        "address": 4286578824,
+        "size": 936,
+        "sha256": "4e0fbb8736ae4eb38addf406e44646c223524ca66ee77a53bf1bec500adc1ec8"
+      },
+      "delay": {
+        "address": 4286582972,
+        "size": 160,
+        "sha256": "12c1bfd4a1e801daecb2228483f5a88ab3e970aff0c9d2dcf9d2971d5bb98be7"
+      },
+      "reset_dat": 164468,
+      "reset_copy_size": 81920,
+      "selector": 72080,
+      "flash": {
+        "controller": 4287668224,
+        "aperture": 4026531840,
+        "window_mask": 4160749568,
+        "clock": 4288778304,
+        "clock_commit": 4288778368,
+        "pins": [
+          {
+            "address": 4287672320,
+            "value": 131074
+          },
+          {
+            "address": 4287672324,
+            "value": 983055
+          },
+          {
+            "address": 4287672328,
+            "value": 1073692671
+          },
+          {
+            "address": 4287672332,
+            "value": 1426412805
+          },
+          {
+            "address": 4287672336,
+            "value": 22348117
+          },
+          {
+            "address": 4287672340,
+            "value": 1072840690
+          }
+        ]
+      },
+      "lamp": {
+        "pio_base": 4287655936,
+        "clock_address": 4287677208,
+        "clock_mask": 131072,
+        "reset_address": 4287678764,
+        "reset_mask": 65536,
+        "green_port": 8,
+        "red_port": 6,
+        "pin": 2
+      },
+      "board": {
+        "host": 4288348160,
+        "timeout_setting": 14,
+        "operations": [
+          {
+            "address": 4287656656,
+            "mask": 0,
+            "value": 12582976,
+            "kind": 0
+          },
+          {
+            "address": 4287656656,
+            "mask": 0,
+            "value": 50331904,
+            "kind": 0
+          },
+          {
+            "address": 4287656776,
+            "mask": 0,
+            "value": 4194304,
+            "kind": 0
+          },
+          {
+            "address": 4287656772,
+            "mask": 0,
+            "value": 4194304,
+            "kind": 0
+          },
+          {
+            "address": 4287656780,
+            "mask": 0,
+            "value": 805306368,
+            "kind": 0
+          },
+          {
+            "address": 4287656768,
+            "mask": 0,
+            "value": 4194368,
+            "kind": 0
+          },
+          {
+            "address": 4287656772,
+            "mask": 0,
+            "value": 4194368,
+            "kind": 0
+          },
+          {
+            "address": 4287656776,
+            "mask": 0,
+            "value": 2097152,
+            "kind": 0
+          },
+          {
+            "address": 4287656772,
+            "mask": 0,
+            "value": 2097152,
+            "kind": 0
+          },
+          {
+            "address": 4287656780,
+            "mask": 0,
+            "value": 201326592,
+            "kind": 0
+          },
+          {
+            "address": 4287656768,
+            "mask": 0,
+            "value": 2097184,
+            "kind": 0
+          },
+          {
+            "address": 4287656772,
+            "mask": 0,
+            "value": 2097184,
+            "kind": 0
+          },
+          {
+            "address": 0,
+            "mask": 0,
+            "value": 0,
+            "kind": 2
+          },
+          {
+            "address": 4287678784,
+            "mask": 1,
+            "value": 0,
+            "kind": 1
+          },
+          {
+            "address": 4287677228,
+            "mask": 127,
+            "value": 0,
+            "kind": 1
+          },
+          {
+            "address": 4287678784,
+            "mask": 1,
+            "value": 0,
+            "kind": 1
+          },
+          {
+            "address": 4287678784,
+            "mask": 2,
+            "value": 0,
+            "kind": 1
+          },
+          {
+            "address": 4287677228,
+            "mask": 127,
+            "value": 0,
+            "kind": 1
+          },
+          {
+            "address": 4287678784,
+            "mask": 2,
+            "value": 0,
+            "kind": 1
+          },
+          {
+            "address": 4287677228,
+            "mask": 127,
+            "value": 127,
+            "kind": 1
+          },
+          {
+            "address": 4287678784,
+            "mask": 1,
+            "value": 1,
+            "kind": 1
+          },
+          {
+            "address": 4287678784,
+            "mask": 1,
+            "value": 1,
+            "kind": 1
+          },
+          {
+            "address": 4288356480,
+            "mask": 3840,
+            "value": 3840,
+            "kind": 1
+          },
+          {
+            "address": 4288356926,
+            "mask": 4352,
+            "value": 4352,
+            "kind": 3
+          },
+          {
+            "address": 0,
+            "mask": 0,
+            "value": 1,
+            "kind": 6
+          },
+          {
+            "address": 4288356472,
+            "mask": 1,
+            "value": 1,
+            "kind": 5
+          },
+          {
+            "address": 4288356588,
+            "mask": 0,
+            "value": 1,
+            "kind": 0
+          },
+          {
+            "address": 4288356908,
+            "mask": 1,
+            "value": 1,
+            "kind": 3
+          },
+          {
+            "address": 4288356908,
+            "mask": 2,
+            "value": 2,
+            "kind": 4
+          }
+        ]
+      },
+      "proofs": [
+        {
+          "source": {
+            "dat_offset": 393844,
+            "size": 123520,
+            "compression": "raw",
+            "decoded_size": 123520,
+            "sha256": "84a2cfa813d6ce289a4dbd86488da73d943bc22661d72ef14d305a8a35f5f8d3"
+          },
+          "offset": 122152,
+          "size": 8,
+          "sha256": "41db1d28e3bf3479aa3a49646ee0e016ae0de9b295533fb5d61e0bd1a5751bde"
+        },
+        {
+          "source": {
+            "dat_offset": 393844,
+            "size": 123520,
+            "compression": "raw",
+            "decoded_size": 123520,
+            "sha256": "84a2cfa813d6ce289a4dbd86488da73d943bc22661d72ef14d305a8a35f5f8d3"
+          },
+          "offset": 122160,
+          "size": 12,
+          "sha256": "a4274afaa963e918e6bc13e5da8135abb3eb21789f44de5b070a6a87dfa94b63"
+        },
+        {
+          "source": {
+            "dat_offset": 393844,
+            "size": 123520,
+            "compression": "raw",
+            "decoded_size": 123520,
+            "sha256": "84a2cfa813d6ce289a4dbd86488da73d943bc22661d72ef14d305a8a35f5f8d3"
+          },
+          "offset": 122192,
+          "size": 8,
+          "sha256": "9bb31e50c9e4b1e6d3afbc308de8dce185c4ece3c405e5fc1e3b97b52d26c6a0"
+        },
+        {
+          "source": {
+            "dat_offset": 393844,
+            "size": 123520,
+            "compression": "raw",
+            "decoded_size": 123520,
+            "sha256": "84a2cfa813d6ce289a4dbd86488da73d943bc22661d72ef14d305a8a35f5f8d3"
+          },
+          "offset": 122200,
+          "size": 8,
+          "sha256": "26e76e94edb247fa7ec09c85ff026bc7e22ffe0c59b8893f8f72552d1b0a520c"
+        },
+        {
+          "source": {
+            "dat_offset": 3146356,
+            "size": 5401070,
+            "compression": "method4",
+            "decoded_size": 12011836,
+            "sha256": "0bce45c8bdf0b0e6f245431f61f42ecda87d69cf9fe761afe44a2719f7e55e06"
+          },
+          "offset": 2629628,
+          "size": 24,
+          "sha256": "9f6c2e719c1d7cd885cf55b3cfa19ed18e8de6363c8ddcab94bbbb3138127123"
+        },
+        {
+          "source": {
+            "dat_offset": 3146356,
+            "size": 5401070,
+            "compression": "method4",
+            "decoded_size": 12011836,
+            "sha256": "0bce45c8bdf0b0e6f245431f61f42ecda87d69cf9fe761afe44a2719f7e55e06"
+          },
+          "offset": 2630468,
+          "size": 24,
+          "sha256": "9f6c2e719c1d7cd885cf55b3cfa19ed18e8de6363c8ddcab94bbbb3138127123"
+        },
+        {
+          "source": {
+            "dat_offset": 3146356,
+            "size": 5401070,
+            "compression": "method4",
+            "decoded_size": 12011836,
+            "sha256": "0bce45c8bdf0b0e6f245431f61f42ecda87d69cf9fe761afe44a2719f7e55e06"
+          },
+          "offset": 2781880,
+          "size": 160,
+          "sha256": "e27d45866a4e8cfbbe38bd7aef17bd69fdfd49c74ba8c8fcd73d2200c239d8e9"
+        },
+        {
+          "source": {
+            "dat_offset": 3146356,
+            "size": 5401070,
+            "compression": "method4",
+            "decoded_size": 12011836,
+            "sha256": "0bce45c8bdf0b0e6f245431f61f42ecda87d69cf9fe761afe44a2719f7e55e06"
+          },
+          "offset": 2782200,
+          "size": 508,
+          "sha256": "06ef039246dc24155fe51bf759900dd9b02b7d83615c9e170d2723b366ddf497"
+        },
+        {
+          "source": {
+            "dat_offset": 3146356,
+            "size": 5401070,
+            "compression": "method4",
+            "decoded_size": 12011836,
+            "sha256": "0bce45c8bdf0b0e6f245431f61f42ecda87d69cf9fe761afe44a2719f7e55e06"
+          },
+          "offset": 2782280,
+          "size": 4,
+          "sha256": "fd917b24bc63a5d4b503599c4ab625762a09aa6d26dc3df11f1776eec2c2e66d"
+        },
+        {
+          "source": {
+            "dat_offset": 3146356,
+            "size": 5401070,
+            "compression": "method4",
+            "decoded_size": 12011836,
+            "sha256": "0bce45c8bdf0b0e6f245431f61f42ecda87d69cf9fe761afe44a2719f7e55e06"
+          },
+          "offset": 2782292,
+          "size": 4,
+          "sha256": "5c9d354f9ac68a1595085c01f8bece608f06db550bd51c686d1f029bc6dca0f0"
+        },
+        {
+          "source": {
+            "dat_offset": 3146356,
+            "size": 5401070,
+            "compression": "method4",
+            "decoded_size": 12011836,
+            "sha256": "0bce45c8bdf0b0e6f245431f61f42ecda87d69cf9fe761afe44a2719f7e55e06"
+          },
+          "offset": 2782304,
+          "size": 4,
+          "sha256": "659d072fe86756adc2285af871e14d0e75890c746d60422f65350ce01f00813e"
+        },
+        {
+          "source": {
+            "dat_offset": 3146356,
+            "size": 5401070,
+            "compression": "method4",
+            "decoded_size": 12011836,
+            "sha256": "0bce45c8bdf0b0e6f245431f61f42ecda87d69cf9fe761afe44a2719f7e55e06"
+          },
+          "offset": 2782316,
+          "size": 4,
+          "sha256": "d634da3953242a9e849ae74811dd3cee4d54b5fe987f1234a2debdcbdb7f5893"
+        },
+        {
+          "source": {
+            "dat_offset": 3146356,
+            "size": 5401070,
+            "compression": "method4",
+            "decoded_size": 12011836,
+            "sha256": "0bce45c8bdf0b0e6f245431f61f42ecda87d69cf9fe761afe44a2719f7e55e06"
+          },
+          "offset": 2782328,
+          "size": 4,
+          "sha256": "4d6a8cedd45edb473fa261a446cbbbd0ddf02bc00ed3d51a2644b497fd457d63"
+        },
+        {
+          "source": {
+            "dat_offset": 3146356,
+            "size": 5401070,
+            "compression": "method4",
+            "decoded_size": 12011836,
+            "sha256": "0bce45c8bdf0b0e6f245431f61f42ecda87d69cf9fe761afe44a2719f7e55e06"
+          },
+          "offset": 2782348,
+          "size": 4,
+          "sha256": "1d99d63c36ee6a3d7cbd0db368818d22ecde169ce1bd3aefefc6665ed5f28019"
+        },
+        {
+          "source": {
+            "dat_offset": 3146356,
+            "size": 5401070,
+            "compression": "method4",
+            "decoded_size": 12011836,
+            "sha256": "0bce45c8bdf0b0e6f245431f61f42ecda87d69cf9fe761afe44a2719f7e55e06"
+          },
+          "offset": 2782360,
+          "size": 4,
+          "sha256": "21ff61d855ba0fffba57561171e235b8ef26c2c2ce4dec2359655f81bfb223b3"
+        },
+        {
+          "source": {
+            "dat_offset": 3146356,
+            "size": 5401070,
+            "compression": "method4",
+            "decoded_size": 12011836,
+            "sha256": "0bce45c8bdf0b0e6f245431f61f42ecda87d69cf9fe761afe44a2719f7e55e06"
+          },
+          "offset": 2782372,
+          "size": 4,
+          "sha256": "69dfa0fddbc7c45c35abdacd1474b6eac71d9bfe23c368c332d2781e111de56a"
+        },
+        {
+          "source": {
+            "dat_offset": 3146356,
+            "size": 5401070,
+            "compression": "method4",
+            "decoded_size": 12011836,
+            "sha256": "0bce45c8bdf0b0e6f245431f61f42ecda87d69cf9fe761afe44a2719f7e55e06"
+          },
+          "offset": 2782384,
+          "size": 4,
+          "sha256": "c09c734ac9376f74925dad94529fb28f41248e5580847aad7e5ffa5cf1f2e43e"
+        },
+        {
+          "source": {
+            "dat_offset": 3146356,
+            "size": 5401070,
+            "compression": "method4",
+            "decoded_size": 12011836,
+            "sha256": "0bce45c8bdf0b0e6f245431f61f42ecda87d69cf9fe761afe44a2719f7e55e06"
+          },
+          "offset": 2782396,
+          "size": 4,
+          "sha256": "2de9f9435bcfb9c340aab197a6cae72ab0effe96fddd56045c4809ecc3368782"
+        },
+        {
+          "source": {
+            "dat_offset": 3146356,
+            "size": 5401070,
+            "compression": "method4",
+            "decoded_size": 12011836,
+            "sha256": "0bce45c8bdf0b0e6f245431f61f42ecda87d69cf9fe761afe44a2719f7e55e06"
+          },
+          "offset": 2782408,
+          "size": 36,
+          "sha256": "9402aea6ae1ab3d1f809add29d2ad0154a134630e41a1be2eabdf908752f1d55"
+        },
+        {
+          "source": {
+            "dat_offset": 3146356,
+            "size": 5401070,
+            "compression": "method4",
+            "decoded_size": 12011836,
+            "sha256": "0bce45c8bdf0b0e6f245431f61f42ecda87d69cf9fe761afe44a2719f7e55e06"
+          },
+          "offset": 2782708,
+          "size": 232,
+          "sha256": "1f38bb74477464364c7a59bc1c9a844af2aca4263d6571398da41017ecf856e7"
+        },
+        {
+          "source": {
+            "dat_offset": 3146356,
+            "size": 5401070,
+            "compression": "method4",
+            "decoded_size": 12011836,
+            "sha256": "0bce45c8bdf0b0e6f245431f61f42ecda87d69cf9fe761afe44a2719f7e55e06"
+          },
+          "offset": 2784372,
+          "size": 92,
+          "sha256": "b3eae6e7f57478596687ac1ef36771d94f62482b20739cf63220e83ee4f4105c"
+        },
+        {
+          "source": {
+            "dat_offset": 3146356,
+            "size": 5401070,
+            "compression": "method4",
+            "decoded_size": 12011836,
+            "sha256": "0bce45c8bdf0b0e6f245431f61f42ecda87d69cf9fe761afe44a2719f7e55e06"
+          },
+          "offset": 2784768,
+          "size": 92,
+          "sha256": "11cb16547e24a7a2ed2917c04bb3fa6b6b59fcec5e8c00820b05b0df315d57d2"
+        },
+        {
+          "source": {
+            "dat_offset": 3146356,
+            "size": 5401070,
+            "compression": "method4",
+            "decoded_size": 12011836,
+            "sha256": "0bce45c8bdf0b0e6f245431f61f42ecda87d69cf9fe761afe44a2719f7e55e06"
+          },
+          "offset": 2784860,
+          "size": 80,
+          "sha256": "f85db851a16024d382671eeb1761d0ac7098106b35c5ef5d0dde8af7c3805099"
+        },
+        {
+          "source": {
+            "dat_offset": 3146356,
+            "size": 5401070,
+            "compression": "method4",
+            "decoded_size": 12011836,
+            "sha256": "0bce45c8bdf0b0e6f245431f61f42ecda87d69cf9fe761afe44a2719f7e55e06"
+          },
+          "offset": 2785108,
+          "size": 40,
+          "sha256": "fa04610b205db2f66a259efb8d9d45a11f2668dbe87603b4b7350604310ae0e0"
+        },
+        {
+          "source": {
+            "dat_offset": 3146356,
+            "size": 5401070,
+            "compression": "method4",
+            "decoded_size": 12011836,
+            "sha256": "0bce45c8bdf0b0e6f245431f61f42ecda87d69cf9fe761afe44a2719f7e55e06"
+          },
+          "offset": 2786768,
+          "size": 172,
+          "sha256": "ac674fdfbe6d618a566b15cd3e5ccdb6b48bcf8efda00130a433d14df7d19229"
+        },
+        {
+          "source": {
+            "dat_offset": 3146356,
+            "size": 5401070,
+            "compression": "method4",
+            "decoded_size": 12011836,
+            "sha256": "0bce45c8bdf0b0e6f245431f61f42ecda87d69cf9fe761afe44a2719f7e55e06"
+          },
+          "offset": 2793772,
+          "size": 92,
+          "sha256": "e8b958c887611768391352098611fb8f89d637b1f817b4481f37e1df304be494"
+        },
+        {
+          "source": {
+            "dat_offset": 3146356,
+            "size": 5401070,
+            "compression": "method4",
+            "decoded_size": 12011836,
+            "sha256": "0bce45c8bdf0b0e6f245431f61f42ecda87d69cf9fe761afe44a2719f7e55e06"
+          },
+          "offset": 2803880,
+          "size": 116,
+          "sha256": "fdcc59055ec2c513348fbfa8f380e0c95e5e2b033858474b87bd04e0b1476051"
+        },
+        {
+          "source": {
+            "dat_offset": 3146356,
+            "size": 5401070,
+            "compression": "method4",
+            "decoded_size": 12011836,
+            "sha256": "0bce45c8bdf0b0e6f245431f61f42ecda87d69cf9fe761afe44a2719f7e55e06"
+          },
+          "offset": 2804596,
+          "size": 116,
+          "sha256": "a41899558fec10291b7f1aaa7abb1fc9f1c9d7154a09e2f3a31f01c41ed123e6"
+        },
+        {
+          "source": {
+            "dat_offset": 3146356,
+            "size": 5401070,
+            "compression": "method4",
+            "decoded_size": 12011836,
+            "sha256": "0bce45c8bdf0b0e6f245431f61f42ecda87d69cf9fe761afe44a2719f7e55e06"
+          },
+          "offset": 8448128,
+          "size": 24,
+          "sha256": "8e527fe8ebacaa9484bdab83625d0c6980d2845d908faab58eb86bd6f4521d7e"
+        },
+        {
+          "source": {
+            "dat_offset": 3146356,
+            "size": 5401070,
+            "compression": "method4",
+            "decoded_size": 12011836,
+            "sha256": "0bce45c8bdf0b0e6f245431f61f42ecda87d69cf9fe761afe44a2719f7e55e06"
+          },
+          "offset": 8450200,
+          "size": 24,
+          "sha256": "ff791747f0cee8649d3f05b464ceb2d2b8b24a6eb8fdc7307be4ce79c508cafd"
+        },
+        {
+          "source": {
+            "dat_offset": 3146356,
+            "size": 5401070,
+            "compression": "method4",
+            "decoded_size": 12011836,
+            "sha256": "0bce45c8bdf0b0e6f245431f61f42ecda87d69cf9fe761afe44a2719f7e55e06"
+          },
+          "offset": 8457168,
+          "size": 144,
+          "sha256": "f0ae9f810f345b25084c0146beb1ee1299a46a4ad35f287694528e7b0f331efc"
+        },
+        {
+          "source": {
+            "dat_offset": 3146356,
+            "size": 5401070,
+            "compression": "method4",
+            "decoded_size": 12011836,
+            "sha256": "0bce45c8bdf0b0e6f245431f61f42ecda87d69cf9fe761afe44a2719f7e55e06"
+          },
+          "offset": 8457312,
+          "size": 120,
+          "sha256": "a04b00620e88ce7d297889c098b2e2cbbaa9a1fc06cc8a3a2926627076684db5"
+        },
+        {
+          "source": {
+            "dat_offset": 3146356,
+            "size": 5401070,
+            "compression": "method4",
+            "decoded_size": 12011836,
+            "sha256": "0bce45c8bdf0b0e6f245431f61f42ecda87d69cf9fe761afe44a2719f7e55e06"
+          },
+          "offset": 8457432,
+          "size": 60,
+          "sha256": "501c48a0d9867428a4d756f88f893d73745cfb93fba6c12acbb25e6537848e12"
+        },
+        {
+          "source": {
+            "dat_offset": 3146356,
+            "size": 5401070,
+            "compression": "method4",
+            "decoded_size": 12011836,
+            "sha256": "0bce45c8bdf0b0e6f245431f61f42ecda87d69cf9fe761afe44a2719f7e55e06"
+          },
+          "offset": 8457496,
+          "size": 72,
+          "sha256": "62dad65c56bf2f786ad11fe76f4af143fa5a4d38f1761983fbe84c12dec23b47"
+        },
+        {
+          "source": {
+            "dat_offset": 3146356,
+            "size": 5401070,
+            "compression": "method4",
+            "decoded_size": 12011836,
+            "sha256": "0bce45c8bdf0b0e6f245431f61f42ecda87d69cf9fe761afe44a2719f7e55e06"
+          },
+          "offset": 8546240,
+          "size": 64,
+          "sha256": "1e3634dc03f158c278d7a5a40255765558a4324ef75bfad5fd51b406f0a1f541"
+        },
+        {
+          "source": {
+            "dat_offset": 8651380,
+            "size": 7320350,
+            "compression": "method4",
+            "decoded_size": 15470592,
+            "sha256": "9a0104aef3fa6a5579edb2cc06cd3f35e6e7044f33fdf1ebc1103a06ae405462"
+          },
+          "offset": 9448304,
+          "size": 312,
+          "sha256": "0c739bd5b1a80ddf5bbb940c41eb62b815fbb72979f7d55d24bf1962d0f842b5"
+        },
+        {
+          "source": {
+            "dat_offset": 628,
+            "size": 163840,
+            "compression": "raw",
+            "decoded_size": 163840,
+            "sha256": "3d5de3b64582004ce74a57a0d595de86aa493b8a1ba3b801286c9c4540e9f242"
+          },
+          "offset": 4988,
+          "size": 28,
+          "sha256": "0300b8064231e0e977ab7c3a325d6fb24d9876fa55efe802fe11cd7f76dcbcbc"
+        },
+        {
+          "source": {
+            "dat_offset": 628,
+            "size": 163840,
+            "compression": "raw",
+            "decoded_size": 163840,
+            "sha256": "3d5de3b64582004ce74a57a0d595de86aa493b8a1ba3b801286c9c4540e9f242"
+          },
+          "offset": 68280,
+          "size": 20,
+          "sha256": "9940adbd2e654a8756eb761c4a08fa6129b6d5d241307886f509e29ed8914d8e"
+        },
+        {
+          "source": {
+            "dat_offset": 628,
+            "size": 163840,
+            "compression": "raw",
+            "decoded_size": 163840,
+            "sha256": "3d5de3b64582004ce74a57a0d595de86aa493b8a1ba3b801286c9c4540e9f242"
+          },
+          "offset": 68296,
+          "size": 20,
+          "sha256": "0e165294c21e4fba1f455ae62ee7fece21e14c0c069c9fd064301d857cc51e5f"
+        },
+        {
+          "source": {
+            "dat_offset": 628,
+            "size": 163840,
+            "compression": "raw",
+            "decoded_size": 163840,
+            "sha256": "3d5de3b64582004ce74a57a0d595de86aa493b8a1ba3b801286c9c4540e9f242"
+          },
+          "offset": 68312,
+          "size": 20,
+          "sha256": "0a2a8d601231b45829b7f61b8ee741946d60b31216242ad80c4de46060def285"
+        },
+        {
+          "source": {
+            "dat_offset": 628,
+            "size": 163840,
+            "compression": "raw",
+            "decoded_size": 163840,
+            "sha256": "3d5de3b64582004ce74a57a0d595de86aa493b8a1ba3b801286c9c4540e9f242"
+          },
+          "offset": 68332,
+          "size": 20,
+          "sha256": "672bbca61a37fcfb53e469dd8f9627771ad65fa96f665c07f4e852efd0c40008"
+        },
+        {
+          "source": {
+            "dat_offset": 628,
+            "size": 163840,
+            "compression": "raw",
+            "decoded_size": 163840,
+            "sha256": "3d5de3b64582004ce74a57a0d595de86aa493b8a1ba3b801286c9c4540e9f242"
+          },
+          "offset": 68352,
+          "size": 20,
+          "sha256": "b4eefd0bb4fac803b68ede5dc6d94f6b0997ac904b8c1c75cc360f1c75c53686"
+        },
+        {
+          "source": {
+            "dat_offset": 628,
+            "size": 163840,
+            "compression": "raw",
+            "decoded_size": 163840,
+            "sha256": "3d5de3b64582004ce74a57a0d595de86aa493b8a1ba3b801286c9c4540e9f242"
+          },
+          "offset": 68372,
+          "size": 20,
+          "sha256": "26564265690d336f3fff779f93bb2105407fe2f5f98e52ef3bc07ebc83d3b931"
+        },
+        {
+          "source": {
+            "dat_offset": 628,
+            "size": 163840,
+            "compression": "raw",
+            "decoded_size": 163840,
+            "sha256": "3d5de3b64582004ce74a57a0d595de86aa493b8a1ba3b801286c9c4540e9f242"
+          },
+          "offset": 68416,
+          "size": 20,
+          "sha256": "208b0b28dbf219931bc7803ece87a6f4b95b55633fd937c9730bab5d6afecd09"
+        },
+        {
+          "source": {
+            "dat_offset": 628,
+            "size": 163840,
+            "compression": "raw",
+            "decoded_size": 163840,
+            "sha256": "3d5de3b64582004ce74a57a0d595de86aa493b8a1ba3b801286c9c4540e9f242"
+          },
+          "offset": 72432,
+          "size": 28,
+          "sha256": "a406816aea5d245a3b3bd830177fbd6c49ad7d2801006e68d416d2cfbae219ea"
+        }
+      ],
+      "banks": {
+        "copies": [
+          {
+            "source_offset": 160144,
+            "destination_offset": 158096,
+            "size": 168,
+            "sha256": "e3dddb271abb1a2c24e8bb32629bf92f6085be0a520b515ffc8d8b2e23079441"
+          }
+        ],
+        "edits": [
+          {
+            "address": 1148,
+            "old": 3505930368,
+            "new": 2952790144,
+            "what": "Use the card-resident setup register-bank accessors"
+          },
+          {
+            "address": 1152,
+            "old": 2433024000,
+            "new": 2435121152,
+            "what": "Use the card-resident setup register-bank accessors"
+          },
+          {
+            "address": 1160,
+            "old": 3505930372,
+            "new": 2952790148,
+            "what": "Use the card-resident setup register-bank accessors"
+          },
+          {
+            "address": 1164,
+            "old": 2433360004,
+            "new": 2435457156,
+            "what": "Use the card-resident setup register-bank accessors"
+          },
+          {
+            "address": 1864,
+            "old": 3505930368,
+            "new": 2952790144,
+            "what": "Use the card-resident setup register-bank accessors"
+          },
+          {
+            "address": 1868,
+            "old": 2433171456,
+            "new": 2435268608,
+            "what": "Use the card-resident setup register-bank accessors"
+          },
+          {
+            "address": 1876,
+            "old": 3505930372,
+            "new": 2952790148,
+            "what": "Use the card-resident setup register-bank accessors"
+          },
+          {
+            "address": 1880,
+            "old": 2433294468,
+            "new": 2435391620,
+            "what": "Use the card-resident setup register-bank accessors"
+          },
+          {
+            "address": 8,
+            "old": 4042801456,
+            "new": 3489661232,
+            "what": "Use the card-resident setup register-bank accessors"
+          },
+          {
+            "address": 12,
+            "old": 2433208848,
+            "new": 2435306000,
+            "what": "Use the card-resident setup register-bank accessors"
+          },
+          {
+            "address": 24,
+            "old": 4042801456,
+            "new": 3489661232,
+            "what": "Use the card-resident setup register-bank accessors"
+          },
+          {
+            "address": 28,
+            "old": 2433159696,
+            "new": 2435256848,
+            "what": "Use the card-resident setup register-bank accessors"
+          },
+          {
+            "address": 40,
+            "old": 4042801456,
+            "new": 3489661232,
+            "what": "Use the card-resident setup register-bank accessors"
+          },
+          {
+            "address": 44,
+            "old": 2433258000,
+            "new": 2435355152,
+            "what": "Use the card-resident setup register-bank accessors"
+          },
+          {
+            "address": 158096,
+            "old": 3490168624,
+            "new": 4043308848,
+            "what": "Use the card-resident setup register-bank accessors"
+          },
+          {
+            "address": 158112,
+            "old": 3490168624,
+            "new": 4043308848,
+            "what": "Use the card-resident setup register-bank accessors"
+          }
+        ]
+      }
+    },
     "cold_start": null,
     "file_api": null,
-    "sd_boot_combination": null,
+    "sd_boot_combination": {
+      "usb": false,
+      "hold": [
+        {
+          "id": "iso_button"
+        },
+        {
+          "id": "movie_recording_button"
+        }
+      ]
+    },
     "firmware_update": null,
-    "updater": null,
-    "missing": [
-      "version-independent stock updater acceptance",
-      "XP5 bindings: setup/header: No unique aligned AArch64 reset register-clear sequence"
-    ]
+    "updater": {
+      "public_version": [
+        3,
+        48
+      ],
+      "version_getter": {
+        "address": 21581320,
+        "size": 88,
+        "sha256": "a1f84dde63ae934ed4e04eaaaa4091b8c70467d659e9676c6b74f55c210c77fc"
+      },
+      "configuration": {
+        "kind": "reader",
+        "address": 21578976
+      },
+      "getter_arguments": 1,
+      "comparison": {
+        "address": 45199508,
+        "size": 568,
+        "sha256": "871a522fd0bacfbabd41134d2ab89528d050aee4bc43ee316ed4767e7989ee38"
+      },
+      "target_major": 38758896,
+      "target_minor": 38758900,
+      "current_major": 38758904,
+      "current_minor": 38758908,
+      "version_producer": {
+        "address": 48222228,
+        "size": 164,
+        "sha256": "e6572f9919f4b7b799416405fe2d874d72e8b46b5cc23bfaefd2c3c8da8d8ac8"
+      },
+      "producer_stop": 48222264,
+      "version_context_pointer": 63845344,
+      "version_context": 38758368,
+      "current_major_setter": {
+        "address": 48226228,
+        "size": 56,
+        "sha256": "07fd76cf88d7c070dd0bc48cf90e89ecab6345d5142610287380cf50d611712e"
+      },
+      "current_minor_setter": {
+        "address": 48226284,
+        "size": 56,
+        "sha256": "8688efc036ae8ca5b34df651207fcf42cf25366b59dfc9ecd07795e2854c29f2"
+      }
+    },
+    "missing": []
   },
   {
     "firmware_id": "xt1-552",
