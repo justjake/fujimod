@@ -4,9 +4,9 @@
   "id": "xe5-112-flash",
   "firmware_id": "xe5-112",
   "device": {
-    "kind": "serial-nand",
-    "jedec_id": "efdc21",
-    "part": "Winbond W35N01JW"
+    "kind": "serial-nor",
+    "jedec_id": "2c5b1b",
+    "part": "Micron MT35XU01GBBA"
   },
   "window": {
     "address": 4026531840,
@@ -38,7 +38,7 @@
       "size": 704
     },
     {
-      "name": "flash DMA read",
+      "name": "mixed NOR/NAND DMA reader",
       "address": 21614016,
       "size": 1292
     },
@@ -51,14 +51,40 @@
       "name": "destination cache maintenance",
       "address": 22983056,
       "size": 64
+    },
+    {
+      "name": "installed flash identity reader",
+      "address": 21623744,
+      "size": 28
+    },
+    {
+      "name": "aligned NOR dispatcher",
+      "address": 21617652,
+      "size": 312
+    },
+    {
+      "name": "flash bank selection",
+      "address": 21625188,
+      "size": 60
+    },
+    {
+      "name": "flash CPU tail copy",
+      "address": 21615436,
+      "size": 168
     }
   ],
   "state_checks": [
     {
-      "name": "serial NAND driver mode",
+      "name": "serial flash driver mode",
       "address": 980416,
       "size": 4,
-      "value": 1
+      "value": 0
+    },
+    {
+      "name": "installed NOR JEDEC identity",
+      "address": 980112,
+      "size": 4,
+      "value": 2906907
     },
     {
       "name": "flash driver initialized",
@@ -68,8 +94,8 @@
     }
   ],
   "control": {
-    "offset": 524288,
+    "offset": 262144,
     "size": 32768,
-    "sha256": "fbb93cef1860b2b744f118381b4330c89d940f2d1e6bc789f47ff010f8c551d9"
+    "sha256": "e1121f5239684685ed053b585f13346cde3b7233ab801e6883b209091ea52055"
   }
 }
