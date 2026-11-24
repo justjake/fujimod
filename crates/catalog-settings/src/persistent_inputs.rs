@@ -24,6 +24,7 @@ pub struct PersistentAsset {
     /// Build/cache identity after applying the edits; unused during preparation.
     pub normalized_sha256: String,
     /// Explicit edits applied to the supplied source window.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub patches: Vec<PersistentPatch>,
 }
 /// An explicit byte edit within a source window.
@@ -42,10 +43,13 @@ pub struct PersistentPatch {
 #[serde(deny_unknown_fields)]
 pub struct PersistentSet {
     /// NAND main-area windows and their optional managed block tags.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub placements: Vec<PersistentPlacement>,
     /// Explicit journal append, when selected.
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub append: Option<PersistentJournalAppend>,
     /// Optional persistent MCU packet source.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub mcu_packet: Option<PersistentPacket>,
 }
 /// Place a bounded source window into the selected body's NAND.
@@ -62,6 +66,7 @@ pub struct PersistentPlacement {
     /// Main-area offset within the selected NAND.
     pub physical_offset: u64,
     /// First logical managed-block index, if synthetic tags are requested.
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub managed_index: Option<u16>,
 }
 /// Explicit journal-record construction and destination.

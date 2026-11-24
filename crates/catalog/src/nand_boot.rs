@@ -146,6 +146,7 @@ pub struct NandBootLoadRange {
     /// Maximum file size.
     pub capacity: u64,
     /// Uncached alias of the address, where the body establishes one.
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub alias: Option<String>,
     /// Base of the stock network heap when it owns this range.
     pub heap_base: Option<u64>,

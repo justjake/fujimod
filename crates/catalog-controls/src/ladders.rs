@@ -24,7 +24,7 @@ pub struct ControlLadder {
     /// Number of distinct values the firmware reads on this wire.
     pub levels: u16,
     /// Value read while no control of this ladder is held, when established.
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub released: Option<u16>,
     /// Evidence for the wire, its resolution and any released value.
     pub basis: String,
@@ -186,23 +186,22 @@ mod tests {
     fn document(ladders: Value) -> Value {
         let control = |behavior: Value, pushable: bool| {
             json!({"name":"Documented control","location":"rear","face":"KEY",
-                "connection_ids":[],"assignable":false,"pushable":pushable,"positions":[
-                    {"id":"S","label":"S","description":null}],
+                "assignable":false,"pushable":pushable,"positions":[
+                    {"id":"S","label":"S"}],
                 "mechanical":false,"behavior":behavior})
         };
         json!({
             "$schema":PHYSICAL_CONTROLS_SCHEMA_URI,"schema":1,"id":"body-controls","body_id":"body",
             "manual":{"url":"https://example.com/manual","title":"Camera manual","pages":[3]},
-            "analog_levels":null,
             "controls":{
-                "ok":control(json!({"kind":"button","press":null}), true),
-                "back":control(json!({"kind":"button","press":null}), true),
+                "ok":control(json!({"kind":"button"}), true),
+                "back":control(json!({"kind":"button"}), true),
                 "stick":control(json!({"kind":"pad","directions":{
-                    "up":null,"down":null,"left":null,"right":null},"press":null}), true),
-                "dial":control(json!({"kind":"dial","motion":{"kind":"steps",
-                    "decrease":null,"increase":null},"press":null,"endless":true}), false),
+                    "up":null,"down":null,"left":null,"right":null}}), true),
+                "dial":control(json!({"kind":"dial","motion":{"kind":"steps"},
+                    "endless":true}), false),
                 "mode":control(json!({"kind":"switch","positions":[
-                    {"id":"S","key":null,"asserted":null}]}), false)
+                    {"id":"S"}]}), false)
             },
             "ladders":ladders
         })
@@ -214,8 +213,12 @@ mod tests {
     }
 
     fn register(register: u8, released: Value, rungs: Value) -> Value {
-        json!({"wire":{"kind":"power_controller_register","register":register},
-            "levels":1024,"released":released,"basis":"reader masks 10 bits","rungs":rungs})
+        let mut value = json!({"wire":{"kind":"power_controller_register","register":register},
+            "levels":1024,"basis":"reader masks 10 bits","rungs":rungs});
+        if !released.is_null() {
+            value["released"] = released;
+        }
+        value
     }
 
     fn check(ladders: Value) -> Result<PhysicalControls, String> {

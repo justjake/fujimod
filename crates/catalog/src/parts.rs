@@ -8,34 +8,49 @@ use serde::{Deserialize, Serialize};
 #[serde(deny_unknown_fields)]
 pub struct PartAttachment {
     /// Assembly label used when constructing a device graph.
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub label: Option<String>,
     /// Pulse-counter and timer channels consumed by the assembly.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub pulse: Option<crate::reference::PulseInterface>,
     /// Interrupt outputs for the pulse channels, in channel order.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub interrupts: Option<Vec<Interrupt>>,
     /// Interrupts raised when each motor completes its movement.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub completion_interrupts: Option<Vec<Interrupt>>,
     /// Pin edges routed to processor interrupt inputs.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub gpio_interrupts: Option<Vec<PinInterrupt>>,
     /// Home-switch GPIO pins, indexed by motor.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub motor_home_pins: Option<Vec<Option<Pin>>>,
     /// Encoder GPIO pins in phase order.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub encoder_pins: Option<Vec<Pin>>,
     /// Actuator drive GPIO pins in bit order.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub drive_pins: Option<Vec<Pin>>,
     /// Actuator contact GPIO pins in contact order.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub contact_pins: Option<Vec<Pin>>,
     /// Actuator position at reset.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub initial_position: Option<i32>,
     /// Pulse-to-position feedback bridge, when installed.
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub position_bridge: Option<PositionBridge>,
     /// Zoom motor pulse and home routes.
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub zoom: Option<ZoomAttachment>,
     /// Serial routes and the selected reusable endpoints.
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub serial_routes: Option<Vec<SerialAttachment>>,
     /// Qualification of these declared attachment facts.
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub basis: Option<String>,
     /// Known limits of the assembly.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub limits: Vec<String>,
 }
 

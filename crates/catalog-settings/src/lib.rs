@@ -156,12 +156,15 @@ pub struct SettingsProfile {
     pub header: UpdateRange,
     /// The marker byte before the checksum: `0xaa` unless the layout states
     /// another one, as the stock check of an X-E5 does.
-    #[serde(default = "stock_header_marker", skip_serializing_if = "is_stock_header_marker")]
+    #[serde(
+        default = "stock_header_marker",
+        skip_serializing_if = "is_stock_header_marker"
+    )]
     pub marker: u8,
     /// X-Processor 4 only: the header's offset in the boot loader's handoff
     /// block. Absent for X-Processor Pro, whose header goes to sub-CPU
     /// registers.
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub loader_offset: Option<u64>,
     /// First 16-bit register of the header on a checksum SPI power controller.
     /// The header fills one register per two bytes: four registers for an
@@ -171,7 +174,7 @@ pub struct SettingsProfile {
     /// Journal records the stock loader requires, by name.
     pub records: BTreeMap<String, ProfileRecord>,
     /// Fields initialized from the calibration bank or a declared fill.
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub derived_fields: Vec<ProfileField>,
 }
 
@@ -228,6 +231,7 @@ pub enum ProfileFieldSource {
         otherwise: u8,
         /// Optional signed-byte fallback for unmatched inputs with bit 7 set.
         #[serde(default)]
+        #[serde(skip_serializing_if = "Option::is_none")]
         otherwise_high: Option<u8>,
     },
 }

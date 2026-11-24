@@ -62,6 +62,7 @@ pub enum Mechanism {
         search_address: u32,
         search_bytes: u32,
         address_alias: u32,
+        #[serde(skip_serializing_if = "Option::is_none")]
         build: Option<u32>,
     },
     /// Existing asynchronous file SDK, invoked through a stock dispatcher.
@@ -83,6 +84,7 @@ pub struct StockSdk {
     pub table_sha256: String,
     pub query_output: u32,
     /// Optional checked E1 source pair. Each read borrows and restores it.
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub bulk_source: Option<u32>,
     pub dispatcher: u32,
     pub request: u32,

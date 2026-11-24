@@ -67,6 +67,7 @@ pub struct FirmwareGeneration {
     /// Public firmware release.
     pub version: String,
     /// Located internal version, when available.
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub internal_version: Option<String>,
     /// Table name to its generation outcome.
     pub tables: BTreeMap<String, TableGeneration>,

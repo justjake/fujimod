@@ -17,7 +17,7 @@ use std::collections::{BTreeMap, BTreeSet};
 pub struct Content {
     pub size: u64,
     /// Build/cache identity; loading checks only the declared byte count.
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "String::is_empty")]
     pub sha256: String,
 }
 impl Content {
