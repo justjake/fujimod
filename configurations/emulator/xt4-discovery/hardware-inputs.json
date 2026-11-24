@@ -187,7 +187,7 @@
     },
     "serial_flash": {
       "contents": "registered-update",
-      "jedec_id": 2906906,
+      "jedec_id": 1727276,
       "geometry": {
         "erase_bytes": 131072,
         "page_bytes": 256,
@@ -195,7 +195,7 @@
         "page_ticks": 512,
         "basis": "128 KiB erase sectors and 256-byte pages of the MT35XU512ABA; erase and page timing are declared virtual inputs."
       },
-      "basis": "The X-T4 NOR is a Micron MT35XU512ABA, 64 MiB, JEDEC ID 2c 5b 1a; erase and page timing are declared virtual inputs."
+      "basis": "The X-T4 NOR is a Micron MT35XU512ABA, 64 MiB, JEDEC ID 2c 5b 1a. The model returns the identity bytes in one data word, first byte lowest, so the declared word is 0x1a5b2c: the stock loader takes the low byte as the manufacturer and stores 0x2c, the manufacturer the firmware reads from boot information offset 0x5cc. Erase and page timing are declared virtual inputs."
     },
     "adc_input": {
       "samples": [
