@@ -366,7 +366,7 @@ fn euclidean_div_255(value: i32) -> i32 {
 }
 
 fn combine(case_index: u32, primary: vec4<f32>, texture0: vec4<f32>, texture1: vec4<f32>) -> vec4<f32> {
-    let color = vec4<i32>(clamp(primary, vec4<f32>(0.0), vec4<f32>(1.0)) * 255.0);
+    let color = vec4<i32>(floor(clamp(primary, vec4<f32>(0.0), vec4<f32>(1.0)) * 255.0 + 0.5));
     let textures = array<vec4<i32>, 2>(
         vec4<i32>(floor(clamp(texture0, vec4<f32>(0.0), vec4<f32>(1.0)) * 255.0 + 0.5)),
         vec4<i32>(floor(clamp(texture1, vec4<f32>(0.0), vec4<f32>(1.0)) * 255.0 + 0.5)),
