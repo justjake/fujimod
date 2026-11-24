@@ -1,0 +1,186 @@
+{
+  "$schema": "https://fujimod.com/schemas/ip.schema.json",
+  "schema": 1,
+  "id": "mali-v61",
+  "device": null,
+  "registers": [
+    {
+      "name": "core_lsid",
+      "offset": 16,
+      "width_bytes": 4,
+      "access": "read-write",
+      "reset": 65535
+    },
+    {
+      "name": "job_queue",
+      "offset": 20,
+      "width_bytes": 4,
+      "access": "read-write",
+      "reset": 252645135
+    },
+    {
+      "name": "irq_ve",
+      "offset": 24,
+      "width_bytes": 4,
+      "access": "read-write",
+      "fields": [
+        {
+          "name": "pending",
+          "bit": 0,
+          "width_bits": 1
+        }
+      ]
+    },
+    {
+      "name": "reset",
+      "offset": 80,
+      "width_bytes": 4,
+      "access": "read-write",
+      "fields": [
+        {
+          "name": "reset",
+          "bit": 0,
+          "width_bits": 1
+        }
+      ]
+    },
+    {
+      "name": "session0_mmu_control",
+      "offset": 516,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "session0_terminate",
+      "offset": 536,
+      "width_bytes": 4,
+      "access": "read-only"
+    },
+    {
+      "name": "session0_irq_ack",
+      "offset": 540,
+      "width_bytes": 4,
+      "access": "write-only"
+    },
+    {
+      "name": "session0_irq_host",
+      "offset": 544,
+      "width_bytes": 4,
+      "access": "write-only",
+      "fields": [
+        {
+          "name": "doorbell",
+          "bit": 0,
+          "width_bits": 1
+        }
+      ]
+    },
+    {
+      "name": "session1_mmu_control",
+      "offset": 580,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "session1_terminate",
+      "offset": 600,
+      "width_bytes": 4,
+      "access": "read-only"
+    },
+    {
+      "name": "session1_irq_ack",
+      "offset": 604,
+      "width_bytes": 4,
+      "access": "write-only"
+    },
+    {
+      "name": "session1_irq_host",
+      "offset": 608,
+      "width_bytes": 4,
+      "access": "write-only",
+      "fields": [
+        {
+          "name": "doorbell",
+          "bit": 0,
+          "width_bits": 1
+        }
+      ]
+    },
+    {
+      "name": "session2_mmu_control",
+      "offset": 644,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "session2_terminate",
+      "offset": 664,
+      "width_bytes": 4,
+      "access": "read-only"
+    },
+    {
+      "name": "session2_irq_ack",
+      "offset": 668,
+      "width_bytes": 4,
+      "access": "write-only"
+    },
+    {
+      "name": "session2_irq_host",
+      "offset": 672,
+      "width_bytes": 4,
+      "access": "write-only",
+      "fields": [
+        {
+          "name": "doorbell",
+          "bit": 0,
+          "width_bits": 1
+        }
+      ]
+    },
+    {
+      "name": "session3_mmu_control",
+      "offset": 708,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "session3_terminate",
+      "offset": 728,
+      "width_bytes": 4,
+      "access": "read-only"
+    },
+    {
+      "name": "session3_irq_ack",
+      "offset": 732,
+      "width_bytes": 4,
+      "access": "write-only"
+    },
+    {
+      "name": "session3_irq_host",
+      "offset": 736,
+      "width_bytes": 4,
+      "access": "write-only",
+      "fields": [
+        {
+          "name": "doorbell",
+          "bit": 0,
+          "width_bits": 1
+        }
+      ]
+    }
+  ],
+  "parameters": [
+    "base",
+    "interrupt",
+    "queues",
+    "session_count"
+  ],
+  "evidence": [
+    {
+      "kind": "inferred",
+      "firmware_ids": [
+        "xt3-511"
+      ]
+    }
+  ]
+}

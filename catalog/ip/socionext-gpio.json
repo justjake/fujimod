@@ -1,0 +1,793 @@
+{
+  "$schema": "https://fujimod.com/schemas/ip.schema.json",
+  "schema": 1,
+  "id": "socionext-gpio",
+  "device": {
+    "model": "gpio",
+    "basis": "Sixteen banks of eight words; words 0-4 apply a 16-bit write mask, word 5 reads pad levels"
+  },
+  "registers": [
+    {
+      "name": "bank0_word0",
+      "offset": 0,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "bank0_word1",
+      "offset": 4,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "bank0_word2",
+      "offset": 8,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "bank0_word3",
+      "offset": 12,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "bank0_word4",
+      "offset": 16,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "bank0_word5",
+      "offset": 20,
+      "width_bytes": 4,
+      "access": "read-only"
+    },
+    {
+      "name": "bank0_word6",
+      "offset": 24,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "bank0_word7",
+      "offset": 28,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "bank1_word0",
+      "offset": 64,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "bank1_word1",
+      "offset": 68,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "bank1_word2",
+      "offset": 72,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "bank1_word3",
+      "offset": 76,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "bank1_word4",
+      "offset": 80,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "bank1_word5",
+      "offset": 84,
+      "width_bytes": 4,
+      "access": "read-only"
+    },
+    {
+      "name": "bank1_word6",
+      "offset": 88,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "bank1_word7",
+      "offset": 92,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "bank2_word0",
+      "offset": 128,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "bank2_word1",
+      "offset": 132,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "bank2_word2",
+      "offset": 136,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "bank2_word3",
+      "offset": 140,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "bank2_word4",
+      "offset": 144,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "bank2_word5",
+      "offset": 148,
+      "width_bytes": 4,
+      "access": "read-only"
+    },
+    {
+      "name": "bank2_word6",
+      "offset": 152,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "bank2_word7",
+      "offset": 156,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "bank3_word0",
+      "offset": 192,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "bank3_word1",
+      "offset": 196,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "bank3_word2",
+      "offset": 200,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "bank3_word3",
+      "offset": 204,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "bank3_word4",
+      "offset": 208,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "bank3_word5",
+      "offset": 212,
+      "width_bytes": 4,
+      "access": "read-only"
+    },
+    {
+      "name": "bank3_word6",
+      "offset": 216,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "bank3_word7",
+      "offset": 220,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "bank4_word0",
+      "offset": 256,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "bank4_word1",
+      "offset": 260,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "bank4_word2",
+      "offset": 264,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "bank4_word3",
+      "offset": 268,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "bank4_word4",
+      "offset": 272,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "bank4_word5",
+      "offset": 276,
+      "width_bytes": 4,
+      "access": "read-only"
+    },
+    {
+      "name": "bank4_word6",
+      "offset": 280,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "bank4_word7",
+      "offset": 284,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "bank5_word0",
+      "offset": 320,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "bank5_word1",
+      "offset": 324,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "bank5_word2",
+      "offset": 328,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "bank5_word3",
+      "offset": 332,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "bank5_word4",
+      "offset": 336,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "bank5_word5",
+      "offset": 340,
+      "width_bytes": 4,
+      "access": "read-only"
+    },
+    {
+      "name": "bank5_word6",
+      "offset": 344,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "bank5_word7",
+      "offset": 348,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "bank6_word0",
+      "offset": 384,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "bank6_word1",
+      "offset": 388,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "bank6_word2",
+      "offset": 392,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "bank6_word3",
+      "offset": 396,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "bank6_word4",
+      "offset": 400,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "bank6_word5",
+      "offset": 404,
+      "width_bytes": 4,
+      "access": "read-only"
+    },
+    {
+      "name": "bank6_word6",
+      "offset": 408,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "bank6_word7",
+      "offset": 412,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "bank7_word0",
+      "offset": 448,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "bank7_word1",
+      "offset": 452,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "bank7_word2",
+      "offset": 456,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "bank7_word3",
+      "offset": 460,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "bank7_word4",
+      "offset": 464,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "bank7_word5",
+      "offset": 468,
+      "width_bytes": 4,
+      "access": "read-only"
+    },
+    {
+      "name": "bank7_word6",
+      "offset": 472,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "bank7_word7",
+      "offset": 476,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "bank8_word0",
+      "offset": 512,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "bank8_word1",
+      "offset": 516,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "bank8_word2",
+      "offset": 520,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "bank8_word3",
+      "offset": 524,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "bank8_word4",
+      "offset": 528,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "bank8_word5",
+      "offset": 532,
+      "width_bytes": 4,
+      "access": "read-only"
+    },
+    {
+      "name": "bank8_word6",
+      "offset": 536,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "bank8_word7",
+      "offset": 540,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "bank9_word0",
+      "offset": 576,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "bank9_word1",
+      "offset": 580,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "bank9_word2",
+      "offset": 584,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "bank9_word3",
+      "offset": 588,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "bank9_word4",
+      "offset": 592,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "bank9_word5",
+      "offset": 596,
+      "width_bytes": 4,
+      "access": "read-only"
+    },
+    {
+      "name": "bank9_word6",
+      "offset": 600,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "bank9_word7",
+      "offset": 604,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "bank10_word0",
+      "offset": 640,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "bank10_word1",
+      "offset": 644,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "bank10_word2",
+      "offset": 648,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "bank10_word3",
+      "offset": 652,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "bank10_word4",
+      "offset": 656,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "bank10_word5",
+      "offset": 660,
+      "width_bytes": 4,
+      "access": "read-only"
+    },
+    {
+      "name": "bank10_word6",
+      "offset": 664,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "bank10_word7",
+      "offset": 668,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "bank11_word0",
+      "offset": 704,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "bank11_word1",
+      "offset": 708,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "bank11_word2",
+      "offset": 712,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "bank11_word3",
+      "offset": 716,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "bank11_word4",
+      "offset": 720,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "bank11_word5",
+      "offset": 724,
+      "width_bytes": 4,
+      "access": "read-only"
+    },
+    {
+      "name": "bank11_word6",
+      "offset": 728,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "bank11_word7",
+      "offset": 732,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "bank12_word0",
+      "offset": 768,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "bank12_word1",
+      "offset": 772,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "bank12_word2",
+      "offset": 776,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "bank12_word3",
+      "offset": 780,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "bank12_word4",
+      "offset": 784,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "bank12_word5",
+      "offset": 788,
+      "width_bytes": 4,
+      "access": "read-only"
+    },
+    {
+      "name": "bank12_word6",
+      "offset": 792,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "bank12_word7",
+      "offset": 796,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "bank13_word0",
+      "offset": 832,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "bank13_word1",
+      "offset": 836,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "bank13_word2",
+      "offset": 840,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "bank13_word3",
+      "offset": 844,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "bank13_word4",
+      "offset": 848,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "bank13_word5",
+      "offset": 852,
+      "width_bytes": 4,
+      "access": "read-only"
+    },
+    {
+      "name": "bank13_word6",
+      "offset": 856,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "bank13_word7",
+      "offset": 860,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "bank14_word0",
+      "offset": 896,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "bank14_word1",
+      "offset": 900,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "bank14_word2",
+      "offset": 904,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "bank14_word3",
+      "offset": 908,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "bank14_word4",
+      "offset": 912,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "bank14_word5",
+      "offset": 916,
+      "width_bytes": 4,
+      "access": "read-only"
+    },
+    {
+      "name": "bank14_word6",
+      "offset": 920,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "bank14_word7",
+      "offset": 924,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "bank15_word0",
+      "offset": 960,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "bank15_word1",
+      "offset": 964,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "bank15_word2",
+      "offset": 968,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "bank15_word3",
+      "offset": 972,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "bank15_word4",
+      "offset": 976,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "bank15_word5",
+      "offset": 980,
+      "width_bytes": 4,
+      "access": "read-only"
+    },
+    {
+      "name": "bank15_word6",
+      "offset": 984,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "bank15_word7",
+      "offset": 988,
+      "width_bytes": 4,
+      "access": "read-write"
+    }
+  ],
+  "parameters": [
+    "base",
+    "banks",
+    "interrupt_routes"
+  ],
+  "evidence": [
+    {
+      "kind": "inferred",
+      "firmware_ids": [
+        "xt3-511",
+        "xt5-431"
+      ]
+    }
+  ]
+}

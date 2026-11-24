@@ -1,0 +1,202 @@
+{
+  "$schema": "https://fujimod.com/schemas/ip.schema.json",
+  "schema": 1,
+  "id": "lz-osd",
+  "device": {
+    "model": "decompressor",
+    "basis": "Method-4 stream with a separately selected OSD transport"
+  },
+  "registers": [
+    {
+      "name": "reset",
+      "offset": 0,
+      "width_bytes": 4,
+      "access": "read-write",
+      "reset": 1
+    },
+    {
+      "name": "start_dma",
+      "offset": 4,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "source_address",
+      "offset": 8,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "page_length",
+      "offset": 12,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "destination_address",
+      "offset": 16,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "output_bytes",
+      "offset": 20,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "header_bytes",
+      "offset": 24,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "page_count",
+      "offset": 28,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "mode",
+      "offset": 32,
+      "width_bytes": 4,
+      "access": "read-write",
+      "fields": [
+        {
+          "name": "mode",
+          "bit": 0,
+          "width_bits": 32,
+          "values": [
+            {
+              "name": "decompress",
+              "value": 2214593536
+            },
+            {
+              "name": "osd",
+              "value": 2483033088
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "version",
+      "offset": 36,
+      "width_bytes": 4,
+      "access": "read-only",
+      "reset": 65537
+    },
+    {
+      "name": "dma_status",
+      "offset": 40,
+      "width_bytes": 4,
+      "access": "read-write",
+      "fields": [
+        {
+          "name": "done",
+          "bit": 0,
+          "width_bits": 1
+        }
+      ]
+    },
+    {
+      "name": "osd_mode",
+      "offset": 64,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "osd_start",
+      "offset": 68,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "osd_dimensions",
+      "offset": 72,
+      "width_bytes": 4,
+      "access": "read-write",
+      "fields": [
+        {
+          "name": "width",
+          "bit": 0,
+          "width_bits": 12
+        },
+        {
+          "name": "height",
+          "bit": 16,
+          "width_bits": 12
+        }
+      ]
+    },
+    {
+      "name": "osd_source",
+      "offset": 76,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "osd_primary",
+      "offset": 80,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "osd_secondary",
+      "offset": 84,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "osd_scale",
+      "offset": 88,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "osd_format",
+      "offset": 92,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "osd_stride",
+      "offset": 96,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "osd_status",
+      "offset": 100,
+      "width_bytes": 4,
+      "access": "read-only"
+    },
+    {
+      "name": "osd_ack",
+      "offset": 104,
+      "width_bytes": 4,
+      "access": "read-write",
+      "fields": [
+        {
+          "name": "done",
+          "bit": 0,
+          "width_bits": 1
+        }
+      ]
+    }
+  ],
+  "parameters": [
+    "base",
+    "interrupt",
+    "dma_high_words"
+  ],
+  "evidence": [
+    {
+      "kind": "inferred",
+      "firmware_ids": [
+        "xt3-511",
+        "xt2-441"
+      ]
+    }
+  ]
+}

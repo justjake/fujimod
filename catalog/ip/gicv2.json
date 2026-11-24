@@ -1,0 +1,219 @@
+{
+  "$schema": "https://fujimod.com/schemas/ip.schema.json",
+  "schema": 1,
+  "id": "gicv2",
+  "device": null,
+  "registers": [
+    {
+      "name": "distributor_control",
+      "offset": 0,
+      "width_bytes": 4,
+      "access": "read-write",
+      "fields": [
+        {
+          "name": "enable",
+          "bit": 0,
+          "width_bits": 1
+        }
+      ]
+    },
+    {
+      "name": "distributor_type",
+      "offset": 4,
+      "width_bytes": 4,
+      "access": "read-only",
+      "fields": [
+        {
+          "name": "lines",
+          "bit": 0,
+          "width_bits": 5
+        },
+        {
+          "name": "cores",
+          "bit": 5,
+          "width_bits": 3
+        }
+      ]
+    },
+    {
+      "name": "enable_set_0",
+      "offset": 256,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "enable_clear_0",
+      "offset": 384,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "pending_set_0",
+      "offset": 512,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "pending_clear_0",
+      "offset": 640,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "active_set_0",
+      "offset": 768,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "active_clear_0",
+      "offset": 896,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "priority_0",
+      "offset": 1024,
+      "width_bytes": 1,
+      "access": "read-write"
+    },
+    {
+      "name": "target_0",
+      "offset": 2048,
+      "width_bytes": 1,
+      "access": "read-write"
+    },
+    {
+      "name": "configuration_0",
+      "offset": 3072,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "software_interrupt",
+      "offset": 3840,
+      "width_bytes": 4,
+      "access": "write-only",
+      "fields": [
+        {
+          "name": "interrupt_id",
+          "bit": 0,
+          "width_bits": 4
+        },
+        {
+          "name": "target_list",
+          "bit": 16,
+          "width_bits": 8
+        },
+        {
+          "name": "filter",
+          "bit": 24,
+          "width_bits": 2,
+          "values": [
+            {
+              "name": "target_list",
+              "value": 0
+            },
+            {
+              "name": "all_but_self",
+              "value": 1
+            },
+            {
+              "name": "self",
+              "value": 2
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "sgi_source_mask_0",
+      "offset": 3856,
+      "width_bytes": 1,
+      "access": "read-write"
+    },
+    {
+      "name": "sgi_source_clear_0",
+      "offset": 3872,
+      "width_bytes": 1,
+      "access": "read-write"
+    },
+    {
+      "name": "cpu_control",
+      "offset": 4096,
+      "width_bytes": 4,
+      "access": "read-write",
+      "fields": [
+        {
+          "name": "enable",
+          "bit": 0,
+          "width_bits": 1
+        }
+      ]
+    },
+    {
+      "name": "cpu_priority_mask",
+      "offset": 4100,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "cpu_binary_point",
+      "offset": 4104,
+      "width_bytes": 4,
+      "access": "read-write",
+      "fields": [
+        {
+          "name": "binary_point",
+          "bit": 0,
+          "width_bits": 3
+        }
+      ]
+    },
+    {
+      "name": "cpu_acknowledge",
+      "offset": 4108,
+      "width_bytes": 4,
+      "access": "read-only",
+      "fields": [
+        {
+          "name": "interrupt_id",
+          "bit": 0,
+          "width_bits": 10
+        },
+        {
+          "name": "cpu_source",
+          "bit": 10,
+          "width_bits": 3
+        }
+      ]
+    },
+    {
+      "name": "cpu_end_of_interrupt",
+      "offset": 4112,
+      "width_bytes": 4,
+      "access": "write-only"
+    },
+    {
+      "name": "cpu_highest_pending",
+      "offset": 4120,
+      "width_bytes": 4,
+      "access": "read-only"
+    }
+  ],
+  "parameters": [
+    "base",
+    "cpu_interface_base",
+    "lines",
+    "cores"
+  ],
+  "evidence": [
+    {
+      "kind": "inferred",
+      "firmware_ids": [
+        "xt3-511",
+        "xt2-441"
+      ]
+    }
+  ]
+}

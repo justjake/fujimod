@@ -1,0 +1,362 @@
+{
+  "$schema": "https://fujimod.com/schemas/ip.schema.json",
+  "schema": 1,
+  "id": "pl011",
+  "device": {
+    "model": "serial_port",
+    "basis": "Arm PrimeCell PL011 r1p5, one 4 KiB port; transmitter drains at once"
+  },
+  "registers": [
+    {
+      "name": "data",
+      "offset": 0,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "receive_status_error_clear",
+      "offset": 4,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "flag",
+      "offset": 24,
+      "width_bytes": 4,
+      "access": "read-only",
+      "fields": [
+        {
+          "name": "receive_fifo_full",
+          "bit": 6,
+          "width_bits": 1
+        },
+        {
+          "name": "transmit_fifo_empty",
+          "bit": 7,
+          "width_bits": 1
+        },
+        {
+          "name": "receive_fifo_empty",
+          "bit": 4,
+          "width_bits": 1
+        }
+      ]
+    },
+    {
+      "name": "irda_low_power_counter",
+      "offset": 32,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "integer_baud_divisor",
+      "offset": 36,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "fractional_baud_divisor",
+      "offset": 40,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "line_control",
+      "offset": 44,
+      "width_bytes": 4,
+      "access": "read-write",
+      "fields": [
+        {
+          "name": "break",
+          "bit": 0,
+          "width_bits": 1
+        },
+        {
+          "name": "parity_enable",
+          "bit": 1,
+          "width_bits": 1
+        },
+        {
+          "name": "even_parity",
+          "bit": 2,
+          "width_bits": 1
+        },
+        {
+          "name": "two_stop_bits",
+          "bit": 3,
+          "width_bits": 1
+        },
+        {
+          "name": "fifo_enable",
+          "bit": 4,
+          "width_bits": 1
+        },
+        {
+          "name": "word_length",
+          "bit": 5,
+          "width_bits": 2,
+          "values": [
+            {
+              "name": "five_bits",
+              "value": 0
+            },
+            {
+              "name": "six_bits",
+              "value": 1
+            },
+            {
+              "name": "seven_bits",
+              "value": 2
+            },
+            {
+              "name": "eight_bits",
+              "value": 3
+            }
+          ]
+        },
+        {
+          "name": "stick_parity",
+          "bit": 7,
+          "width_bits": 1
+        }
+      ]
+    },
+    {
+      "name": "control",
+      "offset": 48,
+      "width_bytes": 4,
+      "access": "read-write",
+      "reset": 768,
+      "fields": [
+        {
+          "name": "uart_enable",
+          "bit": 0,
+          "width_bits": 1
+        },
+        {
+          "name": "transmit_enable",
+          "bit": 8,
+          "width_bits": 1
+        },
+        {
+          "name": "receive_enable",
+          "bit": 9,
+          "width_bits": 1
+        },
+        {
+          "name": "rts_enable",
+          "bit": 14,
+          "width_bits": 1
+        },
+        {
+          "name": "cts_enable",
+          "bit": 15,
+          "width_bits": 1
+        }
+      ]
+    },
+    {
+      "name": "interrupt_fifo_level_select",
+      "offset": 52,
+      "width_bytes": 4,
+      "access": "read-write",
+      "reset": 18,
+      "fields": [
+        {
+          "name": "receive_trigger",
+          "bit": 0,
+          "width_bits": 3
+        },
+        {
+          "name": "transmit_trigger",
+          "bit": 3,
+          "width_bits": 3
+        }
+      ]
+    },
+    {
+      "name": "interrupt_mask",
+      "offset": 56,
+      "width_bytes": 4,
+      "access": "read-write",
+      "fields": [
+        {
+          "name": "receive",
+          "bit": 4,
+          "width_bits": 1
+        },
+        {
+          "name": "transmit",
+          "bit": 5,
+          "width_bits": 1
+        },
+        {
+          "name": "receive_timeout",
+          "bit": 6,
+          "width_bits": 1
+        }
+      ]
+    },
+    {
+      "name": "raw_interrupt_status",
+      "offset": 60,
+      "width_bytes": 4,
+      "access": "read-only",
+      "fields": [
+        {
+          "name": "receive",
+          "bit": 4,
+          "width_bits": 1
+        },
+        {
+          "name": "transmit",
+          "bit": 5,
+          "width_bits": 1
+        },
+        {
+          "name": "receive_timeout",
+          "bit": 6,
+          "width_bits": 1
+        }
+      ]
+    },
+    {
+      "name": "masked_interrupt_status",
+      "offset": 64,
+      "width_bytes": 4,
+      "access": "read-only",
+      "fields": [
+        {
+          "name": "receive",
+          "bit": 4,
+          "width_bits": 1
+        },
+        {
+          "name": "transmit",
+          "bit": 5,
+          "width_bits": 1
+        },
+        {
+          "name": "receive_timeout",
+          "bit": 6,
+          "width_bits": 1
+        }
+      ]
+    },
+    {
+      "name": "interrupt_clear",
+      "offset": 68,
+      "width_bytes": 4,
+      "access": "write-only",
+      "fields": [
+        {
+          "name": "receive",
+          "bit": 4,
+          "width_bits": 1
+        },
+        {
+          "name": "transmit",
+          "bit": 5,
+          "width_bits": 1
+        },
+        {
+          "name": "receive_timeout",
+          "bit": 6,
+          "width_bits": 1
+        }
+      ]
+    },
+    {
+      "name": "dma_control",
+      "offset": 72,
+      "width_bytes": 4,
+      "access": "read-write",
+      "fields": [
+        {
+          "name": "receive_dma",
+          "bit": 0,
+          "width_bits": 1
+        },
+        {
+          "name": "transmit_dma",
+          "bit": 1,
+          "width_bits": 1
+        },
+        {
+          "name": "dma_on_error",
+          "bit": 2,
+          "width_bits": 1
+        }
+      ]
+    },
+    {
+      "name": "peripheral_id_0",
+      "offset": 4064,
+      "width_bytes": 4,
+      "access": "read-only",
+      "reset": 17
+    },
+    {
+      "name": "peripheral_id_1",
+      "offset": 4068,
+      "width_bytes": 4,
+      "access": "read-only",
+      "reset": 16
+    },
+    {
+      "name": "peripheral_id_2",
+      "offset": 4072,
+      "width_bytes": 4,
+      "access": "read-only",
+      "reset": 52
+    },
+    {
+      "name": "peripheral_id_3",
+      "offset": 4076,
+      "width_bytes": 4,
+      "access": "read-only",
+      "reset": 0
+    },
+    {
+      "name": "primecell_id_0",
+      "offset": 4080,
+      "width_bytes": 4,
+      "access": "read-only",
+      "reset": 13
+    },
+    {
+      "name": "primecell_id_1",
+      "offset": 4084,
+      "width_bytes": 4,
+      "access": "read-only",
+      "reset": 240
+    },
+    {
+      "name": "primecell_id_2",
+      "offset": 4088,
+      "width_bytes": 4,
+      "access": "read-only",
+      "reset": 5
+    },
+    {
+      "name": "primecell_id_3",
+      "offset": 4092,
+      "width_bytes": 4,
+      "access": "read-only",
+      "reset": 177
+    }
+  ],
+  "parameters": [
+    "base",
+    "interrupts",
+    "peer"
+  ],
+  "evidence": [
+    {
+      "kind": "inferred",
+      "firmware_ids": [
+        "xt3-511"
+      ]
+    }
+  ]
+}
