@@ -62,7 +62,13 @@ only place its facts appear:
 An interrupt controller's line count and partner interfaces are its block's
 `device` parameters. A companion processor is a core, and its mailbox is a
 block. A register that lives inside another block is an entry in that block's
-layout; a device that uses it names the block and register. There are no
+layout; a device that uses it names the block and register. A block nested in
+a larger controller names it in `parent_block_id`; blocks otherwise never
+overlap, and no catch-all window block covers others. A device with no
+register window, such as one that only consumes an SRAM region, is listed by
+that memory region rather than given a block. A block whose window is located
+but whose behavior is not yet modeled has no `device`; it still carries
+evidence. There are no
 separate peripheral, interrupt-route, interrupt-input, interrupt-controller,
 per-block parameter or register-map lists, and no processor-level window lists.
 
@@ -126,7 +132,9 @@ selectors, never file locations.
 chooses for a processor rather than what the hardware is: execution engines,
 the CPU model standing in for an unavailable one, instruction and tick rates
 and the runtime ABI. Run configurations select it with the hardware records;
-it holds no hardware facts.
+it holds no hardware facts. A run overlay may change a hardware record's
+field only when that field's evidence is `stand-in`; validation refuses an
+override of a measured, located or inferred fact.
 
 Mods read register addresses and firmware numbers from C headers generated
 from these records, never from hand-copied constants.
