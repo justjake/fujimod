@@ -14,6 +14,7 @@ pub mod generation;
 pub mod nand_boot;
 pub mod progress;
 pub mod reference;
+pub mod rom_start;
 pub mod soc;
 
 pub use ip::Ip;
