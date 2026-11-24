@@ -1,0 +1,50 @@
+{
+  "$schema": "https://fujimod.com/schemas/soc-block.schema.json",
+  "schema": 1,
+  "id": "filter-engine",
+  "base": 4294676480,
+  "size": 4096,
+  "kind": "imaging-controller",
+  "interrupts": [
+    {
+      "output": "interrupt",
+      "line": 127
+    }
+  ],
+  "device": {
+    "model": "filter_engine",
+    "run_ticks": 108000,
+    "memory_types_block_id": "lane-mux-fff4a710",
+    "evidence": [
+      {
+        "kind": "stand-in"
+      }
+    ],
+    "basis": "Filter engine of X-T3 5.11, driver 0x1dba99c..0x1dbb344. Its open registers the handler 0x1dba954 on interrupt row 0x45 of table 0x13e6454 ({0x7f, 0xd0, 1, 1}: line 127). 0x1dbb1d4 writes the source and destination memory types at 0xfff4a710. It prepares the face detection picture and runs the still step TCUBEPR; the stock still capture does not reach it. The 2 ms run time at 54 MHz is a stand-in."
+  },
+  "evidence": [
+    {
+      "kind": "located",
+      "firmware_ids": [
+        "xt3-511"
+      ],
+      "addresses": [
+        {
+          "firmware_id": "xt3-511",
+          "address": 31173020,
+          "space": "code"
+        },
+        {
+          "firmware_id": "xt3-511",
+          "address": 31172948,
+          "space": "code"
+        },
+        {
+          "firmware_id": "xt3-511",
+          "address": 31175124,
+          "space": "code"
+        }
+      ]
+    }
+  ]
+}

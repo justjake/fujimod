@@ -374,7 +374,7 @@ fn block_register_layouts(
                 });
             }
             BlockDevice::SerialPort { basis } => serial_bases.push((block.base, basis.clone())),
-            BlockDevice::JpegCodec { run_ticks, basis } => {
+            BlockDevice::JpegCodec { run_ticks, basis, .. } => {
                 let value = JpegCodec {
                     base: block.base,
                     basis: basis.clone(),
@@ -602,7 +602,12 @@ fn block_register_layouts(
             BlockDevice::SerialDma { .. }
             | BlockDevice::CompanionDma { .. }
             | BlockDevice::GicV2 { .. }
-            | BlockDevice::GicV3 { .. } => {}
+            | BlockDevice::GicV3 { .. }
+            | BlockDevice::StillEngine { .. }
+            | BlockDevice::FilterEngine { .. }
+            | BlockDevice::Dsp { .. }
+            | BlockDevice::CountdownTimer { .. }
+            | BlockDevice::UsbCondition { .. } => {}
         }
     }
 

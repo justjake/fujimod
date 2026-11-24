@@ -1,0 +1,50 @@
+{
+  "$schema": "https://fujimod.com/schemas/soc-block.schema.json",
+  "schema": 1,
+  "id": "still-recc",
+  "base": 4294451200,
+  "size": 4096,
+  "kind": "imaging-controller",
+  "interrupts": [
+    {
+      "output": "interrupt",
+      "line": 129
+    }
+  ],
+  "device": {
+    "model": "still_engine",
+    "engine": "recc",
+    "run_ticks": 108000,
+    "evidence": [
+      {
+        "kind": "stand-in"
+      }
+    ],
+    "basis": "Control page of the RECC still engine of X-T3 5.11. Step 0x06023320 (0x1e901d0) owns it; the start 0x1dc2980 registers the handler 0x1dc17cc on row 0x47 ({129, 0xd0, 3, 1}: line 129, mode 3 like the countdown-timer rows, taken as an edge; inferred, not measured). The tone and YCbCr parameter pages at 0xfff86000 and 0xfff87000 and the three pages below them are separate blocks. The 2 ms run time at 54 MHz is a stand-in."
+  },
+  "evidence": [
+    {
+      "kind": "located",
+      "firmware_ids": [
+        "xt3-511"
+      ],
+      "addresses": [
+        {
+          "firmware_id": "xt3-511",
+          "address": 32047568,
+          "space": "code"
+        },
+        {
+          "firmware_id": "xt3-511",
+          "address": 31205760,
+          "space": "code"
+        },
+        {
+          "firmware_id": "xt3-511",
+          "address": 31201228,
+          "space": "code"
+        }
+      ]
+    }
+  ]
+}

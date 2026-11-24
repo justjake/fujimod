@@ -1,0 +1,115 @@
+{
+  "$schema": "https://fujimod.com/schemas/soc-block.schema.json",
+  "schema": 1,
+  "id": "countdown-timer-control",
+  "base": 4294164480,
+  "size": 80,
+  "kind": "timer",
+  "interrupts": [
+    {
+      "output": "channel0",
+      "line": 41
+    },
+    {
+      "output": "channel1",
+      "line": 42
+    },
+    {
+      "output": "channel2",
+      "line": 43
+    },
+    {
+      "output": "channel3",
+      "line": 44
+    },
+    {
+      "output": "channel4",
+      "line": 45
+    },
+    {
+      "output": "channel5",
+      "line": 46
+    },
+    {
+      "output": "channel6",
+      "line": 47
+    },
+    {
+      "output": "channel7",
+      "line": 48
+    },
+    {
+      "output": "channel8",
+      "line": 49
+    },
+    {
+      "output": "channel9",
+      "line": 50
+    },
+    {
+      "output": "channel10",
+      "line": 51
+    },
+    {
+      "output": "channel11",
+      "line": 52
+    },
+    {
+      "output": "channel12",
+      "line": 53
+    },
+    {
+      "output": "channel13",
+      "line": 54
+    },
+    {
+      "output": "channel14",
+      "line": 55
+    },
+    {
+      "output": "channel15",
+      "line": 56
+    }
+  ],
+  "device": {
+    "model": "countdown_timer",
+    "channels": 16,
+    "counter_block_id": "countdown-timer-counters",
+    "basis": "Control window of the XP4 sixteen-channel countdown timer bank. X-T3 5.11 kernel 0x5963c/0x59674/0x59594/0x59c80 programs it; 0x106e8b0 routes channel n through interrupt row 0x13e4f94[n] = 0x10 + n of table 0x13e6454 ({0x29 + n, 0xc0, 3, 1}). The model pulses an edge per expiry because nothing acknowledges the timer; that the line is an edge is inferred, not measured."
+  },
+  "evidence": [
+    {
+      "kind": "located",
+      "firmware_ids": [
+        "xt3-511"
+      ],
+      "addresses": [
+        {
+          "firmware_id": "xt3-511",
+          "address": 366140,
+          "space": "code"
+        },
+        {
+          "firmware_id": "xt3-511",
+          "address": 366196,
+          "space": "code"
+        },
+        {
+          "firmware_id": "xt3-511",
+          "address": 365972,
+          "space": "code"
+        },
+        {
+          "firmware_id": "xt3-511",
+          "address": 367744,
+          "space": "code"
+        },
+        {
+          "firmware_id": "xt3-511",
+          "address": 17230000,
+          "space": "code"
+        }
+      ]
+    }
+  ]
+}

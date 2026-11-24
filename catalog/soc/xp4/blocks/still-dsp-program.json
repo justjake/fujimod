@@ -1,0 +1,28 @@
+{
+  "$schema": "https://fujimod.com/schemas/soc-block.schema.json",
+  "schema": 1,
+  "id": "still-dsp-program",
+  "base": 4294224412,
+  "size": 8,
+  "kind": "address-window",
+  "evidence": [
+    {
+      "kind": "located",
+      "firmware_ids": [
+        "xt3-511"
+      ],
+      "addresses": [
+        {
+          "firmware_id": "xt3-511",
+          "address": 17273060,
+          "space": "code"
+        },
+        {
+          "firmware_id": "xt3-511",
+          "address": 17272960,
+          "space": "code"
+        }
+      ]
+    }
+  ]
+}

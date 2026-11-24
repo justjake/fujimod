@@ -1,0 +1,49 @@
+{
+  "$schema": "https://fujimod.com/schemas/soc-block.schema.json",
+  "schema": 1,
+  "id": "still-dsp",
+  "base": 4194304000,
+  "size": 4096,
+  "kind": "imaging-controller",
+  "interrupts": [
+    {
+      "output": "interrupt",
+      "line": 145
+    }
+  ],
+  "device": {
+    "model": "dsp",
+    "run_ticks": 108000,
+    "evidence": [
+      {
+        "kind": "stand-in"
+      }
+    ],
+    "basis": "Still DSP host interface of X-T3 5.11. Step 0x06023380 (0x1e91288); the command start 0x1078650 registers the handler 0x10784c4 on interrupt row 0x72 of table 0x13e6454 ({145, 0xc0, 1, 1}: line 145). What the DSP program computes is not modeled, and the command time is a stand-in."
+  },
+  "evidence": [
+    {
+      "kind": "located",
+      "firmware_ids": [
+        "xt3-511"
+      ],
+      "addresses": [
+        {
+          "firmware_id": "xt3-511",
+          "address": 32051848,
+          "space": "code"
+        },
+        {
+          "firmware_id": "xt3-511",
+          "address": 17270352,
+          "space": "code"
+        },
+        {
+          "firmware_id": "xt3-511",
+          "address": 17269956,
+          "space": "code"
+        }
+      ]
+    }
+  ]
+}
