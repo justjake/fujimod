@@ -6302,16 +6302,60 @@
           {
             "bank": 4194304000,
             "firmware": "x100vi-131",
+            "function": 21832864,
+            "handler": 21831056,
+            "index": 200,
+            "line": 143,
+            "offset": 256,
+            "site": 21832964
+          },
+          {
+            "bank": 4194304000,
+            "firmware": "x100vi-131",
+            "function": 21832864,
+            "handler": 21832380,
+            "index": 201,
+            "line": 141,
+            "offset": 256,
+            "site": 21833064
+          },
+          {
+            "bank": 4194304000,
+            "firmware": "x100vi-131",
             "function": 21839636,
-            "line": 199,
+            "handler": 21831128,
+            "index": 199,
+            "line": 142,
             "offset": 256,
             "site": 21840168
           },
           {
             "bank": 4194304000,
             "firmware": "xh2-530",
+            "function": 20945352,
+            "handler": 20943720,
+            "index": 193,
+            "line": 143,
+            "offset": 256,
+            "site": 20945452
+          },
+          {
+            "bank": 4194304000,
+            "firmware": "xh2-530",
+            "function": 20945352,
+            "handler": 20944868,
+            "index": 194,
+            "line": 141,
+            "offset": 256,
+            "site": 20945552
+          },
+          {
+            "bank": 4194304000,
+            "firmware": "xh2-530",
             "function": 20951328,
-            "line": 192,
+            "handler": 20943792,
+            "index": 192,
+            "line": 142,
             "offset": 256,
             "site": 20951800
           },
@@ -6319,15 +6363,38 @@
             "bank": 4194304000,
             "firmware": "xt5-431",
             "function": 20937436,
-            "line": 192,
+            "handler": 20936832,
+            "index": 192,
+            "line": 142,
             "offset": 256,
             "site": 20937888
+          },
+          {
+            "bank": 4194304000,
+            "firmware": "xt5-431",
+            "function": 20939268,
+            "handler": 20936760,
+            "index": 193,
+            "line": 143,
+            "offset": 256,
+            "site": 20939368
+          },
+          {
+            "bank": 4194304000,
+            "firmware": "xt5-431",
+            "function": 20939268,
+            "handler": 20938784,
+            "index": 194,
+            "line": 141,
+            "offset": 256,
+            "site": 20939468
           }
         ]
       },
       "lines": [
-        192,
-        199
+        141,
+        142,
+        143
       ]
     },
     "movdc-reset": {
