@@ -289,11 +289,22 @@ def rebase(repository: Repository, base: str) -> Rebased:
         commits = repository.output(
             "rev-list", "--reverse", "--topo-order", f"{onto}..{current}"
         ).split()
+        # A commit whose patch already landed under another ID, such as a
+        # stacked base merged by rebase, is dropped before replaying: replaying
+        # an early commit of a landed series onto its final state conflicts.
+        landed = {
+            line.split()[1]
+            for line in repository.output("cherry", onto, current).splitlines()
+            if line.startswith("- ")
+        }
         moved = None
         head = current
         kept = dropped = 0
         if not ancestor(repository, onto, current):
-            head, kept, dropped = replay(repository, onto, commits)
+            head, kept, dropped = replay(
+                repository, onto, [commit for commit in commits if commit not in landed]
+            )
+            dropped += sum(commit in landed for commit in commits)
             moved = advance(repository, ref, current, head)
         if pushed_before == head:
             return Rebased(head, kept, False, moved, dropped)
