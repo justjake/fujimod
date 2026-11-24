@@ -11,12 +11,247 @@
       "fill": 0,
       "words": [
         {
+          "offset": 0,
+          "value": 28051,
+          "name": "gpio_bank0"
+        },
+        {
+          "offset": 4,
+          "value": 4656,
+          "name": "gpio_bank1"
+        },
+        {
+          "offset": 8,
+          "value": 414,
+          "name": "gpio_bank2"
+        },
+        {
+          "offset": 12,
+          "value": 8719,
+          "name": "gpio_bank3"
+        },
+        {
+          "offset": 24,
+          "value": 24,
+          "name": "gpio_bank6"
+        },
+        {
+          "offset": 28,
+          "value": 15576,
+          "name": "gpio_bank7"
+        },
+        {
+          "offset": 32,
+          "value": 30,
+          "name": "gpio_bank8"
+        },
+        {
+          "offset": 40,
+          "value": 5632,
+          "name": "gpio_bank10"
+        },
+        {
+          "offset": 44,
+          "value": 4544,
+          "name": "gpio_bank11"
+        },
+        {
+          "offset": 48,
+          "value": 195,
+          "name": "gpio_bank12"
+        },
+        {
+          "offset": 52,
+          "value": 9,
+          "name": "gpio_bank13"
+        },
+        {
+          "offset": 56,
+          "value": 12,
+          "name": "gpio_bank14"
+        },
+        {
+          "offset": 60,
+          "value": 3,
+          "name": "gpio_bank15"
+        },
+        {
+          "offset": 64,
+          "value": 16777216,
+          "name": "captured_0x040"
+        },
+        {
+          "offset": 68,
+          "value": 293,
+          "name": "captured_0x044"
+        },
+        {
+          "offset": 72,
+          "value": 285212672,
+          "name": "captured_0x048"
+        },
+        {
+          "offset": 76,
+          "value": 196145,
+          "name": "captured_0x04c"
+        },
+        {
+          "offset": 80,
+          "value": 16777728,
+          "name": "captured_0x050"
+        },
+        {
+          "offset": 84,
+          "value": 196785,
+          "name": "captured_0x054"
+        },
+        {
+          "offset": 88,
+          "value": 285213184,
+          "name": "captured_0x058"
+        },
+        {
+          "offset": 92,
+          "value": 2806190,
+          "name": "captured_0x05c"
+        },
+        {
+          "offset": 96,
+          "value": 1398031684,
+          "name": "captured_0x060"
+        },
+        {
+          "offset": 192,
+          "value": 16777984,
+          "name": "captured_0x0c0"
+        },
+        {
+          "offset": 196,
+          "value": 162802,
+          "name": "captured_0x0c4"
+        },
+        {
+          "offset": 200,
+          "value": 16778240,
+          "name": "captured_0x0c8"
+        },
+        {
+          "offset": 204,
+          "value": 243454,
+          "name": "captured_0x0cc"
+        },
+        {
+          "offset": 208,
+          "value": 285213696,
+          "name": "captured_0x0d0"
+        },
+        {
+          "offset": 212,
+          "value": 249788,
+          "name": "captured_0x0d4"
+        },
+        {
+          "offset": 216,
+          "value": 285213440,
+          "name": "captured_0x0d8"
+        },
+        {
+          "offset": 220,
+          "value": 250453,
+          "name": "captured_0x0dc"
+        },
+        {
+          "offset": 224,
+          "value": 1398031684,
+          "name": "captured_0x0e0"
+        },
+        {
           "offset": 320,
           "value": 16,
           "name": "boot reason"
+        },
+        {
+          "offset": 324,
+          "value": 1,
+          "name": "captured_0x144"
+        },
+        {
+          "offset": 332,
+          "value": 4278192080,
+          "name": "captured_0x14c"
+        },
+        {
+          "offset": 336,
+          "value": 4190125838,
+          "name": "captured_0x150"
+        },
+        {
+          "offset": 340,
+          "value": 1588199452,
+          "name": "captured_0x154"
+        },
+        {
+          "offset": 392,
+          "value": 405,
+          "name": "captured_0x188"
+        },
+        {
+          "offset": 396,
+          "value": 1023,
+          "name": "captured_0x18c"
+        },
+        {
+          "offset": 400,
+          "value": 417,
+          "name": "captured_0x190"
+        },
+        {
+          "offset": 404,
+          "value": 870,
+          "name": "captured_0x194"
+        },
+        {
+          "offset": 408,
+          "value": 600,
+          "name": "captured_0x198"
+        },
+        {
+          "offset": 412,
+          "value": 507,
+          "name": "captured_0x19c"
+        },
+        {
+          "offset": 416,
+          "value": 562,
+          "name": "captured_0x1a0"
+        },
+        {
+          "offset": 420,
+          "value": 504,
+          "name": "captured_0x1a4"
+        },
+        {
+          "offset": 424,
+          "value": 431,
+          "name": "captured_0x1a8"
+        },
+        {
+          "offset": 428,
+          "value": 464,
+          "name": "captured_0x1ac"
+        },
+        {
+          "offset": 452,
+          "value": 98304,
+          "name": "captured_0x1c4"
+        },
+        {
+          "offset": 1468,
+          "value": 4,
+          "name": "captured_0x5bc"
         }
       ],
-      "basis": "Declared discovery input: a zero-filled loader handoff in a free RAM gap, not a capture. The kernel copies 0x5c0 bytes from it. The boot-reason word at +0x140 is 0x10, measured by the resident service in lab/gfx50r-sd-blink/runs/gfx50r-boot-inputs-1; it selects boot reason 2 from GFX 50R table 0x104e8dc. Kernel entry bypasses the boot ROM."
+      "basis": "Measured: the first 0x5c0 bytes of the GFX 50R 3.11 loader handoff at 0x7f738, read over the resident service after a normal power-on with the USB cable attached (2026-10-30, lab/gfx50r-sd-blink/runs/gfx50r-handoff-1). +0x140 is 0x10 (boot reason 2). Words +0x00..+0x3c are the sixteen GPIO bank inputs; bank 1 (+0x04) is declared 0x1230, the measured 0x5230 with bit 14 (VBUS) cleared for the disconnected emulated cable."
     },
     "flash_aperture": {
       "contents": "registered-update",
@@ -35,7 +270,7 @@
       "samples": [
         333,
         1022,
-        394,
+        1023,
         77,
         352,
         485,
@@ -50,24 +285,24 @@
     },
     "gpio_input": {
       "levels": [
+        28051,
+        4656,
+        414,
+        8719,
         0,
         0,
+        24,
+        15576,
+        30,
         0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0
+        5632,
+        4544,
+        195,
+        9,
+        12,
+        3
       ],
-      "basis": "Declared zero external GPIO levels for discovery; not measured pin levels."
+      "basis": "Measured: the sixteen GPIO input words in the GFX 50R 3.11 loader handoff +0x00..+0x3c (2026-10-30), read with the USB cable attached. Bank 1 bit 14 (VBUS, declared in usb_cable) is cleared from the measured 0x5230 to 0x1230 because the emulated cable is disconnected; every other word is as measured."
     },
     "sd_card": {
       "basis": "Declared 4 GiB SDHC card for ROM-to-SD execution; size, RCA and FAT32 geometry are synthetic.",
@@ -101,6 +336,37 @@
         }
       ],
       "basis": "Measured GFX 50R 3.11 loader handoff +0x140 value 0x10, read through the resident service; selects boot reason 2. Other peer registers are declared zero."
+    },
+    "battery_gauge": {
+      "port": 4294098944,
+      "registers": [
+        {
+          "name": "status",
+          "register": 0,
+          "value": 32816
+        },
+        {
+          "name": "cache+0x02",
+          "register": 4,
+          "value": 1795
+        },
+        {
+          "name": "cache+0x04",
+          "register": 8,
+          "value": 128
+        },
+        {
+          "name": "cache+0x08",
+          "register": 16,
+          "value": 65087
+        },
+        {
+          "name": "command 0xa7 result",
+          "register": 76,
+          "value": 2989
+        }
+      ],
+      "basis": "Measured from the camera at RAM 0x10e79cc (run gfx50r-gauge-block-1), register 0 only. The other words in that block are not mapped to gauge registers and stay undeclared."
     },
     "pll_input": {
       "running": [

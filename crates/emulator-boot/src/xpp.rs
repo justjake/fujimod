@@ -978,13 +978,6 @@ fn nodes(
         maps.pl330.is_some(),
         "flash DMA",
     )?;
-    if maps
-        .display_frames
-        .as_ref()
-        .is_some_and(|f| f.timing.is_some())
-    {
-        return Err("X-Processor Pro display timing banks have no graph node".into());
-    }
     // The imaging pipeline's frame period, when declared, replaces each
     // imaging law's own period; display frames keep theirs.
     let frame_period = |declared: u64| {
@@ -1374,6 +1367,7 @@ fn nodes(
             "display-frames".into(),
             json!({
                 "kind": "display-frames", "irqs": frames.irq_routes, "period_ticks": frames.period_ticks,
+                "timing": frames.timing.as_ref().map(|t| json!([t.bases, t.stop_ticks])),
             }),
         );
     }
