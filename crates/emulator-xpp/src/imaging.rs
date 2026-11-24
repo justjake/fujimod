@@ -9,7 +9,12 @@
 //! a frame whose first byte is 0: the only writer of +0x210 (0xc35254 from
 //! 0x16b76fc) always passes 8, and the section-6 table builder (0x17f67f4)
 //! fills the block with eight register frames (0x1d..0x24 in REC) or with
-//! five start-up frames followed by zero frames. The imaging-side chip
+//! five start-up frames followed by zero frames. The GFX 50R 3.11
+//! driver (0x1a13e6c write, 0x1a13f80 read) uses byte addresses instead:
+//! `0x02`/`0x03 register value` and `0x82`/`0x83 register`; leaving SETUP
+//! for REC writes registers and reads them back until they match (0x1b57d70).
+//! A `0x82` read takes a byte-address register once one was written there.
+//! The imaging-side chip
 //! is a register file per channel and select: a read returns the last value
 //! written there; the start-up writes a register and reads it back until it
 //! matches. What the chip does with the values is not modeled. Commands
@@ -130,6 +135,8 @@ pub struct Readout {
     pub frame_period: Option<u64>,
 }
 const READ: u8 = 0x82;
+const BYTE_WRITES: [u8; 2] = [0x02, 0x03];
+const BYTE_READ: u8 = 0x83;
 
 /// One register-bus frame the guest sent, recorded only by an opt-in log
 /// ([`Control::with_write_log`]). `sequence` counts every recorded frame; the
@@ -155,6 +162,8 @@ struct State {
     /// (select, register) -> value.
     chip: Vec<((u8, u16), u8)>,
     received: u8,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    byte_chip: Vec<((u8, u8), u8)>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     readout_due: Option<u64>,
     #[serde(default, skip_serializing_if = "is_zero")]
@@ -168,6 +177,8 @@ pub struct Control {
     words: BTreeMap<u64, u32>,
     chip: BTreeMap<(u8, u16), u8>,
     received: u8,
+    /// (select, byte register) -> value, for the GFX 50R frames.
+    byte_chip: BTreeMap<(u8, u8), u8>,
     readout: Option<Readout>,
     readout_due: Option<u64>,
     readout_status: u32,
@@ -200,6 +211,7 @@ impl Control {
             words: BTreeMap::new(),
             chip: BTreeMap::new(),
             received: 0,
+            byte_chip: BTreeMap::new(),
             readout: None,
             readout_due: None,
             readout_status: 0,
@@ -358,9 +370,18 @@ impl Control {
                     self.chip.insert(key(frame), frame[3]);
                     self.log(cx, select, true, key(frame).1, frame[3]);
                 }
+                READ if self.byte_chip.contains_key(&(select, frame[1])) => {
+                    self.received = self.byte_chip[&(select, frame[1])];
+                }
                 READ => {
                     self.received = self.chip.get(&key(frame)).copied().unwrap_or(0);
                     self.log(cx, select, false, key(frame).1, self.received);
+                }
+                op if BYTE_WRITES.contains(&op) => {
+                    self.byte_chip.insert((select, frame[1]), frame[2]);
+                }
+                BYTE_READ => {
+                    self.received = self.byte_chip.get(&(select, frame[1])).copied().unwrap_or(0);
                 }
                 _ => return cx.unsupported("Unrecognized imaging bus frame"),
             }
@@ -541,6 +562,7 @@ impl Control {
             words: self.words.clone(),
             chip: self.chip.iter().map(|(k, v)| (*k, *v)).collect(),
             received: self.received,
+            byte_chip: self.byte_chip.iter().map(|(k, v)| (*k, *v)).collect(),
             readout_due: self.readout_due,
             readout_status: self.readout_status,
         }
@@ -551,6 +573,7 @@ impl Control {
             .iter()
             .any(|(o, v)| o & 3 != 0 || *o >= WINDOW || *v == 0)
             || state.chip.iter().any(|((select, _), _)| *select > 0x1f)
+            || state.byte_chip.iter().any(|((select, _), _)| *select > 0x1f)
             || self.readout.is_none() && (state.readout_due.is_some() || state.readout_status != 0)
             || state.readout_status & !READOUT_DONE != 0
         {
@@ -562,6 +585,7 @@ impl Control {
         self.words = state.words;
         self.chip = state.chip.into_iter().collect();
         self.received = state.received;
+        self.byte_chip = state.byte_chip.into_iter().collect();
         self.readout_due = state.readout_due;
         self.readout_status = state.readout_status;
         self.publish_integration();

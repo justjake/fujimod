@@ -472,12 +472,13 @@ fn block_register_layouts(
                     size: block.size,
                 });
             }
-            BlockDevice::FrameSync { interrupts, period_ticks, sources, basis } => {
+            BlockDevice::FrameSync { interrupts, period_ticks, sources, basis, reads_set_after_clear } => {
                 maps.frame_sync = Some(FrameSync {
                     base: block.base,
                     basis: basis.clone(),
                     interrupts: *interrupts,
                     period_ticks: *period_ticks,
+                    reads_set_after_clear: *reads_set_after_clear,
                     size: block.size,
                     sources: sources
                         .iter()
@@ -1424,6 +1425,7 @@ fn nodes(
                 "frame_lines": sync.sources.iter()
                     .map(|s| json!([s.status_bit / 8, s.irq_route])).collect::<Vec<_>>(),
                 "period_ticks": frame_period(sync.period_ticks),
+                "reads_set_after_clear": sync.reads_set_after_clear,
             }),
         );
     }

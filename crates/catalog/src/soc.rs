@@ -407,6 +407,9 @@ pub enum BlockDevice {
         sources: Vec<BlockFrameSource>,
         /// Declared basis.
         basis: String,
+        /// Bit 0 of +0x00 reads set again at once after a write clears it.
+        #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+        reads_set_after_clear: bool,
     },
     /// Reset and gate controller.
     ResetGates {
