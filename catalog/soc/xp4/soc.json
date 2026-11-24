@@ -862,6 +862,56 @@
           },
           "register_blocks": [
             {
+              "base": 4294361668,
+              "size": 3516,
+              "idle_bits": [],
+              "commands": [
+                {
+                  "word": 64,
+                  "value": 1,
+                  "status": 64,
+                  "mask": 1,
+                  "state": 0
+                },
+                {
+                  "word": 128,
+                  "value": 1,
+                  "status": 128,
+                  "mask": 1,
+                  "state": 0
+                },
+                {
+                  "word": 192,
+                  "value": 1,
+                  "status": 192,
+                  "mask": 1,
+                  "state": 0
+                },
+                {
+                  "word": 256,
+                  "value": 1,
+                  "status": 256,
+                  "mask": 1,
+                  "state": 0
+                },
+                {
+                  "word": 320,
+                  "value": 1,
+                  "status": 320,
+                  "mask": 1,
+                  "state": 0
+                },
+                {
+                  "word": 384,
+                  "value": 1,
+                  "status": 384,
+                  "mask": 1,
+                  "state": 0
+                }
+              ],
+              "basis": "X-T3 5.11 imaging words after the sensor command window (0xfff6c000..0xfff6c244), to the end of the page. Six units at 0xfff6c280 + 0x40n each take an update request at +0x4 bit 0 (writers 0x104d5e0 and its peers for units 1..5): after a still capture the teardown 0x1f56f74 sets it on units 0, 1, 4 and 5 and polls the units' status (0x1dcd9d4, reading +0x4 of each) until bit 0 reads clear. The request is modeled as taken at once, so the bit reads clear right after the write; when the hardware takes it (at the next frame or immediately) is not measured. Other words read back their last write."
+            },
+            {
               "base": 4294455296,
               "size": 4096,
               "idle_bits": [],

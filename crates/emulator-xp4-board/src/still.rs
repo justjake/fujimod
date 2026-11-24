@@ -950,9 +950,22 @@ impl Engine {
         let (source, spitch) = (address(0x0c0, 0x0c4), self.word(0x0d0) as usize);
         let (output, opitch) = (address(0x0d4, 0x0d8), self.word(0x0e4) as usize);
         let (sline, oline) = (sw * 2 * input.lines(), ow * 2 * layout_out.lines());
-        if sw % 2 != 0 || ow % 2 != 0 || sline > spitch || oline > opitch {
+        // A packed-line source may be wider than its pitch: the engine reads
+        // each line from its start at the pitch, so the pixels past the pitch
+        // are the next line's first ones. X-T3 5.11 playback decodes a
+        // 6240 x 4160 picture at 3/5 into 3744-pixel lines (pitch 7488) and
+        // scales it as 3760 x 2500, the decoded size rounded up.
+        let source_overrun = input == YcLayout::Lines && sline <= 2 * spitch;
+        if sw % 2 != 0 || ow % 2 != 0 || (sline > spitch && !source_overrun) || oline > opitch {
+            let words: Vec<String> = [
+                0x08u64, 0x0c, 0x10, 0x14, 0x18, 0x1c, 0x20, 0xc0, 0xc4, 0xd0, 0xd4, 0xd8, 0xe4,
+            ]
+            .iter()
+            .map(|&o| format!("+{o:#x}={:#x}", self.word(o)))
+            .collect();
             return Err(format!(
-                "{name} {sw}x{sh} pitch {spitch} -> {ow}x{oh} pitch {opitch}"
+                "{name} {sw}x{sh} pitch {spitch} -> {ow}x{oh} pitch {opitch} ({})",
+                words.join(" ")
             ));
         }
         let rows = sh.div_ceil(input.lines());
@@ -1589,6 +1602,26 @@ mod tests {
 
     /// Formats 1 and 2 (+0x08 bits 1..0 or 5..4), odd widths, a pitch
     /// shorter than a line and a zero step refuse when the job ends.
+    /// A packed-line source wider than its pitch reads each line from its
+    /// start at the pitch, so its last pixels are the next line's first ones.
+    #[test]
+    fn a_source_line_wider_than_its_pitch_reads_into_the_next_line() {
+        // 4 x 2 source at pitch 6 (3 pixels a line) copied 1:1 to pitch 8.
+        let words = job((0x0001_0003, 0x0001_0003), (0x1000, 0x1000), (0, 6), (0x100, 8));
+        let mut h = RecordingHost {
+            ram: (0..0x200).map(|i| i as u8).collect(),
+            ..Default::default()
+        };
+        let mut e = Engine::new(Kind::Resz, RESZ, RESZ_IRQ, 20)
+            .unwrap()
+            .computing()
+            .unwrap();
+        assert_eq!(resize_job(&mut e, &mut h, &words), None);
+        // Line 1 starts at byte 6: luma of pixels 0..3 are bytes 6, 7, 10, 11.
+        let line = |y: usize| h.ram[0x100 + 8 * y..0x100 + 8 * y + 8].to_vec();
+        assert_eq!(line(0), [0, 1, 2, 3, 4, 5, 6, 7]);
+        assert_eq!(line(1), [6, 7, 8, 9, 10, 11, 12, 13]);
+    }
     #[test]
     fn a_job_outside_the_modeled_layout_refuses() {
         let base = job(
@@ -1607,7 +1640,7 @@ mod tests {
             (with(0x008, 0x101), "format 0x101 is not modeled"),
             (with(0x008, 0x120), "format 0x120 is not modeled"),
             (with(0x00c, 0x0001_0002), "3x2"),
-            (with(0x0d0, 6), "pitch 6"),
+            (with(0x0d0, 2), "pitch 2"),
             (with(0x01c, 0x1_0000), "no step"),
         ] {
             let mut h = RecordingHost {
