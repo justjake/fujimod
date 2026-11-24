@@ -88,7 +88,7 @@ fn body(id: &str) -> Body {
 fn xp5_bodies_declare_their_own_bus_drain() {
     let drain = |id: &str| {
         let body = body(id);
-        let drain = body.hardware.unwrap().bus_drain.unwrap();
+        let drain = body.hardware.unwrap().bus_drain.into_iter().next().unwrap();
         (drain.address, drain.processor_ids)
     };
     let cores: Vec<String> = (0..4).map(|n| format!("core{n}")).collect();
@@ -100,15 +100,15 @@ fn xp5_bodies_declare_their_own_bus_drain() {
 #[test]
 fn bus_drain_must_be_aligned_and_name_processors() {
     let mut body = body("xt5");
-    let drain = body.hardware.as_mut().unwrap().bus_drain.as_mut().unwrap();
+    let drain = &mut body.hardware.as_mut().unwrap().bus_drain[0];
     drain.address += 2;
     assert!(body.validate("xt5").is_err());
     let mut body = self::body("xt5");
-    let drain = body.hardware.as_mut().unwrap().bus_drain.as_mut().unwrap();
+    let drain = &mut body.hardware.as_mut().unwrap().bus_drain[0];
     drain.processor_ids.clear();
     assert!(body.validate("xt5").is_err());
     let mut body = self::body("xt5");
-    let drain = body.hardware.as_mut().unwrap().bus_drain.as_mut().unwrap();
+    let drain = &mut body.hardware.as_mut().unwrap().bus_drain[0];
     drain.processor_ids = vec!["core0".into(), "core0".into()];
     assert!(body.validate("xt5").is_err());
 }

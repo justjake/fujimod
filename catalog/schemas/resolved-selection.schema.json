@@ -3682,15 +3682,11 @@
       "description": "Additional body-specific physical wiring.",
       "properties": {
         "bus_drain": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/BusDrain"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "description": "Address the firmware reads to drain the bus past this body's DRAM map."
+          "description": "Addresses the firmware reads to drain the bus past this body's DRAM map.",
+          "items": {
+            "$ref": "#/$defs/BusDrain"
+          },
+          "type": "array"
         },
         "gpio_feedback": {
           "description": "Connections between GPIO output and input pads.",

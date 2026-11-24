@@ -1015,7 +1015,7 @@ class BodyConnection(TypedDict, total=False):
 
 
 class BodyHardware(TypedDict, total=False):
-    bus_drain: NotRequired[BusDrain | None]
+    bus_drain: NotRequired[list[BusDrain]]
     gpio_feedback: NotRequired[list[GpioFeedback]]
     keypad_samples: NotRequired[dict[str, int]]
     profiles: NotRequired[dict[str, BodyProfile]]

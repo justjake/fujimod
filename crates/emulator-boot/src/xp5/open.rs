@@ -749,12 +749,16 @@ pub(crate) fn open_from(
         Some(dram) => {
             dram.validate(resolved.configuration.dram_address_space.is_some())?;
             let reference = overridden.insert(resolved.reference.clone());
-            let drain = reference
+            let drains = reference
                 .body
                 .hardware
                 .as_mut()
-                .and_then(|hardware| hardware.bus_drain.as_mut())
+                .map(|hardware| &mut hardware.bus_drain)
+                .filter(|drains| !drains.is_empty())
                 .ok_or("manifest moves the bus drain, which the body does not declare")?;
+            let [drain] = drains.as_mut_slice() else {
+                return Err("manifest moves the bus drain, which the body declares more than once".into());
+            };
             drain.address = dram.bus_drain;
             dram.limit
         }
