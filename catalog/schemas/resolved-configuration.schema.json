@@ -2694,6 +2694,56 @@
       ],
       "type": "object"
     },
+    "BlockRegister": {
+      "additionalProperties": false,
+      "description": "One named register in a block or IP layout.",
+      "properties": {
+        "access": {
+          "$ref": "#/$defs/RegisterAccess",
+          "description": "Accesses the register accepts."
+        },
+        "fields": {
+          "description": "Named bit fields and the values they carry.",
+          "items": {
+            "$ref": "#/$defs/RegisterField"
+          },
+          "type": "array"
+        },
+        "name": {
+          "description": "Register name within the block.",
+          "type": "string"
+        },
+        "offset": {
+          "description": "Byte offset within the block.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "reset": {
+          "description": "Value the register holds after reset, when known.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "width_bytes": {
+          "description": "Register width in bytes.",
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "name",
+        "offset",
+        "width_bytes",
+        "access"
+      ],
+      "type": "object"
+    },
     "BlockRegisterBlockFrames": {
       "additionalProperties": false,
       "description": "Frame law of a register block, with its interrupt line on the block.",
@@ -2827,6 +2877,13 @@
         "$schema": {
           "description": "Stable schema URI for this body record.",
           "type": "string"
+        },
+        "absent_blocks": {
+          "description": "Processor blocks this board leaves unconnected.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
         },
         "card_slot": {
           "anyOf": [
@@ -9365,6 +9422,100 @@
         "rows"
       ],
       "type": "object"
+    },
+    "Evidence": {
+      "additionalProperties": false,
+      "description": "Typed evidence for one catalog fact.",
+      "properties": {
+        "addresses": {
+          "description": "Code or data addresses the fact rests on.",
+          "items": {
+            "$ref": "#/$defs/EvidenceAddress"
+          },
+          "type": "array"
+        },
+        "firmware_ids": {
+          "description": "Firmware identities the fact rests on.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "kind": {
+          "$ref": "#/$defs/EvidenceKind",
+          "description": "How the fact was established."
+        }
+      },
+      "required": [
+        "kind"
+      ],
+      "type": "object"
+    },
+    "EvidenceAddress": {
+      "additionalProperties": false,
+      "description": "One firmware address a fact rests on.",
+      "properties": {
+        "address": {
+          "description": "Address within that firmware.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "firmware_id": {
+          "description": "Firmware identity holding the address.",
+          "type": "string"
+        },
+        "space": {
+          "$ref": "#/$defs/EvidenceSpace",
+          "description": "Whether the address selects code or data."
+        }
+      },
+      "required": [
+        "firmware_id",
+        "address",
+        "space"
+      ],
+      "type": "object"
+    },
+    "EvidenceKind": {
+      "description": "How a catalog fact was established.",
+      "oneOf": [
+        {
+          "const": "measured",
+          "description": "Read on a camera.",
+          "type": "string"
+        },
+        {
+          "const": "located",
+          "description": "Found in firmware code or tables.",
+          "type": "string"
+        },
+        {
+          "const": "inferred",
+          "description": "Deduced from the behavior of other facts.",
+          "type": "string"
+        },
+        {
+          "const": "stand-in",
+          "description": "A declared input with no known hardware value.",
+          "type": "string"
+        }
+      ]
+    },
+    "EvidenceSpace": {
+      "description": "The kind of address a fact rests on.",
+      "oneOf": [
+        {
+          "const": "code",
+          "description": "An instruction address.",
+          "type": "string"
+        },
+        {
+          "const": "data",
+          "description": "A data address.",
+          "type": "string"
+        }
+      ]
     },
     "ExecutionMechanism": {
       "description": "A mechanism that owns an allocation and can publish code as a diagnostic\ncallback after synchronizing its instruction view.",
@@ -16932,6 +17083,13 @@
           "minimum": 0,
           "type": "integer"
         },
+        "consumers": {
+          "description": "Devices that consume this region without a register window.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
         "id": {
           "description": "Region identity within the SoC.",
           "type": "string"
@@ -20756,6 +20914,84 @@
           "type": "object"
         }
       ]
+    },
+    "RegisterAccess": {
+      "description": "Accesses a register accepts.",
+      "oneOf": [
+        {
+          "const": "read-only",
+          "description": "Reads are accepted; writes are refused.",
+          "type": "string"
+        },
+        {
+          "const": "write-only",
+          "description": "Writes are accepted; reads are refused.",
+          "type": "string"
+        },
+        {
+          "const": "read-write",
+          "description": "Reads and writes are accepted.",
+          "type": "string"
+        }
+      ]
+    },
+    "RegisterField": {
+      "additionalProperties": false,
+      "description": "One named bit field within a register.",
+      "properties": {
+        "bit": {
+          "description": "Least-significant bit of the field.",
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "name": {
+          "description": "Field name within the register.",
+          "type": "string"
+        },
+        "values": {
+          "description": "Named values the field carries.",
+          "items": {
+            "$ref": "#/$defs/RegisterFieldValue"
+          },
+          "type": "array"
+        },
+        "width_bits": {
+          "description": "Field width in bits.",
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "name",
+        "bit",
+        "width_bits"
+      ],
+      "type": "object"
+    },
+    "RegisterFieldValue": {
+      "additionalProperties": false,
+      "description": "One named value of a register bit field.",
+      "properties": {
+        "name": {
+          "description": "Value name.",
+          "type": "string"
+        },
+        "value": {
+          "description": "Value the field carries.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "name",
+        "value"
+      ],
+      "type": "object"
     },
     "RegisterRange": {
       "additionalProperties": false,
@@ -26379,6 +26615,13 @@
           ],
           "description": "Device model and its typed parameters, when declared."
         },
+        "evidence": {
+          "description": "How the block's facts were established.",
+          "items": {
+            "$ref": "#/$defs/Evidence"
+          },
+          "type": "array"
+        },
         "id": {
           "description": "Block identity used by bodies and run inputs.",
           "type": "string"
@@ -26390,9 +26633,23 @@
           },
           "type": "array"
         },
+        "ip": {
+          "description": "IP record this block instantiates, when the design is shared.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "kind": {
           "$ref": "#/$defs/SocBlockKind",
           "description": "Block's modeled hardware category."
+        },
+        "parent_block_id": {
+          "description": "Containing block, when this block is nested in a larger controller.",
+          "type": [
+            "string",
+            "null"
+          ]
         },
         "processor_core_id": {
           "description": "Processor core directly served by this block, for per-core interrupt controllers.",
@@ -26400,6 +26657,13 @@
             "string",
             "null"
           ]
+        },
+        "registers": {
+          "description": "Register layout of a block with no IP record.",
+          "items": {
+            "$ref": "#/$defs/BlockRegister"
+          },
+          "type": "array"
         },
         "size": {
           "description": "Addressable block size in bytes.",

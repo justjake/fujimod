@@ -5,6 +5,7 @@ use std::{collections::BTreeMap, fs, path::Path};
 type Definitions = BTreeMap<String, Value>;
 
 const RUST_SCHEMA_FILES: &[(&str, &str)] = &[
+    ("ip.schema.json", "Ip"),
     ("soc.schema.json", "Soc"),
     ("part.schema.json", "Part"),
     ("body.schema.json", "Body"),
@@ -665,6 +666,7 @@ mod tests {
         fs::create_dir_all(&directory).unwrap();
         for (filename, name) in [
             ("soc.schema.json", "Soc"),
+            ("ip.schema.json", "Ip"),
             ("part.schema.json", "Part"),
             ("body.schema.json", "Body"),
             ("firmware.schema.json", "Firmware"),

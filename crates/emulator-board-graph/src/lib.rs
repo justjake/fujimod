@@ -756,6 +756,7 @@ mod tests {
                 base: 0x2000_0000,
                 size: RegionSize::Bytes { bytes: 0x2000 },
                 kind: MemoryKind::Dram,
+                consumers: vec![],
             }],
             blocks: vec![],
             clocks: vec![],
@@ -831,6 +832,7 @@ mod tests {
             control_bus_chips: vec![],
             connections: vec![],
             parts: vec![],
+            absent_blocks: vec![],
             wiring: vec![],
         };
         let selection = ResolvedSelection {

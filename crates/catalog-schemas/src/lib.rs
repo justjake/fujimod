@@ -149,6 +149,10 @@ pub fn generated_documents() -> BTreeMap<&'static str, Value> {
         ),
     );
     documents.insert(
+        "ip.schema.json",
+        schema::<fujimod_catalog::ip::Ip>(fujimod_catalog::ip::IP_SCHEMA_URI),
+    );
+    documents.insert(
         "soc.schema.json",
         schema::<fujimod_catalog::reference::Soc>("https://fujimod.com/schemas/soc.schema.json"),
     );

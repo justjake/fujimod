@@ -25,6 +25,7 @@ fn main() {
     let root = manifest.join("../..");
     let catalog = root.join("catalog");
     let layers = [
+        ("ip", "Ip"),
         ("soc", "Soc"),
         ("parts", "Part"),
         ("bodies", "Body"),
