@@ -765,7 +765,7 @@ fn core_reset_refuses_pending_operations_without_canceling_them() {
 }
 
 #[test]
-fn usb_port_repeats_naked_transactions_until_the_guest_starts_a_transfer() {
+fn usb_port_parks_naked_transactions_until_the_guest_starts_a_transfer() {
     let (mut d, mut b) = ready(0x1357);
     endpoint(&mut d, &mut b, 3, 8);
     let port = |d: &mut Dwc3, b: &mut Board, f: &mut dyn FnMut(&mut Dwc3, &mut Cx<'_>)| {
@@ -779,14 +779,16 @@ fn usb_port_repeats_naked_transactions_until_the_guest_starts_a_transfer() {
     port(&mut d, &mut b, &mut |d, cx| d.host_in_token(cx, 0x81).unwrap());
     assert!(!d.host_in_wants_token(0x81).unwrap());
     assert!(!d.host_ready(UsbHostWait::Idle).unwrap());
-    let first = d.state.host[&3];
-    for _ in 0..3 {
-        let at = d.next_deadline(b.now).unwrap();
-        tick(&mut d, &mut b, at);
-        assert!(!d.host_ready(UsbHostWait::InPacket(0x81)).unwrap());
-        assert!(d.state.replies.is_empty());
-    }
-    assert!(d.state.host[&3] > first);
+    let at = d.next_deadline(b.now).unwrap();
+    tick(&mut d, &mut b, at);
+    // NAKed: parked until the guest's next command, with no timer.
+    assert!(d.state.parked.contains_key(&3));
+    assert_eq!(d.next_deadline(b.now), None);
+    assert!(!d.host_ready(UsbHostWait::InPacket(0x81)).unwrap());
+    assert!(!d.host_in_wants_token(0x81).unwrap());
+    assert!(d.state.replies.is_empty());
+    let parked = d.save();
+    d.restore(&parked).unwrap();
     b.ram[0x3000..0x3003].copy_from_slice(b"abc");
     trb(&mut b, 0x2000, 0x3000, 3, 1);
     for (n, value) in [0, 0x2000, 0].into_iter().enumerate() {
@@ -806,4 +808,29 @@ fn usb_port_repeats_naked_transactions_until_the_guest_starts_a_transfer() {
     assert!(d.state.replies.is_empty() && d.state.host.is_empty());
     let saved = d.save();
     d.restore(&saved).unwrap();
+}
+
+#[test]
+fn usb_port_reset_drops_parked_and_in_flight_transactions() {
+    let (mut d, mut b) = ready(0x1357);
+    endpoint(&mut d, &mut b, 3, 8);
+    let pc = b.pc;
+    {
+        let mut cx = Cx::new(&mut b, 0, pc, 0);
+        d.host_in_token(&mut cx, 0x81).unwrap();
+    }
+    let at = d.next_deadline(b.now).unwrap();
+    tick(&mut d, &mut b, at);
+    assert!(d.state.parked.contains_key(&3));
+    {
+        let mut cx = Cx::new(&mut b, 0, pc, 0);
+        d.host_in_token(&mut cx, 0x81).unwrap();
+        d.host_reset(&mut cx).unwrap();
+    }
+    assert!(d.state.host.is_empty() && d.state.parked.is_empty());
+    assert!(!d.state.pending.iter().any(|p| matches!(p.operation, Operation::Transaction { .. })));
+    while let Some(at) = d.next_deadline(b.now) {
+        tick(&mut d, &mut b, at);
+    }
+    assert!(d.state.replies.is_empty());
 }
