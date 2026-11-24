@@ -21,92 +21,10 @@ pub struct SocHardware {
         tsify(type = "Record<string, SocProfile>")
     )]
     pub profiles: BTreeMap<String, crate::profiles::SocProfile>,
-    /// Companion-processor clock and mailbox connections, when present.
-    #[serde(default)]
-    pub companion: Option<CompanionHardware>,
     /// The byte every RAM cell holds at power-on, as read on a camera. Absent
     /// when unmeasured; the emulator then starts RAM zeroed.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub power_on_ram_fill: Option<u8>,
-}
-
-impl SocHardware {
-    /// Check every hardware connection against the containing SoC's identities.
-    pub fn validate(&self, soc: &crate::reference::Soc) -> Result<(), String> {
-        let block = |id: &str| {
-            soc.blocks
-                .iter()
-                .any(|item| item.id == id)
-                .then_some(())
-                .ok_or_else(|| format!("SoC {} hardware refers to missing block {id}", soc.id))
-        };
-        let core = |id: &str| {
-            soc.processors
-                .iter()
-                .any(|item| item.id == id)
-                .then_some(())
-                .ok_or_else(|| format!("SoC {} hardware refers to missing processor {id}", soc.id))
-        };
-        let clock = |id: &str| {
-            soc.clocks
-                .iter()
-                .any(|item| item.id == id)
-                .then_some(())
-                .ok_or_else(|| format!("SoC {} hardware refers to missing clock {id}", soc.id))
-        };
-        if let Some(companion) = &self.companion {
-            core(&companion.processor_id)?;
-            clock(&companion.clock_id)?;
-            block(&companion.mailbox_block_id)?;
-        }
-        Ok(())
-    }
-}
-
-/// A companion processor's hardware clock and mailbox endpoints.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
-#[serde(deny_unknown_fields)]
-#[cfg_attr(feature = "schema", schemars(deny_unknown_fields))]
-#[cfg_attr(
-    all(target_arch = "wasm32", not(target_os = "emscripten")),
-    derive(tsify::Tsify),
-    tsify(hashmap_as_object, missing_as_null)
-)]
-pub struct CompanionHardware {
-    /// Companion processor identity in the SoC processor list.
-    pub processor_id: String,
-    /// Clock domain supplying the companion processor.
-    pub clock_id: String,
-    /// Vector-table address presented to the companion after reset.
-    pub vector_base: u64,
-    /// SoC mailbox block identity.
-    pub mailbox_block_id: String,
-    /// Mailbox indices used by the companion link.
-    pub mailbox: CompanionMailbox,
-}
-
-/// Mailbox indices used by a companion processor link.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
-#[serde(deny_unknown_fields)]
-#[cfg_attr(feature = "schema", schemars(deny_unknown_fields))]
-#[cfg_attr(
-    all(target_arch = "wasm32", not(target_os = "emscripten")),
-    derive(tsify::Tsify),
-    tsify(hashmap_as_object, missing_as_null)
-)]
-pub struct CompanionMailbox {
-    /// Request mailbox index.
-    pub request: u32,
-    /// Control mailbox index.
-    pub control: u32,
-    /// Reply mailbox index.
-    pub reply: u32,
-    /// Status mailbox index.
-    pub status: u32,
-    /// Fault mailbox index.
-    pub fault: u32,
 }
 
 /// Hardware parameters for a SoC block, selected by its model tag.

@@ -75,9 +75,13 @@
     {
       "id": "core4",
       "model": "cortex-m4",
-      "released": null,
+      "released": false,
       "registers": [],
-      "mprofile": null,
+      "clock_id": "companion",
+      "mprofile": {
+        "cpuid": null,
+        "vector_base": 0
+      },
       "rprofile": null,
       "aprofile": null
     }
@@ -462,7 +466,34 @@
       "base": 4287684864,
       "size": 36,
       "kind": "address-window",
-      "clock_id": null
+      "clock_id": null,
+      "interrupts": [
+        {
+          "output": "request",
+          "line": 55,
+          "core": "core4"
+        },
+        {
+          "output": "control",
+          "line": 58,
+          "core": "core4"
+        },
+        {
+          "output": "reply",
+          "line": 141,
+          "core": "core4"
+        },
+        {
+          "output": "status",
+          "line": 142,
+          "core": "core4"
+        },
+        {
+          "output": "fault",
+          "line": 143,
+          "core": "core4"
+        }
+      ]
     },
     {
       "id": "serial",
@@ -991,19 +1022,6 @@
     "coprocessor_writes": []
   },
   "hardware": {
-    "companion": {
-      "processor_id": "core4",
-      "clock_id": "companion",
-      "vector_base": 0,
-      "mailbox_block_id": "mailbox",
-      "mailbox": {
-        "request": 55,
-        "control": 58,
-        "reply": 141,
-        "status": 142,
-        "fault": 143
-      }
-    },
     "profiles": {
       "xp5": {
         "cpu_model": "Cortex-A53",

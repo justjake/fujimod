@@ -138,6 +138,22 @@ impl Soc {
                 }
             }
         }
+        for core in &self.processors {
+            if let Some(clock_id) = &core.clock_id
+                && !self.clocks.iter().any(|clock| clock.id == *clock_id)
+            {
+                return Err(format!(
+                    "SoC {} processor {} refers to missing clock {clock_id}",
+                    self.id, core.id
+                ));
+            }
+            if core.mprofile.is_some() && core.model != ProcessorModel::CortexM4 {
+                return Err(format!(
+                    "SoC {} processor {} M-profile state does not match its model",
+                    self.id, core.id
+                ));
+            }
+        }
         let mut blocks = BTreeSet::new();
         for block in &self.blocks {
             validate_id(&block.id)?;
@@ -411,9 +427,6 @@ impl Soc {
                 ));
             }
         }
-        if let Some(hardware) = &self.hardware {
-            hardware.validate(self)?;
-        }
         Ok(())
     }
 }
@@ -438,6 +451,9 @@ pub struct ProcessorCore {
     pub released: Option<bool>,
     /// Initial architectural register values.
     pub registers: Vec<RegisterValue>,
+    /// Clock domain supplying this core, when specified.
+    #[serde(default)]
+    pub clock_id: Option<String>,
     /// Optional M-profile hardware state.
     #[serde(default)]
     pub mprofile: Option<MProfileState>,
@@ -517,8 +533,9 @@ pub enum ProcessorRegister {
     tsify(hashmap_as_object, missing_as_null)
 )]
 pub struct MProfileState {
-    /// CPUID register value presented by the processor.
-    pub cpuid: u32,
+    /// CPUID register value presented by the processor, when known.
+    #[serde(default)]
+    pub cpuid: Option<u32>,
     /// Vector-table address after reset.
     pub vector_base: u64,
 }
