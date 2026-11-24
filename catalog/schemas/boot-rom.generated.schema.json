@@ -90,6 +90,71 @@
       ],
       "type": "object"
     },
+    "BootRomNandImage": {
+      "additionalProperties": false,
+      "description": "One NAND transport image: its native flash placement and RAM destination.",
+      "properties": {
+        "address": {
+          "description": "RAM destination.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "name": {
+          "description": "Image identity.",
+          "type": "string"
+        },
+        "offset": {
+          "description": "Native flash offset.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "size": {
+          "description": "Bytes copied.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "name",
+        "offset",
+        "size",
+        "address"
+      ],
+      "type": "object"
+    },
+    "BootRomNandLayout": {
+      "additionalProperties": false,
+      "description": "One NAND geometry the boot ROM can load from.",
+      "properties": {
+        "entry_labels": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "description": "Entry addresses within the loaded image, keyed by hexadecimal address.",
+          "type": "object"
+        },
+        "images": {
+          "description": "The transport images the ROM copies, in load order.",
+          "items": {
+            "$ref": "#/$defs/BootRomNandImage"
+          },
+          "type": "array"
+        },
+        "name": {
+          "description": "Geometry and stage identity.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "images",
+        "entry_labels"
+      ],
+      "type": "object"
+    },
     "BootRomPowerHold": {
       "additionalProperties": false,
       "description": "Power-hold register asserted before any ROM card access.",
@@ -205,6 +270,13 @@
     "nand": {
       "$ref": "#/$defs/BootRomNand",
       "description": "The NAND entries the universal SD-boot stage 1 calls."
+    },
+    "nand_layouts": {
+      "additionalProperties": {
+        "$ref": "#/$defs/BootRomNandLayout"
+      },
+      "description": "The NAND boot layouts the ROM selects from the geometry, keyed by\nthe declared boot-source identity.",
+      "type": "object"
     },
     "power_hold": {
       "$ref": "#/$defs/BootRomPowerHold",

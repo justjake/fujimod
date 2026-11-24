@@ -22,7 +22,10 @@ fn processors_keep_the_choices_their_soc_profiles_held() {
     let exr2 = emulation("exr2");
     assert_eq!(exr2.cpu_model, "Cortex-R5F proxy for R4");
     assert_eq!(exr2.runtime_abi, "exr2-r5f-fixed-map-v1");
-    assert!(exr2.limits.is_empty());
+    assert_eq!(exr2.limits.len(), 1);
+    assert!(exr2.limits[0].contains("EXR II register subset"));
+    assert_eq!(exr2.discovery_mmio.len(), 2);
+    assert_eq!(exr2.private_mmio.len(), 4);
 
     let xp4 = emulation("xp4");
     assert_eq!(xp4.cpu_model, "Cortex-A7");

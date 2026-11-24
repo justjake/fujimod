@@ -32,5 +32,37 @@
     "read_512_bytes": 2147486984,
     "load_blocks_dma": 2147487212
   },
+  "nand_layouts": {
+    "0": {
+      "name": "nand-512-byte-pages",
+      "images": [
+        {
+          "name": "boot",
+          "offset": 32768,
+          "size": 131072,
+          "address": 0
+        }
+      ],
+      "entry_labels": {
+        "0x14000": "secondary loader",
+        "0x4000": "primary loader"
+      }
+    },
+    "1": {
+      "name": "nand-2048-byte-pages",
+      "images": [
+        {
+          "name": "boot",
+          "offset": 262144,
+          "size": 131072,
+          "address": 0
+        }
+      ],
+      "entry_labels": {
+        "0x11800": "secondary loader",
+        "0x1800": "primary loader"
+      }
+    }
+  },
   "load_address": 0
 }

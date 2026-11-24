@@ -4,5 +4,23 @@
   "id": "exr2",
   "cpu_model": "Cortex-R5F proxy for R4",
   "runtime_abi": "exr2-r5f-fixed-map-v1",
-  "limits": []
+  "limits": [
+    "Only the existing supported EXR II register subset; no inference of sibling reset values or device replies."
+  ],
+  "discovery_mmio": [
+    {
+      "address": 4026531840,
+      "size": 268369920
+    },
+    {
+      "address": 2683043840,
+      "size": 65536
+    }
+  ],
+  "private_mmio": [
+    "peripheral-window-fe318000",
+    "peripheral-window-fe3b0000",
+    "companion-fe80c",
+    "companion-fe80d"
+  ]
 }

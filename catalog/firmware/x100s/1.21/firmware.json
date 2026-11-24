@@ -68,5 +68,21 @@
         "native_flash_offset": 5947392
       }
     ]
+  },
+  "reset_release": {
+    "checks": [
+      {
+        "address": 1073676288,
+        "expected_hex": "18f09fe5"
+      },
+      {
+        "address": 1073676320,
+        "expected_hex": "00180100"
+      }
+    ],
+    "mask": 16777216,
+    "register": 4294656204,
+    "source": 120,
+    "target": 1073676288
   }
 }

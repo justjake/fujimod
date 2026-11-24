@@ -649,30 +649,24 @@ pub fn validate_selection(
     Ok(())
 }
 
-/// Resolve both profile identities against already selected reference records.
+/// Resolve the selected hardware profile identities against already selected
+/// reference records. A processor may declare no profiles at all.
 fn hardware_profiles<'a>(
     choice: &HardwareSelection,
     selection: &'a ResolvedSelection,
-) -> Result<
-    (
-        &'a fujimod_catalog::profiles::SocProfile,
-        &'a fujimod_catalog::profiles::BodyProfile,
-    ),
-    String,
-> {
-    fujimod_catalog_identity::validate_id(&choice.soc_profile_id)?;
+) -> Result<&'a fujimod_catalog::profiles::BodyProfile, String> {
     fujimod_catalog_identity::validate_id(&choice.body_profile_id)?;
-    let soc = selection
-        .soc
-        .hardware
-        .as_ref()
-        .and_then(|hardware| hardware.profiles.get(&choice.soc_profile_id))
-        .ok_or_else(|| {
-            format!(
-                "SoC {} has no hardware profile {}",
-                selection.soc.id, choice.soc_profile_id
-            )
-        })?;
+    if let Some(id) = &choice.soc_profile_id {
+        fujimod_catalog_identity::validate_id(id)?;
+        selection
+            .soc
+            .hardware
+            .as_ref()
+            .and_then(|hardware| hardware.profiles.get(id))
+            .ok_or_else(|| {
+                format!("SoC {} has no hardware profile {id}", selection.soc.id)
+            })?;
+    }
     let body = selection
         .body
         .hardware
@@ -684,7 +678,7 @@ fn hardware_profiles<'a>(
                 selection.body.id, choice.body_profile_id
             )
         })?;
-    Ok((soc, body))
+    Ok(body)
 }
 
 fn scene_selection(scene: &RunScene, selection: &ResolvedSelection) -> Result<(), String> {

@@ -42,7 +42,6 @@
         "user_journals"
       ],
       "hardware_selection": {
-        "soc_profile_id": "exr2-service-transports",
         "body_profile_id": "x100s-rec"
       },
       "hardware_inputs_id": "x100s-rec",

@@ -14,7 +14,6 @@
       "usb_connected": true,
       "firmware_inputs_id": "x70-110-browser-usb-catalog-inputs",
       "hardware_selection": {
-        "soc_profile_id": "exr2-service-transports",
         "body_profile_id": "x70-110-browser-usb"
       }
     }

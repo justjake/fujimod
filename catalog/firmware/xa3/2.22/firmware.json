@@ -7,5 +7,21 @@
   "update": {
     "size": 20633088,
     "sha256": "d51108e476e1028a18472df2797c8d81a22736e0b90a48b02b0ddc278ba91fba"
+  },
+  "reset_release": {
+    "checks": [
+      {
+        "address": 1073676288,
+        "expected_hex": "18f09fe5"
+      },
+      {
+        "address": 1073676320,
+        "expected_hex": "00180100"
+      }
+    ],
+    "mask": 16777216,
+    "register": 4294656204,
+    "source": 120,
+    "target": 1073676288
   }
 }

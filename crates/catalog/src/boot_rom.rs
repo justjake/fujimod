@@ -5,6 +5,7 @@
 //! register and the file-system pointer word. Firmware documents reference the
 //! ROM by hash instead of repeating these addresses.
 use serde::{Deserialize, Serialize};
+use std::collections::BTreeMap;
 
 pub const BOOT_ROM_SCHEMA_URI: &str = "https://fujimod.com/schemas/boot-rom.generated.schema.json";
 
@@ -39,8 +40,50 @@ pub struct BootRom {
     pub sd: BootRomSdClocks,
     /// The NAND entries the universal SD-boot stage 1 calls.
     pub nand: BootRomNand,
+    /// The NAND boot layouts the ROM selects from the geometry, keyed by
+    /// the declared boot-source identity.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub nand_layouts: BTreeMap<String, BootRomNandLayout>,
     /// RAM address the boot ROM hands control to.
     pub load_address: u64,
+}
+
+/// One NAND geometry the boot ROM can load from.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[cfg_attr(
+    all(target_arch = "wasm32", not(target_os = "emscripten")),
+    derive(tsify::Tsify),
+    tsify(missing_as_null)
+)]
+#[serde(deny_unknown_fields)]
+pub struct BootRomNandLayout {
+    /// Geometry and stage identity.
+    pub name: String,
+    /// The transport images the ROM copies, in load order.
+    pub images: Vec<BootRomNandImage>,
+    /// Entry addresses within the loaded image, keyed by hexadecimal address.
+    pub entry_labels: BTreeMap<String, String>,
+}
+
+/// One NAND transport image: its native flash placement and RAM destination.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[cfg_attr(
+    all(target_arch = "wasm32", not(target_os = "emscripten")),
+    derive(tsify::Tsify),
+    tsify(missing_as_null)
+)]
+#[serde(deny_unknown_fields)]
+pub struct BootRomNandImage {
+    /// Image identity.
+    pub name: String,
+    /// Native flash offset.
+    pub offset: u64,
+    /// Bytes copied.
+    pub size: u64,
+    /// RAM destination.
+    pub address: u64,
 }
 
 /// The three ROM file routines the NAND bootloader calls.
@@ -178,6 +221,16 @@ impl BootRom {
             || self.nand.load_blocks_dma == 0
         {
             return Err("boot-ROM NAND routines are required".into());
+        }
+        for (source, layout) in &self.nand_layouts {
+            if source.is_empty() || layout.name.is_empty() || layout.images.is_empty() {
+                return Err("boot-ROM NAND layout is incomplete".into());
+            }
+            for image in &layout.images {
+                if image.name.is_empty() || image.size == 0 || !image.offset.is_multiple_of(4) {
+                    return Err("boot-ROM NAND image is incomplete".into());
+                }
+            }
         }
         if !self.load_address.is_multiple_of(4) {
             return Err("invalid boot-ROM handoff address".into());

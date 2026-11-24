@@ -9033,6 +9033,17 @@
           ],
           "description": "Located boot, device and persistent-storage layout facts."
         },
+        "reset_release": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/HardwareResetRelease"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Release mechanism this build uses, when the layouts do not vary it."
+        },
         "schema": {
           "description": "Firmware record version.",
           "format": "uint32",
@@ -12402,39 +12413,6 @@
       ],
       "type": "object"
     },
-    "HardwareAtcm": {
-      "additionalProperties": false,
-      "description": "Declared atcm facts.",
-      "properties": {
-        "basis": {
-          "description": "Declared basis.",
-          "type": "string"
-        },
-        "reset_base": {
-          "description": "Declared reset base.",
-          "format": "uint64",
-          "minimum": 0,
-          "type": "integer"
-        },
-        "reset_enabled": {
-          "description": "Declared reset enabled.",
-          "type": "boolean"
-        },
-        "size": {
-          "description": "Declared size.",
-          "format": "uint64",
-          "minimum": 0,
-          "type": "integer"
-        }
-      },
-      "required": [
-        "basis",
-        "reset_base",
-        "reset_enabled",
-        "size"
-      ],
-      "type": "object"
-    },
     "HardwareBlockParameters": {
       "additionalProperties": false,
       "description": "Declared windows options facts.",
@@ -12539,67 +12517,6 @@
           ]
         }
       },
-      "type": "object"
-    },
-    "HardwareBootImage": {
-      "additionalProperties": false,
-      "description": "Declared images facts.",
-      "properties": {
-        "address": {
-          "description": "Declared address.",
-          "format": "uint64",
-          "minimum": 0,
-          "type": "integer"
-        },
-        "name": {
-          "description": "Declared name.",
-          "type": "string"
-        },
-        "offset": {
-          "description": "Declared offset.",
-          "format": "uint64",
-          "minimum": 0,
-          "type": "integer"
-        },
-        "size": {
-          "description": "Declared size.",
-          "format": "uint64",
-          "minimum": 0,
-          "type": "integer"
-        }
-      },
-      "required": [
-        "address",
-        "name",
-        "offset",
-        "size"
-      ],
-      "type": "object"
-    },
-    "HardwareBootRom": {
-      "additionalProperties": false,
-      "description": "Declared boot rom facts.",
-      "properties": {
-        "basis": {
-          "description": "Declared basis.",
-          "type": "string"
-        },
-        "sha256": {
-          "description": "Declared sha256.",
-          "type": "string"
-        },
-        "size": {
-          "description": "Declared size.",
-          "format": "uint64",
-          "minimum": 0,
-          "type": "integer"
-        }
-      },
-      "required": [
-        "basis",
-        "sha256",
-        "size"
-      ],
       "type": "object"
     },
     "HardwareBusSensor": {
@@ -13087,29 +13004,6 @@
       ],
       "type": "object"
     },
-    "HardwareCoreWindow": {
-      "additionalProperties": false,
-      "description": "Declared private mmio facts.",
-      "properties": {
-        "address": {
-          "description": "Declared address.",
-          "format": "uint64",
-          "minimum": 0,
-          "type": "integer"
-        },
-        "size": {
-          "description": "Declared size.",
-          "format": "uint64",
-          "minimum": 0,
-          "type": "integer"
-        }
-      },
-      "required": [
-        "address",
-        "size"
-      ],
-      "type": "object"
-    },
     "HardwareCurtains": {
       "additionalProperties": false,
       "description": "Declared focal-plane curtain facts.",
@@ -13222,62 +13116,6 @@
         "dependencies",
         "kind",
         "refs"
-      ],
-      "type": "object"
-    },
-    "HardwareDiagnosticHeaders": {
-      "additionalProperties": false,
-      "description": "Declared diagnostic headers facts.",
-      "properties": {
-        "address": {
-          "description": "Declared address.",
-          "format": "uint64",
-          "minimum": 0,
-          "type": "integer"
-        },
-        "name": {
-          "description": "Declared name.",
-          "type": "string"
-        },
-        "offset": {
-          "description": "Declared offset.",
-          "format": "uint64",
-          "minimum": 0,
-          "type": "integer"
-        }
-      },
-      "required": [
-        "address",
-        "name",
-        "offset"
-      ],
-      "type": "object"
-    },
-    "HardwareDiscoveryWindow": {
-      "additionalProperties": false,
-      "description": "Declared discovery mmio facts.",
-      "properties": {
-        "address": {
-          "description": "Declared address.",
-          "format": "uint64",
-          "minimum": 0,
-          "type": "integer"
-        },
-        "basis": {
-          "description": "Declared basis.",
-          "type": "string"
-        },
-        "size": {
-          "description": "Declared size.",
-          "format": "uint64",
-          "minimum": 0,
-          "type": "integer"
-        }
-      },
-      "required": [
-        "address",
-        "basis",
-        "size"
       ],
       "type": "object"
     },
@@ -13915,41 +13753,6 @@
       "required": [
         "output",
         "positions"
-      ],
-      "type": "object"
-    },
-    "HardwareNandBootLayout": {
-      "additionalProperties": false,
-      "description": "Declared nand layouts facts.",
-      "properties": {
-        "basis": {
-          "description": "Declared basis.",
-          "type": "string"
-        },
-        "entry_labels": {
-          "additionalProperties": {
-            "type": "string"
-          },
-          "description": "Declared entry labels.",
-          "type": "object"
-        },
-        "images": {
-          "description": "Declared images.",
-          "items": {
-            "$ref": "#/$defs/HardwareBootImage"
-          },
-          "type": "array"
-        },
-        "name": {
-          "description": "Declared name.",
-          "type": "string"
-        }
-      },
-      "required": [
-        "basis",
-        "entry_labels",
-        "images",
-        "name"
       ],
       "type": "object"
     },
@@ -15045,25 +14848,6 @@
       ],
       "type": "object"
     },
-    "HardwareTcm": {
-      "additionalProperties": false,
-      "description": "Declared tcm facts.",
-      "properties": {
-        "atcm": {
-          "$ref": "#/$defs/HardwareAtcm",
-          "description": "Declared atcm."
-        },
-        "btcm": {
-          "$ref": "#/$defs/HardwareAtcm",
-          "description": "Declared btcm."
-        }
-      },
-      "required": [
-        "atcm",
-        "btcm"
-      ],
-      "type": "object"
-    },
     "HardwareTimerLayout": {
       "description": "Interval-timer register layouts.",
       "oneOf": [
@@ -15113,38 +14897,6 @@
         "irq",
         "register",
         "ticks_per_second"
-      ],
-      "type": "object"
-    },
-    "HardwareUpdateBoot": {
-      "additionalProperties": false,
-      "description": "Declared update boot facts.",
-      "properties": {
-        "diagnostic_headers": {
-          "description": "Declared diagnostic headers.",
-          "items": {
-            "$ref": "#/$defs/HardwareDiagnosticHeaders"
-          },
-          "type": "array"
-        },
-        "flash_dat_bias": {
-          "description": "Declared flash dat bias.",
-          "format": "uint64",
-          "minimum": 0,
-          "type": "integer"
-        },
-        "nand_layouts": {
-          "additionalProperties": {
-            "$ref": "#/$defs/HardwareNandBootLayout"
-          },
-          "description": "Declared nand layouts.",
-          "type": "object"
-        }
-      },
-      "required": [
-        "diagnostic_headers",
-        "flash_dat_bias",
-        "nand_layouts"
       ],
       "type": "object"
     },
@@ -18989,6 +18741,13 @@
             "null"
           ]
         },
+        "evidence": {
+          "description": "How this core's facts not recorded elsewhere were established.",
+          "items": {
+            "$ref": "#/$defs/Evidence"
+          },
+          "type": "array"
+        },
         "id": {
           "description": "Core identity within its SoC.",
           "type": "string"
@@ -21616,76 +21375,12 @@
       "additionalProperties": false,
       "description": "Declared soc profile facts.",
       "properties": {
-        "boot_rom": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/HardwareBootRom"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "description": "Declared boot rom."
-        },
         "cache_basis": {
           "description": "Qualification of the declared processor cache capacities.",
           "type": [
             "string",
             "null"
           ]
-        },
-        "discovery_mmio": {
-          "description": "Declared discovery mmio.",
-          "items": {
-            "$ref": "#/$defs/HardwareDiscoveryWindow"
-          },
-          "type": [
-            "array",
-            "null"
-          ]
-        },
-        "private_mmio": {
-          "description": "Declared private mmio.",
-          "items": {
-            "$ref": "#/$defs/HardwareCoreWindow"
-          },
-          "type": [
-            "array",
-            "null"
-          ]
-        },
-        "reset_release": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/HardwareResetRelease"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "description": "Declared reset release."
-        },
-        "tcm": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/HardwareTcm"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "description": "Declared tcm."
-        },
-        "update_boot": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/HardwareUpdateBoot"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "description": "Declared update boot."
         },
         "windows": {
           "description": "Declared windows.",

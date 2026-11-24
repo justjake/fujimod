@@ -14,5 +14,12 @@
       "core": "core1",
       "address": 4264656896
     }
+  ],
+  "interrupts": [
+    {
+      "output": "processing",
+      "line": 88,
+      "core": "core0"
+    }
   ]
 }

@@ -280,7 +280,6 @@
   "preset": {
     "factory_options": {},
     "hardware_selection": {
-      "soc_profile_id": "exr2",
       "body_profile_id": "x70"
     },
     "hardware_inputs_id": "x70",

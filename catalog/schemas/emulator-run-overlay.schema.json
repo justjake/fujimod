@@ -9,12 +9,14 @@
           "type": "string"
         },
         "soc_profile_id": {
-          "description": "Profile identity within the selected SoC.",
-          "type": "string"
+          "description": "Profile identity within the selected SoC, when the processor declares one.",
+          "type": [
+            "string",
+            "null"
+          ]
         }
       },
       "required": [
-        "soc_profile_id",
         "body_profile_id"
       ],
       "type": "object"
