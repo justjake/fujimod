@@ -448,8 +448,14 @@ impl ByteI2c {
                     && !s.transport.expect_pointer => {}
             _ => return Err("Changed byte I2C peer factory".into()),
         }
-        let addressing = s.pending.as_ref().is_some_and(|p| matches!(p.operation,Operation::Address(_)));
-        let stopping = s.pending.as_ref().is_some_and(|p| p.operation==Operation::Stop);
+        let addressing = s
+            .pending
+            .as_ref()
+            .is_some_and(|p| matches!(p.operation, Operation::Address(_)));
+        let stopping = s
+            .pending
+            .as_ref()
+            .is_some_and(|p| p.operation == Operation::Stop);
         if s.transport.selected && s.transport.peer.address7().is_none()
             || s.transport.expect_pointer && !matches!(s.transport.peer, Peer::Register(_))
             || s.transport.selected
