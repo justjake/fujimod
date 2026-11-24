@@ -172,6 +172,10 @@
           "basis": "Four-byte checksum frames: X-T4 2.12 clocks each power-controller frame as four bytes, most significant first (0x011d4388): a seven-bit register with a write flag, a data word and a checksum byte that brings the byte sum to 0xff (0x011d52fc builds a read). The loader reads the eight-byte settings profile header from registers 31..34 and stores it at boot-information offset 0x148; the board serves the requested profile header there. Startup writes 0x0100 to register 18 and the settings and power code write registers 2, 31..34 and 39 back, so these are stored words. The stock loader that runs from flash before the kernel writes 0x7f00 to register 17, the value the firmware's power-register cache holds, so register 17 is declared a stored word too. The firmware reads register 0 through XOR 0x3407 (0x0225bdb0, 0x0225ef70); 0x3007 leaves only bit 0x400 active, which startup (0x01291324) needs to continue a boot with reason 4. Registers 2, 3, 4, 5, 14, 17, 29, 30, 39, 47..50, 64, 65, 67, 71, 72, 111..114 and 118..121 are the last values in the firmware's power-register cache, and 37, 38, 69 and 70 the values in its power-register shadow, in RAM of a running X-T4 2.12 read in USB service mode. Registers 35 (low) and 36 (high) are a seconds-since-2000 clock, declared stopped at zero. Physical values at power-on are not measured."
         }
       },
+      "2": {
+        "level": "low",
+        "basis": "Declared catalog input."
+      },
       "3": {
         "level": "low",
         "basis": "Declared catalog input."
