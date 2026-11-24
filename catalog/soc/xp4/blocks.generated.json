@@ -2552,131 +2552,6 @@
         "lines": []
       }
     },
-    "block-fff3e000": {
-      "base": 4294172672,
-      "evidence": {
-        "base": [
-          {
-            "findings": [
-              {
-                "addresses": [
-                  40849244
-                ],
-                "kind": "data-page",
-                "matches": 1,
-                "value": 4294172672
-              }
-            ],
-            "firmware": "gfx100s-213"
-          },
-          {
-            "findings": [
-              {
-                "addresses": [
-                  36279116
-                ],
-                "kind": "data-page",
-                "matches": 1,
-                "value": 4294172672
-              }
-            ],
-            "firmware": "x100v-301"
-          },
-          {
-            "findings": [
-              {
-                "addresses": [
-                  38672544
-                ],
-                "kind": "data-page",
-                "matches": 1,
-                "value": 4294172672
-              }
-            ],
-            "firmware": "xe4-201"
-          },
-          {
-            "findings": [
-              {
-                "addresses": [
-                  37685936
-                ],
-                "kind": "data-page",
-                "matches": 1,
-                "value": 4294172672
-              }
-            ],
-            "firmware": "xpro3-200"
-          },
-          {
-            "findings": [
-              {
-                "addresses": [
-                  40144348
-                ],
-                "kind": "data-page",
-                "matches": 1,
-                "value": 4294172672
-              }
-            ],
-            "firmware": "xs10-311"
-          },
-          {
-            "findings": [
-              {
-                "addresses": [
-                  35417808
-                ],
-                "kind": "data-page",
-                "matches": 1,
-                "value": 4294172672
-              }
-            ],
-            "firmware": "xt3-511"
-          },
-          {
-            "findings": [
-              {
-                "addresses": [
-                  34781888
-                ],
-                "kind": "data-page",
-                "matches": 1,
-                "value": 4294172672
-              }
-            ],
-            "firmware": "xt30-201"
-          },
-          {
-            "findings": [
-              {
-                "addresses": [
-                  39335512
-                ],
-                "kind": "data-page",
-                "matches": 1,
-                "value": 4294172672
-              }
-            ],
-            "firmware": "xt30ii-204"
-          },
-          {
-            "findings": [
-              {
-                "addresses": [
-                  39467736
-                ],
-                "kind": "data-page",
-                "matches": 1,
-                "value": 4294172672
-              }
-            ],
-            "firmware": "xt4-212"
-          }
-        ],
-        "lines": []
-      }
-    },
     "block-fff48000": {
       "base": 4294213632,
       "evidence": {
@@ -5447,6 +5322,958 @@
         ],
         "lines": []
       }
+    },
+    "byte-i2c-0": {
+      "base": 4294168576,
+      "evidence": {
+        "base": [
+          {
+            "findings": [
+              {
+                "addresses": [
+                  18744624,
+                  18744676,
+                  18744708,
+                  18744740,
+                  18744824,
+                  18744856,
+                  18744920,
+                  18744952
+                ],
+                "kind": "code-page",
+                "matches": 8,
+                "value": 4294168576
+              }
+            ],
+            "firmware": "gfx100s-213"
+          },
+          {
+            "findings": [
+              {
+                "addresses": [
+                  17388016,
+                  17388060,
+                  17388176,
+                  17388324,
+                  17389580,
+                  17389628,
+                  17389652,
+                  17389720
+                ],
+                "kind": "code-page",
+                "matches": 12,
+                "value": 4294168576
+              }
+            ],
+            "firmware": "x100v-301"
+          },
+          {
+            "findings": [
+              {
+                "addresses": [
+                  18652076,
+                  18652128,
+                  18652160,
+                  18652192,
+                  18652276,
+                  18652308,
+                  18652372,
+                  18652404
+                ],
+                "kind": "code-page",
+                "matches": 8,
+                "value": 4294168576
+              }
+            ],
+            "firmware": "xe4-201"
+          },
+          {
+            "findings": [
+              {
+                "addresses": [
+                  17381400,
+                  17381444,
+                  17381560,
+                  17381708,
+                  17382964,
+                  17383012,
+                  17383036,
+                  17383104
+                ],
+                "kind": "code-page",
+                "matches": 12,
+                "value": 4294168576
+              }
+            ],
+            "firmware": "xpro3-200"
+          },
+          {
+            "findings": [
+              {
+                "addresses": [
+                  18700848,
+                  18700900,
+                  18700932,
+                  18700964,
+                  18701048,
+                  18701080,
+                  18701144,
+                  18701176
+                ],
+                "kind": "code-page",
+                "matches": 8,
+                "value": 4294168576
+              },
+              {
+                "addresses": [
+                  22818092
+                ],
+                "kind": "data-page",
+                "matches": 1,
+                "value": 4294168576
+              }
+            ],
+            "firmware": "xs10-311"
+          },
+          {
+            "findings": [
+              {
+                "addresses": [
+                  17264680,
+                  17264724,
+                  17264840,
+                  17264988,
+                  17266108,
+                  17266156,
+                  17266180,
+                  17266248
+                ],
+                "kind": "code-page",
+                "matches": 12,
+                "value": 4294168576
+              }
+            ],
+            "firmware": "xt3-511"
+          },
+          {
+            "findings": [
+              {
+                "addresses": [
+                  17241164,
+                  17241208,
+                  17241324,
+                  17241472,
+                  17242592,
+                  17242640,
+                  17242664,
+                  17242732
+                ],
+                "kind": "code-page",
+                "matches": 12,
+                "value": 4294168576
+              }
+            ],
+            "firmware": "xt30-201"
+          },
+          {
+            "findings": [
+              {
+                "addresses": [
+                  18659168,
+                  18659220,
+                  18659252,
+                  18659284,
+                  18659368,
+                  18659400,
+                  18659464,
+                  18659496
+                ],
+                "kind": "code-page",
+                "matches": 8,
+                "value": 4294168576
+              }
+            ],
+            "firmware": "xt30ii-204"
+          },
+          {
+            "findings": [
+              {
+                "addresses": [
+                  18515904,
+                  18515956,
+                  18515988,
+                  18516020,
+                  18516104,
+                  18516136,
+                  18516200,
+                  18516232
+                ],
+                "kind": "code-page",
+                "matches": 8,
+                "value": 4294168576
+              },
+              {
+                "addresses": [
+                  22651772
+                ],
+                "kind": "data-page",
+                "matches": 1,
+                "value": 4294168576
+              }
+            ],
+            "firmware": "xt4-212"
+          }
+        ],
+        "lines": [
+          {
+            "byte_table": 22708020,
+            "descriptor": 3,
+            "firmware": "gfx100s-213",
+            "function": 18746412,
+            "line": 65,
+            "row": 22710748,
+            "site": 18746516
+          },
+          {
+            "byte_table": 25241540,
+            "descriptor": 3,
+            "firmware": "gfx100s-213",
+            "function": 19125416,
+            "line": 65,
+            "row": 22710748,
+            "site": 19125540
+          },
+          {
+            "byte_table": 20969440,
+            "descriptor": 3,
+            "firmware": "x100v-301",
+            "function": 17389432,
+            "line": 65,
+            "row": 20972100,
+            "site": 17389536
+          },
+          {
+            "byte_table": 22445120,
+            "descriptor": 3,
+            "firmware": "xe4-201",
+            "function": 18653864,
+            "line": 65,
+            "row": 22447828,
+            "site": 18653968
+          },
+          {
+            "byte_table": 23795976,
+            "descriptor": 3,
+            "firmware": "xe4-201",
+            "function": 18963236,
+            "line": 65,
+            "row": 22447828,
+            "site": 18963360
+          },
+          {
+            "byte_table": 21202856,
+            "descriptor": 3,
+            "firmware": "xpro3-200",
+            "function": 17382816,
+            "line": 65,
+            "row": 21205512,
+            "site": 17382920
+          },
+          {
+            "byte_table": 22721448,
+            "descriptor": 3,
+            "firmware": "xs10-311",
+            "function": 18702636,
+            "line": 65,
+            "row": 22724156,
+            "site": 18702740
+          },
+          {
+            "byte_table": 24860756,
+            "descriptor": 3,
+            "firmware": "xs10-311",
+            "function": 19069816,
+            "line": 65,
+            "row": 22724156,
+            "site": 19069940
+          },
+          {
+            "byte_table": 20863496,
+            "descriptor": 3,
+            "firmware": "xt3-511",
+            "function": 17265960,
+            "line": 65,
+            "row": 20866180,
+            "site": 17266064
+          },
+          {
+            "byte_table": 22003992,
+            "descriptor": 3,
+            "firmware": "xt3-511",
+            "function": 17588816,
+            "line": 65,
+            "row": 20866180,
+            "site": 17588940
+          },
+          {
+            "byte_table": 20668784,
+            "descriptor": 3,
+            "firmware": "xt30-201",
+            "function": 17242444,
+            "line": 65,
+            "row": 20671428,
+            "site": 17242548
+          },
+          {
+            "byte_table": 22474256,
+            "descriptor": 3,
+            "firmware": "xt30ii-204",
+            "function": 18660956,
+            "line": 65,
+            "row": 22476968,
+            "site": 18661060
+          },
+          {
+            "byte_table": 24221796,
+            "descriptor": 3,
+            "firmware": "xt30ii-204",
+            "function": 18972324,
+            "line": 65,
+            "row": 22476968,
+            "site": 18972448
+          },
+          {
+            "byte_table": 22555736,
+            "descriptor": 3,
+            "firmware": "xt4-212",
+            "function": 18517692,
+            "line": 65,
+            "row": 22558444,
+            "site": 18517796
+          },
+          {
+            "byte_table": 24297524,
+            "descriptor": 3,
+            "firmware": "xt4-212",
+            "function": 18889776,
+            "line": 65,
+            "row": 22558444,
+            "site": 18889900
+          }
+        ]
+      },
+      "lines": [
+        65
+      ]
+    },
+    "byte-i2c-1": {
+      "base": 4294172672,
+      "evidence": {
+        "base": [
+          {
+            "findings": [
+              {
+                "addresses": [
+                  40849244
+                ],
+                "kind": "data-page",
+                "matches": 1,
+                "value": 4294172672
+              }
+            ],
+            "firmware": "gfx100s-213"
+          },
+          {
+            "findings": [
+              {
+                "addresses": [
+                  36279116
+                ],
+                "kind": "data-page",
+                "matches": 1,
+                "value": 4294172672
+              }
+            ],
+            "firmware": "x100v-301"
+          },
+          {
+            "findings": [
+              {
+                "addresses": [
+                  38672544
+                ],
+                "kind": "data-page",
+                "matches": 1,
+                "value": 4294172672
+              }
+            ],
+            "firmware": "xe4-201"
+          },
+          {
+            "findings": [
+              {
+                "addresses": [
+                  37685936
+                ],
+                "kind": "data-page",
+                "matches": 1,
+                "value": 4294172672
+              }
+            ],
+            "firmware": "xpro3-200"
+          },
+          {
+            "findings": [
+              {
+                "addresses": [
+                  40144348
+                ],
+                "kind": "data-page",
+                "matches": 1,
+                "value": 4294172672
+              }
+            ],
+            "firmware": "xs10-311"
+          },
+          {
+            "findings": [
+              {
+                "addresses": [
+                  35417808
+                ],
+                "kind": "data-page",
+                "matches": 1,
+                "value": 4294172672
+              }
+            ],
+            "firmware": "xt3-511"
+          },
+          {
+            "findings": [
+              {
+                "addresses": [
+                  34781888
+                ],
+                "kind": "data-page",
+                "matches": 1,
+                "value": 4294172672
+              }
+            ],
+            "firmware": "xt30-201"
+          },
+          {
+            "findings": [
+              {
+                "addresses": [
+                  39335512
+                ],
+                "kind": "data-page",
+                "matches": 1,
+                "value": 4294172672
+              }
+            ],
+            "firmware": "xt30ii-204"
+          },
+          {
+            "findings": [
+              {
+                "addresses": [
+                  39467736
+                ],
+                "kind": "data-page",
+                "matches": 1,
+                "value": 4294172672
+              }
+            ],
+            "firmware": "xt4-212"
+          }
+        ],
+        "lines": [
+          {
+            "byte_table": 22708020,
+            "descriptor": 4,
+            "firmware": "gfx100s-213",
+            "function": 18746412,
+            "line": 66,
+            "row": 22710764,
+            "site": 18746516
+          },
+          {
+            "byte_table": 25241540,
+            "descriptor": 4,
+            "firmware": "gfx100s-213",
+            "function": 19125416,
+            "line": 66,
+            "row": 22710764,
+            "site": 19125540
+          },
+          {
+            "byte_table": 20969440,
+            "descriptor": 4,
+            "firmware": "x100v-301",
+            "function": 17389432,
+            "line": 66,
+            "row": 20972116,
+            "site": 17389536
+          },
+          {
+            "byte_table": 22445120,
+            "descriptor": 4,
+            "firmware": "xe4-201",
+            "function": 18653864,
+            "line": 66,
+            "row": 22447844,
+            "site": 18653968
+          },
+          {
+            "byte_table": 23795976,
+            "descriptor": 4,
+            "firmware": "xe4-201",
+            "function": 18963236,
+            "line": 66,
+            "row": 22447844,
+            "site": 18963360
+          },
+          {
+            "byte_table": 21202856,
+            "descriptor": 4,
+            "firmware": "xpro3-200",
+            "function": 17382816,
+            "line": 66,
+            "row": 21205528,
+            "site": 17382920
+          },
+          {
+            "byte_table": 22721448,
+            "descriptor": 4,
+            "firmware": "xs10-311",
+            "function": 18702636,
+            "line": 66,
+            "row": 22724172,
+            "site": 18702740
+          },
+          {
+            "byte_table": 24860756,
+            "descriptor": 4,
+            "firmware": "xs10-311",
+            "function": 19069816,
+            "line": 66,
+            "row": 22724172,
+            "site": 19069940
+          },
+          {
+            "byte_table": 20863496,
+            "descriptor": 4,
+            "firmware": "xt3-511",
+            "function": 17265960,
+            "line": 66,
+            "row": 20866196,
+            "site": 17266064
+          },
+          {
+            "byte_table": 22003992,
+            "descriptor": 4,
+            "firmware": "xt3-511",
+            "function": 17588816,
+            "line": 66,
+            "row": 20866196,
+            "site": 17588940
+          },
+          {
+            "byte_table": 20668784,
+            "descriptor": 4,
+            "firmware": "xt30-201",
+            "function": 17242444,
+            "line": 66,
+            "row": 20671444,
+            "site": 17242548
+          },
+          {
+            "byte_table": 22474256,
+            "descriptor": 4,
+            "firmware": "xt30ii-204",
+            "function": 18660956,
+            "line": 66,
+            "row": 22476984,
+            "site": 18661060
+          },
+          {
+            "byte_table": 24221796,
+            "descriptor": 4,
+            "firmware": "xt30ii-204",
+            "function": 18972324,
+            "line": 66,
+            "row": 22476984,
+            "site": 18972448
+          },
+          {
+            "byte_table": 22555736,
+            "descriptor": 4,
+            "firmware": "xt4-212",
+            "function": 18517692,
+            "line": 66,
+            "row": 22558460,
+            "site": 18517796
+          },
+          {
+            "byte_table": 24297524,
+            "descriptor": 4,
+            "firmware": "xt4-212",
+            "function": 18889776,
+            "line": 66,
+            "row": 22558460,
+            "site": 18889900
+          }
+        ]
+      },
+      "lines": [
+        66
+      ]
+    },
+    "byte-i2c-2": {
+      "base": 4294176768,
+      "evidence": {
+        "base": [
+          {
+            "findings": [
+              {
+                "addresses": [
+                  22687156,
+                  22687256,
+                  22690864,
+                  22691000,
+                  22691504,
+                  22691512,
+                  22691648,
+                  22691656
+                ],
+                "kind": "data-page",
+                "matches": 163,
+                "value": 4294176768
+              }
+            ],
+            "firmware": "gfx100s-213"
+          },
+          {
+            "findings": [
+              {
+                "addresses": [
+                  20943344,
+                  20943644,
+                  20943736,
+                  20951244,
+                  20951404,
+                  20951568,
+                  20955476,
+                  20959176
+                ],
+                "kind": "data-page",
+                "matches": 124,
+                "value": 4294176768
+              }
+            ],
+            "firmware": "x100v-301"
+          },
+          {
+            "findings": [
+              {
+                "addresses": [
+                  22424896,
+                  22425936,
+                  22426824,
+                  22426968,
+                  22427500,
+                  22428976,
+                  22429048,
+                  22435708
+                ],
+                "kind": "data-page",
+                "matches": 120,
+                "value": 4294176768
+              }
+            ],
+            "firmware": "xe4-201"
+          },
+          {
+            "findings": [
+              {
+                "addresses": [
+                  21182696,
+                  21183736,
+                  21184624,
+                  21184768,
+                  21185300,
+                  21186776,
+                  21186848,
+                  21193508
+                ],
+                "kind": "data-page",
+                "matches": 119,
+                "value": 4294176768
+              }
+            ],
+            "firmware": "xpro3-200"
+          },
+          {
+            "findings": [
+              {
+                "addresses": [
+                  14958968,
+                  16007544,
+                  22701160,
+                  22702200,
+                  22703088,
+                  22703232,
+                  22703764,
+                  22705240
+                ],
+                "kind": "data-page",
+                "matches": 122,
+                "value": 4294176768
+              }
+            ],
+            "firmware": "xs10-311"
+          },
+          {
+            "findings": [
+              {
+                "addresses": [
+                  7653788,
+                  13938040,
+                  14986616,
+                  20843392,
+                  20844432,
+                  20845320,
+                  20845464,
+                  20845996
+                ],
+                "kind": "data-page",
+                "matches": 122,
+                "value": 4294176768
+              }
+            ],
+            "firmware": "xt3-511"
+          },
+          {
+            "findings": [
+              {
+                "addresses": [
+                  7530144,
+                  13945164,
+                  14993740,
+                  20648680,
+                  20649720,
+                  20650608,
+                  20650752,
+                  20651284
+                ],
+                "kind": "data-page",
+                "matches": 122,
+                "value": 4294176768
+              }
+            ],
+            "firmware": "xt30-201"
+          },
+          {
+            "findings": [
+              {
+                "addresses": [
+                  22453984,
+                  22455024,
+                  22455912,
+                  22456056,
+                  22456588,
+                  22458064,
+                  22458136,
+                  22464796
+                ],
+                "kind": "data-page",
+                "matches": 120,
+                "value": 4294176768
+              }
+            ],
+            "firmware": "xt30ii-204"
+          },
+          {
+            "findings": [
+              {
+                "addresses": [
+                  22535464,
+                  22536504,
+                  22537392,
+                  22537536,
+                  22538068,
+                  22539544,
+                  22539616,
+                  22546276
+                ],
+                "kind": "data-page",
+                "matches": 120,
+                "value": 4294176768
+              }
+            ],
+            "firmware": "xt4-212"
+          }
+        ],
+        "lines": [
+          {
+            "byte_table": 22708020,
+            "descriptor": 5,
+            "firmware": "gfx100s-213",
+            "function": 18746412,
+            "line": 67,
+            "row": 22710780,
+            "site": 18746516
+          },
+          {
+            "byte_table": 25241540,
+            "descriptor": 5,
+            "firmware": "gfx100s-213",
+            "function": 19125416,
+            "line": 67,
+            "row": 22710780,
+            "site": 19125540
+          },
+          {
+            "byte_table": 20969440,
+            "descriptor": 5,
+            "firmware": "x100v-301",
+            "function": 17389432,
+            "line": 67,
+            "row": 20972132,
+            "site": 17389536
+          },
+          {
+            "byte_table": 22445120,
+            "descriptor": 5,
+            "firmware": "xe4-201",
+            "function": 18653864,
+            "line": 67,
+            "row": 22447860,
+            "site": 18653968
+          },
+          {
+            "byte_table": 23795976,
+            "descriptor": 5,
+            "firmware": "xe4-201",
+            "function": 18963236,
+            "line": 67,
+            "row": 22447860,
+            "site": 18963360
+          },
+          {
+            "byte_table": 21202856,
+            "descriptor": 5,
+            "firmware": "xpro3-200",
+            "function": 17382816,
+            "line": 67,
+            "row": 21205544,
+            "site": 17382920
+          },
+          {
+            "byte_table": 23342396,
+            "descriptor": 5,
+            "firmware": "xpro3-200",
+            "function": 17695252,
+            "line": 67,
+            "row": 21205544,
+            "site": 17695376
+          },
+          {
+            "byte_table": 22721448,
+            "descriptor": 5,
+            "firmware": "xs10-311",
+            "function": 18702636,
+            "line": 67,
+            "row": 22724188,
+            "site": 18702740
+          },
+          {
+            "byte_table": 24860756,
+            "descriptor": 5,
+            "firmware": "xs10-311",
+            "function": 19069816,
+            "line": 67,
+            "row": 22724188,
+            "site": 19069940
+          },
+          {
+            "byte_table": 20863496,
+            "descriptor": 5,
+            "firmware": "xt3-511",
+            "function": 17265960,
+            "line": 67,
+            "row": 20866212,
+            "site": 17266064
+          },
+          {
+            "byte_table": 22003992,
+            "descriptor": 5,
+            "firmware": "xt3-511",
+            "function": 17588816,
+            "line": 67,
+            "row": 20866212,
+            "site": 17588940
+          },
+          {
+            "byte_table": 20668784,
+            "descriptor": 5,
+            "firmware": "xt30-201",
+            "function": 17242444,
+            "line": 67,
+            "row": 20671460,
+            "site": 17242548
+          },
+          {
+            "byte_table": 21615404,
+            "descriptor": 5,
+            "firmware": "xt30-201",
+            "function": 17541500,
+            "line": 67,
+            "row": 20671460,
+            "site": 17541624
+          },
+          {
+            "byte_table": 22474256,
+            "descriptor": 5,
+            "firmware": "xt30ii-204",
+            "function": 18660956,
+            "line": 67,
+            "row": 22477000,
+            "site": 18661060
+          },
+          {
+            "byte_table": 24221796,
+            "descriptor": 5,
+            "firmware": "xt30ii-204",
+            "function": 18972324,
+            "line": 67,
+            "row": 22477000,
+            "site": 18972448
+          },
+          {
+            "byte_table": 22555736,
+            "descriptor": 5,
+            "firmware": "xt4-212",
+            "function": 18517692,
+            "line": 67,
+            "row": 22558476,
+            "site": 18517796
+          },
+          {
+            "byte_table": 24297524,
+            "descriptor": 5,
+            "firmware": "xt4-212",
+            "function": 18889776,
+            "line": 67,
+            "row": 22558476,
+            "site": 18889900
+          }
+        ]
+      },
+      "lines": [
+        67
+      ]
     },
     "control-group-ff701000": {
       "base": 4285534208,
