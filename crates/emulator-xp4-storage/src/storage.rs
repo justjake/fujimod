@@ -1222,8 +1222,50 @@ impl Channel {
         fixed(0x1c, 0x14) || fixed(0x20, 0x18)
     }
 }
+/// A running full-duplex exchange through a declared synchronous serial
+/// controller (see [`crate::serial_link`]).
+///
+/// Observed register behavior: with the controller's transmit and receive
+/// requests enabled (its `+0x24` = 3), a driver starts a receive channel whose
+/// fixed source is the controller's data register (`+0x1c` = 4, `+0x20` = 0),
+/// then a transmit channel of the same length whose fixed destination is it
+/// (`+0x1c` = 0, `+0x20` = 4), one byte per unit. It detects completion only
+/// through the receive channel's IRQ, then stops both channels.
+///
+/// The exchange starts when the transmit channel starts (nothing shifts
+/// before a master transmits) and lasts one controller word time per word,
+/// with no setup charge: the controller's clock paces it, as a declared
+/// audio FIFO paces its block. When the last word has shifted, every
+/// transmitted word (read from RAM then) has gone through the controller's
+/// input peer at its own shift tick, the received words are written to the
+/// receive buffer, and both channels complete as a finished block does.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+struct SpiExchange {
+    receive: usize,
+    transmit: usize,
+    /// Tick the transmit channel started.
+    start: u64,
+    words: u64,
+    /// Bytes per transfer: one word.
+    width: u64,
+    bits: u32,
+    word_ticks: u64,
+}
+impl SpiExchange {
+    /// Tick at which the last word has shifted.
+    fn end(&self) -> Option<u64> {
+        self.words
+            .checked_mul(self.word_ticks)
+            .and_then(|ticks| self.start.checked_add(ticks))
+    }
+}
 pub struct DmaController {
     receiver: Option<crate::tx_receiver::SharedReceiver>,
+    /// Declared synchronous serial controllers by data register.
+    serial: Option<crate::serial_link::SerialLinks>,
+    /// Running exchanges by data register.
+    spi: BTreeMap<u64, SpiExchange>,
     port: Option<Shared>,
     standalone_admitted: bool,
     channels: [Channel; 16],
@@ -1239,7 +1281,11 @@ pub struct DmaController {
 impl DmaController {
     pub fn new(port: Shared, routes: [u32; 16]) -> Self {
         Self {
-            receiver: None, port: Some(port), standalone_admitted: false,
+            receiver: None,
+            serial: None,
+            spi: BTreeMap::new(),
+            port: Some(port),
+            standalone_admitted: false,
             channels: Default::default(),
             routes,
             mux: BTreeMap::new(),
@@ -1337,13 +1383,241 @@ impl DmaController {
         {
             return Err("Invalid explicit standalone XP4 DMA profiles or IRQ routes".into());
         }
-        Ok(Self { receiver: None, port: None, standalone_admitted: false, channels: Default::default(), routes,
+        Ok(Self { receiver: None, serial: None, spi: BTreeMap::new(), port: None, standalone_admitted: false,
+            channels: Default::default(), routes,
             mux: BTreeMap::new(), mux_changed: [0; 16], request: BTreeMap::new(), audio: None,
             microphone_frames: 0 })
     }
     pub fn with_receiver(mut self, receiver: crate::tx_receiver::SharedReceiver) -> Self {
         self.receiver = Some(receiver);
         self
+    }
+    /// Connects the declared synchronous serial controllers (see
+    /// [`SpiExchange`]). Channels whose fixed side is none of their data
+    /// registers keep every other behavior.
+    pub fn with_serial_links(mut self, links: crate::serial_link::SerialLinks) -> Self {
+        self.serial = Some(links);
+        self
+    }
+    /// The declared serial controller channel `c` moves words through: its
+    /// data register, and whether the channel transmits (fixed destination)
+    /// rather than receives (fixed source).
+    fn spi_side_of(&self, c: &Channel) -> Option<(u64, bool)> {
+        let links = self.serial.as_ref()?;
+        let (src, dst) = (u64::from(c.regs[0x14 / 4]), u64::from(c.regs[0x18 / 4]));
+        if c.regs[0x20 / 4] & 4 != 0 && links.contains(dst) {
+            Some((dst, true))
+        } else if c.regs[0x1c / 4] & 4 != 0 && links.contains(src) {
+            Some((src, false))
+        } else {
+            None
+        }
+    }
+    /// Data register of the running exchange channel `n` belongs to.
+    fn spi_exchange_of(&self, n: usize) -> Option<u64> {
+        self.spi
+            .iter()
+            .find(|(_, x)| x.receive == n || x.transmit == n)
+            .map(|(&register, _)| register)
+    }
+    /// A submitted receive channel on `register` other than `n`.
+    fn spi_receiver(&self, register: u64, n: usize) -> Option<usize> {
+        (0..16).find(|&m| {
+            m != n
+                && self.channels[m].submitted
+                && self.spi_side_of(&self.channels[m]) == Some((register, false))
+        })
+    }
+    /// Bytes per transfer of a serial controller channel, when its source and
+    /// destination configuration (`+0x1c`, `+0x20`: fixed flag bit 2, unit
+    /// minus one in bits 8..15, log2 width in bits 16..17) move one transfer
+    /// per unit, with the same width on both sides and the fixed flag on the
+    /// data register side only.
+    fn spi_width(c: &Channel, transmit: bool) -> Option<u64> {
+        let width = (c.regs[0x1c / 4] >> 16) & 3;
+        let (source, destination) = if transmit { (0, 4) } else { (4, 0) };
+        (c.regs[0x1c / 4] == width << 16 | source && c.regs[0x20 / 4] == width << 16 | destination)
+            .then_some(1 << width)
+    }
+    /// Request line routed to channel `n` (`0xfff4a500 + (n / 2) * 4`, lane
+    /// `n % 2`), recorded but not required for serial controller exchanges.
+    fn request_line(&self, n: usize) -> u64 {
+        let mux = *self
+            .mux
+            .get(&(0xfff4a500 + (n / 2) as u64 * 4))
+            .unwrap_or(&0);
+        u64::from((mux >> ((n % 2) * 8)) & 63)
+    }
+    /// Starts channel `n`, whose fixed side is the data register `register` of
+    /// a declared serial controller (see [`SpiExchange`]).
+    fn start_spi(
+        &mut self,
+        cx: &mut Cx<'_>,
+        n: usize,
+        (register, transmit): (u64, bool),
+        value: u32,
+    ) -> Result<(), String> {
+        let c = &self.channels[n];
+        if c.submitted {
+            return Err("XP4 DMA channel start while busy".into());
+        }
+        if self.audio(n).is_some() {
+            return Err("XP4 SPI DMA on a declared audio channel is not modeled".into());
+        }
+        if c.regs[0x24 / 4] != 0 {
+            return Err("XP4 SPI DMA cannot link a next descriptor (+0x24 must be 0)".into());
+        }
+        let Some(width) = Self::spi_width(c, transmit) else {
+            return Err(
+                "XP4 SPI DMA must move one word per unit, fixed on the data register side only"
+                    .into(),
+            );
+        };
+        let peer = self
+            .serial
+            .as_ref()
+            .and_then(|links| links.get(register))
+            .ok_or("XP4 SPI DMA controller is not declared")?;
+        let (bit, direction) = if transmit {
+            (1, "transmit")
+        } else {
+            (2, "receive")
+        };
+        if peer.requests()? & bit == 0 {
+            return Err(format!(
+                "XP4 SPI DMA {direction} request is not enabled at {:#x} (+0x24 bit {})",
+                register - 8,
+                bit >> 1
+            ));
+        }
+        peer.check_idle()?;
+        let now = cx.now();
+        if !transmit {
+            if self.spi_receiver(register, n).is_some() {
+                return Err("XP4 SPI DMA already has a receive channel on this controller".into());
+            }
+            // Nothing shifts until a transmit channel feeds the controller.
+            let c = &mut self.channels[n];
+            c.regs[0x28 / 4] = value;
+            c.regs[0x30 / 4] = 0x10000;
+            c.submitted = true;
+            c.submitted_at = now;
+            return Ok(());
+        }
+        let Some(receive) = self.spi_receiver(register, n) else {
+            return Err("XP4 SPI DMA transmit needs a running receive channel on the same controller (transmit-only or transmit-first exchanges are not modeled)".into());
+        };
+        let rx = &self.channels[receive];
+        if rx.regs[0x10 / 4] != c.regs[0x10 / 4] {
+            return Err("XP4 SPI DMA transmit and receive lengths differ".into());
+        }
+        if Self::spi_width(rx, false) != Some(width) {
+            return Err("XP4 SPI DMA transmit and receive transfer widths differ".into());
+        }
+        let bytes = u64::from(c.regs[0x10 / 4]) + 1;
+        let exchange = peer.begin(now, bytes, width)?;
+        let x = SpiExchange {
+            receive,
+            transmit: n,
+            start: now,
+            words: bytes / width,
+            width,
+            bits: exchange.bits,
+            word_ticks: exchange.word_ticks,
+        };
+        if x.end() != Some(exchange.end) || u64::from(exchange.bits.div_ceil(8)) != width {
+            let _ = peer.finish(now, exchange.end);
+            return Err("XP4 SPI DMA exchange timing differs from the controller's".into());
+        }
+        for m in [n, receive] {
+            self.channels[m].due = Some(exchange.end);
+            cx.schedule(exchange.end, m as u64);
+        }
+        let c = &mut self.channels[n];
+        c.regs[0x28 / 4] = value;
+        c.regs[0x30 / 4] = 0x10000;
+        c.submitted = true;
+        c.submitted_at = now;
+        self.spi.insert(register, x);
+        cx.record(Record::new(
+            "XP4 SPI DMA exchange start",
+            [
+                ("data_register", Field::int(register)),
+                ("receive_channel", Field::int(receive as u64)),
+                ("transmit_channel", Field::int(n as u64)),
+                ("receive_request", Field::int(self.request_line(receive))),
+                ("transmit_request", Field::int(self.request_line(n))),
+                ("bytes", Field::int(bytes)),
+                ("word_ticks", Field::int(exchange.word_ticks)),
+                ("tick", Field::int(now)),
+                ("end", Field::int(exchange.end)),
+            ],
+        ));
+        Ok(())
+    }
+    /// The last word of the exchange through `register` has shifted.
+    fn complete_spi(&mut self, cx: &mut Cx<'_>, register: u64) -> Result<(), String> {
+        let x = *self
+            .spi
+            .get(&register)
+            .ok_or("XP4 SPI DMA exchange is missing")?;
+        let end = x.end().ok_or("XP4 DMA deadline overflow")?;
+        let peer = self
+            .serial
+            .as_ref()
+            .and_then(|links| links.get(register))
+            .ok_or("XP4 SPI DMA controller is not declared")?;
+        let width = x.width as usize;
+        let size = x.words as usize * width;
+        let tx = cx.ram_bytes(u64::from(self.channels[x.transmit].regs[0x14 / 4]), size)?;
+        let mut rx = Vec::with_capacity(size);
+        for (index, word) in tx.chunks_exact(width).enumerate() {
+            let value = word.iter().rev().fold(0u16, |v, &b| v << 8 | u16::from(b));
+            let tick = x.start + (index as u64 + 1) * x.word_ticks;
+            let received = peer.shift(value, tick)?;
+            rx.extend_from_slice(&received.to_le_bytes()[..width]);
+            cx.record(Record::new(
+                "XP4 SPI DMA word",
+                [
+                    ("data_register", Field::int(register)),
+                    ("tx", Field::int(value)),
+                    ("rx", Field::int(received)),
+                    ("bits", Field::int(x.bits)),
+                    ("tick", Field::int(tick)),
+                ],
+            ));
+        }
+        cx.ram_write(u64::from(self.channels[x.receive].regs[0x18 / 4]), &rx)?;
+        peer.finish(x.start, end)?;
+        self.spi.remove(&register);
+        for n in [x.transmit, x.receive] {
+            let c = &mut self.channels[n];
+            let (src, dst) = (u64::from(c.regs[0x14 / 4]), u64::from(c.regs[0x18 / 4]));
+            if c.regs[0x1c / 4] & 4 == 0 {
+                c.regs[0x14 / 4] = c.regs[0x14 / 4].wrapping_add(size as u32);
+            }
+            if c.regs[0x20 / 4] & 4 == 0 {
+                c.regs[0x18 / 4] = c.regs[0x18 / 4].wrapping_add(size as u32);
+            }
+            c.regs[0x30 / 4] = 1;
+            c.regs[0x28 / 4] &= !0x10000000;
+            c.submitted = false;
+            c.due = None;
+            c.completed += 1;
+            cx.set_irq(self.routes[n], true);
+            cx.record(Record::new(
+                "XP4 DMA complete",
+                [
+                    ("channel", Field::int(n as u64)),
+                    ("source", Field::int(src)),
+                    ("destination", Field::int(dst)),
+                    ("size", Field::int(size as u64)),
+                    ("irq", Field::int(self.routes[n])),
+                    ("tick", Field::int(end)),
+                ],
+            ));
+        }
+        Ok(())
     }
     fn admit(&mut self, cx: &mut Cx<'_>) {
         if self.port.is_some() || self.standalone_admitted { return; }
@@ -1372,6 +1646,11 @@ impl DmaController {
     fn ready_time(&self, n: usize) -> Option<u64> {
         let c = &self.channels[n];
         if !c.submitted || c.due.is_some() {
+            return None;
+        }
+        // A serial controller channel waits for its exchange, which sets
+        // both deadlines when it starts.
+        if self.spi_side_of(c).is_some() {
             return None;
         }
         let src = u64::from(c.regs[0x14 / 4]);
@@ -1495,6 +1774,28 @@ impl DmaController {
                 .check_mutation(u64::from(c.regs[0x18 / 4]), c.regs[0x10 / 4] as usize + 1)?;
         }
         self.admit(cx);
+        if write
+            && matches!(o, 0x28 | 0x30)
+            && let Some(side) = self.spi_side_of(&self.channels[n])
+        {
+            if o == 0x28 && value & 0x10000001 == 0x10000001 {
+                return self.start_spi(cx, n, side, value).map(|()| 0);
+            }
+            if self.spi_exchange_of(n).is_some() {
+                return Err(if o == 0x28 {
+                    "XP4 SPI DMA channel stopped during its exchange"
+                } else {
+                    "XP4 SPI DMA channel status written during its exchange"
+                }
+                .into());
+            }
+            // A waiting receive channel may be stopped (+0x28), not acknowledged.
+            if o == 0x30 && self.channels[n].submitted {
+                return Err(
+                    "XP4 SPI DMA channel status written while it waits for its exchange".into(),
+                );
+            }
+        }
         let audio = self.audio(n).is_some();
         if !write && matches!(o, 0x14 | 0x18) && self.channels[n].submitted && self.paced(n) {
             // A paced block moves continuously: its incremented address reads
@@ -1750,9 +2051,16 @@ impl Device for DmaController {
         if n < 16
             && self.channels[n].submitted
             && self.channels[n].due.is_some_and(|at| at <= cx.now())
-            && let Err(e) = self.complete(cx, n)
         {
-            cx.fail(e);
+            // Both channels of an exchange share one deadline: the first of
+            // their events completes the pair.
+            let result = match self.spi_exchange_of(n) {
+                Some(register) => self.complete_spi(cx, register),
+                None => self.complete(cx, n),
+            };
+            if let Err(e) = result {
+                cx.fail(e);
+            }
         }
     }
     fn checkpoint(&self) -> Result<fujimod_emulator_devices::checkpoint::Checkpoint, String> {
@@ -1767,6 +2075,7 @@ impl Device for DmaController {
     fn save(&self) -> Value {
         let mut state = json!({"channels":self.channels.iter().map(|c|json!({"registers":c.regs.to_vec(),"next":c.due,"submitted":c.submitted,"submitted_at":c.submitted_at,"completed":c.completed})).collect::<Vec<_>>(),"irq_routes":self.routes,"request_mux":self.mux,"request_mux_changed":self.mux_changed,"request":self.request});
         if self.receiver.is_some() { state["transmit_receiver_connected"] = json!(true); }
+        if !self.spi.is_empty() { state["spi_exchanges"] = json!(self.spi); }
         if let Some(audio) = &self.audio { state["audio"] = json!(audio); }
         if self.microphone().is_some() {
             state["microphone_frames"] = json!(self.microphone_frames);
@@ -3505,6 +3814,391 @@ mod tests {
         assert_eq!(json!([host.events,host.irqs,host.records]),effects);
     }
 
+    /// A serial controller peer that answers each word with its complement
+    /// and keeps what the DMA engine asked of it.
+    #[derive(Default)]
+    struct Complement(Mutex<ComplementState>);
+    #[derive(Default)]
+    struct ComplementState {
+        requests: u32,
+        shifting: bool,
+        exchange: Option<(u64, u64)>,
+        words: Vec<(u16, u64)>,
+    }
+    impl crate::serial_link::SerialPeer for Complement {
+        fn requests(&self) -> Result<u32, String> {
+            Ok(self.0.lock().unwrap().requests)
+        }
+        fn check_idle(&self) -> Result<(), String> {
+            let state = self.0.lock().unwrap();
+            if state.shifting || state.exchange.is_some() {
+                return Err("controller busy".into());
+            }
+            Ok(())
+        }
+        fn begin(
+            &self,
+            start: u64,
+            bytes: u64,
+            width: u64,
+        ) -> Result<crate::serial_link::Exchange, String> {
+            self.check_idle()?;
+            if width != 1 {
+                return Err("not one 8-bit word".into());
+            }
+            let end = start + bytes * 288;
+            self.0.lock().unwrap().exchange = Some((start, end));
+            Ok(crate::serial_link::Exchange {
+                bits: 8,
+                word_ticks: 288,
+                end,
+            })
+        }
+        fn shift(&self, tx: u16, tick: u64) -> Result<u16, String> {
+            let mut state = self.0.lock().unwrap();
+            assert!(
+                state
+                    .exchange
+                    .is_some_and(|(start, end)| start < tick && tick <= end)
+            );
+            state.words.push((tx, tick));
+            Ok(!tx & 0xff)
+        }
+        fn finish(&self, start: u64, end: u64) -> Result<(), String> {
+            let mut state = self.0.lock().unwrap();
+            if state.exchange != Some((start, end)) {
+                return Err("exchange differs".into());
+            }
+            state.exchange = None;
+            Ok(())
+        }
+    }
+    const SPI2_DATA: u64 = 0xfff34008;
+    fn spi_links() -> (crate::serial_link::SerialLinks, Arc<Complement>) {
+        let links = crate::serial_link::SerialLinks::default();
+        let peer = Arc::new(Complement::default());
+        peer.0.lock().unwrap().requests = 3;
+        links.register(SPI2_DATA, peer.clone()).unwrap();
+        (links, peer)
+    }
+    fn spi_dma() -> (DmaController, Arc<Complement>, TestHost) {
+        let (links, peer) = spi_links();
+        (standalone().with_serial_links(links), peer, ram_host())
+    }
+    /// Programs channel `n` for `bytes` bytes between `buffer` and the SPI2
+    /// data register as the observed driver does.
+    fn spi_channel(
+        dma: &mut DmaController,
+        host: &mut TestHost,
+        n: u64,
+        transmit: bool,
+        bytes: u64,
+        buffer: u64,
+    ) {
+        let (src, dst, source, destination) = if transmit {
+            (buffer, SPI2_DATA, 0, 4)
+        } else {
+            (SPI2_DATA, buffer, 4, 0)
+        };
+        for (offset, value) in [
+            (0x10, bytes - 1),
+            (0x14, src),
+            (0x18, dst),
+            (0x1c, source),
+            (0x20, destination),
+            (0x24, 0),
+            (0x28, 0x00201011),
+        ] {
+            write(dma, host, 0, DMA + n * 0x1000 + offset, value, 0);
+        }
+    }
+    /// The observed start: acknowledge, clear the enable bit, set it.
+    fn start_spi_channel(dma: &mut DmaController, host: &mut TestHost, n: u64) -> Option<String> {
+        let channel = DMA + n * 0x1000;
+        let mut cx = Cx::new(host, 0, 0, 0);
+        for (offset, value) in [(0x30, 0), (0x28, 0x00201011), (0x28, 0x10201011)] {
+            dma.write(&mut cx, channel + offset, 4, value);
+        }
+        cx.refusal().map(str::to_owned)
+    }
+    fn field(record: &Record, key: &str) -> Option<Field> {
+        record
+            .fields
+            .iter()
+            .find(|(k, _)| k == key)
+            .map(|(_, v)| v.clone())
+    }
+    #[test]
+    fn a_full_duplex_spi_exchange_moves_each_word_through_the_controller() {
+        let (mut dma, peer, mut host) = spi_dma();
+        // Observed routing: receive on channel 5 = request 4 (high lane),
+        // transmit on channel 6 = request 5 (low lane).
+        write(&mut dma, &mut host, 0, 0xfff4a508, 0x0100042c, 0);
+        write(&mut dma, &mut host, 0, 0xfff4a50c, 0x00012c05, 0);
+        spi_channel(&mut dma, &mut host, 5, false, 4, 0x400);
+        spi_channel(&mut dma, &mut host, 6, true, 4, 0x300);
+        assert_eq!(start_spi_channel(&mut dma, &mut host, 5), None);
+        // The receive channel alone waits: nothing shifts without a transmitter.
+        dma.advance(&mut Cx::new(&mut host, 0, 0, 0));
+        assert_eq!(dma.next_deadline(100), None);
+        assert!(host.events.is_empty());
+        assert_eq!(load(&mut dma, &mut host, DMA + 0x5030), 0x10000);
+        host.now = 150;
+        assert_eq!(start_spi_channel(&mut dma, &mut host, 6), None);
+        // Each start first acknowledges its channel (+0x30 = 0), which drops
+        // that channel's IRQ line.
+        assert_eq!(host.irqs, vec![(212, false), (213, false)]);
+        host.irqs.clear();
+        let end = 150 + 4 * 288;
+        assert_eq!(dma.next_deadline(150), Some(end));
+        assert_eq!(host.events, vec![(0, end, 6), (0, end, 5)]);
+        let begun = host
+            .records
+            .iter()
+            .find(|r| r.name == "XP4 SPI DMA exchange start")
+            .unwrap();
+        for (key, value) in [
+            ("receive_request", 4u64),
+            ("transmit_request", 5),
+            ("bytes", 4),
+            ("end", end),
+        ] {
+            assert_eq!(field(begun, key), Some(Field::int(value)), "{key}");
+        }
+        let before = host.ram.clone();
+        host.now = end - 1;
+        event(&mut dma, &mut host, 0, 5);
+        assert_eq!(host.ram, before);
+        assert!(host.irqs.is_empty());
+        host.now = end;
+        event(&mut dma, &mut host, 0, 5);
+        // The partner's event finds the pair completed.
+        event(&mut dma, &mut host, 0, 6);
+        assert_eq!(&host.ram[0x400..0x404], &[0xff, 0xfe, 0xfd, 0xfc]);
+        assert_eq!(
+            peer.0.lock().unwrap().words,
+            vec![(0, 438), (1, 726), (2, 1014), (3, 1302)]
+        );
+        assert!(peer.0.lock().unwrap().exchange.is_none());
+        assert_eq!(host.irqs, vec![(213, true), (212, true)]);
+        for (n, src, dst) in [(5, SPI2_DATA, 0x404), (6, 0x304, SPI2_DATA)] {
+            let channel = DMA + n * 0x1000;
+            assert_eq!(load(&mut dma, &mut host, channel + 0x30), 1);
+            assert_eq!(load(&mut dma, &mut host, channel + 0x28), 0x00201011);
+            assert_eq!(load(&mut dma, &mut host, channel + 0x14), src);
+            assert_eq!(load(&mut dma, &mut host, channel + 0x18), dst);
+        }
+        assert!(dma.spi.is_empty() && dma.save().get("spi_exchanges").is_none());
+        assert_eq!(
+            host.records
+                .iter()
+                .filter(|r| r.name == "XP4 SPI DMA word")
+                .count(),
+            4
+        );
+        // The driver stops both channels; each acknowledge drops its IRQ.
+        write(&mut dma, &mut host, 0, DMA + 0x5030, 0, 0);
+        write(&mut dma, &mut host, 0, DMA + 0x6030, 0, 0);
+        assert_eq!(&host.irqs[2..], &[(212, false), (213, false)]);
+        // The next frame runs the same way.
+        spi_channel(&mut dma, &mut host, 5, false, 4, 0x404);
+        spi_channel(&mut dma, &mut host, 6, true, 4, 0x304);
+        assert_eq!(start_spi_channel(&mut dma, &mut host, 5), None);
+        assert_eq!(start_spi_channel(&mut dma, &mut host, 6), None);
+        assert_eq!(dma.next_deadline(end), Some(end + 4 * 288));
+    }
+    #[test]
+    fn spi_exchanges_refuse_what_the_model_does_not_cover() {
+        let refused =
+            |setup: &dyn Fn(&mut DmaController, &mut TestHost, &Complement) -> Option<String>| {
+                let (mut dma, peer, mut host) = spi_dma();
+                setup(&mut dma, &mut host, &peer).expect("refusal")
+            };
+        let cases: [(
+            &str,
+            &dyn Fn(&mut DmaController, &mut TestHost, &Complement) -> Option<String>,
+        ); 8] = [
+            ("transmit needs a running receive channel", &|d, h, _| {
+                spi_channel(d, h, 6, true, 4, 0x300);
+                start_spi_channel(d, h, 6)
+            }),
+            ("lengths differ", &|d, h, _| {
+                spi_channel(d, h, 5, false, 4, 0x400);
+                spi_channel(d, h, 6, true, 8, 0x300);
+                start_spi_channel(d, h, 5).or_else(|| start_spi_channel(d, h, 6))
+            }),
+            ("receive request is not enabled", &|d, h, p| {
+                p.0.lock().unwrap().requests = 1;
+                spi_channel(d, h, 5, false, 4, 0x400);
+                start_spi_channel(d, h, 5)
+            }),
+            ("transmit request is not enabled", &|d, h, p| {
+                p.0.lock().unwrap().requests = 2;
+                spi_channel(d, h, 5, false, 4, 0x400);
+                spi_channel(d, h, 6, true, 4, 0x300);
+                start_spi_channel(d, h, 5).or_else(|| start_spi_channel(d, h, 6))
+            }),
+            ("one word per unit", &|d, h, _| {
+                spi_channel(d, h, 5, false, 4, 0x400);
+                write(d, h, 0, DMA + 0x501c, 0x104, 0);
+                start_spi_channel(d, h, 5)
+            }),
+            ("transfer widths differ", &|d, h, _| {
+                spi_channel(d, h, 5, false, 4, 0x400);
+                spi_channel(d, h, 6, true, 4, 0x300);
+                write(d, h, 0, DMA + 0x601c, 0x10000, 0);
+                write(d, h, 0, DMA + 0x6020, 0x10004, 0);
+                start_spi_channel(d, h, 5).or_else(|| start_spi_channel(d, h, 6))
+            }),
+            ("controller busy", &|d, h, p| {
+                p.0.lock().unwrap().shifting = true;
+                spi_channel(d, h, 5, false, 4, 0x400);
+                start_spi_channel(d, h, 5)
+            }),
+            ("already has a receive channel", &|d, h, _| {
+                spi_channel(d, h, 5, false, 4, 0x400);
+                spi_channel(d, h, 7, false, 4, 0x500);
+                start_spi_channel(d, h, 5).or_else(|| start_spi_channel(d, h, 7))
+            }),
+        ];
+        for (text, setup) in cases {
+            let error = refused(setup);
+            assert!(error.contains(text), "{text}: {error}");
+        }
+        // With a serial-flash peer (the standalone engine refuses linked and
+        // repeated starts itself): no linked descriptor, no audio channel, no
+        // restart.
+        for (audio, next, text) in [
+            (None, 0x201, "cannot link a next descriptor"),
+            (
+                Some(movie_audio(vec![5], true)),
+                0,
+                "declared audio channel",
+            ),
+            (None, 0, "start while busy"),
+        ] {
+            let (links, _) = spi_links();
+            let mut dma = audio_dma(audio).unwrap().with_serial_links(links);
+            let mut host = ram_host();
+            spi_channel(&mut dma, &mut host, 5, false, 4, 0x400);
+            write(&mut dma, &mut host, 0, DMA + 0x5024, next, 0);
+            let error = start_spi_channel(&mut dma, &mut host, 5).or_else(|| {
+                let mut cx = Cx::new(&mut host, 0, 0, 0);
+                dma.write(&mut cx, DMA + 0x5028, 4, 0x10201011);
+                cx.refusal().map(str::to_owned)
+            });
+            let error = error.unwrap();
+            assert!(error.contains(text), "{text}: {error}");
+        }
+        // A running exchange keeps its channels: no stop, acknowledge or restart.
+        let (mut dma, _, mut host) = spi_dma();
+        spi_channel(&mut dma, &mut host, 5, false, 4, 0x400);
+        spi_channel(&mut dma, &mut host, 6, true, 4, 0x300);
+        assert_eq!(start_spi_channel(&mut dma, &mut host, 5), None);
+        assert_eq!(start_spi_channel(&mut dma, &mut host, 6), None);
+        for (offset, value, text) in [
+            (0x5028, 0x00201011, "stopped during its exchange"),
+            (0x6030, 0, "status written during its exchange"),
+            (0x6028, 0x10201011, "submission"),
+            (0x5010, 7, "reconfiguration while active"),
+        ] {
+            let mut cx = Cx::new(&mut host, 0, 0, 0);
+            dma.write(&mut cx, DMA + offset, 4, value);
+            let error = cx.refusal().unwrap();
+            assert!(error.contains(text), "{offset:#x}: {error}");
+        }
+        // A waiting receive channel may be stopped but not acknowledged.
+        let (mut dma, peer, mut host) = spi_dma();
+        spi_channel(&mut dma, &mut host, 5, false, 4, 0x400);
+        assert_eq!(start_spi_channel(&mut dma, &mut host, 5), None);
+        let mut cx = Cx::new(&mut host, 0, 0, 0);
+        dma.write(&mut cx, DMA + 0x5030, 4, 0);
+        assert!(cx.refusal().unwrap().contains("waits for its exchange"));
+        write(&mut dma, &mut host, 0, DMA + 0x5028, 0x00201011, 0);
+        assert!(!dma.channels[5].submitted);
+        assert!(peer.0.lock().unwrap().exchange.is_none() && dma.spi.is_empty());
+    }
+    #[test]
+    fn channels_off_a_declared_data_register_keep_the_plain_engine() {
+        // Same programming against an undeclared register: the plain engine
+        // runs its timing and refuses the unmodeled fixed destination.
+        let (mut dma, peer, mut host) = spi_dma();
+        for (offset, value) in [
+            (0x10, 3),
+            (0x14, 0x300),
+            (0x18, 0xfff35008),
+            (0x1c, 0),
+            (0x20, 4),
+            (0x24, 0),
+        ] {
+            write(&mut dma, &mut host, 0, DMA + 0x6000 + offset, value, 0);
+        }
+        write(&mut dma, &mut host, 0, DMA + 0x6028, 0x10201011, 0);
+        dma.advance(&mut Cx::new(&mut host, 0, 0, 0));
+        assert_eq!(dma.next_deadline(100), Some(100 + 16 + 1));
+        host.now = 117;
+        let mut cx = Cx::new(&mut host, 0, 0, 0);
+        dma.event(&mut cx, 6);
+        assert_eq!(
+            cx.refusal(),
+            Some("XP4 fixed-destination DMA is not modeled")
+        );
+        assert!(peer.0.lock().unwrap().words.is_empty());
+        // A RAM copy is untouched by the links.
+        let (mut dma, _, mut host) = spi_dma();
+        configure_ram(&mut dma, &mut host, 0x100, 0x300, 32, 0);
+        write(&mut dma, &mut host, 0, DMA + 0x28, 0x10000001, 0);
+        dma.advance(&mut Cx::new(&mut host, 0, 0, 0));
+        assert_eq!(dma.next_deadline(100), Some(118));
+    }
+    #[test]
+    fn a_running_spi_exchange_survives_a_checkpoint_bound_to_its_wiring() {
+        let (mut dma, _, mut host) = spi_dma();
+        spi_channel(&mut dma, &mut host, 5, false, 4, 0x400);
+        spi_channel(&mut dma, &mut host, 6, true, 4, 0x300);
+        assert_eq!(start_spi_channel(&mut dma, &mut host, 5), None);
+        let waiting = dma.save();
+        assert!(waiting.get("spi_exchanges").is_none());
+        assert_eq!(start_spi_channel(&mut dma, &mut host, 6), None);
+        let saved = dma.save();
+        assert_eq!(saved["spi_exchanges"][SPI2_DATA.to_string()]["transmit"], 6);
+        let portable = dma.checkpoint().unwrap();
+        for state in [&waiting, &saved] {
+            let (mut resumed, _, _) = spi_dma();
+            resumed.restore(state).unwrap();
+            assert_eq!(&resumed.save(), state);
+        }
+        let (mut resumed, peer, mut host) = spi_dma();
+        resumed.restore_checkpoint(&portable).unwrap();
+        assert_eq!(resumed.save(), saved);
+        // The controller restores its own half; here the peer starts it.
+        peer.0.lock().unwrap().exchange = Some((100, 100 + 4 * 288));
+        host.now = 100 + 4 * 288;
+        event(&mut resumed, &mut host, 0, 6);
+        assert_eq!(&host.ram[0x400..0x404], &[0xff, 0xfe, 0xfd, 0xfc]);
+        // Without the controller declared, or with an inconsistent pair, the
+        // checkpoint is refused before anything changes.
+        let mut unlinked = standalone();
+        assert!(unlinked.restore(&saved).is_err());
+        assert!(unlinked.validate_checkpoint(&portable).is_err());
+        for (pointer, value) in [
+            ("/spi_exchanges/4294131720/receive", json!(6)),
+            ("/spi_exchanges/4294131720/word_ticks", json!(100)),
+            ("/spi_exchanges/4294131720/start", json!(99)),
+            ("/channels/5/next", json!(null)),
+            ("/channels/6/registers/4", json!(7)),
+        ] {
+            let mut bad = saved.clone();
+            *bad.pointer_mut(pointer).unwrap() = value;
+            let (mut target, _, _) = spi_dma();
+            let before = target.save();
+            assert!(target.restore(&bad).is_err(), "{pointer}");
+            assert_eq!(target.save(), before);
+        }
+        let mut lone = waiting.clone();
+        lone["channels"][5]["next"] = json!(500);
+        assert!(spi_dma().0.restore(&lone).is_err());
+    }
 }
 
 #[cfg(test)]
