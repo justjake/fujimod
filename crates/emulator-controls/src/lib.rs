@@ -433,6 +433,38 @@ pub fn compile(
     })
 }
 
+/// Samples that present one ADC key pressed and every input on its channel
+/// released, for boards that drive a key's channel directly rather than
+/// through a compiled panel. Levels are chosen as the panel chooses them:
+/// the middle of the longest run the key's band allows, and the top of the
+/// converter range at rest unless a band claims it.
+pub fn adc_levels(
+    key: &fujimod_catalog_wiring::AnalogKey,
+    calibration: Option<&dyn Calibration>,
+) -> Result<(u16, u16), String> {
+    let levels = key.analog_levels;
+    let mask = |interval: &AdcInterval| {
+        panel::interval_mask(interval, calibration, levels).map_err(|panel::Unresolved(why)| why)
+    };
+    let mut others = mask::Mask::default();
+    for interval in &key.others {
+        others = others.union(&mask(interval)?);
+    }
+    let band = mask(&key.band)?;
+    let limit = u64::from(levels);
+    let pressed = band
+        .difference(&others)
+        .level(limit, limit)
+        .ok_or("the key's ADC band lies inside another input's band")?;
+    let released = mask::Mask::full(levels)
+        .difference(&band.union(&others))
+        .level(limit - 1, limit)
+        .ok_or("every ADC level reads as an input")?;
+    let sample =
+        |level: u64| u16::try_from(level).map_err(|_| "ADC level exceeds 16 bits".to_owned());
+    Ok((sample(pressed)?, sample(released)?))
+}
+
 /// Build the selected body's control wiring and input confirmation for a
 /// running session, reading thresholds from the firmware's loaded
 /// configuration, and install them.
@@ -615,5 +647,71 @@ mod tests {
             (0x1000 + 21, &[1u8][..])
         );
         assert_eq!(pressed.ready.len(), 3);
+    }
+
+    fn literal(lower: u16, upper: u16) -> AdcInterval {
+        AdcInterval::Literal {
+            lower,
+            upper,
+            when: None,
+            unless: Vec::new(),
+        }
+    }
+
+    #[test]
+    fn adc_keys_press_inside_their_band_and_rest_at_the_top_of_the_range() {
+        let mut key = fujimod_catalog_wiring::AnalogKey {
+            channel: 2,
+            band: literal(100, 199),
+            others: vec![literal(300, 399)],
+            calibration: None,
+            analog_levels: 1024,
+        };
+        assert_eq!(super::adc_levels(&key, None), Ok((149, 1023)));
+        // A band that claims the top pushes the rest level into the longest free run.
+        key.others.push(literal(900, 1023));
+        assert_eq!(super::adc_levels(&key, None), Ok((149, 649)));
+        // Only the part of the band no other input claims counts as pressed.
+        key.others.push(literal(100, 159));
+        assert_eq!(super::adc_levels(&key, None), Ok((179, 649)));
+        key.others = vec![literal(0, 1023)];
+        assert!(super::adc_levels(&key, None).is_err());
+    }
+
+    #[test]
+    fn configuration_bands_read_their_bounds_from_the_loaded_configuration() {
+        let configuration = |lower, upper| AdcInterval::ConfigurationU16 {
+            lower,
+            upper,
+            when: None,
+            unless: Vec::new(),
+        };
+        // Bounds of three ladder bands, stored as in a configuration block.
+        let mut image = vec![0u8; 0x40];
+        for (offset, value) in [
+            (0x10, 0),
+            (0x12, 121),
+            (0x14, 122),
+            (0x16, 368),
+            (0x18, 369),
+            (0x1a, 689),
+        ] {
+            image[offset..offset + 2].copy_from_slice(&u16::to_le_bytes(value));
+        }
+        let key = fujimod_catalog_wiring::AnalogKey {
+            channel: 3,
+            band: configuration(0x14, 0x16),
+            others: vec![configuration(0x10, 0x12), configuration(0x18, 0x1a)],
+            calibration: None,
+            analog_levels: 4096,
+        };
+        let calibration: &dyn super::Calibration = &image;
+        assert_eq!(super::adc_levels(&key, Some(calibration)), Ok((245, 4095)));
+        assert!(super::adc_levels(&key, None).is_err());
+        let outside = fujimod_catalog_wiring::AnalogKey {
+            band: configuration(0x3e, 0x40),
+            ..key
+        };
+        assert!(super::adc_levels(&outside, Some(calibration)).is_err());
     }
 }

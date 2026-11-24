@@ -17,7 +17,6 @@ fujimod-emulator-models = { path = "../../crates/emulator-models" }
 fujimod-emulator-boot = { workspace = true, features = ["xp5-startup"] }
 fujimod-catalog-configuration.workspace = true
 fujimod-catalog-resolution.workspace = true
-fujimod-catalog-wiring.workspace = true
 fujimod-emulator-controls.workspace = true
 fujimod-emulator-cpu = { path = "../emulator-cpu" }
 fujimod-emulator-exr2-board = { path = "../emulator-exr2-board" }

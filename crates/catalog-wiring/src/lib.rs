@@ -972,6 +972,76 @@ pub fn digital_key(
     }))
 }
 
+/// A key read from one ADC channel as a band of samples, with the bands of
+/// every other input on that channel.
+#[derive(Clone, Debug, PartialEq, Serialize)]
+pub struct AnalogKey {
+    pub channel: u8,
+    /// The band that reads as this key pressed.
+    pub band: AdcInterval,
+    /// Bands of the other inputs on the same channel.
+    pub others: Vec<AdcInterval>,
+    /// Where the running firmware keeps the configuration that
+    /// configuration-offset bounds are read from.
+    pub calibration: Option<ConfigurationLocation>,
+    /// Number of distinct values the body's ADC reports.
+    pub analog_levels: u32,
+}
+
+/// The ADC band a key name reads, when the key is one unconditional band on
+/// one channel.
+pub fn analog_key(selection: &ResolvedSelection, name: &str) -> Result<Option<AnalogKey>, String> {
+    let located = locate(selection)?;
+    let kinds = |control: &LocatedControl| {
+        control
+            .input
+            .iter()
+            .filter(|(key, _)| key.eq_ignore_ascii_case(name))
+            .flat_map(|(_, wires)| wires)
+            .map(|wire| wire.kind.clone())
+            .collect::<Vec<_>>()
+    };
+    let Some(kinds) = located
+        .controls
+        .iter()
+        .map(kinds)
+        .find(|kinds| !kinds.is_empty())
+    else {
+        return Ok(None);
+    };
+    let [
+        WireKind::Adc {
+            channel, intervals, ..
+        },
+    ] = kinds.as_slice()
+    else {
+        return Ok(None);
+    };
+    let [band] = intervals.as_slice() else {
+        return Ok(None);
+    };
+    if band.condition().is_some() || !band.exclusions().is_empty() {
+        return Ok(None);
+    }
+    let others = located
+        .controls
+        .iter()
+        .flat_map(|control| &control.input)
+        .filter(|(key, _)| !key.eq_ignore_ascii_case(name))
+        .flat_map(|(_, wires)| wires)
+        .flat_map(|wire| wire.kind.analog_terms())
+        .filter(|(other, _)| other == channel)
+        .map(|(_, interval)| interval.clone())
+        .collect();
+    Ok(Some(AnalogKey {
+        channel: *channel,
+        band: band.clone(),
+        others,
+        calibration: located.calibration,
+        analog_levels: located.analog_levels,
+    }))
+}
+
 #[cfg(test)]
 mod tests {
     use fujimod_catalog::reference::ReferenceCatalog;
@@ -1023,5 +1093,22 @@ mod tests {
         assert!(wire.scanner_record.is_some());
         assert_eq!(located.analog_levels, 1024);
         assert!(located.calibration.is_some());
+    }
+
+    #[test]
+    fn x70_menu_ok_resolves_to_one_configuration_band_on_its_adc_channel() {
+        use fujimod_catalog_controls::AdcInterval;
+        let selection = ReferenceCatalog::bundled()
+            .unwrap()
+            .resolve_firmware("x70-110")
+            .unwrap();
+        let menu = super::analog_key(&selection, "exe_m").unwrap().unwrap();
+        assert_eq!(menu.channel, 8);
+        assert!(matches!(menu.band, AdcInterval::ConfigurationU16 { .. }));
+        assert!(!menu.others.is_empty());
+        assert!(menu.others.iter().all(|band| *band != menu.band));
+        assert_eq!(menu.analog_levels, 1024);
+        assert!(menu.calibration.is_some());
+        assert_eq!(super::analog_key(&selection, "NOT_A_KEY").unwrap(), None);
     }
 }

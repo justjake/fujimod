@@ -35,7 +35,8 @@ layout locates, built from the update at run time (X-T5: setup=done, language=en
 REAR_PUSH, FRONT_PUSH and one detent of REAR+, REAR-, FRONT+, FRONT-.\n\
 XP5 --watch-writes logs each CPU store, DMA and host write into the physical ranges to stderr (needs --engine unicorn).\n\
 XP5 --poke also takes ADDR=U32@MS: the word is written MS guest milliseconds after the run starts.\n\
-Application-profile startup: --application-plan FILE.\n\
+Application-profile startup: --application-plan FILE. Its --keys and --press drive the key's GPIO contact or,\n\
+for a key read as one ADC band, the middle of that band; configuration bounds come from the block the firmware has loaded.\n\
 Session observations: --load-snapshot FILE, --save-snapshot FILE, --pc-trace FILE [--pc-trace-limit N].\n\
 Native GUI: --gui opens the desktop window connected to this session.\n\
 Prints a JSON boot report; exits 0 at REC (EXR II) or at the end of the run (XP5), 2 at a stopped frontier.\n";
@@ -657,8 +658,7 @@ fn run_application(mut options: Boot, resolved: ResolvedConfiguration) -> Result
     )?
     .into_iter()
     .map(|edge| {
-        let wire = fujimod_catalog_wiring::digital_key(&resolved.reference, &edge.name)?
-            .ok_or_else(|| format!("{} has no declared digital input", edge.name))?;
+        let wire = boot::application::KeyWire::resolve(&resolved.reference, &edge.name)?;
         Ok((edge.delay, wire, edge.pressed))
     })
     .collect::<Result<std::collections::VecDeque<_>, String>>()?;
@@ -734,9 +734,7 @@ fn run_application(mut options: Boot, resolved: ResolvedConfiguration) -> Result
                 next_key = Some(at);
                 break;
             }
-            board
-                .board
-                .gpio_input(wire.port, wire.pin, wire.active == *pressed)?;
+            board.board.key_input(wire, *pressed)?;
             keys.pop_front();
         }
         let next_patch = patches.advance(&board.board, now, start, board.ticks_per_second)?;
