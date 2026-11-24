@@ -124,37 +124,37 @@
       ]
     },
     {
-      "name": "output_address",
+      "name": "word-0100",
       "offset": 256,
       "width_bytes": 4,
       "access": "read-write"
     },
     {
-      "name": "output_limit",
+      "name": "word-0104",
       "offset": 260,
       "width_bytes": 4,
       "access": "read-write"
     },
     {
-      "name": "output_end",
+      "name": "word-0108",
       "offset": 264,
       "width_bytes": 4,
       "access": "read-write"
     },
     {
-      "name": "stream_address",
+      "name": "word-010c",
       "offset": 268,
       "width_bytes": 4,
       "access": "read-write"
     },
     {
-      "name": "stream_limit",
+      "name": "word-0110",
       "offset": 272,
       "width_bytes": 4,
       "access": "read-write"
     },
     {
-      "name": "stream_refill",
+      "name": "word-0118",
       "offset": 280,
       "width_bytes": 4,
       "access": "read-write"
