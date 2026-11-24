@@ -742,6 +742,7 @@ mod tests {
                 },
                 data_cache: None,
             }),
+            aprofile: None,
         }
     }
 

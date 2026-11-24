@@ -10,7 +10,16 @@
       "released": null,
       "registers": [],
       "mprofile": null,
-      "rprofile": null
+      "rprofile": null,
+      "aprofile": {
+        "kind": "armv8a",
+        "midr_el1": 1091555380,
+        "affinity": 0,
+        "counter_clock_id": "counter",
+        "pmu_clock_id": "pmu",
+        "physical_timer_irq": 30,
+        "virtual_timer_irq": 27
+      }
     },
     {
       "id": "core1",
@@ -18,7 +27,16 @@
       "released": null,
       "registers": [],
       "mprofile": null,
-      "rprofile": null
+      "rprofile": null,
+      "aprofile": {
+        "kind": "armv8a",
+        "midr_el1": 1091555380,
+        "affinity": 1,
+        "counter_clock_id": "counter",
+        "pmu_clock_id": "pmu",
+        "physical_timer_irq": 30,
+        "virtual_timer_irq": 27
+      }
     },
     {
       "id": "core2",
@@ -26,7 +44,16 @@
       "released": null,
       "registers": [],
       "mprofile": null,
-      "rprofile": null
+      "rprofile": null,
+      "aprofile": {
+        "kind": "armv8a",
+        "midr_el1": 1091555380,
+        "affinity": 2,
+        "counter_clock_id": "counter",
+        "pmu_clock_id": "pmu",
+        "physical_timer_irq": 30,
+        "virtual_timer_irq": 27
+      }
     },
     {
       "id": "core3",
@@ -34,7 +61,16 @@
       "released": null,
       "registers": [],
       "mprofile": null,
-      "rprofile": null
+      "rprofile": null,
+      "aprofile": {
+        "kind": "armv8a",
+        "midr_el1": 1091555380,
+        "affinity": 3,
+        "counter_clock_id": "counter",
+        "pmu_clock_id": "pmu",
+        "physical_timer_irq": 30,
+        "virtual_timer_irq": 27
+      }
     },
     {
       "id": "core4",
@@ -42,7 +78,8 @@
       "released": null,
       "registers": [],
       "mprofile": null,
-      "rprofile": null
+      "rprofile": null,
+      "aprofile": null
     }
   ],
   "memory_regions": [
@@ -954,20 +991,6 @@
     "coprocessor_writes": []
   },
   "hardware": {
-    "application": {
-      "kind": "armv8a",
-      "midr_el1": 1091555380,
-      "affinities": {
-        "core0": 0,
-        "core1": 1,
-        "core2": 2,
-        "core3": 3
-      },
-      "counter_clock_id": "counter",
-      "pmu_clock_id": "pmu",
-      "physical_timer_irq": 30,
-      "virtual_timer_irq": 27
-    },
     "companion": {
       "processor_id": "core4",
       "clock_id": "companion",

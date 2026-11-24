@@ -10,7 +10,16 @@
       "released": null,
       "registers": [],
       "mprofile": null,
-      "rprofile": null
+      "rprofile": null,
+      "aprofile": {
+        "kind": "armv7a",
+        "configuration_base": 4294901760,
+        "caches": {
+          "l1_data_bytes": 32768,
+          "l1_instruction_bytes": 32768,
+          "l2_bytes": 1048576
+        }
+      }
     },
     {
       "id": "core1",
@@ -18,7 +27,16 @@
       "released": null,
       "registers": [],
       "mprofile": null,
-      "rprofile": null
+      "rprofile": null,
+      "aprofile": {
+        "kind": "armv7a",
+        "configuration_base": 4294901760,
+        "caches": {
+          "l1_data_bytes": 32768,
+          "l1_instruction_bytes": 32768,
+          "l2_bytes": 1048576
+        }
+      }
     }
   ],
   "memory_regions": [
@@ -1518,15 +1536,6 @@
     "coprocessor_writes": []
   },
   "hardware": {
-    "application": {
-      "kind": "armv7a",
-      "configuration_base": 4294901760,
-      "caches": {
-        "l1_data_bytes": 32768,
-        "l1_instruction_bytes": 32768,
-        "l2_bytes": 1048576
-      }
-    },
     "companion": null,
     "profiles": {
       "xpp": {

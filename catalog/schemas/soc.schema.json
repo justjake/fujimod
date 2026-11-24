@@ -1,5 +1,88 @@
 {
   "$defs": {
+    "AProfileState": {
+      "description": "A-profile application-processor state, tagged by architecture.",
+      "oneOf": [
+        {
+          "additionalProperties": false,
+          "description": "ARMv7-A configuration base and cache capacities.",
+          "properties": {
+            "caches": {
+              "$ref": "#/$defs/CacheGeometry",
+              "description": "Declared cache capacities."
+            },
+            "configuration_base": {
+              "description": "Configuration base address presented to the core.",
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "kind": {
+              "const": "armv7a",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "configuration_base",
+            "caches"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "ARMv8-A identification, affinity and architectural timer wiring.",
+          "properties": {
+            "affinity": {
+              "description": "MPIDR_EL1 affinity value.",
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "counter_clock_id": {
+              "description": "Clock domain supplying the architectural counter.",
+              "type": "string"
+            },
+            "kind": {
+              "const": "armv8a",
+              "type": "string"
+            },
+            "midr_el1": {
+              "description": "MIDR_EL1 identification value.",
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "physical_timer_irq": {
+              "description": "Physical architectural timer interrupt line.",
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "pmu_clock_id": {
+              "description": "Clock domain supplying the performance monitor.",
+              "type": "string"
+            },
+            "virtual_timer_irq": {
+              "description": "Virtual architectural timer interrupt line.",
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          "required": [
+            "kind",
+            "midr_el1",
+            "affinity",
+            "counter_clock_id",
+            "pmu_clock_id",
+            "physical_timer_irq",
+            "virtual_timer_irq"
+          ],
+          "type": "object"
+        }
+      ]
+    },
     "AddressDecoder": {
       "additionalProperties": false,
       "description": "A selectable SoC address decoder.",
@@ -72,92 +155,6 @@
         "permissions"
       ],
       "type": "object"
-    },
-    "ApplicationHardware": {
-      "description": "Family-specific application-processor identification.",
-      "oneOf": [
-        {
-          "additionalProperties": false,
-          "description": "ARMv7-A configuration base and cache capacities.",
-          "properties": {
-            "caches": {
-              "$ref": "#/$defs/CacheGeometry",
-              "description": "Declared cache capacities."
-            },
-            "configuration_base": {
-              "description": "Configuration base address presented to each application core.",
-              "format": "uint64",
-              "minimum": 0,
-              "type": "integer"
-            },
-            "kind": {
-              "const": "armv7a",
-              "type": "string"
-            }
-          },
-          "required": [
-            "kind",
-            "configuration_base",
-            "caches"
-          ],
-          "type": "object"
-        },
-        {
-          "additionalProperties": false,
-          "description": "ARMv8-A processor identity, affinities and architectural timer wiring.",
-          "properties": {
-            "affinities": {
-              "additionalProperties": {
-                "format": "uint64",
-                "minimum": 0,
-                "type": "integer"
-              },
-              "description": "MPIDR_EL1 affinity values, keyed by processor identity.",
-              "type": "object"
-            },
-            "counter_clock_id": {
-              "description": "Clock domain supplying the architectural counter.",
-              "type": "string"
-            },
-            "kind": {
-              "const": "armv8a",
-              "type": "string"
-            },
-            "midr_el1": {
-              "description": "MIDR_EL1 processor identification value.",
-              "format": "uint64",
-              "minimum": 0,
-              "type": "integer"
-            },
-            "physical_timer_irq": {
-              "description": "Physical architectural timer interrupt line.",
-              "format": "uint32",
-              "minimum": 0,
-              "type": "integer"
-            },
-            "pmu_clock_id": {
-              "description": "Clock domain supplying the performance monitor.",
-              "type": "string"
-            },
-            "virtual_timer_irq": {
-              "description": "Virtual architectural timer interrupt line.",
-              "format": "uint32",
-              "minimum": 0,
-              "type": "integer"
-            }
-          },
-          "required": [
-            "kind",
-            "midr_el1",
-            "affinities",
-            "counter_clock_id",
-            "pmu_clock_id",
-            "physical_timer_irq",
-            "virtual_timer_irq"
-          ],
-          "type": "object"
-        }
-      ]
     },
     "BlockDevice": {
       "description": "Hardware parameters for a SoC block, selected by its model tag.",
@@ -1731,16 +1728,16 @@
     },
     "CacheGeometry": {
       "additionalProperties": false,
-      "description": "Cache capacities declared for an application processor.",
+      "description": "Cache capacities declared for an A-profile core.",
       "properties": {
         "l1_data_bytes": {
-          "description": "Per-core level-one data-cache capacity.",
+          "description": "Level-one data-cache capacity.",
           "format": "uint64",
           "minimum": 0,
           "type": "integer"
         },
         "l1_instruction_bytes": {
-          "description": "Per-core level-one instruction-cache capacity.",
+          "description": "Level-one instruction-cache capacity.",
           "format": "uint64",
           "minimum": 0,
           "type": "integer"
@@ -2900,6 +2897,18 @@
       "additionalProperties": false,
       "description": "A processor core and its hardware reset state.",
       "properties": {
+        "aprofile": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/AProfileState"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Optional A-profile application-processor state."
+        },
         "id": {
           "description": "Core identity within its SoC.",
           "type": "string"
@@ -3322,18 +3331,6 @@
       "additionalProperties": false,
       "description": "Additional hardware parameters whose meaning depends on the processor family.",
       "properties": {
-        "application": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/ApplicationHardware"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "description": "Application-processor identification and cache topology, when declared."
-        },
         "companion": {
           "anyOf": [
             {

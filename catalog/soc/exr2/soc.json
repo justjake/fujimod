@@ -34,7 +34,8 @@
           "sets": 128,
           "ways": 4
         }
-      }
+      },
+      "aprofile": null
     },
     {
       "id": "core1",
@@ -66,7 +67,8 @@
           "sets": 128,
           "ways": 4
         }
-      }
+      },
+      "aprofile": null
     }
   ],
   "memory_regions": [

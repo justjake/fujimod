@@ -21,9 +21,6 @@ pub struct SocHardware {
         tsify(type = "Record<string, SocProfile>")
     )]
     pub profiles: BTreeMap<String, crate::profiles::SocProfile>,
-    /// Application-processor identification and cache topology, when declared.
-    #[serde(default)]
-    pub application: Option<ApplicationHardware>,
     /// Companion-processor clock and mailbox connections, when present.
     #[serde(default)]
     pub companion: Option<CompanionHardware>,
@@ -57,23 +54,6 @@ impl SocHardware {
                 .then_some(())
                 .ok_or_else(|| format!("SoC {} hardware refers to missing clock {id}", soc.id))
         };
-        if let Some(ApplicationHardware::Armv8a {
-            affinities,
-            counter_clock_id,
-            pmu_clock_id,
-            ..
-        }) = &self.application
-        {
-            let mut values = std::collections::BTreeSet::new();
-            for (id, affinity) in affinities {
-                core(id)?;
-                if !values.insert(affinity) {
-                    return Err(format!("SoC {} repeats a processor affinity", soc.id));
-                }
-            }
-            clock(counter_clock_id)?;
-            clock(pmu_clock_id)?;
-        }
         if let Some(companion) = &self.companion {
             core(&companion.processor_id)?;
             clock(&companion.clock_id)?;
@@ -81,60 +61,6 @@ impl SocHardware {
         }
         Ok(())
     }
-}
-
-/// Family-specific application-processor identification.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
-#[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
-#[cfg_attr(feature = "schema", schemars(deny_unknown_fields))]
-#[cfg_attr(
-    all(target_arch = "wasm32", not(target_os = "emscripten")),
-    derive(tsify::Tsify),
-    tsify(hashmap_as_object, missing_as_null)
-)]
-pub enum ApplicationHardware {
-    /// ARMv7-A configuration base and cache capacities.
-    Armv7a {
-        /// Configuration base address presented to each application core.
-        configuration_base: u64,
-        /// Declared cache capacities.
-        caches: CacheGeometry,
-    },
-    /// ARMv8-A processor identity, affinities and architectural timer wiring.
-    Armv8a {
-        /// MIDR_EL1 processor identification value.
-        midr_el1: u64,
-        /// MPIDR_EL1 affinity values, keyed by processor identity.
-        affinities: BTreeMap<String, u64>,
-        /// Clock domain supplying the architectural counter.
-        counter_clock_id: String,
-        /// Clock domain supplying the performance monitor.
-        pmu_clock_id: String,
-        /// Physical architectural timer interrupt line.
-        physical_timer_irq: u32,
-        /// Virtual architectural timer interrupt line.
-        virtual_timer_irq: u32,
-    },
-}
-
-/// Cache capacities declared for an application processor.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
-#[serde(deny_unknown_fields)]
-#[cfg_attr(feature = "schema", schemars(deny_unknown_fields))]
-#[cfg_attr(
-    all(target_arch = "wasm32", not(target_os = "emscripten")),
-    derive(tsify::Tsify),
-    tsify(hashmap_as_object, missing_as_null)
-)]
-pub struct CacheGeometry {
-    /// Per-core level-one data-cache capacity.
-    pub l1_data_bytes: u64,
-    /// Per-core level-one instruction-cache capacity.
-    pub l1_instruction_bytes: u64,
-    /// Shared level-two cache capacity.
-    pub l2_bytes: u64,
 }
 
 /// A companion processor's hardware clock and mailbox endpoints.
