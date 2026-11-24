@@ -263,6 +263,10 @@ pub struct Definition {
         (u16, u8),
         Option<(u64, u32, u64, u64, u64, String)>,
     )>,
+    /// The RAW DMA channel of `imaging` whose frames carry the still scene
+    /// (opt-in). Absent, every RAW frame is the test ramp.
+    #[serde(default)]
+    pub raw_scene: Option<RawScene>,
     #[serde(default)]
     pub movdc: Vec<(u64, u32, u64, u64, u8)>,
     #[serde(default)]
@@ -365,6 +369,19 @@ pub struct JpegDecoder {
     pub base: u64,
     pub irq: u32,
     pub run_ticks: u64,
+}
+
+/// A RAW DMA channel of the imaging wiring whose frames carry the still
+/// scene as X-Trans samples (see
+/// `fujimod_emulator_sensor_input::sensor::SceneChannel`).
+#[derive(Clone, Copy, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct RawScene {
+    pub channel: usize,
+    /// X-Trans site (line, sample) of the frame's first sample.
+    pub site: (u8, u8),
+    /// Optical black margins: samples on the left, lines on top.
+    pub optical_black: (u32, u32),
 }
 
 /// One declared XP4 still-processing engine: which contract, its register

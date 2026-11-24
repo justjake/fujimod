@@ -1485,6 +1485,7 @@ impl Session {
             power_spi_eye_commit,
             checksum_power_spi,
             imaging,
+            raw_scene,
             movdc,
             sd_clocks,
             sd_hosts,
@@ -2034,6 +2035,9 @@ impl Session {
                 .get_or_insert_with(devices::Devices::empty)
                 .adc(inputs, sample_ticks)?;
         }
+        if raw_scene.is_some() && imaging.is_none() {
+            return Err("A RAW scene channel needs the imaging wiring".into());
+        }
         if let Some((map, timing, read_gate, ibuf)) = imaging {
             // The statistics banks are guest memory when a declared memory
             // region holds them (the boot ROM start keeps its SRAM there).
@@ -2045,7 +2049,7 @@ impl Session {
             });
             devices
                 .get_or_insert_with(devices::Devices::empty)
-                .imaging(map, timing, read_gate, ibuf, statistics_in_memory)?;
+                .imaging(map, timing, read_gate, ibuf, raw_scene, statistics_in_memory)?;
         }
         if !movdc.is_empty() {
             devices

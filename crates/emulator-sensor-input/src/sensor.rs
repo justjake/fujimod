@@ -219,6 +219,29 @@ pub struct FrameTiming {
     /// The length of one line of that readout in ticks (nanoseconds).
     pub line_ticks: u64,
 }
+/// A RAW DMA channel whose frames carry the still scene instead of the test ramp (opt-in,
+/// [`Sensor::with_scene_channel`]).
+///
+/// The channel keeps the live-view channels' words (enable sampled at frame start, +0x04
+/// samples, +0x08 lines, +0x0c / +0x10 address, +0x18 line stride) and only changes what a
+/// frame holds: the scene ([`fujimod_emulator_imaging::frame::still_scene`]) sampled as
+/// X-Trans 14-bit samples in 16-bit containers by the declared neutral response
+/// ([`xtrans::Response::NEUTRAL`]), the law the declared still development inverts. The
+/// optical black margins hold [`xtrans::BLACK`] and the scene fills the rest of the frame.
+/// Packed 12-bit lines refuse.
+///
+/// X-T3 5.11: the still read-out runs on channel 0 (6276 x 4212 samples, stride 0x31e0), and
+/// the still engine RECC develops from 36 lines and 24 samples into it.
+#[derive(Clone, Copy)]
+pub struct SceneChannel {
+    pub channel: usize,
+    /// X-Trans site (line, sample) of the frame's first sample.
+    pub site: (u8, u8),
+    /// Optical black margins: samples on the left, lines on top.
+    pub optical_black: (u32, u32),
+    /// The picture the sensor sees.
+    pub scene: fn() -> &'static fujimod_emulator_imaging::frame::Scene,
+}
 #[derive(Clone)]
 pub struct Sensor(
     pub Arc<Mutex<SensorState>>,
@@ -227,10 +250,11 @@ pub struct Sensor(
     Option<StillChannel>,
     ExposureHandle,
     Option<FrameTiming>,
+    Option<SceneChannel>,
 );
 impl Sensor {
     pub fn new(routes: Option<ImageRoutes>, read_gate: (u16, u8)) -> Self {
-        Self(Arc::default(), routes, read_gate, None, ExposureHandle::default(), None)
+        Self(Arc::default(), routes, read_gate, None, ExposureHandle::default(), None, None)
     }
     /// Let the frame length follow the sensor's registers in one decoded readout (see
     /// [`FrameTiming`]). Set it before the sensor is cloned into its devices.
@@ -270,6 +294,15 @@ impl Sensor {
     pub fn with_still_channel(mut self, still: StillChannel) -> Self {
         self.3 = Some(still);
         self
+    }
+    /// Make one RAW DMA channel write the still scene (see [`SceneChannel`]). Set it before the
+    /// sensor is cloned into its devices.
+    pub fn with_scene_channel(mut self, scene: SceneChannel) -> Result<Self, String> {
+        if scene.channel > 1 || scene.site.0 > 5 || scene.site.1 > 5 {
+            return Err("scene channel: channel 0 or 1 and an X-Trans site below (6, 6)".into());
+        }
+        self.6 = Some(scene);
+        Ok(self)
     }
     /// The last picture the still channel wrote, if any.
     pub fn still_raw(&self) -> Option<StillRaw> {
@@ -413,10 +446,14 @@ impl Sensor {
             return Err("receiver frame exceeds functional DMA limit".into());
         }
         let frame = s.frames[channel];
-        let mut bytes = vec![0u8; line as usize];
-        for y in 0..height {
-            ramp_line(y, frame, packed12, &mut bytes);
-            cx.ram_write(address + stride * u64::from(y), &bytes)?;
+        if let Some(scene) = self.6.filter(|scene| scene.channel == channel) {
+            scene_frame(cx, scene, address, stride, width, height, packed12)?;
+        } else {
+            let mut bytes = vec![0u8; line as usize];
+            for y in 0..height {
+                ramp_line(y, frame, packed12, &mut bytes);
+                cx.ram_write(address + stride * u64::from(y), &bytes)?;
+            }
         }
         s.frames[channel] += 1;
         s.last_dma[channel] = (address, width, height);
@@ -592,6 +629,51 @@ const CHANNEL_BASE: u64 = 0x280;
 /// in 32-bit arithmetic, which the compiler vectorizes. [`Sensor::frame`] writes every movie
 /// live-view line through here (7776 samples a line, every frame): about 2.5 ms a frame
 /// instead of 9-12 ms with per-sample `Vec` pushes.
+/// One frame of a [`SceneChannel`]: black margins, then the scene's X-Trans samples.
+fn scene_frame(
+    cx: &mut Cx<'_>,
+    scene: SceneChannel,
+    address: u64,
+    stride: u64,
+    width: u32,
+    height: u32,
+    packed12: bool,
+) -> Result<(), String> {
+    if packed12 {
+        return Err(format!(
+            "scene channel {}: packed 12-bit lines (stride {stride:#x} for {width} samples) are not modelled",
+            scene.channel
+        ));
+    }
+    let (left, top) = scene.optical_black;
+    if width <= left || height <= top {
+        return Err(format!(
+            "scene channel {}: a {width} x {height} frame has no picture inside its optical black margins",
+            scene.channel
+        ));
+    }
+    let (left, top) = (left as usize, top as usize);
+    let black = xtrans::BLACK.to_le_bytes().repeat(width as usize);
+    for y in 0..top {
+        cx.ram_write(address + stride * y as u64, &black)?;
+    }
+    let lut = xtrans::Response::NEUTRAL.mosaic_lut();
+    let mut samples = black.clone();
+    fujimod_emulator_imaging::frame::render_rgb_lines(
+        (scene.scene)(),
+        width as usize - left,
+        height as usize - top,
+        |y, rgb| {
+            let y = y + top;
+            let site = (
+                usize::from(scene.site.0) + y,
+                usize::from(scene.site.1) + left,
+            );
+            xtrans::mosaic_line_with(rgb, site, &mut samples[2 * left..], &lut);
+            cx.ram_write(address + stride * y as u64, &samples)
+        },
+    )
+}
 fn ramp_line(y: u32, frame: u64, packed12: bool, out: &mut [u8]) {
     let offset = (u64::from(y)
         .wrapping_mul(17)
@@ -1308,6 +1390,108 @@ mod tests {
         sensor.frame(&mut Cx::new(&mut host, 0, 0, 0), 0).unwrap();
         assert_eq!(host.ram, vec![0x55; 0x10]);
         assert_eq!(sensor.image_reg(0x64), 0);
+    }
+    /// A scene channel's frame holds optical black in its margins and, from the margin on, the
+    /// scene's X-Trans samples from the declared site; a packed 12-bit frame refuses and the
+    /// other channel keeps the ramp.
+    #[test]
+    fn a_scene_channel_writes_the_scene_as_x_trans_samples() {
+        let (width, lines, stride, top, left) = (12usize, 9usize, 0x20usize, 3usize, 6usize);
+        let sensor = Sensor::new(
+            Some(ImageRoutes {
+                dma: Some([97, 98]),
+                timing: [102, 100],
+                line_stride: true,
+                frame_start_pulse: None,
+            }),
+            (0x59, 4),
+        )
+        .with_scene_channel(SceneChannel {
+            channel: 0,
+            site: (5, 1),
+            optical_black: (left as u32, top as u32),
+            scene: bars,
+        })
+        .unwrap();
+        assert!(
+            Sensor::new(None, (0x59, 4))
+                .with_scene_channel(SceneChannel {
+                    channel: 0,
+                    site: (6, 0),
+                    optical_black: (0, 0),
+                    scene: bars
+                })
+                .is_err()
+        );
+        let mut host = RecordingHost {
+            ram: vec![0x55; stride * lines],
+            ram_base: 0x1000,
+            ..Default::default()
+        };
+        let program = |host: &mut RecordingHost, base: u64, stride: usize| {
+            for (offset, value) in [
+                (4, width as u32),
+                (8, lines as u32),
+                (0x10, 0x1000),
+                (0x18, stride as u32),
+                (0, 1),
+            ] {
+                sensor.image_write(&mut Cx::new(host, 0, 0, 0), base + offset, value);
+            }
+        };
+        program(&mut host, 0x40, stride);
+        sensor.frame_start(0);
+        sensor.frame(&mut Cx::new(&mut host, 0, 0, 0), 0).unwrap();
+        let sample = |ram: &[u8], y: usize, x: usize| {
+            u16::from_le_bytes([ram[y * stride + 2 * x], ram[y * stride + 2 * x + 1]])
+        };
+        let lut = xtrans::Response::NEUTRAL.mosaic_lut();
+        let mut rgb = vec![];
+        fujimod_emulator_imaging::frame::render_rgb_lines(
+            bars(),
+            width - left,
+            lines - top,
+            |_, line| {
+                rgb.push(line.to_vec());
+                Ok(())
+            },
+        )
+        .unwrap();
+        for y in 0..lines {
+            for x in 0..width {
+                let expected = if y < top || x < left {
+                    xtrans::BLACK
+                } else {
+                    let c = usize::from(xtrans::XTRANS[(5 + y) % 6][(1 + x) % 6]);
+                    lut.0[c][usize::from(rgb[y - top][(x - left) * 3 + c])]
+                };
+                assert_eq!(sample(&host.ram, y, x), expected, "line {y} sample {x}");
+            }
+            assert_eq!(
+                host.ram[y * stride + 2 * width..(y + 1) * stride],
+                vec![0x55; stride - 2 * width]
+            );
+        }
+        assert_eq!(sensor.image_reg(0x64), 1);
+        // Channel 1 keeps the ramp.
+        let mut other = RecordingHost {
+            ram: vec![0x55; stride * lines],
+            ram_base: 0x1000,
+            ..Default::default()
+        };
+        program(&mut other, 0xc0, stride);
+        sensor.frame_start(1);
+        sensor.frame(&mut Cx::new(&mut other, 0, 0, 0), 1).unwrap();
+        assert_eq!(&other.ram[..4], &[0, 0, 31, 0]);
+        // Packed 12-bit lines (1.5 bytes a sample) refuse.
+        program(&mut host, 0x40, width * 3 / 2);
+        sensor.frame_start(0);
+        assert!(
+            sensor
+                .frame(&mut Cx::new(&mut host, 0, 0, 0), 0)
+                .unwrap_err()
+                .contains("packed 12-bit")
+        );
     }
     /// The incremental ramp writes the same bytes as the per-sample formula it replaced.
     #[test]

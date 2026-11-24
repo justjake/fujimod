@@ -3181,6 +3181,7 @@ dependencies = [
  "fujimod-emulator-cpu-unicorn",
  "fujimod-emulator-devices",
  "fujimod-emulator-image-codecs",
+ "fujimod-emulator-imaging",
  "fujimod-emulator-ip",
  "fujimod-emulator-ip-arm",
  "fujimod-emulator-ip-dmp",

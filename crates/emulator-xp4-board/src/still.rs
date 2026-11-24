@@ -1126,12 +1126,12 @@ impl Device for Engine {
             Output::NotComputed => {}
             Output::Resize => {
                 if let Err(error) = self.resize(cx) {
-                    return cx.fail(error);
+                    return cx.fail(format!("{}: {error}", self.contract.name));
                 }
             }
             Output::Develop(raw) => {
                 if let Err(error) = self.pass(cx, raw) {
-                    return cx.fail(error);
+                    return cx.fail(format!("{}: {error}", self.contract.name));
                 }
             }
         }
