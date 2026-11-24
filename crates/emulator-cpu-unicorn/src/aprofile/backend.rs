@@ -59,16 +59,11 @@ impl Cpu for Core {
         self.execution.board_mpidr.set(supported);
         Ok(())
     }
-    fn select_armv7a_affinity_policy(&self, policy: ExecutionPolicy) -> Result<(), String> {
+    fn select_armv7a_affinity_policy(&self, _policy: ExecutionPolicy) -> Result<(), String> {
         let e = &self.execution;
-        if e.board_mpidr.get() {
-            // Interactive runs can switch cores at an instruction exit.
-            // Preserve the existing MPIDR scheduling boundary there.
-            let native = policy == ExecutionPolicy::Exact;
-            if e.owner_mpidr.get() != native {
-                e.cpu.invalidate_code(None)?;
-                e.owner_mpidr.set(native);
-            }
+        if e.board_mpidr.get() && !e.owner_mpidr.get() {
+            e.cpu.invalidate_code(None)?;
+            e.owner_mpidr.set(true);
         }
         Ok(())
     }
