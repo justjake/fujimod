@@ -60,6 +60,17 @@ fn firmware_rom_start(firmware_id: &str) -> PyResult<Option<String>> {
         .map_err(|error| PyValueError::new_err(error.to_string()))
 }
 
+/// NAND boot facts of one boot ROM image, found by its SHA-256.
+#[pyfunction]
+fn nand_boot_rom(sha256: &str) -> PyResult<Option<String>> {
+    let catalog = fujimod_catalog::ReferenceCatalog::bundled().map_err(PyValueError::new_err)?;
+    catalog
+        .nand_boot_rom(sha256)
+        .map(serde_json::to_string)
+        .transpose()
+        .map_err(|error| PyValueError::new_err(error.to_string()))
+}
+
 /// Every bundled `restart.generated.json` profile, as a JSON list.
 #[pyfunction]
 fn restart_profiles() -> PyResult<String> {
@@ -95,6 +106,7 @@ pub fn register(py: Python<'_>, parent: &Bound<'_, PyModule>) -> PyResult<()> {
     catalog.add_function(wrap_pyfunction!(resolve_reference, &catalog)?)?;
     catalog.add_function(wrap_pyfunction!(resolve_firmware, &catalog)?)?;
     catalog.add_function(wrap_pyfunction!(firmware_rom_start, &catalog)?)?;
+    catalog.add_function(wrap_pyfunction!(nand_boot_rom, &catalog)?)?;
     catalog.add_function(wrap_pyfunction!(resolve_configuration, &catalog)?)?;
     catalog.add_function(wrap_pyfunction!(restart_profiles, &catalog)?)?;
     catalog.add_function(wrap_pyfunction!(card_profiles, &catalog)?)?;

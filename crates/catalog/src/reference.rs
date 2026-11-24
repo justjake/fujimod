@@ -3346,6 +3346,7 @@ pub struct ReferenceCatalog {
     rom_start: BTreeMap<String, crate::rom_start::FirmwareRomStart>,
     boot_patch: BTreeMap<String, crate::boot_patch::FirmwareBootPatch>,
     boot_roms: BTreeMap<String, crate::boot_rom::BootRom>,
+    nand_boot_roms: BTreeMap<String, crate::nand_boot_rom::NandBootRom>,
     restart: BTreeMap<String, fujimod_catalog_restart::FirmwareRestart>,
     memory_reservations: BTreeMap<String, fujimod_catalog_memory_reservations::FirmwareMemoryReservations>,
     card_files: BTreeMap<String, fujimod_catalog_card::FirmwareCard>,
@@ -3384,7 +3385,7 @@ impl ReferenceCatalog {
             catalog.insert_document(ReferenceKind::of_body_file(&path)?, &bytes, &path)?;
         }
         for (path, bytes) in read_json_files(&root.join("boot-roms"))? {
-            catalog.insert_document(ReferenceKind::BootRom, &bytes, &path)?;
+            catalog.insert_document(ReferenceKind::of_boot_rom_file(&path)?, &bytes, &path)?;
         }
         for (path, bytes) in read_json_files(&root.join("firmware"))? {
             catalog.insert_document(ReferenceKind::of_firmware_file(&path)?, &bytes, &path)?;
@@ -3634,6 +3635,11 @@ impl ReferenceCatalog {
         self.boot_roms.get(sha256)
     }
 
+    /// Located NAND boot facts of one boot ROM image, keyed by its SHA-256.
+    pub fn nand_boot_rom(&self, sha256: &str) -> Option<&crate::nand_boot_rom::NandBootRom> {
+        self.nand_boot_roms.get(sha256)
+    }
+
     /// Located restart profiles, independent of a body or execution profile.
     pub fn restart_profiles(
         &self,
@@ -3739,6 +3745,11 @@ impl ReferenceCatalog {
                 let value: crate::boot_rom::BootRom = decode(bytes, path)?;
                 value.validate()?;
                 insert_unique(&mut self.boot_roms, value.sha256.clone(), value, path)
+            }
+            ReferenceKind::NandBootRom => {
+                let value: crate::nand_boot_rom::NandBootRom = decode(bytes, path)?;
+                value.validate()?;
+                insert_unique(&mut self.nand_boot_roms, value.rom_sha256.clone(), value, path)
             }
             ReferenceKind::Restart => {
                 let value: fujimod_catalog_restart::FirmwareRestart = decode(bytes, path)?;
@@ -3910,6 +3921,19 @@ impl ReferenceCatalog {
                 return Err(format!(
                     "ROM start facts for {firmware_id} name block {} of kind {:?}",
                     block.id, block.kind
+                ));
+            }
+        }
+        for record in self.nand_boot_roms.values() {
+            let known = self.socs.values().any(|soc| {
+                soc.blocks
+                    .iter()
+                    .any(|block| block.id == record.controller_block_id)
+            });
+            if !known {
+                return Err(format!(
+                    "NAND boot record {} names missing controller block {}",
+                    record.id, record.controller_block_id
                 ));
             }
         }
@@ -4699,6 +4723,7 @@ enum ReferenceKind {
     RomStart,
     BootPatch,
     BootRom,
+    NandBootRom,
     CardFiles,
     Restart,
     MemoryReservations,
@@ -4713,6 +4738,14 @@ impl ReferenceKind {
             Some("body.json") => Ok(Self::Body),
             Some("controls.json") => Ok(Self::PhysicalControls),
             _ => Err(format!("{} is not a body document", path.display())),
+        }
+    }
+
+    fn of_boot_rom_file(path: &Path) -> Result<Self, String> {
+        match path.file_name().and_then(|name| name.to_str()) {
+            Some(name) if name.ends_with(".nand-boot.generated.json") => Ok(Self::NandBootRom),
+            Some(name) if name.ends_with(".generated.json") => Ok(Self::BootRom),
+            _ => Err(format!("{} is not a boot ROM document", path.display())),
         }
     }
 
