@@ -40,9 +40,21 @@ async function deployedSite(files: Record<string, string>, tamper: Record<string
 test('site asset manifests name only staged paths with sizes and hashes', () => {
   const file = { path: 'runtime/catalog.json', bytes: 2, sha256: 'a'.repeat(64) };
   assert.deepEqual(validateSiteAssets({ schema: 1, files: [file] }), [file]);
+  for (const path of ['demo/film-editor/manifest.json', 'demo/film-editor/index.html'])
+    assert.deepEqual(validateSiteAssets({ schema: 1, files: [{ ...file, path }] }), [
+      { ...file, path },
+    ]);
   assert.throws(() => validateSiteAssets({ schema: 2, files: [file] }), /unknown schema/);
   assert.throws(() => validateSiteAssets({ schema: 1, files: [] }), /no files/);
-  for (const path of ['index.html', 'runtime/../worker.ts', 'artifacts/docs/../../x', '/runtime/a'])
+  for (const path of [
+    'index.html',
+    'runtime/../worker.ts',
+    'artifacts/docs/../../x',
+    '/runtime/a',
+    'demo/film-editor/',
+    'demo/film-editor/../x',
+    'demo/other/manifest.json',
+  ])
     assert.throws(() => validateSiteAssets({ schema: 1, files: [{ ...file, path }] }), /path/);
   assert.throws(() => validateSiteAssets({ schema: 1, files: [file, file] }), /Duplicate/);
   assert.throws(() => validateSiteAssets({ schema: 1, files: [{ ...file, bytes: 0 }] }), /size/);
@@ -137,6 +149,84 @@ test('carrying a deployed site verifies every asset and the runtime Camera API',
       deployed.close(),
       incompleteSdk.close(),
       beforeSdk.close(),
+    ]);
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test('carrying a deployed Film Editor demo verifies its manifest and installs its files', async () => {
+  const declarations = await readFile(
+    new URL('../../../bindings/javascript/emulator/camera.generated.ts', import.meta.url),
+    'utf8',
+  );
+  const loader = `class Camera { ${[...cameraApi(declarations)].map((method) => `${method}() {}`).join(' ')} }`;
+  const video = 'a'.repeat(24) + '.mp4',
+    still = 'a'.repeat(24) + '.webp';
+  const files: Record<string, string> = {
+    'runtime/catalog.json': JSON.stringify({
+      schema: 1,
+      firmwares: [
+        {
+          id: 'test-100',
+          body: 'test',
+          model: 'Test',
+          version: '1.00',
+          sha256: '1'.repeat(64),
+          bytes: 42,
+          release_date: '',
+          download_url: 'https://example.org/firmware',
+          emulate: { bundle: 'runtime/test-100/', sceneInput: false },
+        },
+      ],
+    }),
+    'runtime/test-100/camera.mjs': loader,
+    'runtime/test-100/camera.wasm': 'wasm',
+    'runtime/test-100/licenses/COPYING.txt': 'license',
+    'artifacts/docs/media.json': JSON.stringify({
+      schema: 1,
+      cards: { card: { video, still, clips: {} } },
+    }),
+    [`artifacts/docs/${video}`]: 'video',
+    [`artifacts/docs/${still}`]: 'still',
+  };
+  const demo = (files: string[], developmentOnly = false) => ({
+    'demo/film-editor/manifest.json': JSON.stringify({
+      schema: 1,
+      files,
+      ...(developmentOnly ? { developmentOnly: true } : {}),
+    }),
+    'demo/film-editor/index.html': '<!doctype html>',
+    'demo/film-editor/app.js': 'console.log(1);',
+  });
+  const root = await mkdtemp(join(tmpdir(), 'carry-demo-'));
+  const destination = join(root, 'public');
+  const deployed = await deployedSite({ ...files, ...demo(['index.html', 'app.js']) });
+  const developmentOnly = await deployedSite({
+    ...files,
+    ...demo(['index.html', 'app.js'], true),
+  });
+  const missing = await deployedSite({ ...files, ...demo(['index.html', 'app.js', 'extra.js']) });
+  const extra = await deployedSite({ ...files, ...demo(['index.html']) });
+  const beforeDemo = await deployedSite(files);
+  try {
+    assert.deepEqual(await carrySite(deployed.origin, destination), { emulators: 1, files: 10 });
+    for (const [path, data] of Object.entries({ ...files, ...demo(['index.html', 'app.js']) }))
+      assert.equal(await readFile(join(destination, path), 'utf8'), data);
+    for (const origin of [developmentOnly, missing, extra])
+      await assert.rejects(carrySite(origin.origin, destination), /development-only|differs/);
+    assert.equal(
+      await readFile(join(destination, 'demo/film-editor/index.html'), 'utf8'),
+      '<!doctype html>',
+    );
+    assert.deepEqual(await carrySite(beforeDemo.origin, destination), { emulators: 1, files: 7 });
+    await assert.rejects(readFile(join(destination, 'demo/film-editor/index.html')), /ENOENT/);
+  } finally {
+    await Promise.all([
+      deployed.close(),
+      developmentOnly.close(),
+      missing.close(),
+      extra.close(),
+      beforeDemo.close(),
     ]);
     await rm(root, { recursive: true, force: true });
   }

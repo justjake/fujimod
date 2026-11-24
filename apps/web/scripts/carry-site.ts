@@ -4,6 +4,7 @@ import { mkdir, mkdtemp, readFile, rename, rm, writeFile } from 'node:fs/promise
 import { dirname, join, resolve } from 'node:path';
 import { validateCatalog, type Catalog } from '../src/catalog.ts';
 import { validateFeatureMedia } from '../src/home/feature-media.ts';
+import { filmEditorDemoPath, parseFilmEditorDemo } from './film-editor-demo.ts';
 import { validateRuntimeApi } from './runtime-api.ts';
 import { parseSdkDocs, sdkDocsFiles, sdkDocsManifest, sdkDocsPath } from './sdk-docs.ts';
 
@@ -12,9 +13,10 @@ export interface SiteAsset {
   bytes: number;
   sha256: string;
 }
-/** Staged paths: runtime bundles, the runtime catalog, feature media, and SDK docs. */
+/** Staged paths: runtime bundles, the runtime catalog, feature media, SDK docs
+ * and the Film Editor demo. */
 const ASSET_PATH =
-  /^(?:runtime\/(?:catalog|sbom-components)\.json|runtime\/[a-z0-9-]+\/(?:licenses\/)?[a-zA-Z0-9_-][a-zA-Z0-9_.-]*|artifacts\/docs\/[a-zA-Z0-9_-][a-zA-Z0-9_.-]*|docs\/sdk\/focal\/(?:manifest\.json|[a-z0-9-]+\/[a-z0-9-]+\/[a-zA-Z0-9_-][a-zA-Z0-9_.-]*))$/;
+  /^(?:runtime\/(?:catalog|sbom-components)\.json|runtime\/[a-z0-9-]+\/(?:licenses\/)?[a-zA-Z0-9_-][a-zA-Z0-9_.-]*|artifacts\/docs\/[a-zA-Z0-9_-][a-zA-Z0-9_.-]*|docs\/sdk\/focal\/(?:manifest\.json|[a-z0-9-]+\/[a-z0-9-]+\/[a-zA-Z0-9_-][a-zA-Z0-9_.-]*)|demo\/film-editor\/(?:manifest\.json|[a-zA-Z0-9_-][a-zA-Z0-9_.-]*))$/;
 
 /** The `site-assets.json` that staging writes, checked before any file is fetched. */
 export function validateSiteAssets(value: unknown): SiteAsset[] {
@@ -113,8 +115,27 @@ export async function carrySite(origin: string, destination = 'public', parallel
       if (expected.size !== sdkAssets.length || sdkAssets.some(({ path }) => !expected.has(path)))
         throw Error('Deployed FocalUI SDK assets differ from the SDK manifest.');
     }
+    const demoAssets = files.filter(({ path }) => path.startsWith(filmEditorDemoPath + '/'));
+    if (demoAssets.length) {
+      const demo = parseFilmEditorDemo(
+        await readFile(join(temporary, filmEditorDemoPath, 'manifest.json'), 'utf8'),
+      );
+      if (demo.developmentOnly) throw Error('Deployed Film Editor demo is development-only.');
+      const expected = new Set([
+        `${filmEditorDemoPath}/manifest.json`,
+        ...demo.files.map((name) => `${filmEditorDemoPath}/${name}`),
+      ]);
+      if (expected.size !== demoAssets.length || demoAssets.some(({ path }) => !expected.has(path)))
+        throw Error('Deployed Film Editor demo differs from its manifest.');
+    }
     await mkdir(resolve(target, dirname(sdkDocsPath)), { recursive: true });
-    for (const directory of ['runtime', 'artifacts', sdkDocsPath]) {
+    await rm(join(target, 'demo'), { recursive: true, force: true });
+    for (const directory of [
+      'runtime',
+      'artifacts',
+      sdkDocsPath,
+      ...(demoAssets.length ? ['demo'] : []),
+    ]) {
       await rm(join(target, directory), { recursive: true, force: true });
       if (directory !== sdkDocsPath || sdkAssets.length)
         await rename(join(temporary, directory), join(target, directory));

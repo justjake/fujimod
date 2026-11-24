@@ -16,16 +16,25 @@ export interface FilmEditorDemo {
 }
 
 /** The demo's manifest.json: schema 1, the flat file names the page loads and
- * an optional `developmentOnly` flag. */
+ * an optional `developmentOnly` flag. The manifest names no other manifest. */
 export function parseFilmEditorDemo(json: string): FilmEditorDemo {
-  const manifest = JSON.parse(json) as { schema?: unknown; files?: unknown; developmentOnly?: unknown } | null;
+  const manifest = JSON.parse(json) as {
+    schema?: unknown;
+    files?: unknown;
+    developmentOnly?: unknown;
+  } | null;
   if (manifest?.schema !== 1 || !Array.isArray(manifest.files))
     throw Error('The Film Editor demo manifest has an unknown schema.');
   const files = manifest.files as unknown[];
   if (!files.includes('index.html'))
     throw Error('The Film Editor demo manifest has no index.html.');
   for (const name of files)
-    if (typeof name !== 'string' || !file.test(name) || name.startsWith('.'))
+    if (
+      typeof name !== 'string' ||
+      !file.test(name) ||
+      name.startsWith('.') ||
+      name === 'manifest.json'
+    )
       throw Error(`The Film Editor demo manifest names an invalid file: ${String(name)}`);
   if (manifest.developmentOnly !== undefined && typeof manifest.developmentOnly !== 'boolean')
     throw Error('The Film Editor demo manifest has an invalid developmentOnly flag.');
@@ -46,7 +55,9 @@ export function siteFilmEditorDemo(configured: string | undefined, localPreview:
           throw Error(`FUJIMOD_FILM_EDITOR_DEMO has no manifest.json: ${configured}`);
         const demo = parseFilmEditorDemo(readFileSync(manifest, 'utf8'));
         if (demo.developmentOnly && env.command === 'build' && !localPreview)
-          throw Error(`FUJIMOD_FILM_EDITOR_DEMO is a development-only build and cannot be published: ${configured}`);
+          throw Error(
+            `FUJIMOD_FILM_EDITOR_DEMO is a development-only build and cannot be published: ${configured}`,
+          );
         files = demo.files;
         directory = realpathSync(configured);
       }

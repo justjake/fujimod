@@ -198,6 +198,102 @@ test('local preparation gates qualification and stages complete runtime bundles'
   }
 });
 
+test('staging stages a Film Editor demo and refuses a development-only one', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'site-demo-'));
+  const runtime = join(root, 'input'),
+    media = join(root, 'media'),
+    sdkDocs = join(root, 'sdk'),
+    demo = join(root, 'demo'),
+    destination = join(root, 'public');
+  try {
+    await mkdir(join(runtime, 'test-100/licenses'), { recursive: true });
+    await mkdir(media);
+    await mkdir(sdkDocs);
+    await mkdir(demo);
+    const catalog: Catalog = {
+      schema: 1,
+      firmwares: [
+        {
+          id: 'test-100',
+          body: 'test',
+          model: 'Test',
+          version: '1.00',
+          sha256: '1'.repeat(64),
+          bytes: 42,
+          release_date: '',
+          download_url: 'https://example.org/firmware',
+          emulate: { bundle: 'runtime/test-100/', sceneInput: false },
+        },
+      ],
+    };
+    await writeFile(join(runtime, 'catalog.json'), JSON.stringify(catalog));
+    await writeFile(join(runtime, 'sbom-components.json'), '[]');
+    await writeFile(
+      join(runtime, 'test-100/qualification.json'),
+      JSON.stringify({
+        firmware_sha256: '1'.repeat(64),
+        execution_mode: 'strict',
+        counts_as_boot: true,
+        menu: true,
+        failure: null,
+      }),
+    );
+    await writeFile(
+      join(runtime, 'test-100/browser-qualification.json'),
+      JSON.stringify({ sha256: '1'.repeat(64), passed: true }),
+    );
+    await writeFile(join(runtime, 'test-100/wasm.json'), '{"construction":"session"}');
+    const declarations = await readFile(
+      new URL('../../../bindings/javascript/emulator/camera.generated.ts', import.meta.url),
+      'utf8',
+    );
+    const loader = `class Camera { ${[...cameraApi(declarations)].map((method) => `${method}() {}`).join(' ')} }`;
+    for (const [name, data] of [
+      ['camera.wasm', 'wasm'],
+      ['camera.mjs', loader],
+      ['runtime-NOTICES.txt', 'notices'],
+      ['licenses/COPYING.txt', 'license'],
+    ])
+      await writeFile(join(runtime, 'test-100', name), data);
+    await writeFile(join(media, 'media.json'), '{"schema":1,"cards":{}}');
+    await writeFile(join(sdkDocs, 'manifest.json'), '{"schema":1,"components":[]}');
+    await writeFile(join(demo, 'index.html'), '<!doctype html>');
+    await writeFile(join(demo, 'app.js'), 'console.log(1);');
+    const manifest = (files: string[], developmentOnly?: boolean) =>
+      JSON.stringify({ schema: 1, files, ...(developmentOnly ? { developmentOnly } : {}) });
+    const inputs = { runtime, media, sdkDocs, filmEditorDemo: demo };
+    await writeFile(join(demo, 'manifest.json'), manifest(['index.html', 'app.js'], true));
+    await assert.rejects(stageSite(inputs, destination), /development-only/);
+    await writeFile(join(demo, 'manifest.json'), manifest(['index.html', 'manifest.json']));
+    await assert.rejects(stageSite(inputs, destination), /invalid file: manifest\.json/);
+    const stagedManifest = manifest(['index.html', 'app.js']);
+    await writeFile(join(demo, 'manifest.json'), stagedManifest);
+    await stageSite(inputs, destination);
+    for (const [name, expected] of [
+      ['manifest.json', stagedManifest],
+      ['index.html', '<!doctype html>'],
+      ['app.js', 'console.log(1);'],
+    ])
+      assert.equal(await readFile(join(destination, 'demo/film-editor', name), 'utf8'), expected);
+    const manifestFile = JSON.parse(
+      await readFile(join(destination, 'site-assets.json'), 'utf8'),
+    ) as { files: { path: string }[] };
+    for (const name of ['manifest.json', 'index.html', 'app.js'])
+      assert.ok(
+        manifestFile.files.some((file) => file.path === `demo/film-editor/${name}`),
+        `site-assets.json names demo/film-editor/${name}`,
+      );
+    await stageSite({ runtime, media, sdkDocs }, destination);
+    await assert.rejects(readFile(join(destination, 'demo/film-editor/index.html')), /ENOENT/);
+    const withoutDemo = JSON.parse(
+      await readFile(join(destination, 'site-assets.json'), 'utf8'),
+    ) as { files: { path: string }[] };
+    assert.ok(!withoutDemo.files.some((file) => file.path.startsWith('demo/')));
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
 test('prepared runtime staging follows declared cold input filenames and refuses traversal', () => {
   assert.deepEqual(runtimeBundleFiles({ construction: 'resolved', dmpCpuRenderer: false }), [
     'camera.wasm',

@@ -4,6 +4,7 @@ import { mkdir, mkdtemp, readFile, readdir, rename, rm, writeFile } from 'node:f
 import { dirname, join, resolve } from 'node:path';
 import { validateCatalog, type Catalog } from '../src/catalog.ts';
 import { validateFeatureMedia, type FeatureMedia } from '../src/home/feature-media.ts';
+import { filmEditorDemoPath, parseFilmEditorDemo } from './film-editor-demo.ts';
 import { validateRuntimeApi } from './runtime-api.ts';
 import { parseSdkDocs, sdkDocsFiles, sdkDocsManifest, sdkDocsPath } from './sdk-docs.ts';
 
@@ -11,6 +12,8 @@ export interface SiteInputs {
   runtime: string;
   media: string;
   sdkDocs: string;
+  /** A built Film Editor demo to publish at `demo/film-editor/`. */
+  filmEditorDemo?: string;
 }
 /** Files of the media, photographs included, for cards the homepage still shows; recordings of removed cards stay behind. */
 export function featureMediaFiles(media: FeatureMedia, shownCards: Iterable<string>) {
@@ -18,16 +21,14 @@ export function featureMediaFiles(media: FeatureMedia, shownCards: Iterable<stri
   const cards = Object.entries(media.cards)
     .filter(([id]) => shown.has(id))
     .map(([, recording]) => recording);
-  return new Set(
-    [
-      ...cards.flatMap(({ video, still, photos = [] }) => [
-        video,
-        still,
-        ...photos.flatMap(({ image, full }) => [image, full]),
-      ]),
-      ...Object.values(media.reels ?? {}).flatMap(({ video, still }) => [video, still]),
-    ],
-  );
+  return new Set([
+    ...cards.flatMap(({ video, still, photos = [] }) => [
+      video,
+      still,
+      ...photos.flatMap(({ image, full }) => [image, full]),
+    ]),
+    ...Object.values(media.reels ?? {}).flatMap(({ video, still }) => [video, still]),
+  ]);
 }
 
 /** Cold inputs named by prepared manifests accompany the ordinary runtime files. */
@@ -170,8 +171,25 @@ export async function stageSite(inputs: SiteInputs, destination = 'public') {
     const sdkDocs = parseSdkDocs(await readFile(join(inputs.sdkDocs, sdkDocsManifest), 'utf8'));
     for (const name of sdkDocsFiles(sdkDocs))
       await copy(join(inputs.sdkDocs, name), `${sdkDocsPath}/${name}`);
+    if (inputs.filmEditorDemo) {
+      const directory = resolve(inputs.filmEditorDemo);
+      const demo = parseFilmEditorDemo(await readFile(join(directory, 'manifest.json'), 'utf8'));
+      if (demo.developmentOnly)
+        throw Error(
+          `The Film Editor demo is development-only and cannot be published: ${directory}`,
+        );
+      await copy(join(directory, 'manifest.json'), `${filmEditorDemoPath}/manifest.json`);
+      for (const name of demo.files)
+        await copy(join(directory, name), `${filmEditorDemoPath}/${name}`);
+    }
     await mkdir(resolve(target, dirname(sdkDocsPath)), { recursive: true });
-    for (const directory of ['runtime', 'artifacts', sdkDocsPath]) {
+    await rm(join(target, 'demo'), { recursive: true, force: true });
+    for (const directory of [
+      'runtime',
+      'artifacts',
+      sdkDocsPath,
+      ...(inputs.filmEditorDemo ? ['demo'] : []),
+    ]) {
       await rm(join(target, directory), { recursive: true, force: true });
       await rename(join(temporary, directory), join(target, directory));
     }
