@@ -1822,6 +1822,881 @@
             "model"
           ],
           "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "XP5 general-purpose timer, optionally with the focus-pulse capture capability.",
+          "properties": {
+            "basis": {
+              "description": "Declared basis.",
+              "type": "string"
+            },
+            "focus_capture": {
+              "description": "Whether the timer captures the body's focus pulse.",
+              "type": "boolean"
+            },
+            "model": {
+              "const": "xp5_timer",
+              "type": "string"
+            }
+          },
+          "required": [
+            "model",
+            "focus_capture",
+            "basis"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "XP5 extended timer bank whose PWM outputs feed input capture.",
+          "properties": {
+            "basis": {
+              "description": "Declared basis.",
+              "type": "string"
+            },
+            "model": {
+              "const": "xp5_timer_extended",
+              "type": "string"
+            }
+          },
+          "required": [
+            "model",
+            "basis"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Serial-flash memory aperture.",
+          "properties": {
+            "basis": {
+              "description": "Declared basis.",
+              "type": "string"
+            },
+            "model": {
+              "const": "serial_flash_aperture",
+              "type": "string"
+            }
+          },
+          "required": [
+            "model",
+            "basis"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Serial-flash command controller.",
+          "properties": {
+            "basis": {
+              "description": "Declared basis.",
+              "type": "string"
+            },
+            "model": {
+              "const": "serial_flash_controller",
+              "type": "string"
+            }
+          },
+          "required": [
+            "model",
+            "basis"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Flash-storage DMA channel.",
+          "properties": {
+            "basis": {
+              "description": "Declared basis.",
+              "type": "string"
+            },
+            "model": {
+              "const": "flash_storage_dma",
+              "type": "string"
+            }
+          },
+          "required": [
+            "model",
+            "basis"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Clock or power gate page.",
+          "properties": {
+            "basis": {
+              "description": "Declared basis.",
+              "type": "string"
+            },
+            "configuration_word": {
+              "description": "Initial configuration word, when the driver writes one.",
+              "format": "uint64",
+              "minimum": 0,
+              "type": [
+                "integer",
+                "null"
+              ]
+            },
+            "model": {
+              "const": "gates",
+              "type": "string"
+            }
+          },
+          "required": [
+            "model",
+            "basis"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Clock-bank page with the processor's clock gates.",
+          "properties": {
+            "basis": {
+              "description": "Declared basis.",
+              "type": "string"
+            },
+            "model": {
+              "const": "clock_banks",
+              "type": "string"
+            }
+          },
+          "required": [
+            "model",
+            "basis"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Panel PLL page.",
+          "properties": {
+            "basis": {
+              "description": "Declared basis.",
+              "type": "string"
+            },
+            "model": {
+              "const": "panel_pll",
+              "type": "string"
+            }
+          },
+          "required": [
+            "model",
+            "basis"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "General-purpose DMA controller.",
+          "properties": {
+            "basis": {
+              "description": "Declared basis.",
+              "type": "string"
+            },
+            "model": {
+              "const": "general_dma",
+              "type": "string"
+            }
+          },
+          "required": [
+            "model",
+            "basis"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Audio DMA channel.",
+          "properties": {
+            "basis": {
+              "description": "Declared basis.",
+              "type": "string"
+            },
+            "bytes_per_tick": {
+              "description": "Bytes moved per tick.",
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "model": {
+              "const": "audio_dma",
+              "type": "string"
+            },
+            "setup_ticks": {
+              "description": "Ticks before the first byte moves.",
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          "required": [
+            "model",
+            "setup_ticks",
+            "bytes_per_tick",
+            "basis"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "GPIO controller with interrupt inputs and pad behavior.",
+          "properties": {
+            "basis": {
+              "description": "Declared basis.",
+              "type": "string"
+            },
+            "model": {
+              "const": "xp5_gpio",
+              "type": "string"
+            }
+          },
+          "required": [
+            "model",
+            "basis"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "ADC with run-supplied samples.",
+          "properties": {
+            "basis": {
+              "description": "Declared basis.",
+              "type": "string"
+            },
+            "model": {
+              "const": "xp5_adc",
+              "type": "string"
+            }
+          },
+          "required": [
+            "model",
+            "basis"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "SoC temperature conversion page.",
+          "properties": {
+            "basis": {
+              "description": "Declared basis.",
+              "type": "string"
+            },
+            "model": {
+              "const": "temperature",
+              "type": "string"
+            }
+          },
+          "required": [
+            "model",
+            "basis"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Inter-processor mailbox shared with the companion core.",
+          "properties": {
+            "basis": {
+              "description": "Declared basis.",
+              "type": "string"
+            },
+            "model": {
+              "const": "interprocessor_mailbox",
+              "type": "string"
+            }
+          },
+          "required": [
+            "model",
+            "basis"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Audio serial interface and its reset handshake.",
+          "properties": {
+            "basis": {
+              "description": "Declared basis.",
+              "type": "string"
+            },
+            "model": {
+              "const": "audio_serial",
+              "type": "string"
+            }
+          },
+          "required": [
+            "model",
+            "basis"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "DDR channel memory-configuration page.",
+          "properties": {
+            "basis": {
+              "description": "Declared basis.",
+              "type": "string"
+            },
+            "commit_ticks": {
+              "description": "Ticks the channel takes to commit a configuration.",
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "model": {
+              "const": "memory_configuration",
+              "type": "string"
+            }
+          },
+          "required": [
+            "model",
+            "commit_ticks",
+            "basis"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "DDR PHY mailbox page.",
+          "properties": {
+            "basis": {
+              "description": "Declared basis.",
+              "type": "string"
+            },
+            "model": {
+              "const": "ddr_phy",
+              "type": "string"
+            }
+          },
+          "required": [
+            "model",
+            "basis"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "SD interface register set beside an SDHCI host.",
+          "properties": {
+            "basis": {
+              "description": "Declared basis.",
+              "type": "string"
+            },
+            "model": {
+              "const": "sd_interface",
+              "type": "string"
+            }
+          },
+          "required": [
+            "model",
+            "basis"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "UHS-II capabilities page beside an SDHCI host.",
+          "properties": {
+            "basis": {
+              "description": "Declared basis.",
+              "type": "string"
+            },
+            "clock_ticks": {
+              "description": "Ticks for the clock to settle.",
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "model": {
+              "const": "sdhci_uhs2",
+              "type": "string"
+            }
+          },
+          "required": [
+            "model",
+            "clock_ticks",
+            "basis"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Display output link's request word.",
+          "properties": {
+            "basis": {
+              "description": "Declared basis.",
+              "type": "string"
+            },
+            "model": {
+              "const": "display_output_link",
+              "type": "string"
+            }
+          },
+          "required": [
+            "model",
+            "basis"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "2D/3D renderer.",
+          "properties": {
+            "basis": {
+              "description": "Declared basis.",
+              "type": "string"
+            },
+            "model": {
+              "const": "renderer",
+              "type": "string"
+            }
+          },
+          "required": [
+            "model",
+            "basis"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Imaging PHY page.",
+          "properties": {
+            "basis": {
+              "description": "Declared basis.",
+              "type": "string"
+            },
+            "model": {
+              "const": "imaging_phy",
+              "type": "string"
+            }
+          },
+          "required": [
+            "model",
+            "basis"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Imaging input page.",
+          "properties": {
+            "basis": {
+              "description": "Declared basis.",
+              "type": "string"
+            },
+            "model": {
+              "const": "imaging_input",
+              "type": "string"
+            }
+          },
+          "required": [
+            "model",
+            "basis"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Imaging resizer.",
+          "properties": {
+            "basis": {
+              "description": "Declared basis.",
+              "type": "string"
+            },
+            "model": {
+              "const": "imaging_resize",
+              "type": "string"
+            }
+          },
+          "required": [
+            "model",
+            "basis"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Phase-detection autofocus page.",
+          "properties": {
+            "basis": {
+              "description": "Declared basis.",
+              "type": "string"
+            },
+            "model": {
+              "const": "imaging_paf",
+              "type": "string"
+            }
+          },
+          "required": [
+            "model",
+            "basis"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Preview channel.",
+          "properties": {
+            "basis": {
+              "description": "Declared basis.",
+              "type": "string"
+            },
+            "model": {
+              "const": "imaging_preview",
+              "type": "string"
+            }
+          },
+          "required": [
+            "model",
+            "basis"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "RIFP input/output page.",
+          "properties": {
+            "basis": {
+              "description": "Declared basis.",
+              "type": "string"
+            },
+            "model": {
+              "const": "imaging_rifp_io",
+              "type": "string"
+            }
+          },
+          "required": [
+            "model",
+            "basis"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "RIFP processing page.",
+          "properties": {
+            "basis": {
+              "description": "Declared basis.",
+              "type": "string"
+            },
+            "model": {
+              "const": "imaging_rifp",
+              "type": "string"
+            }
+          },
+          "required": [
+            "model",
+            "basis"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Temporal noise reduction stage.",
+          "properties": {
+            "basis": {
+              "description": "Declared basis.",
+              "type": "string"
+            },
+            "model": {
+              "const": "imaging_tnr",
+              "type": "string"
+            }
+          },
+          "required": [
+            "model",
+            "basis"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Frame conversion stage.",
+          "properties": {
+            "basis": {
+              "description": "Declared basis.",
+              "type": "string"
+            },
+            "model": {
+              "const": "imaging_fcnv",
+              "type": "string"
+            }
+          },
+          "required": [
+            "model",
+            "basis"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Filter and scaler stage.",
+          "properties": {
+            "basis": {
+              "description": "Declared basis.",
+              "type": "string"
+            },
+            "model": {
+              "const": "imaging_filter_scaler",
+              "type": "string"
+            }
+          },
+          "required": [
+            "model",
+            "basis"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "RZL2 scaler.",
+          "properties": {
+            "basis": {
+              "description": "Declared basis.",
+              "type": "string"
+            },
+            "model": {
+              "const": "imaging_rzl2",
+              "type": "string"
+            }
+          },
+          "required": [
+            "model",
+            "basis"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "RESZ scaler page.",
+          "properties": {
+            "basis": {
+              "description": "Declared basis.",
+              "type": "string"
+            },
+            "model": {
+              "const": "imaging_resz",
+              "type": "string"
+            }
+          },
+          "required": [
+            "model",
+            "basis"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Input-capture channel.",
+          "properties": {
+            "basis": {
+              "description": "Declared basis.",
+              "type": "string"
+            },
+            "model": {
+              "const": "input_capture",
+              "type": "string"
+            }
+          },
+          "required": [
+            "model",
+            "basis"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "UART port.",
+          "properties": {
+            "basis": {
+              "description": "Declared basis.",
+              "type": "string"
+            },
+            "model": {
+              "const": "pl011",
+              "type": "string"
+            }
+          },
+          "required": [
+            "model",
+            "basis"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "PL022 serial peripheral interface.",
+          "properties": {
+            "basis": {
+              "description": "Declared basis.",
+              "type": "string"
+            },
+            "companion_irq_line": {
+              "description": "Companion interrupt line, when connected.",
+              "format": "uint32",
+              "minimum": 0,
+              "type": [
+                "integer",
+                "null"
+              ]
+            },
+            "model": {
+              "const": "pl022",
+              "type": "string"
+            },
+            "receive_request": {
+              "description": "DMA receive request line, when declared.",
+              "format": "uint32",
+              "minimum": 0,
+              "type": [
+                "integer",
+                "null"
+              ]
+            },
+            "source_hz": {
+              "description": "Source clock in hertz.",
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "ticks_per_second": {
+              "description": "Device ticks per second.",
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "transmit_request": {
+              "description": "DMA transmit request line, when declared.",
+              "format": "uint32",
+              "minimum": 0,
+              "type": [
+                "integer",
+                "null"
+              ]
+            }
+          },
+          "required": [
+            "model",
+            "source_hz",
+            "ticks_per_second",
+            "basis"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Register window whose completion handshake is typed.",
+          "properties": {
+            "ack": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/CompletionAck"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Acknowledgement behavior."
+            },
+            "basis": {
+              "description": "Declared basis.",
+              "type": "string"
+            },
+            "completion": {
+              "description": "Writes a completed job leaves.",
+              "items": {
+                "$ref": "#/$defs/CompletionWrite"
+              },
+              "type": "array"
+            },
+            "delay_ticks": {
+              "description": "Ticks from start to completion.",
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "model": {
+              "const": "completion",
+              "type": "string"
+            },
+            "starts": {
+              "description": "Start writes and their mask.",
+              "items": {
+                "$ref": "#/$defs/CompletionStart"
+              },
+              "type": "array"
+            }
+          },
+          "required": [
+            "model",
+            "delay_ticks",
+            "basis"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Video codec page.",
+          "properties": {
+            "basis": {
+              "description": "Declared basis.",
+              "type": "string"
+            },
+            "model": {
+              "const": "video_codec",
+              "type": "string"
+            }
+          },
+          "required": [
+            "model",
+            "basis"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Program memory and debug page of the imaging DSP.",
+          "properties": {
+            "basis": {
+              "description": "Declared basis.",
+              "type": "string"
+            },
+            "model": {
+              "const": "imaging_dsp",
+              "type": "string"
+            }
+          },
+          "required": [
+            "model",
+            "basis"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Address that only discards reads.",
+          "properties": {
+            "basis": {
+              "description": "Declared basis.",
+              "type": "string"
+            },
+            "model": {
+              "const": "unmodeled_bus_drain",
+              "type": "string"
+            }
+          },
+          "required": [
+            "model",
+            "basis"
+          ],
+          "type": "object"
         }
       ]
     },
@@ -2058,6 +2933,112 @@
       },
       "required": [
         "id"
+      ],
+      "type": "object"
+    },
+    "CompletionAck": {
+      "additionalProperties": false,
+      "description": "Acknowledgement behavior of a completion block.",
+      "properties": {
+        "bits": {
+          "description": "Bits the acknowledgement covers.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "mode": {
+          "$ref": "#/$defs/CompletionAckMode",
+          "description": "How a write acknowledges the job."
+        },
+        "offset": {
+          "description": "Offset of the acknowledgement word.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "status_offset": {
+          "description": "Offset of the status word an acknowledgement clears, when different.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "offset",
+        "mode"
+      ],
+      "type": "object"
+    },
+    "CompletionAckMode": {
+      "description": "How a completion block acknowledges a job.",
+      "oneOf": [
+        {
+          "const": "w1c",
+          "description": "Writing one to a bit clears it.",
+          "type": "string"
+        }
+      ]
+    },
+    "CompletionStart": {
+      "additionalProperties": false,
+      "description": "One start write of a completion block.",
+      "properties": {
+        "mask": {
+          "description": "Bits that start a job.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "offset": {
+          "description": "Offset of the start word inside the block.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "offset",
+        "mask"
+      ],
+      "type": "object"
+    },
+    "CompletionWrite": {
+      "additionalProperties": false,
+      "description": "One write a completed job leaves behind.",
+      "properties": {
+        "clear": {
+          "description": "Bits the write clears, when set.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "offset": {
+          "description": "Offset of the word inside the block.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "set": {
+          "description": "Bits the write sets, when set.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "offset"
       ],
       "type": "object"
     },
@@ -3374,6 +4355,11 @@
         {
           "const": "memory-controller",
           "description": "Memory controller.",
+          "type": "string"
+        },
+        {
+          "const": "audio-controller",
+          "description": "Audio serial controller.",
           "type": "string"
         },
         {

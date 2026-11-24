@@ -506,6 +506,315 @@ pub enum BlockDevice {
         #[serde(default, skip_serializing_if = "Option::is_none")]
         basis: Option<String>,
     },
+    /// XP5 general-purpose timer, optionally with the focus-pulse capture capability.
+    Xp5Timer {
+        /// Whether the timer captures the body's focus pulse.
+        focus_capture: bool,
+        /// Declared basis.
+        basis: String,
+    },
+    /// XP5 extended timer bank whose PWM outputs feed input capture.
+    Xp5TimerExtended {
+        /// Declared basis.
+        basis: String,
+    },
+    /// Serial-flash memory aperture.
+    SerialFlashAperture {
+        /// Declared basis.
+        basis: String,
+    },
+    /// Serial-flash command controller.
+    SerialFlashController {
+        /// Declared basis.
+        basis: String,
+    },
+    /// Flash-storage DMA channel.
+    FlashStorageDma {
+        /// Declared basis.
+        basis: String,
+    },
+    /// Clock or power gate page.
+    Gates {
+        /// Initial configuration word, when the driver writes one.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        configuration_word: Option<u64>,
+        /// Declared basis.
+        basis: String,
+    },
+    /// Clock-bank page with the processor's clock gates.
+    ClockBanks {
+        /// Declared basis.
+        basis: String,
+    },
+    /// Panel PLL page.
+    PanelPll {
+        /// Declared basis.
+        basis: String,
+    },
+    /// General-purpose DMA controller.
+    GeneralDma {
+        /// Declared basis.
+        basis: String,
+    },
+    /// Audio DMA channel.
+    AudioDma {
+        /// Ticks before the first byte moves.
+        setup_ticks: u64,
+        /// Bytes moved per tick.
+        bytes_per_tick: u64,
+        /// Declared basis.
+        basis: String,
+    },
+    /// GPIO controller with interrupt inputs and pad behavior.
+    Xp5Gpio {
+        /// Declared basis.
+        basis: String,
+    },
+    /// ADC with run-supplied samples.
+    Xp5Adc {
+        /// Declared basis.
+        basis: String,
+    },
+    /// SoC temperature conversion page.
+    Temperature {
+        /// Declared basis.
+        basis: String,
+    },
+    /// Inter-processor mailbox shared with the companion core.
+    InterprocessorMailbox {
+        /// Declared basis.
+        basis: String,
+    },
+    /// Audio serial interface and its reset handshake.
+    AudioSerial {
+        /// Declared basis.
+        basis: String,
+    },
+    /// DDR channel memory-configuration page.
+    MemoryConfiguration {
+        /// Ticks the channel takes to commit a configuration.
+        commit_ticks: u64,
+        /// Declared basis.
+        basis: String,
+    },
+    /// DDR PHY mailbox page.
+    DdrPhy {
+        /// Declared basis.
+        basis: String,
+    },
+    /// SD interface register set beside an SDHCI host.
+    SdInterface {
+        /// Declared basis.
+        basis: String,
+    },
+    /// UHS-II capabilities page beside an SDHCI host.
+    SdhciUhs2 {
+        /// Ticks for the clock to settle.
+        clock_ticks: u64,
+        /// Declared basis.
+        basis: String,
+    },
+    /// Display output link's request word.
+    DisplayOutputLink {
+        /// Declared basis.
+        basis: String,
+    },
+    /// 2D/3D renderer.
+    Renderer {
+        /// Declared basis.
+        basis: String,
+    },
+    /// Imaging PHY page.
+    ImagingPhy {
+        /// Declared basis.
+        basis: String,
+    },
+    /// Imaging input page.
+    ImagingInput {
+        /// Declared basis.
+        basis: String,
+    },
+    /// Imaging resizer.
+    ImagingResize {
+        /// Declared basis.
+        basis: String,
+    },
+    /// Phase-detection autofocus page.
+    ImagingPaf {
+        /// Declared basis.
+        basis: String,
+    },
+    /// Preview channel.
+    ImagingPreview {
+        /// Declared basis.
+        basis: String,
+    },
+    /// RIFP input/output page.
+    ImagingRifpIo {
+        /// Declared basis.
+        basis: String,
+    },
+    /// RIFP processing page.
+    ImagingRifp {
+        /// Declared basis.
+        basis: String,
+    },
+    /// Temporal noise reduction stage.
+    ImagingTnr {
+        /// Declared basis.
+        basis: String,
+    },
+    /// Frame conversion stage.
+    ImagingFcnv {
+        /// Declared basis.
+        basis: String,
+    },
+    /// Filter and scaler stage.
+    ImagingFilterScaler {
+        /// Declared basis.
+        basis: String,
+    },
+    /// RZL2 scaler.
+    ImagingRzl2 {
+        /// Declared basis.
+        basis: String,
+    },
+    /// RESZ scaler page.
+    ImagingResz {
+        /// Declared basis.
+        basis: String,
+    },
+    /// Input-capture channel.
+    InputCapture {
+        /// Declared basis.
+        basis: String,
+    },
+    /// UART port.
+    Pl011 {
+        /// Declared basis.
+        basis: String,
+    },
+    /// PL022 serial peripheral interface.
+    Pl022 {
+        /// Source clock in hertz.
+        source_hz: u64,
+        /// Device ticks per second.
+        ticks_per_second: u64,
+        /// DMA receive request line, when declared.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        receive_request: Option<u32>,
+        /// DMA transmit request line, when declared.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        transmit_request: Option<u32>,
+        /// Companion interrupt line, when connected.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        companion_irq_line: Option<u32>,
+        /// Declared basis.
+        basis: String,
+    },
+    /// Register window whose completion handshake is typed.
+    Completion {
+        /// Start writes and their mask.
+        #[serde(default, skip_serializing_if = "Vec::is_empty")]
+        starts: Vec<CompletionStart>,
+        /// Writes a completed job leaves.
+        #[serde(default, skip_serializing_if = "Vec::is_empty")]
+        completion: Vec<CompletionWrite>,
+        /// Acknowledgement behavior.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        ack: Option<CompletionAck>,
+        /// Ticks from start to completion.
+        delay_ticks: u64,
+        /// Declared basis.
+        basis: String,
+    },
+    /// Video codec page.
+    VideoCodec {
+        /// Declared basis.
+        basis: String,
+    },
+    /// Program memory and debug page of the imaging DSP.
+    ImagingDsp {
+        /// Declared basis.
+        basis: String,
+    },
+    /// Address that only discards reads.
+    UnmodeledBusDrain {
+        /// Declared basis.
+        basis: String,
+    },
+}
+
+/// One start write of a completion block.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(deny_unknown_fields)]
+#[cfg_attr(
+    all(target_arch = "wasm32", not(target_os = "emscripten")),
+    derive(tsify::Tsify),
+    tsify(hashmap_as_object, missing_as_null)
+)]
+pub struct CompletionStart {
+    /// Offset of the start word inside the block.
+    pub offset: u64,
+    /// Bits that start a job.
+    pub mask: u32,
+}
+
+/// One write a completed job leaves behind.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(deny_unknown_fields)]
+#[cfg_attr(
+    all(target_arch = "wasm32", not(target_os = "emscripten")),
+    derive(tsify::Tsify),
+    tsify(hashmap_as_object, missing_as_null)
+)]
+pub struct CompletionWrite {
+    /// Offset of the word inside the block.
+    pub offset: u64,
+    /// Bits the write sets, when set.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub set: Option<u32>,
+    /// Bits the write clears, when set.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub clear: Option<u32>,
+}
+
+/// Acknowledgement behavior of a completion block.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(deny_unknown_fields)]
+#[cfg_attr(
+    all(target_arch = "wasm32", not(target_os = "emscripten")),
+    derive(tsify::Tsify),
+    tsify(hashmap_as_object, missing_as_null)
+)]
+pub struct CompletionAck {
+    /// Offset of the acknowledgement word.
+    pub offset: u64,
+    /// How a write acknowledges the job.
+    pub mode: CompletionAckMode,
+    /// Offset of the status word an acknowledgement clears, when different.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub status_offset: Option<u64>,
+    /// Bits the acknowledgement covers.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub bits: Option<u32>,
+}
+
+/// How a completion block acknowledges a job.
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(rename_all = "snake_case")]
+#[cfg_attr(
+    all(target_arch = "wasm32", not(target_os = "emscripten")),
+    derive(tsify::Tsify),
+    tsify(hashmap_as_object, missing_as_null)
+)]
+pub enum CompletionAckMode {
+    /// Writing one to a bit clears it.
+    W1c,
 }
 
 /// The still-processing engine a block runs.
@@ -599,9 +908,16 @@ impl BlockDevice {
                     | BlockDevice::CompanionDma { .. }
                     | BlockDevice::LoaderDma { .. }
                     | BlockDevice::Pl330 { .. }
+                    | BlockDevice::GeneralDma { .. }
+                    | BlockDevice::AudioDma { .. }
+                    | BlockDevice::FlashStorageDma { .. }
             ) | (
                 SocBlockKind::SerialController,
-                BlockDevice::SerialDma { .. } | BlockDevice::Spi { .. } | BlockDevice::SerialPort { .. }
+                BlockDevice::SerialDma { .. }
+                    | BlockDevice::Spi { .. }
+                    | BlockDevice::SerialPort { .. }
+                    | BlockDevice::Pl022 { .. }
+                    | BlockDevice::Pl011 { .. }
             ) | (
                 SocBlockKind::InterruptController,
                 BlockDevice::GicV2 { .. } | BlockDevice::GicV3 { .. }
@@ -623,6 +939,21 @@ impl BlockDevice {
                         | BlockDevice::FilterEngine { .. }
                         | BlockDevice::Dsp { .. }
                         | BlockDevice::RegisterBlock { .. }
+                        | BlockDevice::ImagingPhy { .. }
+                        | BlockDevice::ImagingInput { .. }
+                        | BlockDevice::ImagingResize { .. }
+                        | BlockDevice::ImagingPaf { .. }
+                        | BlockDevice::ImagingPreview { .. }
+                        | BlockDevice::ImagingRifpIo { .. }
+                        | BlockDevice::ImagingRifp { .. }
+                        | BlockDevice::ImagingTnr { .. }
+                        | BlockDevice::ImagingFcnv { .. }
+                        | BlockDevice::ImagingFilterScaler { .. }
+                        | BlockDevice::ImagingRzl2 { .. }
+                        | BlockDevice::ImagingResz { .. }
+                        | BlockDevice::VideoCodec { .. }
+                        | BlockDevice::ImagingDsp { .. }
+                        | BlockDevice::Completion { .. }
                 )
                 | (
                     SocBlockKind::AddressWindow,
@@ -632,14 +963,50 @@ impl BlockDevice {
                         | BlockDevice::PowerControl { .. }
                         | BlockDevice::UsbCondition { .. }
                         | BlockDevice::RegisterBlock { .. }
+                        | BlockDevice::SerialFlashAperture { .. }
+                        | BlockDevice::Temperature { .. }
+                        | BlockDevice::InterprocessorMailbox { .. }
+                        | BlockDevice::InputCapture { .. }
+                        | BlockDevice::UnmodeledBusDrain { .. }
                 )
                 | (SocBlockKind::ControlBus, BlockDevice::ControlBus { .. } | BlockDevice::SecondaryBus { .. } | BlockDevice::I2c { .. })
-                | (SocBlockKind::NandController, BlockDevice::Nand { .. })
-                | (SocBlockKind::UsbController, BlockDevice::Usb { .. } | BlockDevice::UsbPhy { .. } | BlockDevice::XppUsb { .. })
-                | (SocBlockKind::ClockController, BlockDevice::SdHostClock { .. } | BlockDevice::PllClocks { .. })
-                | (SocBlockKind::Gpio, BlockDevice::Gpio { .. } | BlockDevice::IoGroups { .. })
-                | (SocBlockKind::Adc, BlockDevice::Adc { .. })
-                | (SocBlockKind::DisplayController, BlockDevice::Dmp { .. } | BlockDevice::DisplayOutput { .. } | BlockDevice::HdmiTx { .. })
+                | (
+                    SocBlockKind::NandController,
+                    BlockDevice::Nand { .. } | BlockDevice::SerialFlashController { .. }
+                )
+                | (
+                    SocBlockKind::UsbController,
+                    BlockDevice::Usb { .. }
+                        | BlockDevice::UsbPhy { .. }
+                        | BlockDevice::XppUsb { .. }
+                        | BlockDevice::Completion { .. }
+                )
+                | (
+                    SocBlockKind::ClockController,
+                    BlockDevice::SdHostClock { .. }
+                        | BlockDevice::PllClocks { .. }
+                        | BlockDevice::Gates { .. }
+                        | BlockDevice::ClockBanks { .. }
+                        | BlockDevice::PanelPll { .. }
+                )
+                | (
+                    SocBlockKind::Gpio,
+                    BlockDevice::Gpio { .. }
+                        | BlockDevice::IoGroups { .. }
+                        | BlockDevice::Xp5Gpio { .. }
+                )
+                | (
+                    SocBlockKind::Adc,
+                    BlockDevice::Adc { .. } | BlockDevice::Xp5Adc { .. }
+                )
+                | (
+                    SocBlockKind::DisplayController,
+                    BlockDevice::Dmp { .. }
+                        | BlockDevice::DisplayOutput { .. }
+                        | BlockDevice::HdmiTx { .. }
+                        | BlockDevice::DisplayOutputLink { .. }
+                        | BlockDevice::Renderer { .. }
+                )
                 | (
                     SocBlockKind::ResetController,
                     BlockDevice::ControlRequest { .. }
@@ -648,10 +1015,29 @@ impl BlockDevice {
                 )
                 | (
                     SocBlockKind::Timer,
-                    BlockDevice::IntervalTimer { .. } | BlockDevice::CountdownTimer { .. }
+                    BlockDevice::IntervalTimer { .. }
+                        | BlockDevice::CountdownTimer { .. }
+                        | BlockDevice::Xp5Timer { .. }
+                        | BlockDevice::Xp5TimerExtended { .. }
                 )
-                | (SocBlockKind::MemoryController, BlockDevice::RegisterBlock { .. } | BlockDevice::DramController { .. })
-                | (SocBlockKind::SdCardController, BlockDevice::SdHost { .. } | BlockDevice::XppSd { .. })
+                | (
+                    SocBlockKind::MemoryController,
+                    BlockDevice::RegisterBlock { .. }
+                        | BlockDevice::DramController { .. }
+                        | BlockDevice::MemoryConfiguration { .. }
+                        | BlockDevice::DdrPhy { .. }
+                )
+                | (
+                    SocBlockKind::SdCardController,
+                    BlockDevice::SdHost { .. }
+                        | BlockDevice::XppSd { .. }
+                        | BlockDevice::SdInterface { .. }
+                        | BlockDevice::SdhciUhs2 { .. }
+                )
+                | (
+                    SocBlockKind::AudioController,
+                    BlockDevice::AudioSerial { .. }
+                )
         )
     }
 }

@@ -181,6 +181,18 @@ impl Soc {
                 return Err(format!("SoC {} repeats block {}", self.id, block.id));
             }
         }
+        // A located block owns its address. Legacy `peripheral-window-*` fallbacks
+        // carry no evidence and stay exempt until each processor's migration
+        // replaces them, but two located blocks may never share a base.
+        let mut located_bases = BTreeMap::new();
+        for block in self.blocks.iter().filter(|block| !block.evidence.is_empty()) {
+            if let Some(other) = located_bases.insert(block.base, block.id.as_str()) {
+                return Err(format!(
+                    "SoC {} blocks {other} and {} share base {:#x}",
+                    self.id, block.id, block.base
+                ));
+            }
+        }
         let mut mapping_ids = BTreeSet::new();
         for mapping in &self.mappings {
             validate_id(&mapping.id)?;
@@ -502,7 +514,47 @@ impl Soc {
                     | crate::soc::BlockDevice::PowerControl { .. }
                     | crate::soc::BlockDevice::I2c { .. }
                     | crate::soc::BlockDevice::XppSd { .. }
-                    | crate::soc::BlockDevice::H264Encoder { .. } => {}
+                    | crate::soc::BlockDevice::H264Encoder { .. }
+                    | crate::soc::BlockDevice::Xp5Timer { .. }
+                    | crate::soc::BlockDevice::Xp5TimerExtended { .. }
+                    | crate::soc::BlockDevice::SerialFlashAperture { .. }
+                    | crate::soc::BlockDevice::SerialFlashController { .. }
+                    | crate::soc::BlockDevice::FlashStorageDma { .. }
+                    | crate::soc::BlockDevice::Gates { .. }
+                    | crate::soc::BlockDevice::ClockBanks { .. }
+                    | crate::soc::BlockDevice::PanelPll { .. }
+                    | crate::soc::BlockDevice::GeneralDma { .. }
+                    | crate::soc::BlockDevice::AudioDma { .. }
+                    | crate::soc::BlockDevice::Xp5Gpio { .. }
+                    | crate::soc::BlockDevice::Xp5Adc { .. }
+                    | crate::soc::BlockDevice::Temperature { .. }
+                    | crate::soc::BlockDevice::InterprocessorMailbox { .. }
+                    | crate::soc::BlockDevice::AudioSerial { .. }
+                    | crate::soc::BlockDevice::MemoryConfiguration { .. }
+                    | crate::soc::BlockDevice::DdrPhy { .. }
+                    | crate::soc::BlockDevice::SdInterface { .. }
+                    | crate::soc::BlockDevice::SdhciUhs2 { .. }
+                    | crate::soc::BlockDevice::DisplayOutputLink { .. }
+                    | crate::soc::BlockDevice::Renderer { .. }
+                    | crate::soc::BlockDevice::ImagingPhy { .. }
+                    | crate::soc::BlockDevice::ImagingInput { .. }
+                    | crate::soc::BlockDevice::ImagingResize { .. }
+                    | crate::soc::BlockDevice::ImagingPaf { .. }
+                    | crate::soc::BlockDevice::ImagingPreview { .. }
+                    | crate::soc::BlockDevice::ImagingRifpIo { .. }
+                    | crate::soc::BlockDevice::ImagingRifp { .. }
+                    | crate::soc::BlockDevice::ImagingTnr { .. }
+                    | crate::soc::BlockDevice::ImagingFcnv { .. }
+                    | crate::soc::BlockDevice::ImagingFilterScaler { .. }
+                    | crate::soc::BlockDevice::ImagingRzl2 { .. }
+                    | crate::soc::BlockDevice::ImagingResz { .. }
+                    | crate::soc::BlockDevice::InputCapture { .. }
+                    | crate::soc::BlockDevice::Pl011 { .. }
+                    | crate::soc::BlockDevice::Pl022 { .. }
+                    | crate::soc::BlockDevice::Completion { .. }
+                    | crate::soc::BlockDevice::VideoCodec { .. }
+                    | crate::soc::BlockDevice::ImagingDsp { .. }
+                    | crate::soc::BlockDevice::UnmodeledBusDrain { .. } => {}
                 }
             }
         }
@@ -1132,6 +1184,8 @@ pub enum SocBlockKind {
     ClockController,
     /// Memory controller.
     MemoryController,
+    /// Audio serial controller.
+    AudioController,
     /// Addressable register window with no assigned functional category.
     AddressWindow,
 }
@@ -3289,6 +3343,7 @@ pub struct ReferenceCatalog {
     bulk: BTreeMap<String, fujimod_catalog_bulk::FirmwareBulk>,
     execution: BTreeMap<String, fujimod_catalog_execution::FirmwareExecution>,
     nand_boot: BTreeMap<String, crate::nand_boot::FirmwareNandBoot>,
+    rom_start: BTreeMap<String, crate::rom_start::FirmwareRomStart>,
     boot_patch: BTreeMap<String, crate::boot_patch::FirmwareBootPatch>,
     boot_roms: BTreeMap<String, crate::boot_rom::BootRom>,
     restart: BTreeMap<String, fujimod_catalog_restart::FirmwareRestart>,
@@ -3557,6 +3612,11 @@ impl ReferenceCatalog {
         self.nand_boot.get(firmware_id)
     }
 
+    /// ROM start facts for a firmware release.
+    pub fn rom_start(&self, firmware_id: &str) -> Option<&crate::rom_start::FirmwareRomStart> {
+        self.rom_start.get(firmware_id)
+    }
+
     /// Located boot-patch facts, independent of a body or execution profile.
     pub fn boot_patch_profiles(
         &self,
@@ -3664,6 +3724,11 @@ impl ReferenceCatalog {
                 let value: crate::nand_boot::FirmwareNandBoot = decode(bytes, path)?;
                 value.validate()?;
                 insert_unique(&mut self.nand_boot, value.firmware_id.clone(), value, path)
+            }
+            ReferenceKind::RomStart => {
+                let value: crate::rom_start::FirmwareRomStart = decode(bytes, path)?;
+                value.validate()?;
+                insert_unique(&mut self.rom_start, value.firmware_id.clone(), value, path)
             }
             ReferenceKind::BootPatch => {
                 let value: crate::boot_patch::FirmwareBootPatch = decode(bytes, path)?;
@@ -3812,6 +3877,29 @@ impl ReferenceCatalog {
                 return Err(format!(
                     "boot-patch facts for {firmware_id} name update {} instead of {}",
                     facts.update_sha256, update.sha256
+                ));
+            }
+        }
+        for (firmware_id, facts) in &self.rom_start {
+            let firmware = self.firmwares.get(firmware_id).ok_or_else(|| {
+                format!("ROM start facts refer to missing firmware {firmware_id}")
+            })?;
+            if let Some(update) = &firmware.update
+                && update.sha256 != facts.update_sha256
+            {
+                return Err(format!(
+                    "ROM start facts for {firmware_id} name update {} instead of {}",
+                    facts.update_sha256, update.sha256
+                ));
+            }
+            if !self.socs.values().any(|soc| {
+                soc.blocks
+                    .iter()
+                    .any(|block| block.id == facts.boot_strap.block_id)
+            }) {
+                return Err(format!(
+                    "ROM start facts for {firmware_id} refer to missing block {}",
+                    facts.boot_strap.block_id
                 ));
             }
         }
@@ -4598,6 +4686,7 @@ enum ReferenceKind {
     Bulk,
     Execution,
     NandBoot,
+    RomStart,
     BootPatch,
     BootRom,
     CardFiles,
@@ -4628,6 +4717,7 @@ impl ReferenceKind {
             Some("bulk.generated.json") => Ok(Self::Bulk),
             Some("execution.generated.json") => Ok(Self::Execution),
             Some("sd-boot-v2-autostart.generated.json") => Ok(Self::NandBoot),
+            Some("rom-start.generated.json") => Ok(Self::RomStart),
             Some("boot-patch.generated.json") => Ok(Self::BootPatch),
             Some("card-files.generated.json") => Ok(Self::CardFiles),
             Some("restart.generated.json") => Ok(Self::Restart),
@@ -4835,6 +4925,24 @@ mod layout_tests {
             firmware_ids: vec![],
             addresses: vec![],
         }
+    }
+
+    #[test]
+    fn located_blocks_cannot_share_a_base() {
+        let mut first = block("first", 0x1000, 0x100);
+        first.evidence = vec![stand_in()];
+        let mut second = block("second", 0x1000, 0x100);
+        second.evidence = vec![stand_in()];
+        let error = soc(vec![first, second], vec![]).validate("test-soc").unwrap_err();
+        assert!(error.contains("share base 0x1000"), "{error}");
+
+        // A legacy fallback without evidence may sit at a located block's base.
+        let mut located = block("located", 0x1000, 0x100);
+        located.evidence = vec![stand_in()];
+        let fallback = block("peripheral-window-00001000", 0x1000, 0x1000);
+        soc(vec![located, fallback], vec![])
+            .validate("test-soc")
+            .unwrap();
     }
 
     #[test]
