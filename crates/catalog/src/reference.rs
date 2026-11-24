@@ -265,6 +265,48 @@ impl Soc {
                             ));
                         }
                     }
+                    crate::soc::BlockDevice::GicV2 {
+                        cpu_interface_block_id,
+                        lines,
+                        ..
+                    } => {
+                        if !self.blocks.iter().any(|item| {
+                            item.id == *cpu_interface_block_id
+                                && item.kind == SocBlockKind::InterruptController
+                        }) {
+                            return Err(format!(
+                                "SoC {} GIC block {} refers to missing CPU interface {}",
+                                self.id, block.id, cpu_interface_block_id
+                            ));
+                        }
+                        if *lines == 0 {
+                            return Err(format!(
+                                "SoC {} GIC block {} has no lines",
+                                self.id, block.id
+                            ));
+                        }
+                    }
+                    crate::soc::BlockDevice::GicV3 {
+                        redistributor_block_id,
+                        lines,
+                        ..
+                    } => {
+                        if !self.blocks.iter().any(|item| {
+                            item.id == *redistributor_block_id
+                                && item.kind == SocBlockKind::InterruptController
+                        }) {
+                            return Err(format!(
+                                "SoC {} GIC block {} refers to missing redistributor {}",
+                                self.id, block.id, redistributor_block_id
+                            ));
+                        }
+                        if *lines == 0 {
+                            return Err(format!(
+                                "SoC {} GIC block {} has no lines",
+                                self.id, block.id
+                            ));
+                        }
+                    }
                     crate::soc::BlockDevice::Display { .. }
                     | crate::soc::BlockDevice::SerialDma { .. }
                     | crate::soc::BlockDevice::CompanionDma { .. }

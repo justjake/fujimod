@@ -350,6 +350,79 @@
         },
         {
           "additionalProperties": false,
+          "description": "ARM GICv2 distributor, which names its CPU interface.",
+          "properties": {
+            "basis": {
+              "description": "Declared basis.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "cpu_interface_block_id": {
+              "description": "CPU-interface register block identity.",
+              "type": "string"
+            },
+            "lines": {
+              "description": "Number of implemented interrupt lines.",
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "model": {
+              "const": "gic_v2",
+              "type": "string"
+            }
+          },
+          "required": [
+            "model",
+            "cpu_interface_block_id",
+            "lines"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "ARM GICv3 distributor, which names its redistributor block.",
+          "properties": {
+            "basis": {
+              "description": "Declared basis.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "lines": {
+              "description": "Number of implemented interrupt lines.",
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "model": {
+              "const": "gic_v3",
+              "type": "string"
+            },
+            "redistributor_block_id": {
+              "description": "Redistributor register block identity.",
+              "type": "string"
+            },
+            "redistributor_stride": {
+              "description": "Distance between adjacent redistributor frames.",
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          "required": [
+            "model",
+            "redistributor_block_id",
+            "redistributor_stride",
+            "lines"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
           "description": "Imaging sensor command window.",
           "properties": {
             "basis": {

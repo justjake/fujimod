@@ -16,7 +16,7 @@ use fujimod_catalog::{
     firmware::FirmwareProfile,
     profiles::RegisterWindow,
     reference::{ConnectionSignal, ProcessorModel, ResolvedSelection, SocBlockKind},
-    soc::{ApplicationHardware, InterruptControllerHardware},
+    soc::{ApplicationHardware, BlockDevice},
 };
 use fujimod_emulator_cpu::{Register, arm64};
 use fujimod_emulator_devices::{graph::{DeviceGraph, DeviceWindow}, parts::gpio::Feedback};
@@ -140,21 +140,22 @@ pub fn startup_from_profile(
         })
         .collect::<Result<Vec<_>, String>>()?;
 
-    let interrupts = match hardware.interrupt_controller.as_ref() {
-        Some(InterruptControllerHardware::GicV3 {
-            distributor_block_id,
+    let interrupts = match soc.blocks.iter().find_map(|block| match &block.device {
+        Some(BlockDevice::GicV3 {
             redistributor_block_id,
             redistributor_stride,
             lines,
             ..
-        }) => {
-            let block_base = |id: &str| {
-                soc.blocks
-                    .iter()
-                    .find(|block| block.id == id)
-                    .map(|block| block.base)
-                    .ok_or_else(|| format!("GIC names absent SoC block {id}"))
-            };
+        }) => Some((block, redistributor_block_id, redistributor_stride, lines)),
+        _ => None,
+    }) {
+        Some((distributor, redistributor_block_id, redistributor_stride, lines)) => {
+            let redistributor = soc
+                .blocks
+                .iter()
+                .find(|block| block.id == *redistributor_block_id)
+                .map(|block| block.base)
+                .ok_or_else(|| format!("GIC names absent SoC block {redistributor_block_id}"))?;
             let affinity_values = soc
                 .processors
                 .iter()
@@ -214,14 +215,14 @@ pub fn startup_from_profile(
             Some(InterruptMap {
                 gic: Box::new(gic),
                 registers: fujimod_emulator::board::InterruptRegisters::GicV3 {
-                    distributor: block_base(distributor_block_id)?,
-                    redistributor: block_base(redistributor_block_id)?,
+                    distributor: distributor.base,
+                    redistributor,
                     stride: *redistributor_stride,
                 },
                 cores: affinity_values.len(),
             })
         }
-        _ => None,
+        None => None,
     };
 
     let ApplicationHardware::Armv8a {

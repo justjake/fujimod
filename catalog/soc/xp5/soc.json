@@ -79,7 +79,13 @@
       "base": 4194304000,
       "size": 65536,
       "kind": "interrupt-controller",
-      "clock_id": null
+      "clock_id": null,
+      "device": {
+        "model": "gic_v3",
+        "redistributor_block_id": "gic-redistributor",
+        "redistributor_stride": 131072,
+        "lines": 512
+      }
     },
     {
       "id": "gic-redistributor",
@@ -961,13 +967,6 @@
       "pmu_clock_id": "pmu",
       "physical_timer_irq": 30,
       "virtual_timer_irq": 27
-    },
-    "interrupt_controller": {
-      "kind": "gic_v3",
-      "distributor_block_id": "gic-distributor",
-      "redistributor_block_id": "gic-redistributor",
-      "redistributor_stride": 131072,
-      "lines": 512
     },
     "companion": {
       "processor_id": "core4",

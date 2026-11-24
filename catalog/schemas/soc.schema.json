@@ -475,6 +475,79 @@
         },
         {
           "additionalProperties": false,
+          "description": "ARM GICv2 distributor, which names its CPU interface.",
+          "properties": {
+            "basis": {
+              "description": "Declared basis.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "cpu_interface_block_id": {
+              "description": "CPU-interface register block identity.",
+              "type": "string"
+            },
+            "lines": {
+              "description": "Number of implemented interrupt lines.",
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "model": {
+              "const": "gic_v2",
+              "type": "string"
+            }
+          },
+          "required": [
+            "model",
+            "cpu_interface_block_id",
+            "lines"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "ARM GICv3 distributor, which names its redistributor block.",
+          "properties": {
+            "basis": {
+              "description": "Declared basis.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "lines": {
+              "description": "Number of implemented interrupt lines.",
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "model": {
+              "const": "gic_v3",
+              "type": "string"
+            },
+            "redistributor_block_id": {
+              "description": "Redistributor register block identity.",
+              "type": "string"
+            },
+            "redistributor_stride": {
+              "description": "Distance between adjacent redistributor frames.",
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          "required": [
+            "model",
+            "redistributor_block_id",
+            "redistributor_stride",
+            "lines"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
           "description": "Imaging sensor command window.",
           "properties": {
             "basis": {
@@ -2719,94 +2792,6 @@
       ],
       "type": "object"
     },
-    "InterruptControllerHardware": {
-      "description": "ARM generic interrupt-controller interfaces.",
-      "oneOf": [
-        {
-          "additionalProperties": false,
-          "description": "GICv2 distributor and CPU interface.",
-          "properties": {
-            "basis": {
-              "description": "Declared basis.",
-              "type": [
-                "string",
-                "null"
-              ]
-            },
-            "cpu_interface_block_id": {
-              "description": "CPU-interface register block identity.",
-              "type": "string"
-            },
-            "distributor_block_id": {
-              "description": "Distributor register block identity.",
-              "type": "string"
-            },
-            "kind": {
-              "const": "gic_v2",
-              "type": "string"
-            },
-            "lines": {
-              "description": "Number of implemented interrupt lines.",
-              "format": "uint32",
-              "minimum": 0,
-              "type": "integer"
-            }
-          },
-          "required": [
-            "kind",
-            "distributor_block_id",
-            "cpu_interface_block_id",
-            "lines"
-          ],
-          "type": "object"
-        },
-        {
-          "additionalProperties": false,
-          "description": "GICv3 distributor and per-core redistributors.",
-          "properties": {
-            "basis": {
-              "description": "Declared basis.",
-              "type": [
-                "string",
-                "null"
-              ]
-            },
-            "distributor_block_id": {
-              "description": "Distributor register block identity.",
-              "type": "string"
-            },
-            "kind": {
-              "const": "gic_v3",
-              "type": "string"
-            },
-            "lines": {
-              "description": "Number of implemented interrupt lines.",
-              "format": "uint32",
-              "minimum": 0,
-              "type": "integer"
-            },
-            "redistributor_block_id": {
-              "description": "Redistributor register block identity.",
-              "type": "string"
-            },
-            "redistributor_stride": {
-              "description": "Distance between adjacent redistributor frames.",
-              "format": "uint64",
-              "minimum": 0,
-              "type": "integer"
-            }
-          },
-          "required": [
-            "kind",
-            "distributor_block_id",
-            "redistributor_block_id",
-            "redistributor_stride",
-            "lines"
-          ],
-          "type": "object"
-        }
-      ]
-    },
     "MProfileState": {
       "additionalProperties": false,
       "description": "M-profile processor identification state.",
@@ -3360,18 +3345,6 @@
           ],
           "default": null,
           "description": "Companion-processor clock and mailbox connections, when present."
-        },
-        "interrupt_controller": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/InterruptControllerHardware"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "description": "Hardware interrupt-controller interfaces."
         },
         "power_on_ram_fill": {
           "description": "The byte every RAM cell holds at power-on, as read on a camera. Absent\nwhen unmeasured; the emulator then starts RAM zeroed.",
