@@ -33,6 +33,22 @@ impl<'a> Owner<'a> {
     }
 }
 
+/// The measured power-on RAM byte: a body's own measurement, else its
+/// processor's DRAM region.
+fn declared_power_on_ram_fill(definition: &serde_json::Value) -> Option<u8> {
+    let reference = &definition["resolved"]["reference"];
+    let body = reference["body"]["power_on_ram_fill"]["byte"].as_u64();
+    let soc = reference["soc"]["memory_regions"]
+        .as_array()
+        .and_then(|regions| {
+            regions
+                .iter()
+                .filter(|region| region["kind"] == "dram")
+                .find_map(|region| region["power_on_ram_fill"]["byte"].as_u64())
+        });
+    body.or(soc).and_then(|value| u8::try_from(value).ok())
+}
+
 #[pymethods]
 impl Board {
     #[staticmethod]
@@ -142,16 +158,11 @@ impl Board {
             .and_then(|v| v.try_into().ok())
             .ok_or_else(|| error("board was not constructed from boot inputs".into()))
     }
-    /// The byte this processor's RAM holds at power-on, or None when its
-    /// emulation document declares none (RAM then starts zeroed).
+    /// The byte this board's DRAM holds at power-on, or None when no camera
+    /// measured one (RAM then starts zeroed).
     #[getter]
     fn power_on_ram_fill(&self) -> PyResult<Option<u8>> {
-        let soc = self.session()?.definition["resolved"]["reference"]["soc"]["id"]
-            .as_str()
-            .ok_or_else(|| error("session has no resolved processor identity".into()))?;
-        let emulation = fujimod_catalog_configuration::ProcessorEmulation::bundled(soc)
-            .map_err(error)?;
-        Ok(emulation.power_on_ram_fill)
+        Ok(declared_power_on_ram_fill(&self.session()?.definition))
     }
     #[pyo3(signature=(instruction_limit=2_000_000_000))]
     fn boot_to_rec(&mut self, py: Python<'_>, instruction_limit: u64) -> PyResult<String> {

@@ -3,8 +3,8 @@
 //! A processor document records what the emulator chooses rather than what the
 //! hardware is: the CPU model standing in for an unavailable one, the runtime
 //! ABI, available execution engines, instruction and board-tick rates, the
-//! modeled MMU, declared model limits and the power-on RAM fill the emulator
-//! applies. Hardware facts stay in the catalog records.
+//! modeled MMU and declared model limits. Hardware facts stay in the catalog
+//! records.
 
 use crate::{BUNDLED_PROCESSOR_EMULATIONS, RunInstructionRate};
 use serde::{Deserialize, Serialize};
@@ -53,10 +53,6 @@ pub struct ProcessorEmulation {
     /// Declared limits of the emulator's processor models.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub limits: Vec<String>,
-    /// The byte every RAM cell holds at power-on, as read on a camera. Absent
-    /// when unmeasured; the emulator then starts RAM zeroed.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub power_on_ram_fill: Option<u8>,
 }
 
 impl ProcessorEmulation {

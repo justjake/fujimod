@@ -2448,6 +2448,17 @@
           "default": null,
           "description": "Optional power-controller endpoint and its body-specific wiring."
         },
+        "power_on_ram_fill": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PowerOnFill"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "The byte this body's DRAM holds at power-on, when a camera measured a\nvalue that differs from its processor's DRAM region."
+        },
         "ram_regions": {
           "description": "Body-mapped RAM extents when the board exposes a non-default memory map.",
           "items": {
@@ -16421,6 +16432,17 @@
           "$ref": "#/$defs/MemoryKind",
           "description": "Hardware memory type."
         },
+        "power_on_ram_fill": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PowerOnFill"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "The byte every cell of this region holds at power-on, when a camera\nmeasured it, with the evidence for that measurement."
+        },
         "size": {
           "$ref": "#/$defs/RegionSize",
           "description": "Region capacity or a reference to body DRAM capacity."
@@ -19004,6 +19026,28 @@
         "halt",
         "power_cut",
         "alarm"
+      ],
+      "type": "object"
+    },
+    "PowerOnFill": {
+      "additionalProperties": false,
+      "description": "A measured power-on fill byte for a memory region or a body's DRAM.",
+      "properties": {
+        "byte": {
+          "description": "The byte every cell holds at power-on.",
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "evidence": {
+          "$ref": "#/$defs/Evidence",
+          "description": "How the byte was established."
+        }
+      },
+      "required": [
+        "byte",
+        "evidence"
       ],
       "type": "object"
     },

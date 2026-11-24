@@ -78,7 +78,16 @@
       "size": {
         "kind": "body_dram"
       },
-      "kind": "dram"
+      "kind": "dram",
+      "power_on_ram_fill": {
+        "byte": 255,
+        "evidence": {
+          "kind": "measured",
+          "firmware_ids": [
+            "x70-110"
+          ]
+        }
+      }
     },
     {
       "id": "boot-rom",

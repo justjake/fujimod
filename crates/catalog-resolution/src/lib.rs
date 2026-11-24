@@ -31,6 +31,17 @@ pub struct ResolvedConfiguration {
 }
 
 impl ResolvedConfiguration {
+    /// The measured power-on RAM byte: a body's own measurement, else its
+    /// processor's DRAM region.
+    pub fn power_on_ram_fill(&self) -> Option<u8> {
+        self.reference
+            .body
+            .power_on_ram_fill
+            .as_ref()
+            .map(|fill| fill.byte)
+            .or_else(|| self.reference.soc.power_on_ram_fill())
+    }
+
     /// The emulation choices declared for the selected processor.
     pub fn processor_emulation(&self) -> Result<ProcessorEmulation, String> {
         ProcessorEmulation::bundled(&self.reference.soc.id)
