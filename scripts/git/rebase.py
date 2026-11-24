@@ -51,7 +51,7 @@ def pull_request_base(repository: Repository, branch: str) -> str:
     return pulls[0]["baseRefName"] if pulls else DEFAULT_BASE
 
 
-def branch_submodules(repository: Repository) -> list[Repository]:
+def branch_submodules(repository: Repository) -> list[tuple[str, Repository]]:
     """Initialized submodule checkouts whose HEAD is a branch, in path order."""
     listed = repository.git(
         "config", "-f", ".gitmodules", "--get-regexp", r"^submodule\..*\.path$",
@@ -68,26 +68,35 @@ def branch_submodules(repository: Repository) -> list[Repository]:
         checkout = Repository(root)
         if checkout.git("symbolic-ref", "-q", "HEAD", check=False).returncode:
             continue
-        found.append(checkout)
+        found.append((path.strip(), checkout))
     return found
 
 
 def rebase_tree(
-    repository: Repository, base: str | None, seen: set[Path]
+    repository: Repository,
+    base: str | None,
+    seen: set[Path],
+    pin_maps: dict[Path, dict[str, str]],
 ) -> None:
     """Rebase branch submodules first, then ``repository`` itself."""
     root = repository.root.resolve()
     if root in seen:
         return
     seen.add(root)
-    for submodule in branch_submodules(repository):
-        rebase_tree(submodule, base, seen)
+    submodules = branch_submodules(repository)
+    maps: dict[str, dict[str, str]] = {}
+    for path, submodule in submodules:
+        rebase_tree(submodule, base, seen, pin_maps)
+        if pin_maps.get(submodule.root.resolve()):
+            maps[path] = pin_maps[submodule.root.resolve()]
     if follows_superproject(repository):
         return
     branch = repository.branch().removeprefix("refs/heads/")
     target = base or pull_request_base(repository, branch)
     print(f"rebase: {repository.root.name} {branch} onto origin/{target}")
-    rebase_and_report(repository, target)
+    rebased = rebase_and_report(repository, target, maps or None)
+    if rebased.commits:
+        pin_maps[root] = rebased.commits
 
 
 def main() -> None:
@@ -101,10 +110,11 @@ def main() -> None:
     parser.add_argument("--base", help="rebase onto this branch instead of the pull request's base")
     args = parser.parse_args()
     seen: set[Path] = set()
+    pin_maps: dict[Path, dict[str, str]] = {}
     for repo in args.repo or [Path.cwd()]:
         try:
             repository = Repository(Repository.toplevel(repo))
-            rebase_tree(repository, args.base, seen)
+            rebase_tree(repository, args.base, seen, pin_maps)
         except (Failure, subprocess.CalledProcessError) as error:
             print(f"rebase: {error}", file=sys.stderr)
             sys.exit(1)

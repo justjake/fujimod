@@ -224,25 +224,32 @@ class Rebased:
     pushed: bool
     moved: Result | None = None
     dropped: int = 0
+    commits: dict[str, str] = field(default_factory=dict)
 
 
 def replay(
-    repository: Repository, onto: str, commits: list[str]
+    repository: Repository,
+    onto: str,
+    commits: list[str],
+    pin_maps: dict[str, dict[str, str]] | None = None,
+    replayed: dict[str, str] | None = None,
 ) -> tuple[str, int, int]:
     """Copy ``commits`` (oldest first) onto ``onto`` without touching any checkout.
 
     A commit whose change ``onto`` already has, such as a stacked base's commit
-    that landed on main by rebase, is dropped. Returns the new head and the
+    that landed on main by rebase, is dropped. ``pin_maps`` names a submodule
+    path and its old-to-new commits from the submodule's own rebase; ``replayed``
+    receives the mapping this replay produced. Returns the new head and the
     numbers of commits kept and dropped.
     """
     head = onto
     kept = dropped = 0
-    pins: dict[tuple[str, str], str | None] = {}
+    cache: dict[tuple[str, str], str | None] = {}
     for commit in commits:
         parents = repository.output("rev-list", "--parents", "-n", "1", commit).split()[1:]
         if len(parents) != 1:
             raise Failure(f"{commit[:10]} is a merge; rebase it by hand")
-        moved = moved_pins(repository, commit, parents[0], pins)
+        moved = moved_pins(repository, commit, parents[0], cache, pin_maps)
         merged = repository.git(
             "merge-tree", "--write-tree", "--name-only", "--no-messages",
             f"--merge-base={parents[0]}", head, commit, check=False,
@@ -250,7 +257,7 @@ def replay(
         lines = merged.stdout.strip().splitlines()
         if merged.returncode:
             tree = resolve_pinned_submodules(
-                repository, onto, commit, parents[0], lines, pins
+                repository, onto, commit, parents[0], lines, cache, pin_maps
             )
         else:
             tree = tree_with_pins(repository, lines[0], moved) if moved else lines[0]
@@ -271,6 +278,8 @@ def replay(
         head = repository.git(
             "commit-tree", tree, "-p", head, env=env, input=message
         ).stdout.strip()
+        if replayed is not None:
+            replayed[commit] = head
     return head, kept, dropped
 
 
@@ -296,9 +305,14 @@ def patch_id(repository: Repository, commit: str) -> str | None:
 
 
 def rebased_pin(
-    submodule: Repository, pinned: str, cache: dict[tuple[str, str], str | None]
+    submodule: Repository,
+    pinned: str,
+    cache: dict[tuple[str, str], str | None],
+    mapping: dict[str, str] | None = None,
 ) -> str | None:
     """The submodule commit with ``pinned``'s patch id on its current branch."""
+    if mapping is not None and pinned in mapping:
+        return mapping[pinned]
     key = (str(submodule.root), pinned)
     if key in cache:
         return cache[key]
@@ -329,6 +343,7 @@ def moved_pins(
     commit: str,
     parent: str,
     cache: dict[tuple[str, str], str | None],
+    pin_maps: dict[str, dict[str, str]] | None = None,
 ) -> dict[str, str]:
     """Pins this commit moves to commits no longer on the submodule's branch.
 
@@ -353,7 +368,9 @@ def moved_pins(
         submodule = Repository(root)
         if submodule.git("symbolic-ref", "-q", "HEAD", check=False).returncode:
             continue
-        target = rebased_pin(submodule, new[1], cache)
+        target = rebased_pin(
+            submodule, new[1], cache, (pin_maps or {}).get(path)
+        )
         if target is None:
             raise Failure(
                 f"{commit[:10]} pins {path} at {new[1]}, but no commit on its branch "
@@ -386,6 +403,7 @@ def resolve_pinned_submodules(
     parent: str,
     merged: list[str],
     cache: dict[tuple[str, str], str | None],
+    pin_maps: dict[str, dict[str, str]] | None = None,
 ) -> str:
     """The merged tree of a commit whose only conflicts are submodule pins.
 
@@ -418,7 +436,9 @@ def resolve_pinned_submodules(
             # The commit leaves this pin alone, so the new base's pin stands.
             continue
         submodule = Repository(Path(repository.root, path))
-        target = rebased_pin(submodule, new[1], cache)
+        target = rebased_pin(
+            submodule, new[1], cache, (pin_maps or {}).get(path)
+        )
         if target is None:
             raise Failure(
                 f"{commit[:10]} pins {path} at {new[1]}, but no commit on its branch "
@@ -433,8 +453,16 @@ def resolve_pinned_submodules(
     return tree_with_pins(repository, tree, resolved)
 
 
-def rebase(repository: Repository, base: str) -> Rebased:
-    """Rebase the checked-out topic branch onto origin's ``base`` and push it."""
+def rebase(
+    repository: Repository,
+    base: str,
+    pin_maps: dict[str, dict[str, str]] | None = None,
+) -> Rebased:
+    """Rebase the checked-out topic branch onto origin's ``base`` and push it.
+
+    ``pin_maps`` passes each submodule's own rebase mapping (path to old-to-new
+    commits) into ``replay`` so its pins follow the replayed commits.
+    """
     ref = repository.branch()
     name = ref.removeprefix("refs/heads/")
     if name == base:
@@ -460,14 +488,19 @@ def rebase(repository: Repository, base: str) -> Rebased:
         moved = None
         head = current
         kept = dropped = 0
+        commits_mapped: dict[str, str] = {}
         if not ancestor(repository, onto, current):
             head, kept, dropped = replay(
-                repository, onto, [commit for commit in commits if commit not in landed]
+                repository,
+                onto,
+                [commit for commit in commits if commit not in landed],
+                pin_maps,
+                commits_mapped,
             )
             dropped += sum(commit in landed for commit in commits)
             moved = advance(repository, ref, current, head)
         if pushed_before == head:
-            return Rebased(head, kept, False, moved, dropped)
+            return Rebased(head, kept, False, moved, dropped, commits_mapped)
         lease = f"--force-with-lease=refs/heads/{name}:{pushed_before or ''}"
         pushed = repository.git(
             "push", "-q", lease, "origin", f"{head}:refs/heads/{name}", check=False
@@ -478,7 +511,7 @@ def rebase(repository: Repository, base: str) -> Rebased:
                 "moved or refused); run the sync again:\n" + pushed.stderr.strip()
             )
         repository.git("update-ref", f"refs/remotes/origin/{name}", head)
-        return Rebased(head, kept, True, moved, dropped)
+        return Rebased(head, kept, True, moved, dropped, commits_mapped)
 
 
 def advance(repository: Repository, ref: str, current: str, remote: str) -> Result:
@@ -695,8 +728,12 @@ def run(args: argparse.Namespace, repo: Path) -> None:
     report(result)
 
 
-def rebase_and_report(repository: Repository, base: str) -> None:
-    rebased = rebase(repository, base)
+def rebase_and_report(
+    repository: Repository,
+    base: str,
+    pin_maps: dict[str, dict[str, str]] | None = None,
+) -> Rebased:
+    rebased = rebase(repository, base, pin_maps)
     report(rebased.moved)
     if rebased.replayed or rebased.dropped:
         dropped = f", dropped {rebased.dropped} it already has" if rebased.dropped else ""
@@ -705,6 +742,7 @@ def rebase_and_report(repository: Repository, base: str) -> None:
         f"sync: at {rebased.head[:10]}"
         + ("; pushed" if rebased.pushed else "; origin already has it")
     )
+    return rebased
 
 
 def report(result: Result | None) -> None:

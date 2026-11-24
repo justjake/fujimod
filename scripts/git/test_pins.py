@@ -92,7 +92,7 @@ def pin_repositories(tmp_path: Path) -> dict[str, object]:
     return dict(
         shared=shared, rebased=rebased, main=library_main, pinned=pinned,
         pin_commit=pin_commit, work_commit=work_commit, new_base=head_of(other),
-        base_commit=base_commit,
+        base_commit=base_commit, base=base,
     )
 
 
@@ -138,6 +138,21 @@ def test_replay_rewrites_a_clean_pin_move_to_the_rebased_commit(tmp_path: Path) 
     )
     assert (kept, dropped) == (1, 0)
     assert run("git", "ls-tree", head, "lib", cwd=shared).split()[2] == repos["rebased"]
+
+
+def test_replay_prefers_the_submodule_rebases_commit_map(tmp_path: Path) -> None:
+    repos = pin_repositories(tmp_path)
+    shared = repos["shared"]
+    assert isinstance(shared, Path)
+    # The recorded map wins over the patch id, which would pick the rebased twin.
+    head, kept, dropped = replay(
+        Repository(shared),
+        repos["base_commit"],
+        [repos["pin_commit"]],
+        pin_maps={"lib": {repos["pinned"]: repos["main"]}},
+    )
+    assert (kept, dropped) == (1, 0)
+    assert run("git", "ls-tree", head, "lib", cwd=shared).split()[2] == repos["main"]
 
 
 def test_replay_keeps_the_new_base_pin_when_a_commit_leaves_it_alone(
