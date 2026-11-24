@@ -864,11 +864,51 @@
             "model": {
               "const": "control_request",
               "type": "string"
+            },
+            "request_offset": {
+              "description": "Offset of the request word inside the block.",
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
             }
           },
           "required": [
             "model",
             "ack_ticks",
+            "request_offset",
+            "basis"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Control group that owns base parameters, request descriptors and its request word.",
+          "properties": {
+            "ack_ticks": {
+              "description": "Ticks for the request acknowledge.",
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "basis": {
+              "description": "Declared basis.",
+              "type": "string"
+            },
+            "model": {
+              "const": "control_group",
+              "type": "string"
+            },
+            "request_offset": {
+              "description": "Offset of the request word inside the block.",
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          "required": [
+            "model",
+            "ack_ticks",
+            "request_offset",
             "basis"
           ],
           "type": "object"

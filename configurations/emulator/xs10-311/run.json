@@ -128,9 +128,9 @@
       {
         "kind": "delay",
         "block_ids": [
-          "sd-host-clock-0",
+          "sd-host-0",
           "sd-host-clock-1",
-          "sd-host-clock-2",
+          "sd-host-1",
           "sd-host-clock-3"
         ],
         "operation": "settle",
@@ -163,19 +163,19 @@
       {
         "kind": "delay",
         "block_ids": [
-          "control-request-0",
-          "control-request-1",
-          "control-request-2",
-          "control-request-3",
-          "control-request-4",
-          "control-request-5",
-          "control-request-6",
-          "control-request-7",
-          "control-request-8",
-          "control-request-9",
-          "control-request-10",
-          "control-request-11",
-          "control-request-12"
+          "control-group-ff701000",
+          "control-group-ff701200",
+          "control-group-ff701400",
+          "control-group-ff701600",
+          "control-group-ff701800",
+          "control-group-ff701a00",
+          "control-group-ff701c00",
+          "control-group-ff702000",
+          "control-group-ff702200",
+          "control-request-ff702400",
+          "control-request-ff702600",
+          "control-request-ff702800",
+          "control-request-ff702a00"
         ],
         "operation": "acknowledge",
         "ticks": 8

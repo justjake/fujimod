@@ -3,7 +3,7 @@
   "schema": 1,
   "id": "still-recc",
   "base": 4294451200,
-  "size": 4096,
+  "size": 24576,
   "kind": "imaging-controller",
   "interrupts": [
     {
@@ -20,8 +20,40 @@
         "kind": "stand-in"
       }
     ],
-    "basis": "Control page of the RECC still engine of X-T3 5.11. Step 0x06023320 (0x1e901d0) owns it; the start 0x1dc2980 registers the handler 0x1dc17cc on row 0x47 ({129, 0xd0, 3, 1}: line 129, mode 3 like the countdown-timer rows, taken as an edge; inferred, not measured). The tone and YCbCr parameter pages at 0xfff86000 and 0xfff87000 and the three pages below them are separate blocks. The 2 ms run time at 54 MHz is a stand-in."
+    "basis": "Control page and five parameter pages of the RECC still engine of X-T3 5.11. Step 0x06023320 (0x1e901d0) owns the control page; the start 0x1dc2980 registers the handler 0x1dc17cc on row 0x47 ({129, 0xd0, 3, 1}: line 129, mode 3 like the countdown-timer rows, taken as an edge; inferred, not measured). The register-load pages at 0xfff83000..0xfff85000 and the tone and YCbCr pages at 0xfff86000/0xfff87000 are entries of this block; every word reads back its last write. The 2 ms run time at 54 MHz is a stand-in."
   },
+  "registers": [
+    {
+      "name": "parameter-page-1000",
+      "offset": 4096,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "parameter-page-2000",
+      "offset": 8192,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "parameter-page-3000",
+      "offset": 12288,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "tone-page",
+      "offset": 16384,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "ycbcr-page",
+      "offset": 20480,
+      "width_bytes": 4,
+      "access": "read-write"
+    }
+  ],
   "evidence": [
     {
       "kind": "located",

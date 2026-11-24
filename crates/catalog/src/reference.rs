@@ -443,6 +443,15 @@ impl Soc {
                             ));
                         }
                     }
+                    crate::soc::BlockDevice::ControlRequest { request_offset, .. }
+                    | crate::soc::BlockDevice::ControlGroup { request_offset, .. } => {
+                        if *request_offset >= block.size {
+                            return Err(format!(
+                                "SoC {} control block {} has its request word outside its window",
+                                self.id, block.id
+                            ));
+                        }
+                    }
                     crate::soc::BlockDevice::JpegCodec {
                         memory_type_block_id: Some(memory_type_block_id),
                         ..
@@ -473,7 +482,6 @@ impl Soc {
                     | crate::soc::BlockDevice::Adc { .. }
                     | crate::soc::BlockDevice::Dmp { .. }
                     | crate::soc::BlockDevice::Movdc { .. }
-                    | crate::soc::BlockDevice::ControlRequest { .. }
                     | crate::soc::BlockDevice::IoGroups { .. }
                     | crate::soc::BlockDevice::Spi { .. }
                     | crate::soc::BlockDevice::IntervalTimer { .. }
