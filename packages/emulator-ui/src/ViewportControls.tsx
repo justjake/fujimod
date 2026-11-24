@@ -150,7 +150,7 @@ export function ViewportControls(props: {
             aria-pressed={props.realTime ? 'true' : 'false'}
             onClick={() => props.toggleRealTime?.()}
           >
-            Real time
+            Speed limit
           </button>
         </Show>
       </Show>
