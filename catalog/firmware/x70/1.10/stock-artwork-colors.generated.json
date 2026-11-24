@@ -1445,6 +1445,16 @@
             ]
           },
           {
+            "palette": 108,
+            "when": "unselected other kind",
+            "rgba": [
+              148,
+              148,
+              148,
+              255
+            ]
+          },
+          {
             "palette": 109,
             "when": "value row",
             "rgba": [
@@ -1476,6 +1486,16 @@
               255,
               255,
               0,
+              0
+            ]
+          },
+          {
+            "palette": 0,
+            "when": "unselected other kind",
+            "rgba": [
+              148,
+              148,
+              148,
               0
             ]
           },
