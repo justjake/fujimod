@@ -16,6 +16,16 @@ pub struct InitialOutput {
     pub levels: u16,
 }
 
+/// One port register's value at the boot handoff (output enables, function selects), for a
+/// start that enters after the stage that programmed it.
+#[derive(Clone, Copy, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct InitialRegister {
+    pub port: usize,
+    pub register: usize,
+    pub value: u32,
+}
+
 /// One external pad level at the boot handoff, for a pin whose level the board
 /// or the run declares. Undeclared pads keep the pin bank's default.
 #[derive(Clone, Copy, Deserialize)]
@@ -126,6 +136,27 @@ impl Gpio {
             let mut pins = self.pins.lock().unwrap();
             for output in outputs {
                 pins.ports[output.port].registers[0] = output.levels.into();
+            }
+        }
+        Ok(self)
+    }
+    /// Explicit port register values at the selected boot handoff. Construction performs no
+    /// guest write, pin transition, or interrupt delivery. Apply before the feedback wires,
+    /// which sample their drive registers at construction.
+    pub fn with_initial_registers(self, registers: Vec<InitialRegister>) -> Result<Self, String> {
+        {
+            let mut pins = self.pins.lock().unwrap();
+            for (i, r) in registers.iter().enumerate() {
+                if r.port >= pins.ports.len()
+                    || r.register >= pins.ports[r.port].registers.len()
+                    || registers[..i].iter().any(|p| (p.port, p.register) == (r.port, r.register))
+                {
+                    return Err(format!(
+                        "invalid initial GPIO register: port {} register {}",
+                        r.port, r.register
+                    ));
+                }
+                pins.ports[r.port].registers[r.register] = r.value;
             }
         }
         Ok(self)

@@ -471,7 +471,7 @@ fn register_with_resources(
                 .any(|k| {
                     !matches!(
                         k.as_str(),
-                        "input_irqs" | "companion_input_irqs" | "feedback" | "initial_outputs" | "initial_inputs" | "pad_model"
+                        "input_irqs" | "companion_input_irqs" | "feedback" | "initial_outputs" | "initial_registers" | "initial_inputs" | "pad_model"
                     )
                 })
             {
@@ -555,6 +555,19 @@ fn register_with_resources(
                                     serde_json::to_value(v).map_err(|e| e.to_string())?,
                                 )
                                 .map_err(|e| format!("initial GPIO outputs: {e}"))
+                            })
+                            .transpose()?
+                            .unwrap_or_default(),
+                    )?
+                    .with_initial_registers(
+                        window
+                            .options
+                            .get("initial_registers")
+                            .map(|v| {
+                                serde_json::from_value(
+                                    serde_json::to_value(v).map_err(|e| e.to_string())?,
+                                )
+                                .map_err(|e| format!("initial GPIO registers: {e}"))
                             })
                             .transpose()?
                             .unwrap_or_default(),
