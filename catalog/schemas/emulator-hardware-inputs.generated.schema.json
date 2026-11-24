@@ -1854,6 +1854,10 @@
           "minimum": 0,
           "type": "integer"
         },
+        "section_table": {
+          "description": "Whether RAM also holds the stock loader's copy of the update's section table at its\nlocated address, as the loader leaves it before entering the kernel.",
+          "type": "boolean"
+        },
         "size": {
           "description": "Declared size.",
           "format": "uint64",

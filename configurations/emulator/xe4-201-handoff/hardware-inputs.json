@@ -151,7 +151,8 @@
           "offset": 1484,
           "value": 32
         }
-      ]
+      ],
+      "section_table": true
     },
     "adc_input": {
       "basis": "Declared virtual ADC startup samples used by the Discovery run; physical idle samples are not measured.",
