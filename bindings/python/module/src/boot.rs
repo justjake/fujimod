@@ -79,7 +79,7 @@ impl Boot for CatalogBoot {
                 card_image: inputs.card_image, card_files: inputs.card_files,
                 second_card_image: inputs.second_card_image, second_card_files: inputs.second_card_files,
                 scene: inputs.scene,
-                output: None, viewer_port: None, viewer_keys: None,
+                output: None,
                 mode, quantum: inputs.quantum, camera_settings: inputs.camera_settings,
             }))?;
             let inputs = camera.take_xp5_inputs()?;
