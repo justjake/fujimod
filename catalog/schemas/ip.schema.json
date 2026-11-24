@@ -674,6 +674,13 @@
           "additionalProperties": false,
           "description": "MOVDC imaging channel.",
           "properties": {
+            "basis": {
+              "description": "Declared basis.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
             "model": {
               "const": "movdc",
               "type": "string"
@@ -1837,9 +1844,27 @@
           "additionalProperties": false,
           "description": "General-purpose DMA controller.",
           "properties": {
+            "a53_irq_base": {
+              "description": "First interrupt line presented to the application cores, when declared.",
+              "format": "uint32",
+              "minimum": 0,
+              "type": [
+                "integer",
+                "null"
+              ]
+            },
             "basis": {
               "description": "Declared basis.",
               "type": "string"
+            },
+            "companion_irq_base": {
+              "description": "First interrupt line presented to the companion core, when declared.",
+              "format": "uint32",
+              "minimum": 0,
+              "type": [
+                "integer",
+                "null"
+              ]
             },
             "model": {
               "const": "general_dma",
@@ -2466,6 +2491,24 @@
               "minimum": 0,
               "type": "integer"
             },
+            "fixed_words": {
+              "description": "Words that always read a fixed value.",
+              "items": {
+                "$ref": "#/$defs/HardwareRegisterFixedWord"
+              },
+              "type": "array"
+            },
+            "irq_mask": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/CompletionIrqMask"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Interrupt-enable word, when declared."
+            },
             "model": {
               "const": "completion",
               "type": "string"
@@ -2768,6 +2811,34 @@
           "type": "string"
         }
       ]
+    },
+    "CompletionIrqMask": {
+      "additionalProperties": false,
+      "description": "Interrupt-enable word of a completion block.",
+      "properties": {
+        "bit": {
+          "description": "Enable bit.",
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "offset": {
+          "description": "Offset of the enable word.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "set_masks": {
+          "description": "Whether a set bit masks the interrupt.",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "offset",
+        "bit"
+      ],
+      "type": "object"
     },
     "CompletionStart": {
       "additionalProperties": false,

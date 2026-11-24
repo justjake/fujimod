@@ -227,6 +227,9 @@ pub enum BlockDevice {
     Movdc {
         /// Ticks for the block reset.
         reset_ticks: u64,
+        /// Declared basis.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        basis: Option<String>,
     },
     /// One control-request gate word.
     ControlRequest {
@@ -553,6 +556,12 @@ pub enum BlockDevice {
     },
     /// General-purpose DMA controller.
     GeneralDma {
+        /// First interrupt line presented to the companion core, when declared.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        companion_irq_base: Option<u32>,
+        /// First interrupt line presented to the application cores, when declared.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        a53_irq_base: Option<u32>,
         /// Declared basis.
         basis: String,
     },
@@ -714,6 +723,9 @@ pub enum BlockDevice {
     },
     /// Register window whose completion handshake is typed.
     Completion {
+        /// Words that always read a fixed value.
+        #[serde(default, skip_serializing_if = "Vec::is_empty")]
+        fixed_words: Vec<crate::profiles::RegisterFixedWord>,
         /// Start writes and their mask.
         #[serde(default, skip_serializing_if = "Vec::is_empty")]
         starts: Vec<CompletionStart>,
@@ -723,6 +735,9 @@ pub enum BlockDevice {
         /// Acknowledgement behavior.
         #[serde(default, skip_serializing_if = "Option::is_none")]
         ack: Option<CompletionAck>,
+        /// Interrupt-enable word, when declared.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        irq_mask: Option<CompletionIrqMask>,
         /// Ticks from start to completion.
         delay_ticks: u64,
         /// Declared basis.
@@ -815,6 +830,25 @@ pub struct CompletionAck {
 pub enum CompletionAckMode {
     /// Writing one to a bit clears it.
     W1c,
+}
+
+/// Interrupt-enable word of a completion block.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(deny_unknown_fields)]
+#[cfg_attr(
+    all(target_arch = "wasm32", not(target_os = "emscripten")),
+    derive(tsify::Tsify),
+    tsify(hashmap_as_object, missing_as_null)
+)]
+pub struct CompletionIrqMask {
+    /// Offset of the enable word.
+    pub offset: u64,
+    /// Enable bit.
+    pub bit: u8,
+    /// Whether a set bit masks the interrupt.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub set_masks: bool,
 }
 
 /// The still-processing engine a block runs.
@@ -980,6 +1014,7 @@ impl BlockDevice {
                         | BlockDevice::UsbPhy { .. }
                         | BlockDevice::XppUsb { .. }
                         | BlockDevice::Completion { .. }
+                        | BlockDevice::RegisterBlock { .. }
                 )
                 | (
                     SocBlockKind::ClockController,
@@ -1006,6 +1041,7 @@ impl BlockDevice {
                         | BlockDevice::HdmiTx { .. }
                         | BlockDevice::DisplayOutputLink { .. }
                         | BlockDevice::Renderer { .. }
+                        | BlockDevice::RegisterBlock { .. }
                 )
                 | (
                     SocBlockKind::ResetController,

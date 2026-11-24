@@ -457,6 +457,7 @@ class BlockDeviceVariant20(TypedDict, total=False):
 
 
 class BlockDeviceVariant21(TypedDict, total=False):
+    basis: NotRequired[str | None]
     model: Required[Literal["movdc"]]
     reset_ticks: Required[int]
 
@@ -733,7 +734,9 @@ class BlockDeviceVariant58(TypedDict, total=False):
 
 
 class BlockDeviceVariant59(TypedDict, total=False):
+    a53_irq_base: NotRequired[int | None]
     basis: Required[str]
+    companion_irq_base: NotRequired[int | None]
     model: Required[Literal["general_dma"]]
 
 
@@ -908,6 +911,8 @@ class BlockDeviceVariant87(TypedDict, total=False):
     basis: Required[str]
     completion: NotRequired[list[CompletionWrite]]
     delay_ticks: Required[int]
+    fixed_words: NotRequired[list[HardwareRegisterFixedWord]]
+    irq_mask: NotRequired[CompletionIrqMask | None]
     model: Required[Literal["completion"]]
     starts: NotRequired[list[CompletionStart]]
 
@@ -1210,6 +1215,12 @@ class CompletionAck(TypedDict, total=False):
 
 
 type CompletionAckMode = Literal["w1c"]
+
+
+class CompletionIrqMask(TypedDict, total=False):
+    bit: Required[int]
+    offset: Required[int]
+    set_masks: NotRequired[bool]
 
 
 class CompletionStart(TypedDict, total=False):
