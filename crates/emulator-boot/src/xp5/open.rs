@@ -111,7 +111,8 @@ fn initial_images(
 }
 
 /// Mailbox interrupt lines the catalog declares on the block behind the
-/// companion window, routed to the companion core.
+/// companion window. Request and control have fixed companion routes; reply,
+/// status and fault are controller lines.
 fn mailbox_pins(soc: &Soc, base: u64, companion: usize) -> Result<mailbox::Pins, String> {
     let block = soc
         .blocks
@@ -129,7 +130,7 @@ fn mailbox_pins(soc: &Soc, base: u64, companion: usize) -> Result<mailbox::Pins,
         .ok_or("mailbox companion core is absent")?
         .id
         .as_str();
-    let line = |output: &str| {
+    let companion_line = |output: &str| {
         block
             .interrupts
             .iter()
@@ -142,13 +143,26 @@ fn mailbox_pins(soc: &Soc, base: u64, companion: usize) -> Result<mailbox::Pins,
                 )
             })
     };
+    let controller_line = |output: &str| {
+        block
+            .interrupts
+            .iter()
+            .find(|row| row.output == output)
+            .map(|row| row.line)
+            .ok_or_else(|| {
+                format!(
+                    "SoC {} mailbox block {} has no {output} line",
+                    soc.id, block.id
+                )
+            })
+    };
     Ok(mailbox::Pins {
         companion,
-        request: line("request")?,
-        control: line("control")?,
-        reply: line("reply")?,
-        status: line("status")?,
-        fault: line("fault")?,
+        request: companion_line("request")?,
+        control: companion_line("control")?,
+        reply: controller_line("reply")?,
+        status: controller_line("status")?,
+        fault: controller_line("fault")?,
     })
 }
 
@@ -1240,6 +1254,18 @@ mod tests {
             .iter()
             .find(|block| block.id == "mailbox")
             .unwrap();
+        let line = |output: &str| {
+            mailbox
+                .interrupts
+                .iter()
+                .find(|row| row.output == output)
+                .unwrap()
+        };
+        assert_eq!(line("request").core.as_deref(), Some("core4"));
+        assert_eq!(line("control").core.as_deref(), Some("core4"));
+        assert!(line("reply").core.is_none());
+        assert!(line("status").core.is_none());
+        assert!(line("fault").core.is_none());
         let pins = mailbox_pins(&selection.soc, mailbox.base, 4).unwrap();
         assert_eq!(
             (

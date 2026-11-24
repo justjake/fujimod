@@ -480,18 +480,15 @@
         },
         {
           "output": "reply",
-          "line": 141,
-          "core": "core4"
+          "line": 141
         },
         {
           "output": "status",
-          "line": 142,
-          "core": "core4"
+          "line": 142
         },
         {
           "output": "fault",
-          "line": 143,
-          "core": "core4"
+          "line": 143
         }
       ]
     },
