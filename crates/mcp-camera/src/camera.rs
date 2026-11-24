@@ -86,6 +86,9 @@ impl fujimod_emulator_gui::Run for Camera {
     fn session_mut(&mut self) -> &mut Session {
         &mut self.session
     }
+    fn ticks_per_second(&self) -> u64 {
+        self.ticks_per_second
+    }
     fn step(&mut self) -> Result<(), String> {
         // About one LCD frame of guest time per slice keeps the window responsive.
         let until = self.session.board.now() + (self.ticks_per_second / 60).max(1);

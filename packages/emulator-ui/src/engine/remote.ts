@@ -177,6 +177,7 @@ export class RemoteEngine implements Engine {
       | NativeState
       | NativeCatalogMessage
       | NativeSessionMessage
+      | ({ type: 'metrics' } & CameraPerformance)
       | { type: 'progress'; message: string; percent?: number };
     try {
       message = JSON.parse(source) as typeof message;
@@ -186,6 +187,11 @@ export class RemoteEngine implements Engine {
     }
     if (message.type === 'progress') {
       this.progress?.(message.message, message.percent);
+      return;
+    }
+    if (message.type === 'metrics') {
+      const { type: _, ...metrics } = message;
+      this.metricListeners.emit(metrics);
       return;
     }
     if (message.type === 'native-state') {
