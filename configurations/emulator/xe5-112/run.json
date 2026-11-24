@@ -117,7 +117,7 @@
     "block_ids": [
      "receiver0"
     ],
-    "period_ticks": 1000000000,
+    "period_ticks": 100000000,
     "active_ticks": 10000000,
     "luma": null
    },
@@ -125,7 +125,7 @@
     "block_ids": [
      "receiver1"
     ],
-    "period_ticks": 1000000000,
+    "period_ticks": 100000000,
     "active_ticks": null,
     "luma": null
    },
@@ -133,7 +133,7 @@
     "block_ids": [
      "movdc0"
     ],
-    "period_ticks": 1000000000,
+    "period_ticks": 100000000,
     "active_ticks": null,
     "luma": 128
    },
@@ -141,7 +141,7 @@
     "block_ids": [
      "movdc1"
     ],
-    "period_ticks": 1000000000,
+    "period_ticks": 100000000,
     "active_ticks": null,
     "luma": 128
    },
@@ -149,7 +149,7 @@
     "block_ids": [
      "movdc2"
     ],
-    "period_ticks": 1000000000,
+    "period_ticks": 100000000,
     "active_ticks": null,
     "luma": 128
    },
@@ -157,7 +157,7 @@
     "block_ids": [
      "preview"
     ],
-    "period_ticks": 1000000000,
+    "period_ticks": 100000000,
     "active_ticks": null,
     "luma": 128
    }
