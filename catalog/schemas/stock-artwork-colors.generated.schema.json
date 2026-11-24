@@ -81,6 +81,10 @@
           },
           "type": "array"
         },
+        "grid_palette": {
+          "minimum": 0,
+          "type": "integer"
+        },
         "palette": {
           "type": [
             "integer",
@@ -310,6 +314,15 @@
         "canvas_packet_function": {
           "$ref": "#/$defs/address"
         },
+        "grid_palette_entries": {
+          "$ref": "#/$defs/address"
+        },
+        "grid_palette_entry_bytes": {
+          "type": "integer"
+        },
+        "grid_palette_function": {
+          "$ref": "#/$defs/address"
+        },
         "osd_items_catalog": {
           "type": "string"
         },
@@ -342,6 +355,9 @@
         "palette_select_function",
         "palette_rgb_function",
         "palette_components_function",
+        "grid_palette_function",
+        "grid_palette_entries",
+        "grid_palette_entry_bytes",
         "q_tile_function",
         "canvas_packet_function",
         "osd_items_catalog"
