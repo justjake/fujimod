@@ -200,14 +200,10 @@
   }
 }
 
-.viewport-bar .viewport-text-toggle {
-  width: auto;
-  padding: 0 8px;
-  font: inherit;
-  font-size: 12px;
-  opacity: 0.6;
+#camera-speed {
+  margin-right: 12px;
 }
-.viewport-bar .viewport-text-toggle[aria-pressed='true'] {
-  opacity: 1;
-  color: #34c759;
+.viewport-bar button[aria-pressed='true'].viewport-text-toggle {
+  color: #fff;
+  background: rgb(118 118 128 / 24%);
 }
