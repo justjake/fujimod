@@ -97,9 +97,13 @@ struct State {
     pending: Vec<Pending>,
     replies: BTreeMap<u64, Reply>,
     /// The latest [`UsbPort`] transaction on each physical endpoint. A NAK
-    /// on it repeats it, as a host does, so a port waits without inputs.
+    /// on it parks it in `parked`; the next guest command on that endpoint
+    /// sends it again, so a waiting port needs no inputs and no timer.
     #[serde(default)]
     host: BTreeMap<usize, u64>,
+    /// NAKed port transactions by physical endpoint: (setup, OUT bytes).
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    parked: BTreeMap<usize, (bool, Option<Vec<u8>>)>,
 }
 #[derive(Clone, Default, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -143,6 +147,7 @@ impl Dwc3 {
                 pending: vec![],
                 replies: BTreeMap::new(),
                 host: BTreeMap::new(),
+                parked: BTreeMap::new(),
             },
         })
     }
@@ -499,13 +504,25 @@ impl Dwc3 {
                     ep,
                     value,
                     parameters,
-                } => self.command(cx, ep, value, parameters)?,
+                } => {
+                    self.command(cx, ep, value, parameters)?;
+                    if let Some((setup, out)) = self.state.parked.remove(&ep) {
+                        match self.transaction(cx.now(), ep, setup, out.clone()) {
+                            Ok(next) => {
+                                self.state.host.insert(ep, next);
+                            }
+                            // Queue full: stay parked until the next command.
+                            Err(_) => {
+                                self.state.parked.insert(ep, (setup, out));
+                            }
+                        }
+                    }
+                }
                 Operation::Transaction { id, ep, setup, out } => {
                     let again = out.clone();
                     let reply = self.transfer(cx, ep, setup, out)?;
                     if reply == Reply::Nak && self.state.host.get(&ep) == Some(&id) {
-                        let next = self.transaction(cx.now(), ep, setup, again)?;
-                        self.state.host.insert(ep, next);
+                        self.state.parked.insert(ep, (setup, again));
                     } else {
                         self.state.replies.insert(id, reply);
                     }
@@ -844,9 +861,11 @@ impl Dwc3 {
             }
         }
         if saved.config != self.config
+            || state.parked.keys().any(|ep| !state.host.contains_key(ep))
             || state.host.iter().any(|(&ep, &id)| {
                 ep >= 32
-                    || !state.replies.contains_key(&id)
+                    || !state.parked.contains_key(&ep)
+                    && !state.replies.contains_key(&id)
                         && !state.pending.iter().any(|p| matches!(p.operation,
                             Operation::Transaction { id: t, .. } if t == id))
             })
@@ -922,7 +941,7 @@ impl Dwc3 {
     /// Start a port transaction on `ep`, releasing its previous reply.
     fn host_start(&mut self, now: u64, ep: usize, setup: bool, out: Option<Vec<u8>>) -> Result<(), String> {
         if let Some(id) = self.state.host.remove(&ep) {
-            if self.state.replies.remove(&id).is_none() {
+            if self.state.parked.remove(&ep).is_none() && self.state.replies.remove(&id).is_none() {
                 return Err(format!("USB physical endpoint {ep} has a transaction in flight"));
             }
         }
@@ -944,9 +963,14 @@ impl UsbPort for Dwc3 {
         }))
     }
     fn host_reset(&mut self, cx: &mut Cx<'_>) -> Result<(), String> {
-        for id in std::mem::take(&mut self.state.host).into_values() {
-            self.state.replies.remove(&id);
+        let ids = std::mem::take(&mut self.state.host);
+        self.state.parked.clear();
+        for id in ids.values() {
+            self.state.replies.remove(id);
         }
+        self.state.pending.retain(|p| {
+            !matches!(p.operation, Operation::Transaction { id, .. } if ids.values().any(|&i| i == id))
+        });
         self.bus_reset(cx.now())
     }
     fn host_setup(&mut self, cx: &mut Cx<'_>, packet: &[u8]) -> Result<(), String> {
