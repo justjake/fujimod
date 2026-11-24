@@ -1,0 +1,14 @@
+{
+  "$schema": "https://fujimod.com/schemas/soc-block.schema.json",
+  "schema": 1,
+  "id": "control-request-ff702800",
+  "base": 4285540352,
+  "size": 256,
+  "kind": "reset-controller",
+  "device": {
+    "model": "control_request",
+    "ack_ticks": 8,
+    "request_offset": 128,
+    "basis": "Request word +0x80 of an interface with no base-parameter group. X-T3 5.11 polls it after writing, with the low three bits clearing once the request completes. The 8-tick acknowledge is a declared stand-in."
+  }
+}

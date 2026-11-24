@@ -241,9 +241,8 @@ fn block_register_layouts(
                 irq: first_irq(block).unwrap_or_default(),
                 reset_ticks: *reset_ticks,
             }),
-            BlockDevice::ControlRequest { ack_ticks, basis } => {
-                let register = if block.size == 0x84 { block.base + 0x80 } else { block.base };
-                control_requests.push((register, *ack_ticks, basis.clone()));
+            BlockDevice::ControlRequest { ack_ticks, request_offset, basis } => {
+                control_requests.push((block.base + *request_offset, *ack_ticks, basis.clone()));
             }
             BlockDevice::IoGroups { basis } => {
                 maps.io_groups = Some(IoGroups {
@@ -607,6 +606,7 @@ fn block_register_layouts(
             | BlockDevice::FilterEngine { .. }
             | BlockDevice::Dsp { .. }
             | BlockDevice::CountdownTimer { .. }
+            | BlockDevice::ControlGroup { .. }
             | BlockDevice::UsbCondition { .. } => {}
         }
     }

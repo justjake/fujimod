@@ -8,6 +8,6 @@
   "device": {
     "model": "sd_host_clock",
     "settle_ticks": 8,
-    "basis": "Declared catalog input."
+    "basis": "Clock-gate halfword of an SD interface with no declared card. The stock driver writes it at page +0x22c for the second and fourth interfaces and polls it until it reads stable; 8 ticks is a declared stand-in."
   }
 }

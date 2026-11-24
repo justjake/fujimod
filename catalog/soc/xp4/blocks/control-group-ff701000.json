@@ -1,0 +1,14 @@
+{
+  "$schema": "https://fujimod.com/schemas/soc-block.schema.json",
+  "schema": 1,
+  "id": "control-group-ff701000",
+  "base": 4285534208,
+  "size": 256,
+  "kind": "reset-controller",
+  "device": {
+    "model": "control_group",
+    "ack_ticks": 8,
+    "request_offset": 128,
+    "basis": "Control group window. Base-parameter words sit at +0x00 and +0x08, the request descriptors at +0x40, the completion word at +0xf0 and the request word at +0x80; X-T3 5.11 polls the request word, whose low three bits clear once the request completes. The 8-tick acknowledge is a declared stand-in, and the descriptor and parameter words read back their last write until their layouts are recorded."
+  }
+}

@@ -134,14 +134,13 @@
 //!
 //! # RECC color pages
 //!
-//! RECC owns two parameter pages besides its control page ([`Contract::pages`]):
-//! RECC + 0x4000 (0xfff86000, the tone page) and RECC + 0x5000 (0xfff87000,
-//! the YCbCr page). The X-T3 5.11 still capture programs both before the
-//! band passes. Every word of a parameter page takes any value and reads it
-//! back: which words the setters write, and how wide each is, is not
-//! declared, so no write there refuses. The pages between them (0xfff83000
-//! to 0xfff85000) are not RECC's: the catalog declares them as plain
-//! register blocks.
+//! RECC owns five parameter pages besides its control page ([`Contract::pages`]):
+//! RECC + 0x1000..+0x3000 (0xfff83000 to 0xfff85000, the register-load pages)
+//! and RECC + 0x4000/+0x5000 (0xfff86000, the tone page, and 0xfff87000, the
+//! YCbCr page). The X-T3 5.11 still capture programs them before the band
+//! passes. Every word of a parameter page takes any value and reads it back:
+//! which words the setters write, and how wide each is, is not declared, so no
+//! write there refuses.
 //!
 //! [`Engine::firmware_color`] (opt-in, on a developing RECC) develops the
 //! still bands (mode 0x620000) with the color these two pages hold when the
@@ -430,9 +429,10 @@ pub fn contract(kind: Kind) -> Contract {
                 // timer interrupts; that mode 3 is an edge is inferred, not measured.
                 acknowledge: None,
                 flags: None,
-                // The tone (0xfff86000) and YCbCr (0xfff87000) pages, see
-                // the module notes.
-                pages: vec![0x4000, 0x5000],
+                // The three parameter pages (0xfff83000..0xfff85000), the tone
+                // page (0xfff86000) and the YCbCr page (0xfff87000), see the
+                // module notes.
+                pages: vec![0x1000, 0x2000, 0x3000, 0x4000, 0x5000],
                 output: Output::NotComputed,
             }
         }
@@ -2043,15 +2043,18 @@ mod tests {
         developing_recc().firmware_color().unwrap()
     }
 
-    /// RECC's color pages: any word, any value, read back and kept by a
-    /// checkpoint; the pages between them are not RECC's.
+    /// RECC's control page and five parameter pages: any word, any value, read
+    /// back and kept by a checkpoint.
     #[test]
-    fn recc_owns_its_two_color_pages_and_reads_back_every_word() {
+    fn recc_owns_its_control_page_and_five_parameter_pages() {
         let mut e = Engine::new(Kind::Recc, RECC, RECC_IRQ, 20).unwrap();
         assert_eq!(
             e.windows(),
             [
                 (RECC, RECC + 0x1000),
+                (RECC + 0x1000, RECC + 0x2000),
+                (RECC + 0x2000, RECC + 0x3000),
+                (RECC + 0x3000, RECC + 0x4000),
                 (RECC + 0x4000, RECC + 0x5000),
                 (RECC + 0x5000, RECC + 0x6000)
             ]
@@ -2060,6 +2063,7 @@ mod tests {
         assert_eq!(resz.windows(), [(RESZ, RESZ + 0x1000)]);
         let mut h = RecordingHost::default();
         for (o, v) in [
+            (0x1000, 0x0102_0304),
             (0x4000, u32::MAX),
             (0x4204, 0x1fb8_041b),
             (0x5ffc, 0x1234_5678),
@@ -2073,7 +2077,7 @@ mod tests {
         other.restore(&e.save()).unwrap();
         let mut cx = Cx::new(&mut h, 0, 0, 0);
         assert_eq!(other.read(&mut cx, RECC + 0x5ffc, 4), 0x1234_5678);
-        for o in [0x1000, 0x3ffc, 0x6000] {
+        for o in [0x6000, 0x8000] {
             let mut cx = Cx::new(&mut h, 0, 0, 0);
             e.read(&mut cx, RECC + o, 4);
             assert!(cx.refusal().is_some(), "+{o:#x}");

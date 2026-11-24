@@ -232,6 +232,17 @@ pub enum BlockDevice {
     ControlRequest {
         /// Ticks for the request acknowledge.
         ack_ticks: u64,
+        /// Offset of the request word inside the block.
+        request_offset: u64,
+        /// Declared basis.
+        basis: String,
+    },
+    /// Control group that owns base parameters, request descriptors and its request word.
+    ControlGroup {
+        /// Ticks for the request acknowledge.
+        ack_ticks: u64,
+        /// Offset of the request word inside the block.
+        request_offset: u64,
         /// Declared basis.
         basis: String,
     },
@@ -629,7 +640,12 @@ impl BlockDevice {
                 | (SocBlockKind::Gpio, BlockDevice::Gpio { .. } | BlockDevice::IoGroups { .. })
                 | (SocBlockKind::Adc, BlockDevice::Adc { .. })
                 | (SocBlockKind::DisplayController, BlockDevice::Dmp { .. } | BlockDevice::DisplayOutput { .. } | BlockDevice::HdmiTx { .. })
-                | (SocBlockKind::ResetController, BlockDevice::ControlRequest { .. } | BlockDevice::ResetGates { .. })
+                | (
+                    SocBlockKind::ResetController,
+                    BlockDevice::ControlRequest { .. }
+                        | BlockDevice::ControlGroup { .. }
+                        | BlockDevice::ResetGates { .. }
+                )
                 | (
                     SocBlockKind::Timer,
                     BlockDevice::IntervalTimer { .. } | BlockDevice::CountdownTimer { .. }
