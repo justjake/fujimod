@@ -759,6 +759,11 @@
               "parent_clock_ticks": 1,
               "basis": "Declared catalog input."
             },
+            "2": {
+              "base": 4294131712,
+              "parent_clock_ticks": 1,
+              "basis": "Declared catalog input."
+            },
             "3": {
               "base": 4294135808,
               "parent_clock_ticks": 1,
