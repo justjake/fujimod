@@ -423,6 +423,13 @@ pub enum BlockDevice {
         /// Declared basis.
         basis: String,
     },
+    /// Byte-oriented I2C master (the Socionext controller Linux drives as i2c-synquacer).
+    ByteI2c {
+        /// Virtual ticks per address, data byte or STOP.
+        byte_ticks: u64,
+        /// Declared basis.
+        basis: String,
+    },
     /// DesignWare I2C bus.
     I2c {
         /// TX and RX FIFO depth.
@@ -1003,7 +1010,7 @@ impl BlockDevice {
                         | BlockDevice::InputCapture { .. }
                         | BlockDevice::UnmodeledBusDrain { .. }
                 )
-                | (SocBlockKind::ControlBus, BlockDevice::ControlBus { .. } | BlockDevice::SecondaryBus { .. } | BlockDevice::I2c { .. })
+                | (SocBlockKind::ControlBus, BlockDevice::ControlBus { .. } | BlockDevice::SecondaryBus { .. } | BlockDevice::ByteI2c { .. } | BlockDevice::I2c { .. } | BlockDevice::RegisterBlock { .. })
                 | (
                     SocBlockKind::NandController,
                     BlockDevice::Nand { .. } | BlockDevice::SerialFlashController { .. }

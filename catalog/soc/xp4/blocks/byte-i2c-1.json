@@ -1,0 +1,20 @@
+{
+  "$schema": "https://fujimod.com/schemas/soc-block.schema.json",
+  "schema": 1,
+  "id": "byte-i2c-1",
+  "base": 4294172672,
+  "size": 4096,
+  "kind": "control-bus",
+  "interrupts": [
+    {
+      "output": "interrupt",
+      "line": 66
+    }
+  ],
+  "device": {
+    "model": "register_block",
+    "idle_bits": [],
+    "basis": "Byte I2C controller channel 1 (0xfff3d000 + 0x1000 n, interrupt lines 65, 66 and 67). X-T3 5.11 reads/writes 0xfff3e000..0xfff3e018. Reads return the last write; no arbitration is modeled.",
+    "order": 4
+  }
+}

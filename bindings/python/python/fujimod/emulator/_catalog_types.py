@@ -372,6 +372,7 @@ type BlockDevice = (
     | BlockDeviceVariant88
     | BlockDeviceVariant89
     | BlockDeviceVariant90
+    | BlockDeviceVariant91
 )
 
 
@@ -629,13 +630,19 @@ class BlockDeviceVariant42(TypedDict, total=False):
 
 class BlockDeviceVariant43(TypedDict, total=False):
     basis: Required[str]
+    byte_ticks: Required[int]
+    model: Required[Literal["byte_i2c"]]
+
+
+class BlockDeviceVariant44(TypedDict, total=False):
+    basis: Required[str]
     clock_hz: Required[int]
     fifo_depth: Required[int]
     model: Required[Literal["i2c"]]
     tick_hz: Required[int]
 
 
-class BlockDeviceVariant44(TypedDict, total=False):
+class BlockDeviceVariant45(TypedDict, total=False):
     basis: Required[str]
     clock_ticks: Required[int]
     model: Required[Literal["xpp_sd"]]
@@ -645,13 +652,13 @@ class BlockDeviceVariant44(TypedDict, total=False):
     transfer_ticks: Required[int]
 
 
-class BlockDeviceVariant45(TypedDict, total=False):
+class BlockDeviceVariant46(TypedDict, total=False):
     basis: Required[str]
     model: Required[Literal["h264_encoder"]]
     run_ticks: Required[int]
 
 
-class BlockDeviceVariant46(TypedDict, total=False):
+class BlockDeviceVariant47(TypedDict, total=False):
     basis: NotRequired[str | None]
     engine: Required[StillEngineKind]
     evidence: NotRequired[list[Evidence]]
@@ -659,7 +666,7 @@ class BlockDeviceVariant46(TypedDict, total=False):
     run_ticks: Required[int]
 
 
-class BlockDeviceVariant47(TypedDict, total=False):
+class BlockDeviceVariant48(TypedDict, total=False):
     basis: NotRequired[str | None]
     evidence: NotRequired[list[Evidence]]
     memory_types_block_id: Required[str]
@@ -667,18 +674,11 @@ class BlockDeviceVariant47(TypedDict, total=False):
     run_ticks: Required[int]
 
 
-class BlockDeviceVariant48(TypedDict, total=False):
+class BlockDeviceVariant49(TypedDict, total=False):
     basis: NotRequired[str | None]
     evidence: NotRequired[list[Evidence]]
     model: Required[Literal["dsp"]]
     run_ticks: Required[int]
-
-
-class BlockDeviceVariant49(TypedDict, total=False):
-    basis: NotRequired[str | None]
-    channels: Required[int]
-    counter_block_id: Required[str]
-    model: Required[Literal["countdown_timer"]]
 
 
 class BlockDeviceVariant5(TypedDict, total=False):
@@ -688,56 +688,56 @@ class BlockDeviceVariant5(TypedDict, total=False):
 
 class BlockDeviceVariant50(TypedDict, total=False):
     basis: NotRequired[str | None]
-    model: Required[Literal["usb_condition"]]
+    channels: Required[int]
+    counter_block_id: Required[str]
+    model: Required[Literal["countdown_timer"]]
 
 
 class BlockDeviceVariant51(TypedDict, total=False):
+    basis: NotRequired[str | None]
+    model: Required[Literal["usb_condition"]]
+
+
+class BlockDeviceVariant52(TypedDict, total=False):
     basis: Required[str]
     focus_capture: Required[bool]
     model: Required[Literal["xp5_timer"]]
 
 
-class BlockDeviceVariant52(TypedDict, total=False):
+class BlockDeviceVariant53(TypedDict, total=False):
     basis: Required[str]
     model: Required[Literal["xp5_timer_extended"]]
 
 
-class BlockDeviceVariant53(TypedDict, total=False):
+class BlockDeviceVariant54(TypedDict, total=False):
     basis: Required[str]
     model: Required[Literal["serial_flash_aperture"]]
 
 
-class BlockDeviceVariant54(TypedDict, total=False):
+class BlockDeviceVariant55(TypedDict, total=False):
     basis: Required[str]
     model: Required[Literal["serial_flash_controller"]]
 
 
-class BlockDeviceVariant55(TypedDict, total=False):
+class BlockDeviceVariant56(TypedDict, total=False):
     basis: Required[str]
     model: Required[Literal["flash_storage_dma"]]
 
 
-class BlockDeviceVariant56(TypedDict, total=False):
+class BlockDeviceVariant57(TypedDict, total=False):
     basis: Required[str]
     configuration_word: NotRequired[int | None]
     model: Required[Literal["gates"]]
 
 
-class BlockDeviceVariant57(TypedDict, total=False):
+class BlockDeviceVariant58(TypedDict, total=False):
     basis: Required[str]
     model: Required[Literal["clock_banks"]]
 
 
-class BlockDeviceVariant58(TypedDict, total=False):
+class BlockDeviceVariant59(TypedDict, total=False):
     basis: Required[str]
     model: Required[Literal["panel_pll"]]
-
-
-class BlockDeviceVariant59(TypedDict, total=False):
-    a53_irq_base: NotRequired[int | None]
-    basis: Required[str]
-    companion_irq_base: NotRequired[int | None]
-    model: Required[Literal["general_dma"]]
 
 
 class BlockDeviceVariant6(TypedDict, total=False):
@@ -748,57 +748,58 @@ class BlockDeviceVariant6(TypedDict, total=False):
 
 
 class BlockDeviceVariant60(TypedDict, total=False):
+    a53_irq_base: NotRequired[int | None]
+    basis: Required[str]
+    companion_irq_base: NotRequired[int | None]
+    model: Required[Literal["general_dma"]]
+
+
+class BlockDeviceVariant61(TypedDict, total=False):
     basis: Required[str]
     bytes_per_tick: Required[int]
     model: Required[Literal["audio_dma"]]
     setup_ticks: Required[int]
 
 
-class BlockDeviceVariant61(TypedDict, total=False):
+class BlockDeviceVariant62(TypedDict, total=False):
     basis: Required[str]
     model: Required[Literal["xp5_gpio"]]
 
 
-class BlockDeviceVariant62(TypedDict, total=False):
+class BlockDeviceVariant63(TypedDict, total=False):
     basis: Required[str]
     model: Required[Literal["xp5_adc"]]
 
 
-class BlockDeviceVariant63(TypedDict, total=False):
+class BlockDeviceVariant64(TypedDict, total=False):
     basis: Required[str]
     model: Required[Literal["temperature"]]
 
 
-class BlockDeviceVariant64(TypedDict, total=False):
+class BlockDeviceVariant65(TypedDict, total=False):
     basis: Required[str]
     model: Required[Literal["interprocessor_mailbox"]]
 
 
-class BlockDeviceVariant65(TypedDict, total=False):
+class BlockDeviceVariant66(TypedDict, total=False):
     basis: Required[str]
     model: Required[Literal["audio_serial"]]
 
 
-class BlockDeviceVariant66(TypedDict, total=False):
+class BlockDeviceVariant67(TypedDict, total=False):
     basis: Required[str]
     commit_ticks: Required[int]
     model: Required[Literal["memory_configuration"]]
 
 
-class BlockDeviceVariant67(TypedDict, total=False):
+class BlockDeviceVariant68(TypedDict, total=False):
     basis: Required[str]
     model: Required[Literal["ddr_phy"]]
 
 
-class BlockDeviceVariant68(TypedDict, total=False):
-    basis: Required[str]
-    model: Required[Literal["sd_interface"]]
-
-
 class BlockDeviceVariant69(TypedDict, total=False):
     basis: Required[str]
-    clock_ticks: Required[int]
-    model: Required[Literal["sdhci_uhs2"]]
+    model: Required[Literal["sd_interface"]]
 
 
 class BlockDeviceVariant7(TypedDict, total=False):
@@ -811,52 +812,53 @@ class BlockDeviceVariant7(TypedDict, total=False):
 
 class BlockDeviceVariant70(TypedDict, total=False):
     basis: Required[str]
-    model: Required[Literal["display_output_link"]]
+    clock_ticks: Required[int]
+    model: Required[Literal["sdhci_uhs2"]]
 
 
 class BlockDeviceVariant71(TypedDict, total=False):
     basis: Required[str]
-    model: Required[Literal["renderer"]]
+    model: Required[Literal["display_output_link"]]
 
 
 class BlockDeviceVariant72(TypedDict, total=False):
     basis: Required[str]
-    model: Required[Literal["imaging_phy"]]
+    model: Required[Literal["renderer"]]
 
 
 class BlockDeviceVariant73(TypedDict, total=False):
     basis: Required[str]
-    model: Required[Literal["imaging_input"]]
+    model: Required[Literal["imaging_phy"]]
 
 
 class BlockDeviceVariant74(TypedDict, total=False):
     basis: Required[str]
-    model: Required[Literal["imaging_resize"]]
+    model: Required[Literal["imaging_input"]]
 
 
 class BlockDeviceVariant75(TypedDict, total=False):
     basis: Required[str]
-    model: Required[Literal["imaging_paf"]]
+    model: Required[Literal["imaging_resize"]]
 
 
 class BlockDeviceVariant76(TypedDict, total=False):
     basis: Required[str]
-    model: Required[Literal["imaging_preview"]]
+    model: Required[Literal["imaging_paf"]]
 
 
 class BlockDeviceVariant77(TypedDict, total=False):
     basis: Required[str]
-    model: Required[Literal["imaging_rifp_io"]]
+    model: Required[Literal["imaging_preview"]]
 
 
 class BlockDeviceVariant78(TypedDict, total=False):
     basis: Required[str]
-    model: Required[Literal["imaging_rifp"]]
+    model: Required[Literal["imaging_rifp_io"]]
 
 
 class BlockDeviceVariant79(TypedDict, total=False):
     basis: Required[str]
-    model: Required[Literal["imaging_tnr"]]
+    model: Required[Literal["imaging_rifp"]]
 
 
 class BlockDeviceVariant8(TypedDict, total=False):
@@ -868,35 +870,40 @@ class BlockDeviceVariant8(TypedDict, total=False):
 
 class BlockDeviceVariant80(TypedDict, total=False):
     basis: Required[str]
-    model: Required[Literal["imaging_fcnv"]]
+    model: Required[Literal["imaging_tnr"]]
 
 
 class BlockDeviceVariant81(TypedDict, total=False):
     basis: Required[str]
-    model: Required[Literal["imaging_filter_scaler"]]
+    model: Required[Literal["imaging_fcnv"]]
 
 
 class BlockDeviceVariant82(TypedDict, total=False):
     basis: Required[str]
-    model: Required[Literal["imaging_rzl2"]]
+    model: Required[Literal["imaging_filter_scaler"]]
 
 
 class BlockDeviceVariant83(TypedDict, total=False):
     basis: Required[str]
-    model: Required[Literal["imaging_resz"]]
+    model: Required[Literal["imaging_rzl2"]]
 
 
 class BlockDeviceVariant84(TypedDict, total=False):
     basis: Required[str]
-    model: Required[Literal["input_capture"]]
+    model: Required[Literal["imaging_resz"]]
 
 
 class BlockDeviceVariant85(TypedDict, total=False):
     basis: Required[str]
-    model: Required[Literal["pl011"]]
+    model: Required[Literal["input_capture"]]
 
 
 class BlockDeviceVariant86(TypedDict, total=False):
+    basis: Required[str]
+    model: Required[Literal["pl011"]]
+
+
+class BlockDeviceVariant87(TypedDict, total=False):
     basis: Required[str]
     companion_irq_line: NotRequired[int | None]
     model: Required[Literal["pl022"]]
@@ -906,7 +913,7 @@ class BlockDeviceVariant86(TypedDict, total=False):
     transmit_request: NotRequired[int | None]
 
 
-class BlockDeviceVariant87(TypedDict, total=False):
+class BlockDeviceVariant88(TypedDict, total=False):
     ack: NotRequired[CompletionAck | None]
     basis: Required[str]
     completion: NotRequired[list[CompletionWrite]]
@@ -917,14 +924,9 @@ class BlockDeviceVariant87(TypedDict, total=False):
     starts: NotRequired[list[CompletionStart]]
 
 
-class BlockDeviceVariant88(TypedDict, total=False):
-    basis: Required[str]
-    model: Required[Literal["video_codec"]]
-
-
 class BlockDeviceVariant89(TypedDict, total=False):
     basis: Required[str]
-    model: Required[Literal["imaging_dsp"]]
+    model: Required[Literal["video_codec"]]
 
 
 class BlockDeviceVariant9(TypedDict, total=False):
@@ -933,6 +935,11 @@ class BlockDeviceVariant9(TypedDict, total=False):
 
 
 class BlockDeviceVariant90(TypedDict, total=False):
+    basis: Required[str]
+    model: Required[Literal["imaging_dsp"]]
+
+
+class BlockDeviceVariant91(TypedDict, total=False):
     basis: Required[str]
     model: Required[Literal["unmodeled_bus_drain"]]
 
