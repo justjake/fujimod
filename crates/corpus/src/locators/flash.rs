@@ -351,12 +351,13 @@ fn flash_with_route<L: Lookup>(
             .collect(),
         "destination cache maintenance",
     )?;
-    let nand = dispatcher.has("tst", "x0, #0x3f");
+    let mixed = dispatcher.has("tst", "x0, #0x3f");
+    let nand = selected_nand(mixed, jedec_id)?;
     let mut ranges = vec![
         reader.span("flash_read"),
         request.span("flash read request"),
         dispatcher.span("flash read dispatcher"),
-        dma.span(dma_shape.range_name()),
+        dma.span(if mixed { "mixed NOR/NAND DMA reader" } else { dma_shape.range_name() }),
     ];
     if mapped_only {
         if nand {
@@ -376,7 +377,7 @@ fn flash_with_route<L: Lookup>(
         }));
     }
     let mut checks = vec![];
-    let device = if nand {
+    if mixed {
         let mode = one(
             loads(&dispatcher)
                 .into_iter()
@@ -390,6 +391,9 @@ fn flash_with_route<L: Lookup>(
                 .collect(),
             "NAND mode",
         )?;
+        checks.push(json!({"name":"serial flash driver mode","address":mode,"size":4,"value":u32::from(nand)}));
+    }
+    let device = if nand {
         let poll = one(
             locator
                 .calls(&dma)?
@@ -452,7 +456,6 @@ fn flash_with_route<L: Lookup>(
         if jedec_id.is_some_and(|id| id != 0xefdc21) {
             return Err("installed NAND differs from driver".into());
         }
-        checks.push(json!({"name":"serial NAND driver mode","address":mode,"size":4,"value":1}));
         json!({"kind":"serial-nand","jedec_id":"efdc21","part":"Winbond W35N01JW"})
     } else {
         let id = jedec_id.ok_or("NOR installed JEDEC identity is not established")?;
@@ -507,7 +510,22 @@ fn flash_with_route<L: Lookup>(
             }
         }
         ranges.push(cache.span("destination cache maintenance"));
-        let calls = locator.calls(&request)?;
+        if mixed {
+            let identity = locator.named("flash_installed_jedec_id", |r| {
+                r.code.len() == 3 && r.code[0].mnemonic == "adrp"
+                    && r.code[1].mnemonic == "ldr" && r.code[1].operands.starts_with("w0,")
+                    && r.code[2].mnemonic == "ret"
+            })?;
+            let address = one(loads(&identity).into_iter().map(|(_, a)| a).collect(), "installed flash identity")?;
+            checks.push(json!({"name":"installed NOR JEDEC identity","address":address,"size":4,"value":id}));
+            ranges.push(identity.span("installed flash identity reader"));
+            let aligned = one(locator.calls(&dispatcher)?.into_iter().filter(|r| {
+                r.code.iter().any(|i| i.mnemonic == "ands" && i.operands.ends_with(", #0x3f"))
+                    && locator.calls(r).is_ok_and(|calls| calls.iter().any(|c| c.header.key.address == dma.header.key.address))
+            }).collect(), "aligned NOR dispatcher")?;
+            ranges.push(aligned.span("aligned NOR dispatcher"));
+        }
+        let calls = locator.calls(if mixed { &dispatcher } else { &request })?;
         let bank = one(
             calls
                 .iter()
@@ -583,6 +601,17 @@ impl DmaShape {
             Self::DirectPoll => "flash DMA read",
             Self::QueuedCommand => "flash queued DMA read (not live-verified)",
         }
+    }
+}
+
+/// A driver may contain both technologies; reachable NAND instructions do not
+/// identify the installed chip. Selection requires the checked device identity.
+fn selected_nand(has_nand_path: bool, jedec_id: Option<u32>) -> Result<bool> {
+    match jedec_id {
+        Some(0xefdc21) if has_nand_path => Ok(true),
+        Some(id) if nor_part_name(id).is_some() => Ok(false),
+        Some(id) => Err(format!("{id:06x}: installed flash technology is not established")),
+        None => Err("installed flash identity is not established".into()),
     }
 }
 
@@ -1581,6 +1610,16 @@ pub fn image_offsets<L: Lookup>(
 mod tests {
     use super::*;
     use crate::{Boundary, Index, Region, UnitInput, UnitLayout};
+
+    #[test]
+    fn mixed_driver_technology_follows_checked_identity() {
+        assert_eq!(selected_nand(true, Some(0x2c5b1b)).unwrap(), false);
+        assert_eq!(selected_nand(true, Some(0xefdc21)).unwrap(), true);
+        assert_eq!(selected_nand(false, Some(0x20bb20)).unwrap(), false);
+        assert!(selected_nand(false, Some(0xefdc21)).is_err());
+        assert!(selected_nand(true, None).is_err());
+        assert!(selected_nand(true, Some(0x123456)).is_err());
+    }
 
     #[test]
     fn packet_reader_rejects_changed_roles_state_and_calls() {
