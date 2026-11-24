@@ -3892,14 +3892,24 @@ impl ReferenceCatalog {
                     facts.update_sha256, update.sha256
                 ));
             }
-            if !self.socs.values().any(|soc| {
+            let soc = self
+                .bodies
+                .get(&firmware.body_id)
+                .and_then(|body| self.socs.get(&body.soc_id));
+            let Some(block) = soc.and_then(|soc| {
                 soc.blocks
                     .iter()
-                    .any(|block| block.id == facts.boot_strap.block_id)
-            }) {
+                    .find(|block| block.id == facts.boot_strap.block_id)
+            }) else {
                 return Err(format!(
-                    "ROM start facts for {firmware_id} refer to missing block {}",
+                    "ROM start facts for {firmware_id} name missing block {} of its processor",
                     facts.boot_strap.block_id
+                ));
+            };
+            if block.kind != SocBlockKind::AddressWindow {
+                return Err(format!(
+                    "ROM start facts for {firmware_id} name block {} of kind {:?}",
+                    block.id, block.kind
                 ));
             }
         }

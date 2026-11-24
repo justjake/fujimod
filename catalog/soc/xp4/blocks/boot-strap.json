@@ -1,0 +1,31 @@
+{
+  "$schema": "https://fujimod.com/schemas/soc-block.schema.json",
+  "schema": 1,
+  "id": "boot-strap",
+  "base": 4294221824,
+  "size": 256,
+  "kind": "address-window",
+  "registers": [
+    {
+      "name": "boot-source",
+      "offset": 0,
+      "width_bytes": 4,
+      "access": "read-only"
+    }
+  ],
+  "evidence": [
+    {
+      "kind": "located",
+      "firmware_ids": [
+        "x100v-301"
+      ],
+      "addresses": [
+        {
+          "firmware_id": "x100v-301",
+          "address": 4293919620,
+          "space": "code"
+        }
+      ]
+    }
+  ]
+}

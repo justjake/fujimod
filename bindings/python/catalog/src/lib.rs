@@ -25,6 +25,41 @@ fn resolve_firmware(firmware_id: &str) -> PyResult<String> {
     serde_json::to_string(&selection).map_err(|error| PyValueError::new_err(error.to_string()))
 }
 
+/// ROM start facts for a firmware and the processor window of their boot strap.
+#[pyfunction]
+fn firmware_rom_start(firmware_id: &str) -> PyResult<Option<String>> {
+    let catalog = fujimod_catalog::ReferenceCatalog::bundled().map_err(PyValueError::new_err)?;
+    let Some(facts) = catalog.rom_start(firmware_id) else {
+        return Ok(None);
+    };
+    let firmware = catalog.firmware(firmware_id).ok_or_else(|| {
+        PyValueError::new_err(format!("unknown firmware identity {firmware_id}"))
+    })?;
+    let body = catalog.body(&firmware.body_id).ok_or_else(|| {
+        PyValueError::new_err(format!("ROM start firmware has no body {}", firmware.body_id))
+    })?;
+    let soc = catalog.soc(&body.soc_id).ok_or_else(|| {
+        PyValueError::new_err(format!("ROM start body has no processor {}", body.soc_id))
+    })?;
+    let block = soc
+        .blocks
+        .iter()
+        .find(|block| block.id == facts.boot_strap.block_id)
+        .ok_or_else(|| {
+            PyValueError::new_err(format!(
+                "ROM start facts name missing block {}",
+                facts.boot_strap.block_id
+            ))
+        })?;
+    let payload = serde_json::json!({
+        "document": facts,
+        "boot_strap_block": {"base": block.base, "size": block.size},
+    });
+    serde_json::to_string(&payload)
+        .map(Some)
+        .map_err(|error| PyValueError::new_err(error.to_string()))
+}
+
 /// Every bundled `restart.generated.json` profile, as a JSON list.
 #[pyfunction]
 fn restart_profiles() -> PyResult<String> {
@@ -59,6 +94,7 @@ pub fn register(py: Python<'_>, parent: &Bound<'_, PyModule>) -> PyResult<()> {
     let catalog = PyModule::new(py, "fujimod.catalog")?;
     catalog.add_function(wrap_pyfunction!(resolve_reference, &catalog)?)?;
     catalog.add_function(wrap_pyfunction!(resolve_firmware, &catalog)?)?;
+    catalog.add_function(wrap_pyfunction!(firmware_rom_start, &catalog)?)?;
     catalog.add_function(wrap_pyfunction!(resolve_configuration, &catalog)?)?;
     catalog.add_function(wrap_pyfunction!(restart_profiles, &catalog)?)?;
     catalog.add_function(wrap_pyfunction!(card_profiles, &catalog)?)?;

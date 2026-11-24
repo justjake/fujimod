@@ -1,0 +1,104 @@
+{
+  "$schema": "https://fujimod.com/schemas/rom-start.generated.schema.json",
+  "schema": 1,
+  "firmware_id": "xe4-201",
+  "update_sha256": "ce80e4a88f0fffff998d3144ef51411d8285d16c06e4791c89cd36823769f8c2",
+  "boot_rom": {
+    "sha256": "2a8b69986dd3fad0b73808c44e0834fa95c7b4e4f84e6c8664d4b0a82f7b24a4",
+    "basis": "The X-E4 ROM window read matches the X-S10 reference byte for byte; the ROM reference is registered in firmware.json.",
+    "evidence": [
+      {
+        "kind": "measured",
+        "firmware_ids": [
+          "xe4-201"
+        ]
+      }
+    ]
+  },
+  "boot_strap": {
+    "block_id": "boot-strap",
+    "sd_card_word": 0,
+    "serial_flash_word": 24,
+    "basis": "The ROM selects the card when bits 0x18 are clear. Both words are declared virtual inputs following X-T3; the physical X-E4 strap is unmeasured.",
+    "evidence": [
+      {
+        "kind": "stand-in"
+      }
+    ]
+  },
+  "last_write_banks": [
+    {
+      "base": 4294185984,
+      "end": 4294189056,
+      "basis": "Virtual last-write words above the GPIO model used by the first-stage setup; physical behavior is unmeasured.",
+      "evidence": [
+        {
+          "kind": "stand-in"
+        }
+      ]
+    },
+    {
+      "base": 4211081216,
+      "end": 4211085312,
+      "basis": "Virtual last-write page used by the first-stage setup; physical behavior is unmeasured.",
+      "evidence": [
+        {
+          "kind": "stand-in"
+        }
+      ]
+    },
+    {
+      "base": 4282384384,
+      "end": 4282916864,
+      "basis": "Virtual setup window follows X-T3; it covers the X-E4 first refusal and physical behavior is unmeasured.",
+      "evidence": [
+        {
+          "kind": "stand-in"
+        }
+      ]
+    },
+    {
+      "base": 4282920960,
+      "end": 4283432960,
+      "basis": "Virtual setup window follows X-T3 and excludes the modeled DSP page; physical behavior is unmeasured.",
+      "evidence": [
+        {
+          "kind": "stand-in"
+        }
+      ]
+    }
+  ],
+  "fixed_words": [
+    {
+      "base": 4284497920,
+      "words": [
+        {
+          "offset": 1100,
+          "value": 2097184
+        },
+        {
+          "offset": 1568,
+          "value": 2097184
+        }
+      ],
+      "basis": "Virtual DRAM training results follow X-T3; physical X-E4 values are unmeasured.",
+      "evidence": [
+        {
+          "kind": "stand-in"
+        }
+      ]
+    }
+  ],
+  "power_inputs": [
+    {
+      "register": 16,
+      "value": 4,
+      "basis": "Virtual cold boot reason follows the X-E4 flash-start handoff; the physical value is unmeasured.",
+      "evidence": [
+        {
+          "kind": "stand-in"
+        }
+      ]
+    }
+  ]
+}

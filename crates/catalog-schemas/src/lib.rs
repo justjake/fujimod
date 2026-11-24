@@ -101,6 +101,12 @@ pub fn generated_documents() -> BTreeMap<&'static str, Value> {
         ),
     );
     documents.insert(
+        "rom-start.generated.schema.json",
+        schema::<fujimod_catalog::rom_start::FirmwareRomStart>(
+            fujimod_catalog::rom_start::ROM_START_SCHEMA_URI,
+        ),
+    );
+    documents.insert(
         "boot-patch.generated.schema.json",
         schema::<fujimod_catalog::boot_patch::FirmwareBootPatch>(
             fujimod_catalog::boot_patch::BOOT_PATCH_SCHEMA_URI,
