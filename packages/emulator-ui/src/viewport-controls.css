@@ -203,6 +203,3 @@
 #camera-speed {
   margin-right: 12px;
 }
-.viewport-bar button[aria-pressed='true'].viewport-text-toggle {
-  color: #30d158;
-}

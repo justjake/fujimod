@@ -18,8 +18,6 @@ export function ViewportControls(props: {
   /** Whether the camera is held to the wall clock; absent where it always is. */
   realTime?: boolean;
   toggleRealTime?: () => void;
-  /** Choose a RAW file as the sensor image. */
-  chooseRaw?: () => void;
   modSupported: boolean;
   modEnabled: boolean;
   modDisabled: boolean;
@@ -146,11 +144,9 @@ export function ViewportControls(props: {
           <button
             id="real-time-toggle"
             type="button"
-            class="viewport-text-toggle"
-            aria-pressed={props.realTime ? 'true' : 'false'}
             onClick={() => props.toggleRealTime?.()}
           >
-            Speed limit
+            {props.realTime ? 'Limit 100%' : 'No limit'}
           </button>
         </Show>
       </Show>
@@ -176,18 +172,6 @@ export function ViewportControls(props: {
           onClick={() => props.toggleWebcam?.()}
         >
           <Icon name="camera" size={16} />
-        </button>
-      </Show>
-      <Show when={props.active && props.chooseRaw}>
-        <button
-          id="raw-scene"
-          type="button"
-          aria-label="Use a RAW file as the sensor image"
-          title="Use a RAW file as the sensor image"
-          disabled={props.webcamDisabled}
-          onClick={() => props.chooseRaw?.()}
-        >
-          <Icon name="image" size={16} />
         </button>
       </Show>
       <Show when={props.active && props.feedback}>
