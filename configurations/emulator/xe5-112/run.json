@@ -55,7 +55,7 @@
    {
     "kind": "flash",
     "block_id": "flash-aperture",
-    "part_id": "xe5-serial-nand",
+    "part_id": "xe5-serial-nor",
     "source": "firmware_update",
     "erased_tail": 255,
     "seeds": []
