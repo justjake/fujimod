@@ -6,6 +6,7 @@ import { readSdkDocs, sdkDocsPath } from './sdk-docs.ts';
 import { manualRoutes } from '../src/docs/manual-data.ts';
 import { isManualPath } from '../src/docs/manual-routes.ts';
 import { textPagePath, textPages } from '../src/text/routes.ts';
+import { errorPages } from '../src/error-pages/routes.ts';
 const tools = Object.values(Wizard).map(toolPath);
 export function siteRoutes(client: string) {
   const components = readSdkDocs(resolve(client, sdkDocsPath))?.components ?? [];
@@ -19,8 +20,9 @@ export function siteRoutes(client: string) {
     ...Object.keys(textPages),
     ...manualRoutes(),
     '/docs/',
-    // Cloudflare serves 404.html for every address without a page.
-    '/404',
+    // Cloudflare serves 404.html for every address without a page; the
+    // Worker serves these pages for failed browser requests.
+    ...Object.values(errorPages),
     `/${sdkDocsPath}/`,
     ...components.map((component) => `/${sdkDocsPath}/components/${component.slug}/`),
   ];
@@ -51,7 +53,9 @@ export async function prerender(output = 'dist') {
                 '/recovery/': 'class="shell recovery"',
                 '/device/': 'class="shell device"',
                 '/docs/': 'class="shell docs-overview"',
-                '/404': 'class="shell not-found"',
+                '/404': 'data-status="404"',
+                '/500': 'data-status="500"',
+                '/503': 'data-status="503"',
               }[route];
     if (
       !html.includes('class="site-header"') ||

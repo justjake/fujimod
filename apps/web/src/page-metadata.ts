@@ -12,6 +12,14 @@ const pages = {
     title: 'Page not found · Fujimod',
     description: 'There is no Fujimod page at this address.',
   },
+  '/500/': {
+    title: 'Something went wrong · Fujimod',
+    description: 'This Fujimod page failed to load.',
+  },
+  '/503/': {
+    title: 'Temporarily unavailable · Fujimod',
+    description: 'This Fujimod page is temporarily unavailable.',
+  },
   '/': {
     title: 'Fujimod',
     description:

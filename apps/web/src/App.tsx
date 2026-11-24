@@ -1,10 +1,12 @@
 // First, so errors during hydration are logged.
 import './error-log';
-import { lazy, Loading } from 'solid-js';
-import { getRequestEvent } from '@solidjs/web';
+import { Errored, lazy, Loading } from 'solid-js';
+import { getRequestEvent, type JSX } from '@solidjs/web';
 import { isDevToolsPath } from './dev-tools/routes';
 import { isManualPath } from './docs/manual-routes';
 import { textPagePath } from './text/routes';
+import { ErrorPage } from './error-pages/ErrorPage';
+import { servedErrorStatus } from './error-pages/routes';
 const Home = lazy(() => import('./home/Page'));
 const DevTools = lazy(() => import('./dev-tools/Page'));
 const BugReport = lazy(() => import('./bug/Page'));
@@ -16,29 +18,35 @@ const ReleasePersonalNotePreview = import.meta.env.DEV
 const SdkDocs = lazy(() => import('./docs/Page'));
 const Manual = lazy(() => import('./docs/Manual'));
 const DocsOverview = lazy(() => import('./docs/Overview'));
-const NotFound = lazy(() => import('./not-found/Page'));
 const textRoutes = {
   '/safety': lazy(() => import('./text/Safety')),
   '/credits': lazy(() => import('./text/Credits')),
   '/releases': lazy(() => import('./text/Releases')),
 };
+/** A page that fails to render or load shows the error page instead of a blank one. */
+function Guarded(props: { page: () => JSX.Element }) {
+  return (
+    <Errored
+      fallback={(error) => {
+        console.error(error);
+        return <ErrorPage status={500} />;
+      }}
+    >
+      <Loading>{props.page()}</Loading>
+    </Errored>
+  );
+}
 export default function App() {
   const path = new URL(getRequestEvent()?.request.url ?? window.location.href).pathname;
+  const error = servedErrorStatus(path);
+  if (error) return <ErrorPage status={error} />;
   const textRoute = textPagePath(path);
   if (textRoute) {
     const TextPage = textRoutes[textRoute];
-    return (
-      <Loading>
-        <TextPage />
-      </Loading>
-    );
+    return <Guarded page={() => <TextPage />} />;
   }
   if (ReleasePersonalNotePreview && path === '/__dev/release-personal-note') {
-    return (
-      <Loading>
-        <ReleasePersonalNotePreview />
-      </Loading>
-    );
+    return <Guarded page={() => <ReleasePersonalNotePreview />} />;
   }
   const Page = isDevToolsPath(path)
     ? DevTools
@@ -56,10 +64,6 @@ export default function App() {
                 ? Manual
                 : path === '/'
                   ? Home
-                  : NotFound;
-  return (
-    <Loading>
-      <Page />
-    </Loading>
-  );
+                  : undefined;
+  return Page ? <Guarded page={() => <Page />} /> : <ErrorPage status={404} />;
 }
