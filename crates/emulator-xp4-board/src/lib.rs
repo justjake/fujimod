@@ -914,9 +914,7 @@ fn exclusive(c: &Cluster, core: usize, address: u64, word: u32) -> Result<Exclus
             // Counted runs see stores on watched pages only: route
             // every core's stores to this monitor through `store`.
             for cpu in &c.cpus {
-                match cpu.watch_stores(physical, size as u64) {
-                    result => result?,
-                }
+                cpu.watch_stores(physical, size as u64)?;
             }
         }
         let mut bytes = [0u8; 8];
@@ -946,9 +944,7 @@ fn exclusive(c: &Cluster, core: usize, address: u64, word: u32) -> Result<Exclus
             if size == 8 {
                 value |= u64::from(c.reg(core, arm::CORE[rt + 1])?) << 32;
             }
-            match c.cpus[core].write_memory(physical, &value.to_le_bytes()[..size]) {
-                result => result?,
-            }
+            c.cpus[core].write_memory(physical, &value.to_le_bytes()[..size])?;
             for monitor in &mut state.exclusive {
                 if monitor
                     .is_some_and(|(p, n)| p < physical + size as u64 && physical < p + n as u64)
@@ -1621,7 +1617,7 @@ impl Session {
             })
             .transpose()?;
         let cpus = (0..cores)
-            .map(|index| -> Result<counted::Processor, String> {
+            .map(|_| -> Result<counted::Processor, String> {
                 let raw = library.open(cpu::Model::CortexA7, translation_cache_size_bytes)?;
                 if !counted {
                     return Ok(counted::Processor::Exact(raw));
