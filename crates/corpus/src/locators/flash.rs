@@ -338,8 +338,6 @@ pub fn flash<L: Lookup>(
             "NAND mode",
         )?;
         checks.push(json!({"name":"serial flash driver mode","address":mode,"size":4,"value":u32::from(nand)}));
-    }
-    let device = if nand {
         let poll = one(
             locator
                 .calls(&dma)?
@@ -354,6 +352,8 @@ pub fn flash<L: Lookup>(
             "DMA completion poll",
         )?;
         ranges.push(poll.span("flash DMA completion poll"));
+    }
+    let device = if nand {
         ranges.push(cache.span("destination cache maintenance"));
         // The NAND initializer requires all three ID bytes before publishing
         // this exact ID to its descriptor. Verify the complete constructor.
