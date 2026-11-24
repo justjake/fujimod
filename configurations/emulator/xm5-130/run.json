@@ -45,7 +45,7 @@
       {
         "kind": "flash",
         "block_id": "flash-aperture",
-        "part_id": "xe5-serial-nand",
+        "part_id": "winbond-w35n01jw",
         "source": "firmware_update",
         "erased_tail": 255,
         "seeds": []
