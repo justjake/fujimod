@@ -1,0 +1,22 @@
+.error-page article {
+  max-width: 640px;
+  margin: 96px auto;
+  padding: 0 24px;
+  text-align: center;
+}
+.error-page h1 {
+  margin: 0 0 16px;
+  font-size: 28px;
+}
+.error-page p {
+  color: var(--dim);
+}
+.error-page button {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-decoration: underline;
+  cursor: pointer;
+}

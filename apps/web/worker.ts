@@ -6,6 +6,7 @@ import { serveDeviceToken, serveGoogleToken, type ProviderTokenApi } from './src
 import { serveDownloadEvent } from './src/downloads/routes.ts';
 import { byteRange, otaRoute } from './src/ota/routes.ts';
 import { siteRelease, sortReleases, type SiteRelease } from './src/site-releases.ts';
+import { errorPages, errorPageStatus } from './src/error-pages/routes.ts';
 
 const repository = 'justjake/fujimod';
 const api = `https://api.github.com/repos/${repository}/releases`;
@@ -546,11 +547,42 @@ async function serveOtaPath(
   }
   return failure(404, 'OTA route not found.');
 }
+/** Browsers opening an address get the site's error page for a missing
+ * address, a failure or an outage; other clients keep the plain response. */
 export async function serveRequest(
   request: Request,
   env: Env,
   context: Context,
   makeAuth: AuthFactory = createAuth,
+): Promise<Response> {
+  let response: Response;
+  try {
+    response = await route(request, env, context, makeAuth);
+  } catch (error) {
+    console.error(error);
+    response = failure(500, 'Internal error.');
+  }
+  if (
+    (response.status !== 404 && response.status < 500) ||
+    request.headers.get('sec-fetch-mode') !== 'navigate' ||
+    response.headers.get('content-type')?.startsWith('text/html')
+  )
+    return response;
+  const page = await env.ASSETS.fetch(
+    new Request(new URL(errorPages[errorPageStatus(response.status)], request.url)),
+  );
+  const headers = new Headers(page.headers);
+  headers.set('Cache-Control', 'no-store');
+  return new Response(request.method === 'HEAD' ? null : page.body, {
+    status: response.status,
+    headers,
+  });
+}
+async function route(
+  request: Request,
+  env: Env,
+  context: Context,
+  makeAuth: AuthFactory,
 ): Promise<Response> {
   const url = new URL(request.url);
   if (url.pathname === '/api/auth/device/token') {

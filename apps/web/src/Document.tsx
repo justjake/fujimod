@@ -3,13 +3,14 @@ import type { JSX } from '@solidjs/web';
 import { getRequestEvent, HydrationScript } from '@solidjs/web';
 import { pageMetadata, siteOrigin } from './page-metadata';
 import { featureMedia } from './home/feature-media';
+import { renderedErrorStatus } from './error-pages/routes';
 export default function Document(props: { children: JSX.Element; developmentEntry?: string }) {
   const path = new URL(getRequestEvent()?.request.url ?? window.location.href).pathname;
   const bug = /^\/bug(?:\/|$)/.test(path);
   const metadata = pageMetadata(path);
   const preview = path === '/' ? featureMedia()('shape_aspect_item') : undefined;
   return (
-    <html lang="en">
+    <html lang="en" data-error={renderedErrorStatus(path)}>
       <head>
         {/* The client never walks <head>: browser extensions add nodes to it before
             the page hydrates, and a positional walk over them stops hydration. */}

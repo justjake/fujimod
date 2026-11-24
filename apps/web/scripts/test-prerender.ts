@@ -13,11 +13,13 @@ import { readSdkDocs, sdkDocsPath } from './sdk-docs.ts';
 import { manualChapters, manualMenuRows, manualPageAt } from '../src/docs/manual-data.ts';
 import { manualMenus, manualPagePath, manualRoot } from '../src/docs/manual-routes.ts';
 import { textPagePath } from '../src/text/routes.ts';
+import { errorPages } from '../src/error-pages/routes.ts';
 import credits from '../src/text/credits.generated.json' with { type: 'json' };
 import type { cycloneDx } from './sbom/bom.ts';
 const root = resolve(process.argv[2] || 'dist/client');
-// 404.html is served for missing addresses, checked below.
-const routes = siteRoutes(root).filter((route) => route !== '/404');
+// Error pages are served at failing addresses, checked below.
+const errorRoutes: string[] = Object.values(errorPages);
+const routes = siteRoutes(root).filter((route) => !errorRoutes.includes(route));
 const sdk = readSdkDocs(resolve(root, sdkDocsPath));
 const chapters = manualChapters();
 const manualPage = chapters[0]?.pages[0];
@@ -33,11 +35,13 @@ for (const file of await readdir(root, { recursive: true })) {
 
 const server = createServer(async (req, res) => {
   const url = new URL(req.url ?? '/', 'http://test');
-  const textRoute = textPagePath(url.pathname);
+  // Like Cloudflare's HTML handling, /safety and /500 serve safety.html and 500.html.
+  const htmlRoute =
+    textPagePath(url.pathname) ?? errorRoutes.find((route) => route === url.pathname);
   const path = resolve(
     root,
-    textRoute ? `.${textRoute}.html` : '.' + decodeURIComponent(url.pathname),
-    !textRoute && url.pathname.endsWith('/') ? 'index.html' : '',
+    htmlRoute ? `.${htmlRoute}.html` : '.' + decodeURIComponent(url.pathname),
+    !htmlRoute && url.pathname.endsWith('/') ? 'index.html' : '',
   );
   if (!path.startsWith(root + sep)) {
     res.writeHead(403).end();
@@ -467,6 +471,14 @@ try {
       const missing = await page.goto(base + '/docs/no-such-page/');
       assert.equal(missing?.status(), 404);
       await page.getByRole('heading', { name: 'Page not found' }).waitFor();
+      for (const [route, heading] of [
+        ['/500', 'Something went wrong'],
+        ['/503', 'Temporarily unavailable'],
+      ]) {
+        await page.goto(base + route);
+        await page.getByRole('heading', { name: heading }).waitFor();
+        await page.getByRole('button', { name: 'Try again' }).waitFor();
+      }
       await page.goto(base + '/');
       try {
         await page.locator('#viewer-tools[data-ready="true"]').waitFor({ state: 'attached' });
@@ -576,6 +588,11 @@ try {
       await page.waitForURL(base + manualPage.href);
       assert.deepEqual(errors, [], `${type.name()} page errors`);
       assert.deepEqual(diagnostics, [], `${type.name()} hydration/reactivity diagnostics`);
+      // A page whose code fails to load, as after a deployment replaces it,
+      // shows Something went wrong instead of a blank page.
+      await page.route(/\/assets\/Credits-[^/]+\.js$/, (route) => route.abort());
+      await page.goto(base + '/credits');
+      await page.getByRole('heading', { name: 'Something went wrong' }).waitFor();
       await context.close();
       console.log(
         `${type.name()}: three static pages, existing-node hydration, features and feedback passed`,
