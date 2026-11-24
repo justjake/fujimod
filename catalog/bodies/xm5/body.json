@@ -68,7 +68,7 @@
   ],
   "parts": [
     "power-controller",
-    "xe5-serial-nand"
+    "winbond-w35n01jw"
   ],
   "wiring": [
     {
@@ -78,7 +78,7 @@
     },
     {
       "source_id": "flash",
-      "target_id": "xe5-serial-nand",
+      "target_id": "winbond-w35n01jw",
       "signal": "storage"
     }
   ],
