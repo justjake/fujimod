@@ -328,6 +328,14 @@
     },
     "sub_cpu": {
       "port": 4294090752,
+      "profile_header": 80,
+      "clock": {
+        "first": 65,
+        "hold": 69,
+        "seconds": 846555480,
+        "ticks_per_second": 48000000,
+        "basis": "Declared input, the X-T20 calendar law: GFX 50R reader 0xcbd340, setter 0xcbd3a8 and converter 0xcc31e0 match X-T20 0xc70058, 0xc700c0 and 0xc75800. Seconds since 2000-01-01 in registers 0x41..0x44, run/hold at 0x45. Not measured on the camera; 846555480 is 2026-10-29 02:18."
+      },
       "registers": [
         {
           "name": "power-on cause",
@@ -335,7 +343,7 @@
           "value": 16
         }
       ],
-      "basis": "Measured GFX 50R 3.11 loader handoff +0x140 value 0x10, read through the resident service; selects boot reason 2. Other peer registers are declared zero."
+      "basis": "Measured GFX 50R 3.11 loader handoff +0x140 value 0x10, read through the resident service; selects boot reason 2. Registers 0x50-0x5f hold the settings header that 0xd317c0 validates, the X-T20 0xcdd670 code; a selected user profile places its header there (profile_header). Other peer registers are declared zero."
     },
     "battery_gauge": {
       "port": 4294098944,
