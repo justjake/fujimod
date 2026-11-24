@@ -604,6 +604,7 @@ class BlockDeviceVariant39(TypedDict, total=False):
     interrupts: Required[int]
     model: Required[Literal["frame_sync"]]
     period_ticks: Required[int]
+    reads_set_after_clear: NotRequired[bool]
     sources: Required[list[BlockFrameSource]]
 
 
