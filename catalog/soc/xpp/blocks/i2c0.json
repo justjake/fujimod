@@ -2,6 +2,7 @@
   "$schema": "https://fujimod.com/schemas/soc-block.schema.json",
   "schema": 1,
   "id": "i2c0",
+  "ip": "dw-i2c",
   "base": 4294045696,
   "size": 4096,
   "kind": "control-bus",

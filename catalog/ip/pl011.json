@@ -347,8 +347,6 @@
     }
   ],
   "parameters": [
-    "base",
-    "interrupts",
     "peer"
   ],
   "evidence": [

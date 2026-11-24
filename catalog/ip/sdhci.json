@@ -287,8 +287,6 @@
     }
   ],
   "parameters": [
-    "base",
-    "interrupts",
     "capabilities",
     "capabilities_2",
     "clock_ticks",

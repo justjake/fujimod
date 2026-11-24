@@ -278,8 +278,6 @@
     }
   ],
   "parameters": [
-    "base",
-    "interrupt",
     "pixmap_readback"
   ],
   "evidence": [
