@@ -1,0 +1,294 @@
+{
+  "$schema": "https://fujimod.com/schemas/ip.schema.json",
+  "schema": 1,
+  "id": "smaph",
+  "device": {
+    "model": "dmp",
+    "basis": "SMAPH-H low-opcode command streams with a software raster law"
+  },
+  "registers": [
+    {
+      "name": "word-0010",
+      "offset": 16,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "word-0014",
+      "offset": 20,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "word-0018",
+      "offset": 24,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "fill_job",
+      "offset": 28,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "status",
+      "offset": 52,
+      "width_bytes": 4,
+      "access": "read-only",
+      "fields": [
+        {
+          "name": "fill",
+          "bit": 26,
+          "width_bits": 1
+        },
+        {
+          "name": "copy",
+          "bit": 30,
+          "width_bits": 1
+        },
+        {
+          "name": "command",
+          "bit": 31,
+          "width_bits": 1
+        }
+      ]
+    },
+    {
+      "name": "fill_status",
+      "offset": 88,
+      "width_bytes": 4,
+      "access": "read-only"
+    },
+    {
+      "name": "word-00e0",
+      "offset": 224,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "word-00e4",
+      "offset": 228,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "word-00e8",
+      "offset": 232,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "word-00ec",
+      "offset": 236,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "copy-0c00",
+      "offset": 3072,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "copy-0c04",
+      "offset": 3076,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "copy-0c08",
+      "offset": 3080,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "copy-0c0c",
+      "offset": 3084,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "copy-0c10",
+      "offset": 3088,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "copy-0c14",
+      "offset": 3092,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "copy-0c18",
+      "offset": 3096,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "copy-0c1c",
+      "offset": 3100,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "copy-0c20",
+      "offset": 3104,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "copy-0c24",
+      "offset": 3108,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "copy-0c28",
+      "offset": 3112,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "word-1000",
+      "offset": 4096,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "word-1020",
+      "offset": 4128,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "word-10a0",
+      "offset": 4256,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "word-10c0",
+      "offset": 4288,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "word-10c4",
+      "offset": 4292,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "word-10d0",
+      "offset": 4304,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "word-10d4",
+      "offset": 4308,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "word-10dc",
+      "offset": 4316,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "word-10e0",
+      "offset": 4320,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "word-10e4",
+      "offset": 4324,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "word-10ec",
+      "offset": 4332,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "word-1200",
+      "offset": 4608,
+      "width_bytes": 4,
+      "access": "read-only"
+    },
+    {
+      "name": "word-1214",
+      "offset": 4628,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "word-1248",
+      "offset": 4680,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "word-1298",
+      "offset": 4760,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "word-1800",
+      "offset": 6144,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "word-1880",
+      "offset": 6272,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "word-18c0",
+      "offset": 6336,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "word-20e0",
+      "offset": 8416,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "word-20e8",
+      "offset": 8424,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "word-20f0",
+      "offset": 8432,
+      "width_bytes": 4,
+      "access": "read-write"
+    }
+  ],
+  "parameters": [
+    "base",
+    "interrupt",
+    "pixmap_readback"
+  ],
+  "evidence": [
+    {
+      "kind": "inferred",
+      "firmware_ids": [
+        "xt3-511",
+        "xt5-431"
+      ]
+    }
+  ]
+}

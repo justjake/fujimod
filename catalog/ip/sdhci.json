@@ -1,0 +1,309 @@
+{
+  "$schema": "https://fujimod.com/schemas/ip.schema.json",
+  "schema": 1,
+  "id": "sdhci",
+  "device": null,
+  "registers": [
+    {
+      "name": "sdma_system_address",
+      "offset": 0,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "block_size",
+      "offset": 4,
+      "width_bytes": 2,
+      "access": "read-write"
+    },
+    {
+      "name": "block_count",
+      "offset": 6,
+      "width_bytes": 2,
+      "access": "read-write"
+    },
+    {
+      "name": "argument",
+      "offset": 8,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "transfer_mode_command",
+      "offset": 12,
+      "width_bytes": 4,
+      "access": "read-write",
+      "fields": [
+        {
+          "name": "command_index",
+          "bit": 16,
+          "width_bits": 6
+        }
+      ]
+    },
+    {
+      "name": "response_0",
+      "offset": 16,
+      "width_bytes": 2,
+      "access": "read-only"
+    },
+    {
+      "name": "response_1",
+      "offset": 18,
+      "width_bytes": 2,
+      "access": "read-only"
+    },
+    {
+      "name": "response_2",
+      "offset": 20,
+      "width_bytes": 2,
+      "access": "read-only"
+    },
+    {
+      "name": "response_3",
+      "offset": 22,
+      "width_bytes": 2,
+      "access": "read-only"
+    },
+    {
+      "name": "response_4",
+      "offset": 24,
+      "width_bytes": 2,
+      "access": "read-only"
+    },
+    {
+      "name": "response_5",
+      "offset": 26,
+      "width_bytes": 2,
+      "access": "read-only"
+    },
+    {
+      "name": "response_6",
+      "offset": 28,
+      "width_bytes": 2,
+      "access": "read-only"
+    },
+    {
+      "name": "response_7",
+      "offset": 30,
+      "width_bytes": 2,
+      "access": "read-only"
+    },
+    {
+      "name": "buffer_data_port",
+      "offset": 32,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "present_state",
+      "offset": 36,
+      "width_bytes": 4,
+      "access": "read-only",
+      "fields": [
+        {
+          "name": "command_inhibit",
+          "bit": 0,
+          "width_bits": 1
+        },
+        {
+          "name": "card_inserted",
+          "bit": 16,
+          "width_bits": 1
+        }
+      ]
+    },
+    {
+      "name": "block_gap_control",
+      "offset": 40,
+      "width_bytes": 2,
+      "access": "read-write"
+    },
+    {
+      "name": "clock_control",
+      "offset": 44,
+      "width_bytes": 2,
+      "access": "read-write"
+    },
+    {
+      "name": "timeout_control",
+      "offset": 46,
+      "width_bytes": 1,
+      "access": "read-write"
+    },
+    {
+      "name": "software_reset",
+      "offset": 47,
+      "width_bytes": 1,
+      "access": "read-write",
+      "fields": [
+        {
+          "name": "all",
+          "bit": 0,
+          "width_bits": 1
+        },
+        {
+          "name": "command_line",
+          "bit": 1,
+          "width_bits": 1
+        },
+        {
+          "name": "data_line",
+          "bit": 2,
+          "width_bits": 1
+        }
+      ]
+    },
+    {
+      "name": "normal_interrupt_status",
+      "offset": 48,
+      "width_bytes": 2,
+      "access": "read-write"
+    },
+    {
+      "name": "error_interrupt_status",
+      "offset": 50,
+      "width_bytes": 2,
+      "access": "read-write"
+    },
+    {
+      "name": "normal_interrupt_enable",
+      "offset": 52,
+      "width_bytes": 2,
+      "access": "read-write"
+    },
+    {
+      "name": "error_interrupt_enable",
+      "offset": 54,
+      "width_bytes": 2,
+      "access": "read-write"
+    },
+    {
+      "name": "normal_interrupt_signal",
+      "offset": 56,
+      "width_bytes": 2,
+      "access": "read-write"
+    },
+    {
+      "name": "error_interrupt_signal",
+      "offset": 58,
+      "width_bytes": 2,
+      "access": "read-write"
+    },
+    {
+      "name": "auto_command_error_status",
+      "offset": 60,
+      "width_bytes": 2,
+      "access": "read-only"
+    },
+    {
+      "name": "host_control_2",
+      "offset": 62,
+      "width_bytes": 2,
+      "access": "read-write"
+    },
+    {
+      "name": "capabilities",
+      "offset": 64,
+      "width_bytes": 4,
+      "access": "read-only"
+    },
+    {
+      "name": "capabilities_2",
+      "offset": 68,
+      "width_bytes": 4,
+      "access": "read-only"
+    },
+    {
+      "name": "slot_status",
+      "offset": 252,
+      "width_bytes": 2,
+      "access": "read-only"
+    },
+    {
+      "name": "host_version",
+      "offset": 254,
+      "width_bytes": 2,
+      "access": "read-only"
+    },
+    {
+      "name": "vendor_0100",
+      "offset": 256,
+      "width_bytes": 2,
+      "access": "read-write"
+    },
+    {
+      "name": "vendor_0104",
+      "offset": 260,
+      "width_bytes": 2,
+      "access": "read-write"
+    },
+    {
+      "name": "vendor_0108",
+      "offset": 264,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "vendor_010c",
+      "offset": 268,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "vendor_0110",
+      "offset": 272,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "vendor_0114",
+      "offset": 276,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "vendor_0118",
+      "offset": 280,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "vendor_011c",
+      "offset": 284,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "vendor_0120",
+      "offset": 288,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "vendor_0124",
+      "offset": 292,
+      "width_bytes": 4,
+      "access": "read-write"
+    }
+  ],
+  "parameters": [
+    "base",
+    "interrupts",
+    "capabilities",
+    "capabilities_2",
+    "clock_ticks",
+    "slot_and_version",
+    "transfer_ticks",
+    "vendor_offsets"
+  ],
+  "evidence": [
+    {
+      "kind": "inferred",
+      "firmware_ids": [
+        "xt3-511",
+        "x100v-301"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,454 @@
+{
+  "$schema": "https://fujimod.com/schemas/ip.schema.json",
+  "schema": 1,
+  "id": "dw-i2c",
+  "device": null,
+  "registers": [
+    {
+      "name": "control",
+      "offset": 0,
+      "width_bytes": 4,
+      "access": "read-write",
+      "fields": [
+        {
+          "name": "speed",
+          "bit": 1,
+          "width_bits": 2,
+          "values": [
+            {
+              "name": "standard",
+              "value": 1
+            },
+            {
+              "name": "fast",
+              "value": 2
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "target_address",
+      "offset": 4,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "config_0008",
+      "offset": 8,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "config_000c",
+      "offset": 12,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "data_command",
+      "offset": 16,
+      "width_bytes": 4,
+      "access": "read-write",
+      "fields": [
+        {
+          "name": "read",
+          "bit": 8,
+          "width_bits": 1
+        },
+        {
+          "name": "stop",
+          "bit": 9,
+          "width_bits": 1
+        },
+        {
+          "name": "restart",
+          "bit": 10,
+          "width_bits": 1
+        }
+      ]
+    },
+    {
+      "name": "standard_speed_scl_high",
+      "offset": 20,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "config_0018",
+      "offset": 24,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "fast_speed_scl_high",
+      "offset": 28,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "config_0020",
+      "offset": 32,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "config_0024",
+      "offset": 36,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "config_0028",
+      "offset": 40,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "interrupt_status",
+      "offset": 44,
+      "width_bytes": 4,
+      "access": "read-only",
+      "fields": [
+        {
+          "name": "rx_under",
+          "bit": 0,
+          "width_bits": 1
+        },
+        {
+          "name": "rx_over",
+          "bit": 1,
+          "width_bits": 1
+        },
+        {
+          "name": "rx_full",
+          "bit": 2,
+          "width_bits": 1
+        },
+        {
+          "name": "tx_over",
+          "bit": 3,
+          "width_bits": 1
+        },
+        {
+          "name": "tx_empty",
+          "bit": 4,
+          "width_bits": 1
+        },
+        {
+          "name": "tx_abort",
+          "bit": 6,
+          "width_bits": 1
+        },
+        {
+          "name": "activity",
+          "bit": 8,
+          "width_bits": 1
+        },
+        {
+          "name": "stop_detect",
+          "bit": 9,
+          "width_bits": 1
+        },
+        {
+          "name": "start_detect",
+          "bit": 10,
+          "width_bits": 1
+        }
+      ]
+    },
+    {
+      "name": "interrupt_mask",
+      "offset": 48,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "raw_interrupt_status",
+      "offset": 52,
+      "width_bytes": 4,
+      "access": "read-only",
+      "fields": [
+        {
+          "name": "rx_under",
+          "bit": 0,
+          "width_bits": 1
+        },
+        {
+          "name": "rx_over",
+          "bit": 1,
+          "width_bits": 1
+        },
+        {
+          "name": "rx_full",
+          "bit": 2,
+          "width_bits": 1
+        },
+        {
+          "name": "tx_over",
+          "bit": 3,
+          "width_bits": 1
+        },
+        {
+          "name": "tx_empty",
+          "bit": 4,
+          "width_bits": 1
+        },
+        {
+          "name": "tx_abort",
+          "bit": 6,
+          "width_bits": 1
+        },
+        {
+          "name": "activity",
+          "bit": 8,
+          "width_bits": 1
+        },
+        {
+          "name": "stop_detect",
+          "bit": 9,
+          "width_bits": 1
+        },
+        {
+          "name": "start_detect",
+          "bit": 10,
+          "width_bits": 1
+        }
+      ]
+    },
+    {
+      "name": "receive_threshold",
+      "offset": 56,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "transmit_threshold",
+      "offset": 60,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "clear_interrupt",
+      "offset": 64,
+      "width_bytes": 4,
+      "access": "read-only"
+    },
+    {
+      "name": "clear-0044",
+      "offset": 68,
+      "width_bytes": 4,
+      "access": "read-only"
+    },
+    {
+      "name": "clear-0048",
+      "offset": 72,
+      "width_bytes": 4,
+      "access": "read-only"
+    },
+    {
+      "name": "clear-004c",
+      "offset": 76,
+      "width_bytes": 4,
+      "access": "read-only"
+    },
+    {
+      "name": "clear-0050",
+      "offset": 80,
+      "width_bytes": 4,
+      "access": "read-only"
+    },
+    {
+      "name": "clear-0054",
+      "offset": 84,
+      "width_bytes": 4,
+      "access": "read-only"
+    },
+    {
+      "name": "clear-0058",
+      "offset": 88,
+      "width_bytes": 4,
+      "access": "read-only"
+    },
+    {
+      "name": "clear-005c",
+      "offset": 92,
+      "width_bytes": 4,
+      "access": "read-only"
+    },
+    {
+      "name": "clear-0060",
+      "offset": 96,
+      "width_bytes": 4,
+      "access": "read-only"
+    },
+    {
+      "name": "clear-0064",
+      "offset": 100,
+      "width_bytes": 4,
+      "access": "read-only"
+    },
+    {
+      "name": "clear-0068",
+      "offset": 104,
+      "width_bytes": 4,
+      "access": "read-only"
+    },
+    {
+      "name": "enable",
+      "offset": 108,
+      "width_bytes": 4,
+      "access": "read-write",
+      "fields": [
+        {
+          "name": "enable",
+          "bit": 0,
+          "width_bits": 1
+        },
+        {
+          "name": "abort",
+          "bit": 1,
+          "width_bits": 1
+        }
+      ]
+    },
+    {
+      "name": "status",
+      "offset": 112,
+      "width_bytes": 4,
+      "access": "read-only",
+      "fields": [
+        {
+          "name": "activity",
+          "bit": 0,
+          "width_bits": 1
+        },
+        {
+          "name": "tx_fifo_not_full",
+          "bit": 1,
+          "width_bits": 1
+        },
+        {
+          "name": "tx_fifo_empty",
+          "bit": 2,
+          "width_bits": 1
+        },
+        {
+          "name": "rx_fifo_not_empty",
+          "bit": 3,
+          "width_bits": 1
+        },
+        {
+          "name": "rx_fifo_full",
+          "bit": 4,
+          "width_bits": 1
+        },
+        {
+          "name": "master_activity",
+          "bit": 5,
+          "width_bits": 1
+        }
+      ]
+    },
+    {
+      "name": "transmit_fifo_level",
+      "offset": 116,
+      "width_bytes": 4,
+      "access": "read-only"
+    },
+    {
+      "name": "receive_fifo_level",
+      "offset": 120,
+      "width_bytes": 4,
+      "access": "read-only"
+    },
+    {
+      "name": "config_007c",
+      "offset": 124,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "abort_source",
+      "offset": 128,
+      "width_bytes": 4,
+      "access": "read-only",
+      "fields": [
+        {
+          "name": "address_no_ack",
+          "bit": 0,
+          "width_bits": 1
+        },
+        {
+          "name": "user_abort",
+          "bit": 16,
+          "width_bits": 1
+        }
+      ]
+    },
+    {
+      "name": "config_0088",
+      "offset": 136,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "config_008c",
+      "offset": 140,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "config_0090",
+      "offset": 144,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "config_0094",
+      "offset": 148,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "config_0098",
+      "offset": 152,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "enable_status",
+      "offset": 156,
+      "width_bytes": 4,
+      "access": "read-only"
+    },
+    {
+      "name": "config_00a0",
+      "offset": 160,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "config_00a4",
+      "offset": 164,
+      "width_bytes": 4,
+      "access": "read-write"
+    }
+  ],
+  "parameters": [
+    "base",
+    "interrupt",
+    "fifo_depth",
+    "clock_hz",
+    "tick_hz"
+  ],
+  "evidence": [
+    {
+      "kind": "inferred",
+      "firmware_ids": [
+        "xt5-431",
+        "x100vi-131"
+      ]
+    }
+  ]
+}

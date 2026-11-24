@@ -1,0 +1,208 @@
+{
+  "$schema": "https://fujimod.com/schemas/ip.schema.json",
+  "schema": 1,
+  "id": "dwc3",
+  "device": null,
+  "registers": [
+    {
+      "name": "global_control_00",
+      "offset": 49408,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "global_control_04",
+      "offset": 49412,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "global_status",
+      "offset": 49424,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "device_control_00",
+      "offset": 49664,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "device_control_2c0",
+      "offset": 49856,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "event_buffer_address_low",
+      "offset": 50176,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "event_buffer_address_high",
+      "offset": 50180,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "event_buffer_size",
+      "offset": 50184,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "event_dequeue_pointer",
+      "offset": 50188,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "device_command_00",
+      "offset": 50944,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "device_control",
+      "offset": 50948,
+      "width_bytes": 4,
+      "access": "read-write",
+      "fields": [
+        {
+          "name": "link_request",
+          "bit": 5,
+          "width_bits": 4,
+          "values": [
+            {
+              "name": "no_action",
+              "value": 0
+            },
+            {
+              "name": "rx_detect",
+              "value": 5
+            }
+          ]
+        },
+        {
+          "name": "u1_u2_enable",
+          "bit": 9,
+          "width_bits": 4
+        },
+        {
+          "name": "core_soft_reset",
+          "bit": 30,
+          "width_bits": 1
+        },
+        {
+          "name": "run_stop",
+          "bit": 31,
+          "width_bits": 1
+        }
+      ]
+    },
+    {
+      "name": "device_status_08",
+      "offset": 50952,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "device_status",
+      "offset": 50956,
+      "width_bytes": 4,
+      "access": "read-only",
+      "fields": [
+        {
+          "name": "speed",
+          "bit": 0,
+          "width_bits": 4,
+          "values": [
+            {
+              "name": "high_speed",
+              "value": 0
+            },
+            {
+              "name": "super_speed",
+              "value": 4
+            }
+          ]
+        },
+        {
+          "name": "connected",
+          "bit": 18,
+          "width_bits": 2
+        },
+        {
+          "name": "running",
+          "bit": 22,
+          "width_bits": 1
+        }
+      ]
+    },
+    {
+      "name": "device_status_10",
+      "offset": 50960,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "device_status_14",
+      "offset": 50964,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "device_status_20",
+      "offset": 50976,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "device_endpoint_00",
+      "offset": 51200,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "device_endpoint_0c",
+      "offset": 51212,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "device_endpoint_last",
+      "offset": 51708,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "device_endpoint_next",
+      "offset": 51712,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "device_endpoint_page",
+      "offset": 52224,
+      "width_bytes": 4,
+      "access": "read-write"
+    }
+  ],
+  "parameters": [
+    "base",
+    "interrupts",
+    "command_ticks",
+    "transaction_ticks",
+    "speed"
+  ],
+  "evidence": [
+    {
+      "kind": "inferred",
+      "firmware_ids": [
+        "xt3-511"
+      ]
+    }
+  ]
+}

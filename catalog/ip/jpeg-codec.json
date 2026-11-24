@@ -1,0 +1,227 @@
+{
+  "$schema": "https://fujimod.com/schemas/ip.schema.json",
+  "schema": 1,
+  "id": "jpeg-codec",
+  "device": null,
+  "registers": [
+    {
+      "name": "control",
+      "offset": 0,
+      "width_bytes": 4,
+      "access": "read-write",
+      "fields": [
+        {
+          "name": "start",
+          "bit": 0,
+          "width_bits": 1
+        },
+        {
+          "name": "reset",
+          "bit": 8,
+          "width_bits": 1
+        }
+      ]
+    },
+    {
+      "name": "decoder_status",
+      "offset": 4,
+      "width_bytes": 4,
+      "access": "read-write",
+      "fields": [
+        {
+          "name": "finished",
+          "bit": 4,
+          "width_bits": 1
+        },
+        {
+          "name": "initialized",
+          "bit": 16,
+          "width_bits": 1
+        },
+        {
+          "name": "failed",
+          "bit": 17,
+          "width_bits": 1
+        }
+      ]
+    },
+    {
+      "name": "status",
+      "offset": 36,
+      "width_bytes": 4,
+      "access": "read-write",
+      "fields": [
+        {
+          "name": "ready",
+          "bit": 16,
+          "width_bits": 1
+        },
+        {
+          "name": "done",
+          "bit": 4,
+          "width_bits": 1
+        },
+        {
+          "name": "failed",
+          "bit": 17,
+          "width_bits": 1
+        }
+      ]
+    },
+    {
+      "name": "interrupt_mask",
+      "offset": 40,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "format",
+      "offset": 64,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "size",
+      "offset": 68,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "restart_interval",
+      "offset": 128,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "quantization_tables",
+      "offset": 140,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "stream_size",
+      "offset": 148,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "stream_size_high",
+      "offset": 152,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "output_scale",
+      "offset": 160,
+      "width_bytes": 4,
+      "access": "read-write",
+      "fields": [
+        {
+          "name": "scale",
+          "bit": 0,
+          "width_bits": 2
+        }
+      ]
+    },
+    {
+      "name": "output_address",
+      "offset": 256,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "output_limit",
+      "offset": 260,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "output_end",
+      "offset": 264,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "stream_address",
+      "offset": 268,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "stream_limit",
+      "offset": 272,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "stream_refill",
+      "offset": 280,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "output_crop",
+      "offset": 288,
+      "width_bytes": 4,
+      "access": "read-write",
+      "fields": [
+        {
+          "name": "crop_enable",
+          "bit": 0,
+          "width_bits": 1
+        }
+      ]
+    },
+    {
+      "name": "crop_x",
+      "offset": 292,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "crop_y",
+      "offset": 296,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "window_origin",
+      "offset": 300,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "pitch",
+      "offset": 304,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "source_high",
+      "offset": 320,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "destination_high",
+      "offset": 332,
+      "width_bytes": 4,
+      "access": "read-write"
+    }
+  ],
+  "parameters": [
+    "base",
+    "interrupt",
+    "run_ticks",
+    "register_contract"
+  ],
+  "evidence": [
+    {
+      "kind": "inferred",
+      "firmware_ids": [
+        "xt3-511",
+        "xt20-211"
+      ]
+    }
+  ]
+}
