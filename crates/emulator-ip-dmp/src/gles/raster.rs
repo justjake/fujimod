@@ -727,7 +727,7 @@ fn combine_state(
 ) -> Result<Vector, String> {
     // Each stage consumes and produces unsigned eight-bit components.
     let quantize = |v: Vector| v.map(|c| (c.clamp(0., 1.) * 255.).round() as i64);
-    let color = color.map(|c| (c.clamp(0., 1.) * 255.) as i64);
+    let color = color.map(|c| (c.clamp(0., 1.) * 255.).round() as i64);
     let textures = textures.map(quantize);
     let mut previous = color;
     for stage in state.combiners {
@@ -1048,6 +1048,21 @@ mod combiner_tests {
             let second = ((first + 32 - 128) * 4).clamp(0, 255);
             let out = combine(&e, [1.; 4], [[input as f32 / 255.; 4]; 2]).unwrap();
             assert_eq!(out.map(|v| (v * 255.).round() as i32), [second; 4]);
+        }
+    }
+
+    #[test]
+    fn primary_color_rounds_like_texture_inputs() {
+        // Default stages replace with source 0, the interpolated primary color.
+        let e = Engine::default();
+        let tiny = 1e-6;
+        for (primary, expected) in [
+            (15. / 255. - tiny, 15),
+            (15. / 255. + tiny, 15),
+            (1. - tiny, 255),
+        ] {
+            let out = combine(&e, [primary; 4], [[0.; 4]; 2]).unwrap();
+            assert_eq!(out.map(|v| (v * 255.).round() as i32), [expected; 4]);
         }
     }
 }
