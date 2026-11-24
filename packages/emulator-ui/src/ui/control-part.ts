@@ -39,13 +39,13 @@ export function controlPart(
     case 'shutter': {
       if (action !== undefined) throw invalid();
       if (stage !== undefined && stage !== 'half' && stage !== 'full') throw invalid();
-      if (stage !== undefined && !(`${stage}_press` in behavior.stages)) throw invalid();
+      if (stage !== undefined && !(`${stage}_press` in (behavior.stages ?? {}))) throw invalid();
       return { kind: 'shutter', marking: mark, ...(stage ? { stage } : {}) };
     }
     case 'pad':
       if (action === 'press') {
         if (!behavior.press && !control.pushable) throw invalid();
-      } else if (action !== undefined && !(action in behavior.directions)) throw invalid();
+      } else if (action !== undefined && !(action in (behavior.directions ?? {}))) throw invalid();
       if (action !== undefined && !['up', 'down', 'left', 'right', 'press'].includes(action))
         throw invalid();
       return {
@@ -76,12 +76,13 @@ export function controlPart(
           held: action as Extract<ControlPart, { kind: 'command' }>['held'],
         };
       }
-      if (action !== undefined && !behavior.motion.positions.some((p) => p.id === action))
+      if (action !== undefined && !(behavior.motion.positions ?? []).some((p) => p.id === action))
         throw invalid();
       return { kind: 'positions', marking: mark, position: action };
     case 'switch':
     case 'lever':
-      if (action !== undefined && !behavior.positions.some((p) => p.id === action)) throw invalid();
+      if (action !== undefined && !(behavior.positions ?? []).some((p) => p.id === action))
+        throw invalid();
       return { kind: 'positions', marking: mark, position: action };
     case 'touch':
       throw new Error('Touch controls have no physical face');
