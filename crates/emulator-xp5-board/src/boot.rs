@@ -483,11 +483,12 @@ pub fn windows(
         .windows
         .as_ref()
         .ok_or_else(|| format!("SoC profile {profile_id} declares no register windows"))?;
-    let drain = selection
+    let drains = selection
         .body
         .hardware
         .as_ref()
-        .and_then(|hardware| hardware.bus_drain.as_ref())
+        .map(|hardware| hardware.bus_drain.as_slice())
+        .filter(|drains| !drains.is_empty())
         .ok_or_else(|| {
             format!(
                 "body {} declares no bus-drain address the XP5 firmware reads",
@@ -498,12 +499,12 @@ pub fn windows(
         .iter()
         .map(|window| device_window(selection, window))
         .collect::<Result<Vec<_>, _>>()?;
-    devices.push(DeviceWindow {
+    devices.extend(drains.iter().map(|drain| DeviceWindow {
         base: drain.address,
         size: 4,
         kind: "unmodeled-bus-drain".into(),
         options: Default::default(),
-    });
+    }));
     let feedback = gpio_feedback(selection)?;
     if !feedback.is_empty() {
         let gpio = devices
@@ -837,7 +838,7 @@ mod bus_drain_tests {
     #[test]
     fn a_body_without_a_declared_drain_is_refused() {
         let mut selection = selection("xt5", "xt5-431");
-        selection.body.hardware.as_mut().unwrap().bus_drain = None;
+        selection.body.hardware.as_mut().unwrap().bus_drain.clear();
         let error = windows(&selection, "xp5").err().unwrap();
         assert!(error.contains("no bus-drain address"), "{error}");
     }

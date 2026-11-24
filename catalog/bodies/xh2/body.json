@@ -13,16 +13,18 @@
         ]
       }
     },
-    "bus_drain": {
-      "address": 2147483648,
-      "processor_ids": [
-        "core0",
-        "core1",
-        "core2",
-        "core3"
-      ],
-      "basis": "The stock firmware drains the bus with a discarded read of the end of its first memory region: helper 0x14d1c00 (slot 1, 0x14d1c44) and classifier 0x14d1a1c read 0x80000000, as the X-H2S helpers do. PROVISIONAL: the address is the firmware's region boundary, not a measured bus port."
-    }
+    "bus_drain": [
+      {
+        "address": 2147483648,
+        "processor_ids": [
+          "core0",
+          "core1",
+          "core2",
+          "core3"
+        ],
+        "basis": "The stock firmware drains the bus with a discarded read of the end of its first memory region: helper 0x14d1c00 (slot 1, 0x14d1c44) and classifier 0x14d1a1c read 0x80000000, as the X-H2S helpers do. PROVISIONAL: the address is the firmware's region boundary, not a measured bus port."
+      }
+    ]
   },
   "parts": [
     "x100vi-serial-nor"

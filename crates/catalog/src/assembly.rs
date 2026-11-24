@@ -35,9 +35,9 @@ pub struct BodyHardware {
     /// Body connections carrying thermal sensor voltages.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub thermal_connection_ids: Vec<String>,
-    /// Address the firmware reads to drain the bus past this body's DRAM map.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub bus_drain: Option<BusDrain>,
+    /// Addresses the firmware reads to drain the bus past this body's DRAM map.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub bus_drain: Vec<BusDrain>,
 }
 
 /// One discarded read the firmware issues to drain its write buffers: the
@@ -139,13 +139,17 @@ impl BodyHardware {
         for id in &self.thermal_connection_ids {
             connection(id)?;
         }
-        if let Some(drain) = &self.bus_drain {
+        let mut drain_addresses = std::collections::BTreeSet::new();
+        for drain in &self.bus_drain {
             if drain.address % 4 != 0
                 || drain.address.checked_add(4).is_none()
                 || drain.processor_ids.is_empty()
                 || drain.basis.is_empty()
             {
                 return Err(format!("body {} has an invalid bus drain", body.id));
+            }
+            if !drain_addresses.insert(drain.address) {
+                return Err(format!("body {} repeats a bus drain address", body.id));
             }
             let mut seen = std::collections::BTreeSet::new();
             for id in &drain.processor_ids {

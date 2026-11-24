@@ -467,21 +467,23 @@ pub fn assemble_with_starts(
         }
     }
     let (numerator, denominator) = (rate.numerator, rate.denominator);
-    if let Some(drain) = body
+    if let Some(drains) = body
         .hardware
         .as_ref()
-        .and_then(|hardware| hardware.bus_drain.as_ref())
+        .map(|hardware| hardware.bus_drain.as_slice())
     {
-        for id in &drain.processor_ids {
-            let core = *cores
-                .get(id.as_str())
-                .ok_or_else(|| format!("bus drain names absent core {id}"))?;
-            peripherals.push(factory::Peripheral {
-                core,
-                address: drain.address,
-                physical: drain.address,
-                size: 4,
-            });
+        for drain in drains {
+            for id in &drain.processor_ids {
+                let core = *cores
+                    .get(id.as_str())
+                    .ok_or_else(|| format!("bus drain names absent core {id}"))?;
+                peripherals.push(factory::Peripheral {
+                    core,
+                    address: drain.address,
+                    physical: drain.address,
+                    size: 4,
+                });
+            }
         }
     }
     let peripherals = peripheral_pages(&processors, peripherals)?;
@@ -970,7 +972,7 @@ mod tests {
             .as_mut()
             .unwrap()
             .bus_drain
-            .as_mut()
+            .first_mut()
             .unwrap()
             .processor_ids = vec!["core9".into()];
         let rate = RunInstructionRate {
