@@ -552,6 +552,30 @@ pub struct ImagingFramesInput {
     pub period_ticks: u64,
 }
 
+/// The XP4 still data path: a RAW DMA channel of the imaging receiver
+/// writes the scene as X-Trans samples, the still engine RECC develops the
+/// read-out from the declared RAW and RESZ scales the developed picture.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(deny_unknown_fields)]
+#[cfg_attr(feature = "schema", schemars(rename = "ResetXp4StillData"))]
+pub struct Xp4StillData {
+    /// Declared basis.
+    pub basis: String,
+    /// RAW DMA channel (0 or 1) whose frames carry the scene.
+    pub scene_channel: u8,
+    /// Optical black margins of a scene frame: samples on the left, lines
+    /// on top.
+    pub optical_black: (u32, u32),
+    /// Address of the still read-out's first sample, from which RECC
+    /// develops.
+    pub raw_address: u64,
+    /// Line pitch of the still read-out in bytes.
+    pub raw_pitch: u64,
+    /// X-Trans site (line, sample) of the still read-out's first sample.
+    pub raw_site: (u8, u8),
+}
+
 /// Instruction throughput of each core against the tick clock.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
@@ -1350,6 +1374,10 @@ pub struct HardwareReset {
     /// Declared still development of the read-out.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub still_development: Option<StillDevelopment>,
+    /// Declared XP4 still data path: the scene the still read-out carries
+    /// and the RAW the still engines develop.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub xp4_still_data: Option<Xp4StillData>,
     /// Declared calibration records in the body's flash.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub flash_calibration: Option<FlashCalibration>,

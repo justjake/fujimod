@@ -367,6 +367,17 @@
           ],
           "description": "Declared USB PHY programming-port state."
         },
+        "xp4_still_data": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ResetXp4StillData"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Declared XP4 still data path: the scene the still read-out carries\nand the RAW the still engines develop."
+        },
         "zone_statistics": {
           "anyOf": [
             {
@@ -3407,6 +3418,82 @@
         "name",
         "offset",
         "value"
+      ],
+      "type": "object"
+    },
+    "ResetXp4StillData": {
+      "additionalProperties": false,
+      "description": "The XP4 still data path: a RAW DMA channel of the imaging receiver\nwrites the scene as X-Trans samples, the still engine RECC develops the\nread-out from the declared RAW and RESZ scales the developed picture.",
+      "properties": {
+        "basis": {
+          "description": "Declared basis.",
+          "type": "string"
+        },
+        "optical_black": {
+          "description": "Optical black margins of a scene frame: samples on the left, lines\non top.",
+          "maxItems": 2,
+          "minItems": 2,
+          "prefixItems": [
+            {
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            }
+          ],
+          "type": "array"
+        },
+        "raw_address": {
+          "description": "Address of the still read-out's first sample, from which RECC\ndevelops.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "raw_pitch": {
+          "description": "Line pitch of the still read-out in bytes.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "raw_site": {
+          "description": "X-Trans site (line, sample) of the still read-out's first sample.",
+          "maxItems": 2,
+          "minItems": 2,
+          "prefixItems": [
+            {
+              "format": "uint8",
+              "maximum": 255,
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "format": "uint8",
+              "maximum": 255,
+              "minimum": 0,
+              "type": "integer"
+            }
+          ],
+          "type": "array"
+        },
+        "scene_channel": {
+          "description": "RAW DMA channel (0 or 1) whose frames carry the scene.",
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "basis",
+        "scene_channel",
+        "optical_black",
+        "raw_address",
+        "raw_pitch",
+        "raw_site"
       ],
       "type": "object"
     },

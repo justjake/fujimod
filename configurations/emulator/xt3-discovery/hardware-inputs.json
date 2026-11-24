@@ -177,6 +177,20 @@
       },
       "basis": "Declared catalog input."
     },
+    "xp4_still_data": {
+      "basis": "X-T3 5.11 still capture in emulation (drive S, one frame): the still handler enables RAW DMA channel 0, which reads out 6276 x 4212 16-bit samples at 0x473d8fd0, pitch 0x31e0. RECC's two band passes (mode 0x620000) read from 36 lines and 24 samples into it (source 0x47449380) and write the picture at 0x80000000, which RESZ scales to 6240 x 4160 at 0xc0000000 for the JPEG encoder. 36 and 24 are whole X-Trans tiles, so the band starts at the read-out's site (5, 1), the tile of the firmware's X-Trans table; the optical black margins (24 samples, 36 lines) are those offsets. Other drive modes read out into other buffers (bracketing alternates with 0x873d8fd0), which this declaration does not cover.",
+      "scene_channel": 0,
+      "optical_black": [
+        24,
+        36
+      ],
+      "raw_address": 1195216848,
+      "raw_pitch": 12768,
+      "raw_site": [
+        5,
+        1
+      ]
+    },
     "usb_cable": {
       "basis": "No VBUS input is known for the X-T3: its key table has no USB row and the stock USB task reads the condition register at 0xfff4a300, which follows the cable. Bank 15 pin 15 is a declared pin no stock key row reads; a host negotiates high speed.",
       "vbus_bank": 15,

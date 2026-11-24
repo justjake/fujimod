@@ -979,6 +979,7 @@ impl Devices {
         timing: (u64, u64, u64, u64),
         read_gate: (u16, u8),
         ibuf: Option<(u64, u32, u64, u64, u64, String)>,
+        raw_scene: Option<crate::definition::RawScene>,
         statistics_in_memory: bool,
     ) -> Result<(), String> {
         use fujimod_emulator_sensor_input::{sensor, slvs};
@@ -1016,6 +1017,18 @@ impl Devices {
             }),
             read_gate,
         );
+        let sensor = match raw_scene {
+            Some(_) if dma.is_none() => {
+                return Err("A RAW scene channel needs the RAW read-out DMA lines".into());
+            }
+            Some(raw) => sensor.with_scene_channel(sensor::SceneChannel {
+                channel: raw.channel,
+                site: raw.site,
+                optical_black: raw.optical_black,
+                scene: fujimod_emulator_imaging::frame::still_scene,
+            })?,
+            None => sensor,
+        };
         let command =
             sensor::Command::new(command_base, sensor.clone(), command_ticks)?.with_retained_words();
         let mut receiver = slvs::Receiver::new(
@@ -2284,12 +2297,12 @@ mod imaging_admission_tests {
     fn raw_dma_lines_are_two_valid_interrupts_or_absent() {
         for raw_dma in [Some(vec![97]), Some(vec![97, 98, 99]), Some(vec![97, 600])] {
             let mut devices = Devices::empty();
-            assert!(devices.imaging(map(raw_dma), (100, 50, 10, 8), (0x59, 4), None, false).is_err());
+            assert!(devices.imaging(map(raw_dma), (100, 50, 10, 8), (0x59, 4), None, None, false).is_err());
             assert!(devices.models.is_empty() && devices.windows.is_empty());
         }
         for raw_dma in [None, Some(vec![97, 98])] {
             let mut devices = Devices::empty();
-            devices.imaging(map(raw_dma), (100, 50, 10, 8), (0x59, 4), None, false).unwrap();
+            devices.imaging(map(raw_dma), (100, 50, 10, 8), (0x59, 4), None, None, false).unwrap();
             assert_eq!(devices.windows.len(), 2);
         }
     }
