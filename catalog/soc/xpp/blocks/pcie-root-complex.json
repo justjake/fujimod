@@ -4,5 +4,11 @@
   "id": "pcie-root-complex",
   "base": 4290772992,
   "size": 4096,
-  "kind": "address-window"
+  "kind": "address-window",
+  "device": {
+    "model": "register_block",
+    "idle_bits": [],
+    "basis": "Inferred PCIe root-port configuration space: GFX 50R 3.11 0xaa0bbc programs a DesignWare-style address-translation viewport at +0x900..+0x91c. 0xa9c44c configures it only before and after the link poll of 0xfff0a208 bit 7. Reset values are not measured and read 0.",
+    "order": 35
+  }
 }

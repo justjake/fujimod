@@ -17,7 +17,8 @@
 //! writes tuning fields from configuration bytes to +0x21c..+0x224, then
 //! polls +0x208 bit 7 for link up before it programs the PCIe controller. The
 //! words read back their last write, so the link never comes up: no PCIe
-//! endpoint is modeled and the driver takes its timeout path.
+//! endpoint is modeled and the driver takes its timeout path. GFX 50R 3.11
+//! 0xa9c44c runs the same wait and takes its link-down return.
 //!
 //! +0x08 holds the polarity of the sixteen external interrupt lines: bit n
 //! set inverts line n (0xc694d4). Line n is interrupt 151 + n (0xc5cfd4 maps

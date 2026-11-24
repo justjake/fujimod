@@ -21,6 +21,7 @@ fujimod-emulator-exr2-resources.workspace = true
 fujimod-emulator-ip-arm.workspace = true
 fujimod-emulator-storage.workspace = true
 fujimod-emulator-xp4-io.workspace = true
+fujimod-emulator-xp4-display.workspace = true
 fujimod-emulator-devices.workspace = true
 fujimod-emulator-parts-controls.workspace = true
 fujimod-emulator-graphics.workspace = true

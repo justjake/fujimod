@@ -12,11 +12,11 @@
       "words": [
         {
           "offset": 320,
-          "value": 64,
+          "value": 16,
           "name": "boot reason"
         }
       ],
-      "basis": "Declared discovery input: a zero-filled loader handoff in a free RAM gap, not a capture. The kernel copies 0x5c0 bytes from it. The boot-reason word at +0x140 is 0x40, which selects boot reason 1 from GFX 50R table 0x104e8dc. Its physical meaning is not measured. Kernel entry bypasses the boot ROM."
+      "basis": "Declared discovery input: a zero-filled loader handoff in a free RAM gap, not a capture. The kernel copies 0x5c0 bytes from it. The boot-reason word at +0x140 is 0x10, measured by the resident service in lab/gfx50r-sd-blink/runs/gfx50r-boot-inputs-1; it selects boot reason 2 from GFX 50R table 0x104e8dc. Kernel entry bypasses the boot ROM."
     },
     "flash_aperture": {
       "contents": "registered-update",
