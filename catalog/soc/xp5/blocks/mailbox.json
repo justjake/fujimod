@@ -8,11 +8,13 @@
   "interrupts": [
     {
       "output": "request",
-      "line": 55
+      "line": 55,
+      "core": "core4"
     },
     {
       "output": "control",
-      "line": 58
+      "line": 58,
+      "core": "core4"
     },
     {
       "output": "reply",
