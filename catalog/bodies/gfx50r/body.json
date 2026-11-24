@@ -25,7 +25,7 @@
               "model": "display",
               "picture_layout": null,
               "video_layout": null,
-              "basis": "GFX 50R 3.11 display control bit-16 handshake polled by 0xcf6adc. A falling request completes after the declared frame period; the delay is not measured. GFX 50R 3.11 configuration copy 0xcfc644 writes 0xfff66000, +0x4, +0x20 and +0xc8; the words read back their last write. Routine 0xcfd224 sets bit 28 of +0x2000 (0xfff66000) and polls until it reads clear, the same request as X-T20 2.11 0xca9df0; it is declared to complete at once, not measured.",
+              "basis": "GFX 50R 3.11 display control bit-16 handshake polled by 0xcf6adc. A falling request completes after the declared frame period; the delay is not measured. GFX 50R 3.11 configuration copy 0xcfc644 writes 0xfff66000, +0x4, +0x20 and +0xc8; the words read back their last write. Routine 0xcfd224 sets bit 28 of +0x2000 (0xfff66000) and polls until it reads clear, the same request as X-T20 2.11 0xca9df0; it is declared to complete at once, not measured. Scanout: emulated GFX 50R 3.11 at 700M instructions holds the X-T20 output 1 layout here: video format 0x333 at +0x010, size 0x3ff02ff (1024 x 768) at +0x02c, buffer +0x030, OSD layer 0 enabled at +0x200 with size +0x220 and buffer +0x230. Captured as host output 0; the period is a declared capture rate, not panel timing.",
               "frame_basis": "GFX 50R 3.11 timing banks at 0xfff5a000 and 0xfff65000; GIC routes from interrupt table 0xfb93ac rows 0x4c-0x4e and 0x49-0x4b. Frame period 16666 and stop delay 16 are declared guest ticks, not measured camera timing.",
               "period_ticks": 16666,
               "timing": {
@@ -43,6 +43,10 @@
                   "mask": 268435456
                 }
               ],
+              "scanout": {
+                "output": 0,
+                "period_ticks": 800000
+              },
               "order": 1
             }
           }
