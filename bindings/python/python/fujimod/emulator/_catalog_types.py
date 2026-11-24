@@ -693,6 +693,7 @@ class BlockRegister(TypedDict, total=False):
     offset: Required[int]
     reset: NotRequired[int | None]
     width_bytes: Required[int]
+    write_mask: NotRequired[int | None]
 
 
 class BlockRegisterBlockFrames(TypedDict, total=False):

@@ -1881,6 +1881,15 @@
           "maximum": 255,
           "minimum": 0,
           "type": "integer"
+        },
+        "write_mask": {
+          "description": "Bits a write may set, when the register accepts only some of them.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
         }
       },
       "required": [

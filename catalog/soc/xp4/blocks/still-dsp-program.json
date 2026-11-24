@@ -5,6 +5,22 @@
   "base": 4294224412,
   "size": 8,
   "kind": "address-window",
+  "registers": [
+    {
+      "name": "program",
+      "offset": 0,
+      "width_bytes": 4,
+      "write_mask": 4294967295,
+      "access": "read-write"
+    },
+    {
+      "name": "gates",
+      "offset": 4,
+      "width_bytes": 4,
+      "write_mask": 4294967295,
+      "access": "read-write"
+    }
+  ],
   "evidence": [
     {
       "kind": "located",

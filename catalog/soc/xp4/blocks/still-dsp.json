@@ -21,6 +21,230 @@
     ],
     "basis": "Still DSP host interface of X-T3 5.11. Step 0x06023380 (0x1e91288); the command start 0x1078650 registers the handler 0x10784c4 on interrupt row 0x72 of table 0x13e6454 ({145, 0xc0, 1, 1}: line 145). What the DSP program computes is not modeled, and the command time is a stand-in."
   },
+  "registers": [
+    {
+      "name": "run",
+      "offset": 0,
+      "width_bytes": 4,
+      "write_mask": 65537,
+      "access": "read-write",
+      "fields": [
+        {
+          "name": "run",
+          "bit": 0,
+          "width_bits": 1
+        },
+        {
+          "name": "ready",
+          "bit": 16,
+          "width_bits": 1
+        }
+      ]
+    },
+    {
+      "name": "mask",
+      "offset": 8,
+      "width_bytes": 4,
+      "write_mask": 252641295,
+      "access": "read-write"
+    },
+    {
+      "name": "word-0010",
+      "offset": 16,
+      "width_bytes": 4,
+      "write_mask": 4294967295,
+      "access": "read-write"
+    },
+    {
+      "name": "word-0014",
+      "offset": 20,
+      "width_bytes": 4,
+      "write_mask": 4294967295,
+      "access": "read-write"
+    },
+    {
+      "name": "word-0018",
+      "offset": 24,
+      "width_bytes": 4,
+      "write_mask": 4294967295,
+      "access": "read-write"
+    },
+    {
+      "name": "word-001c",
+      "offset": 28,
+      "width_bytes": 4,
+      "write_mask": 4294967295,
+      "access": "read-write"
+    },
+    {
+      "name": "mailbox-40",
+      "offset": 64,
+      "width_bytes": 1,
+      "write_mask": 255,
+      "access": "read-write"
+    },
+    {
+      "name": "mailbox-41",
+      "offset": 65,
+      "width_bytes": 1,
+      "write_mask": 255,
+      "access": "read-write"
+    },
+    {
+      "name": "mailbox-42",
+      "offset": 66,
+      "width_bytes": 1,
+      "write_mask": 255,
+      "access": "read-write"
+    },
+    {
+      "name": "mailbox-43",
+      "offset": 67,
+      "width_bytes": 1,
+      "write_mask": 255,
+      "access": "read-write"
+    },
+    {
+      "name": "mailbox-44",
+      "offset": 68,
+      "width_bytes": 1,
+      "write_mask": 255,
+      "access": "read-write"
+    },
+    {
+      "name": "mailbox-45",
+      "offset": 69,
+      "width_bytes": 1,
+      "write_mask": 255,
+      "access": "read-write"
+    },
+    {
+      "name": "mailbox-46",
+      "offset": 70,
+      "width_bytes": 1,
+      "write_mask": 255,
+      "access": "read-write"
+    },
+    {
+      "name": "mailbox-47",
+      "offset": 71,
+      "width_bytes": 1,
+      "write_mask": 255,
+      "access": "read-write"
+    },
+    {
+      "name": "mailbox-48",
+      "offset": 72,
+      "width_bytes": 1,
+      "write_mask": 255,
+      "access": "read-write"
+    },
+    {
+      "name": "mailbox-49",
+      "offset": 73,
+      "width_bytes": 1,
+      "write_mask": 255,
+      "access": "read-write"
+    },
+    {
+      "name": "mailbox-4a",
+      "offset": 74,
+      "width_bytes": 1,
+      "write_mask": 255,
+      "access": "read-write"
+    },
+    {
+      "name": "mailbox-4b",
+      "offset": 75,
+      "width_bytes": 1,
+      "write_mask": 255,
+      "access": "read-write"
+    },
+    {
+      "name": "mailbox-4c",
+      "offset": 76,
+      "width_bytes": 1,
+      "write_mask": 255,
+      "access": "read-write"
+    },
+    {
+      "name": "mailbox-4d",
+      "offset": 77,
+      "width_bytes": 1,
+      "write_mask": 255,
+      "access": "read-write"
+    },
+    {
+      "name": "mailbox-4e",
+      "offset": 78,
+      "width_bytes": 1,
+      "write_mask": 255,
+      "access": "read-write"
+    },
+    {
+      "name": "mailbox-4f",
+      "offset": 79,
+      "width_bytes": 1,
+      "write_mask": 255,
+      "access": "read-write"
+    },
+    {
+      "name": "mailbox-50",
+      "offset": 80,
+      "width_bytes": 1,
+      "write_mask": 255,
+      "access": "read-write"
+    },
+    {
+      "name": "mailbox-51",
+      "offset": 81,
+      "width_bytes": 1,
+      "write_mask": 255,
+      "access": "read-write"
+    },
+    {
+      "name": "mailbox-52",
+      "offset": 82,
+      "width_bytes": 1,
+      "write_mask": 255,
+      "access": "read-write"
+    },
+    {
+      "name": "mailbox-53",
+      "offset": 83,
+      "width_bytes": 1,
+      "write_mask": 255,
+      "access": "read-write"
+    },
+    {
+      "name": "mailbox-54",
+      "offset": 84,
+      "width_bytes": 1,
+      "write_mask": 255,
+      "access": "read-write"
+    },
+    {
+      "name": "mailbox-55",
+      "offset": 85,
+      "width_bytes": 1,
+      "write_mask": 255,
+      "access": "read-write"
+    },
+    {
+      "name": "mailbox-56",
+      "offset": 86,
+      "width_bytes": 1,
+      "write_mask": 255,
+      "access": "read-write"
+    },
+    {
+      "name": "mailbox-57",
+      "offset": 87,
+      "width_bytes": 1,
+      "write_mask": 255,
+      "access": "read-write"
+    }
+  ],
   "evidence": [
     {
       "kind": "located",

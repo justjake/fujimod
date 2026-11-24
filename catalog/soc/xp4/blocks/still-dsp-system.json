@@ -5,6 +5,22 @@
   "base": 4294224400,
   "size": 4,
   "kind": "address-window",
+  "registers": [
+    {
+      "name": "system",
+      "offset": 0,
+      "width_bytes": 4,
+      "write_mask": 15,
+      "access": "read-write",
+      "fields": [
+        {
+          "name": "halt",
+          "bit": 3,
+          "width_bits": 1
+        }
+      ]
+    }
+  ],
   "evidence": [
     {
       "kind": "located",

@@ -4723,6 +4723,7 @@ mod layout_tests {
             offset,
             width_bytes,
             reset: None,
+            write_mask: None,
             access: RegisterAccess::ReadWrite,
             fields: vec![],
         }

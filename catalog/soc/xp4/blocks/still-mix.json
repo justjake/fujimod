@@ -22,6 +22,271 @@
     ],
     "basis": "MIX still engine of X-T3 5.11. Step 0x06023371 (0x1e91480); 0x1dbca70 registers 0x1dbc484 on row 0xd ({140, 0xd0, 1, 1}). The 2 ms run time at 54 MHz is a stand-in."
   },
+  "registers": [
+    {
+      "name": "control",
+      "offset": 0,
+      "width_bytes": 4,
+      "write_mask": 1,
+      "access": "read-write",
+      "fields": [
+        {
+          "name": "ready",
+          "bit": 0,
+          "width_bits": 1
+        }
+      ]
+    },
+    {
+      "name": "start",
+      "offset": 4,
+      "width_bytes": 4,
+      "write_mask": 1,
+      "access": "read-write",
+      "fields": [
+        {
+          "name": "start",
+          "bit": 0,
+          "width_bits": 1
+        }
+      ]
+    },
+    {
+      "name": "word-0008",
+      "offset": 8,
+      "width_bytes": 4,
+      "write_mask": 50551,
+      "access": "read-write"
+    },
+    {
+      "name": "word-0010",
+      "offset": 16,
+      "width_bytes": 4,
+      "write_mask": 4294967295,
+      "access": "read-write"
+    },
+    {
+      "name": "word-0014",
+      "offset": 20,
+      "width_bytes": 4,
+      "write_mask": 32767,
+      "access": "read-write"
+    },
+    {
+      "name": "word-0018",
+      "offset": 24,
+      "width_bytes": 4,
+      "write_mask": 4294967295,
+      "access": "read-write"
+    },
+    {
+      "name": "word-001c",
+      "offset": 28,
+      "width_bytes": 4,
+      "write_mask": 32767,
+      "access": "read-write"
+    },
+    {
+      "name": "word-0020",
+      "offset": 32,
+      "width_bytes": 4,
+      "write_mask": 4294967295,
+      "access": "read-write"
+    },
+    {
+      "name": "word-0024",
+      "offset": 36,
+      "width_bytes": 4,
+      "write_mask": 32767,
+      "access": "read-write"
+    },
+    {
+      "name": "word-0028",
+      "offset": 40,
+      "width_bytes": 4,
+      "write_mask": 4294967295,
+      "access": "read-write"
+    },
+    {
+      "name": "word-002c",
+      "offset": 44,
+      "width_bytes": 4,
+      "write_mask": 32767,
+      "access": "read-write"
+    },
+    {
+      "name": "word-0030",
+      "offset": 48,
+      "width_bytes": 4,
+      "write_mask": 4294967295,
+      "access": "read-write"
+    },
+    {
+      "name": "word-0034",
+      "offset": 52,
+      "width_bytes": 4,
+      "write_mask": 32767,
+      "access": "read-write"
+    },
+    {
+      "name": "word-0038",
+      "offset": 56,
+      "width_bytes": 4,
+      "write_mask": 4294967295,
+      "access": "read-write"
+    },
+    {
+      "name": "word-003c",
+      "offset": 60,
+      "width_bytes": 4,
+      "write_mask": 4294967295,
+      "access": "read-write"
+    },
+    {
+      "name": "word-0040",
+      "offset": 64,
+      "width_bytes": 4,
+      "write_mask": 32767,
+      "access": "read-write"
+    },
+    {
+      "name": "word-0044",
+      "offset": 68,
+      "width_bytes": 4,
+      "write_mask": 1073692671,
+      "access": "read-write"
+    },
+    {
+      "name": "word-0048",
+      "offset": 72,
+      "width_bytes": 4,
+      "write_mask": 1023,
+      "access": "read-write"
+    },
+    {
+      "name": "word-0054",
+      "offset": 84,
+      "width_bytes": 4,
+      "write_mask": 67044351,
+      "access": "read-write"
+    },
+    {
+      "name": "word-0058",
+      "offset": 88,
+      "width_bytes": 4,
+      "write_mask": 67044351,
+      "access": "read-write"
+    },
+    {
+      "name": "word-0060",
+      "offset": 96,
+      "width_bytes": 4,
+      "write_mask": 4294967295,
+      "access": "read-write"
+    },
+    {
+      "name": "word-0064",
+      "offset": 100,
+      "width_bytes": 4,
+      "write_mask": 2097151,
+      "access": "read-write"
+    },
+    {
+      "name": "word-0068",
+      "offset": 104,
+      "width_bytes": 4,
+      "write_mask": 2147434495,
+      "access": "read-write"
+    },
+    {
+      "name": "word-006c",
+      "offset": 108,
+      "width_bytes": 4,
+      "write_mask": 2147434495,
+      "access": "read-write"
+    },
+    {
+      "name": "word-0070",
+      "offset": 112,
+      "width_bytes": 4,
+      "write_mask": 2147434495,
+      "access": "read-write"
+    },
+    {
+      "name": "word-0074",
+      "offset": 116,
+      "width_bytes": 4,
+      "write_mask": 2147434495,
+      "access": "read-write"
+    },
+    {
+      "name": "word-0078",
+      "offset": 120,
+      "width_bytes": 4,
+      "write_mask": 8388607,
+      "access": "read-write"
+    },
+    {
+      "name": "word-007c",
+      "offset": 124,
+      "width_bytes": 4,
+      "write_mask": 67045375,
+      "access": "read-write"
+    },
+    {
+      "name": "word-0080",
+      "offset": 128,
+      "width_bytes": 4,
+      "write_mask": 3843,
+      "access": "read-write"
+    },
+    {
+      "name": "word-0090",
+      "offset": 144,
+      "width_bytes": 4,
+      "write_mask": 1912566271,
+      "access": "read-write"
+    },
+    {
+      "name": "word-0094",
+      "offset": 148,
+      "width_bytes": 4,
+      "write_mask": 28927,
+      "access": "read-write"
+    },
+    {
+      "name": "status",
+      "offset": 152,
+      "width_bytes": 4,
+      "access": "read-only",
+      "fields": [
+        {
+          "name": "idle-2",
+          "bit": 2,
+          "width_bits": 1
+        },
+        {
+          "name": "idle-18",
+          "bit": 18,
+          "width_bits": 1
+        }
+      ]
+    },
+    {
+      "name": "acknowledge",
+      "offset": 156,
+      "width_bytes": 4,
+      "write_mask": 1,
+      "access": "read-write",
+      "fields": [
+        {
+          "name": "acknowledge",
+          "bit": 0,
+          "width_bits": 1
+        }
+      ]
+    }
+  ],
   "evidence": [
     {
       "kind": "located",
