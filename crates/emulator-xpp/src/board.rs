@@ -344,6 +344,9 @@ pub enum Model {
     DisplayFrames {
         irqs: Vec<u32>,
         period_ticks: u64,
+        /// Two timing banks and the stop delay; the IRQs are then three per bank.
+        #[serde(default)]
+        timing: Option<([u64; 2], u64)>,
     },
     /// The imaging control page, less the frame interrupt words that a
     /// frame-sync node at `hole` owns.
@@ -846,6 +849,13 @@ pub fn build(
                     options,
                     contacts.iter().map(|(_, l)| l.clone()).collect(),
                 )?;
+                if gates.is_some() {
+                    return Err("Repeated X-Processor Pro reset/gate bank".into());
+                }
+                let lines = (0..3)
+                    .map(|channel| model.sd_reset(channel))
+                    .collect::<Result<Vec<_>, _>>()?;
+                gates = Some((lines, model.external_lines()));
                 let id = devices.register_windows(windows, Box::new(model))?;
                 for (name, level) in contacts {
                     inputs.push((name, level, id));
@@ -1300,8 +1310,35 @@ pub fn build(
                 };
                 devices.register(base, size, Box::new(output))?
             }
-            Model::DisplayFrames { irqs, period_ticks } => {
-                devices.attach(Box::new(display::FrameClock::new(irqs, period_ticks)?))
+            Model::DisplayFrames {
+                irqs,
+                period_ticks,
+                timing: None,
+            } => devices.attach(Box::new(display::FrameClock::new(irqs, period_ticks)?)),
+            Model::DisplayFrames {
+                irqs,
+                period_ticks,
+                timing: Some((bases, stop_ticks)),
+            } => {
+                let routes: Vec<u8> = irqs
+                    .iter()
+                    .map(|&n| u8::try_from(n).map_err(|_| "Display phase IRQ exceeds 255"))
+                    .collect::<Result<_, _>>()?;
+                let routes: [[u8; 3]; 2] = routes
+                    .chunks(3)
+                    .map(|r| r.try_into().map_err(|_| "Display needs three IRQs per bank"))
+                    .collect::<Result<Vec<_>, _>>()?
+                    .try_into()
+                    .map_err(|_| "Display needs two timing banks")?;
+                let model = fujimod_emulator_xp4_display::timing::XppTiming::new(
+                    bases, routes, period_ticks, stop_ticks,
+                )?;
+                let mappings = model
+                    .windows()
+                    .into_iter()
+                    .map(|(lo, hi)| Mapping { base: lo, size: hi - lo })
+                    .collect();
+                devices.register_windows(mappings, Box::new(model))?
             }
             Model::ImagingControl {
                 base,
