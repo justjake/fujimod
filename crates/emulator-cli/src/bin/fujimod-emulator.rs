@@ -817,9 +817,11 @@ fn run_window(mut options: Boot, resolved: ResolvedConfiguration) -> Result<Outc
     let selection = resolved.reference.clone();
     let camera = boot::open_request(resolved, request)?;
     let room = fujimod_emulator_gui::Room::loopback()?;
+    eprintln!("FUJIMOD share link: {}", room.endpoint().url);
     let mut window = fujimod_emulator_gui::launch::connect(&room.endpoint().url)?;
+    let ticks = camera.ticks_per_second;
     let report = fujimod_emulator_gui::serve(
-        fujimod_emulator_gui::Live::new(camera, selection),
+        XppPlug::new(fujimod_emulator_gui::Live::new(camera, selection), ticks)?,
         room,
         &mut || window.open(),
     )?;
@@ -829,6 +831,131 @@ fn run_window(mut options: Boot, resolved: ResolvedConfiguration) -> Result<Outc
         serde_json::to_string_pretty(&report).map_err(|e| e.to_string())?
     );
     Ok(Outcome { success: true })
+}
+
+/// Test only: `FUJIMOD_XPP_PLUG="<seconds>;<bank>.<pin>;<bank>.<pin>,..."` holds
+/// the listed GPIO inputs high from the start and plugs the USB cable (VBUS
+/// pin and DWC3 link) after `seconds` of guest time.
+struct XppPlug<R> {
+    run: R,
+    at: Option<u64>,
+    vbus: (usize, usize),
+    /// `FUJIMOD_XPP_NO_APO=1`: GFX 50R 3.11 only. The auto power-off timer
+    /// callback 0x17ae62c (posts UI event 0xa002) returns at once, as the
+    /// X-Pro1 harness's `no_apo`. Applied when segment 6 holds its stock code.
+    no_apo: bool,
+    /// `FUJIMOD_XPP_CLEAR_SLOT=1`: GFX 50R 3.11 only. Zero the command
+    /// callback slot 0x10e27d4 once, after the boot installer stores the stock
+    /// handler, as on a camera booted with configuration 0xf7=0.
+    clear_slot: bool,
+    /// `FUJIMOD_XPP_RAM_F7=1`: GFX 50R 3.11 only. Until the plug, keep live
+    /// configuration RAM 0xf7 at 1 once the boot loader set its base, so a flash
+    /// image with stored 0xf7=0 still enumerates ff80. Storage is not touched.
+    ram_f7: bool,
+}
+const CONFIGURATION_POINTER: u64 = 0x1108990;
+const CONFIGURATION_BASE: u32 = 0x3268000;
+const CALLBACK_SLOT: u64 = 0x10e27d4;
+const APO_CALLBACK: u64 = 0x17ae62c;
+const APO_STOCK: [u8; 4] = [0x00, 0x48, 0x2d, 0xe9];
+const BX_LR: [u8; 4] = [0x1e, 0xff, 0x2f, 0xe1];
+impl<R: fujimod_emulator_gui::Run> XppPlug<R> {
+    fn new(mut run: R, ticks: u64) -> Result<Self, String> {
+        let Ok(spec) = std::env::var("FUJIMOD_XPP_PLUG") else {
+            return Ok(Self { run, at: None, vbus: (0, 0), no_apo: false, clear_slot: false, ram_f7: false });
+        };
+        let pin = |s: &str| -> Result<(usize, usize), String> {
+            let (b, p) = s.split_once('.').ok_or("pin is <bank>.<pin>")?;
+            Ok((b.parse().map_err(|_| "bank")?, p.parse().map_err(|_| "pin")?))
+        };
+        let mut parts = spec.split(';');
+        let seconds: f64 = parts.next().unwrap_or("").parse().map_err(|_| "plug seconds")?;
+        let vbus = pin(parts.next().ok_or("VBUS pin")?)?;
+        for high in parts.next().unwrap_or("").split(',').filter(|s| !s.is_empty()) {
+            let (bank, p) = pin(high)?;
+            Self::gpio(&mut run, bank, p, true)?;
+        }
+        let at = run.session().board.now() + (seconds * ticks as f64) as u64;
+        let no_apo = std::env::var("FUJIMOD_XPP_NO_APO").is_ok_and(|v| v == "1");
+        let clear_slot = std::env::var("FUJIMOD_XPP_CLEAR_SLOT").is_ok_and(|v| v == "1");
+        let ram_f7 = std::env::var("FUJIMOD_XPP_RAM_F7").is_ok_and(|v| v == "1");
+        Ok(Self { run, at: Some(at), vbus, no_apo, clear_slot, ram_f7 })
+    }
+    fn gpio(run: &mut R, bank: usize, pin: usize, high: bool) -> Result<(), String> {
+        let session = run.session_mut();
+        let id = session.node("gpio")?;
+        session
+            .board
+            .with_device_inputs::<fujimod_emulator_ip::socionext::gpio::Gpio, _>(id, |g, _| {
+                g.set_input(bank, pin, high)
+            })
+    }
+}
+impl<R: fujimod_emulator_gui::Run> fujimod_emulator_gui::Run for XppPlug<R> {
+    fn session(&self) -> &fujimod_emulator_session::Session {
+        self.run.session()
+    }
+    fn session_mut(&mut self) -> &mut fujimod_emulator_session::Session {
+        self.run.session_mut()
+    }
+    fn step(&mut self) -> Result<(), String> {
+        if self.no_apo {
+            let board = &self.run.session().board;
+            let mut word = [0; 4];
+            board.inspect_physical(APO_CALLBACK, &mut word)?;
+            if word == APO_STOCK {
+                board.write_physical(APO_CALLBACK, &BX_LR)?;
+                eprintln!("FUJIMOD XPP auto power-off callback disabled");
+            }
+        }
+        if self.ram_f7 && self.at.is_some() {
+            let board = &self.run.session().board;
+            let mut word = [0; 4];
+            board.inspect_physical(CONFIGURATION_POINTER, &mut word)?;
+            if u32::from_le_bytes(word) == CONFIGURATION_BASE {
+                let flag = u64::from(CONFIGURATION_BASE) + 0xf7;
+                let mut byte = [0; 1];
+                board.inspect_physical(flag, &mut byte)?;
+                if byte != [1] {
+                    board.write_physical(flag, &[1])?;
+                    eprintln!("FUJIMOD XPP live configuration 0xf7 set to 1 (was {})", byte[0]);
+                }
+            }
+        }
+        if self.clear_slot {
+            let board = &self.run.session().board;
+            let mut word = [0; 4];
+            board.inspect_physical(CALLBACK_SLOT, &mut word)?;
+            if word != [0; 4] {
+                board.write_physical(CALLBACK_SLOT, &[0; 4])?;
+                self.clear_slot = false;
+                eprintln!("FUJIMOD XPP command callback slot cleared (was {:#x})", u32::from_le_bytes(word));
+            }
+        }
+        if self.at.is_some_and(|at| self.run.session().board.now() >= at) {
+            self.at = None;
+            let (bank, pin) = self.vbus;
+            Self::gpio(&mut self.run, bank, pin, true)?;
+            let session = self.run.session_mut();
+            let id = session.node("usb")?;
+            session
+                .board
+                .with_device_inputs::<fujimod_emulator_ip::usb::dwc3::Dwc3, _>(id, |u, now| {
+                    u.link(now, true)
+                })?;
+            eprintln!("FUJIMOD XPP USB cable plugged");
+        }
+        self.run.step()
+    }
+    fn settle(&mut self) -> Result<(), String> {
+        self.run.settle()
+    }
+    fn frames(&mut self) -> Result<Vec<fujimod_emulator_devices::graphics::scanout::Frame>, String> {
+        self.run.frames()
+    }
+    fn finish(self) -> Result<serde_json::Value, String> {
+        self.run.finish()
+    }
 }
 
 fn run() -> Result<Outcome, String> {

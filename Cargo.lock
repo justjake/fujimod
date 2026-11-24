@@ -2391,9 +2391,12 @@ dependencies = [
  "fujimod-emulator-boot",
  "fujimod-emulator-controls",
  "fujimod-emulator-cpu",
+ "fujimod-emulator-devices",
  "fujimod-emulator-exr2-board",
  "fujimod-emulator-gui",
+ "fujimod-emulator-ip",
  "fujimod-emulator-models",
+ "fujimod-emulator-session",
  "fujimod-workspace-hack",
  "serde_json",
 ]
