@@ -48,6 +48,9 @@ fn reference_and_run_configuration_documents_validate_generated_schemas() {
     files.extend(json_files(&package.join("../../configurations/emulator")));
 
     for path in files {
+        if path.file_name().and_then(|name| name.to_str()) == Some("osd-anchors.json") {
+            continue;
+        }
         let document: Value = serde_json::from_slice(&fs::read(&path).expect("catalog document"))
             .unwrap_or_else(|error| panic!("{}: {error}", path.display()));
         let schema_reference = document

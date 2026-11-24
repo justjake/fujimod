@@ -3356,6 +3356,7 @@ pub struct ReferenceCatalog {
     ui_setting_names: BTreeMap<String, crate::ui_setting_names::UiSettingNames>,
     ui_event_codes: BTreeMap<String, crate::ui_event_codes::UiEventCodes>,
     osd_items: BTreeMap<String, crate::osd_items::OsdItems>,
+    stock_artwork_colors: BTreeMap<String, serde_json::Value>,
     bulk: BTreeMap<String, fujimod_catalog_bulk::FirmwareBulk>,
     execution: BTreeMap<String, fujimod_catalog_execution::FirmwareExecution>,
     nand_boot: BTreeMap<String, crate::nand_boot::FirmwareNandBoot>,
@@ -3406,6 +3407,10 @@ impl ReferenceCatalog {
             catalog.insert_document(ReferenceKind::of_boot_rom_file(&path)?, &bytes, &path)?;
         }
         for (path, bytes) in read_json_files(&root.join("firmware"))? {
+            // Hand-authored locator inputs are not catalog documents.
+            if path.file_name().and_then(|name| name.to_str()) == Some("osd-anchors.json") {
+                continue;
+            }
             catalog.insert_document(ReferenceKind::of_firmware_file(&path)?, &bytes, &path)?;
         }
         catalog.validate_references()?;
@@ -3613,6 +3618,11 @@ impl ReferenceCatalog {
         self.osd_items.get(firmware_id)
     }
 
+    /// Return the generated stock artwork palette and place colors for a firmware release.
+    pub fn stock_artwork_colors(&self, firmware_id: &str) -> Option<&serde_json::Value> {
+        self.stock_artwork_colors.get(firmware_id)
+    }
+
     /// Return the bulk profile for a firmware release.
     pub fn bulk(&self, firmware_id: &str) -> Option<&fujimod_catalog_bulk::FirmwareBulk> {
         self.bulk.get(firmware_id)
@@ -3749,6 +3759,11 @@ impl ReferenceCatalog {
                 let value: crate::osd_items::OsdItems = decode(bytes, path)?;
                 value.validate()?;
                 insert_unique(&mut self.osd_items, value.firmware_id.clone(), value, path)
+            }
+            ReferenceKind::StockArtworkColors => {
+                let value: serde_json::Value = decode(bytes, path)?;
+                let firmware_id = document_string(&value, "firmware_id", path)?;
+                insert_unique(&mut self.stock_artwork_colors, firmware_id, value, path)
             }
             ReferenceKind::FirstStart => {
                 let value: crate::first_start::FirstStartMenu = decode(bytes, path)?;
@@ -3957,6 +3972,31 @@ impl ReferenceCatalog {
             if update != Some(osd_items.firmware_sha256.as_str()) {
                 return Err(format!(
                     "OSD items differ from update identity {firmware_id}"
+                ));
+            }
+        }
+        for (firmware_id, colors) in &self.stock_artwork_colors {
+            let update = self
+                .firmwares
+                .get(firmware_id)
+                .and_then(|firmware| {
+                    firmware
+                        .update
+                        .as_ref()
+                        .map(|update| update.sha256.as_str())
+                })
+                .or_else(|| {
+                    self.firmware_versions
+                        .iter()
+                        .find(|release| &release.firmware_id == firmware_id)
+                        .map(|release| release.update_sha256.as_str())
+                });
+            let sha256 = colors
+                .get("firmware_sha256")
+                .and_then(serde_json::Value::as_str);
+            if update != sha256 {
+                return Err(format!(
+                    "stock artwork colors differ from update identity {firmware_id}"
                 ));
             }
         }
@@ -4886,6 +4926,7 @@ enum ReferenceKind {
     UiSettingNames,
     UiEventCodes,
     OsdItems,
+    StockArtworkColors,
     Bulk,
     Execution,
     NandBoot,
@@ -4928,6 +4969,7 @@ impl ReferenceKind {
             Some("ui-setting-names.generated.json") => Ok(Self::UiSettingNames),
             Some("ui-event-codes.generated.json") => Ok(Self::UiEventCodes),
             Some("osd-items.generated.json") => Ok(Self::OsdItems),
+            Some("stock-artwork-colors.generated.json") => Ok(Self::StockArtworkColors),
             Some("bulk.generated.json") => Ok(Self::Bulk),
             Some("execution.generated.json") => Ok(Self::Execution),
             Some("sd-boot-v2-autostart.generated.json") => Ok(Self::NandBoot),
@@ -5455,5 +5497,19 @@ mod osd_items_tests {
         assert_eq!(osd_items.scene_variants.len(), 40);
         assert_eq!(osd_items.sprite_records.len(), 6_190);
         assert_eq!(osd_items.disp_custom_selectors.len(), 24);
+    }
+}
+
+#[cfg(test)]
+mod stock_artwork_colors_tests {
+    use super::*;
+
+    #[test]
+    fn bundles_x70_palette_and_artwork_places() {
+        let catalog = ReferenceCatalog::bundled().unwrap();
+        let colors = catalog.stock_artwork_colors("x70-110").unwrap();
+        assert_eq!(colors["palette"].as_array().unwrap().len(), 170);
+        assert_eq!(colors["places"].as_array().unwrap().len(), 3);
+        assert_eq!(colors["places"][0]["name"], "q_tile_value");
     }
 }
