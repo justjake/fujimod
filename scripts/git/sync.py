@@ -237,22 +237,23 @@ def replay(
     """
     head = onto
     kept = dropped = 0
+    pins: dict[tuple[str, str], str | None] = {}
     for commit in commits:
         parents = repository.output("rev-list", "--parents", "-n", "1", commit).split()[1:]
         if len(parents) != 1:
             raise Failure(f"{commit[:10]} is a merge; rebase it by hand")
+        moved = moved_pins(repository, commit, parents[0], pins)
         merged = repository.git(
             "merge-tree", "--write-tree", "--name-only", "--no-messages",
             f"--merge-base={parents[0]}", head, commit, check=False,
         )
+        lines = merged.stdout.strip().splitlines()
         if merged.returncode:
-            lines = merged.stdout.strip().splitlines()
-            subject = repository.output("log", "-1", "--format=%s", commit)
-            raise Failure(
-                f"{commit[:10]} {subject!r} does not apply onto {onto[:10]}; nothing was "
-                "changed. Conflicting files: " + ", ".join(lines[1:] or ["(unknown)"])
+            tree = resolve_pinned_submodules(
+                repository, onto, commit, parents[0], lines, pins
             )
-        tree = merged.stdout.split()[0]
+        else:
+            tree = tree_with_pins(repository, lines[0], moved) if moved else lines[0]
         if tree == repository.output("rev-parse", f"{head}^{{tree}}"):
             dropped += 1
             continue
@@ -271,6 +272,165 @@ def replay(
             "commit-tree", tree, "-p", head, env=env, input=message
         ).stdout.strip()
     return head, kept, dropped
+
+
+def patch_id(repository: Repository, commit: str) -> str | None:
+    """The stable patch id of one commit, or None when it carries no diff."""
+    shown = repository.git(
+        "show", "--no-color", "--no-ext-diff", "--format=", commit, check=False
+    )
+    if shown.returncode or not shown.stdout.strip():
+        return None
+    shown = shown.stdout
+    identified = subprocess.run(
+        ["git", "patch-id", "--stable"],
+        cwd=repository.root,
+        input=shown,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if identified.returncode or not identified.stdout.strip():
+        return None
+    return identified.stdout.split()[0]
+
+
+def rebased_pin(
+    submodule: Repository, pinned: str, cache: dict[tuple[str, str], str | None]
+) -> str | None:
+    """The submodule commit with ``pinned``'s patch id on its current branch."""
+    key = (str(submodule.root), pinned)
+    if key in cache:
+        return cache[key]
+    found = None
+    if submodule.git("cat-file", "-e", f"{pinned}^{{commit}}", check=False).returncode == 0:
+        if submodule.git(
+            "merge-base", "--is-ancestor", pinned, "HEAD", check=False
+        ).returncode == 0:
+            found = pinned
+    if found is None:
+        wanted = patch_id(submodule, pinned)
+        if wanted is not None:
+            subject = submodule.output("log", "-1", "--format=%s", pinned)
+            candidates = submodule.git(
+                "log", "--format=%H", "--fixed-strings", "--grep", subject, "HEAD",
+                check=False,
+            ).stdout.split()
+            for candidate in candidates:
+                if patch_id(submodule, candidate) == wanted:
+                    found = candidate
+                    break
+    cache[key] = found
+    return found
+
+
+def moved_pins(
+    repository: Repository,
+    commit: str,
+    parent: str,
+    cache: dict[tuple[str, str], str | None],
+) -> dict[str, str]:
+    """Pins this commit moves to commits no longer on the submodule's branch.
+
+    A submodule checked out on a branch is rebased first; its old commits have
+    new twins. A pin the commit moves is rewritten to the twin with the same
+    patch id. A detached submodule follows the superproject's pin and is left
+    alone.
+    """
+    targets: dict[str, str] = {}
+    for path in repository.names("diff", "--no-renames", parent, commit):
+        old = entry(repository, parent, path)
+        new = entry(repository, commit, path)
+        if (
+            old is None or new is None
+            or old[0] != GITLINK or new[0] != GITLINK
+            or old[1] == new[1]
+        ):
+            continue
+        root = Path(repository.root, path)
+        if not Path(root, ".git").exists():
+            continue
+        submodule = Repository(root)
+        if submodule.git("symbolic-ref", "-q", "HEAD", check=False).returncode:
+            continue
+        target = rebased_pin(submodule, new[1], cache)
+        if target is None:
+            raise Failure(
+                f"{commit[:10]} pins {path} at {new[1]}, but no commit on its branch "
+                "has the same patch id; rebase the submodule first, then this branch"
+            )
+        if target != new[1]:
+            targets[path] = target
+    return targets
+
+
+def tree_with_pins(
+    repository: Repository, tree: str, pins: dict[str, str]
+) -> str:
+    """``tree`` with submodule gitlinks replaced, edited in a private index."""
+    with tempfile.TemporaryDirectory(prefix="fujimod-rebase-index-") as scratch:
+        env = dict(os.environ, GIT_INDEX_FILE=str(Path(scratch, "index")))
+        repository.git("read-tree", tree, env=env)
+        for path, pinned in pins.items():
+            repository.git(
+                "update-index", "--add", "--cacheinfo",
+                f"{GITLINK},{pinned},{path}", env=env,
+            )
+        return repository.git("write-tree", env=env).stdout.strip()
+
+
+def resolve_pinned_submodules(
+    repository: Repository,
+    onto: str,
+    commit: str,
+    parent: str,
+    merged: list[str],
+    cache: dict[tuple[str, str], str | None],
+) -> str:
+    """The merged tree of a commit whose only conflicts are submodule pins.
+
+    A pin the commit moves is mapped to the rebased submodule commit with the
+    same patch id; a pin it leaves alone keeps the new base's value. Anything
+    else is a conflict someone has to resolve.
+    """
+    subject = repository.output("log", "-1", "--format=%s", commit)
+    tree = merged[0] if merged else ""
+    conflicts = merged[1:]
+    if not conflicts:
+        raise Failure(
+            f"{commit[:10]} {subject!r} does not apply onto {onto[:10]}; nothing was "
+            "changed. Conflicting files: (unknown)"
+        )
+    resolved: dict[str, str] = {}
+    for path in conflicts:
+        old = entry(repository, parent, path)
+        new = entry(repository, commit, path)
+        if old is None or old[0] != GITLINK or (new is not None and new[0] != GITLINK):
+            raise Failure(
+                f"{commit[:10]} {subject!r} does not apply onto {onto[:10]}; nothing was "
+                "changed. Conflicting files: " + ", ".join(conflicts)
+            )
+        if new is None:
+            raise Failure(
+                f"{commit[:10]} deletes the pin {path}; rebase that change by hand"
+            )
+        if new[1] == old[1]:
+            # The commit leaves this pin alone, so the new base's pin stands.
+            continue
+        submodule = Repository(Path(repository.root, path))
+        target = rebased_pin(submodule, new[1], cache)
+        if target is None:
+            raise Failure(
+                f"{commit[:10]} pins {path} at {new[1]}, but no commit on its branch "
+                "has the same patch id; rebase the submodule first, then this branch"
+            )
+        resolved[path] = target
+    if not tree:
+        raise Failure(
+            f"{commit[:10]} {subject!r} does not apply onto {onto[:10]}; nothing was "
+            "changed. Conflicting files: " + ", ".join(conflicts)
+        )
+    return tree_with_pins(repository, tree, resolved)
 
 
 def rebase(repository: Repository, base: str) -> Rebased:

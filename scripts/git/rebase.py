@@ -8,7 +8,10 @@ has no pull request yet. ``--base`` names it instead of asking GitHub. The
 rebase is ``sync.py --onto BASE``: each commit not on ``origin/BASE`` is
 replayed onto it (commits it already has, such as a landed stacked base's, are
 dropped), uncommitted edits are carried, and the branch is pushed with
-``--force-with-lease``. A detached submodule checkout is skipped.
+``--force-with-lease``. Submodule checkouts on branches are rebased first, each
+onto its own pull request's base (or ``--base``), so the superproject's pin
+commits map to the rebased submodule commits. A detached submodule checkout is
+skipped.
 
 Plain ``sync.py`` never rebases; it only catches up with the branch's own
 ``origin`` copy, which is safe to run in the background.
@@ -48,6 +51,45 @@ def pull_request_base(repository: Repository, branch: str) -> str:
     return pulls[0]["baseRefName"] if pulls else DEFAULT_BASE
 
 
+def branch_submodules(repository: Repository) -> list[Repository]:
+    """Initialized submodule checkouts whose HEAD is a branch, in path order."""
+    listed = repository.git(
+        "config", "-f", ".gitmodules", "--get-regexp", r"^submodule\..*\.path$",
+        check=False,
+    )
+    if listed.returncode:
+        return []
+    found = []
+    for line in listed.stdout.splitlines():
+        _, _, path = line.partition(" ")
+        root = Path(repository.root, path.strip())
+        if not path.strip() or not Path(root, ".git").exists():
+            continue
+        checkout = Repository(root)
+        if checkout.git("symbolic-ref", "-q", "HEAD", check=False).returncode:
+            continue
+        found.append(checkout)
+    return found
+
+
+def rebase_tree(
+    repository: Repository, base: str | None, seen: set[Path]
+) -> None:
+    """Rebase branch submodules first, then ``repository`` itself."""
+    root = repository.root.resolve()
+    if root in seen:
+        return
+    seen.add(root)
+    for submodule in branch_submodules(repository):
+        rebase_tree(submodule, base, seen)
+    if follows_superproject(repository):
+        return
+    branch = repository.branch().removeprefix("refs/heads/")
+    target = base or pull_request_base(repository, branch)
+    print(f"rebase: {repository.root.name} {branch} onto origin/{target}")
+    rebase_and_report(repository, target)
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
@@ -58,15 +100,11 @@ def main() -> None:
     )
     parser.add_argument("--base", help="rebase onto this branch instead of the pull request's base")
     args = parser.parse_args()
+    seen: set[Path] = set()
     for repo in args.repo or [Path.cwd()]:
         try:
             repository = Repository(Repository.toplevel(repo))
-            if follows_superproject(repository):
-                continue
-            branch = repository.branch().removeprefix("refs/heads/")
-            base = args.base or pull_request_base(repository, branch)
-            print(f"rebase: {repository.root.name} {branch} onto origin/{base}")
-            rebase_and_report(repository, base)
+            rebase_tree(repository, args.base, seen)
         except (Failure, subprocess.CalledProcessError) as error:
             print(f"rebase: {error}", file=sys.stderr)
             sys.exit(1)
