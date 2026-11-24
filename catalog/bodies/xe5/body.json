@@ -50,7 +50,7 @@
     }
   ],
   "parts": [
-    "xe5-serial-nand",
+    "xe5-serial-nor",
     "power-controller",
     "serial-calibration",
     "bis-configuration"
@@ -58,7 +58,7 @@
   "wiring": [
     {
       "source_id": "flash",
-      "target_id": "xe5-serial-nand",
+      "target_id": "xe5-serial-nor",
       "signal": "storage"
     },
     {
