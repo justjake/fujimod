@@ -24,6 +24,7 @@ pub struct FirmwareProgress {
     /// Firmware version.
     pub version: String,
     /// Located firmware facts, when the firmware has a facts document.
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub facts: Option<FactCount>,
     /// Camera model whose boot ROM dump this firmware boots with, if any.
     pub boot_rom: Option<String>,

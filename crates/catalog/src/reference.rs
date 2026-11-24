@@ -62,6 +62,7 @@ pub struct Soc {
     /// Address and register blocks exposed by the SoC.
     pub blocks: Vec<SocBlock>,
     /// Clock domains exposed by the SoC.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub clocks: Vec<ClockDomain>,
     /// Additional family-specific hardware parameters, when specified.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -71,10 +72,13 @@ pub struct Soc {
     )]
     pub hardware: Option<crate::soc::SocHardware>,
     /// CPU address-space mappings used to construct a processor graph.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub mappings: Vec<AddressMapping>,
     /// DMA address-space mappings used to construct a processor graph.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub dma_mappings: Vec<DmaMapping>,
     /// Named hardware-decoder states and supported selections.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub decoders: Vec<AddressDecoder>,
     /// Hardware reset and coprocessor setup facts.
     pub reset: SocReset,
@@ -563,21 +567,22 @@ pub struct ProcessorCore {
     /// Implemented processor model.
     pub model: ProcessorModel,
     /// Whether this core leaves reset when the SoC starts, when known.
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub released: Option<bool>,
     /// Initial architectural register values.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub registers: Vec<RegisterValue>,
     /// Clock domain supplying this core, when specified.
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub clock_id: Option<String>,
     /// Optional M-profile hardware state.
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub mprofile: Option<MProfileState>,
     /// Optional R-profile hardware state.
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub rprofile: Option<RProfileState>,
     /// Optional A-profile application-processor state.
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub aprofile: Option<AProfileState>,
 }
 
@@ -650,7 +655,7 @@ pub enum ProcessorRegister {
 )]
 pub struct MProfileState {
     /// CPUID register value presented by the processor, when known.
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub cpuid: Option<u32>,
     /// Vector-table address after reset.
     pub vector_base: u64,
@@ -674,6 +679,7 @@ pub struct RProfileState {
     /// BTCM state after reset.
     pub btcm: TcmState,
     /// Private, non-coherent write-back L1 data cache, as CCSIDR reports it.
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub data_cache: Option<DataCacheGeometry>,
 }
 
@@ -890,7 +896,7 @@ pub struct SocBlock {
     )]
     pub processor_core_id: Option<String>,
     /// Clock domain supplying this block, when specified.
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub clock_id: Option<String>,
     /// Per-core addresses where processors see this block.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
@@ -1037,10 +1043,10 @@ pub struct ClockDomain {
     /// Clock-domain identity.
     pub id: String,
     /// Clock frequency in hertz, when known.
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub frequency_hz: Option<u64>,
     /// Parent clock-domain identity, when present.
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub parent_id: Option<String>,
 }
 
@@ -1157,9 +1163,10 @@ pub struct DecoderChoice {
 )]
 pub struct SocReset {
     /// Optional secondary-core release register.
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub release: Option<CoreRelease>,
     /// Coprocessor register writes applied during reset.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub coprocessor_writes: Vec<CoprocessorWrite>,
 }
 
@@ -1261,36 +1268,40 @@ pub struct Body {
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub ram_regions: Vec<BodyRamRegion>,
     /// Optional installed NAND geometry.
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub nand: Option<NandGeometry>,
     /// Optional sensor assembly and its physical characteristics.
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub sensor: Option<SensorAssembly>,
     /// Optional lens assembly and its physical characteristics.
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub lens: Option<LensAssembly>,
     /// Optional display assembly and its physical characteristics.
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub display: Option<DisplayAssembly>,
     /// Optional MCU endpoint and its body-specific serial wiring.
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub microcontroller: Option<MicrocontrollerAssembly>,
     /// Optional power-controller endpoint and its body-specific wiring.
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub power_control: Option<PowerControlAssembly>,
     /// Optional removable-card slot and its body-specific contacts.
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub card_slot: Option<CardSlotAssembly>,
     /// Physical control-bus devices installed in this body.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub control_bus_chips: Vec<ControlBusChip>,
     /// Declared physical control and peripheral connections.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub connections: Vec<BodyConnection>,
     /// Reusable part identities installed in this body.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub parts: Vec<String>,
     /// Processor blocks this board leaves unconnected.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub absent_blocks: Vec<String>,
     /// Physical links between named body connections and SoC blocks or parts.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub wiring: Vec<BodyWiring>,
 }
 
@@ -1493,7 +1504,7 @@ pub struct SensorAssembly {
     /// Body connection identity carrying sensor control and data signals.
     pub connection_id: String,
     /// Body-specific serial control-bus endpoint, when documented.
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub control_bus: Option<ControlBusAttachment>,
 }
 
@@ -1537,7 +1548,7 @@ pub struct SensorRaster {
     /// Active image area as `[x, y, width, height]`.
     pub image_area: [u32; 4],
     /// Sensor clock frequency in hertz when known.
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub pixel_clock_hz: Option<u64>,
 }
 
@@ -1570,6 +1581,7 @@ pub struct SensorRadiometry {
     /// Invalid readouts while a sensor drive-mode change acquires sync.
     pub mode_change_frames: u8,
     /// Full preview readout field in sensor command-window coordinates.
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub preview_field: Option<[u32; 2]>,
     /// Lens projection onto the sensor.
     pub projection: SensorProjection,
@@ -1678,15 +1690,15 @@ pub struct LensAssembly {
     /// Body-specific pulse-controller wiring for this lens.
     pub pulse: PulseInterface,
     /// Documented aperture positions and their optical output.
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub iris: Option<IrisOptics>,
     /// Documented focus-axis response.
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub focus: Option<FocusAxis>,
     /// Body connections wired to motor home switches.
     pub home_connections: Vec<LensHomeConnection>,
     /// Body connection wired to the optional rotary encoder.
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub encoder_connection_id: Option<String>,
 }
 
@@ -1794,7 +1806,7 @@ pub struct DisplayAssembly {
     /// Body connection identity carrying display data.
     pub connection_id: String,
     /// Body-specific serial wiring for this panel.
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub route: Option<SerialRoute>,
 }
 
@@ -1908,6 +1920,7 @@ pub struct BodyConnection {
     /// Physical connection category.
     pub kind: ConnectionKind,
     /// Electrical or physical signals carried by the connection.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub signals: Vec<ConnectionSignal>,
 }
 
@@ -1970,6 +1983,7 @@ pub enum ConnectionSignal {
     Adc {
         channel: u8,
         #[serde(default)]
+        #[serde(skip_serializing_if = "Option::is_none")]
         threshold: Option<u16>,
     },
     /// A named SoC block signal.
@@ -2251,10 +2265,10 @@ pub enum PartModel {
         /// Lens motors and their travel/response mechanics.
         motors: Vec<LensMotor>,
         /// Optional physical encoder input.
-        #[serde(default)]
+        #[serde(default, skip_serializing_if = "Option::is_none")]
         encoder: Option<PartEncoder>,
         /// Optional zoom mechanism.
-        #[serde(default)]
+        #[serde(default, skip_serializing_if = "Option::is_none")]
         zoom: Option<ZoomMechanism>,
     },
     /// A multi-pin contact actuator.
@@ -2279,6 +2293,7 @@ pub enum PartModel {
         clock_registers: RegisterRange,
         /// Status register exposed by the endpoint, when present.
         #[serde(default)]
+        #[serde(skip_serializing_if = "Option::is_none")]
         status_register: Option<u32>,
         /// Other explicitly initialized register addresses accepted by a run.
         initial_registers: Vec<u32>,
@@ -2322,13 +2337,13 @@ pub enum PartModel {
     /// A display panel endpoint.
     DisplayPanel {
         /// Display raster width in pixels.
-        #[serde(default)]
+        #[serde(default, skip_serializing_if = "Option::is_none")]
         width: Option<u32>,
         /// Display raster height in pixels.
-        #[serde(default)]
+        #[serde(default, skip_serializing_if = "Option::is_none")]
         height: Option<u32>,
         /// Display orientation relative to the body.
-        #[serde(default)]
+        #[serde(default, skip_serializing_if = "Option::is_none")]
         orientation: Option<DisplayOrientation>,
         /// Display endpoint serial protocol.
         serial: SerialOutputKind,
@@ -2459,7 +2474,7 @@ pub struct LensMotor {
     /// Settling time after motion stops.
     pub settle_ticks: u64,
     /// Optional home-switch pin and threshold.
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub home: Option<HomeSwitch>,
 }
 
@@ -2608,7 +2623,7 @@ pub struct SerialRoute {
     /// Body connection driving chip select.
     pub select_connection_id: String,
     /// Serial clock frequency in hertz, when known.
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub clock_hz: Option<u64>,
     /// Word width in bits.
     pub word_bits: u8,
@@ -2724,16 +2739,16 @@ pub struct Firmware {
     /// Human-readable firmware version string.
     pub version: String,
     /// Firmware update content, when distributed for this version.
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub update: Option<ContentIdentity>,
     /// Boot ROM content and its physical load address, when applicable.
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub boot_rom: Option<BootRomIdentity>,
     /// Firmware installation and loader facts consumed by the emulator.
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub installation: Option<FirmwareInstallation>,
     /// Generated observation facts consumed by supported runs.
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub generated_facts: Option<FirmwareGeneratedFacts>,
     /// Located boot, device and persistent-storage layout facts.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -2845,9 +2860,10 @@ pub struct FirmwareInstallation {
     /// Offset from the update input to the flash image.
     pub flash_offset: u64,
     /// Named executable entry addresses consumed by firmware tooling.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub entry_labels: BTreeMap<String, String>,
     /// Loader validation entry and the mapped sections required by the loader.
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub loader_validation: Option<FirmwareLoaderValidation>,
     /// Named sections in the installed firmware image.
     pub image_sections: Vec<FirmwareImageSection>,
@@ -2890,7 +2906,7 @@ pub struct FirmwareImageSection {
     /// SHA-256 of the mapped section.
     pub sha256: String,
     /// Native flash offset, when identified.
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub native_flash_offset: Option<u64>,
 }
 
@@ -2906,7 +2922,7 @@ pub struct FirmwareImageSection {
 )]
 pub struct FirmwareGeneratedFacts {
     /// Layouts and declarations used by remote camera control.
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     #[cfg_attr(
         feature = "schema",
         schemars(with = "Option<fujimod_catalog_remote::FirmwareFacts>")
@@ -2917,7 +2933,7 @@ pub struct FirmwareGeneratedFacts {
     )]
     pub remote: Option<serde_json::Value>,
     /// Firmware configuration-block location.
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     #[cfg_attr(
         feature = "schema",
         schemars(with = "Option<fujimod_catalog_controls::facts::ConfigurationLocation>")
@@ -2928,7 +2944,7 @@ pub struct FirmwareGeneratedFacts {
     )]
     pub cfgdata_location: Option<serde_json::Value>,
     /// Additional playback UI mode values.
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     #[cfg_attr(
         feature = "schema",
         schemars(with = "Option<fujimod_catalog_controls::facts::AdditionalUiModes>")
@@ -2939,10 +2955,10 @@ pub struct FirmwareGeneratedFacts {
     )]
     pub additional_ui_modes: Option<serde_json::Value>,
     /// Firmware menu-cursor structure base address.
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub menu_cursor: Option<u64>,
     /// Logical keys used by menu controls.
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     #[cfg_attr(
         feature = "schema",
         schemars(with = "Option<fujimod_catalog_controls::facts::MenuKeys>")
@@ -2953,7 +2969,7 @@ pub struct FirmwareGeneratedFacts {
     )]
     pub menu_keys: Option<serde_json::Value>,
     /// Uncached alias used to access RAM addresses.
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub uncached_alias: Option<u64>,
     /// Hash-identified firmware address ranges used for identity checks.
     #[cfg_attr(
@@ -2964,9 +2980,10 @@ pub struct FirmwareGeneratedFacts {
         all(target_arch = "wasm32", not(target_os = "emscripten")),
         tsify(type = "unknown[]")
     )]
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub identity_checks: Vec<serde_json::Value>,
     /// Addresses and values used to observe firmware readiness.
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     #[cfg_attr(
         feature = "schema",
         schemars(with = "Option<fujimod_catalog_remote::FirmwareObservation>")
@@ -3007,6 +3024,7 @@ pub struct ResolvedSelection {
         all(target_arch = "wasm32", not(target_os = "emscripten")),
         tsify(type = "PhysicalControls | null")
     )]
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub physical_controls: Option<serde_json::Value>,
     /// The firmware's generated located inputs, when generated.
     #[serde(default)]
@@ -3020,37 +3038,37 @@ pub struct ResolvedSelection {
     )]
     pub control_ids: Option<serde_json::Value>,
     /// Stock first-start menus, when located for this firmware.
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub first_start: Option<crate::first_start::FirstStartMenu>,
     /// Exact stock scene names and their firmware-specific IDs.
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub ui_scene_names: Option<crate::ui_scene_names::UiSceneNames>,
     /// Exact stock setting names and their firmware-specific IDs.
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub ui_setting_names: Option<crate::ui_setting_names::UiSettingNames>,
     /// Located stock event category codes.
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub ui_event_codes: Option<crate::ui_event_codes::UiEventCodes>,
     /// Stock diagnostic bulk reads, when located for this firmware.
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub bulk: Option<fujimod_catalog_bulk::FirmwareBulk>,
     /// Stock runtime allocation, cache and callback mechanisms.
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub execution: Option<fujimod_catalog_execution::FirmwareExecution>,
     /// Stock restart over debug USB, when located for this firmware.
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub restart: Option<fujimod_catalog_restart::FirmwareRestart>,
     /// Optional card files over the debug link, when located for this firmware.
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub card_files: Option<fujimod_catalog_card::FirmwareCard>,
     /// Settings-bank layout, when located for this firmware.
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub settings: Option<fujimod_catalog_settings::FirmwareSettings>,
     /// Stock flash-read contract, when located for this firmware.
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub flash: Option<crate::capture::FirmwareFlash>,
     /// Safely readable state regions, when established for this selection.
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub state: Option<crate::capture::FirmwareState>,
 }
 
@@ -4595,6 +4613,7 @@ mod layout_tests {
             base: 0x2000_0000,
             size: RegionSize::Bytes { bytes: 0x1000 },
             kind: MemoryKind::Sram,
+            power_on_ram_fill: None,
             consumers: vec!["shared".into()],
         };
         catalog
@@ -4622,6 +4641,7 @@ mod layout_tests {
             id: "test-body".into(),
             soc_id: "test-soc".into(),
             dram_bytes: Some(0x1000),
+            power_on_ram_fill: None,
             hardware: None,
             ram_regions: vec![],
             nand: None,

@@ -57,6 +57,7 @@ pub struct PhysicalControls {
     /// Published manual identifying the controls.
     pub manual: ManualReference,
     /// Analog sample resolution used by this body's contacts.
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub analog_levels: Option<u16>,
     /// Confirmed inputs held while powering on.
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
@@ -144,35 +145,37 @@ pub struct PhysicalControl {
     /// Surface on which the control is located.
     pub location: ControlSurface,
     /// Manual page identifying the control, when available.
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub manual_page: Option<u32>,
     /// Text printed on the control, when present.
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub face: Option<String>,
     /// Meaning of a printed icon, when present.
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub icon: Option<ControlIcon>,
     /// Short uppercase caption for an unmarked control (at most 10 characters).
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub short_name: Option<String>,
     /// Body connections carrying the control's electrical signals.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub connection_ids: Vec<String>,
     /// Whether the control's function can be assigned in the camera.
     pub assignable: bool,
     /// Whether the manual documents a press action, independently of its binding.
     pub pushable: bool,
     /// Documented positions or stages, including controls with no located inputs.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub positions: Vec<ControlPosition>,
     /// Documented initial function, when available.
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub default_function: Option<String>,
     /// Physical role required by a declared cross-body operation.
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub role: Option<ControlRole>,
     /// Whether this control has no electronic action.
     pub mechanical: bool,
     /// Actions defined by this control's mechanism; absent for mechanical controls.
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub behavior: Option<ControlBehavior>,
 }
 
@@ -272,16 +275,19 @@ pub enum ControlBehavior {
     /// A momentary button.
     Button {
         /// Input asserted by a press and deasserted by release.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
         press: Option<InputBinding>,
     },
     /// A shutter release with named stages.
     Shutter {
         /// Inputs asserted at each named shutter stage.
+        #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
         stages: BTreeMap<String, Option<Vec<InputBinding>>>,
     },
     /// A directional pad with individually addressable direction identities.
     Pad {
         /// Inputs asserted by the four directions.
+        #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
         #[cfg_attr(
             all(target_arch = "wasm32", not(target_os = "emscripten")),
             tsify(type = "Partial<Record<PadDirection, InputBinding | null>>")
@@ -289,13 +295,17 @@ pub enum ControlBehavior {
         directions: BTreeMap<PadDirection, Option<InputBinding>>,
         /// Center press input, when present.
         #[serde(default)]
+        #[serde(skip_serializing_if = "Option::is_none")]
         press: Option<InputBinding>,
     },
     /// A spring-centered control with separate left and right contacts.
     Rocker {
+        #[serde(default, skip_serializing_if = "Option::is_none")]
         decrease: Option<InputBinding>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
         increase: Option<InputBinding>,
         #[serde(default)]
+        #[serde(skip_serializing_if = "Option::is_none")]
         press: Option<InputBinding>,
     },
     /// A dial with positions or relative steps.
@@ -304,8 +314,10 @@ pub enum ControlBehavior {
         motion: ControlMotion,
         /// Press input, when the dial is pushable.
         #[serde(default)]
+        #[serde(skip_serializing_if = "Option::is_none")]
         press: Option<InputBinding>,
         /// Whether the mechanism rotates without an end stop.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
         endless: Option<bool>,
     },
     /// A ring with positions or relative steps.
@@ -314,20 +326,25 @@ pub enum ControlBehavior {
         motion: ControlMotion,
         /// Press input, when the ring is pushable.
         #[serde(default)]
+        #[serde(skip_serializing_if = "Option::is_none")]
         press: Option<InputBinding>,
         /// Whether the mechanism rotates without an end stop.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
         endless: Option<bool>,
     },
     /// A switch with named positions.
     Switch {
         /// Inputs selecting each documented position.
+        #[serde(default, skip_serializing_if = "Vec::is_empty")]
         positions: Vec<BoundPosition>,
     },
     /// A lever with named positions.
     Lever {
         /// Inputs selecting each documented position.
+        #[serde(default, skip_serializing_if = "Vec::is_empty")]
         positions: Vec<BoundPosition>,
         /// Whether releasing the lever returns it to an unasserted rest position.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
         momentary: Option<bool>,
     },
     /// A touch surface whose protocol is located in the firmware input document.
@@ -347,13 +364,16 @@ pub enum ControlMotion {
     /// Finite, named mechanical detents.
     Positions {
         /// Input and asserted level for each detent.
+        #[serde(default, skip_serializing_if = "Vec::is_empty")]
         positions: Vec<BoundPosition>,
     },
     /// Relative movement in either direction.
     Steps {
         /// Input generated by one decreasing step.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
         decrease: Option<InputBinding>,
         /// Input generated by one increasing step.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
         increase: Option<InputBinding>,
     },
 }
@@ -371,8 +391,10 @@ pub struct BoundPosition {
     /// Exact position identity accepted by the physical panel.
     pub id: String,
     /// Explicit firmware input binding.
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub key: Option<InputBinding>,
     /// Whether this position asserts that input.
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub asserted: Option<bool>,
 }
 
@@ -389,8 +411,10 @@ pub struct ControlPosition {
     /// Unique manual position identity.
     pub id: String,
     /// Printed label, when present.
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub label: Option<String>,
     /// Meaning of an unlabeled position or icon.
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub description: Option<String>,
 }
 
@@ -450,11 +474,11 @@ pub struct FirmwareControlIds {
     /// Calibration and stable-state readers located in that firmware.
     pub input_readers: InputReaders,
     /// Native names and their source table identity, when the table was located.
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub native_key_names: Option<NativeKeyNames>,
     /// Physical-key to UI-event table of a processor whose scanner rows hold
     /// physical keys; absent when the rows hold UI events directly.
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub event_translation: Option<EventTranslation>,
     /// Exact debug command vocabulary, independent of the native names.
     pub debug_keys: Vec<DebugKey>,
@@ -514,10 +538,10 @@ pub struct TranslatedKey {
 )]
 pub struct InputReaders {
     /// Routine reading 16-bit control calibration values.
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub calibration: Option<u64>,
     /// Routine reading stable key scanner state.
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub scanner: Option<ScannerReader>,
 }
 
@@ -536,15 +560,15 @@ pub struct LocatedInput {
     /// UI/native event identity established by the locator.
     pub event: u32,
     /// Exact debug command token for this input, absent for native-only inputs.
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub debug_key: Option<String>,
     /// Physical control, connection detector, or unclaimed firmware input.
     pub target: InputTarget,
     /// Scanner row and its source witness, absent for inputs outside that table.
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub scanner: Option<LocatedScannerRecord>,
     /// Located electrical interpretation, absent when the hardware is not modeled.
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub electrical: Option<ElectricalInput>,
 }
 
@@ -613,9 +637,11 @@ pub enum ElectricalInput {
         intervals: Vec<AdcInterval>,
         /// Firmware callback evaluating the input, when present.
         #[serde(default)]
+        #[serde(skip_serializing_if = "Option::is_none")]
         callback: Option<u64>,
         /// Callback result interpreted as active, when present.
         #[serde(default)]
+        #[serde(skip_serializing_if = "Option::is_none")]
         expected_result: Option<u32>,
     },
     /// Digital contact interpreted by a located scanner predicate.

@@ -22,12 +22,16 @@ pub struct BodyHardware {
     )]
     pub profiles: BTreeMap<String, crate::profiles::BodyProfile>,
     /// Serial endpoints and their processor-side connections.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub serial_attachments: Vec<SerialAttachment>,
     /// Connections between GPIO output and input pads.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub gpio_feedback: Vec<GpioFeedback>,
     /// Named keypad positions and their declared analog sample levels.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub keypad_samples: BTreeMap<String, u16>,
     /// Body connections carrying thermal sensor voltages.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub thermal_connection_ids: Vec<String>,
     /// Address the firmware reads to drain the bus past this body's DRAM map.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -72,7 +76,7 @@ pub struct SerialAttachment {
     /// Connection carrying endpoint data.
     pub connection_id: String,
     /// Connection selecting the endpoint, when declared.
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub select_connection_id: Option<String>,
 }
 
@@ -210,12 +214,15 @@ pub enum PeripheralPart {
     SerialNorFlash {
         /// JEDEC identification value, when supplied by the part definition.
         #[serde(default)]
+        #[serde(skip_serializing_if = "Option::is_none")]
         jedec_id: Option<u32>,
         /// Erase-unit capacity in bytes, when declared.
         #[serde(default)]
+        #[serde(skip_serializing_if = "Option::is_none")]
         erase_bytes: Option<u64>,
         /// Program-page capacity in bytes, when declared.
         #[serde(default)]
+        #[serde(skip_serializing_if = "Option::is_none")]
         page_bytes: Option<u64>,
     },
 
@@ -223,15 +230,19 @@ pub enum PeripheralPart {
     SerialNandFlash {
         /// JEDEC identification value, when supplied by the part definition.
         #[serde(default)]
+        #[serde(skip_serializing_if = "Option::is_none")]
         jedec_id: Option<u32>,
         /// Program-page capacity in bytes, when declared.
         #[serde(default)]
+        #[serde(skip_serializing_if = "Option::is_none")]
         page_bytes: Option<u64>,
         /// Pages per erase block, when declared.
         #[serde(default)]
+        #[serde(skip_serializing_if = "Option::is_none")]
         pages_per_block: Option<u64>,
         /// Spare bytes per page, when declared.
         #[serde(default)]
+        #[serde(skip_serializing_if = "Option::is_none")]
         spare_bytes: Option<u64>,
     },
 }

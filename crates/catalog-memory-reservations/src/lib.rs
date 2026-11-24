@@ -31,7 +31,10 @@ pub struct FirmwareMemoryReservations {
     /// Firmware whose stock code owns these reservations.
     pub firmware_id: String,
     /// DRAM window in bytes when known. Unknown size does not imply free memory.
-    #[serde(deserialize_with = "deserialize_dram_size")]
+    #[serde(
+        deserialize_with = "deserialize_dram_size",
+        skip_serializing_if = "Option::is_none"
+    )]
     pub dram_size: Option<u64>,
     /// Located reservations, by stock name.
     pub reservations: Vec<Reservation>,

@@ -533,6 +533,7 @@ pub struct RecIdle {
     /// UI mode value for REC.
     pub rec_mode: u32,
     /// Pending UI mode, zero when no change is pending, where located.
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub pending_mode_address: Option<u64>,
     /// Nonzero while a menu is open, where located.
     pub menu_active_address: Option<u64>,
@@ -555,6 +556,7 @@ pub struct PowerOff {
     /// Stock routine that cuts power.
     pub power_cut: u64,
     /// Byte offset of the deadline in the request the power-off receives.
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub request_deadline_offset: Option<u32>,
     /// Power-controller registers for the alarm.
     pub alarm: AlarmRegisters,

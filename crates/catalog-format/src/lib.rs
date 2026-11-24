@@ -66,6 +66,15 @@ fn format<T: DeserializeOwned + Serialize>(bytes: &[u8]) -> Result<Vec<u8>, Stri
     let mut canonical = serde_json::to_vec_pretty(&record)
         .map_err(|error| format!("cannot serialize record: {error}"))?;
     canonical.push(b'\n');
+    let reparsed: T = serde_json::from_slice(&canonical)
+        .map_err(|error| format!("formatted record no longer parses: {error}"))?;
+    let before =
+        serde_json::to_vec(&record).map_err(|error| format!("cannot compare record: {error}"))?;
+    let after = serde_json::to_vec(&reparsed)
+        .map_err(|error| format!("cannot compare formatted record: {error}"))?;
+    if before != after {
+        return Err("the typed value changes in the round trip".into());
+    }
     Ok(canonical)
 }
 

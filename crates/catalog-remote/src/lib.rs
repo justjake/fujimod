@@ -24,12 +24,13 @@ pub struct Facts {
     /// Selected firmware layouts and inputs.
     pub firmware: FirmwareFacts,
     /// Installed build declarations, absent for stock firmware.
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub menu_manifest: Option<BuildMenuManifest>,
     /// Optional task receive boundary required by native input consumers.
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub input_tasks: Option<InputTasks>,
     /// Controls accepted in declared states while REC parameter work remains active.
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub parameter_independent_inputs: Vec<ParameterIndependentInput>,
 }
 
@@ -249,7 +250,7 @@ pub struct RootRoute {
     /// Navigation role used to open the root.
     pub entry: String,
     /// Optional tab key.
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub tab: Option<u32>,
 }
 
@@ -630,6 +631,7 @@ pub struct MenuTreeNode {
     /// Static label literal, or empty when the provider supplies it at runtime.
     pub label_text: String,
     /// Declared parent node path; none for roots attached to a stock anchor.
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub parent: Option<String>,
     /// Position among the node's siblings or attached roots.
     pub order: u32,
@@ -739,6 +741,7 @@ pub struct MenuOption {
     /// Native choice key or normalized option index.
     pub key: u32,
     /// Persisted value when declared.
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub value: Option<u32>,
 }
 
@@ -913,6 +916,7 @@ pub struct InlineChoices {
 #[serde(deny_unknown_fields)]
 pub struct WalkthroughMetadata {
     /// Menu layout.
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub menu: Option<DeclarationLayout>,
     /// Qfn layout.
     pub qfn: Option<QfnLayout>,
@@ -1103,7 +1107,7 @@ pub struct BindingChoices {
     /// Action identities in their selectable order.
     pub mod_actions: Vec<BindingActionChoice>,
     /// Accepted writer and control owners for compiled function choices.
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub accepted_apply: Option<BindingApply>,
 }
 

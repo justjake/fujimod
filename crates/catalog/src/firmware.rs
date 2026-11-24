@@ -418,6 +418,7 @@ pub struct ConfigurationDefaults {
     /// Declared final version bytes.
     pub final_version_bytes: Vec<FinalVersionBytes>,
     /// Declared limits.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub limits: Vec<String>,
     /// Declared max instructions.
     pub max_instructions: u64,
@@ -464,6 +465,7 @@ pub struct ControlBusTables {
     /// Declared descriptors.
     pub descriptors: Descriptors,
     /// Declared limits.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub limits: Vec<String>,
     /// Declared polarity words.
     pub polarity_words: Descriptor,
@@ -540,6 +542,7 @@ pub struct Cfgdata {
     /// Declared pointer address.
     pub pointer_address: u64,
     /// Declared remapping.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub remapping: Vec<Remapping>,
     /// Declared selector address.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -683,6 +686,7 @@ pub struct Journals {
     /// Declared check view.
     pub check_view: String,
     /// Declared default copies.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub default_copies: Vec<DefaultCopies>,
     /// Declared kind.
     pub kind: u64,
@@ -704,6 +708,7 @@ pub struct Journals {
     /// Declared record copies.
     pub record_copies: Vec<RecordCopies>,
     /// Declared record tags.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub record_tags: Vec<DefaultCopies>,
 }
 
@@ -780,6 +785,7 @@ pub struct StorageLayout {
     /// Declared journals.
     pub journals: Vec<Journals>,
     /// Declared limits.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub limits: Vec<String>,
     /// Declared managed.
     pub managed: Managed,
@@ -806,6 +812,7 @@ pub struct FirmwareLayouts {
     /// Boot and device layout profiles for this firmware.
     pub profiles: BTreeMap<String, FirmwareProfile>,
     /// Immutable tables and storage layouts addressed by semantic identity.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub views: BTreeMap<String, FirmwareView>,
 }
 
@@ -845,5 +852,6 @@ pub struct PersistentAssetLayout {
     /// SHA-256 after declared byte edits.
     pub normalized_sha256: String,
     /// Explicit small edits used to normalize the input.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub patches: Vec<fujimod_catalog_settings::persistent_inputs::PersistentPatch>,
 }
