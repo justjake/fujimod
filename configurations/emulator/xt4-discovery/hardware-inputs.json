@@ -174,7 +174,34 @@
       },
       "2": {
         "level": "low",
-        "basis": "Declared catalog input."
+        "basis": "Declared catalog input.",
+        "stabilizer_link": {
+          "basis": "In-body stabilizer controller on SPI2, as its link behaves: the camera powers it with GPIO outputs 0.12 and 1.14 (powered while both are high), pulses its reset on 12.6 (high, then low releases it), selects it with 12.3 (active low) and exchanges four-byte frames of eight-bit words, most significant first. The controller reports on pad 0.4, which reads its GPIO input level (high) while the controller is unpowered or held in reset: the pad goes low once the controller has booted and high after the first frame of the link. The boot delay, 10 ms at 54 MHz, is declared, not measured. No command reply data is declared, so every reply carries data 0, which the periodic status traffic at the shooting screen (status id 0x29 every 40 ms, ids 0x2a and 0x11a) accepts.",
+          "boot_ticks": 540000,
+          "power": [
+            {
+              "pin": 12,
+              "port": 0
+            },
+            {
+              "pin": 14,
+              "port": 1
+            }
+          ],
+          "ready": {
+            "pin": 4,
+            "port": 0
+          },
+          "reset": {
+            "pin": 6,
+            "port": 12
+          },
+          "select": {
+            "active_high": false,
+            "pin": 3,
+            "port": 12
+          }
+        }
       },
       "3": {
         "level": "low",
@@ -244,6 +271,23 @@
         252
       ],
       "basis": "GPIO port levels the X-T4 2.12 loader sampled at a power-on of a running X-T4 (boot-information words 0x00..0x3c of its kernel copy in RAM), taken with the service-entry keys held. Port 0 bits 0 and 1 (shutter S1/S2, active low as on the X-T3) are declared released. The firmware selects the firmware-update start from these levels (DISP/BACK held at power-on); all-zero levels read every active-low key as held and start it. The service-entry UP key is not located and may still read held."
+    },
+    "gpio_interrupts": {
+      "basis": "Stabilizer ready pad 0.4 on two level-sensitive interrupt inputs: GIC 171 is asserted while the pad is low (the controller has booted after its reset release) and GIC 155 while it is high (the controller has answered the first frame of its link). The camera waits on each in turn while it opens the link.",
+      "routes": [
+        {
+          "port": 0,
+          "pin": 4,
+          "line": 171,
+          "active_high": false
+        },
+        {
+          "port": 0,
+          "pin": 4,
+          "line": 155,
+          "active_high": true
+        }
+      ]
     },
     "temperature_input": {
       "millicelsius": 25000,

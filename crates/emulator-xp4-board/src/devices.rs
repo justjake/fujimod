@@ -1201,6 +1201,22 @@ impl Devices {
         self.windows.push((base, end, id));
         Ok(())
     }
+    /// The in-body stabilizer controller behind an SPI controller: its input
+    /// peer, which also follows the GPIO outputs it is wired to and drives
+    /// its ready pad through the GPIO bank.
+    pub fn stabilizer_link(
+        &mut self,
+        config: fujimod_emulator_xp4_io::stabilizer_link::Config,
+    ) -> Result<(), String> {
+        let pins = self
+            .pins
+            .as_ref()
+            .ok_or("The stabilizer link requires physical GPIO wiring")?
+            .clone();
+        let base = config.base;
+        let link = fujimod_emulator_xp4_io::stabilizer_link::StabilizerLink::new(pins, config)?;
+        self.spi_input(base, Box::new(link))
+    }
     pub fn spi(&mut self, base: u64, miso: bool) -> Result<(), String> {
         self.spi_input(base, Box::new(fujimod_emulator_xp4_io::spi::FixedPin(miso)))
     }
