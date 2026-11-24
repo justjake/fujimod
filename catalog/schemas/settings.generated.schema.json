@@ -226,7 +226,6 @@
               "type": "integer"
             },
             "otherwise_high": {
-              "default": null,
               "description": "Optional signed-byte fallback for unmatched inputs with bit 7 set.",
               "format": "uint8",
               "maximum": 255,
@@ -493,7 +492,6 @@
       "description": "The stock user profile: a header kept by the power controller\nand journal records in managed flash blocks. Firmware that finds no valid\nheader and records resets the profile to its defaults at startup.",
       "properties": {
         "derived_fields": {
-          "default": [],
           "description": "Fields initialized from the calibration bank or a declared fill.",
           "items": {
             "$ref": "#/$defs/ProfileField"
@@ -505,7 +503,6 @@
           "description": "Stock eight- or sixteen-byte header. The last two bytes hold the marker\nand the checksum that makes the header sum to zero."
         },
         "loader_offset": {
-          "default": null,
           "description": "X-Processor 4 only: the header's offset in the boot loader's handoff\nblock. Absent for X-Processor Pro, whose header goes to sub-CPU\nregisters.",
           "format": "uint64",
           "minimum": 0,

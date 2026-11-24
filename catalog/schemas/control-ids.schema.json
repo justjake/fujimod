@@ -541,7 +541,6 @@
           "description": "Analog input interpreted using located sample bands or calibration offsets.",
           "properties": {
             "callback": {
-              "default": null,
               "description": "Firmware callback evaluating the input, when present.",
               "format": "uint64",
               "minimum": 0,
@@ -555,7 +554,6 @@
               "type": "string"
             },
             "expected_result": {
-              "default": null,
               "description": "Callback result interpreted as active, when present.",
               "format": "uint32",
               "minimum": 0,
@@ -1020,7 +1018,6 @@
       "description": "Input routines located in one firmware; a routine the locators did not find is absent.",
       "properties": {
         "calibration": {
-          "default": null,
           "description": "Routine reading 16-bit control calibration values.",
           "format": "uint64",
           "minimum": 0,
@@ -1038,7 +1035,6 @@
               "type": "null"
             }
           ],
-          "default": null,
           "description": "Routine reading stable key scanner state."
         }
       },
@@ -1106,7 +1102,6 @@
       "description": "One located input's identity, ownership, and checked electrical predicates.",
       "properties": {
         "debug_key": {
-          "default": null,
           "description": "Exact debug command token for this input, absent for native-only inputs.",
           "type": [
             "string",
@@ -1122,7 +1117,6 @@
               "type": "null"
             }
           ],
-          "default": null,
           "description": "Located electrical interpretation, absent when the hardware is not modeled."
         },
         "event": {
@@ -1144,7 +1138,6 @@
               "type": "null"
             }
           ],
-          "default": null,
           "description": "Scanner row and its source witness, absent for inputs outside that table."
         },
         "target": {
@@ -1458,7 +1451,6 @@
           "type": "null"
         }
       ],
-      "default": null,
       "description": "Physical-key to UI-event table of a processor whose scanner rows hold\nphysical keys; absent when the rows hold UI events directly."
     },
     "firmware_id": {
@@ -1496,7 +1488,6 @@
           "type": "null"
         }
       ],
-      "default": null,
       "description": "Native names and their source table identity, when the table was located."
     },
     "scanner": {

@@ -674,8 +674,8 @@ Body = TypedDict(
         "$schema": Required['Literal["https://fujimod.com/schemas/body.schema.json"]'],
         "absent_blocks": NotRequired["list[str]"],
         "card_slot": NotRequired["CardSlotAssembly | None"],
-        "connections": Required["list[BodyConnection]"],
-        "control_bus_chips": Required["list[ControlBusChip]"],
+        "connections": NotRequired["list[BodyConnection]"],
+        "control_bus_chips": NotRequired["list[ControlBusChip]"],
         "display": NotRequired["DisplayAssembly | None"],
         "dram_bytes": NotRequired["int | None"],
         "hardware": NotRequired["BodyHardware | None"],
@@ -683,14 +683,14 @@ Body = TypedDict(
         "lens": NotRequired["LensAssembly | None"],
         "microcontroller": NotRequired["MicrocontrollerAssembly | None"],
         "nand": NotRequired["NandGeometry | None"],
-        "parts": Required["list[str]"],
+        "parts": NotRequired["list[str]"],
         "power_control": NotRequired["PowerControlAssembly | None"],
         "power_on_ram_fill": NotRequired["PowerOnFill | None"],
         "ram_regions": NotRequired["list[BodyRamRegion]"],
         "schema": Required["int"],
         "sensor": NotRequired["SensorAssembly | None"],
         "soc_id": Required["str"],
-        "wiring": Required["list[BodyWiring]"],
+        "wiring": NotRequired["list[BodyWiring]"],
     },
     total=False,
 )
@@ -699,16 +699,16 @@ Body = TypedDict(
 class BodyConnection(TypedDict, total=False):
     id: Required[str]
     kind: Required[ConnectionKind]
-    signals: Required[list[ConnectionSignal]]
+    signals: NotRequired[list[ConnectionSignal]]
 
 
 class BodyHardware(TypedDict, total=False):
     bus_drain: NotRequired[BusDrain | None]
-    gpio_feedback: Required[list[GpioFeedback]]
-    keypad_samples: Required[dict[str, int]]
+    gpio_feedback: NotRequired[list[GpioFeedback]]
+    keypad_samples: NotRequired[dict[str, int]]
     profiles: NotRequired[dict[str, BodyProfile]]
-    serial_attachments: Required[list[SerialAttachment]]
-    thermal_connection_ids: Required[list[str]]
+    serial_attachments: NotRequired[list[SerialAttachment]]
+    thermal_connection_ids: NotRequired[list[str]]
 
 
 class BodyProfile(TypedDict, total=False):
@@ -1590,11 +1590,11 @@ class ControlBehaviorVariant0(TypedDict, total=False):
 
 class ControlBehaviorVariant1(TypedDict, total=False):
     kind: Required[Literal["shutter"]]
-    stages: Required[dict[str, list[InputBinding] | None]]
+    stages: NotRequired[dict[str, list[InputBinding] | None]]
 
 
 class ControlBehaviorVariant2(TypedDict, total=False):
-    directions: Required[dict[str, InputBinding | None]]
+    directions: NotRequired[dict[str, InputBinding | None]]
     kind: Required[Literal["pad"]]
     press: NotRequired[InputBinding | None]
 
@@ -1622,13 +1622,13 @@ class ControlBehaviorVariant5(TypedDict, total=False):
 
 class ControlBehaviorVariant6(TypedDict, total=False):
     kind: Required[Literal["switch"]]
-    positions: Required[list[BoundPosition]]
+    positions: NotRequired[list[BoundPosition]]
 
 
 class ControlBehaviorVariant7(TypedDict, total=False):
     kind: Required[Literal["lever"]]
     momentary: NotRequired[bool | None]
-    positions: Required[list[BoundPosition]]
+    positions: NotRequired[list[BoundPosition]]
 
 
 class ControlBehaviorVariant8(TypedDict, total=False):
@@ -1697,7 +1697,7 @@ type ControlMotion = ControlMotionVariant0 | ControlMotionVariant1
 
 class ControlMotionVariant0(TypedDict, total=False):
     kind: Required[Literal["positions"]]
-    positions: Required[list[BoundPosition]]
+    positions: NotRequired[list[BoundPosition]]
 
 
 class ControlMotionVariant1(TypedDict, total=False):
@@ -2161,7 +2161,7 @@ class FirmwareCfgdata(TypedDict, total=False):
     address: Required[int]
     defaults_sha256: Required[str]
     pointer_address: Required[int]
-    remapping: Required[list[FirmwareRemapping]]
+    remapping: NotRequired[list[FirmwareRemapping]]
     selector_address: NotRequired[int | None]
     size: Required[int]
     synthetic_byte_fields: NotRequired[list[FirmwareSyntheticByteFields] | None]
@@ -2179,7 +2179,7 @@ class FirmwareConfigurationDefaults(TypedDict, total=False):
     builder_entry: Required[int]
     code_checks: Required[list[FirmwareUsbInterruptTables]]
     final_version_bytes: Required[list[FirmwareFinalVersionBytes]]
-    limits: Required[list[str]]
+    limits: NotRequired[list[str]]
     max_instructions: Required[int]
     output: Required[FirmwareConfigurationdefaultsOutput]
     pointer_address: Required[int]
@@ -2196,7 +2196,7 @@ class FirmwareConfigurationdefaultsOutput(TypedDict, total=False):
 
 class FirmwareControlBusTables(TypedDict, total=False):
     descriptors: Required[FirmwareDescriptors]
-    limits: Required[list[str]]
+    limits: NotRequired[list[str]]
     polarity_words: Required[FirmwareDescriptor]
 
 
@@ -2370,7 +2370,7 @@ class FirmwareFlashSlices(TypedDict, total=False):
 class FirmwareGeneratedFacts(TypedDict, total=False):
     additional_ui_modes: NotRequired[AdditionalUiModes | None]
     cfgdata_location: NotRequired[ConfigurationLocation | None]
-    identity_checks: Required[list[AddressIdentity]]
+    identity_checks: NotRequired[list[AddressIdentity]]
     menu_cursor: NotRequired[int | None]
     menu_keys: NotRequired[MenuKeys | None]
     observation: NotRequired[FirmwareObservation | None]
@@ -2400,7 +2400,7 @@ class FirmwareImageSection(TypedDict, total=False):
 
 
 class FirmwareInstallation(TypedDict, total=False):
-    entry_labels: Required[dict[str, str]]
+    entry_labels: NotRequired[dict[str, str]]
     flash_offset: Required[int]
     image_sections: Required[list[FirmwareImageSection]]
     loader_validation: NotRequired[FirmwareLoaderValidation | None]
@@ -2409,7 +2409,7 @@ class FirmwareInstallation(TypedDict, total=False):
 class FirmwareJournals(TypedDict, total=False):
     bank_rows: Required[list[int]]
     check_view: Required[str]
-    default_copies: Required[list[FirmwareDefaultCopies]]
+    default_copies: NotRequired[list[FirmwareDefaultCopies]]
     kind: Required[int]
     name: Required[str]
     nondefault_edits: Required[list[FirmwareNondefaultEdits]]
@@ -2419,12 +2419,12 @@ class FirmwareJournals(TypedDict, total=False):
     query_view: Required[str]
     record: NotRequired[FirmwareRecord | None]
     record_copies: Required[list[FirmwareRecordCopies]]
-    record_tags: Required[list[FirmwareDefaultCopies]]
+    record_tags: NotRequired[list[FirmwareDefaultCopies]]
 
 
 class FirmwareLayouts(TypedDict, total=False):
     profiles: Required[dict[str, FirmwareProfile]]
-    views: Required[dict[str, FirmwareFirmwareView]]
+    views: NotRequired[dict[str, FirmwareFirmwareView]]
 
 
 class FirmwareLoaderValidation(TypedDict, total=False):
@@ -2459,7 +2459,7 @@ class FirmwarePersistentAssetLayout(TypedDict, total=False):
     bytes: Required[int]
     file_offset: Required[int]
     normalized_sha256: Required[str]
-    patches: Required[list[PersistentPatch]]
+    patches: NotRequired[list[PersistentPatch]]
     sha256: Required[str]
 
 
@@ -2608,7 +2608,7 @@ class FirmwareStorageLayout(TypedDict, total=False):
     geometry: Required[FirmwareStoragelayoutGeometry]
     header: Required[FirmwareHeader]
     journals: Required[list[FirmwareJournals]]
-    limits: Required[list[str]]
+    limits: NotRequired[list[str]]
     managed: Required[FirmwareManaged]
     max_instructions: Required[int]
     raw_records: NotRequired[list[FirmwareRawRecords] | None]
@@ -3925,7 +3925,7 @@ class PartAttachment(TypedDict, total=False):
     initial_position: NotRequired[int | None]
     interrupts: NotRequired[list[PartAssemblyInterrupt] | None]
     label: NotRequired[str | None]
-    limits: Required[list[str]]
+    limits: NotRequired[list[str]]
     motor_home_pins: NotRequired[list[PartAssemblyPin | None] | None]
     position_bridge: NotRequired[PartAssemblyPositionBridge | None]
     pulse: NotRequired[PulseInterface | None]
@@ -4168,13 +4168,13 @@ class PersistentPlacement(TypedDict, total=False):
 class PersistentSet(TypedDict, total=False):
     append: NotRequired[PersistentJournalAppend | None]
     mcu_packet: NotRequired[PersistentPacket | None]
-    placements: Required[list[PersistentPlacement]]
+    placements: NotRequired[list[PersistentPlacement]]
 
 
 class PhysicalControl(TypedDict, total=False):
     assignable: Required[bool]
     behavior: NotRequired[ControlBehavior | None]
-    connection_ids: Required[list[str]]
+    connection_ids: NotRequired[list[str]]
     default_function: NotRequired[str | None]
     face: NotRequired[str | None]
     icon: NotRequired[ControlIcon | None]
@@ -4182,7 +4182,7 @@ class PhysicalControl(TypedDict, total=False):
     manual_page: NotRequired[int | None]
     mechanical: Required[bool]
     name: Required[str]
-    positions: Required[list[ControlPosition]]
+    positions: NotRequired[list[ControlPosition]]
     pushable: Required[bool]
     role: NotRequired[ControlRole | None]
     short_name: NotRequired[str | None]
@@ -4251,7 +4251,7 @@ class ProcessorCore(TypedDict, total=False):
     id: Required[str]
     model: Required[ProcessorModel]
     mprofile: NotRequired[MProfileState | None]
-    registers: Required[list[RegisterValue]]
+    registers: NotRequired[list[RegisterValue]]
     released: NotRequired[bool | None]
     rprofile: NotRequired[RProfileState | None]
 
@@ -5657,12 +5657,12 @@ Soc = TypedDict(
         "$schema": Required['Literal["https://fujimod.com/schemas/soc.schema.json"]'],
         "architecture": Required["ProcessorArchitecture"],
         "blocks": Required["list[SocBlock]"],
-        "clocks": Required["list[ClockDomain]"],
-        "decoders": Required["list[AddressDecoder]"],
-        "dma_mappings": Required["list[DmaMapping]"],
+        "clocks": NotRequired["list[ClockDomain]"],
+        "decoders": NotRequired["list[AddressDecoder]"],
+        "dma_mappings": NotRequired["list[DmaMapping]"],
         "hardware": NotRequired["SocHardware | None"],
         "id": Required["str"],
-        "mappings": Required["list[AddressMapping]"],
+        "mappings": NotRequired["list[AddressMapping]"],
         "memory_regions": Required["list[MemoryRegion]"],
         "processors": Required["list[ProcessorCore]"],
         "reset": Required["SocReset"],
@@ -5736,7 +5736,7 @@ class SocProfile(TypedDict, total=False):
 
 
 class SocReset(TypedDict, total=False):
-    coprocessor_writes: Required[list[CoprocessorWrite]]
+    coprocessor_writes: NotRequired[list[CoprocessorWrite]]
     release: NotRequired[CoreRelease | None]
 
 

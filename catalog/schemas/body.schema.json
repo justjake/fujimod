@@ -1670,8 +1670,7 @@
       },
       "required": [
         "id",
-        "kind",
-        "signals"
+        "kind"
       ],
       "type": "object"
     },
@@ -1729,12 +1728,6 @@
           "type": "array"
         }
       },
-      "required": [
-        "serial_attachments",
-        "gpio_feedback",
-        "keypad_samples",
-        "thermal_connection_ids"
-      ],
       "type": "object"
     },
     "BodyProfile": {
@@ -2180,7 +2173,6 @@
               "type": "string"
             },
             "threshold": {
-              "default": null,
               "format": "uint16",
               "maximum": 65535,
               "minimum": 0,
@@ -5084,7 +5076,6 @@
               "type": "null"
             }
           ],
-          "default": null,
           "description": "Body-specific serial wiring for this panel."
         }
       },
@@ -7696,7 +7687,6 @@
           "type": "string"
         },
         "encoder_connection_id": {
-          "default": null,
           "description": "Body connection wired to the optional rotary encoder.",
           "type": [
             "string",
@@ -7712,7 +7702,6 @@
               "type": "null"
             }
           ],
-          "default": null,
           "description": "Documented focus-axis response."
         },
         "home_connections": {
@@ -7731,7 +7720,6 @@
               "type": "null"
             }
           ],
-          "default": null,
           "description": "Documented aperture positions and their optical output."
         },
         "part_id": {
@@ -8064,7 +8052,6 @@
               "type": "null"
             }
           ],
-          "default": null,
           "description": "Body-specific serial control-bus endpoint, when documented."
         },
         "part_id": {
@@ -8139,7 +8126,6 @@
           "type": "string"
         },
         "select_connection_id": {
-          "default": null,
           "description": "Connection selecting the endpoint, when declared.",
           "type": [
             "string",
@@ -8166,7 +8152,6 @@
           "type": "integer"
         },
         "clock_hz": {
-          "default": null,
           "description": "Serial clock frequency in hertz, when known.",
           "format": "uint64",
           "minimum": 0,
@@ -8304,7 +8289,6 @@
           "type": "null"
         }
       ],
-      "default": null,
       "description": "Optional removable-card slot and its body-specific contacts."
     },
     "connections": {
@@ -8330,7 +8314,6 @@
           "type": "null"
         }
       ],
-      "default": null,
       "description": "Optional display assembly and its physical characteristics."
     },
     "dram_bytes": {
@@ -8366,7 +8349,6 @@
           "type": "null"
         }
       ],
-      "default": null,
       "description": "Optional lens assembly and its physical characteristics."
     },
     "microcontroller": {
@@ -8378,7 +8360,6 @@
           "type": "null"
         }
       ],
-      "default": null,
       "description": "Optional MCU endpoint and its body-specific serial wiring."
     },
     "nand": {
@@ -8390,7 +8371,6 @@
           "type": "null"
         }
       ],
-      "default": null,
       "description": "Optional installed NAND geometry."
     },
     "parts": {
@@ -8409,7 +8389,6 @@
           "type": "null"
         }
       ],
-      "default": null,
       "description": "Optional power-controller endpoint and its body-specific wiring."
     },
     "power_on_ram_fill": {
@@ -8445,7 +8424,6 @@
           "type": "null"
         }
       ],
-      "default": null,
       "description": "Optional sensor assembly and its physical characteristics."
     },
     "soc_id": {
@@ -8464,11 +8442,7 @@
     "$schema",
     "schema",
     "id",
-    "soc_id",
-    "control_bus_chips",
-    "connections",
-    "parts",
-    "wiring"
+    "soc_id"
   ],
   "title": "Body",
   "type": "object"

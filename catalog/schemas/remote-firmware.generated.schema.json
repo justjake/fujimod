@@ -898,7 +898,6 @@
           "type": "string"
         },
         "tab": {
-          "default": null,
           "description": "Optional tab key.",
           "format": "uint32",
           "minimum": 0,

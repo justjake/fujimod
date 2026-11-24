@@ -384,7 +384,6 @@
               "type": "null"
             }
           ],
-          "default": null,
           "description": "Accepted writer and control owners for compiled function choices."
         },
         "count": {
@@ -1023,8 +1022,7 @@
             }
           },
           "required": [
-            "kind",
-            "stages"
+            "kind"
           ],
           "type": "object"
         },
@@ -1059,13 +1057,11 @@
                   "type": "null"
                 }
               ],
-              "default": null,
               "description": "Center press input, when present."
             }
           },
           "required": [
-            "kind",
-            "directions"
+            "kind"
           ],
           "type": "object"
         },
@@ -1105,8 +1101,7 @@
                 {
                   "type": "null"
                 }
-              ],
-              "default": null
+              ]
             }
           },
           "required": [
@@ -1142,7 +1137,6 @@
                   "type": "null"
                 }
               ],
-              "default": null,
               "description": "Press input, when the dial is pushable."
             }
           },
@@ -1180,7 +1174,6 @@
                   "type": "null"
                 }
               ],
-              "default": null,
               "description": "Press input, when the ring is pushable."
             }
           },
@@ -1207,8 +1200,7 @@
             }
           },
           "required": [
-            "kind",
-            "positions"
+            "kind"
           ],
           "type": "object"
         },
@@ -1236,8 +1228,7 @@
             }
           },
           "required": [
-            "kind",
-            "positions"
+            "kind"
           ],
           "type": "object"
         },
@@ -1455,7 +1446,6 @@
           "type": "integer"
         },
         "released": {
-          "default": null,
           "description": "Value read while no control of this ladder is held, when established.",
           "format": "uint16",
           "maximum": 65535,
@@ -1505,8 +1495,7 @@
             }
           },
           "required": [
-            "kind",
-            "positions"
+            "kind"
           ],
           "type": "object"
         },
@@ -1980,7 +1969,6 @@
           "description": "Analog input interpreted using located sample bands or calibration offsets.",
           "properties": {
             "callback": {
-              "default": null,
               "description": "Firmware callback evaluating the input, when present.",
               "format": "uint64",
               "minimum": 0,
@@ -1994,7 +1982,6 @@
               "type": "string"
             },
             "expected_result": {
-              "default": null,
               "description": "Callback result interpreted as active, when present.",
               "format": "uint32",
               "minimum": 0,
@@ -2422,7 +2409,6 @@
               "type": "null"
             }
           ],
-          "default": null,
           "description": "Physical-key to UI-event table of a processor whose scanner rows hold\nphysical keys; absent when the rows hold UI events directly."
         },
         "firmware_id": {
@@ -2460,7 +2446,6 @@
               "type": "null"
             }
           ],
-          "default": null,
           "description": "Native names and their source table identity, when the table was located."
         },
         "scanner": {
@@ -2912,7 +2897,6 @@
       "description": "Input routines located in one firmware; a routine the locators did not find is absent.",
       "properties": {
         "calibration": {
-          "default": null,
           "description": "Routine reading 16-bit control calibration values.",
           "format": "uint64",
           "minimum": 0,
@@ -2930,7 +2914,6 @@
               "type": "null"
             }
           ],
-          "default": null,
           "description": "Routine reading stable key scanner state."
         }
       },
@@ -3252,7 +3235,6 @@
       "description": "One located input's identity, ownership, and checked electrical predicates.",
       "properties": {
         "debug_key": {
-          "default": null,
           "description": "Exact debug command token for this input, absent for native-only inputs.",
           "type": [
             "string",
@@ -3268,7 +3250,6 @@
               "type": "null"
             }
           ],
-          "default": null,
           "description": "Located electrical interpretation, absent when the hardware is not modeled."
         },
         "event": {
@@ -3290,7 +3271,6 @@
               "type": "null"
             }
           ],
-          "default": null,
           "description": "Scanner row and its source witness, absent for inputs outside that table."
         },
         "target": {
@@ -4282,7 +4262,6 @@
               "type": "null"
             }
           ],
-          "default": null,
           "description": "Actions defined by this control's mechanism; absent for mechanical controls."
         },
         "connection_ids": {
@@ -4293,7 +4272,6 @@
           "type": "array"
         },
         "default_function": {
-          "default": null,
           "description": "Documented initial function, when available.",
           "type": [
             "string",
@@ -4301,7 +4279,6 @@
           ]
         },
         "face": {
-          "default": null,
           "description": "Text printed on the control, when present.",
           "type": [
             "string",
@@ -4317,7 +4294,6 @@
               "type": "null"
             }
           ],
-          "default": null,
           "description": "Meaning of a printed icon, when present."
         },
         "location": {
@@ -4325,7 +4301,6 @@
           "description": "Surface on which the control is located."
         },
         "manual_page": {
-          "default": null,
           "description": "Manual page identifying the control, when available.",
           "format": "uint32",
           "minimum": 0,
@@ -4362,11 +4337,9 @@
               "type": "null"
             }
           ],
-          "default": null,
           "description": "Physical role required by a declared cross-body operation."
         },
         "short_name": {
-          "default": null,
           "description": "Short uppercase caption for an unmarked control (at most 10 characters).",
           "type": [
             "string",
@@ -4377,10 +4350,8 @@
       "required": [
         "name",
         "location",
-        "connection_ids",
         "assignable",
         "pushable",
-        "positions",
         "mechanical"
       ],
       "type": "object"
@@ -4896,7 +4867,6 @@
           "type": "string"
         },
         "tab": {
-          "default": null,
           "description": "Optional tab key.",
           "format": "uint32",
           "minimum": 0,
@@ -5372,7 +5342,6 @@
           "type": "null"
         }
       ],
-      "default": null,
       "description": "Optional task receive boundary required by native input consumers."
     },
     "menu_manifest": {
@@ -5387,7 +5356,6 @@
       "description": "Installed build declarations, absent for stock firmware."
     },
     "parameter_independent_inputs": {
-      "default": [],
       "description": "Controls accepted in declared states while REC parameter work remains active.",
       "items": {
         "$ref": "#/$defs/ParameterIndependentInput"

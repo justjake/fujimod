@@ -141,7 +141,6 @@
               "type": "null"
             }
           ],
-          "default": null,
           "description": "Accepted writer and control owners for compiled function choices."
         },
         "count": {
