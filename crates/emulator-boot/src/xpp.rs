@@ -236,7 +236,7 @@ fn block_register_layouts(
                     size: block.size,
                 });
             }
-            BlockDevice::Movdc { reset_ticks } => movdc.push(Movdc {
+            BlockDevice::Movdc { reset_ticks, .. } => movdc.push(Movdc {
                 base: block.base,
                 irq: first_irq(block).unwrap_or_default(),
                 reset_ticks: *reset_ticks,
@@ -607,7 +607,47 @@ fn block_register_layouts(
             | BlockDevice::Dsp { .. }
             | BlockDevice::CountdownTimer { .. }
             | BlockDevice::ControlGroup { .. }
-            | BlockDevice::UsbCondition { .. } => {}
+            | BlockDevice::UsbCondition { .. }
+            | BlockDevice::Xp5Timer { .. }
+            | BlockDevice::Xp5TimerExtended { .. }
+            | BlockDevice::SerialFlashAperture { .. }
+            | BlockDevice::SerialFlashController { .. }
+            | BlockDevice::FlashStorageDma { .. }
+            | BlockDevice::Gates { .. }
+            | BlockDevice::ClockBanks { .. }
+            | BlockDevice::PanelPll { .. }
+            | BlockDevice::GeneralDma { .. }
+            | BlockDevice::AudioDma { .. }
+            | BlockDevice::Xp5Gpio { .. }
+            | BlockDevice::Xp5Adc { .. }
+            | BlockDevice::Temperature { .. }
+            | BlockDevice::InterprocessorMailbox { .. }
+            | BlockDevice::AudioSerial { .. }
+            | BlockDevice::MemoryConfiguration { .. }
+            | BlockDevice::DdrPhy { .. }
+            | BlockDevice::SdInterface { .. }
+            | BlockDevice::SdhciUhs2 { .. }
+            | BlockDevice::DisplayOutputLink { .. }
+            | BlockDevice::Renderer { .. }
+            | BlockDevice::ImagingPhy { .. }
+            | BlockDevice::ImagingInput { .. }
+            | BlockDevice::ImagingResize { .. }
+            | BlockDevice::ImagingPaf { .. }
+            | BlockDevice::ImagingPreview { .. }
+            | BlockDevice::ImagingRifpIo { .. }
+            | BlockDevice::ImagingRifp { .. }
+            | BlockDevice::ImagingTnr { .. }
+            | BlockDevice::ImagingFcnv { .. }
+            | BlockDevice::ImagingFilterScaler { .. }
+            | BlockDevice::ImagingRzl2 { .. }
+            | BlockDevice::ImagingResz { .. }
+            | BlockDevice::InputCapture { .. }
+            | BlockDevice::Pl011 { .. }
+            | BlockDevice::Pl022 { .. }
+            | BlockDevice::Completion { .. }
+            | BlockDevice::VideoCodec { .. }
+            | BlockDevice::ImagingDsp { .. }
+            | BlockDevice::UnmodeledBusDrain { .. } => {}
         }
     }
 
