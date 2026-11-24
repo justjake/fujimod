@@ -13,6 +13,68 @@ kind = "gpio"
 # screen stays black; removing the feedback or the NVIC 27 route leaves the screen and the
 # key walk unchanged. Only the pad model is needed to light the screen.
 pad_model = "data-latch"
+# Port registers +0x00..+0x14 as the reset stage leaves them at the EL1 handoff (setup start,
+# dumped at 3.6 ms), for the loader start, which enters after that stage. The application relies
+# on them: among them are the panel selects 15.14 (LCD) and 12.10 (EVF) as driven outputs. Without
+# them the loader start reaches the first-start pages but the shooting screen never draws. The
+# values are the emulated reset stage's, not a hardware measurement. Interrupt configuration
+# (+0x18, +0x1c) is left to the application.
+initial_registers = [
+  { port = 0, register = 1, value = 0x10 },
+  { port = 0, register = 2, value = 0xffff },
+  { port = 0, register = 3, value = 0x455 },
+  { port = 0, register = 4, value = 0x141 },
+  { port = 1, register = 0, value = 0x3 },
+  { port = 1, register = 1, value = 0xffff },
+  { port = 1, register = 2, value = 0xffff },
+  { port = 1, register = 3, value = 0x4115 },
+  { port = 1, register = 4, value = 0x5001 },
+  { port = 2, register = 1, value = 0x3f },
+  { port = 2, register = 2, value = 0x3f },
+  { port = 3, register = 0, value = 0x2 },
+  { port = 3, register = 1, value = 0x200f },
+  { port = 3, register = 2, value = 0x3fff },
+  { port = 3, register = 3, value = 0x5505 },
+  { port = 3, register = 4, value = 0x155 },
+  { port = 3, register = 5, value = 0x3ff2 },
+  { port = 4, register = 1, value = 0x3ff },
+  { port = 4, register = 2, value = 0x3ff },
+  { port = 4, register = 3, value = 0x55 },
+  { port = 4, register = 4, value = 0x5 },
+  { port = 5, register = 1, value = 0xfffd },
+  { port = 5, register = 2, value = 0xffff },
+  { port = 6, register = 1, value = 0xf },
+  { port = 6, register = 2, value = 0x1f },
+  { port = 8, register = 1, value = 0x36 },
+  { port = 8, register = 2, value = 0x3f },
+  { port = 9, register = 0, value = 0x10 },
+  { port = 9, register = 1, value = 0x33f8 },
+  { port = 9, register = 2, value = 0x3fff },
+  { port = 9, register = 3, value = 0x5500 },
+  { port = 10, register = 1, value = 0x6d8 },
+  { port = 10, register = 2, value = 0xfff },
+  { port = 10, register = 3, value = 0x5540 },
+  { port = 10, register = 4, value = 0x41 },
+  { port = 11, register = 1, value = 0x23ef },
+  { port = 11, register = 2, value = 0x3fff },
+  { port = 11, register = 4, value = 0x155 },
+  { port = 12, register = 0, value = 0x480 },
+  { port = 12, register = 1, value = 0x7db },
+  { port = 12, register = 2, value = 0x7ff },
+  { port = 12, register = 3, value = 0x555 },
+  { port = 13, register = 1, value = 0x7f },
+  { port = 13, register = 2, value = 0x7f },
+  { port = 13, register = 3, value = 0x100 },
+  { port = 14, register = 0, value = 0xfc },
+  { port = 14, register = 1, value = 0x3ff },
+  { port = 14, register = 2, value = 0x3ff },
+  { port = 14, register = 3, value = 0x5505 },
+  { port = 15, register = 0, value = 0x4000 },
+  { port = 15, register = 1, value = 0xeedf },
+  { port = 15, register = 2, value = 0xffff },
+  { port = 15, register = 3, value = 0x5540 },
+  { port = 15, register = 4, value = 0x1 },
+]
 feedback = [{ port = 1, register = 0, bit = 14, input_port = 0, input_pin = 4, rise_delay = 30000000, latch_high = true }]
 companion_input_irqs = [{ port = 0, pin = 4, line = 27, active_high = true }]
 # Shutter release: the scanner rows (kind 4, sources 0 and 1; physical keys 25 and 26) read GPIO 0.0 (S1) and 0.1 (S2),
