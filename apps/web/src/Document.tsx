@@ -57,6 +57,8 @@ export default function Document(props: { children: JSX.Element; developmentEntr
           <Show when={import.meta.env.DEV && !bug}>
             <meta name="fujimod-local-reports" content="/__simulator-reports" />
             <script src="/__simulator-reports.js" />
+          </Show>
+          <Show when={(import.meta.env.DEV || import.meta.env.MODE === 'local-preview') && !bug}>
             <script src="/__browser-diagnostics.js" />
           </Show>
           <title>{metadata.title}</title>

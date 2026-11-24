@@ -19,8 +19,34 @@ declare global {
     value instanceof Error
       ? clean(value.stack || value.message)
       : clean(typeof value === 'string' ? value : JSON.stringify(value));
+  const stalls: [number, number][] = [];
+  const inputDelays: [string, number, number][] = [];
+  let lastFrame = performance.now();
+  const frame = (now: number) => {
+    if (document.visibilityState === 'visible' && now - lastFrame > 100)
+      stalls.push([Math.round(lastFrame), Math.round(now - lastFrame)]);
+    lastFrame = now;
+    requestAnimationFrame(frame);
+  };
+  requestAnimationFrame(frame);
+  document.addEventListener('visibilitychange', () => (lastFrame = performance.now()));
+  for (const type of ['pointerdown', 'keydown'] as const)
+    window.addEventListener(
+      type,
+      (event) => {
+        const delay = performance.now() - event.timeStamp;
+        if (delay > 50) inputDelays.push([type, Math.round(event.timeStamp), Math.round(delay)]);
+      },
+      true,
+    );
+  const reported = new Set<string>();
   function report(kind: string, detail: unknown) {
-    if (++reports > 60) return;
+    // Timing checkpoints always go out; a repeated message is sent once.
+    if (kind !== 'checkpoint') {
+      const key = kind + '\0' + String(detail);
+      if (reported.has(key) || ++reports > 60) return;
+      reported.add(key);
+    }
     const viewer = document.querySelector<HTMLElement>('#viewer');
     const canvas = document.querySelector<HTMLCanvasElement>('#lcd-source');
     const state = viewer?.dataset;
@@ -54,7 +80,7 @@ declare global {
         // Keep page revisions as well as library versions: a stale preload can
         // pair old page code with new HTML before the app initializes.
         .filter((entry) =>
-          /\.(wasm|glb)(\?|$)|\/\.vite\/deps\/|\/src\/(?:home\/Page|recovery\/Page|development\/entry-client|App|Document)\.tsx(?:\?|$)/.test(
+          /\/demo\/|\.(wasm|glb)(\?|$)|\/\.vite\/deps\/|\/src\/(?:home\/Page|recovery\/Page|development\/entry-client|App|Document)\.tsx(?:\?|$)/.test(
             entry.name,
           ),
         )
@@ -67,6 +93,27 @@ declare global {
           transferred: entry.transferSize,
           status: entry.responseStatus,
         })),
+      // Every file the page loaded: how many, and when the last one arrived.
+      loaded: (() => {
+        const entries = performance
+          .getEntriesByType('resource')
+          .filter(
+            (entry): entry is PerformanceResourceTiming =>
+              entry instanceof PerformanceResourceTiming,
+          );
+        return {
+          count: entries.length,
+          lastEnd: Math.round(Math.max(0, ...entries.map((entry) => entry.responseEnd))),
+        };
+      })(),
+      // Main-thread stalls (frames held over 100 ms) and the wait before a
+      // tap or key was handled, as this device measured them.
+      stalls: stalls.slice(0, 80),
+      inputDelays: inputDelays.slice(0, 40),
+      marks: performance
+        .getEntriesByType('mark')
+        .slice(0, 40)
+        .map((mark) => [mark.name, Math.round(mark.startTime)]),
     });
     void fetch('/__browser-diagnostics', {
       method: 'POST',

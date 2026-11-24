@@ -124,9 +124,7 @@ export function ReleasePersonalNote(props: { data?: SiteReleaseData }) {
           <ManualFeatureLink page="film-effects" row="HALATION" card="halation_strength_item">
             HALATION
           </ManualFeatureLink>
-          ; <a href="https://github.com/shanecranor">shane</a> and{' '}
-          <a href="https://github.com/chris-rudmin">chris-rudmin</a> for bringing up the X-E2 and
-          X-E2S and speeding things up; and{' '}
+          ; and{' '}
           <a href="https://www.instagram.com/jody_hinterleitner">jody</a> and an anonymous tester
           for early feedback that pushed us further.
         </p>

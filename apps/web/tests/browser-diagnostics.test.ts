@@ -48,6 +48,7 @@ test('development diagnostics capture async failures, console errors and LCD sta
     },
     fetch: async (_url: string, request: { body: string }) => sent.push(JSON.parse(request.body)),
     setTimeout: (callback: () => void) => timers.push(callback),
+    requestAnimationFrame() {},
   });
   browserConsole.error('LCD display failure');
   events.unhandledrejection({
@@ -79,7 +80,8 @@ test('diagnostic endpoint saves valid reports and rejects oversized, malformed a
   const logs: string[] = [];
   let middleware: Connect.NextHandleFunction | undefined;
   const plugin = browserDiagnostics();
-  assert.equal(plugin.apply, 'serve');
+  assert.equal(plugin.apply, undefined);
+  assert.ok(typeof plugin.configurePreviewServer === 'function');
   const configure = plugin.configureServer;
   assert.ok(typeof configure === 'function');
   await configure.call(

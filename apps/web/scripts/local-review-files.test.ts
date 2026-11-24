@@ -5,7 +5,12 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
 import { build } from 'vite';
-import { assertNoPublicReviews, localReviewFiles, reviewFiles } from './local-review-files.ts';
+import {
+  assertNoPublicReviews,
+  localReviewFiles,
+  reviewFiles,
+  staticFiles,
+} from './local-review-files.ts';
 
 await test('external reviews stay local, support media ranges and cannot escape their root', async () => {
   const dir = await mkdtemp(join(tmpdir(), 'reviews-test-'));
@@ -71,6 +76,31 @@ await test('production builds never copy external reviews and reject public revi
     await writeFile(join(repository, 'public/review/secret.txt'), 'must not deploy');
     await assert.rejects(build(options), /Local review files must live outside the repository/);
   } finally {
+    await rm(dir, { recursive: true });
+  }
+});
+
+await test('a filtered mount passes other methods on for paths it does not serve', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'reviews-filtered-'));
+  await writeFile(join(dir, 'page.png'), 'png');
+  const middleware = staticFiles(dir, '/', (path) => path.endsWith('.png'));
+  const server = createServer((req, res) =>
+    middleware(req, res, () => {
+      res.statusCode = 204;
+      res.end();
+    }),
+  );
+  await new Promise<void>((done) => server.listen(0, '127.0.0.1', done));
+  const address = server.address();
+  assert.ok(address && typeof address !== 'string');
+  const url = `http://127.0.0.1:${address.port}`;
+  try {
+    assert.equal((await fetch(`${url}/__report`, { method: 'POST' })).status, 204);
+    assert.equal((await fetch(`${url}/page.png`, { method: 'POST' })).status, 405);
+  } finally {
+    await new Promise<void>((done, fail) =>
+      server.close((error) => (error ? fail(error) : done())),
+    );
     await rm(dir, { recursive: true });
   }
 });

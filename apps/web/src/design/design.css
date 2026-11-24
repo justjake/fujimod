@@ -1,8 +1,10 @@
-/* Focal UI prototypes. Every size and color a camera implementation needs is a
+/* The design system for Focal UI prototypes. Every size and color a camera implementation needs is a
    token in @theme below; components use only these tokens. Sizes are camera
    pixels on the 720x480 LCD. */
 @import 'tailwindcss' source(none);
 @source './';
+@source '../docs/design/';
+@source '../development/focal/';
 @import '@fontsource-variable/inter';
 
 @theme {
@@ -101,4 +103,19 @@
 .focal-review {
   font-family: var(--font-focal);
   -webkit-font-smoothing: antialiased;
+}
+
+/* The site's button reset is outside every layer, so it would beat each text
+   size a prototype sets on a button. Inside a prototype, buttons take the
+   layered styles again. */
+.design-frame button {
+  font: revert-layer;
+  color: revert-layer;
+}
+
+/* Prototypes are operated, not read: presses and drags never select text. */
+.design-frame {
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
 }
