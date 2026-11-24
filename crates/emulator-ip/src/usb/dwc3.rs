@@ -4,6 +4,7 @@
 //! https://github.com/torvalds/linux/blob/v6.12/drivers/usb/dwc3/core.h
 //! Only registers, hardware TRBs, DMA buffers, bus transactions and guest time
 //! drive this model. PHY transport and firmware protocols are separate devices.
+use fujimod_emulator_devices::capability::{UsbHostWait, UsbPort};
 use fujimod_emulator_devices::{Cx, Device};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
@@ -95,6 +96,10 @@ struct State {
     next_order: u64,
     pending: Vec<Pending>,
     replies: BTreeMap<u64, Reply>,
+    /// The latest [`UsbPort`] transaction on each physical endpoint. A NAK
+    /// on it repeats it, as a host does, so a port waits without inputs.
+    #[serde(default)]
+    host: BTreeMap<usize, u64>,
 }
 #[derive(Clone, Default, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -137,6 +142,7 @@ impl Dwc3 {
                 next_order: 1,
                 pending: vec![],
                 replies: BTreeMap::new(),
+                host: BTreeMap::new(),
             },
         })
     }
@@ -495,8 +501,14 @@ impl Dwc3 {
                     parameters,
                 } => self.command(cx, ep, value, parameters)?,
                 Operation::Transaction { id, ep, setup, out } => {
+                    let again = out.clone();
                     let reply = self.transfer(cx, ep, setup, out)?;
-                    self.state.replies.insert(id, reply);
+                    if reply == Reply::Nak && self.state.host.get(&ep) == Some(&id) {
+                        let next = self.transaction(cx.now(), ep, setup, again)?;
+                        self.state.host.insert(ep, next);
+                    } else {
+                        self.state.replies.insert(id, reply);
+                    }
                 }
             }
         }
@@ -535,6 +547,12 @@ impl Dwc3 {
 impl Device for Dwc3 {
     fn name(&self) -> &'static str {
         "dwc3"
+    }
+    fn usb_port(&self) -> Option<&(dyn UsbPort + 'static)> {
+        Some(self)
+    }
+    fn usb_port_mut(&mut self) -> Option<&mut (dyn UsbPort + 'static)> {
+        Some(self)
     }
     fn read(&mut self, cx: &mut Cx<'_>, address: u64, size: u8) -> u64 {
         let Some(offset) = self.offset(address, size) else {
@@ -826,6 +844,12 @@ impl Dwc3 {
             }
         }
         if saved.config != self.config
+            || state.host.iter().any(|(&ep, &id)| {
+                ep >= 32
+                    || !state.replies.contains_key(&id)
+                        && !state.pending.iter().any(|p| matches!(p.operation,
+                            Operation::Transaction { id: t, .. } if t == id))
+            })
             || saved.state.pending.len() + saved.state.replies.len() > 128
             || saved.state.next_order == 0
             || saved
@@ -877,6 +901,104 @@ impl Dwc3 {
             return Err("Invalid DWC3 checkpoint or changed physical wiring".into());
         }
         Ok(())
+    }
+}
+
+/// The physical endpoint of a USB endpoint address: OUT even, IN odd.
+fn physical(endpoint: u8) -> Result<usize, String> {
+    if endpoint & 0x70 != 0 {
+        return Err(format!("Invalid USB endpoint {endpoint:#04x}"));
+    }
+    Ok(usize::from(endpoint & 15) * 2 + usize::from(endpoint >> 7))
+}
+impl Dwc3 {
+    /// The finished reply of the port's transaction on `ep`, if any.
+    fn host_reply(&self, ep: usize) -> Result<Option<&Reply>, String> {
+        match self.state.host.get(&ep).and_then(|id| self.state.replies.get(id)) {
+            Some(Reply::Stall) => Err(format!("USB physical endpoint {ep} stalled")),
+            reply => Ok(reply),
+        }
+    }
+    /// Start a port transaction on `ep`, releasing its previous reply.
+    fn host_start(&mut self, now: u64, ep: usize, setup: bool, out: Option<Vec<u8>>) -> Result<(), String> {
+        if let Some(id) = self.state.host.remove(&ep) {
+            if self.state.replies.remove(&id).is_none() {
+                return Err(format!("USB physical endpoint {ep} has a transaction in flight"));
+            }
+        }
+        let id = self.transaction(now, ep, setup, out)?;
+        self.state.host.insert(ep, id);
+        Ok(())
+    }
+}
+impl UsbPort for Dwc3 {
+    fn cable_connected(&self) -> bool {
+        self.state.connected
+    }
+    fn bus_status(&self) -> Result<serde_json::Value, String> {
+        Ok(serde_json::json!({
+            "running": self.state.running,
+            "host": self.state.host.iter().map(|(ep, id)| (ep.to_string(), serde_json::json!({
+                "id": id, "reply": self.state.replies.get(id),
+            }))).collect::<serde_json::Map<_, _>>(),
+        }))
+    }
+    fn host_reset(&mut self, cx: &mut Cx<'_>) -> Result<(), String> {
+        for id in std::mem::take(&mut self.state.host).into_values() {
+            self.state.replies.remove(&id);
+        }
+        self.bus_reset(cx.now())
+    }
+    fn host_setup(&mut self, cx: &mut Cx<'_>, packet: &[u8]) -> Result<(), String> {
+        self.host_start(cx.now(), 0, true, Some(packet.to_vec()))
+    }
+    fn host_out(&mut self, cx: &mut Cx<'_>, endpoint: u8, packet: &[u8]) -> Result<(), String> {
+        self.host_start(cx.now(), physical(endpoint & 0x7f)?, false, Some(packet.to_vec()))
+    }
+    fn host_in(&mut self, _cx: &mut Cx<'_>, endpoint: u8, size: usize) -> Result<Vec<u8>, String> {
+        let ep = physical(endpoint | 0x80)?;
+        let Some(Reply::Data(data)) = self.host_reply(ep)? else {
+            return Err(format!("USB IN endpoint {endpoint:#04x} holds no packet"));
+        };
+        if data.len() > size {
+            return Err(format!("USB IN packet of {} bytes exceeds {size}", data.len()));
+        }
+        let data = data.clone();
+        let id = self.state.host.remove(&ep).ok_or("USB IN transaction vanished")?;
+        self.consume_reply(id)?;
+        Ok(data)
+    }
+    fn host_in_token(&mut self, cx: &mut Cx<'_>, endpoint: u8) -> Result<(), String> {
+        self.host_start(cx.now(), physical(endpoint | 0x80)?, false, None)
+    }
+    fn host_ready(&self, wait: UsbHostWait) -> Result<bool, String> {
+        let acked = |ep| Ok::<_, String>(matches!(self.host_reply(ep)?, Some(Reply::Ack)));
+        Ok(match wait {
+            UsbHostWait::Enabled => self.state.running && self.state.connected,
+            UsbHostWait::Idle => {
+                for &ep in self.state.host.keys() {
+                    if self.host_reply(ep)?.is_none() {
+                        return Ok(false);
+                    }
+                }
+                !self.state.pending.iter().any(|p| matches!(p.operation,
+                    Operation::Transaction { .. } | Operation::BusReset | Operation::Link(_)))
+            }
+            UsbHostWait::SetupTaken | UsbHostWait::ControlOutTaken(_) => acked(0)?,
+            UsbHostWait::OutTaken(endpoint) => {
+                let ep = physical(endpoint & 0x7f)?;
+                !self.state.host.contains_key(&ep) || acked(ep)?
+            }
+            UsbHostWait::InPacket(endpoint) => {
+                matches!(self.host_reply(physical(endpoint | 0x80)?)?, Some(Reply::Data(_)))
+            }
+        })
+    }
+    fn host_in_wants_token(&self, endpoint: u8) -> Result<bool, String> {
+        Ok(!self.state.host.contains_key(&physical(endpoint | 0x80)?))
+    }
+    fn packet_bytes(&self) -> Result<usize, String> {
+        Ok(if self.config.speed == 4 { 1024 } else { 512 })
     }
 }
 
