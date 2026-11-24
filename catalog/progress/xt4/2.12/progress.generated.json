@@ -5,8 +5,8 @@
   "model": "X-T4",
   "version": "2.12",
   "facts": {
-    "located": 14,
-    "total": 22
+    "located": 23,
+    "total": 24
   },
   "boot_rom": null,
   "tracks": [
@@ -23,7 +23,7 @@
         {
           "id": "analysis",
           "title": "Function index built and facts located",
-          "result": "not-run"
+          "result": "pass"
         },
         {
           "id": "catalog",
@@ -38,7 +38,7 @@
         {
           "id": "bulk-source",
           "title": "Bulk read source located",
-          "result": "stale"
+          "result": "pass"
         },
         {
           "id": "flash-reader",
@@ -48,7 +48,7 @@
         {
           "id": "state-regions",
           "title": "State-dump regions located",
-          "result": "stale"
+          "result": "pass"
         },
         {
           "id": "restart-facts",
@@ -58,7 +58,7 @@
         {
           "id": "card-files",
           "title": "Optional card file access located",
-          "result": "stale"
+          "result": "pass"
         },
         {
           "id": "controls",
@@ -68,7 +68,7 @@
         {
           "id": "settings-layout",
           "title": "Settings layout located",
-          "result": "stale"
+          "result": "pass"
         },
         {
           "id": "sd-facts",
@@ -100,10 +100,9 @@
           "id": "analysis",
           "label": "Function index built and facts located",
           "stage": "analysis",
-          "result": "not-run",
-          "passed": 14,
-          "total": 22,
-          "detail": "14 of 22 facts",
+          "result": "pass",
+          "passed": 1,
+          "total": 1,
           "milestone": true
         },
         {
@@ -126,9 +125,9 @@
           "id": "bulk-source",
           "label": "Bulk read source located",
           "stage": "bulk-source",
-          "result": "stale",
-          "passed": 0,
-          "total": 0
+          "result": "pass",
+          "passed": 1,
+          "total": 1
         },
         {
           "id": "flash-reader",
@@ -142,9 +141,9 @@
           "id": "state-regions",
           "label": "State-dump regions located",
           "stage": "state-regions",
-          "result": "stale",
-          "passed": 0,
-          "total": 0
+          "result": "pass",
+          "passed": 1,
+          "total": 1
         },
         {
           "id": "restart-facts",
@@ -158,9 +157,9 @@
           "id": "card-files",
           "label": "Optional card file access located",
           "stage": "card-files",
-          "result": "stale",
-          "passed": 0,
-          "total": 0
+          "result": "pass",
+          "passed": 1,
+          "total": 1
         },
         {
           "id": "controls",
@@ -175,9 +174,9 @@
           "id": "settings-layout",
           "label": "Settings layout located",
           "stage": "settings-layout",
-          "result": "stale",
-          "passed": 0,
-          "total": 0,
+          "result": "pass",
+          "passed": 1,
+          "total": 1,
           "milestone": true
         },
         {
@@ -207,12 +206,12 @@
         {
           "id": "rec",
           "title": "Boots to the shooting screen",
-          "result": "not-run"
+          "result": "pass"
         },
         {
           "id": "emulator-screen",
           "title": "First usable emulator screen",
-          "result": "not-run"
+          "result": "pass"
         },
         {
           "id": "sd-boot-v2-autostart-starts-in-emulator",
@@ -255,18 +254,18 @@
           "id": "emulator-screen",
           "label": "First usable screen",
           "stage": "emulator-screen",
-          "result": "not-run",
-          "passed": 0,
-          "total": 0,
+          "result": "pass",
+          "passed": 1,
+          "total": 1,
           "milestone": true
         },
         {
           "id": "rec",
           "label": "Boot",
           "stage": "rec",
-          "result": "not-run",
-          "passed": 0,
-          "total": 0,
+          "result": "pass",
+          "passed": 1,
+          "total": 1,
           "milestone": true
         },
         {
@@ -413,12 +412,12 @@
         {
           "id": "camera-identity",
           "title": "Identified over FF80 in service mode",
-          "result": "not-run"
+          "result": "pass"
         },
         {
           "id": "camera-read-gate",
           "title": "Debug read gate enabled in RAM",
-          "result": "not-run"
+          "result": "pass"
         },
         {
           "id": "camera-code",
@@ -428,7 +427,7 @@
         {
           "id": "camera-bulk",
           "title": "Bulk reads at 1 MiB/s or more",
-          "result": "not-run"
+          "result": "pass"
         },
         {
           "id": "camera-backup",
@@ -481,17 +480,17 @@
           "id": "camera-identity",
           "label": "Identified over FF80 in service mode",
           "stage": "camera-identity",
-          "result": "not-run",
-          "passed": 0,
-          "total": 0
+          "result": "pass",
+          "passed": 1,
+          "total": 1
         },
         {
           "id": "camera-read-gate",
           "label": "Debug read gate enabled in RAM",
           "stage": "camera-read-gate",
-          "result": "not-run",
-          "passed": 0,
-          "total": 0
+          "result": "pass",
+          "passed": 1,
+          "total": 1
         },
         {
           "id": "camera-code",
@@ -506,9 +505,9 @@
           "id": "camera-bulk",
           "label": "Bulk reads at 1 MiB/s or more",
           "stage": "camera-bulk",
-          "result": "not-run",
-          "passed": 0,
-          "total": 0
+          "result": "pass",
+          "passed": 1,
+          "total": 1
         },
         {
           "id": "camera-backup",
@@ -1219,6 +1218,14 @@
           "total": 1
         },
         {
+          "id": "walkthroughs/hardware-divide-history",
+          "label": "hardware-divide-history",
+          "stage": "walkthroughs",
+          "result": "not-run",
+          "passed": 0,
+          "total": 1
+        },
+        {
           "id": "walkthroughs/live-view-speedups",
           "label": "live-view-speedups",
           "stage": "walkthroughs",
@@ -1832,6 +1839,15 @@
           "milestone": true
         },
         {
+          "id": "mod-build/hardware-divide-history",
+          "label": "hardware-divide-history links",
+          "stage": "mod-build",
+          "result": "not-run",
+          "passed": 0,
+          "total": 1,
+          "milestone": true
+        },
+        {
           "id": "mod-build/live-view-speedups",
           "label": "live-view-speedups links",
           "stage": "mod-build",
@@ -2036,6 +2052,7 @@
     "internal-data-backup": "not-run",
     "welcome-sheet": "not-run",
     "hardware-divide": "not-run",
+    "hardware-divide-history": "not-run",
     "live-view-speedups": "not-run"
   }
 }
