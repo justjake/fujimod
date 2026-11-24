@@ -1538,14 +1538,6 @@
   "hardware": {
     "profiles": {
       "xpp": {
-        "cpu_model": "Cortex-A7",
-        "runtime_abi": "armv7a-unicorn-v1",
-        "mmu": "Unicorn ARMv7-A CPU page-table walker; guest CP15 and page tables",
-        "limits": [
-          "Two cores are a declared discovery input from a public dual Cortex-A7 listing; the count is not measured.",
-          "Storage covers the flash aperture, PL330 memory-to-memory programs and the method-4 decompressor. The DMP renderer and display output 1 registers are declared; output 1 scans out its OSD layers over its packed 4:2:2 video layer.",
-          "No boot ROM, reset-release controller or external peripheral replies are assumed."
-        ],
         "cache_basis": "Declared discovery input: the XP4 Cortex-A7 capacities, unmeasured. Not a cache timing model."
       }
     }

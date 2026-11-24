@@ -142,12 +142,16 @@ impl Board {
             .and_then(|v| v.try_into().ok())
             .ok_or_else(|| error("board was not constructed from boot inputs".into()))
     }
-    /// The byte the SoC's RAM holds at power-on, or None when the SoC
-    /// declares none (RAM then starts zeroed).
+    /// The byte this processor's RAM holds at power-on, or None when its
+    /// emulation document declares none (RAM then starts zeroed).
     #[getter]
     fn power_on_ram_fill(&self) -> PyResult<Option<u8>> {
-        let hardware = &self.session()?.definition["resolved"]["reference"]["soc"]["hardware"];
-        Ok(hardware["power_on_ram_fill"].as_u64().and_then(|v| u8::try_from(v).ok()))
+        let soc = self.session()?.definition["resolved"]["reference"]["soc"]["id"]
+            .as_str()
+            .ok_or_else(|| error("session has no resolved processor identity".into()))?;
+        let emulation = fujimod_catalog_configuration::ProcessorEmulation::bundled(soc)
+            .map_err(error)?;
+        Ok(emulation.power_on_ram_fill)
     }
     #[pyo3(signature=(instruction_limit=2_000_000_000))]
     fn boot_to_rec(&mut self, py: Python<'_>, instruction_limit: u64) -> PyResult<String> {

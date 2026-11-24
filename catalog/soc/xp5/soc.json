@@ -1021,13 +1021,6 @@
   "hardware": {
     "profiles": {
       "xp5": {
-        "cpu_model": "Cortex-A53",
-        "runtime_abi": "armv8a-shared-v1",
-        "limits": [
-          "The reset-handshake request completes immediately as a functional session assumption; physical reset timing and effects are unmodeled.",
-          "Memory-configuration commit completion uses an explicit 1000-tick functional latency; physical training and retention transfers are unmodeled.",
-          "Write-only configuration bands retain 32-bit words; reads and physical side effects remain unmodeled."
-        ],
         "windows": [
           {
             "name": "timer",
@@ -1687,16 +1680,7 @@
             "size": 16,
             "kind": "write-only-registers"
           }
-        ],
-        "engines": [
-          "unicorn",
-          "hypervisor"
-        ],
-        "instructions_per_tick": {
-          "numerator": 1,
-          "denominator": 1
-        },
-        "board_ticks_per_second": 1000000000
+        ]
       }
     }
   }

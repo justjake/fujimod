@@ -3054,11 +3054,6 @@ class HardwareInputProcessing(TypedDict, total=False):
     command_controls: Required[list[int]]
 
 
-class HardwareInstructionRate(TypedDict, total=False):
-    denominator: Required[int]
-    numerator: Required[int]
-
-
 class HardwareInterruptOutput(TypedDict, total=False):
     Core: Required[HardwareCore]
 
@@ -5719,23 +5714,15 @@ class SocBlockView(TypedDict, total=False):
 
 
 class SocHardware(TypedDict, total=False):
-    power_on_ram_fill: NotRequired[int | None]
     profiles: NotRequired[dict[str, SocProfile]]
 
 
 class SocProfile(TypedDict, total=False):
-    board_ticks_per_second: NotRequired[int | None]
     boot_rom: NotRequired[HardwareBootRom | None]
     cache_basis: NotRequired[str | None]
-    cpu_model: Required[str]
     discovery_mmio: NotRequired[list[HardwareDiscoveryWindow] | None]
-    engines: NotRequired[list[str] | None]
-    instructions_per_tick: NotRequired[HardwareInstructionRate | None]
-    limits: Required[list[str]]
-    mmu: NotRequired[str | None]
     private_mmio: NotRequired[list[HardwareCoreWindow] | None]
     reset_release: NotRequired[HardwareResetRelease | None]
-    runtime_abi: Required[str]
     tcm: NotRequired[HardwareTcm | None]
     update_boot: NotRequired[HardwareUpdateBoot | None]
     windows: NotRequired[list[HardwareRegisterWindow] | None]

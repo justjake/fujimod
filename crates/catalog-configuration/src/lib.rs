@@ -9,7 +9,9 @@ use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
 
 pub mod application_inputs;
+pub mod processor;
 use fujimod_catalog_run_inputs::*;
+pub use processor::{PROCESSOR_EMULATION_SCHEMA_URI, ProcessorEmulation};
 
 pub const RUN_CONFIGURATION_SCHEMA_URI: &str =
     "https://fujimod.com/schemas/emulator-run-configuration.schema.json";

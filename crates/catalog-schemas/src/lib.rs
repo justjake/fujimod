@@ -183,6 +183,12 @@ pub fn generated_documents() -> BTreeMap<&'static str, Value> {
         ),
     );
     documents.insert(
+        "emulator-processor.schema.json",
+        schema::<fujimod_catalog_configuration::ProcessorEmulation>(
+            fujimod_catalog_configuration::PROCESSOR_EMULATION_SCHEMA_URI,
+        ),
+    );
+    documents.insert(
         "resolved-selection.schema.json",
         schema::<fujimod_catalog::reference::ResolvedSelection>(
             "https://fujimod.com/schemas/resolved-selection.schema.json",

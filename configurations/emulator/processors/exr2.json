@@ -1,0 +1,9 @@
+{
+  "$schema": "https://fujimod.com/schemas/emulator-processor.schema.json",
+  "schema": 1,
+  "id": "exr2",
+  "cpu_model": "Cortex-R5F proxy for R4",
+  "runtime_abi": "exr2-r5f-fixed-map-v1",
+  "limits": [],
+  "power_on_ram_fill": 255
+}

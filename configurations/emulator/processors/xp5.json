@@ -1,0 +1,21 @@
+{
+  "$schema": "https://fujimod.com/schemas/emulator-processor.schema.json",
+  "schema": 1,
+  "id": "xp5",
+  "cpu_model": "Cortex-A53",
+  "runtime_abi": "armv8a-shared-v1",
+  "engines": [
+    "unicorn",
+    "hypervisor"
+  ],
+  "instructions_per_tick": {
+    "denominator": 1,
+    "numerator": 1
+  },
+  "board_ticks_per_second": 1000000000,
+  "limits": [
+    "The reset-handshake request completes immediately as a functional session assumption; physical reset timing and effects are unmodeled.",
+    "Memory-configuration commit completion uses an explicit 1000-tick functional latency; physical training and retention transfers are unmodeled.",
+    "Write-only configuration bands retain 32-bit words; reads and physical side effects remain unmodeled."
+  ]
+}

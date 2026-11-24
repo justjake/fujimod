@@ -8,7 +8,7 @@
 
 use crate::graph::{self, ProcessorStart};
 use fujimod_catalog::{
-    profiles::{BlockOverride, BodyProfile, RegisterIdleBits, RegisterLayouts, SocProfile},
+    profiles::{BlockOverride, BodyProfile, RegisterIdleBits, RegisterLayouts},
     reference::{
         AProfileState, Body, ConnectionSignal, MemoryKind, MemoryRegion, RegionSize, Soc, SocBlock,
     },
@@ -87,25 +87,6 @@ impl SensorImageLight {
             other => Err(format!("unknown sensor picture light {other}")),
         }
     }
-}
-
-fn soc_profile(resolved: &ResolvedConfiguration) -> Result<&SocProfile, String> {
-    let selection = resolved
-        .configuration
-        .preset
-        .as_ref()
-        .and_then(|preset| preset.hardware_selection.as_ref())
-        .ok_or("X-Processor Pro assembly requires a hardware selection")?;
-    let soc = &resolved.reference.soc;
-    soc.hardware
-        .as_ref()
-        .and_then(|hardware| hardware.profiles.get(&selection.soc_profile_id))
-        .ok_or_else(|| {
-            format!(
-                "SoC {} has no hardware profile {}",
-                soc.id, selection.soc_profile_id
-            )
-        })
 }
 
 fn bits(bits: &RegisterIdleBits) -> Value {
@@ -1495,8 +1476,8 @@ fn ram_banks(regions: &[MemoryRegion]) -> Vec<(u64, u64)> {
 
 pub fn assemble(resolved: &ResolvedConfiguration, inputs: &Inputs<'_>) -> Result<Assembly, String> {
     let selection = &resolved.reference;
-    let soc = soc_profile(resolved)?;
-    if soc.runtime_abi != "armv7a-unicorn-v1" || soc.cpu_model != "Cortex-A7" {
+    let emulation = resolved.processor_emulation()?;
+    if emulation.runtime_abi != "armv7a-unicorn-v1" || emulation.cpu_model != "Cortex-A7" {
         return Err(format!(
             "SoC profile of {} is not an ARMv7-A Cortex-A7 application profile",
             selection.soc.id
