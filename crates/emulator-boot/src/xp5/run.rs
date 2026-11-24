@@ -375,6 +375,9 @@ impl RunHost {
         } = facts;
         let inputs = inputs.ok_or("XP5 camera has no physical input handle")?;
         if let Some(path) = load_snapshot {
+            // Restoring runs the processors to the snapshot boundary; an HVF
+            // processor starts asynchronous runs only under the interactive policy.
+            session.board.set_execution_policy(policy)?;
             crate::load_snapshot(&mut session, &path)?;
         }
         session.board.install_discovery_callee_stubs(&callee_stubs)?;
