@@ -1454,6 +1454,7 @@ impl Session {
             power_spi_command_output,
             power_spi_bank_inputs,
             power_spi_eye_commit,
+            stabilizer_link,
             checksum_power_spi,
             imaging,
             movdc,
@@ -2103,6 +2104,11 @@ impl Session {
                     rtc,
                     retained_registers,
                 )?;
+        }
+        if let Some(config) = stabilizer_link {
+            devices
+                .get_or_insert_with(devices::Devices::empty)
+                .stabilizer_link(config)?;
         }
         for (base, miso) in spi_inputs {
             devices

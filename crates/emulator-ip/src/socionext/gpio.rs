@@ -3,16 +3,45 @@
 //! A pad may also be wired to a level-sensitive processor interrupt input:
 //! the line is held asserted while the pad's external level equals the
 //! route's active level. The interrupt controller latches and clears it.
+//! One pad may drive two inputs of opposite active levels.
+//!
+//! A modeled peer may drive input pads itself: it records each change with
+//! the tick it takes effect (`Pins::drive_input`), and the bank applies it and
+//! routes its interrupt inputs at that tick, its next deadline. A peer that
+//! answers output levels follows them as an `OutputWatcher`: the bank tells
+//! it, at the write's tick, about every output bit a guest write changes.
 use fujimod_emulator_devices::parts::gpio::InputIrq;
 use fujimod_emulator_devices::{Cx, Device};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::sync::{Arc, Mutex};
+/// A modeled peer that follows output pads and may drive input pads in
+/// return (`Pins::drive_input`). Called with the bank's pins locked.
+pub trait OutputWatcher: Send {
+    /// Output `pin` of bank `port` changed to `high` at tick `now`.
+    fn output_changed(&mut self, pins: &mut Pins, port: usize, pin: usize, high: bool, now: u64);
+}
+pub type SharedWatcher = Arc<Mutex<dyn OutputWatcher>>;
+/// An input level a modeled peer drives from a tick on.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct InputChange {
+    pub at: u64,
+    pub port: u8,
+    pub pin: u8,
+    pub high: bool,
+}
 #[derive(Clone, Serialize, Deserialize)]
 pub struct Pins {
     regs: [[u32; 8]; 16],
     inputs: [u16; 16],
     changes: [[u64; 16]; 16],
+    /// Peer-driven input changes not yet applied, in tick order.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pending: Vec<InputChange>,
+    /// Wiring, not state: restoring keeps the connected peers.
+    #[serde(skip)]
+    watchers: Vec<SharedWatcher>,
 }
 pub type SharedPins = Arc<Mutex<Pins>>;
 impl Pins {
@@ -21,7 +50,60 @@ impl Pins {
             regs: [[0; 8]; 16],
             inputs,
             changes: [[0; 16]; 16],
+            pending: Vec::new(),
+            watchers: Vec::new(),
         }))
+    }
+    /// Connects a peer that follows output changes.
+    pub fn watch(&mut self, watcher: SharedWatcher) {
+        self.watchers.push(watcher);
+    }
+    /// A modeled peer drives input `pin` of bank `port` to `high` from tick
+    /// `at` on. The bank applies it, and routes its interrupt inputs, at that
+    /// tick; changes of one pad apply in tick order.
+    pub fn drive_input(
+        &mut self,
+        at: u64,
+        port: usize,
+        pin: usize,
+        high: bool,
+    ) -> Result<(), String> {
+        if port >= 16 || pin >= 16 {
+            return Err("Invalid GPIO input pin".into());
+        }
+        let change = InputChange {
+            at,
+            port: port as u8,
+            pin: pin as u8,
+            high,
+        };
+        let index = self.pending.partition_point(|c| c.at <= at);
+        self.pending.insert(index, change);
+        Ok(())
+    }
+    /// Withdraws the changes not yet applied to input `pin` of bank `port`.
+    pub fn cancel_inputs(&mut self, port: usize, pin: usize) {
+        self.pending
+            .retain(|c| (usize::from(c.port), usize::from(c.pin)) != (port, pin));
+    }
+    /// Tick of the earliest peer-driven input change not yet applied.
+    pub fn next_input_change(&self) -> Option<u64> {
+        self.pending.first().map(|c| c.at)
+    }
+    /// Peer-driven input changes not yet applied, in tick order.
+    pub fn pending_inputs(&self) -> &[InputChange] {
+        &self.pending
+    }
+    /// Applies the peer-driven changes due by `now`.
+    fn apply_inputs(&mut self, now: u64) {
+        let due = self.pending.partition_point(|c| c.at <= now);
+        for change in self.pending.drain(..due).collect::<Vec<_>>() {
+            self.set_input(
+                usize::from(change.port),
+                usize::from(change.pin),
+                change.high,
+            );
+        }
     }
     /// Register words of `port`, indexed by offset / 4.
     pub fn registers(&self, port: usize) -> [u32; 8] {
@@ -74,8 +156,10 @@ impl Gpio {
     pub fn with_interrupts(mut self, interrupts: Vec<InputIrq>) -> Result<Self, String> {
         for (i, irq) in interrupts.iter().enumerate() {
             irq.validate(16)?;
+            // One pad may hold two inputs only at opposite active levels.
             if interrupts[..i].iter().any(|other| {
-                (other.port, other.pin) == (irq.port, irq.pin) || other.line == irq.line
+                (other.port, other.pin, other.active_high) == (irq.port, irq.pin, irq.active_high)
+                    || other.line == irq.line
             }) {
                 return Err("Duplicate GPIO interrupt route".into());
             }
@@ -83,6 +167,11 @@ impl Gpio {
         self.previous = interrupts.iter().map(|irq| !irq.active_high).collect();
         self.interrupts = interrupts;
         Ok(self)
+    }
+    /// Applies the peer-driven input changes due by now, then routes the pads.
+    fn settle(&mut self, cx: &mut Cx<'_>) {
+        self.pins.lock().unwrap().apply_inputs(cx.now());
+        self.route_interrupts(cx);
     }
     fn route_interrupts(&mut self, cx: &mut Cx<'_>) {
         let pins = self.pins.lock().unwrap();
@@ -150,7 +239,7 @@ impl Device for Gpio {
             cx.unmodeled();
             return 0;
         }
-        self.route_interrupts(cx);
+        self.settle(cx);
         let pins = self.pins.lock().unwrap();
         if r == 5 {
             u64::from(pins.inputs[p])
@@ -166,7 +255,7 @@ impl Device for Gpio {
             cx.unmodeled();
             return;
         }
-        self.route_interrupts(cx);
+        self.settle(cx);
         let mut pins = self.pins.lock().unwrap();
         let old = pins.regs[p][r];
         let v = value as u32;
@@ -177,9 +266,31 @@ impl Device for Gpio {
             (old & !mask) | (v & mask)
         };
         if r == 0 {
+            let new = pins.regs[p][r];
             for bit in 0..16 {
-                if (old ^ pins.regs[p][r]) & (1 << bit) != 0 {
+                if (old ^ new) & (1 << bit) != 0 {
                     pins.changes[p][bit] += 1;
+                }
+            }
+            // Watching peers follow each changed output at this tick; the
+            // input changes they answer with are this bank's deadlines.
+            if !pins.watchers.is_empty() && (old ^ new) & 0xffff != 0 {
+                let watchers = pins.watchers.clone();
+                for bit in (0..16).filter(|bit| (old ^ new) & (1 << bit) != 0) {
+                    for watcher in &watchers {
+                        watcher.lock().unwrap().output_changed(
+                            &mut pins,
+                            p,
+                            bit,
+                            new & (1 << bit) != 0,
+                            cx.now(),
+                        );
+                    }
+                }
+                let due = pins.next_input_change().is_some_and(|at| at <= cx.now());
+                drop(pins);
+                if due {
+                    self.settle(cx);
                 }
             }
         }
@@ -188,15 +299,17 @@ impl Device for Gpio {
         self.advance(cx);
     }
     fn advance(&mut self, cx: &mut Cx<'_>) {
-        self.route_interrupts(cx);
+        self.settle(cx);
     }
     fn next_deadline(&self, now: u64) -> Option<u64> {
         let pins = self.pins.lock().unwrap();
-        self.interrupts
+        let changed = self
+            .interrupts
             .iter()
             .zip(&self.previous)
-            .any(|(irq, previous)| pins.input(irq.port, irq.pin) != *previous)
-            .then_some(now)
+            .any(|(irq, previous)| pins.input(irq.port, irq.pin) != *previous);
+        let driven = pins.next_input_change().map(|at| at.max(now));
+        if changed { Some(now) } else { driven }
     }
     fn save(&self) -> Value {
         let pins = serde_json::to_value(&*self.pins.lock().unwrap()).unwrap();
@@ -220,9 +333,14 @@ impl Device for Gpio {
         &self,
         saved: &fujimod_emulator_devices::checkpoint::Checkpoint,
     ) -> Result<(), String> {
-        let (base, _, previous): (u64, Pins, Vec<bool>) = saved.decode(self.name())?;
+        let (base, pins, previous): (u64, Pins, Vec<bool>) = saved.decode(self.name())?;
         if base != self.base {
             return Err("GPIO checkpoint base differs".into());
+        }
+        if pins.pending.iter().any(|c| c.port >= 16 || c.pin >= 16)
+            || pins.pending.windows(2).any(|pair| pair[0].at > pair[1].at)
+        {
+            return Err("Invalid GPIO peer-driven input changes".into());
         }
         if previous.len() != self.interrupts.len() {
             return Err("GPIO interrupt wiring differs".into());
@@ -234,8 +352,10 @@ impl Device for Gpio {
         saved: &fujimod_emulator_devices::checkpoint::Checkpoint,
     ) -> Result<(), String> {
         self.validate_checkpoint(saved)?;
-        let (_, pins, previous): (u64, Pins, Vec<bool>) = saved.decode(self.name())?;
-        *self.pins.lock().map_err(|_| "GPIO pins poisoned")? = pins;
+        let (_, mut pins, previous): (u64, Pins, Vec<bool>) = saved.decode(self.name())?;
+        let mut current = self.pins.lock().map_err(|_| "GPIO pins poisoned")?;
+        pins.watchers = std::mem::take(&mut current.watchers);
+        *current = pins;
         self.previous = previous;
         Ok(())
     }
@@ -318,5 +438,139 @@ mod tests {
                 .with_interrupts(vec![route(0, 167), route(0, 167)])
                 .is_err()
         );
+    }
+
+    fn pad(line: u32, active_high: bool) -> InputIrq {
+        InputIrq {
+            port: 0,
+            pin: 4,
+            line,
+            active_high,
+        }
+    }
+    #[test]
+    fn one_pad_may_hold_two_inputs_of_opposite_levels_but_lines_stay_unique() {
+        let pins = Pins::new([0x10; 16]);
+        let gpio = |routes| {
+            Gpio::new(0xfff41000, pins.clone())
+                .unwrap()
+                .with_interrupts(routes)
+        };
+        assert!(gpio(vec![pad(171, false), pad(155, true)]).is_ok());
+        for routes in [
+            vec![pad(171, false), pad(155, false)],
+            vec![pad(171, false), pad(171, true)],
+            vec![
+                pad(171, false),
+                InputIrq {
+                    port: 1,
+                    pin: 2,
+                    line: 171,
+                    active_high: true,
+                },
+            ],
+        ] {
+            assert_eq!(
+                gpio(routes).err().as_deref(),
+                Some("Duplicate GPIO interrupt route")
+            );
+        }
+    }
+    #[test]
+    fn a_peer_driven_input_change_applies_and_routes_at_its_tick() {
+        use fujimod_emulator_devices::test_host::recording::RecordingHost;
+        let pins = Pins::new([0x10; 16]);
+        let mut d = Gpio::new(0xfff41000, pins.clone())
+            .unwrap()
+            .with_interrupts(vec![pad(171, false), pad(155, true)])
+            .unwrap();
+        let mut h = RecordingHost::default();
+        // The high pad asserts the active-high input at the first scan.
+        assert_eq!(d.next_deadline(0), Some(0));
+        d.advance(&mut Cx::new(&mut h, 0, 0, 0));
+        assert_eq!(h.irqs, [(155, true)]);
+        pins.lock().unwrap().drive_input(100, 0, 4, false).unwrap();
+        assert_eq!(d.next_deadline(10), Some(100));
+        h.now = 99;
+        d.advance(&mut Cx::new(&mut h, 0, 0, 0));
+        assert_eq!(read_input(&mut d, &mut h), 0x10);
+        assert_eq!(h.irqs.len(), 1);
+        // The checkpoint keeps the change that is still to come.
+        let saved = d.checkpoint().unwrap();
+        h.now = 100;
+        assert_eq!(read_input(&mut d, &mut h), 0, "a read at the tick sees it");
+        assert_eq!(h.irqs, [(155, true), (171, true), (155, false)]);
+        assert_eq!(d.next_deadline(100), None);
+        d.restore_checkpoint(&saved).unwrap();
+        assert_eq!(pins.lock().unwrap().pending_inputs().len(), 1);
+        assert_eq!(d.next_deadline(99), Some(100));
+        // A change already due is applied at once.
+        pins.lock().unwrap().cancel_inputs(0, 4);
+        assert_eq!(d.next_deadline(99), None);
+        pins.lock().unwrap().drive_input(50, 0, 4, false).unwrap();
+        assert_eq!(d.next_deadline(99), Some(99));
+        assert!(pins.lock().unwrap().drive_input(0, 16, 0, true).is_err());
+    }
+    fn read_input(
+        d: &mut Gpio,
+        h: &mut fujimod_emulator_devices::test_host::recording::RecordingHost,
+    ) -> u64 {
+        d.read(&mut Cx::new(h, 0, 0, 0), 0xfff41000 + 0x14, 4)
+    }
+    /// Answers output 1.2 rising with input 0.4 falling ten ticks later.
+    struct Echo(Vec<(usize, usize, bool, u64)>);
+    impl OutputWatcher for Echo {
+        fn output_changed(
+            &mut self,
+            pins: &mut Pins,
+            port: usize,
+            pin: usize,
+            high: bool,
+            now: u64,
+        ) {
+            self.0.push((port, pin, high, now));
+            if (port, pin, high) == (1, 2, true) {
+                pins.drive_input(now + 10, 0, 4, false).unwrap();
+            }
+        }
+    }
+    #[test]
+    fn a_watching_peer_follows_output_changes_and_survives_restore() {
+        use fujimod_emulator_devices::test_host::recording::RecordingHost;
+        let pins = Pins::new([0x10; 16]);
+        let echo = Arc::new(Mutex::new(Echo(vec![])));
+        pins.lock().unwrap().watch(echo.clone());
+        let mut d = Gpio::new(0xfff41000, pins.clone()).unwrap();
+        let mut h = RecordingHost {
+            now: 5,
+            ..Default::default()
+        };
+        let saved = d.checkpoint().unwrap();
+        d.write(
+            &mut Cx::new(&mut h, 0, 0, 0),
+            0xfff41000 + 64,
+            4,
+            0x0006_0006,
+        );
+        // Bits 1 and 2 changed; the same value again changes nothing.
+        d.write(
+            &mut Cx::new(&mut h, 0, 0, 0),
+            0xfff41000 + 64,
+            4,
+            0x0006_0006,
+        );
+        assert_eq!(echo.lock().unwrap().0, [(1, 1, true, 5), (1, 2, true, 5)]);
+        assert_eq!(d.next_deadline(5), Some(15));
+        d.restore_checkpoint(&saved).unwrap();
+        assert_eq!(d.next_deadline(5), None);
+        h.now = 7;
+        d.write(
+            &mut Cx::new(&mut h, 0, 0, 0),
+            0xfff41000 + 64,
+            4,
+            0x0004_0004,
+        );
+        assert_eq!(echo.lock().unwrap().0.last(), Some(&(1, 2, true, 7)));
+        assert_eq!(d.next_deadline(7), Some(17));
     }
 }
