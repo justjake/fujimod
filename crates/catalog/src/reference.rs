@@ -258,6 +258,22 @@ impl Soc {
             }
         }
         for block in &self.blocks {
+            if let Some(ip) = &block.ip {
+                validate_id(ip)?;
+            }
+            if let Some(parent) = &block.parent_block_id {
+                validate_id(parent)?;
+            }
+            crate::ip::validate_register_layout(&block.registers, Some(block.size))?;
+            if !block.registers.is_empty() && block.evidence.is_empty() {
+                return Err(format!(
+                    "SoC {} block {} has a register layout without evidence",
+                    self.id, block.id
+                ));
+            }
+            for evidence in &block.evidence {
+                evidence.validate()?;
+            }
             if let Some(clock_id) = &block.clock_id
                 && !self.clocks.iter().any(|clock| clock.id == *clock_id)
             {
@@ -408,6 +424,78 @@ impl Soc {
                     | crate::soc::BlockDevice::I2c { .. }
                     | crate::soc::BlockDevice::XppSd { .. }
                     | crate::soc::BlockDevice::H264Encoder { .. } => {}
+                }
+            }
+        }
+        let block_by_id: BTreeMap<_, _> = self
+            .blocks
+            .iter()
+            .map(|block| (block.id.as_str(), block))
+            .collect();
+        let mut children: BTreeMap<&str, Vec<(u64, u64, &str)>> = BTreeMap::new();
+        for block in &self.blocks {
+            let Some(parent_id) = &block.parent_block_id else {
+                continue;
+            };
+            let mut current = parent_id.as_str();
+            let mut seen = BTreeSet::new();
+            loop {
+                if !seen.insert(current) {
+                    return Err(format!(
+                        "SoC {} block {} has a parent cycle",
+                        self.id, block.id
+                    ));
+                }
+                let parent = block_by_id.get(current).ok_or_else(|| {
+                    format!(
+                        "SoC {} block {} refers to missing parent block {current}",
+                        self.id, block.id
+                    )
+                })?;
+                match &parent.parent_block_id {
+                    Some(next) => current = next,
+                    None => break,
+                }
+            }
+            let parent = block_by_id[parent_id.as_str()];
+            let parent_end = parent
+                .base
+                .checked_add(parent.size)
+                .ok_or_else(|| format!("SoC {} block {} extent overflows", self.id, parent.id))?;
+            let child_end = block
+                .base
+                .checked_add(block.size)
+                .ok_or_else(|| format!("SoC {} block {} extent overflows", self.id, block.id))?;
+            if block.base < parent.base || child_end > parent_end {
+                return Err(format!(
+                    "SoC {} block {} lies outside its parent block {parent_id}",
+                    self.id, block.id
+                ));
+            }
+            children
+                .entry(parent_id)
+                .or_default()
+                .push((block.base, child_end, block.id.as_str()));
+        }
+        for (parent_id, mut siblings) in children {
+            siblings.sort_unstable();
+            if siblings.windows(2).any(|pair| pair[0].1 > pair[1].0) {
+                return Err(format!(
+                    "SoC {} blocks nested in {parent_id} overlap",
+                    self.id
+                ));
+            }
+        }
+        for region in &self.memory_regions {
+            validate_id(&region.id)?;
+            let mut consumers = BTreeSet::new();
+            for consumer in &region.consumers {
+                validate_id(consumer)?;
+                if !consumers.insert(consumer.as_str()) {
+                    return Err(format!(
+                        "SoC {} region {} repeats consumer {consumer}",
+                        self.id, region.id
+                    ));
                 }
             }
         }
@@ -670,6 +758,9 @@ pub struct MemoryRegion {
     pub size: RegionSize,
     /// Hardware memory type.
     pub kind: MemoryKind,
+    /// Devices that consume this region without a register window.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub consumers: Vec<String>,
 }
 
 /// A memory extent with no repeated body-specific capacity.
@@ -722,12 +813,26 @@ pub enum MemoryKind {
 pub struct SocBlock {
     /// Block identity used by bodies and run inputs.
     pub id: String,
+    /// IP record this block instantiates, when the design is shared.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(
+        all(target_arch = "wasm32", not(target_os = "emscripten")),
+        tsify(type = "string | null")
+    )]
+    pub ip: Option<String>,
     /// Physical base address of the block.
     pub base: u64,
     /// Addressable block size in bytes.
     pub size: u64,
     /// Block's modeled hardware category.
     pub kind: SocBlockKind,
+    /// Containing block, when this block is nested in a larger controller.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(
+        all(target_arch = "wasm32", not(target_os = "emscripten")),
+        tsify(type = "string | null")
+    )]
+    pub parent_block_id: Option<String>,
     /// Processor core directly served by this block, for per-core interrupt controllers.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[cfg_attr(
@@ -751,6 +856,30 @@ pub struct SocBlock {
         tsify(type = "BlockDevice | null")
     )]
     pub device: Option<crate::soc::BlockDevice>,
+    /// Register layout of a block with no IP record.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub registers: Vec<crate::ip::BlockRegister>,
+    /// How the block's facts were established.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub evidence: Vec<crate::provenance::Evidence>,
+}
+
+impl SocBlock {
+    /// Refuse a run overlay change to a fact that is not a declared stand-in.
+    pub fn require_stand_in_override(&self, field: &str) -> Result<(), String> {
+        if self
+            .evidence
+            .iter()
+            .any(crate::provenance::Evidence::permits_override)
+        {
+            Ok(())
+        } else {
+            Err(format!(
+                "run overlay changes block {} {field}, whose evidence is not a stand-in",
+                self.id
+            ))
+        }
+    }
 }
 
 /// One processor core's address window into a SoC block.
@@ -1105,6 +1234,9 @@ pub struct Body {
     pub connections: Vec<BodyConnection>,
     /// Reusable part identities installed in this body.
     pub parts: Vec<String>,
+    /// Processor blocks this board leaves unconnected.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub absent_blocks: Vec<String>,
     /// Physical links between named body connections and SoC blocks or parts.
     pub wiring: Vec<BodyWiring>,
 }
@@ -1156,6 +1288,10 @@ impl Body {
             ));
         }
         unique_ids(self.parts.iter().map(String::as_str), "body part")?;
+        unique_ids(
+            self.absent_blocks.iter().map(String::as_str),
+            "body absent block",
+        )?;
         unique_ids(
             self.connections.iter().map(|item| item.id.as_str()),
             "body connection",
@@ -2867,6 +3003,7 @@ pub struct ResolvedSelection {
 pub struct ReferenceCatalog {
     firmware_versions: Vec<crate::firmware_versions::FirmwareVersion>,
     socs: BTreeMap<String, Soc>,
+    ips: BTreeMap<String, crate::ip::Ip>,
     parts: BTreeMap<String, Part>,
     bodies: BTreeMap<String, Body>,
     firmwares: BTreeMap<String, Firmware>,
@@ -2902,6 +3039,11 @@ impl ReferenceCatalog {
                 &fs::read(&versions).map_err(|e| e.to_string())?,
             )?
             .releases;
+        }
+        for (path, bytes) in read_json_files(&root.join("ip"))? {
+            let value: crate::ip::Ip = decode(&bytes, &path)?;
+            value.validate(&value.id)?;
+            insert_unique(&mut catalog.ips, value.id.clone(), value, &path)?;
         }
         for (path, bytes) in read_json_files(&root.join("soc"))? {
             let value: Soc = decode(&bytes, &path)?;
@@ -2952,6 +3094,11 @@ impl ReferenceCatalog {
             #[cfg(not(target_os = "emscripten"))]
             let bytes = source.as_bytes();
             match kind {
+                ReferenceKind::Ip => {
+                    let value: crate::ip::Ip = decode(bytes, Path::new(path))?;
+                    value.validate(&value.id)?;
+                    insert_unique(&mut catalog.ips, value.id.clone(), value, Path::new(path))?;
+                }
                 ReferenceKind::Soc => {
                     let value: Soc = decode(bytes, Path::new(path))?;
                     value.validate(&value.id)?;
@@ -3035,6 +3182,11 @@ impl ReferenceCatalog {
     /// Return a resolved SoC by its stable identity.
     pub fn soc(&self, id: &str) -> Option<&Soc> {
         self.socs.get(id)
+    }
+
+    /// Return a reusable block design by its stable identity.
+    pub fn ip(&self, id: &str) -> Option<&crate::ip::Ip> {
+        self.ips.get(id)
     }
 
     /// Return a resolved body by its stable identity.
@@ -3152,6 +3304,11 @@ impl ReferenceCatalog {
         path: &Path,
     ) -> Result<(), String> {
         match kind {
+            ReferenceKind::Ip => {
+                let value: crate::ip::Ip = decode(bytes, path)?;
+                value.validate(&value.id)?;
+                insert_unique(&mut self.ips, value.id.clone(), value, path)
+            }
             ReferenceKind::UiEventCodes => {
                 let value: crate::ui_event_codes::UiEventCodes = decode(bytes, path)?;
                 value.validate()?;
@@ -3445,6 +3602,46 @@ impl ReferenceCatalog {
                 ));
             }
         }
+        for soc in self.socs.values() {
+            let block_ids: BTreeSet<_> = soc.blocks.iter().map(|block| block.id.as_str()).collect();
+            for block in &soc.blocks {
+                if let Some(ip_id) = &block.ip {
+                    let ip = self.ips.get(ip_id).ok_or_else(|| {
+                        format!(
+                            "SoC {} block {} refers to missing IP {ip_id}",
+                            soc.id, block.id
+                        )
+                    })?;
+                    if !block.registers.is_empty() && !ip.registers.is_empty() {
+                        return Err(format!(
+                            "SoC {} block {} declares a register layout its IP already owns",
+                            soc.id, block.id
+                        ));
+                    }
+                    if let Some(device) = &ip.device
+                        && !device.allowed_for(block.kind)
+                    {
+                        return Err(format!(
+                            "SoC {} block {} IP device model is not allowed by its kind",
+                            soc.id, block.id
+                        ));
+                    }
+                }
+            }
+            for region in &soc.memory_regions {
+                for consumer in &region.consumers {
+                    if !self.ips.contains_key(consumer)
+                        && !block_ids.contains(consumer.as_str())
+                        && !self.parts.contains_key(consumer)
+                    {
+                        return Err(format!(
+                            "SoC {} region {} refers to missing consumer {consumer}",
+                            soc.id, region.id
+                        ));
+                    }
+                }
+            }
+        }
         self.validate_controls()?;
         for body in self.bodies.values() {
             if !self.socs.contains_key(&body.soc_id) {
@@ -3594,6 +3791,63 @@ impl ReferenceCatalog {
                 }
             }
             let soc = &self.socs[&body.soc_id];
+            let mut connected = BTreeSet::new();
+            if let Some(hardware) = &body.hardware {
+                for attachment in &hardware.serial_attachments {
+                    connected.insert(attachment.controller_id.as_str());
+                }
+            }
+            for chip in &body.control_bus_chips {
+                connected.insert(chip.controller_id.as_str());
+            }
+            if let Some(bus) = body
+                .sensor
+                .as_ref()
+                .and_then(|sensor| sensor.control_bus.as_ref())
+            {
+                connected.insert(bus.controller_id.as_str());
+            }
+            for controller in [
+                body.lens
+                    .as_ref()
+                    .map(|lens| lens.route.controller_id.as_str()),
+                body.display
+                    .as_ref()
+                    .and_then(|display| display.route.as_ref())
+                    .map(|route| route.controller_id.as_str()),
+                body.microcontroller
+                    .as_ref()
+                    .map(|mcu| mcu.controller_id.as_str()),
+                body.power_control
+                    .as_ref()
+                    .map(|power| power.controller_id.as_str()),
+                body.card_slot
+                    .as_ref()
+                    .and_then(|slot| slot.controller_id.as_deref()),
+            ]
+            .into_iter()
+            .flatten()
+            {
+                connected.insert(controller);
+            }
+            for wiring in &body.wiring {
+                connected.insert(wiring.source_id.as_str());
+                connected.insert(wiring.target_id.as_str());
+            }
+            for id in &body.absent_blocks {
+                if !soc.blocks.iter().any(|block| block.id == *id) {
+                    return Err(format!(
+                        "body {} absent block {id} is not a SoC block",
+                        body.id
+                    ));
+                }
+                if connected.contains(id.as_str()) {
+                    return Err(format!(
+                        "body {} lists connected block {id} as absent",
+                        body.id
+                    ));
+                }
+            }
             let block_kind = |id: &str, expected: SocBlockKind, role: &str| {
                 let block = soc
                     .blocks
@@ -3888,6 +4142,7 @@ fn read_json_files(directory: &Path) -> Result<Vec<(PathBuf, Vec<u8>)>, String> 
 
 #[derive(Clone, Copy, Debug)]
 enum ReferenceKind {
+    Ip,
     Soc,
     Part,
     Body,
@@ -4060,5 +4315,293 @@ mod ui_event_codes_tests {
         catalog.validate_controls().unwrap();
         catalog.firmware_versions[0].update_sha256 = "b".repeat(64);
         assert!(catalog.validate_controls().is_err());
+    }
+}
+
+#[cfg(test)]
+mod layout_tests {
+    use super::*;
+    use crate::ip::{
+        BlockRegister, IP_SCHEMA_URI, RegisterAccess, RegisterField, RegisterFieldValue,
+    };
+    use crate::provenance::{Evidence, EvidenceAddress, EvidenceKind, EvidenceSpace};
+
+    fn block(id: &str, base: u64, size: u64) -> SocBlock {
+        SocBlock {
+            id: id.into(),
+            ip: None,
+            base,
+            size,
+            kind: SocBlockKind::AddressWindow,
+            parent_block_id: None,
+            processor_core_id: None,
+            clock_id: None,
+            views: vec![],
+            interrupts: vec![],
+            device: None,
+            registers: vec![],
+            evidence: vec![],
+        }
+    }
+
+    fn soc(blocks: Vec<SocBlock>, regions: Vec<MemoryRegion>) -> Soc {
+        Soc {
+            schema_uri: SOC_SCHEMA_URI.into(),
+            schema: 1,
+            id: "test-soc".into(),
+            architecture: ProcessorArchitecture::Arm32,
+            processors: vec![ProcessorCore {
+                id: "core0".into(),
+                model: ProcessorModel::CortexR5f,
+                released: Some(true),
+                registers: vec![],
+                clock_id: None,
+                mprofile: None,
+                rprofile: None,
+                aprofile: None,
+            }],
+            memory_regions: regions,
+            blocks,
+            clocks: vec![],
+            hardware: None,
+            mappings: vec![],
+            dma_mappings: vec![],
+            decoders: vec![],
+            reset: SocReset {
+                release: None,
+                coprocessor_writes: vec![],
+            },
+        }
+    }
+
+    fn register(name: &str, offset: u64, width_bytes: u8) -> BlockRegister {
+        BlockRegister {
+            name: name.into(),
+            offset,
+            width_bytes,
+            reset: None,
+            access: RegisterAccess::ReadWrite,
+            fields: vec![],
+        }
+    }
+
+    fn stand_in() -> Evidence {
+        Evidence {
+            kind: EvidenceKind::StandIn,
+            firmware_ids: vec![],
+            addresses: vec![],
+        }
+    }
+
+    #[test]
+    fn block_registers_must_fit_their_window_and_not_overlap() {
+        let mut candidate = block("control", 0x1000, 0x100);
+        candidate.evidence = vec![stand_in()];
+        candidate.registers = vec![register("control", 0, 4)];
+        soc(vec![candidate], vec![]).validate("test-soc").unwrap();
+
+        let mut candidate = block("control", 0x1000, 0x100);
+        candidate.evidence = vec![stand_in()];
+        candidate.registers = vec![register("control", 0x100, 4)];
+        assert!(soc(vec![candidate], vec![]).validate("test-soc").is_err());
+
+        let mut candidate = block("control", 0x1000, 0x100);
+        candidate.evidence = vec![stand_in()];
+        candidate.registers = vec![register("control", 0, 4), register("status", 0, 4)];
+        assert!(soc(vec![candidate], vec![]).validate("test-soc").is_err());
+
+        let mut candidate = block("control", 0x1000, 0x100);
+        candidate.evidence = vec![stand_in()];
+        let mut first = register("control", 0, 4);
+        first.fields = vec![RegisterField {
+            name: "start".into(),
+            bit: 0,
+            width_bits: 2,
+            values: vec![RegisterFieldValue {
+                name: "run".into(),
+                value: 1,
+            }],
+        }];
+        candidate.registers = vec![first];
+        soc(vec![candidate], vec![]).validate("test-soc").unwrap();
+
+        let mut candidate = block("control", 0x1000, 0x100);
+        candidate.evidence = vec![stand_in()];
+        let mut first = register("control", 0, 4);
+        first.fields = vec![
+            RegisterField {
+                name: "start".into(),
+                bit: 0,
+                width_bits: 2,
+                values: vec![],
+            },
+            RegisterField {
+                name: "stop".into(),
+                bit: 1,
+                width_bits: 1,
+                values: vec![],
+            },
+        ];
+        candidate.registers = vec![first];
+        assert!(soc(vec![candidate], vec![]).validate("test-soc").is_err());
+
+        let mut candidate = block("control", 0x1000, 0x100);
+        candidate.registers = vec![register("control", 0, 4)];
+        assert!(soc(vec![candidate], vec![]).validate("test-soc").is_err());
+    }
+
+    #[test]
+    fn nested_blocks_name_a_containing_parent() {
+        let mut parent = block("controller", 0x1000, 0x1000);
+        let mut child = block("channel", 0x1100, 0x10);
+        child.parent_block_id = Some("controller".into());
+        soc(vec![parent.clone(), child], vec![])
+            .validate("test-soc")
+            .unwrap();
+
+        let mut child = block("channel", 0x3000, 0x10);
+        child.parent_block_id = Some("controller".into());
+        assert!(soc(vec![parent.clone(), child], vec![]).validate("test-soc").is_err());
+
+        let mut child = block("channel", 0x1100, 0x10);
+        child.parent_block_id = Some("missing".into());
+        assert!(soc(vec![parent.clone(), child], vec![]).validate("test-soc").is_err());
+
+        parent.parent_block_id = Some("channel".into());
+        let mut child = block("channel", 0x1100, 0x10);
+        child.parent_block_id = Some("controller".into());
+        assert!(soc(vec![parent, child], vec![]).validate("test-soc").is_err());
+
+        let parent = block("controller", 0x1000, 0x1000);
+        let mut first = block("first", 0x1100, 0x20);
+        first.parent_block_id = Some("controller".into());
+        let mut second = block("second", 0x1110, 0x20);
+        second.parent_block_id = Some("controller".into());
+        assert!(soc(vec![parent, first, second], vec![]).validate("test-soc").is_err());
+    }
+
+    #[test]
+    fn evidence_is_typed_and_only_stand_ins_allow_overrides() {
+        let evidence = Evidence {
+            kind: EvidenceKind::Located,
+            firmware_ids: vec!["example-100".into()],
+            addresses: vec![EvidenceAddress {
+                firmware_id: "example-100".into(),
+                address: 0x1000,
+                space: EvidenceSpace::Code,
+            }],
+        };
+        evidence.validate().unwrap();
+        assert!(Evidence {
+            kind: EvidenceKind::Located,
+            firmware_ids: vec![],
+            addresses: vec![],
+        }
+        .validate()
+        .is_err());
+
+        let mut candidate = block("control", 0x1000, 0x100);
+        assert!(candidate.require_stand_in_override("device").is_err());
+        candidate.evidence = vec![evidence];
+        assert!(candidate.require_stand_in_override("device").is_err());
+        candidate.evidence = vec![stand_in()];
+        candidate.require_stand_in_override("device").unwrap();
+    }
+
+    #[test]
+    fn block_ip_and_region_consumers_resolve_in_the_catalog() {
+        let mut catalog = ReferenceCatalog::default();
+        let ip = crate::ip::Ip {
+            schema_uri: IP_SCHEMA_URI.into(),
+            schema: 1,
+            id: "shared".into(),
+            device: None,
+            registers: vec![register("control", 0, 4)],
+            parameters: vec!["channels".into()],
+            evidence: vec![stand_in()],
+        };
+        ip.validate("shared").unwrap();
+        catalog.ips.insert("shared".into(), ip);
+
+        let mut candidate = block("control", 0x1000, 0x100);
+        candidate.ip = Some("shared".into());
+        candidate.evidence = vec![stand_in()];
+        candidate.registers = vec![register("status", 4, 4)];
+        catalog
+            .socs
+            .insert("test-soc".into(), soc(vec![candidate], vec![]));
+        assert!(catalog.validate_references().is_err());
+
+        let mut candidate = block("control", 0x1000, 0x100);
+        candidate.ip = Some("shared".into());
+        let region = MemoryRegion {
+            id: "sram".into(),
+            base: 0x2000_0000,
+            size: RegionSize::Bytes { bytes: 0x1000 },
+            kind: MemoryKind::Sram,
+            consumers: vec!["shared".into()],
+        };
+        catalog
+            .socs
+            .insert("test-soc".into(), soc(vec![candidate], vec![region.clone()]));
+        catalog.validate_references().unwrap();
+
+        let mut missing = region;
+        missing.consumers = vec!["missing".into()];
+        catalog
+            .socs
+            .insert("test-soc".into(), soc(vec![], vec![missing]));
+        assert!(catalog.validate_references().is_err());
+    }
+
+    #[test]
+    fn absent_blocks_must_exist_and_stay_unconnected() {
+        let mut catalog = ReferenceCatalog::default();
+        catalog
+            .socs
+            .insert("test-soc".into(), soc(vec![block("gpio", 0x1000, 0x100)], vec![]));
+        let body = |absent_blocks: Vec<&str>, wiring: Vec<BodyWiring>| Body {
+            schema_uri: BODY_SCHEMA_URI.into(),
+            schema: 1,
+            id: "test-body".into(),
+            soc_id: "test-soc".into(),
+            dram_bytes: Some(0x1000),
+            hardware: None,
+            ram_regions: vec![],
+            nand: None,
+            sensor: None,
+            lens: None,
+            display: None,
+            microcontroller: None,
+            power_control: None,
+            card_slot: None,
+            control_bus_chips: vec![],
+            connections: vec![],
+            parts: vec![],
+            absent_blocks: absent_blocks.into_iter().map(str::to_owned).collect(),
+            wiring,
+        };
+
+        let mut candidate = body(vec!["gpio"], vec![]);
+        candidate.validate("test-body").unwrap();
+        catalog.bodies.insert("test-body".into(), candidate.clone());
+        catalog.validate_references().unwrap();
+
+        candidate = body(vec!["missing"], vec![]);
+        catalog.bodies.insert("test-body".into(), candidate);
+        assert!(catalog.validate_references().is_err());
+
+        catalog.bodies.insert(
+            "test-body".into(),
+            body(
+                vec!["gpio"],
+                vec![BodyWiring {
+                    source_id: "gpio".into(),
+                    target_id: "gpio".into(),
+                    signal: WireSignal::Gpio,
+                }],
+            ),
+        );
+        assert!(catalog.validate_references().is_err());
     }
 }

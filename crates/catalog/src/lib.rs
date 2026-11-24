@@ -6,6 +6,7 @@ pub mod boot_rom;
 pub mod capture;
 pub mod firmware_versions;
 pub mod first_start;
+pub mod ip;
 pub mod ui_scene_names;
 pub mod ui_setting_names;
 pub mod ui_event_codes;
@@ -15,6 +16,7 @@ pub mod progress;
 pub mod reference;
 pub mod soc;
 
+pub use ip::Ip;
 pub use reference::{Body, Firmware, Part, ReferenceCatalog, ResolvedSelection, Soc};
 pub use soc::SocHardware;
 

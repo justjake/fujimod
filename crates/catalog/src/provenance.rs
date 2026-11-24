@@ -2,10 +2,129 @@
 
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
+use std::collections::BTreeSet;
 
 /// Schema identity for supplemental catalog provenance.
 pub const ANNOTATIONS_SCHEMA_URI: &str =
     "https://fujimod.com/schemas/catalog-annotations.generated.schema.json";
+
+/// Typed evidence for one catalog fact.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(deny_unknown_fields)]
+#[cfg_attr(feature = "schema", schemars(deny_unknown_fields))]
+#[cfg_attr(
+    all(target_arch = "wasm32", not(target_os = "emscripten")),
+    derive(tsify::Tsify),
+    tsify(hashmap_as_object, missing_as_null)
+)]
+pub struct Evidence {
+    /// How the fact was established.
+    pub kind: EvidenceKind,
+    /// Firmware identities the fact rests on.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub firmware_ids: Vec<String>,
+    /// Code or data addresses the fact rests on.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub addresses: Vec<EvidenceAddress>,
+}
+
+/// How a catalog fact was established.
+#[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(rename_all = "kebab-case")]
+#[cfg_attr(
+    all(target_arch = "wasm32", not(target_os = "emscripten")),
+    derive(tsify::Tsify),
+    tsify(hashmap_as_object, missing_as_null)
+)]
+pub enum EvidenceKind {
+    /// Read on a camera.
+    Measured,
+    /// Found in firmware code or tables.
+    Located,
+    /// Deduced from the behavior of other facts.
+    Inferred,
+    /// A declared input with no known hardware value.
+    StandIn,
+}
+
+/// One firmware address a fact rests on.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(deny_unknown_fields)]
+#[cfg_attr(feature = "schema", schemars(deny_unknown_fields))]
+#[cfg_attr(
+    all(target_arch = "wasm32", not(target_os = "emscripten")),
+    derive(tsify::Tsify),
+    tsify(hashmap_as_object, missing_as_null)
+)]
+pub struct EvidenceAddress {
+    /// Firmware identity holding the address.
+    pub firmware_id: String,
+    /// Address within that firmware.
+    pub address: u64,
+    /// Whether the address selects code or data.
+    pub space: EvidenceSpace,
+}
+
+/// The kind of address a fact rests on.
+#[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(rename_all = "kebab-case")]
+#[cfg_attr(
+    all(target_arch = "wasm32", not(target_os = "emscripten")),
+    derive(tsify::Tsify),
+    tsify(hashmap_as_object, missing_as_null)
+)]
+pub enum EvidenceSpace {
+    /// An instruction address.
+    Code,
+    /// A data address.
+    Data,
+}
+
+impl Evidence {
+    /// Whether a run overlay may replace a fact carrying this evidence.
+    pub fn permits_override(&self) -> bool {
+        self.kind == EvidenceKind::StandIn
+    }
+
+    /// Check the evidence's identities and addresses.
+    pub fn validate(&self) -> Result<(), String> {
+        let mut firmware = BTreeSet::new();
+        for id in &self.firmware_ids {
+            fujimod_catalog_identity::validate_id(id)?;
+            if !firmware.insert(id.as_str()) {
+                return Err(format!("evidence repeats firmware {id}"));
+            }
+        }
+        let mut addresses = BTreeSet::new();
+        for address in &self.addresses {
+            fujimod_catalog_identity::validate_id(&address.firmware_id)?;
+            if !addresses.insert((address.firmware_id.as_str(), address.address, address.space)) {
+                return Err(format!(
+                    "evidence repeats address {:#x} in firmware {}",
+                    address.address, address.firmware_id
+                ));
+            }
+        }
+        if matches!(self.kind, EvidenceKind::Located | EvidenceKind::Inferred)
+            && self.firmware_ids.is_empty()
+            && self.addresses.is_empty()
+        {
+            return Err(format!(
+                "{} evidence names no firmware or address",
+                match self.kind {
+                    EvidenceKind::Located => "located",
+                    EvidenceKind::Inferred => "inferred",
+                    _ => unreachable!(),
+                }
+            ));
+        }
+        Ok(())
+    }
+}
 
 /// Evidence that accompanies catalog records without changing their public identities.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]

@@ -636,6 +636,15 @@ class BlockOverride(TypedDict, total=False):
     device: Required[BlockDevice]
 
 
+class BlockRegister(TypedDict, total=False):
+    access: Required[RegisterAccess]
+    fields: NotRequired[list[RegisterField]]
+    name: Required[str]
+    offset: Required[int]
+    reset: NotRequired[int | None]
+    width_bytes: Required[int]
+
+
 class BlockRegisterBlockFrames(TypedDict, total=False):
     period_ticks: Required[int]
     start: Required[HardwareRegisterIdleBits]
@@ -663,6 +672,7 @@ Body = TypedDict(
     "Body",
     {
         "$schema": Required['Literal["https://fujimod.com/schemas/body.schema.json"]'],
+        "absent_blocks": NotRequired["list[str]"],
         "card_slot": NotRequired["CardSlotAssembly | None"],
         "connections": Required["list[BodyConnection]"],
         "control_bus_chips": Required["list[ControlBusChip]"],
@@ -2054,6 +2064,24 @@ class EventTranslation(TypedDict, total=False):
     stride: Required[int]
 
 
+class Evidence(TypedDict, total=False):
+    addresses: NotRequired[list[EvidenceAddress]]
+    firmware_ids: NotRequired[list[str]]
+    kind: Required[EvidenceKind]
+
+
+class EvidenceAddress(TypedDict, total=False):
+    address: Required[int]
+    firmware_id: Required[str]
+    space: Required[EvidenceSpace]
+
+
+type EvidenceKind = Literal["measured", "located", "inferred", "stand-in"]
+
+
+type EvidenceSpace = Literal["code", "data"]
+
+
 type ExecutionMechanism = ExecutionMechanismVariant0
 
 
@@ -3332,6 +3360,21 @@ class InputTargetVariant2(TypedDict, total=False):
     kind: Required[Literal["unclaimed"]]
 
 
+Ip = TypedDict(
+    "Ip",
+    {
+        "$schema": Required['Literal["https://fujimod.com/schemas/ip.schema.json"]'],
+        "device": NotRequired["BlockDevice | None"],
+        "evidence": Required["list[Evidence]"],
+        "id": Required["str"],
+        "parameters": NotRequired["list[str]"],
+        "registers": NotRequired["list[BlockRegister]"],
+        "schema": Required["int"],
+    },
+    total=False,
+)
+
+
 class IrisOptics(TypedDict, total=False):
     output: Required[OpticalQuantity]
     positions: Required[list[AperturePosition]]
@@ -3510,6 +3553,7 @@ type MemoryKind = Literal["dram", "rom", "sram", "tcm"]
 
 class MemoryRegion(TypedDict, total=False):
     base: Required[int]
+    consumers: NotRequired[list[str]]
     id: Required[str]
     kind: Required[MemoryKind]
     size: Required[RegionSize]
@@ -4329,6 +4373,21 @@ class RegionSizeVariant0(TypedDict, total=False):
 
 class RegionSizeVariant1(TypedDict, total=False):
     kind: Required[Literal["body_dram"]]
+
+
+type RegisterAccess = Literal["read-only", "write-only", "read-write"]
+
+
+class RegisterField(TypedDict, total=False):
+    bit: Required[int]
+    name: Required[str]
+    values: NotRequired[list[RegisterFieldValue]]
+    width_bits: Required[int]
+
+
+class RegisterFieldValue(TypedDict, total=False):
+    name: Required[str]
+    value: Required[int]
 
 
 class RegisterRange(TypedDict, total=False):
@@ -5615,10 +5674,14 @@ class SocBlock(TypedDict, total=False):
     base: Required[int]
     clock_id: NotRequired[str | None]
     device: NotRequired[BlockDevice | None]
+    evidence: NotRequired[list[Evidence]]
     id: Required[str]
     interrupts: NotRequired[list[SocBlockInterrupt]]
+    ip: NotRequired[str | None]
     kind: Required[SocBlockKind]
+    parent_block_id: NotRequired[str | None]
     processor_core_id: NotRequired[str | None]
+    registers: NotRequired[list[BlockRegister]]
     size: Required[int]
     views: NotRequired[list[SocBlockView]]
 

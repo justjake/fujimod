@@ -8172,6 +8172,13 @@
       "description": "Stable schema identifier for this document.",
       "type": "string"
     },
+    "absent_blocks": {
+      "description": "Processor blocks this board leaves unconnected.",
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
     "card_slot": {
       "anyOf": [
         {

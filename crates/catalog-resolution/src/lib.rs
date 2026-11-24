@@ -110,6 +110,7 @@ impl ResolvedConfiguration {
         validate_selection(&configuration, &reference)?;
         let mut applied = BTreeSet::new();
         let mut changed = BTreeSet::new();
+        let mut selected_hardware = false;
         configuration.overlays.clear();
         for overlay_id in overlay_ids {
             if !applied.insert(overlay_id.as_str()) {
@@ -125,6 +126,7 @@ impl ResolvedConfiguration {
                         return Err("run overlays select a device preset more than once".into());
                     }
                     preset.validate()?;
+                    selected_hardware |= preset.hardware_selection.is_some();
                     if let Some(base) = &configuration.preset {
                         if preset.execution_scope.is_none() {
                             preset.execution_scope = base.execution_scope.clone();
@@ -249,12 +251,52 @@ impl ResolvedConfiguration {
             }
             configuration.overlays.push(overlay.id);
         }
+        if selected_hardware {
+            check_overlay_hardware(&configuration, &reference)?;
+        }
         validate_selection(&configuration, &reference)?;
         Ok(Self {
             configuration,
             reference,
         })
     }
+}
+
+/// A run overlay may replace a hardware fact only when its evidence is a stand-in.
+fn check_overlay_hardware(
+    configuration: &RunConfiguration,
+    selection: &ResolvedSelection,
+) -> Result<(), String> {
+    let Some(machine) = configuration
+        .preset
+        .as_ref()
+        .and_then(|preset| preset.hardware_selection.as_ref())
+    else {
+        return Ok(());
+    };
+    let Some(profile) = selection
+        .body
+        .hardware
+        .as_ref()
+        .and_then(|body| body.profiles.get(&machine.body_profile_id))
+    else {
+        return Ok(());
+    };
+    for override_ in &profile.block_overrides {
+        let block = selection
+            .soc
+            .blocks
+            .iter()
+            .find(|block| block.id == override_.block_id)
+            .ok_or_else(|| {
+                format!(
+                    "run overlay changes missing processor block {}",
+                    override_.block_id
+                )
+            })?;
+        block.require_stand_in_override("device")?;
+    }
+    Ok(())
 }
 
 /// Check that every run-input identity exists in the selected hardware.
@@ -914,6 +956,34 @@ mod tests {
                     .unwrap_or_else(|error| panic!("run overlay {id}: {error}"));
             assert_eq!(resolved.configuration.overlays, [id]);
         }
+    }
+
+    #[test]
+    fn overlay_hardware_overrides_need_stand_in_evidence() {
+        let config = RunConfiguration::bundled("xt20-211").unwrap();
+        let catalog = ReferenceCatalog::bundled().unwrap();
+        let mut selection = catalog.resolve("xt20", "xt20-211").unwrap();
+        let overrides = selection
+            .body
+            .hardware
+            .as_ref()
+            .unwrap()
+            .profiles["xt20-discovery"]
+            .block_overrides
+            .clone();
+        assert!(!overrides.is_empty());
+        let error = check_overlay_hardware(&config, &selection).unwrap_err();
+        assert!(error.contains("not a stand-in"), "{error}");
+        for block in &mut selection.soc.blocks {
+            if overrides.iter().any(|override_| override_.block_id == block.id) {
+                block.evidence = vec![fujimod_catalog::provenance::Evidence {
+                    kind: fujimod_catalog::provenance::EvidenceKind::StandIn,
+                    firmware_ids: vec![],
+                    addresses: vec![],
+                }];
+            }
+        }
+        check_overlay_hardware(&config, &selection).unwrap();
     }
 
     #[test]
