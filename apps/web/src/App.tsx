@@ -16,6 +16,7 @@ const ReleasePersonalNotePreview = import.meta.env.DEV
 const SdkDocs = lazy(() => import('./docs/Page'));
 const Manual = lazy(() => import('./docs/Manual'));
 const DocsOverview = lazy(() => import('./docs/Overview'));
+const NotFound = lazy(() => import('./not-found/Page'));
 const textRoutes = {
   '/safety': lazy(() => import('./text/Safety')),
   '/credits': lazy(() => import('./text/Credits')),
@@ -50,10 +51,12 @@ export default function App() {
           : path === '/docs/' || path === '/docs'
             ? DocsOverview
             : path.startsWith('/docs/sdk/')
-            ? SdkDocs
-            : isManualPath(path)
-              ? Manual
-              : Home;
+              ? SdkDocs
+              : isManualPath(path)
+                ? Manual
+                : path === '/'
+                  ? Home
+                  : NotFound;
   return (
     <Loading>
       <Page />

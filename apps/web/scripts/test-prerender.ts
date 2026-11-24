@@ -16,7 +16,8 @@ import { textPagePath } from '../src/text/routes.ts';
 import credits from '../src/text/credits.generated.json' with { type: 'json' };
 import type { cycloneDx } from './sbom/bom.ts';
 const root = resolve(process.argv[2] || 'dist/client');
-const routes = siteRoutes(root);
+// 404.html is served for missing addresses, checked below.
+const routes = siteRoutes(root).filter((route) => route !== '/404');
 const sdk = readSdkDocs(resolve(root, sdkDocsPath));
 const chapters = manualChapters();
 const manualPage = chapters[0]?.pages[0];
@@ -60,7 +61,13 @@ const server = createServer(async (req, res) => {
     );
     res.end(bytes);
   } catch {
-    res.writeHead(404).end();
+    // Like Cloudflare's 404-page handling: missing addresses get 404.html.
+    try {
+      const page = await readFile(resolve(root, '404.html'));
+      res.writeHead(404, { 'Content-Type': 'text/html' }).end(page);
+    } catch {
+      res.writeHead(404).end();
+    }
   }
 });
 await new Promise<void>((done) => server.listen(0, '127.0.0.1', done));
@@ -457,6 +464,9 @@ try {
           window.__hydrationDOM = document.querySelector('#workspace');
         });
       });
+      const missing = await page.goto(base + '/docs/no-such-page/');
+      assert.equal(missing?.status(), 404);
+      await page.getByRole('heading', { name: 'Page not found' }).waitFor();
       await page.goto(base + '/');
       try {
         await page.locator('#viewer-tools[data-ready="true"]').waitFor({ state: 'attached' });
