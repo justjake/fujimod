@@ -3690,13 +3690,6 @@
       "$ref": "#/$defs/ProcessorArchitecture",
       "description": "CPU execution architecture implemented by the SoC."
     },
-    "blocks": {
-      "description": "Address and register blocks exposed by the SoC.",
-      "items": {
-        "$ref": "#/$defs/SocBlock"
-      },
-      "type": "array"
-    },
     "clocks": {
       "description": "Clock domains exposed by the SoC.",
       "items": {
@@ -3772,7 +3765,6 @@
     "architecture",
     "processors",
     "memory_regions",
-    "blocks",
     "reset"
   ],
   "title": "Soc",

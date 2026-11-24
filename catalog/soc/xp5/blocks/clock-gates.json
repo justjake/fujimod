@@ -1,0 +1,8 @@
+{
+  "$schema": "https://fujimod.com/schemas/soc-block.schema.json",
+  "schema": 1,
+  "id": "clock-gates",
+  "base": 4287676416,
+  "size": 4096,
+  "kind": "clock-controller"
+}

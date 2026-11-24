@@ -1,0 +1,23 @@
+{
+  "$schema": "https://fujimod.com/schemas/soc-block.schema.json",
+  "schema": 1,
+  "id": "block-ff632000",
+  "base": 4284686336,
+  "size": 4096,
+  "kind": "address-window",
+  "device": {
+    "model": "register_block",
+    "idle_bits": [],
+    "commands": [
+      {
+        "mask": 1,
+        "state": 1,
+        "status": 272,
+        "value": 2817,
+        "word": 0
+      }
+    ],
+    "basis": "X-T3 5.11 DRAM controller channel 3 request word at 0xff632000: writing 0xb01 to +0x000 sets +0x110 bit 0 for the routine that waits on it. Other words read back their last write.",
+    "order": 16
+  }
+}

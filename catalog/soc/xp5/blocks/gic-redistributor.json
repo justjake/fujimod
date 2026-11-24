@@ -1,0 +1,8 @@
+{
+  "$schema": "https://fujimod.com/schemas/soc-block.schema.json",
+  "schema": 1,
+  "id": "gic-redistributor",
+  "base": 4194828288,
+  "size": 524288,
+  "kind": "interrupt-controller"
+}

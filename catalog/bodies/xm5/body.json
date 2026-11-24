@@ -4,19 +4,45 @@
   "id": "xm5",
   "soc_id": "xp5",
   "dram_bytes": 1744830464,
-  "nand": null,
-  "sensor": null,
-  "lens": null,
-  "display": null,
-  "microcontroller": null,
-  "power_control": null,
-  "card_slot": null,
-  "control_bus_chips": [],
+  "hardware": {
+    "profiles": {
+      "xm5": {
+        "dram_basis": "Catalog extent of the X-M5 body; installed capacity is unmeasured.",
+        "limits": []
+      }
+    },
+    "serial_attachments": [
+      {
+        "part_id": "power-controller",
+        "controller_id": "spi8",
+        "connection_id": "power-controller-bus",
+        "select_connection_id": "power-controller-select"
+      }
+    ],
+    "gpio_feedback": [
+      {
+        "output_connection_id": "sensor-power-enable",
+        "input_connection_id": "sensor-power-sense"
+      }
+    ],
+    "thermal_connection_ids": [
+      "thermal-0"
+    ],
+    "bus_drain": {
+      "address": 1744830464,
+      "processor_ids": [
+        "core0",
+        "core1",
+        "core2",
+        "core3"
+      ],
+      "basis": "Provisional: the first address past the body's 1664 MiB DRAM catalog extent; the first strict boot stop names the stock drain read."
+    }
+  },
   "connections": [
     {
       "id": "power-controller-bus",
-      "kind": "power-control",
-      "signals": []
+      "kind": "power-control"
     },
     {
       "id": "power-controller-select",
@@ -60,8 +86,7 @@
       "signals": [
         {
           "kind": "adc",
-          "channel": 0,
-          "threshold": null
+          "channel": 0
         }
       ]
     }
@@ -81,41 +106,5 @@
       "target_id": "xe5-serial-nand",
       "signal": "storage"
     }
-  ],
-  "hardware": {
-    "serial_attachments": [
-      {
-        "part_id": "power-controller",
-        "controller_id": "spi8",
-        "connection_id": "power-controller-bus",
-        "select_connection_id": "power-controller-select"
-      }
-    ],
-    "gpio_feedback": [
-      {
-        "output_connection_id": "sensor-power-enable",
-        "input_connection_id": "sensor-power-sense"
-      }
-    ],
-    "keypad_samples": {},
-    "thermal_connection_ids": [
-      "thermal-0"
-    ],
-    "bus_drain": {
-      "address": 1744830464,
-      "processor_ids": [
-        "core0",
-        "core1",
-        "core2",
-        "core3"
-      ],
-      "basis": "Provisional: the first address past the body's 1664 MiB DRAM catalog extent; the first strict boot stop names the stock drain read."
-    },
-    "profiles": {
-      "xm5": {
-        "limits": [],
-        "dram_basis": "Catalog extent of the X-M5 body; installed capacity is unmeasured."
-      }
-    }
-  }
+  ]
 }

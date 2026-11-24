@@ -1,0 +1,15 @@
+{
+  "$schema": "https://fujimod.com/schemas/soc-block.schema.json",
+  "schema": 1,
+  "id": "raw-statistics",
+  "base": 4294033408,
+  "size": 4096,
+  "kind": "address-window",
+  "interrupts": [
+    {
+      "output": "complete",
+      "line": 50,
+      "core": "core0"
+    }
+  ]
+}

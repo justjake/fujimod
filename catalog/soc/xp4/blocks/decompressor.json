@@ -1,0 +1,18 @@
+{
+  "$schema": "https://fujimod.com/schemas/soc-block.schema.json",
+  "schema": 1,
+  "id": "decompressor",
+  "base": 4294414336,
+  "size": 108,
+  "kind": "imaging-controller",
+  "interrupts": [
+    {
+      "output": "interrupt",
+      "line": 128
+    }
+  ],
+  "device": {
+    "model": "decompressor",
+    "basis": "Declared catalog input."
+  }
+}

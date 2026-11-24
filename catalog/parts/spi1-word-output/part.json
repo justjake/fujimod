@@ -4,16 +4,11 @@
   "id": "spi1-word-output",
   "model": {
     "kind": "display-panel",
-    "width": null,
-    "height": null,
-    "orientation": null,
     "serial": "panel",
     "used_mask": 65535
   },
   "attachment": {
     "label": "serial_spi1",
-    "basis": "Declared catalog input.",
-    "limits": [],
     "serial_routes": [
       {
         "controller_address": 4294459456,
@@ -38,6 +33,7 @@
         "queue": "single",
         "endpoint_part_id": "spi1-word-output"
       }
-    ]
+    ],
+    "basis": "Declared catalog input."
   }
 }

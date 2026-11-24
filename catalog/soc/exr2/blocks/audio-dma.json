@@ -1,0 +1,8 @@
+{
+  "$schema": "https://fujimod.com/schemas/soc-block.schema.json",
+  "schema": 1,
+  "id": "audio-dma",
+  "base": 4293926976,
+  "size": 64,
+  "kind": "dma"
+}

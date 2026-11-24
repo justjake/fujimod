@@ -1,0 +1,29 @@
+{
+  "$schema": "https://fujimod.com/schemas/soc-block.schema.json",
+  "schema": 1,
+  "id": "control-bus0",
+  "base": 4294463488,
+  "size": 64,
+  "kind": "control-bus",
+  "interrupts": [
+    {
+      "output": "controller",
+      "line": 101,
+      "core": "core0"
+    }
+  ],
+  "device": {
+    "model": "control_bus",
+    "offsets": [
+      0,
+      4,
+      8,
+      16,
+      24
+    ],
+    "modes": [
+      1,
+      9
+    ]
+  }
+}

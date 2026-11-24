@@ -1,0 +1,8 @@
+{
+  "$schema": "https://fujimod.com/schemas/soc-block.schema.json",
+  "schema": 1,
+  "id": "gic-cpu-interface",
+  "base": 4294909952,
+  "size": 4096,
+  "kind": "interrupt-controller"
+}

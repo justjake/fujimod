@@ -9,11 +9,11 @@
     "sha256": "ef040de2a241c6f0318cae5a2911f7b6c1a1edc61704870f041ac0c8256603d3"
   },
   "boot_rom": {
-    "address": 4290772992,
     "content": {
       "size": 262144,
       "sha256": "151bc5d7863a4028a315eebf361f1db986d64f55076929351d207c23c027b165"
-    }
+    },
+    "address": 4290772992
   },
   "installation": {
     "flash_offset": 700,
@@ -21,7 +21,6 @@
       "0x15fb874": "camera-app (C) entry",
       "0x2dc4fa4": "recording app (D) entry"
     },
-    "loader_validation": null,
     "image_sections": [
       {
         "name": "unit-0",

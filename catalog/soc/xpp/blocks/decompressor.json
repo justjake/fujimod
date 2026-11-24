@@ -1,0 +1,18 @@
+{
+  "$schema": "https://fujimod.com/schemas/soc-block.schema.json",
+  "schema": 1,
+  "id": "decompressor",
+  "base": 4294443008,
+  "size": 108,
+  "kind": "imaging-controller",
+  "interrupts": [
+    {
+      "output": "interrupt",
+      "line": 129
+    }
+  ],
+  "device": {
+    "model": "decompressor",
+    "basis": "Method-4 streaming decompressor with the XP4 register interface: the X-T20 2.11 section-6 loader resets it through +0 (0xc5d584), waits for +0 to read nonzero and for +0x24 to read 0x10001, and connects interrupt descriptor row 0x12 of 0xed4720 (interrupt 0x81) with handler 0xc5d348 (0xc5d440)."
+  }
+}

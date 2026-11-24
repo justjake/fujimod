@@ -1,0 +1,23 @@
+{
+  "$schema": "https://fujimod.com/schemas/soc-block.schema.json",
+  "schema": 1,
+  "id": "usb-core",
+  "base": 4294262784,
+  "size": 4096,
+  "kind": "usb-controller",
+  "interrupts": [
+    {
+      "output": "device",
+      "line": 84,
+      "core": "core0"
+    },
+    {
+      "output": "host",
+      "line": 85,
+      "core": "core0"
+    }
+  ],
+  "device": {
+    "model": "usb"
+  }
+}

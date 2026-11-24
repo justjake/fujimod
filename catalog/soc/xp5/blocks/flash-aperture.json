@@ -1,0 +1,8 @@
+{
+  "$schema": "https://fujimod.com/schemas/soc-block.schema.json",
+  "schema": 1,
+  "id": "flash-aperture",
+  "base": 4026531840,
+  "size": 134217728,
+  "kind": "address-window"
+}

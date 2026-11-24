@@ -1,0 +1,12 @@
+{
+  "$schema": "https://fujimod.com/schemas/soc-block.schema.json",
+  "schema": 1,
+  "id": "hdmi-tx",
+  "base": 4160749568,
+  "size": 131072,
+  "kind": "display-controller",
+  "device": {
+    "model": "hdmi_tx",
+    "basis": "Synopsys DesignWare HDMI TX controller of X-T20 2.11 section 5, byte registers at a four-byte stride (generated accessors 0xcb29xx..0xcb8xxx): IH_FC_STAT0.. at +0x400, IH_MUTE_FC_STAT0.. at +0x600, IH_MUTE at +0x7fc (0xcb3c98), FC_DBGFORCE/FC_DBGTMDS0-2 at +0x4800/+0x4864..+0x486c and PHY_CONF0..PHY_POL0 at +0xc000..+0xc01c. 0xcbe578 reads PHY_STAT0 (+0xc010, 0xcb7df8) and takes bit 1 as hot plug and bits 4-7 as receiver sense; 0xcbe5e0 starts the connection only on hot plug. No HDMI cable was attached during the reference captures, so the controller is an idle law: PHY_STAT0 and the interrupt status registers read 0 and the other used registers read back."
+  }
+}

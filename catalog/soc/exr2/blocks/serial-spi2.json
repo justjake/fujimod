@@ -1,0 +1,20 @@
+{
+  "$schema": "https://fujimod.com/schemas/soc-block.schema.json",
+  "schema": 1,
+  "id": "serial-spi2",
+  "base": 4294459520,
+  "size": 32,
+  "kind": "serial-controller",
+  "interrupts": [
+    {
+      "output": "complete-0",
+      "line": 14,
+      "core": "core0"
+    },
+    {
+      "output": "complete-1",
+      "line": 12,
+      "core": "core0"
+    }
+  ]
+}

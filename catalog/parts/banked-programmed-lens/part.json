@@ -5,6 +5,30 @@
   "model": {
     "kind": "lens-mechanism",
     "protocol": "banked",
+    "direction_high": false,
+    "stop_response": "settled",
+    "clock_modes": [
+      {
+        "kind": "microstep_stages",
+        "ticks_per_quantum": 3
+      },
+      {
+        "kind": "encoder_stages",
+        "ticks_per_quantum": 3
+      }
+    ],
+    "motor_counters": [
+      {
+        "motor": 0,
+        "channel": 4,
+        "divider": 1
+      },
+      {
+        "motor": 0,
+        "channel": 0,
+        "divider": 4
+      }
+    ],
     "motors": [
       {
         "initial_position": 0,
@@ -26,34 +50,7 @@
           32767
         ],
         "ticks_per_step": 1000,
-        "settle_ticks": 4000,
-        "home": null
-      }
-    ],
-    "encoder": null,
-    "zoom": null,
-    "motor_counters": [
-      {
-        "motor": 0,
-        "channel": 4,
-        "divider": 1
-      },
-      {
-        "motor": 0,
-        "channel": 0,
-        "divider": 4
-      }
-    ],
-    "direction_high": false,
-    "stop_response": "settled",
-    "clock_modes": [
-      {
-        "kind": "microstep_stages",
-        "ticks_per_quantum": 3
-      },
-      {
-        "kind": "encoder_stages",
-        "ticks_per_quantum": 3
+        "settle_ticks": 4000
       }
     ]
   },
@@ -74,8 +71,7 @@
         11
       ],
       "quadrature": false,
-      "initial_phase": 0,
-      "capture_channel": null
+      "initial_phase": 0
     },
     "interrupts": [
       {
@@ -152,7 +148,6 @@
         ]
       }
     ],
-    "limits": [],
     "motor_home_pins": [
       {
         "port": 0,

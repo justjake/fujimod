@@ -1,0 +1,11 @@
+{
+  "$schema": "https://fujimod.com/schemas/soc-block.schema.json",
+  "schema": 1,
+  "id": "memory-dma",
+  "base": 4293926912,
+  "size": 64,
+  "kind": "dma",
+  "device": {
+    "model": "loader_dma"
+  }
+}

@@ -1,0 +1,25 @@
+{
+  "$schema": "https://fujimod.com/schemas/soc-block.schema.json",
+  "schema": 1,
+  "id": "lcdc1",
+  "base": 4294610944,
+  "size": 1540,
+  "kind": "display-controller",
+  "interrupts": [
+    {
+      "output": "channel0",
+      "line": 117
+    },
+    {
+      "output": "channel1",
+      "line": 118
+    }
+  ],
+  "device": {
+    "model": "display",
+    "picture_layout": "abgr8888-straight",
+    "video_layout": "yycbcr422",
+    "pixel_clock_ticks": 2,
+    "basis": "Declared catalog input."
+  }
+}

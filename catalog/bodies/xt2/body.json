@@ -4,19 +4,28 @@
   "id": "xt2",
   "soc_id": "xpp",
   "dram_bytes": 1073741824,
-  "nand": null,
-  "sensor": null,
-  "lens": null,
-  "display": null,
-  "microcontroller": null,
-  "power_control": null,
-  "card_slot": null,
-  "control_bus_chips": [],
+  "hardware": {
+    "profiles": {
+      "xt2-discovery": {
+        "block_overrides": [
+          {
+            "block_id": "pcie-root-complex",
+            "device": {
+              "model": "register_block",
+              "idle_bits": [],
+              "basis": "DesignWare PCIe root-complex registers of X-T2 4.41: routine 0xa7c1e0 programs +0x710 (port link control) and, after link up, +0x18 and +0x4; 0xa80950 programs outbound translation windows through +0x900..+0x91c to 0xfe081000 (endpoint configuration header, whose +0x3c/+0x3d interrupt line and pin are checked) and 0xf0000000. Plain registers: with the PHY link down, only the +0x710 setup before the poll is reached.",
+              "order": 1000
+            }
+          }
+        ],
+        "dram_basis": "Declared discovery input from firmware, not measured: X-T2 4.41 section 5 0xcf8200 sets the attribute of 0x13d4000-0x3fffffff to 3, the value it gives its own read-write data at 0xf99000 (0xcf81b0), so the firmware uses RAM up to 1 GiB. RAM population and the camera MMU table are not read."
+      }
+    }
+  },
   "connections": [
     {
       "id": "flash-storage",
-      "kind": "control",
-      "signals": []
+      "kind": "control"
     },
     {
       "id": "controls-adc-1",
@@ -24,8 +33,7 @@
       "signals": [
         {
           "kind": "adc",
-          "channel": 1,
-          "threshold": null
+          "channel": 1
         }
       ]
     },
@@ -35,8 +43,7 @@
       "signals": [
         {
           "kind": "adc",
-          "channel": 2,
-          "threshold": null
+          "channel": 2
         }
       ]
     },
@@ -46,8 +53,7 @@
       "signals": [
         {
           "kind": "adc",
-          "channel": 3,
-          "threshold": null
+          "channel": 3
         }
       ]
     },
@@ -57,8 +63,7 @@
       "signals": [
         {
           "kind": "adc",
-          "channel": 5,
-          "threshold": null
+          "channel": 5
         }
       ]
     },
@@ -68,8 +73,7 @@
       "signals": [
         {
           "kind": "adc",
-          "channel": 6,
-          "threshold": null
+          "channel": 6
         }
       ]
     },
@@ -79,8 +83,7 @@
       "signals": [
         {
           "kind": "adc",
-          "channel": 7,
-          "threshold": null
+          "channel": 7
         }
       ]
     },
@@ -202,27 +205,5 @@
       "target_id": "xt2-flash",
       "signal": "storage"
     }
-  ],
-  "hardware": {
-    "serial_attachments": [],
-    "gpio_feedback": [],
-    "keypad_samples": {},
-    "thermal_connection_ids": [],
-    "profiles": {
-      "xt2-discovery": {
-        "dram_basis": "Declared discovery input from firmware, not measured: X-T2 4.41 section 5 0xcf8200 sets the attribute of 0x13d4000-0x3fffffff to 3, the value it gives its own read-write data at 0xf99000 (0xcf81b0), so the firmware uses RAM up to 1 GiB. RAM population and the camera MMU table are not read.",
-        "block_overrides": [
-          {
-            "block_id": "pcie-root-complex",
-            "device": {
-              "model": "register_block",
-              "idle_bits": [],
-              "basis": "DesignWare PCIe root-complex registers of X-T2 4.41: routine 0xa7c1e0 programs +0x710 (port link control) and, after link up, +0x18 and +0x4; 0xa80950 programs outbound translation windows through +0x900..+0x91c to 0xfe081000 (endpoint configuration header, whose +0x3c/+0x3d interrupt line and pin are checked) and 0xf0000000. Plain registers: with the PHY link down, only the +0x710 setup before the poll is reached.",
-              "order": 1000
-            }
-          }
-        ]
-      }
-    }
-  }
+  ]
 }

@@ -2,7 +2,6 @@
   "$schema": "https://fujimod.com/schemas/ip.schema.json",
   "schema": 1,
   "id": "gicv2",
-  "device": null,
   "registers": [
     {
       "name": "distributor_control",

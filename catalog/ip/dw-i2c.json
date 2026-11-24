@@ -2,7 +2,6 @@
   "$schema": "https://fujimod.com/schemas/ip.schema.json",
   "schema": 1,
   "id": "dw-i2c",
-  "device": null,
   "registers": [
     {
       "name": "control",

@@ -7,8 +7,5 @@
   "update": {
     "size": 20633088,
     "sha256": "d51108e476e1028a18472df2797c8d81a22736e0b90a48b02b0ddc278ba91fba"
-  },
-  "boot_rom": null,
-  "installation": null,
-  "generated_facts": null
+  }
 }

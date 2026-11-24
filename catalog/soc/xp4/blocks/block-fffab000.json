@@ -1,0 +1,19 @@
+{
+  "$schema": "https://fujimod.com/schemas/soc-block.schema.json",
+  "schema": 1,
+  "id": "block-fffab000",
+  "base": 4294619136,
+  "size": 4096,
+  "kind": "address-window",
+  "device": {
+    "model": "register_block",
+    "idle_bits": [
+      {
+        "mask": 1,
+        "offset": 0
+      }
+    ],
+    "basis": "X-T3 5.11 viewfinder output setup, run when VIEW MODE selects the viewfinder: it read-modify-writes +0x004, writes table words to +0x008..+0x014, then writes 0 to +0x000 and waits for bit 0 to read 1; its release sets +0x004 bits 0x1f0fff again. Other words read back their last write; what the words select is not modeled. The viewfinder picture itself is scanned by the rear screen controller at 0xfffa9000, retimed to 1280 columns.",
+    "order": 24
+  }
+}

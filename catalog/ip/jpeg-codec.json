@@ -2,7 +2,6 @@
   "$schema": "https://fujimod.com/schemas/ip.schema.json",
   "schema": 1,
   "id": "jpeg-codec",
-  "device": null,
   "registers": [
     {
       "name": "control",

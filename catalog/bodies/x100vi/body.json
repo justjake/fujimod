@@ -4,39 +4,119 @@
   "id": "x100vi",
   "soc_id": "xp5",
   "dram_bytes": 1744830464,
-  "nand": null,
-  "sensor": null,
-  "lens": null,
-  "display": null,
-  "microcontroller": null,
-  "power_control": null,
-  "card_slot": null,
-  "control_bus_chips": [],
+  "hardware": {
+    "profiles": {
+      "x100vi": {
+        "dram_basis": "Declared catalog input.",
+        "limits": []
+      }
+    },
+    "serial_attachments": [
+      {
+        "part_id": "focus-actuator",
+        "controller_id": "spi4",
+        "connection_id": "focus-actuator-bus"
+      },
+      {
+        "part_id": "iris-actuator",
+        "controller_id": "spi5",
+        "connection_id": "iris-actuator-bus"
+      },
+      {
+        "part_id": "audio-serial-output",
+        "controller_id": "spi8",
+        "connection_id": "audio-serial-output-bus"
+      },
+      {
+        "part_id": "imaging-serial-output",
+        "controller_id": "spi3",
+        "connection_id": "imaging-serial-output-bus"
+      },
+      {
+        "part_id": "power-controller",
+        "controller_id": "spi0",
+        "connection_id": "power-controller-bus",
+        "select_connection_id": "power-controller-select"
+      },
+      {
+        "part_id": "serial-calibration",
+        "controller_id": "spi0",
+        "connection_id": "serial-calibration-bus",
+        "select_connection_id": "serial-calibration-select"
+      },
+      {
+        "part_id": "bis-configuration",
+        "controller_id": "serial",
+        "connection_id": "bis-configuration-bus",
+        "select_connection_id": "bis-configuration-select"
+      },
+      {
+        "part_id": "lsm6ds",
+        "controller_id": "serial",
+        "connection_id": "lsm6ds-bus",
+        "select_connection_id": "lsm6ds-select"
+      }
+    ],
+    "gpio_feedback": [
+      {
+        "output_connection_id": "feedback-0-output",
+        "input_connection_id": "feedback-0-input"
+      }
+    ],
+    "keypad_samples": {
+      "back": 2227,
+      "down": 3409,
+      "left": 2829,
+      "menu": 3472,
+      "menu_back": 1999,
+      "right": 2068,
+      "up": 1558
+    },
+    "bus_drain": {
+      "address": 1744830464,
+      "processor_ids": [
+        "core0",
+        "core1",
+        "core2",
+        "core3"
+      ],
+      "basis": "The stock firmware drains the bus with a discarded read of the first address past its DRAM map, which ends at 0x68000000 (Linux 366 MiB plus shared arenas, from the supplied Linux device tree and the firmware memory map)."
+    }
+  },
+  "ram_regions": [
+    {
+      "id": "dram-0",
+      "base": 0,
+      "bytes": 1073741824,
+      "kind": "dram"
+    },
+    {
+      "id": "dram-1",
+      "base": 1073741824,
+      "bytes": 671088640,
+      "kind": "dram"
+    }
+  ],
   "connections": [
     {
       "id": "focus-actuator-bus",
-      "kind": "lens",
-      "signals": []
+      "kind": "lens"
     },
     {
       "id": "iris-actuator-bus",
-      "kind": "lens",
-      "signals": []
+      "kind": "lens"
     },
     {
       "id": "audio-serial-output-bus",
-      "kind": "control",
-      "signals": []
+      "kind": "control"
     },
     {
       "id": "imaging-serial-output-bus",
-      "kind": "sensor",
-      "signals": []
+      "kind": "sensor"
     },
     {
       "id": "power-controller-bus",
-      "kind": "power-control",
-      "signals": []
+      "kind": "power-control"
     },
     {
       "id": "power-controller-select",
@@ -52,8 +132,7 @@
     },
     {
       "id": "serial-calibration-bus",
-      "kind": "control",
-      "signals": []
+      "kind": "control"
     },
     {
       "id": "serial-calibration-select",
@@ -69,8 +148,7 @@
     },
     {
       "id": "bis-configuration-bus",
-      "kind": "control",
-      "signals": []
+      "kind": "control"
     },
     {
       "id": "bis-configuration-select",
@@ -86,8 +164,7 @@
     },
     {
       "id": "lsm6ds-bus",
-      "kind": "control",
-      "signals": []
+      "kind": "control"
     },
     {
       "id": "lsm6ds-select",
@@ -251,99 +328,6 @@
       "source_id": "flash",
       "target_id": "x100vi-serial-nor",
       "signal": "storage"
-    }
-  ],
-  "hardware": {
-    "serial_attachments": [
-      {
-        "part_id": "focus-actuator",
-        "controller_id": "spi4",
-        "connection_id": "focus-actuator-bus",
-        "select_connection_id": null
-      },
-      {
-        "part_id": "iris-actuator",
-        "controller_id": "spi5",
-        "connection_id": "iris-actuator-bus",
-        "select_connection_id": null
-      },
-      {
-        "part_id": "audio-serial-output",
-        "controller_id": "spi8",
-        "connection_id": "audio-serial-output-bus",
-        "select_connection_id": null
-      },
-      {
-        "part_id": "imaging-serial-output",
-        "controller_id": "spi3",
-        "connection_id": "imaging-serial-output-bus",
-        "select_connection_id": null
-      },
-      {
-        "part_id": "power-controller",
-        "controller_id": "spi0",
-        "connection_id": "power-controller-bus",
-        "select_connection_id": "power-controller-select"
-      },
-      {
-        "part_id": "serial-calibration",
-        "controller_id": "spi0",
-        "connection_id": "serial-calibration-bus",
-        "select_connection_id": "serial-calibration-select"
-      },
-      {
-        "part_id": "bis-configuration",
-        "controller_id": "serial",
-        "connection_id": "bis-configuration-bus",
-        "select_connection_id": "bis-configuration-select"
-      },
-      {
-        "part_id": "lsm6ds",
-        "controller_id": "serial",
-        "connection_id": "lsm6ds-bus",
-        "select_connection_id": "lsm6ds-select"
-      }
-    ],
-    "gpio_feedback": [
-      {
-        "output_connection_id": "feedback-0-output",
-        "input_connection_id": "feedback-0-input"
-      }
-    ],
-    "keypad_samples": {
-      "menu": 3472,
-      "back": 2227,
-      "menu_back": 1999,
-      "up": 1558,
-      "down": 3409,
-      "left": 2829,
-      "right": 2068
-    },
-    "thermal_connection_ids": [],
-    "bus_drain": {
-      "address": 1744830464,
-      "processor_ids": ["core0", "core1", "core2", "core3"],
-      "basis": "The stock firmware drains the bus with a discarded read of the first address past its DRAM map, which ends at 0x68000000 (Linux 366 MiB plus shared arenas, from the supplied Linux device tree and the firmware memory map)."
-    },
-    "profiles": {
-      "x100vi": {
-        "limits": [],
-        "dram_basis": "Declared catalog input."
-      }
-    }
-  },
-  "ram_regions": [
-    {
-      "id": "dram-0",
-      "base": 0,
-      "bytes": 1073741824,
-      "kind": "dram"
-    },
-    {
-      "id": "dram-1",
-      "base": 1073741824,
-      "bytes": 671088640,
-      "kind": "dram"
     }
   ]
 }

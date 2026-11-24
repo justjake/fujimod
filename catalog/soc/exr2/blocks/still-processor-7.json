@@ -1,0 +1,8 @@
+{
+  "$schema": "https://fujimod.com/schemas/soc-block.schema.json",
+  "schema": 1,
+  "id": "still-processor-7",
+  "base": 4294205584,
+  "size": 112,
+  "kind": "address-window"
+}

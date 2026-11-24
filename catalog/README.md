@@ -50,6 +50,11 @@ in device parameters.
 Each hardware block is one file, `soc/<id>/blocks/<block-id>.json`, and is the
 only place its facts appear:
 
+The file holds the block's fields at the top level beside `$schema` and
+`schema`, and declares no order. The loader joins every block file to its
+processor by ID, refusing a repeated ID or a block file outside its processor,
+and orders the blocks by base address then ID.
+
 | Field | Holds |
 | --- | --- |
 | `id`, `kind`, `base`, `size` | Identity and the register window |

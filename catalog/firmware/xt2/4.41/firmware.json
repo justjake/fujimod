@@ -9,19 +9,16 @@
     "sha256": "dd02ec5a862cf0e6f03a519a600ed99435efa442848249945b13ca6d78fabb25"
   },
   "boot_rom": {
-    "address": 4293918720,
     "content": {
       "size": 32768,
       "sha256": "632445259ac679bf36281ea3f707b127759e0802bd507ba2b8d5b926492fd59f"
-    }
-  },
-  "installation": null,
-  "generated_facts": {
-    "remote": null,
-    "cfgdata_location": {
-      "kind": "pointer",
-      "address": 16929604
     },
-    "identity_checks": []
+    "address": 4293918720
+  },
+  "generated_facts": {
+    "cfgdata_location": {
+      "address": 16929604,
+      "kind": "pointer"
+    }
   }
 }

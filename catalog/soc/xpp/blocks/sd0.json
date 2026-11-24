@@ -1,0 +1,23 @@
+{
+  "$schema": "https://fujimod.com/schemas/soc-block.schema.json",
+  "schema": 1,
+  "id": "sd0",
+  "base": 4294516736,
+  "size": 4096,
+  "kind": "sd-card-controller",
+  "interrupts": [
+    {
+      "output": "status",
+      "line": 83
+    }
+  ],
+  "device": {
+    "model": "xpp_sd",
+    "register_offset": 512,
+    "reset_channel": 0,
+    "transfer_ticks": 4800,
+    "clock_ticks": 48,
+    "reset_ticks": 48,
+    "basis": "SD channel 0 of X-T20 2.11 section 5 (0xc6164c..0xc65f24): channel n is at 0xfff92000 + 0x1000*n with its SDHCI bank at +0x200 for channel 0 and +0x100 otherwise. 0xc6592c..0xc65a48 program vendor words +0x20, +0x24 and +0xec; 0xc658cc then tries the UHS-II interface (VDD2 power, host control 2 = 0x107, internal clock) and 0xc65d90 reads present-state bit 31, which is clear for a card without UHS-II, so the driver resets the host through the reset gates and starts the 3.3 V interface. Interrupt descriptor row 0x19 of table 0xed471c connects channel 0 to interrupt 83 (rows 0x1a/0x1b: channels 1/2, 84/85). Channels 1 and 2 (0xfff93000, used from 0xc64cbc, and 0xfff94000) are not mapped: the driver logs SDIO errors (0xc673b8..0xc67804), but which channel carries the Wi-Fi module is not established, and the wificont and netdrv tasks wait for messages in REC and the menu, so a strict run that reached either channel would stop on the unmapped access. Clock settle (1 us), transfer (100 us) and wrapper reset (1 us) times are assumed, not measured."
+  }
+}

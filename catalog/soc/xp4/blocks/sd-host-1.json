@@ -1,0 +1,36 @@
+{
+  "$schema": "https://fujimod.com/schemas/soc-block.schema.json",
+  "schema": 1,
+  "id": "sd-host-1",
+  "base": 4294737920,
+  "size": 4096,
+  "kind": "sd-card-controller",
+  "interrupts": [
+    {
+      "output": "status",
+      "line": 237
+    }
+  ],
+  "device": {
+    "model": "sd_host",
+    "capabilities": 635973808,
+    "capabilities_2": 8311,
+    "clock_ticks": 8,
+    "slot_and_version": 16908288,
+    "transfer_ticks": 4800,
+    "vendor_offsets": [
+      256,
+      264,
+      268,
+      272,
+      276,
+      292,
+      304,
+      336,
+      340,
+      480,
+      484
+    ],
+    "basis": "SDHCI host page of one card slot. The present-state, capability and version words follow the standard SDHCI layout, and the clock and timeout words are programmed by the driver. The interrupt line is declared for the slot. The vendor words are programmed by the driver; their meanings are not decoded, so they read back their last write. Clock settle and transfer times are assumed, not measured."
+  }
+}

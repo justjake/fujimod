@@ -1,0 +1,12 @@
+{
+  "$schema": "https://fujimod.com/schemas/soc-block.schema.json",
+  "schema": 1,
+  "id": "gpio",
+  "base": 4293967872,
+  "size": 1024,
+  "kind": "gpio",
+  "device": {
+    "model": "gpio",
+    "basis": "Sixteen GPIO banks with a 0x40 stride and input levels at +0x14, the same layout as the XP4 banks: X-T20 2.11 stage 2 (0x102c) copies the sixteen input words into the boot information and seg5 0xc4e138 reads the live register. Discovery up to REC writes only registers 0-7 of each bank."
+  }
+}

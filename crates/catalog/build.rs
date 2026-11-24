@@ -84,6 +84,15 @@ fn main() {
             ("Firmware", "state.generated.json") => "State",
             ("Body", "body.json") | ("Firmware", "firmware.json") => kind,
             ("Body" | "Firmware", _) => panic!("unknown catalog document {}", path.display()),
+            ("Soc", _)
+                if path
+                    .parent()
+                    .and_then(|parent| parent.file_name())
+                    .and_then(|name| name.to_str())
+                    == Some("blocks") =>
+            {
+                "SocBlock"
+            }
             _ => kind,
         };
         let relative = path

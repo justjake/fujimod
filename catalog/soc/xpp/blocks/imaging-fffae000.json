@@ -1,0 +1,14 @@
+{
+  "$schema": "https://fujimod.com/schemas/soc-block.schema.json",
+  "schema": 1,
+  "id": "imaging-fffae000",
+  "base": 4294631424,
+  "size": 4096,
+  "kind": "imaging-controller",
+  "device": {
+    "model": "register_block",
+    "idle_bits": [],
+    "basis": "Unit of X-T20 2.11 programmed during still development (xpro-lab shot survey); its words read back and it does nothing.",
+    "order": 27
+  }
+}

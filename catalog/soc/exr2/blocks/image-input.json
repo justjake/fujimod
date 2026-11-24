@@ -1,0 +1,35 @@
+{
+  "$schema": "https://fujimod.com/schemas/soc-block.schema.json",
+  "schema": 1,
+  "id": "image-input",
+  "base": 4293984256,
+  "size": 1024,
+  "kind": "imaging-controller",
+  "interrupts": [
+    {
+      "output": "phase-0",
+      "line": 39,
+      "core": "core0"
+    },
+    {
+      "output": "phase-1",
+      "line": 41,
+      "core": "core0"
+    },
+    {
+      "output": "record-phase",
+      "line": 40,
+      "core": "core0"
+    },
+    {
+      "output": "raw",
+      "line": 36,
+      "core": "core0"
+    },
+    {
+      "output": "readback",
+      "line": 38,
+      "core": "core0"
+    }
+  ]
+}

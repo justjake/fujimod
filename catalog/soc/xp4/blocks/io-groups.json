@@ -1,0 +1,12 @@
+{
+  "$schema": "https://fujimod.com/schemas/soc-block.schema.json",
+  "schema": 1,
+  "id": "io-groups",
+  "base": 4294189056,
+  "size": 160,
+  "kind": "gpio",
+  "device": {
+    "model": "io_groups",
+    "basis": "Declared catalog input."
+  }
+}

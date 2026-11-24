@@ -17,8 +17,6 @@
   },
   "installation": {
     "flash_offset": 604,
-    "entry_labels": {},
-    "loader_validation": null,
     "image_sections": [
       {
         "name": "kernel0",
@@ -70,6 +68,5 @@
         "native_flash_offset": 5947392
       }
     ]
-  },
-  "generated_facts": null
+  }
 }

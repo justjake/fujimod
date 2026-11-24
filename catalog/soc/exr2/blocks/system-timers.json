@@ -1,0 +1,8 @@
+{
+  "$schema": "https://fujimod.com/schemas/soc-block.schema.json",
+  "schema": 1,
+  "id": "system-timers",
+  "base": 4294512640,
+  "size": 64,
+  "kind": "timer"
+}

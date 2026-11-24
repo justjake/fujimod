@@ -1,0 +1,11 @@
+{
+  "$schema": "https://fujimod.com/schemas/soc-block.schema.json",
+  "schema": 1,
+  "id": "usb-phy",
+  "base": 4294266880,
+  "size": 4096,
+  "kind": "usb-controller",
+  "device": {
+    "model": "usb_phy"
+  }
+}

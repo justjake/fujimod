@@ -7,10 +7,6 @@
     {
       "id": "core0",
       "model": "cortex-a53",
-      "released": null,
-      "registers": [],
-      "mprofile": null,
-      "rprofile": null,
       "aprofile": {
         "kind": "armv8a",
         "midr_el1": 1091555380,
@@ -24,10 +20,6 @@
     {
       "id": "core1",
       "model": "cortex-a53",
-      "released": null,
-      "registers": [],
-      "mprofile": null,
-      "rprofile": null,
       "aprofile": {
         "kind": "armv8a",
         "midr_el1": 1091555380,
@@ -41,10 +33,6 @@
     {
       "id": "core2",
       "model": "cortex-a53",
-      "released": null,
-      "registers": [],
-      "mprofile": null,
-      "rprofile": null,
       "aprofile": {
         "kind": "armv8a",
         "midr_el1": 1091555380,
@@ -58,10 +46,6 @@
     {
       "id": "core3",
       "model": "cortex-a53",
-      "released": null,
-      "registers": [],
-      "mprofile": null,
-      "rprofile": null,
       "aprofile": {
         "kind": "armv8a",
         "midr_el1": 1091555380,
@@ -76,14 +60,10 @@
       "id": "core4",
       "model": "cortex-m4",
       "released": false,
-      "registers": [],
       "clock_id": "companion",
       "mprofile": {
-        "cpuid": null,
         "vector_base": 0
-      },
-      "rprofile": null,
-      "aprofile": null
+      }
     }
   ],
   "memory_regions": [
@@ -114,869 +94,690 @@
       "kind": "sram"
     }
   ],
-  "blocks": [
-    {
-      "id": "gic-distributor",
-      "base": 4194304000,
-      "size": 65536,
-      "kind": "interrupt-controller",
-      "clock_id": null,
-      "device": {
-        "model": "gic_v3",
-        "redistributor_block_id": "gic-redistributor",
-        "redistributor_stride": 131072,
-        "lines": 512
-      }
-    },
-    {
-      "id": "gic-redistributor",
-      "base": 4194828288,
-      "size": 524288,
-      "kind": "interrupt-controller",
-      "clock_id": null
-    },
-    {
-      "id": "timer",
-      "base": 4287660032,
-      "size": 4096,
-      "kind": "timer",
-      "clock_id": null
-    },
-    {
-      "id": "extended-timer",
-      "base": 4287664128,
-      "size": 4096,
-      "kind": "timer",
-      "clock_id": null
-    },
-    {
-      "id": "flash-aperture",
-      "base": 4026531840,
-      "size": 134217728,
-      "kind": "address-window",
-      "clock_id": null
-    },
-    {
-      "id": "flash",
-      "base": 4287668224,
-      "size": 4096,
-      "kind": "address-window",
-      "clock_id": null
-    },
-    {
-      "id": "flash-dma",
-      "base": 4287860736,
-      "size": 4096,
-      "kind": "dma",
-      "clock_id": null
-    },
-    {
-      "id": "clock-gates",
-      "base": 4287676416,
-      "size": 4096,
-      "kind": "clock-controller",
-      "clock_id": null
-    },
-    {
-      "id": "power-gates",
-      "base": 4287680512,
-      "size": 4096,
-      "kind": "clock-controller",
-      "clock_id": null
-    },
-    {
-      "id": "clock-banks",
-      "base": 4288675840,
-      "size": 131072,
-      "kind": "clock-controller",
-      "clock_id": null
-    },
-    {
-      "id": "dma",
-      "base": 4287823872,
-      "size": 32768,
-      "kind": "dma",
-      "clock_id": null,
-      "device": {
-        "model": "companion_dma",
-        "companion_irq_base": 83
-      }
-    },
-    {
-      "id": "spi8",
-      "base": 4287725568,
-      "size": 4096,
-      "kind": "serial-controller",
-      "clock_id": null
-    },
-    {
-      "id": "output-link",
-      "base": 4288286720,
-      "size": 28,
-      "kind": "address-window",
-      "clock_id": null
-    },
-    {
-      "id": "pin-control",
-      "base": 4287643648,
-      "size": 4096,
-      "kind": "gpio",
-      "clock_id": null
-    },
-    {
-      "id": "temperature",
-      "base": 4287647744,
-      "size": 4096,
-      "kind": "address-window",
-      "clock_id": null
-    },
-    {
-      "id": "adc",
-      "base": 4287651840,
-      "size": 4096,
-      "kind": "adc",
-      "clock_id": null
-    },
-    {
-      "id": "gpio",
-      "base": 4287655936,
-      "size": 4096,
-      "kind": "gpio",
-      "clock_id": null
-    },
-    {
-      "id": "gpio3",
-      "base": 4287672320,
-      "size": 4096,
-      "kind": "gpio",
-      "clock_id": null
-    },
-    {
-      "id": "spi0",
-      "base": 4287692800,
-      "size": 4096,
-      "kind": "serial-controller",
-      "clock_id": "serial-source"
-    },
-    {
-      "id": "i2c1",
-      "base": 4287778816,
-      "size": 4096,
-      "kind": "control-bus",
-      "clock_id": null
-    },
-    {
-      "id": "lz",
-      "base": 4288151552,
-      "size": 4096,
-      "kind": "address-window",
-      "clock_id": null
-    },
-    {
-      "id": "pixel-pll0",
-      "base": 4288745472,
-      "size": 4096,
-      "kind": "address-window",
-      "clock_id": null
-    },
-    {
-      "id": "pixel-pll1",
-      "base": 4288749568,
-      "size": 4096,
-      "kind": "address-window",
-      "clock_id": null
-    },
-    {
-      "id": "pixel-pll2",
-      "base": 4288753664,
-      "size": 4096,
-      "kind": "address-window",
-      "clock_id": null
-    },
-    {
-      "id": "pixel-pll3",
-      "base": 4288757760,
-      "size": 4096,
-      "kind": "address-window",
-      "clock_id": null
-    },
-    {
-      "id": "display0",
-      "base": 4288217088,
-      "size": 4096,
-      "kind": "display-controller",
-      "clock_id": null
-    },
-    {
-      "id": "display1",
-      "base": 4288282624,
-      "size": 4096,
-      "kind": "display-controller",
-      "clock_id": null
-    },
-    {
-      "id": "spi9",
-      "base": 4287729664,
-      "size": 4096,
-      "kind": "serial-controller",
-      "clock_id": "serial-source"
-    },
-    {
-      "id": "renderer",
-      "base": 4287873024,
-      "size": 12288,
-      "kind": "display-controller",
-      "clock_id": null
-    },
-    {
-      "id": "sensor",
-      "base": 4287922176,
-      "size": 4096,
-      "kind": "imaging-controller",
-      "clock_id": null
-    },
-    {
-      "id": "receiver0",
-      "base": 4287889408,
-      "size": 4096,
-      "kind": "imaging-controller",
-      "clock_id": null
-    },
-    {
-      "id": "receiver1",
-      "base": 4287893504,
-      "size": 4096,
-      "kind": "imaging-controller",
-      "clock_id": null
-    },
-    {
-      "id": "phy",
-      "base": 4287905792,
-      "size": 4096,
-      "kind": "imaging-controller",
-      "clock_id": null
-    },
-    {
-      "id": "input",
-      "base": 4287913984,
-      "size": 4096,
-      "kind": "imaging-controller",
-      "clock_id": null
-    },
-    {
-      "id": "input-reset",
-      "base": 4287954944,
-      "size": 4096,
-      "kind": "reset-controller",
-      "clock_id": null
-    },
-    {
-      "id": "movdc0",
-      "base": 4288086016,
-      "size": 4096,
-      "kind": "address-window",
-      "clock_id": null
-    },
-    {
-      "id": "movdc1",
-      "base": 4288090112,
-      "size": 4096,
-      "kind": "address-window",
-      "clock_id": null
-    },
-    {
-      "id": "movdc2",
-      "base": 4288094208,
-      "size": 4096,
-      "kind": "address-window",
-      "clock_id": null
-    },
-    {
-      "id": "movdc-reset",
-      "base": 4288098304,
-      "size": 4096,
-      "kind": "reset-controller",
-      "clock_id": null
-    },
-    {
-      "id": "resize",
-      "base": 4288159744,
-      "size": 4096,
-      "kind": "imaging-controller",
-      "clock_id": null
-    },
-    {
-      "id": "statistics",
-      "base": 4286578688,
-      "size": 60224,
-      "kind": "imaging-controller",
-      "clock_id": null
-    },
-    {
-      "id": "paf",
-      "base": 4288110592,
-      "size": 4096,
-      "kind": "imaging-controller",
-      "clock_id": null
-    },
-    {
-      "id": "preview",
-      "base": 4288102400,
-      "size": 4096,
-      "kind": "imaging-controller",
-      "clock_id": null
-    },
-    {
-      "id": "rifp-io",
-      "base": 4291825664,
-      "size": 4096,
-      "kind": "imaging-controller",
-      "clock_id": null
-    },
-    {
-      "id": "rifp",
-      "base": 4291829760,
-      "size": 4096,
-      "kind": "imaging-controller",
-      "clock_id": null
-    },
-    {
-      "id": "spi3",
-      "base": 4287705088,
-      "size": 4096,
-      "kind": "serial-controller",
-      "clock_id": null
-    },
-    {
-      "id": "spi4",
-      "base": 4287709184,
-      "size": 4096,
-      "kind": "serial-controller",
-      "clock_id": null
-    },
-    {
-      "id": "spi5",
-      "base": 4287713280,
-      "size": 4096,
-      "kind": "serial-controller",
-      "clock_id": null
-    },
-    {
-      "id": "mailbox",
-      "base": 4287684864,
-      "size": 36,
-      "kind": "address-window",
-      "clock_id": null,
-      "interrupts": [
-        {
-          "output": "request",
-          "line": 55,
-          "core": "core4"
-        },
-        {
-          "output": "control",
-          "line": 58,
-          "core": "core4"
-        },
-        {
-          "output": "reply",
-          "line": 141
-        },
-        {
-          "output": "status",
-          "line": 142
-        },
-        {
-          "output": "fault",
-          "line": 143
-        }
-      ]
-    },
-    {
-      "id": "serial",
-      "base": 4287696896,
-      "size": 4096,
-      "kind": "serial-controller",
-      "clock_id": "serial-source",
-      "device": {
-        "model": "serial_dma",
-        "receive_request": 2,
-        "transmit_request": 3
-      }
-    },
-    {
-      "id": "capture0",
-      "base": 4287791104,
-      "size": 4096,
-      "kind": "address-window",
-      "clock_id": null
-    },
-    {
-      "id": "capture1",
-      "base": 4287795200,
-      "size": 4096,
-      "kind": "address-window",
-      "clock_id": null
-    },
-    {
-      "id": "dma-address-high",
-      "base": 4287686472,
-      "size": 64,
-      "kind": "address-window",
-      "clock_id": null
-    },
-    {
-      "id": "dma-routes",
-      "base": 4287685888,
-      "size": 32,
-      "kind": "address-window",
-      "clock_id": null
-    },
-    {
-      "id": "bus-drain-80000000",
-      "base": 2147483648,
-      "size": 4,
-      "kind": "address-window",
-      "clock_id": null
-    },
-    {
-      "id": "bus-drain-1c0000000",
-      "base": 7516192768,
-      "size": 4,
-      "kind": "address-window",
-      "clock_id": null
-    },
-    {
-      "id": "peripheral-window-ff000000",
-      "base": 4278190080,
-      "size": 8388608,
-      "kind": "address-window",
-      "clock_id": null,
-      "views": [
-        {
-          "core": "core0",
-          "address": 4278190080
-        },
-        {
-          "core": "core1",
-          "address": 4278190080
-        },
-        {
-          "core": "core2",
-          "address": 4278190080
-        },
-        {
-          "core": "core3",
-          "address": 4278190080
-        },
-        {
-          "core": "core4",
-          "address": 1593835520
-        }
-      ]
-    },
-    {
-      "id": "peripheral-window-ff840000",
-      "base": 4286840832,
-      "size": 8126464,
-      "kind": "address-window",
-      "clock_id": null,
-      "views": [
-        {
-          "core": "core0",
-          "address": 4286840832
-        },
-        {
-          "core": "core1",
-          "address": 4286840832
-        },
-        {
-          "core": "core2",
-          "address": 4286840832
-        },
-        {
-          "core": "core3",
-          "address": 4286840832
-        },
-        {
-          "core": "core4",
-          "address": 1602486272
-        }
-      ]
-    },
-    {
-      "id": "peripheral-window-fa000000",
-      "base": 4194304000,
-      "size": 1048576,
-      "kind": "address-window",
-      "clock_id": null,
-      "views": [
-        {
-          "core": "core0",
-          "address": 4194304000
-        },
-        {
-          "core": "core1",
-          "address": 4194304000
-        },
-        {
-          "core": "core2",
-          "address": 4194304000
-        },
-        {
-          "core": "core3",
-          "address": 4194304000
-        }
-      ]
-    },
-    {
-      "id": "peripheral-window-f0000000",
-      "base": 4026531840,
-      "size": 134217728,
-      "kind": "address-window",
-      "clock_id": null,
-      "views": [
-        {
-          "core": "core0",
-          "address": 4026531840
-        },
-        {
-          "core": "core1",
-          "address": 4026531840
-        },
-        {
-          "core": "core2",
-          "address": 4026531840
-        },
-        {
-          "core": "core3",
-          "address": 4026531840
-        }
-      ]
-    },
-    {
-      "id": "peripheral-window-faf05000",
-      "base": 4210053120,
-      "size": 4096,
-      "kind": "address-window",
-      "clock_id": null,
-      "views": [
-        {
-          "core": "core0",
-          "address": 4210053120
-        },
-        {
-          "core": "core1",
-          "address": 4210053120
-        },
-        {
-          "core": "core2",
-          "address": 4210053120
-        },
-        {
-          "core": "core3",
-          "address": 4210053120
-        }
-      ]
-    },
-    {
-      "id": "peripheral-window-faf15000",
-      "base": 4210118656,
-      "size": 4096,
-      "kind": "address-window",
-      "clock_id": null,
-      "views": [
-        {
-          "core": "core0",
-          "address": 4210118656
-        },
-        {
-          "core": "core1",
-          "address": 4210118656
-        },
-        {
-          "core": "core2",
-          "address": 4210118656
-        },
-        {
-          "core": "core3",
-          "address": 4210118656
-        }
-      ]
-    },
-    {
-      "id": "peripheral-window-faf25000",
-      "base": 4210184192,
-      "size": 4096,
-      "kind": "address-window",
-      "clock_id": null,
-      "views": [
-        {
-          "core": "core0",
-          "address": 4210184192
-        },
-        {
-          "core": "core1",
-          "address": 4210184192
-        },
-        {
-          "core": "core2",
-          "address": 4210184192
-        },
-        {
-          "core": "core3",
-          "address": 4210184192
-        }
-      ]
-    },
-    {
-      "id": "peripheral-window-faf35000",
-      "base": 4210249728,
-      "size": 4096,
-      "kind": "address-window",
-      "clock_id": null,
-      "views": [
-        {
-          "core": "core0",
-          "address": 4210249728
-        },
-        {
-          "core": "core1",
-          "address": 4210249728
-        },
-        {
-          "core": "core2",
-          "address": 4210249728
-        },
-        {
-          "core": "core3",
-          "address": 4210249728
-        }
-      ]
-    },
-    {
-      "id": "peripheral-window-f8000000",
-      "base": 4160749568,
-      "size": 4,
-      "kind": "address-window",
-      "clock_id": null,
-      "views": [
-        {
-          "core": "core0",
-          "address": 4160749568
-        },
-        {
-          "core": "core1",
-          "address": 4160749568
-        },
-        {
-          "core": "core2",
-          "address": 4160749568
-        },
-        {
-          "core": "core3",
-          "address": 4160749568
-        }
-      ]
-    },
-    {
-      "id": "peripheral-window-f9100000",
-      "base": 4178575360,
-      "size": 4,
-      "kind": "address-window",
-      "clock_id": null,
-      "views": [
-        {
-          "core": "core0",
-          "address": 4178575360
-        },
-        {
-          "core": "core1",
-          "address": 4178575360
-        },
-        {
-          "core": "core2",
-          "address": 4178575360
-        },
-        {
-          "core": "core3",
-          "address": 4178575360
-        }
-      ]
-    },
-    {
-      "id": "peripheral-window-faa80010",
-      "base": 4205314064,
-      "size": 4,
-      "kind": "address-window",
-      "clock_id": null,
-      "views": [
-        {
-          "core": "core0",
-          "address": 4205314064
-        },
-        {
-          "core": "core1",
-          "address": 4205314064
-        },
-        {
-          "core": "core2",
-          "address": 4205314064
-        },
-        {
-          "core": "core3",
-          "address": 4205314064
-        }
-      ]
-    },
-    {
-      "id": "peripheral-window-fae00000",
-      "base": 4208984064,
-      "size": 12288,
-      "kind": "address-window",
-      "clock_id": null,
-      "views": [
-        {
-          "core": "core0",
-          "address": 4208984064
-        },
-        {
-          "core": "core1",
-          "address": 4208984064
-        },
-        {
-          "core": "core2",
-          "address": 4208984064
-        },
-        {
-          "core": "core3",
-          "address": 4208984064
-        }
-      ]
-    },
-    {
-      "id": "peripheral-window-fae60000",
-      "base": 4209377280,
-      "size": 147456,
-      "kind": "address-window",
-      "clock_id": null,
-      "views": [
-        {
-          "core": "core0",
-          "address": 4209377280
-        },
-        {
-          "core": "core1",
-          "address": 4209377280
-        },
-        {
-          "core": "core2",
-          "address": 4209377280
-        },
-        {
-          "core": "core3",
-          "address": 4209377280
-        }
-      ]
-    },
-    {
-      "id": "peripheral-window-faf08000",
-      "base": 4210065408,
-      "size": 4096,
-      "kind": "address-window",
-      "clock_id": null,
-      "views": [
-        {
-          "core": "core0",
-          "address": 4210065408
-        },
-        {
-          "core": "core1",
-          "address": 4210065408
-        },
-        {
-          "core": "core2",
-          "address": 4210065408
-        },
-        {
-          "core": "core3",
-          "address": 4210065408
-        }
-      ]
-    },
-    {
-      "id": "peripheral-window-80000000",
-      "base": 2147483648,
-      "size": 4,
-      "kind": "address-window",
-      "clock_id": null,
-      "views": [
-        {
-          "core": "core0",
-          "address": 2147483648
-        },
-        {
-          "core": "core1",
-          "address": 2147483648
-        },
-        {
-          "core": "core2",
-          "address": 2147483648
-        },
-        {
-          "core": "core3",
-          "address": 2147483648
-        }
-      ]
-    },
-    {
-      "id": "peripheral-window-1c0000000",
-      "base": 7516192768,
-      "size": 4,
-      "kind": "address-window",
-      "clock_id": null,
-      "views": [
-        {
-          "core": "core0",
-          "address": 7516192768
-        },
-        {
-          "core": "core1",
-          "address": 7516192768
-        },
-        {
-          "core": "core2",
-          "address": 7516192768
-        },
-        {
-          "core": "core3",
-          "address": 7516192768
-        }
-      ]
-    }
-  ],
   "clocks": [
     {
       "id": "counter",
-      "frequency_hz": 1000000000,
-      "parent_id": null
+      "frequency_hz": 1000000000
     },
     {
       "id": "pmu",
-      "frequency_hz": 1000000000,
-      "parent_id": null
+      "frequency_hz": 1000000000
     },
     {
       "id": "companion",
-      "frequency_hz": 600000000,
-      "parent_id": null
+      "frequency_hz": 600000000
     },
     {
       "id": "serial-source",
-      "frequency_hz": 48000000,
-      "parent_id": null
+      "frequency_hz": 48000000
     }
   ],
+  "hardware": {
+    "profiles": {
+      "xp5": {
+        "windows": [
+          {
+            "attachment": "timer",
+            "base": 4287660032,
+            "name": "timer",
+            "size": 4096
+          },
+          {
+            "base": 4287664128,
+            "kind": "timer-extended",
+            "name": "extended_timer",
+            "size": 4096
+          },
+          {
+            "base": 4026531840,
+            "kind": "flash-storage",
+            "name": "flash_aperture",
+            "size": 134217728
+          },
+          {
+            "base": 4287668224,
+            "kind": "flash-storage-controller",
+            "name": "flash",
+            "size": 4096
+          },
+          {
+            "base": 4287860736,
+            "kind": "flash-storage-dma",
+            "name": "flash_dma",
+            "size": 4096
+          },
+          {
+            "base": 4287676416,
+            "kind": "clock-gates",
+            "name": "clock_gates",
+            "options": {
+              "configuration_word": 0
+            },
+            "size": 4096
+          },
+          {
+            "base": 4287680512,
+            "kind": "power-gates",
+            "name": "power_gates",
+            "size": 4096
+          },
+          {
+            "base": 4288675840,
+            "kind": "clock-banks",
+            "name": "clock_banks",
+            "size": 131072
+          },
+          {
+            "base": 4287823872,
+            "kind": "general-dma",
+            "name": "dma",
+            "options": {
+              "companion_irq_base": 83
+            },
+            "size": 32768
+          },
+          {
+            "attachment": "spi8",
+            "base": 4287725568,
+            "name": "spi8",
+            "size": 4096
+          },
+          {
+            "base": 4288286720,
+            "kind": "display-output-link",
+            "name": "output_link",
+            "size": 28
+          },
+          {
+            "base": 4287643648,
+            "kind": "pin-control",
+            "name": "pin_control",
+            "size": 4096
+          },
+          {
+            "base": 4287647744,
+            "kind": "soc-temperature",
+            "name": "temperature",
+            "size": 4096
+          },
+          {
+            "base": 4287651840,
+            "kind": "adc",
+            "name": "adc",
+            "size": 4096
+          },
+          {
+            "base": 4287655936,
+            "kind": "gpio",
+            "name": "gpio",
+            "size": 4096
+          },
+          {
+            "base": 4287672320,
+            "kind": "gpio-port3",
+            "name": "gpio3",
+            "size": 4096
+          },
+          {
+            "base": 4287692800,
+            "kind": "spi-controller",
+            "name": "spi0",
+            "options": {
+              "source_hz": 48000000
+            },
+            "size": 4096
+          },
+          {
+            "base": 4287778816,
+            "kind": "i2c-controller",
+            "name": "i2c1",
+            "options": {
+              "byte_ns": 1000000,
+              "interrupt": 289
+            },
+            "size": 4096
+          },
+          {
+            "base": 4288151552,
+            "kind": "lz",
+            "name": "lz",
+            "size": 4096
+          },
+          {
+            "base": 4288745472,
+            "kind": "panel-pll",
+            "name": "pixel_pll0",
+            "size": 4096
+          },
+          {
+            "base": 4288749568,
+            "kind": "panel-pll",
+            "name": "pixel_pll1",
+            "size": 4096
+          },
+          {
+            "base": 4288753664,
+            "kind": "panel-pll",
+            "name": "pixel_pll2",
+            "size": 4096
+          },
+          {
+            "base": 4288757760,
+            "kind": "panel-pll",
+            "name": "pixel_pll3",
+            "size": 4096
+          },
+          {
+            "base": 4288217088,
+            "kind": "display",
+            "name": "display0",
+            "size": 4096
+          },
+          {
+            "base": 4288282624,
+            "kind": "display",
+            "name": "display1",
+            "size": 4096
+          },
+          {
+            "base": 4287729664,
+            "kind": "panel-spi",
+            "name": "spi9",
+            "options": {
+              "source_hz": 48000000
+            },
+            "size": 4096
+          },
+          {
+            "base": 4287873024,
+            "kind": "renderer",
+            "name": "renderer",
+            "size": 12288
+          },
+          {
+            "base": 4287922176,
+            "kind": "imaging-sensor",
+            "name": "sensor",
+            "options": {
+              "command_latency_us": 1
+            },
+            "size": 4096
+          },
+          {
+            "base": 4287889408,
+            "kind": "imaging-receiver",
+            "name": "receiver0",
+            "size": 4096
+          },
+          {
+            "base": 4287893504,
+            "kind": "imaging-receiver",
+            "name": "receiver1",
+            "size": 4096
+          },
+          {
+            "base": 4287905792,
+            "kind": "imaging-phy",
+            "name": "phy",
+            "size": 4096
+          },
+          {
+            "base": 4287913984,
+            "kind": "imaging-input",
+            "name": "input",
+            "size": 4096
+          },
+          {
+            "base": 4287954944,
+            "kind": "imaging-reset",
+            "name": "input_reset",
+            "size": 4096
+          },
+          {
+            "base": 4288086016,
+            "kind": "movdc",
+            "name": "movdc0",
+            "size": 4096
+          },
+          {
+            "base": 4288090112,
+            "kind": "movdc",
+            "name": "movdc1",
+            "size": 4096
+          },
+          {
+            "base": 4288094208,
+            "kind": "movdc",
+            "name": "movdc2",
+            "size": 4096
+          },
+          {
+            "base": 4288098304,
+            "kind": "imaging-reset",
+            "name": "movdc_reset",
+            "size": 4096
+          },
+          {
+            "base": 4288159744,
+            "kind": "imaging-resize",
+            "name": "resize",
+            "size": 4096
+          },
+          {
+            "base": 4286578688,
+            "kind": "imaging-statistics",
+            "name": "statistics",
+            "size": 60224
+          },
+          {
+            "base": 4288110592,
+            "kind": "imaging-paf",
+            "name": "paf",
+            "size": 4096
+          },
+          {
+            "base": 4288102400,
+            "kind": "imaging-preview",
+            "name": "preview",
+            "size": 4096
+          },
+          {
+            "base": 4291825664,
+            "kind": "imaging-rifp-io",
+            "name": "rifp_io",
+            "size": 4096
+          },
+          {
+            "base": 4291829760,
+            "kind": "imaging-rifp",
+            "name": "rifp",
+            "size": 4096
+          },
+          {
+            "attachment": "spi3",
+            "base": 4287705088,
+            "name": "spi3",
+            "size": 4096
+          },
+          {
+            "attachment": "spi4",
+            "base": 4287709184,
+            "name": "spi4",
+            "size": 4096
+          },
+          {
+            "attachment": "spi5",
+            "base": 4287713280,
+            "name": "spi5",
+            "size": 4096
+          },
+          {
+            "base": 4287684864,
+            "kind": "interprocessor-mailbox",
+            "name": "mailbox",
+            "size": 36
+          },
+          {
+            "base": 4287696896,
+            "kind": "pl022",
+            "name": "serial",
+            "options": {
+              "receive_request": 2,
+              "source_hz": 48000000,
+              "ticks_per_second": 1000000000,
+              "transmit_request": 3
+            },
+            "size": 4096
+          },
+          {
+            "base": 4287791104,
+            "kind": "input-capture",
+            "name": "capture0",
+            "size": 4096
+          },
+          {
+            "base": 4287795200,
+            "kind": "input-capture",
+            "name": "capture1",
+            "size": 4096
+          },
+          {
+            "base": 4287686472,
+            "kind": "dma-address-high",
+            "name": "dma_address_high",
+            "size": 64
+          },
+          {
+            "base": 4287685888,
+            "kind": "dma-request-routing",
+            "name": "dma_routes",
+            "size": 32
+          },
+          {
+            "base": 2147483648,
+            "kind": "unmodeled-bus-drain",
+            "name": "bus_drain_80000000",
+            "size": 4
+          },
+          {
+            "base": 7516192768,
+            "kind": "unmodeled-bus-drain",
+            "name": "bus_drain_1c0000000",
+            "size": 4
+          },
+          {
+            "base": 4287741952,
+            "kind": "reset-handshake",
+            "name": "reset_handshake",
+            "options": {
+              "trigger_offset": 28
+            },
+            "size": 4096
+          },
+          {
+            "base": 4210053120,
+            "kind": "memory-configuration",
+            "name": "memory_configuration0",
+            "options": {
+              "commit_ticks": 1000
+            },
+            "size": 4096
+          },
+          {
+            "base": 4210118656,
+            "kind": "memory-configuration",
+            "name": "memory_configuration1",
+            "options": {
+              "commit_ticks": 1000
+            },
+            "size": 4096
+          },
+          {
+            "base": 4210184192,
+            "kind": "memory-configuration",
+            "name": "memory_configuration2",
+            "options": {
+              "commit_ticks": 1000
+            },
+            "size": 4096
+          },
+          {
+            "base": 4210249728,
+            "kind": "memory-configuration",
+            "name": "memory_configuration3",
+            "options": {
+              "commit_ticks": 1000
+            },
+            "size": 4096
+          },
+          {
+            "base": 4208984096,
+            "kind": "write-only-registers",
+            "name": "configuration_group0_words20",
+            "size": 16
+          },
+          {
+            "base": 4208984128,
+            "kind": "write-only-registers",
+            "name": "configuration_group0_words40",
+            "size": 16
+          },
+          {
+            "base": 4208984608,
+            "kind": "write-only-registers",
+            "name": "configuration_group1_words20",
+            "size": 16
+          },
+          {
+            "base": 4208984640,
+            "kind": "write-only-registers",
+            "name": "configuration_group1_words40",
+            "size": 16
+          },
+          {
+            "base": 4208985120,
+            "kind": "write-only-registers",
+            "name": "configuration_group2_words20",
+            "size": 16
+          },
+          {
+            "base": 4208985152,
+            "kind": "write-only-registers",
+            "name": "configuration_group2_words40",
+            "size": 16
+          },
+          {
+            "base": 4208985632,
+            "kind": "write-only-registers",
+            "name": "configuration_group3_words20",
+            "size": 16
+          },
+          {
+            "base": 4208985664,
+            "kind": "write-only-registers",
+            "name": "configuration_group3_words40",
+            "size": 16
+          },
+          {
+            "base": 4208986144,
+            "kind": "write-only-registers",
+            "name": "configuration_group4_words20",
+            "size": 16
+          },
+          {
+            "base": 4208986176,
+            "kind": "write-only-registers",
+            "name": "configuration_group4_words40",
+            "size": 16
+          },
+          {
+            "base": 4208986656,
+            "kind": "write-only-registers",
+            "name": "configuration_group5_words20",
+            "size": 16
+          },
+          {
+            "base": 4208986688,
+            "kind": "write-only-registers",
+            "name": "configuration_group5_words40",
+            "size": 16
+          },
+          {
+            "base": 4208987168,
+            "kind": "write-only-registers",
+            "name": "configuration_group6_words20",
+            "size": 16
+          },
+          {
+            "base": 4208987200,
+            "kind": "write-only-registers",
+            "name": "configuration_group6_words40",
+            "size": 16
+          },
+          {
+            "base": 4208987680,
+            "kind": "write-only-registers",
+            "name": "configuration_group7_words20",
+            "size": 16
+          },
+          {
+            "base": 4208987712,
+            "kind": "write-only-registers",
+            "name": "configuration_group7_words40",
+            "size": 16
+          },
+          {
+            "base": 4208988192,
+            "kind": "write-only-registers",
+            "name": "configuration_group8_words20",
+            "size": 16
+          },
+          {
+            "base": 4208988224,
+            "kind": "write-only-registers",
+            "name": "configuration_group8_words40",
+            "size": 16
+          },
+          {
+            "base": 4208988704,
+            "kind": "write-only-registers",
+            "name": "configuration_group9_words20",
+            "size": 16
+          },
+          {
+            "base": 4208988736,
+            "kind": "write-only-registers",
+            "name": "configuration_group9_words40",
+            "size": 16
+          },
+          {
+            "base": 4208989216,
+            "kind": "write-only-registers",
+            "name": "configuration_group10_words20",
+            "size": 16
+          },
+          {
+            "base": 4208989248,
+            "kind": "write-only-registers",
+            "name": "configuration_group10_words40",
+            "size": 16
+          },
+          {
+            "base": 4208989728,
+            "kind": "write-only-registers",
+            "name": "configuration_group11_words20",
+            "size": 16
+          },
+          {
+            "base": 4208989760,
+            "kind": "write-only-registers",
+            "name": "configuration_group11_words40",
+            "size": 16
+          },
+          {
+            "base": 4208990240,
+            "kind": "write-only-registers",
+            "name": "configuration_group12_words20",
+            "size": 16
+          },
+          {
+            "base": 4208990272,
+            "kind": "write-only-registers",
+            "name": "configuration_group12_words40",
+            "size": 16
+          },
+          {
+            "base": 4208990752,
+            "kind": "write-only-registers",
+            "name": "configuration_group13_words20",
+            "size": 16
+          },
+          {
+            "base": 4208990784,
+            "kind": "write-only-registers",
+            "name": "configuration_group13_words40",
+            "size": 16
+          },
+          {
+            "base": 4208991264,
+            "kind": "write-only-registers",
+            "name": "configuration_group14_words20",
+            "size": 16
+          },
+          {
+            "base": 4208991296,
+            "kind": "write-only-registers",
+            "name": "configuration_group14_words40",
+            "size": 16
+          },
+          {
+            "base": 4208991776,
+            "kind": "write-only-registers",
+            "name": "configuration_group15_words20",
+            "size": 16
+          },
+          {
+            "base": 4208991808,
+            "kind": "write-only-registers",
+            "name": "configuration_group15_words40",
+            "size": 16
+          },
+          {
+            "base": 4208992288,
+            "kind": "write-only-registers",
+            "name": "configuration_group16_words20",
+            "size": 16
+          },
+          {
+            "base": 4208992320,
+            "kind": "write-only-registers",
+            "name": "configuration_group16_words40",
+            "size": 16
+          },
+          {
+            "base": 4208992800,
+            "kind": "write-only-registers",
+            "name": "configuration_group17_words20",
+            "size": 16
+          },
+          {
+            "base": 4208992832,
+            "kind": "write-only-registers",
+            "name": "configuration_group17_words40",
+            "size": 16
+          },
+          {
+            "base": 4208993312,
+            "kind": "write-only-registers",
+            "name": "configuration_group18_words20",
+            "size": 16
+          },
+          {
+            "base": 4208993344,
+            "kind": "write-only-registers",
+            "name": "configuration_group18_words40",
+            "size": 16
+          },
+          {
+            "base": 4208993824,
+            "kind": "write-only-registers",
+            "name": "configuration_group19_words20",
+            "size": 16
+          },
+          {
+            "base": 4208993856,
+            "kind": "write-only-registers",
+            "name": "configuration_group19_words40",
+            "size": 16
+          },
+          {
+            "base": 4208994336,
+            "kind": "write-only-registers",
+            "name": "configuration_group20_words20",
+            "size": 16
+          },
+          {
+            "base": 4208994368,
+            "kind": "write-only-registers",
+            "name": "configuration_group20_words40",
+            "size": 16
+          },
+          {
+            "base": 4208994848,
+            "kind": "write-only-registers",
+            "name": "configuration_group21_words20",
+            "size": 16
+          },
+          {
+            "base": 4208994880,
+            "kind": "write-only-registers",
+            "name": "configuration_group21_words40",
+            "size": 16
+          }
+        ]
+      }
+    }
+  },
   "mappings": [
     {
       "id": "companion-map-0",
@@ -1012,676 +813,5 @@
       "permissions": 7
     }
   ],
-  "dma_mappings": [],
-  "decoders": [],
-  "reset": {
-    "release": null,
-    "coprocessor_writes": []
-  },
-  "hardware": {
-    "profiles": {
-      "xp5": {
-        "windows": [
-          {
-            "name": "timer",
-            "base": 4287660032,
-            "size": 4096,
-            "attachment": "timer"
-          },
-          {
-            "name": "extended_timer",
-            "base": 4287664128,
-            "size": 4096,
-            "kind": "timer-extended"
-          },
-          {
-            "name": "flash_aperture",
-            "base": 4026531840,
-            "size": 134217728,
-            "kind": "flash-storage"
-          },
-          {
-            "name": "flash",
-            "base": 4287668224,
-            "size": 4096,
-            "kind": "flash-storage-controller"
-          },
-          {
-            "name": "flash_dma",
-            "base": 4287860736,
-            "size": 4096,
-            "kind": "flash-storage-dma"
-          },
-          {
-            "name": "clock_gates",
-            "base": 4287676416,
-            "size": 4096,
-            "kind": "clock-gates",
-            "options": {
-              "configuration_word": 0
-            }
-          },
-          {
-            "name": "power_gates",
-            "base": 4287680512,
-            "size": 4096,
-            "kind": "power-gates"
-          },
-          {
-            "name": "clock_banks",
-            "base": 4288675840,
-            "size": 131072,
-            "kind": "clock-banks"
-          },
-          {
-            "name": "dma",
-            "base": 4287823872,
-            "size": 32768,
-            "kind": "general-dma",
-            "options": {
-              "companion_irq_base": 83
-            }
-          },
-          {
-            "name": "spi8",
-            "base": 4287725568,
-            "size": 4096,
-            "attachment": "spi8"
-          },
-          {
-            "name": "output_link",
-            "base": 4288286720,
-            "size": 28,
-            "kind": "display-output-link"
-          },
-          {
-            "name": "pin_control",
-            "base": 4287643648,
-            "size": 4096,
-            "kind": "pin-control"
-          },
-          {
-            "name": "temperature",
-            "base": 4287647744,
-            "size": 4096,
-            "kind": "soc-temperature"
-          },
-          {
-            "name": "adc",
-            "base": 4287651840,
-            "size": 4096,
-            "kind": "adc"
-          },
-          {
-            "name": "gpio",
-            "base": 4287655936,
-            "size": 4096,
-            "kind": "gpio"
-          },
-          {
-            "name": "gpio3",
-            "base": 4287672320,
-            "size": 4096,
-            "kind": "gpio-port3"
-          },
-          {
-            "name": "spi0",
-            "base": 4287692800,
-            "size": 4096,
-            "kind": "spi-controller",
-            "options": {
-              "source_hz": 48000000
-            }
-          },
-          {
-            "name": "i2c1",
-            "base": 4287778816,
-            "size": 4096,
-            "kind": "i2c-controller",
-            "options": {
-              "interrupt": 289,
-              "byte_ns": 1000000
-            }
-          },
-          {
-            "name": "lz",
-            "base": 4288151552,
-            "size": 4096,
-            "kind": "lz"
-          },
-          {
-            "name": "pixel_pll0",
-            "base": 4288745472,
-            "size": 4096,
-            "kind": "panel-pll"
-          },
-          {
-            "name": "pixel_pll1",
-            "base": 4288749568,
-            "size": 4096,
-            "kind": "panel-pll"
-          },
-          {
-            "name": "pixel_pll2",
-            "base": 4288753664,
-            "size": 4096,
-            "kind": "panel-pll"
-          },
-          {
-            "name": "pixel_pll3",
-            "base": 4288757760,
-            "size": 4096,
-            "kind": "panel-pll"
-          },
-          {
-            "name": "display0",
-            "base": 4288217088,
-            "size": 4096,
-            "kind": "display"
-          },
-          {
-            "name": "display1",
-            "base": 4288282624,
-            "size": 4096,
-            "kind": "display"
-          },
-          {
-            "name": "spi9",
-            "base": 4287729664,
-            "size": 4096,
-            "kind": "panel-spi",
-            "options": {
-              "source_hz": 48000000
-            }
-          },
-          {
-            "name": "renderer",
-            "base": 4287873024,
-            "size": 12288,
-            "kind": "renderer"
-          },
-          {
-            "name": "sensor",
-            "base": 4287922176,
-            "size": 4096,
-            "kind": "imaging-sensor",
-            "options": {
-              "command_latency_us": 1
-            }
-          },
-          {
-            "name": "receiver0",
-            "base": 4287889408,
-            "size": 4096,
-            "kind": "imaging-receiver"
-          },
-          {
-            "name": "receiver1",
-            "base": 4287893504,
-            "size": 4096,
-            "kind": "imaging-receiver"
-          },
-          {
-            "name": "phy",
-            "base": 4287905792,
-            "size": 4096,
-            "kind": "imaging-phy"
-          },
-          {
-            "name": "input",
-            "base": 4287913984,
-            "size": 4096,
-            "kind": "imaging-input"
-          },
-          {
-            "name": "input_reset",
-            "base": 4287954944,
-            "size": 4096,
-            "kind": "imaging-reset"
-          },
-          {
-            "name": "movdc0",
-            "base": 4288086016,
-            "size": 4096,
-            "kind": "movdc"
-          },
-          {
-            "name": "movdc1",
-            "base": 4288090112,
-            "size": 4096,
-            "kind": "movdc"
-          },
-          {
-            "name": "movdc2",
-            "base": 4288094208,
-            "size": 4096,
-            "kind": "movdc"
-          },
-          {
-            "name": "movdc_reset",
-            "base": 4288098304,
-            "size": 4096,
-            "kind": "imaging-reset"
-          },
-          {
-            "name": "resize",
-            "base": 4288159744,
-            "size": 4096,
-            "kind": "imaging-resize"
-          },
-          {
-            "name": "statistics",
-            "base": 4286578688,
-            "size": 60224,
-            "kind": "imaging-statistics"
-          },
-          {
-            "name": "paf",
-            "base": 4288110592,
-            "size": 4096,
-            "kind": "imaging-paf"
-          },
-          {
-            "name": "preview",
-            "base": 4288102400,
-            "size": 4096,
-            "kind": "imaging-preview"
-          },
-          {
-            "name": "rifp_io",
-            "base": 4291825664,
-            "size": 4096,
-            "kind": "imaging-rifp-io"
-          },
-          {
-            "name": "rifp",
-            "base": 4291829760,
-            "size": 4096,
-            "kind": "imaging-rifp"
-          },
-          {
-            "name": "spi3",
-            "base": 4287705088,
-            "size": 4096,
-            "attachment": "spi3"
-          },
-          {
-            "name": "spi4",
-            "base": 4287709184,
-            "size": 4096,
-            "attachment": "spi4"
-          },
-          {
-            "name": "spi5",
-            "base": 4287713280,
-            "size": 4096,
-            "attachment": "spi5"
-          },
-          {
-            "name": "mailbox",
-            "base": 4287684864,
-            "size": 36,
-            "kind": "interprocessor-mailbox"
-          },
-          {
-            "name": "serial",
-            "base": 4287696896,
-            "size": 4096,
-            "kind": "pl022",
-            "options": {
-              "source_hz": 48000000,
-              "ticks_per_second": 1000000000,
-              "receive_request": 2,
-              "transmit_request": 3
-            }
-          },
-          {
-            "name": "capture0",
-            "base": 4287791104,
-            "size": 4096,
-            "kind": "input-capture"
-          },
-          {
-            "name": "capture1",
-            "base": 4287795200,
-            "size": 4096,
-            "kind": "input-capture"
-          },
-          {
-            "name": "dma_address_high",
-            "base": 4287686472,
-            "size": 64,
-            "kind": "dma-address-high"
-          },
-          {
-            "name": "dma_routes",
-            "base": 4287685888,
-            "size": 32,
-            "kind": "dma-request-routing"
-          },
-          {
-            "name": "bus_drain_80000000",
-            "base": 2147483648,
-            "size": 4,
-            "kind": "unmodeled-bus-drain"
-          },
-          {
-            "name": "bus_drain_1c0000000",
-            "base": 7516192768,
-            "size": 4,
-            "kind": "unmodeled-bus-drain"
-          },
-          {
-            "name": "reset_handshake",
-            "base": 4287741952,
-            "size": 4096,
-            "kind": "reset-handshake",
-            "options": {
-              "trigger_offset": 28
-            }
-          },
-          {
-            "name": "memory_configuration0",
-            "base": 4210053120,
-            "size": 4096,
-            "kind": "memory-configuration",
-            "options": {
-              "commit_ticks": 1000
-            }
-          },
-          {
-            "name": "memory_configuration1",
-            "base": 4210118656,
-            "size": 4096,
-            "kind": "memory-configuration",
-            "options": {
-              "commit_ticks": 1000
-            }
-          },
-          {
-            "name": "memory_configuration2",
-            "base": 4210184192,
-            "size": 4096,
-            "kind": "memory-configuration",
-            "options": {
-              "commit_ticks": 1000
-            }
-          },
-          {
-            "name": "memory_configuration3",
-            "base": 4210249728,
-            "size": 4096,
-            "kind": "memory-configuration",
-            "options": {
-              "commit_ticks": 1000
-            }
-          },
-          {
-            "name": "configuration_group0_words20",
-            "base": 4208984096,
-            "size": 16,
-            "kind": "write-only-registers"
-          },
-          {
-            "name": "configuration_group0_words40",
-            "base": 4208984128,
-            "size": 16,
-            "kind": "write-only-registers"
-          },
-          {
-            "name": "configuration_group1_words20",
-            "base": 4208984608,
-            "size": 16,
-            "kind": "write-only-registers"
-          },
-          {
-            "name": "configuration_group1_words40",
-            "base": 4208984640,
-            "size": 16,
-            "kind": "write-only-registers"
-          },
-          {
-            "name": "configuration_group2_words20",
-            "base": 4208985120,
-            "size": 16,
-            "kind": "write-only-registers"
-          },
-          {
-            "name": "configuration_group2_words40",
-            "base": 4208985152,
-            "size": 16,
-            "kind": "write-only-registers"
-          },
-          {
-            "name": "configuration_group3_words20",
-            "base": 4208985632,
-            "size": 16,
-            "kind": "write-only-registers"
-          },
-          {
-            "name": "configuration_group3_words40",
-            "base": 4208985664,
-            "size": 16,
-            "kind": "write-only-registers"
-          },
-          {
-            "name": "configuration_group4_words20",
-            "base": 4208986144,
-            "size": 16,
-            "kind": "write-only-registers"
-          },
-          {
-            "name": "configuration_group4_words40",
-            "base": 4208986176,
-            "size": 16,
-            "kind": "write-only-registers"
-          },
-          {
-            "name": "configuration_group5_words20",
-            "base": 4208986656,
-            "size": 16,
-            "kind": "write-only-registers"
-          },
-          {
-            "name": "configuration_group5_words40",
-            "base": 4208986688,
-            "size": 16,
-            "kind": "write-only-registers"
-          },
-          {
-            "name": "configuration_group6_words20",
-            "base": 4208987168,
-            "size": 16,
-            "kind": "write-only-registers"
-          },
-          {
-            "name": "configuration_group6_words40",
-            "base": 4208987200,
-            "size": 16,
-            "kind": "write-only-registers"
-          },
-          {
-            "name": "configuration_group7_words20",
-            "base": 4208987680,
-            "size": 16,
-            "kind": "write-only-registers"
-          },
-          {
-            "name": "configuration_group7_words40",
-            "base": 4208987712,
-            "size": 16,
-            "kind": "write-only-registers"
-          },
-          {
-            "name": "configuration_group8_words20",
-            "base": 4208988192,
-            "size": 16,
-            "kind": "write-only-registers"
-          },
-          {
-            "name": "configuration_group8_words40",
-            "base": 4208988224,
-            "size": 16,
-            "kind": "write-only-registers"
-          },
-          {
-            "name": "configuration_group9_words20",
-            "base": 4208988704,
-            "size": 16,
-            "kind": "write-only-registers"
-          },
-          {
-            "name": "configuration_group9_words40",
-            "base": 4208988736,
-            "size": 16,
-            "kind": "write-only-registers"
-          },
-          {
-            "name": "configuration_group10_words20",
-            "base": 4208989216,
-            "size": 16,
-            "kind": "write-only-registers"
-          },
-          {
-            "name": "configuration_group10_words40",
-            "base": 4208989248,
-            "size": 16,
-            "kind": "write-only-registers"
-          },
-          {
-            "name": "configuration_group11_words20",
-            "base": 4208989728,
-            "size": 16,
-            "kind": "write-only-registers"
-          },
-          {
-            "name": "configuration_group11_words40",
-            "base": 4208989760,
-            "size": 16,
-            "kind": "write-only-registers"
-          },
-          {
-            "name": "configuration_group12_words20",
-            "base": 4208990240,
-            "size": 16,
-            "kind": "write-only-registers"
-          },
-          {
-            "name": "configuration_group12_words40",
-            "base": 4208990272,
-            "size": 16,
-            "kind": "write-only-registers"
-          },
-          {
-            "name": "configuration_group13_words20",
-            "base": 4208990752,
-            "size": 16,
-            "kind": "write-only-registers"
-          },
-          {
-            "name": "configuration_group13_words40",
-            "base": 4208990784,
-            "size": 16,
-            "kind": "write-only-registers"
-          },
-          {
-            "name": "configuration_group14_words20",
-            "base": 4208991264,
-            "size": 16,
-            "kind": "write-only-registers"
-          },
-          {
-            "name": "configuration_group14_words40",
-            "base": 4208991296,
-            "size": 16,
-            "kind": "write-only-registers"
-          },
-          {
-            "name": "configuration_group15_words20",
-            "base": 4208991776,
-            "size": 16,
-            "kind": "write-only-registers"
-          },
-          {
-            "name": "configuration_group15_words40",
-            "base": 4208991808,
-            "size": 16,
-            "kind": "write-only-registers"
-          },
-          {
-            "name": "configuration_group16_words20",
-            "base": 4208992288,
-            "size": 16,
-            "kind": "write-only-registers"
-          },
-          {
-            "name": "configuration_group16_words40",
-            "base": 4208992320,
-            "size": 16,
-            "kind": "write-only-registers"
-          },
-          {
-            "name": "configuration_group17_words20",
-            "base": 4208992800,
-            "size": 16,
-            "kind": "write-only-registers"
-          },
-          {
-            "name": "configuration_group17_words40",
-            "base": 4208992832,
-            "size": 16,
-            "kind": "write-only-registers"
-          },
-          {
-            "name": "configuration_group18_words20",
-            "base": 4208993312,
-            "size": 16,
-            "kind": "write-only-registers"
-          },
-          {
-            "name": "configuration_group18_words40",
-            "base": 4208993344,
-            "size": 16,
-            "kind": "write-only-registers"
-          },
-          {
-            "name": "configuration_group19_words20",
-            "base": 4208993824,
-            "size": 16,
-            "kind": "write-only-registers"
-          },
-          {
-            "name": "configuration_group19_words40",
-            "base": 4208993856,
-            "size": 16,
-            "kind": "write-only-registers"
-          },
-          {
-            "name": "configuration_group20_words20",
-            "base": 4208994336,
-            "size": 16,
-            "kind": "write-only-registers"
-          },
-          {
-            "name": "configuration_group20_words40",
-            "base": 4208994368,
-            "size": 16,
-            "kind": "write-only-registers"
-          },
-          {
-            "name": "configuration_group21_words20",
-            "base": 4208994848,
-            "size": 16,
-            "kind": "write-only-registers"
-          },
-          {
-            "name": "configuration_group21_words40",
-            "base": 4208994880,
-            "size": 16,
-            "kind": "write-only-registers"
-          }
-        ]
-      }
-    }
-  }
+  "reset": {}
 }

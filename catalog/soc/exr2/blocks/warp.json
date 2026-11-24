@@ -1,0 +1,15 @@
+{
+  "$schema": "https://fujimod.com/schemas/soc-block.schema.json",
+  "schema": 1,
+  "id": "warp",
+  "base": 4294332416,
+  "size": 332,
+  "kind": "address-window",
+  "interrupts": [
+    {
+      "output": "complete",
+      "line": 74,
+      "core": "core0"
+    }
+  ]
+}

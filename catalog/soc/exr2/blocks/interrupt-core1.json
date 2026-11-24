@@ -1,0 +1,16 @@
+{
+  "$schema": "https://fujimod.com/schemas/soc-block.schema.json",
+  "schema": 1,
+  "id": "interrupt-core1",
+  "base": 4294656000,
+  "size": 4096,
+  "kind": "interrupt-controller",
+  "processor_core_id": "core1",
+  "interrupts": [
+    {
+      "output": "software-release",
+      "line": 120,
+      "core": "core1"
+    }
+  ]
+}

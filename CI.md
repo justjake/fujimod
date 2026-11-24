@@ -58,6 +58,7 @@ mise run python-lint
 mise run python-format-check
 mise run python-typecheck
 mise run rust-format-check
+mise run catalog-format-check
 mise run rust-check
 pnpm --filter fujimod run build
 mise run javascript-lint

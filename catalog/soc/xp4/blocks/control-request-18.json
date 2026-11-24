@@ -1,0 +1,13 @@
+{
+  "$schema": "https://fujimod.com/schemas/soc-block.schema.json",
+  "schema": 1,
+  "id": "control-request-18",
+  "base": 4285554816,
+  "size": 4,
+  "kind": "reset-controller",
+  "device": {
+    "model": "control_request",
+    "ack_ticks": 8,
+    "basis": "X-T3 5.11 polls the +0x80 word of each block after writing it, with the low three bits clearing once the request completes. The blocks at 0xff70a000, 0xff70b000, 0xff70c000 and 0xff70f000 keep their gate words inside the same block. When VIEW MODE selects the viewfinder, X-T3 5.11 writes the +0x00 and +0x08 words of the 0xfffae000 block, the last entry of the same parameter table as the 0xff70x000 blocks, and posts request 3 at its +0x80."
+  }
+}

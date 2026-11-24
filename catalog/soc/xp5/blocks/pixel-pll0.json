@@ -1,0 +1,8 @@
+{
+  "$schema": "https://fujimod.com/schemas/soc-block.schema.json",
+  "schema": 1,
+  "id": "pixel-pll0",
+  "base": 4288745472,
+  "size": 4096,
+  "kind": "address-window"
+}

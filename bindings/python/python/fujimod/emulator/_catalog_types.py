@@ -5656,7 +5656,6 @@ Soc = TypedDict(
     {
         "$schema": Required['Literal["https://fujimod.com/schemas/soc.schema.json"]'],
         "architecture": Required["ProcessorArchitecture"],
-        "blocks": Required["list[SocBlock]"],
         "clocks": NotRequired["list[ClockDomain]"],
         "decoders": NotRequired["list[AddressDecoder]"],
         "dma_mappings": NotRequired["list[DmaMapping]"],

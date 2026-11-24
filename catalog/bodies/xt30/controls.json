@@ -47,7 +47,6 @@
       229
     ]
   },
-  "analog_levels": null,
   "boot": {
     "sd": {
       "usb": false,
@@ -69,565 +68,169 @@
     }
   },
   "controls": {
-    "exposure_compensation_dial": {
-      "name": "Exposure compensation dial",
-      "location": "top",
-      "manual_page": 77,
-      "face": null,
-      "icon": null,
+    "ae_lock_button": {
+      "name": "AE-L (exposure lock) button",
+      "location": "rear",
+      "manual_page": 228,
+      "face": "AE-L",
       "connection_ids": [
-        "controls-adc-7"
+        "controls-adc-11"
       ],
-      "assignable": false,
-      "pushable": false,
-      "default_function": "Rotate to choose an exposure compensation amount. At C, use the front command dial to set compensation from −5 to +5 EV.",
-      "role": null,
-      "mechanical": false,
-      "behavior": {
-        "kind": "dial",
-        "motion": {
-          "kind": "positions",
-          "positions": [
-            {
-              "id": "−3",
-              "key": {
-                "kind": "debug_key",
-                "name": "E-D-3.0"
-              },
-              "asserted": null
-            },
-            {
-              "id": "−2",
-              "key": {
-                "kind": "debug_key",
-                "name": "E-D-2.0"
-              },
-              "asserted": null
-            },
-            {
-              "id": "−1",
-              "key": {
-                "kind": "debug_key",
-                "name": "E-D-1.0"
-              },
-              "asserted": null
-            },
-            {
-              "id": "0",
-              "key": {
-                "kind": "debug_key",
-                "name": "E-D=0"
-              },
-              "asserted": null
-            },
-            {
-              "id": "+1",
-              "key": {
-                "kind": "debug_key",
-                "name": "E-D+1.0"
-              },
-              "asserted": null
-            },
-            {
-              "id": "+2",
-              "key": {
-                "kind": "debug_key",
-                "name": "E-D+2.0"
-              },
-              "asserted": null
-            },
-            {
-              "id": "+3",
-              "key": {
-                "kind": "debug_key",
-                "name": "E-D+3.0"
-              },
-              "asserted": null
-            },
-            {
-              "id": "C",
-              "key": {
-                "kind": "debug_key",
-                "name": "E-D=C"
-              },
-              "asserted": null
-            }
-          ]
-        },
-        "press": null,
-        "endless": null
-      },
-      "positions": [
-        {
-          "id": "−3",
-          "label": "−3",
-          "description": null
-        },
-        {
-          "id": "−2",
-          "label": "−2",
-          "description": null
-        },
-        {
-          "id": "−1",
-          "label": "−1",
-          "description": null
-        },
-        {
-          "id": "0",
-          "label": "0",
-          "description": null
-        },
-        {
-          "id": "+1",
-          "label": "+1",
-          "description": null
-        },
-        {
-          "id": "+2",
-          "label": "+2",
-          "description": null
-        },
-        {
-          "id": "+3",
-          "label": "+3",
-          "description": null
-        },
-        {
-          "id": "C",
-          "label": "C",
-          "description": null
-        }
-      ],
-      "short_name": "EV"
-    },
-    "shutter_button": {
-      "name": "Shutter button",
-      "location": "top",
-      "manual_page": 44,
-      "face": null,
-      "icon": null,
-      "connection_ids": [
-        "controls-gpio-0-0",
-        "controls-gpio-0-1"
-      ],
-      "assignable": false,
+      "assignable": true,
       "pushable": true,
-      "default_function": "Half-press to focus and lock focus and exposure; press fully to take a photograph.",
-      "role": null,
+      "default_function": "AE LOCK ONLY by default; its role can be assigned using FUNCTION (Fn) SETTING.",
       "mechanical": false,
       "behavior": {
-        "kind": "shutter",
-        "stages": {
-          "half_press": [
-            {
-              "kind": "debug_key",
-              "name": "S1"
-            }
-          ],
-          "full_press": [
-            {
-              "kind": "debug_key",
-              "name": "S2"
-            }
-          ]
+        "kind": "button",
+        "press": {
+          "kind": "debug_key",
+          "name": "AE-LOCK"
         }
-      },
-      "positions": [],
-      "short_name": "SHUTTER"
+      }
+    },
+    "af_lock_button": {
+      "name": "AF-L (focus lock) button",
+      "location": "rear",
+      "manual_page": 228,
+      "face": "AF-L",
+      "connection_ids": [
+        "controls-adc-11"
+      ],
+      "assignable": true,
+      "pushable": true,
+      "default_function": "AF LOCK ONLY by default; its role can be assigned using FUNCTION (Fn) SETTING.",
+      "mechanical": false,
+      "behavior": {
+        "kind": "button",
+        "press": {
+          "kind": "debug_key",
+          "name": "AF-LOCK"
+        }
+      }
     },
     "auto_mode_selector_lever": {
       "name": "Auto mode selector lever",
       "location": "top",
       "manual_page": 6,
-      "face": null,
-      "icon": null,
-      "connection_ids": [],
+      "short_name": "AUTO",
       "assignable": false,
       "pushable": false,
+      "positions": [
+        {
+          "id": "M",
+          "label": "M"
+        },
+        {
+          "id": "AUTO",
+          "label": "AUTO"
+        }
+      ],
       "default_function": "Switch between manual and auto modes. At M, choose P, S, A, or M exposure modes; at AUTO, choose a scene mode or ADVANCED SR AUTO with the front command dial.",
-      "role": null,
       "mechanical": false,
       "behavior": {
         "kind": "lever",
         "positions": [
           {
-            "id": "M",
-            "key": null,
-            "asserted": null
+            "id": "M"
           },
           {
-            "id": "AUTO",
-            "key": null,
-            "asserted": null
+            "id": "AUTO"
           }
-        ],
-        "momentary": null
-      },
-      "positions": [
-        {
-          "id": "M",
-          "label": "M",
-          "description": null
-        },
-        {
-          "id": "AUTO",
-          "label": "AUTO",
-          "description": null
-        }
-      ],
-      "short_name": "AUTO"
+        ]
+      }
     },
-    "shutter_speed_dial": {
-      "name": "Shutter speed dial",
-      "location": "top",
-      "manual_page": 5,
-      "face": null,
-      "icon": null,
-      "connection_ids": [
-        "controls-adc-6"
-      ],
+    "battery_chamber_cover_latch": {
+      "name": "Battery-chamber cover latch",
+      "location": "bottom",
+      "manual_page": 29,
+      "short_name": "COVER",
       "assignable": false,
       "pushable": false,
-      "default_function": "Choose shutter speed. T selects a timed exposure, B keeps the shutter open while the shutter button is pressed, and A selects automatic shutter speed.",
-      "role": null,
+      "default_function": "Slide to open the battery-chamber cover.",
+      "mechanical": false,
+      "behavior": {
+        "kind": "lever"
+      }
+    },
+    "battery_latch": {
+      "name": "Battery latch",
+      "location": "bottom",
+      "manual_page": 31,
+      "short_name": "BATTERY",
+      "assignable": false,
+      "pushable": true,
+      "default_function": "Press to the side to release the battery for removal.",
+      "mechanical": false,
+      "behavior": {
+        "kind": "lever"
+      }
+    },
+    "delete_button": {
+      "name": "Delete button",
+      "location": "rear",
+      "manual_page": 46,
+      "icon": "delete",
+      "connection_ids": [
+        "controls-gpio-0-14"
+      ],
+      "assignable": false,
+      "pushable": true,
+      "default_function": "Delete the displayed picture in playback.",
+      "mechanical": false,
+      "behavior": {
+        "kind": "button",
+        "press": {
+          "kind": "debug_key",
+          "name": "DELETE"
+        }
+      }
+    },
+    "diopter_adjustment_control": {
+      "name": "Diopter adjustment control",
+      "location": "rear",
+      "manual_page": 9,
+      "short_name": "DIOPTER",
+      "assignable": false,
+      "pushable": false,
+      "default_function": "Rotate to adjust viewfinder focus.",
       "mechanical": false,
       "behavior": {
         "kind": "dial",
         "motion": {
-          "kind": "positions",
-          "positions": [
-            {
-              "id": "B",
-              "key": {
-                "kind": "debug_key",
-                "name": "S-B"
-              },
-              "asserted": null
-            },
-            {
-              "id": "T",
-              "key": {
-                "kind": "debug_key",
-                "name": "S-T"
-              },
-              "asserted": null
-            },
-            {
-              "id": "1",
-              "key": {
-                "kind": "debug_key",
-                "name": "S-1/1"
-              },
-              "asserted": null
-            },
-            {
-              "id": "2",
-              "key": {
-                "kind": "debug_key",
-                "name": "S-1/2"
-              },
-              "asserted": null
-            },
-            {
-              "id": "4",
-              "key": {
-                "kind": "debug_key",
-                "name": "S-1/4"
-              },
-              "asserted": null
-            },
-            {
-              "id": "8",
-              "key": {
-                "kind": "debug_key",
-                "name": "S-1/8"
-              },
-              "asserted": null
-            },
-            {
-              "id": "15",
-              "key": {
-                "kind": "debug_key",
-                "name": "S-1/15"
-              },
-              "asserted": null
-            },
-            {
-              "id": "30",
-              "key": {
-                "kind": "debug_key",
-                "name": "S-1/30"
-              },
-              "asserted": null
-            },
-            {
-              "id": "60",
-              "key": {
-                "kind": "debug_key",
-                "name": "S-1/60"
-              },
-              "asserted": null
-            },
-            {
-              "id": "125",
-              "key": {
-                "kind": "debug_key",
-                "name": "S-1/125"
-              },
-              "asserted": null
-            },
-            {
-              "id": "180X",
-              "key": null,
-              "asserted": null
-            },
-            {
-              "id": "250",
-              "key": {
-                "kind": "debug_key",
-                "name": "S-1/250"
-              },
-              "asserted": null
-            },
-            {
-              "id": "500",
-              "key": {
-                "kind": "debug_key",
-                "name": "S-1/500"
-              },
-              "asserted": null
-            },
-            {
-              "id": "1000",
-              "key": {
-                "kind": "debug_key",
-                "name": "S-1/1000"
-              },
-              "asserted": null
-            },
-            {
-              "id": "2000",
-              "key": {
-                "kind": "debug_key",
-                "name": "S-1/2000"
-              },
-              "asserted": null
-            },
-            {
-              "id": "4000",
-              "key": {
-                "kind": "debug_key",
-                "name": "S-1/4000"
-              },
-              "asserted": null
-            },
-            {
-              "id": "A",
-              "key": {
-                "kind": "debug_key",
-                "name": "S-A"
-              },
-              "asserted": null
-            }
-          ]
-        },
-        "press": null,
-        "endless": null
-      },
-      "positions": [
-        {
-          "id": "B",
-          "label": "B",
-          "description": null
-        },
-        {
-          "id": "T",
-          "label": "T",
-          "description": null
-        },
-        {
-          "id": "1",
-          "label": "1",
-          "description": null
-        },
-        {
-          "id": "2",
-          "label": "2",
-          "description": null
-        },
-        {
-          "id": "4",
-          "label": "4",
-          "description": null
-        },
-        {
-          "id": "8",
-          "label": "8",
-          "description": null
-        },
-        {
-          "id": "15",
-          "label": "15",
-          "description": null
-        },
-        {
-          "id": "30",
-          "label": "30",
-          "description": null
-        },
-        {
-          "id": "60",
-          "label": "60",
-          "description": null
-        },
-        {
-          "id": "125",
-          "label": "125",
-          "description": null
-        },
-        {
-          "id": "180X",
-          "label": "180X",
-          "description": null
-        },
-        {
-          "id": "250",
-          "label": "250",
-          "description": null
-        },
-        {
-          "id": "500",
-          "label": "500",
-          "description": null
-        },
-        {
-          "id": "1000",
-          "label": "1000",
-          "description": null
-        },
-        {
-          "id": "2000",
-          "label": "2000",
-          "description": null
-        },
-        {
-          "id": "4000",
-          "label": "4000",
-          "description": null
-        },
-        {
-          "id": "A",
-          "label": "A",
-          "description": null
+          "kind": "steps"
         }
+      }
+    },
+    "disp_back_button": {
+      "name": "DISP (display)/BACK button",
+      "location": "rear",
+      "manual_page": 16,
+      "face": "DISP/BACK",
+      "connection_ids": [
+        "controls-adc-5"
       ],
-      "short_name": "SPEED"
+      "assignable": false,
+      "pushable": true,
+      "default_function": "Control the indicators shown in the viewfinder and LCD monitor, and return to the previous screen.",
+      "mechanical": false,
+      "behavior": {
+        "kind": "button",
+        "press": {
+          "kind": "debug_key",
+          "name": "DISP_B"
+        }
+      }
     },
     "drive_dial": {
       "name": "Drive dial",
       "location": "top",
       "manual_page": 5,
-      "face": null,
-      "icon": null,
+      "short_name": "DRIVE",
       "connection_ids": [
         "controls-adc-1"
       ],
       "assignable": false,
       "pushable": false,
-      "default_function": "Rotate to choose the drive mode: movie, bracketing, high- or low-speed burst, single frame, advanced filter, multiple exposure, or panorama.",
-      "role": null,
-      "mechanical": false,
-      "behavior": {
-        "kind": "dial",
-        "motion": {
-          "kind": "positions",
-          "positions": [
-            {
-              "id": "movie",
-              "key": {
-                "kind": "debug_key",
-                "name": "DRV-MOV"
-              },
-              "asserted": null
-            },
-            {
-              "id": "BKT1",
-              "key": {
-                "kind": "debug_key",
-                "name": "DRV-BKT"
-              },
-              "asserted": null
-            },
-            {
-              "id": "BKT2",
-              "key": {
-                "kind": "debug_key",
-                "name": "DRV-BKT2"
-              },
-              "asserted": null
-            },
-            {
-              "id": "CH",
-              "key": {
-                "kind": "debug_key",
-                "name": "DRV-C_H"
-              },
-              "asserted": null
-            },
-            {
-              "id": "CL",
-              "key": {
-                "kind": "debug_key",
-                "name": "DRV-C_L"
-              },
-              "asserted": null
-            },
-            {
-              "id": "S",
-              "key": {
-                "kind": "debug_key",
-                "name": "DRV-ONE"
-              },
-              "asserted": null
-            },
-            {
-              "id": "Adv.1",
-              "key": {
-                "kind": "debug_key",
-                "name": "DRV-ADV"
-              },
-              "asserted": null
-            },
-            {
-              "id": "Adv.2",
-              "key": {
-                "kind": "debug_key",
-                "name": "DRV-ADV2"
-              },
-              "asserted": null
-            },
-            {
-              "id": "multiple_exposure",
-              "key": {
-                "kind": "debug_key",
-                "name": "DRV-MULTI"
-              },
-              "asserted": null
-            },
-            {
-              "id": "panorama",
-              "key": {
-                "kind": "debug_key",
-                "name": "DRV-PANO"
-              },
-              "asserted": null
-            }
-          ]
-        },
-        "press": null,
-        "endless": null
-      },
       "positions": [
         {
           "id": "movie",
@@ -636,38 +239,31 @@
         },
         {
           "id": "BKT1",
-          "label": "BKT1",
-          "description": null
+          "label": "BKT1"
         },
         {
           "id": "BKT2",
-          "label": "BKT2",
-          "description": null
+          "label": "BKT2"
         },
         {
           "id": "CH",
-          "label": "CH",
-          "description": null
+          "label": "CH"
         },
         {
           "id": "CL",
-          "label": "CL",
-          "description": null
+          "label": "CL"
         },
         {
           "id": "S",
-          "label": "S",
-          "description": null
+          "label": "S"
         },
         {
           "id": "Adv.1",
-          "label": "Adv.1",
-          "description": null
+          "label": "Adv.1"
         },
         {
           "id": "Adv.2",
-          "label": "Adv.2",
-          "description": null
+          "label": "Adv.2"
         },
         {
           "id": "multiple_exposure",
@@ -680,175 +276,222 @@
           "description": "Follow an on-screen guide to create a panorama."
         }
       ],
-      "short_name": "DRIVE"
+      "default_function": "Rotate to choose the drive mode: movie, bracketing, high- or low-speed burst, single frame, advanced filter, multiple exposure, or panorama.",
+      "mechanical": false,
+      "behavior": {
+        "kind": "dial",
+        "motion": {
+          "kind": "positions",
+          "positions": [
+            {
+              "id": "movie",
+              "key": {
+                "kind": "debug_key",
+                "name": "DRV-MOV"
+              }
+            },
+            {
+              "id": "BKT1",
+              "key": {
+                "kind": "debug_key",
+                "name": "DRV-BKT"
+              }
+            },
+            {
+              "id": "BKT2",
+              "key": {
+                "kind": "debug_key",
+                "name": "DRV-BKT2"
+              }
+            },
+            {
+              "id": "CH",
+              "key": {
+                "kind": "debug_key",
+                "name": "DRV-C_H"
+              }
+            },
+            {
+              "id": "CL",
+              "key": {
+                "kind": "debug_key",
+                "name": "DRV-C_L"
+              }
+            },
+            {
+              "id": "S",
+              "key": {
+                "kind": "debug_key",
+                "name": "DRV-ONE"
+              }
+            },
+            {
+              "id": "Adv.1",
+              "key": {
+                "kind": "debug_key",
+                "name": "DRV-ADV"
+              }
+            },
+            {
+              "id": "Adv.2",
+              "key": {
+                "kind": "debug_key",
+                "name": "DRV-ADV2"
+              }
+            },
+            {
+              "id": "multiple_exposure",
+              "key": {
+                "kind": "debug_key",
+                "name": "DRV-MULTI"
+              }
+            },
+            {
+              "id": "panorama",
+              "key": {
+                "kind": "debug_key",
+                "name": "DRV-PANO"
+              }
+            }
+          ]
+        }
+      }
+    },
+    "exposure_compensation_dial": {
+      "name": "Exposure compensation dial",
+      "location": "top",
+      "manual_page": 77,
+      "short_name": "EV",
+      "connection_ids": [
+        "controls-adc-7"
+      ],
+      "assignable": false,
+      "pushable": false,
+      "positions": [
+        {
+          "id": "−3",
+          "label": "−3"
+        },
+        {
+          "id": "−2",
+          "label": "−2"
+        },
+        {
+          "id": "−1",
+          "label": "−1"
+        },
+        {
+          "id": "0",
+          "label": "0"
+        },
+        {
+          "id": "+1",
+          "label": "+1"
+        },
+        {
+          "id": "+2",
+          "label": "+2"
+        },
+        {
+          "id": "+3",
+          "label": "+3"
+        },
+        {
+          "id": "C",
+          "label": "C"
+        }
+      ],
+      "default_function": "Rotate to choose an exposure compensation amount. At C, use the front command dial to set compensation from −5 to +5 EV.",
+      "mechanical": false,
+      "behavior": {
+        "kind": "dial",
+        "motion": {
+          "kind": "positions",
+          "positions": [
+            {
+              "id": "−3",
+              "key": {
+                "kind": "debug_key",
+                "name": "E-D-3.0"
+              }
+            },
+            {
+              "id": "−2",
+              "key": {
+                "kind": "debug_key",
+                "name": "E-D-2.0"
+              }
+            },
+            {
+              "id": "−1",
+              "key": {
+                "kind": "debug_key",
+                "name": "E-D-1.0"
+              }
+            },
+            {
+              "id": "0",
+              "key": {
+                "kind": "debug_key",
+                "name": "E-D=0"
+              }
+            },
+            {
+              "id": "+1",
+              "key": {
+                "kind": "debug_key",
+                "name": "E-D+1.0"
+              }
+            },
+            {
+              "id": "+2",
+              "key": {
+                "kind": "debug_key",
+                "name": "E-D+2.0"
+              }
+            },
+            {
+              "id": "+3",
+              "key": {
+                "kind": "debug_key",
+                "name": "E-D+3.0"
+              }
+            },
+            {
+              "id": "C",
+              "key": {
+                "kind": "debug_key",
+                "name": "E-D=C"
+              }
+            }
+          ]
+        }
+      }
     },
     "flash_pop_up_lever": {
       "name": "Flash pop-up lever",
       "location": "top",
       "manual_page": 92,
-      "face": null,
       "icon": "flash",
-      "connection_ids": [],
       "assignable": false,
       "pushable": false,
       "default_function": "Slide the N lever to raise the built-in flash.",
-      "role": null,
       "mechanical": false,
       "behavior": {
-        "kind": "lever",
-        "positions": [],
-        "momentary": null
-      },
-      "positions": []
-    },
-    "focus_mode_selector": {
-      "name": "Focus mode selector",
-      "location": "front",
-      "manual_page": 65,
-      "face": null,
-      "icon": null,
-      "connection_ids": [],
-      "assignable": false,
-      "pushable": false,
-      "default_function": "Choose single AF (S), continuous AF (C), or manual focus (M).",
-      "role": null,
-      "mechanical": false,
-      "behavior": {
-        "kind": "switch",
-        "positions": [
-          {
-            "id": "S",
-            "key": null,
-            "asserted": null
-          },
-          {
-            "id": "C",
-            "key": null,
-            "asserted": null
-          },
-          {
-            "id": "M",
-            "key": null,
-            "asserted": null
-          }
-        ]
-      },
-      "positions": [
-        {
-          "id": "S",
-          "label": "S",
-          "description": null
-        },
-        {
-          "id": "C",
-          "label": "C",
-          "description": null
-        },
-        {
-          "id": "M",
-          "label": "M",
-          "description": null
-        }
-      ],
-      "short_name": "FOCUS"
-    },
-    "lens_release_button": {
-      "name": "Lens release button",
-      "location": "front",
-      "manual_page": 28,
-      "face": null,
-      "icon": null,
-      "connection_ids": [],
-      "assignable": false,
-      "pushable": true,
-      "default_function": "Press while turning the lens to remove it.",
-      "role": null,
-      "mechanical": false,
-      "behavior": {
-        "kind": "button",
-        "press": null
-      },
-      "positions": [],
-      "short_name": "LENS"
-    },
-    "front_command_dial": {
-      "name": "Front command dial",
-      "location": "top",
-      "manual_page": 207,
-      "face": null,
-      "icon": null,
-      "connection_ids": [],
-      "assignable": true,
-      "pushable": true,
-      "default_function": "Rotate to select menu tabs or page through menus, adjust aperture, exposure compensation or sensitivity, choose auto-mode scenes, and view other pictures. Press to cycle the front-dial assignments or press and hold to choose a command-dial setting.",
-      "role": null,
-      "mechanical": false,
-      "behavior": {
-        "kind": "dial",
-        "motion": {
-          "kind": "steps",
-          "decrease": null,
-          "increase": null
-        },
-        "press": null,
-        "endless": null
-      },
-      "positions": [],
-      "short_name": "FRONT DIAL"
-    },
-    "on_off_switch": {
-      "name": "ON/OFF switch",
-      "location": "top",
-      "manual_page": 36,
-      "face": "ON/OFF",
-      "icon": null,
-      "connection_ids": [],
-      "assignable": false,
-      "pushable": false,
-      "default_function": "Turn the camera on or off.",
-      "role": null,
-      "mechanical": false,
-      "behavior": {
-        "kind": "switch",
-        "positions": [
-          {
-            "id": "ON",
-            "key": null,
-            "asserted": null
-          },
-          {
-            "id": "OFF",
-            "key": null,
-            "asserted": null
-          }
-        ]
-      },
-      "positions": [
-        {
-          "id": "ON",
-          "label": "ON",
-          "description": null
-        },
-        {
-          "id": "OFF",
-          "label": "OFF",
-          "description": null
-        }
-      ]
+        "kind": "lever"
+      }
     },
     "fn1_button": {
       "name": "Fn1 button",
       "location": "top",
       "manual_page": 228,
       "face": "Fn1",
-      "icon": null,
       "connection_ids": [
         "controls-adc-11"
       ],
       "assignable": true,
       "pushable": true,
       "default_function": "Performance by default; its role can be assigned using FUNCTION (Fn) SETTING.",
-      "role": null,
       "mechanical": false,
       "behavior": {
         "kind": "button",
@@ -856,211 +499,76 @@
           "kind": "debug_key",
           "name": "FUNCTION"
         }
-      },
-      "positions": []
+      }
     },
-    "delete_button": {
-      "name": "Delete button",
-      "location": "rear",
-      "manual_page": 46,
-      "face": null,
-      "icon": "delete",
-      "connection_ids": [
-        "controls-gpio-0-14"
-      ],
-      "assignable": false,
-      "pushable": true,
-      "default_function": "Delete the displayed picture in playback.",
-      "role": null,
-      "mechanical": false,
-      "behavior": {
-        "kind": "button",
-        "press": {
-          "kind": "debug_key",
-          "name": "DELETE"
-        }
-      },
-      "positions": []
-    },
-    "playback_button": {
-      "name": "Playback button",
-      "location": "rear",
-      "manual_page": 45,
-      "face": null,
-      "icon": "playback",
-      "connection_ids": [
-        "controls-gpio-8-6"
-      ],
-      "assignable": false,
-      "pushable": true,
-      "default_function": "Display pictures in playback; half-press the shutter button to return to shooting.",
-      "role": null,
-      "mechanical": false,
-      "behavior": {
-        "kind": "button",
-        "press": {
-          "kind": "debug_key",
-          "name": "K_PLAY"
-        }
-      },
-      "positions": []
-    },
-    "diopter_adjustment_control": {
-      "name": "Diopter adjustment control",
-      "location": "rear",
-      "manual_page": 9,
-      "face": null,
-      "icon": null,
-      "connection_ids": [],
+    "focus_mode_selector": {
+      "name": "Focus mode selector",
+      "location": "front",
+      "manual_page": 65,
+      "short_name": "FOCUS",
       "assignable": false,
       "pushable": false,
-      "default_function": "Rotate to adjust viewfinder focus.",
-      "role": null,
-      "mechanical": false,
-      "behavior": {
-        "kind": "dial",
-        "motion": {
-          "kind": "steps",
-          "decrease": null,
-          "increase": null
+      "positions": [
+        {
+          "id": "S",
+          "label": "S"
         },
-        "press": null,
-        "endless": null
-      },
-      "positions": [],
-      "short_name": "DIOPTER"
-    },
-    "view_mode_button": {
-      "name": "VIEW MODE button",
-      "location": "rear",
-      "manual_page": 14,
-      "face": "VIEW/MODE",
-      "icon": null,
-      "connection_ids": [
-        "controls-gpio-8-5"
-      ],
-      "assignable": false,
-      "pushable": true,
-      "default_function": "Cycle display modes: EYE SENSOR, EVF ONLY, LCD ONLY, EVF ONLY + EYE SENSOR, and EYE SENSOR + LCD IMAGE DISP.",
-      "role": null,
-      "mechanical": false,
-      "behavior": {
-        "kind": "button",
-        "press": {
-          "kind": "debug_key",
-          "name": "VIEW"
-        }
-      },
-      "positions": []
-    },
-    "ae_lock_button": {
-      "name": "AE-L (exposure lock) button",
-      "location": "rear",
-      "manual_page": 228,
-      "face": "AE-L",
-      "icon": null,
-      "connection_ids": [
-        "controls-adc-11"
-      ],
-      "assignable": true,
-      "pushable": true,
-      "default_function": "AE LOCK ONLY by default; its role can be assigned using FUNCTION (Fn) SETTING.",
-      "role": null,
-      "mechanical": false,
-      "behavior": {
-        "kind": "button",
-        "press": {
-          "kind": "debug_key",
-          "name": "AE-LOCK"
-        }
-      },
-      "positions": []
-    },
-    "rear_command_dial": {
-      "name": "Rear command dial",
-      "location": "rear",
-      "manual_page": 207,
-      "face": null,
-      "icon": null,
-      "connection_ids": [],
-      "assignable": true,
-      "pushable": true,
-      "default_function": "Rotate to highlight menu items, adjust settings in the quick menu, change the focus-frame size, adjust exposure settings, and zoom during playback. The center is assigned FOCUS CHECK by default and can be assigned another function; command-dial roles can also be changed.",
-      "role": null,
-      "mechanical": false,
-      "behavior": {
-        "kind": "dial",
-        "motion": {
-          "kind": "steps",
-          "decrease": null,
-          "increase": null
+        {
+          "id": "C",
+          "label": "C"
         },
-        "press": null,
-        "endless": null
-      },
-      "positions": [],
-      "short_name": "REAR DIAL"
-    },
-    "af_lock_button": {
-      "name": "AF-L (focus lock) button",
-      "location": "rear",
-      "manual_page": 228,
-      "face": "AF-L",
-      "icon": null,
-      "connection_ids": [
-        "controls-adc-11"
+        {
+          "id": "M",
+          "label": "M"
+        }
       ],
-      "assignable": true,
-      "pushable": true,
-      "default_function": "AF LOCK ONLY by default; its role can be assigned using FUNCTION (Fn) SETTING.",
-      "role": null,
+      "default_function": "Choose single AF (S), continuous AF (C), or manual focus (M).",
       "mechanical": false,
       "behavior": {
-        "kind": "button",
-        "press": {
-          "kind": "debug_key",
-          "name": "AF-LOCK"
-        }
-      },
-      "positions": []
-    },
-    "quick_menu_button": {
-      "name": "Q (quick menu) button",
-      "location": "rear",
-      "manual_page": 225,
-      "face": "Q",
-      "icon": null,
-      "connection_ids": [
-        "controls-adc-5"
-      ],
-      "assignable": false,
-      "pushable": true,
-      "default_function": "Display the quick menu; press and hold to edit its contents.",
-      "role": null,
-      "mechanical": false,
-      "behavior": {
-        "kind": "button",
-        "press": {
-          "kind": "debug_key",
-          "name": "K_Q"
-        }
-      },
-      "positions": []
+        "kind": "switch",
+        "positions": [
+          {
+            "id": "S"
+          },
+          {
+            "id": "C"
+          },
+          {
+            "id": "M"
+          }
+        ]
+      }
     },
     "focus_stick": {
       "name": "Focus stick (focus lever)",
       "location": "rear",
       "manual_page": 4,
-      "face": null,
-      "icon": null,
+      "short_name": "FOCUS",
       "connection_ids": [
         "controls-adc-5",
         "controls-adc-9"
       ],
       "assignable": true,
       "pushable": true,
+      "positions": [
+        {
+          "id": "up",
+          "label": "up"
+        },
+        {
+          "id": "down",
+          "label": "down"
+        },
+        {
+          "id": "left",
+          "label": "left"
+        },
+        {
+          "id": "right",
+          "label": "right"
+        }
+      ],
       "default_function": "Tilt or press to select the focus area and navigate menus; use left or right to view other pictures in playback.",
-      "role": null,
       "mechanical": false,
       "behavior": {
         "kind": "pad",
@@ -1086,44 +594,48 @@
           "kind": "debug_key",
           "name": "8DIR_PUSH"
         }
-      },
-      "positions": [
-        {
-          "id": "up",
-          "label": "up",
-          "description": null
-        },
-        {
-          "id": "down",
-          "label": "down",
-          "description": null
-        },
-        {
-          "id": "left",
-          "label": "left",
-          "description": null
-        },
-        {
-          "id": "right",
-          "label": "right",
-          "description": null
+      }
+    },
+    "front_command_dial": {
+      "name": "Front command dial",
+      "location": "top",
+      "manual_page": 207,
+      "short_name": "FRONT DIAL",
+      "assignable": true,
+      "pushable": true,
+      "default_function": "Rotate to select menu tabs or page through menus, adjust aperture, exposure compensation or sensitivity, choose auto-mode scenes, and view other pictures. Press to cycle the front-dial assignments or press and hold to choose a command-dial setting.",
+      "mechanical": false,
+      "behavior": {
+        "kind": "dial",
+        "motion": {
+          "kind": "steps"
         }
-      ],
-      "short_name": "FOCUS"
+      }
+    },
+    "lens_release_button": {
+      "name": "Lens release button",
+      "location": "front",
+      "manual_page": 28,
+      "short_name": "LENS",
+      "assignable": false,
+      "pushable": true,
+      "default_function": "Press while turning the lens to remove it.",
+      "mechanical": false,
+      "behavior": {
+        "kind": "button"
+      }
     },
     "menu_ok_button": {
       "name": "MENU/OK button",
       "location": "rear",
       "manual_page": 20,
       "face": "MENU/OK",
-      "icon": null,
       "connection_ids": [
         "controls-adc-5"
       ],
       "assignable": false,
       "pushable": true,
       "default_function": "Display menus and confirm a highlighted menu item.",
-      "role": null,
       "mechanical": false,
       "behavior": {
         "kind": "button",
@@ -1131,88 +643,363 @@
           "kind": "debug_key",
           "name": "EXE_M"
         }
-      },
-      "positions": []
+      }
     },
-    "disp_back_button": {
-      "name": "DISP (display)/BACK button",
+    "on_off_switch": {
+      "name": "ON/OFF switch",
+      "location": "top",
+      "manual_page": 36,
+      "face": "ON/OFF",
+      "assignable": false,
+      "pushable": false,
+      "positions": [
+        {
+          "id": "ON",
+          "label": "ON"
+        },
+        {
+          "id": "OFF",
+          "label": "OFF"
+        }
+      ],
+      "default_function": "Turn the camera on or off.",
+      "mechanical": false,
+      "behavior": {
+        "kind": "switch",
+        "positions": [
+          {
+            "id": "ON"
+          },
+          {
+            "id": "OFF"
+          }
+        ]
+      }
+    },
+    "playback_button": {
+      "name": "Playback button",
       "location": "rear",
-      "manual_page": 16,
-      "face": "DISP/BACK",
-      "icon": null,
+      "manual_page": 45,
+      "icon": "playback",
       "connection_ids": [
-        "controls-adc-5"
+        "controls-gpio-8-6"
       ],
       "assignable": false,
       "pushable": true,
-      "default_function": "Control the indicators shown in the viewfinder and LCD monitor, and return to the previous screen.",
-      "role": null,
+      "default_function": "Display pictures in playback; half-press the shutter button to return to shooting.",
       "mechanical": false,
       "behavior": {
         "kind": "button",
         "press": {
           "kind": "debug_key",
-          "name": "DISP_B"
+          "name": "K_PLAY"
         }
-      },
-      "positions": []
+      }
+    },
+    "quick_menu_button": {
+      "name": "Q (quick menu) button",
+      "location": "rear",
+      "manual_page": 225,
+      "face": "Q",
+      "connection_ids": [
+        "controls-adc-5"
+      ],
+      "assignable": false,
+      "pushable": true,
+      "default_function": "Display the quick menu; press and hold to edit its contents.",
+      "mechanical": false,
+      "behavior": {
+        "kind": "button",
+        "press": {
+          "kind": "debug_key",
+          "name": "K_Q"
+        }
+      }
+    },
+    "rear_command_dial": {
+      "name": "Rear command dial",
+      "location": "rear",
+      "manual_page": 207,
+      "short_name": "REAR DIAL",
+      "assignable": true,
+      "pushable": true,
+      "default_function": "Rotate to highlight menu items, adjust settings in the quick menu, change the focus-frame size, adjust exposure settings, and zoom during playback. The center is assigned FOCUS CHECK by default and can be assigned another function; command-dial roles can also be changed.",
+      "mechanical": false,
+      "behavior": {
+        "kind": "dial",
+        "motion": {
+          "kind": "steps"
+        }
+      }
+    },
+    "shutter_button": {
+      "name": "Shutter button",
+      "location": "top",
+      "manual_page": 44,
+      "short_name": "SHUTTER",
+      "connection_ids": [
+        "controls-gpio-0-0",
+        "controls-gpio-0-1"
+      ],
+      "assignable": false,
+      "pushable": true,
+      "default_function": "Half-press to focus and lock focus and exposure; press fully to take a photograph.",
+      "mechanical": false,
+      "behavior": {
+        "kind": "shutter",
+        "stages": {
+          "full_press": [
+            {
+              "kind": "debug_key",
+              "name": "S2"
+            }
+          ],
+          "half_press": [
+            {
+              "kind": "debug_key",
+              "name": "S1"
+            }
+          ]
+        }
+      }
+    },
+    "shutter_speed_dial": {
+      "name": "Shutter speed dial",
+      "location": "top",
+      "manual_page": 5,
+      "short_name": "SPEED",
+      "connection_ids": [
+        "controls-adc-6"
+      ],
+      "assignable": false,
+      "pushable": false,
+      "positions": [
+        {
+          "id": "B",
+          "label": "B"
+        },
+        {
+          "id": "T",
+          "label": "T"
+        },
+        {
+          "id": "1",
+          "label": "1"
+        },
+        {
+          "id": "2",
+          "label": "2"
+        },
+        {
+          "id": "4",
+          "label": "4"
+        },
+        {
+          "id": "8",
+          "label": "8"
+        },
+        {
+          "id": "15",
+          "label": "15"
+        },
+        {
+          "id": "30",
+          "label": "30"
+        },
+        {
+          "id": "60",
+          "label": "60"
+        },
+        {
+          "id": "125",
+          "label": "125"
+        },
+        {
+          "id": "180X",
+          "label": "180X"
+        },
+        {
+          "id": "250",
+          "label": "250"
+        },
+        {
+          "id": "500",
+          "label": "500"
+        },
+        {
+          "id": "1000",
+          "label": "1000"
+        },
+        {
+          "id": "2000",
+          "label": "2000"
+        },
+        {
+          "id": "4000",
+          "label": "4000"
+        },
+        {
+          "id": "A",
+          "label": "A"
+        }
+      ],
+      "default_function": "Choose shutter speed. T selects a timed exposure, B keeps the shutter open while the shutter button is pressed, and A selects automatic shutter speed.",
+      "mechanical": false,
+      "behavior": {
+        "kind": "dial",
+        "motion": {
+          "kind": "positions",
+          "positions": [
+            {
+              "id": "B",
+              "key": {
+                "kind": "debug_key",
+                "name": "S-B"
+              }
+            },
+            {
+              "id": "T",
+              "key": {
+                "kind": "debug_key",
+                "name": "S-T"
+              }
+            },
+            {
+              "id": "1",
+              "key": {
+                "kind": "debug_key",
+                "name": "S-1/1"
+              }
+            },
+            {
+              "id": "2",
+              "key": {
+                "kind": "debug_key",
+                "name": "S-1/2"
+              }
+            },
+            {
+              "id": "4",
+              "key": {
+                "kind": "debug_key",
+                "name": "S-1/4"
+              }
+            },
+            {
+              "id": "8",
+              "key": {
+                "kind": "debug_key",
+                "name": "S-1/8"
+              }
+            },
+            {
+              "id": "15",
+              "key": {
+                "kind": "debug_key",
+                "name": "S-1/15"
+              }
+            },
+            {
+              "id": "30",
+              "key": {
+                "kind": "debug_key",
+                "name": "S-1/30"
+              }
+            },
+            {
+              "id": "60",
+              "key": {
+                "kind": "debug_key",
+                "name": "S-1/60"
+              }
+            },
+            {
+              "id": "125",
+              "key": {
+                "kind": "debug_key",
+                "name": "S-1/125"
+              }
+            },
+            {
+              "id": "180X"
+            },
+            {
+              "id": "250",
+              "key": {
+                "kind": "debug_key",
+                "name": "S-1/250"
+              }
+            },
+            {
+              "id": "500",
+              "key": {
+                "kind": "debug_key",
+                "name": "S-1/500"
+              }
+            },
+            {
+              "id": "1000",
+              "key": {
+                "kind": "debug_key",
+                "name": "S-1/1000"
+              }
+            },
+            {
+              "id": "2000",
+              "key": {
+                "kind": "debug_key",
+                "name": "S-1/2000"
+              }
+            },
+            {
+              "id": "4000",
+              "key": {
+                "kind": "debug_key",
+                "name": "S-1/4000"
+              }
+            },
+            {
+              "id": "A",
+              "key": {
+                "kind": "debug_key",
+                "name": "S-A"
+              }
+            }
+          ]
+        }
+      }
     },
     "touch_screen": {
       "name": "Touch screen",
       "location": "rear",
       "manual_page": 21,
-      "face": null,
-      "icon": null,
-      "connection_ids": [],
       "assignable": true,
       "pushable": false,
       "default_function": "When enabled, supports touch photography, focus-area selection, function selection, muting camera controls during movie recording, and full-frame playback.",
-      "role": null,
       "mechanical": false,
       "behavior": {
         "kind": "touch"
-      },
-      "positions": []
+      }
     },
-    "battery_chamber_cover_latch": {
-      "name": "Battery-chamber cover latch",
-      "location": "bottom",
-      "manual_page": 29,
-      "face": null,
-      "icon": null,
-      "connection_ids": [],
-      "assignable": false,
-      "pushable": false,
-      "default_function": "Slide to open the battery-chamber cover.",
-      "role": null,
-      "mechanical": false,
-      "behavior": {
-        "kind": "lever",
-        "positions": [],
-        "momentary": null
-      },
-      "positions": [],
-      "short_name": "COVER"
-    },
-    "battery_latch": {
-      "name": "Battery latch",
-      "location": "bottom",
-      "manual_page": 31,
-      "face": null,
-      "icon": null,
-      "connection_ids": [],
+    "view_mode_button": {
+      "name": "VIEW MODE button",
+      "location": "rear",
+      "manual_page": 14,
+      "face": "VIEW/MODE",
+      "connection_ids": [
+        "controls-gpio-8-5"
+      ],
       "assignable": false,
       "pushable": true,
-      "default_function": "Press to the side to release the battery for removal.",
-      "role": null,
+      "default_function": "Cycle display modes: EYE SENSOR, EVF ONLY, LCD ONLY, EVF ONLY + EYE SENSOR, and EYE SENSOR + LCD IMAGE DISP.",
       "mechanical": false,
       "behavior": {
-        "kind": "lever",
-        "positions": [],
-        "momentary": null
-      },
-      "positions": [],
-      "short_name": "BATTERY"
+        "kind": "button",
+        "press": {
+          "kind": "debug_key",
+          "name": "VIEW"
+        }
+      }
     }
   }
 }

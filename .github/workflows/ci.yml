@@ -46,6 +46,9 @@ jobs:
           sudo apt-get install -y libjpeg-dev
       - run: mise run rust-format-check
       - if: ${{ !cancelled() }}
+        name: Check catalog record formatting
+        run: mise run catalog-format-check
+      - if: ${{ !cancelled() }}
         run: mise run rust-check
       - name: Check the generated workspace-hack crate
         if: ${{ !cancelled() }}

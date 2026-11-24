@@ -1,0 +1,8 @@
+{
+  "$schema": "https://fujimod.com/schemas/soc-block.schema.json",
+  "schema": 1,
+  "id": "sd-clocks-0",
+  "base": 4294246444,
+  "size": 2,
+  "kind": "address-window"
+}

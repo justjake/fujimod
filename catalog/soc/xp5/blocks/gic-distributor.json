@@ -1,0 +1,14 @@
+{
+  "$schema": "https://fujimod.com/schemas/soc-block.schema.json",
+  "schema": 1,
+  "id": "gic-distributor",
+  "base": 4194304000,
+  "size": 65536,
+  "kind": "interrupt-controller",
+  "device": {
+    "model": "gic_v3",
+    "redistributor_block_id": "gic-redistributor",
+    "redistributor_stride": 131072,
+    "lines": 512
+  }
+}

@@ -2,7 +2,6 @@
   "$schema": "https://fujimod.com/schemas/ip.schema.json",
   "schema": 1,
   "id": "sdhci",
-  "device": null,
   "registers": [
     {
       "name": "sdma_system_address",

@@ -1,0 +1,19 @@
+{
+  "$schema": "https://fujimod.com/schemas/soc-block.schema.json",
+  "schema": 1,
+  "id": "block-fff74000",
+  "base": 4294393856,
+  "size": 4096,
+  "kind": "address-window",
+  "device": {
+    "model": "register_block",
+    "idle_bits": [
+      {
+        "mask": 1,
+        "offset": 0
+      }
+    ],
+    "basis": "X-T3 5.11 resets the unit by writing 0 to +0x000 and waits for bit 0 to read 1. Other words read back their last write; nothing else in this block is modeled.",
+    "order": 23
+  }
+}

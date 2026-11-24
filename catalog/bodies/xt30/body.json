@@ -3,15 +3,29 @@
   "schema": 1,
   "id": "xt30",
   "soc_id": "xp4",
-  "dram_bytes": null,
-  "nand": null,
-  "sensor": null,
-  "lens": null,
-  "display": null,
-  "microcontroller": null,
-  "power_control": null,
-  "card_slot": null,
-  "control_bus_chips": [],
+  "hardware": {
+    "profiles": {
+      "xt30-boot": {
+        "dram_basis": "Run-level virtual memory bound; installed capacity is unknown."
+      },
+      "xt30-discovery": {
+        "dram_basis": "Installed DRAM capacity is unknown; this profile makes no body-level capacity claim."
+      }
+    },
+    "serial_attachments": [
+      {
+        "part_id": "xt30-boot-power",
+        "controller_id": "spi1",
+        "connection_id": "xt30-boot-power-bus",
+        "select_connection_id": "xt30-boot-power-select"
+      }
+    ],
+    "thermal_connection_ids": [
+      "xt30-thermal-2",
+      "xt30-thermal-4",
+      "xt30-thermal-10"
+    ]
+  },
   "connections": [
     {
       "id": "controls-gpio-0-11",
@@ -79,8 +93,7 @@
       "signals": [
         {
           "kind": "adc",
-          "channel": 7,
-          "threshold": null
+          "channel": 7
         }
       ]
     },
@@ -90,8 +103,7 @@
       "signals": [
         {
           "kind": "adc",
-          "channel": 6,
-          "threshold": null
+          "channel": 6
         }
       ]
     },
@@ -101,8 +113,7 @@
       "signals": [
         {
           "kind": "adc",
-          "channel": 1,
-          "threshold": null
+          "channel": 1
         }
       ]
     },
@@ -112,8 +123,7 @@
       "signals": [
         {
           "kind": "adc",
-          "channel": 9,
-          "threshold": null
+          "channel": 9
         }
       ]
     },
@@ -123,8 +133,7 @@
       "signals": [
         {
           "kind": "adc",
-          "channel": 5,
-          "threshold": null
+          "channel": 5
         }
       ]
     },
@@ -134,8 +143,7 @@
       "signals": [
         {
           "kind": "adc",
-          "channel": 11,
-          "threshold": null
+          "channel": 11
         }
       ]
     },
@@ -177,13 +185,11 @@
     },
     {
       "id": "xt30-boot-flash",
-      "kind": "control",
-      "signals": []
+      "kind": "control"
     },
     {
       "id": "xt30-boot-power-bus",
-      "kind": "power-control",
-      "signals": []
+      "kind": "power-control"
     },
     {
       "id": "xt30-boot-power-select",
@@ -203,8 +209,7 @@
       "signals": [
         {
           "kind": "adc",
-          "channel": 2,
-          "threshold": null
+          "channel": 2
         }
       ]
     },
@@ -214,8 +219,7 @@
       "signals": [
         {
           "kind": "adc",
-          "channel": 4,
-          "threshold": null
+          "channel": 4
         }
       ]
     },
@@ -225,8 +229,7 @@
       "signals": [
         {
           "kind": "adc",
-          "channel": 10,
-          "threshold": null
+          "channel": 10
         }
       ]
     }
@@ -252,30 +255,5 @@
       "target_id": "imaging-receiver",
       "signal": "image_data"
     }
-  ],
-  "hardware": {
-    "serial_attachments": [
-      {
-        "part_id": "xt30-boot-power",
-        "controller_id": "spi1",
-        "connection_id": "xt30-boot-power-bus",
-        "select_connection_id": "xt30-boot-power-select"
-      }
-    ],
-    "gpio_feedback": [],
-    "keypad_samples": {},
-    "thermal_connection_ids": [
-      "xt30-thermal-2",
-      "xt30-thermal-4",
-      "xt30-thermal-10"
-    ],
-    "profiles": {
-      "xt30-discovery": {
-        "dram_basis": "Installed DRAM capacity is unknown; this profile makes no body-level capacity claim."
-      },
-      "xt30-boot": {
-        "dram_basis": "Run-level virtual memory bound; installed capacity is unknown."
-      }
-    }
-  }
+  ]
 }

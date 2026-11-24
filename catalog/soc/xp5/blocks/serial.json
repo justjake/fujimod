@@ -1,0 +1,14 @@
+{
+  "$schema": "https://fujimod.com/schemas/soc-block.schema.json",
+  "schema": 1,
+  "id": "serial",
+  "base": 4287696896,
+  "size": 4096,
+  "kind": "serial-controller",
+  "clock_id": "serial-source",
+  "device": {
+    "model": "serial_dma",
+    "receive_request": 2,
+    "transmit_request": 3
+  }
+}

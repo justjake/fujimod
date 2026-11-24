@@ -1,0 +1,23 @@
+{
+  "$schema": "https://fujimod.com/schemas/soc-block.schema.json",
+  "schema": 1,
+  "id": "serial-flash",
+  "base": 4294803456,
+  "size": 256,
+  "kind": "address-window",
+  "interrupts": [
+    {
+      "output": "interrupt",
+      "line": 37
+    }
+  ],
+  "device": {
+    "model": "serial_flash",
+    "aperture_block_id": "flash-aperture",
+    "timing": "8 guest ticks per command acceptance; functional latency, not measured silicon timing.",
+    "native_dependencies": [
+      "dma"
+    ],
+    "basis": "Declared catalog input."
+  }
+}

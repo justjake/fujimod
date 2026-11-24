@@ -1,0 +1,13 @@
+{
+  "$schema": "https://fujimod.com/schemas/soc-block.schema.json",
+  "schema": 1,
+  "id": "temperature",
+  "base": 4294211600,
+  "size": 68,
+  "kind": "address-window",
+  "device": {
+    "model": "adc",
+    "sample_ticks": 5000,
+    "basis": "Declared catalog input."
+  }
+}

@@ -2,7 +2,6 @@
   "$schema": "https://fujimod.com/schemas/ip.schema.json",
   "schema": 1,
   "id": "dwc3",
-  "device": null,
   "registers": [
     {
       "name": "global_control_00",

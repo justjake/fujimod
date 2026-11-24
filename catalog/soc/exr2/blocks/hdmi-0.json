@@ -1,0 +1,8 @@
+{
+  "$schema": "https://fujimod.com/schemas/soc-block.schema.json",
+  "schema": 1,
+  "id": "hdmi-0",
+  "base": 4294344704,
+  "size": 4096,
+  "kind": "address-window"
+}

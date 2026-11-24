@@ -1,0 +1,19 @@
+{
+  "$schema": "https://fujimod.com/schemas/soc-block.schema.json",
+  "schema": 1,
+  "id": "imaging-fff3b000",
+  "base": 4294160384,
+  "size": 4096,
+  "kind": "imaging-controller",
+  "device": {
+    "model": "register_block",
+    "idle_bits": [
+      {
+        "mask": 1,
+        "offset": 0
+      }
+    ],
+    "basis": "Imaging block of X-T20 2.11 section 5 configured by 0xc3c100..0xc3f8c4 (words +0x04..+0x204), with enable bits in +0x04 updated by read-modify-write. The stop 0xc3c0c0 writes 0 to +0x00 and waits until bit 0 reads set, so bit 0 is declared idle. The words read back their last write; what the block computes is not modeled.",
+    "order": 7
+  }
+}

@@ -1,0 +1,14 @@
+{
+  "$schema": "https://fujimod.com/schemas/soc-block.schema.json",
+  "schema": 1,
+  "id": "gic-distributor",
+  "base": 4294905856,
+  "size": 4096,
+  "kind": "interrupt-controller",
+  "device": {
+    "model": "gic_v2",
+    "cpu_interface_block_id": "gic-cpu-interface",
+    "lines": 512,
+    "basis": "Kernel CBAR reads and GIC distributor/CPU-interface accesses at CBAR+0x1000/+0x2000. CBAR 0xffff0000 is a declared discovery input, not captured."
+  }
+}

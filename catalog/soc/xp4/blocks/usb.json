@@ -1,0 +1,20 @@
+{
+  "$schema": "https://fujimod.com/schemas/soc-block.schema.json",
+  "schema": 1,
+  "id": "usb",
+  "base": 4289724416,
+  "size": 65536,
+  "kind": "usb-controller",
+  "interrupts": [
+    {
+      "output": "event",
+      "line": 246
+    }
+  ],
+  "device": {
+    "model": "xpp_usb",
+    "command_ticks": 48,
+    "transaction_ticks": 6000,
+    "basis": "DesignWare USB3 device controller register block; the core registers start at +0xc100. The interrupt line and the command and transaction latencies are declared values for this body. The latencies are not measured."
+  }
+}

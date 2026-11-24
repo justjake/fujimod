@@ -1,0 +1,14 @@
+{
+  "$schema": "https://fujimod.com/schemas/soc-block.schema.json",
+  "schema": 1,
+  "id": "imaging-fff41000",
+  "base": 4294184960,
+  "size": 4096,
+  "kind": "imaging-controller",
+  "device": {
+    "model": "register_block",
+    "idle_bits": [],
+    "basis": "Coordinate table of the X-T20 2.11 section-5 imaging driver (0xc3c100..0xc3f8c4, beside the block at 0xfff3b000), one page of four (0xfff3f000..0xfff42fff). 0xc3d2c8 writes one word per entry of a list of at most 0x1000 entries to 0xfff3f200 + 4*n: two 13-bit coordinates in bits 0-12 and 16-28, each offset by a word of the list header, with two flag bits each (13-14, 29-30). It then reads the last word back and sets its bit 31; an empty list writes 0x1fff/0x1fff with bit 31 to +0x200 and +0x204. The list comes from the body's flash data: a strict boot with a camera's own flash regions writes +0x200 at 162.9M instructions, while the update image's defaults do not reach it before REC. The words read back their last write; what the table does is not modeled.",
+    "order": 10
+  }
+}

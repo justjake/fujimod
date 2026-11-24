@@ -1,0 +1,8 @@
+{
+  "$schema": "https://fujimod.com/schemas/soc-block.schema.json",
+  "schema": 1,
+  "id": "phase-detection",
+  "base": 4294066176,
+  "size": 208,
+  "kind": "imaging-controller"
+}

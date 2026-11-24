@@ -1,0 +1,19 @@
+{
+  "$schema": "https://fujimod.com/schemas/soc-block.schema.json",
+  "schema": 1,
+  "id": "jpeg-decoder",
+  "base": 4294578176,
+  "size": 4096,
+  "kind": "imaging-controller",
+  "interrupts": [
+    {
+      "output": "interrupt",
+      "line": 136
+    }
+  ],
+  "device": {
+    "model": "jpeg_codec",
+    "run_ticks": 54000,
+    "basis": "JPEG decoder of X-T3 5.11, the X-T20 2.11 decoder's register layout, beside the encoder page. Playback initialises it by writing 1 to +0x118 and waits for status +0x04 bit 16. A run programs the stream +0x10c and its size +0x110, the packed 4:2:2 output +0x100 and its limit +0x104, and starts with +0x00 bit 0. The playback client registers its handler on interrupt line 136 (level), from the interrupt source table of the firmware; the handler reads the status +0x04, takes bit 4 as a finished run (it then reads +0x14 and the output end +0x108) and bit 17 as a failure. In emulation with the X-T20 decoder model, one playback decodes a card JPEG's thumbnail, preview and picture. The stream refill (+0x118 = 4) is not seen. run_ticks (1 ms at 54 MHz) is not measured."
+  }
+}

@@ -1,0 +1,24 @@
+{
+  "$schema": "https://fujimod.com/schemas/soc-block.schema.json",
+  "schema": 1,
+  "id": "display-output-1",
+  "base": 4294283264,
+  "size": 4096,
+  "kind": "display-controller",
+  "device": {
+    "model": "display_output",
+    "set_bits": [
+      {
+        "offset": 0,
+        "mask": 65536
+      }
+    ],
+    "clear_bits": [],
+    "scanout": {
+      "output": 1,
+      "period_ticks": 800000
+    },
+    "basis": "Output 0 of the X-T20 display controller at 0xfff59000. The register window covers the output-0 accesses in X-T20 2.11, with the highest observed offset +0xc0c (0xca29c8); the separate body register block at 0xfff5b000 is outside this window. The stock output-0 path waits for bit 16 at +0 to read set (0xca37ac). No output-0 bit-28 status at +0x2000 is modeled. Status requests complete immediately; controller latency is not measured. Registers start at their default values and change only through firmware MMIO, so this path remains inactive until firmware programs it. Scanout is attached to host output 1 to observe it separately; physical panel identity and panel-specific color behavior are unchecked.",
+    "order": 1
+  }
+}

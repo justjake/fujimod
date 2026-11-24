@@ -1,0 +1,12 @@
+{
+  "$schema": "https://fujimod.com/schemas/soc-block.schema.json",
+  "schema": 1,
+  "id": "serial3",
+  "base": 4294094848,
+  "size": 256,
+  "kind": "serial-controller",
+  "device": {
+    "model": "serial_port",
+    "basis": "Declared discovery input: a provisional status law without a peer. Sends complete at once and set done bit 2, writes to +0x2c clear status bits, bit 3 reads set and received words read zero. The attached peers are not identified."
+  }
+}

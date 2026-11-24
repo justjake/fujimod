@@ -1,4 +1,4 @@
-use fujimod_catalog::{Body, Soc};
+use fujimod_catalog::{Body, ReferenceCatalog, Soc};
 use std::{fs, path::PathBuf};
 
 #[test]
@@ -29,12 +29,9 @@ fn declared_hardware_profiles_decode_and_validate() {
         }
     }
     assert!(hardware_bodies > 0 && manual_only_bodies > 0);
-    for entry in fs::read_dir(root.join("soc")).unwrap() {
-        let path = entry.unwrap().path().join("soc.json");
-        let soc: Soc = serde_json::from_slice(&fs::read(&path).unwrap())
-            .unwrap_or_else(|error| panic!("{}: {error}", path.display()));
-        soc.validate(&soc.id)
-            .unwrap_or_else(|error| panic!("{}: {error}", path.display()));
+    let catalog = ReferenceCatalog::load(&root).expect("catalog loads");
+    for id in ["exr2", "xp4", "xp5", "xpp"] {
+        assert!(catalog.soc(id).is_some(), "{id} loads with its blocks");
     }
 }
 
@@ -118,7 +115,8 @@ fn bus_drain_must_be_aligned_and_name_processors() {
 
 #[test]
 fn xp4_display_channels_declare_the_same_plane_layouts() {
-    let soc: Soc = serde_json::from_str(include_str!("../../../catalog/soc/xp4/soc.json")).unwrap();
+    let catalog = ReferenceCatalog::bundled().expect("bundled catalog loads");
+    let soc: &Soc = catalog.soc("xp4").expect("xp4 record");
     soc.validate(&soc.id).unwrap();
     let block = |id: &str| match soc
         .blocks

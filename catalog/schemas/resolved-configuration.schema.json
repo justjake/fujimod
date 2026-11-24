@@ -26473,7 +26473,6 @@
         "architecture",
         "processors",
         "memory_regions",
-        "blocks",
         "reset"
       ],
       "type": "object"

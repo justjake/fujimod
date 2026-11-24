@@ -1,0 +1,14 @@
+{
+  "$schema": "https://fujimod.com/schemas/soc-block.schema.json",
+  "schema": 1,
+  "id": "imaging-fff47000",
+  "base": 4294209536,
+  "size": 4096,
+  "kind": "imaging-controller",
+  "device": {
+    "model": "register_block",
+    "idle_bits": [],
+    "basis": "Imaging block of X-T20 2.11 written only by the register-table copier 0xc41d30 from section-5 tables (for example 0xf73428 and 0xf795a0); no read of the block is known. The words read back their last write; what the block computes is not modeled.",
+    "order": 16
+  }
+}

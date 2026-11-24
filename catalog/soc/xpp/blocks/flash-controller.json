@@ -1,0 +1,20 @@
+{
+  "$schema": "https://fujimod.com/schemas/soc-block.schema.json",
+  "schema": 1,
+  "id": "flash-controller",
+  "base": 4294000640,
+  "size": 64,
+  "kind": "address-window",
+  "interrupts": [
+    {
+      "output": "interrupt",
+      "line": 35
+    }
+  ],
+  "device": {
+    "model": "serial_flash",
+    "aperture_block_id": "flash-aperture",
+    "aperture_size": 134217728,
+    "basis": "Flash reads go through the aperture at 0xf0000000+offset by CPU copies and DMA; the controller's configuration words are written around each copy. Commands: +0x00 opcode, +0x04 aperture address, +0x10 control (chip select in bits 6-7), +0x20 phase count, +0x1c start; +0x24 status and +0x28 mask, where a set mask bit also acknowledges its status. Page programs are aperture stores while the registers hold opcode 0x12, ended by +0x30 bit 0. X-T20 2.11 driver 0xc5182c/0xc5220c; its handler 0xc501c0 is connected through descriptor 0xed4804, interrupt 0x23."
+  }
+}

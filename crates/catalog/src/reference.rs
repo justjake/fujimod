@@ -11,6 +11,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 pub const SOC_SCHEMA_URI: &str = "https://fujimod.com/schemas/soc.schema.json";
+pub const SOC_BLOCK_SCHEMA_URI: &str = "https://fujimod.com/schemas/soc-block.schema.json";
 pub const PART_SCHEMA_URI: &str = "https://fujimod.com/schemas/part.schema.json";
 pub const BODY_SCHEMA_URI: &str = "https://fujimod.com/schemas/body.schema.json";
 pub const FIRMWARE_SCHEMA_URI: &str = "https://fujimod.com/schemas/firmware.schema.json";
@@ -60,6 +61,7 @@ pub struct Soc {
     /// Addressable memory regions owned by this SoC.
     pub memory_regions: Vec<MemoryRegion>,
     /// Address and register blocks exposed by the SoC.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub blocks: Vec<SocBlock>,
     /// Clock domains exposed by the SoC.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
@@ -917,6 +919,46 @@ pub struct SocBlock {
     /// How the block's facts were established.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub evidence: Vec<crate::provenance::Evidence>,
+}
+
+/// One block record file under `soc/<id>/blocks/`: the block's fields beside
+/// its schema identity.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[cfg_attr(
+    all(target_arch = "wasm32", not(target_os = "emscripten")),
+    derive(tsify::Tsify),
+    tsify(hashmap_as_object, missing_as_null)
+)]
+pub struct SocBlockRecord {
+    /// Stable schema URI for a block record.
+    #[serde(rename = "$schema")]
+    #[cfg_attr(
+        all(target_arch = "wasm32", not(target_os = "emscripten")),
+        tsify(type = "\"https://fujimod.com/schemas/soc-block.schema.json\"")
+    )]
+    pub schema_uri: String,
+    /// Block record version.
+    pub schema: u32,
+    /// The block's facts.
+    #[serde(flatten)]
+    pub block: SocBlock,
+}
+
+impl SocBlockRecord {
+    /// Check the record version, position identity and block identity.
+    pub fn validate(&self, file_id: &str) -> Result<(), String> {
+        if self.schema != 1 || self.schema_uri != SOC_BLOCK_SCHEMA_URI {
+            return Err(format!("block {file_id} schema or version differs"));
+        }
+        if self.block.id != file_id {
+            return Err(format!(
+                "block file {file_id} declares identity {}",
+                self.block.id
+            ));
+        }
+        Ok(())
+    }
 }
 
 impl SocBlock {
@@ -3119,8 +3161,7 @@ impl ReferenceCatalog {
             value.validate(&value.id)?;
             insert_unique(&mut catalog.ips, value.id.clone(), value, &path)?;
         }
-        for (path, bytes) in read_json_files(&root.join("soc"))? {
-            let value: Soc = decode(&bytes, &path)?;
+        for (path, value) in read_socs(root)? {
             value.validate(&value.id)?;
             insert_unique(&mut catalog.socs, value.id.clone(), value, &path)?;
         }
@@ -3156,6 +3197,8 @@ impl ReferenceCatalog {
         };
         #[cfg(target_os = "emscripten")]
         let mut document = Vec::new();
+        let mut soc_documents: Vec<(PathBuf, Soc)> = Vec::new();
+        let mut block_rows: BTreeMap<String, Vec<SocBlock>> = BTreeMap::new();
         for &(kind, path, source) in BUNDLED_CATALOG {
             #[cfg(target_os = "emscripten")]
             let bytes = {
@@ -3175,8 +3218,23 @@ impl ReferenceCatalog {
                 }
                 ReferenceKind::Soc => {
                     let value: Soc = decode(bytes, Path::new(path))?;
-                    value.validate(&value.id)?;
-                    insert_unique(&mut catalog.socs, value.id.clone(), value, Path::new(path))?;
+                    if !value.blocks.is_empty() {
+                        return Err(format!(
+                            "{}: processor document declares blocks inline",
+                            path
+                        ));
+                    }
+                    soc_documents.push((PathBuf::from(path), value));
+                }
+                ReferenceKind::SocBlock => {
+                    let block_path = Path::new(path);
+                    let (soc_id, file_id) = block_path_ids(block_path)?;
+                    let record: SocBlockRecord = decode(bytes, block_path)?;
+                    record.validate(&file_id)?;
+                    block_rows
+                        .entry(soc_id)
+                        .or_default()
+                        .push(record.block);
                 }
                 ReferenceKind::Part => {
                     let value: Part = decode(bytes, Path::new(path))?;
@@ -3185,6 +3243,17 @@ impl ReferenceCatalog {
                 }
                 kind => catalog.insert_document(kind, bytes, Path::new(path))?,
             }
+        }
+        for (path, mut value) in soc_documents {
+            let rows = block_rows.remove(&value.id).unwrap_or_default();
+            value.blocks = ordered_blocks(&value.id, rows)?;
+            value.validate(&value.id)?;
+            insert_unique(&mut catalog.socs, value.id.clone(), value, &path)?;
+        }
+        if let Some((soc_id, _)) = block_rows.into_iter().next() {
+            return Err(format!(
+                "soc/{soc_id}/blocks: block file outside its processor"
+            ));
         }
         catalog.validate_references()?;
         Ok(catalog)
@@ -3378,6 +3447,9 @@ impl ReferenceCatalog {
         path: &Path,
     ) -> Result<(), String> {
         match kind {
+            ReferenceKind::SocBlock => {
+                Err(format!("{} is a block record beside its processor", path.display()))
+            }
             ReferenceKind::Ip => {
                 let value: crate::ip::Ip = decode(bytes, path)?;
                 value.validate(&value.id)?;
@@ -4186,6 +4258,133 @@ fn contains_input_binding(value: &serde_json::Value) -> bool {
     }
 }
 
+/// Read every processor document and join the block files beside it.
+fn read_socs(root: &Path) -> Result<Vec<(PathBuf, Soc)>, String> {
+    let directory = root.join("soc");
+    if !directory.exists() {
+        return Ok(Vec::new());
+    }
+    let entries = fs::read_dir(&directory)
+        .map_err(|error| format!("could not list {}: {error}", directory.display()))?;
+    let mut result = Vec::new();
+    for entry in entries {
+        let path = entry
+            .map_err(|error| format!("could not read {}: {error}", directory.display()))?
+            .path();
+        if path.is_dir() {
+            let Some(soc_id) = path.file_name().and_then(|name| name.to_str()) else {
+                return Err(format!("{}: processor directory has no identity", path.display()));
+            };
+            let soc_path = path.join("soc.json");
+            if !soc_path.is_file() {
+                return Err(format!("{}: block file outside its processor", path.display()));
+            }
+            let mut value: Soc = decode(
+                &fs::read(&soc_path)
+                    .map_err(|error| format!("could not read {}: {error}", soc_path.display()))?,
+                &soc_path,
+            )?;
+            if value.id != soc_id {
+                return Err(format!(
+                    "{}: processor identity {} differs from its directory",
+                    soc_path.display(),
+                    value.id
+                ));
+            }
+            if !value.blocks.is_empty() {
+                return Err(format!(
+                    "{}: processor document declares blocks inline",
+                    soc_path.display()
+                ));
+            }
+            let blocks = path.join("blocks");
+            if blocks.is_dir() {
+                value.blocks = read_block_files(&blocks, soc_id)?;
+            } else if blocks.exists() {
+                return Err(format!("{}: blocks is not a directory", blocks.display()));
+            }
+            result.push((soc_path, value));
+        } else if path
+            .extension()
+            .is_some_and(|extension| extension == "json")
+        {
+            return Err(format!("{}: block file outside its processor", path.display()));
+        }
+    }
+    result.sort_by(|left, right| left.0.cmp(&right.0));
+    Ok(result)
+}
+
+/// Read one processor's block files, ordered by base address then identity.
+fn read_block_files(directory: &Path, soc_id: &str) -> Result<Vec<SocBlock>, String> {
+    let entries = fs::read_dir(directory)
+        .map_err(|error| format!("could not list {}: {error}", directory.display()))?;
+    let mut blocks = Vec::new();
+    for entry in entries {
+        let path = entry
+            .map_err(|error| format!("could not read {}: {error}", directory.display()))?
+            .path();
+        if path.is_dir() {
+            return Err(format!("{}: block file outside its processor", path.display()));
+        }
+        if !path
+            .extension()
+            .is_some_and(|extension| extension == "json")
+        {
+            continue;
+        }
+        let Some(file_id) = path.file_stem().and_then(|name| name.to_str()) else {
+            return Err(format!("{}: block file has no identity", path.display()));
+        };
+        let record: SocBlockRecord = decode(
+            &fs::read(&path)
+                .map_err(|error| format!("could not read {}: {error}", path.display()))?,
+            &path,
+        )?;
+        record.validate(file_id)?;
+        blocks.push(record.block);
+    }
+    ordered_blocks(soc_id, blocks)
+}
+
+/// Order blocks by base address then identity, refusing repeated identities.
+fn ordered_blocks(soc_id: &str, mut blocks: Vec<SocBlock>) -> Result<Vec<SocBlock>, String> {
+    blocks.sort_by(|left, right| left.base.cmp(&right.base).then_with(|| left.id.cmp(&right.id)));
+    let mut ids = BTreeSet::new();
+    for block in &blocks {
+        if !ids.insert(block.id.clone()) {
+            return Err(format!(
+                "soc/{soc_id}/blocks: duplicate block identity {}",
+                block.id
+            ));
+        }
+    }
+    Ok(blocks)
+}
+
+/// The processor and file identities a bundled block path names.
+fn block_path_ids(path: &Path) -> Result<(String, String), String> {
+    let parts: Vec<&str> = path.iter().filter_map(|part| part.to_str()).collect();
+    let Some(index) = parts.iter().rposition(|part| *part == "soc") else {
+        return Err(format!("{}: block file outside its processor", path.display()));
+    };
+    let (Some(soc_id), Some(&"blocks"), Some(file)) = (
+        parts.get(index + 1),
+        parts.get(index + 2),
+        parts.get(index + 3),
+    ) else {
+        return Err(format!("{}: block file outside its processor", path.display()));
+    };
+    if parts.len() != index + 4 {
+        return Err(format!("{}: block file outside its processor", path.display()));
+    }
+    let file_id = Path::new(file)
+        .file_stem()
+        .and_then(|name| name.to_str())
+        .ok_or_else(|| format!("{}: block file has no identity", path.display()))?;
+    Ok(((*soc_id).to_owned(), file_id.to_owned()))
+}
+
 fn read_json_files(directory: &Path) -> Result<Vec<(PathBuf, Vec<u8>)>, String> {
     if !directory.exists() {
         return Ok(Vec::new());
@@ -4218,6 +4417,7 @@ fn read_json_files(directory: &Path) -> Result<Vec<(PathBuf, Vec<u8>)>, String> 
 enum ReferenceKind {
     Ip,
     Soc,
+    SocBlock,
     Part,
     Body,
     Firmware,

@@ -1,0 +1,32 @@
+{
+  "$schema": "https://fujimod.com/schemas/soc-block.schema.json",
+  "schema": 1,
+  "id": "frame-sync",
+  "base": 4294148096,
+  "size": 4096,
+  "kind": "imaging-controller",
+  "interrupts": [
+    {
+      "output": "frame-status-0",
+      "line": 102
+    },
+    {
+      "output": "frame-status-8",
+      "line": 100
+    }
+  ],
+  "device": {
+    "model": "frame_sync",
+    "interrupts": 4294152512,
+    "period_ticks": 800000,
+    "sources": [
+      {
+        "status_bit": 0
+      },
+      {
+        "status_bit": 8
+      }
+    ],
+    "basis": "Imaging frame sync of X-T20 2.11 section 5. 0xc3fd10..0xc401b4 program the timing words +0x04..+0x58; +0x00 takes bit 1 from 0xc3fc98, bits 0, 1 and 4 from 0xc3fcb8 and loses bit 1 in 0xc3fce0, and seg6 0x16b91bc clears bit 0 and waits until it reads set while bit 1 may be clear, so bit 0 is a frame flag set every frame from tick zero; the other bits read back, and whether they gate the frames is not known. The frame interrupt words are imaging control +0x140 (enable, written by 0xc35a08) and +0x144 (status, write 1 to clear, 0xc359b4) with bits 0, 8 and 16. 0xd09dc8 connects frame source n to descriptor row byte 0xf67188 + 3n and handler word 0xf64858 + 4n: source 0 is row 0x2a (interrupt 100, level) with handler 0xd099ec, which clears status bit 8; source 1 is row 0x2c (interrupt 102, edge) with handler 0xd09958, which clears bit 0. Row 0x2b (interrupt 101, bit 16) has no handler word and is not modeled. Without interrupt 102 the recording start-up never receives completion 0x11cd; without 100, REC re-entry after a USB session stops after step 0x02010200 (observed in an independent X-T20 emulator). Both sources latch on the same frame tick; the phase between them is not known. The period is an assumed 60 Hz in 48 MHz timer ticks; what the timing words select is not modeled."
+  }
+}

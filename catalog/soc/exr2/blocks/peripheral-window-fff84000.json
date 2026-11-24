@@ -1,0 +1,18 @@
+{
+  "$schema": "https://fujimod.com/schemas/soc-block.schema.json",
+  "schema": 1,
+  "id": "peripheral-window-fff84000",
+  "base": 4294459392,
+  "size": 12288,
+  "kind": "address-window",
+  "views": [
+    {
+      "core": "core0",
+      "address": 4294459392
+    },
+    {
+      "core": "core1",
+      "address": 4294459392
+    }
+  ]
+}

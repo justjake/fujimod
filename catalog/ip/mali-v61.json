@@ -2,21 +2,20 @@
   "$schema": "https://fujimod.com/schemas/ip.schema.json",
   "schema": 1,
   "id": "mali-v61",
-  "device": null,
   "registers": [
     {
       "name": "core_lsid",
       "offset": 16,
       "width_bytes": 4,
-      "access": "read-write",
-      "reset": 65535
+      "reset": 65535,
+      "access": "read-write"
     },
     {
       "name": "job_queue",
       "offset": 20,
       "width_bytes": 4,
-      "access": "read-write",
-      "reset": 252645135
+      "reset": 252645135,
+      "access": "read-write"
     },
     {
       "name": "irq_ve",

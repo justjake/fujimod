@@ -1,0 +1,8 @@
+{
+  "$schema": "https://fujimod.com/schemas/soc-block.schema.json",
+  "schema": 1,
+  "id": "lz",
+  "base": 4288151552,
+  "size": 4096,
+  "kind": "address-window"
+}

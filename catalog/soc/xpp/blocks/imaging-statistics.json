@@ -1,0 +1,19 @@
+{
+  "$schema": "https://fujimod.com/schemas/soc-block.schema.json",
+  "schema": 1,
+  "id": "imaging-statistics",
+  "base": 4294262784,
+  "size": 512,
+  "kind": "imaging-controller",
+  "interrupts": [
+    {
+      "output": "status",
+      "line": 106
+    }
+  ],
+  "device": {
+    "model": "imaging_statistics",
+    "period_ticks": 800000,
+    "basis": "Imaging statistics engine of X-T20 2.11 section 5: configuration and output buffer words +0x04..+0x1e4, interrupt enables in the low ten bits of +0x04 and start bit 28 of +0x1e8. Descriptor row 0x32 connects it to interrupt 106 (level); handler 0xc36280 reads the status +0x08 and writes it back to clear it. The stop sequence 0xc365a8 clears +0x00 bit 0, waits until +0x00 reads 1 and +0x1ec bit 16 (idle) reads set, then clears the start bit; 0xc398c4 waits for the same idle bit. While started, the model finishes a frame at every frame-sync tick and reports every enabled status bit, so a frame is never in flight; the statistics are not computed and the buffers are not written. Without these completions, REC re-entry after a USB session stops in imgdc job 0x26 (observed in an independent X-T20 emulator)."
+  }
+}
