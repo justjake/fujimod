@@ -22,6 +22,15 @@ files that generators only read.
 Never put binary data larger than 128 bytes in JSON, whether as base64, hex or
 number arrays. Write it to a separate binary file and reference that file by path from the JSON.
 
+## Emulation
+
+Emulator devices, scheduling and CPU backends follow
+[program-independent emulation](crates/emulator/PROGRAM_INDEPENDENCE.md). They
+consume only register accesses, modeled peers, external inputs, virtual time and
+DMA, never PCs, firmware addresses, recognized code or software state. A CPU
+fast-forward is allowed only for a loop proven from the instructions being
+executed, with a regression test against execution without it.
+
 ## Checkouts and commits
 
 Work on a topic branch and open a pull request against `main`; nothing is

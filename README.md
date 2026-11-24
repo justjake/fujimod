@@ -47,6 +47,9 @@ definitions USB uses through `fujimod::catalog_service`.
 Enable the `emulator` feature for `fujimod::emulator`; execution, device models
 and processor backends live in separate crates under `crates/emulator*`.
 The Python package exposes the same execution core through `fujimod.emulator`.
+Every emulator change follows [program-independent emulation](crates/emulator/PROGRAM_INDEPENDENCE.md):
+devices, scheduling and the CPU backend never infer what the emulated program
+is doing from its code, addresses or state.
 
 External EXR II board composers can consume `fujimod_emulator_exr2_boot_serial::BootSerialBlocks::devices()` into their device graph. Register each `Some(Mapping)` window and attach each `None` entry as an unmapped event device; the returned devices share one serial state and coordinator.
 
