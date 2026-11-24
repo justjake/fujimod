@@ -326,6 +326,11 @@ type BlockDevice = (
     | BlockDeviceVariant42
     | BlockDeviceVariant43
     | BlockDeviceVariant44
+    | BlockDeviceVariant45
+    | BlockDeviceVariant46
+    | BlockDeviceVariant47
+    | BlockDeviceVariant48
+    | BlockDeviceVariant49
 )
 
 
@@ -465,6 +470,7 @@ class BlockDeviceVariant28(TypedDict, total=False):
 
 class BlockDeviceVariant29(TypedDict, total=False):
     basis: Required[str]
+    memory_type_block_id: NotRequired[str | None]
     model: Required[Literal["jpeg_codec"]]
     run_ticks: Required[int]
 
@@ -593,6 +599,41 @@ class BlockDeviceVariant44(TypedDict, total=False):
     basis: Required[str]
     model: Required[Literal["h264_encoder"]]
     run_ticks: Required[int]
+
+
+class BlockDeviceVariant45(TypedDict, total=False):
+    basis: NotRequired[str | None]
+    engine: Required[StillEngineKind]
+    evidence: NotRequired[list[Evidence]]
+    model: Required[Literal["still_engine"]]
+    run_ticks: Required[int]
+
+
+class BlockDeviceVariant46(TypedDict, total=False):
+    basis: NotRequired[str | None]
+    evidence: NotRequired[list[Evidence]]
+    memory_types_block_id: Required[str]
+    model: Required[Literal["filter_engine"]]
+    run_ticks: Required[int]
+
+
+class BlockDeviceVariant47(TypedDict, total=False):
+    basis: NotRequired[str | None]
+    evidence: NotRequired[list[Evidence]]
+    model: Required[Literal["dsp"]]
+    run_ticks: Required[int]
+
+
+class BlockDeviceVariant48(TypedDict, total=False):
+    basis: NotRequired[str | None]
+    channels: Required[int]
+    counter_block_id: Required[str]
+    model: Required[Literal["countdown_timer"]]
+
+
+class BlockDeviceVariant49(TypedDict, total=False):
+    basis: NotRequired[str | None]
+    model: Required[Literal["usb_condition"]]
 
 
 class BlockDeviceVariant5(TypedDict, total=False):
@@ -5716,6 +5757,9 @@ class StateRegion(TypedDict, total=False):
 class StatusRegister(TypedDict, total=False):
     address: Required[int]
     value: Required[int]
+
+
+type StillEngineKind = Literal["iifp", "recc", "resz", "reszl", "retch", "mix"]
 
 
 class TcmState(TypedDict, total=False):

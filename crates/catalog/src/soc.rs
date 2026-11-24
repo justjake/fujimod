@@ -298,6 +298,9 @@ pub enum BlockDevice {
     JpegCodec {
         /// Ticks for one run.
         run_ticks: u64,
+        /// Block holding the encoder's memory type word, when declared.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        memory_type_block_id: Option<String>,
         /// Declared basis.
         basis: String,
     },
@@ -439,6 +442,83 @@ pub enum BlockDevice {
         /// Declared basis.
         basis: String,
     },
+    /// One still-processing engine.
+    StillEngine {
+        /// Engine contract the block runs.
+        engine: StillEngineKind,
+        /// Ticks for one job.
+        run_ticks: u64,
+        /// Evidence for the declared timing, when it is a stand-in.
+        #[serde(default, skip_serializing_if = "Vec::is_empty")]
+        evidence: Vec<crate::provenance::Evidence>,
+        /// Declared basis.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        basis: Option<String>,
+    },
+    /// Filter engine that prepares pictures for the still and face paths.
+    FilterEngine {
+        /// Ticks for one run.
+        run_ticks: u64,
+        /// Block holding the source and destination memory type words.
+        memory_types_block_id: String,
+        /// Evidence for the declared timing, when it is a stand-in.
+        #[serde(default, skip_serializing_if = "Vec::is_empty")]
+        evidence: Vec<crate::provenance::Evidence>,
+        /// Declared basis.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        basis: Option<String>,
+    },
+    /// Still DSP host interface.
+    Dsp {
+        /// Ticks for one command.
+        run_ticks: u64,
+        /// Evidence for the declared timing, when it is a stand-in.
+        #[serde(default, skip_serializing_if = "Vec::is_empty")]
+        evidence: Vec<crate::provenance::Evidence>,
+        /// Declared basis.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        basis: Option<String>,
+    },
+    /// Bank of countdown timers, each with its own interrupt line.
+    CountdownTimer {
+        /// Number of channels.
+        channels: u32,
+        /// Block holding the count and reload words.
+        counter_block_id: String,
+        /// Declared basis.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        basis: Option<String>,
+    },
+    /// USB cable condition word read by the system init task.
+    UsbCondition {
+        /// Declared basis.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        basis: Option<String>,
+    },
+}
+
+/// The still-processing engine a block runs.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(rename_all = "snake_case")]
+#[cfg_attr(
+    all(target_arch = "wasm32", not(target_os = "emscripten")),
+    derive(tsify::Tsify),
+    tsify(hashmap_as_object, missing_as_null)
+)]
+pub enum StillEngineKind {
+    /// The IIFP engine.
+    Iifp,
+    /// The RECC engine's control page.
+    Recc,
+    /// The RESZ resizer.
+    Resz,
+    /// The RESZL resizer.
+    Reszl,
+    /// The RETCH engine.
+    Retch,
+    /// The MIX engine.
+    Mix,
 }
 
 /// Frame law of a register block, with its interrupt line on the block.
@@ -528,6 +608,9 @@ impl BlockDevice {
                         | BlockDevice::ImagingStatistics { .. }
                         | BlockDevice::FrameSync { .. }
                         | BlockDevice::H264Encoder { .. }
+                        | BlockDevice::StillEngine { .. }
+                        | BlockDevice::FilterEngine { .. }
+                        | BlockDevice::Dsp { .. }
                         | BlockDevice::RegisterBlock { .. }
                 )
                 | (
@@ -536,6 +619,7 @@ impl BlockDevice {
                         | BlockDevice::Decompressor { .. }
                         | BlockDevice::Adc { .. }
                         | BlockDevice::PowerControl { .. }
+                        | BlockDevice::UsbCondition { .. }
                         | BlockDevice::RegisterBlock { .. }
                 )
                 | (SocBlockKind::ControlBus, BlockDevice::ControlBus { .. } | BlockDevice::SecondaryBus { .. } | BlockDevice::I2c { .. })
@@ -546,7 +630,10 @@ impl BlockDevice {
                 | (SocBlockKind::Adc, BlockDevice::Adc { .. })
                 | (SocBlockKind::DisplayController, BlockDevice::Dmp { .. } | BlockDevice::DisplayOutput { .. } | BlockDevice::HdmiTx { .. })
                 | (SocBlockKind::ResetController, BlockDevice::ControlRequest { .. } | BlockDevice::ResetGates { .. })
-                | (SocBlockKind::Timer, BlockDevice::IntervalTimer { .. })
+                | (
+                    SocBlockKind::Timer,
+                    BlockDevice::IntervalTimer { .. } | BlockDevice::CountdownTimer { .. }
+                )
                 | (SocBlockKind::MemoryController, BlockDevice::RegisterBlock { .. } | BlockDevice::DramController { .. })
                 | (SocBlockKind::SdCardController, BlockDevice::SdHost { .. } | BlockDevice::XppSd { .. })
         )

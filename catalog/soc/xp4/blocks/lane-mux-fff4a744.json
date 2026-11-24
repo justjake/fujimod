@@ -1,0 +1,28 @@
+{
+  "$schema": "https://fujimod.com/schemas/soc-block.schema.json",
+  "schema": 1,
+  "id": "lane-mux-fff4a744",
+  "base": 4294223684,
+  "size": 4,
+  "kind": "address-window",
+  "evidence": [
+    {
+      "kind": "located",
+      "firmware_ids": [
+        "xt3-511"
+      ],
+      "addresses": [
+        {
+          "firmware_id": "xt3-511",
+          "address": 17382984,
+          "space": "code"
+        },
+        {
+          "firmware_id": "xt3-511",
+          "address": 17383140,
+          "space": "code"
+        }
+      ]
+    }
+  ]
+}

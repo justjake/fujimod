@@ -1,0 +1,28 @@
+{
+  "$schema": "https://fujimod.com/schemas/soc-block.schema.json",
+  "schema": 1,
+  "id": "countdown-timer-counters",
+  "base": 4294164736,
+  "size": 256,
+  "kind": "timer",
+  "evidence": [
+    {
+      "kind": "located",
+      "firmware_ids": [
+        "xt3-511"
+      ],
+      "addresses": [
+        {
+          "firmware_id": "xt3-511",
+          "address": 365972,
+          "space": "code"
+        },
+        {
+          "firmware_id": "xt3-511",
+          "address": 367744,
+          "space": "code"
+        }
+      ]
+    }
+  ]
+}

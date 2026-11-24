@@ -1,0 +1,23 @@
+{
+  "$schema": "https://fujimod.com/schemas/soc-block.schema.json",
+  "schema": 1,
+  "id": "dsp-clock",
+  "base": 4282916864,
+  "size": 8,
+  "kind": "clock-controller",
+  "evidence": [
+    {
+      "kind": "located",
+      "firmware_ids": [
+        "xt3-511"
+      ],
+      "addresses": [
+        {
+          "firmware_id": "xt3-511",
+          "address": 17273004,
+          "space": "code"
+        }
+      ]
+    }
+  ]
+}

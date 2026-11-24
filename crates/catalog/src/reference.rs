@@ -404,7 +404,59 @@ impl Soc {
                             ));
                         }
                     }
-                    crate::soc::BlockDevice::Display { .. }
+                    crate::soc::BlockDevice::StillEngine { evidence, .. }
+                    | crate::soc::BlockDevice::Dsp { evidence, .. } => {
+                        for item in evidence {
+                            item.validate()?;
+                        }
+                    }
+                    crate::soc::BlockDevice::FilterEngine {
+                        memory_types_block_id,
+                        evidence,
+                        ..
+                    } => {
+                        if !blocks.contains(memory_types_block_id.as_str()) {
+                            return Err(format!(
+                                "SoC {} filter engine {} refers to missing memory-type block {}",
+                                self.id, block.id, memory_types_block_id
+                            ));
+                        }
+                        for item in evidence {
+                            item.validate()?;
+                        }
+                    }
+                    crate::soc::BlockDevice::CountdownTimer {
+                        channels,
+                        counter_block_id,
+                        ..
+                    } => {
+                        if !blocks.contains(counter_block_id.as_str()) {
+                            return Err(format!(
+                                "SoC {} countdown timer {} refers to missing counter block {}",
+                                self.id, block.id, counter_block_id
+                            ));
+                        }
+                        if *channels == 0 {
+                            return Err(format!(
+                                "SoC {} countdown timer {} has no channels",
+                                self.id, block.id
+                            ));
+                        }
+                    }
+                    crate::soc::BlockDevice::JpegCodec {
+                        memory_type_block_id: Some(memory_type_block_id),
+                        ..
+                    } => {
+                        if !blocks.contains(memory_type_block_id.as_str()) {
+                            return Err(format!(
+                                "SoC {} JPEG block {} refers to missing memory-type block {}",
+                                self.id, block.id, memory_type_block_id
+                            ));
+                        }
+                    }
+                    crate::soc::BlockDevice::UsbCondition { .. }
+                    | crate::soc::BlockDevice::JpegCodec { .. }
+                    | crate::soc::BlockDevice::Display { .. }
                     | crate::soc::BlockDevice::SerialDma { .. }
                     | crate::soc::BlockDevice::CompanionDma { .. }
                     | crate::soc::BlockDevice::SensorCommand { .. }
@@ -428,7 +480,6 @@ impl Soc {
                     | crate::soc::BlockDevice::RegisterBlock { .. }
                     | crate::soc::BlockDevice::Pl330 { .. }
                     | crate::soc::BlockDevice::SerialPort { .. }
-                    | crate::soc::BlockDevice::JpegCodec { .. }
                     | crate::soc::BlockDevice::FaceDetection { .. }
                     | crate::soc::BlockDevice::SdHost { .. }
                     | crate::soc::BlockDevice::XppUsb { .. }

@@ -15,6 +15,27 @@
   "device": {
     "model": "jpeg_codec",
     "run_ticks": 108000,
+    "memory_type_block_id": "lane-mux-fff4a744",
     "basis": "JPEG encoder of X-T3 5.11, the X-T20 2.11 encoder's register layout. The driver has one accessor per word: +0x44 size, +0x12c origin, +0x130 pitch, +0x100/+0x10c/+0x110 source, destination and limit, +0x84 table loading and +0x8c table words, +0x28 interrupt mask. The driver's start registers its handler on interrupt line 135 (level) before setting +0x00 bit 0. The handler reads the status +0x24, writes it back and takes bit 4 as a finished run, then reads the stream size +0x94. run_ticks (2 ms at 54 MHz) is not measured."
-  }
+  },
+  "evidence": [
+    {
+      "kind": "located",
+      "firmware_ids": [
+        "xt3-511"
+      ],
+      "addresses": [
+        {
+          "firmware_id": "xt3-511",
+          "address": 17382984,
+          "space": "code"
+        },
+        {
+          "firmware_id": "xt3-511",
+          "address": 17383140,
+          "space": "code"
+        }
+      ]
+    }
+  ]
 }

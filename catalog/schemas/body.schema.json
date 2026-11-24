@@ -962,6 +962,13 @@
               "description": "Declared basis.",
               "type": "string"
             },
+            "memory_type_block_id": {
+              "description": "Block holding the encoder's memory type word, when declared.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
             "model": {
               "const": "jpeg_codec",
               "type": "string"
@@ -1482,6 +1489,175 @@
             "model",
             "run_ticks",
             "basis"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "One still-processing engine.",
+          "properties": {
+            "basis": {
+              "description": "Declared basis.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "engine": {
+              "$ref": "#/$defs/StillEngineKind",
+              "description": "Engine contract the block runs."
+            },
+            "evidence": {
+              "description": "Evidence for the declared timing, when it is a stand-in.",
+              "items": {
+                "$ref": "#/$defs/Evidence"
+              },
+              "type": "array"
+            },
+            "model": {
+              "const": "still_engine",
+              "type": "string"
+            },
+            "run_ticks": {
+              "description": "Ticks for one job.",
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          "required": [
+            "model",
+            "engine",
+            "run_ticks"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Filter engine that prepares pictures for the still and face paths.",
+          "properties": {
+            "basis": {
+              "description": "Declared basis.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "evidence": {
+              "description": "Evidence for the declared timing, when it is a stand-in.",
+              "items": {
+                "$ref": "#/$defs/Evidence"
+              },
+              "type": "array"
+            },
+            "memory_types_block_id": {
+              "description": "Block holding the source and destination memory type words.",
+              "type": "string"
+            },
+            "model": {
+              "const": "filter_engine",
+              "type": "string"
+            },
+            "run_ticks": {
+              "description": "Ticks for one run.",
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          "required": [
+            "model",
+            "run_ticks",
+            "memory_types_block_id"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Still DSP host interface.",
+          "properties": {
+            "basis": {
+              "description": "Declared basis.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "evidence": {
+              "description": "Evidence for the declared timing, when it is a stand-in.",
+              "items": {
+                "$ref": "#/$defs/Evidence"
+              },
+              "type": "array"
+            },
+            "model": {
+              "const": "dsp",
+              "type": "string"
+            },
+            "run_ticks": {
+              "description": "Ticks for one command.",
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          "required": [
+            "model",
+            "run_ticks"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Bank of countdown timers, each with its own interrupt line.",
+          "properties": {
+            "basis": {
+              "description": "Declared basis.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "channels": {
+              "description": "Number of channels.",
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "counter_block_id": {
+              "description": "Block holding the count and reload words.",
+              "type": "string"
+            },
+            "model": {
+              "const": "countdown_timer",
+              "type": "string"
+            }
+          },
+          "required": [
+            "model",
+            "channels",
+            "counter_block_id"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "USB cable condition word read by the system init task.",
+          "properties": {
+            "basis": {
+              "description": "Declared basis.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "model": {
+              "const": "usb_condition",
+              "type": "string"
+            }
+          },
+          "required": [
+            "model"
           ],
           "type": "object"
         }
@@ -8188,6 +8364,41 @@
         "word_bits"
       ],
       "type": "object"
+    },
+    "StillEngineKind": {
+      "description": "The still-processing engine a block runs.",
+      "oneOf": [
+        {
+          "const": "iifp",
+          "description": "The IIFP engine.",
+          "type": "string"
+        },
+        {
+          "const": "recc",
+          "description": "The RECC engine's control page.",
+          "type": "string"
+        },
+        {
+          "const": "resz",
+          "description": "The RESZ resizer.",
+          "type": "string"
+        },
+        {
+          "const": "reszl",
+          "description": "The RESZL resizer.",
+          "type": "string"
+        },
+        {
+          "const": "retch",
+          "description": "The RETCH engine.",
+          "type": "string"
+        },
+        {
+          "const": "mix",
+          "description": "The MIX engine.",
+          "type": "string"
+        }
+      ]
     },
     "VideoEncoderBackend": {
       "description": "Explicit H.264 compression implementation, selected before construction.",

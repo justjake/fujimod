@@ -1,0 +1,50 @@
+{
+  "$schema": "https://fujimod.com/schemas/soc-block.schema.json",
+  "schema": 1,
+  "id": "still-mix",
+  "base": 4294684672,
+  "size": 4096,
+  "kind": "imaging-controller",
+  "interrupts": [
+    {
+      "output": "interrupt",
+      "line": 140
+    }
+  ],
+  "device": {
+    "model": "still_engine",
+    "engine": "mix",
+    "run_ticks": 108000,
+    "evidence": [
+      {
+        "kind": "stand-in"
+      }
+    ],
+    "basis": "MIX still engine of X-T3 5.11. Step 0x06023371 (0x1e91480); 0x1dbca70 registers 0x1dbc484 on row 0xd ({140, 0xd0, 1, 1}). The 2 ms run time at 54 MHz is a stand-in."
+  },
+  "evidence": [
+    {
+      "kind": "located",
+      "firmware_ids": [
+        "xt3-511"
+      ],
+      "addresses": [
+        {
+          "firmware_id": "xt3-511",
+          "address": 32052352,
+          "space": "code"
+        },
+        {
+          "firmware_id": "xt3-511",
+          "address": 31181424,
+          "space": "code"
+        },
+        {
+          "firmware_id": "xt3-511",
+          "address": 31179908,
+          "space": "code"
+        }
+      ]
+    }
+  ]
+}
