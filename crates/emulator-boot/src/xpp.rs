@@ -10,7 +10,7 @@ use crate::graph::{self, ProcessorStart};
 use fujimod_catalog::{
     profiles::{BlockOverride, BodyProfile, RegisterIdleBits, RegisterLayouts, SocProfile},
     reference::{Body, ConnectionSignal, MemoryKind, MemoryRegion, RegionSize, Soc, SocBlock},
-    soc::{ApplicationHardware, BlockDevice, InterruptControllerHardware},
+    soc::{ApplicationHardware, BlockDevice},
 };
 use fujimod_catalog_configuration::RunInstructionRate;
 use fujimod_catalog_resolution::ResolvedConfiguration;
@@ -616,7 +616,10 @@ fn block_register_layouts(
             BlockDevice::ImagingInputBuffer { reset_ticks, basis, .. } => {
                 let _ = (reset_ticks, basis);
             }
-            BlockDevice::SerialDma { .. } | BlockDevice::CompanionDma { .. } => {}
+            BlockDevice::SerialDma { .. }
+            | BlockDevice::CompanionDma { .. }
+            | BlockDevice::GicV2 { .. }
+            | BlockDevice::GicV3 { .. } => {}
         }
     }
 
@@ -685,37 +688,39 @@ fn block_register_layouts(
     Ok(maps)
 }
 
-/// The GIC node of the selected SoC: distributor and CPU-interface windows
-/// located through the block identities the interrupt-controller hardware
-/// names, plus its implemented line count.
+/// The GIC node of the selected SoC: the distributor block that carries the
+/// GICv2 device, the CPU-interface block it names and its implemented lines.
 fn gic_node(soc: &Soc) -> Result<Value, String> {
-    let controller = soc
-        .hardware
-        .as_ref()
-        .and_then(|hardware| hardware.interrupt_controller.as_ref())
-        .ok_or("X-Processor Pro assembly requires an interrupt controller")?;
-    let block_base = |id: &str| {
-        soc.blocks
-            .iter()
-            .find(|block| block.id == id)
-            .map(|block| block.base)
-            .ok_or_else(|| format!("interrupt controller names absent block {id}"))
-    };
-    match controller {
-        InterruptControllerHardware::GicV2 {
-            distributor_block_id,
+    let controller = soc.blocks.iter().find_map(|block| match &block.device {
+        Some(BlockDevice::GicV2 {
             cpu_interface_block_id,
             lines,
             ..
-        } => Ok(json!({
-            "distributor": block_base(distributor_block_id)?,
-            "cpu_interface": block_base(cpu_interface_block_id)?,
-            "lines": lines,
-        })),
-        InterruptControllerHardware::GicV3 { .. } => {
-            Err("X-Processor Pro assembly requires a GICv2 interrupt controller".into())
-        }
-    }
+        }) => Some((block, cpu_interface_block_id, lines)),
+        _ => None,
+    });
+    let Some((distributor, cpu_interface_block_id, lines)) = controller else {
+        let gicv3 = soc
+            .blocks
+            .iter()
+            .any(|block| matches!(block.device, Some(BlockDevice::GicV3 { .. })));
+        return Err(if gicv3 {
+            "X-Processor Pro assembly requires a GICv2 interrupt controller".to_string()
+        } else {
+            "X-Processor Pro assembly requires an interrupt controller".to_string()
+        });
+    };
+    let cpu_interface = soc
+        .blocks
+        .iter()
+        .find(|block| block.id == *cpu_interface_block_id)
+        .map(|block| block.base)
+        .ok_or_else(|| format!("interrupt controller names absent block {cpu_interface_block_id}"))?;
+    Ok(json!({
+        "distributor": distributor.base,
+        "cpu_interface": cpu_interface,
+        "lines": lines,
+    }))
 }
 
 /// Command-dial encoder nodes of the selected body profile. Each declaration

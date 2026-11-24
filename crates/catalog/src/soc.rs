@@ -24,9 +24,6 @@ pub struct SocHardware {
     /// Application-processor identification and cache topology, when declared.
     #[serde(default)]
     pub application: Option<ApplicationHardware>,
-    /// Hardware interrupt-controller interfaces.
-    #[serde(default)]
-    pub interrupt_controller: Option<InterruptControllerHardware>,
     /// Companion-processor clock and mailbox connections, when present.
     #[serde(default)]
     pub companion: Option<CompanionHardware>,
@@ -76,27 +73,6 @@ impl SocHardware {
             }
             clock(counter_clock_id)?;
             clock(pmu_clock_id)?;
-        }
-        if let Some(controller) = &self.interrupt_controller {
-            let (distributor, interface, lines) = match controller {
-                InterruptControllerHardware::GicV2 {
-                    distributor_block_id,
-                    cpu_interface_block_id,
-                    lines,
-                    ..
-                } => (distributor_block_id, cpu_interface_block_id, lines),
-                InterruptControllerHardware::GicV3 {
-                    distributor_block_id,
-                    redistributor_block_id,
-                    lines,
-                    ..
-                } => (distributor_block_id, redistributor_block_id, lines),
-            };
-            block(distributor)?;
-            block(interface)?;
-            if *lines == 0 {
-                return Err(format!("SoC {} interrupt controller has no lines", soc.id));
-            }
         }
         if let Some(companion) = &self.companion {
             core(&companion.processor_id)?;
@@ -159,45 +135,6 @@ pub struct CacheGeometry {
     pub l1_instruction_bytes: u64,
     /// Shared level-two cache capacity.
     pub l2_bytes: u64,
-}
-
-/// ARM generic interrupt-controller interfaces.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
-#[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
-#[cfg_attr(feature = "schema", schemars(deny_unknown_fields))]
-#[cfg_attr(
-    all(target_arch = "wasm32", not(target_os = "emscripten")),
-    derive(tsify::Tsify),
-    tsify(hashmap_as_object, missing_as_null)
-)]
-pub enum InterruptControllerHardware {
-    /// GICv2 distributor and CPU interface.
-    GicV2 {
-        /// Distributor register block identity.
-        distributor_block_id: String,
-        /// CPU-interface register block identity.
-        cpu_interface_block_id: String,
-        /// Number of implemented interrupt lines.
-        lines: u32,
-        /// Declared basis.
-        #[serde(default, skip_serializing_if = "Option::is_none")]
-        basis: Option<String>,
-    },
-    /// GICv3 distributor and per-core redistributors.
-    GicV3 {
-        /// Distributor register block identity.
-        distributor_block_id: String,
-        /// Redistributor register block identity.
-        redistributor_block_id: String,
-        /// Distance between adjacent redistributor frames.
-        redistributor_stride: u64,
-        /// Number of implemented interrupt lines.
-        lines: u32,
-        /// Declared basis.
-        #[serde(default, skip_serializing_if = "Option::is_none")]
-        basis: Option<String>,
-    },
 }
 
 /// A companion processor's hardware clock and mailbox endpoints.
@@ -353,6 +290,28 @@ pub enum BlockDevice {
     CompanionDma {
         /// First companion interrupt line for the DMA controller.
         companion_irq_base: u32,
+    },
+    /// ARM GICv2 distributor, which names its CPU interface.
+    GicV2 {
+        /// CPU-interface register block identity.
+        cpu_interface_block_id: String,
+        /// Number of implemented interrupt lines.
+        lines: u32,
+        /// Declared basis.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        basis: Option<String>,
+    },
+    /// ARM GICv3 distributor, which names its redistributor block.
+    GicV3 {
+        /// Redistributor register block identity.
+        redistributor_block_id: String,
+        /// Distance between adjacent redistributor frames.
+        redistributor_stride: u64,
+        /// Number of implemented interrupt lines.
+        lines: u32,
+        /// Declared basis.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        basis: Option<String>,
     },
     /// Imaging sensor command window.
     SensorCommand {
@@ -712,6 +671,9 @@ impl BlockDevice {
             ) | (
                 SocBlockKind::SerialController,
                 BlockDevice::SerialDma { .. } | BlockDevice::Spi { .. } | BlockDevice::SerialPort { .. }
+            ) | (
+                SocBlockKind::InterruptController,
+                BlockDevice::GicV2 { .. } | BlockDevice::GicV3 { .. }
             ) | (SocBlockKind::DisplayController, BlockDevice::Display { .. })
                 | (
                     SocBlockKind::ImagingController,

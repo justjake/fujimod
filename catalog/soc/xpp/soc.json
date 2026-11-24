@@ -46,7 +46,13 @@
       "base": 4294905856,
       "size": 4096,
       "kind": "interrupt-controller",
-      "clock_id": null
+      "clock_id": null,
+      "device": {
+        "model": "gic_v2",
+        "cpu_interface_block_id": "gic-cpu-interface",
+        "lines": 512,
+        "basis": "Kernel CBAR reads and GIC distributor/CPU-interface accesses at CBAR+0x1000/+0x2000. CBAR 0xffff0000 is a declared discovery input, not captured."
+      }
     },
     {
       "id": "gic-cpu-interface",
@@ -1520,13 +1526,6 @@
         "l1_instruction_bytes": 32768,
         "l2_bytes": 1048576
       }
-    },
-    "interrupt_controller": {
-      "kind": "gic_v2",
-      "distributor_block_id": "gic-distributor",
-      "cpu_interface_block_id": "gic-cpu-interface",
-      "lines": 512,
-      "basis": "Kernel CBAR reads and GIC distributor/CPU-interface accesses at CBAR+0x1000/+0x2000. CBAR 0xffff0000 is a declared discovery input, not captured."
     },
     "companion": null,
     "profiles": {

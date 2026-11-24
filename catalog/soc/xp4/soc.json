@@ -62,7 +62,13 @@
       "base": 4294905856,
       "size": 4096,
       "kind": "interrupt-controller",
-      "clock_id": null
+      "clock_id": null,
+      "device": {
+        "model": "gic_v2",
+        "cpu_interface_block_id": "gic-cpu-interface",
+        "lines": 512,
+        "basis": "Declared catalog input."
+      }
     },
     {
       "id": "gic-cpu-interface",
@@ -1691,13 +1697,6 @@
         "l1_instruction_bytes": 32768,
         "l2_bytes": 1048576
       }
-    },
-    "interrupt_controller": {
-      "kind": "gic_v2",
-      "distributor_block_id": "gic-distributor",
-      "cpu_interface_block_id": "gic-cpu-interface",
-      "lines": 512,
-      "basis": "Declared catalog input."
     },
     "companion": null,
     "profiles": {
