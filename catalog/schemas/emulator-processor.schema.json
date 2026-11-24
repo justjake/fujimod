@@ -113,6 +113,15 @@
         "null"
       ]
     },
+    "pmu_cycles_per_tick": {
+      "description": "PMU counter cycles per board tick, when declared.",
+      "format": "uint64",
+      "minimum": 0,
+      "type": [
+        "integer",
+        "null"
+      ]
+    },
     "private_mmio": {
       "description": "Processor blocks the emulator backs privately for each CPU.",
       "items": {

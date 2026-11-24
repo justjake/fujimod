@@ -43,7 +43,7 @@
   "device": {
     "model": "interval_timer",
     "layout": "xp4",
-    "clock": "cpu-tick; one timer cycle per aggregate CPU instruction (synthetic ratio)",
+    "clock": "cpu-tick",
     "basis": "XP4 interval timer, eight channels, window 0x50. The run times and sample windows of its users are declared stand-ins; the clock is the processor cpu-tick domain."
   }
 }
