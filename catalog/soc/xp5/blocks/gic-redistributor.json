@@ -4,5 +4,18 @@
   "id": "gic-redistributor",
   "base": 4194828288,
   "size": 524288,
-  "kind": "interrupt-controller"
+  "kind": "interrupt-controller",
+  "evidence": [
+    {
+      "kind": "located",
+      "firmware_ids": [
+        "x100vi-131",
+        "xe5-112",
+        "xh2-530",
+        "xh2s-730",
+        "xm5-130",
+        "xt5-431"
+      ]
+    }
+  ]
 }

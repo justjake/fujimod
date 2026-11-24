@@ -1,0 +1,26 @@
+{
+  "$schema": "https://fujimod.com/schemas/soc-block.schema.json",
+  "schema": 1,
+  "id": "uart",
+  "base": 4287758336,
+  "size": 4096,
+  "kind": "serial-controller",
+  "interrupts": [
+    {
+      "output": "irq",
+      "line": 293
+    }
+  ],
+  "device": {
+    "model": "pl011",
+    "basis": "UART port; RL78 peer is a part Located in catalog/firmware/xt5/4.31/xp5-boot/manifest.d/65-uart.toml."
+  },
+  "evidence": [
+    {
+      "kind": "located",
+      "firmware_ids": [
+        "xt5-431"
+      ]
+    }
+  ]
+}

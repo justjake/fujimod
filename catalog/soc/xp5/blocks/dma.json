@@ -6,7 +6,22 @@
   "size": 32768,
   "kind": "dma",
   "device": {
-    "model": "companion_dma",
-    "companion_irq_base": 83
-  }
+    "model": "general_dma",
+    "companion_irq_base": 83,
+    "a53_irq_base": 237,
+    "basis": "general-purpose DMA controller Located in catalog/firmware/x100vi/1.31/xp5-boot/manifest.d/22-general-dma.toml."
+  },
+  "evidence": [
+    {
+      "kind": "located",
+      "firmware_ids": [
+        "x100vi-131",
+        "xe5-112",
+        "xh2-530",
+        "xh2s-730",
+        "xm5-130",
+        "xt5-431"
+      ]
+    }
+  ]
 }

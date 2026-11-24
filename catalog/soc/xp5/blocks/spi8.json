@@ -4,5 +4,24 @@
   "id": "spi8",
   "base": 4287725568,
   "size": 4096,
-  "kind": "serial-controller"
+  "kind": "serial-controller",
+  "device": {
+    "model": "pl022",
+    "source_hz": 48000000,
+    "ticks_per_second": 1000000000,
+    "basis": "PL022 serial controller; attached part and select pins are body facts Located in catalog/firmware/x100vi/1.31/xp5-boot/manifest.d/23-audio-sink.toml."
+  },
+  "evidence": [
+    {
+      "kind": "located",
+      "firmware_ids": [
+        "x100vi-131",
+        "xe5-112",
+        "xh2-530",
+        "xh2s-730",
+        "xm5-130",
+        "xt5-431"
+      ]
+    }
+  ]
 }

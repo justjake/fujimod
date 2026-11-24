@@ -3,6 +3,22 @@
   "schema": 1,
   "id": "rifp",
   "base": 4291829760,
-  "size": 4096,
-  "kind": "imaging-controller"
+  "size": 40960,
+  "kind": "imaging-controller",
+  "device": {
+    "model": "imaging_rifp",
+    "basis": "RIFP processing page; the 0xa000 extent covers the develop sub-blocks Located in catalog/firmware/x100vi/1.31/xp5-boot/manifest.d/50-imaging.toml."
+  },
+  "evidence": [
+    {
+      "kind": "located",
+      "firmware_ids": [
+        "x100vi-131",
+        "xe5-112",
+        "xh2s-730",
+        "xm5-130",
+        "xt5-431"
+      ]
+    }
+  ]
 }

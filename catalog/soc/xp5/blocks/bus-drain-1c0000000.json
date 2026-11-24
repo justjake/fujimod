@@ -4,5 +4,19 @@
   "id": "bus-drain-1c0000000",
   "base": 7516192768,
   "size": 4,
-  "kind": "address-window"
+  "kind": "address-window",
+  "device": {
+    "model": "unmodeled_bus_drain",
+    "basis": "bus-drain port discarded by the firmware Located in catalog/firmware/x100vi/1.31/xp5-boot/manifest.d/20-storage.toml."
+  },
+  "evidence": [
+    {
+      "kind": "located",
+      "firmware_ids": [
+        "x100vi-131",
+        "xe5-112",
+        "xt5-431"
+      ]
+    }
+  ]
 }

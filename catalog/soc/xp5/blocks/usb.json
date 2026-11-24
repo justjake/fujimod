@@ -1,0 +1,27 @@
+{
+  "$schema": "https://fujimod.com/schemas/soc-block.schema.json",
+  "schema": 1,
+  "id": "usb",
+  "base": 4290772992,
+  "size": 65536,
+  "kind": "usb-controller",
+  "interrupts": [
+    {
+      "output": "irq",
+      "line": 283
+    }
+  ],
+  "device": {
+    "model": "usb",
+    "basis": "USB device controller Located in catalog/firmware/xe5/1.12/xp5-boot/manifest.d/64-usb.toml."
+  },
+  "evidence": [
+    {
+      "kind": "located",
+      "firmware_ids": [
+        "xe5-112",
+        "xt5-431"
+      ]
+    }
+  ]
+}

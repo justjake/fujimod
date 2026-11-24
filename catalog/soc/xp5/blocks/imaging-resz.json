@@ -1,0 +1,21 @@
+{
+  "$schema": "https://fujimod.com/schemas/soc-block.schema.json",
+  "schema": 1,
+  "id": "imaging-resz",
+  "base": 4291870720,
+  "size": 4096,
+  "kind": "imaging-controller",
+  "device": {
+    "model": "imaging_resz",
+    "basis": "RESZ scaler Located in catalog/firmware/xe5/1.12/xp5-boot/manifest.d/55-develop-stubs.toml."
+  },
+  "evidence": [
+    {
+      "kind": "located",
+      "firmware_ids": [
+        "xe5-112",
+        "xt5-431"
+      ]
+    }
+  ]
+}

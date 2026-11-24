@@ -1,0 +1,25 @@
+{
+  "$schema": "https://fujimod.com/schemas/soc-block.schema.json",
+  "schema": 1,
+  "id": "ddr-controller-2",
+  "base": 4210163712,
+  "size": 65536,
+  "kind": "memory-controller",
+  "device": {
+    "model": "dram_controller",
+    "basis": "DDR channel 2 controller with its status page at +0x7000 Located in catalog/firmware/x100vi/1.31/xp5-boot/manifest.d/20-storage.toml."
+  },
+  "evidence": [
+    {
+      "kind": "located",
+      "firmware_ids": [
+        "x100vi-131",
+        "xe5-112",
+        "xh2-530",
+        "xh2s-730",
+        "xm5-130",
+        "xt5-431"
+      ]
+    }
+  ]
+}

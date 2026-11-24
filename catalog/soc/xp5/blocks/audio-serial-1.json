@@ -1,0 +1,20 @@
+{
+  "$schema": "https://fujimod.com/schemas/soc-block.schema.json",
+  "schema": 1,
+  "id": "audio-serial-1",
+  "base": 4288221184,
+  "size": 4096,
+  "kind": "audio-controller",
+  "device": {
+    "model": "audio_serial",
+    "basis": "audio serial output with a 1 kHz test tone Located in catalog/firmware/xt5/4.31/xp5-boot/manifest.d/62-audio.toml."
+  },
+  "evidence": [
+    {
+      "kind": "located",
+      "firmware_ids": [
+        "xt5-431"
+      ]
+    }
+  ]
+}

@@ -3,6 +3,170 @@
   "schema": 1,
   "id": "dma-routes",
   "base": 4287685888,
-  "size": 32,
-  "kind": "address-window"
+  "size": 96,
+  "kind": "address-window",
+  "device": {
+    "model": "register_block",
+    "idle_bits": [],
+    "basis": "DMA request routing and PL330 request-select words Located in catalog/firmware/x100vi/1.31/xp5-boot/manifest.d/60-mcore.toml."
+  },
+  "registers": [
+    {
+      "name": "word-0000",
+      "offset": 0,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "word-0004",
+      "offset": 4,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "word-0008",
+      "offset": 8,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "word-000c",
+      "offset": 12,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "word-0010",
+      "offset": 16,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "word-0014",
+      "offset": 20,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "word-0018",
+      "offset": 24,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "word-001c",
+      "offset": 28,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "word-0020",
+      "offset": 32,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "word-0024",
+      "offset": 36,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "word-0028",
+      "offset": 40,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "word-002c",
+      "offset": 44,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "word-0030",
+      "offset": 48,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "word-0034",
+      "offset": 52,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "word-0038",
+      "offset": 56,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "word-003c",
+      "offset": 60,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "word-0040",
+      "offset": 64,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "word-0044",
+      "offset": 68,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "word-0048",
+      "offset": 72,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "word-004c",
+      "offset": 76,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "word-0050",
+      "offset": 80,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "word-0054",
+      "offset": 84,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "word-0058",
+      "offset": 88,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "word-005c",
+      "offset": 92,
+      "width_bytes": 4,
+      "access": "read-write"
+    }
+  ],
+  "evidence": [
+    {
+      "kind": "located",
+      "firmware_ids": [
+        "x100vi-131",
+        "xe5-112",
+        "xh2-530",
+        "xh2s-730",
+        "xm5-130",
+        "xt5-431"
+      ]
+    }
+  ]
 }

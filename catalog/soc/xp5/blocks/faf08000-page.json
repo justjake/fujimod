@@ -1,0 +1,26 @@
+{
+  "$schema": "https://fujimod.com/schemas/soc-block.schema.json",
+  "schema": 1,
+  "id": "faf08000-page",
+  "base": 4210065408,
+  "size": 4096,
+  "kind": "memory-controller",
+  "device": {
+    "model": "register_block",
+    "idle_bits": [],
+    "basis": "DDR channel 0 page with no firmware declaration Located in catalog/firmware/x100vi/1.31/xp5-boot/manifest.d/20-storage.toml."
+  },
+  "evidence": [
+    {
+      "kind": "located",
+      "firmware_ids": [
+        "x100vi-131",
+        "xe5-112",
+        "xh2-530",
+        "xh2s-730",
+        "xm5-130",
+        "xt5-431"
+      ]
+    }
+  ]
+}

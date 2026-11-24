@@ -4,5 +4,22 @@
   "id": "movdc2",
   "base": 4288094208,
   "size": 4096,
-  "kind": "address-window"
+  "kind": "imaging-controller",
+  "device": {
+    "model": "movdc",
+    "reset_ticks": 0,
+    "basis": "MOVDC imaging channel 2 Located in catalog/firmware/x100vi/1.31/xp5-boot/manifest.d/50-imaging.toml."
+  },
+  "evidence": [
+    {
+      "kind": "located",
+      "firmware_ids": [
+        "x100vi-131",
+        "xe5-112",
+        "xh2s-730",
+        "xm5-130",
+        "xt5-431"
+      ]
+    }
+  ]
 }

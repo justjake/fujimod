@@ -1,0 +1,23 @@
+{
+  "$schema": "https://fujimod.com/schemas/soc-block.schema.json",
+  "schema": 1,
+  "id": "sdhci-uhs2-1",
+  "base": 4288372736,
+  "size": 768,
+  "kind": "sd-card-controller",
+  "device": {
+    "model": "sdhci_uhs2",
+    "clock_ticks": 1000,
+    "basis": "UHS-II capabilities page 1 Located in catalog/firmware/xe5/1.12/xp5-boot/manifest.d/25-sd.toml."
+  },
+  "evidence": [
+    {
+      "kind": "located",
+      "firmware_ids": [
+        "xe5-112",
+        "xh2s-730",
+        "xt5-431"
+      ]
+    }
+  ]
+}

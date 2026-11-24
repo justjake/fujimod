@@ -1,0 +1,21 @@
+{
+  "$schema": "https://fujimod.com/schemas/soc-block.schema.json",
+  "schema": 1,
+  "id": "image-dsp",
+  "base": 4278190080,
+  "size": 4202496,
+  "kind": "imaging-controller",
+  "device": {
+    "model": "imaging_dsp",
+    "basis": "imaging DSP program memory and debug page Located in catalog/firmware/xe5/1.12/xp5-boot/manifest.d/63-hdr.toml."
+  },
+  "evidence": [
+    {
+      "kind": "located",
+      "firmware_ids": [
+        "xe5-112",
+        "xt5-431"
+      ]
+    }
+  ]
+}
