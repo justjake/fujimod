@@ -75,6 +75,7 @@ fn main() {
             ("Firmware", "sd-boot-v2-autostart.generated.json") => "NandBoot",
             ("Firmware", "boot-patch.generated.json") => "BootPatch",
             ("Firmware", "rom-start.generated.json") => "RomStart",
+            ("BootRom", name) if name.ends_with(".nand-boot.generated.json") => "NandBootRom",
             ("BootRom", _) => "BootRom",
             ("Firmware", "card-files.generated.json") => "CardFiles",
             ("Firmware", "execution.generated.json") => "Execution",

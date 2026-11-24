@@ -12,6 +12,7 @@ pub mod ui_setting_names;
 pub mod ui_event_codes;
 pub mod generation;
 pub mod nand_boot;
+pub mod nand_boot_rom;
 pub mod progress;
 pub mod reference;
 pub mod rom_start;

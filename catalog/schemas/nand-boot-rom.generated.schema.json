@@ -1,0 +1,286 @@
+{
+  "$defs": {
+    "Evidence": {
+      "additionalProperties": false,
+      "description": "Typed evidence for one catalog fact.",
+      "properties": {
+        "addresses": {
+          "description": "Code or data addresses the fact rests on.",
+          "items": {
+            "$ref": "#/$defs/EvidenceAddress"
+          },
+          "type": "array"
+        },
+        "firmware_ids": {
+          "description": "Firmware identities the fact rests on.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "kind": {
+          "$ref": "#/$defs/EvidenceKind",
+          "description": "How the fact was established."
+        }
+      },
+      "required": [
+        "kind"
+      ],
+      "type": "object"
+    },
+    "EvidenceAddress": {
+      "additionalProperties": false,
+      "description": "One firmware address a fact rests on.",
+      "properties": {
+        "address": {
+          "description": "Address within that firmware.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "firmware_id": {
+          "description": "Firmware identity holding the address.",
+          "type": "string"
+        },
+        "space": {
+          "$ref": "#/$defs/EvidenceSpace",
+          "description": "Whether the address selects code or data."
+        }
+      },
+      "required": [
+        "firmware_id",
+        "address",
+        "space"
+      ],
+      "type": "object"
+    },
+    "EvidenceKind": {
+      "description": "How a catalog fact was established.",
+      "oneOf": [
+        {
+          "const": "measured",
+          "description": "Read on a camera.",
+          "type": "string"
+        },
+        {
+          "const": "located",
+          "description": "Found in firmware code or tables.",
+          "type": "string"
+        },
+        {
+          "const": "inferred",
+          "description": "Deduced from the behavior of other facts.",
+          "type": "string"
+        },
+        {
+          "const": "stand-in",
+          "description": "A declared input with no known hardware value.",
+          "type": "string"
+        }
+      ]
+    },
+    "EvidenceSpace": {
+      "description": "The kind of address a fact rests on.",
+      "oneOf": [
+        {
+          "const": "code",
+          "description": "An instruction address.",
+          "type": "string"
+        },
+        {
+          "const": "data",
+          "description": "A data address.",
+          "type": "string"
+        }
+      ]
+    },
+    "NandBootHeader": {
+      "additionalProperties": false,
+      "description": "The header page and its signature.",
+      "properties": {
+        "address": {
+          "description": "RAM address the header page is read to.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "block": {
+          "description": "Block the header is read from.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "length_word": {
+          "description": "Word index holding the program length in bytes.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "page": {
+          "description": "Page the header is read from.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "signature": {
+          "description": "Words the ROM compares before loading the program.",
+          "items": {
+            "format": "uint32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "address",
+        "block",
+        "page",
+        "signature",
+        "length_word"
+      ],
+      "type": "object"
+    },
+    "NandBootProgram": {
+      "additionalProperties": false,
+      "description": "The program pages copied after the header.",
+      "properties": {
+        "destination": {
+          "description": "RAM address the program is copied to.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "first_page": {
+          "description": "First program page the ROM reads.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "page_bytes": {
+          "description": "Bytes one page holds.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "page_mask": {
+          "description": "Mask the page argument wraps with.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "destination",
+        "page_bytes",
+        "first_page",
+        "page_mask"
+      ],
+      "type": "object"
+    },
+    "NandBootSourceMode": {
+      "additionalProperties": false,
+      "description": "One boot-source mode's NAND settings.",
+      "properties": {
+        "address_cycles": {
+          "description": "Address cycles the ROM presents.",
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "ecc_mode": {
+          "description": "ECC mode the ROM configures, where zero disables it.",
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "mode": {
+          "description": "Boot-source mode the strap selects.",
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "mode",
+        "ecc_mode",
+        "address_cycles"
+      ],
+      "type": "object"
+    }
+  },
+  "$id": "https://fujimod.com/schemas/nand-boot-rom.generated.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "NAND boot behavior of one boot ROM image.",
+  "properties": {
+    "$schema": {
+      "const": "https://fujimod.com/schemas/nand-boot-rom.generated.schema.json",
+      "description": "Stable schema identifier for this document.",
+      "type": "string"
+    },
+    "controller_block_id": {
+      "description": "Processor block holding the controller's registers.",
+      "type": "string"
+    },
+    "data_window": {
+      "description": "Base of the controller's page-data aperture.",
+      "format": "uint64",
+      "minimum": 0,
+      "type": "integer"
+    },
+    "evidence": {
+      "description": "How these facts were established.",
+      "items": {
+        "$ref": "#/$defs/Evidence"
+      },
+      "type": "array"
+    },
+    "header": {
+      "$ref": "#/$defs/NandBootHeader",
+      "description": "The header page the ROM reads first."
+    },
+    "id": {
+      "description": "Stable document identity.",
+      "type": "string"
+    },
+    "program": {
+      "$ref": "#/$defs/NandBootProgram",
+      "description": "The program pages the ROM copies after the header."
+    },
+    "rom_sha256": {
+      "description": "SHA-256 of the boot ROM image this record describes.",
+      "type": "string"
+    },
+    "schema": {
+      "description": "Document version.",
+      "format": "uint32",
+      "minimum": 0,
+      "type": "integer"
+    },
+    "source_modes": {
+      "description": "Boot-source modes that load from NAND.",
+      "items": {
+        "$ref": "#/$defs/NandBootSourceMode"
+      },
+      "type": "array"
+    }
+  },
+  "required": [
+    "$schema",
+    "schema",
+    "id",
+    "rom_sha256",
+    "controller_block_id",
+    "data_window",
+    "source_modes",
+    "header",
+    "program",
+    "evidence"
+  ],
+  "title": "NandBootRom",
+  "type": "object"
+}

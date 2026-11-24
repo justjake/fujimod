@@ -1,0 +1,73 @@
+{
+  "$schema": "https://fujimod.com/schemas/nand-boot-rom.generated.schema.json",
+  "schema": 1,
+  "id": "nand-boot-2a8b69986dd3fad0b73808c44e0834fa95c7b4e4f84e6c8664d4b0a82f7b24a4",
+  "rom_sha256": "2a8b69986dd3fad0b73808c44e0834fa95c7b4e4f84e6c8664d4b0a82f7b24a4",
+  "controller_block_id": "nand-controller",
+  "data_window": 4227858432,
+  "source_modes": [
+    {
+      "mode": 5,
+      "ecc_mode": 1,
+      "address_cycles": 4
+    },
+    {
+      "mode": 6,
+      "ecc_mode": 1,
+      "address_cycles": 5
+    },
+    {
+      "mode": 7,
+      "ecc_mode": 2,
+      "address_cycles": 4
+    },
+    {
+      "mode": 8,
+      "ecc_mode": 2,
+      "address_cycles": 5
+    }
+  ],
+  "header": {
+    "address": 4294109184,
+    "block": 0,
+    "page": 0,
+    "signature": [
+      4294967295,
+      0,
+      2863311530,
+      1431655765
+    ],
+    "length_word": 4
+  },
+  "program": {
+    "destination": 4293984256,
+    "page_bytes": 2048,
+    "first_page": 1,
+    "page_mask": 255
+  },
+  "evidence": [
+    {
+      "kind": "located",
+      "firmware_ids": [
+        "x100v-301"
+      ],
+      "addresses": [
+        {
+          "firmware_id": "x100v-301",
+          "address": 4293919620,
+          "space": "code"
+        },
+        {
+          "firmware_id": "x100v-301",
+          "address": 4293919920,
+          "space": "code"
+        },
+        {
+          "firmware_id": "x100v-301",
+          "address": 4293933008,
+          "space": "code"
+        }
+      ]
+    }
+  ]
+}
