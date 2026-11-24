@@ -4,5 +4,29 @@
   "id": "gpio",
   "base": 4287655936,
   "size": 4096,
-  "kind": "gpio"
+  "kind": "gpio",
+  "interrupts": [
+    {
+      "output": "port0-pin0",
+      "line": 116
+    },
+    {
+      "output": "port0-pin1",
+      "line": 117
+    }
+  ],
+  "device": {
+    "model": "xp5_gpio",
+    "basis": "GPIO controller Located in catalog/firmware/x100vi/1.31/xp5-boot/manifest.d/30-power-input.toml."
+  },
+  "evidence": [
+    {
+      "kind": "located",
+      "firmware_ids": [
+        "x100vi-131",
+        "xe5-112",
+        "xt5-431"
+      ]
+    }
+  ]
 }

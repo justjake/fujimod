@@ -1,0 +1,54 @@
+{
+  "$schema": "https://fujimod.com/schemas/soc-block.schema.json",
+  "schema": 1,
+  "id": "codec-words",
+  "base": 4287687184,
+  "size": 20,
+  "kind": "address-window",
+  "device": {
+    "model": "register_block",
+    "idle_bits": [],
+    "basis": "codec words beside the DMA address page Located in catalog/firmware/xe5/1.12/xp5-boot/manifest.d/63-hdr.toml."
+  },
+  "registers": [
+    {
+      "name": "word-0000",
+      "offset": 0,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "word-0004",
+      "offset": 4,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "word-0008",
+      "offset": 8,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "word-000c",
+      "offset": 12,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "word-0010",
+      "offset": 16,
+      "width_bytes": 4,
+      "access": "read-write"
+    }
+  ],
+  "evidence": [
+    {
+      "kind": "located",
+      "firmware_ids": [
+        "xe5-112",
+        "xt5-431"
+      ]
+    }
+  ]
+}

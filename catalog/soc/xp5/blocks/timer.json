@@ -4,5 +4,23 @@
   "id": "timer",
   "base": 4287660032,
   "size": 4096,
-  "kind": "timer"
+  "kind": "timer",
+  "device": {
+    "model": "xp5_timer",
+    "focus_capture": true,
+    "basis": "general/PWM16 timer; five firmwares capture the focus pulse Located in catalog/firmware/x100vi/1.31/xp5-boot/manifest.d/10-timer.toml."
+  },
+  "evidence": [
+    {
+      "kind": "located",
+      "firmware_ids": [
+        "x100vi-131",
+        "xe5-112",
+        "xh2-530",
+        "xh2s-730",
+        "xm5-130",
+        "xt5-431"
+      ]
+    }
+  ]
 }

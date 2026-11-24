@@ -1,0 +1,64 @@
+{
+  "$schema": "https://fujimod.com/schemas/soc-block.schema.json",
+  "schema": 1,
+  "id": "completion-d23000",
+  "base": 4291964928,
+  "size": 4096,
+  "kind": "imaging-controller",
+  "interrupts": [
+    {
+      "output": "irq",
+      "line": 214
+    }
+  ],
+  "device": {
+    "model": "completion",
+    "fixed_words": [
+      {
+        "offset": 0,
+        "value": 1
+      },
+      {
+        "offset": 16,
+        "value": 65537
+      }
+    ],
+    "starts": [
+      {
+        "offset": 4,
+        "mask": 1
+      }
+    ],
+    "completion": [
+      {
+        "offset": 48,
+        "set": 1
+      },
+      {
+        "offset": 4,
+        "clear": 1
+      }
+    ],
+    "ack": {
+      "offset": 52,
+      "mode": "w1c",
+      "status_offset": 48,
+      "bits": 1
+    },
+    "irq_mask": {
+      "offset": 56,
+      "bit": 0
+    },
+    "delay_ticks": 200000,
+    "basis": "completion handshake Located in catalog/firmware/xe5/1.12/xp5-boot/manifest.d/63-hdr.toml."
+  },
+  "evidence": [
+    {
+      "kind": "located",
+      "firmware_ids": [
+        "xe5-112",
+        "xt5-431"
+      ]
+    }
+  ]
+}

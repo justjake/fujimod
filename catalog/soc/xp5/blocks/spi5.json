@@ -4,5 +4,25 @@
   "id": "spi5",
   "base": 4287713280,
   "size": 4096,
-  "kind": "serial-controller"
+  "kind": "serial-controller",
+  "device": {
+    "model": "pl022",
+    "source_hz": 48000000,
+    "ticks_per_second": 1000000000,
+    "receive_request": 10,
+    "transmit_request": 11,
+    "basis": "PL022 serial controller; attached part and select pins are body facts Located in catalog/firmware/x100vi/1.31/xp5-boot/manifest.d/50-imaging.toml."
+  },
+  "evidence": [
+    {
+      "kind": "located",
+      "firmware_ids": [
+        "x100vi-131",
+        "xe5-112",
+        "xh2-530",
+        "xh2s-730",
+        "xt5-431"
+      ]
+    }
+  ]
 }

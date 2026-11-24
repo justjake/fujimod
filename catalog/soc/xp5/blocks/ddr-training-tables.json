@@ -1,0 +1,97 @@
+{
+  "$schema": "https://fujimod.com/schemas/soc-block.schema.json",
+  "schema": 1,
+  "id": "ddr-training-tables",
+  "base": 4209377280,
+  "size": 147456,
+  "kind": "memory-controller",
+  "device": {
+    "model": "register_block",
+    "idle_bits": [],
+    "basis": "DDR training table writes Located in catalog/firmware/xe5/1.12/xp5-boot/manifest.d/49-table-writes.toml."
+  },
+  "registers": [
+    {
+      "name": "page-0000",
+      "offset": 0,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "page-1000",
+      "offset": 4096,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "page-2000",
+      "offset": 8192,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "page-3000",
+      "offset": 12288,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "page-4000",
+      "offset": 16384,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "page-11000",
+      "offset": 69632,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "page-12000",
+      "offset": 73728,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "page-13000",
+      "offset": 77824,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "page-20000",
+      "offset": 131072,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "page-21000",
+      "offset": 135168,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "page-22000",
+      "offset": 139264,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "page-23000",
+      "offset": 143360,
+      "width_bytes": 4,
+      "access": "read-write"
+    }
+  ],
+  "evidence": [
+    {
+      "kind": "located",
+      "firmware_ids": [
+        "xe5-112",
+        "xm5-130",
+        "xt5-431"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,309 @@
+{
+  "$schema": "https://fujimod.com/schemas/soc-block.schema.json",
+  "schema": 1,
+  "id": "configuration-band",
+  "base": 4208984064,
+  "size": 12288,
+  "kind": "memory-controller",
+  "device": {
+    "model": "register_block",
+    "idle_bits": [],
+    "basis": "DDR configuration band of 22 banks Located in catalog/firmware/x100vi/1.31/xp5-boot/manifest.d/20-storage.toml."
+  },
+  "registers": [
+    {
+      "name": "group-0-20",
+      "offset": 32,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "group-0-40",
+      "offset": 64,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "group-1-20",
+      "offset": 544,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "group-1-40",
+      "offset": 576,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "group-2-20",
+      "offset": 1056,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "group-2-40",
+      "offset": 1088,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "group-3-20",
+      "offset": 1568,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "group-3-40",
+      "offset": 1600,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "group-4-20",
+      "offset": 2080,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "group-4-40",
+      "offset": 2112,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "group-5-20",
+      "offset": 2592,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "group-5-40",
+      "offset": 2624,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "group-6-20",
+      "offset": 3104,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "group-6-40",
+      "offset": 3136,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "group-7-20",
+      "offset": 3616,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "group-7-40",
+      "offset": 3648,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "group-8-20",
+      "offset": 4128,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "group-8-40",
+      "offset": 4160,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "group-9-20",
+      "offset": 4640,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "group-9-40",
+      "offset": 4672,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "group-10-20",
+      "offset": 5152,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "group-10-40",
+      "offset": 5184,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "group-11-20",
+      "offset": 5664,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "group-11-40",
+      "offset": 5696,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "group-12-20",
+      "offset": 6176,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "group-12-40",
+      "offset": 6208,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "group-13-20",
+      "offset": 6688,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "group-13-40",
+      "offset": 6720,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "group-14-20",
+      "offset": 7200,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "group-14-40",
+      "offset": 7232,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "group-15-20",
+      "offset": 7712,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "group-15-40",
+      "offset": 7744,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "group-16-20",
+      "offset": 8224,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "group-16-40",
+      "offset": 8256,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "group-17-20",
+      "offset": 8736,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "group-17-40",
+      "offset": 8768,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "group-18-20",
+      "offset": 9248,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "group-18-40",
+      "offset": 9280,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "group-19-20",
+      "offset": 9760,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "group-19-40",
+      "offset": 9792,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "group-20-20",
+      "offset": 10272,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "group-20-40",
+      "offset": 10304,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "group-21-20",
+      "offset": 10784,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "group-21-40",
+      "offset": 10816,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "page-0000",
+      "offset": 0,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "page-1000",
+      "offset": 4096,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "page-2000",
+      "offset": 8192,
+      "width_bytes": 4,
+      "access": "read-write"
+    }
+  ],
+  "evidence": [
+    {
+      "kind": "located",
+      "firmware_ids": [
+        "x100vi-131",
+        "xe5-112",
+        "xh2s-730",
+        "xm5-130",
+        "xt5-431"
+      ]
+    }
+  ]
+}

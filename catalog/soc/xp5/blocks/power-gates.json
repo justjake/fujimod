@@ -4,5 +4,22 @@
   "id": "power-gates",
   "base": 4287680512,
   "size": 4096,
-  "kind": "clock-controller"
+  "kind": "clock-controller",
+  "device": {
+    "model": "gates",
+    "basis": "power gates Located in catalog/firmware/x100vi/1.31/xp5-boot/manifest.d/20-storage.toml."
+  },
+  "evidence": [
+    {
+      "kind": "located",
+      "firmware_ids": [
+        "x100vi-131",
+        "xe5-112",
+        "xh2-530",
+        "xh2s-730",
+        "xm5-130",
+        "xt5-431"
+      ]
+    }
+  ]
 }

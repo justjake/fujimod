@@ -4,5 +4,22 @@
   "id": "temperature",
   "base": 4287647744,
   "size": 4096,
-  "kind": "address-window"
+  "kind": "address-window",
+  "device": {
+    "model": "temperature",
+    "basis": "SoC temperature conversion page Located in catalog/firmware/x100vi/1.31/xp5-boot/manifest.d/30-power-input.toml."
+  },
+  "evidence": [
+    {
+      "kind": "located",
+      "firmware_ids": [
+        "x100vi-131",
+        "xe5-112",
+        "xh2-530",
+        "xh2s-730",
+        "xm5-130",
+        "xt5-431"
+      ]
+    }
+  ]
 }

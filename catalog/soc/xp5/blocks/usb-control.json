@@ -1,0 +1,39 @@
+{
+  "$schema": "https://fujimod.com/schemas/soc-block.schema.json",
+  "schema": 1,
+  "id": "usb-control",
+  "base": 4290969600,
+  "size": 4096,
+  "kind": "usb-controller",
+  "device": {
+    "model": "completion",
+    "starts": [
+      {
+        "offset": 20,
+        "mask": 16
+      }
+    ],
+    "completion": [
+      {
+        "offset": 8,
+        "set": 1
+      }
+    ],
+    "ack": {
+      "offset": 8,
+      "mode": "w1c",
+      "bits": 1
+    },
+    "delay_ticks": 100000,
+    "basis": "completion handshake Located in catalog/firmware/xe5/1.12/xp5-boot/manifest.d/64-usb.toml."
+  },
+  "evidence": [
+    {
+      "kind": "located",
+      "firmware_ids": [
+        "xe5-112",
+        "xt5-431"
+      ]
+    }
+  ]
+}

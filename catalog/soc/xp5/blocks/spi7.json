@@ -1,0 +1,25 @@
+{
+  "$schema": "https://fujimod.com/schemas/soc-block.schema.json",
+  "schema": 1,
+  "id": "spi7",
+  "base": 4287721472,
+  "size": 4096,
+  "kind": "serial-controller",
+  "device": {
+    "model": "pl022",
+    "source_hz": 48000000,
+    "ticks_per_second": 1000000000,
+    "receive_request": 14,
+    "transmit_request": 15,
+    "companion_irq_line": 105,
+    "basis": "PL022 serial controller; attached part and select pins are body facts Located in catalog/firmware/xh2s/7.30/xp5-boot/manifest.d/61-companion-serial.toml."
+  },
+  "evidence": [
+    {
+      "kind": "located",
+      "firmware_ids": [
+        "xh2s-730"
+      ]
+    }
+  ]
+}

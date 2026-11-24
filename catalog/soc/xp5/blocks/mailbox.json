@@ -8,13 +8,11 @@
   "interrupts": [
     {
       "output": "request",
-      "line": 55,
-      "core": "core4"
+      "line": 55
     },
     {
       "output": "control",
-      "line": 58,
-      "core": "core4"
+      "line": 58
     },
     {
       "output": "reply",
@@ -27,6 +25,23 @@
     {
       "output": "fault",
       "line": 143
+    }
+  ],
+  "device": {
+    "model": "interprocessor_mailbox",
+    "basis": "inter-processor mailbox, indices are model parameters Located in catalog/firmware/x100vi/1.31/xp5-boot/manifest.d/60-mcore.toml."
+  },
+  "evidence": [
+    {
+      "kind": "located",
+      "firmware_ids": [
+        "x100vi-131",
+        "xe5-112",
+        "xh2-530",
+        "xh2s-730",
+        "xm5-130",
+        "xt5-431"
+      ]
     }
   ]
 }

@@ -1,0 +1,62 @@
+{
+  "$schema": "https://fujimod.com/schemas/soc-block.schema.json",
+  "schema": 1,
+  "id": "completion-977000",
+  "base": 4288114688,
+  "size": 4096,
+  "kind": "imaging-controller",
+  "interrupts": [
+    {
+      "output": "irq",
+      "line": 176
+    }
+  ],
+  "device": {
+    "model": "completion",
+    "fixed_words": [
+      {
+        "offset": 0,
+        "value": 1
+      },
+      {
+        "offset": 776,
+        "value": 65537
+      }
+    ],
+    "starts": [
+      {
+        "offset": 4,
+        "mask": 1
+      }
+    ],
+    "completion": [
+      {
+        "offset": 784,
+        "set": 1
+      },
+      {
+        "offset": 4,
+        "clear": 1
+      }
+    ],
+    "ack": {
+      "offset": 784,
+      "mode": "w1c"
+    },
+    "irq_mask": {
+      "offset": 780,
+      "bit": 0
+    },
+    "delay_ticks": 200000,
+    "basis": "completion handshake Located in catalog/firmware/xe5/1.12/xp5-boot/manifest.d/57-develop-stubs-3.toml."
+  },
+  "evidence": [
+    {
+      "kind": "located",
+      "firmware_ids": [
+        "xe5-112",
+        "xt5-431"
+      ]
+    }
+  ]
+}

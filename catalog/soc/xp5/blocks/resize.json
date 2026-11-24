@@ -4,5 +4,20 @@
   "id": "resize",
   "base": 4288159744,
   "size": 4096,
-  "kind": "imaging-controller"
+  "kind": "imaging-controller",
+  "device": {
+    "model": "imaging_resize",
+    "basis": "imaging resizer Located in catalog/firmware/x100vi/1.31/xp5-boot/manifest.d/50-imaging.toml."
+  },
+  "evidence": [
+    {
+      "kind": "located",
+      "firmware_ids": [
+        "x100vi-131",
+        "xe5-112",
+        "xh2s-730",
+        "xt5-431"
+      ]
+    }
+  ]
 }

@@ -4,5 +4,22 @@
   "id": "clock-banks",
   "base": 4288675840,
   "size": 131072,
-  "kind": "clock-controller"
+  "kind": "clock-controller",
+  "device": {
+    "model": "clock_banks",
+    "basis": "17 clock banks; panel PLLs are separate blocks inside the envelope Located in catalog/firmware/x100vi/1.31/xp5-boot/manifest.d/21-clocks.toml."
+  },
+  "evidence": [
+    {
+      "kind": "located",
+      "firmware_ids": [
+        "x100vi-131",
+        "xe5-112",
+        "xh2-530",
+        "xh2s-730",
+        "xm5-130",
+        "xt5-431"
+      ]
+    }
+  ]
 }

@@ -4,5 +4,21 @@
   "id": "receiver0",
   "base": 4287889408,
   "size": 4096,
-  "kind": "imaging-controller"
+  "kind": "imaging-controller",
+  "device": {
+    "model": "imaging_receiver",
+    "basis": "imaging receiver 0; frame law is a sensor/run fact Located in catalog/firmware/x100vi/1.31/xp5-boot/manifest.d/50-imaging.toml."
+  },
+  "evidence": [
+    {
+      "kind": "located",
+      "firmware_ids": [
+        "x100vi-131",
+        "xe5-112",
+        "xh2s-730",
+        "xm5-130",
+        "xt5-431"
+      ]
+    }
+  ]
 }

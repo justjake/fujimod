@@ -1,0 +1,27 @@
+{
+  "$schema": "https://fujimod.com/schemas/soc-block.schema.json",
+  "schema": 1,
+  "id": "sd-host-1",
+  "base": 4288364544,
+  "size": 480,
+  "kind": "sd-card-controller",
+  "device": {
+    "model": "sd_host",
+    "capabilities": 0,
+    "capabilities_2": 0,
+    "clock_ticks": 1000,
+    "slot_and_version": 0,
+    "transfer_ticks": 1000,
+    "basis": "SDHCI host 1; DMA space and banks are run/body facts Located in catalog/firmware/xe5/1.12/xp5-boot/manifest.d/25-sd.toml."
+  },
+  "evidence": [
+    {
+      "kind": "located",
+      "firmware_ids": [
+        "xe5-112",
+        "xh2s-730",
+        "xt5-431"
+      ]
+    }
+  ]
+}

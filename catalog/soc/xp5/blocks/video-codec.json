@@ -1,0 +1,20 @@
+{
+  "$schema": "https://fujimod.com/schemas/soc-block.schema.json",
+  "schema": 1,
+  "id": "video-codec",
+  "base": 4291903488,
+  "size": 8192,
+  "kind": "imaging-controller",
+  "device": {
+    "model": "video_codec",
+    "basis": "video codec page Located in catalog/firmware/xt5/4.31/xp5-boot/manifest.d/61-codec.toml."
+  },
+  "evidence": [
+    {
+      "kind": "located",
+      "firmware_ids": [
+        "xt5-431"
+      ]
+    }
+  ]
+}

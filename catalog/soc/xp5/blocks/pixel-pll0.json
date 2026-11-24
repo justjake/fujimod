@@ -4,5 +4,20 @@
   "id": "pixel-pll0",
   "base": 4288745472,
   "size": 4096,
-  "kind": "address-window"
+  "kind": "clock-controller",
+  "device": {
+    "model": "panel_pll",
+    "basis": "panel PLL 0 Located in catalog/firmware/x100vi/1.31/xp5-boot/manifest.d/40-display.toml."
+  },
+  "evidence": [
+    {
+      "kind": "located",
+      "firmware_ids": [
+        "x100vi-131",
+        "xe5-112",
+        "xh2s-730",
+        "xt5-431"
+      ]
+    }
+  ]
 }
