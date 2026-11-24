@@ -121,6 +121,14 @@ run = "cargo run --locked -p fujimod-bindgen -- --catalog-types catalog/schemas 
 description = "Check generated Python catalog types against Rust schemas"
 run = "cargo run --locked -p fujimod-bindgen -- --check-catalog-types catalog/schemas bindings/python/python/fujimod/emulator/_catalog_types.py"
 
+[tasks.catalog-format]
+description = "Write hand-authored catalog records in their canonical form"
+run = "cargo run -q --locked -p fujimod-catalog-format --bin catalog-format --"
+
+[tasks.catalog-format-check]
+description = "Fail when a hand-authored catalog record differs from its canonical form"
+run = "cargo run -q --locked -p fujimod-catalog-format --bin catalog-format -- --check"
+
 [tasks.python-build-test]
 run = [
   "uv run --locked python scripts/python_extension.py",

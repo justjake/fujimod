@@ -27,6 +27,7 @@ members = [
   "crates/catalog-restart",
   "crates/catalog-workflows",
   "crates/catalog-firmware-identity",
+  "crates/catalog-format",
   "crates/catalog-configuration",
   "crates/catalog-resolution",
   "crates/catalog-construction",

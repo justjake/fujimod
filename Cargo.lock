@@ -2111,6 +2111,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "fujimod-catalog-format"
+version = "0.1.0"
+dependencies = [
+ "fujimod-catalog",
+ "fujimod-catalog-controls",
+ "fujimod-workspace-hack",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "fujimod-catalog-identity"
 version = "0.1.0"
 dependencies = [
