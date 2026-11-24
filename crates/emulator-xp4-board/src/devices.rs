@@ -5,9 +5,44 @@ use fujimod_emulator_devices::graphics::scanout::Frame;
 use fujimod_emulator_devices::{Cx, Device, Host, Record, checkpoint::Checkpoint};
 use fujimod_emulator_ip::usb::dwc3::{self, Dwc3};
 use fujimod_emulator_xp4_io::adc::Adc;
+use fujimod_emulator_xp4_io::spi::Spi;
+use fujimod_emulator_xp4_storage::serial_link::{self, SerialLinks};
 use fujimod_emulator_xp4_storage::storage::{self, DmaController, SerialFlashController};
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::{Arc, Mutex};
+
+/// A declared SPI controller as the XP4 DMA engine sees it: channels whose
+/// fixed side is its data register move words through it.
+struct SpiLink(Arc<Mutex<Spi>>);
+impl SpiLink {
+    fn spi(&self) -> Result<std::sync::MutexGuard<'_, Spi>, String> {
+        self.0
+            .lock()
+            .map_err(|_| "XP4 SPI lock poisoned".to_owned())
+    }
+}
+impl serial_link::SerialPeer for SpiLink {
+    fn requests(&self) -> Result<u32, String> {
+        Ok(self.spi()?.dma_requests())
+    }
+    fn check_idle(&self) -> Result<(), String> {
+        self.spi()?.dma_check_idle()
+    }
+    fn begin(&self, start: u64, bytes: u64, width: u64) -> Result<serial_link::Exchange, String> {
+        let exchange = self.spi()?.dma_begin(start, bytes, width)?;
+        Ok(serial_link::Exchange {
+            bits: exchange.bits,
+            word_ticks: exchange.word_ticks,
+            end: exchange.end,
+        })
+    }
+    fn shift(&self, tx: u16, tick: u64) -> Result<u16, String> {
+        self.spi()?.dma_shift(tx, tick)
+    }
+    fn finish(&self, start: u64, end: u64) -> Result<(), String> {
+        self.spi()?.dma_finish(start, end)
+    }
+}
 
 struct Connected<T>(Arc<Mutex<T>>);
 impl<T: Device> Device for Connected<T> {
@@ -28,6 +63,9 @@ impl<T: Device> Device for Connected<T> {
     }
     fn pollable(&self, address: u64, size: u8) -> bool {
         self.0.lock().unwrap().pollable(address, size)
+    }
+    fn read_stable(&self, address: u64, size: u8) -> bool {
+        self.0.lock().unwrap().read_stable(address, size)
     }
     fn set_scene(&mut self, scene: &serde_json::Value) -> Result<bool, String> {
         self.0.lock().unwrap().set_scene(scene)
@@ -80,6 +118,9 @@ pub struct Devices {
     last_read_stable: bool,
     /// Epoch of the serial-flash array and its controller's read state, when this board has them.
     nor_epoch: Option<Arc<std::sync::atomic::AtomicU64>>,
+    /// Declared SPI controllers the XP4 DMA engine can move words through,
+    /// whichever of the two is declared first.
+    serial_links: SerialLinks,
 }
 const CHECKPOINT_KIND: &str = "xp4-devices-v1";
 
@@ -1132,6 +1173,7 @@ impl Devices {
             last_access: None,
             last_read_stable: false,
             nor_epoch: None,
+            serial_links: SerialLinks::default(),
         }
     }
     pub fn io_groups(&mut self, base: u64) -> Result<(), String> {
@@ -1176,18 +1218,24 @@ impl Devices {
         {
             return Err("Invalid or duplicate XP4 SPI controller".into());
         }
+        // The MMIO model and the DMA engine's link share one controller.
+        let spi = Arc::new(Mutex::new(Spi::new(base, input)));
+        let data_register = spi
+            .lock()
+            .map_err(|_| "XP4 SPI lock poisoned")?
+            .data_register();
+        self.serial_links
+            .register(data_register, Arc::new(SpiLink(spi.clone())))?;
         let id = self.models.len();
-        self.models
-            .push(Some(Box::new(fujimod_emulator_xp4_io::spi::Spi::new(
-                base, input,
-            ))));
+        self.models.push(Some(Box::new(Connected(spi))));
         self.windows.push((base, base + 0x28, id));
         Ok(())
     }
     pub fn standalone_dma(&mut self, input: super::definition::StandaloneDma) -> Result<(), String> {
         let routes: [u32; 16] = input.irq_routes.try_into()
             .map_err(|_| "Standalone XP4 DMA requires 16 explicit IRQ routes")?;
-        let model = DmaController::standalone(routes, &input.reset_profile, &input.timing_profile)?;
+        let model = DmaController::standalone(routes, &input.reset_profile, &input.timing_profile)?
+            .with_serial_links(self.serial_links.clone());
         let windows = [(storage::DMA, storage::DMA + 0x10000), (0xfff4a500, 0xfff4a520), (0xfff4a800, 0xfff4a880)];
         if windows.iter().any(|&(a, b)| self.windows.iter().any(|&(lo, hi, _)| a < hi && lo < b)) {
             return Err("Overlapping standalone XP4 DMA window".into());
@@ -1259,7 +1307,10 @@ impl Devices {
         let view = nor.immutable_view();
         let executable_view = nor.executable_view();
         let port = storage::try_port_from_nor(nor)?;
-        let mut dma = DmaController::new(port.clone(), routes).with_audio(audio)?;
+        let serial_links = SerialLinks::default();
+        let mut dma = DmaController::new(port.clone(), routes)
+            .with_audio(audio)?
+            .with_serial_links(serial_links.clone());
         if let Some(input) = receiver_input {
             if input.address < 0xff000000 {
                 return Err("Discovery transmit receiver requires a peripheral destination".into());
@@ -1304,6 +1355,7 @@ impl Devices {
             last_access: None,
             last_read_stable: false,
             nor_epoch: Some(port.lock().unwrap().epoch()),
+            serial_links,
         };
         if let Some(pad) = pad {
             if devices.windows.iter().any(|&(lo, hi, _)| pad < hi && lo < pad + 4) {

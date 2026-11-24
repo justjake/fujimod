@@ -354,6 +354,9 @@ struct DmaState {
     audio: Option<AudioPacing>,
     #[serde(default)]
     microphone_frames: Option<u64>,
+    /// Running serial controller exchanges; absent when none runs.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    spi_exchanges: BTreeMap<u64, SpiExchange>,
 }
 impl DmaController {
     pub(super) fn capture_portable(&self) -> Result<Checkpoint, String> {
@@ -370,6 +373,7 @@ impl DmaController {
             request_mux: self.mux.clone(), request_mux_changed: self.mux_changed,
             request: self.request.clone(), audio: self.audio.clone(),
             microphone_frames: self.microphone().map(|_| self.microphone_frames),
+            spi_exchanges: self.spi.clone(),
         };
         Checkpoint::encode(self.name(), &state)
     }
@@ -416,7 +420,9 @@ impl DmaController {
                     || standalone && c.submitted && (Self::needs_flash(c) || c.regs[0x24 / 4] != 0
                         || c.regs[0x28 / 4] & 0x10000001 != 0x10000001
                         || Self::standalone_deadline(c).is_none()
-                        || c.due.is_some_and(|at| Self::standalone_deadline(c) != Some(at)))
+                        // A serial controller exchange keeps its own deadline.
+                        || c.due.is_some_and(|at| self.spi_side_of(c).is_none()
+                            && Self::standalone_deadline(c) != Some(at)))
             })
             || state.request_mux.iter().any(|(a, v)| {
                 !(0xfff4a500..0xfff4a520).contains(a) || a & 3 != 0 || v & !0x3f3f != 0
@@ -428,6 +434,7 @@ impl DmaController {
         {
             return Err("Invalid XP4 DMA checkpoint or routes".into());
         }
+        self.validate_spi(state)?;
         if let Some(port) = &self.port {
             let port = port.lock().unwrap();
             for channel in &state.channels {
@@ -448,6 +455,63 @@ impl DmaController {
         self.mux = state.request_mux;
         self.mux_changed = state.request_mux_changed;
         self.request = state.request;
+        self.spi = state.spi_exchanges;
+        Ok(())
+    }
+
+    /// An exchange pairs a submitted receive and transmit channel of one
+    /// declared serial controller, both due when the last word has shifted;
+    /// any other submitted channel on a controller is the one receive channel
+    /// waiting for its transmit partner.
+    fn validate_spi(&self, state: &DmaState) -> Result<(), String> {
+        let invalid = || Err("Invalid XP4 SPI DMA exchange in checkpoint".to_owned());
+        let mut members = std::collections::BTreeSet::new();
+        for (&register, x) in &state.spi_exchanges {
+            let (Some(rx), Some(tx), Some(end)) = (
+                state.channels.get(x.receive),
+                state.channels.get(x.transmit),
+                x.end(),
+            ) else {
+                return invalid();
+            };
+            if x.receive == x.transmit
+                || !members.insert(x.receive)
+                || !members.insert(x.transmit)
+                || x.words == 0
+                || x.word_ticks == 0
+                || !(4..=16).contains(&x.bits)
+                || u64::from(x.bits.div_ceil(8)) != x.width
+                || x.words.checked_mul(x.width) != Some(u64::from(tx.regs[0x10 / 4]) + 1)
+                || rx.regs[0x10 / 4] != tx.regs[0x10 / 4]
+                || self.spi_side_of(rx) != Some((register, false))
+                || self.spi_side_of(tx) != Some((register, true))
+                || Self::spi_width(rx, false) != Some(x.width)
+                || Self::spi_width(tx, true) != Some(x.width)
+                || [rx, tx]
+                    .iter()
+                    .any(|c| !c.submitted || c.due != Some(end) || c.regs[0x24 / 4] != 0)
+                || tx.submitted_at != x.start
+                || rx.submitted_at > x.start
+                || self.audio(x.receive).is_some()
+                || self.audio(x.transmit).is_some()
+            {
+                return invalid();
+            }
+        }
+        let mut waiting = std::collections::BTreeSet::new();
+        for (n, c) in state.channels.iter().enumerate() {
+            if !c.submitted || members.contains(&n) {
+                continue;
+            }
+            if let Some((register, transmit)) = self.spi_side_of(c)
+                && (transmit
+                    || c.due.is_some()
+                    || state.spi_exchanges.contains_key(&register)
+                    || !waiting.insert(register))
+            {
+                return invalid();
+            }
+        }
         Ok(())
     }
 }
