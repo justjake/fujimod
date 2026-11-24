@@ -19,6 +19,16 @@ const CONTROL_REJECTED: u32 = 0xf0000000;
 /// Control-word configuration fields 28..29: kept as opaque values on the fifth
 /// PLL row only, where the model has no behavior attached to them.
 const CONTROL_CONFIG: u32 = 0x30000000;
+/// Control words at reset. The fifth PLL starts released: stock stage 2
+/// (X-T20 2.11 0xa3f8, GFX 50R 3.11 0xaa24) locks it by setting bit 26 alone,
+/// and both cameras boot that stage 2 from a card.
+const RESET: [u32; 5] = [
+    CONTROL_LOCK_HELD,
+    CONTROL_LOCK_HELD,
+    CONTROL_LOCK_HELD,
+    CONTROL_LOCK_HELD,
+    0,
+];
 fn word(offset: u64) -> bool {
     offset <= 0x64 || matches!(offset, 0x70 | 0x78 | 0x7c | 0x80)
 }
@@ -58,10 +68,8 @@ impl ClockControl {
         if options.base & 0xfff != 0 || options.lock_ticks == 0 {
             return Err("Invalid clock register base/settle time".into());
         }
-        let mut words: std::collections::BTreeMap<u64, u32> = CONTROL
-            .into_iter()
-            .map(|offset| (offset, CONTROL_LOCK_HELD))
-            .collect();
+        let mut words: std::collections::BTreeMap<u64, u32> =
+            CONTROL.into_iter().zip(RESET).collect();
         let mut locked = 0;
         for &index in &options.running {
             if index >= CONTROL.len() || locked & LOCK[index] != 0 {
@@ -340,7 +348,7 @@ mod tests {
             let mut cx = h.cx();
             d.write(&mut cx, fifth, 4, u64::from(CONTROL_POWERED | bad));
             assert!(cx.refusal().is_some());
-            assert_eq!(read(&mut d, &mut h, fifth), u64::from(CONTROL_LOCK_HELD));
+            assert_eq!(read(&mut d, &mut h, fifth), u64::from(RESET[4]));
         }
         for control in &CONTROL[..CONTROL.len() - 1] {
             for bit in [1 << 28, 1 << 29, 1 << 30, 1 << 31] {
