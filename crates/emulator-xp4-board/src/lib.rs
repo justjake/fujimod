@@ -915,7 +915,7 @@ fn exclusive(c: &Cluster, core: usize, address: u64, word: u32) -> Result<Exclus
             // every core's stores to this monitor through `store`.
             for cpu in &c.cpus {
                 match cpu.watch_stores(physical, size as u64) {
-                                result => result?,
+                    result => result?,
                 }
             }
         }
@@ -947,7 +947,7 @@ fn exclusive(c: &Cluster, core: usize, address: u64, word: u32) -> Result<Exclus
                 value |= u64::from(c.reg(core, arm::CORE[rt + 1])?) << 32;
             }
             match c.cpus[core].write_memory(physical, &value.to_le_bytes()[..size]) {
-                        result => result?,
+                result => result?,
             }
             for monitor in &mut state.exclusive {
                 if monitor
@@ -3035,7 +3035,11 @@ impl Session {
     /// Ticks between touch reports on the board's touch panel.
     pub fn touch_period(&self) -> Result<u64, String> {
         let state = unsafe { &*self.inner.state.get() };
-        state.devices.as_ref().ok_or("XP4 touch panel is not wired")?.touch_period()
+        state
+            .devices
+            .as_ref()
+            .ok_or("XP4 touch panel is not wired")?
+            .touch_period()
     }
     /// One contact-0 input at the current tick: `phase` is press, drag or
     /// release; `x`, `y` are raw 12-bit panel coordinates.
@@ -3048,7 +3052,16 @@ impl Session {
             _ => return Err("Touch phase must be press, drag or release".into()),
         };
         self.inner.external_devices(|d, now| {
-            d.touch(now, &[ContactInput { tick: now, contact: 0, phase, x, y }])
+            d.touch(
+                now,
+                &[ContactInput {
+                    tick: now,
+                    contact: 0,
+                    phase,
+                    x,
+                    y,
+                }],
+            )
         })
     }
     pub fn set_gpio_input(&self, port: usize, pin: usize, high: bool) -> Result<(), String> {

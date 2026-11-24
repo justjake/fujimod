@@ -45,8 +45,15 @@ pub enum AddressBytes {
     Two,
 }
 impl AddressBytes {
-    fn is_one(&self) -> bool { *self == Self::One }
-    fn max(self) -> u16 { match self { Self::One => 0xff, Self::Two => 0xffff } }
+    fn is_one(&self) -> bool {
+        *self == Self::One
+    }
+    fn max(self) -> u16 {
+        match self {
+            Self::One => 0xff,
+            Self::Two => 0xffff,
+        }
+    }
 }
 /// Explicit synthetic register-file protocol: the first write bytes select a
 /// pointer; later writes and reads increment it. Only declared cells exist.
@@ -98,25 +105,38 @@ impl Transport {
             (Peer::Touch(_), Some(chip)) => chip.address(byte),
             _ => false,
         };
-        self.expect_pointer = matches!(self.peer, Peer::Register(_)) && self.selected && byte & 1 == 0;
+        self.expect_pointer =
+            matches!(self.peer, Peer::Register(_)) && self.selected && byte & 1 == 0;
         self.pointer_high = None;
         self.selected
     }
     fn check_write(&self, byte: u8) -> Result<(), String> {
         if let (Peer::Touch(_), Some(chip)) = (&self.peer, &self.touch) {
-            return if self.selected { chip.check_write() } else { Err("No selected I2C peer".into()) };
+            return if self.selected {
+                chip.check_write()
+            } else {
+                Err("No selected I2C peer".into())
+            };
         }
-        let Peer::Register(p) = &self.peer else { return Err("No selected I2C peer".into()); };
+        let Peer::Register(p) = &self.peer else {
+            return Err("No selected I2C peer".into());
+        };
         let cell = if self.expect_pointer {
             if p.address_bytes == AddressBytes::Two && self.pointer_high.is_none() {
                 // The first of two address bytes selects nothing by itself.
-                return if self.selected { Ok(()) } else { Err("Undeclared synthetic register write/pointer".into()) };
+                return if self.selected {
+                    Ok(())
+                } else {
+                    Err("Undeclared synthetic register write/pointer".into())
+                };
             }
             u16::from(self.pointer_high.unwrap_or(0)) << 8 | u16::from(byte)
         } else {
             self.pointer.ok_or("Register pointer missing")?
         };
-        if !self.selected || !p.registers.contains_key(&cell) { return Err("Undeclared synthetic register write/pointer".into()); }
+        if !self.selected || !p.registers.contains_key(&cell) {
+            return Err("Undeclared synthetic register write/pointer".into());
+        }
         Ok(())
     }
     fn write(&mut self, byte: u8) -> Result<(), String> {
@@ -127,16 +147,20 @@ impl Transport {
         Ok(())
     }
     fn write_register(&mut self, byte: u8) {
-        let Peer::Register(p) = &mut self.peer else { return };
+        let Peer::Register(p) = &mut self.peer else {
+            return;
+        };
         if self.expect_pointer {
             if p.address_bytes == AddressBytes::Two && self.pointer_high.is_none() {
                 self.pointer_high = Some(byte);
             } else {
-                self.pointer = Some(u16::from(self.pointer_high.take().unwrap_or(0)) << 8 | u16::from(byte));
+                self.pointer =
+                    Some(u16::from(self.pointer_high.take().unwrap_or(0)) << 8 | u16::from(byte));
                 self.expect_pointer = false;
             }
         } else {
-            let pointer = self.pointer.unwrap(); p.registers.insert(pointer, byte);
+            let pointer = self.pointer.unwrap();
+            p.registers.insert(pointer, byte);
             self.pointer = Some(Self::next(p.address_bytes, pointer));
         }
     }
@@ -154,7 +178,13 @@ impl Transport {
         Err("Undeclared synthetic register read".into())
     }
     /// Pointer after one data byte, wrapping at the address width.
-    fn next(width: AddressBytes, pointer: u16) -> u16 { if pointer == width.max() { 0 } else { pointer + 1 } }
+    fn next(width: AddressBytes, pointer: u16) -> u16 {
+        if pointer == width.max() {
+            0
+        } else {
+            pointer + 1
+        }
+    }
     /// Take the next read byte. A touch chip produces it now, so it is the
     /// authority over the byte the guest receives.
     fn consume(&mut self) -> Result<Option<u8>, String> {
@@ -162,13 +192,19 @@ impl Transport {
             return chip.read().map(Some);
         }
         if let Peer::Register(p) = &self.peer {
-            self.pointer = self.pointer.map(|pointer| Self::next(p.address_bytes, pointer));
+            self.pointer = self
+                .pointer
+                .map(|pointer| Self::next(p.address_bytes, pointer));
         }
         Ok(None)
     }
     fn stop(&mut self) {
-        self.selected = false; self.expect_pointer = false; self.pointer_high = None;
-        if let Some(chip) = &mut self.touch { chip.stop(); }
+        self.selected = false;
+        self.expect_pointer = false;
+        self.pointer_high = None;
+        if let Some(chip) = &mut self.touch {
+            chip.stop();
+        }
     }
 }
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -220,10 +256,37 @@ impl ByteI2c {
         // The declared peer itself binds checkpoints to this factory.
         let factory = serde_json::to_value(&peer).unwrap();
         let r = &profile.reset;
-        let state = State { ccr:r.ccr, adr:r.adr, csr:r.csr, fsr:r.fsr, bcr:0, bsr:0, dar:0,
-            staged:false, rx_ready:false, low_drives:0, phase:Phase::Idle, pending:None,
-            transport:Transport { peer:peer.clone(), selected:false, pointer:None, expect_pointer:false, pointer_high:None, touch } };
-        Ok(Self {base, irq, profile, factory, initial_peer:peer, state, irq_dirty:true})
+        let state = State {
+            ccr: r.ccr,
+            adr: r.adr,
+            csr: r.csr,
+            fsr: r.fsr,
+            bcr: 0,
+            bsr: 0,
+            dar: 0,
+            staged: false,
+            rx_ready: false,
+            low_drives: 0,
+            phase: Phase::Idle,
+            pending: None,
+            transport: Transport {
+                peer: peer.clone(),
+                selected: false,
+                pointer: None,
+                expect_pointer: false,
+                pointer_high: None,
+                touch,
+            },
+        };
+        Ok(Self {
+            base,
+            irq,
+            profile,
+            factory,
+            initial_peer: peer,
+            state,
+            irq_dirty: true,
+        })
     }
     pub fn windows(&self) -> Vec<(u64,u64)> { vec![(self.base, self.base + 0x20)] }
     fn offset(&self, address:u64, size:u8) -> Result<u64,String> {
@@ -280,18 +343,35 @@ impl ByteI2c {
             4 => {
                 // Restating the control bits a pending STOP already latched
                 // changes nothing, so the STOP stays scheduled as it was.
-                if self.state.pending.as_ref().is_some_and(|p| p.operation==Operation::Stop)
-                    && value & (INT|BER) == 0 && value == self.state.bcr & !(INT|BER) {
+                if self
+                    .state
+                    .pending
+                    .as_ref()
+                    .is_some_and(|p| p.operation == Operation::Stop)
+                    && value & (INT | BER) == 0
+                    && value == self.state.bcr & !(INT | BER)
+                {
                     return Ok(());
                 }
-                let op=self.command(value)?;
-                let pending=if let Some(operation)=op {
-                    Some(Pending {submitted:cx.now(),deadline:cx.now().checked_add(self.profile.byte_ticks).ok_or("I2C deadline overflow")?,operation})
-                } else {None};
-                next.bcr=(value & !(INT|BER|SCC)) | (next.bcr & value & (INT|BER));
-                if let Some(p)=&pending {
-                    if matches!(p.operation,Operation::Address(_)) {next.bsr=0x80;}
-                    next.staged=false;
+                let op = self.command(value)?;
+                let pending = if let Some(operation) = op {
+                    Some(Pending {
+                        submitted: cx.now(),
+                        deadline: cx
+                            .now()
+                            .checked_add(self.profile.byte_ticks)
+                            .ok_or("I2C deadline overflow")?,
+                        operation,
+                    })
+                } else {
+                    None
+                };
+                next.bcr = (value & !(INT | BER | SCC)) | (next.bcr & value & (INT | BER));
+                if let Some(p) = &pending {
+                    if matches!(p.operation, Operation::Address(_)) {
+                        next.bsr = 0x80;
+                    }
+                    next.staged = false;
                 }
                 next.pending=pending;
             }
@@ -303,8 +383,13 @@ impl ByteI2c {
                 } else {
                     // Rewriting the value a register already holds changes nothing,
                     // so drivers may restate their configuration during a transfer.
-                    let held=match offset {8=>next.ccr,12=>next.adr,20=>next.csr,_=>next.fsr};
-                    if value!=held && (next.phase!=Phase::Idle || next.pending.is_some()) {
+                    let held = match offset {
+                        8 => next.ccr,
+                        12 => next.adr,
+                        20 => next.csr,
+                        _ => next.fsr,
+                    };
+                    if value != held && (next.phase != Phase::Idle || next.pending.is_some()) {
                         return Err("Active I2C reconfiguration unsupported".into());
                     }
                     match offset {
@@ -348,13 +433,16 @@ impl ByteI2c {
                         a.address_bytes == AddressBytes::Two && s.transport.expect_pointer
                     })
                     && s.transport.pointer.is_none_or(|pointer| {
-                        a.registers
-                            .keys()
-                            .any(|key| *key == pointer || Transport::next(a.address_bytes, *key) == pointer)
+                        a.registers.keys().any(|key| {
+                            *key == pointer || Transport::next(a.address_bytes, *key) == pointer
+                        })
                     }) => {}
             (Peer::Touch(a), Peer::Touch(b))
                 if a == b
-                    && s.transport.touch.as_ref().is_some_and(|chip| chip.profile() == a)
+                    && s.transport
+                        .touch
+                        .as_ref()
+                        .is_some_and(|chip| chip.profile() == a)
                     && s.transport.pointer.is_none()
                     && s.transport.pointer_high.is_none()
                     && !s.transport.expect_pointer => {}
@@ -363,35 +451,64 @@ impl ByteI2c {
         let addressing = s.pending.as_ref().is_some_and(|p| matches!(p.operation,Operation::Address(_)));
         let stopping = s.pending.as_ref().is_some_and(|p| p.operation==Operation::Stop);
         if s.transport.selected && s.transport.peer.address7().is_none()
-            || s.transport.expect_pointer && !matches!(s.transport.peer,Peer::Register(_))
-            || s.transport.selected != matches!(s.phase,Phase::Read|Phase::Write|Phase::ReadEnded)
-            || s.transport.expect_pointer && (!s.transport.selected || s.phase!=Phase::Write)
-            || s.phase!=Phase::Idle && s.pending.is_none() && s.bcr&INT==0
-            || s.rx_ready && s.bsr&1!=0
-            || s.rx_ready && (s.phase!=Phase::Read && s.phase!=Phase::ReadEnded || s.bcr&INT==0 || s.staged)
-            || s.phase==Phase::Idle && s.pending.is_some() && !addressing && !stopping
-            || !addressing && !stopping && match s.phase {
-                Phase::Idle => s.bsr!=0 || s.bcr&INT!=0 || s.rx_ready,
-                Phase::Write => ![0x89,0x88].contains(&s.bsr),
-                Phase::Read => ![0x81,0x80].contains(&s.bsr),
-                Phase::ReadEnded => s.bsr!=0x90,
-                Phase::Nacked => ![0x91,0x99].contains(&s.bsr),
-            }
-            || s.phase==Phase::Idle && s.pending.is_none() && (s.bsr&0x80!=0 || s.bcr&MSS!=0 || s.transport.selected)
-            || s.phase!=Phase::Idle && (s.bsr&0x80==0 || s.ccr&0x20==0 || s.low_drives!=0)
-            || s.phase!=Phase::Idle && s.pending.as_ref().is_none_or(|p| p.operation!=Operation::Stop) && s.bcr&MSS==0 {
+            || s.transport.expect_pointer && !matches!(s.transport.peer, Peer::Register(_))
+            || s.transport.selected
+                != matches!(s.phase, Phase::Read | Phase::Write | Phase::ReadEnded)
+            || s.transport.expect_pointer && (!s.transport.selected || s.phase != Phase::Write)
+            || s.phase != Phase::Idle && s.pending.is_none() && s.bcr & INT == 0
+            || s.rx_ready && s.bsr & 1 != 0
+            || s.rx_ready
+                && (s.phase != Phase::Read && s.phase != Phase::ReadEnded
+                    || s.bcr & INT == 0
+                    || s.staged)
+            || s.phase == Phase::Idle && s.pending.is_some() && !addressing && !stopping
+            || !addressing
+                && !stopping
+                && match s.phase {
+                    Phase::Idle => s.bsr != 0 || s.bcr & INT != 0 || s.rx_ready,
+                    Phase::Write => ![0x89, 0x88].contains(&s.bsr),
+                    Phase::Read => ![0x81, 0x80].contains(&s.bsr),
+                    Phase::ReadEnded => s.bsr != 0x90,
+                    Phase::Nacked => ![0x91, 0x99].contains(&s.bsr),
+                }
+            || s.phase == Phase::Idle
+                && s.pending.is_none()
+                && (s.bsr & 0x80 != 0 || s.bcr & MSS != 0 || s.transport.selected)
+            || s.phase != Phase::Idle
+                && (s.bsr & 0x80 == 0 || s.ccr & 0x20 == 0 || s.low_drives != 0)
+            || s.phase != Phase::Idle
+                && s.pending
+                    .as_ref()
+                    .is_none_or(|p| p.operation != Operation::Stop)
+                && s.bcr & MSS == 0
+        {
             return Err("Incoherent byte I2C phase checkpoint".into());
         }
         if let Some(p)=&s.pending {
             if p.submitted.checked_add(self.profile.byte_ticks)!=Some(p.deadline) || s.bcr&INT!=0 || s.rx_ready || s.staged {
                 return Err("Invalid byte I2C pending deadline/event".into());
             }
-            let legal=match p.operation {
-                Operation::Address(b) => s.ccr&0x20!=0 && (8..=0x77).contains(&(b>>1)) && s.bcr&MSS!=0 && s.bsr==0x80 && s.dar==b && s.low_drives==0,
-                Operation::Write(b) => s.phase==Phase::Write && s.transport.check_write(b).is_ok(),
-                Operation::Read{byte,ack} => s.phase==Phase::Read && (s.bcr&ACK!=0)==ack
-                    && match s.transport.touch { Some(_) => s.transport.read().is_ok(), None => s.transport.read()==Ok(byte) },
-                Operation::Stop => s.bsr&0x80!=0 && s.bcr&MSS==0,
+            let legal = match p.operation {
+                Operation::Address(b) => {
+                    s.ccr & 0x20 != 0
+                        && (8..=0x77).contains(&(b >> 1))
+                        && s.bcr & MSS != 0
+                        && s.bsr == 0x80
+                        && s.dar == b
+                        && s.low_drives == 0
+                }
+                Operation::Write(b) => {
+                    s.phase == Phase::Write && s.transport.check_write(b).is_ok()
+                }
+                Operation::Read { byte, ack } => {
+                    s.phase == Phase::Read
+                        && (s.bcr & ACK != 0) == ack
+                        && match s.transport.touch {
+                            Some(_) => s.transport.read().is_ok(),
+                            None => s.transport.read() == Ok(byte),
+                        }
+                }
+                Operation::Stop => s.bsr & 0x80 != 0 && s.bcr & MSS == 0,
             };
             if !legal {return Err("Invalid byte I2C pending operation".into());}
         }
@@ -422,19 +539,38 @@ impl ByteI2c {
                 s.bsr=0x81 | if b&1==0 {8}else{0} | if ack {0}else{0x10};
                 s.bcr|=INT;
             }
-            Operation::Write(b)=>{
-                if let Err(e)=s.transport.write(b){cx.fail(e);}s.bsr=0x88;s.bcr|=INT;
-                fields.extend([("operation",Field::constant("write")),("direction",Field::constant("write")),("data",Field::int(b)),("peer_ack",Field::Bool(true))]);
+            Operation::Write(b) => {
+                if let Err(e) = s.transport.write(b) {
+                    cx.fail(e);
+                }
+                s.bsr = 0x88;
+                s.bcr |= INT;
+                fields.extend([
+                    ("operation", Field::constant("write")),
+                    ("direction", Field::constant("write")),
+                    ("data", Field::int(b)),
+                    ("peer_ack", Field::Bool(true)),
+                ]);
             }
-            Operation::Read{ack,mut byte}=>{
+            Operation::Read { ack, mut byte } => {
                 match s.transport.consume() {
                     Ok(Some(actual)) => byte = actual,
                     Ok(None) => {}
                     Err(e) => cx.fail(e),
                 }
-                fields.extend([("operation",Field::constant("read")),("direction",Field::constant("read")),("data",Field::int(byte)),("master_ack",Field::Bool(ack))]);
-                s.dar=byte;s.rx_ready=true;s.bsr=0x80|if ack{0}else{0x10};
-                if !ack {s.phase=Phase::ReadEnded;} s.bcr|=INT;
+                fields.extend([
+                    ("operation", Field::constant("read")),
+                    ("direction", Field::constant("read")),
+                    ("data", Field::int(byte)),
+                    ("master_ack", Field::Bool(ack)),
+                ]);
+                s.dar = byte;
+                s.rx_ready = true;
+                s.bsr = 0x80 | if ack { 0 } else { 0x10 };
+                if !ack {
+                    s.phase = Phase::ReadEnded;
+                }
+                s.bcr |= INT;
             }
             Operation::Stop=>{
                 fields.push(("operation",Field::constant("stop")));
@@ -446,14 +582,18 @@ impl ByteI2c {
     /// Run due chip input edges; an input-ready edge raises the chip's interrupt.
     fn advance_touch(&mut self, cx: &mut Cx<'_>) {
         let now = cx.now();
-        let Some(chip) = &mut self.state.transport.touch else { return };
+        let Some(chip) = &mut self.state.transport.touch else {
+            return;
+        };
         if chip.next_deadline(now).is_none_or(|at| at > now) {
             return;
         }
         match chip.advance(now) {
             Ok(true) => {
                 let line = chip.profile().input_ready_irq;
-                if let Err(e) = cx.raise_irq(0, line) { cx.fail(e); }
+                if let Err(e) = cx.raise_irq(0, line) {
+                    cx.fail(e);
+                }
             }
             Ok(false) => {}
             Err(e) => cx.fail(e),
@@ -462,59 +602,150 @@ impl ByteI2c {
 }
 impl fujimod_emulator_devices::capability::TouchPanel for ByteI2c {
     fn touch_period(&self) -> Result<u64, String> {
-        self.state.transport.touch.as_ref().map(TouchChip::touch_period).ok_or_else(|| "No touch chip on this bus".into())
+        self.state
+            .transport
+            .touch
+            .as_ref()
+            .map(TouchChip::touch_period)
+            .ok_or_else(|| "No touch chip on this bus".into())
     }
-    fn admit_touch(&self, now: u64, script: &[fujimod_emulator_devices::parts::touch_input::ContactInput]) -> Result<(), String> {
-        self.state.transport.touch.as_ref().ok_or("No touch chip on this bus")?.admit_touch(now, script)
+    fn admit_touch(
+        &self,
+        now: u64,
+        script: &[fujimod_emulator_devices::parts::touch_input::ContactInput],
+    ) -> Result<(), String> {
+        self.state
+            .transport
+            .touch
+            .as_ref()
+            .ok_or("No touch chip on this bus")?
+            .admit_touch(now, script)
     }
-    fn touch(&mut self, now: u64, script: &[fujimod_emulator_devices::parts::touch_input::ContactInput]) -> Result<(), String> {
-        self.state.transport.touch.as_mut().ok_or("No touch chip on this bus")?.touch(now, script)
+    fn touch(
+        &mut self,
+        now: u64,
+        script: &[fujimod_emulator_devices::parts::touch_input::ContactInput],
+    ) -> Result<(), String> {
+        self.state
+            .transport
+            .touch
+            .as_mut()
+            .ok_or("No touch chip on this bus")?
+            .touch(now, script)
     }
 }
 impl Device for ByteI2c {
-    fn touch_panel(&self) -> Option<&(dyn fujimod_emulator_devices::capability::TouchPanel + 'static)> {
+    fn touch_panel(
+        &self,
+    ) -> Option<&(dyn fujimod_emulator_devices::capability::TouchPanel + 'static)> {
         self.state.transport.touch.as_ref().map(|_| self as _)
     }
-    fn touch_panel_mut(&mut self) -> Option<&mut (dyn fujimod_emulator_devices::capability::TouchPanel + 'static)> {
-        if self.state.transport.touch.is_some() { Some(self) } else { None }
-    }
-    fn name(&self)-> &'static str {"byte-i2c"}
-    fn read(&mut self,cx:&mut Cx<'_>,address:u64,size:u8)->u64 {
-        let o=match self.offset(address,size) {Ok(o)=>o,Err(e)=>{cx.fail(e);return 0;}};
-        let s=&mut self.state;
-        let v=match o {0=>s.bsr,4=>s.bcr,8=>s.ccr,12=>s.adr,16=>s.dar,20=>s.csr,24=>s.fsr,
-            28=>s.low_drives | if s.low_drives&1==0 {0x10}else{0} | if s.low_drives&2==0 {0x20}else{0},_=>unreachable!()};
-        if o==16 && matches!(s.phase,Phase::Read|Phase::ReadEnded) {
-            if !s.rx_ready {cx.fail("I2C receive data not ready");return 0;}
-            s.rx_ready=false;
+    fn touch_panel_mut(
+        &mut self,
+    ) -> Option<&mut (dyn fujimod_emulator_devices::capability::TouchPanel + 'static)> {
+        if self.state.transport.touch.is_some() {
+            Some(self)
+        } else {
+            None
         }
-        if self.irq_dirty {self.sync_irq(cx);} u64::from(v)
     }
-    fn write(&mut self,cx:&mut Cx<'_>,address:u64,size:u8,value:u64) {
-        let result=self.offset(address,size).and_then(|o| {
-            if value>255 {Err("I2C value exceeds byte".into())} else {self.write_checked(cx,o,value as u8)}
+    fn name(&self) -> &'static str {
+        "byte-i2c"
+    }
+    fn read(&mut self, cx: &mut Cx<'_>, address: u64, size: u8) -> u64 {
+        let o = match self.offset(address, size) {
+            Ok(o) => o,
+            Err(e) => {
+                cx.fail(e);
+                return 0;
+            }
+        };
+        let s = &mut self.state;
+        let v = match o {
+            0 => s.bsr,
+            4 => s.bcr,
+            8 => s.ccr,
+            12 => s.adr,
+            16 => s.dar,
+            20 => s.csr,
+            24 => s.fsr,
+            28 => {
+                s.low_drives
+                    | if s.low_drives & 1 == 0 { 0x10 } else { 0 }
+                    | if s.low_drives & 2 == 0 { 0x20 } else { 0 }
+            }
+            _ => unreachable!(),
+        };
+        if o == 16 && matches!(s.phase, Phase::Read | Phase::ReadEnded) {
+            if !s.rx_ready {
+                cx.fail("I2C receive data not ready");
+                return 0;
+            }
+            s.rx_ready = false;
+        }
+        if self.irq_dirty {
+            self.sync_irq(cx);
+        }
+        u64::from(v)
+    }
+    fn write(&mut self, cx: &mut Cx<'_>, address: u64, size: u8, value: u64) {
+        let result = self.offset(address, size).and_then(|o| {
+            if value > 255 {
+                Err("I2C value exceeds byte".into())
+            } else {
+                self.write_checked(cx, o, value as u8)
+            }
         });
-        if let Err(e)=result {cx.fail(e);}
+        if let Err(e) = result {
+            cx.fail(e);
+        }
     }
     fn advance(&mut self, cx: &mut Cx<'_>) {
         if self.irq_dirty {
             self.sync_irq(cx);
         }
-        if let Some(p) = self.state.pending.clone().filter(|p| p.deadline <= cx.now()) {
+        if let Some(p) = self
+            .state
+            .pending
+            .clone()
+            .filter(|p| p.deadline <= cx.now())
+        {
             self.complete(cx, p);
         }
         self.advance_touch(cx);
     }
-    fn next_deadline(&self,now:u64)->Option<u64> {
-        if self.irq_dirty { return Some(now); }
+    fn next_deadline(&self, now: u64) -> Option<u64> {
+        if self.irq_dirty {
+            return Some(now);
+        }
         let pending = self.state.pending.as_ref().map(|p| p.deadline);
-        let touch = self.state.transport.touch.as_ref().and_then(|chip| chip.next_deadline(now));
+        let touch = self
+            .state
+            .transport
+            .touch
+            .as_ref()
+            .and_then(|chip| chip.next_deadline(now));
         pending.into_iter().chain(touch).min()
     }
-    fn save(&self)->Value {serde_json::to_value(Snapshot{version:1,base:self.base,irq:self.irq,profile:self.profile.clone(),factory:self.factory.clone(),state:self.state.clone()}).unwrap()}
-    fn restore(&mut self,v:&Value)->Result<(),String> {
-        let snapshot:Snapshot=serde_json::from_value(v.clone()).map_err(|e|e.to_string())?;
-        if snapshot.version!=1 || snapshot.base!=self.base || snapshot.irq!=self.irq || snapshot.profile!=self.profile || snapshot.factory!=self.factory {
+    fn save(&self) -> Value {
+        serde_json::to_value(Snapshot {
+            version: 1,
+            base: self.base,
+            irq: self.irq,
+            profile: self.profile.clone(),
+            factory: self.factory.clone(),
+            state: self.state.clone(),
+        })
+        .unwrap()
+    }
+    fn restore(&mut self, v: &Value) -> Result<(), String> {
+        let snapshot: Snapshot = serde_json::from_value(v.clone()).map_err(|e| e.to_string())?;
+        if snapshot.version != 1
+            || snapshot.base != self.base
+            || snapshot.irq != self.irq
+            || snapshot.profile != self.profile
+            || snapshot.factory != self.factory
+        {
             return Err("Changed byte I2C checkpoint binding".into());
         }
         self.validate(&snapshot.state)?;self.state=snapshot.state;self.irq_dirty=true;Ok(())
