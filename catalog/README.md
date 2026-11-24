@@ -94,8 +94,9 @@ either, and each `kind` allows a fixed set of models.
 It names the firmware IDs and code or data addresses the fact rests on.
 Prose explanations and citations live outside the record, in caller-supplied
 catalog annotations (`CatalogAnnotations`) keyed by record and field. Cores,
-mappings and body chips carry evidence the same way. A stand-in value carries
-`stand-in` evidence on the device parameter or part field it stands in for.
+mappings, body connections and body chips carry evidence the same way. A
+stand-in value carries `stand-in` evidence on the device parameter or part
+field it stands in for.
 
 A processor fact found by reading firmware is generated into
 `soc/<id>/<name>.generated.json` by a generator that runs over every

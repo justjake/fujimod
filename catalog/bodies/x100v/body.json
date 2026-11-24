@@ -10,5 +10,22 @@
         "dram_basis": "The captured X100V 3.01 stock address window contains distinct readable data through 0x3fffffff; this declares a 512 MiB execution bound and does not assert physical DRAM density."
       }
     }
-  }
+  },
+  "connections": [
+    {
+      "id": "x100v-usb",
+      "kind": "usb",
+      "signals": [
+        {
+          "kind": "gpio",
+          "port": 15,
+          "pin": 15,
+          "active_level": true
+        }
+      ],
+      "evidence": {
+        "kind": "stand-in"
+      }
+    }
+  ]
 }

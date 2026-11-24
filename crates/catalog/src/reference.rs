@@ -1470,6 +1470,11 @@ impl Body {
             self.connections.iter().map(|item| item.id.as_str()),
             "body connection",
         )?;
+        for connection in &self.connections {
+            if let Some(evidence) = &connection.evidence {
+                evidence.validate()?;
+            }
+        }
         unique_ids(
             self.control_bus_chips.iter().map(|item| item.id.as_str()),
             "control-bus endpoint",
@@ -2029,6 +2034,9 @@ pub struct BodyConnection {
     /// Electrical or physical signals carried by the connection.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub signals: Vec<ConnectionSignal>,
+    /// How the wiring was established, when it is not inherited from a part.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub evidence: Option<Evidence>,
 }
 
 /// Physical connection categories.
@@ -2106,6 +2114,12 @@ pub enum ConnectionSignal {
     },
     /// Direct interrupt wire to a processor interrupt-controller input.
     Interrupt { controller_id: String, line: u32 },
+    /// One countdown-timer channel driven as a quadrature input.
+    CountdownTimer {
+        block_id: String,
+        channel: u8,
+        rest_phase: u8,
+    },
     /// Contact reported as bits of a register read through a serial controller.
     SerialStatus {
         block_id: String,
@@ -4210,6 +4224,19 @@ impl ReferenceCatalog {
                         }
                         ConnectionSignal::Interrupt { controller_id, .. } => {
                             (controller_id, Some(SocBlockKind::InterruptController))
+                        }
+                        ConnectionSignal::CountdownTimer {
+                            block_id,
+                            channel,
+                            rest_phase,
+                        } => {
+                            if *channel > 15 || *rest_phase > 3 {
+                                return Err(format!(
+                                    "body {} connection {} has an invalid countdown timer channel",
+                                    body.id, connection.id
+                                ));
+                            }
+                            (block_id, Some(SocBlockKind::Timer))
                         }
                         ConnectionSignal::SerialStatus {
                             block_id,

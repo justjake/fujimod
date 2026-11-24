@@ -190,6 +190,21 @@
           "active_level": false
         }
       ]
+    },
+    {
+      "id": "xe4-usb",
+      "kind": "usb",
+      "signals": [
+        {
+          "kind": "gpio",
+          "port": 15,
+          "pin": 15,
+          "active_level": true
+        }
+      ],
+      "evidence": {
+        "kind": "stand-in"
+      }
     }
   ]
 }

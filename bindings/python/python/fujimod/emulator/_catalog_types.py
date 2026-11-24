@@ -748,6 +748,7 @@ Body = TypedDict(
 
 
 class BodyConnection(TypedDict, total=False):
+    evidence: NotRequired[Evidence | None]
     id: Required[str]
     kind: Required[ConnectionKind]
     signals: NotRequired[list[ConnectionSignal]]
@@ -1015,6 +1016,7 @@ type ConnectionSignal = (
     | ConnectionSignalVariant3
     | ConnectionSignalVariant4
     | ConnectionSignalVariant5
+    | ConnectionSignalVariant6
 )
 
 
@@ -1051,6 +1053,13 @@ class ConnectionSignalVariant4(TypedDict, total=False):
 
 
 class ConnectionSignalVariant5(TypedDict, total=False):
+    block_id: Required[str]
+    channel: Required[int]
+    kind: Required[Literal["countdown_timer"]]
+    rest_phase: Required[int]
+
+
+class ConnectionSignalVariant6(TypedDict, total=False):
     block_id: Required[str]
     kind: Required[Literal["serial_status"]]
     mask: Required[int]

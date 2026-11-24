@@ -402,4 +402,43 @@ mod tests {
             "basis":"x","rungs":[rung("ok", 0, 0, 0)]}]);
         assert!(check(unknown_wire).is_err());
     }
+
+    #[test]
+    fn xt3_ladders_hold_the_measured_button_identities() {
+        let path = concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../catalog/bodies/xt3/controls.json"
+        );
+        let document: Value = serde_json::from_slice(&std::fs::read(path).unwrap()).unwrap();
+        let controls = PhysicalControls::decode_document(&document, path).unwrap();
+        controls.validate().unwrap();
+        let wires: Vec<_> = controls.ladders.iter().map(|ladder| ladder.wire).collect();
+        assert_eq!(
+            wires,
+            [
+                LadderWire::Adc { channel: 3 },
+                LadderWire::Adc { channel: 9 },
+                LadderWire::Adc { channel: 11 },
+            ]
+        );
+        let released: Vec<_> = controls
+            .ladders
+            .iter()
+            .map(|ladder| ladder.released)
+            .collect();
+        assert_eq!(released, [Some(4088), Some(4093), Some(4093)]);
+        // The focus lever tilts on ADC 9 and presses on ADC 3.
+        let (lever, rung) = controls.ladder_rung("focus_stick.up").unwrap();
+        assert_eq!(lever.wire, LadderWire::Adc { channel: 9 });
+        assert_eq!(rung.sample, 1566);
+        let (press, rung) = controls.ladder_rung("focus_stick").unwrap();
+        assert_eq!(press.wire, LadderWire::Adc { channel: 3 });
+        assert_eq!(rung.sample, 2893);
+        // MENU/OK is the one rung whose accepted band was located.
+        let (_, menu) = controls.ladder_rung("menu_ok_button").unwrap();
+        assert_eq!(
+            (menu.band_low, menu.band_high, menu.sample),
+            (1071, 1540, 1236)
+        );
+    }
 }
