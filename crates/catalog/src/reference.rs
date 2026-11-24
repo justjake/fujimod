@@ -2349,6 +2349,79 @@ impl Part {
                 ));
             }
         }
+        if let PartModel::Peripheral { interface } = &self.model {
+            match interface {
+                crate::assembly::PeripheralPart::PowerController {
+                    registers,
+                    transport,
+                    port_detection,
+                } => {
+                    let mut taken = [false; 128];
+                    for row in registers {
+                        if row.count == 0
+                            || u16::from(row.first) + u16::from(row.count) > 128
+                        {
+                            return Err(format!(
+                                "power controller {} has an invalid register range",
+                                self.id
+                            ));
+                        }
+                        for register in row.first..row.first + row.count {
+                            if std::mem::replace(&mut taken[usize::from(register)], true) {
+                                return Err(format!(
+                                    "power controller {} repeats register {register}",
+                                    self.id
+                                ));
+                            }
+                        }
+                        row.evidence.validate()?;
+                    }
+                    if let Some(port) = port_detection
+                        && (port.accept_mask == 0
+                            || port.accept_value & !port.accept_mask != 0
+                            || u16::from(port.request_register) >= 128
+                            || u16::from(port.result_register) >= 128
+                            || !taken[usize::from(port.request_register)]
+                            || !taken[usize::from(port.result_register)])
+                    {
+                        return Err(format!(
+                            "power controller {} has an invalid port detection",
+                            self.id
+                        ));
+                    }
+                    if let Some(crate::assembly::PowerControllerTransport::ChecksumPowerSpi {
+                        register_mask,
+                        write_mask,
+                        data_bytes,
+                        request_sum,
+                    }) = transport
+                        && (*register_mask == 0
+                            || write_mask & register_mask != 0
+                            || *data_bytes != 2
+                            || *request_sum != 0xff)
+                    {
+                        return Err(format!(
+                            "power controller {} has an invalid checksum transport",
+                            self.id
+                        ));
+                    }
+                }
+                crate::assembly::PeripheralPart::SerialNorFlash { sampling, .. } => {
+                    if let Some(sampling) = sampling {
+                        if sampling.sample_first > sampling.sample_last
+                            || sampling.sample_last > 15
+                        {
+                            return Err(format!(
+                                "serial NOR part {} has an invalid sample window",
+                                self.id
+                            ));
+                        }
+                        sampling.evidence.validate()?;
+                    }
+                }
+                _ => {}
+            }
+        }
         Ok(())
     }
 }

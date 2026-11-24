@@ -5,7 +5,90 @@
   "model": {
     "kind": "peripheral",
     "interface": {
-      "kind": "power-controller"
+      "kind": "power-controller",
+      "registers": [
+        {
+          "first": 20,
+          "role": "port-detection-request",
+          "evidence": {
+            "kind": "located",
+            "firmware_ids": [
+              "xt30-201"
+            ],
+            "addresses": [
+              {
+                "firmware_id": "xt30-201",
+                "address": 32127732,
+                "space": "code"
+              },
+              {
+                "firmware_id": "xt30-201",
+                "address": 32127316,
+                "space": "code"
+              }
+            ]
+          }
+        },
+        {
+          "first": 21,
+          "role": "port-detection-result",
+          "evidence": {
+            "kind": "located",
+            "firmware_ids": [
+              "xt30-201"
+            ],
+            "addresses": [
+              {
+                "firmware_id": "xt30-201",
+                "address": 32127732,
+                "space": "code"
+              },
+              {
+                "firmware_id": "xt30-201",
+                "address": 32127316,
+                "space": "code"
+              }
+            ]
+          }
+        },
+        {
+          "first": 24,
+          "role": "accessory-status",
+          "evidence": {
+            "kind": "inferred",
+            "firmware_ids": [
+              "xt30-201"
+            ]
+          }
+        },
+        {
+          "first": 27,
+          "role": "battery-sample",
+          "evidence": {
+            "kind": "located",
+            "firmware_ids": [
+              "xt30-201"
+            ],
+            "addresses": [
+              {
+                "firmware_id": "xt30-201",
+                "address": 17411388,
+                "space": "code"
+              }
+            ]
+          }
+        }
+      ],
+      "transport": {
+        "kind": "direct-register"
+      },
+      "port_detection": {
+        "request_register": 20,
+        "request_value": 2816,
+        "result_register": 21,
+        "accept_mask": 253,
+        "accept_value": 1
+      }
     }
   }
 }

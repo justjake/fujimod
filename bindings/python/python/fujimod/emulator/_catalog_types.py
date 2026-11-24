@@ -3842,6 +3842,13 @@ type NativeVectorGpuInputsClearProfile = Literal["declared-vg-ui-primitives-unme
 type NativeVectorGpuInputsCopyProfile = Literal["vg-32bpp-untile-unrotated"]
 
 
+class NorSampling(TypedDict, total=False):
+    evidence: Required[Evidence]
+    miss_byte: Required[int]
+    sample_first: Required[int]
+    sample_last: Required[int]
+
+
 type OpticalQuantity = Literal["lens_focus", "lens_aperture"]
 
 
@@ -4085,6 +4092,7 @@ class PeripheralPartVariant11(TypedDict, total=False):
     jedec_id: NotRequired[int | None]
     kind: Required[Literal["serial-nor-flash"]]
     page_bytes: NotRequired[int | None]
+    sampling: NotRequired[NorSampling | None]
 
 
 class PeripheralPartVariant12(TypedDict, total=False):
@@ -4111,6 +4119,9 @@ class PeripheralPartVariant4(TypedDict, total=False):
 
 class PeripheralPartVariant5(TypedDict, total=False):
     kind: Required[Literal["power-controller"]]
+    port_detection: NotRequired[PowerPortDetection | None]
+    registers: NotRequired[list[PowerControllerRegister]]
+    transport: NotRequired[PowerControllerTransport | None]
 
 
 class PeripheralPartVariant6(TypedDict, total=False):
@@ -4231,6 +4242,47 @@ class PowerControlAssembly(TypedDict, total=False):
     select_connection_id: Required[str]
 
 
+class PowerControllerRegister(TypedDict, total=False):
+    count: NotRequired[int]
+    evidence: Required[Evidence]
+    first: Required[int]
+    role: Required[PowerControllerRole]
+
+
+type PowerControllerRole = Literal[
+    "boot-reason",
+    "accessory-command",
+    "accessory-status",
+    "battery-sample",
+    "rtc-control",
+    "rtc-seconds-low",
+    "rtc-seconds-high",
+    "rtc-stage-low",
+    "rtc-stage-high",
+    "settings-header",
+    "port-detection-request",
+    "port-detection-result",
+    "usb-power-status",
+]
+
+
+type PowerControllerTransport = (
+    PowerControllerTransportVariant0 | PowerControllerTransportVariant1
+)
+
+
+class PowerControllerTransportVariant0(TypedDict, total=False):
+    kind: Required[Literal["direct-register"]]
+
+
+class PowerControllerTransportVariant1(TypedDict, total=False):
+    data_bytes: Required[int]
+    kind: Required[Literal["checksum-power-spi"]]
+    register_mask: Required[int]
+    request_sum: Required[int]
+    write_mask: Required[int]
+
+
 class PowerOff(TypedDict, total=False):
     alarm: Required[AlarmRegisters]
     boot_flag: NotRequired[BootFlag | None]
@@ -4246,6 +4298,14 @@ class PowerOff(TypedDict, total=False):
 class PowerOnFill(TypedDict, total=False):
     byte: Required[int]
     evidence: Required[Evidence]
+
+
+class PowerPortDetection(TypedDict, total=False):
+    accept_mask: Required[int]
+    accept_value: Required[int]
+    request_register: Required[int]
+    request_value: Required[int]
+    result_register: Required[int]
 
 
 type ProcessorArchitecture = Literal["arm32", "aarch64"]

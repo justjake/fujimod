@@ -3,6 +3,8 @@
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
+use crate::provenance::Evidence;
+
 /// Additional body-specific physical wiring.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
@@ -184,7 +186,17 @@ pub enum PeripheralPart {
         read_gate_mask: u8,
     },
     /// Power-controller register protocol.
-    PowerController,
+    PowerController {
+        /// Registers this controller answers and what each carries.
+        #[serde(default, skip_serializing_if = "Vec::is_empty")]
+        registers: Vec<PowerControllerRegister>,
+        /// Transport the controller speaks, when located.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        transport: Option<PowerControllerTransport>,
+        /// USB port detection this controller answers, when located.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        port_detection: Option<PowerPortDetection>,
+    },
     /// Serial calibration-register protocol.
     SerialCalibrationRegisters,
     /// BIS configuration-register protocol.
@@ -224,6 +236,9 @@ pub enum PeripheralPart {
         #[serde(default)]
         #[serde(skip_serializing_if = "Option::is_none")]
         page_bytes: Option<u64>,
+        /// Sample-point window and miss byte of the controller's read states, when declared.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        sampling: Option<NorSampling>,
     },
 
     /// Serial NAND flash geometry and device identification, when declared.
@@ -245,6 +260,144 @@ pub enum PeripheralPart {
         #[serde(skip_serializing_if = "Option::is_none")]
         spare_bytes: Option<u64>,
     },
+}
+
+/// One register range a power controller answers.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(deny_unknown_fields)]
+#[cfg_attr(feature = "schema", schemars(deny_unknown_fields))]
+#[cfg_attr(
+    all(target_arch = "wasm32", not(target_os = "emscripten")),
+    derive(tsify::Tsify),
+    tsify(hashmap_as_object, missing_as_null)
+)]
+pub struct PowerControllerRegister {
+    /// First register number this role covers.
+    pub first: u8,
+    /// Consecutive register numbers this role covers.
+    #[serde(default = "one_register", skip_serializing_if = "is_one_register")]
+    pub count: u8,
+    /// What the firmware reads or writes there.
+    pub role: PowerControllerRole,
+    /// How the role was established.
+    pub evidence: Evidence,
+}
+
+/// What a power-controller register carries.
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Ord, PartialOrd, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(rename_all = "kebab-case")]
+#[cfg_attr(
+    all(target_arch = "wasm32", not(target_os = "emscripten")),
+    derive(tsify::Tsify),
+    tsify(hashmap_as_object, missing_as_null)
+)]
+pub enum PowerControllerRole {
+    /// Cold-boot reason the loader copies into its handoff block.
+    BootReason,
+    /// Accessory command selector.
+    AccessoryCommand,
+    /// Accessory status word.
+    AccessoryStatus,
+    /// Battery monitor's raw sample.
+    BatterySample,
+    /// RTC control word.
+    RtcControl,
+    /// RTC seconds, low word.
+    RtcSecondsLow,
+    /// RTC seconds, high word.
+    RtcSecondsHigh,
+    /// RTC seconds staged for a clock load, low word.
+    RtcStageLow,
+    /// RTC seconds staged for a clock load, high word.
+    RtcStageHigh,
+    /// One word of the stored settings header.
+    SettingsHeader,
+    /// USB port-detection request.
+    PortDetectionRequest,
+    /// USB port-detection result.
+    PortDetectionResult,
+    /// USB power status word.
+    UsbPowerStatus,
+}
+
+/// How a power controller exchanges registers.
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(tag = "kind", rename_all = "kebab-case", deny_unknown_fields)]
+#[cfg_attr(feature = "schema", schemars(deny_unknown_fields))]
+#[cfg_attr(
+    all(target_arch = "wasm32", not(target_os = "emscripten")),
+    derive(tsify::Tsify),
+    tsify(hashmap_as_object, missing_as_null)
+)]
+pub enum PowerControllerTransport {
+    /// One register selector per exchange over a 24-bit frame.
+    DirectRegister,
+    /// Four 8-bit frames: register and write flag, two data bytes, checksum.
+    ChecksumPowerSpi {
+        /// Bits of the first frame carrying the register number.
+        register_mask: u8,
+        /// Bits of the first frame marking a write.
+        write_mask: u8,
+        /// Data bytes in each frame, most significant first.
+        data_bytes: u8,
+        /// Sum the four request bytes reach modulo 256.
+        request_sum: u8,
+    },
+}
+
+/// USB port detection a power controller answers.
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(deny_unknown_fields)]
+#[cfg_attr(feature = "schema", schemars(deny_unknown_fields))]
+#[cfg_attr(
+    all(target_arch = "wasm32", not(target_os = "emscripten")),
+    derive(tsify::Tsify),
+    tsify(hashmap_as_object, missing_as_null)
+)]
+pub struct PowerPortDetection {
+    /// Register receiving the request word.
+    pub request_register: u8,
+    /// Word written to the request register.
+    pub request_value: u16,
+    /// Register returning the detection result.
+    pub result_register: u8,
+    /// Bits of the result the firmware tests.
+    pub accept_mask: u16,
+    /// Result the firmware accepts as a detected port.
+    pub accept_value: u16,
+}
+
+/// Sample-point window and miss byte of a serial NOR read state.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(deny_unknown_fields)]
+#[cfg_attr(feature = "schema", schemars(deny_unknown_fields))]
+#[cfg_attr(
+    all(target_arch = "wasm32", not(target_os = "emscripten")),
+    derive(tsify::Tsify),
+    tsify(hashmap_as_object, missing_as_null)
+)]
+pub struct NorSampling {
+    /// Lowest sample index that captures data.
+    pub sample_first: u8,
+    /// Highest sample index that captures data.
+    pub sample_last: u8,
+    /// Byte the array returns for a sampled miss.
+    pub miss_byte: u8,
+    /// How the window was established.
+    pub evidence: Evidence,
+}
+
+fn one_register() -> u8 {
+    1
+}
+
+fn is_one_register(count: &u8) -> bool {
+    *count == 1
 }
 
 /// A command accepted by a lens stabilizer endpoint.

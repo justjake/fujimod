@@ -17029,6 +17029,44 @@
       ],
       "type": "object"
     },
+    "NorSampling": {
+      "additionalProperties": false,
+      "description": "Sample-point window and miss byte of a serial NOR read state.",
+      "properties": {
+        "evidence": {
+          "$ref": "#/$defs/Evidence",
+          "description": "How the window was established."
+        },
+        "miss_byte": {
+          "description": "Byte the array returns for a sampled miss.",
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "sample_first": {
+          "description": "Lowest sample index that captures data.",
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "sample_last": {
+          "description": "Highest sample index that captures data.",
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "sample_first",
+        "sample_last",
+        "miss_byte",
+        "evidence"
+      ],
+      "type": "object"
+    },
     "OpticalQuantity": {
       "description": "Named optical quantities exposed by a lens assembly.",
       "oneOf": [
@@ -18177,6 +18215,35 @@
             "kind": {
               "const": "power-controller",
               "type": "string"
+            },
+            "port_detection": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/PowerPortDetection"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "USB port detection this controller answers, when located."
+            },
+            "registers": {
+              "description": "Registers this controller answers and what each carries.",
+              "items": {
+                "$ref": "#/$defs/PowerControllerRegister"
+              },
+              "type": "array"
+            },
+            "transport": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/PowerControllerTransport"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Transport the controller speaks, when located."
             }
           },
           "required": [
@@ -18333,6 +18400,17 @@
                 "integer",
                 "null"
               ]
+            },
+            "sampling": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/NorSampling"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Sample-point window and miss byte of the controller's read states, when declared."
             }
           },
           "required": [
@@ -18866,6 +18944,175 @@
       ],
       "type": "object"
     },
+    "PowerControllerRegister": {
+      "additionalProperties": false,
+      "description": "One register range a power controller answers.",
+      "properties": {
+        "count": {
+          "description": "Consecutive register numbers this role covers.",
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "evidence": {
+          "$ref": "#/$defs/Evidence",
+          "description": "How the role was established."
+        },
+        "first": {
+          "description": "First register number this role covers.",
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "role": {
+          "$ref": "#/$defs/PowerControllerRole",
+          "description": "What the firmware reads or writes there."
+        }
+      },
+      "required": [
+        "first",
+        "role",
+        "evidence"
+      ],
+      "type": "object"
+    },
+    "PowerControllerRole": {
+      "description": "What a power-controller register carries.",
+      "oneOf": [
+        {
+          "const": "boot-reason",
+          "description": "Cold-boot reason the loader copies into its handoff block.",
+          "type": "string"
+        },
+        {
+          "const": "accessory-command",
+          "description": "Accessory command selector.",
+          "type": "string"
+        },
+        {
+          "const": "accessory-status",
+          "description": "Accessory status word.",
+          "type": "string"
+        },
+        {
+          "const": "battery-sample",
+          "description": "Battery monitor's raw sample.",
+          "type": "string"
+        },
+        {
+          "const": "rtc-control",
+          "description": "RTC control word.",
+          "type": "string"
+        },
+        {
+          "const": "rtc-seconds-low",
+          "description": "RTC seconds, low word.",
+          "type": "string"
+        },
+        {
+          "const": "rtc-seconds-high",
+          "description": "RTC seconds, high word.",
+          "type": "string"
+        },
+        {
+          "const": "rtc-stage-low",
+          "description": "RTC seconds staged for a clock load, low word.",
+          "type": "string"
+        },
+        {
+          "const": "rtc-stage-high",
+          "description": "RTC seconds staged for a clock load, high word.",
+          "type": "string"
+        },
+        {
+          "const": "settings-header",
+          "description": "One word of the stored settings header.",
+          "type": "string"
+        },
+        {
+          "const": "port-detection-request",
+          "description": "USB port-detection request.",
+          "type": "string"
+        },
+        {
+          "const": "port-detection-result",
+          "description": "USB port-detection result.",
+          "type": "string"
+        },
+        {
+          "const": "usb-power-status",
+          "description": "USB power status word.",
+          "type": "string"
+        }
+      ]
+    },
+    "PowerControllerTransport": {
+      "description": "How a power controller exchanges registers.",
+      "oneOf": [
+        {
+          "additionalProperties": false,
+          "description": "One register selector per exchange over a 24-bit frame.",
+          "properties": {
+            "kind": {
+              "const": "direct-register",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Four 8-bit frames: register and write flag, two data bytes, checksum.",
+          "properties": {
+            "data_bytes": {
+              "description": "Data bytes in each frame, most significant first.",
+              "format": "uint8",
+              "maximum": 255,
+              "minimum": 0,
+              "type": "integer"
+            },
+            "kind": {
+              "const": "checksum-power-spi",
+              "type": "string"
+            },
+            "register_mask": {
+              "description": "Bits of the first frame carrying the register number.",
+              "format": "uint8",
+              "maximum": 255,
+              "minimum": 0,
+              "type": "integer"
+            },
+            "request_sum": {
+              "description": "Sum the four request bytes reach modulo 256.",
+              "format": "uint8",
+              "maximum": 255,
+              "minimum": 0,
+              "type": "integer"
+            },
+            "write_mask": {
+              "description": "Bits of the first frame marking a write.",
+              "format": "uint8",
+              "maximum": 255,
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          "required": [
+            "kind",
+            "register_mask",
+            "write_mask",
+            "data_bytes",
+            "request_sum"
+          ],
+          "type": "object"
+        }
+      ]
+    },
     "PowerOff": {
       "additionalProperties": false,
       "description": "The stock power-off reached by the request.",
@@ -18969,6 +19216,55 @@
       "required": [
         "byte",
         "evidence"
+      ],
+      "type": "object"
+    },
+    "PowerPortDetection": {
+      "additionalProperties": false,
+      "description": "USB port detection a power controller answers.",
+      "properties": {
+        "accept_mask": {
+          "description": "Bits of the result the firmware tests.",
+          "format": "uint16",
+          "maximum": 65535,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "accept_value": {
+          "description": "Result the firmware accepts as a detected port.",
+          "format": "uint16",
+          "maximum": 65535,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "request_register": {
+          "description": "Register receiving the request word.",
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "request_value": {
+          "description": "Word written to the request register.",
+          "format": "uint16",
+          "maximum": 65535,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "result_register": {
+          "description": "Register returning the detection result.",
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "request_register",
+        "request_value",
+        "result_register",
+        "accept_mask",
+        "accept_value"
       ],
       "type": "object"
     },

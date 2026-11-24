@@ -5,7 +5,86 @@
   "model": {
     "kind": "peripheral",
     "interface": {
-      "kind": "power-controller"
+      "kind": "power-controller",
+      "registers": [
+        {
+          "first": 16,
+          "role": "boot-reason",
+          "evidence": {
+            "kind": "inferred",
+            "firmware_ids": [
+              "xs10-311"
+            ]
+          }
+        },
+        {
+          "first": 25,
+          "role": "usb-power-status",
+          "evidence": {
+            "kind": "inferred",
+            "firmware_ids": [
+              "xs10-311"
+            ]
+          }
+        },
+        {
+          "first": 29,
+          "role": "rtc-stage-low",
+          "evidence": {
+            "kind": "inferred",
+            "firmware_ids": [
+              "xs10-311"
+            ]
+          }
+        },
+        {
+          "first": 30,
+          "role": "rtc-stage-high",
+          "evidence": {
+            "kind": "inferred",
+            "firmware_ids": [
+              "xs10-311"
+            ]
+          }
+        },
+        {
+          "first": 34,
+          "role": "rtc-seconds-low",
+          "evidence": {
+            "kind": "inferred",
+            "firmware_ids": [
+              "xs10-311"
+            ]
+          }
+        },
+        {
+          "first": 35,
+          "role": "rtc-seconds-high",
+          "evidence": {
+            "kind": "inferred",
+            "firmware_ids": [
+              "xs10-311"
+            ]
+          }
+        },
+        {
+          "first": 36,
+          "role": "rtc-control",
+          "evidence": {
+            "kind": "inferred",
+            "firmware_ids": [
+              "xs10-311"
+            ]
+          }
+        }
+      ],
+      "transport": {
+        "kind": "checksum-power-spi",
+        "register_mask": 127,
+        "write_mask": 128,
+        "data_bytes": 2,
+        "request_sum": 255
+      }
     }
   }
 }
