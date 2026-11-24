@@ -1,0 +1,19 @@
+{
+  "$schema": "https://fujimod.com/schemas/soc-block.schema.json",
+  "schema": 1,
+  "id": "byte-i2c-0",
+  "base": 4294168576,
+  "size": 4096,
+  "kind": "control-bus",
+  "interrupts": [
+    {
+      "output": "interrupt",
+      "line": 65
+    }
+  ],
+  "device": {
+    "model": "byte_i2c",
+    "byte_ticks": 16,
+    "basis": "Byte I2C controller of the X-Processor 4 family: three channels at 0xfff3d000 + 0x1000 n with interrupt lines 65, 66 and 67 (the X-T3 boot-time touch bus is channel 2, at 0xfff3f000, interrupt 0x43). Register layout follows the Fujitsu/Socionext byte I2C master (Linux i2c-synquacer). The completion latency of one byte is a virtual tick count; it is not measured."
+  }
+}

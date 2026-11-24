@@ -78,25 +78,26 @@ fn xt30_boot_inputs_declare_the_sd_host_slot() {
 
 #[test]
 fn xt3_boot_wires_the_touch_bus_to_a_declared_byte_i2c_controller() {
-    use fujimod_catalog::Soc;
-    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..");
-    let soc: Soc =
-        serde_json::from_slice(&fs::read(root.join("catalog/soc/xp4/soc.json")).unwrap()).unwrap();
-    let maps = soc.hardware.as_ref().unwrap().profiles["xp4"]
-        .register_maps
-        .as_ref()
-        .unwrap();
-    let controllers = maps
-        .byte_i2c
-        .as_ref()
-        .expect("declared byte I2C controllers");
+    let soc = fujimod_catalog::ReferenceCatalog::bundled()
+        .unwrap()
+        .resolve("xt3", "xt3-511")
+        .unwrap()
+        .soc;
     let inputs = HardwareInputs::bundled("xt3-discovery").unwrap();
     let wired = inputs
         .reset
         .byte_i2c_inputs
         .expect("declared byte I2C buses");
     assert_eq!(wired.keys().collect::<Vec<_>>(), ["2"]);
-    let bus = &controllers["2"];
-    assert_eq!((bus.base, bus.irq), (0xfff3_f000, 0x43));
-    assert!(bus.byte_ticks > 0);
+    let bus = soc
+        .blocks
+        .iter()
+        .find(|block| block.id == "byte-i2c-2")
+        .expect("declared byte I2C controller 2");
+    let line = bus.interrupts.iter().find(|row| row.output == "interrupt").unwrap().line;
+    assert_eq!((bus.base, line), (0xfff3_f000, 0x43));
+    assert!(matches!(
+        bus.device,
+        Some(fujimod_catalog::soc::BlockDevice::ByteI2c { byte_ticks, .. }) if byte_ticks > 0
+    ));
 }

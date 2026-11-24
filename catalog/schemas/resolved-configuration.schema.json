@@ -2593,6 +2593,32 @@
         },
         {
           "additionalProperties": false,
+          "description": "Byte-oriented I2C master (the Socionext controller Linux drives as i2c-synquacer).",
+          "properties": {
+            "basis": {
+              "description": "Declared basis.",
+              "type": "string"
+            },
+            "byte_ticks": {
+              "description": "Virtual ticks per address, data byte or STOP.",
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "model": {
+              "const": "byte_i2c",
+              "type": "string"
+            }
+          },
+          "required": [
+            "model",
+            "byte_ticks",
+            "basis"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
           "description": "DesignWare I2C bus.",
           "properties": {
             "basis": {

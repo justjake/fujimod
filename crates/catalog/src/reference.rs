@@ -512,6 +512,7 @@ impl Soc {
                     | crate::soc::BlockDevice::ResetGates { .. }
                     | crate::soc::BlockDevice::DramController { .. }
                     | crate::soc::BlockDevice::PowerControl { .. }
+                    | crate::soc::BlockDevice::ByteI2c { .. }
                     | crate::soc::BlockDevice::I2c { .. }
                     | crate::soc::BlockDevice::XppSd { .. }
                     | crate::soc::BlockDevice::H264Encoder { .. }
