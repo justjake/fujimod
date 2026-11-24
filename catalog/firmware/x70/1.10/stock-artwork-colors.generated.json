@@ -11,6 +11,9 @@
     "palette_select_function": "0x019c969c",
     "palette_rgb_function": "0x019c9784",
     "palette_components_function": "0x019f7804",
+    "grid_palette_function": "0x019f7838",
+    "grid_palette_entries": "0x01b42eac",
+    "grid_palette_entry_bytes": 16,
     "q_tile_function": "0x019fd238",
     "canvas_packet_function": "0x019cb9bc",
     "osd_items_catalog": "osd-items.generated.json"
@@ -1452,7 +1455,11 @@
               148,
               148,
               255
-            ]
+            ],
+            "call_sites": [
+              "0x019fd600"
+            ],
+            "grid_palette": 120
           },
           {
             "palette": 109,
