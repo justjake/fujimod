@@ -1,0 +1,84 @@
+{
+  "$schema": "https://fujimod.com/schemas/soc-block.schema.json",
+  "schema": 1,
+  "id": "dma",
+  "base": 4294836224,
+  "size": 65536,
+  "kind": "dma",
+  "interrupts": [
+    {
+      "output": "channel0",
+      "line": 207
+    },
+    {
+      "output": "channel1",
+      "line": 208
+    },
+    {
+      "output": "channel2",
+      "line": 209
+    },
+    {
+      "output": "channel3",
+      "line": 210
+    },
+    {
+      "output": "channel4",
+      "line": 211
+    },
+    {
+      "output": "channel5",
+      "line": 212
+    },
+    {
+      "output": "channel6",
+      "line": 213
+    },
+    {
+      "output": "channel7",
+      "line": 214
+    },
+    {
+      "output": "channel8",
+      "line": 215
+    },
+    {
+      "output": "channel9",
+      "line": 216
+    },
+    {
+      "output": "channel10",
+      "line": 217
+    },
+    {
+      "output": "channel11",
+      "line": 218
+    },
+    {
+      "output": "channel12",
+      "line": 219
+    },
+    {
+      "output": "channel13",
+      "line": 220
+    },
+    {
+      "output": "channel14",
+      "line": 221
+    },
+    {
+      "output": "channel15",
+      "line": 222
+    }
+  ],
+  "device": {
+    "model": "dma",
+    "channels": 16,
+    "request_mux_block_id": "dma-request-mux",
+    "timing": "16 guest setup ticks plus ceil(bytes/16); functional transfer timing, not measured bus bandwidth.",
+    "native_dependencies": [
+      "serial_flash"
+    ],
+    "basis": "Declared catalog input."
+  }
+}

@@ -1,0 +1,15 @@
+{
+  "$schema": "https://fujimod.com/schemas/soc-block.schema.json",
+  "schema": 1,
+  "id": "jpeg-decoder",
+  "base": 4294324224,
+  "size": 300,
+  "kind": "address-window",
+  "interrupts": [
+    {
+      "output": "complete",
+      "line": 76,
+      "core": "core0"
+    }
+  ]
+}

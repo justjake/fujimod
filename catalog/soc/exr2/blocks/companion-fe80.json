@@ -1,0 +1,15 @@
+{
+  "$schema": "https://fujimod.com/schemas/soc-block.schema.json",
+  "schema": 1,
+  "id": "companion-fe80",
+  "base": 4264656896,
+  "size": 4096,
+  "kind": "address-window",
+  "interrupts": [
+    {
+      "output": "processing",
+      "line": 88,
+      "core": "core0"
+    }
+  ]
+}

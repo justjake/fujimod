@@ -17,8 +17,6 @@
   },
   "installation": {
     "flash_offset": 604,
-    "entry_labels": {},
-    "loader_validation": null,
     "image_sections": [
       {
         "name": "kernel0",
@@ -87,8 +85,6 @@
           "ssid": "FUJIFILM-X100T-CAFE"
         }
       }
-    },
-    "views": {}
-  },
-  "generated_facts": null
+    }
+  }
 }

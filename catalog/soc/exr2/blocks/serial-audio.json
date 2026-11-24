@@ -1,0 +1,8 @@
+{
+  "$schema": "https://fujimod.com/schemas/soc-block.schema.json",
+  "schema": 1,
+  "id": "serial-audio",
+  "base": 4294574080,
+  "size": 4096,
+  "kind": "address-window"
+}

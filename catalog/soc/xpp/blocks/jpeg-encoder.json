@@ -1,0 +1,19 @@
+{
+  "$schema": "https://fujimod.com/schemas/soc-block.schema.json",
+  "schema": 1,
+  "id": "jpeg-encoder",
+  "base": 4294737920,
+  "size": 4096,
+  "kind": "imaging-controller",
+  "interrupts": [
+    {
+      "output": "interrupt",
+      "line": 134
+    }
+  ],
+  "device": {
+    "model": "jpeg_codec",
+    "run_ticks": 96000,
+    "basis": "JPEG encoder of X-T20 2.11 (section 6 driver 0x1557390..0x15575ac, section 5 0xc6dbfc..0xc6e568; interrupt index 0x3c of table 0xed4720 is line 134). A still encodes the 160x120 EXIF thumbnail, a 320x240 preview and the main picture from 0x80000000 (markers 0x06028b00/0x06028a00). Quantization tables go word by word to +0x8c, the restart interval to +0x80, height << 16 | width to +0x44, the packed 4:2:2 source to +0x100, the destination to +0x10c and its limit to +0x110; +0x00 bit 0 starts a run and bit 8 resets. +0x24 bit 16 reads set; a finished run sets bit 4 (write 1 clears) and the stream size at +0x94. run_ticks (2 ms) is not measured."
+  }
+}

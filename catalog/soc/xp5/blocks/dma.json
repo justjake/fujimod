@@ -1,0 +1,12 @@
+{
+  "$schema": "https://fujimod.com/schemas/soc-block.schema.json",
+  "schema": 1,
+  "id": "dma",
+  "base": 4287823872,
+  "size": 32768,
+  "kind": "dma",
+  "device": {
+    "model": "companion_dma",
+    "companion_irq_base": 83
+  }
+}

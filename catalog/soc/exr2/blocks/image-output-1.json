@@ -1,0 +1,15 @@
+{
+  "$schema": "https://fujimod.com/schemas/soc-block.schema.json",
+  "schema": 1,
+  "id": "image-output-1",
+  "base": 4293996544,
+  "size": 256,
+  "kind": "imaging-controller",
+  "interrupts": [
+    {
+      "output": "output",
+      "line": 45,
+      "core": "core0"
+    }
+  ]
+}

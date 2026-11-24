@@ -125,8 +125,8 @@
       "name": "control",
       "offset": 48,
       "width_bytes": 4,
-      "access": "read-write",
       "reset": 768,
+      "access": "read-write",
       "fields": [
         {
           "name": "uart_enable",
@@ -159,8 +159,8 @@
       "name": "interrupt_fifo_level_select",
       "offset": 52,
       "width_bytes": 4,
-      "access": "read-write",
       "reset": 18,
+      "access": "read-write",
       "fields": [
         {
           "name": "receive_trigger",
@@ -293,57 +293,57 @@
       "name": "peripheral_id_0",
       "offset": 4064,
       "width_bytes": 4,
-      "access": "read-only",
-      "reset": 17
+      "reset": 17,
+      "access": "read-only"
     },
     {
       "name": "peripheral_id_1",
       "offset": 4068,
       "width_bytes": 4,
-      "access": "read-only",
-      "reset": 16
+      "reset": 16,
+      "access": "read-only"
     },
     {
       "name": "peripheral_id_2",
       "offset": 4072,
       "width_bytes": 4,
-      "access": "read-only",
-      "reset": 52
+      "reset": 52,
+      "access": "read-only"
     },
     {
       "name": "peripheral_id_3",
       "offset": 4076,
       "width_bytes": 4,
-      "access": "read-only",
-      "reset": 0
+      "reset": 0,
+      "access": "read-only"
     },
     {
       "name": "primecell_id_0",
       "offset": 4080,
       "width_bytes": 4,
-      "access": "read-only",
-      "reset": 13
+      "reset": 13,
+      "access": "read-only"
     },
     {
       "name": "primecell_id_1",
       "offset": 4084,
       "width_bytes": 4,
-      "access": "read-only",
-      "reset": 240
+      "reset": 240,
+      "access": "read-only"
     },
     {
       "name": "primecell_id_2",
       "offset": 4088,
       "width_bytes": 4,
-      "access": "read-only",
-      "reset": 5
+      "reset": 5,
+      "access": "read-only"
     },
     {
       "name": "primecell_id_3",
       "offset": 4092,
       "width_bytes": 4,
-      "access": "read-only",
-      "reset": 177
+      "reset": 177,
+      "access": "read-only"
     }
   ],
   "parameters": [

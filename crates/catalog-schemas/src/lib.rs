@@ -152,9 +152,22 @@ pub fn generated_documents() -> BTreeMap<&'static str, Value> {
         "ip.schema.json",
         schema::<fujimod_catalog::ip::Ip>(fujimod_catalog::ip::IP_SCHEMA_URI),
     );
+    let mut soc = schema::<fujimod_catalog::reference::Soc>(
+        "https://fujimod.com/schemas/soc.schema.json",
+    );
+    // A processor document lists no blocks; each block is its own record file.
+    if let Some(properties) = soc.get_mut("properties").and_then(Value::as_object_mut) {
+        properties.remove("blocks");
+    }
+    if let Some(required) = soc.get_mut("required").and_then(Value::as_array_mut) {
+        required.retain(|item| item != "blocks");
+    }
+    documents.insert("soc.schema.json", soc);
     documents.insert(
-        "soc.schema.json",
-        schema::<fujimod_catalog::reference::Soc>("https://fujimod.com/schemas/soc.schema.json"),
+        "soc-block.schema.json",
+        schema::<fujimod_catalog::reference::SocBlockRecord>(
+            fujimod_catalog::reference::SOC_BLOCK_SCHEMA_URI,
+        ),
     );
     documents.insert(
         "part.schema.json",

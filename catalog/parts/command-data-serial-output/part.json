@@ -13,8 +13,6 @@
   },
   "attachment": {
     "label": "serial_spi3",
-    "basis": "Declared catalog input.",
-    "limits": [],
     "serial_routes": [
       {
         "controller_address": 4294459584,
@@ -45,6 +43,7 @@
         "queue": "single",
         "endpoint_part_id": "command-data-serial-output"
       }
-    ]
+    ],
+    "basis": "Declared catalog input."
   }
 }

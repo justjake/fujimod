@@ -1121,7 +1121,7 @@ fn apply_body_facts(
                 "gpio":"serial_gpio",
                 "endpoint":{"kind":"registers","options":{
                     "registers":[[*status,0]],"readable":true,
-                    "status_registers":[*status],"clock":null}}
+                    "status_registers":[*status]}}
             }));
             if lens.route.endpoint_id != lens.part_id {
                 return Err("X70 lens route endpoint differs from installed part".into());

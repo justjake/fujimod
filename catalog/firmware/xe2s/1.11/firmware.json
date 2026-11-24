@@ -17,8 +17,6 @@
   },
   "installation": {
     "flash_offset": 604,
-    "entry_labels": {},
-    "loader_validation": null,
     "image_sections": [
       {
         "name": "kernel0",
@@ -71,12 +69,26 @@
       }
     ]
   },
-  "generated_facts": null,
   "layouts": {
     "profiles": {
-      "xe2s-111-service-session": {
-        "execution_scope": "offline-boot-development",
+      "xe2s-111": {
+        "reset_release": {
+          "basis": "Declared catalog input.",
+          "mask": 16777216,
+          "register": 4294656204,
+          "source": 120,
+          "target": 1073676288
+        },
         "boot_layout": {
+          "flash_slices": [
+            {
+              "address": 0,
+              "name": "boot",
+              "offset": 262144,
+              "sha256": "4c4458c66572de6e789e51aa6a3279ef752c9770be1543c92b3566aeebe4ef9d",
+              "size": 131072
+            }
+          ],
           "units": [
             {
               "unit": "kernel0"
@@ -84,126 +96,111 @@
             {
               "unit": "kernel1"
             }
-          ],
+          ]
+        },
+        "execution_scope": "offline-boot-development",
+        "limits": [],
+        "rom_basis": "Declared catalog input.",
+        "storage_layout_id": "storage-fixtures-xe2s-111"
+      },
+      "xe2s-111-service-session": {
+        "reset_release": {
+          "basis": "Declared catalog input.",
+          "mask": 16777216,
+          "register": 4294656204,
+          "source": 120,
+          "target": 1073676288
+        },
+        "boot_layout": {
           "flash_slices": [
             {
+              "address": 0,
               "name": "boot",
               "offset": 262144,
-              "size": 131072,
-              "address": 0,
-              "sha256": "4c4458c66572de6e789e51aa6a3279ef752c9770be1543c92b3566aeebe4ef9d"
+              "sha256": "4c4458c66572de6e789e51aa6a3279ef752c9770be1543c92b3566aeebe4ef9d",
+              "size": 131072
+            }
+          ],
+          "units": [
+            {
+              "unit": "kernel0"
+            },
+            {
+              "unit": "kernel1"
             }
           ]
         },
+        "control_bus_tables_id": "control-bus-xe2s-111",
+        "execution_scope": "offline-boot-development",
         "fe80_programs": [
           {
+            "basis": "Declared catalog input.",
             "descriptor": {
               "address": 12564528,
-              "size": 16,
+              "sampling": "immutable-source",
               "sha256": "d2355e6c1ecb63415f9856b1ee8732b8474515d03a68868c139e1c659a52999e",
-              "sampling": "immutable-source"
-            },
-            "program": {
-              "address": 12028432,
-              "size": 18656,
-              "sha256": "34131494b53051b95fe32c3a672fe606a5f0eed75d85f1533eb5a25ff1f0db18",
-              "sampling": "immutable-source"
+              "size": 16
             },
             "period": 12,
-            "basis": "Declared catalog input."
+            "program": {
+              "address": 12028432,
+              "sampling": "immutable-source",
+              "sha256": "34131494b53051b95fe32c3a672fe606a5f0eed75d85f1533eb5a25ff1f0db18",
+              "size": 18656
+            }
           },
           {
+            "basis": "Declared catalog input.",
             "descriptor": {
               "address": 12564544,
-              "size": 16,
+              "sampling": "immutable-source",
               "sha256": "a1c4eca132aaf0693c6c4719370b4a57631aaa8d8842ed33d351ea3d3f129432",
-              "sampling": "immutable-source"
-            },
-            "program": {
-              "address": 11448208,
-              "size": 28224,
-              "sha256": "72476fe1dbc845ca8c8877ac24da97a44d8bba3264038d1b335282795729fd8d",
-              "sampling": "immutable-source"
+              "size": 16
             },
             "period": 13,
-            "basis": "Declared catalog input."
+            "program": {
+              "address": 11448208,
+              "sampling": "immutable-source",
+              "sha256": "72476fe1dbc845ca8c8877ac24da97a44d8bba3264038d1b335282795729fd8d",
+              "size": 28224
+            }
           },
           {
+            "basis": "Declared catalog input.",
             "descriptor": {
               "address": 12564560,
-              "size": 16,
+              "sampling": "immutable-source",
               "sha256": "7beedc1c774cc79ccac405d949e07065c4c65ceb8c72dbe595c8c9bb5b581bc0",
-              "sampling": "immutable-source"
-            },
-            "program": {
-              "address": 11383072,
-              "size": 65128,
-              "sha256": "3a9118e784fc775a22831b0e97cd1167e541f03380cea8a95406b64c7a120b25",
-              "sampling": "immutable-source"
+              "size": 16
             },
             "period": 16,
-            "basis": "Declared catalog input."
+            "program": {
+              "address": 11383072,
+              "sampling": "immutable-source",
+              "sha256": "3a9118e784fc775a22831b0e97cd1167e541f03380cea8a95406b64c7a120b25",
+              "size": 65128
+            }
           }
         ],
         "limits": [],
-        "control_bus_tables_id": "control-bus-xe2s-111",
+        "rom_basis": "Declared catalog input.",
         "storage_layout_id": "storage-fixtures-xe2s-111-service",
         "usb_interrupt_tables": [
           {
-            "name": "irq",
             "address": 11579204,
-            "size": 12,
+            "name": "irq",
+            "sampling": "immutable-source",
             "sha256": "5cc548bd54d16b6bd80ce6376a79b9ccbc8a7b17e379bcab9c9b58e7f1ebcbb1",
-            "sampling": "immutable-source"
+            "size": 12
           },
           {
-            "name": "dma_irq",
             "address": 11579864,
-            "size": 12,
+            "name": "dma_irq",
+            "sampling": "immutable-source",
             "sha256": "879883a19c7732f9ec2115a2a01006f101c4762956464fd7107bc25166125600",
-            "sampling": "immutable-source"
+            "size": 12
           }
-        ],
-        "rom_basis": "Declared catalog input.",
-        "reset_release": {
-          "register": 4294656204,
-          "mask": 16777216,
-          "source": 120,
-          "target": 1073676288,
-          "basis": "Declared catalog input."
-        }
-      },
-      "xe2s-111": {
-        "execution_scope": "offline-boot-development",
-        "boot_layout": {
-          "units": [
-            {
-              "unit": "kernel0"
-            },
-            {
-              "unit": "kernel1"
-            }
-          ],
-          "flash_slices": [
-            {
-              "name": "boot",
-              "offset": 262144,
-              "size": 131072,
-              "address": 0,
-              "sha256": "4c4458c66572de6e789e51aa6a3279ef752c9770be1543c92b3566aeebe4ef9d"
-            }
-          ]
-        },
-        "limits": [],
-        "storage_layout_id": "storage-fixtures-xe2s-111",
-        "rom_basis": "Declared catalog input.",
-        "reset_release": {
-          "register": 4294656204,
-          "mask": 16777216,
-          "source": 120,
-          "target": 1073676288,
-          "basis": "Declared catalog input."
-        }
+        ]
       }
     },
     "views": {
@@ -211,72 +208,55 @@
         "kind": "configuration_defaults",
         "data": {
           "builder_entry": 9718284,
-          "sections": [
-            "stream-0016025c"
-          ],
-          "max_instructions": 8000000,
-          "pointer_address": 12581772,
-          "output": {
-            "address": 1107722240,
-            "size": 4325376
-          },
-          "table": {
-            "name": "defaults_table",
-            "address": 11577224,
-            "size": 532,
-            "sha256": "6576495224ec029ce256a70fc1a40494fe1cf2dacb8dc47f38693b262c25ce9b",
-            "sampling": "immutable-source",
-            "count": 132
-          },
           "code_checks": [
             {
-              "name": "defaults_builder",
               "address": 9718284,
-              "size": 144,
+              "name": "defaults_builder",
+              "sampling": "immutable-source",
               "sha256": "fe1a65f67ff9402d87a4b7880cc953b0472ff5ac10d667fdc5ef3fd2ce228948",
-              "sampling": "immutable-source"
+              "size": 144
             },
             {
-              "name": "cfg_base_getter",
               "address": 9718252,
-              "size": 32,
+              "name": "cfg_base_getter",
+              "sampling": "immutable-source",
               "sha256": "29cae5b5b8ea6b1898377977e59ae1ded423bb3eb691a431a854e4519e138c77",
-              "sampling": "immutable-source"
+              "size": 32
             },
             {
-              "name": "cfg_byte_setter",
               "address": 9718172,
-              "size": 36,
+              "name": "cfg_byte_setter",
+              "sampling": "immutable-source",
               "sha256": "473b9612385fbeed5f790f2bfa9b7c98621796ea0eaf018364aa1d49643023bf",
-              "sampling": "immutable-source"
+              "size": 36
             },
             {
-              "name": "cfg_remapper",
               "address": 9717472,
-              "size": 148,
+              "name": "cfg_remapper",
+              "sampling": "immutable-source",
               "sha256": "b8c4987284f2ac15ac81a44c89ccf6b1181b81b6555e5b582fe281601912254c",
-              "sampling": "immutable-source"
+              "size": 148
             },
             {
-              "name": "version_setter",
               "address": 9718208,
-              "size": 44,
+              "name": "version_setter",
+              "sampling": "immutable-source",
               "sha256": "a7ef10bfd6db4f59605e7d6f71dd956a7b5c973263418662db50b868f68e306b",
-              "sampling": "immutable-source"
+              "size": 44
             },
             {
-              "name": "fill_bytes",
               "address": 10278980,
-              "size": 80,
+              "name": "fill_bytes",
+              "sampling": "immutable-source",
               "sha256": "95075b7d736be75661473a2b8d814e2e3b0335d6dd106d90052d1877e1ebf4cf",
-              "sampling": "immutable-source"
+              "size": 80
             },
             {
-              "name": "fill_words",
               "address": 10278940,
-              "size": 40,
+              "name": "fill_words",
+              "sampling": "immutable-source",
               "sha256": "c129dcbee17753f3a8c22b072f38acfbfa7aa7e3dabf88b8adde1f0c5099b870",
-              "sampling": "immutable-source"
+              "size": 40
             }
           ],
           "final_version_bytes": [
@@ -289,9 +269,25 @@
               "value": 25
             }
           ],
+          "max_instructions": 8000000,
+          "output": {
+            "address": 1107722240,
+            "size": 4325376
+          },
+          "pointer_address": 12581772,
+          "sections": [
+            "stream-0016025c"
+          ],
           "static_oracle_sha256": "af9c783e638931b8bd04272a99e97959b4b444b0ad283d57b1f43d59e3a552a2",
-          "limits": [],
-          "store_limit": 2097152
+          "store_limit": 2097152,
+          "table": {
+            "address": 11577224,
+            "count": 132,
+            "name": "defaults_table",
+            "sampling": "immutable-source",
+            "sha256": "6576495224ec029ce256a70fc1a40494fe1cf2dacb8dc47f38693b262c25ce9b",
+            "size": 532
+          }
         }
       },
       "control-bus-xe2s-111": {
@@ -299,867 +295,107 @@
         "data": {
           "descriptors": {
             "address": 11581920,
-            "size": 108,
             "count": 9,
-            "sha256": "3eae16a026f134e5a510da0d0f82408d5e406157af4519f1688d4e137f60c2eb",
+            "format": "little-endian address/polarity-selector/channel u32",
             "sampling": "immutable-source",
-            "format": "little-endian address/polarity-selector/channel u32"
+            "sha256": "3eae16a026f134e5a510da0d0f82408d5e406157af4519f1688d4e137f60c2eb",
+            "size": 108
           },
           "polarity_words": {
             "address": 11617744,
-            "size": 8,
+            "sampling": "transaction",
             "sha256": "01acecb507abfe1a354aa8064f4af5d3f1acd019e37db3c11c97523b71c76e9d",
-            "sampling": "transaction"
-          },
-          "limits": []
-        }
-      },
-      "storage-fixtures-xe2s-111-service": {
-        "kind": "storage_layout",
-        "data": {
-          "views": [
-            {
-              "name": "banks",
-              "address": 11577908,
-              "size": 132,
-              "sha256": "7037a92e31269daaa9160858c0c05f631a87f2ca17c09ec9404ed09f6d920aeb",
-              "sampling": "immutable-source"
-            },
-            {
-              "name": "parity_contexts",
-              "address": 12079324,
-              "size": 12,
-              "sha256": "6fb8986f7e96f980f3911f2b1049d28ec537436e5940fda05c180a2a098c1216",
-              "sampling": "immutable-source"
-            },
-            {
-              "name": "main_header",
-              "address": 11617792,
-              "size": 16,
-              "sha256": "342cdfa6f02b2b2a507d081fe33a17facc02468faec5647f40b36ef0c0f571a2",
-              "sampling": "immutable-source"
-            },
-            {
-              "name": "main_defaults",
-              "address": 12564624,
-              "size": 3700,
-              "sha256": "37b39a926f01b4c7359a16f783e8f647b75ca6eabd138a8d5d35979c28e323f7",
-              "sampling": "immutable-source"
-            },
-            {
-              "name": "custom_defaults",
-              "address": 11617808,
-              "size": 1792,
-              "sha256": "196a601ba4ec62e1641554706ad245de64027d5c764c67d52dc670232f66cb2b",
-              "sampling": "immutable-source"
-            },
-            {
-              "name": "tag0",
-              "address": 11617629,
-              "size": 1,
-              "sha256": "4bf5122f344554c53bde2ebb8cd2b7e3d1600ad631c385a5d7cce23c7785459a",
-              "sampling": "immutable-source"
-            },
-            {
-              "name": "tag1",
-              "address": 11617635,
-              "size": 1,
-              "sha256": "4a64a107f0cb32536e5bce6c98c393db21cca7f4ea187ba8c4dca8b51d4ea80a",
-              "sampling": "immutable-source"
-            },
-            {
-              "name": "header_registers",
-              "address": 11617760,
-              "size": 32,
-              "sha256": "57475af57d0a845a4c0e3d69b559c62699d93bca4a0519711b0f501e8d6f1bd1",
-              "sampling": "immutable-source"
-            },
-            {
-              "name": "main_prepare",
-              "address": 9728820,
-              "size": 88,
-              "sha256": "c3439e422dc077a9a0e782b9cf62d937d4130d4928b5c08c12726d63d4ffebc4",
-              "sampling": "immutable-source"
-            },
-            {
-              "name": "main_check",
-              "address": 9728908,
-              "size": 400,
-              "sha256": "ec78a09e8ced2bbf313476db4d02781fa62aba8459c2f5ac10e13a9ae789ee26",
-              "sampling": "immutable-source"
-            },
-            {
-              "name": "custom_prepare",
-              "address": 9734228,
-              "size": 88,
-              "sha256": "7f73947da2bcf8c6993f81afcf71c554b1620b3475d404223dc3fd8406b3f9ec",
-              "sampling": "immutable-source"
-            },
-            {
-              "name": "custom_check",
-              "address": 9734316,
-              "size": 400,
-              "sha256": "51e09c162c5e257baa6eacad9afc9233792ba6f035d23c02b0cbcff81c74b351",
-              "sampling": "immutable-source"
-            },
-            {
-              "name": "custom_builder",
-              "address": 9735008,
-              "size": 348,
-              "sha256": "e7cf6cbdbf288d3e72e8a0addbbfc568463cd825613ead6dceccd0b4bc3c653b",
-              "sampling": "immutable-source"
-            },
-            {
-              "name": "startup",
-              "address": 9731080,
-              "size": 556,
-              "sha256": "4014e50d4dc9ab13c108bf67c6a0b8c5082632f399f93926481657a505619d5f",
-              "sampling": "immutable-source"
-            },
-            {
-              "name": "custom_startup",
-              "address": 9735356,
-              "size": 264,
-              "sha256": "628168cf277dbaa64c00d7f1c373350406b60c85528d33c26e6b60d2bd6c49d3",
-              "sampling": "immutable-source"
-            },
-            {
-              "name": "main_banks",
-              "address": 9744768,
-              "size": 160,
-              "sha256": "c39d13535ea11ce8479d99c8dddf02100ceadb2e961a69b7506c45d8ea079ecb",
-              "sampling": "immutable-source"
-            },
-            {
-              "name": "custom_banks",
-              "address": 9745432,
-              "size": 160,
-              "sha256": "849c4662e1f4eecd777dd440cf0b4915d437499516f2fed592a13782a2daa0b3",
-              "sampling": "immutable-source"
-            },
-            {
-              "name": "byte_getter",
-              "address": 9717680,
-              "size": 36,
-              "sha256": "43f4183156c1939940a4c9d0d75b46bcd9195841e5c4cd980ddc18e5a68476b1",
-              "sampling": "immutable-source"
-            },
-            {
-              "name": "cfg_initializer",
-              "address": 9719332,
-              "size": 312,
-              "sha256": "c58d85e07e3583669fd07d87dccdbd9e01760ece380f2182f90f61255c8f5ce5",
-              "sampling": "immutable-source"
-            },
-            {
-              "name": "remapper",
-              "address": 9717472,
-              "size": 148,
-              "sha256": "b8c4987284f2ac15ac81a44c89ccf6b1181b81b6555e5b582fe281601912254c",
-              "sampling": "immutable-source"
-            },
-            {
-              "name": "endpoint2_initializers",
-              "address": 11657296,
-              "size": 180,
-              "sha256": "1ff06dbda4665e106be4befdd1320dbc2522fbb07b8c52340bf445631e653991",
-              "sampling": "immutable-source"
-            },
-            {
-              "name": "eye_sensor_selector_initializer",
-              "address": 12080496,
-              "size": 1,
-              "sha256": "4bf5122f344554c53bde2ebb8cd2b7e3d1600ad631c385a5d7cce23c7785459a",
-              "sampling": "immutable-source"
-            },
-            {
-              "name": "sensor_initializers",
-              "address": 11619600,
-              "size": 300,
-              "sampling": "immutable-source",
-              "sha256": "1b82e1933899dc3c7179160cbf7c4b508b95d943d3fe74fe9f93e391fecdecc4"
-            }
-          ],
-          "sections": [
-            "stream-0016025c"
-          ],
-          "max_instructions": 1000000,
-          "scratch_record": 1124073472,
-          "cfgdata": {
-            "address": 1107722240,
-            "pointer_address": 12581772,
-            "size": 4325376,
-            "defaults_sha256": "af9c783e638931b8bd04272a99e97959b4b444b0ad283d57b1f43d59e3a552a2",
-            "synthetic_signature": {
-              "offset": 514
-            },
-            "selector_address": 13075224,
-            "remapping": [
-              {
-                "start": 4063232,
-                "size": 89344,
-                "selector": 1,
-                "delta": 89344
-              },
-              {
-                "start": 4194304,
-                "size": 64768,
-                "selector": 1,
-                "delta": 64768
-              }
-            ],
-            "synthetic_byte_fields": [
-              {
-                "field": 4514,
-                "view": "endpoint2_initializers",
-                "row": 0,
-                "basis": "Declared catalog input."
-              },
-              {
-                "field": 4515,
-                "view": "endpoint2_initializers",
-                "row": 1,
-                "basis": "Declared catalog input."
-              },
-              {
-                "field": 4516,
-                "view": "endpoint2_initializers",
-                "row": 2,
-                "basis": "Declared catalog input."
-              },
-              {
-                "field": 4517,
-                "view": "endpoint2_initializers",
-                "row": 3,
-                "basis": "Declared catalog input."
-              },
-              {
-                "field": 4518,
-                "view": "endpoint2_initializers",
-                "row": 4,
-                "basis": "Declared catalog input."
-              },
-              {
-                "field": 4519,
-                "view": "endpoint2_initializers",
-                "row": 5,
-                "basis": "Declared catalog input."
-              },
-              {
-                "field": 4520,
-                "view": "endpoint2_initializers",
-                "row": 6,
-                "basis": "Declared catalog input."
-              },
-              {
-                "field": 4521,
-                "view": "endpoint2_initializers",
-                "row": 7,
-                "basis": "Declared catalog input."
-              },
-              {
-                "field": 4522,
-                "view": "endpoint2_initializers",
-                "row": 8,
-                "basis": "Declared catalog input."
-              },
-              {
-                "field": 4523,
-                "view": "endpoint2_initializers",
-                "row": 9,
-                "basis": "Declared catalog input."
-              },
-              {
-                "field": 4524,
-                "view": "endpoint2_initializers",
-                "row": 10,
-                "basis": "Declared catalog input."
-              },
-              {
-                "field": 4525,
-                "view": "endpoint2_initializers",
-                "row": 11,
-                "basis": "Declared catalog input."
-              },
-              {
-                "field": 4526,
-                "view": "endpoint2_initializers",
-                "row": 12,
-                "basis": "Declared catalog input."
-              },
-              {
-                "field": 4527,
-                "view": "endpoint2_initializers",
-                "row": 13,
-                "basis": "Declared catalog input."
-              },
-              {
-                "field": 4528,
-                "view": "endpoint2_initializers",
-                "row": 14,
-                "basis": "Declared catalog input."
-              },
-              {
-                "field": 38912,
-                "view": "sensor_initializers",
-                "row": 0,
-                "basis": "Declared catalog input."
-              },
-              {
-                "field": 38913,
-                "view": "sensor_initializers",
-                "row": 1,
-                "basis": "Declared catalog input."
-              },
-              {
-                "field": 38914,
-                "view": "sensor_initializers",
-                "row": 2,
-                "basis": "Declared catalog input."
-              },
-              {
-                "field": 38915,
-                "view": "sensor_initializers",
-                "row": 3,
-                "basis": "Declared catalog input."
-              },
-              {
-                "field": 38916,
-                "view": "sensor_initializers",
-                "row": 4,
-                "basis": "Declared catalog input."
-              },
-              {
-                "field": 38917,
-                "view": "sensor_initializers",
-                "row": 5,
-                "basis": "Declared catalog input."
-              },
-              {
-                "field": 38918,
-                "view": "sensor_initializers",
-                "row": 6,
-                "basis": "Declared catalog input."
-              },
-              {
-                "field": 38919,
-                "view": "sensor_initializers",
-                "row": 7,
-                "basis": "Declared catalog input."
-              },
-              {
-                "field": 38920,
-                "view": "sensor_initializers",
-                "row": 8,
-                "basis": "Declared catalog input."
-              },
-              {
-                "field": 38921,
-                "view": "sensor_initializers",
-                "row": 9,
-                "basis": "Declared catalog input."
-              },
-              {
-                "field": 38922,
-                "view": "sensor_initializers",
-                "row": 10,
-                "basis": "Declared catalog input."
-              },
-              {
-                "field": 38923,
-                "view": "sensor_initializers",
-                "row": 11,
-                "basis": "Declared catalog input."
-              },
-              {
-                "field": 38924,
-                "view": "sensor_initializers",
-                "row": 12,
-                "basis": "Declared catalog input."
-              },
-              {
-                "field": 38925,
-                "view": "sensor_initializers",
-                "row": 13,
-                "basis": "Declared catalog input."
-              },
-              {
-                "field": 38926,
-                "view": "sensor_initializers",
-                "row": 14,
-                "basis": "Declared catalog input."
-              },
-              {
-                "field": 38927,
-                "view": "sensor_initializers",
-                "row": 15,
-                "basis": "Declared catalog input."
-              },
-              {
-                "field": 38928,
-                "view": "sensor_initializers",
-                "row": 16,
-                "basis": "Declared catalog input."
-              },
-              {
-                "field": 38929,
-                "view": "sensor_initializers",
-                "row": 17,
-                "basis": "Declared catalog input."
-              },
-              {
-                "field": 38930,
-                "view": "sensor_initializers",
-                "row": 18,
-                "basis": "Declared catalog input."
-              },
-              {
-                "field": 38931,
-                "view": "sensor_initializers",
-                "row": 19,
-                "basis": "Declared catalog input."
-              },
-              {
-                "field": 38932,
-                "view": "sensor_initializers",
-                "row": 20,
-                "basis": "Declared catalog input."
-              },
-              {
-                "field": 38933,
-                "view": "sensor_initializers",
-                "row": 21,
-                "basis": "Declared catalog input."
-              },
-              {
-                "field": 38934,
-                "view": "sensor_initializers",
-                "row": 22,
-                "basis": "Declared catalog input."
-              },
-              {
-                "field": 38935,
-                "view": "sensor_initializers",
-                "row": 23,
-                "basis": "Declared catalog input."
-              },
-              {
-                "field": 38936,
-                "view": "sensor_initializers",
-                "row": 24,
-                "basis": "Declared catalog input."
-              }
-            ],
-            "synthetic_scalar_bytes": [
-              {
-                "field": 4512,
-                "view": "eye_sensor_selector_initializer",
-                "source_offset": 0,
-                "basis": "Declared catalog input."
-              }
-            ]
-          },
-          "geometry": {
-            "page_bytes": 2048,
-            "spare_bytes": 512,
-            "pages_per_block": 64,
-            "blocks": 1024
-          },
-          "managed": {
-            "start": 890,
-            "logical_capacity": 114,
-            "banks_view": "banks"
-          },
-          "configuration_banks": [
-            {
-              "row": 0,
-              "cfg_offset": 0
-            },
-            {
-              "row": 1,
-              "fill": 255
-            }
-          ],
-          "header": {
-            "view": "main_header",
-            "registers_view": "header_registers",
-            "checksum_offset": 15
-          },
-          "custom_defaults": {
-            "entry_view": "custom_builder",
-            "output_address": 1087543256,
-            "size": 1792,
-            "slots": 7,
-            "slot_bytes": 256
-          },
-          "journals": [
-            {
-              "name": "main",
-              "kind": 2,
-              "bank_rows": [
-                6,
-                7
-              ],
-              "query_view": "main_banks",
-              "payload_size": 3844,
-              "default_copies": [
-                {
-                  "view": "main_header",
-                  "offset": 0
-                },
-                {
-                  "view": "main_defaults",
-                  "offset": 16
-                }
-              ],
-              "nondefault_edits": [
-                {
-                  "offset": 31,
-                  "mask": 192,
-                  "values": [
-                    1
-                  ]
-                }
-              ],
-              "record_copies": [
-                {
-                  "payload_offset": 3716,
-                  "record_offset": 4,
-                  "size": 128
-                },
-                {
-                  "payload_offset": 16,
-                  "record_offset": 260,
-                  "size": 3700
-                }
-              ],
-              "record_tags": [
-                {
-                  "view": "tag0",
-                  "offset": 3960
-                },
-                {
-                  "view": "tag1",
-                  "offset": 3961
-                }
-              ],
-              "prepare_view": "main_prepare",
-              "check_view": "main_check",
-              "parity_context": 12079324
-            },
-            {
-              "name": "custom",
-              "kind": 3,
-              "bank_rows": [
-                8,
-                9
-              ],
-              "query_view": "custom_banks",
-              "payload_size": 1792,
-              "default_copies": [],
-              "nondefault_edits": [
-                {
-                  "offset": 33,
-                  "mask": 159,
-                  "values": [
-                    32,
-                    32,
-                    32,
-                    32,
-                    32,
-                    32,
-                    32
-                  ]
-                },
-                {
-                  "offset": 13,
-                  "mask": 31,
-                  "values": [
-                    0,
-                    0,
-                    0,
-                    0,
-                    32,
-                    32,
-                    32
-                  ]
-                },
-                {
-                  "offset": 35,
-                  "mask": 159,
-                  "values": [
-                    0,
-                    32,
-                    64,
-                    96,
-                    0,
-                    32,
-                    64
-                  ]
-                }
-              ],
-              "record_copies": [
-                {
-                  "payload_offset": 0,
-                  "record_offset": 260,
-                  "size": 1792
-                }
-              ],
-              "record_tags": [],
-              "prepare_view": "custom_prepare",
-              "check_view": "custom_check",
-              "parity_context": 12079332
-            }
-          ],
-          "record": {
-            "size": 4096,
-            "protected_bytes": 3964,
-            "sequence_offset": 0,
-            "seed_sequences": [
-              1,
-              2
-            ],
-            "empty_fill": 255
-          },
-          "limits": []
+            "size": 8
+          }
         }
       },
       "storage-fixtures-xe2s-111": {
         "kind": "storage_layout",
         "data": {
-          "views": [
-            {
-              "name": "banks",
-              "address": 11577908,
-              "size": 132,
-              "sha256": "7037a92e31269daaa9160858c0c05f631a87f2ca17c09ec9404ed09f6d920aeb",
-              "sampling": "immutable-source"
-            },
-            {
-              "name": "parity_contexts",
-              "address": 12079324,
-              "size": 12,
-              "sha256": "6fb8986f7e96f980f3911f2b1049d28ec537436e5940fda05c180a2a098c1216",
-              "sampling": "immutable-source"
-            },
-            {
-              "name": "main_header",
-              "address": 11617792,
-              "size": 16,
-              "sha256": "342cdfa6f02b2b2a507d081fe33a17facc02468faec5647f40b36ef0c0f571a2",
-              "sampling": "immutable-source"
-            },
-            {
-              "name": "main_defaults",
-              "address": 12564624,
-              "size": 3700,
-              "sha256": "37b39a926f01b4c7359a16f783e8f647b75ca6eabd138a8d5d35979c28e323f7",
-              "sampling": "immutable-source"
-            },
-            {
-              "name": "custom_defaults",
-              "address": 11617808,
-              "size": 1792,
-              "sha256": "196a601ba4ec62e1641554706ad245de64027d5c764c67d52dc670232f66cb2b",
-              "sampling": "immutable-source"
-            },
-            {
-              "name": "tag0",
-              "address": 11617629,
-              "size": 1,
-              "sha256": "4bf5122f344554c53bde2ebb8cd2b7e3d1600ad631c385a5d7cce23c7785459a",
-              "sampling": "immutable-source"
-            },
-            {
-              "name": "tag1",
-              "address": 11617635,
-              "size": 1,
-              "sha256": "4a64a107f0cb32536e5bce6c98c393db21cca7f4ea187ba8c4dca8b51d4ea80a",
-              "sampling": "immutable-source"
-            },
-            {
-              "name": "header_registers",
-              "address": 11617760,
-              "size": 32,
-              "sha256": "57475af57d0a845a4c0e3d69b559c62699d93bca4a0519711b0f501e8d6f1bd1",
-              "sampling": "immutable-source"
-            },
-            {
-              "name": "main_prepare",
-              "address": 9728820,
-              "size": 88,
-              "sha256": "c3439e422dc077a9a0e782b9cf62d937d4130d4928b5c08c12726d63d4ffebc4",
-              "sampling": "immutable-source"
-            },
-            {
-              "name": "main_check",
-              "address": 9728908,
-              "size": 400,
-              "sha256": "ec78a09e8ced2bbf313476db4d02781fa62aba8459c2f5ac10e13a9ae789ee26",
-              "sampling": "immutable-source"
-            },
-            {
-              "name": "custom_prepare",
-              "address": 9734228,
-              "size": 88,
-              "sha256": "7f73947da2bcf8c6993f81afcf71c554b1620b3475d404223dc3fd8406b3f9ec",
-              "sampling": "immutable-source"
-            },
-            {
-              "name": "custom_check",
-              "address": 9734316,
-              "size": 400,
-              "sha256": "51e09c162c5e257baa6eacad9afc9233792ba6f035d23c02b0cbcff81c74b351",
-              "sampling": "immutable-source"
-            },
-            {
-              "name": "custom_builder",
-              "address": 9735008,
-              "size": 348,
-              "sha256": "e7cf6cbdbf288d3e72e8a0addbbfc568463cd825613ead6dceccd0b4bc3c653b",
-              "sampling": "immutable-source"
-            },
-            {
-              "name": "startup",
-              "address": 9731080,
-              "size": 556,
-              "sha256": "4014e50d4dc9ab13c108bf67c6a0b8c5082632f399f93926481657a505619d5f",
-              "sampling": "immutable-source"
-            },
-            {
-              "name": "custom_startup",
-              "address": 9735356,
-              "size": 264,
-              "sha256": "628168cf277dbaa64c00d7f1c373350406b60c85528d33c26e6b60d2bd6c49d3",
-              "sampling": "immutable-source"
-            },
-            {
-              "name": "main_banks",
-              "address": 9744768,
-              "size": 160,
-              "sha256": "c39d13535ea11ce8479d99c8dddf02100ceadb2e961a69b7506c45d8ea079ecb",
-              "sampling": "immutable-source"
-            },
-            {
-              "name": "custom_banks",
-              "address": 9745432,
-              "size": 160,
-              "sha256": "849c4662e1f4eecd777dd440cf0b4915d437499516f2fed592a13782a2daa0b3",
-              "sampling": "immutable-source"
-            },
-            {
-              "name": "byte_getter",
-              "address": 9717680,
-              "size": 36,
-              "sha256": "43f4183156c1939940a4c9d0d75b46bcd9195841e5c4cd980ddc18e5a68476b1",
-              "sampling": "immutable-source"
-            },
-            {
-              "name": "cfg_initializer",
-              "address": 9719332,
-              "size": 312,
-              "sha256": "c58d85e07e3583669fd07d87dccdbd9e01760ece380f2182f90f61255c8f5ce5",
-              "sampling": "immutable-source"
-            },
-            {
-              "name": "remapper",
-              "address": 9717472,
-              "size": 148,
-              "sha256": "b8c4987284f2ac15ac81a44c89ccf6b1181b81b6555e5b582fe281601912254c",
-              "sampling": "immutable-source"
-            }
-          ],
-          "sections": [
-            "stream-0016025c"
-          ],
-          "max_instructions": 1000000,
-          "scratch_record": 1124073472,
           "cfgdata": {
             "address": 1107722240,
-            "pointer_address": 12581772,
-            "size": 4325376,
             "defaults_sha256": "af9c783e638931b8bd04272a99e97959b4b444b0ad283d57b1f43d59e3a552a2",
-            "synthetic_signature": {
-              "offset": 514
-            },
-            "selector_address": 13075224,
+            "pointer_address": 12581772,
             "remapping": [
               {
-                "start": 4063232,
-                "size": 89344,
+                "delta": 89344,
                 "selector": 1,
-                "delta": 89344
+                "size": 89344,
+                "start": 4063232
               },
               {
-                "start": 4194304,
-                "size": 64768,
+                "delta": 64768,
                 "selector": 1,
-                "delta": 64768
+                "size": 64768,
+                "start": 4194304
               }
-            ]
-          },
-          "geometry": {
-            "page_bytes": 2048,
-            "spare_bytes": 512,
-            "pages_per_block": 64,
-            "blocks": 1024
-          },
-          "managed": {
-            "start": 890,
-            "logical_capacity": 114,
-            "banks_view": "banks"
+            ],
+            "selector_address": 13075224,
+            "size": 4325376,
+            "synthetic_signature": {
+              "offset": 514
+            }
           },
           "configuration_banks": [
             {
-              "row": 0,
-              "cfg_offset": 0
+              "cfg_offset": 0,
+              "row": 0
             },
             {
-              "row": 1,
-              "fill": 255
+              "fill": 255,
+              "row": 1
             }
           ],
-          "header": {
-            "view": "main_header",
-            "registers_view": "header_registers",
-            "checksum_offset": 15
-          },
           "custom_defaults": {
             "entry_view": "custom_builder",
             "output_address": 1087543256,
             "size": 1792,
-            "slots": 7,
-            "slot_bytes": 256
+            "slot_bytes": 256,
+            "slots": 7
+          },
+          "geometry": {
+            "blocks": 1024,
+            "page_bytes": 2048,
+            "pages_per_block": 64,
+            "spare_bytes": 512
+          },
+          "header": {
+            "checksum_offset": 15,
+            "registers_view": "header_registers",
+            "view": "main_header"
           },
           "journals": [
             {
-              "name": "main",
-              "kind": 2,
               "bank_rows": [
                 6,
                 7
               ],
-              "query_view": "main_banks",
-              "payload_size": 3844,
+              "check_view": "main_check",
               "default_copies": [
                 {
-                  "view": "main_header",
-                  "offset": 0
+                  "offset": 0,
+                  "view": "main_header"
                 },
                 {
-                  "view": "main_defaults",
-                  "offset": 16
+                  "offset": 16,
+                  "view": "main_defaults"
                 }
               ],
+              "kind": 2,
+              "name": "main",
               "nondefault_edits": [
                 {
-                  "offset": 31,
                   "mask": 192,
+                  "offset": 31,
                   "values": [
                     1
                   ]
                 }
               ],
+              "parity_context": 12079324,
+              "payload_size": 3844,
+              "prepare_view": "main_prepare",
+              "query_view": "main_banks",
               "record_copies": [
                 {
                   "payload_offset": 3716,
@@ -1174,32 +410,27 @@
               ],
               "record_tags": [
                 {
-                  "view": "tag0",
-                  "offset": 3960
+                  "offset": 3960,
+                  "view": "tag0"
                 },
                 {
-                  "view": "tag1",
-                  "offset": 3961
+                  "offset": 3961,
+                  "view": "tag1"
                 }
-              ],
-              "prepare_view": "main_prepare",
-              "check_view": "main_check",
-              "parity_context": 12079324
+              ]
             },
             {
-              "name": "custom",
-              "kind": 3,
               "bank_rows": [
                 8,
                 9
               ],
-              "query_view": "custom_banks",
-              "payload_size": 1792,
-              "default_copies": [],
+              "check_view": "custom_check",
+              "kind": 3,
+              "name": "custom",
               "nondefault_edits": [
                 {
+                  "mask": 159,
                   "offset": 33,
-                  "mask": 159,
                   "values": [
                     32,
                     32,
@@ -1211,8 +442,8 @@
                   ]
                 },
                 {
-                  "offset": 13,
                   "mask": 31,
+                  "offset": 13,
                   "values": [
                     0,
                     0,
@@ -1224,8 +455,8 @@
                   ]
                 },
                 {
-                  "offset": 35,
                   "mask": 159,
+                  "offset": 35,
                   "values": [
                     0,
                     32,
@@ -1237,30 +468,788 @@
                   ]
                 }
               ],
+              "parity_context": 12079332,
+              "payload_size": 1792,
+              "prepare_view": "custom_prepare",
+              "query_view": "custom_banks",
               "record_copies": [
                 {
                   "payload_offset": 0,
                   "record_offset": 260,
                   "size": 1792
                 }
-              ],
-              "record_tags": [],
-              "prepare_view": "custom_prepare",
-              "check_view": "custom_check",
-              "parity_context": 12079332
+              ]
             }
           ],
+          "managed": {
+            "banks_view": "banks",
+            "logical_capacity": 114,
+            "start": 890
+          },
+          "max_instructions": 1000000,
           "record": {
-            "size": 4096,
+            "empty_fill": 255,
             "protected_bytes": 3964,
-            "sequence_offset": 0,
             "seed_sequences": [
               1,
               2
             ],
-            "empty_fill": 255
+            "sequence_offset": 0,
+            "size": 4096
           },
-          "limits": []
+          "scratch_record": 1124073472,
+          "sections": [
+            "stream-0016025c"
+          ],
+          "views": [
+            {
+              "address": 11577908,
+              "name": "banks",
+              "sampling": "immutable-source",
+              "sha256": "7037a92e31269daaa9160858c0c05f631a87f2ca17c09ec9404ed09f6d920aeb",
+              "size": 132
+            },
+            {
+              "address": 12079324,
+              "name": "parity_contexts",
+              "sampling": "immutable-source",
+              "sha256": "6fb8986f7e96f980f3911f2b1049d28ec537436e5940fda05c180a2a098c1216",
+              "size": 12
+            },
+            {
+              "address": 11617792,
+              "name": "main_header",
+              "sampling": "immutable-source",
+              "sha256": "342cdfa6f02b2b2a507d081fe33a17facc02468faec5647f40b36ef0c0f571a2",
+              "size": 16
+            },
+            {
+              "address": 12564624,
+              "name": "main_defaults",
+              "sampling": "immutable-source",
+              "sha256": "37b39a926f01b4c7359a16f783e8f647b75ca6eabd138a8d5d35979c28e323f7",
+              "size": 3700
+            },
+            {
+              "address": 11617808,
+              "name": "custom_defaults",
+              "sampling": "immutable-source",
+              "sha256": "196a601ba4ec62e1641554706ad245de64027d5c764c67d52dc670232f66cb2b",
+              "size": 1792
+            },
+            {
+              "address": 11617629,
+              "name": "tag0",
+              "sampling": "immutable-source",
+              "sha256": "4bf5122f344554c53bde2ebb8cd2b7e3d1600ad631c385a5d7cce23c7785459a",
+              "size": 1
+            },
+            {
+              "address": 11617635,
+              "name": "tag1",
+              "sampling": "immutable-source",
+              "sha256": "4a64a107f0cb32536e5bce6c98c393db21cca7f4ea187ba8c4dca8b51d4ea80a",
+              "size": 1
+            },
+            {
+              "address": 11617760,
+              "name": "header_registers",
+              "sampling": "immutable-source",
+              "sha256": "57475af57d0a845a4c0e3d69b559c62699d93bca4a0519711b0f501e8d6f1bd1",
+              "size": 32
+            },
+            {
+              "address": 9728820,
+              "name": "main_prepare",
+              "sampling": "immutable-source",
+              "sha256": "c3439e422dc077a9a0e782b9cf62d937d4130d4928b5c08c12726d63d4ffebc4",
+              "size": 88
+            },
+            {
+              "address": 9728908,
+              "name": "main_check",
+              "sampling": "immutable-source",
+              "sha256": "ec78a09e8ced2bbf313476db4d02781fa62aba8459c2f5ac10e13a9ae789ee26",
+              "size": 400
+            },
+            {
+              "address": 9734228,
+              "name": "custom_prepare",
+              "sampling": "immutable-source",
+              "sha256": "7f73947da2bcf8c6993f81afcf71c554b1620b3475d404223dc3fd8406b3f9ec",
+              "size": 88
+            },
+            {
+              "address": 9734316,
+              "name": "custom_check",
+              "sampling": "immutable-source",
+              "sha256": "51e09c162c5e257baa6eacad9afc9233792ba6f035d23c02b0cbcff81c74b351",
+              "size": 400
+            },
+            {
+              "address": 9735008,
+              "name": "custom_builder",
+              "sampling": "immutable-source",
+              "sha256": "e7cf6cbdbf288d3e72e8a0addbbfc568463cd825613ead6dceccd0b4bc3c653b",
+              "size": 348
+            },
+            {
+              "address": 9731080,
+              "name": "startup",
+              "sampling": "immutable-source",
+              "sha256": "4014e50d4dc9ab13c108bf67c6a0b8c5082632f399f93926481657a505619d5f",
+              "size": 556
+            },
+            {
+              "address": 9735356,
+              "name": "custom_startup",
+              "sampling": "immutable-source",
+              "sha256": "628168cf277dbaa64c00d7f1c373350406b60c85528d33c26e6b60d2bd6c49d3",
+              "size": 264
+            },
+            {
+              "address": 9744768,
+              "name": "main_banks",
+              "sampling": "immutable-source",
+              "sha256": "c39d13535ea11ce8479d99c8dddf02100ceadb2e961a69b7506c45d8ea079ecb",
+              "size": 160
+            },
+            {
+              "address": 9745432,
+              "name": "custom_banks",
+              "sampling": "immutable-source",
+              "sha256": "849c4662e1f4eecd777dd440cf0b4915d437499516f2fed592a13782a2daa0b3",
+              "size": 160
+            },
+            {
+              "address": 9717680,
+              "name": "byte_getter",
+              "sampling": "immutable-source",
+              "sha256": "43f4183156c1939940a4c9d0d75b46bcd9195841e5c4cd980ddc18e5a68476b1",
+              "size": 36
+            },
+            {
+              "address": 9719332,
+              "name": "cfg_initializer",
+              "sampling": "immutable-source",
+              "sha256": "c58d85e07e3583669fd07d87dccdbd9e01760ece380f2182f90f61255c8f5ce5",
+              "size": 312
+            },
+            {
+              "address": 9717472,
+              "name": "remapper",
+              "sampling": "immutable-source",
+              "sha256": "b8c4987284f2ac15ac81a44c89ccf6b1181b81b6555e5b582fe281601912254c",
+              "size": 148
+            }
+          ]
+        }
+      },
+      "storage-fixtures-xe2s-111-service": {
+        "kind": "storage_layout",
+        "data": {
+          "cfgdata": {
+            "address": 1107722240,
+            "defaults_sha256": "af9c783e638931b8bd04272a99e97959b4b444b0ad283d57b1f43d59e3a552a2",
+            "pointer_address": 12581772,
+            "remapping": [
+              {
+                "delta": 89344,
+                "selector": 1,
+                "size": 89344,
+                "start": 4063232
+              },
+              {
+                "delta": 64768,
+                "selector": 1,
+                "size": 64768,
+                "start": 4194304
+              }
+            ],
+            "selector_address": 13075224,
+            "size": 4325376,
+            "synthetic_byte_fields": [
+              {
+                "basis": "Declared catalog input.",
+                "field": 4514,
+                "row": 0,
+                "view": "endpoint2_initializers"
+              },
+              {
+                "basis": "Declared catalog input.",
+                "field": 4515,
+                "row": 1,
+                "view": "endpoint2_initializers"
+              },
+              {
+                "basis": "Declared catalog input.",
+                "field": 4516,
+                "row": 2,
+                "view": "endpoint2_initializers"
+              },
+              {
+                "basis": "Declared catalog input.",
+                "field": 4517,
+                "row": 3,
+                "view": "endpoint2_initializers"
+              },
+              {
+                "basis": "Declared catalog input.",
+                "field": 4518,
+                "row": 4,
+                "view": "endpoint2_initializers"
+              },
+              {
+                "basis": "Declared catalog input.",
+                "field": 4519,
+                "row": 5,
+                "view": "endpoint2_initializers"
+              },
+              {
+                "basis": "Declared catalog input.",
+                "field": 4520,
+                "row": 6,
+                "view": "endpoint2_initializers"
+              },
+              {
+                "basis": "Declared catalog input.",
+                "field": 4521,
+                "row": 7,
+                "view": "endpoint2_initializers"
+              },
+              {
+                "basis": "Declared catalog input.",
+                "field": 4522,
+                "row": 8,
+                "view": "endpoint2_initializers"
+              },
+              {
+                "basis": "Declared catalog input.",
+                "field": 4523,
+                "row": 9,
+                "view": "endpoint2_initializers"
+              },
+              {
+                "basis": "Declared catalog input.",
+                "field": 4524,
+                "row": 10,
+                "view": "endpoint2_initializers"
+              },
+              {
+                "basis": "Declared catalog input.",
+                "field": 4525,
+                "row": 11,
+                "view": "endpoint2_initializers"
+              },
+              {
+                "basis": "Declared catalog input.",
+                "field": 4526,
+                "row": 12,
+                "view": "endpoint2_initializers"
+              },
+              {
+                "basis": "Declared catalog input.",
+                "field": 4527,
+                "row": 13,
+                "view": "endpoint2_initializers"
+              },
+              {
+                "basis": "Declared catalog input.",
+                "field": 4528,
+                "row": 14,
+                "view": "endpoint2_initializers"
+              },
+              {
+                "basis": "Declared catalog input.",
+                "field": 38912,
+                "row": 0,
+                "view": "sensor_initializers"
+              },
+              {
+                "basis": "Declared catalog input.",
+                "field": 38913,
+                "row": 1,
+                "view": "sensor_initializers"
+              },
+              {
+                "basis": "Declared catalog input.",
+                "field": 38914,
+                "row": 2,
+                "view": "sensor_initializers"
+              },
+              {
+                "basis": "Declared catalog input.",
+                "field": 38915,
+                "row": 3,
+                "view": "sensor_initializers"
+              },
+              {
+                "basis": "Declared catalog input.",
+                "field": 38916,
+                "row": 4,
+                "view": "sensor_initializers"
+              },
+              {
+                "basis": "Declared catalog input.",
+                "field": 38917,
+                "row": 5,
+                "view": "sensor_initializers"
+              },
+              {
+                "basis": "Declared catalog input.",
+                "field": 38918,
+                "row": 6,
+                "view": "sensor_initializers"
+              },
+              {
+                "basis": "Declared catalog input.",
+                "field": 38919,
+                "row": 7,
+                "view": "sensor_initializers"
+              },
+              {
+                "basis": "Declared catalog input.",
+                "field": 38920,
+                "row": 8,
+                "view": "sensor_initializers"
+              },
+              {
+                "basis": "Declared catalog input.",
+                "field": 38921,
+                "row": 9,
+                "view": "sensor_initializers"
+              },
+              {
+                "basis": "Declared catalog input.",
+                "field": 38922,
+                "row": 10,
+                "view": "sensor_initializers"
+              },
+              {
+                "basis": "Declared catalog input.",
+                "field": 38923,
+                "row": 11,
+                "view": "sensor_initializers"
+              },
+              {
+                "basis": "Declared catalog input.",
+                "field": 38924,
+                "row": 12,
+                "view": "sensor_initializers"
+              },
+              {
+                "basis": "Declared catalog input.",
+                "field": 38925,
+                "row": 13,
+                "view": "sensor_initializers"
+              },
+              {
+                "basis": "Declared catalog input.",
+                "field": 38926,
+                "row": 14,
+                "view": "sensor_initializers"
+              },
+              {
+                "basis": "Declared catalog input.",
+                "field": 38927,
+                "row": 15,
+                "view": "sensor_initializers"
+              },
+              {
+                "basis": "Declared catalog input.",
+                "field": 38928,
+                "row": 16,
+                "view": "sensor_initializers"
+              },
+              {
+                "basis": "Declared catalog input.",
+                "field": 38929,
+                "row": 17,
+                "view": "sensor_initializers"
+              },
+              {
+                "basis": "Declared catalog input.",
+                "field": 38930,
+                "row": 18,
+                "view": "sensor_initializers"
+              },
+              {
+                "basis": "Declared catalog input.",
+                "field": 38931,
+                "row": 19,
+                "view": "sensor_initializers"
+              },
+              {
+                "basis": "Declared catalog input.",
+                "field": 38932,
+                "row": 20,
+                "view": "sensor_initializers"
+              },
+              {
+                "basis": "Declared catalog input.",
+                "field": 38933,
+                "row": 21,
+                "view": "sensor_initializers"
+              },
+              {
+                "basis": "Declared catalog input.",
+                "field": 38934,
+                "row": 22,
+                "view": "sensor_initializers"
+              },
+              {
+                "basis": "Declared catalog input.",
+                "field": 38935,
+                "row": 23,
+                "view": "sensor_initializers"
+              },
+              {
+                "basis": "Declared catalog input.",
+                "field": 38936,
+                "row": 24,
+                "view": "sensor_initializers"
+              }
+            ],
+            "synthetic_scalar_bytes": [
+              {
+                "basis": "Declared catalog input.",
+                "field": 4512,
+                "source_offset": 0,
+                "view": "eye_sensor_selector_initializer"
+              }
+            ],
+            "synthetic_signature": {
+              "offset": 514
+            }
+          },
+          "configuration_banks": [
+            {
+              "cfg_offset": 0,
+              "row": 0
+            },
+            {
+              "fill": 255,
+              "row": 1
+            }
+          ],
+          "custom_defaults": {
+            "entry_view": "custom_builder",
+            "output_address": 1087543256,
+            "size": 1792,
+            "slot_bytes": 256,
+            "slots": 7
+          },
+          "geometry": {
+            "blocks": 1024,
+            "page_bytes": 2048,
+            "pages_per_block": 64,
+            "spare_bytes": 512
+          },
+          "header": {
+            "checksum_offset": 15,
+            "registers_view": "header_registers",
+            "view": "main_header"
+          },
+          "journals": [
+            {
+              "bank_rows": [
+                6,
+                7
+              ],
+              "check_view": "main_check",
+              "default_copies": [
+                {
+                  "offset": 0,
+                  "view": "main_header"
+                },
+                {
+                  "offset": 16,
+                  "view": "main_defaults"
+                }
+              ],
+              "kind": 2,
+              "name": "main",
+              "nondefault_edits": [
+                {
+                  "mask": 192,
+                  "offset": 31,
+                  "values": [
+                    1
+                  ]
+                }
+              ],
+              "parity_context": 12079324,
+              "payload_size": 3844,
+              "prepare_view": "main_prepare",
+              "query_view": "main_banks",
+              "record_copies": [
+                {
+                  "payload_offset": 3716,
+                  "record_offset": 4,
+                  "size": 128
+                },
+                {
+                  "payload_offset": 16,
+                  "record_offset": 260,
+                  "size": 3700
+                }
+              ],
+              "record_tags": [
+                {
+                  "offset": 3960,
+                  "view": "tag0"
+                },
+                {
+                  "offset": 3961,
+                  "view": "tag1"
+                }
+              ]
+            },
+            {
+              "bank_rows": [
+                8,
+                9
+              ],
+              "check_view": "custom_check",
+              "kind": 3,
+              "name": "custom",
+              "nondefault_edits": [
+                {
+                  "mask": 159,
+                  "offset": 33,
+                  "values": [
+                    32,
+                    32,
+                    32,
+                    32,
+                    32,
+                    32,
+                    32
+                  ]
+                },
+                {
+                  "mask": 31,
+                  "offset": 13,
+                  "values": [
+                    0,
+                    0,
+                    0,
+                    0,
+                    32,
+                    32,
+                    32
+                  ]
+                },
+                {
+                  "mask": 159,
+                  "offset": 35,
+                  "values": [
+                    0,
+                    32,
+                    64,
+                    96,
+                    0,
+                    32,
+                    64
+                  ]
+                }
+              ],
+              "parity_context": 12079332,
+              "payload_size": 1792,
+              "prepare_view": "custom_prepare",
+              "query_view": "custom_banks",
+              "record_copies": [
+                {
+                  "payload_offset": 0,
+                  "record_offset": 260,
+                  "size": 1792
+                }
+              ]
+            }
+          ],
+          "managed": {
+            "banks_view": "banks",
+            "logical_capacity": 114,
+            "start": 890
+          },
+          "max_instructions": 1000000,
+          "record": {
+            "empty_fill": 255,
+            "protected_bytes": 3964,
+            "seed_sequences": [
+              1,
+              2
+            ],
+            "sequence_offset": 0,
+            "size": 4096
+          },
+          "scratch_record": 1124073472,
+          "sections": [
+            "stream-0016025c"
+          ],
+          "views": [
+            {
+              "address": 11577908,
+              "name": "banks",
+              "sampling": "immutable-source",
+              "sha256": "7037a92e31269daaa9160858c0c05f631a87f2ca17c09ec9404ed09f6d920aeb",
+              "size": 132
+            },
+            {
+              "address": 12079324,
+              "name": "parity_contexts",
+              "sampling": "immutable-source",
+              "sha256": "6fb8986f7e96f980f3911f2b1049d28ec537436e5940fda05c180a2a098c1216",
+              "size": 12
+            },
+            {
+              "address": 11617792,
+              "name": "main_header",
+              "sampling": "immutable-source",
+              "sha256": "342cdfa6f02b2b2a507d081fe33a17facc02468faec5647f40b36ef0c0f571a2",
+              "size": 16
+            },
+            {
+              "address": 12564624,
+              "name": "main_defaults",
+              "sampling": "immutable-source",
+              "sha256": "37b39a926f01b4c7359a16f783e8f647b75ca6eabd138a8d5d35979c28e323f7",
+              "size": 3700
+            },
+            {
+              "address": 11617808,
+              "name": "custom_defaults",
+              "sampling": "immutable-source",
+              "sha256": "196a601ba4ec62e1641554706ad245de64027d5c764c67d52dc670232f66cb2b",
+              "size": 1792
+            },
+            {
+              "address": 11617629,
+              "name": "tag0",
+              "sampling": "immutable-source",
+              "sha256": "4bf5122f344554c53bde2ebb8cd2b7e3d1600ad631c385a5d7cce23c7785459a",
+              "size": 1
+            },
+            {
+              "address": 11617635,
+              "name": "tag1",
+              "sampling": "immutable-source",
+              "sha256": "4a64a107f0cb32536e5bce6c98c393db21cca7f4ea187ba8c4dca8b51d4ea80a",
+              "size": 1
+            },
+            {
+              "address": 11617760,
+              "name": "header_registers",
+              "sampling": "immutable-source",
+              "sha256": "57475af57d0a845a4c0e3d69b559c62699d93bca4a0519711b0f501e8d6f1bd1",
+              "size": 32
+            },
+            {
+              "address": 9728820,
+              "name": "main_prepare",
+              "sampling": "immutable-source",
+              "sha256": "c3439e422dc077a9a0e782b9cf62d937d4130d4928b5c08c12726d63d4ffebc4",
+              "size": 88
+            },
+            {
+              "address": 9728908,
+              "name": "main_check",
+              "sampling": "immutable-source",
+              "sha256": "ec78a09e8ced2bbf313476db4d02781fa62aba8459c2f5ac10e13a9ae789ee26",
+              "size": 400
+            },
+            {
+              "address": 9734228,
+              "name": "custom_prepare",
+              "sampling": "immutable-source",
+              "sha256": "7f73947da2bcf8c6993f81afcf71c554b1620b3475d404223dc3fd8406b3f9ec",
+              "size": 88
+            },
+            {
+              "address": 9734316,
+              "name": "custom_check",
+              "sampling": "immutable-source",
+              "sha256": "51e09c162c5e257baa6eacad9afc9233792ba6f035d23c02b0cbcff81c74b351",
+              "size": 400
+            },
+            {
+              "address": 9735008,
+              "name": "custom_builder",
+              "sampling": "immutable-source",
+              "sha256": "e7cf6cbdbf288d3e72e8a0addbbfc568463cd825613ead6dceccd0b4bc3c653b",
+              "size": 348
+            },
+            {
+              "address": 9731080,
+              "name": "startup",
+              "sampling": "immutable-source",
+              "sha256": "4014e50d4dc9ab13c108bf67c6a0b8c5082632f399f93926481657a505619d5f",
+              "size": 556
+            },
+            {
+              "address": 9735356,
+              "name": "custom_startup",
+              "sampling": "immutable-source",
+              "sha256": "628168cf277dbaa64c00d7f1c373350406b60c85528d33c26e6b60d2bd6c49d3",
+              "size": 264
+            },
+            {
+              "address": 9744768,
+              "name": "main_banks",
+              "sampling": "immutable-source",
+              "sha256": "c39d13535ea11ce8479d99c8dddf02100ceadb2e961a69b7506c45d8ea079ecb",
+              "size": 160
+            },
+            {
+              "address": 9745432,
+              "name": "custom_banks",
+              "sampling": "immutable-source",
+              "sha256": "849c4662e1f4eecd777dd440cf0b4915d437499516f2fed592a13782a2daa0b3",
+              "size": 160
+            },
+            {
+              "address": 9717680,
+              "name": "byte_getter",
+              "sampling": "immutable-source",
+              "sha256": "43f4183156c1939940a4c9d0d75b46bcd9195841e5c4cd980ddc18e5a68476b1",
+              "size": 36
+            },
+            {
+              "address": 9719332,
+              "name": "cfg_initializer",
+              "sampling": "immutable-source",
+              "sha256": "c58d85e07e3583669fd07d87dccdbd9e01760ece380f2182f90f61255c8f5ce5",
+              "size": 312
+            },
+            {
+              "address": 9717472,
+              "name": "remapper",
+              "sampling": "immutable-source",
+              "sha256": "b8c4987284f2ac15ac81a44c89ccf6b1181b81b6555e5b582fe281601912254c",
+              "size": 148
+            },
+            {
+              "address": 11657296,
+              "name": "endpoint2_initializers",
+              "sampling": "immutable-source",
+              "sha256": "1ff06dbda4665e106be4befdd1320dbc2522fbb07b8c52340bf445631e653991",
+              "size": 180
+            },
+            {
+              "address": 12080496,
+              "name": "eye_sensor_selector_initializer",
+              "sampling": "immutable-source",
+              "sha256": "4bf5122f344554c53bde2ebb8cd2b7e3d1600ad631c385a5d7cce23c7785459a",
+              "size": 1
+            },
+            {
+              "address": 11619600,
+              "name": "sensor_initializers",
+              "sampling": "immutable-source",
+              "sha256": "1b82e1933899dc3c7179160cbf7c4b508b95d943d3fe74fe9f93e391fecdecc4",
+              "size": 300
+            }
+          ]
         }
       }
     }

@@ -1,0 +1,19 @@
+{
+  "$schema": "https://fujimod.com/schemas/soc-block.schema.json",
+  "schema": 1,
+  "id": "face-detection",
+  "base": 4294381568,
+  "size": 4096,
+  "kind": "imaging-controller",
+  "interrupts": [
+    {
+      "output": "status",
+      "line": 124
+    }
+  ],
+  "device": {
+    "model": "face_detection",
+    "run_ticks": 508800,
+    "basis": "Face detection engine of X-T20 2.11 section 6, driven by task face (0x1861000..0x186c000). The stop 0x18610b0 writes 0 to +0x00 and waits until it reads non-zero; the start and stop paths 0x186bcd0/0x186bf20 wait until +0x818 reads non-zero. A run is programmed through +0x08..+0x838 and started with bit 0 of +0x04. Descriptor row 0x34 of 0xed471c connects it to interrupt 124 (level); the handler 0x18659b8 acknowledges with 0x11111 written to the status +0x834 (0x1861e88) and calls the registered callback. The engine runs only when face detection is selected: a strict boot with the camera's own settings (2026-10-29 REC dump) writes +0x14 at 180M instructions. Each start completes one run after run_ticks, sets status bit 0 and finds no face; the image is not read. run_ticks is the camera's measured 10.6 ms face-detection step after a shot (marker 0x06029d00), in 48 MHz timer ticks; the live-view run time is not measured."
+  }
+}

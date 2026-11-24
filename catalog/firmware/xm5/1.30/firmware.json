@@ -1,170 +1,170 @@
 {
- "$schema": "https://fujimod.com/schemas/firmware.schema.json",
- "schema": 1,
- "id": "xm5-130",
- "body_id": "xm5",
- "version": "1.30",
- "update": {
-  "size": 110561488,
-  "sha256": "0ee53160737b770ca9927b11885140228df1142d2694ba2e8e32b127f205c03c"
- },
- "boot_rom": null,
- "installation": null,
- "generated_facts": null,
- "layouts": {
-  "profiles": {
-   "xm5-130": {
-    "flash_image": {
-     "dat_origin": 700,
-     "xor": 255
-    },
-    "preload": [
-     {
-      "address": 262144,
-      "dat_offset": 6554300,
-      "length": 2048,
-      "sha256": "573bf9cd1c9dd0ae3dc860e1b1815aa4246176bab810638901fd4f789d0ce481"
-     },
-     {
-      "address": 264192,
-      "dat_offset": 1180348,
-      "length": 2048,
-      "sha256": "be024c049b7361b3918fab0c140f7c592205e39e2a27da545a1994ebdcbe077d"
-     },
-     {
-      "address": 94784,
-      "value": 0,
-      "size": 8
-     },
-     {
-      "address": 126924,
-      "words": [4294967295, 15719457, 1431677612],
-      "word_size": 4
-     },
-     {
-      "address": 127232,
-      "value": 1,
-      "size": 4
-     }
-    ],
-    "cpu": [
-     {
-      "id": 0,
-      "pc": 627180,
-      "cpsr": 964,
-      "running": true,
-      "regs": {
-       "x19": 0,
-       "x20": 22988288,
-       "x21": 125424
-      },
-      "sysregs": {
-       "ICC_PMR_EL1": 255,
-       "ICC_IGRPEN0_EL1": 1,
-       "ICC_IGRPEN1_EL1": 1,
-       "VBAR_EL1": 632832,
-       "SCTLR_EL1": 818939904,
-       "CPACR_EL1": 3145728,
-       "SP_EL0": 157568,
-       "SP_EL1": 157568
-      }
-     },
-     {
-      "id": 1,
-      "pc": 627180,
-      "cpsr": 964,
-      "running": true,
-      "regs": {
-       "x19": 1,
-       "x20": 22988288,
-       "x21": 125424
-      },
-      "sysregs": {
-       "ICC_PMR_EL1": 255,
-       "ICC_IGRPEN0_EL1": 1,
-       "ICC_IGRPEN1_EL1": 1,
-       "VBAR_EL1": 632832,
-       "SCTLR_EL1": 818939904,
-       "CPACR_EL1": 3145728,
-       "SP_EL0": 186240,
-       "SP_EL1": 186240
-      }
-     },
-     {
-      "id": 2,
-      "pc": 627180,
-      "cpsr": 964,
-      "running": true,
-      "regs": {
-       "x19": 2,
-       "x20": 22988288,
-       "x21": 125424
-      },
-      "sysregs": {
-       "ICC_PMR_EL1": 255,
-       "ICC_IGRPEN0_EL1": 1,
-       "ICC_IGRPEN1_EL1": 1,
-       "VBAR_EL1": 632832,
-       "SCTLR_EL1": 818939904,
-       "CPACR_EL1": 3145728,
-       "SP_EL0": 214912,
-       "SP_EL1": 214912
-      }
-     },
-     {
-      "id": 3,
-      "pc": 627180,
-      "cpsr": 964,
-      "running": true,
-      "regs": {
-       "x19": 3,
-       "x20": 22988288,
-       "x21": 125424
-      },
-      "sysregs": {
-       "ICC_PMR_EL1": 255,
-       "ICC_IGRPEN0_EL1": 1,
-       "ICC_IGRPEN1_EL1": 1,
-       "VBAR_EL1": 632832,
-       "SCTLR_EL1": 818939904,
-       "CPACR_EL1": 3145728,
-       "SP_EL0": 243584,
-       "SP_EL1": 243584
-      }
-     }
-    ],
-    "gic_initial": {
-     "0x0": 7
-    },
-    "gic_redistributor_initial": [
-     {
-      "core": 0,
-      "offset": 20,
-      "size": 4,
-      "value": 0
-     },
-     {
-      "core": 1,
-      "offset": 20,
-      "size": 4,
-      "value": 0
-     },
-     {
-      "core": 2,
-      "offset": 20,
-      "size": 4,
-      "value": 0
-     },
-     {
-      "core": 3,
-      "offset": 20,
-      "size": 4,
-      "value": 0
-     }
-    ],
-    "limits": []
-   }
+  "$schema": "https://fujimod.com/schemas/firmware.schema.json",
+  "schema": 1,
+  "id": "xm5-130",
+  "body_id": "xm5",
+  "version": "1.30",
+  "update": {
+    "size": 110561488,
+    "sha256": "0ee53160737b770ca9927b11885140228df1142d2694ba2e8e32b127f205c03c"
   },
-  "views": {}
- }
+  "layouts": {
+    "profiles": {
+      "xm5-130": {
+        "cpu": [
+          {
+            "cpsr": 964,
+            "id": 0,
+            "pc": 627180,
+            "regs": {
+              "x19": 0,
+              "x20": 22988288,
+              "x21": 125424
+            },
+            "running": true,
+            "sysregs": {
+              "CPACR_EL1": 3145728,
+              "ICC_IGRPEN0_EL1": 1,
+              "ICC_IGRPEN1_EL1": 1,
+              "ICC_PMR_EL1": 255,
+              "SCTLR_EL1": 818939904,
+              "SP_EL0": 157568,
+              "SP_EL1": 157568,
+              "VBAR_EL1": 632832
+            }
+          },
+          {
+            "cpsr": 964,
+            "id": 1,
+            "pc": 627180,
+            "regs": {
+              "x19": 1,
+              "x20": 22988288,
+              "x21": 125424
+            },
+            "running": true,
+            "sysregs": {
+              "CPACR_EL1": 3145728,
+              "ICC_IGRPEN0_EL1": 1,
+              "ICC_IGRPEN1_EL1": 1,
+              "ICC_PMR_EL1": 255,
+              "SCTLR_EL1": 818939904,
+              "SP_EL0": 186240,
+              "SP_EL1": 186240,
+              "VBAR_EL1": 632832
+            }
+          },
+          {
+            "cpsr": 964,
+            "id": 2,
+            "pc": 627180,
+            "regs": {
+              "x19": 2,
+              "x20": 22988288,
+              "x21": 125424
+            },
+            "running": true,
+            "sysregs": {
+              "CPACR_EL1": 3145728,
+              "ICC_IGRPEN0_EL1": 1,
+              "ICC_IGRPEN1_EL1": 1,
+              "ICC_PMR_EL1": 255,
+              "SCTLR_EL1": 818939904,
+              "SP_EL0": 214912,
+              "SP_EL1": 214912,
+              "VBAR_EL1": 632832
+            }
+          },
+          {
+            "cpsr": 964,
+            "id": 3,
+            "pc": 627180,
+            "regs": {
+              "x19": 3,
+              "x20": 22988288,
+              "x21": 125424
+            },
+            "running": true,
+            "sysregs": {
+              "CPACR_EL1": 3145728,
+              "ICC_IGRPEN0_EL1": 1,
+              "ICC_IGRPEN1_EL1": 1,
+              "ICC_PMR_EL1": 255,
+              "SCTLR_EL1": 818939904,
+              "SP_EL0": 243584,
+              "SP_EL1": 243584,
+              "VBAR_EL1": 632832
+            }
+          }
+        ],
+        "flash_image": {
+          "dat_origin": 700,
+          "xor": 255
+        },
+        "gic_initial": {
+          "0x0": 7
+        },
+        "gic_redistributor_initial": [
+          {
+            "core": 0,
+            "offset": 20,
+            "size": 4,
+            "value": 0
+          },
+          {
+            "core": 1,
+            "offset": 20,
+            "size": 4,
+            "value": 0
+          },
+          {
+            "core": 2,
+            "offset": 20,
+            "size": 4,
+            "value": 0
+          },
+          {
+            "core": 3,
+            "offset": 20,
+            "size": 4,
+            "value": 0
+          }
+        ],
+        "limits": [],
+        "preload": [
+          {
+            "address": 262144,
+            "dat_offset": 6554300,
+            "length": 2048,
+            "sha256": "573bf9cd1c9dd0ae3dc860e1b1815aa4246176bab810638901fd4f789d0ce481"
+          },
+          {
+            "address": 264192,
+            "dat_offset": 1180348,
+            "length": 2048,
+            "sha256": "be024c049b7361b3918fab0c140f7c592205e39e2a27da545a1994ebdcbe077d"
+          },
+          {
+            "address": 94784,
+            "size": 8,
+            "value": 0
+          },
+          {
+            "address": 126924,
+            "word_size": 4,
+            "words": [
+              4294967295,
+              15719457,
+              1431677612
+            ]
+          },
+          {
+            "address": 127232,
+            "size": 4,
+            "value": 1
+          }
+        ]
+      }
+    }
+  }
 }

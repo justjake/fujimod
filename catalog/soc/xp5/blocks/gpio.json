@@ -1,0 +1,8 @@
+{
+  "$schema": "https://fujimod.com/schemas/soc-block.schema.json",
+  "schema": 1,
+  "id": "gpio",
+  "base": 4287655936,
+  "size": 4096,
+  "kind": "gpio"
+}

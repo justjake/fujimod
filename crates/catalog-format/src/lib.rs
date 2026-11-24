@@ -4,6 +4,7 @@
 //! back, so its key order is the type's field order and hand edits and machine
 //! edits produce the same bytes. Generated files are never formatted.
 
+use fujimod_catalog::reference::SocBlockRecord;
 use fujimod_catalog::{Body, Firmware, Ip, Part, Soc};
 use fujimod_catalog_controls::PhysicalControls;
 use serde::Serialize;
@@ -16,6 +17,8 @@ use std::path::{Path, PathBuf};
 pub enum RecordKind {
     /// `soc/<id>/soc.json`.
     Soc,
+    /// `soc/<id>/blocks/<block-id>.json`.
+    Block,
     /// `ip/<id>.json`.
     Ip,
     /// `bodies/<id>/body.json`.
@@ -36,6 +39,11 @@ impl RecordKind {
         let parts: Vec<&str> = relative.iter().filter_map(|part| part.to_str()).collect();
         match parts.as_slice() {
             ["soc", _, "soc.json"] => Some(Self::Soc),
+            ["soc", _, "blocks", file]
+                if file.ends_with(".json") && !file.ends_with(".generated.json") =>
+            {
+                Some(Self::Block)
+            }
             ["ip", file] if file.ends_with(".json") && !file.ends_with(".generated.json") => {
                 Some(Self::Ip)
             }
@@ -52,6 +60,7 @@ impl RecordKind {
 pub fn format_record(kind: RecordKind, bytes: &[u8]) -> Result<Vec<u8>, String> {
     match kind {
         RecordKind::Soc => format::<Soc>(bytes),
+        RecordKind::Block => format::<SocBlockRecord>(bytes),
         RecordKind::Ip => format::<Ip>(bytes),
         RecordKind::Body => format::<Body>(bytes),
         RecordKind::Controls => format::<PhysicalControls>(bytes),
@@ -191,6 +200,10 @@ mod tests {
         assert_eq!(
             RecordKind::for_path(root, Path::new("catalog/soc/xp4/soc.json")),
             Some(RecordKind::Soc)
+        );
+        assert_eq!(
+            RecordKind::for_path(root, Path::new("catalog/soc/xp4/blocks/gpio.json")),
+            Some(RecordKind::Block)
         );
         assert_eq!(
             RecordKind::for_path(root, Path::new("catalog/bodies/xt3/controls.json")),

@@ -1,0 +1,40 @@
+{
+  "$schema": "https://fujimod.com/schemas/soc-block.schema.json",
+  "schema": 1,
+  "id": "imaging-fffc3000",
+  "base": 4294717440,
+  "size": 4096,
+  "kind": "imaging-controller",
+  "interrupts": [
+    {
+      "output": "interrupt",
+      "line": 131
+    }
+  ],
+  "device": {
+    "model": "register_block",
+    "idle_bits": [
+      {
+        "mask": 1,
+        "offset": 0
+      },
+      {
+        "mask": 16777472,
+        "offset": 220
+      }
+    ],
+    "job": {
+      "start": {
+        "mask": 1,
+        "offset": 4
+      },
+      "status": {
+        "mask": 1,
+        "offset": 220
+      },
+      "ticks": 144000
+    },
+    "basis": "Resize engine of X-T20 2.11 (step marker 0x0602333x; after a still it holds buffers 0x9a94000/0x9ae8000 with geometry 0x77009f, 160x120): started by +0x04 bit 0, finishes with +0xdc bit 0 and interrupt 131 (handler 0xcce510 writes +0xdc); +0xdc reads 0x01000100 when idle. run ticks are xpro-lab's 3 ms engine step; no data moves.",
+    "order": 31
+  }
+}

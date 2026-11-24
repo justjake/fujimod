@@ -5,6 +5,14 @@
   "model": {
     "kind": "lens-mechanism",
     "protocol": "mixed-width",
+    "period_ticks": 16,
+    "motor_counters": [
+      {
+        "motor": 0,
+        "channel": 4,
+        "divider": 2
+      }
+    ],
     "motors": [
       {
         "initial_position": 0,
@@ -34,19 +42,9 @@
       }
     ],
     "encoder": {
-      "phase_ticks": null,
       "rest_phase": 0,
       "steps_per_phase": 4
-    },
-    "zoom": null,
-    "period_ticks": 16,
-    "motor_counters": [
-      {
-        "motor": 0,
-        "channel": 4,
-        "divider": 2
-      }
-    ]
+    }
   },
   "attachment": {
     "pulse": {
@@ -65,8 +63,7 @@
         11
       ],
       "quadrature": true,
-      "initial_phase": 0,
-      "capture_channel": null
+      "initial_phase": 0
     },
     "interrupts": [
       {
@@ -156,7 +153,6 @@
         ]
       }
     ],
-    "limits": [],
     "motor_home_pins": [
       {
         "port": 0,

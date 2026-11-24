@@ -35,176 +35,173 @@
       179
     ]
   },
-  "analog_levels": null,
   "controls": {
-    "rear_command_dial": {
-      "name": "Rear command dial",
-      "location": "top",
-      "manual_page": 6,
-      "face": null,
-      "icon": null,
-      "connection_ids": [],
+    "battery_chamber_cover_latch": {
+      "name": "Battery-chamber cover latch",
+      "location": "bottom",
+      "manual_page": 22,
+      "short_name": "COVER",
       "assignable": false,
       "pushable": false,
-      "default_function": "Chooses shutter speed and exposure compensation while shooting, highlights menu items, adjusts Quick Menu settings, and zooms during playback.",
-      "role": null,
+      "default_function": "Slides to open the battery-chamber cover.",
       "mechanical": false,
       "behavior": {
-        "kind": "dial",
-        "motion": {
-          "kind": "steps",
-          "decrease": null,
-          "increase": null
-        },
-        "press": null,
-        "endless": null
-      },
-      "positions": [],
-      "short_name": "REAR DIAL"
+        "kind": "lever"
+      }
+    },
+    "battery_latch": {
+      "name": "Battery latch",
+      "location": "bottom",
+      "manual_page": 24,
+      "short_name": "BATTERY",
+      "assignable": false,
+      "pushable": false,
+      "default_function": "Moves to the side to release the battery for removal.",
+      "mechanical": false,
+      "behavior": {
+        "kind": "lever"
+      }
+    },
+    "disp_back_button": {
+      "name": "DISP (display)/BACK button",
+      "location": "rear",
+      "manual_page": 11,
+      "face": "DISP/BACK",
+      "assignable": false,
+      "pushable": true,
+      "default_function": "Cycles display modes and exits menus to the shooting display.",
+      "mechanical": false,
+      "behavior": {
+        "kind": "button"
+      }
+    },
+    "drive_delete_button": {
+      "name": "DRIVE button / Delete button (playback mode)",
+      "location": "rear",
+      "manual_page": 5,
+      "face": "DRIVE",
+      "assignable": false,
+      "pushable": true,
+      "default_function": "Opens drive-mode options while shooting and deletes the selected picture in playback mode.",
+      "mechanical": false,
+      "behavior": {
+        "kind": "button"
+      }
+    },
+    "flash_pop_up_switch": {
+      "name": "Flash pop-up switch",
+      "location": "left",
+      "manual_page": 88,
+      "icon": "flash",
+      "assignable": false,
+      "pushable": false,
+      "default_function": "Raises the built-in flash.",
+      "mechanical": false,
+      "behavior": {
+        "kind": "switch"
+      }
     },
     "fn1_button": {
       "name": "Fn1 button",
       "location": "top",
       "manual_page": 178,
       "face": "Fn1",
-      "icon": null,
-      "connection_ids": [],
       "assignable": true,
       "pushable": true,
       "default_function": "Starts and stops movie recording (MOVIE RECORDING RELEASE).",
-      "role": null,
       "mechanical": false,
       "behavior": {
-        "kind": "button",
-        "press": null
-      },
-      "positions": []
+        "kind": "button"
+      }
     },
-    "on_off_button": {
-      "name": "ON/OFF button",
+    "focus_stick": {
+      "name": "Focus stick (focus lever)",
+      "location": "rear",
+      "manual_page": 5,
+      "short_name": "FOCUS",
+      "assignable": true,
+      "pushable": true,
+      "default_function": "Selects the focus area and navigates menus; its role can be changed with FOCUS LEVER SETTING.",
+      "mechanical": false,
+      "behavior": {
+        "kind": "pad",
+        "directions": {
+          "up": null,
+          "down": null,
+          "left": null,
+          "right": null
+        }
+      }
+    },
+    "front_command_dial": {
+      "name": "Front command dial",
       "location": "top",
-      "manual_page": 28,
-      "face": "ON/OFF",
-      "icon": null,
-      "connection_ids": [],
+      "manual_page": 6,
+      "short_name": "FRONT DIAL",
+      "assignable": false,
+      "pushable": false,
+      "default_function": "Adjusts program shift, aperture, or shutter speed while shooting; selects menu tabs or pages through menus; adjusts Quick Menu settings; and views other pictures during playback.",
+      "mechanical": false,
+      "behavior": {
+        "kind": "dial",
+        "motion": {
+          "kind": "steps"
+        }
+      }
+    },
+    "lens_release_button": {
+      "name": "Lens release button",
+      "location": "front",
+      "manual_page": 21,
+      "short_name": "LENS",
       "assignable": false,
       "pushable": true,
-      "default_function": "Turns the camera on and off.",
-      "role": null,
+      "default_function": "Releases the lens for removal.",
       "mechanical": false,
       "behavior": {
-        "kind": "button",
-        "press": null
-      },
-      "positions": []
+        "kind": "button"
+      }
+    },
+    "menu_ok_button": {
+      "name": "MENU/OK button",
+      "location": "rear",
+      "manual_page": 14,
+      "face": "MENU/OK",
+      "assignable": false,
+      "pushable": true,
+      "default_function": "Displays menus and confirms selections.",
+      "mechanical": false,
+      "behavior": {
+        "kind": "button"
+      }
     },
     "mode_dial": {
       "name": "Mode dial",
       "location": "top",
       "manual_page": 4,
-      "face": null,
-      "icon": null,
-      "connection_ids": [],
+      "short_name": "MODE",
       "assignable": false,
       "pushable": false,
-      "default_function": "Selects the shooting mode; SP opens the Scene Position choices h/M/N/O.",
-      "role": null,
-      "mechanical": false,
-      "behavior": {
-        "kind": "dial",
-        "motion": {
-          "kind": "positions",
-          "positions": [
-            {
-              "id": "SR+",
-              "key": null,
-              "asserted": null
-            },
-            {
-              "id": "P",
-              "key": null,
-              "asserted": null
-            },
-            {
-              "id": "S",
-              "key": null,
-              "asserted": null
-            },
-            {
-              "id": "A",
-              "key": null,
-              "asserted": null
-            },
-            {
-              "id": "M",
-              "key": null,
-              "asserted": null
-            },
-            {
-              "id": "panorama",
-              "key": null,
-              "asserted": null
-            },
-            {
-              "id": "SP",
-              "key": null,
-              "asserted": null
-            },
-            {
-              "id": "portrait_enhancer",
-              "key": null,
-              "asserted": null
-            },
-            {
-              "id": "landscape",
-              "key": null,
-              "asserted": null
-            },
-            {
-              "id": "sport",
-              "key": null,
-              "asserted": null
-            },
-            {
-              "id": "night",
-              "key": null,
-              "asserted": null
-            },
-            {
-              "id": "Adv.",
-              "key": null,
-              "asserted": null
-            }
-          ]
-        },
-        "press": null,
-        "endless": null
-      },
       "positions": [
         {
           "id": "SR+",
-          "label": "SR+",
-          "description": null
+          "label": "SR+"
         },
         {
           "id": "P",
-          "label": "P",
-          "description": null
+          "label": "P"
         },
         {
           "id": "S",
-          "label": "S",
-          "description": null
+          "label": "S"
         },
         {
           "id": "A",
-          "label": "A",
-          "description": null
+          "label": "A"
         },
         {
           "id": "M",
-          "label": "M",
-          "description": null
+          "label": "M"
         },
         {
           "id": "panorama",
@@ -213,8 +210,7 @@
         },
         {
           "id": "SP",
-          "label": "SP",
-          "description": null
+          "label": "SP"
         },
         {
           "id": "portrait_enhancer",
@@ -238,260 +234,136 @@
         },
         {
           "id": "Adv.",
-          "label": "Adv.",
-          "description": null
+          "label": "Adv."
         }
       ],
-      "short_name": "MODE"
-    },
-    "flash_pop_up_switch": {
-      "name": "Flash pop-up switch",
-      "location": "left",
-      "manual_page": 88,
-      "face": null,
-      "icon": "flash",
-      "connection_ids": [],
-      "assignable": false,
-      "pushable": false,
-      "default_function": "Raises the built-in flash.",
-      "role": null,
-      "mechanical": false,
-      "behavior": {
-        "kind": "switch",
-        "positions": []
-      },
-      "positions": []
-    },
-    "lens_release_button": {
-      "name": "Lens release button",
-      "location": "front",
-      "manual_page": 21,
-      "face": null,
-      "icon": null,
-      "connection_ids": [],
-      "assignable": false,
-      "pushable": true,
-      "default_function": "Releases the lens for removal.",
-      "role": null,
-      "mechanical": false,
-      "behavior": {
-        "kind": "button",
-        "press": null
-      },
-      "positions": [],
-      "short_name": "LENS"
-    },
-    "front_command_dial": {
-      "name": "Front command dial",
-      "location": "top",
-      "manual_page": 6,
-      "face": null,
-      "icon": null,
-      "connection_ids": [],
-      "assignable": false,
-      "pushable": false,
-      "default_function": "Adjusts program shift, aperture, or shutter speed while shooting; selects menu tabs or pages through menus; adjusts Quick Menu settings; and views other pictures during playback.",
-      "role": null,
+      "default_function": "Selects the shooting mode; SP opens the Scene Position choices h/M/N/O.",
       "mechanical": false,
       "behavior": {
         "kind": "dial",
         "motion": {
-          "kind": "steps",
-          "decrease": null,
-          "increase": null
-        },
-        "press": null,
-        "endless": null
-      },
-      "positions": [],
-      "short_name": "FRONT DIAL"
+          "kind": "positions",
+          "positions": [
+            {
+              "id": "SR+"
+            },
+            {
+              "id": "P"
+            },
+            {
+              "id": "S"
+            },
+            {
+              "id": "A"
+            },
+            {
+              "id": "M"
+            },
+            {
+              "id": "panorama"
+            },
+            {
+              "id": "SP"
+            },
+            {
+              "id": "portrait_enhancer"
+            },
+            {
+              "id": "landscape"
+            },
+            {
+              "id": "sport"
+            },
+            {
+              "id": "night"
+            },
+            {
+              "id": "Adv."
+            }
+          ]
+        }
+      }
     },
-    "shutter_button": {
-      "name": "Shutter button",
+    "on_off_button": {
+      "name": "ON/OFF button",
       "location": "top",
-      "manual_page": 35,
-      "face": null,
-      "icon": null,
-      "connection_ids": [],
+      "manual_page": 28,
+      "face": "ON/OFF",
       "assignable": false,
       "pushable": true,
-      "default_function": "Half-presses to focus and lock focus and exposure; full-presses to take a photograph. In movie mode, starts and stops recording.",
-      "role": null,
+      "default_function": "Turns the camera on and off.",
       "mechanical": false,
       "behavior": {
-        "kind": "shutter",
-        "stages": {
-          "half_press": null,
-          "full_press": null
-        }
-      },
-      "positions": [
-        {
-          "id": "half-press",
-          "label": "half-press",
-          "description": null
-        },
-        {
-          "id": "full press",
-          "label": "full press",
-          "description": null
-        }
-      ],
-      "short_name": "SHUTTER"
-    },
-    "touchscreen": {
-      "name": "Touch screen",
-      "location": "rear",
-      "manual_page": 15,
-      "face": null,
-      "icon": null,
-      "connection_ids": [],
-      "assignable": true,
-      "pushable": false,
-      "default_function": "Provides touch controls for shooting, focus selection, menus, and playback; T.B. Fn1 and T.B. Fn2 provide assigned functions.",
-      "role": null,
-      "mechanical": false,
-      "behavior": {
-        "kind": "touch"
-      },
-      "positions": []
-    },
-    "drive_delete_button": {
-      "name": "DRIVE button / Delete button (playback mode)",
-      "location": "rear",
-      "manual_page": 5,
-      "face": "DRIVE",
-      "icon": null,
-      "connection_ids": [],
-      "assignable": false,
-      "pushable": true,
-      "default_function": "Opens drive-mode options while shooting and deletes the selected picture in playback mode.",
-      "role": null,
-      "mechanical": false,
-      "behavior": {
-        "kind": "button",
-        "press": null
-      },
-      "positions": []
+        "kind": "button"
+      }
     },
     "playback_button": {
       "name": "Playback button",
       "location": "rear",
       "manual_page": 36,
-      "face": null,
       "icon": "playback",
-      "connection_ids": [],
       "assignable": false,
       "pushable": true,
       "default_function": "Starts playback during shooting.",
-      "role": null,
       "mechanical": false,
       "behavior": {
-        "kind": "button",
-        "press": null
-      },
-      "positions": []
+        "kind": "button"
+      }
     },
-    "focus_stick": {
-      "name": "Focus stick (focus lever)",
-      "location": "rear",
-      "manual_page": 5,
-      "face": null,
-      "icon": null,
-      "connection_ids": [],
-      "assignable": true,
-      "pushable": true,
-      "default_function": "Selects the focus area and navigates menus; its role can be changed with FOCUS LEVER SETTING.",
-      "role": null,
+    "rear_command_dial": {
+      "name": "Rear command dial",
+      "location": "top",
+      "manual_page": 6,
+      "short_name": "REAR DIAL",
+      "assignable": false,
+      "pushable": false,
+      "default_function": "Chooses shutter speed and exposure compensation while shooting, highlights menu items, adjusts Quick Menu settings, and zooms during playback.",
       "mechanical": false,
       "behavior": {
-        "kind": "pad",
-        "directions": {
-          "up": null,
-          "down": null,
-          "left": null,
-          "right": null
+        "kind": "dial",
+        "motion": {
+          "kind": "steps"
+        }
+      }
+    },
+    "shutter_button": {
+      "name": "Shutter button",
+      "location": "top",
+      "manual_page": 35,
+      "short_name": "SHUTTER",
+      "assignable": false,
+      "pushable": true,
+      "positions": [
+        {
+          "id": "half-press",
+          "label": "half-press"
         },
-        "press": null
-      },
-      "positions": [],
-      "short_name": "FOCUS"
+        {
+          "id": "full press",
+          "label": "full press"
+        }
+      ],
+      "default_function": "Half-presses to focus and lock focus and exposure; full-presses to take a photograph. In movie mode, starts and stops recording.",
+      "mechanical": false,
+      "behavior": {
+        "kind": "shutter",
+        "stages": {
+          "full_press": null,
+          "half_press": null
+        }
+      }
     },
-    "menu_ok_button": {
-      "name": "MENU/OK button",
+    "touchscreen": {
+      "name": "Touch screen",
       "location": "rear",
-      "manual_page": 14,
-      "face": "MENU/OK",
-      "icon": null,
-      "connection_ids": [],
-      "assignable": false,
-      "pushable": true,
-      "default_function": "Displays menus and confirms selections.",
-      "role": null,
-      "mechanical": false,
-      "behavior": {
-        "kind": "button",
-        "press": null
-      },
-      "positions": []
-    },
-    "disp_back_button": {
-      "name": "DISP (display)/BACK button",
-      "location": "rear",
-      "manual_page": 11,
-      "face": "DISP/BACK",
-      "icon": null,
-      "connection_ids": [],
-      "assignable": false,
-      "pushable": true,
-      "default_function": "Cycles display modes and exits menus to the shooting display.",
-      "role": null,
-      "mechanical": false,
-      "behavior": {
-        "kind": "button",
-        "press": null
-      },
-      "positions": []
-    },
-    "battery_chamber_cover_latch": {
-      "name": "Battery-chamber cover latch",
-      "location": "bottom",
-      "manual_page": 22,
-      "face": null,
-      "icon": null,
-      "connection_ids": [],
-      "assignable": false,
+      "manual_page": 15,
+      "assignable": true,
       "pushable": false,
-      "default_function": "Slides to open the battery-chamber cover.",
-      "role": null,
+      "default_function": "Provides touch controls for shooting, focus selection, menus, and playback; T.B. Fn1 and T.B. Fn2 provide assigned functions.",
       "mechanical": false,
       "behavior": {
-        "kind": "lever",
-        "positions": [],
-        "momentary": null
-      },
-      "positions": [],
-      "short_name": "COVER"
-    },
-    "battery_latch": {
-      "name": "Battery latch",
-      "location": "bottom",
-      "manual_page": 24,
-      "face": null,
-      "icon": null,
-      "connection_ids": [],
-      "assignable": false,
-      "pushable": false,
-      "default_function": "Moves to the side to release the battery for removal.",
-      "role": null,
-      "mechanical": false,
-      "behavior": {
-        "kind": "lever",
-        "positions": [],
-        "momentary": null
-      },
-      "positions": [],
-      "short_name": "BATTERY"
+        "kind": "touch"
+      }
     }
   }
 }

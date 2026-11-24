@@ -3,20 +3,29 @@
   "schema": 1,
   "id": "xt50",
   "soc_id": "xp5",
-  "dram_bytes": null,
-  "nand": null,
-  "sensor": null,
-  "lens": null,
-  "display": null,
-  "microcontroller": null,
-  "power_control": null,
-  "card_slot": null,
-  "control_bus_chips": [],
+  "hardware": {
+    "profiles": {
+      "xt50": {
+        "dram_basis": "Installed capacity is unmeasured; the update's memory map and Linux device tree bound the address space only.",
+        "limits": []
+      }
+    },
+    "serial_attachments": [
+      {
+        "part_id": "power-controller",
+        "controller_id": "spi8",
+        "connection_id": "power-controller-bus",
+        "select_connection_id": "power-controller-select"
+      }
+    ],
+    "thermal_connection_ids": [
+      "thermal-0"
+    ]
+  },
   "connections": [
     {
       "id": "power-controller-bus",
-      "kind": "power-control",
-      "signals": []
+      "kind": "power-control"
     },
     {
       "id": "power-controller-select",
@@ -36,8 +45,7 @@
       "signals": [
         {
           "kind": "adc",
-          "channel": 0,
-          "threshold": null
+          "channel": 0
         }
       ]
     }
@@ -51,25 +59,5 @@
       "target_id": "power-controller",
       "signal": "serial_data"
     }
-  ],
-  "hardware": {
-    "serial_attachments": [
-      {
-        "part_id": "power-controller",
-        "controller_id": "spi8",
-        "connection_id": "power-controller-bus",
-        "select_connection_id": "power-controller-select"
-      }
-    ],
-    "gpio_feedback": [],
-    "keypad_samples": {},
-    "thermal_connection_ids": ["thermal-0"],
-    "bus_drain": null,
-    "profiles": {
-      "xt50": {
-        "limits": [],
-        "dram_basis": "Installed capacity is unmeasured; the update's memory map and Linux device tree bound the address space only."
-      }
-    }
-  }
+  ]
 }

@@ -8,17 +8,15 @@
     "size": 50136252,
     "sha256": "9f2c75fd8a16a1d71b9218f6dbd3144b1f11820bcecd3a9608c8cda9f25f95a3"
   },
-  "boot_rom": null,
   "installation": {
     "flash_offset": 628,
     "entry_labels": {
+      "0x1147a4c": "initial application thread",
       "0x400c8": "ThreadX scheduler",
       "0x41f6c": "ThreadX kernel enter",
       "0x441ac": "ThreadX thread create",
-      "0x578a8": "kernel entry",
-      "0x1147a4c": "initial application thread"
+      "0x578a8": "kernel entry"
     },
-    "loader_validation": null,
     "image_sections": [
       {
         "name": "unit-0",
@@ -77,6 +75,5 @@
         "native_flash_offset": 10223616
       }
     ]
-  },
-  "generated_facts": null
+  }
 }

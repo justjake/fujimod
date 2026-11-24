@@ -1,0 +1,80 @@
+{
+  "$schema": "https://fujimod.com/schemas/soc-block.schema.json",
+  "schema": 1,
+  "id": "interval-timer",
+  "base": 4294025216,
+  "size": 512,
+  "kind": "timer",
+  "interrupts": [
+    {
+      "output": "channel0",
+      "line": 48
+    },
+    {
+      "output": "channel1",
+      "line": 49
+    },
+    {
+      "output": "channel2",
+      "line": 50
+    },
+    {
+      "output": "channel3",
+      "line": 51
+    },
+    {
+      "output": "channel4",
+      "line": 52
+    },
+    {
+      "output": "channel5",
+      "line": 53
+    },
+    {
+      "output": "channel6",
+      "line": 54
+    },
+    {
+      "output": "channel7",
+      "line": 55
+    },
+    {
+      "output": "channel8",
+      "line": 56
+    },
+    {
+      "output": "channel9",
+      "line": 57
+    },
+    {
+      "output": "channel10",
+      "line": 58
+    },
+    {
+      "output": "channel11",
+      "line": 59
+    },
+    {
+      "output": "channel12",
+      "line": 60
+    },
+    {
+      "output": "channel13",
+      "line": 61
+    },
+    {
+      "output": "channel14",
+      "line": 62
+    },
+    {
+      "output": "channel15",
+      "line": 63
+    }
+  ],
+  "device": {
+    "model": "interval_timer",
+    "layout": "xpp",
+    "clock": "one timer cycle per aggregate CPU instruction; synthetic ratio, not measured",
+    "basis": "Control +0 is written with an inverted select mask, per-channel configuration at +0x10+n*4, count and reload at +0x100+n*0x10; one channel is read as a running counter. Channel n raises interrupt 48+n: the X-T20 2.11 timer library (0xc4bcd0) maps channel n through byte table 0xed3b58 to row n+2 of interrupt descriptor table 0xed4720, whose first word is 0x30+n; GFX 50R 3.11 table 0xfb8798 holds IRQ index 2+n for channel n, and the enabled lines 56 and 63 fix the offset at 46."
+  }
+}

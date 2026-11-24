@@ -1,0 +1,21 @@
+{
+  "$schema": "https://fujimod.com/schemas/soc-block.schema.json",
+  "schema": 1,
+  "id": "i2c1",
+  "base": 4294049792,
+  "size": 4096,
+  "kind": "control-bus",
+  "interrupts": [
+    {
+      "output": "interrupt",
+      "line": 69
+    }
+  ],
+  "device": {
+    "model": "i2c",
+    "fifo_depth": 8,
+    "clock_hz": 266000000,
+    "tick_hz": 48000000,
+    "basis": "DesignWare APB I2C masters of X-T20 2.11 section 5: transfer 0xc52b30, API 0xc5328c and interrupt handler 0xc52df8 (bus entries 0xc53264/0xc53278). Bus n is at 0xfff1f000 + 0x1000*n; interrupt descriptor rows 0x50/0x51 of table 0xed471c connect buses 0/1 to interrupts 68/69. Each transfer disables the bus, writes SCL counts 0x533/0x545 (standard) and 0x13f/0x151 (fast), IC_CON speed and restart enable, IC_TAR, the 0x5f interrupt mask and zero FIFO thresholds, then enables it; the handler feeds DATA_CMD on TX_EMPTY while IC_STATUS.TFNF is set, with STOP on the last byte and RESTART on the first read of a write-then-read, drains it on RX_FULL and ends on TX_ABRT, and the task then polls IC_STATUS.MST_ACTIVITY. The interrupt mask is written before IC_ENABLE, so TX_EMPTY is taken as asserted only while enabled. An ic_clk of 266 MHz is inferred from the standard-mode counts giving a symmetric 5 us/5 us 100 kHz clock; it is not measured. The FIFO depth is declared, not measured. Ticks are the 48 MHz timer ticks."
+  }
+}

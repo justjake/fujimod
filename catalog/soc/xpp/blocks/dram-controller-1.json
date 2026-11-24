@@ -1,0 +1,39 @@
+{
+  "$schema": "https://fujimod.com/schemas/soc-block.schema.json",
+  "schema": 1,
+  "id": "dram-controller-1",
+  "base": 4293980160,
+  "size": 4096,
+  "kind": "memory-controller",
+  "device": {
+    "model": "register_block",
+    "idle_bits": [
+      {
+        "mask": 8,
+        "offset": 332
+      },
+      {
+        "mask": 3801088,
+        "offset": 1556
+      }
+    ],
+    "commands": [
+      {
+        "mask": 63,
+        "state": 39,
+        "status": 188,
+        "value": 1778516482,
+        "word": 184
+      },
+      {
+        "mask": 63,
+        "state": 32,
+        "status": 188,
+        "value": 16908802,
+        "word": 184
+      }
+    ],
+    "basis": "Second DRAM controller of X-T20 2.11 section 5: start-up waits for +0x14c bit 3 (done) and reads the calibration result 0x3a from +0x614 bits 23:16. After a still, reccont (0xc6c64c) writes +0xb8 = 0x6a020202 and waits for +0xbc bits 5..0 = 0x27, and 0xc6c700 writes 0x01020202 and waits for 0x20; these are the only +0xb8 commands (REC deinit and re-init). What the states mean is not known.",
+    "order": 4
+  }
+}

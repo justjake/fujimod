@@ -1,0 +1,36 @@
+{
+  "$schema": "https://fujimod.com/schemas/soc-block.schema.json",
+  "schema": 1,
+  "id": "imaging-unit-1",
+  "base": 4294270976,
+  "size": 4096,
+  "kind": "imaging-controller",
+  "interrupts": [
+    {
+      "output": "frame",
+      "line": 108
+    }
+  ],
+  "device": {
+    "model": "register_block",
+    "idle_bits": [
+      {
+        "mask": 1,
+        "offset": 0
+      }
+    ],
+    "frames": {
+      "start": {
+        "mask": 268435456,
+        "offset": 200
+      },
+      "stopped": {
+        "mask": 256,
+        "offset": 216
+      },
+      "period_ticks": 800000
+    },
+    "basis": "Live-view output unit 1 of X-T20 2.11 section 5 at (0xfff55 + n) << 12 (0xc3a954, 0xc3be40): a 31-entry 17-bit table at +0x40..+0xb8 (0xc3b450), buffer address +0xc0, line width +0xc4 and start bit 28 of +0xc8 (0xc3a98c). While started the unit finishes a frame at every frame-sync tick and raises edge interrupt 108 (descriptor row 0x30 of 0xed471c, config 3); its handler (0xc3abe8 / 0xc3abbc, registered by 0xc3bd20) sets +0xd8 bit 0 and reports the frame to the section-6 imaging dispatcher 0x1698f8c, which runs the live-view job callback. The stop 0xc3be40 clears the start bit and waits for +0xd8 bit 8, which reads set while the unit is stopped; 0xc3a954 then writes 0 to +0x00 and waits for bit 0, declared idle. The same law runs live view in the xpro-lab emulator, where REC frames match the camera's marker sequence. The words read back their last write; no data is written to the buffers.",
+    "order": 18
+  }
+}

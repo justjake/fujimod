@@ -6,9 +6,7 @@
     "kind": "peripheral",
     "interface": {
       "kind": "serial-nor-flash",
-      "jedec_id": 2906907,
-      "erase_bytes": null,
-      "page_bytes": null
+      "jedec_id": 2906907
     }
   }
 }

@@ -1,0 +1,42 @@
+{
+  "$schema": "https://fujimod.com/schemas/soc-block.schema.json",
+  "schema": 1,
+  "id": "imaging-fff7e000",
+  "base": 4294434816,
+  "size": 4096,
+  "kind": "imaging-controller",
+  "interrupts": [
+    {
+      "output": "interrupt",
+      "line": 127
+    }
+  ],
+  "device": {
+    "model": "register_block",
+    "idle_bits": [
+      {
+        "mask": 2147483648,
+        "offset": 0
+      }
+    ],
+    "fixed_words": [
+      {
+        "offset": 28,
+        "value": 16777472
+      }
+    ],
+    "job": {
+      "start": {
+        "mask": 1,
+        "offset": 0
+      },
+      "status": {
+        "mask": 1,
+        "offset": 32
+      },
+      "ticks": 144000
+    },
+    "basis": "Still development engine of X-T20 2.11 (step marker 0x06023300): started by +0x00 bit 0, finishes with status +0x20 bit 0 and interrupt 127; +0x00 bit 31 reads set when idle and +0x1c reads 0x01000100 (ready). run ticks are xpro-lab's 3 ms engine step. The engine computes nothing; its buffers come from RAM job descriptors that are not decoded.",
+    "order": 19
+  }
+}

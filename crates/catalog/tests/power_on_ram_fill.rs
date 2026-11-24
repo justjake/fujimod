@@ -43,9 +43,9 @@ fn a_body_records_only_its_own_different_measurement() {
 
 #[test]
 fn a_fill_outside_dram_is_refused() {
-    let path = catalog_root().join("soc/exr2/soc.json");
-    let mut value: serde_json::Value =
-        serde_json::from_slice(&fs::read(&path).expect("exr2 soc")).expect("exr2 soc JSON");
+    let catalog = ReferenceCatalog::bundled().expect("bundled catalog loads");
+    let mut value = serde_json::to_value(catalog.soc("exr2").expect("exr2 record"))
+        .expect("serialize exr2");
     let fill = value["memory_regions"]
         .as_array_mut()
         .unwrap()

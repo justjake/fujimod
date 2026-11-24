@@ -1,0 +1,70 @@
+{
+  "$schema": "https://fujimod.com/schemas/soc-block.schema.json",
+  "schema": 1,
+  "id": "pulse-outputs",
+  "base": 4294610944,
+  "size": 3328,
+  "kind": "address-window",
+  "interrupts": [
+    {
+      "output": "output-0",
+      "line": 20,
+      "core": "core0"
+    },
+    {
+      "output": "output-1",
+      "line": 21,
+      "core": "core0"
+    },
+    {
+      "output": "output-2",
+      "line": 22,
+      "core": "core0"
+    },
+    {
+      "output": "output-3",
+      "line": 23,
+      "core": "core0"
+    },
+    {
+      "output": "output-4",
+      "line": 24,
+      "core": "core0"
+    },
+    {
+      "output": "output-5",
+      "line": 25,
+      "core": "core0"
+    },
+    {
+      "output": "output-6",
+      "line": 26,
+      "core": "core0"
+    },
+    {
+      "output": "output-7",
+      "line": 27,
+      "core": "core0"
+    },
+    {
+      "output": "output-8",
+      "line": 28,
+      "core": "core0"
+    },
+    {
+      "output": "output-9",
+      "line": 29,
+      "core": "core0"
+    },
+    {
+      "output": "output-10",
+      "line": 30,
+      "core": "core0"
+    },
+    {
+      "output": "output-11",
+      "line": 31,
+      "core": "core0"
+    }
+  ]
+}

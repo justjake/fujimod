@@ -136,8 +136,6 @@
           0.0031663181818181816
         ]
       ],
-      "mode_change_frames": 2,
-      "preview_field": [2496, 3344],
       "rolling_references": [
         {
           "mode": 236,
@@ -163,6 +161,11 @@
           "vertical": 1760,
           "lines": 1760
         }
+      ],
+      "mode_change_frames": 2,
+      "preview_field": [
+        2496,
+        3344
       ],
       "projection": {
         "focal_length_mm": 18.5,

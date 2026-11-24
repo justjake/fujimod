@@ -1,0 +1,8 @@
+{
+  "$schema": "https://fujimod.com/schemas/soc-block.schema.json",
+  "schema": 1,
+  "id": "input",
+  "base": 4287913984,
+  "size": 4096,
+  "kind": "imaging-controller"
+}

@@ -1,0 +1,8 @@
+{
+  "$schema": "https://fujimod.com/schemas/soc-block.schema.json",
+  "schema": 1,
+  "id": "pin-control",
+  "base": 4287643648,
+  "size": 4096,
+  "kind": "gpio"
+}

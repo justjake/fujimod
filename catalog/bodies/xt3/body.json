@@ -4,24 +4,34 @@
   "id": "xt3",
   "soc_id": "xp4",
   "dram_bytes": 1073741824,
-  "nand": null,
-  "sensor": null,
-  "lens": null,
-  "display": null,
-  "microcontroller": null,
-  "power_control": null,
-  "card_slot": null,
-  "control_bus_chips": [],
+  "hardware": {
+    "profiles": {
+      "xt3-discovery": {
+        "dram_basis": "1 GiB. The guarded JIG RAM capture (CPU-virtual 0x0..0x40000000, sha256 2773ac81bc202c2a02888873914382d75ead20c5e013a33889aded643a6bdd2b) is populated with real content through the top of the window (strings and structures up to at least 0x3e1b6b04), so the earlier declared 512 MiB was too small."
+      }
+    },
+    "serial_attachments": [
+      {
+        "part_id": "xt3-power-registers",
+        "controller_id": "spi1",
+        "connection_id": "xt3-power-registers-bus",
+        "select_connection_id": "xt3-power-registers-select"
+      }
+    ],
+    "thermal_connection_ids": [
+      "thermal-0",
+      "thermal-8",
+      "thermal-10"
+    ]
+  },
   "connections": [
     {
       "id": "flash-storage",
-      "kind": "control",
-      "signals": []
+      "kind": "control"
     },
     {
       "id": "xt3-power-registers-bus",
-      "kind": "power-control",
-      "signals": []
+      "kind": "power-control"
     },
     {
       "id": "xt3-power-registers-select",
@@ -41,8 +51,7 @@
       "signals": [
         {
           "kind": "adc",
-          "channel": 0,
-          "threshold": null
+          "channel": 0
         }
       ]
     },
@@ -52,8 +61,7 @@
       "signals": [
         {
           "kind": "adc",
-          "channel": 8,
-          "threshold": null
+          "channel": 8
         }
       ]
     },
@@ -63,8 +71,7 @@
       "signals": [
         {
           "kind": "adc",
-          "channel": 10,
-          "threshold": null
+          "channel": 10
         }
       ]
     }
@@ -90,27 +97,5 @@
       "target_id": "imaging-receiver",
       "signal": "image_data"
     }
-  ],
-  "hardware": {
-    "serial_attachments": [
-      {
-        "part_id": "xt3-power-registers",
-        "controller_id": "spi1",
-        "connection_id": "xt3-power-registers-bus",
-        "select_connection_id": "xt3-power-registers-select"
-      }
-    ],
-    "gpio_feedback": [],
-    "keypad_samples": {},
-    "thermal_connection_ids": [
-      "thermal-0",
-      "thermal-8",
-      "thermal-10"
-    ],
-    "profiles": {
-      "xt3-discovery": {
-        "dram_basis": "1 GiB. The guarded JIG RAM capture (CPU-virtual 0x0..0x40000000, sha256 2773ac81bc202c2a02888873914382d75ead20c5e013a33889aded643a6bdd2b) is populated with real content through the top of the window (strings and structures up to at least 0x3e1b6b04), so the earlier declared 512 MiB was too small."
-      }
-    }
-  }
+  ]
 }

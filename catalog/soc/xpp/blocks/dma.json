@@ -1,0 +1,49 @@
+{
+  "$schema": "https://fujimod.com/schemas/soc-block.schema.json",
+  "schema": 1,
+  "id": "dma",
+  "base": 4294017024,
+  "size": 4096,
+  "kind": "dma",
+  "interrupts": [
+    {
+      "output": "event0",
+      "line": 207
+    },
+    {
+      "output": "event1",
+      "line": 208
+    },
+    {
+      "output": "event2",
+      "line": 209
+    },
+    {
+      "output": "event3",
+      "line": 210
+    },
+    {
+      "output": "event4",
+      "line": 211
+    },
+    {
+      "output": "event5",
+      "line": 212
+    },
+    {
+      "output": "event6",
+      "line": 213
+    },
+    {
+      "output": "event7",
+      "line": 214
+    }
+  ],
+  "device": {
+    "model": "pl330",
+    "setup_ticks": 16,
+    "bytes_per_tick": 16,
+    "timing": "16 guest setup ticks plus ceil(bytes/16); functional transfer timing reused from XP4, not measured bus bandwidth.",
+    "basis": "Channel programs start through DMAGO written to the debug instruction registers; the driver's IRQ table maps event n to line 207+n."
+  }
+}

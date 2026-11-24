@@ -1,0 +1,11 @@
+{
+  "$schema": "https://fujimod.com/schemas/soc-block.schema.json",
+  "schema": 1,
+  "id": "nand",
+  "base": 4294254592,
+  "size": 2304,
+  "kind": "nand-controller",
+  "device": {
+    "model": "nand"
+  }
+}

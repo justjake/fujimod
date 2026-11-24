@@ -4,39 +4,9 @@
   "id": "gfx50r",
   "soc_id": "xpp",
   "dram_bytes": 1073741824,
-  "nand": null,
-  "sensor": null,
-  "lens": null,
-  "display": null,
-  "microcontroller": null,
-  "power_control": null,
-  "card_slot": null,
-  "control_bus_chips": [],
-  "connections": [
-    {
-      "id": "flash-storage",
-      "kind": "control",
-      "signals": []
-    }
-  ],
-  "parts": [
-    "gfx50r-flash"
-  ],
-  "wiring": [
-    {
-      "source_id": "flash-controller",
-      "target_id": "gfx50r-flash",
-      "signal": "storage"
-    }
-  ],
   "hardware": {
-    "serial_attachments": [],
-    "gpio_feedback": [],
-    "keypad_samples": {},
-    "thermal_connection_ids": [],
     "profiles": {
       "gfx50r-discovery": {
-        "dram_basis": "Declared discovery input: synthetic 1 GiB physical backing; RAM population is not measured. The shared XPP uncached alias is selected separately.",
         "block_overrides": [
           {
             "block_id": "display-output-1",
@@ -53,6 +23,9 @@
             "block_id": "display",
             "device": {
               "model": "display",
+              "picture_layout": null,
+              "video_layout": null,
+              "basis": "GFX 50R 3.11 display control bit-16 handshake polled by 0xcf6adc. A falling request completes after the declared frame period; the delay is not measured.",
               "frame_basis": "GFX 50R 3.11 timing banks at 0xfff5a000 and 0xfff65000; GIC routes from interrupt table 0xfb93ac rows 0x4c-0x4e and 0x49-0x4b. Frame period 16666 and stop delay 16 are declared guest ticks, not measured camera timing.",
               "period_ticks": 16666,
               "timing": {
@@ -62,15 +35,29 @@
                 ],
                 "stop_ticks": 16
               },
-              "basis": "GFX 50R 3.11 display control bit-16 handshake polled by 0xcf6adc. A falling request completes after the declared frame period; the delay is not measured.",
-              "set_bits": [],
-              "clear_bits": [],
               "handshake_ticks": 16666,
               "order": 1
             }
           }
-        ]
+        ],
+        "dram_basis": "Declared discovery input: synthetic 1 GiB physical backing; RAM population is not measured. The shared XPP uncached alias is selected separately."
       }
     }
-  }
+  },
+  "connections": [
+    {
+      "id": "flash-storage",
+      "kind": "control"
+    }
+  ],
+  "parts": [
+    "gfx50r-flash"
+  ],
+  "wiring": [
+    {
+      "source_id": "flash-controller",
+      "target_id": "gfx50r-flash",
+      "signal": "storage"
+    }
+  ]
 }

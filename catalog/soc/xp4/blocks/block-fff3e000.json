@@ -1,0 +1,14 @@
+{
+  "$schema": "https://fujimod.com/schemas/soc-block.schema.json",
+  "schema": 1,
+  "id": "block-fff3e000",
+  "base": 4294172672,
+  "size": 4096,
+  "kind": "address-window",
+  "device": {
+    "model": "register_block",
+    "idle_bits": [],
+    "basis": "X-T3 5.11 reads/writes 0xfff3e000..0xfff3e018. Reads return the last write; no arbitration is modeled.",
+    "order": 4
+  }
+}

@@ -11,8 +11,8 @@
       "name": "reset",
       "offset": 0,
       "width_bytes": 4,
-      "access": "read-write",
-      "reset": 1
+      "reset": 1,
+      "access": "read-write"
     },
     {
       "name": "start_dma",
@@ -83,8 +83,8 @@
       "name": "version",
       "offset": 36,
       "width_bytes": 4,
-      "access": "read-only",
-      "reset": 65537
+      "reset": 65537,
+      "access": "read-only"
     },
     {
       "name": "dma_status",

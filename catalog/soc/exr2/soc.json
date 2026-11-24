@@ -18,7 +18,6 @@
           "value": 1073742291
         }
       ],
-      "mprofile": null,
       "rprofile": {
         "cp14_identity": 16387,
         "atcm": {
@@ -34,8 +33,7 @@
           "sets": 128,
           "ways": 4
         }
-      },
-      "aprofile": null
+      }
     },
     {
       "id": "core1",
@@ -51,7 +49,6 @@
           "value": 1073742291
         }
       ],
-      "mprofile": null,
       "rprofile": {
         "cp14_identity": 20483,
         "atcm": {
@@ -67,8 +64,7 @@
           "sets": 128,
           "ways": 4
         }
-      },
-      "aprofile": null
+      }
     }
   ],
   "memory_regions": [
@@ -135,1539 +131,230 @@
       "kind": "sram"
     }
   ],
-  "blocks": [
-    {
-      "id": "interrupt-core0",
-      "base": 4294651904,
-      "size": 4096,
-      "kind": "interrupt-controller",
-      "clock_id": null,
-      "processor_core_id": "core0"
-    },
-    {
-      "id": "interrupt-core1",
-      "base": 4294656000,
-      "size": 4096,
-      "kind": "interrupt-controller",
-      "clock_id": null,
-      "processor_core_id": "core1",
-      "interrupts": [
-        {
-          "output": "software-release",
-          "line": 120,
-          "core": "core1"
-        }
-      ]
-    },
-    {
-      "id": "system-timers",
-      "base": 4294512640,
-      "size": 64,
-      "kind": "timer",
-      "clock_id": null
-    },
-    {
-      "id": "gpio",
-      "base": 4294479872,
-      "size": 1052,
-      "kind": "gpio",
-      "clock_id": null,
-      "interrupts": [
-        {
-          "output": "port-0-pin-0",
-          "line": 8,
-          "core": "core0"
+  "hardware": {
+    "profiles": {
+      "exr2": {
+        "boot_rom": {
+          "basis": "Declared catalog input.",
+          "sha256": "4ecedfbfc1910bde488d36abe4380621f8845e6afcfc6cf54a49a33ec0abf9be",
+          "size": 16384
         },
-        {
-          "output": "port-0-pin-2",
-          "line": 10,
-          "core": "core0"
-        },
-        {
-          "output": "port-0-pin-3",
-          "line": 11,
-          "core": "core0"
-        }
-      ]
-    },
-    {
-      "id": "gpio-aux",
-      "base": 4294480928,
-      "size": 96,
-      "kind": "gpio",
-      "clock_id": null
-    },
-    {
-      "id": "serial-spi1",
-      "base": 4294459456,
-      "size": 32,
-      "kind": "serial-controller",
-      "clock_id": null
-    },
-    {
-      "id": "dram-controller",
-      "base": 4294545408,
-      "size": 256,
-      "kind": "address-window",
-      "clock_id": null
-    },
-    {
-      "id": "dram-phy",
-      "base": 4293922816,
-      "size": 584,
-      "kind": "address-window",
-      "clock_id": null
-    },
-    {
-      "id": "reset-controller",
-      "base": 4294647812,
-      "size": 20,
-      "kind": "reset-controller",
-      "clock_id": null
-    },
-    {
-      "id": "clock-controller",
-      "base": 4294475776,
-      "size": 136,
-      "kind": "clock-controller",
-      "clock_id": null
-    },
-    {
-      "id": "clock-controller-aux",
-      "base": 4294480924,
-      "size": 4,
-      "kind": "clock-controller",
-      "clock_id": null
-    },
-    {
-      "id": "block-98000",
-      "base": 4294541312,
-      "size": 768,
-      "kind": "address-window",
-      "clock_id": null
-    },
-    {
-      "id": "sd-clocks-0",
-      "base": 4294246444,
-      "size": 2,
-      "kind": "address-window",
-      "clock_id": null
-    },
-    {
-      "id": "adc",
-      "base": 4294483968,
-      "size": 96,
-      "kind": "adc",
-      "clock_id": null
-    },
-    {
-      "id": "statistics",
-      "base": 4294017024,
-      "size": 4096,
-      "kind": "imaging-controller",
-      "clock_id": null
-    },
-    {
-      "id": "statistics-aux",
-      "base": 4294082560,
-      "size": 13312,
-      "kind": "imaging-controller",
-      "clock_id": null
-    },
-    {
-      "id": "image-output-0",
-      "base": 4293992448,
-      "size": 256,
-      "kind": "imaging-controller",
-      "clock_id": null,
-      "interrupts": [
-        {
-          "output": "output",
-          "line": 44,
-          "core": "core0"
-        }
-      ]
-    },
-    {
-      "id": "image-output-1",
-      "base": 4293996544,
-      "size": 256,
-      "kind": "imaging-controller",
-      "clock_id": null,
-      "interrupts": [
-        {
-          "output": "output",
-          "line": 45,
-          "core": "core0"
-        }
-      ]
-    },
-    {
-      "id": "face-detector-0",
-      "base": 4294000640,
-      "size": 4096,
-      "kind": "imaging-controller",
-      "clock_id": null
-    },
-    {
-      "id": "phase-detection",
-      "base": 4294066176,
-      "size": 208,
-      "kind": "imaging-controller",
-      "clock_id": null
-    },
-    {
-      "id": "phase-detection-aux",
-      "base": 4294070276,
-      "size": 164,
-      "kind": "imaging-controller",
-      "clock_id": null
-    },
-    {
-      "id": "sdhci-card-0",
-      "base": 4294246400,
-      "size": 48,
-      "kind": "sd-card-controller",
-      "clock_id": null,
-      "interrupts": [
-        {
-          "output": "host",
-          "line": 78,
-          "core": "core0"
-        }
-      ]
-    },
-    {
-      "id": "sdhci-card-2",
-      "base": 4294246448,
-      "size": 16,
-      "kind": "address-window",
-      "clock_id": null
-    },
-    {
-      "id": "sdhci-card-1",
-      "base": 4294246656,
-      "size": 8,
-      "kind": "address-window",
-      "clock_id": null
-    },
-    {
-      "id": "sdio-host",
-      "base": 4294250496,
-      "size": 64,
-      "kind": "address-window",
-      "clock_id": null,
-      "interrupts": [
-        {
-          "output": "host",
-          "line": 79,
-          "core": "core0"
-        }
-      ]
-    },
-    {
-      "id": "sdio-1",
-      "base": 4294250752,
-      "size": 8,
-      "kind": "address-window",
-      "clock_id": null
-    },
-    {
-      "id": "nand",
-      "base": 4294254592,
-      "size": 2304,
-      "kind": "nand-controller",
-      "clock_id": null,
-      "device": {
-        "model": "nand"
-      }
-    },
-    {
-      "id": "decompressor",
-      "base": 4294193152,
-      "size": 256,
-      "kind": "address-window",
-      "clock_id": null,
-      "device": {
-        "model": "decompressor"
-      }
-    },
-    {
-      "id": "memory-dma",
-      "base": 4293926912,
-      "size": 64,
-      "kind": "dma",
-      "clock_id": null,
-      "device": {
-        "model": "loader_dma"
-      }
-    },
-    {
-      "id": "memory-dma-1",
-      "base": 4293927680,
-      "size": 4,
-      "kind": "dma",
-      "clock_id": null
-    },
-    {
-      "id": "audio-dma",
-      "base": 4293926976,
-      "size": 64,
-      "kind": "dma",
-      "clock_id": null
-    },
-    {
-      "id": "usb-core",
-      "base": 4294262784,
-      "size": 4096,
-      "kind": "usb-controller",
-      "clock_id": null,
-      "interrupts": [
-        {
-          "output": "device",
-          "line": 84,
-          "core": "core0"
-        },
-        {
-          "output": "host",
-          "line": 85,
-          "core": "core0"
-        }
-      ],
-      "device": {
-        "model": "usb"
-      }
-    },
-    {
-      "id": "usb-phy",
-      "base": 4294266880,
-      "size": 4096,
-      "kind": "usb-controller",
-      "clock_id": null,
-      "device": {
-        "model": "usb_phy"
-      }
-    },
-    {
-      "id": "power-peripherals",
-      "base": 4294459392,
-      "size": 32,
-      "kind": "serial-controller",
-      "clock_id": null
-    },
-    {
-      "id": "power-registers-1",
-      "base": 4294205568,
-      "size": 16,
-      "kind": "serial-controller",
-      "clock_id": null
-    },
-    {
-      "id": "power-registers-2",
-      "base": 4293927040,
-      "size": 64,
-      "kind": "serial-controller",
-      "clock_id": null
-    },
-    {
-      "id": "power-registers-3",
-      "base": 4294542592,
-      "size": 8,
-      "kind": "serial-controller",
-      "clock_id": null
-    },
-    {
-      "id": "serial-audio",
-      "base": 4294574080,
-      "size": 4096,
-      "kind": "address-window",
-      "clock_id": null
-    },
-    {
-      "id": "serial-audio-aux",
-      "base": 4294578176,
-      "size": 4096,
-      "kind": "address-window",
-      "clock_id": null
-    },
-    {
-      "id": "pulse-outputs",
-      "base": 4294610944,
-      "size": 3328,
-      "kind": "address-window",
-      "clock_id": null,
-      "interrupts": [
-        {
-          "output": "output-0",
-          "line": 20,
-          "core": "core0"
-        },
-        {
-          "output": "output-1",
-          "line": 21,
-          "core": "core0"
-        },
-        {
-          "output": "output-2",
-          "line": 22,
-          "core": "core0"
-        },
-        {
-          "output": "output-3",
-          "line": 23,
-          "core": "core0"
-        },
-        {
-          "output": "output-4",
-          "line": 24,
-          "core": "core0"
-        },
-        {
-          "output": "output-5",
-          "line": 25,
-          "core": "core0"
-        },
-        {
-          "output": "output-6",
-          "line": 26,
-          "core": "core0"
-        },
-        {
-          "output": "output-7",
-          "line": 27,
-          "core": "core0"
-        },
-        {
-          "output": "output-8",
-          "line": 28,
-          "core": "core0"
-        },
-        {
-          "output": "output-9",
-          "line": 29,
-          "core": "core0"
-        },
-        {
-          "output": "output-10",
-          "line": 30,
-          "core": "core0"
-        },
-        {
-          "output": "output-11",
-          "line": 31,
-          "core": "core0"
-        }
-      ]
-    },
-    {
-      "id": "serial-spi2",
-      "base": 4294459520,
-      "size": 32,
-      "kind": "serial-controller",
-      "clock_id": null,
-      "interrupts": [
-        {
-          "output": "complete-0",
-          "line": 14,
-          "core": "core0"
-        },
-        {
-          "output": "complete-1",
-          "line": 12,
-          "core": "core0"
-        }
-      ]
-    },
-    {
-      "id": "control-bus0",
-      "base": 4294463488,
-      "size": 64,
-      "kind": "control-bus",
-      "clock_id": null,
-      "interrupts": [
-        {
-          "output": "controller",
-          "line": 101,
-          "core": "core0"
-        }
-      ],
-      "device": {
-        "model": "control_bus",
-        "offsets": [
-          0,
-          4,
-          8,
-          16,
-          24
+        "discovery_mmio": [
+          {
+            "address": 4026531840,
+            "basis": "Declared catalog input.",
+            "size": 268369920
+          },
+          {
+            "address": 2683043840,
+            "basis": "Declared catalog input.",
+            "size": 65536
+          }
         ],
-        "modes": [
-          1,
-          9
-        ]
+        "private_mmio": [
+          {
+            "address": 4264656896,
+            "size": 4096
+          },
+          {
+            "address": 4265279488,
+            "size": 4096
+          },
+          {
+            "address": 4269850624,
+            "size": 4096
+          },
+          {
+            "address": 4269854720,
+            "size": 4096
+          }
+        ],
+        "reset_release": {
+          "mask": 16777216,
+          "register": 4294656204,
+          "source": 120,
+          "target": 1073676288
+        },
+        "tcm": {
+          "atcm": {
+            "basis": "Declared catalog input.",
+            "reset_base": 4294934528,
+            "reset_enabled": true,
+            "size": 8192
+          },
+          "btcm": {
+            "basis": "Declared catalog input.",
+            "reset_base": 0,
+            "reset_enabled": false,
+            "size": 0
+          }
+        },
+        "update_boot": {
+          "diagnostic_headers": [
+            {
+              "address": 262144,
+              "name": "kernel0",
+              "offset": 524288
+            },
+            {
+              "address": 851968,
+              "name": "kernel1",
+              "offset": 655360
+            }
+          ],
+          "flash_dat_bias": 604,
+          "nand_layouts": {
+            "0": {
+              "basis": "Declared catalog input.",
+              "entry_labels": {
+                "0x14000": "secondary loader",
+                "0x4000": "primary loader",
+                "0x40020": "primary kernel",
+                "0xd0020": "secondary kernel"
+              },
+              "images": [
+                {
+                  "address": 0,
+                  "name": "boot",
+                  "offset": 32768,
+                  "size": 131072
+                }
+              ],
+              "name": "nand-512-byte-pages"
+            },
+            "1": {
+              "basis": "Declared catalog input.",
+              "entry_labels": {
+                "0x11800": "secondary loader",
+                "0x1800": "primary loader",
+                "0x40020": "primary kernel",
+                "0xd0020": "secondary kernel"
+              },
+              "images": [
+                {
+                  "address": 0,
+                  "name": "boot",
+                  "offset": 262144,
+                  "size": 131072
+                }
+              ],
+              "name": "nand-2048-byte-pages"
+            }
+          }
+        }
+      },
+      "exr2-service-transports": {
+        "boot_rom": {
+          "basis": "Declared catalog input.",
+          "sha256": "4ecedfbfc1910bde488d36abe4380621f8845e6afcfc6cf54a49a33ec0abf9be",
+          "size": 16384
+        },
+        "discovery_mmio": [
+          {
+            "address": 4026531840,
+            "basis": "Declared catalog input.",
+            "size": 268369920
+          },
+          {
+            "address": 2683043840,
+            "basis": "Declared catalog input.",
+            "size": 65536
+          }
+        ],
+        "private_mmio": [
+          {
+            "address": 4264656896,
+            "size": 4096
+          },
+          {
+            "address": 4265279488,
+            "size": 4096
+          },
+          {
+            "address": 4269850624,
+            "size": 4096
+          },
+          {
+            "address": 4269854720,
+            "size": 4096
+          }
+        ],
+        "reset_release": {
+          "mask": 16777216,
+          "register": 4294656204,
+          "source": 120,
+          "target": 1073676288
+        },
+        "tcm": {
+          "atcm": {
+            "basis": "Declared catalog input.",
+            "reset_base": 4294934528,
+            "reset_enabled": true,
+            "size": 8192
+          },
+          "btcm": {
+            "basis": "Declared catalog input.",
+            "reset_base": 0,
+            "reset_enabled": false,
+            "size": 0
+          }
+        },
+        "update_boot": {
+          "diagnostic_headers": [
+            {
+              "address": 262144,
+              "name": "kernel0",
+              "offset": 524288
+            },
+            {
+              "address": 851968,
+              "name": "kernel1",
+              "offset": 655360
+            }
+          ],
+          "flash_dat_bias": 604,
+          "nand_layouts": {
+            "0": {
+              "basis": "Declared catalog input.",
+              "entry_labels": {
+                "0x14000": "secondary loader",
+                "0x4000": "primary loader",
+                "0x40020": "primary kernel",
+                "0xd0020": "secondary kernel"
+              },
+              "images": [
+                {
+                  "address": 0,
+                  "name": "boot",
+                  "offset": 32768,
+                  "size": 131072
+                }
+              ],
+              "name": "nand-512-byte-pages"
+            },
+            "1": {
+              "basis": "Declared catalog input.",
+              "entry_labels": {
+                "0x11800": "secondary loader",
+                "0x1800": "primary loader",
+                "0x40020": "primary kernel",
+                "0xd0020": "secondary kernel"
+              },
+              "images": [
+                {
+                  "address": 0,
+                  "name": "boot",
+                  "offset": 262144,
+                  "size": 131072
+                }
+              ],
+              "name": "nand-2048-byte-pages"
+            }
+          }
+        }
       }
-    },
-    {
-      "id": "control-bus1",
-      "base": 4294463552,
-      "size": 64,
-      "kind": "control-bus",
-      "clock_id": null,
-      "interrupts": [
-        {
-          "output": "controller",
-          "line": 102,
-          "core": "core0"
-        }
-      ],
-      "device": {
-        "model": "secondary_bus"
-      }
-    },
-    {
-      "id": "companion-fe80",
-      "base": 4264656896,
-      "size": 4096,
-      "kind": "address-window",
-      "clock_id": null,
-      "interrupts": [
-        {
-          "output": "processing",
-          "line": 88,
-          "core": "core0"
-        }
-      ]
-    },
-    {
-      "id": "companion-fe3b",
-      "base": 4265279488,
-      "size": 4096,
-      "kind": "address-window",
-      "clock_id": null
-    },
-    {
-      "id": "companion-fe80c",
-      "base": 4269850624,
-      "size": 4096,
-      "kind": "address-window",
-      "clock_id": null
-    },
-    {
-      "id": "companion-fe80d",
-      "base": 4269854720,
-      "size": 4096,
-      "kind": "address-window",
-      "clock_id": null
-    },
-    {
-      "id": "image-input",
-      "base": 4293984256,
-      "size": 1024,
-      "kind": "imaging-controller",
-      "clock_id": null,
-      "interrupts": [
-        {
-          "output": "phase-0",
-          "line": 39,
-          "core": "core0"
-        },
-        {
-          "output": "phase-1",
-          "line": 41,
-          "core": "core0"
-        },
-        {
-          "output": "record-phase",
-          "line": 40,
-          "core": "core0"
-        },
-        {
-          "output": "raw",
-          "line": 36,
-          "core": "core0"
-        },
-        {
-          "output": "readback",
-          "line": 38,
-          "core": "core0"
-        }
-      ]
-    },
-    {
-      "id": "input-auxiliary-control",
-      "base": 4293988352,
-      "size": 256,
-      "kind": "imaging-controller",
-      "clock_id": null
-    },
-    {
-      "id": "image-parameters",
-      "base": 4294021120,
-      "size": 4096,
-      "kind": "address-window",
-      "clock_id": null
-    },
-    {
-      "id": "hdmi-0",
-      "base": 4294344704,
-      "size": 4096,
-      "kind": "address-window",
-      "clock_id": null
-    },
-    {
-      "id": "hdmi-1",
-      "base": 4294402048,
-      "size": 4096,
-      "kind": "address-window",
-      "clock_id": null,
-      "interrupts": [
-        {
-          "output": "hot-plug",
-          "line": 9,
-          "core": "core0"
-        }
-      ]
-    },
-    {
-      "id": "hdmi-2",
-      "base": 4294406144,
-      "size": 4096,
-      "kind": "address-window",
-      "clock_id": null
-    },
-    {
-      "id": "output-control",
-      "base": 4294467584,
-      "size": 12,
-      "kind": "address-window",
-      "clock_id": null
-    },
-    {
-      "id": "graphics",
-      "base": 4294410240,
-      "size": 20480,
-      "kind": "display-controller",
-      "clock_id": null
-    },
-    {
-      "id": "scanout",
-      "base": 4294356992,
-      "size": 4096,
-      "kind": "display-controller",
-      "clock_id": null
-    },
-    {
-      "id": "scanout-aux",
-      "base": 4294369280,
-      "size": 4096,
-      "kind": "display-controller",
-      "clock_id": null
-    },
-    {
-      "id": "display-timing",
-      "base": 4294352896,
-      "size": 4096,
-      "kind": "display-controller",
-      "clock_id": null
-    },
-    {
-      "id": "display-timing-aux",
-      "base": 4294365184,
-      "size": 4096,
-      "kind": "display-controller",
-      "clock_id": null
-    },
-    {
-      "id": "display-formatter",
-      "base": 4294348800,
-      "size": 4096,
-      "kind": "display-controller",
-      "clock_id": null
-    },
-    {
-      "id": "display-formatter-aux",
-      "base": 4294361088,
-      "size": 4096,
-      "kind": "display-controller",
-      "clock_id": null
-    },
-    {
-      "id": "image-transfer",
-      "base": 4294328320,
-      "size": 32,
-      "kind": "imaging-controller",
-      "clock_id": null,
-      "views": [
-        {
-          "core": "core0",
-          "address": 4294328320
-        },
-        {
-          "core": "core1",
-          "address": 4294328320
-        }
-      ],
-      "interrupts": [
-        {
-          "output": "complete",
-          "line": 73,
-          "core": "core0"
-        }
-      ]
-    },
-    {
-      "id": "avc-codec-input",
-      "base": 4294312960,
-      "size": 256,
-      "kind": "imaging-controller",
-      "clock_id": null
-    },
-    {
-      "id": "avc-codec-control",
-      "base": 4294314752,
-      "size": 1280,
-      "kind": "imaging-controller",
-      "clock_id": null,
-      "interrupts": [
-        {
-          "output": "complete",
-          "line": 75,
-          "core": "core0"
-        }
-      ]
-    },
-    {
-      "id": "image-combination",
-      "base": 4294213632,
-      "size": 1280,
-      "kind": "imaging-controller",
-      "clock_id": null,
-      "interrupts": [
-        {
-          "output": "complete",
-          "line": 68,
-          "core": "core0"
-        }
-      ]
-    },
-    {
-      "id": "peripheral-window-fe318000",
-      "base": 4264656896,
-      "size": 4096,
-      "kind": "address-window",
-      "clock_id": null,
-      "views": [
-        {
-          "core": "core0",
-          "address": 4264656896
-        },
-        {
-          "core": "core1",
-          "address": 4264656896
-        }
-      ]
-    },
-    {
-      "id": "peripheral-window-fe3b0000",
-      "base": 4265279488,
-      "size": 4096,
-      "kind": "address-window",
-      "clock_id": null,
-      "views": [
-        {
-          "core": "core0",
-          "address": 4265279488
-        },
-        {
-          "core": "core1",
-          "address": 4265279488
-        }
-      ]
-    },
-    {
-      "id": "peripheral-window-fe80c000",
-      "base": 4269850624,
-      "size": 8192,
-      "kind": "address-window",
-      "clock_id": null,
-      "views": [
-        {
-          "core": "core0",
-          "address": 4269850624
-        },
-        {
-          "core": "core1",
-          "address": 4269850624
-        }
-      ]
-    },
-    {
-      "id": "peripheral-window-fff01000",
-      "base": 4293922816,
-      "size": 8192,
-      "kind": "address-window",
-      "clock_id": null,
-      "views": [
-        {
-          "core": "core0",
-          "address": 4293922816
-        },
-        {
-          "core": "core1",
-          "address": 4293922816
-        }
-      ]
-    },
-    {
-      "id": "peripheral-window-fff10000",
-      "base": 4293984256,
-      "size": 20480,
-      "kind": "address-window",
-      "clock_id": null,
-      "views": [
-        {
-          "core": "core0",
-          "address": 4293984256
-        },
-        {
-          "core": "core1",
-          "address": 4293984256
-        }
-      ]
-    },
-    {
-      "id": "peripheral-window-fff18000",
-      "base": 4294017024,
-      "size": 8192,
-      "kind": "address-window",
-      "clock_id": null,
-      "views": [
-        {
-          "core": "core0",
-          "address": 4294017024
-        },
-        {
-          "core": "core1",
-          "address": 4294017024
-        }
-      ]
-    },
-    {
-      "id": "peripheral-window-fff24000",
-      "base": 4294066176,
-      "size": 8192,
-      "kind": "address-window",
-      "clock_id": null,
-      "views": [
-        {
-          "core": "core0",
-          "address": 4294066176
-        },
-        {
-          "core": "core1",
-          "address": 4294066176
-        }
-      ]
-    },
-    {
-      "id": "peripheral-window-fff28000",
-      "base": 4294082560,
-      "size": 16384,
-      "kind": "address-window",
-      "clock_id": null,
-      "views": [
-        {
-          "core": "core0",
-          "address": 4294082560
-        },
-        {
-          "core": "core1",
-          "address": 4294082560
-        }
-      ]
-    },
-    {
-      "id": "peripheral-window-fff43000",
-      "base": 4294193152,
-      "size": 4096,
-      "kind": "address-window",
-      "clock_id": null,
-      "views": [
-        {
-          "core": "core0",
-          "address": 4294193152
-        },
-        {
-          "core": "core1",
-          "address": 4294193152
-        }
-      ]
-    },
-    {
-      "id": "peripheral-window-fff46000",
-      "base": 4294205440,
-      "size": 4096,
-      "kind": "address-window",
-      "clock_id": null,
-      "views": [
-        {
-          "core": "core0",
-          "address": 4294205440
-        },
-        {
-          "core": "core1",
-          "address": 4294205440
-        }
-      ]
-    },
-    {
-      "id": "peripheral-window-fff48000",
-      "base": 4294213632,
-      "size": 4096,
-      "kind": "address-window",
-      "clock_id": null,
-      "views": [
-        {
-          "core": "core0",
-          "address": 4294213632
-        },
-        {
-          "core": "core1",
-          "address": 4294213632
-        }
-      ]
-    },
-    {
-      "id": "peripheral-window-fff50000",
-      "base": 4294246400,
-      "size": 12288,
-      "kind": "address-window",
-      "clock_id": null,
-      "views": [
-        {
-          "core": "core0",
-          "address": 4294246400
-        },
-        {
-          "core": "core1",
-          "address": 4294246400
-        }
-      ]
-    },
-    {
-      "id": "peripheral-window-fff54000",
-      "base": 4294262784,
-      "size": 8192,
-      "kind": "address-window",
-      "clock_id": null,
-      "views": [
-        {
-          "core": "core0",
-          "address": 4294262784
-        },
-        {
-          "core": "core1",
-          "address": 4294262784
-        }
-      ]
-    },
-    {
-      "id": "peripheral-window-fff68000",
-      "base": 4294344704,
-      "size": 28672,
-      "kind": "address-window",
-      "clock_id": null,
-      "views": [
-        {
-          "core": "core0",
-          "address": 4294344704
-        },
-        {
-          "core": "core1",
-          "address": 4294344704
-        }
-      ]
-    },
-    {
-      "id": "peripheral-window-fff76000",
-      "base": 4294402048,
-      "size": 28672,
-      "kind": "address-window",
-      "clock_id": null,
-      "views": [
-        {
-          "core": "core0",
-          "address": 4294402048
-        },
-        {
-          "core": "core1",
-          "address": 4294402048
-        }
-      ]
-    },
-    {
-      "id": "peripheral-window-fff84000",
-      "base": 4294459392,
-      "size": 12288,
-      "kind": "address-window",
-      "clock_id": null,
-      "views": [
-        {
-          "core": "core0",
-          "address": 4294459392
-        },
-        {
-          "core": "core1",
-          "address": 4294459392
-        }
-      ]
-    },
-    {
-      "id": "peripheral-window-fff88000",
-      "base": 4294475776,
-      "size": 12288,
-      "kind": "address-window",
-      "clock_id": null,
-      "views": [
-        {
-          "core": "core0",
-          "address": 4294475776
-        },
-        {
-          "core": "core1",
-          "address": 4294475776
-        }
-      ]
-    },
-    {
-      "id": "peripheral-window-fff91000",
-      "base": 4294512640,
-      "size": 4096,
-      "kind": "address-window",
-      "clock_id": null,
-      "views": [
-        {
-          "core": "core0",
-          "address": 4294512640
-        },
-        {
-          "core": "core1",
-          "address": 4294512640
-        }
-      ]
-    },
-    {
-      "id": "peripheral-window-fff98000",
-      "base": 4294541312,
-      "size": 8192,
-      "kind": "address-window",
-      "clock_id": null,
-      "views": [
-        {
-          "core": "core0",
-          "address": 4294541312
-        },
-        {
-          "core": "core1",
-          "address": 4294541312
-        }
-      ]
-    },
-    {
-      "id": "peripheral-window-fffa0000",
-      "base": 4294574080,
-      "size": 8192,
-      "kind": "address-window",
-      "clock_id": null,
-      "views": [
-        {
-          "core": "core0",
-          "address": 4294574080
-        },
-        {
-          "core": "core1",
-          "address": 4294574080
-        }
-      ]
-    },
-    {
-      "id": "peripheral-window-fffa9000",
-      "base": 4294610944,
-      "size": 4096,
-      "kind": "address-window",
-      "clock_id": null,
-      "views": [
-        {
-          "core": "core0",
-          "address": 4294610944
-        },
-        {
-          "core": "core1",
-          "address": 4294610944
-        }
-      ]
-    },
-    {
-      "id": "peripheral-window-fffb2000",
-      "base": 4294647808,
-      "size": 12288,
-      "kind": "address-window",
-      "clock_id": null,
-      "views": [
-        {
-          "core": "core0",
-          "address": 4294647808
-        },
-        {
-          "core": "core1",
-          "address": 4294647808
-        }
-      ]
-    },
-    {
-      "id": "prefilter",
-      "base": 4294025216,
-      "size": 560,
-      "kind": "address-window",
-      "clock_id": null,
-      "interrupts": [
-        {
-          "output": "complete",
-          "line": 49,
-          "core": "core0"
-        }
-      ]
-    },
-    {
-      "id": "raw-statistics",
-      "base": 4294033408,
-      "size": 4096,
-      "kind": "address-window",
-      "clock_id": null,
-      "interrupts": [
-        {
-          "output": "complete",
-          "line": 50,
-          "core": "core0"
-        }
-      ]
-    },
-    {
-      "id": "raw-conversion",
-      "base": 4294189056,
-      "size": 4096,
-      "kind": "address-window",
-      "clock_id": null
-    },
-    {
-      "id": "image-scaler",
-      "base": 4294209536,
-      "size": 132,
-      "kind": "address-window",
-      "clock_id": null,
-      "interrupts": [
-        {
-          "output": "complete",
-          "line": 67,
-          "core": "core0"
-        }
-      ]
-    },
-    {
-      "id": "warp",
-      "base": 4294332416,
-      "size": 332,
-      "kind": "address-window",
-      "clock_id": null,
-      "interrupts": [
-        {
-          "output": "complete",
-          "line": 74,
-          "core": "core0"
-        }
-      ]
-    },
-    {
-      "id": "jpeg-encoder",
-      "base": 4294320128,
-      "size": 300,
-      "kind": "address-window",
-      "clock_id": null,
-      "interrupts": [
-        {
-          "output": "complete",
-          "line": 77,
-          "core": "core0"
-        }
-      ]
-    },
-    {
-      "id": "jpeg-decoder",
-      "base": 4294324224,
-      "size": 300,
-      "kind": "address-window",
-      "clock_id": null,
-      "interrupts": [
-        {
-          "output": "complete",
-          "line": 76,
-          "core": "core0"
-        }
-      ]
-    },
-    {
-      "id": "still-processor-0",
-      "base": 4294115328,
-      "size": 4,
-      "kind": "address-window",
-      "clock_id": null,
-      "interrupts": [
-        {
-          "output": "complete",
-          "line": 61,
-          "core": "core0"
-        }
-      ]
-    },
-    {
-      "id": "still-processor-1",
-      "base": 4294115508,
-      "size": 72,
-      "kind": "address-window",
-      "clock_id": null
-    },
-    {
-      "id": "still-processor-2",
-      "base": 4294120448,
-      "size": 14336,
-      "kind": "address-window",
-      "clock_id": null
-    },
-    {
-      "id": "still-processor-3",
-      "base": 4294148096,
-      "size": 96,
-      "kind": "address-window",
-      "clock_id": null
-    },
-    {
-      "id": "still-processor-4",
-      "base": 4294180864,
-      "size": 256,
-      "kind": "address-window",
-      "clock_id": null
-    },
-    {
-      "id": "still-processor-5",
-      "base": 4294184960,
-      "size": 4096,
-      "kind": "address-window",
-      "clock_id": null
-    },
-    {
-      "id": "still-processor-6",
-      "base": 4294197248,
-      "size": 8320,
-      "kind": "address-window",
-      "clock_id": null
-    },
-    {
-      "id": "still-processor-7",
-      "base": 4294205584,
-      "size": 112,
-      "kind": "address-window",
-      "clock_id": null
-    },
-    {
-      "id": "peripheral-window-fff1a000",
-      "base": 4294025216,
-      "size": 4096,
-      "kind": "address-window",
-      "clock_id": null,
-      "views": [
-        {
-          "core": "core0",
-          "address": 4294025216
-        },
-        {
-          "core": "core1",
-          "address": 4294025216
-        }
-      ]
-    },
-    {
-      "id": "peripheral-window-fff1c000",
-      "base": 4294033408,
-      "size": 4096,
-      "kind": "address-window",
-      "clock_id": null,
-      "views": [
-        {
-          "core": "core0",
-          "address": 4294033408
-        },
-        {
-          "core": "core1",
-          "address": 4294033408
-        }
-      ]
-    },
-    {
-      "id": "peripheral-window-fff30000",
-      "base": 4294115328,
-      "size": 4096,
-      "kind": "address-window",
-      "clock_id": null,
-      "views": [
-        {
-          "core": "core0",
-          "address": 4294115328
-        },
-        {
-          "core": "core1",
-          "address": 4294115328
-        }
-      ]
-    },
-    {
-      "id": "peripheral-window-fff31000",
-      "base": 4294119424,
-      "size": 4096,
-      "kind": "address-window",
-      "clock_id": null,
-      "views": [
-        {
-          "core": "core0",
-          "address": 4294119424
-        },
-        {
-          "core": "core1",
-          "address": 4294119424
-        }
-      ]
-    },
-    {
-      "id": "peripheral-window-fff32000",
-      "base": 4294123520,
-      "size": 4096,
-      "kind": "address-window",
-      "clock_id": null,
-      "views": [
-        {
-          "core": "core0",
-          "address": 4294123520
-        },
-        {
-          "core": "core1",
-          "address": 4294123520
-        }
-      ]
-    },
-    {
-      "id": "peripheral-window-fff33000",
-      "base": 4294127616,
-      "size": 4096,
-      "kind": "address-window",
-      "clock_id": null,
-      "views": [
-        {
-          "core": "core0",
-          "address": 4294127616
-        },
-        {
-          "core": "core1",
-          "address": 4294127616
-        }
-      ]
-    },
-    {
-      "id": "peripheral-window-fff34000",
-      "base": 4294131712,
-      "size": 4096,
-      "kind": "address-window",
-      "clock_id": null,
-      "views": [
-        {
-          "core": "core0",
-          "address": 4294131712
-        },
-        {
-          "core": "core1",
-          "address": 4294131712
-        }
-      ]
-    },
-    {
-      "id": "peripheral-window-fff38000",
-      "base": 4294148096,
-      "size": 4096,
-      "kind": "address-window",
-      "clock_id": null,
-      "views": [
-        {
-          "core": "core0",
-          "address": 4294148096
-        },
-        {
-          "core": "core1",
-          "address": 4294148096
-        }
-      ]
-    },
-    {
-      "id": "peripheral-window-fff40000",
-      "base": 4294180864,
-      "size": 4096,
-      "kind": "address-window",
-      "clock_id": null,
-      "views": [
-        {
-          "core": "core0",
-          "address": 4294180864
-        },
-        {
-          "core": "core1",
-          "address": 4294180864
-        }
-      ]
-    },
-    {
-      "id": "peripheral-window-fff41000",
-      "base": 4294184960,
-      "size": 4096,
-      "kind": "address-window",
-      "clock_id": null,
-      "views": [
-        {
-          "core": "core0",
-          "address": 4294184960
-        },
-        {
-          "core": "core1",
-          "address": 4294184960
-        }
-      ]
-    },
-    {
-      "id": "peripheral-window-fff42000",
-      "base": 4294189056,
-      "size": 4096,
-      "kind": "address-window",
-      "clock_id": null,
-      "views": [
-        {
-          "core": "core0",
-          "address": 4294189056
-        },
-        {
-          "core": "core1",
-          "address": 4294189056
-        }
-      ]
-    },
-    {
-      "id": "peripheral-window-fff44000",
-      "base": 4294197248,
-      "size": 4096,
-      "kind": "address-window",
-      "clock_id": null,
-      "views": [
-        {
-          "core": "core0",
-          "address": 4294197248
-        },
-        {
-          "core": "core1",
-          "address": 4294197248
-        }
-      ]
-    },
-    {
-      "id": "peripheral-window-fff45000",
-      "base": 4294201344,
-      "size": 4096,
-      "kind": "address-window",
-      "clock_id": null,
-      "views": [
-        {
-          "core": "core0",
-          "address": 4294201344
-        },
-        {
-          "core": "core1",
-          "address": 4294201344
-        }
-      ]
-    },
-    {
-      "id": "peripheral-window-fff47000",
-      "base": 4294209536,
-      "size": 4096,
-      "kind": "address-window",
-      "clock_id": null,
-      "views": [
-        {
-          "core": "core0",
-          "address": 4294209536
-        },
-        {
-          "core": "core1",
-          "address": 4294209536
-        }
-      ]
-    },
-    {
-      "id": "peripheral-window-fff62000",
-      "base": 4294320128,
-      "size": 4096,
-      "kind": "address-window",
-      "clock_id": null,
-      "views": [
-        {
-          "core": "core0",
-          "address": 4294320128
-        },
-        {
-          "core": "core1",
-          "address": 4294320128
-        }
-      ]
-    },
-    {
-      "id": "peripheral-window-fff63000",
-      "base": 4294324224,
-      "size": 4096,
-      "kind": "address-window",
-      "clock_id": null,
-      "views": [
-        {
-          "core": "core0",
-          "address": 4294324224
-        },
-        {
-          "core": "core1",
-          "address": 4294324224
-        }
-      ]
-    },
-    {
-      "id": "peripheral-window-fff65000",
-      "base": 4294332416,
-      "size": 4096,
-      "kind": "address-window",
-      "clock_id": null,
-      "views": [
-        {
-          "core": "core0",
-          "address": 4294332416
-        },
-        {
-          "core": "core1",
-          "address": 4294332416
-        }
-      ]
     }
-  ],
-  "clocks": [],
+  },
   "mappings": [
     {
       "id": "cpu0-map-00",
@@ -2029,229 +716,5 @@
         "set_bits": 8192
       }
     ]
-  },
-  "hardware": {
-    "profiles": {
-      "exr2-service-transports": {
-        "tcm": {
-          "atcm": {
-            "size": 8192,
-            "reset_base": 4294934528,
-            "reset_enabled": true,
-            "basis": "Declared catalog input."
-          },
-          "btcm": {
-            "size": 0,
-            "reset_base": 0,
-            "reset_enabled": false,
-            "basis": "Declared catalog input."
-          }
-        },
-        "boot_rom": {
-          "sha256": "4ecedfbfc1910bde488d36abe4380621f8845e6afcfc6cf54a49a33ec0abf9be",
-          "size": 16384,
-          "basis": "Declared catalog input."
-        },
-        "reset_release": {
-          "register": 4294656204,
-          "mask": 16777216,
-          "source": 120,
-          "target": 1073676288
-        },
-        "update_boot": {
-          "flash_dat_bias": 604,
-          "diagnostic_headers": [
-            {
-              "name": "kernel0",
-              "offset": 524288,
-              "address": 262144
-            },
-            {
-              "name": "kernel1",
-              "offset": 655360,
-              "address": 851968
-            }
-          ],
-          "nand_layouts": {
-            "0": {
-              "name": "nand-512-byte-pages",
-              "images": [
-                {
-                  "name": "boot",
-                  "offset": 32768,
-                  "size": 131072,
-                  "address": 0
-                }
-              ],
-              "entry_labels": {
-                "0x4000": "primary loader",
-                "0x14000": "secondary loader",
-                "0x40020": "primary kernel",
-                "0xd0020": "secondary kernel"
-              },
-              "basis": "Declared catalog input."
-            },
-            "1": {
-              "name": "nand-2048-byte-pages",
-              "images": [
-                {
-                  "name": "boot",
-                  "offset": 262144,
-                  "size": 131072,
-                  "address": 0
-                }
-              ],
-              "entry_labels": {
-                "0x1800": "primary loader",
-                "0x11800": "secondary loader",
-                "0x40020": "primary kernel",
-                "0xd0020": "secondary kernel"
-              },
-              "basis": "Declared catalog input."
-            }
-          }
-        },
-        "discovery_mmio": [
-          {
-            "address": 4026531840,
-            "size": 268369920,
-            "basis": "Declared catalog input."
-          },
-          {
-            "address": 2683043840,
-            "size": 65536,
-            "basis": "Declared catalog input."
-          }
-        ],
-        "private_mmio": [
-          {
-            "address": 4264656896,
-            "size": 4096
-          },
-          {
-            "address": 4265279488,
-            "size": 4096
-          },
-          {
-            "address": 4269850624,
-            "size": 4096
-          },
-          {
-            "address": 4269854720,
-            "size": 4096
-          }
-        ]
-      },
-      "exr2": {
-        "tcm": {
-          "atcm": {
-            "size": 8192,
-            "reset_base": 4294934528,
-            "reset_enabled": true,
-            "basis": "Declared catalog input."
-          },
-          "btcm": {
-            "size": 0,
-            "reset_base": 0,
-            "reset_enabled": false,
-            "basis": "Declared catalog input."
-          }
-        },
-        "boot_rom": {
-          "sha256": "4ecedfbfc1910bde488d36abe4380621f8845e6afcfc6cf54a49a33ec0abf9be",
-          "size": 16384,
-          "basis": "Declared catalog input."
-        },
-        "reset_release": {
-          "register": 4294656204,
-          "mask": 16777216,
-          "source": 120,
-          "target": 1073676288
-        },
-        "update_boot": {
-          "flash_dat_bias": 604,
-          "diagnostic_headers": [
-            {
-              "name": "kernel0",
-              "offset": 524288,
-              "address": 262144
-            },
-            {
-              "name": "kernel1",
-              "offset": 655360,
-              "address": 851968
-            }
-          ],
-          "nand_layouts": {
-            "0": {
-              "name": "nand-512-byte-pages",
-              "images": [
-                {
-                  "name": "boot",
-                  "offset": 32768,
-                  "size": 131072,
-                  "address": 0
-                }
-              ],
-              "entry_labels": {
-                "0x4000": "primary loader",
-                "0x14000": "secondary loader",
-                "0x40020": "primary kernel",
-                "0xd0020": "secondary kernel"
-              },
-              "basis": "Declared catalog input."
-            },
-            "1": {
-              "name": "nand-2048-byte-pages",
-              "images": [
-                {
-                  "name": "boot",
-                  "offset": 262144,
-                  "size": 131072,
-                  "address": 0
-                }
-              ],
-              "entry_labels": {
-                "0x1800": "primary loader",
-                "0x11800": "secondary loader",
-                "0x40020": "primary kernel",
-                "0xd0020": "secondary kernel"
-              },
-              "basis": "Declared catalog input."
-            }
-          }
-        },
-        "discovery_mmio": [
-          {
-            "address": 4026531840,
-            "size": 268369920,
-            "basis": "Declared catalog input."
-          },
-          {
-            "address": 2683043840,
-            "size": 65536,
-            "basis": "Declared catalog input."
-          }
-        ],
-        "private_mmio": [
-          {
-            "address": 4264656896,
-            "size": 4096
-          },
-          {
-            "address": 4265279488,
-            "size": 4096
-          },
-          {
-            "address": 4269850624,
-            "size": 4096
-          },
-          {
-            "address": 4269854720,
-            "size": 4096
-          }
-        ]
-      }
-    }
   }
 }

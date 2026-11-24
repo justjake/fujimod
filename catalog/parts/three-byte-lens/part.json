@@ -5,6 +5,18 @@
   "model": {
     "kind": "lens-mechanism",
     "protocol": "three-byte",
+    "clock_modes": [
+      {
+        "kind": "fixed"
+      }
+    ],
+    "motor_counters": [
+      {
+        "motor": 0,
+        "channel": 4,
+        "divider": 1
+      }
+    ],
     "motors": [
       {
         "initial_position": 0,
@@ -26,22 +38,7 @@
           32767
         ],
         "ticks_per_step": 1000,
-        "settle_ticks": 4000,
-        "home": null
-      }
-    ],
-    "encoder": null,
-    "zoom": null,
-    "clock_modes": [
-      {
-        "kind": "fixed"
-      }
-    ],
-    "motor_counters": [
-      {
-        "motor": 0,
-        "channel": 4,
-        "divider": 1
+        "settle_ticks": 4000
       }
     ]
   },
@@ -62,8 +59,7 @@
         11
       ],
       "quadrature": false,
-      "initial_phase": 0,
-      "capture_channel": null
+      "initial_phase": 0
     },
     "interrupts": [
       {
@@ -140,7 +136,6 @@
         ]
       }
     ],
-    "limits": [],
     "motor_home_pins": [
       {
         "port": 0,

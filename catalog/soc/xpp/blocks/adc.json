@@ -1,0 +1,13 @@
+{
+  "$schema": "https://fujimod.com/schemas/soc-block.schema.json",
+  "schema": 1,
+  "id": "adc",
+  "base": 4294021120,
+  "size": 64,
+  "kind": "adc",
+  "device": {
+    "model": "adc",
+    "sample_ticks": 16,
+    "basis": "Twelve-channel ADC with the X-T20 2.11 kernel contract (0x5ac00..0x5adf8): control +0 with start bit 0, continuous-mode bit 1 and channel enables in bits 16-25, clock divider +4, and 10-bit results at +0x10 + 4*channel. Reader 0x5ad8c requires bit 0 and the channel enable; a single conversion clears bit 0 when done (stage 2 0x13d8 waits for it). The conversion clock is unmeasured; sample_ticks is a declared input."
+  }
+}

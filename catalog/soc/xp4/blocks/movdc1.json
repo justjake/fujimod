@@ -1,0 +1,18 @@
+{
+  "$schema": "https://fujimod.com/schemas/soc-block.schema.json",
+  "schema": 1,
+  "id": "movdc1",
+  "base": 4294389760,
+  "size": 268,
+  "kind": "imaging-controller",
+  "interrupts": [
+    {
+      "output": "interrupt",
+      "line": 108
+    }
+  ],
+  "device": {
+    "model": "movdc",
+    "reset_ticks": 8
+  }
+}

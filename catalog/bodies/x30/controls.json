@@ -69,13 +69,12 @@
       "location": "rear",
       "manual_page": 225,
       "face": "AEL/AFL",
-      "icon": null,
       "connection_ids": [
         "controls-adc-8"
       ],
       "assignable": true,
+      "pushable": true,
       "default_function": "Locks exposure, focus, or both according to the configurable [AE/AF-LOCK BUTTON] setting.",
-      "role": null,
       "mechanical": false,
       "behavior": {
         "kind": "button",
@@ -83,51 +82,37 @@
           "kind": "debug_key",
           "name": "AEAF_LOCK"
         }
-      },
-      "pushable": true,
-      "positions": []
+      }
     },
     "battery_chamber_cover_latch": {
       "name": "Battery-chamber cover latch",
       "location": "bottom",
       "manual_page": 13,
-      "face": null,
-      "icon": null,
-      "connection_ids": [],
       "assignable": false,
-      "default_function": "Slide to open or close the battery-chamber cover.",
-      "role": null,
-      "mechanical": true,
-      "behavior": null,
       "pushable": false,
-      "positions": []
+      "default_function": "Slide to open or close the battery-chamber cover.",
+      "mechanical": true
     },
     "battery_latch": {
       "name": "Battery latch",
       "location": "bottom",
       "manual_page": 13,
-      "face": null,
-      "icon": null,
-      "connection_ids": [],
       "assignable": false,
-      "default_function": "Press to the side to release the battery.",
-      "role": null,
-      "mechanical": true,
-      "behavior": null,
       "pushable": false,
-      "positions": []
+      "default_function": "Press to the side to release the battery.",
+      "mechanical": true
     },
     "command_dial": {
       "name": "Command dial",
       "location": "rear",
       "manual_page": 16,
-      "face": null,
-      "icon": null,
+      "short_name": "COMMAND",
       "connection_ids": [
         "controls-gpio-0-10",
         "controls-encoder-3-8-3-9"
       ],
       "assignable": false,
+      "pushable": true,
       "default_function": "Navigates menus, views pictures, and selects quick-menu options; pressing its center zooms in on the active focus area.",
       "role": "command_control",
       "mechanical": false,
@@ -147,23 +132,20 @@
         "press": {
           "kind": "debug_key",
           "name": "CMD_PUSH"
-        },
-        "endless": null
-      },
-      "pushable": true,
-      "positions": [],
-      "short_name": "COMMAND"
+        }
+      }
     },
     "control_ring": {
       "name": "Control ring",
       "location": "front",
       "manual_page": 17,
-      "face": null,
-      "icon": null,
-      "connection_ids": ["controls-encoder-adc-6-7"],
+      "short_name": "LENS",
+      "connection_ids": [
+        "controls-encoder-adc-6-7"
+      ],
       "assignable": true,
+      "pushable": false,
       "default_function": "At [DEFAULT], adjusts program shift ([P]), shutter speed ([S]), aperture ([A]), shutter speed/aperture ([M]), filter selection ([Filter]), advanced mode selection ([Adv.]), or scene selection ([SP1]/[SP2]); it provides manual focus in the applicable modes. Other assignments are ISO, white balance, film simulation, and continuous shooting.",
-      "role": null,
       "mechanical": false,
       "behavior": {
         "kind": "ring",
@@ -178,38 +160,27 @@
             "name": "CRING+"
           }
         },
-        "press": null,
         "endless": true
-      },
-      "pushable": false,
-      "positions": [],
-      "short_name": "LENS"
+      }
     },
     "control_ring_options_button": {
       "name": "Control ring options button",
       "location": "top",
       "manual_page": 17,
       "face": "Fn",
-      "icon": null,
-      "connection_ids": [],
       "assignable": false,
-      "default_function": "Selects the control-ring function from [DEFAULT], [ISO], [WHITE BALANCE], [FILM SIMULATION], or [CONTINUOUS]; in [M] mode it switches between shutter-speed and aperture selection.",
-      "role": null,
-      "mechanical": false,
-      "behavior": null,
       "pushable": false,
-      "positions": []
+      "default_function": "Selects the control-ring function from [DEFAULT], [ISO], [WHITE BALANCE], [FILM SIMULATION], or [CONTINUOUS]; in [M] mode it switches between shutter-speed and aperture selection.",
+      "mechanical": false
     },
     "delete_button": {
       "name": "Delete button (playback mode)",
       "location": "rear",
       "manual_page": 64,
-      "face": null,
       "icon": "delete",
-      "connection_ids": [],
       "assignable": false,
+      "pushable": true,
       "default_function": "Deletes pictures in playback; the manual describes frame, selected-frame, and all-frame deletion.",
-      "role": null,
       "mechanical": false,
       "behavior": {
         "kind": "button",
@@ -217,37 +188,28 @@
           "kind": "debug_key",
           "name": "DELETE"
         }
-      },
-      "pushable": true,
-      "positions": []
+      }
     },
     "diopter_adjustment_control": {
       "name": "Diopter adjustment control",
       "location": "rear",
       "manual_page": 22,
-      "face": null,
-      "icon": null,
-      "connection_ids": [],
       "assignable": false,
-      "default_function": "Adjusts the viewfinder display until it is in sharp focus.",
-      "role": null,
-      "mechanical": true,
-      "behavior": null,
       "pushable": false,
-      "positions": []
+      "default_function": "Adjusts the viewfinder display until it is in sharp focus.",
+      "mechanical": true
     },
     "disp_back_button": {
       "name": "[DISP] (display)/[BACK] button",
       "location": "rear",
       "manual_page": 24,
       "face": "DISP/BACK",
-      "icon": null,
       "connection_ids": [
         "controls-adc-8"
       ],
       "assignable": false,
+      "pushable": true,
       "default_function": "Controls indicators in the viewfinder and LCD monitor and serves as [BACK] in menus.",
-      "role": null,
       "mechanical": false,
       "behavior": {
         "kind": "button",
@@ -255,22 +217,19 @@
           "kind": "debug_key",
           "name": "DISP_B"
         }
-      },
-      "pushable": true,
-      "positions": []
+      }
     },
     "drive_button": {
       "name": "[DRIVE] button",
       "location": "rear",
       "manual_page": 28,
       "face": "DRIVE",
-      "icon": null,
       "connection_ids": [
         "controls-gpio-2-11"
       ],
       "assignable": false,
+      "pushable": true,
       "default_function": "Chooses the drive mode.",
-      "role": null,
       "mechanical": false,
       "behavior": {
         "kind": "button",
@@ -278,99 +237,283 @@
           "kind": "debug_key",
           "name": "DRIVE"
         }
-      },
-      "pushable": true,
-      "positions": []
+      }
     },
     "exposure_compensation_dial": {
       "name": "Exposure compensation dial",
       "location": "top",
       "manual_page": 118,
-      "face": null,
-      "icon": null,
-      "connection_ids": ["controls-adc-4"],
+      "short_name": "EV",
+      "connection_ids": [
+        "controls-adc-4"
+      ],
       "assignable": false,
+      "pushable": false,
+      "positions": [
+        {
+          "id": "+3",
+          "label": "+3"
+        },
+        {
+          "id": "8/3"
+        },
+        {
+          "id": "7/3"
+        },
+        {
+          "id": "+2",
+          "label": "+2"
+        },
+        {
+          "id": "5/3"
+        },
+        {
+          "id": "4/3"
+        },
+        {
+          "id": "+1",
+          "label": "+1"
+        },
+        {
+          "id": "2/3"
+        },
+        {
+          "id": "1/3"
+        },
+        {
+          "id": "0",
+          "label": "0"
+        },
+        {
+          "id": "-1/3"
+        },
+        {
+          "id": "-2/3"
+        },
+        {
+          "id": "−1",
+          "label": "−1"
+        },
+        {
+          "id": "-4/3"
+        },
+        {
+          "id": "-5/3"
+        },
+        {
+          "id": "−2",
+          "label": "−2"
+        },
+        {
+          "id": "-7/3"
+        },
+        {
+          "id": "-8/3"
+        },
+        {
+          "id": "−3",
+          "label": "−3"
+        }
+      ],
       "default_function": "Adjusts exposure; positive values increase exposure and negative values reduce it.",
-      "role": null,
       "mechanical": false,
       "behavior": {
         "kind": "dial",
         "motion": {
           "kind": "positions",
           "positions": [
-            {"id": "+3", "key": {"kind": "native_input", "name": "KEY_EXP_DIAL_P3"}, "asserted": true},
-            {"id": "8/3", "key": {"kind": "native_input", "name": "KEY_EXP_DIAL_P8_3"}, "asserted": true},
-            {"id": "7/3", "key": {"kind": "native_input", "name": "KEY_EXP_DIAL_P7_3"}, "asserted": true},
-            {"id": "+2", "key": {"kind": "native_input", "name": "KEY_EXP_DIAL_P2"}, "asserted": true},
-            {"id": "5/3", "key": {"kind": "native_input", "name": "KEY_EXP_DIAL_P5_3"}, "asserted": true},
-            {"id": "4/3", "key": {"kind": "native_input", "name": "KEY_EXP_DIAL_P4_3"}, "asserted": true},
-            {"id": "+1", "key": {"kind": "native_input", "name": "KEY_EXP_DIAL_P1"}, "asserted": true},
-            {"id": "2/3", "key": {"kind": "native_input", "name": "KEY_EXP_DIAL_P2_3"}, "asserted": true},
-            {"id": "1/3", "key": {"kind": "native_input", "name": "KEY_EXP_DIAL_P1_3"}, "asserted": true},
-            {"id": "0", "key": {"kind": "native_input", "name": "KEY_EXP_DIAL_0"}, "asserted": true},
-            {"id": "-1/3", "key": {"kind": "native_input", "name": "KEY_EXP_DIAL_M1_3"}, "asserted": true},
-            {"id": "-2/3", "key": {"kind": "native_input", "name": "KEY_EXP_DIAL_M2_3"}, "asserted": true},
-            {"id": "−1", "key": {"kind": "native_input", "name": "KEY_EXP_DIAL_M1"}, "asserted": true},
-            {"id": "-4/3", "key": {"kind": "native_input", "name": "KEY_EXP_DIAL_M4_3"}, "asserted": true},
-            {"id": "-5/3", "key": {"kind": "native_input", "name": "KEY_EXP_DIAL_M5_3"}, "asserted": true},
-            {"id": "−2", "key": {"kind": "native_input", "name": "KEY_EXP_DIAL_M2"}, "asserted": true},
-            {"id": "-7/3", "key": {"kind": "native_input", "name": "KEY_EXP_DIAL_M7_3"}, "asserted": true},
-            {"id": "-8/3", "key": {"kind": "native_input", "name": "KEY_EXP_DIAL_M8_3"}, "asserted": true},
-            {"id": "−3", "key": {"kind": "native_input", "name": "KEY_EXP_DIAL_M3"}, "asserted": true}
+            {
+              "id": "+3",
+              "key": {
+                "kind": "native_input",
+                "name": "KEY_EXP_DIAL_P3"
+              },
+              "asserted": true
+            },
+            {
+              "id": "8/3",
+              "key": {
+                "kind": "native_input",
+                "name": "KEY_EXP_DIAL_P8_3"
+              },
+              "asserted": true
+            },
+            {
+              "id": "7/3",
+              "key": {
+                "kind": "native_input",
+                "name": "KEY_EXP_DIAL_P7_3"
+              },
+              "asserted": true
+            },
+            {
+              "id": "+2",
+              "key": {
+                "kind": "native_input",
+                "name": "KEY_EXP_DIAL_P2"
+              },
+              "asserted": true
+            },
+            {
+              "id": "5/3",
+              "key": {
+                "kind": "native_input",
+                "name": "KEY_EXP_DIAL_P5_3"
+              },
+              "asserted": true
+            },
+            {
+              "id": "4/3",
+              "key": {
+                "kind": "native_input",
+                "name": "KEY_EXP_DIAL_P4_3"
+              },
+              "asserted": true
+            },
+            {
+              "id": "+1",
+              "key": {
+                "kind": "native_input",
+                "name": "KEY_EXP_DIAL_P1"
+              },
+              "asserted": true
+            },
+            {
+              "id": "2/3",
+              "key": {
+                "kind": "native_input",
+                "name": "KEY_EXP_DIAL_P2_3"
+              },
+              "asserted": true
+            },
+            {
+              "id": "1/3",
+              "key": {
+                "kind": "native_input",
+                "name": "KEY_EXP_DIAL_P1_3"
+              },
+              "asserted": true
+            },
+            {
+              "id": "0",
+              "key": {
+                "kind": "native_input",
+                "name": "KEY_EXP_DIAL_0"
+              },
+              "asserted": true
+            },
+            {
+              "id": "-1/3",
+              "key": {
+                "kind": "native_input",
+                "name": "KEY_EXP_DIAL_M1_3"
+              },
+              "asserted": true
+            },
+            {
+              "id": "-2/3",
+              "key": {
+                "kind": "native_input",
+                "name": "KEY_EXP_DIAL_M2_3"
+              },
+              "asserted": true
+            },
+            {
+              "id": "−1",
+              "key": {
+                "kind": "native_input",
+                "name": "KEY_EXP_DIAL_M1"
+              },
+              "asserted": true
+            },
+            {
+              "id": "-4/3",
+              "key": {
+                "kind": "native_input",
+                "name": "KEY_EXP_DIAL_M4_3"
+              },
+              "asserted": true
+            },
+            {
+              "id": "-5/3",
+              "key": {
+                "kind": "native_input",
+                "name": "KEY_EXP_DIAL_M5_3"
+              },
+              "asserted": true
+            },
+            {
+              "id": "−2",
+              "key": {
+                "kind": "native_input",
+                "name": "KEY_EXP_DIAL_M2"
+              },
+              "asserted": true
+            },
+            {
+              "id": "-7/3",
+              "key": {
+                "kind": "native_input",
+                "name": "KEY_EXP_DIAL_M7_3"
+              },
+              "asserted": true
+            },
+            {
+              "id": "-8/3",
+              "key": {
+                "kind": "native_input",
+                "name": "KEY_EXP_DIAL_M8_3"
+              },
+              "asserted": true
+            },
+            {
+              "id": "−3",
+              "key": {
+                "kind": "native_input",
+                "name": "KEY_EXP_DIAL_M3"
+              },
+              "asserted": true
+            }
           ]
         },
-        "press": null,
         "endless": false
-      },
-      "pushable": false,
-      "positions": [
-        {"id": "+3", "label": "+3", "description": null},
-        {"id": "8/3", "label": null, "description": null},
-        {"id": "7/3", "label": null, "description": null},
-        {"id": "+2", "label": "+2", "description": null},
-        {"id": "5/3", "label": null, "description": null},
-        {"id": "4/3", "label": null, "description": null},
-        {"id": "+1", "label": "+1", "description": null},
-        {"id": "2/3", "label": null, "description": null},
-        {"id": "1/3", "label": null, "description": null},
-        {"id": "0", "label": "0", "description": null},
-        {"id": "-1/3", "label": null, "description": null},
-        {"id": "-2/3", "label": null, "description": null},
-        {"id": "−1", "label": "−1", "description": null},
-        {"id": "-4/3", "label": null, "description": null},
-        {"id": "-5/3", "label": null, "description": null},
-        {"id": "−2", "label": "−2", "description": null},
-        {"id": "-7/3", "label": null, "description": null},
-        {"id": "-8/3", "label": null, "description": null},
-        {"id": "−3", "label": "−3", "description": null}
-      ],
-      "short_name": "EV"
+      }
     },
     "flash_pop_up_switch": {
       "name": "Flash pop-up switch",
       "location": "rear",
       "manual_page": 112,
-      "face": null,
       "icon": "flash",
-      "connection_ids": [],
       "assignable": false,
-      "default_function": "Raises the built-in flash.",
-      "role": null,
-      "mechanical": false,
-      "behavior": null,
       "pushable": false,
-      "positions": []
+      "default_function": "Raises the built-in flash.",
+      "mechanical": false
     },
     "focus_mode_selector": {
       "name": "Focus mode selector",
       "location": "front",
       "manual_page": 124,
-      "face": null,
-      "icon": null,
-      "connection_ids": ["controls-contacts-3-6-3-7"],
+      "short_name": "FOCUS",
+      "connection_ids": [
+        "controls-contacts-3-6-3-7"
+      ],
       "assignable": false,
+      "pushable": false,
+      "positions": [
+        {
+          "id": "S",
+          "label": "S"
+        },
+        {
+          "id": "C",
+          "label": "C"
+        },
+        {
+          "id": "M",
+          "label": "M"
+        }
+      ],
       "default_function": "Selects single AF, continuous AF, or manual focus.",
-      "role": null,
       "mechanical": false,
       "behavior": {
         "kind": "switch",
@@ -400,39 +543,65 @@
             "asserted": true
           }
         ]
-      },
-      "pushable": false,
-      "positions": [
-        {
-          "id": "S",
-          "label": "S",
-          "description": null
-        },
-        {
-          "id": "C",
-          "label": "C",
-          "description": null
-        },
-        {
-          "id": "M",
-          "label": "M",
-          "description": null
-        }
-      ],
-      "short_name": "FOCUS"
+      }
     },
     "mode_dial": {
       "name": "Mode dial",
       "location": "top",
       "manual_page": 75,
-      "face": null,
-      "icon": null,
+      "short_name": "MODE",
       "connection_ids": [
         "controls-adc-3"
       ],
       "assignable": false,
+      "pushable": false,
+      "positions": [
+        {
+          "id": "P",
+          "label": "P"
+        },
+        {
+          "id": "S",
+          "label": "S"
+        },
+        {
+          "id": "A",
+          "label": "A"
+        },
+        {
+          "id": "M",
+          "label": "M"
+        },
+        {
+          "id": "ADVANCED SR AUTO",
+          "label": "ADVANCED SR AUTO"
+        },
+        {
+          "id": "AUTO",
+          "label": "AUTO"
+        },
+        {
+          "id": "Filter",
+          "label": "Filter"
+        },
+        {
+          "id": "Adv.",
+          "label": "Adv."
+        },
+        {
+          "id": "SP1",
+          "label": "SP1"
+        },
+        {
+          "id": "SP2",
+          "label": "SP2"
+        },
+        {
+          "id": "MOTION PANORAMA 360",
+          "label": "MOTION PANORAMA 360"
+        }
+      ],
       "default_function": "Selects the shooting mode.",
-      "role": null,
       "mechanical": false,
       "behavior": {
         "kind": "dial",
@@ -529,81 +698,20 @@
             }
           ]
         },
-        "press": null,
         "endless": false
-      },
-      "pushable": false,
-      "positions": [
-        {
-          "id": "P",
-          "label": "P",
-          "description": null
-        },
-        {
-          "id": "S",
-          "label": "S",
-          "description": null
-        },
-        {
-          "id": "A",
-          "label": "A",
-          "description": null
-        },
-        {
-          "id": "M",
-          "label": "M",
-          "description": null
-        },
-        {
-          "id": "ADVANCED SR AUTO",
-          "label": "ADVANCED SR AUTO",
-          "description": null
-        },
-        {
-          "id": "AUTO",
-          "label": "AUTO",
-          "description": null
-        },
-        {
-          "id": "Filter",
-          "label": "Filter",
-          "description": null
-        },
-        {
-          "id": "Adv.",
-          "label": "Adv.",
-          "description": null
-        },
-        {
-          "id": "SP1",
-          "label": "SP1",
-          "description": null
-        },
-        {
-          "id": "SP2",
-          "label": "SP2",
-          "description": null
-        },
-        {
-          "id": "MOTION PANORAMA 360",
-          "label": "MOTION PANORAMA 360",
-          "description": null
-        }
-      ],
-      "short_name": "MODE"
+      }
     },
     "movie_record_button": {
       "name": "Movie-record button (function button 1)",
       "location": "top",
       "manual_page": 68,
-      "face": null,
       "icon": "record",
       "connection_ids": [
         "controls-gpio-4-5"
       ],
       "assignable": true,
+      "pushable": true,
       "default_function": "Starts and stops movie recording by default; its function-button role is assignable.",
-      "role": null,
       "mechanical": false,
       "behavior": {
         "kind": "button",
@@ -611,22 +719,19 @@
           "kind": "native_input",
           "name": "KEY_FUNCTION3"
         }
-      },
-      "pushable": true,
-      "positions": []
+      }
     },
     "playback_button": {
       "name": "Playback button",
       "location": "rear",
       "manual_page": 47,
-      "face": null,
       "icon": "playback",
       "connection_ids": [
         "controls-gpio-2-9"
       ],
       "assignable": false,
+      "pushable": true,
       "default_function": "Starts playback; holding it for about a second turns the camera on in playback mode.",
-      "role": null,
       "mechanical": false,
       "behavior": {
         "kind": "button",
@@ -634,22 +739,19 @@
           "kind": "debug_key",
           "name": "K_PLAY"
         }
-      },
-      "pushable": true,
-      "positions": []
+      }
     },
     "quick_menu_button": {
       "name": "[Q] (quick menu) button; RAW conversion button (playback mode)",
       "location": "rear",
       "manual_page": 98,
       "face": "Q",
-      "icon": null,
       "connection_ids": [
         "controls-adc-8"
       ],
       "assignable": false,
+      "pushable": true,
       "default_function": "Opens the quick menu during shooting and displays RAW conversion options during playback.",
-      "role": null,
       "mechanical": false,
       "behavior": {
         "kind": "button",
@@ -657,22 +759,19 @@
           "kind": "debug_key",
           "name": "K_Q"
         }
-      },
-      "pushable": true,
-      "positions": []
+      }
     },
     "selector": {
       "name": "Selector/function buttons",
       "location": "rear",
       "manual_page": 15,
-      "face": null,
-      "icon": null,
+      "short_name": "SELECTOR",
       "connection_ids": [
         "controls-adc-8"
       ],
       "assignable": true,
+      "pushable": true,
       "default_function": "The up, left, right, and down buttons highlight items and act as function buttons 2 through 5; pressing the center [MENU/OK] selects an item. Selector directions can be assigned as function buttons or used to position the focus area.",
-      "role": null,
       "mechanical": false,
       "behavior": {
         "kind": "pad",
@@ -698,34 +797,24 @@
           "kind": "debug_key",
           "name": "EXE_M"
         }
-      },
-      "pushable": true,
-      "positions": [],
-      "short_name": "SELECTOR"
+      }
     },
     "shutter_button": {
       "name": "Shutter button",
       "location": "top",
       "manual_page": 120,
-      "face": null,
-      "icon": null,
+      "short_name": "SHUTTER",
       "connection_ids": [
         "controls-gpio-0-2",
         "controls-gpio-0-3"
       ],
       "assignable": false,
+      "pushable": true,
       "default_function": "Half-press sets focus and exposure and keeps them locked while held; press fully to take a picture.",
-      "role": null,
       "mechanical": false,
       "behavior": {
         "kind": "shutter",
         "stages": {
-          "half_press": [
-            {
-              "kind": "debug_key",
-              "name": "S1"
-            }
-          ],
           "full_press": [
             {
               "kind": "debug_key",
@@ -735,25 +824,27 @@
               "kind": "debug_key",
               "name": "S2"
             }
+          ],
+          "half_press": [
+            {
+              "kind": "debug_key",
+              "name": "S1"
+            }
           ]
         }
-      },
-      "pushable": true,
-      "positions": [],
-      "short_name": "SHUTTER"
+      }
     },
     "view_mode_button": {
       "name": "[VIEW MODE] button",
       "location": "rear",
       "manual_page": 19,
       "face": "VIEW/MODE",
-      "icon": null,
       "connection_ids": [
         "controls-gpio-0-11"
       ],
       "assignable": false,
+      "pushable": true,
       "default_function": "Cycles through the viewfinder and monitor display modes.",
-      "role": null,
       "mechanical": false,
       "behavior": {
         "kind": "button",
@@ -761,20 +852,16 @@
           "kind": "debug_key",
           "name": "VIEW"
         }
-      },
-      "pushable": true,
-      "positions": []
+      }
     },
     "wifi_button": {
       "name": "[Fn] button (function button 6); [Wi-Fi] button (playback mode)",
       "location": "rear",
       "manual_page": 236,
       "face": "Fn",
-      "icon": null,
-      "connection_ids": [],
       "assignable": true,
+      "pushable": true,
       "default_function": "Function button 6 is assignable; wireless communication is assigned to it by default and the button is used for Wi-Fi in playback mode.",
-      "role": null,
       "mechanical": false,
       "behavior": {
         "kind": "button",
@@ -782,20 +869,16 @@
           "kind": "debug_key",
           "name": "WLAN"
         }
-      },
-      "pushable": true,
-      "positions": []
+      }
     },
     "zoom_power_ring": {
       "name": "Zoom ring; [ON/OFF] switch",
       "location": "front",
       "manual_page": 47,
-      "face": null,
-      "icon": null,
-      "connection_ids": [],
+      "short_name": "ZOOM",
       "assignable": false,
+      "pushable": false,
       "default_function": "Frames and zooms the picture; rotating it away from [OFF] turns the camera on, and rotating it to [OFF] turns the camera off.",
-      "role": null,
       "mechanical": false,
       "behavior": {
         "kind": "ring",
@@ -810,12 +893,8 @@
             "name": "TELE"
           }
         },
-        "press": null,
         "endless": false
-      },
-      "pushable": false,
-      "positions": [],
-      "short_name": "ZOOM"
+      }
     }
   }
 }

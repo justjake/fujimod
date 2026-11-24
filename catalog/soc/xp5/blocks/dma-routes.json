@@ -1,0 +1,8 @@
+{
+  "$schema": "https://fujimod.com/schemas/soc-block.schema.json",
+  "schema": 1,
+  "id": "dma-routes",
+  "base": 4287685888,
+  "size": 32,
+  "kind": "address-window"
+}

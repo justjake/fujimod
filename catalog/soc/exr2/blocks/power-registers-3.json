@@ -1,0 +1,8 @@
+{
+  "$schema": "https://fujimod.com/schemas/soc-block.schema.json",
+  "schema": 1,
+  "id": "power-registers-3",
+  "base": 4294542592,
+  "size": 8,
+  "kind": "serial-controller"
+}

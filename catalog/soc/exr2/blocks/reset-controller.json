@@ -1,0 +1,8 @@
+{
+  "$schema": "https://fujimod.com/schemas/soc-block.schema.json",
+  "schema": 1,
+  "id": "reset-controller",
+  "base": 4294647812,
+  "size": 20,
+  "kind": "reset-controller"
+}

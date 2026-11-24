@@ -1,0 +1,19 @@
+{
+  "$schema": "https://fujimod.com/schemas/soc-block.schema.json",
+  "schema": 1,
+  "id": "jpeg-decoder",
+  "base": 4294742016,
+  "size": 4096,
+  "kind": "imaging-controller",
+  "interrupts": [
+    {
+      "output": "interrupt",
+      "line": 135
+    }
+  ],
+  "device": {
+    "model": "jpeg_codec",
+    "run_ticks": 96000,
+    "basis": "JPEG decoder of X-T20 2.11 used by playback (section 6 driver 0x1556e60..0x1557390, section 5 0xc6d844..0xc6dbfc; interrupt index 0x48 of table 0xed4720 is line 135). Initialisation writes 1 to +0x118 and waits for status +0x04 bit 16 (write-1-to-clear). A run reads the stream at +0x10c (size +0x110) and writes packed 4:2:2 to +0x100 (limit +0x104), scaled by 1 / 2^(+0xa0 bits 1..0), optionally cropped by +0x120..+0x128; status bit 4 ends it with the output end at +0x108, bit 17 reports a failure and bit 24 asks for more stream (not modeled). run_ticks (2 ms) is not measured."
+  }
+}

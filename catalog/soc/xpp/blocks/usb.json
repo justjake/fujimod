@@ -1,0 +1,20 @@
+{
+  "$schema": "https://fujimod.com/schemas/soc-block.schema.json",
+  "schema": 1,
+  "id": "usb",
+  "base": 4292870144,
+  "size": 65536,
+  "kind": "usb-controller",
+  "interrupts": [
+    {
+      "output": "event",
+      "line": 82
+    }
+  ],
+  "device": {
+    "model": "xpp_usb",
+    "command_ticks": 48,
+    "transaction_ticks": 6000,
+    "basis": "DesignWare USB3 device controller of X-T20 2.11 section 6 (driver 0x1526e50..0x152b000), core registers from +0xc100, device registers from +0xc700, endpoint commands at +0xc800 + 0x10 n. Interrupt source 0x1c of the section 5 table 0xed4720 is interrupt 82, level. Init 0x15274f0 sets DCTL.CSFTRST, clears GUSB2PHYCFG SUSPHY, places the event buffer (GEVNTADR, 64 events), writes DCFG = 0x20000, DEVTEN = 7 and DALEPENA = 3 and sets DCTL.RUN_STOP; the ISR 0x1527070 masks GEVNTSIZ and posts message 0x1434, and the driver task walks the ring from GEVNTCOUNT (0x152908c). Endpoint commands are written as DEPCMD = 0x400 | command and polled until CMDACT clears (0x15272d4). The driver starts only after a cable is seen (VBUS and the power IC's data-line detection); a boot without a cable never touches the controller. Endpoint commands complete after 48 ticks (1 us) and bus transactions after 6000 ticks (one 125 us high-speed microframe); neither time is measured."
+  }
+}

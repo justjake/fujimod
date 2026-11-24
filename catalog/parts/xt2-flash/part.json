@@ -5,10 +5,7 @@
   "model": {
     "kind": "peripheral",
     "interface": {
-      "kind": "serial-nor-flash",
-      "jedec_id": null,
-      "erase_bytes": null,
-      "page_bytes": null
+      "kind": "serial-nor-flash"
     }
   }
 }

@@ -1,0 +1,14 @@
+{
+  "$schema": "https://fujimod.com/schemas/soc-block.schema.json",
+  "schema": 1,
+  "id": "block-fff84000",
+  "base": 4294459392,
+  "size": 4096,
+  "kind": "address-window",
+  "device": {
+    "model": "register_block",
+    "idle_bits": [],
+    "basis": "Second parameter page of the X-T3 5.11 still RECC engine: the driver's table setters of 0xfff83000 write rows of 0x20 bytes in loops that continue past 0xfff84000, and the still capture writes +0x000 during the RECC init. Words read back their last write; what they parameterize is not modeled.",
+    "order": 1
+  }
+}

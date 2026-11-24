@@ -1,0 +1,36 @@
+{
+  "$schema": "https://fujimod.com/schemas/soc-block.schema.json",
+  "schema": 1,
+  "id": "imaging-fff98000",
+  "base": 4294541312,
+  "size": 4096,
+  "kind": "imaging-controller",
+  "interrupts": [
+    {
+      "output": "interrupt",
+      "line": 130
+    }
+  ],
+  "device": {
+    "model": "register_block",
+    "idle_bits": [
+      {
+        "mask": 1,
+        "offset": 0
+      }
+    ],
+    "job": {
+      "start": {
+        "mask": 5,
+        "offset": 4
+      },
+      "stop": {
+        "mask": 1,
+        "offset": 0
+      },
+      "ticks": 144000
+    },
+    "basis": "Still development engine of X-T20 2.11 (step marker 0x06023320): started by a command in +0x04 bits 0..2 that 0x1561158 takes from its descriptor's first byte: a still runs 1 then 7, the develop-RAW service (USB RAW CONV., 0x1618d94) 1 then 6, and 0x1560e1c writes 2 between jobs, so bit 0 or bit 2 starts a job (xpro-lab emulator trace 2026-11-15); a run raises interrupt 130 until the handler 0x1560744 stops the engine with +0x00 bit 0. run ticks are xpro-lab's 3 ms engine step; no data moves.",
+    "order": 21
+  }
+}

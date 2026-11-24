@@ -1,0 +1,14 @@
+{
+  "$schema": "https://fujimod.com/schemas/soc-block.schema.json",
+  "schema": 1,
+  "id": "block-fffd5000",
+  "base": 4294791168,
+  "size": 4096,
+  "kind": "address-window",
+  "interrupts": [
+    {
+      "output": "interrupt",
+      "line": 143
+    }
+  ]
+}

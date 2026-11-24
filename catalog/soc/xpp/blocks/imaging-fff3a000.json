@@ -1,0 +1,14 @@
+{
+  "$schema": "https://fujimod.com/schemas/soc-block.schema.json",
+  "schema": 1,
+  "id": "imaging-fff3a000",
+  "base": 4294156288,
+  "size": 4096,
+  "kind": "imaging-controller",
+  "device": {
+    "model": "register_block",
+    "idle_bits": [],
+    "basis": "Imaging block of X-T20 2.11 section 5 configured by 0xc54b9c..0xc55318 (words +0x04..+0xd0); 0xc54dc4 and 0xc54e4c update +0x40 bit 8 with read-modify-write. No status word is waited on. The words read back their last write; what the block computes is not modeled.",
+    "order": 6
+  }
+}

@@ -1,0 +1,8 @@
+{
+  "$schema": "https://fujimod.com/schemas/soc-block.schema.json",
+  "schema": 1,
+  "id": "clock-controller",
+  "base": 4294475776,
+  "size": 136,
+  "kind": "clock-controller"
+}

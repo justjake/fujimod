@@ -1,0 +1,48 @@
+{
+  "$schema": "https://fujimod.com/schemas/soc-block.schema.json",
+  "schema": 1,
+  "id": "interval-timer",
+  "base": 4294165248,
+  "size": 80,
+  "kind": "timer",
+  "interrupts": [
+    {
+      "output": "channel0",
+      "line": 57
+    },
+    {
+      "output": "channel1",
+      "line": 58
+    },
+    {
+      "output": "channel2",
+      "line": 59
+    },
+    {
+      "output": "channel3",
+      "line": 60
+    },
+    {
+      "output": "channel4",
+      "line": 61
+    },
+    {
+      "output": "channel5",
+      "line": 62
+    },
+    {
+      "output": "channel6",
+      "line": 63
+    },
+    {
+      "output": "channel7",
+      "line": 64
+    }
+  ],
+  "device": {
+    "model": "interval_timer",
+    "layout": "xp4",
+    "clock": "one 54 MHz timer cycle per aggregate CPU instruction; synthetic ratio",
+    "basis": "Declared catalog input."
+  }
+}

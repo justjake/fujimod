@@ -1,0 +1,40 @@
+{
+  "$schema": "https://fujimod.com/schemas/soc-block.schema.json",
+  "schema": 1,
+  "id": "imaging-fff7f000",
+  "base": 4294438912,
+  "size": 4096,
+  "kind": "imaging-controller",
+  "interrupts": [
+    {
+      "output": "interrupt",
+      "line": 128
+    }
+  ],
+  "device": {
+    "model": "register_block",
+    "idle_bits": [
+      {
+        "mask": 1,
+        "offset": 0
+      },
+      {
+        "mask": 65537,
+        "offset": 64
+      }
+    ],
+    "job": {
+      "start": {
+        "mask": 1,
+        "offset": 4
+      },
+      "status": {
+        "mask": 1,
+        "offset": 68
+      },
+      "ticks": 880000
+    },
+    "basis": "Imaging block of X-T20 2.11 section 6 (driver 0x1558424..0x1558a94, beside the unit at 0xfffc4000 whose handler 0x1558a98 takes interrupt 132). The stop 0x1558424 clears +0x00 bit 0 and waits until it reads set. 0x15589c4 waits until +0x40 reads bits 0 and 16 set, sets bits 12 and 28 of +0x3c and bit 0 of +0x04; 0x1558a2c clears the two +0x3c bits and waits for +0x40 again; 0x1558468 writes 1 to +0x44. A strict boot with the camera's own settings (face detection selected) reads +0x00 at 182.7M instructions. Jobs come from the job ring 0x1c1b240 of section 6 through the driver 0x16b1284, which registers handler 0x1558108 for descriptor row 0x38 of 0xed4720 (interrupt 128; the same table gives rows 0x14/0x15 = 151/152 for the shutter lines); the handler reads +0x44, writes 1 to it and calls the job's callback. An AF-S half press waits for such a job (0x1643, queued by 0x18086c8): its callback clears busy bit 0x800 of 0x1c4b008+0x20 through message 0x1623, which completes the AF request 0x1631 and its event 0x8b. Each start finishes one job: +0x44 bit 0 is set and the interrupt line is high until it is written. The job time is a model choice (one 18.33 ms camera frame); what the block computes is not modeled.",
+    "order": 20
+  }
+}

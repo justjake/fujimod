@@ -30,6 +30,7 @@
     "settle_ticks": 3000
   },
   "attachment": {
+    "label": "acquisition_contacts",
     "gpio_interrupts": [
       {
         "pin": {
@@ -58,8 +59,6 @@
         ]
       }
     ],
-    "label": "acquisition_contacts",
-    "limits": [],
     "drive_pins": [
       {
         "port": 1,

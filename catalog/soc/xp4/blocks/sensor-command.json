@@ -1,0 +1,24 @@
+{
+  "$schema": "https://fujimod.com/schemas/soc-block.schema.json",
+  "schema": 1,
+  "id": "sensor-command",
+  "base": 4294361088,
+  "size": 580,
+  "kind": "imaging-controller",
+  "interrupts": [
+    {
+      "output": "timing0",
+      "line": 102
+    },
+    {
+      "output": "timing1",
+      "line": 100
+    }
+  ],
+  "device": {
+    "model": "sensor_command",
+    "command_ticks": 5400,
+    "reset_ticks": 8,
+    "basis": "Declared catalog input. RAW read-out DMA lines: the X-T3 5.11 sensor driver registers RAW DMA channels 2 and 3 on GIC 97 and 98; their handlers acknowledge +0x64 and +0xe4."
+  }
+}

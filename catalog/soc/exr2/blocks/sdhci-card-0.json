@@ -1,0 +1,15 @@
+{
+  "$schema": "https://fujimod.com/schemas/soc-block.schema.json",
+  "schema": 1,
+  "id": "sdhci-card-0",
+  "base": 4294246400,
+  "size": 48,
+  "kind": "sd-card-controller",
+  "interrupts": [
+    {
+      "output": "host",
+      "line": 78,
+      "core": "core0"
+    }
+  ]
+}

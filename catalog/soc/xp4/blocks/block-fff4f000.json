@@ -1,0 +1,20 @@
+{
+  "$schema": "https://fujimod.com/schemas/soc-block.schema.json",
+  "schema": 1,
+  "id": "block-fff4f000",
+  "base": 4294242304,
+  "size": 4096,
+  "kind": "address-window",
+  "device": {
+    "model": "register_block",
+    "idle_bits": [],
+    "fixed_words": [
+      {
+        "offset": 28,
+        "value": 0
+      }
+    ],
+    "basis": "X-T3 5.11 writes 1 to +0x01c and waits for it to read 0; the command completes at once and the word reads 0. Other words read back their last write; nothing else in this block is modeled.",
+    "order": 17
+  }
+}

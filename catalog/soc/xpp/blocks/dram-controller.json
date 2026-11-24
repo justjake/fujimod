@@ -1,0 +1,12 @@
+{
+  "$schema": "https://fujimod.com/schemas/soc-block.schema.json",
+  "schema": 1,
+  "id": "dram-controller",
+  "base": 4293976064,
+  "size": 4096,
+  "kind": "memory-controller",
+  "device": {
+    "model": "dram_controller",
+    "basis": "DRAM controller of X-T20 2.11 section 5. 0xc8f09c reads the refresh-rate level from bits 8..10 of +0xec (caching it at 0xfdbea8 + 5) and, when it changes, rewrites the low half of the refresh words +0x9c and +0xa0 through 0xc8f044: 0xc30 below level 4, 0x618 at level 4; above level 4 it reports event 0x8015. A second controller at 0xfff0f000 is used only when 0xfda438 is set, which it is not in the s1-s3 captures. The boot code that programs the controller before the kernel is not modeled."
+  }
+}

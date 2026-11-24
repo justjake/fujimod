@@ -1,0 +1,12 @@
+{
+  "$schema": "https://fujimod.com/schemas/soc-block.schema.json",
+  "schema": 1,
+  "id": "usb-phy",
+  "base": 4289869824,
+  "size": 4096,
+  "kind": "usb-controller",
+  "device": {
+    "model": "usb_phy",
+    "basis": "Indexed USB PHY programming port: a control word at +0x000 (register index in bits 12:8, data in bits 7:0, write strobe at bit 16), a parallel-interface word at +0x004 and the selected register's readback at +0x400. No analog or link-ready behavior is modeled."
+  }
+}
