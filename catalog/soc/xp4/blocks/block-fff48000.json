@@ -10,5 +10,51 @@
     "idle_bits": [],
     "basis": "X-T3 5.11 reads/writes 0xfff48000..0xfff48700. Reads return the last write; no arbitration is modeled.",
     "order": 3
-  }
+  },
+  "registers": [
+    {
+      "name": "pad-mux-selector-300",
+      "offset": 768,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "pad-mux-selector-304",
+      "offset": 772,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "pad-mux-selector-308",
+      "offset": 776,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "pad-mux-selector-30c",
+      "offset": 780,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "pad-mux-selector-310",
+      "offset": 784,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "pad-mux-selector-32c",
+      "offset": 812,
+      "width_bytes": 4,
+      "access": "read-write"
+    }
+  ],
+  "evidence": [
+    {
+      "kind": "located",
+      "firmware_ids": [
+        "x100v-301"
+      ]
+    }
+  ]
 }
