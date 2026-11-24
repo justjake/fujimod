@@ -75,6 +75,9 @@
       "location": "rear",
       "manual_page": 83,
       "face": "AE-L",
+      "connection_ids": [
+        "xt3-key-ladder-11"
+      ],
       "assignable": true,
       "pushable": true,
       "default_function": "Lock exposure.",
@@ -92,6 +95,9 @@
       "location": "rear",
       "manual_page": 83,
       "face": "AF-L",
+      "connection_ids": [
+        "xt3-key-ladder-11"
+      ],
       "assignable": true,
       "pushable": true,
       "default_function": "Lock focus.",
@@ -162,6 +168,9 @@
       "location": "rear",
       "manual_page": 16,
       "face": "DISP/BACK",
+      "connection_ids": [
+        "xt3-key-ladder-3"
+      ],
       "assignable": false,
       "pushable": true,
       "default_function": "Control indicators in the viewfinder and LCD; go back in menus.",
@@ -416,6 +425,9 @@
       "location": "top",
       "manual_page": 226,
       "face": "Fn1",
+      "connection_ids": [
+        "xt3-fn1-button"
+      ],
       "assignable": true,
       "pushable": true,
       "default_function": "Face/eye detection setting.",
@@ -433,6 +445,9 @@
       "location": "front",
       "manual_page": 226,
       "face": "Fn2",
+      "connection_ids": [
+        "xt3-fn2-button"
+      ],
       "assignable": true,
       "pushable": false,
       "default_function": "Drive settings.",
@@ -496,6 +511,10 @@
       "location": "rear",
       "manual_page": 4,
       "short_name": "FOCUS",
+      "connection_ids": [
+        "xt3-key-ladder-3",
+        "xt3-key-ladder-9"
+      ],
       "assignable": false,
       "pushable": true,
       "default_function": "Tilt or press to select the focus area; it can also navigate menus.",
@@ -531,6 +550,9 @@
       "location": "front",
       "manual_page": 7,
       "short_name": "FRONT DIAL",
+      "connection_ids": [
+        "xt3-front-dial-count"
+      ],
       "assignable": true,
       "pushable": true,
       "default_function": "Rotate to adjust aperture or other assigned settings; press to switch between aperture, sensitivity, and exposure compensation as configured, or press and hold to choose its command-dial role.",
@@ -578,6 +600,9 @@
       "location": "rear",
       "manual_page": 21,
       "face": "MENU/OK",
+      "connection_ids": [
+        "xt3-key-ladder-3"
+      ],
       "assignable": false,
       "pushable": true,
       "default_function": "Open menus and confirm selections.",
@@ -726,6 +751,9 @@
       "location": "rear",
       "manual_page": 223,
       "face": "Q",
+      "connection_ids": [
+        "xt3-key-ladder-3"
+      ],
       "assignable": false,
       "pushable": true,
       "default_function": "Open the quick menu.",
@@ -743,6 +771,10 @@
       "location": "rear",
       "manual_page": 73,
       "short_name": "REAR DIAL",
+      "connection_ids": [
+        "xt3-rear-dial-count",
+        "xt3-rear-dial-press"
+      ],
       "assignable": true,
       "pushable": true,
       "default_function": "Rotate to highlight menu items, adjust settings, change focus-frame size, and zoom in or out in playback; press for Focus check by default.",
@@ -772,6 +804,9 @@
       "location": "rear",
       "manual_page": 226,
       "short_name": "SELECTOR",
+      "connection_ids": [
+        "xt3-key-ladder-3"
+      ],
       "assignable": true,
       "pushable": false,
       "default_function": "Fn3 default: AF mode; can also be used to highlight items and position the focus area.",
@@ -822,6 +857,10 @@
       "location": "top",
       "manual_page": 48,
       "short_name": "SHUTTER",
+      "connection_ids": [
+        "xt3-shutter-s1",
+        "xt3-shutter-s2"
+      ],
       "assignable": false,
       "pushable": true,
       "default_function": "Half-press to focus and lock focus/exposure; press the rest of the way to take a picture.",
@@ -1099,6 +1138,9 @@
       "location": "rear",
       "manual_page": 14,
       "face": "VIEW/MODE",
+      "connection_ids": [
+        "xt3-key-ladder-11"
+      ],
       "assignable": false,
       "pushable": true,
       "default_function": "Cycle through viewfinder and LCD display modes.",
@@ -1111,5 +1153,145 @@
         }
       }
     }
-  }
+  },
+  "ladders": [
+    {
+      "wire": {
+        "kind": "adc",
+        "channel": 3
+      },
+      "levels": 4096,
+      "released": 4088,
+      "basis": "The body’s button ladder is ADC word 3 at 12-bit resolution. Each reading was taken on an X-T3 running 5.11 with that control held alone; with nothing held the channel reads 4088. The firmware’s key-band table is a separate generated firmware fact.",
+      "rungs": [
+        {
+          "control_id": "selector.up",
+          "band_low": 0,
+          "band_high": 0,
+          "sample": 0,
+          "basis": "Measured on an X-T3 running 5.11 in REC by holding this control alone and reading the ADC word (research/xt3-511/controls.md). No accepted band was located in firmware, so the rung holds exactly the reading the camera produced."
+        },
+        {
+          "control_id": "selector.down",
+          "band_low": 258,
+          "band_high": 258,
+          "sample": 258,
+          "basis": "Measured on an X-T3 running 5.11 in REC by holding this control alone and reading the ADC word (research/xt3-511/controls.md). No accepted band was located in firmware, so the rung holds exactly the reading the camera produced."
+        },
+        {
+          "control_id": "selector.left",
+          "band_low": 486,
+          "band_high": 486,
+          "sample": 486,
+          "basis": "Measured on an X-T3 running 5.11 in REC by holding this control alone and reading the ADC word (research/xt3-511/controls.md). No accepted band was located in firmware, so the rung holds exactly the reading the camera produced."
+        },
+        {
+          "control_id": "selector.right",
+          "band_low": 901,
+          "band_high": 901,
+          "sample": 901,
+          "basis": "Measured on an X-T3 running 5.11 in REC by holding this control alone and reading the ADC word (research/xt3-511/controls.md). No accepted band was located in firmware, so the rung holds exactly the reading the camera produced."
+        },
+        {
+          "control_id": "menu_ok_button",
+          "band_low": 1071,
+          "band_high": 1540,
+          "sample": 1236,
+          "basis": "Measured 1236 on the camera while MENU/OK was held. The band 1071..1540 comes from the button’s calibration row read through the config pointer (research/xt3-511/controls.md)."
+        },
+        {
+          "control_id": "quick_menu_button",
+          "band_low": 1800,
+          "band_high": 2000,
+          "sample": 1852,
+          "basis": "Measured 1852 on the camera while Q was held; the firmware opened the Quick Menu for readings in 1800..2000 (research/xt3-511/controls.md)."
+        },
+        {
+          "control_id": "disp_back_button",
+          "band_low": 2249,
+          "band_high": 2249,
+          "sample": 2249,
+          "basis": "Measured on an X-T3 running 5.11 in REC by holding this control alone and reading the ADC word (research/xt3-511/controls.md). No accepted band was located in firmware, so the rung holds exactly the reading the camera produced."
+        },
+        {
+          "control_id": "focus_stick",
+          "band_low": 2893,
+          "band_high": 2893,
+          "sample": 2893,
+          "basis": "Measured on an X-T3 running 5.11 in REC by holding this control alone and reading the ADC word (research/xt3-511/controls.md). No accepted band was located in firmware, so the rung holds exactly the reading the camera produced."
+        }
+      ]
+    },
+    {
+      "wire": {
+        "kind": "adc",
+        "channel": 9
+      },
+      "levels": 4096,
+      "released": 4093,
+      "basis": "The focus lever reads ADC word 9 at 12-bit resolution. Each reading was taken on an X-T3 running 5.11 with the lever tilted alone; with nothing held the channel reads 4093. The firmware’s key-band table is a separate generated firmware fact.",
+      "rungs": [
+        {
+          "control_id": "focus_stick.up",
+          "band_low": 1566,
+          "band_high": 1566,
+          "sample": 1566,
+          "basis": "Measured on an X-T3 running 5.11 in REC by holding this control alone and reading the ADC word (research/xt3-511/controls.md). No accepted band was located in firmware, so the rung holds exactly the reading the camera produced."
+        },
+        {
+          "control_id": "focus_stick.right",
+          "band_low": 2044,
+          "band_high": 2044,
+          "sample": 2044,
+          "basis": "Measured on an X-T3 running 5.11 in REC by holding this control alone and reading the ADC word (research/xt3-511/controls.md). No accepted band was located in firmware, so the rung holds exactly the reading the camera produced."
+        },
+        {
+          "control_id": "focus_stick.left",
+          "band_low": 2818,
+          "band_high": 2818,
+          "sample": 2818,
+          "basis": "Measured on an X-T3 running 5.11 in REC by holding this control alone and reading the ADC word (research/xt3-511/controls.md). No accepted band was located in firmware, so the rung holds exactly the reading the camera produced."
+        },
+        {
+          "control_id": "focus_stick.down",
+          "band_low": 3257,
+          "band_high": 3257,
+          "sample": 3257,
+          "basis": "Measured on an X-T3 running 5.11 in REC by holding this control alone and reading the ADC word (research/xt3-511/controls.md). No accepted band was located in firmware, so the rung holds exactly the reading the camera produced."
+        }
+      ]
+    },
+    {
+      "wire": {
+        "kind": "adc",
+        "channel": 11
+      },
+      "levels": 4096,
+      "released": 4093,
+      "basis": "The AE-L, AF-L and VIEW MODE buttons read ADC word 11 at 12-bit resolution. Each reading was taken on an X-T3 running 5.11 with that button held alone; with nothing held the channel reads 4093. The firmware’s key-band table is a separate generated firmware fact.",
+      "rungs": [
+        {
+          "control_id": "view_mode_button",
+          "band_low": 2232,
+          "band_high": 2232,
+          "sample": 2232,
+          "basis": "Measured on an X-T3 running 5.11 in REC by holding this control alone and reading the ADC word (research/xt3-511/controls.md). No accepted band was located in firmware, so the rung holds exactly the reading the camera produced."
+        },
+        {
+          "control_id": "ae_lock_button",
+          "band_low": 2811,
+          "band_high": 2811,
+          "sample": 2811,
+          "basis": "Measured on an X-T3 running 5.11 in REC by holding this control alone and reading the ADC word (research/xt3-511/controls.md). No accepted band was located in firmware, so the rung holds exactly the reading the camera produced."
+        },
+        {
+          "control_id": "af_lock_button",
+          "band_low": 3376,
+          "band_high": 3376,
+          "sample": 3376,
+          "basis": "Measured on an X-T3 running 5.11 in REC by holding this control alone and reading the ADC word (research/xt3-511/controls.md). No accepted band was located in firmware, so the rung holds exactly the reading the camera produced."
+        }
+      ]
+    }
+  ]
 }

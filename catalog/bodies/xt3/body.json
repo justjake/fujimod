@@ -74,6 +74,145 @@
           "channel": 10
         }
       ]
+    },
+    {
+      "id": "xt3-key-ladder-3",
+      "kind": "control",
+      "signals": [
+        {
+          "kind": "adc",
+          "channel": 3
+        }
+      ]
+    },
+    {
+      "id": "xt3-key-ladder-9",
+      "kind": "control",
+      "signals": [
+        {
+          "kind": "adc",
+          "channel": 9
+        }
+      ]
+    },
+    {
+      "id": "xt3-key-ladder-11",
+      "kind": "control",
+      "signals": [
+        {
+          "kind": "adc",
+          "channel": 11
+        }
+      ]
+    },
+    {
+      "id": "xt3-shutter-s1",
+      "kind": "control",
+      "signals": [
+        {
+          "kind": "gpio",
+          "port": 0,
+          "pin": 0,
+          "active_level": false
+        },
+        {
+          "kind": "interrupt",
+          "controller_id": "gic-distributor",
+          "line": 167
+        }
+      ]
+    },
+    {
+      "id": "xt3-shutter-s2",
+      "kind": "control",
+      "signals": [
+        {
+          "kind": "gpio",
+          "port": 0,
+          "pin": 1,
+          "active_level": false
+        },
+        {
+          "kind": "interrupt",
+          "controller_id": "gic-distributor",
+          "line": 168
+        }
+      ]
+    },
+    {
+      "id": "xt3-fn1-button",
+      "kind": "control",
+      "signals": [
+        {
+          "kind": "gpio",
+          "port": 0,
+          "pin": 14,
+          "active_level": false
+        }
+      ]
+    },
+    {
+      "id": "xt3-fn2-button",
+      "kind": "control",
+      "signals": [
+        {
+          "kind": "gpio",
+          "port": 2,
+          "pin": 13,
+          "active_level": false
+        }
+      ]
+    },
+    {
+      "id": "xt3-rear-dial-press",
+      "kind": "control",
+      "signals": [
+        {
+          "kind": "gpio",
+          "port": 0,
+          "pin": 13,
+          "active_level": false
+        }
+      ]
+    },
+    {
+      "id": "xt3-rear-dial-count",
+      "kind": "control",
+      "signals": [
+        {
+          "kind": "countdown_timer",
+          "block_id": "countdown-timer-control",
+          "channel": 2,
+          "rest_phase": 0
+        }
+      ]
+    },
+    {
+      "id": "xt3-front-dial-count",
+      "kind": "control",
+      "signals": [
+        {
+          "kind": "countdown_timer",
+          "block_id": "countdown-timer-control",
+          "channel": 4,
+          "rest_phase": 0
+        }
+      ]
+    },
+    {
+      "id": "xt3-usb",
+      "kind": "usb",
+      "signals": [
+        {
+          "kind": "gpio",
+          "port": 15,
+          "pin": 15,
+          "active_level": true
+        }
+      ],
+      "evidence": {
+        "kind": "stand-in"
+      }
     }
   ],
   "parts": [

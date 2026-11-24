@@ -1868,6 +1868,17 @@
       "additionalProperties": false,
       "description": "A physical body connection.",
       "properties": {
+        "evidence": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Evidence"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "How the wiring was established, when it is not inherited from a part."
+        },
         "id": {
           "description": "Connection identity referenced by body wiring and run inputs.",
           "type": "string"
@@ -2479,6 +2490,38 @@
             "kind",
             "controller_id",
             "line"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "One countdown-timer channel driven as a quadrature input.",
+          "properties": {
+            "block_id": {
+              "type": "string"
+            },
+            "channel": {
+              "format": "uint8",
+              "maximum": 255,
+              "minimum": 0,
+              "type": "integer"
+            },
+            "kind": {
+              "const": "countdown_timer",
+              "type": "string"
+            },
+            "rest_phase": {
+              "format": "uint8",
+              "maximum": 255,
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          "required": [
+            "kind",
+            "block_id",
+            "channel",
+            "rest_phase"
           ],
           "type": "object"
         },
