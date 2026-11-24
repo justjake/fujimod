@@ -952,6 +952,47 @@ pub struct SpiInputs {
     /// Declared power registers.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub power_registers: Option<PowerRegisters>,
+    /// Declared in-body stabilizer controller on this port.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub stabilizer_link: Option<StabilizerLink>,
+}
+
+/// One GPIO pad.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(deny_unknown_fields)]
+#[cfg_attr(feature = "schema", schemars(rename = "ResetGpioPad"))]
+pub struct GpioPad {
+    /// Pin within the bank.
+    pub pin: u64,
+    /// GPIO bank.
+    pub port: u64,
+}
+
+/// Declared in-body stabilizer controller behind one SPI port: its GPIO
+/// wiring, its boot delay and its command replies. The link protocol is
+/// observed behavior; the boot delay and reply data are declared.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(deny_unknown_fields)]
+#[cfg_attr(feature = "schema", schemars(rename = "ResetStabilizerLink"))]
+pub struct StabilizerLink {
+    /// Declared basis.
+    pub basis: String,
+    /// Virtual ticks from the reset release to the ready pad going low.
+    pub boot_ticks: u64,
+    /// Outputs that power the controller while all are high.
+    pub power: Vec<GpioPad>,
+    /// Input pad the controller reports on; its declared GPIO input level is
+    /// its idle level.
+    pub ready: GpioPad,
+    /// Reply data by decimal command id; an id not listed replies 0.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub replies: Option<BTreeMap<String, u64>>,
+    /// Output that holds the controller in reset while high.
+    pub reset: GpioPad,
+    /// Chip-select output and its active level.
+    pub select: Select,
 }
 
 /// Declared temperature input facts.

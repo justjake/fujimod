@@ -244,6 +244,11 @@ pub struct Definition {
     /// the RTC alarm interrupt on bodies that do not opt in.
     #[serde(default)]
     pub power_spi_eye_commit: bool,
+    /// The in-body stabilizer controller as an SPI controller's input, with
+    /// its GPIO wiring (see `fujimod_emulator_xp4_io::stabilizer_link`).
+    /// Requires GPIO wiring.
+    #[serde(default)]
+    pub stabilizer_link: Option<fujimod_emulator_xp4_io::stabilizer_link::Config>,
     #[serde(default)]
     pub checksum_power_spi: Option<(
         u64,

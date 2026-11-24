@@ -1210,6 +1210,29 @@
       ],
       "type": "object"
     },
+    "ResetGpioPad": {
+      "additionalProperties": false,
+      "description": "One GPIO pad.",
+      "properties": {
+        "pin": {
+          "description": "Pin within the bank.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "port": {
+          "description": "GPIO bank.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "pin",
+        "port"
+      ],
+      "type": "object"
+    },
     "ResetHardwareresetInputs": {
       "additionalProperties": false,
       "description": "Declared hardwarereset inputs facts.",
@@ -2871,11 +2894,78 @@
             }
           ],
           "description": "Declared power registers."
+        },
+        "stabilizer_link": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ResetStabilizerLink"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Declared in-body stabilizer controller on this port."
         }
       },
       "required": [
         "basis",
         "level"
+      ],
+      "type": "object"
+    },
+    "ResetStabilizerLink": {
+      "additionalProperties": false,
+      "description": "Declared in-body stabilizer controller behind one SPI port: its GPIO\nwiring, its boot delay and its command replies. The link protocol is\nobserved behavior; the boot delay and reply data are declared.",
+      "properties": {
+        "basis": {
+          "description": "Declared basis.",
+          "type": "string"
+        },
+        "boot_ticks": {
+          "description": "Virtual ticks from the reset release to the ready pad going low.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "power": {
+          "description": "Outputs that power the controller while all are high.",
+          "items": {
+            "$ref": "#/$defs/ResetGpioPad"
+          },
+          "type": "array"
+        },
+        "ready": {
+          "$ref": "#/$defs/ResetGpioPad",
+          "description": "Input pad the controller reports on; its declared GPIO input level is\nits idle level."
+        },
+        "replies": {
+          "additionalProperties": {
+            "format": "uint64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "description": "Reply data by decimal command id; an id not listed replies 0.",
+          "type": [
+            "object",
+            "null"
+          ]
+        },
+        "reset": {
+          "$ref": "#/$defs/ResetGpioPad",
+          "description": "Output that holds the controller in reset while high."
+        },
+        "select": {
+          "$ref": "#/$defs/ResetSelect",
+          "description": "Chip-select output and its active level."
+        }
+      },
+      "required": [
+        "basis",
+        "boot_ticks",
+        "power",
+        "ready",
+        "reset",
+        "select"
       ],
       "type": "object"
     },
