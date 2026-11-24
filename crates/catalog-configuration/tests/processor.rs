@@ -22,7 +22,6 @@ fn processors_keep_the_choices_their_soc_profiles_held() {
     let exr2 = emulation("exr2");
     assert_eq!(exr2.cpu_model, "Cortex-R5F proxy for R4");
     assert_eq!(exr2.runtime_abi, "exr2-r5f-fixed-map-v1");
-    assert_eq!(exr2.power_on_ram_fill, Some(0xff));
     assert!(exr2.limits.is_empty());
 
     let xp4 = emulation("xp4");
@@ -33,7 +32,6 @@ fn processors_keep_the_choices_their_soc_profiles_held() {
             .as_deref()
             .is_some_and(|mmu| mmu.contains("ARMv7-A"))
     );
-    assert_eq!(xp4.power_on_ram_fill, None);
 
     let xp5 = emulation("xp5");
     assert_eq!(xp5.cpu_model, "Cortex-A53");

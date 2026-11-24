@@ -5168,6 +5168,100 @@
         }
       ]
     },
+    "Evidence": {
+      "additionalProperties": false,
+      "description": "Typed evidence for one catalog fact.",
+      "properties": {
+        "addresses": {
+          "description": "Code or data addresses the fact rests on.",
+          "items": {
+            "$ref": "#/$defs/EvidenceAddress"
+          },
+          "type": "array"
+        },
+        "firmware_ids": {
+          "description": "Firmware identities the fact rests on.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "kind": {
+          "$ref": "#/$defs/EvidenceKind",
+          "description": "How the fact was established."
+        }
+      },
+      "required": [
+        "kind"
+      ],
+      "type": "object"
+    },
+    "EvidenceAddress": {
+      "additionalProperties": false,
+      "description": "One firmware address a fact rests on.",
+      "properties": {
+        "address": {
+          "description": "Address within that firmware.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "firmware_id": {
+          "description": "Firmware identity holding the address.",
+          "type": "string"
+        },
+        "space": {
+          "$ref": "#/$defs/EvidenceSpace",
+          "description": "Whether the address selects code or data."
+        }
+      },
+      "required": [
+        "firmware_id",
+        "address",
+        "space"
+      ],
+      "type": "object"
+    },
+    "EvidenceKind": {
+      "description": "How a catalog fact was established.",
+      "oneOf": [
+        {
+          "const": "measured",
+          "description": "Read on a camera.",
+          "type": "string"
+        },
+        {
+          "const": "located",
+          "description": "Found in firmware code or tables.",
+          "type": "string"
+        },
+        {
+          "const": "inferred",
+          "description": "Deduced from the behavior of other facts.",
+          "type": "string"
+        },
+        {
+          "const": "stand-in",
+          "description": "A declared input with no known hardware value.",
+          "type": "string"
+        }
+      ]
+    },
+    "EvidenceSpace": {
+      "description": "The kind of address a fact rests on.",
+      "oneOf": [
+        {
+          "const": "code",
+          "description": "An instruction address.",
+          "type": "string"
+        },
+        {
+          "const": "data",
+          "description": "A data address.",
+          "type": "string"
+        }
+      ]
+    },
     "FocusAxis": {
       "additionalProperties": false,
       "description": "A focus-axis model.",
@@ -7878,6 +7972,28 @@
       ],
       "type": "object"
     },
+    "PowerOnFill": {
+      "additionalProperties": false,
+      "description": "A measured power-on fill byte for a memory region or a body's DRAM.",
+      "properties": {
+        "byte": {
+          "description": "The byte every cell holds at power-on.",
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "evidence": {
+          "$ref": "#/$defs/Evidence",
+          "description": "How the byte was established."
+        }
+      },
+      "required": [
+        "byte",
+        "evidence"
+      ],
+      "type": "object"
+    },
     "PulseInterface": {
       "additionalProperties": false,
       "description": "A pulse interface required by an optical mechanism.",
@@ -8295,6 +8411,17 @@
       ],
       "default": null,
       "description": "Optional power-controller endpoint and its body-specific wiring."
+    },
+    "power_on_ram_fill": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/PowerOnFill"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "The byte this body's DRAM holds at power-on, when a camera measured a\nvalue that differs from its processor's DRAM region."
     },
     "ram_regions": {
       "description": "Body-mapped RAM extents when the board exposes a non-default memory map.",

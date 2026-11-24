@@ -40,10 +40,12 @@ architecture, CPU model, identification registers, caches, reset state,
 affinity and timer interrupt lines. An alias of DRAM or another region at a
 second address is an address mapping, not a block. The boot ROM is a `rom`
 memory region; its reset entry and the boot ROM's behavior sit with the
-processor's boot ROM record. A region's access follows its kind (`rom` reads
-and executes, RAM reads, writes and executes); there are no numeric
-permissions. Each clock is one `clocks` entry that blocks, cores and run
-inputs refer to by ID, never a rate repeated in device parameters.
+processor's boot ROM record. A `dram` memory region may record the byte its
+cells hold at power-on together with the evidence that measured it. A
+region's access follows its kind (`rom` reads and executes, RAM reads, writes
+and executes); there are no numeric permissions. Each clock is one `clocks`
+entry that blocks, cores and run inputs refer to by ID, never a rate repeated
+in device parameters.
 
 Each hardware block is one file, `soc/<id>/blocks/<block-id>.json`, and is the
 only place its facts appear:
@@ -102,10 +104,11 @@ A part record describes a chip, panel, sensor or lens that several bodies use:
 its behavior and the pins and bus addresses it answers on. A body record
 (`bodies/<id>/body.json`) holds the processor ID and what this circuit board
 connects: each chip as a part reference with its bus block and address, wiring
-from processor pins and blocks to part pins, panels, DRAM size and regions
-(including the power-on RAM contents when measured), NAND geometry, card
-slots and power control. Processor blocks the board leaves unconnected are
-listed under `absent_blocks`. `bodies/<id>/controls.json` holds buttons, dials
+from processor pins and blocks to part pins, panels, DRAM size and regions,
+NAND geometry, card slots and power control. A body declares a power-on DRAM
+fill only when it measured a byte different from its processor's DRAM region.
+Processor blocks the board leaves unconnected are listed under
+`absent_blocks`. `bodies/<id>/controls.json` holds buttons, dials
 and switches: their positions, the connections they drive and startup
 combinations. A connection carries every signal of one physical line, such as
 a GPIO input together with its interrupt line, or the timer channel and rest
@@ -130,13 +133,12 @@ selectors, never file locations.
 
 `../configurations/emulator/processors/<soc>.json` holds what the emulator
 chooses for a processor rather than what the hardware is: execution engines,
-the CPU model standing in for an unavailable one, instruction and tick rates
-the runtime ABI, the modeled MMU, the declared limits of its processor models
-and the byte its RAM holds at power-on when a camera measured one. Run
-configurations select it with the hardware records; it holds no hardware
-facts. A run overlay may change a hardware record's field only when that
-field's evidence is `stand-in`; validation refuses an override of a measured,
-located or inferred fact.
+the CPU model standing in for an unavailable one, instruction and tick rates,
+the runtime ABI, the modeled MMU and the declared limits of its processor
+models. Run configurations select it with the hardware records; it holds no
+hardware facts. A run overlay may change a hardware record's field only when
+that field's evidence is `stand-in`; validation refuses an override of a
+measured, located or inferred fact.
 
 Mods read register addresses and firmware numbers from C headers generated
 from these records, never from hand-copied constants.

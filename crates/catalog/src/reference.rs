@@ -4,6 +4,7 @@
 //! another record's filename or an input asset's location.
 
 use fujimod_catalog_identity::{validate_id, validate_sha256};
+use crate::provenance::Evidence;
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
@@ -80,6 +81,16 @@ pub struct Soc {
 }
 
 impl Soc {
+    /// The measured byte every DRAM cell holds at power-on, when a camera
+    /// measured one.
+    pub fn power_on_ram_fill(&self) -> Option<u8> {
+        self.memory_regions
+            .iter()
+            .filter(|region| region.kind == MemoryKind::Dram)
+            .find_map(|region| region.power_on_ram_fill.as_ref())
+            .map(|fill| fill.byte)
+    }
+
     /// Validate the record's schema identity and internal references.
     pub fn validate(&self, selected_id: &str) -> Result<(), String> {
         if self.schema != 1 || self.schema_uri != SOC_SCHEMA_URI || self.id != selected_id {
@@ -486,8 +497,25 @@ impl Soc {
                 ));
             }
         }
+        let mut has_power_on_fill = false;
         for region in &self.memory_regions {
             validate_id(&region.id)?;
+            if let Some(fill) = &region.power_on_ram_fill {
+                if region.kind != MemoryKind::Dram {
+                    return Err(format!(
+                        "SoC {} region {} declares a power-on fill outside DRAM",
+                        self.id, region.id
+                    ));
+                }
+                if has_power_on_fill {
+                    return Err(format!(
+                        "SoC {} declares a power-on fill on more than one region",
+                        self.id
+                    ));
+                }
+                has_power_on_fill = true;
+                fill.evidence.validate()?;
+            }
             let mut consumers = BTreeSet::new();
             for consumer in &region.consumers {
                 validate_id(consumer)?;
@@ -758,9 +786,30 @@ pub struct MemoryRegion {
     pub size: RegionSize,
     /// Hardware memory type.
     pub kind: MemoryKind,
+    /// The byte every cell of this region holds at power-on, when a camera
+    /// measured it, with the evidence for that measurement.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub power_on_ram_fill: Option<PowerOnFill>,
     /// Devices that consume this region without a register window.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub consumers: Vec<String>,
+}
+
+/// A measured power-on fill byte for a memory region or a body's DRAM.
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(deny_unknown_fields)]
+#[cfg_attr(feature = "schema", schemars(deny_unknown_fields))]
+#[cfg_attr(
+    all(target_arch = "wasm32", not(target_os = "emscripten")),
+    derive(tsify::Tsify),
+    tsify(hashmap_as_object, missing_as_null)
+)]
+pub struct PowerOnFill {
+    /// The byte every cell holds at power-on.
+    pub byte: u8,
+    /// How the byte was established.
+    pub evidence: Evidence,
 }
 
 /// A memory extent with no repeated body-specific capacity.
@@ -1197,6 +1246,10 @@ pub struct Body {
         tsify(type = "number | null")
     )]
     pub dram_bytes: Option<u64>,
+    /// The byte this body's DRAM holds at power-on, when a camera measured a
+    /// value that differs from its processor's DRAM region.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub power_on_ram_fill: Option<PowerOnFill>,
     /// Optional body-specific physical attachments and signal routing.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[cfg_attr(
@@ -1251,6 +1304,9 @@ impl Body {
         validate_id(&self.soc_id)?;
         if self.dram_bytes == Some(0) {
             return Err(format!("body {} has no DRAM capacity", self.id));
+        }
+        if let Some(fill) = &self.power_on_ram_fill {
+            fill.evidence.validate()?;
         }
         if let Some(hardware) = &self.hardware {
             hardware.validate(self)?;

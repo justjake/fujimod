@@ -685,6 +685,7 @@ Body = TypedDict(
         "nand": NotRequired["NandGeometry | None"],
         "parts": Required["list[str]"],
         "power_control": NotRequired["PowerControlAssembly | None"],
+        "power_on_ram_fill": NotRequired["PowerOnFill | None"],
         "ram_regions": NotRequired["list[BodyRamRegion]"],
         "schema": Required["int"],
         "sensor": NotRequired["SensorAssembly | None"],
@@ -3551,6 +3552,7 @@ class MemoryRegion(TypedDict, total=False):
     consumers: NotRequired[list[str]]
     id: Required[str]
     kind: Required[MemoryKind]
+    power_on_ram_fill: NotRequired[PowerOnFill | None]
     size: Required[RegionSize]
 
 
@@ -4233,6 +4235,11 @@ class PowerOff(TypedDict, total=False):
     power_cut: Required[int]
     request_deadline_offset: NotRequired[int | None]
     rollover_parameter: NotRequired[int | None]
+
+
+class PowerOnFill(TypedDict, total=False):
+    byte: Required[int]
+    evidence: Required[Evidence]
 
 
 type ProcessorArchitecture = Literal["arm32", "aarch64"]
