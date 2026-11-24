@@ -541,8 +541,9 @@ pub enum VideoEncoderBackend {
     tsify(hashmap_as_object, missing_as_null)
 )]
 pub struct HardwareSelection {
-    /// Profile identity within the selected SoC.
-    pub soc_profile_id: String,
+    /// Profile identity within the selected SoC, when the processor declares one.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub soc_profile_id: Option<String>,
     /// Profile identity within the selected body.
     pub body_profile_id: String,
 }

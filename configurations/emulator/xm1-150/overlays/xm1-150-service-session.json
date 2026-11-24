@@ -10,7 +10,6 @@
       "execution_scope": "offline-boot-development",
       "purpose": "service_session",
       "hardware_selection": {
-        "soc_profile_id": "exr2-service-transports",
         "body_profile_id": "xm1-service-session"
       },
       "hardware_inputs_id": "xm1-service-session",

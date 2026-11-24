@@ -26,7 +26,6 @@
       },
       "firmware_profile_id": "x100t-111",
       "hardware_selection": {
-        "soc_profile_id": "exr2-service-transports",
         "body_profile_id": "x100t-rec"
       }
     }

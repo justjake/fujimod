@@ -1041,34 +1041,6 @@ pub struct BlockOverride {
     pub device: crate::soc::BlockDevice,
 }
 
-/// Declared boot rom facts.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
-#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
-#[serde(deny_unknown_fields)]
-#[cfg_attr(feature = "schema", schemars(rename = "HardwareBootRom"))]
-pub struct BootRom {
-    /// Declared basis.
-    pub basis: String,
-    /// Declared sha256.
-    pub sha256: String,
-    /// Declared size.
-    pub size: u64,
-}
-
-/// Declared discovery mmio facts.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
-#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
-#[serde(deny_unknown_fields)]
-#[cfg_attr(feature = "schema", schemars(rename = "HardwareDiscoveryWindow"))]
-pub struct DiscoveryWindow {
-    /// Declared address.
-    pub address: u64,
-    /// Declared basis.
-    pub basis: String,
-    /// Declared size.
-    pub size: u64,
-}
-
 /// Declared instructions per tick facts.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
@@ -1079,18 +1051,6 @@ pub struct InstructionRate {
     pub denominator: u64,
     /// Declared numerator.
     pub numerator: u64,
-}
-
-/// Declared private mmio facts.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
-#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
-#[serde(deny_unknown_fields)]
-#[cfg_attr(feature = "schema", schemars(rename = "HardwareCoreWindow"))]
-pub struct CoreWindow {
-    /// Declared address.
-    pub address: u64,
-    /// Declared size.
-    pub size: u64,
 }
 
 /// Declared adc facts.
@@ -2237,94 +2197,6 @@ pub struct ResetRelease {
     pub target: u64,
 }
 
-/// Declared atcm facts.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
-#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
-#[serde(deny_unknown_fields)]
-#[cfg_attr(feature = "schema", schemars(rename = "HardwareAtcm"))]
-pub struct Atcm {
-    /// Declared basis.
-    pub basis: String,
-    /// Declared reset base.
-    pub reset_base: u64,
-    /// Declared reset enabled.
-    pub reset_enabled: bool,
-    /// Declared size.
-    pub size: u64,
-}
-
-/// Declared tcm facts.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
-#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
-#[serde(deny_unknown_fields)]
-#[cfg_attr(feature = "schema", schemars(rename = "HardwareTcm"))]
-pub struct Tcm {
-    /// Declared atcm.
-    pub atcm: Atcm,
-    /// Declared btcm.
-    pub btcm: Atcm,
-}
-
-/// Declared diagnostic headers facts.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
-#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
-#[serde(deny_unknown_fields)]
-#[cfg_attr(feature = "schema", schemars(rename = "HardwareDiagnosticHeaders"))]
-pub struct DiagnosticHeaders {
-    /// Declared address.
-    pub address: u64,
-    /// Declared name.
-    pub name: String,
-    /// Declared offset.
-    pub offset: u64,
-}
-
-/// Declared images facts.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
-#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
-#[serde(deny_unknown_fields)]
-#[cfg_attr(feature = "schema", schemars(rename = "HardwareBootImage"))]
-pub struct BootImage {
-    /// Declared address.
-    pub address: u64,
-    /// Declared name.
-    pub name: String,
-    /// Declared offset.
-    pub offset: u64,
-    /// Declared size.
-    pub size: u64,
-}
-
-/// Declared nand layouts facts.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
-#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
-#[serde(deny_unknown_fields)]
-#[cfg_attr(feature = "schema", schemars(rename = "HardwareNandBootLayout"))]
-pub struct NandBootLayout {
-    /// Declared basis.
-    pub basis: String,
-    /// Declared entry labels.
-    pub entry_labels: BTreeMap<String, String>,
-    /// Declared images.
-    pub images: Vec<BootImage>,
-    /// Declared name.
-    pub name: String,
-}
-
-/// Declared update boot facts.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
-#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
-#[serde(deny_unknown_fields)]
-#[cfg_attr(feature = "schema", schemars(rename = "HardwareUpdateBoot"))]
-pub struct UpdateBoot {
-    /// Declared diagnostic headers.
-    pub diagnostic_headers: Vec<DiagnosticHeaders>,
-    /// Declared flash dat bias.
-    pub flash_dat_bias: u64,
-    /// Declared nand layouts.
-    pub nand_layouts: BTreeMap<String, NandBootLayout>,
-}
-
 /// Declared windows options facts.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
@@ -2397,24 +2269,6 @@ pub struct SocProfile {
     /// Qualification of the declared processor cache capacities.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub cache_basis: Option<String>,
-    /// Declared boot rom.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub boot_rom: Option<BootRom>,
-    /// Declared discovery mmio.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub discovery_mmio: Option<Vec<DiscoveryWindow>>,
-    /// Declared private mmio.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub private_mmio: Option<Vec<CoreWindow>>,
-    /// Declared reset release.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub reset_release: Option<ResetRelease>,
-    /// Declared tcm.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub tcm: Option<Tcm>,
-    /// Declared update boot.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub update_boot: Option<UpdateBoot>,
     /// Declared windows.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub windows: Option<Vec<RegisterWindow>>,

@@ -3654,6 +3654,17 @@
       ],
       "description": "Located boot, device and persistent-storage layout facts."
     },
+    "reset_release": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/HardwareResetRelease"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "Release mechanism this build uses, when the layouts do not vary it."
+    },
     "schema": {
       "description": "Firmware record version.",
       "format": "uint32",

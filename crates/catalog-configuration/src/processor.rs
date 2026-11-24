@@ -53,6 +53,29 @@ pub struct ProcessorEmulation {
     /// Declared limits of the emulator's processor models.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub limits: Vec<String>,
+    /// Discovery probe apertures the emulator reserves, when it declares any.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub discovery_mmio: Vec<DiscoveryAperture>,
+    /// Processor blocks the emulator backs privately for each CPU.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub private_mmio: Vec<String>,
+}
+
+/// One discovery probe aperture, reserved below the high vectors.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(deny_unknown_fields)]
+#[cfg_attr(feature = "schema", schemars(deny_unknown_fields))]
+#[cfg_attr(
+    all(target_arch = "wasm32", not(target_os = "emscripten")),
+    derive(tsify::Tsify),
+    tsify(hashmap_as_object, missing_as_null)
+)]
+pub struct DiscoveryAperture {
+    /// First address of the aperture.
+    pub address: u64,
+    /// Aperture size in bytes.
+    pub size: u64,
 }
 
 impl ProcessorEmulation {
@@ -91,6 +114,18 @@ impl ProcessorEmulation {
         }
         if self.board_ticks_per_second == Some(0) {
             return Err("processor emulation board tick rate must be positive".into());
+        }
+        for aperture in &self.discovery_mmio {
+            if aperture.size == 0
+                || aperture.address % 0x1000 != 0
+                || aperture.size % 0x1000 != 0
+                || aperture.address + aperture.size > 0xffff_0000
+            {
+                return Err("processor emulation discovery aperture is not a bounded peripheral page range".into());
+            }
+        }
+        for id in &self.private_mmio {
+            fujimod_catalog_identity::validate_id(id)?;
         }
         Ok(())
     }

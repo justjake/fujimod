@@ -1,5 +1,28 @@
 {
   "$defs": {
+    "DiscoveryAperture": {
+      "additionalProperties": false,
+      "description": "One discovery probe aperture, reserved below the high vectors.",
+      "properties": {
+        "address": {
+          "description": "First address of the aperture.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "size": {
+          "description": "Aperture size in bytes.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "address",
+        "size"
+      ],
+      "type": "object"
+    },
     "RunInstructionRate": {
       "additionalProperties": false,
       "description": "Closed instruction-derived timebase ratio for a run.",
@@ -47,6 +70,13 @@
       "description": "CPU model the emulator executes, standing in for an unavailable one.",
       "type": "string"
     },
+    "discovery_mmio": {
+      "description": "Discovery probe apertures the emulator reserves, when it declares any.",
+      "items": {
+        "$ref": "#/$defs/DiscoveryAperture"
+      },
+      "type": "array"
+    },
     "engines": {
       "description": "Execution engines implemented for this processor, when restricted.",
       "items": {
@@ -82,6 +112,13 @@
         "string",
         "null"
       ]
+    },
+    "private_mmio": {
+      "description": "Processor blocks the emulator backs privately for each CPU.",
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
     },
     "runtime_abi": {
       "description": "Runtime ABI the CPU model presents to firmware and mods.",

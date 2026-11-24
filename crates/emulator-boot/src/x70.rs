@@ -687,7 +687,7 @@ fn apply_interrupts(
         "sd" => recipe["irq"] = irq(selection, "sdhci-card-0", "host")?,
         "companion" => {
             recipe["options"]["irq"] =
-                json!(irq(selection, "companion-fe80", "processing")?["Core"]["line"]);
+                json!(irq(selection, "peripheral-window-fe318000", "processing")?["Core"]["line"]);
         }
         "image_input" => {
             recipe["phase_irqs"] = json!([
@@ -1795,19 +1795,18 @@ fn gpio_levels(
     Ok((levels, output_values))
 }
 
-/// The SoC and body hardware profiles a run selects, if it selects any.
+/// The body hardware profile a run selects, if it selects one.
 fn hardware_profiles<'a>(
     selection: &'a ResolvedSelection,
     configuration: &RunConfiguration,
-) -> Option<(
-    &'a fujimod_catalog::profiles::SocProfile,
-    &'a fujimod_catalog::profiles::BodyProfile,
-)> {
+) -> Option<&'a fujimod_catalog::profiles::BodyProfile> {
     let choice = configuration.preset.as_ref()?.hardware_selection.as_ref()?;
-    Some((
-        selection.soc.hardware.as_ref()?.profiles.get(&choice.soc_profile_id)?,
-        selection.body.hardware.as_ref()?.profiles.get(&choice.body_profile_id)?,
-    ))
+    selection
+        .body
+        .hardware
+        .as_ref()?
+        .profiles
+        .get(&choice.body_profile_id)
 }
 
 /// A connected cable with selected hardware profiles: the USB endpoint engine
@@ -2257,7 +2256,7 @@ pub(super) fn assemble(
             browser.is_some(),
         )?;
         if inputs.usb.connected
-            && let Some((_, body)) = hardware_profiles(selection, configuration)
+            && let Some(body) = hardware_profiles(selection, configuration)
         {
             apply_connected_usb(&mut recipe, rule.name, selection, body)?;
         }

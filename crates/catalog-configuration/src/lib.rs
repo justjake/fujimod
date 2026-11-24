@@ -1104,7 +1104,9 @@ impl RunPreset {
             fujimod_catalog_identity::validate_id(&observer.scanout)?;
         }
         if let Some(hardware) = &self.hardware_selection {
-            fujimod_catalog_identity::validate_id(&hardware.soc_profile_id)?;
+            if let Some(id) = &hardware.soc_profile_id {
+                fujimod_catalog_identity::validate_id(id)?;
+            }
             fujimod_catalog_identity::validate_id(&hardware.body_profile_id)?;
         }
         if let Some(id) = &self.firmware_inputs_id {

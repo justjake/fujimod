@@ -33,7 +33,30 @@
           "sets": 128,
           "ways": 4
         }
-      }
+      },
+      "evidence": [
+        {
+          "kind": "inferred",
+          "firmware_ids": [
+            "x70-110"
+          ],
+          "addresses": [
+            {
+              "firmware_id": "x70-110",
+              "address": 6328,
+              "space": "code"
+            },
+            {
+              "firmware_id": "x70-110",
+              "address": 71864,
+              "space": "code"
+            }
+          ]
+        },
+        {
+          "kind": "stand-in"
+        }
+      ]
     },
     {
       "id": "core1",
@@ -64,7 +87,30 @@
           "sets": 128,
           "ways": 4
         }
-      }
+      },
+      "evidence": [
+        {
+          "kind": "inferred",
+          "firmware_ids": [
+            "x70-110"
+          ],
+          "addresses": [
+            {
+              "firmware_id": "x70-110",
+              "address": 6328,
+              "space": "code"
+            },
+            {
+              "firmware_id": "x70-110",
+              "address": 71864,
+              "space": "code"
+            }
+          ]
+        },
+        {
+          "kind": "stand-in"
+        }
+      ]
     }
   ],
   "memory_regions": [
@@ -131,230 +177,6 @@
       "kind": "sram"
     }
   ],
-  "hardware": {
-    "profiles": {
-      "exr2": {
-        "boot_rom": {
-          "basis": "Declared catalog input.",
-          "sha256": "4ecedfbfc1910bde488d36abe4380621f8845e6afcfc6cf54a49a33ec0abf9be",
-          "size": 16384
-        },
-        "discovery_mmio": [
-          {
-            "address": 4026531840,
-            "basis": "Declared catalog input.",
-            "size": 268369920
-          },
-          {
-            "address": 2683043840,
-            "basis": "Declared catalog input.",
-            "size": 65536
-          }
-        ],
-        "private_mmio": [
-          {
-            "address": 4264656896,
-            "size": 4096
-          },
-          {
-            "address": 4265279488,
-            "size": 4096
-          },
-          {
-            "address": 4269850624,
-            "size": 4096
-          },
-          {
-            "address": 4269854720,
-            "size": 4096
-          }
-        ],
-        "reset_release": {
-          "mask": 16777216,
-          "register": 4294656204,
-          "source": 120,
-          "target": 1073676288
-        },
-        "tcm": {
-          "atcm": {
-            "basis": "Declared catalog input.",
-            "reset_base": 4294934528,
-            "reset_enabled": true,
-            "size": 8192
-          },
-          "btcm": {
-            "basis": "Declared catalog input.",
-            "reset_base": 0,
-            "reset_enabled": false,
-            "size": 0
-          }
-        },
-        "update_boot": {
-          "diagnostic_headers": [
-            {
-              "address": 262144,
-              "name": "kernel0",
-              "offset": 524288
-            },
-            {
-              "address": 851968,
-              "name": "kernel1",
-              "offset": 655360
-            }
-          ],
-          "flash_dat_bias": 604,
-          "nand_layouts": {
-            "0": {
-              "basis": "Declared catalog input.",
-              "entry_labels": {
-                "0x14000": "secondary loader",
-                "0x4000": "primary loader",
-                "0x40020": "primary kernel",
-                "0xd0020": "secondary kernel"
-              },
-              "images": [
-                {
-                  "address": 0,
-                  "name": "boot",
-                  "offset": 32768,
-                  "size": 131072
-                }
-              ],
-              "name": "nand-512-byte-pages"
-            },
-            "1": {
-              "basis": "Declared catalog input.",
-              "entry_labels": {
-                "0x11800": "secondary loader",
-                "0x1800": "primary loader",
-                "0x40020": "primary kernel",
-                "0xd0020": "secondary kernel"
-              },
-              "images": [
-                {
-                  "address": 0,
-                  "name": "boot",
-                  "offset": 262144,
-                  "size": 131072
-                }
-              ],
-              "name": "nand-2048-byte-pages"
-            }
-          }
-        }
-      },
-      "exr2-service-transports": {
-        "boot_rom": {
-          "basis": "Declared catalog input.",
-          "sha256": "4ecedfbfc1910bde488d36abe4380621f8845e6afcfc6cf54a49a33ec0abf9be",
-          "size": 16384
-        },
-        "discovery_mmio": [
-          {
-            "address": 4026531840,
-            "basis": "Declared catalog input.",
-            "size": 268369920
-          },
-          {
-            "address": 2683043840,
-            "basis": "Declared catalog input.",
-            "size": 65536
-          }
-        ],
-        "private_mmio": [
-          {
-            "address": 4264656896,
-            "size": 4096
-          },
-          {
-            "address": 4265279488,
-            "size": 4096
-          },
-          {
-            "address": 4269850624,
-            "size": 4096
-          },
-          {
-            "address": 4269854720,
-            "size": 4096
-          }
-        ],
-        "reset_release": {
-          "mask": 16777216,
-          "register": 4294656204,
-          "source": 120,
-          "target": 1073676288
-        },
-        "tcm": {
-          "atcm": {
-            "basis": "Declared catalog input.",
-            "reset_base": 4294934528,
-            "reset_enabled": true,
-            "size": 8192
-          },
-          "btcm": {
-            "basis": "Declared catalog input.",
-            "reset_base": 0,
-            "reset_enabled": false,
-            "size": 0
-          }
-        },
-        "update_boot": {
-          "diagnostic_headers": [
-            {
-              "address": 262144,
-              "name": "kernel0",
-              "offset": 524288
-            },
-            {
-              "address": 851968,
-              "name": "kernel1",
-              "offset": 655360
-            }
-          ],
-          "flash_dat_bias": 604,
-          "nand_layouts": {
-            "0": {
-              "basis": "Declared catalog input.",
-              "entry_labels": {
-                "0x14000": "secondary loader",
-                "0x4000": "primary loader",
-                "0x40020": "primary kernel",
-                "0xd0020": "secondary kernel"
-              },
-              "images": [
-                {
-                  "address": 0,
-                  "name": "boot",
-                  "offset": 32768,
-                  "size": 131072
-                }
-              ],
-              "name": "nand-512-byte-pages"
-            },
-            "1": {
-              "basis": "Declared catalog input.",
-              "entry_labels": {
-                "0x11800": "secondary loader",
-                "0x1800": "primary loader",
-                "0x40020": "primary kernel",
-                "0xd0020": "secondary kernel"
-              },
-              "images": [
-                {
-                  "address": 0,
-                  "name": "boot",
-                  "offset": 262144,
-                  "size": 131072
-                }
-              ],
-              "name": "nand-2048-byte-pages"
-            }
-          }
-        }
-      }
-    }
-  },
   "mappings": [
     {
       "id": "cpu0-map-00",

@@ -271,7 +271,6 @@
   "preset": {
     "factory_options": {},
     "hardware_selection": {
-      "soc_profile_id": "exr2",
       "body_profile_id": "x70-runtime"
     },
     "native_device_inputs": {

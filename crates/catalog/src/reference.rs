@@ -107,6 +107,9 @@ impl Soc {
         let mut affinities = BTreeSet::new();
         for core in &self.processors {
             validate_id(&core.id)?;
+            for evidence in &core.evidence {
+                evidence.validate()?;
+            }
             if !processors.insert(core.id.as_str()) {
                 return Err(format!("SoC {} repeats processor {}", self.id, core.id));
             }
@@ -586,6 +589,9 @@ pub struct ProcessorCore {
     /// Optional A-profile application-processor state.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub aprofile: Option<AProfileState>,
+    /// How this core's facts not recorded elsewhere were established.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub evidence: Vec<crate::provenance::Evidence>,
 }
 
 /// A processor core model supported by the current catalog.
@@ -2792,6 +2798,9 @@ pub struct Firmware {
     /// Generated observation facts consumed by supported runs.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub generated_facts: Option<FirmwareGeneratedFacts>,
+    /// Release mechanism this build uses, when the layouts do not vary it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub reset_release: Option<crate::profiles::ResetRelease>,
     /// Located boot, device and persistent-storage layout facts.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[cfg_attr(
@@ -2889,7 +2898,7 @@ pub struct BootRomIdentity {
 }
 
 /// The flash layout used to install a firmware update.
-#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
 #[cfg_attr(feature = "schema", schemars(deny_unknown_fields))]
@@ -4633,6 +4642,7 @@ mod layout_tests {
                 mprofile: None,
                 rprofile: None,
                 aprofile: None,
+                evidence: vec![],
             }],
             memory_regions: regions,
             blocks,

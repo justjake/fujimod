@@ -2105,6 +2105,7 @@ Firmware = TypedDict(
         "id": Required["str"],
         "installation": NotRequired["FirmwareInstallation | None"],
         "layouts": NotRequired["FirmwareLayouts | None"],
+        "reset_release": NotRequired["HardwareResetRelease | None"],
         "schema": Required["int"],
         "update": NotRequired["ContentIdentity | None"],
         "version": Required["str"],
@@ -2802,13 +2803,6 @@ class HardwareAfExtraction(TypedDict, total=False):
     profile: Required[str]
 
 
-class HardwareAtcm(TypedDict, total=False):
-    basis: Required[str]
-    reset_base: Required[int]
-    reset_enabled: Required[bool]
-    size: Required[int]
-
-
 class HardwareBlockParameters(TypedDict, total=False):
     byte_ns: NotRequired[int | None]
     command_latency_us: NotRequired[int | None]
@@ -2821,19 +2815,6 @@ class HardwareBlockParameters(TypedDict, total=False):
     ticks_per_second: NotRequired[int | None]
     transmit_request: NotRequired[int | None]
     trigger_offset: NotRequired[int | None]
-
-
-class HardwareBootImage(TypedDict, total=False):
-    address: Required[int]
-    name: Required[str]
-    offset: Required[int]
-    size: Required[int]
-
-
-class HardwareBootRom(TypedDict, total=False):
-    basis: Required[str]
-    sha256: Required[str]
-    size: Required[int]
 
 
 class HardwareBusSensor(TypedDict, total=False):
@@ -2911,11 +2892,6 @@ class HardwareCore(TypedDict, total=False):
     line: Required[int]
 
 
-class HardwareCoreWindow(TypedDict, total=False):
-    address: Required[int]
-    size: Required[int]
-
-
 class HardwareCurtains(TypedDict, total=False):
     first_output: Required[int]
     light_offset_seconds: Required[int]
@@ -2938,18 +2914,6 @@ class HardwareDeviceModel(TypedDict, total=False):
     kind: Required[DeviceKind]
     refs: Required[dict[str, str]]
     replaces: NotRequired[list[str]]
-
-
-class HardwareDiagnosticHeaders(TypedDict, total=False):
-    address: Required[int]
-    name: Required[str]
-    offset: Required[int]
-
-
-class HardwareDiscoveryWindow(TypedDict, total=False):
-    address: Required[int]
-    basis: Required[str]
-    size: Required[int]
 
 
 class HardwareDisplayScanout(TypedDict, total=False):
@@ -3068,13 +3032,6 @@ class HardwareIrisOptics(TypedDict, total=False):
     actuator: NotRequired[str | None]
     output: Required[str]
     positions: Required[list[list[int]]]
-
-
-class HardwareNandBootLayout(TypedDict, total=False):
-    basis: Required[str]
-    entry_labels: Required[dict[str, str]]
-    images: Required[list[HardwareBootImage]]
-    name: Required[str]
 
 
 class HardwareNdFilter(TypedDict, total=False):
@@ -3231,7 +3188,7 @@ class HardwareSecondaryControlBus(TypedDict, total=False):
 
 class HardwareSelection(TypedDict, total=False):
     body_profile_id: Required[str]
-    soc_profile_id: Required[str]
+    soc_profile_id: NotRequired[str | None]
 
 
 class HardwareSensorCapture(TypedDict, total=False):
@@ -3267,11 +3224,6 @@ class HardwareStatusTarget(TypedDict, total=False):
     write_replies: Required[list[tuple[int, int, str]]]
 
 
-class HardwareTcm(TypedDict, total=False):
-    atcm: Required[HardwareAtcm]
-    btcm: Required[HardwareAtcm]
-
-
 type HardwareTimerLayout = Literal["xp4", "xpp"]
 
 
@@ -3280,12 +3232,6 @@ class HardwareTouch(TypedDict, total=False):
     irq: Required[int]
     register: Required[int]
     ticks_per_second: Required[int]
-
-
-class HardwareUpdateBoot(TypedDict, total=False):
-    diagnostic_headers: Required[list[HardwareDiagnosticHeaders]]
-    flash_dat_bias: Required[int]
-    nand_layouts: Required[dict[str, HardwareNandBootLayout]]
 
 
 class HardwareUsb(TypedDict, total=False):
@@ -4248,6 +4194,7 @@ type ProcessorArchitecture = Literal["arm32", "aarch64"]
 class ProcessorCore(TypedDict, total=False):
     aprofile: NotRequired[AProfileState | None]
     clock_id: NotRequired[str | None]
+    evidence: NotRequired[list[Evidence]]
     id: Required[str]
     model: Required[ProcessorModel]
     mprofile: NotRequired[MProfileState | None]
@@ -5724,13 +5671,7 @@ class SocHardware(TypedDict, total=False):
 
 
 class SocProfile(TypedDict, total=False):
-    boot_rom: NotRequired[HardwareBootRom | None]
     cache_basis: NotRequired[str | None]
-    discovery_mmio: NotRequired[list[HardwareDiscoveryWindow] | None]
-    private_mmio: NotRequired[list[HardwareCoreWindow] | None]
-    reset_release: NotRequired[HardwareResetRelease | None]
-    tcm: NotRequired[HardwareTcm | None]
-    update_boot: NotRequired[HardwareUpdateBoot | None]
     windows: NotRequired[list[HardwareRegisterWindow] | None]
 
 

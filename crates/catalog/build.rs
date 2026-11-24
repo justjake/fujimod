@@ -84,6 +84,7 @@ fn main() {
             ("Firmware", "state.generated.json") => "State",
             ("Body", "body.json") | ("Firmware", "firmware.json") => kind,
             ("Body" | "Firmware", _) => panic!("unknown catalog document {}", path.display()),
+            ("Soc", "soc.json") => kind,
             ("Soc", _)
                 if path
                     .parent()
@@ -93,6 +94,9 @@ fn main() {
             {
                 "SocBlock"
             }
+            // Generated evidence beside a processor's records is not a
+            // reference document; readers take it from disk directly.
+            ("Soc", _) => continue,
             _ => kind,
         };
         let relative = path

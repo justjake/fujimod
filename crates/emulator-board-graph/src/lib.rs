@@ -740,6 +740,7 @@ mod tests {
                 data_cache: None,
             }),
             aprofile: None,
+            evidence: vec![],
         }
     }
 
@@ -851,6 +852,7 @@ mod tests {
                 installation: None,
                 generated_facts: None,
                 layouts: None,
+                reset_release: None,
             },
             parts: vec![],
             physical_controls: None,
