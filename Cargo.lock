@@ -2449,7 +2449,6 @@ dependencies = [
  "fujimod-camera",
  "fujimod-catalog-configuration",
  "fujimod-catalog-resolution",
- "fujimod-catalog-wiring",
  "fujimod-emulator-boot",
  "fujimod-emulator-controls",
  "fujimod-emulator-cpu",

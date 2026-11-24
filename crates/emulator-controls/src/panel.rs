@@ -119,7 +119,7 @@ fn calibrated(calibration: Option<&dyn Calibration>, offset: u32) -> Result<u32,
 }
 
 /// The levels an interval accepts, without the intervals it excludes.
-fn interval_mask(
+pub(crate) fn interval_mask(
     interval: &AdcInterval,
     calibration: Option<&dyn Calibration>,
     analog_levels: u32,

@@ -1,11 +1,14 @@
 //! Application-profile startup plans with caller-selected firmware and media.
 use crate::{graph::ProcessorStart, xpp};
 use fujimod_catalog_configuration::{RunEngine, RunInputs};
+use fujimod_catalog_controls::facts::ConfigurationLocation;
 use fujimod_catalog_resolution::ResolvedConfiguration;
 use fujimod_emulator::board::bus::Mode;
 use fujimod_emulator_cpu::Register;
 use fujimod_emulator_devices::graphics::scanout::Frame;
+use fujimod_emulator_controls::Calibration;
 use fujimod_emulator_session::Session;
+use crate::host::Memory;
 use fujimod_emulator_xp4_board as xp4;
 use serde::Deserialize;
 use serde_json::{Value, json};
@@ -134,11 +137,80 @@ impl crate::mod_loader::Machine for Board {
     }
 }
 
+/// The electrical input a named key drives on an application-profile board.
+pub enum KeyWire {
+    Digital(fujimod_catalog_wiring::DigitalKey),
+    Analog(fujimod_catalog_wiring::AnalogKey),
+}
+
+impl KeyWire {
+    /// The direct GPIO contact or single ADC band the catalog declares for a key.
+    pub fn resolve(selection: &fujimod_catalog::reference::ResolvedSelection, name: &str) -> Result<Self, String> {
+        if let Some(key) = fujimod_catalog_wiring::digital_key(selection, name)? {
+            return Ok(Self::Digital(key));
+        }
+        fujimod_catalog_wiring::analog_key(selection, name)?
+            .map(Self::Analog)
+            .ok_or_else(|| format!("{name} has no declared GPIO contact or ADC band"))
+    }
+}
+
+/// The configuration block the firmware running on a board has loaded.
+struct LoadedConfiguration<'a> {
+    board: &'a Board,
+    base: u64,
+}
+
+impl<'a> LoadedConfiguration<'a> {
+    fn new(board: &'a Board, location: ConfigurationLocation) -> Result<Self, String> {
+        let base = match location {
+            ConfigurationLocation::Direct { address } => address,
+            ConfigurationLocation::Pointer { address } => {
+                let mut word = [0; 4];
+                board.read(address, &mut word)?;
+                u64::from(u32::from_le_bytes(word))
+            }
+        };
+        if base == 0 {
+            return Err("the firmware has not loaded its configuration yet".into());
+        }
+        Ok(Self { board, base })
+    }
+}
+
+impl Calibration for LoadedConfiguration<'_> {
+    fn bytes(&self, offset: u32, length: usize) -> Option<Vec<u8>> {
+        let mut bytes = vec![0; length];
+        self.board.read(self.base.checked_add(u64::from(offset))?, &mut bytes).ok()?;
+        Some(bytes)
+    }
+}
+
 impl Board {
     pub fn gpio_input(&mut self, port: u8, pin: u8, high: bool) -> Result<(), String> {
         match self {
             Self::Xp4(board) => board.set_gpio_input(usize::from(port), usize::from(pin), high),
             Self::Xpp(session) => fujimod_emulator_xpp::board::gpio_input(session, port, pin, high),
+        }
+    }
+
+    pub fn adc_input(&mut self, channel: u8, sample: u16) -> Result<(), String> {
+        match self {
+            Self::Xp4(board) => board.set_adc_input(usize::from(channel), sample),
+            Self::Xpp(_) => Err("X-Processor Pro ADC key presses are not wired".into()),
+        }
+    }
+
+    /// Present a key pressed or released. ADC bands whose bounds live in the
+    /// firmware's configuration are read from the block the firmware has loaded.
+    pub fn key_input(&mut self, wire: &KeyWire, pressed: bool) -> Result<(), String> {
+        match wire {
+            KeyWire::Digital(key) => self.gpio_input(key.port, key.pin, key.active == pressed),
+            KeyWire::Analog(key) => {
+                let calibration = key.calibration.map(|location| LoadedConfiguration::new(self, location)).transpose()?;
+                let (down, up) = fujimod_emulator_controls::adc_levels(key, calibration.as_ref().map(|c| c as &dyn Calibration))?;
+                self.adc_input(key.channel, if pressed { down } else { up })
+            }
         }
     }
 
