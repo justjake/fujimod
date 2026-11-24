@@ -4,6 +4,25 @@ from __future__ import annotations
 from typing import Literal, Never, NotRequired, Required, TypedDict
 
 
+type AProfileState = AProfileStateVariant0 | AProfileStateVariant1
+
+
+class AProfileStateVariant0(TypedDict, total=False):
+    caches: Required[CacheGeometry]
+    configuration_base: Required[int]
+    kind: Required[Literal["armv7a"]]
+
+
+class AProfileStateVariant1(TypedDict, total=False):
+    affinity: Required[int]
+    counter_clock_id: Required[str]
+    kind: Required[Literal["armv8a"]]
+    midr_el1: Required[int]
+    physical_timer_irq: Required[int]
+    pmu_clock_id: Required[str]
+    virtual_timer_irq: Required[int]
+
+
 type AdcCondition = AdcConditionVariant0 | AdcConditionVariant1
 
 
@@ -145,25 +164,6 @@ class ApplicationFrameInput(TypedDict, total=False):
     block_ids: Required[list[str]]
     luma: NotRequired[int | None]
     period_ticks: Required[int]
-
-
-type ApplicationHardware = ApplicationHardwareVariant0 | ApplicationHardwareVariant1
-
-
-class ApplicationHardwareVariant0(TypedDict, total=False):
-    caches: Required[CacheGeometry]
-    configuration_base: Required[int]
-    kind: Required[Literal["armv7a"]]
-
-
-class ApplicationHardwareVariant1(TypedDict, total=False):
-    affinities: Required[dict[str, int]]
-    counter_clock_id: Required[str]
-    kind: Required[Literal["armv8a"]]
-    midr_el1: Required[int]
-    physical_timer_irq: Required[int]
-    pmu_clock_id: Required[str]
-    virtual_timer_irq: Required[int]
 
 
 class ApplicationLadderInput(TypedDict, total=False):
@@ -4216,6 +4216,7 @@ type ProcessorArchitecture = Literal["arm32", "aarch64"]
 
 
 class ProcessorCore(TypedDict, total=False):
+    aprofile: NotRequired[AProfileState | None]
     id: Required[str]
     model: Required[ProcessorModel]
     mprofile: NotRequired[MProfileState | None]
@@ -5670,7 +5671,6 @@ class SocBlockView(TypedDict, total=False):
 
 
 class SocHardware(TypedDict, total=False):
-    application: NotRequired[ApplicationHardware | None]
     companion: NotRequired[CompanionHardware | None]
     power_on_ram_fill: NotRequired[int | None]
     profiles: NotRequired[dict[str, SocProfile]]

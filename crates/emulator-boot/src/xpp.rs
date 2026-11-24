@@ -9,8 +9,10 @@
 use crate::graph::{self, ProcessorStart};
 use fujimod_catalog::{
     profiles::{BlockOverride, BodyProfile, RegisterIdleBits, RegisterLayouts, SocProfile},
-    reference::{Body, ConnectionSignal, MemoryKind, MemoryRegion, RegionSize, Soc, SocBlock},
-    soc::{ApplicationHardware, BlockDevice},
+    reference::{
+        AProfileState, Body, ConnectionSignal, MemoryKind, MemoryRegion, RegionSize, Soc, SocBlock,
+    },
+    soc::BlockDevice,
 };
 use fujimod_catalog_configuration::RunInstructionRate;
 use fujimod_catalog_resolution::ResolvedConfiguration;
@@ -1500,17 +1502,6 @@ pub fn assemble(resolved: &ResolvedConfiguration, inputs: &Inputs<'_>) -> Result
             selection.soc.id
         ));
     }
-    let Some(ApplicationHardware::Armv7a {
-        configuration_base,
-        caches,
-    }) = selection
-        .soc
-        .hardware
-        .as_ref()
-        .and_then(|hardware| hardware.application.as_ref())
-    else {
-        return Err("X-Processor Pro assembly requires ARMv7-A application hardware".into());
-    };
     let reset = resolved
         .hardware_inputs()?
         .ok_or("X-Processor Pro assembly requires hardware inputs")?
@@ -1534,7 +1525,32 @@ pub fn assemble(resolved: &ResolvedConfiguration, inputs: &Inputs<'_>) -> Result
         None,
         inputs.starts,
     )?;
-    let cores = execution.processors.len() as u64;
+    let cores = execution.processors.len();
+    let mut cpus = Vec::with_capacity(cores);
+    for core in 0..cores {
+        let processor = selection.soc.processors.get(core).ok_or_else(|| {
+            format!(
+                "X-Processor Pro assembly starts core {core}; the SoC declares {} processors",
+                selection.soc.processors.len()
+            )
+        })?;
+        let Some(AProfileState::Armv7a {
+            configuration_base,
+            caches,
+        }) = &processor.aprofile
+        else {
+            return Err(format!(
+                "X-Processor Pro assembly requires ARMv7-A application hardware on processor {}",
+                processor.id
+            ));
+        };
+        cpus.push(json!({
+            "mpidr": MPIDR_MULTIPROCESSOR | core as u64,
+            "configuration_base": configuration_base,
+            "cycles_per_tick": CYCLES_PER_TICK,
+            "cache_sizes": [caches.l1_data_bytes, caches.l1_instruction_bytes, caches.l2_bytes],
+        }));
+    }
     let mut node_list = nodes(
         &maps,
         &reset,
@@ -1546,12 +1562,7 @@ pub fn assemble(resolved: &ResolvedConfiguration, inputs: &Inputs<'_>) -> Result
     node_list.extend(encoder_nodes(body, profile)?);
     let devices = json!({
         "kind": "xpp",
-        "cpus": (0..cores).map(|core| json!({
-            "mpidr": MPIDR_MULTIPROCESSOR | core,
-            "configuration_base": configuration_base,
-            "cycles_per_tick": CYCLES_PER_TICK,
-            "cache_sizes": [caches.l1_data_bytes, caches.l1_instruction_bytes, caches.l2_bytes],
-        })).collect::<Vec<_>>(),
+        "cpus": cpus,
         "gic": gic,
         "nodes": node_list,
     });

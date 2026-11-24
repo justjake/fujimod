@@ -87,10 +87,55 @@ impl Soc {
         }
         validate_id(&self.id)?;
         let mut processors = BTreeSet::new();
+        let mut affinities = BTreeSet::new();
         for core in &self.processors {
             validate_id(&core.id)?;
             if !processors.insert(core.id.as_str()) {
                 return Err(format!("SoC {} repeats processor {}", self.id, core.id));
+            }
+            let Some(aprofile) = &core.aprofile else {
+                continue;
+            };
+            let expected = match aprofile {
+                AProfileState::Armv7a { .. } => ProcessorModel::CortexA7,
+                AProfileState::Armv8a { .. } => ProcessorModel::CortexA53,
+            };
+            if core.model != expected {
+                return Err(format!(
+                    "SoC {} processor {} A-profile state does not match its model",
+                    self.id, core.id
+                ));
+            }
+            match aprofile {
+                AProfileState::Armv7a { caches, .. } => {
+                    if caches.l1_data_bytes == 0
+                        || caches.l1_instruction_bytes == 0
+                        || caches.l2_bytes == 0
+                    {
+                        return Err(format!(
+                            "SoC {} processor {} declares an empty cache",
+                            self.id, core.id
+                        ));
+                    }
+                }
+                AProfileState::Armv8a {
+                    affinity,
+                    counter_clock_id,
+                    pmu_clock_id,
+                    ..
+                } => {
+                    if !affinities.insert(*affinity) {
+                        return Err(format!("SoC {} repeats a processor affinity", self.id));
+                    }
+                    for clock in [counter_clock_id, pmu_clock_id] {
+                        if !self.clocks.iter().any(|item| item.id == *clock) {
+                            return Err(format!(
+                                "SoC {} processor {} refers to missing clock {clock}",
+                                self.id, core.id
+                            ));
+                        }
+                    }
+                }
             }
         }
         let mut blocks = BTreeSet::new();
@@ -399,6 +444,9 @@ pub struct ProcessorCore {
     /// Optional R-profile hardware state.
     #[serde(default)]
     pub rprofile: Option<RProfileState>,
+    /// Optional A-profile application-processor state.
+    #[serde(default)]
+    pub aprofile: Option<AProfileState>,
 }
 
 /// A processor core model supported by the current catalog.
@@ -513,6 +561,60 @@ pub struct DataCacheGeometry {
     pub sets: u32,
     /// Associativity.
     pub ways: u32,
+}
+
+/// A-profile application-processor state, tagged by architecture.
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
+#[cfg_attr(feature = "schema", schemars(deny_unknown_fields))]
+#[cfg_attr(
+    all(target_arch = "wasm32", not(target_os = "emscripten")),
+    derive(tsify::Tsify),
+    tsify(hashmap_as_object, missing_as_null)
+)]
+pub enum AProfileState {
+    /// ARMv7-A configuration base and cache capacities.
+    Armv7a {
+        /// Configuration base address presented to the core.
+        configuration_base: u64,
+        /// Declared cache capacities.
+        caches: CacheGeometry,
+    },
+    /// ARMv8-A identification, affinity and architectural timer wiring.
+    Armv8a {
+        /// MIDR_EL1 identification value.
+        midr_el1: u64,
+        /// MPIDR_EL1 affinity value.
+        affinity: u64,
+        /// Clock domain supplying the architectural counter.
+        counter_clock_id: String,
+        /// Clock domain supplying the performance monitor.
+        pmu_clock_id: String,
+        /// Physical architectural timer interrupt line.
+        physical_timer_irq: u32,
+        /// Virtual architectural timer interrupt line.
+        virtual_timer_irq: u32,
+    },
+}
+
+/// Cache capacities declared for an A-profile core.
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(deny_unknown_fields)]
+#[cfg_attr(feature = "schema", schemars(deny_unknown_fields))]
+#[cfg_attr(
+    all(target_arch = "wasm32", not(target_os = "emscripten")),
+    derive(tsify::Tsify),
+    tsify(hashmap_as_object, missing_as_null)
+)]
+pub struct CacheGeometry {
+    /// Level-one data-cache capacity.
+    pub l1_data_bytes: u64,
+    /// Level-one instruction-cache capacity.
+    pub l1_instruction_bytes: u64,
+    /// Shared level-two cache capacity.
+    pub l2_bytes: u64,
 }
 
 /// A tightly coupled memory reset state.

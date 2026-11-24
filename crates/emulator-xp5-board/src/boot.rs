@@ -15,8 +15,8 @@ use fujimod_catalog_resolution::ResolvedConfiguration;
 use fujimod_catalog::{
     firmware::FirmwareProfile,
     profiles::RegisterWindow,
-    reference::{ConnectionSignal, ProcessorModel, ResolvedSelection, SocBlockKind},
-    soc::{ApplicationHardware, BlockDevice},
+    reference::{AProfileState, ConnectionSignal, ProcessorModel, ResolvedSelection, SocBlockKind},
+    soc::BlockDevice,
 };
 use fujimod_emulator_cpu::{Register, arm64};
 use fujimod_emulator_devices::{graph::{DeviceGraph, DeviceWindow}, parts::gpio::Feedback};
@@ -76,17 +76,16 @@ pub fn startup_from_profile(
     ticks_per_second: u64,
 ) -> Result<FirmwareStartup, String> {
     let soc = &resolved.reference.soc;
-    let hardware = soc
-        .hardware
-        .as_ref()
-        .ok_or("selected SoC has no hardware description")?;
-    let ApplicationHardware::Armv8a { affinities, .. } = hardware
-        .application
-        .as_ref()
-        .ok_or("XP5 SoC has no A-profile processor wiring")?
-    else {
-        return Err("XP5 SoC application processors are not ARMv8-A".into());
-    };
+    let affinities = soc
+        .processors
+        .iter()
+        .filter_map(|processor| match &processor.aprofile {
+            Some(AProfileState::Armv8a { affinity, .. }) => {
+                Some((processor.id.clone(), *affinity))
+            }
+            _ => None,
+        })
+        .collect::<BTreeMap<_, _>>();
     let cpus = profile
         .cpu
         .as_ref()
@@ -225,18 +224,32 @@ pub fn startup_from_profile(
         None => None,
     };
 
-    let ApplicationHardware::Armv8a {
-        counter_clock_id,
-        pmu_clock_id,
-        physical_timer_irq,
-        virtual_timer_irq,
-        ..
-    } = hardware
-        .application
-        .as_ref()
-        .ok_or("XP5 SoC has no A-profile timer wiring")?
+    let mut wiring = None;
+    for processor in &soc.processors {
+        let Some(AProfileState::Armv8a {
+            counter_clock_id,
+            pmu_clock_id,
+            physical_timer_irq,
+            virtual_timer_irq,
+            ..
+        }) = &processor.aprofile
+        else {
+            continue;
+        };
+        let value = (
+            counter_clock_id,
+            pmu_clock_id,
+            *physical_timer_irq,
+            *virtual_timer_irq,
+        );
+        if wiring.is_some_and(|prior| prior != value) {
+            return Err("XP5 SoC processors declare different architectural timer wiring".into());
+        }
+        wiring = Some(value);
+    }
+    let Some((counter_clock_id, pmu_clock_id, physical_timer_irq, virtual_timer_irq)) = wiring
     else {
-        return Err("XP5 SoC application processors are not ARMv8-A".into());
+        return Err("XP5 SoC has no ARMv8-A application processors".into());
     };
     let clock_frequency = |id: &str| {
         soc.clocks
@@ -255,8 +268,8 @@ pub fn startup_from_profile(
             counter_hz: clock_frequency(counter_clock_id)?,
             ticks_per_second,
         },
-        physical_irq: *physical_timer_irq,
-        virtual_irq: *virtual_timer_irq,
+        physical_irq: physical_timer_irq,
+        virtual_irq: virtual_timer_irq,
         pmu_hz: clock_frequency(pmu_clock_id)?,
         implementation: Some(aprofile::CortexA53 {
             cores: affinities.len(),
