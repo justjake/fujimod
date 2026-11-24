@@ -9,6 +9,10 @@
     "kind": "loader"
   },
   "execution": null,
+  "dram_address_space": {
+    "limit_bytes": 4026531840,
+    "basis": "The X-T4 2.12 still memory plan places its shooting buffer pool at 0x2023a000..0xf0000000, so the software-visible DRAM space ends at 0xf0000000; the installed capacity is not measured."
+  },
   "inputs": {
     "kind": "xp4",
     "ticks_per_second": 54000000,
