@@ -50,7 +50,9 @@ const WORDS: [u64; 21] = [
 /// bits 15:0. The driver polls the acknowledge 50 times without a timeout and
 /// never branches on a PHY value; registers start at zero and the acknowledge
 /// follows at once (a model choice). The X-T20 2.11 start-up never sets these
-/// strobes or reads +0x120.
+/// strobes or reads +0x120. GFX 50R 3.11 0x186c5c4..0x186c710 runs the same
+/// port and waits without a timeout for the acknowledge to rise after each
+/// strobe and to fall after it drops the strobe.
 const PHY_PORT: u64 = 0x110;
 const PHY_STATUS: u64 = 0x120;
 const PHY_ADDRESS_STROBE: u32 = 1 << 8;
@@ -450,6 +452,32 @@ mod tests {
         let mut cx = h.cx();
         gates.write(&mut cx, BASE + 0x120, 4, 1);
         assert!(cx.is_unmodeled());
+    }
+
+    #[test]
+    fn usb3_phy_port_follows_the_gfx50r_handshake() {
+        let mut gates = Gates::new(BASE).unwrap();
+        let mut h = TestHost::new();
+        let ack = |g: &mut Gates, h: &mut TestHost| read(g, h, BASE + 0x120) >> 16 & 1;
+        // 0x186c5d4/0x186c5e0: payload 0x1006, then bit 8; 0x186c5f0 waits for 1.
+        write(&mut gates, &mut h, BASE + 0x110, 0x401800);
+        write(&mut gates, &mut h, BASE + 0x110, 0x401900);
+        assert_eq!(ack(&mut gates, &mut h), 1);
+        // 0x186c620 clears the payload; 0x186c634 masks with 0xfc0002ff, which
+        // drops bit 8; 0x186c640 waits for 0.
+        write(&mut gates, &mut h, BASE + 0x110, 0x100);
+        assert_eq!(ack(&mut gates, &mut h), 1);
+        write(&mut gates, &mut h, BASE + 0x110, 0);
+        assert_eq!(ack(&mut gates, &mut h), 0);
+        // 0x186c668 sets bit 26 and waits for 1; 0x186c6ac clears it and waits for 0.
+        write(&mut gates, &mut h, BASE + 0x110, 1 << 26);
+        assert_eq!(ack(&mut gates, &mut h), 1);
+        write(&mut gates, &mut h, BASE + 0x110, 0);
+        assert_eq!(ack(&mut gates, &mut h), 0);
+        // 0x186c6f8: the next address phase raises bit 8 again.
+        write(&mut gates, &mut h, BASE + 0x110, 0x401800);
+        write(&mut gates, &mut h, BASE + 0x110, 0x401900);
+        assert_eq!(ack(&mut gates, &mut h), 1);
     }
 
     #[test]
