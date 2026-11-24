@@ -258,3 +258,28 @@ def test_onto_drops_commits_of_a_stacked_base_that_landed_by_rebase(
     )
     assert run("git", "rev-list", "--count", "origin/main..HEAD", cwd=shared).strip() == "1"
     assert run("git", "rev-parse", "someone/stacked", cwd=remote).strip() == rebased.head
+
+
+def test_onto_drops_a_landed_base_series_that_rewrote_its_own_lines(
+    repos: tuple[Path, Path, Path],
+) -> None:
+    remote, shared, other = repos
+    run("git", "switch", "-q", "-c", "someone/base", cwd=shared)
+    for content in ("first\n", "second\n"):
+        (shared / "b.txt").write_text(content)
+        run("git", "commit", "-qam", f"base {content.strip()}", cwd=shared)
+    run("git", "switch", "-q", "-c", "someone/stacked", cwd=shared)
+    (shared / "gone.txt").write_text("stacked\n")
+    run("git", "add", "gone.txt", cwd=shared)
+    run("git", "commit", "-qm", "stacked change", cwd=shared)
+    # The series lands by rebase. Replaying its first commit onto the second's
+    # result would conflict; the patch is already upstream, so it is dropped.
+    push(other, {"a.txt": "one\ntwo\nthree\nfour\nFIVE\n"})
+    push(other, {"b.txt": "first\n"})
+    push(other, {"b.txt": "second\n"})
+    rebased = rebase(Repository(shared), "main")
+    assert (rebased.replayed, rebased.dropped) == (1, 2)
+    assert run("git", "log", "--format=%s", "origin/main..HEAD", cwd=shared).strip() == (
+        "stacked change"
+    )
+    assert run("git", "rev-parse", "someone/stacked", cwd=remote).strip() == rebased.head
