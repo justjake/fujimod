@@ -22,6 +22,152 @@
     ],
     "basis": "Filter engine of X-T3 5.11, driver 0x1dba99c..0x1dbb344. Its open registers the handler 0x1dba954 on interrupt row 0x45 of table 0x13e6454 ({0x7f, 0xd0, 1, 1}: line 127). 0x1dbb1d4 writes the source and destination memory types at 0xfff4a710. It prepares the face detection picture and runs the still step TCUBEPR; the stock still capture does not reach it. The 2 ms run time at 54 MHz is a stand-in."
   },
+  "registers": [
+    {
+      "name": "control",
+      "offset": 0,
+      "width_bytes": 4,
+      "write_mask": 1,
+      "access": "read-write",
+      "fields": [
+        {
+          "name": "stopped",
+          "bit": 0,
+          "width_bits": 1
+        }
+      ]
+    },
+    {
+      "name": "start",
+      "offset": 4,
+      "width_bytes": 4,
+      "write_mask": 1,
+      "access": "read-write",
+      "fields": [
+        {
+          "name": "start",
+          "bit": 0,
+          "width_bits": 1
+        }
+      ]
+    },
+    {
+      "name": "word-0008",
+      "offset": 8,
+      "width_bytes": 4,
+      "write_mask": 69905,
+      "access": "read-write"
+    },
+    {
+      "name": "word-0010",
+      "offset": 16,
+      "width_bytes": 4,
+      "write_mask": 4294967288,
+      "access": "read-write"
+    },
+    {
+      "name": "word-0014",
+      "offset": 20,
+      "width_bytes": 4,
+      "write_mask": 32767,
+      "access": "read-write"
+    },
+    {
+      "name": "word-0018",
+      "offset": 24,
+      "width_bytes": 4,
+      "write_mask": 1073692671,
+      "access": "read-write"
+    },
+    {
+      "name": "word-0020",
+      "offset": 32,
+      "width_bytes": 4,
+      "write_mask": 4294967288,
+      "access": "read-write"
+    },
+    {
+      "name": "word-0024",
+      "offset": 36,
+      "width_bytes": 4,
+      "write_mask": 32767,
+      "access": "read-write"
+    },
+    {
+      "name": "word-0028",
+      "offset": 40,
+      "width_bytes": 4,
+      "write_mask": 1023,
+      "access": "read-write"
+    },
+    {
+      "name": "word-0030",
+      "offset": 48,
+      "width_bytes": 4,
+      "write_mask": 8355711,
+      "access": "read-write"
+    },
+    {
+      "name": "word-0034",
+      "offset": 52,
+      "width_bytes": 4,
+      "write_mask": 4294967295,
+      "access": "read-write"
+    },
+    {
+      "name": "word-0038",
+      "offset": 56,
+      "width_bytes": 4,
+      "write_mask": 1023,
+      "access": "read-write"
+    },
+    {
+      "name": "word-003c",
+      "offset": 60,
+      "width_bytes": 4,
+      "write_mask": 2550077439,
+      "access": "read-write"
+    },
+    {
+      "name": "status",
+      "offset": 64,
+      "width_bytes": 4,
+      "access": "read-only",
+      "fields": [
+        {
+          "name": "idle-0",
+          "bit": 0,
+          "width_bits": 1
+        },
+        {
+          "name": "idle-16",
+          "bit": 16,
+          "width_bits": 1
+        }
+      ]
+    },
+    {
+      "name": "acknowledge",
+      "offset": 68,
+      "width_bytes": 4,
+      "write_mask": 1,
+      "access": "read-write",
+      "fields": [
+        {
+          "name": "finished",
+          "bit": 0,
+          "width_bits": 1
+        }
+      ]
+    },
+    {
+      "name": "word-0048",
+      "offset": 72,
+      "width_bytes": 4,
+      "write_mask": 16711935,
+      "access": "read-write"
+    }
+  ],
   "evidence": [
     {
       "kind": "located",

@@ -5,6 +5,392 @@
   "base": 4294164736,
   "size": 256,
   "kind": "timer",
+  "registers": [
+    {
+      "name": "channel-0-count",
+      "offset": 0,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "channel-0-reload",
+      "offset": 4,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "word-0008",
+      "offset": 8,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "word-000c",
+      "offset": 12,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "channel-1-count",
+      "offset": 16,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "channel-1-reload",
+      "offset": 20,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "word-0018",
+      "offset": 24,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "word-001c",
+      "offset": 28,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "channel-2-count",
+      "offset": 32,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "channel-2-reload",
+      "offset": 36,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "word-0028",
+      "offset": 40,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "word-002c",
+      "offset": 44,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "channel-3-count",
+      "offset": 48,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "channel-3-reload",
+      "offset": 52,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "word-0038",
+      "offset": 56,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "word-003c",
+      "offset": 60,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "channel-4-count",
+      "offset": 64,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "channel-4-reload",
+      "offset": 68,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "word-0048",
+      "offset": 72,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "word-004c",
+      "offset": 76,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "channel-5-count",
+      "offset": 80,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "channel-5-reload",
+      "offset": 84,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "word-0058",
+      "offset": 88,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "word-005c",
+      "offset": 92,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "channel-6-count",
+      "offset": 96,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "channel-6-reload",
+      "offset": 100,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "word-0068",
+      "offset": 104,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "word-006c",
+      "offset": 108,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "channel-7-count",
+      "offset": 112,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "channel-7-reload",
+      "offset": 116,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "word-0078",
+      "offset": 120,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "word-007c",
+      "offset": 124,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "channel-8-count",
+      "offset": 128,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "channel-8-reload",
+      "offset": 132,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "word-0088",
+      "offset": 136,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "word-008c",
+      "offset": 140,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "channel-9-count",
+      "offset": 144,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "channel-9-reload",
+      "offset": 148,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "word-0098",
+      "offset": 152,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "word-009c",
+      "offset": 156,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "channel-10-count",
+      "offset": 160,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "channel-10-reload",
+      "offset": 164,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "word-00a8",
+      "offset": 168,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "word-00ac",
+      "offset": 172,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "channel-11-count",
+      "offset": 176,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "channel-11-reload",
+      "offset": 180,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "word-00b8",
+      "offset": 184,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "word-00bc",
+      "offset": 188,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "channel-12-count",
+      "offset": 192,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "channel-12-reload",
+      "offset": 196,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "word-00c8",
+      "offset": 200,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "word-00cc",
+      "offset": 204,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "channel-13-count",
+      "offset": 208,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "channel-13-reload",
+      "offset": 212,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "word-00d8",
+      "offset": 216,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "word-00dc",
+      "offset": 220,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "channel-14-count",
+      "offset": 224,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "channel-14-reload",
+      "offset": 228,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "word-00e8",
+      "offset": 232,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "word-00ec",
+      "offset": 236,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "channel-15-count",
+      "offset": 240,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "channel-15-reload",
+      "offset": 244,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "word-00f8",
+      "offset": 248,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "word-00fc",
+      "offset": 252,
+      "width_bytes": 4,
+      "access": "read-write"
+    }
+  ],
   "evidence": [
     {
       "kind": "located",

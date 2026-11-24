@@ -24,22 +24,293 @@
   },
   "registers": [
     {
-      "name": "parameter-page-1000",
-      "offset": 4096,
+      "name": "control",
+      "offset": 0,
       "width_bytes": 4,
+      "write_mask": 0,
       "access": "read-write"
     },
     {
-      "name": "parameter-page-2000",
-      "offset": 8192,
+      "name": "start",
+      "offset": 4,
       "width_bytes": 4,
+      "write_mask": 1,
+      "access": "read-write",
+      "fields": [
+        {
+          "name": "start",
+          "bit": 0,
+          "width_bits": 1
+        }
+      ]
+    },
+    {
+      "name": "word-0008",
+      "offset": 8,
+      "width_bytes": 4,
+      "write_mask": 8335639,
       "access": "read-write"
     },
     {
-      "name": "parameter-page-3000",
-      "offset": 12288,
+      "name": "word-000c",
+      "offset": 12,
       "width_bytes": 4,
+      "write_mask": 4294967295,
       "access": "read-write"
+    },
+    {
+      "name": "word-0010",
+      "offset": 16,
+      "width_bytes": 4,
+      "write_mask": 3,
+      "access": "read-write"
+    },
+    {
+      "name": "word-0014",
+      "offset": 20,
+      "width_bytes": 4,
+      "write_mask": 32767,
+      "access": "read-write"
+    },
+    {
+      "name": "word-0018",
+      "offset": 24,
+      "width_bytes": 4,
+      "write_mask": 1073692671,
+      "access": "read-write"
+    },
+    {
+      "name": "word-001c",
+      "offset": 28,
+      "width_bytes": 4,
+      "write_mask": 1073692671,
+      "access": "read-write"
+    },
+    {
+      "name": "word-0020",
+      "offset": 32,
+      "width_bytes": 4,
+      "write_mask": 16383,
+      "access": "read-write"
+    },
+    {
+      "name": "word-0024",
+      "offset": 36,
+      "width_bytes": 4,
+      "write_mask": 1073678335,
+      "access": "read-write"
+    },
+    {
+      "name": "word-0028",
+      "offset": 40,
+      "width_bytes": 4,
+      "write_mask": 33489407,
+      "access": "read-write"
+    },
+    {
+      "name": "word-002c",
+      "offset": 44,
+      "width_bytes": 4,
+      "write_mask": 33489407,
+      "access": "read-write"
+    },
+    {
+      "name": "word-0030",
+      "offset": 48,
+      "width_bytes": 4,
+      "write_mask": 3,
+      "access": "read-write"
+    },
+    {
+      "name": "word-0034",
+      "offset": 52,
+      "width_bytes": 4,
+      "write_mask": 33489407,
+      "access": "read-write"
+    },
+    {
+      "name": "word-0038",
+      "offset": 56,
+      "width_bytes": 4,
+      "write_mask": 3,
+      "access": "read-write"
+    },
+    {
+      "name": "word-003c",
+      "offset": 60,
+      "width_bytes": 4,
+      "write_mask": 4294967295,
+      "access": "read-write"
+    },
+    {
+      "name": "word-0040",
+      "offset": 64,
+      "width_bytes": 4,
+      "write_mask": 3,
+      "access": "read-write"
+    },
+    {
+      "name": "word-0044",
+      "offset": 68,
+      "width_bytes": 4,
+      "write_mask": 4294967295,
+      "access": "read-write"
+    },
+    {
+      "name": "word-0048",
+      "offset": 72,
+      "width_bytes": 4,
+      "write_mask": 3,
+      "access": "read-write"
+    },
+    {
+      "name": "word-004c",
+      "offset": 76,
+      "width_bytes": 4,
+      "write_mask": 65535,
+      "access": "read-write"
+    },
+    {
+      "name": "word-0050",
+      "offset": 80,
+      "width_bytes": 4,
+      "write_mask": 1073692671,
+      "access": "read-write"
+    },
+    {
+      "name": "word-0054",
+      "offset": 84,
+      "width_bytes": 4,
+      "write_mask": 1073692671,
+      "access": "read-write"
+    },
+    {
+      "name": "word-0058",
+      "offset": 88,
+      "width_bytes": 4,
+      "write_mask": 16383,
+      "access": "read-write"
+    },
+    {
+      "name": "word-005c",
+      "offset": 92,
+      "width_bytes": 4,
+      "write_mask": 1073678335,
+      "access": "read-write"
+    },
+    {
+      "name": "word-0060",
+      "offset": 96,
+      "width_bytes": 4,
+      "write_mask": 33489407,
+      "access": "read-write"
+    },
+    {
+      "name": "word-0064",
+      "offset": 100,
+      "width_bytes": 4,
+      "write_mask": 33489407,
+      "access": "read-write"
+    },
+    {
+      "name": "word-0068",
+      "offset": 104,
+      "width_bytes": 4,
+      "write_mask": 511,
+      "access": "read-write"
+    },
+    {
+      "name": "word-006c",
+      "offset": 108,
+      "width_bytes": 4,
+      "write_mask": 65539,
+      "access": "read-write"
+    },
+    {
+      "name": "word-0070",
+      "offset": 112,
+      "width_bytes": 4,
+      "write_mask": 4294967295,
+      "access": "read-write"
+    },
+    {
+      "name": "word-0074",
+      "offset": 116,
+      "width_bytes": 4,
+      "write_mask": 3,
+      "access": "read-write"
+    },
+    {
+      "name": "word-0078",
+      "offset": 120,
+      "width_bytes": 4,
+      "write_mask": 4294967295,
+      "access": "read-write"
+    },
+    {
+      "name": "word-007c",
+      "offset": 124,
+      "width_bytes": 4,
+      "write_mask": 3,
+      "access": "read-write"
+    },
+    {
+      "name": "word-0080",
+      "offset": 128,
+      "width_bytes": 4,
+      "write_mask": 65535,
+      "access": "read-write"
+    },
+    {
+      "name": "word-0084",
+      "offset": 132,
+      "width_bytes": 4,
+      "write_mask": 33489407,
+      "access": "read-write"
+    },
+    {
+      "name": "word-0088",
+      "offset": 136,
+      "width_bytes": 4,
+      "write_mask": 17301503,
+      "access": "read-write"
+    },
+    {
+      "name": "word-008c",
+      "offset": 140,
+      "width_bytes": 4,
+      "write_mask": 17301503,
+      "access": "read-write"
+    },
+    {
+      "name": "word-0090",
+      "offset": 144,
+      "width_bytes": 4,
+      "write_mask": 17301503,
+      "access": "read-write"
+    },
+    {
+      "name": "status",
+      "offset": 148,
+      "width_bytes": 4,
+      "access": "read-only",
+      "fields": [
+        {
+          "name": "idle-0",
+          "bit": 0,
+          "width_bits": 1
+        },
+        {
+          "name": "idle-4",
+          "bit": 4,
+          "width_bits": 1
+        },
+        {
+          "name": "idle-8",
+          "bit": 8,
+          "width_bits": 1
+        }
+      ]
     },
     {
       "name": "tone-page",
@@ -48,10 +319,1163 @@
       "access": "read-write"
     },
     {
+      "name": "tone-channel-gains-rg",
+      "offset": 16520,
+      "width_bytes": 4,
+      "write_mask": 4294967295,
+      "access": "read-write",
+      "fields": [
+        {
+          "name": "r-gain",
+          "bit": 0,
+          "width_bits": 16
+        },
+        {
+          "name": "g-gain",
+          "bit": 16,
+          "width_bits": 16
+        }
+      ]
+    },
+    {
+      "name": "tone-channel-gain-b",
+      "offset": 16524,
+      "width_bytes": 4,
+      "write_mask": 65535,
+      "access": "read-write",
+      "fields": [
+        {
+          "name": "b-gain",
+          "bit": 0,
+          "width_bits": 16
+        }
+      ]
+    },
+    {
+      "name": "tone-matrix-row-0-low",
+      "offset": 16900,
+      "width_bytes": 4,
+      "write_mask": 1073692671,
+      "access": "read-write",
+      "fields": [
+        {
+          "name": "column-0",
+          "bit": 0,
+          "width_bits": 13
+        },
+        {
+          "name": "column-1",
+          "bit": 16,
+          "width_bits": 13
+        }
+      ]
+    },
+    {
+      "name": "tone-matrix-row-0-high",
+      "offset": 16904,
+      "width_bytes": 4,
+      "write_mask": 1073692671,
+      "access": "read-write",
+      "fields": [
+        {
+          "name": "column-2",
+          "bit": 0,
+          "width_bits": 13
+        }
+      ]
+    },
+    {
+      "name": "tone-matrix-row-1-low",
+      "offset": 16908,
+      "width_bytes": 4,
+      "write_mask": 1073692671,
+      "access": "read-write",
+      "fields": [
+        {
+          "name": "column-0",
+          "bit": 0,
+          "width_bits": 13
+        },
+        {
+          "name": "column-1",
+          "bit": 16,
+          "width_bits": 13
+        }
+      ]
+    },
+    {
+      "name": "tone-matrix-row-1-high",
+      "offset": 16912,
+      "width_bytes": 4,
+      "write_mask": 1073692671,
+      "access": "read-write",
+      "fields": [
+        {
+          "name": "column-2",
+          "bit": 0,
+          "width_bits": 13
+        }
+      ]
+    },
+    {
+      "name": "tone-matrix-row-2-low",
+      "offset": 16916,
+      "width_bytes": 4,
+      "write_mask": 1073692671,
+      "access": "read-write",
+      "fields": [
+        {
+          "name": "column-0",
+          "bit": 0,
+          "width_bits": 13
+        },
+        {
+          "name": "column-1",
+          "bit": 16,
+          "width_bits": 13
+        }
+      ]
+    },
+    {
+      "name": "tone-matrix-row-2-high",
+      "offset": 16920,
+      "width_bytes": 4,
+      "write_mask": 1073692671,
+      "access": "read-write",
+      "fields": [
+        {
+          "name": "column-2",
+          "bit": 0,
+          "width_bits": 13
+        }
+      ]
+    },
+    {
+      "name": "tone-segment-widths-0",
+      "offset": 16924,
+      "width_bytes": 4,
+      "write_mask": 4294967295,
+      "access": "read-write"
+    },
+    {
+      "name": "tone-segment-widths-1",
+      "offset": 16928,
+      "width_bytes": 4,
+      "write_mask": 65535,
+      "access": "read-write"
+    },
+    {
+      "name": "tone-curve-0-00",
+      "offset": 16932,
+      "width_bytes": 4,
+      "write_mask": 1073692671,
+      "access": "read-write",
+      "fields": [
+        {
+          "name": "point-even",
+          "bit": 0,
+          "width_bits": 14
+        },
+        {
+          "name": "point-odd",
+          "bit": 16,
+          "width_bits": 14
+        }
+      ]
+    },
+    {
+      "name": "tone-curve-0-01",
+      "offset": 16936,
+      "width_bytes": 4,
+      "write_mask": 1073692671,
+      "access": "read-write",
+      "fields": [
+        {
+          "name": "point-even",
+          "bit": 0,
+          "width_bits": 14
+        },
+        {
+          "name": "point-odd",
+          "bit": 16,
+          "width_bits": 14
+        }
+      ]
+    },
+    {
+      "name": "tone-curve-0-02",
+      "offset": 16940,
+      "width_bytes": 4,
+      "write_mask": 1073692671,
+      "access": "read-write",
+      "fields": [
+        {
+          "name": "point-even",
+          "bit": 0,
+          "width_bits": 14
+        },
+        {
+          "name": "point-odd",
+          "bit": 16,
+          "width_bits": 14
+        }
+      ]
+    },
+    {
+      "name": "tone-curve-0-03",
+      "offset": 16944,
+      "width_bytes": 4,
+      "write_mask": 1073692671,
+      "access": "read-write",
+      "fields": [
+        {
+          "name": "point-even",
+          "bit": 0,
+          "width_bits": 14
+        },
+        {
+          "name": "point-odd",
+          "bit": 16,
+          "width_bits": 14
+        }
+      ]
+    },
+    {
+      "name": "tone-curve-0-04",
+      "offset": 16948,
+      "width_bytes": 4,
+      "write_mask": 1073692671,
+      "access": "read-write",
+      "fields": [
+        {
+          "name": "point-even",
+          "bit": 0,
+          "width_bits": 14
+        },
+        {
+          "name": "point-odd",
+          "bit": 16,
+          "width_bits": 14
+        }
+      ]
+    },
+    {
+      "name": "tone-curve-0-05",
+      "offset": 16952,
+      "width_bytes": 4,
+      "write_mask": 1073692671,
+      "access": "read-write",
+      "fields": [
+        {
+          "name": "point-even",
+          "bit": 0,
+          "width_bits": 14
+        },
+        {
+          "name": "point-odd",
+          "bit": 16,
+          "width_bits": 14
+        }
+      ]
+    },
+    {
+      "name": "tone-curve-0-06",
+      "offset": 16956,
+      "width_bytes": 4,
+      "write_mask": 1073692671,
+      "access": "read-write",
+      "fields": [
+        {
+          "name": "point-even",
+          "bit": 0,
+          "width_bits": 14
+        },
+        {
+          "name": "point-odd",
+          "bit": 16,
+          "width_bits": 14
+        }
+      ]
+    },
+    {
+      "name": "tone-curve-0-07",
+      "offset": 16960,
+      "width_bytes": 4,
+      "write_mask": 1073692671,
+      "access": "read-write",
+      "fields": [
+        {
+          "name": "point-even",
+          "bit": 0,
+          "width_bits": 14
+        },
+        {
+          "name": "point-odd",
+          "bit": 16,
+          "width_bits": 14
+        }
+      ]
+    },
+    {
+      "name": "tone-curve-0-08",
+      "offset": 16964,
+      "width_bytes": 4,
+      "write_mask": 1073692671,
+      "access": "read-write",
+      "fields": [
+        {
+          "name": "point-even",
+          "bit": 0,
+          "width_bits": 14
+        },
+        {
+          "name": "point-odd",
+          "bit": 16,
+          "width_bits": 14
+        }
+      ]
+    },
+    {
+      "name": "tone-curve-0-09",
+      "offset": 16968,
+      "width_bytes": 4,
+      "write_mask": 1073692671,
+      "access": "read-write",
+      "fields": [
+        {
+          "name": "point-even",
+          "bit": 0,
+          "width_bits": 14
+        },
+        {
+          "name": "point-odd",
+          "bit": 16,
+          "width_bits": 14
+        }
+      ]
+    },
+    {
+      "name": "tone-curve-0-10",
+      "offset": 16972,
+      "width_bytes": 4,
+      "write_mask": 1073692671,
+      "access": "read-write",
+      "fields": [
+        {
+          "name": "point-even",
+          "bit": 0,
+          "width_bits": 14
+        },
+        {
+          "name": "point-odd",
+          "bit": 16,
+          "width_bits": 14
+        }
+      ]
+    },
+    {
+      "name": "tone-curve-0-11",
+      "offset": 16976,
+      "width_bytes": 4,
+      "write_mask": 1073692671,
+      "access": "read-write",
+      "fields": [
+        {
+          "name": "point-even",
+          "bit": 0,
+          "width_bits": 14
+        },
+        {
+          "name": "point-odd",
+          "bit": 16,
+          "width_bits": 14
+        }
+      ]
+    },
+    {
+      "name": "tone-curve-0-12",
+      "offset": 16980,
+      "width_bytes": 4,
+      "write_mask": 1073692671,
+      "access": "read-write",
+      "fields": [
+        {
+          "name": "point-even",
+          "bit": 0,
+          "width_bits": 14
+        },
+        {
+          "name": "point-odd",
+          "bit": 16,
+          "width_bits": 14
+        }
+      ]
+    },
+    {
+      "name": "tone-curve-0-13",
+      "offset": 16984,
+      "width_bytes": 4,
+      "write_mask": 1073692671,
+      "access": "read-write",
+      "fields": [
+        {
+          "name": "point-even",
+          "bit": 0,
+          "width_bits": 14
+        },
+        {
+          "name": "point-odd",
+          "bit": 16,
+          "width_bits": 14
+        }
+      ]
+    },
+    {
+      "name": "tone-curve-0-14",
+      "offset": 16988,
+      "width_bytes": 4,
+      "write_mask": 1073692671,
+      "access": "read-write",
+      "fields": [
+        {
+          "name": "point-even",
+          "bit": 0,
+          "width_bits": 14
+        },
+        {
+          "name": "point-odd",
+          "bit": 16,
+          "width_bits": 14
+        }
+      ]
+    },
+    {
+      "name": "tone-curve-0-15",
+      "offset": 16992,
+      "width_bytes": 4,
+      "write_mask": 1073692671,
+      "access": "read-write",
+      "fields": [
+        {
+          "name": "point-even",
+          "bit": 0,
+          "width_bits": 14
+        },
+        {
+          "name": "point-odd",
+          "bit": 16,
+          "width_bits": 14
+        }
+      ]
+    },
+    {
+      "name": "tone-curve-1-00",
+      "offset": 16996,
+      "width_bytes": 4,
+      "write_mask": 1073692671,
+      "access": "read-write",
+      "fields": [
+        {
+          "name": "point-even",
+          "bit": 0,
+          "width_bits": 14
+        },
+        {
+          "name": "point-odd",
+          "bit": 16,
+          "width_bits": 14
+        }
+      ]
+    },
+    {
+      "name": "tone-curve-1-01",
+      "offset": 17000,
+      "width_bytes": 4,
+      "write_mask": 1073692671,
+      "access": "read-write",
+      "fields": [
+        {
+          "name": "point-even",
+          "bit": 0,
+          "width_bits": 14
+        },
+        {
+          "name": "point-odd",
+          "bit": 16,
+          "width_bits": 14
+        }
+      ]
+    },
+    {
+      "name": "tone-curve-1-02",
+      "offset": 17004,
+      "width_bytes": 4,
+      "write_mask": 1073692671,
+      "access": "read-write",
+      "fields": [
+        {
+          "name": "point-even",
+          "bit": 0,
+          "width_bits": 14
+        },
+        {
+          "name": "point-odd",
+          "bit": 16,
+          "width_bits": 14
+        }
+      ]
+    },
+    {
+      "name": "tone-curve-1-03",
+      "offset": 17008,
+      "width_bytes": 4,
+      "write_mask": 1073692671,
+      "access": "read-write",
+      "fields": [
+        {
+          "name": "point-even",
+          "bit": 0,
+          "width_bits": 14
+        },
+        {
+          "name": "point-odd",
+          "bit": 16,
+          "width_bits": 14
+        }
+      ]
+    },
+    {
+      "name": "tone-curve-1-04",
+      "offset": 17012,
+      "width_bytes": 4,
+      "write_mask": 1073692671,
+      "access": "read-write",
+      "fields": [
+        {
+          "name": "point-even",
+          "bit": 0,
+          "width_bits": 14
+        },
+        {
+          "name": "point-odd",
+          "bit": 16,
+          "width_bits": 14
+        }
+      ]
+    },
+    {
+      "name": "tone-curve-1-05",
+      "offset": 17016,
+      "width_bytes": 4,
+      "write_mask": 1073692671,
+      "access": "read-write",
+      "fields": [
+        {
+          "name": "point-even",
+          "bit": 0,
+          "width_bits": 14
+        },
+        {
+          "name": "point-odd",
+          "bit": 16,
+          "width_bits": 14
+        }
+      ]
+    },
+    {
+      "name": "tone-curve-1-06",
+      "offset": 17020,
+      "width_bytes": 4,
+      "write_mask": 1073692671,
+      "access": "read-write",
+      "fields": [
+        {
+          "name": "point-even",
+          "bit": 0,
+          "width_bits": 14
+        },
+        {
+          "name": "point-odd",
+          "bit": 16,
+          "width_bits": 14
+        }
+      ]
+    },
+    {
+      "name": "tone-curve-1-07",
+      "offset": 17024,
+      "width_bytes": 4,
+      "write_mask": 1073692671,
+      "access": "read-write",
+      "fields": [
+        {
+          "name": "point-even",
+          "bit": 0,
+          "width_bits": 14
+        },
+        {
+          "name": "point-odd",
+          "bit": 16,
+          "width_bits": 14
+        }
+      ]
+    },
+    {
+      "name": "tone-curve-1-08",
+      "offset": 17028,
+      "width_bytes": 4,
+      "write_mask": 1073692671,
+      "access": "read-write",
+      "fields": [
+        {
+          "name": "point-even",
+          "bit": 0,
+          "width_bits": 14
+        },
+        {
+          "name": "point-odd",
+          "bit": 16,
+          "width_bits": 14
+        }
+      ]
+    },
+    {
+      "name": "tone-curve-1-09",
+      "offset": 17032,
+      "width_bytes": 4,
+      "write_mask": 1073692671,
+      "access": "read-write",
+      "fields": [
+        {
+          "name": "point-even",
+          "bit": 0,
+          "width_bits": 14
+        },
+        {
+          "name": "point-odd",
+          "bit": 16,
+          "width_bits": 14
+        }
+      ]
+    },
+    {
+      "name": "tone-curve-1-10",
+      "offset": 17036,
+      "width_bytes": 4,
+      "write_mask": 1073692671,
+      "access": "read-write",
+      "fields": [
+        {
+          "name": "point-even",
+          "bit": 0,
+          "width_bits": 14
+        },
+        {
+          "name": "point-odd",
+          "bit": 16,
+          "width_bits": 14
+        }
+      ]
+    },
+    {
+      "name": "tone-curve-1-11",
+      "offset": 17040,
+      "width_bytes": 4,
+      "write_mask": 1073692671,
+      "access": "read-write",
+      "fields": [
+        {
+          "name": "point-even",
+          "bit": 0,
+          "width_bits": 14
+        },
+        {
+          "name": "point-odd",
+          "bit": 16,
+          "width_bits": 14
+        }
+      ]
+    },
+    {
+      "name": "tone-curve-1-12",
+      "offset": 17044,
+      "width_bytes": 4,
+      "write_mask": 1073692671,
+      "access": "read-write",
+      "fields": [
+        {
+          "name": "point-even",
+          "bit": 0,
+          "width_bits": 14
+        },
+        {
+          "name": "point-odd",
+          "bit": 16,
+          "width_bits": 14
+        }
+      ]
+    },
+    {
+      "name": "tone-curve-1-13",
+      "offset": 17048,
+      "width_bytes": 4,
+      "write_mask": 1073692671,
+      "access": "read-write",
+      "fields": [
+        {
+          "name": "point-even",
+          "bit": 0,
+          "width_bits": 14
+        },
+        {
+          "name": "point-odd",
+          "bit": 16,
+          "width_bits": 14
+        }
+      ]
+    },
+    {
+      "name": "tone-curve-1-14",
+      "offset": 17052,
+      "width_bytes": 4,
+      "write_mask": 1073692671,
+      "access": "read-write",
+      "fields": [
+        {
+          "name": "point-even",
+          "bit": 0,
+          "width_bits": 14
+        },
+        {
+          "name": "point-odd",
+          "bit": 16,
+          "width_bits": 14
+        }
+      ]
+    },
+    {
+      "name": "tone-curve-1-15",
+      "offset": 17056,
+      "width_bytes": 4,
+      "write_mask": 1073692671,
+      "access": "read-write",
+      "fields": [
+        {
+          "name": "point-even",
+          "bit": 0,
+          "width_bits": 14
+        },
+        {
+          "name": "point-odd",
+          "bit": 16,
+          "width_bits": 14
+        }
+      ]
+    },
+    {
+      "name": "tone-curve-2-00",
+      "offset": 17060,
+      "width_bytes": 4,
+      "write_mask": 1073692671,
+      "access": "read-write",
+      "fields": [
+        {
+          "name": "point-even",
+          "bit": 0,
+          "width_bits": 14
+        },
+        {
+          "name": "point-odd",
+          "bit": 16,
+          "width_bits": 14
+        }
+      ]
+    },
+    {
+      "name": "tone-curve-2-01",
+      "offset": 17064,
+      "width_bytes": 4,
+      "write_mask": 1073692671,
+      "access": "read-write",
+      "fields": [
+        {
+          "name": "point-even",
+          "bit": 0,
+          "width_bits": 14
+        },
+        {
+          "name": "point-odd",
+          "bit": 16,
+          "width_bits": 14
+        }
+      ]
+    },
+    {
+      "name": "tone-curve-2-02",
+      "offset": 17068,
+      "width_bytes": 4,
+      "write_mask": 1073692671,
+      "access": "read-write",
+      "fields": [
+        {
+          "name": "point-even",
+          "bit": 0,
+          "width_bits": 14
+        },
+        {
+          "name": "point-odd",
+          "bit": 16,
+          "width_bits": 14
+        }
+      ]
+    },
+    {
+      "name": "tone-curve-2-03",
+      "offset": 17072,
+      "width_bytes": 4,
+      "write_mask": 1073692671,
+      "access": "read-write",
+      "fields": [
+        {
+          "name": "point-even",
+          "bit": 0,
+          "width_bits": 14
+        },
+        {
+          "name": "point-odd",
+          "bit": 16,
+          "width_bits": 14
+        }
+      ]
+    },
+    {
+      "name": "tone-curve-2-04",
+      "offset": 17076,
+      "width_bytes": 4,
+      "write_mask": 1073692671,
+      "access": "read-write",
+      "fields": [
+        {
+          "name": "point-even",
+          "bit": 0,
+          "width_bits": 14
+        },
+        {
+          "name": "point-odd",
+          "bit": 16,
+          "width_bits": 14
+        }
+      ]
+    },
+    {
+      "name": "tone-curve-2-05",
+      "offset": 17080,
+      "width_bytes": 4,
+      "write_mask": 1073692671,
+      "access": "read-write",
+      "fields": [
+        {
+          "name": "point-even",
+          "bit": 0,
+          "width_bits": 14
+        },
+        {
+          "name": "point-odd",
+          "bit": 16,
+          "width_bits": 14
+        }
+      ]
+    },
+    {
+      "name": "tone-curve-2-06",
+      "offset": 17084,
+      "width_bytes": 4,
+      "write_mask": 1073692671,
+      "access": "read-write",
+      "fields": [
+        {
+          "name": "point-even",
+          "bit": 0,
+          "width_bits": 14
+        },
+        {
+          "name": "point-odd",
+          "bit": 16,
+          "width_bits": 14
+        }
+      ]
+    },
+    {
+      "name": "tone-curve-2-07",
+      "offset": 17088,
+      "width_bytes": 4,
+      "write_mask": 1073692671,
+      "access": "read-write",
+      "fields": [
+        {
+          "name": "point-even",
+          "bit": 0,
+          "width_bits": 14
+        },
+        {
+          "name": "point-odd",
+          "bit": 16,
+          "width_bits": 14
+        }
+      ]
+    },
+    {
+      "name": "tone-curve-2-08",
+      "offset": 17092,
+      "width_bytes": 4,
+      "write_mask": 1073692671,
+      "access": "read-write",
+      "fields": [
+        {
+          "name": "point-even",
+          "bit": 0,
+          "width_bits": 14
+        },
+        {
+          "name": "point-odd",
+          "bit": 16,
+          "width_bits": 14
+        }
+      ]
+    },
+    {
+      "name": "tone-curve-2-09",
+      "offset": 17096,
+      "width_bytes": 4,
+      "write_mask": 1073692671,
+      "access": "read-write",
+      "fields": [
+        {
+          "name": "point-even",
+          "bit": 0,
+          "width_bits": 14
+        },
+        {
+          "name": "point-odd",
+          "bit": 16,
+          "width_bits": 14
+        }
+      ]
+    },
+    {
+      "name": "tone-curve-2-10",
+      "offset": 17100,
+      "width_bytes": 4,
+      "write_mask": 1073692671,
+      "access": "read-write",
+      "fields": [
+        {
+          "name": "point-even",
+          "bit": 0,
+          "width_bits": 14
+        },
+        {
+          "name": "point-odd",
+          "bit": 16,
+          "width_bits": 14
+        }
+      ]
+    },
+    {
+      "name": "tone-curve-2-11",
+      "offset": 17104,
+      "width_bytes": 4,
+      "write_mask": 1073692671,
+      "access": "read-write",
+      "fields": [
+        {
+          "name": "point-even",
+          "bit": 0,
+          "width_bits": 14
+        },
+        {
+          "name": "point-odd",
+          "bit": 16,
+          "width_bits": 14
+        }
+      ]
+    },
+    {
+      "name": "tone-curve-2-12",
+      "offset": 17108,
+      "width_bytes": 4,
+      "write_mask": 1073692671,
+      "access": "read-write",
+      "fields": [
+        {
+          "name": "point-even",
+          "bit": 0,
+          "width_bits": 14
+        },
+        {
+          "name": "point-odd",
+          "bit": 16,
+          "width_bits": 14
+        }
+      ]
+    },
+    {
+      "name": "tone-curve-2-13",
+      "offset": 17112,
+      "width_bytes": 4,
+      "write_mask": 1073692671,
+      "access": "read-write",
+      "fields": [
+        {
+          "name": "point-even",
+          "bit": 0,
+          "width_bits": 14
+        },
+        {
+          "name": "point-odd",
+          "bit": 16,
+          "width_bits": 14
+        }
+      ]
+    },
+    {
+      "name": "tone-curve-2-14",
+      "offset": 17116,
+      "width_bytes": 4,
+      "write_mask": 1073692671,
+      "access": "read-write",
+      "fields": [
+        {
+          "name": "point-even",
+          "bit": 0,
+          "width_bits": 14
+        },
+        {
+          "name": "point-odd",
+          "bit": 16,
+          "width_bits": 14
+        }
+      ]
+    },
+    {
+      "name": "tone-curve-2-15",
+      "offset": 17120,
+      "width_bytes": 4,
+      "write_mask": 1073692671,
+      "access": "read-write",
+      "fields": [
+        {
+          "name": "point-even",
+          "bit": 0,
+          "width_bits": 14
+        },
+        {
+          "name": "point-odd",
+          "bit": 16,
+          "width_bits": 14
+        }
+      ]
+    },
+    {
       "name": "ycbcr-page",
       "offset": 20480,
       "width_bytes": 4,
       "access": "read-write"
+    },
+    {
+      "name": "ycbcr-matrix-0",
+      "offset": 20996,
+      "width_bytes": 4,
+      "write_mask": 1073692671,
+      "access": "read-write",
+      "fields": [
+        {
+          "name": "first",
+          "bit": 0,
+          "width_bits": 13
+        },
+        {
+          "name": "second",
+          "bit": 16,
+          "width_bits": 13
+        }
+      ]
+    },
+    {
+      "name": "ycbcr-matrix-1",
+      "offset": 21000,
+      "width_bytes": 4,
+      "write_mask": 1073692671,
+      "access": "read-write",
+      "fields": [
+        {
+          "name": "first",
+          "bit": 0,
+          "width_bits": 13
+        },
+        {
+          "name": "second",
+          "bit": 16,
+          "width_bits": 13
+        }
+      ]
+    },
+    {
+      "name": "ycbcr-matrix-2",
+      "offset": 21004,
+      "width_bytes": 4,
+      "write_mask": 1073692671,
+      "access": "read-write",
+      "fields": [
+        {
+          "name": "first",
+          "bit": 0,
+          "width_bits": 13
+        },
+        {
+          "name": "second",
+          "bit": 16,
+          "width_bits": 13
+        }
+      ]
+    },
+    {
+      "name": "ycbcr-matrix-3",
+      "offset": 21008,
+      "width_bytes": 4,
+      "write_mask": 1073692671,
+      "access": "read-write",
+      "fields": [
+        {
+          "name": "first",
+          "bit": 0,
+          "width_bits": 13
+        },
+        {
+          "name": "second",
+          "bit": 16,
+          "width_bits": 13
+        }
+      ]
+    },
+    {
+      "name": "ycbcr-matrix-4",
+      "offset": 21012,
+      "width_bytes": 4,
+      "write_mask": 1073692671,
+      "access": "read-write",
+      "fields": [
+        {
+          "name": "first",
+          "bit": 0,
+          "width_bits": 13
+        },
+        {
+          "name": "second",
+          "bit": 16,
+          "width_bits": 13
+        }
+      ]
     }
   ],
   "evidence": [

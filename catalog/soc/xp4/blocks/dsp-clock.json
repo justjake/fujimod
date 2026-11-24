@@ -5,6 +5,29 @@
   "base": 4282916864,
   "size": 8,
   "kind": "clock-controller",
+  "registers": [
+    {
+      "name": "clock-0",
+      "offset": 0,
+      "width_bytes": 4,
+      "write_mask": 65535,
+      "access": "read-write",
+      "fields": [
+        {
+          "name": "gate",
+          "bit": 5,
+          "width_bits": 1
+        }
+      ]
+    },
+    {
+      "name": "clock-1",
+      "offset": 4,
+      "width_bytes": 4,
+      "write_mask": 65535,
+      "access": "read-write"
+    }
+  ],
   "evidence": [
     {
       "kind": "located",

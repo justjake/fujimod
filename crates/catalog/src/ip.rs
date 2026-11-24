@@ -93,6 +93,9 @@ pub struct BlockRegister {
     /// Value the register holds after reset, when known.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub reset: Option<u64>,
+    /// Bits a write may set, when the register accepts only some of them.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub write_mask: Option<u64>,
     /// Accesses the register accepts.
     pub access: RegisterAccess,
     /// Named bit fields and the values they carry.
@@ -181,6 +184,12 @@ pub fn validate_register_layout(
         if bits < 64 && register.reset.is_some_and(|reset| reset >> bits != 0) {
             return Err(format!(
                 "register {} reset value exceeds its width",
+                register.name
+            ));
+        }
+        if bits < 64 && register.write_mask.is_some_and(|mask| mask >> bits != 0) {
+            return Err(format!(
+                "register {} write mask exceeds its width",
                 register.name
             ));
         }

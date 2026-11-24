@@ -78,6 +78,570 @@
     "counter_block_id": "countdown-timer-counters",
     "basis": "Control window of the XP4 sixteen-channel countdown timer bank. X-T3 5.11 kernel 0x5963c/0x59674/0x59594/0x59c80 programs it; 0x106e8b0 routes channel n through interrupt row 0x13e4f94[n] = 0x10 + n of table 0x13e6454 ({0x29 + n, 0xc0, 3, 1}). The model pulses an edge per expiry because nothing acknowledges the timer; that the line is an edge is inferred, not measured."
   },
+  "registers": [
+    {
+      "name": "enable",
+      "offset": 0,
+      "width_bytes": 4,
+      "access": "read-write",
+      "fields": [
+        {
+          "name": "channel-run",
+          "bit": 0,
+          "width_bits": 16
+        },
+        {
+          "name": "channel-change",
+          "bit": 16,
+          "width_bits": 16
+        }
+      ]
+    },
+    {
+      "name": "channel-0-control",
+      "offset": 16,
+      "width_bytes": 4,
+      "write_mask": 81951,
+      "access": "read-write",
+      "fields": [
+        {
+          "name": "mode",
+          "bit": 0,
+          "width_bits": 2
+        },
+        {
+          "name": "edges",
+          "bit": 2,
+          "width_bits": 2
+        },
+        {
+          "name": "one-shot",
+          "bit": 4,
+          "width_bits": 1
+        },
+        {
+          "name": "bit-14",
+          "bit": 14,
+          "width_bits": 1
+        },
+        {
+          "name": "interrupt-mode",
+          "bit": 16,
+          "width_bits": 1
+        }
+      ]
+    },
+    {
+      "name": "channel-1-control",
+      "offset": 20,
+      "width_bytes": 4,
+      "write_mask": 81951,
+      "access": "read-write",
+      "fields": [
+        {
+          "name": "mode",
+          "bit": 0,
+          "width_bits": 2
+        },
+        {
+          "name": "edges",
+          "bit": 2,
+          "width_bits": 2
+        },
+        {
+          "name": "one-shot",
+          "bit": 4,
+          "width_bits": 1
+        },
+        {
+          "name": "bit-14",
+          "bit": 14,
+          "width_bits": 1
+        },
+        {
+          "name": "interrupt-mode",
+          "bit": 16,
+          "width_bits": 1
+        }
+      ]
+    },
+    {
+      "name": "channel-2-control",
+      "offset": 24,
+      "width_bytes": 4,
+      "write_mask": 81951,
+      "access": "read-write",
+      "fields": [
+        {
+          "name": "mode",
+          "bit": 0,
+          "width_bits": 2
+        },
+        {
+          "name": "edges",
+          "bit": 2,
+          "width_bits": 2
+        },
+        {
+          "name": "one-shot",
+          "bit": 4,
+          "width_bits": 1
+        },
+        {
+          "name": "bit-14",
+          "bit": 14,
+          "width_bits": 1
+        },
+        {
+          "name": "interrupt-mode",
+          "bit": 16,
+          "width_bits": 1
+        }
+      ]
+    },
+    {
+      "name": "channel-3-control",
+      "offset": 28,
+      "width_bytes": 4,
+      "write_mask": 81951,
+      "access": "read-write",
+      "fields": [
+        {
+          "name": "mode",
+          "bit": 0,
+          "width_bits": 2
+        },
+        {
+          "name": "edges",
+          "bit": 2,
+          "width_bits": 2
+        },
+        {
+          "name": "one-shot",
+          "bit": 4,
+          "width_bits": 1
+        },
+        {
+          "name": "bit-14",
+          "bit": 14,
+          "width_bits": 1
+        },
+        {
+          "name": "interrupt-mode",
+          "bit": 16,
+          "width_bits": 1
+        }
+      ]
+    },
+    {
+      "name": "channel-4-control",
+      "offset": 32,
+      "width_bytes": 4,
+      "write_mask": 81951,
+      "access": "read-write",
+      "fields": [
+        {
+          "name": "mode",
+          "bit": 0,
+          "width_bits": 2
+        },
+        {
+          "name": "edges",
+          "bit": 2,
+          "width_bits": 2
+        },
+        {
+          "name": "one-shot",
+          "bit": 4,
+          "width_bits": 1
+        },
+        {
+          "name": "bit-14",
+          "bit": 14,
+          "width_bits": 1
+        },
+        {
+          "name": "interrupt-mode",
+          "bit": 16,
+          "width_bits": 1
+        }
+      ]
+    },
+    {
+      "name": "channel-5-control",
+      "offset": 36,
+      "width_bytes": 4,
+      "write_mask": 81951,
+      "access": "read-write",
+      "fields": [
+        {
+          "name": "mode",
+          "bit": 0,
+          "width_bits": 2
+        },
+        {
+          "name": "edges",
+          "bit": 2,
+          "width_bits": 2
+        },
+        {
+          "name": "one-shot",
+          "bit": 4,
+          "width_bits": 1
+        },
+        {
+          "name": "bit-14",
+          "bit": 14,
+          "width_bits": 1
+        },
+        {
+          "name": "interrupt-mode",
+          "bit": 16,
+          "width_bits": 1
+        }
+      ]
+    },
+    {
+      "name": "channel-6-control",
+      "offset": 40,
+      "width_bytes": 4,
+      "write_mask": 81951,
+      "access": "read-write",
+      "fields": [
+        {
+          "name": "mode",
+          "bit": 0,
+          "width_bits": 2
+        },
+        {
+          "name": "edges",
+          "bit": 2,
+          "width_bits": 2
+        },
+        {
+          "name": "one-shot",
+          "bit": 4,
+          "width_bits": 1
+        },
+        {
+          "name": "bit-14",
+          "bit": 14,
+          "width_bits": 1
+        },
+        {
+          "name": "interrupt-mode",
+          "bit": 16,
+          "width_bits": 1
+        }
+      ]
+    },
+    {
+      "name": "channel-7-control",
+      "offset": 44,
+      "width_bytes": 4,
+      "write_mask": 81951,
+      "access": "read-write",
+      "fields": [
+        {
+          "name": "mode",
+          "bit": 0,
+          "width_bits": 2
+        },
+        {
+          "name": "edges",
+          "bit": 2,
+          "width_bits": 2
+        },
+        {
+          "name": "one-shot",
+          "bit": 4,
+          "width_bits": 1
+        },
+        {
+          "name": "bit-14",
+          "bit": 14,
+          "width_bits": 1
+        },
+        {
+          "name": "interrupt-mode",
+          "bit": 16,
+          "width_bits": 1
+        }
+      ]
+    },
+    {
+      "name": "channel-8-control",
+      "offset": 48,
+      "width_bytes": 4,
+      "write_mask": 81951,
+      "access": "read-write",
+      "fields": [
+        {
+          "name": "mode",
+          "bit": 0,
+          "width_bits": 2
+        },
+        {
+          "name": "edges",
+          "bit": 2,
+          "width_bits": 2
+        },
+        {
+          "name": "one-shot",
+          "bit": 4,
+          "width_bits": 1
+        },
+        {
+          "name": "bit-14",
+          "bit": 14,
+          "width_bits": 1
+        },
+        {
+          "name": "interrupt-mode",
+          "bit": 16,
+          "width_bits": 1
+        }
+      ]
+    },
+    {
+      "name": "channel-9-control",
+      "offset": 52,
+      "width_bytes": 4,
+      "write_mask": 81951,
+      "access": "read-write",
+      "fields": [
+        {
+          "name": "mode",
+          "bit": 0,
+          "width_bits": 2
+        },
+        {
+          "name": "edges",
+          "bit": 2,
+          "width_bits": 2
+        },
+        {
+          "name": "one-shot",
+          "bit": 4,
+          "width_bits": 1
+        },
+        {
+          "name": "bit-14",
+          "bit": 14,
+          "width_bits": 1
+        },
+        {
+          "name": "interrupt-mode",
+          "bit": 16,
+          "width_bits": 1
+        }
+      ]
+    },
+    {
+      "name": "channel-10-control",
+      "offset": 56,
+      "width_bytes": 4,
+      "write_mask": 81951,
+      "access": "read-write",
+      "fields": [
+        {
+          "name": "mode",
+          "bit": 0,
+          "width_bits": 2
+        },
+        {
+          "name": "edges",
+          "bit": 2,
+          "width_bits": 2
+        },
+        {
+          "name": "one-shot",
+          "bit": 4,
+          "width_bits": 1
+        },
+        {
+          "name": "bit-14",
+          "bit": 14,
+          "width_bits": 1
+        },
+        {
+          "name": "interrupt-mode",
+          "bit": 16,
+          "width_bits": 1
+        }
+      ]
+    },
+    {
+      "name": "channel-11-control",
+      "offset": 60,
+      "width_bytes": 4,
+      "write_mask": 81951,
+      "access": "read-write",
+      "fields": [
+        {
+          "name": "mode",
+          "bit": 0,
+          "width_bits": 2
+        },
+        {
+          "name": "edges",
+          "bit": 2,
+          "width_bits": 2
+        },
+        {
+          "name": "one-shot",
+          "bit": 4,
+          "width_bits": 1
+        },
+        {
+          "name": "bit-14",
+          "bit": 14,
+          "width_bits": 1
+        },
+        {
+          "name": "interrupt-mode",
+          "bit": 16,
+          "width_bits": 1
+        }
+      ]
+    },
+    {
+      "name": "channel-12-control",
+      "offset": 64,
+      "width_bytes": 4,
+      "write_mask": 81951,
+      "access": "read-write",
+      "fields": [
+        {
+          "name": "mode",
+          "bit": 0,
+          "width_bits": 2
+        },
+        {
+          "name": "edges",
+          "bit": 2,
+          "width_bits": 2
+        },
+        {
+          "name": "one-shot",
+          "bit": 4,
+          "width_bits": 1
+        },
+        {
+          "name": "bit-14",
+          "bit": 14,
+          "width_bits": 1
+        },
+        {
+          "name": "interrupt-mode",
+          "bit": 16,
+          "width_bits": 1
+        }
+      ]
+    },
+    {
+      "name": "channel-13-control",
+      "offset": 68,
+      "width_bytes": 4,
+      "write_mask": 81951,
+      "access": "read-write",
+      "fields": [
+        {
+          "name": "mode",
+          "bit": 0,
+          "width_bits": 2
+        },
+        {
+          "name": "edges",
+          "bit": 2,
+          "width_bits": 2
+        },
+        {
+          "name": "one-shot",
+          "bit": 4,
+          "width_bits": 1
+        },
+        {
+          "name": "bit-14",
+          "bit": 14,
+          "width_bits": 1
+        },
+        {
+          "name": "interrupt-mode",
+          "bit": 16,
+          "width_bits": 1
+        }
+      ]
+    },
+    {
+      "name": "channel-14-control",
+      "offset": 72,
+      "width_bytes": 4,
+      "write_mask": 81951,
+      "access": "read-write",
+      "fields": [
+        {
+          "name": "mode",
+          "bit": 0,
+          "width_bits": 2
+        },
+        {
+          "name": "edges",
+          "bit": 2,
+          "width_bits": 2
+        },
+        {
+          "name": "one-shot",
+          "bit": 4,
+          "width_bits": 1
+        },
+        {
+          "name": "bit-14",
+          "bit": 14,
+          "width_bits": 1
+        },
+        {
+          "name": "interrupt-mode",
+          "bit": 16,
+          "width_bits": 1
+        }
+      ]
+    },
+    {
+      "name": "channel-15-control",
+      "offset": 76,
+      "width_bytes": 4,
+      "write_mask": 81951,
+      "access": "read-write",
+      "fields": [
+        {
+          "name": "mode",
+          "bit": 0,
+          "width_bits": 2
+        },
+        {
+          "name": "edges",
+          "bit": 2,
+          "width_bits": 2
+        },
+        {
+          "name": "one-shot",
+          "bit": 4,
+          "width_bits": 1
+        },
+        {
+          "name": "bit-14",
+          "bit": 14,
+          "width_bits": 1
+        },
+        {
+          "name": "interrupt-mode",
+          "bit": 16,
+          "width_bits": 1
+        }
+      ]
+    }
+  ],
   "evidence": [
     {
       "kind": "located",
