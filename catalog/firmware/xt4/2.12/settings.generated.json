@@ -46,9 +46,9 @@
           {
             "offset": 572,
             "bytes": [
-              2
+              8
             ],
-            "basis": "Stock UI migration commits backup version 2; this virtual profile is current."
+            "basis": "Stock UI migration commits backup version 8; this virtual profile is current."
           },
           {
             "offset": 3729,
