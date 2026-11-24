@@ -8,6 +8,10 @@ const manualPageTitle = import.meta.env.SSR
   : undefined;
 
 const pages = {
+  '/404/': {
+    title: 'Page not found · Fujimod',
+    description: 'There is no Fujimod page at this address.',
+  },
   '/': {
     title: 'Fujimod',
     description:
@@ -78,8 +82,8 @@ export function pageMetadata(path: string) {
   if (component)
     return {
       title: `${component.title} · FocalUI SDK · Fujimod`,
-      description: component.summary.replace(/\s+/g, ' ').slice(0, 160) ||
-        'FocalUI component reference.',
+      description:
+        component.summary.replace(/\s+/g, ' ').slice(0, 160) || 'FocalUI component reference.',
       canonical: siteOrigin + normalized,
     };
   if (normalized === '/docs/')

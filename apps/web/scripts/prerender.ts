@@ -19,6 +19,8 @@ export function siteRoutes(client: string) {
     ...Object.keys(textPages),
     ...manualRoutes(),
     '/docs/',
+    // Cloudflare serves 404.html for every address without a page.
+    '/404',
     `/${sdkDocsPath}/`,
     ...components.map((component) => `/${sdkDocsPath}/components/${component.slug}/`),
   ];
@@ -49,6 +51,7 @@ export async function prerender(output = 'dist') {
                 '/recovery/': 'class="shell recovery"',
                 '/device/': 'class="shell device"',
                 '/docs/': 'class="shell docs-overview"',
+                '/404': 'class="shell not-found"',
               }[route];
     if (
       !html.includes('class="site-header"') ||
