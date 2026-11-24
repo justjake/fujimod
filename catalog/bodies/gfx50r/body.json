@@ -35,14 +35,13 @@
                 ],
                 "stop_ticks": 16
               },
-              "handshake_ticks": 16666,
-              "set_bits": [],
               "clear_bits": [
                 {
                   "offset": 8192,
                   "mask": 268435456
                 }
               ],
+              "handshake_ticks": 16666,
               "scanout": {
                 "output": 0,
                 "period_ticks": 800000
@@ -64,8 +63,8 @@
                   "status_bit": 8
                 }
               ],
-              "reads_set_after_clear": true,
-              "basis": "GFX 50R 3.11 frame sync: the X-T20 law, except bit 0 of +0x00. 0xc8a530 clears it and 0x1a15668 polls it about eleven times through 0xc8a4f8; still clear, it returns 0x86 and 0x1b57db4 restarts the SETUP to REC sequence. The camera reaches REC, so the bit reads set again at once. Not measured: FF80 reads of 0xfff38000 hang the camera (lab/gfx50r-sd-blink/runs/gfx50r-frame-sync-1)."
+              "basis": "GFX 50R 3.11 frame sync: the X-T20 law, except bit 0 of +0x00. 0xc8a530 clears it and 0x1a15668 polls it about eleven times through 0xc8a4f8; still clear, it returns 0x86 and 0x1b57db4 restarts the SETUP to REC sequence. The camera reaches REC, so the bit reads set again at once. Not measured: FF80 reads of 0xfff38000 hang the camera (lab/gfx50r-sd-blink/runs/gfx50r-frame-sync-1).",
+              "reads_set_after_clear": true
             }
           }
         ],

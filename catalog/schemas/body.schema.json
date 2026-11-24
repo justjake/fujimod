@@ -1345,6 +1345,10 @@
               "minimum": 0,
               "type": "integer"
             },
+            "reads_set_after_clear": {
+              "description": "Bit 0 of +0x00 reads set again at once after a write clears it.",
+              "type": "boolean"
+            },
             "sources": {
               "description": "Sources every frame latches.",
               "items": {
