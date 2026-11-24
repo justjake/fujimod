@@ -221,7 +221,6 @@ test('an identity generation failure stays visible when its internal version cou
       firmware_id: 'xe4-201',
       product: 'X-E4',
       version: '2.01',
-      internal_version: null,
       tables: {
         versions: {
           status: 'unavailable',
