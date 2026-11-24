@@ -484,6 +484,8 @@ fn rom_boot_state(state: &BootState, rom: &RomStart) -> Result<BootState, String
     options.insert("source_straps".into(), toml::Value::Integer(rom.source_straps.into()));
     options.insert("initial_control".into(), toml::Value::Integer(0));
     options.insert("initial_primary_control".into(), toml::Value::Integer(0));
+    // A manifest may declare boot control for its loader start; the ROM start's straps replace it.
+    state.device.retain(|window| window.kind != "boot-control");
     state.device.push(DeviceWindow {
         base: 0xff90_e000,
         size: 4,
