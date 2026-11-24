@@ -2645,6 +2645,26 @@ mod tests {
         assert!(cx.refusal().is_some());
     }
     #[test]
+    fn polling_driver_unmasks_buffer_ready_after_the_command_interrupt() {
+        // GFX 50R 3.11 0xcae030: status 0x21 at once, clear bit 0, then unmask bit 5.
+        let mut m = host(Protocol::Application);
+        let mut h = Ram::new(0x10000);
+        setup(&mut m, &mut h);
+        m.state = State::Transfer;
+        write(&mut m, &mut h, 4, 2, 512);
+        write(&mut m, &mut h, 6, 2, 2);
+        write(&mut m, &mut h, 0x34, 2, 0xee23);
+        write(&mut m, &mut h, 0x38, 2, 0xee01);
+        command(&mut m, &mut h, 0x123a0036, 4);
+        due(&mut m, &mut h);
+        assert_eq!(read(&mut m, &mut h, 0x30, 2), 0x21);
+        assert_eq!(h.effects.last(), Some(&Effect::Irq(78, true)));
+        write(&mut m, &mut h, 0x30, 2, 0xee01);
+        assert_eq!(h.effects.last(), Some(&Effect::Irq(78, false)));
+        write(&mut m, &mut h, 0x38, 2, 0xee23);
+        assert_eq!(h.effects.last(), Some(&Effect::Irq(78, true)));
+    }
+    #[test]
     fn combined_host_keeps_media_across_rom_and_application_register_accesses() {
         let mut m = host(Protocol::Sdhc);
         let mut h = Ram::new(0x10000);

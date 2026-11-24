@@ -586,4 +586,19 @@ mod tests {
             assert_eq!(g.access(core, false, 12, 4, false, 0).unwrap(), 1023);
         }
     }
+    #[test]
+    fn clearing_pending_keeps_a_level_spi_pending_while_its_line_is_high() {
+        let mut g = Gic::new(2, 512);
+        g.access(0, true, 0, 4, true, 1).unwrap();
+        g.access(0, false, 0, 4, true, 1).unwrap();
+        g.access(0, false, 4, 4, true, 255).unwrap();
+        g.access(0, true, 0x100 + 8, 4, true, 1 << 19).unwrap();
+        g.access(0, true, 0x800 + 80, 4, true, 1 << 24).unwrap();
+        g.set_line(83, true);
+        g.access(0, true, 0x280 + 8, 4, true, 1 << 19).unwrap();
+        assert_eq!(g.next_irq(0), Some(83));
+        g.set_line(83, false);
+        g.access(0, true, 0x280 + 8, 4, true, 1 << 19).unwrap();
+        assert_eq!(g.next_irq(0), None);
+    }
 }
