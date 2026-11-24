@@ -1131,7 +1131,11 @@ fn open_prepared_mode(prepared: Prepared, inputs: InputBytes, mode: Mode) -> Res
 }
 
 fn power_on_ram_fill(prepared: &Prepared) -> Option<u8> {
-    prepared.resolved.reference.soc.hardware.as_ref().and_then(|hardware| hardware.power_on_ram_fill)
+    prepared
+        .resolved
+        .processor_emulation()
+        .ok()
+        .and_then(|emulation| emulation.power_on_ram_fill)
 }
 
 fn open_prepared_epoch(

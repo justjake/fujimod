@@ -131,10 +131,12 @@ selectors, never file locations.
 `../configurations/emulator/processors/<soc>.json` holds what the emulator
 chooses for a processor rather than what the hardware is: execution engines,
 the CPU model standing in for an unavailable one, instruction and tick rates
-and the runtime ABI. Run configurations select it with the hardware records;
-it holds no hardware facts. A run overlay may change a hardware record's
-field only when that field's evidence is `stand-in`; validation refuses an
-override of a measured, located or inferred fact.
+the runtime ABI, the modeled MMU, the declared limits of its processor models
+and the byte its RAM holds at power-on when a camera measured one. Run
+configurations select it with the hardware records; it holds no hardware
+facts. A run overlay may change a hardware record's field only when that
+field's evidence is `stand-in`; validation refuses an override of a measured,
+located or inferred fact.
 
 Mods read register addresses and firmware numbers from C headers generated
 from these records, never from hand-copied constants.

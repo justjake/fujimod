@@ -14533,29 +14533,6 @@
       ],
       "type": "object"
     },
-    "HardwareInstructionRate": {
-      "additionalProperties": false,
-      "description": "Declared instructions per tick facts.",
-      "properties": {
-        "denominator": {
-          "description": "Declared denominator.",
-          "format": "uint64",
-          "minimum": 0,
-          "type": "integer"
-        },
-        "numerator": {
-          "description": "Declared numerator.",
-          "format": "uint64",
-          "minimum": 0,
-          "type": "integer"
-        }
-      },
-      "required": [
-        "denominator",
-        "numerator"
-      ],
-      "type": "object"
-    },
     "HardwareInterruptOutput": {
       "additionalProperties": false,
       "description": "Declared outputs facts.",
@@ -26834,16 +26811,6 @@
       "additionalProperties": false,
       "description": "Additional hardware parameters whose meaning depends on the processor family.",
       "properties": {
-        "power_on_ram_fill": {
-          "description": "The byte every RAM cell holds at power-on, as read on a camera. Absent\nwhen unmeasured; the emulator then starts RAM zeroed.",
-          "format": "uint8",
-          "maximum": 255,
-          "minimum": 0,
-          "type": [
-            "integer",
-            "null"
-          ]
-        },
         "profiles": {
           "additionalProperties": {
             "$ref": "#/$defs/SocProfile"
@@ -26858,15 +26825,6 @@
       "additionalProperties": false,
       "description": "Declared soc profile facts.",
       "properties": {
-        "board_ticks_per_second": {
-          "description": "Declared board ticks per second.",
-          "format": "uint64",
-          "minimum": 0,
-          "type": [
-            "integer",
-            "null"
-          ]
-        },
         "boot_rom": {
           "anyOf": [
             {
@@ -26885,10 +26843,6 @@
             "null"
           ]
         },
-        "cpu_model": {
-          "description": "Declared cpu model.",
-          "type": "string"
-        },
         "discovery_mmio": {
           "description": "Declared discovery mmio.",
           "items": {
@@ -26896,41 +26850,6 @@
           },
           "type": [
             "array",
-            "null"
-          ]
-        },
-        "engines": {
-          "description": "Declared engines.",
-          "items": {
-            "type": "string"
-          },
-          "type": [
-            "array",
-            "null"
-          ]
-        },
-        "instructions_per_tick": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/HardwareInstructionRate"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "description": "Declared instructions per tick."
-        },
-        "limits": {
-          "description": "Declared limits.",
-          "items": {
-            "type": "string"
-          },
-          "type": "array"
-        },
-        "mmu": {
-          "description": "Declared mmu.",
-          "type": [
-            "string",
             "null"
           ]
         },
@@ -26954,10 +26873,6 @@
             }
           ],
           "description": "Declared reset release."
-        },
-        "runtime_abi": {
-          "description": "Declared runtime abi.",
-          "type": "string"
         },
         "tcm": {
           "anyOf": [
@@ -26992,11 +26907,6 @@
           ]
         }
       },
-      "required": [
-        "cpu_model",
-        "limits",
-        "runtime_abi"
-      ],
       "type": "object"
     },
     "SocReset": {

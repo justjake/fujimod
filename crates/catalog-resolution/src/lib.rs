@@ -31,6 +31,11 @@ pub struct ResolvedConfiguration {
 }
 
 impl ResolvedConfiguration {
+    /// The emulation choices declared for the selected processor.
+    pub fn processor_emulation(&self) -> Result<ProcessorEmulation, String> {
+        ProcessorEmulation::bundled(&self.reference.soc.id)
+    }
+
     /// Load a bundled run configuration and resolve all selected catalog IDs.
     pub fn bundled(id: &str) -> Result<Self, String> {
         let configuration = RunConfiguration::bundled(id)?;

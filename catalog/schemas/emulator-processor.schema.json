@@ -1,0 +1,116 @@
+{
+  "$defs": {
+    "RunInstructionRate": {
+      "additionalProperties": false,
+      "description": "Closed instruction-derived timebase ratio for a run.",
+      "properties": {
+        "denominator": {
+          "description": "Board ticks advanced per instruction entry.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "numerator": {
+          "description": "Instruction entries consumed per board tick.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "numerator",
+        "denominator"
+      ],
+      "type": "object"
+    }
+  },
+  "$id": "https://fujimod.com/schemas/emulator-processor.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "Emulation choices for one processor identity.",
+  "properties": {
+    "$schema": {
+      "const": "https://fujimod.com/schemas/emulator-processor.schema.json",
+      "description": "Stable schema identifier for this document.",
+      "type": "string"
+    },
+    "board_ticks_per_second": {
+      "description": "Board ticks per second, when the processor declares its own time base.",
+      "format": "uint64",
+      "minimum": 0,
+      "type": [
+        "integer",
+        "null"
+      ]
+    },
+    "cpu_model": {
+      "description": "CPU model the emulator executes, standing in for an unavailable one.",
+      "type": "string"
+    },
+    "engines": {
+      "description": "Execution engines implemented for this processor, when restricted.",
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "id": {
+      "description": "Processor identity this document describes.",
+      "type": "string"
+    },
+    "instructions_per_tick": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/RunInstructionRate"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "Instruction entries consumed per board tick, when the processor declares one."
+    },
+    "limits": {
+      "description": "Declared limits of the emulator's processor models.",
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "mmu": {
+      "description": "Memory-management model the emulator implements, when it has one.",
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "power_on_ram_fill": {
+      "description": "The byte every RAM cell holds at power-on, as read on a camera. Absent\nwhen unmeasured; the emulator then starts RAM zeroed.",
+      "format": "uint8",
+      "maximum": 255,
+      "minimum": 0,
+      "type": [
+        "integer",
+        "null"
+      ]
+    },
+    "runtime_abi": {
+      "description": "Runtime ABI the CPU model presents to firmware and mods.",
+      "type": "string"
+    },
+    "schema": {
+      "description": "Processor-emulation document version.",
+      "format": "uint32",
+      "minimum": 0,
+      "type": "integer"
+    }
+  },
+  "required": [
+    "$schema",
+    "schema",
+    "id",
+    "cpu_model",
+    "runtime_abi"
+  ],
+  "title": "ProcessorEmulation",
+  "type": "object"
+}

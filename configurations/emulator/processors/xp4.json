@@ -1,0 +1,9 @@
+{
+  "$schema": "https://fujimod.com/schemas/emulator-processor.schema.json",
+  "schema": 1,
+  "id": "xp4",
+  "cpu_model": "Cortex-A7",
+  "runtime_abi": "armv7a-unicorn-v1",
+  "mmu": "Unicorn ARMv7-A CPU page-table walker; guest CP15 and page tables",
+  "limits": []
+}

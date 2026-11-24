@@ -2022,12 +2022,8 @@
     ]
   },
   "hardware": {
-    "power_on_ram_fill": 255,
     "profiles": {
       "exr2-service-transports": {
-        "cpu_model": "Cortex-R5F proxy for R4",
-        "runtime_abi": "exr2-r5f-fixed-map-v1",
-        "limits": [],
         "tcm": {
           "atcm": {
             "size": 8192,
@@ -2138,9 +2134,6 @@
         ]
       },
       "exr2": {
-        "cpu_model": "Cortex-R5F proxy for R4",
-        "runtime_abi": "exr2-r5f-fixed-map-v1",
-        "limits": [],
         "tcm": {
           "atcm": {
             "size": 8192,

@@ -2397,36 +2397,18 @@ pub struct SocProfile {
     /// Qualification of the declared processor cache capacities.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub cache_basis: Option<String>,
-    /// Declared board ticks per second.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub board_ticks_per_second: Option<u64>,
     /// Declared boot rom.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub boot_rom: Option<BootRom>,
-    /// Declared cpu model.
-    pub cpu_model: String,
     /// Declared discovery mmio.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub discovery_mmio: Option<Vec<DiscoveryWindow>>,
-    /// Declared engines.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub engines: Option<Vec<String>>,
-    /// Declared instructions per tick.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub instructions_per_tick: Option<InstructionRate>,
-    /// Declared limits.
-    pub limits: Vec<String>,
-    /// Declared mmu.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub mmu: Option<String>,
     /// Declared private mmio.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub private_mmio: Option<Vec<CoreWindow>>,
     /// Declared reset release.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub reset_release: Option<ResetRelease>,
-    /// Declared runtime abi.
-    pub runtime_abi: String,
     /// Declared tcm.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub tcm: Option<Tcm>,

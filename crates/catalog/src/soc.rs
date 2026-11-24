@@ -21,10 +21,6 @@ pub struct SocHardware {
         tsify(type = "Record<string, SocProfile>")
     )]
     pub profiles: BTreeMap<String, crate::profiles::SocProfile>,
-    /// The byte every RAM cell holds at power-on, as read on a camera. Absent
-    /// when unmeasured; the emulator then starts RAM zeroed.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub power_on_ram_fill: Option<u8>,
 }
 
 /// Hardware parameters for a SoC block, selected by its model tag.
