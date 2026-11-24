@@ -1174,6 +1174,11 @@ pub struct DisplayFrames {
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
 #[cfg_attr(feature = "schema", schemars(rename = "HardwareDisplayTimingBanks"))]
+#[cfg_attr(
+    all(target_arch = "wasm32", not(target_os = "emscripten")),
+    derive(tsify::Tsify),
+    tsify(hashmap_as_object, missing_as_null)
+)]
 pub struct DisplayTimingBanks {
     /// Two timing-register page bases, in output order.
     pub bases: [u64; 2],
@@ -1186,6 +1191,11 @@ pub struct DisplayTimingBanks {
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
 #[cfg_attr(feature = "schema", schemars(rename = "HardwareDisplayStatusBits"))]
+#[cfg_attr(
+    all(target_arch = "wasm32", not(target_os = "emscripten")),
+    derive(tsify::Tsify),
+    tsify(hashmap_as_object, missing_as_null)
+)]
 pub struct DisplayStatusBits {
     /// Word offset from the output base.
     pub offset: u64,
@@ -1222,6 +1232,11 @@ pub struct DisplayOutput {
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
 #[cfg_attr(feature = "schema", schemars(rename = "HardwareDisplayScanout"))]
+#[cfg_attr(
+    all(target_arch = "wasm32", not(target_os = "emscripten")),
+    derive(tsify::Tsify),
+    tsify(hashmap_as_object, missing_as_null)
+)]
 pub struct DisplayScanout {
     /// Host output index of the captured frames.
     pub output: u64,
@@ -1465,6 +1480,11 @@ pub struct ResetGates {
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
 #[cfg_attr(feature = "schema", schemars(rename = "HardwareRegisterIdleBits"))]
+#[cfg_attr(
+    all(target_arch = "wasm32", not(target_os = "emscripten")),
+    derive(tsify::Tsify),
+    tsify(hashmap_as_object, missing_as_null)
+)]
 pub struct RegisterIdleBits {
     /// Bits that read set.
     pub mask: u32,
@@ -1505,6 +1525,11 @@ pub struct RegisterBlock {
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
 #[cfg_attr(feature = "schema", schemars(rename = "HardwareRegisterFixedWord"))]
+#[cfg_attr(
+    all(target_arch = "wasm32", not(target_os = "emscripten")),
+    derive(tsify::Tsify),
+    tsify(hashmap_as_object, missing_as_null)
+)]
 pub struct RegisterFixedWord {
     /// Word offset in the block.
     pub offset: u64,
@@ -1518,6 +1543,11 @@ pub struct RegisterFixedWord {
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
 #[cfg_attr(feature = "schema", schemars(rename = "HardwareRegisterBlockCommand"))]
+#[cfg_attr(
+    all(target_arch = "wasm32", not(target_os = "emscripten")),
+    derive(tsify::Tsify),
+    tsify(hashmap_as_object, missing_as_null)
+)]
 pub struct RegisterBlockCommand {
     /// Field of the status word.
     pub mask: u32,
@@ -1825,6 +1855,11 @@ pub struct IntervalTimer {
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(rename_all = "snake_case")]
 #[cfg_attr(feature = "schema", schemars(rename = "HardwareTimerLayout"))]
+#[cfg_attr(
+    all(target_arch = "wasm32", not(target_os = "emscripten")),
+    derive(tsify::Tsify),
+    tsify(hashmap_as_object, missing_as_null)
+)]
 pub enum TimerLayout {
     /// Eight channels at +0x10 + n*8; control select bits set.
     Xp4,
@@ -2161,6 +2196,11 @@ pub struct RegisterLayouts {
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
 #[cfg_attr(feature = "schema", schemars(rename = "HardwareResetRelease"))]
+#[cfg_attr(
+    all(target_arch = "wasm32", not(target_os = "emscripten")),
+    derive(tsify::Tsify),
+    tsify(hashmap_as_object, missing_as_null)
+)]
 pub struct ResetRelease {
     /// Qualification of the release mechanism for this firmware.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -2442,6 +2482,11 @@ impl DeviceGraph {
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
 #[cfg_attr(feature = "schema", schemars(rename = "HardwareResetCheck"))]
+#[cfg_attr(
+    all(target_arch = "wasm32", not(target_os = "emscripten")),
+    derive(tsify::Tsify),
+    tsify(hashmap_as_object, missing_as_null)
+)]
 pub struct ResetCheck {
     /// Address of the expected word.
     pub address: u64,
