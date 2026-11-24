@@ -1647,6 +1647,9 @@ pub struct FrameSync {
     pub interrupts: u64,
     /// Frame period in device ticks.
     pub period_ticks: u64,
+    /// Bit 0 of +0x00 reads set again at once after a write clears it.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub reads_set_after_clear: bool,
     /// Declared size.
     pub size: u64,
     /// Sources every frame latches.

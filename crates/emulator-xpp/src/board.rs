@@ -377,6 +377,8 @@ pub enum Model {
         interrupts: u64,
         frame_lines: Vec<(usize, u32)>,
         period_ticks: u64,
+        #[serde(default)]
+        reads_set_after_clear: bool,
     },
     /// X-mount lens on its serial port; follows the GPIO and reset-gate nodes.
     Lens {
@@ -1410,6 +1412,7 @@ pub fn build(
                 interrupts,
                 frame_lines,
                 period_ticks,
+                reads_set_after_clear,
             } => devices.register_windows(
                 vec![
                     Mapping {
@@ -1421,12 +1424,10 @@ pub fn build(
                         size: sync::INTERRUPT_WINDOW,
                     },
                 ],
-                Box::new(sync::Generator::new(
-                    base,
-                    interrupts,
-                    frame_lines,
-                    period_ticks,
-                )?),
+                Box::new(
+                    sync::Generator::new(base, interrupts, frame_lines, period_ticks)?
+                        .with_reads_set_after_clear(reads_set_after_clear),
+                ),
             )?,
             Model::Lens {
                 port,

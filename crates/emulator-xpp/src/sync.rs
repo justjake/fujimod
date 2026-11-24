@@ -19,6 +19,11 @@
 //! clears it (0xc359b4, called by the handlers 0xd09958 and 0xd099ec). All
 //! sources start on the same frame tick; the phase between them is not known.
 //! What the timing words select and the frame rate they give are not modeled.
+//!
+//! GFX 50R 3.11 0xc8a530 clears bit 0 and 0x1a15668 reads it about eleven
+//! times; if it is still clear, leaving SETUP for REC starts over (0x1b57db4).
+//! The camera reaches REC, so its bit 0 reads set again at once. A body may
+//! declare that; FF80 reads of 0xfff38000 hang, so it is not measured.
 use fujimod_emulator_devices::{Cx, Device};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -54,6 +59,8 @@ pub struct Generator {
     /// Line of each source that frames latch.
     frame_lines: Vec<(usize, u32)>,
     period: u64,
+    /// Bit 0 reads set again at once after a write clears it.
+    reads_set_after_clear: bool,
     state: State,
 }
 impl Generator {
@@ -81,11 +88,17 @@ impl Generator {
             interrupts,
             frame_lines,
             period,
+            reads_set_after_clear: false,
             state: State {
                 next: period,
                 ..State::default()
             },
         })
+    }
+    /// Bit 0 reads set again at once after a write clears it.
+    pub fn with_reads_set_after_clear(mut self, on: bool) -> Self {
+        self.reads_set_after_clear = on;
+        self
     }
     fn update_lines(&mut self, cx: &mut Cx<'_>) {
         for &(source, irq) in &self.frame_lines {
@@ -131,8 +144,9 @@ impl Device for Generator {
         };
         match self.offset(address, size) {
             Some(Ok(o)) => {
-                self.state.words.insert(o, value);
-                if o == 0 && value & FRAME == 0 {
+                let flag = if o == 0 && self.reads_set_after_clear { FRAME } else { 0 };
+                self.state.words.insert(o, value | flag);
+                if o == 0 && (value | flag) & FRAME == 0 {
                     match cx.now().checked_add(FLAG_SETTLE_TICKS) {
                         Some(at) => self.state.settle = Some(at),
                         None => return cx.fail("Frame flag deadline overflow"),
@@ -238,5 +252,14 @@ mod tests {
         let mut cx = h.cx();
         sync.read(&mut cx, BASE + 0x5c, 4);
         assert!(cx.is_unmodeled());
+    }
+
+    #[test]
+    fn a_declared_flag_reads_set_right_after_a_clear() {
+        let sync = Generator::new(BASE, INTERRUPTS, vec![(0, 102)], 1000).unwrap();
+        let mut sync = sync.with_reads_set_after_clear(true);
+        let mut h = TestHost::new();
+        write(&mut sync, &mut h, BASE, 0x10);
+        assert_eq!(read(&mut sync, &mut h, BASE), 0x11);
     }
 }

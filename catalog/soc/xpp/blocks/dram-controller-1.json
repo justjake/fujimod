@@ -9,11 +9,11 @@
     "model": "register_block",
     "idle_bits": [
       {
-        "mask": 8,
+        "mask": 134283272,
         "offset": 332
       },
       {
-        "mask": 3801088,
+        "mask": 4094528,
         "offset": 1556
       }
     ],
@@ -33,7 +33,7 @@
         "word": 184
       }
     ],
-    "basis": "Second DRAM controller of X-T20 2.11 section 5: start-up waits for +0x14c bit 3 (done) and reads the calibration result 0x3a from +0x614 bits 23:16. After a still, reccont (0xc6c64c) writes +0xb8 = 0x6a020202 and waits for +0xbc bits 5..0 = 0x27, and 0xc6c700 writes 0x01020202 and waits for 0x20; these are the only +0xb8 commands (REC deinit and re-init). What the states mean is not known.",
+    "basis": "Second DRAM controller of X-T20 2.11 section 5: start-up waits for +0x14c bit 3 (done) and reads the calibration result 0x3a from +0x614 bits 23:16. After a still, reccont (0xc6c64c) writes +0xb8 = 0x6a020202 and waits for +0xbc bits 5..0 = 0x27, and 0xc6c700 writes 0x01020202 and waits for 0x20; these are the only +0xb8 commands (REC deinit and re-init). What the states mean is not known. GFX 50R 3.11 0xcb77d4 polls +0x14c and 0xcb77f4 accepts +0x614 bits 23:16 in 0x17..0x5d; the idle masks are the set bits measured there (+0x14c 0x08010008, +0x614 0x003e7a40; lab/gfx50r-sd-blink/runs/gfx50r-pad-status-1 and gfx50r-pad-value-1).",
     "order": 4
   }
 }
