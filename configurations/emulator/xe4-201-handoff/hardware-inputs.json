@@ -337,6 +337,23 @@
         0,
         0
       ]
-    }
+    },
+    "sd_cards": [
+      {
+        "host_base": 4294721536,
+        "card": {
+          "basis": "Virtual SDHC card and slot follow X-T3 Discovery; physical X-E4 behavior is unmeasured.",
+          "format": {
+            "filesystem": "fat32",
+            "label": "CAMERA",
+            "partition_start": 8192,
+            "sectors_per_cluster": 64
+          },
+          "high_speed": true,
+          "rca": 1,
+          "sectors": 16777216
+        }
+      }
+    ]
   }
 }

@@ -1,0 +1,196 @@
+{
+  "$schema": "https://fujimod.com/schemas/rom-start.generated.schema.json",
+  "schema": 1,
+  "firmware_id": "xt3-511",
+  "update_sha256": "9f2c75fd8a16a1d71b9218f6dbd3144b1f11820bcecd3a9608c8cda9f25f95a3",
+  "boot_rom": {
+    "sha256": "2a8b69986dd3fad0b73808c44e0834fa95c7b4e4f84e6c8664d4b0a82f7b24a4",
+    "basis": "The X-T3's own boot ROM window 0xfff00000..0xfff08000, read from the camera over FF80, is byte-identical to the X100V capture the registry resolves (research/xt3-511/sd-boot.md, 'Boot ROM read from the X-T3', 2026-11-10).",
+    "evidence": [
+      {
+        "kind": "measured",
+        "firmware_ids": [
+          "xt3-511"
+        ]
+      }
+    ]
+  },
+  "boot_strap": {
+    "block_id": "boot-strap",
+    "sd_card_word": 0,
+    "serial_flash_word": 24,
+    "basis": "boot_source_select selects the SD card when bits 0x18 of the word are clear (the X-T3's rear dial press with Fn1 at power-on) and otherwise serial-flash mode (word & 7) + 1; 0x18 is mode 1, the mode stage one is read with. The strap's other bits are unmeasured.",
+    "evidence": [
+      {
+        "kind": "located",
+        "firmware_ids": [
+          "x100v-301"
+        ],
+        "addresses": [
+          {
+            "firmware_id": "x100v-301",
+            "address": 4293919620,
+            "space": "code"
+          }
+        ]
+      }
+    ]
+  },
+  "last_write_banks": [
+    {
+      "base": 4294185984,
+      "end": 4294189056,
+      "basis": "Words above the GPIO model that the card's first stage (ffinit, its hardware setup script) writes; their meanings are not decoded.",
+      "evidence": [
+        {
+          "kind": "inferred",
+          "firmware_ids": [
+            "xt3-511"
+          ]
+        }
+      ]
+    },
+    {
+      "base": 4211081216,
+      "end": 4211085312,
+      "basis": "A page ffinit's hardware setup script writes that no model owns; its meaning is not decoded.",
+      "evidence": [
+        {
+          "kind": "inferred",
+          "firmware_ids": [
+            "xt3-511"
+          ]
+        }
+      ]
+    },
+    {
+      "base": 4282384384,
+      "end": 4282396672,
+      "basis": "Pages ffinit's first-stage DRAM and clock setup writes, found by declaring one page per refused access; meanings unmeasured.",
+      "evidence": [
+        {
+          "kind": "inferred",
+          "firmware_ids": [
+            "xt3-511"
+          ]
+        }
+      ]
+    },
+    {
+      "base": 4282908672,
+      "end": 4282916864,
+      "basis": "As 0xff400000. The still DSP window at 0xff482000 lies inside the following range and stays its own device.",
+      "evidence": [
+        {
+          "kind": "inferred",
+          "firmware_ids": [
+            "xt3-511"
+          ]
+        }
+      ]
+    },
+    {
+      "base": 4282920960,
+      "end": 4282925056,
+      "basis": "As 0xff480000, the part above the still DSP window.",
+      "evidence": [
+        {
+          "kind": "inferred",
+          "firmware_ids": [
+            "xt3-511"
+          ]
+        }
+      ]
+    }
+  ],
+  "fixed_words": [
+    {
+      "base": 4284497920,
+      "words": [
+        {
+          "offset": 1100,
+          "value": 65537
+        },
+        {
+          "offset": 1568,
+          "value": 65537
+        }
+      ],
+      "basis": "Words +0x44c and +0x620 of each DDR channel block read 0x00010001: the first-stage DRAM setup requires both 11-bit fields (bits 10:0 and 26:16) of each to be nonzero as its training result. These are the smallest values that pass; the real training results are unmeasured.",
+      "evidence": [
+        {
+          "kind": "stand-in"
+        }
+      ]
+    },
+    {
+      "base": 4284563456,
+      "words": [
+        {
+          "offset": 1100,
+          "value": 65537
+        },
+        {
+          "offset": 1568,
+          "value": 65537
+        }
+      ],
+      "basis": "Words +0x44c and +0x620 of each DDR channel block read 0x00010001: the first-stage DRAM setup requires both 11-bit fields (bits 10:0 and 26:16) of each to be nonzero as its training result. These are the smallest values that pass; the real training results are unmeasured.",
+      "evidence": [
+        {
+          "kind": "stand-in"
+        }
+      ]
+    },
+    {
+      "base": 4284628992,
+      "words": [
+        {
+          "offset": 1100,
+          "value": 65537
+        },
+        {
+          "offset": 1568,
+          "value": 65537
+        }
+      ],
+      "basis": "Words +0x44c and +0x620 of each DDR channel block read 0x00010001: the first-stage DRAM setup requires both 11-bit fields (bits 10:0 and 26:16) of each to be nonzero as its training result. These are the smallest values that pass; the real training results are unmeasured.",
+      "evidence": [
+        {
+          "kind": "stand-in"
+        }
+      ]
+    },
+    {
+      "base": 4284694528,
+      "words": [
+        {
+          "offset": 1100,
+          "value": 65537
+        },
+        {
+          "offset": 1568,
+          "value": 65537
+        }
+      ],
+      "basis": "Words +0x44c and +0x620 of each DDR channel block read 0x00010001: the first-stage DRAM setup requires both 11-bit fields (bits 10:0 and 26:16) of each to be nonzero as its training result. These are the smallest values that pass; the real training results are unmeasured.",
+      "evidence": [
+        {
+          "kind": "stand-in"
+        }
+      ]
+    }
+  ],
+  "power_inputs": [
+    {
+      "register": 16,
+      "value": 4,
+      "basis": "Power controller register 16 is the cold boot reason the stock loader copies into its handoff block, which the X-T3 run configuration declares as 4. Reason 4 is a declared cold-start input, not a capture from a camera. (The loader reads it at 0x850..0x860 and stores it at handoff +0x140.)",
+      "evidence": [
+        {
+          "kind": "stand-in"
+        }
+      ]
+    }
+  ]
+}

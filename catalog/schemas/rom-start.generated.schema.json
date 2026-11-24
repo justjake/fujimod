@@ -1,0 +1,367 @@
+{
+  "$defs": {
+    "Evidence": {
+      "additionalProperties": false,
+      "description": "Typed evidence for one catalog fact.",
+      "properties": {
+        "addresses": {
+          "description": "Code or data addresses the fact rests on.",
+          "items": {
+            "$ref": "#/$defs/EvidenceAddress"
+          },
+          "type": "array"
+        },
+        "firmware_ids": {
+          "description": "Firmware identities the fact rests on.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "kind": {
+          "$ref": "#/$defs/EvidenceKind",
+          "description": "How the fact was established."
+        }
+      },
+      "required": [
+        "kind"
+      ],
+      "type": "object"
+    },
+    "EvidenceAddress": {
+      "additionalProperties": false,
+      "description": "One firmware address a fact rests on.",
+      "properties": {
+        "address": {
+          "description": "Address within that firmware.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "firmware_id": {
+          "description": "Firmware identity holding the address.",
+          "type": "string"
+        },
+        "space": {
+          "$ref": "#/$defs/EvidenceSpace",
+          "description": "Whether the address selects code or data."
+        }
+      },
+      "required": [
+        "firmware_id",
+        "address",
+        "space"
+      ],
+      "type": "object"
+    },
+    "EvidenceKind": {
+      "description": "How a catalog fact was established.",
+      "oneOf": [
+        {
+          "const": "measured",
+          "description": "Read on a camera.",
+          "type": "string"
+        },
+        {
+          "const": "located",
+          "description": "Found in firmware code or tables.",
+          "type": "string"
+        },
+        {
+          "const": "inferred",
+          "description": "Deduced from the behavior of other facts.",
+          "type": "string"
+        },
+        {
+          "const": "stand-in",
+          "description": "A declared input with no known hardware value.",
+          "type": "string"
+        }
+      ]
+    },
+    "EvidenceSpace": {
+      "description": "The kind of address a fact rests on.",
+      "oneOf": [
+        {
+          "const": "code",
+          "description": "An instruction address.",
+          "type": "string"
+        },
+        {
+          "const": "data",
+          "description": "A data address.",
+          "type": "string"
+        }
+      ]
+    },
+    "RomStartBank": {
+      "additionalProperties": false,
+      "description": "One half-open register range the first stage writes.",
+      "properties": {
+        "base": {
+          "description": "First address of the range.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "basis": {
+          "description": "Declared basis.",
+          "type": "string"
+        },
+        "end": {
+          "description": "First address past the range.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "evidence": {
+          "description": "How the range was established.",
+          "items": {
+            "$ref": "#/$defs/Evidence"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "base",
+        "end",
+        "basis",
+        "evidence"
+      ],
+      "type": "object"
+    },
+    "RomStartBootRom": {
+      "additionalProperties": false,
+      "description": "One firmware's boot ROM identity.",
+      "properties": {
+        "basis": {
+          "description": "Declared basis.",
+          "type": "string"
+        },
+        "evidence": {
+          "description": "How the identity was established.",
+          "items": {
+            "$ref": "#/$defs/Evidence"
+          },
+          "type": "array"
+        },
+        "sha256": {
+          "description": "SHA-256 of the 32 KiB boot ROM image.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "sha256",
+        "basis",
+        "evidence"
+      ],
+      "type": "object"
+    },
+    "RomStartPowerInput": {
+      "additionalProperties": false,
+      "description": "One power-controller register at reset.",
+      "properties": {
+        "basis": {
+          "description": "Declared basis.",
+          "type": "string"
+        },
+        "evidence": {
+          "description": "How the value was established.",
+          "items": {
+            "$ref": "#/$defs/Evidence"
+          },
+          "type": "array"
+        },
+        "register": {
+          "description": "Power-controller register number.",
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "value": {
+          "description": "Register value.",
+          "format": "uint16",
+          "maximum": 65535,
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "register",
+        "value",
+        "basis",
+        "evidence"
+      ],
+      "type": "object"
+    },
+    "RomStartStrap": {
+      "additionalProperties": false,
+      "description": "The boot-source strap and its two selection words.",
+      "properties": {
+        "basis": {
+          "description": "Declared basis.",
+          "type": "string"
+        },
+        "block_id": {
+          "description": "Processor block holding the strap word.",
+          "type": "string"
+        },
+        "evidence": {
+          "description": "How the words were established.",
+          "items": {
+            "$ref": "#/$defs/Evidence"
+          },
+          "type": "array"
+        },
+        "sd_card_word": {
+          "description": "Word presented when the SD card boots.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "serial_flash_word": {
+          "description": "Word presented when the serial flash boots.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "block_id",
+        "sd_card_word",
+        "serial_flash_word",
+        "basis",
+        "evidence"
+      ],
+      "type": "object"
+    },
+    "RomStartWord": {
+      "additionalProperties": false,
+      "description": "One fixed register word.",
+      "properties": {
+        "offset": {
+          "description": "Word offset within the block.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "value": {
+          "description": "Word value.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "offset",
+        "value"
+      ],
+      "type": "object"
+    },
+    "RomStartWordBlock": {
+      "additionalProperties": false,
+      "description": "The fixed words one register block starts with.",
+      "properties": {
+        "base": {
+          "description": "Block base address the words belong to.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "basis": {
+          "description": "Declared basis.",
+          "type": "string"
+        },
+        "evidence": {
+          "description": "How the words were established.",
+          "items": {
+            "$ref": "#/$defs/Evidence"
+          },
+          "type": "array"
+        },
+        "words": {
+          "description": "The words.",
+          "items": {
+            "$ref": "#/$defs/RomStartWord"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "base",
+        "words",
+        "basis",
+        "evidence"
+      ],
+      "type": "object"
+    }
+  },
+  "$id": "https://fujimod.com/schemas/rom-start.generated.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "ROM start facts for one firmware.",
+  "properties": {
+    "$schema": {
+      "const": "https://fujimod.com/schemas/rom-start.generated.schema.json",
+      "description": "Stable schema identifier for this document.",
+      "type": "string"
+    },
+    "boot_rom": {
+      "$ref": "#/$defs/RomStartBootRom",
+      "description": "The boot ROM the firmware starts in."
+    },
+    "boot_strap": {
+      "$ref": "#/$defs/RomStartStrap",
+      "description": "Boot-source strap window and the word each selection presents."
+    },
+    "firmware_id": {
+      "description": "Firmware the facts belong to.",
+      "type": "string"
+    },
+    "fixed_words": {
+      "description": "Fixed register words the first stage requires, per block base.",
+      "items": {
+        "$ref": "#/$defs/RomStartWordBlock"
+      },
+      "type": "array"
+    },
+    "last_write_banks": {
+      "description": "Register ranges the first stage writes and no device owns.",
+      "items": {
+        "$ref": "#/$defs/RomStartBank"
+      },
+      "type": "array"
+    },
+    "power_inputs": {
+      "description": "Power-controller registers at reset.",
+      "items": {
+        "$ref": "#/$defs/RomStartPowerInput"
+      },
+      "type": "array"
+    },
+    "schema": {
+      "description": "Document version.",
+      "format": "uint32",
+      "minimum": 0,
+      "type": "integer"
+    },
+    "update_sha256": {
+      "description": "SHA-256 of the update the facts were derived from.",
+      "type": "string"
+    }
+  },
+  "required": [
+    "$schema",
+    "schema",
+    "firmware_id",
+    "update_sha256",
+    "boot_rom",
+    "boot_strap",
+    "last_write_banks",
+    "fixed_words",
+    "power_inputs"
+  ],
+  "title": "FirmwareRomStart",
+  "type": "object"
+}
