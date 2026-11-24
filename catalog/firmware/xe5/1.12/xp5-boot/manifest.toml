@@ -1,6 +1,9 @@
 version = 1
 firmware = "xe5-112"
 load_firmware = true
+# Host execution only: the companion M4 serves the stabilizer and lens traffic far more than it
+# waits in delay loops, so it runs in block execution. The guest state is the same either way.
+mprofile_block_execution = true
 
 # The XP5 device tree maps Linux DRAM and shared arenas below 0x67f00000, but the application also
 # uses DRAM up to 0x80000000: CPU1 writes 0x7ec00000 (a memset from 0x3271124, as on the X-T5, whose
