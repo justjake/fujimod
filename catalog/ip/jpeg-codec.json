@@ -209,8 +209,6 @@
     }
   ],
   "parameters": [
-    "base",
-    "interrupt",
     "run_ticks",
     "register_contract"
   ],

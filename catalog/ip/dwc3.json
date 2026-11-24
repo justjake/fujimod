@@ -190,8 +190,6 @@
     }
   ],
   "parameters": [
-    "base",
-    "interrupts",
     "command_ticks",
     "transaction_ticks",
     "speed"

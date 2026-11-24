@@ -201,7 +201,6 @@
     }
   ],
   "parameters": [
-    "base",
     "cpu_interface_base",
     "lines",
     "cores"

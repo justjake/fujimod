@@ -777,9 +777,7 @@
     }
   ],
   "parameters": [
-    "base",
-    "banks",
-    "interrupt_routes"
+    "banks"
   ],
   "evidence": [
     {

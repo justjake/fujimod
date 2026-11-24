@@ -169,8 +169,6 @@
     }
   ],
   "parameters": [
-    "base",
-    "interrupt",
     "queues",
     "session_count"
   ],

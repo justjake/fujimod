@@ -2,6 +2,7 @@
   "$schema": "https://fujimod.com/schemas/soc-block.schema.json",
   "schema": 1,
   "id": "sd-host-1",
+  "ip": "sdhci",
   "base": 4294737920,
   "size": 4096,
   "kind": "sd-card-controller",

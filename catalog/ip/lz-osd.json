@@ -186,8 +186,6 @@
     }
   ],
   "parameters": [
-    "base",
-    "interrupt",
     "dma_high_words"
   ],
   "evidence": [

@@ -435,8 +435,6 @@
     }
   ],
   "parameters": [
-    "base",
-    "interrupt",
     "fifo_depth",
     "clock_hz",
     "tick_hz"
