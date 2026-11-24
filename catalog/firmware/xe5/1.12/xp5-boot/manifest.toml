@@ -29,6 +29,13 @@ size = 0x1a0000
 base = 0xfb400000
 size = 0x1a0000
 
+# Boot SRAM (the SoC profile's boot-sram region). The ROM start loads the setup stage here; in the
+# loader start the application's live-view path still reaches it once the shooting screen starts
+# (first access 0xff8075a0, from a non-CPU master). Contents at the handoff are not preloaded.
+[[ram]]
+base = 0xff800000
+size = 0x40000
+
 # Companion window onto the shared DRAM region. The application stores the region's physical base
 # 0x8c73000 in the companion's SRAM word 0xf6f8c (companion view), and the companion code adds the
 # 0x60000000 alias (0x312a stores to 0x69030080). The SoC's own window for the same structure sits
