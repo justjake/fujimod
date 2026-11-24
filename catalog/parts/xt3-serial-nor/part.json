@@ -8,7 +8,15 @@
       "kind": "serial-nor-flash",
       "jedec_id": 0,
       "erase_bytes": 131072,
-      "page_bytes": 256
+      "page_bytes": 256,
+      "sampling": {
+        "sample_first": 2,
+        "sample_last": 9,
+        "miss_byte": 165,
+        "evidence": {
+          "kind": "stand-in"
+        }
+      }
     }
   }
 }

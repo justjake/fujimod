@@ -5,7 +5,129 @@
   "model": {
     "kind": "peripheral",
     "interface": {
-      "kind": "power-controller"
+      "kind": "power-controller",
+      "registers": [
+        {
+          "first": 16,
+          "role": "boot-reason",
+          "evidence": {
+            "kind": "inferred",
+            "firmware_ids": [
+              "xt3-511"
+            ]
+          }
+        },
+        {
+          "first": 23,
+          "role": "accessory-command",
+          "evidence": {
+            "kind": "inferred",
+            "firmware_ids": [
+              "xt3-511"
+            ]
+          }
+        },
+        {
+          "first": 24,
+          "role": "accessory-status",
+          "evidence": {
+            "kind": "inferred",
+            "firmware_ids": [
+              "xt3-511"
+            ]
+          }
+        },
+        {
+          "first": 27,
+          "role": "battery-sample",
+          "evidence": {
+            "kind": "inferred",
+            "firmware_ids": [
+              "xt3-511"
+            ]
+          }
+        },
+        {
+          "first": 32,
+          "role": "rtc-control",
+          "evidence": {
+            "kind": "located",
+            "firmware_ids": [
+              "xt3-511"
+            ],
+            "addresses": [
+              {
+                "firmware_id": "xt3-511",
+                "address": 17445784,
+                "space": "code"
+              },
+              {
+                "firmware_id": "xt3-511",
+                "address": 17445700,
+                "space": "code"
+              }
+            ]
+          }
+        },
+        {
+          "first": 34,
+          "role": "rtc-seconds-low",
+          "evidence": {
+            "kind": "located",
+            "firmware_ids": [
+              "xt3-511"
+            ],
+            "addresses": [
+              {
+                "firmware_id": "xt3-511",
+                "address": 17445784,
+                "space": "code"
+              },
+              {
+                "firmware_id": "xt3-511",
+                "address": 17445700,
+                "space": "code"
+              }
+            ]
+          }
+        },
+        {
+          "first": 35,
+          "role": "rtc-seconds-high",
+          "evidence": {
+            "kind": "located",
+            "firmware_ids": [
+              "xt3-511"
+            ],
+            "addresses": [
+              {
+                "firmware_id": "xt3-511",
+                "address": 17445784,
+                "space": "code"
+              },
+              {
+                "firmware_id": "xt3-511",
+                "address": 17445700,
+                "space": "code"
+              }
+            ]
+          }
+        },
+        {
+          "first": 48,
+          "count": 8,
+          "role": "settings-header",
+          "evidence": {
+            "kind": "inferred",
+            "firmware_ids": [
+              "xt3-511"
+            ]
+          }
+        }
+      ],
+      "transport": {
+        "kind": "direct-register"
+      }
     }
   }
 }
