@@ -5,7 +5,7 @@ import { getRequestEvent, type JSX } from '@solidjs/web';
 import { isDevToolsPath } from './dev-tools/routes';
 import { isManualPath } from './docs/manual-routes';
 import { textPagePath } from './text/routes';
-import { ErrorPage } from './error-pages/ErrorPage';
+import { CrashPage, ErrorPage } from './error-pages/ErrorPage';
 import { servedErrorStatus } from './error-pages/routes';
 const Home = lazy(() => import('./home/Page'));
 const DevTools = lazy(() => import('./dev-tools/Page'));
@@ -26,12 +26,7 @@ const textRoutes = {
 /** A page that fails to render or load shows the error page instead of a blank one. */
 function Guarded(props: { page: () => JSX.Element }) {
   return (
-    <Errored
-      fallback={(error) => {
-        console.error(error);
-        return <ErrorPage status={500} />;
-      }}
-    >
+    <Errored fallback={(error) => <CrashPage error={error()} />}>
       <Loading>{props.page()}</Loading>
     </Errored>
   );

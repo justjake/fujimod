@@ -593,6 +593,7 @@ try {
       await page.route(/\/assets\/Credits-[^/]+\.js$/, (route) => route.abort());
       await page.goto(base + '/credits');
       await page.getByRole('heading', { name: 'Something went wrong' }).waitFor();
+      assert.deepEqual(await page.locator('h1').allInnerTexts(), ['Something went wrong']);
       await context.close();
       console.log(
         `${type.name()}: three static pages, existing-node hydration, features and feedback passed`,

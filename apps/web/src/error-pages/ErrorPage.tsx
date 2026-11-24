@@ -1,3 +1,4 @@
+import { onSettled } from 'solid-js';
 import { SiteFrame } from '../ui/SiteFrame';
 import { manualRoot } from '../docs/manual-routes';
 import type { ErrorStatus } from './routes';
@@ -33,4 +34,14 @@ export function ErrorPage(props: { status: ErrorStatus }) {
       </article>
     </SiteFrame>
   );
+}
+
+/** Shown when a page fails to render or its code fails to load. A page that
+ * fails while hydrating leaves its server-rendered markup behind; remove it. */
+export function CrashPage(props: { error: unknown }) {
+  console.error(props.error);
+  onSettled(() => {
+    for (const shell of document.querySelectorAll('body > .shell:not(.error-page)')) shell.remove();
+  });
+  return <ErrorPage status={500} />;
 }
