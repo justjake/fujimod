@@ -1811,7 +1811,6 @@
       "description": "A SoC clock domain.",
       "properties": {
         "frequency_hz": {
-          "default": null,
           "description": "Clock frequency in hertz, when known.",
           "format": "uint64",
           "minimum": 0,
@@ -1825,7 +1824,6 @@
           "type": "string"
         },
         "parent_id": {
-          "default": null,
           "description": "Parent clock-domain identity, when present.",
           "type": [
             "string",
@@ -2835,7 +2833,6 @@
       "description": "M-profile processor identification state.",
       "properties": {
         "cpuid": {
-          "default": null,
           "description": "CPUID register value presented by the processor, when known.",
           "format": "uint32",
           "minimum": 0,
@@ -2990,11 +2987,9 @@
               "type": "null"
             }
           ],
-          "default": null,
           "description": "Optional A-profile application-processor state."
         },
         "clock_id": {
-          "default": null,
           "description": "Clock domain supplying this core, when specified.",
           "type": [
             "string",
@@ -3018,7 +3013,6 @@
               "type": "null"
             }
           ],
-          "default": null,
           "description": "Optional M-profile hardware state."
         },
         "registers": {
@@ -3029,7 +3023,6 @@
           "type": "array"
         },
         "released": {
-          "default": null,
           "description": "Whether this core leaves reset when the SoC starts, when known.",
           "type": [
             "boolean",
@@ -3045,14 +3038,12 @@
               "type": "null"
             }
           ],
-          "default": null,
           "description": "Optional R-profile hardware state."
         }
       },
       "required": [
         "id",
-        "model",
-        "registers"
+        "model"
       ],
       "type": "object"
     },
@@ -3292,7 +3283,6 @@
           "type": "integer"
         },
         "clock_id": {
-          "default": null,
           "description": "Clock domain supplying this block, when specified.",
           "type": [
             "string",
@@ -3647,13 +3637,9 @@
               "type": "null"
             }
           ],
-          "default": null,
           "description": "Optional secondary-core release register."
         }
       },
-      "required": [
-        "coprocessor_writes"
-      ],
       "type": "object"
     },
     "TcmState": {
@@ -3787,10 +3773,6 @@
     "processors",
     "memory_regions",
     "blocks",
-    "clocks",
-    "mappings",
-    "dma_mappings",
-    "decoders",
     "reset"
   ],
   "title": "Soc",

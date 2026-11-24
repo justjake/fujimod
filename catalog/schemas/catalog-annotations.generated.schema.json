@@ -218,8 +218,7 @@
       "required": [
         "bytes",
         "sha256",
-        "normalized_sha256",
-        "patches"
+        "normalized_sha256"
       ],
       "type": "object"
     },
@@ -478,9 +477,6 @@
           "type": "array"
         }
       },
-      "required": [
-        "placements"
-      ],
       "type": "object"
     },
     "SourceAnnotations": {

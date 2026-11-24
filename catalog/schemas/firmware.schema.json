@@ -457,7 +457,6 @@
         "address",
         "defaults_sha256",
         "pointer_address",
-        "remapping",
         "size",
         "synthetic_signature"
       ],
@@ -570,7 +569,6 @@
         "builder_entry",
         "code_checks",
         "final_version_bytes",
-        "limits",
         "max_instructions",
         "output",
         "pointer_address",
@@ -626,7 +624,6 @@
       },
       "required": [
         "descriptors",
-        "limits",
         "polarity_words"
       ],
       "type": "object"
@@ -1103,7 +1100,6 @@
               "type": "null"
             }
           ],
-          "default": null,
           "description": "Additional playback UI mode values."
         },
         "cfgdata_location": {
@@ -1115,7 +1111,6 @@
               "type": "null"
             }
           ],
-          "default": null,
           "description": "Firmware configuration-block location."
         },
         "identity_checks": {
@@ -1126,7 +1121,6 @@
           "type": "array"
         },
         "menu_cursor": {
-          "default": null,
           "description": "Firmware menu-cursor structure base address.",
           "format": "uint64",
           "minimum": 0,
@@ -1144,7 +1138,6 @@
               "type": "null"
             }
           ],
-          "default": null,
           "description": "Logical keys used by menu controls."
         },
         "observation": {
@@ -1156,7 +1149,6 @@
               "type": "null"
             }
           ],
-          "default": null,
           "description": "Addresses and values used to observe firmware readiness."
         },
         "remote": {
@@ -1168,11 +1160,9 @@
               "type": "null"
             }
           ],
-          "default": null,
           "description": "Layouts and declarations used by remote camera control."
         },
         "uncached_alias": {
-          "default": null,
           "description": "Uncached alias used to access RAM addresses.",
           "format": "uint64",
           "minimum": 0,
@@ -1182,9 +1172,6 @@
           ]
         }
       },
-      "required": [
-        "identity_checks"
-      ],
       "type": "object"
     },
     "FirmwareGicRedistributorInitial": {
@@ -1265,7 +1252,6 @@
           "type": "string"
         },
         "native_flash_offset": {
-          "default": null,
           "description": "Native flash offset, when identified.",
           "format": "uint64",
           "minimum": 0,
@@ -1326,13 +1312,11 @@
               "type": "null"
             }
           ],
-          "default": null,
           "description": "Loader validation entry and the mapped sections required by the loader."
         }
       },
       "required": [
         "flash_offset",
-        "entry_labels",
         "image_sections"
       ],
       "type": "object"
@@ -1427,7 +1411,6 @@
       "required": [
         "bank_rows",
         "check_view",
-        "default_copies",
         "kind",
         "name",
         "nondefault_edits",
@@ -1435,8 +1418,7 @@
         "payload_size",
         "prepare_view",
         "query_view",
-        "record_copies",
-        "record_tags"
+        "record_copies"
       ],
       "type": "object"
     },
@@ -1460,8 +1442,7 @@
         }
       },
       "required": [
-        "profiles",
-        "views"
+        "profiles"
       ],
       "type": "object"
     },
@@ -1649,8 +1630,7 @@
         "file_offset",
         "bytes",
         "sha256",
-        "normalized_sha256",
-        "patches"
+        "normalized_sha256"
       ],
       "type": "object"
     },
@@ -2308,7 +2288,6 @@
         "geometry",
         "header",
         "journals",
-        "limits",
         "managed",
         "max_instructions",
         "record",
@@ -3286,9 +3265,6 @@
           "type": "array"
         }
       },
-      "required": [
-        "placements"
-      ],
       "type": "object"
     },
     "PixelFormat": {
@@ -3524,7 +3500,6 @@
           "type": "string"
         },
         "tab": {
-          "default": null,
           "description": "Optional tab key.",
           "format": "uint32",
           "minimum": 0,
@@ -3640,7 +3615,6 @@
           "type": "null"
         }
       ],
-      "default": null,
       "description": "Boot ROM content and its physical load address, when applicable."
     },
     "generated_facts": {
@@ -3652,7 +3626,6 @@
           "type": "null"
         }
       ],
-      "default": null,
       "description": "Generated observation facts consumed by supported runs."
     },
     "id": {
@@ -3668,7 +3641,6 @@
           "type": "null"
         }
       ],
-      "default": null,
       "description": "Firmware installation and loader facts consumed by the emulator."
     },
     "layouts": {
@@ -3697,7 +3669,6 @@
           "type": "null"
         }
       ],
-      "default": null,
       "description": "Firmware update content, when distributed for this version."
     },
     "version": {
