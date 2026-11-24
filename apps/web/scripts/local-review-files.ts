@@ -56,10 +56,6 @@ export function staticFiles(
       res.statusCode = status;
       res.end();
     };
-    if (req.method !== 'GET' && req.method !== 'HEAD') {
-      res.setHeader('Allow', 'GET, HEAD');
-      return finish(405);
-    }
     const serve = async () => {
       let relative: string;
       try {
@@ -72,6 +68,11 @@ export function staticFiles(
       let path = resolve(root, relative);
       if (!inside(root, path)) return finish(403);
       if (!allowed(path)) return next();
+      // Only a path this mount serves refuses other methods; the rest pass on.
+      if (req.method !== 'GET' && req.method !== 'HEAD') {
+        res.setHeader('Allow', 'GET, HEAD');
+        return finish(405);
+      }
       try {
         path = await realpath(path);
         if (!inside(root, path) || !allowed(path)) return finish(403);
@@ -143,6 +144,11 @@ export function localReviewFiles(directory: string | undefined): Plugin {
       assertNoPublicReviews(config.root);
     },
     configureServer(server) {
+      if (directory)
+        server.middlewares.use(reviewFiles(directory, resolve(server.config.root, '../..')));
+    },
+    // The local preview build serves the same files; a published build has no directory.
+    configurePreviewServer(server) {
       if (directory)
         server.middlewares.use(reviewFiles(directory, resolve(server.config.root, '../..')));
     },

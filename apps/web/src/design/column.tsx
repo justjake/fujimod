@@ -1,0 +1,116 @@
+import { Show } from 'solid-js';
+import type { JSX } from '@solidjs/web';
+
+import { Chevron } from './controls';
+import { ACCENT, COLUMN, HEADING, TEXT, TRACK } from './materials';
+
+/* The column every editor screen draws its rows in, and the pieces inside it. */
+
+/** A column of rows over the picture: native scrolling (a finger, momentum)
+ * without a scroll bar, in the column material. */
+export function Scroller(props: {
+  ref?: (element: HTMLDivElement) => void;
+  class?: string;
+  style?: JSX.CSSProperties;
+  onScroll?: (top: number) => void;
+  children: JSX.Element;
+}) {
+  return (
+    <div
+      ref={(element) => props.ref?.(element)}
+      class={`overflow-y-auto overscroll-contain ${props.class ?? ''}`}
+      style={{ ...COLUMN, 'scrollbar-width': 'none', ...props.style }}
+      onScroll={(e) => props.onScroll?.(e.currentTarget.scrollTop)}
+    >
+      {props.children}
+    </div>
+  );
+}
+
+/** Scrolls `scroller` the least that shows `top` to `bottom` with `margin`
+ * to spare: smoothly once the screen is showing, at once when it opens. */
+/** `view` is the scroll position and height when the caller knows them, so
+ * moving the focus reads no layout. */
+export function reveal(scroller: HTMLElement, top: number, bottom: number, margin: number, smooth: boolean, view?: { top: number; height: number }) {
+  const behavior = smooth ? 'smooth' : 'auto';
+  const at = view?.top ?? scroller.scrollTop;
+  const height = view?.height ?? scroller.clientHeight;
+  if (top < at + margin / 2) scroller.scrollTo({ top: top - margin, behavior });
+  else if (bottom > at + height - margin / 2) scroller.scrollTo({ top: bottom - height + margin, behavior });
+}
+
+/** A titled group of rows, divided from the group above. */
+export function Section(props: {
+  ref?: (element: HTMLElement) => void;
+  title?: string;
+  /** Beside the title on its right, such as a chip. */
+  accessory?: JSX.Element;
+  first?: boolean;
+  /** A long title: a size smaller, and free to wrap. */
+  long?: boolean;
+  children: JSX.Element;
+}) {
+  return (
+    <section
+      ref={(element) => props.ref?.(element)}
+      class={props.first ? 'pt-[8px] pb-[14px]' : 'pt-[10px] pb-[14px]'}
+      style={props.first ? {} : { 'box-shadow': 'var(--m-divider)' }}
+    >
+      <Show when={props.title}>
+        <div class="mb-[6px] flex h-[44px] items-center gap-[8px] px-[6px]">
+          <span class={`grow font-semibold tracking-[0.02em] ${props.long ? TEXT : `whitespace-nowrap ${HEADING}`}`}>{props.title}</span>
+          {props.accessory}
+        </div>
+      </Show>
+      {props.children}
+    </section>
+  );
+}
+
+/** An action in the column: its label on a track, the focused one lit. */
+export function Button(props: {
+  label: string;
+  focused: boolean;
+  /** Filled in the accent, for an action that is done. */
+  accent?: boolean;
+  /** Nothing to do yet. */
+  idle?: boolean;
+  class?: string;
+  /** The name a fly-out opened from this button anchors to. */
+  anchor?: string;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      data-anchor={props.anchor}
+      class={`flex h-[47px] items-center justify-center px-[8px] font-semibold whitespace-nowrap ${TEXT} ${props.class ?? ''}`}
+      style={{
+        ...TRACK(props.focused),
+        ...(props.accent ? { background: ACCENT } : {}),
+        ...(props.idle ? { color: 'rgb(255 255 255 / 0.35)' } : {}),
+      }}
+      onClick={() => props.onClick()}
+    >
+      {props.label}
+    </button>
+  );
+}
+
+/** A menu row: its name, then its value and a chevron; OK or a tap opens its
+ * options in a fly-out, as the camera's menu rows do. */
+export function OptionRow(props: { name: string; value: string; focused: boolean; anchor?: string; onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      data-anchor={props.anchor}
+      class={`flex h-[57px] w-full items-center gap-[10px] pr-[10px] pl-[12px] font-medium whitespace-nowrap ${TEXT}`}
+      style={TRACK(props.focused)}
+      onClick={() => props.onClick()}
+    >
+      <span class="grow text-left">{props.name}</span>
+      <span>{props.value}</span>
+      <Chevron dir="right" size={16} />
+    </button>
+  );
+}

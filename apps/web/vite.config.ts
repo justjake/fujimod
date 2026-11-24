@@ -17,6 +17,7 @@ import { simulatorReports } from './scripts/local-reports.ts';
 import { directoryRoute } from './src/directory-route.ts';
 import { browserDiagnostics } from './scripts/browser-diagnostics.ts';
 import { siteSdkDocs } from './scripts/sdk-docs.ts';
+import { siteFilmEditorDemo } from './scripts/film-editor-demo.ts';
 import { SHARING_WORKER_ORIGIN, SHARING_WORKER_PATHS } from './scripts/sharing-worker.ts';
 import { execFileSync } from 'node:child_process';
 import { createReadStream, existsSync, readFileSync } from 'node:fs';
@@ -286,6 +287,7 @@ export default defineConfig(({ mode, command }) => ({
     previewLicenseFiles(),
     isolationHeaders(),
     siteSdkDocs(loadEnv(mode, process.cwd(), 'FUJIMOD_').FUJIMOD_SDK_DOCS),
+    siteFilmEditorDemo(loadEnv(mode, process.cwd(), 'FUJIMOD_').FUJIMOD_FILM_EDITOR_DEMO, mode === 'local-preview'),
     localMedia(
       loadEnv(mode, process.cwd(), 'FUJIMOD_').FUJIMOD_MEDIA_ROOT,
       loadEnv(mode, process.cwd(), 'FUJIMOD_').FUJIMOD_MEDIA,

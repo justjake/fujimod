@@ -23,6 +23,9 @@ export function siteRoutes(client: string) {
     // Cloudflare serves 404.html for every address without a page; the
     // Worker serves these pages for failed browser requests.
     ...Object.values(errorPages),
+    '/docs/design/',
+    '/docs/design/custom-settings-editor/',
+    '/features/custom-settings-editor/',
     `/${sdkDocsPath}/`,
     ...components.map((component) => `/${sdkDocsPath}/components/${component.slug}/`),
   ];
@@ -56,6 +59,9 @@ export async function prerender(output = 'dist') {
                 '/404': 'data-status="404"',
                 '/500': 'data-status="500"',
                 '/503': 'data-status="503"',
+                '/docs/design/': 'class="shell design-index"',
+                '/docs/design/custom-settings-editor/': 'class="shell design-page"',
+                '/features/custom-settings-editor/': 'class="feature-page"',
               }[route];
     if (
       !html.includes('class="site-header"') ||
