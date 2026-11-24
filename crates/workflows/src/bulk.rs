@@ -521,7 +521,10 @@ impl Source {
                     u64::from(reply.fields[0]) == query_base
                         && capacities.contains(&capacity)
                         && data_offset < capacity,
-                    "Bulk source or capacity differs from the located facts",
+                    &format!(
+                        "Bulk source or capacity differs from the located facts: base {:#x}, capacity {capacity:#x}",
+                        reply.fields[0]
+                    ),
                 )?;
                 let mode = if wrapping {
                     OffsetMode::Wrapping
