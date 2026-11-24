@@ -28,6 +28,7 @@ export default function App() {
   const [busy, setBusy] = createSignal(false);
   const [runtime, setRuntime] = createSignal<ReturnType<typeof startSession>>();
   const [model, setModel] = createSignal('');
+  const [realTime, setRealTime] = createSignal(false);
   let viewer!: HTMLDivElement, lcd!: HTMLCanvasElement;
   let engine: RemoteEngine | undefined;
   const updateState = (write: (value: ReturnType<typeof sessionState>) => void) => {
@@ -211,6 +212,11 @@ export default function App() {
             active={state().toolbarVisible}
             title={model()}
             speed={state().speed}
+            realTime={realTime()}
+            toggleRealTime={() => {
+              const on = !realTime();
+              void engine?.setRealTime(on).then(() => setRealTime(on));
+            }}
             modSupported={false}
             modEnabled={false}
             modDisabled

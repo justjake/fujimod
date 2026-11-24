@@ -104,6 +104,7 @@ impl Room {
             catalog: None,
             pending_releases: Vec::new(),
             pace: None,
+            real_time: None,
         };
         while viewer.joining.is_empty() {
             if abandoned() {
@@ -131,6 +132,7 @@ pub fn serve<R: Run>(mut run: R, room: Room, open: &mut dyn FnMut() -> bool) -> 
         let frames = run.frames()?;
         viewer.show(&frames)?;
         viewer.publish_metrics(&run);
+        viewer.hold_to_real_time(&run);
     }
     run.finish()
 }
@@ -179,6 +181,8 @@ pub struct Viewer {
     /// Buttons whose last holder left, released before the next command.
     pending_releases: Vec<String>,
     pace: Option<Pace>,
+    /// Wall time and guest tick from which a real-time run is held to the clock.
+    real_time: Option<(Instant, u64)>,
 }
 
 /// Guest ticks sampled against wall time.
@@ -367,6 +371,17 @@ impl Viewer {
         Ok(())
     }
 
+    /// In real time, wait while the guest is ahead of the wall clock, at most a frame.
+    fn hold_to_real_time(&mut self, run: &dyn Run) {
+        let Some((wall, start)) = self.real_time else { return };
+        let rate = run.ticks_per_second().max(1) as f64;
+        let ahead = run.session().board.now().saturating_sub(start) as f64 / rate
+            - wall.elapsed().as_secs_f64();
+        if ahead > 0.0 {
+            std::thread::sleep(Duration::from_secs_f64(ahead.min(1.0 / 60.0)));
+        }
+    }
+
     /// Send each controller the camera's speed against real time.
     pub fn publish_metrics(&mut self, run: &dyn Run) {
         let (now, ticks) = (Instant::now(), run.session().board.now());
@@ -521,6 +536,14 @@ impl Viewer {
                 let (node, script) =
                     session.touch_input(string(&args, "id")?, string(&args, "phase")?, x, y)?;
                 session.touch(&node, &script)?;
+                Ok(Value::Null)
+            }
+            "real_time" => {
+                let on = args
+                    .get("on")
+                    .and_then(Value::as_bool)
+                    .ok_or("on must be a boolean")?;
+                self.real_time = on.then(|| (Instant::now(), session.board.now()));
                 Ok(Value::Null)
             }
             "close" => Ok(Value::Null),

@@ -15,6 +15,9 @@ export function ViewportControls(props: {
   webcamDisabled?: boolean;
   webcamError?: string;
   toggleWebcam?: () => void;
+  /** Whether the camera is held to the wall clock; absent where it always is. */
+  realTime?: boolean;
+  toggleRealTime?: () => void;
   /** Choose a RAW file as the sensor image. */
   chooseRaw?: () => void;
   modSupported: boolean;
@@ -138,6 +141,17 @@ export function ViewportControls(props: {
         </Show>
         <Show when={props.speed !== undefined && Number.isFinite(props.speed)}>
           <SpeedGauge speed={props.speed!} />
+        </Show>
+        <Show when={props.toggleRealTime}>
+          <button
+            id="real-time-toggle"
+            type="button"
+            class="viewport-text-toggle"
+            aria-pressed={props.realTime ? 'true' : 'false'}
+            onClick={() => props.toggleRealTime?.()}
+          >
+            Real time
+          </button>
         </Show>
       </Show>
       <span class="viewport-bar-spacer" />

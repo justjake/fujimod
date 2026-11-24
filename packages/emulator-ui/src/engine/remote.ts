@@ -359,6 +359,10 @@ export class RemoteEngine implements Engine {
   setPosition(id: string, position: string): Promise<void> {
     return this.rpc('set_position', { id, position });
   }
+  /** Hold the camera to the wall clock, or let it run as fast as the host allows. */
+  setRealTime(on: boolean): Promise<void> {
+    return this.rpc('real_time', { on });
+  }
   setScene(_scene: Scene | null): Promise<void> {
     return this.unavailableMethod('Scene input');
   }
