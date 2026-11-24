@@ -105,7 +105,7 @@ def test_a_branch_submodule_rebases_before_its_superproject(
     command("git", "push", "-q", "origin", "main", cwd=other)
     new_base = command("git", "rev-parse", "HEAD", cwd=other)
 
-    rebase_tree(Repository(shared), "main", set())
+    rebase_tree(Repository(shared), "main", set(), {})
 
     library_head = command("git", "rev-parse", "HEAD", cwd=shared / "lib")
     assert command("git", "rev-parse", "HEAD^", cwd=shared / "lib") == library_main
