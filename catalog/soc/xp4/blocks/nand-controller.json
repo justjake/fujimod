@@ -1,0 +1,98 @@
+{
+  "$schema": "https://fujimod.com/schemas/soc-block.schema.json",
+  "schema": 1,
+  "id": "nand-controller",
+  "base": 4294705152,
+  "size": 4104,
+  "kind": "nand-controller",
+  "registers": [
+    {
+      "name": "command",
+      "offset": 0,
+      "width_bytes": 4,
+      "access": "read-write",
+      "fields": [
+        {
+          "name": "start",
+          "bit": 0,
+          "width_bits": 1
+        }
+      ]
+    },
+    {
+      "name": "command-word-0",
+      "offset": 8,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "command-word-1",
+      "offset": 12,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "trigger",
+      "offset": 16,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "status",
+      "offset": 20,
+      "width_bytes": 4,
+      "access": "read-write",
+      "fields": [
+        {
+          "name": "error-bit-0",
+          "bit": 0,
+          "width_bits": 1
+        },
+        {
+          "name": "error-bit-1",
+          "bit": 1,
+          "width_bits": 1
+        },
+        {
+          "name": "ready",
+          "bit": 15,
+          "width_bits": 1
+        }
+      ]
+    },
+    {
+      "name": "data-status",
+      "offset": 272,
+      "width_bytes": 4,
+      "access": "read-write",
+      "fields": [
+        {
+          "name": "data-ready",
+          "bit": 21,
+          "width_bits": 1
+        }
+      ]
+    },
+    {
+      "name": "ready",
+      "offset": 4100,
+      "width_bytes": 4,
+      "access": "read-write",
+      "fields": [
+        {
+          "name": "ready",
+          "bit": 0,
+          "width_bits": 1
+        }
+      ]
+    }
+  ],
+  "evidence": [
+    {
+      "kind": "located",
+      "firmware_ids": [
+        "x100v-301"
+      ]
+    }
+  ]
+}

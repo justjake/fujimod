@@ -76,6 +76,12 @@
       "kind": "sram"
     }
   ],
+  "clocks": [
+    {
+      "id": "cpu-tick",
+      "frequency_hz": 54000000
+    }
+  ],
   "hardware": {
     "profiles": {
       "xp4": {

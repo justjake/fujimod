@@ -5,6 +5,7 @@
   "base": 4294165248,
   "size": 80,
   "kind": "timer",
+  "clock_id": "cpu-tick",
   "interrupts": [
     {
       "output": "channel0",
@@ -42,7 +43,7 @@
   "device": {
     "model": "interval_timer",
     "layout": "xp4",
-    "clock": "one 54 MHz timer cycle per aggregate CPU instruction; synthetic ratio",
-    "basis": "Declared catalog input."
+    "clock": "cpu-tick; one timer cycle per aggregate CPU instruction (synthetic ratio)",
+    "basis": "XP4 interval timer, eight channels, window 0x50. The run times and sample windows of its users are declared stand-ins; the clock is the processor cpu-tick domain."
   }
 }

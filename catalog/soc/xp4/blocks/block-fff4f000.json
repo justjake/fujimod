@@ -16,5 +16,27 @@
     ],
     "basis": "X-T3 5.11 writes 1 to +0x01c and waits for it to read 0; the command completes at once and the word reads 0. Other words read back their last write; nothing else in this block is modeled.",
     "order": 17
-  }
+  },
+  "registers": [
+    {
+      "name": "audio-fifo-0-receive",
+      "offset": 0,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "audio-fifo-0-transmit",
+      "offset": 4,
+      "width_bytes": 4,
+      "access": "read-write"
+    }
+  ],
+  "evidence": [
+    {
+      "kind": "located",
+      "firmware_ids": [
+        "xt3-511"
+      ]
+    }
+  ]
 }

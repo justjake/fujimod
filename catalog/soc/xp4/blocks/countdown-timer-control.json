@@ -5,6 +5,7 @@
   "base": 4294164480,
   "size": 80,
   "kind": "timer",
+  "clock_id": "cpu-tick",
   "interrupts": [
     {
       "output": "channel0",

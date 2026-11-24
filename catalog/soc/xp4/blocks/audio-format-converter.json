@@ -1,0 +1,21 @@
+{
+  "$schema": "https://fujimod.com/schemas/soc-block.schema.json",
+  "schema": 1,
+  "id": "audio-format-converter",
+  "base": 4294606848,
+  "size": 4096,
+  "kind": "address-window",
+  "device": {
+    "model": "register_block",
+    "idle_bits": [],
+    "basis": "X-T3 5.11 audio format converter at 0xfffa8000. The register block serves its words as last write until the conversion job is modeled; the converter itself is the explicit block job of `emulator-xp4-board` blocks.rs and no run enables it."
+  },
+  "evidence": [
+    {
+      "kind": "located",
+      "firmware_ids": [
+        "xt3-511"
+      ]
+    }
+  ]
+}
