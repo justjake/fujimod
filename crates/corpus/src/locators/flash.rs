@@ -511,10 +511,12 @@ fn flash_with_route<L: Lookup>(
         }
         ranges.push(cache.span("destination cache maintenance"));
         if mixed {
-            let identity = locator.named("flash_installed_jedec_id", |r| {
-                r.code.len() == 3 && r.code[0].mnemonic == "adrp"
-                    && r.code[1].mnemonic == "ldr" && r.code[1].operands.starts_with("w0,")
-                    && r.code[2].mnemonic == "ret"
+            let identity = locator.named("flash_read_jedec_signature", |r| {
+                r.code.len() == 7 && r.code[0].mnemonic == "adrp"
+                    && r.code[1].mnemonic == "add" && r.code[2].mnemonic == "ldrh"
+                    && r.has("strb", "w3, [x0]") && r.has("strb", "w0, [x1]")
+                    && r.code[4].mnemonic == "ldr" && r.code[4].operands.starts_with("w0,")
+                    && r.code[6].mnemonic == "ret"
             })?;
             let address = one(loads(&identity).into_iter().map(|(_, a)| a).collect(), "installed flash identity")?;
             checks.push(json!({"name":"installed NOR JEDEC identity","address":address,"size":4,"value":id}));
