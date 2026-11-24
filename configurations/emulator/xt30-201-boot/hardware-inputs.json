@@ -80,10 +80,6 @@
           "rtc_basis": "Virtual unset RTC. The counter advances from guest ticks after a stock start command."
         }
       },
-      "2": {
-        "level": "low",
-        "basis": "Declared virtual startup inputs for a bounded application-boot scenario."
-      },
       "3": {
         "level": "low",
         "basis": "Declared virtual startup inputs for a bounded application-boot scenario."

@@ -49,10 +49,6 @@
           "basis": "Declared catalog input. Register 21 is the USB port detection result the firmware reads after writing 0x0b00 to register 20 when a cable arrives; it starts its USB device only when the low bits read 1 or 3. The value 1 is inferred from a body that starts its USB device with a host attached, not read from the controller, and is served whether or not a cable is present."
         }
       },
-      "2": {
-        "level": "low",
-        "basis": "Declared catalog input."
-      },
       "3": {
         "level": "low",
         "basis": "Declared catalog input."

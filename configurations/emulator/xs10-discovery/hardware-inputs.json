@@ -72,10 +72,6 @@
           "basis": "Four-byte checksum transport; synthetic status inputs and unset RTC. Registers 2 and 14 read 0x0000 and 0x0011, physical service-mode samples stable over five seconds (register 14 with the headphone field clear); writes to them refuse. Stored words initially read zero. Clock loads preserve retained validity. Control reads retain the load strobe through the declared set window, refuse the unresolved interval, then clear it. After fresh writes to every retained word, the declared validity update latches without a clock reload or persistence effect. Independent control operations and alarm enables refuse."
         }
       },
-      "2": {
-        "level": "low",
-        "basis": "Declared catalog input."
-      },
       "3": {
         "level": "low",
         "basis": "Declared catalog input."
