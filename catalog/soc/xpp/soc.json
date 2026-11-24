@@ -1536,7 +1536,6 @@
     "coprocessor_writes": []
   },
   "hardware": {
-    "companion": null,
     "profiles": {
       "xpp": {
         "cpu_model": "Cortex-A7",

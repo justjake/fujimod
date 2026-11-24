@@ -1788,86 +1788,6 @@
       ],
       "type": "object"
     },
-    "CompanionHardware": {
-      "additionalProperties": false,
-      "description": "A companion processor's hardware clock and mailbox endpoints.",
-      "properties": {
-        "clock_id": {
-          "description": "Clock domain supplying the companion processor.",
-          "type": "string"
-        },
-        "mailbox": {
-          "$ref": "#/$defs/CompanionMailbox",
-          "description": "Mailbox indices used by the companion link."
-        },
-        "mailbox_block_id": {
-          "description": "SoC mailbox block identity.",
-          "type": "string"
-        },
-        "processor_id": {
-          "description": "Companion processor identity in the SoC processor list.",
-          "type": "string"
-        },
-        "vector_base": {
-          "description": "Vector-table address presented to the companion after reset.",
-          "format": "uint64",
-          "minimum": 0,
-          "type": "integer"
-        }
-      },
-      "required": [
-        "processor_id",
-        "clock_id",
-        "vector_base",
-        "mailbox_block_id",
-        "mailbox"
-      ],
-      "type": "object"
-    },
-    "CompanionMailbox": {
-      "additionalProperties": false,
-      "description": "Mailbox indices used by a companion processor link.",
-      "properties": {
-        "control": {
-          "description": "Control mailbox index.",
-          "format": "uint32",
-          "minimum": 0,
-          "type": "integer"
-        },
-        "fault": {
-          "description": "Fault mailbox index.",
-          "format": "uint32",
-          "minimum": 0,
-          "type": "integer"
-        },
-        "reply": {
-          "description": "Reply mailbox index.",
-          "format": "uint32",
-          "minimum": 0,
-          "type": "integer"
-        },
-        "request": {
-          "description": "Request mailbox index.",
-          "format": "uint32",
-          "minimum": 0,
-          "type": "integer"
-        },
-        "status": {
-          "description": "Status mailbox index.",
-          "format": "uint32",
-          "minimum": 0,
-          "type": "integer"
-        }
-      },
-      "required": [
-        "request",
-        "control",
-        "reply",
-        "status",
-        "fault"
-      ],
-      "type": "object"
-    },
     "CoprocessorWrite": {
       "additionalProperties": false,
       "description": "A CP15 or CP14 coprocessor register write during reset.",
@@ -2794,10 +2714,14 @@
       "description": "M-profile processor identification state.",
       "properties": {
         "cpuid": {
-          "description": "CPUID register value presented by the processor.",
+          "default": null,
+          "description": "CPUID register value presented by the processor, when known.",
           "format": "uint32",
           "minimum": 0,
-          "type": "integer"
+          "type": [
+            "integer",
+            "null"
+          ]
         },
         "vector_base": {
           "description": "Vector-table address after reset.",
@@ -2807,7 +2731,6 @@
         }
       },
       "required": [
-        "cpuid",
         "vector_base"
       ],
       "type": "object"
@@ -2908,6 +2831,14 @@
           ],
           "default": null,
           "description": "Optional A-profile application-processor state."
+        },
+        "clock_id": {
+          "default": null,
+          "description": "Clock domain supplying this core, when specified.",
+          "type": [
+            "string",
+            "null"
+          ]
         },
         "id": {
           "description": "Core identity within its SoC.",
@@ -3331,18 +3262,6 @@
       "additionalProperties": false,
       "description": "Additional hardware parameters whose meaning depends on the processor family.",
       "properties": {
-        "companion": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/CompanionHardware"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "description": "Companion-processor clock and mailbox connections, when present."
-        },
         "power_on_ram_fill": {
           "description": "The byte every RAM cell holds at power-on, as read on a camera. Absent\nwhen unmeasured; the emulator then starts RAM zeroed.",
           "format": "uint8",

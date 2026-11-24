@@ -9,7 +9,7 @@ use super::{
     firmware::Firmware,
     rom_start::{self, Entry, RomStart},
 };
-use fujimod_catalog::reference::{ProcessorModel, RegionSize};
+use fujimod_catalog::reference::{ProcessorModel, RegionSize, Soc};
 use fujimod_catalog_configuration::{RunInputs, RunScene};
 use fujimod_catalog_resolution::ResolvedConfiguration;
 use fujimod_emulator::board::{self, bus::Mode};
@@ -110,6 +110,48 @@ fn initial_images(
     Ok(images)
 }
 
+/// Mailbox interrupt lines the catalog declares on the block behind the
+/// companion window, routed to the companion core.
+fn mailbox_pins(soc: &Soc, base: u64, companion: usize) -> Result<mailbox::Pins, String> {
+    let block = soc
+        .blocks
+        .iter()
+        .find(|block| block.base == base)
+        .ok_or_else(|| {
+            format!(
+                "SoC {} has no block at the mailbox window {base:#x}",
+                soc.id
+            )
+        })?;
+    let core = soc
+        .processors
+        .get(companion)
+        .ok_or("mailbox companion core is absent")?
+        .id
+        .as_str();
+    let line = |output: &str| {
+        block
+            .interrupts
+            .iter()
+            .find(|row| row.output == output && row.core.as_deref() == Some(core))
+            .map(|row| row.line)
+            .ok_or_else(|| {
+                format!(
+                    "SoC {} mailbox block {} has no {output} line for core {core}",
+                    soc.id, block.id
+                )
+            })
+    };
+    Ok(mailbox::Pins {
+        companion,
+        request: line("request")?,
+        control: line("control")?,
+        reply: line("reply")?,
+        status: line("status")?,
+        fault: line("fault")?,
+    })
+}
+
 fn devices_and_resources(
     state: &BootState,
     firmware: &Firmware,
@@ -118,23 +160,24 @@ fn devices_and_resources(
     mut windows: Vec<DeviceWindow>,
     assets: &BTreeMap<String, Vec<u8>>,
     card_images: &[(u64, &fujimod_emulator_devices::parts::sd_card::Card)],
+    soc: &Soc,
     companion_core: Option<usize>,
 ) -> Result<(Vec<DeviceWindow>, xp5_board::Resources), String> {
     let pins = fujimod_emulator_devices::xp5::pins::Pins::shared();
-    let companion = if state.device.iter().any(|window| window.kind == "interprocessor-mailbox") {
-        Some(xp5_board::Companion {
-            pins: mailbox::Pins {
-                companion: companion_core.ok_or("mailbox requires a Cortex-M4 core")?,
-                request: 55,
-                control: 58,
-                reply: 141,
-                status: 142,
-                fault: 143,
-            },
+    let companion = match state
+        .device
+        .iter()
+        .find(|window| window.kind == "interprocessor-mailbox")
+    {
+        Some(window) => Some(xp5_board::Companion {
+            pins: mailbox_pins(
+                soc,
+                window.base,
+                companion_core.ok_or("mailbox requires a Cortex-M4 core")?,
+            )?,
             channel: mailbox::Channel::default(),
-        })
-    } else {
-        None
+        }),
+        None => None,
     };
     let mut resources = xp5_board::Resources {
         sd: xp5_board::sd::resolve(state.sd.clone(), assets)?,
@@ -976,6 +1019,7 @@ pub(crate) fn open_from(
             || loader_cards.iter().filter_map(|card| Some((card.slot, card.card.as_ref()?))).collect(),
             |rom| rom.card_image.iter().map(|image| (super::loader_card::SLOT, &image.card)).collect::<Vec<_>>(),
         ),
+        &reference.soc,
         reference.soc.processors.iter()
             .position(|processor| processor.model == ProcessorModel::CortexM4),
     )?;
@@ -1182,6 +1226,33 @@ mod tests {
         assert!(caller_ram_declares(&ram, 0xff80_0000, 0x4_0000));
         assert!(!caller_ram_declares(&ram, 0xff80_0000, 0x3_c000));
         assert!(!caller_ram_declares(&ram, 0xfff0_0000, 0x1_0000));
+    }
+
+    #[test]
+    fn mailbox_lines_come_from_the_catalog_block() {
+        let selection = fujimod_catalog::ReferenceCatalog::bundled()
+            .unwrap()
+            .resolve("x100vi", "x100vi-131")
+            .unwrap();
+        let mailbox = selection
+            .soc
+            .blocks
+            .iter()
+            .find(|block| block.id == "mailbox")
+            .unwrap();
+        let pins = mailbox_pins(&selection.soc, mailbox.base, 4).unwrap();
+        assert_eq!(
+            (
+                pins.request,
+                pins.control,
+                pins.reply,
+                pins.status,
+                pins.fault
+            ),
+            (55, 58, 141, 142, 143)
+        );
+        assert_eq!(pins.companion, 4);
+        assert!(mailbox_pins(&selection.soc, mailbox.base, 0).is_err());
     }
 
     #[test]

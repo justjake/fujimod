@@ -246,7 +246,8 @@ pub fn assemble(
 }
 
 /// Construct the checked catalog memory/peripheral graph with caller-owned
-/// processor reset state. Missing companion state remains held in reset.
+/// processor reset state. A processor's declared state supplies what the
+/// caller leaves out; a core with neither is refused.
 pub fn assemble_with_starts(
     selection: &ResolvedSelection,
     dram_address_space_limit_bytes: u64,
@@ -263,10 +264,6 @@ pub fn assemble_with_starts(
         return Err("resolved body and SoC identities differ".into());
     }
     let cores = core_index(soc)?;
-    let companion = soc
-        .hardware
-        .as_ref()
-        .and_then(|hardware| hardware.companion.as_ref());
     let mut start_by_id = BTreeMap::new();
     for start in starts {
         if start_by_id
@@ -304,30 +301,34 @@ pub fn assemble_with_starts(
                     .collect::<Vec<_>>()
             };
             let mprofile = if processor.model == ProcessorModel::CortexM4 {
-                let companion = companion
-                    .filter(|companion| companion.processor_id == processor.id)
-                    .ok_or_else(|| {
-                        format!(
-                            "SoC {} has no companion facts for core {}",
-                            soc.id, processor.id
-                        )
-                    })?;
+                let profile = processor.mprofile.as_ref().ok_or_else(|| {
+                    format!(
+                        "SoC {} has no M-profile state for core {}",
+                        soc.id, processor.id
+                    )
+                })?;
+                let clock_id = processor.clock_id.as_ref().ok_or_else(|| {
+                    format!(
+                        "SoC {} has no clock for processor {}",
+                        soc.id, processor.id
+                    )
+                })?;
                 let clock_hz = soc
                     .clocks
                     .iter()
-                    .find(|clock| clock.id == companion.clock_id)
+                    .find(|clock| clock.id == *clock_id)
                     .and_then(|clock| clock.frequency_hz)
                     .ok_or_else(|| {
                         format!(
-                            "SoC {} has no frequency for companion clock {}",
-                            soc.id, companion.clock_id
+                            "SoC {} has no frequency for clock {clock_id}",
+                            soc.id
                         )
                     })?;
                 Some(fujimod_emulator::board::mprofile::Config {
                     clock_hz,
                     board_ticks_per_second: board_ticks_per_second
-                        .ok_or("M-profile companion requires a run timebase")?,
-                    vector_base: u32::try_from(companion.vector_base)
+                        .ok_or("M-profile processor requires a run timebase")?,
+                    vector_base: u32::try_from(profile.vector_base)
                         .map_err(|_| "M-profile vector base exceeds 32 bits")?,
                 })
             } else {
@@ -339,11 +340,6 @@ pub fn assemble_with_starts(
                 start
                     .map(|state| state.released)
                     .or(processor.released)
-                    .or_else(|| {
-                        companion
-                            .is_some_and(|companion| companion.processor_id == processor.id)
-                            .then_some(false)
-                    })
                     .ok_or_else(|| {
                         format!(
                             "SoC {} does not declare the reset-release state for core {}",
@@ -729,6 +725,7 @@ mod tests {
             model: ProcessorModel::CortexR5f,
             released: Some(true),
             registers: vec![],
+            clock_id: None,
             mprofile: None,
             rprofile: Some(RProfileState {
                 cp14_identity: 0,
