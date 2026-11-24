@@ -77,18 +77,24 @@ impl TouchChip {
             .with_contact_ids(profile.contact_ids)?;
         if !(8..=0x77).contains(&profile.address)
             || !profile.writable_registers.contains(&profile.mode_register)
-            || !profile.writable_registers.contains(&profile.restart_register)
+            || !profile
+                .writable_registers
+                .contains(&profile.restart_register)
         {
             return Err("Invalid touch chip address or mode register".into());
         }
         let report_end = u32::from(profile.report_register) + u32::from(REPORT_BYTES);
         let overlaps = |register: u16| {
-            (profile.report_register..).take(usize::from(REPORT_BYTES)).any(|r| r == register)
+            (profile.report_register..)
+                .take(usize::from(REPORT_BYTES))
+                .any(|r| r == register)
         };
         if report_end > 0x1_0000
             || overlaps(profile.heartbeat_register)
             || profile.writable_registers.iter().any(|r| overlaps(*r))
-            || profile.writable_registers.contains(&profile.heartbeat_register)
+            || profile
+                .writable_registers
+                .contains(&profile.heartbeat_register)
         {
             return Err("Touch chip register ranges overlap".into());
         }
@@ -144,7 +150,16 @@ impl TouchChip {
     }
 
     fn input(&mut self, now: u64, phase: Phase, x: u16, y: u16) -> Result<(), String> {
-        self.controller.inject(now, &[ContactInput { tick: now, contact: 0, phase, x, y }])
+        self.controller.inject(
+            now,
+            &[ContactInput {
+                tick: now,
+                contact: 0,
+                phase,
+                x,
+                y,
+            }],
+        )
     }
 
     /// Earliest tick at which [`TouchChip::advance`] has work.
@@ -152,7 +167,8 @@ impl TouchChip {
         if self.initial_ready_pending {
             return Some(now);
         }
-        self.controller.next_event_tick(now, self.reads, self.enabled)
+        self.controller
+            .next_event_tick(now, self.reads, self.enabled)
     }
 
     /// Run due input edges. Returns true when the input-ready interrupt should
@@ -186,7 +202,9 @@ impl TouchChip {
                 if self.profile.writable_registers.contains(&pointer) {
                     Ok(())
                 } else {
-                    Err(format!("Touch chip register {pointer:#06x} is not writable"))
+                    Err(format!(
+                        "Touch chip register {pointer:#06x} is not writable"
+                    ))
                 }
             }
             TransferPhase::Idle | TransferPhase::Read => {
@@ -229,7 +247,9 @@ impl TouchChip {
         } else if pointer == self.profile.heartbeat_register {
             Ok(self.heartbeat.wrapping_add(1))
         } else {
-            Err(format!("Touch chip register {pointer:#06x} is not readable"))
+            Err(format!(
+                "Touch chip register {pointer:#06x} is not readable"
+            ))
         }
     }
 
