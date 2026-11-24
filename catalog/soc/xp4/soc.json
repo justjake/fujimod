@@ -67,11 +67,29 @@
       "kind": "dram"
     },
     {
+      "id": "boot-rom",
+      "base": 4293918720,
+      "size": {
+        "kind": "bytes",
+        "bytes": 32768
+      },
+      "kind": "rom"
+    },
+    {
       "id": "input-buffer-sram",
       "base": 4293984256,
       "size": {
         "kind": "bytes",
         "bytes": 57344
+      },
+      "kind": "sram"
+    },
+    {
+      "id": "boot-sram",
+      "base": 4294041600,
+      "size": {
+        "kind": "bytes",
+        "bytes": 73728
       },
       "kind": "sram"
     }

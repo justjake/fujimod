@@ -44,6 +44,9 @@ pub struct ProcessorEmulation {
     /// Instruction entries consumed per board tick, when the processor declares one.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub instructions_per_tick: Option<RunInstructionRate>,
+    /// PMU counter cycles per board tick, when declared.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub pmu_cycles_per_tick: Option<u64>,
     /// Board ticks per second, when the processor declares its own time base.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub board_ticks_per_second: Option<u64>,
@@ -111,6 +114,9 @@ impl ProcessorEmulation {
         }
         if let Some(rate) = &self.instructions_per_tick {
             rate.validate()?;
+        }
+        if self.pmu_cycles_per_tick == Some(0) {
+            return Err("processor emulation PMU cycles per tick must be positive".into());
         }
         if self.board_ticks_per_second == Some(0) {
             return Err("processor emulation board tick rate must be positive".into());

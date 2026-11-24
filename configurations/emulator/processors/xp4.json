@@ -4,6 +4,14 @@
   "id": "xp4",
   "cpu_model": "Cortex-A7",
   "runtime_abi": "armv7a-unicorn-v1",
+  "engines": [
+    "rust-unicorn-armv7a"
+  ],
+  "instructions_per_tick": {
+    "numerator": 1,
+    "denominator": 1
+  },
+  "pmu_cycles_per_tick": 24,
   "mmu": "Unicorn ARMv7-A CPU page-table walker; guest CP15 and page tables",
   "limits": []
 }

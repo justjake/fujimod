@@ -35,6 +35,15 @@ fn processors_keep_the_choices_their_soc_profiles_held() {
             .as_deref()
             .is_some_and(|mmu| mmu.contains("ARMv7-A"))
     );
+    assert_eq!(xp4.engines, ["rust-unicorn-armv7a"]);
+    assert_eq!(
+        xp4.instructions_per_tick,
+        Some(RunInstructionRate {
+            numerator: 1,
+            denominator: 1,
+        })
+    );
+    assert_eq!(xp4.pmu_cycles_per_tick, Some(24));
 
     let xp5 = emulation("xp5");
     assert_eq!(xp5.cpu_model, "Cortex-A53");
