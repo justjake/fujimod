@@ -698,6 +698,14 @@ pub struct LoaderHandoff {
     pub size: u64,
     /// Declared words.
     pub words: Vec<Words>,
+    /// Whether RAM also holds the stock loader's copy of the update's section table at its
+    /// located address, as the loader leaves it before entering the kernel.
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub section_table: bool,
+}
+
+fn is_false(value: &bool) -> bool {
+    !*value
 }
 
 /// Declared processed frame input facts.
