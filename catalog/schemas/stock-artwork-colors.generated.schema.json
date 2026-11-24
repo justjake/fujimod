@@ -1,0 +1,352 @@
+{
+  "$id": "https://fujimod.com/schemas/stock-artwork-colors.generated.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "Generated stock palette numbers and resolved black, white and red artwork paints.",
+  "properties": {
+    "$schema": {
+      "const": "https://fujimod.com/schemas/stock-artwork-colors.generated.schema.json",
+      "type": "string"
+    },
+    "firmware_id": {
+      "type": "string"
+    },
+    "firmware_sha256": {
+      "pattern": "^[0-9a-f]{64}$",
+      "type": "string"
+    },
+    "id": {
+      "type": "string"
+    },
+    "palette": {
+      "items": {
+        "$ref": "#/$defs/palette_entry"
+      },
+      "type": "array"
+    },
+    "places": {
+      "items": {
+        "$ref": "#/$defs/place"
+      },
+      "type": "array"
+    },
+    "schema": {
+      "const": 1,
+      "type": "integer"
+    },
+    "source": {
+      "$ref": "#/$defs/source"
+    }
+  },
+  "required": [
+    "$schema",
+    "schema",
+    "id",
+    "firmware_id",
+    "firmware_sha256",
+    "source",
+    "palette",
+    "places"
+  ],
+  "title": "StockArtworkColors",
+  "type": "object",
+  "$defs": {
+    "address": {
+      "pattern": "^0x[0-9a-f]{8}$",
+      "type": "string"
+    },
+    "palette_entry": {
+      "additionalProperties": false,
+      "properties": {
+        "index": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "rgb": {
+          "$ref": "#/$defs/rgb"
+        }
+      },
+      "required": [
+        "index",
+        "rgb"
+      ],
+      "type": "object"
+    },
+    "paint": {
+      "additionalProperties": false,
+      "properties": {
+        "call_sites": {
+          "items": {
+            "$ref": "#/$defs/address"
+          },
+          "type": "array"
+        },
+        "palette": {
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "records": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "rgba": {
+          "$ref": "#/$defs/rgba"
+        },
+        "when": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "palette",
+        "when",
+        "rgba"
+      ],
+      "type": "object"
+    },
+    "paints": {
+      "additionalProperties": false,
+      "properties": {
+        "black": {
+          "items": {
+            "$ref": "#/$defs/paint"
+          },
+          "type": "array"
+        },
+        "red": {
+          "items": {
+            "$ref": "#/$defs/paint"
+          },
+          "type": "array"
+        },
+        "white": {
+          "items": {
+            "$ref": "#/$defs/paint"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "black",
+        "white",
+        "red"
+      ],
+      "type": "object"
+    },
+    "place": {
+      "additionalProperties": false,
+      "properties": {
+        "default": {
+          "$ref": "#/$defs/default_paints"
+        },
+        "kind": {
+          "enum": [
+            "q_tile_value",
+            "shooting_display_status"
+          ],
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "paints": {
+          "$ref": "#/$defs/paints"
+        },
+        "records": {
+          "items": {
+            "$ref": "#/$defs/record"
+          },
+          "type": "array"
+        },
+        "source": {
+          "additionalProperties": true,
+          "properties": {
+            "kind": {
+              "enum": [
+                "palette",
+                "canvas_packet"
+              ],
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind"
+          ],
+          "type": "object"
+        }
+      },
+      "required": [
+        "name",
+        "kind",
+        "source",
+        "default",
+        "paints"
+      ],
+      "type": "object"
+    },
+    "default_paints": {
+      "additionalProperties": false,
+      "properties": {
+        "palette": {
+          "$ref": "#/$defs/palette_numbers"
+        },
+        "rgba": {
+          "$ref": "#/$defs/color_groups"
+        }
+      },
+      "required": [
+        "palette",
+        "rgba"
+      ],
+      "type": "object"
+    },
+    "palette_numbers": {
+      "additionalProperties": false,
+      "properties": {
+        "black": {
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "red": {
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "white": {
+          "type": [
+            "integer",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "black",
+        "white",
+        "red"
+      ],
+      "type": "object"
+    },
+    "record": {
+      "additionalProperties": false,
+      "properties": {
+        "artwork_id": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "color_words": {
+          "items": {
+            "$ref": "#/$defs/address"
+          },
+          "type": "array"
+        },
+        "colors": {
+          "$ref": "#/$defs/color_groups"
+        },
+        "id": {
+          "type": "string"
+        },
+        "mode": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "mode",
+        "artwork_id",
+        "color_words",
+        "colors"
+      ],
+      "type": "object"
+    },
+    "color_groups": {
+      "additionalProperties": false,
+      "properties": {
+        "black": {
+          "$ref": "#/$defs/rgba"
+        },
+        "red": {
+          "$ref": "#/$defs/rgba"
+        },
+        "white": {
+          "$ref": "#/$defs/rgba"
+        }
+      },
+      "required": [
+        "black",
+        "white",
+        "red"
+      ],
+      "type": "object"
+    },
+    "rgb": {
+      "items": {
+        "maximum": 255,
+        "minimum": 0,
+        "type": "integer"
+      },
+      "maxItems": 3,
+      "minItems": 3,
+      "type": "array"
+    },
+    "rgba": {
+      "items": {
+        "maximum": 255,
+        "minimum": 0,
+        "type": "integer"
+      },
+      "maxItems": 4,
+      "minItems": 4,
+      "type": "array"
+    },
+    "source": {
+      "additionalProperties": false,
+      "properties": {
+        "canvas_packet_function": {
+          "$ref": "#/$defs/address"
+        },
+        "osd_items_catalog": {
+          "type": "string"
+        },
+        "palette_address": {
+          "$ref": "#/$defs/address"
+        },
+        "palette_components_function": {
+          "$ref": "#/$defs/address"
+        },
+        "palette_end": {
+          "$ref": "#/$defs/address"
+        },
+        "palette_entry_bytes": {
+          "type": "integer"
+        },
+        "palette_rgb_function": {
+          "$ref": "#/$defs/address"
+        },
+        "palette_select_function": {
+          "$ref": "#/$defs/address"
+        },
+        "q_tile_function": {
+          "$ref": "#/$defs/address"
+        }
+      },
+      "required": [
+        "palette_address",
+        "palette_end",
+        "palette_entry_bytes",
+        "palette_select_function",
+        "palette_rgb_function",
+        "palette_components_function",
+        "q_tile_function",
+        "canvas_packet_function",
+        "osd_items_catalog"
+      ],
+      "type": "object"
+    }
+  }
+}

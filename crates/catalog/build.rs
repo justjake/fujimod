@@ -64,6 +64,10 @@ fn main() {
             .file_name()
             .and_then(|name| name.to_str())
             .unwrap_or_default();
+        // Hand-authored locator inputs are not catalog documents.
+        if name == "osd-anchors.json" {
+            continue;
+        }
         let kind = match (*kind, name) {
             ("Body", "controls.json") => "PhysicalControls",
             ("Firmware", "control-ids.generated.json") => "ControlIds",
@@ -72,6 +76,7 @@ fn main() {
             ("Firmware", "ui-setting-names.generated.json") => "UiSettingNames",
             ("Firmware", "ui-event-codes.generated.json") => "UiEventCodes",
             ("Firmware", "osd-items.generated.json") => "OsdItems",
+            ("Firmware", "stock-artwork-colors.generated.json") => "StockArtworkColors",
             ("Firmware", "bulk.generated.json") => "Bulk",
             ("Firmware", "sd-boot-v2-autostart.generated.json") => "NandBoot",
             ("Firmware", "boot-patch.generated.json") => "BootPatch",
