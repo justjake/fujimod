@@ -1,0 +1,20 @@
+{
+  "sourceSha256": "a1d80c89834d533f9863bdd04f1063f6ac8749f56fc8c7a9d523366f12561e9f",
+  "endTick": 1077600000,
+  "scannerCallers": [
+    {
+      "function": "0x956790",
+      "return": "0x958b44",
+      "count": 53
+    },
+    {
+      "function": "0x9d6790",
+      "return": "0x9d8b44",
+      "count": 52
+    }
+  ],
+  "stockModuleExports": {
+    "A": "0x95045c",
+    "B": "0x9d045c"
+  }
+}

@@ -1,0 +1,487 @@
+{
+  "stockSha256": "ed400cde0abfb07bd54a9aeb9a99f1d993843c47d29f3c71732edd0ed0d5f172",
+  "scope": "stock path, DCF index and FAT directory entry generation, no media operations",
+  "helperSourceSha256": "ac524fd59e9bc07cbfb665c1ef73723aa7b019fb932ddc5c0391d775d2c6f225",
+  "rtcFixture": "SDK return and camera-local fields supplied by the test",
+  "constructorFixtures": [
+    "ready volume",
+    "drive index zero",
+    "folder and file numbers from scanner"
+  ],
+  "scannerFixtures": [
+    "ready volume",
+    "drive indices 0 and 1",
+    "mounted handle",
+    "synthetic DCF index"
+  ],
+  "capacityFixtures": [
+    "acquired DCF lock",
+    "released DCF lock"
+  ],
+  "checks": 59,
+  "observations": [
+    {
+      "validator": "0x957160",
+      "suffix": "_FUJI",
+      "result": 0
+    },
+    {
+      "validator": "0x957160",
+      "suffix": "_0101",
+      "result": 0
+    },
+    {
+      "validator": "0x957160",
+      "suffix": "_0229",
+      "result": 0
+    },
+    {
+      "validator": "0x957160",
+      "suffix": "_1022",
+      "result": 0
+    },
+    {
+      "validator": "0x957160",
+      "suffix": "_1231",
+      "result": 0
+    },
+    {
+      "validator": "0x957160",
+      "suffix": "_10/2",
+      "result": 8
+    },
+    {
+      "validator": "0x957160",
+      "suffix": "_10 2",
+      "result": 8
+    },
+    {
+      "parser": "0x95b3e4",
+      "path": "A:\\DCIM\\101_FUJI\\DSCF0001.JPG",
+      "result": 0
+    },
+    {
+      "parser": "0x95b3e4",
+      "path": "A:\\DCIM\\101_1022\\DSCF0001.JPG",
+      "result": 0
+    },
+    {
+      "parser": "0x95b3e4",
+      "path": "B:\\DCIM\\101_FUJI\\DSCF0001.JPG",
+      "result": 0
+    },
+    {
+      "parser": "0x95b3e4",
+      "path": "B:\\DCIM\\101_1022\\DSCF0001.JPG",
+      "result": 0
+    },
+    {
+      "validator": "0x9d7160",
+      "suffix": "_FUJI",
+      "result": 0
+    },
+    {
+      "validator": "0x9d7160",
+      "suffix": "_0101",
+      "result": 0
+    },
+    {
+      "validator": "0x9d7160",
+      "suffix": "_0229",
+      "result": 0
+    },
+    {
+      "validator": "0x9d7160",
+      "suffix": "_1022",
+      "result": 0
+    },
+    {
+      "validator": "0x9d7160",
+      "suffix": "_1231",
+      "result": 0
+    },
+    {
+      "validator": "0x9d7160",
+      "suffix": "_10/2",
+      "result": 8
+    },
+    {
+      "validator": "0x9d7160",
+      "suffix": "_10 2",
+      "result": 8
+    },
+    {
+      "parser": "0x9db3e4",
+      "path": "A:\\DCIM\\101_FUJI\\DSCF0001.JPG",
+      "result": 0
+    },
+    {
+      "parser": "0x9db3e4",
+      "path": "A:\\DCIM\\101_1022\\DSCF0001.JPG",
+      "result": 0
+    },
+    {
+      "parser": "0x9db3e4",
+      "path": "B:\\DCIM\\101_FUJI\\DSCF0001.JPG",
+      "result": 0
+    },
+    {
+      "parser": "0x9db3e4",
+      "path": "B:\\DCIM\\101_1022\\DSCF0001.JPG",
+      "result": 0
+    },
+    {
+      "date": [
+        26,
+        12,
+        31
+      ],
+      "rtcStatus": 0,
+      "dateKey": "0x20261231",
+      "fatDate": 23967,
+      "suffix": "_1231"
+    },
+    {
+      "date": [
+        27,
+        1,
+        1
+      ],
+      "rtcStatus": 0,
+      "dateKey": "0x20270101",
+      "fatDate": 24097,
+      "suffix": "_0101"
+    },
+    {
+      "date": [
+        26,
+        1,
+        1
+      ],
+      "rtcStatus": 0,
+      "dateKey": "0x20260101",
+      "fatDate": 23585,
+      "suffix": "_0101"
+    },
+    {
+      "date": [
+        24,
+        2,
+        29
+      ],
+      "rtcStatus": 0,
+      "dateKey": "0x20240229",
+      "fatDate": 22621,
+      "suffix": "_0229"
+    },
+    {
+      "date": [
+        0,
+        1,
+        1
+      ],
+      "rtcStatus": 0,
+      "dateKey": "0x20000101",
+      "fatDate": 10273,
+      "suffix": "_0101"
+    },
+    {
+      "date": [
+        107,
+        12,
+        31
+      ],
+      "rtcStatus": 0,
+      "dateKey": "0x21071231",
+      "fatDate": 65439,
+      "suffix": "_1231"
+    },
+    {
+      "date": [
+        100,
+        2,
+        29
+      ],
+      "rtcStatus": 0,
+      "dateKey": "0x0",
+      "fatDate": 0,
+      "suffix": null
+    },
+    {
+      "date": [
+        26,
+        0,
+        1
+      ],
+      "rtcStatus": 0,
+      "dateKey": "0x0",
+      "fatDate": 0,
+      "suffix": null
+    },
+    {
+      "date": [
+        26,
+        10,
+        22
+      ],
+      "rtcStatus": 1,
+      "dateKey": "0x0",
+      "fatDate": 0,
+      "suffix": null
+    },
+    {
+      "directoryEntry": "0x96d50c",
+      "dateKey": "0x20240229",
+      "name": "101_0229",
+      "onDiskDateFields": [
+        22621,
+        22621,
+        22621
+      ]
+    },
+    {
+      "directoryEntry": "0x96d50c",
+      "dateKey": "0x20251022",
+      "name": "101_1022",
+      "onDiskDateFields": [
+        23382,
+        23382,
+        23382
+      ]
+    },
+    {
+      "directoryEntry": "0x96d50c",
+      "dateKey": "0x20261022",
+      "name": "101_1022",
+      "onDiskDateFields": [
+        23894,
+        23894,
+        23894
+      ]
+    },
+    {
+      "directoryEntry": "0x9ed50c",
+      "dateKey": "0x20240229",
+      "name": "101_0229",
+      "onDiskDateFields": [
+        22621,
+        22621,
+        22621
+      ]
+    },
+    {
+      "directoryEntry": "0x9ed50c",
+      "dateKey": "0x20251022",
+      "name": "101_1022",
+      "onDiskDateFields": [
+        23382,
+        23382,
+        23382
+      ]
+    },
+    {
+      "directoryEntry": "0x9ed50c",
+      "dateKey": "0x20261022",
+      "name": "101_1022",
+      "onDiskDateFields": [
+        23894,
+        23894,
+        23894
+      ]
+    },
+    {
+      "constructor": "0x959144",
+      "suffix": null,
+      "scanResult": [
+        101,
+        1000
+      ],
+      "path": "A:\\DCIM\\101_FUJI\\DSCF1001",
+      "result": 0
+    },
+    {
+      "constructor": "0x959144",
+      "suffix": "_1022",
+      "scanResult": [
+        101,
+        1000
+      ],
+      "path": "A:\\DCIM\\101_1022\\DSCF1001",
+      "result": 0
+    },
+    {
+      "constructor": "0x959144",
+      "suffix": "_1022",
+      "scanResult": [
+        101,
+        1999
+      ],
+      "path": "A:\\DCIM\\102_1022\\DSCF2001",
+      "result": 0
+    },
+    {
+      "constructor": "0x9d9144",
+      "suffix": null,
+      "scanResult": [
+        101,
+        1000
+      ],
+      "path": "A:\\DCIM\\101_FUJI\\DSCF1001",
+      "result": 0
+    },
+    {
+      "constructor": "0x9d9144",
+      "suffix": "_1022",
+      "scanResult": [
+        101,
+        1000
+      ],
+      "path": "A:\\DCIM\\101_1022\\DSCF1001",
+      "result": 0
+    },
+    {
+      "constructor": "0x9d9144",
+      "suffix": "_1022",
+      "scanResult": [
+        101,
+        1999
+      ],
+      "path": "A:\\DCIM\\102_1022\\DSCF2001",
+      "result": 0
+    },
+    {
+      "scanner": "0x964624",
+      "indexed": "_FUJI",
+      "requested": "_FUJI",
+      "path": "A:\\DCIM\\101_FUJI\\DSCF1001",
+      "createFlag": 0,
+      "advanceFlag": 0
+    },
+    {
+      "scanner": "0x964624",
+      "indexed": "_1022",
+      "requested": "_1022",
+      "path": "A:\\DCIM\\101_1022\\DSCF1001",
+      "createFlag": 0,
+      "advanceFlag": 0
+    },
+    {
+      "scanner": "0x964624",
+      "indexed": "_1022",
+      "requested": "_1023",
+      "path": "A:\\DCIM\\102_1023\\DSCF2001",
+      "createFlag": 1,
+      "advanceFlag": 1
+    },
+    {
+      "scanner": "0x964624",
+      "indexed": "_FUJI",
+      "requested": "_1022",
+      "path": "A:\\DCIM\\102_1022\\DSCF2001",
+      "createFlag": 1,
+      "advanceFlag": 1
+    },
+    {
+      "scanner": "0x964624",
+      "indexed": "_1022",
+      "requested": "_FUJI",
+      "path": "A:\\DCIM\\102_FUJI\\DSCF2001",
+      "createFlag": 1,
+      "advanceFlag": 1
+    },
+    {
+      "scanner": "0x964624",
+      "drive": "B",
+      "maxFolder": 104,
+      "result": 0,
+      "folder": "105_1023",
+      "diagnostics": []
+    },
+    {
+      "scanner": "0x964624",
+      "drive": "B",
+      "maxFolder": 999,
+      "result": 6,
+      "folder": null,
+      "diagnostics": [
+        [
+          2,
+          81
+        ]
+      ]
+    },
+    {
+      "capacityReader": "0x958af4",
+      "lastFolder": 101,
+      "lastFile": 1200,
+      "remainingNames": 897901
+    },
+    {
+      "scanner": "0x9e4624",
+      "indexed": "_FUJI",
+      "requested": "_FUJI",
+      "path": "A:\\DCIM\\101_FUJI\\DSCF1001",
+      "createFlag": 0,
+      "advanceFlag": 0
+    },
+    {
+      "scanner": "0x9e4624",
+      "indexed": "_1022",
+      "requested": "_1022",
+      "path": "A:\\DCIM\\101_1022\\DSCF1001",
+      "createFlag": 0,
+      "advanceFlag": 0
+    },
+    {
+      "scanner": "0x9e4624",
+      "indexed": "_1022",
+      "requested": "_1023",
+      "path": "A:\\DCIM\\102_1023\\DSCF2001",
+      "createFlag": 1,
+      "advanceFlag": 1
+    },
+    {
+      "scanner": "0x9e4624",
+      "indexed": "_FUJI",
+      "requested": "_1022",
+      "path": "A:\\DCIM\\102_1022\\DSCF2001",
+      "createFlag": 1,
+      "advanceFlag": 1
+    },
+    {
+      "scanner": "0x9e4624",
+      "indexed": "_1022",
+      "requested": "_FUJI",
+      "path": "A:\\DCIM\\102_FUJI\\DSCF2001",
+      "createFlag": 1,
+      "advanceFlag": 1
+    },
+    {
+      "scanner": "0x9e4624",
+      "drive": "B",
+      "maxFolder": 104,
+      "result": 0,
+      "folder": "105_1023",
+      "diagnostics": []
+    },
+    {
+      "scanner": "0x9e4624",
+      "drive": "B",
+      "maxFolder": 999,
+      "result": 6,
+      "folder": null,
+      "diagnostics": [
+        [
+          2,
+          81
+        ]
+      ]
+    },
+    {
+      "capacityReader": "0x9d8af4",
+      "lastFolder": 101,
+      "lastFile": 1200,
+      "remainingNames": 897901
+    }
+  ]
+}

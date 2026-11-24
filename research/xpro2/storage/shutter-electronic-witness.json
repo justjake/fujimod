@@ -1,0 +1,92 @@
+{
+  "scope": "electronic shutter, no lens, virtual SDs",
+  "runs": [
+    {
+      "sourceSha256": "3e611cffb143f2af14917431987f51adb0988723fc2bc2f2b6bf16a761a579b7",
+      "endTick": 1416000000,
+      "leadHalf": false,
+      "holdTicks": 36000000,
+      "shutterKeyEvents": [
+        [
+          2,
+          1
+        ],
+        [
+          3,
+          1
+        ],
+        [
+          3,
+          0
+        ],
+        [
+          2,
+          0
+        ],
+        [
+          2,
+          0
+        ]
+      ],
+      "recMessages": [
+        "0x204",
+        "0x207"
+      ],
+      "constructorAndMkdirCalls": {
+        "0x959144": 0,
+        "0x95e72c": 0,
+        "0x9d9144": 0,
+        "0x9de72c": 0
+      },
+      "cardRevisions": {
+        "sd": 11,
+        "sd1": 11
+      }
+    },
+    {
+      "sourceSha256": "33fe1646c8f3e9394a2de63cc66dc92f3eff385be3e07dbe2485d9ce46b567cb",
+      "endTick": 1444800000,
+      "leadHalf": true,
+      "holdTicks": 36000000,
+      "shutterKeyEvents": [
+        [
+          2,
+          1
+        ],
+        [
+          3,
+          1
+        ],
+        [
+          3,
+          0
+        ],
+        [
+          2,
+          0
+        ]
+      ],
+      "recMessages": [
+        "0x204",
+        "0x207",
+        "0x11cd",
+        "0x11ce",
+        "0x11cf",
+        "0x11d0",
+        "0x11d1",
+        "0x11ed",
+        "0x11f6"
+      ],
+      "constructorAndMkdirCalls": {
+        "0x959144": 0,
+        "0x95e72c": 0,
+        "0x9d9144": 0,
+        "0x9de72c": 0
+      },
+      "cardRevisions": {
+        "sd": 11,
+        "sd1": 11
+      }
+    }
+  ]
+}

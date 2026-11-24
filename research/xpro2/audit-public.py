@@ -7,13 +7,13 @@ from pathlib import Path
 import re
 
 HERE=Path(__file__).resolve().parent
-ALLOWED={'.py','.md','.json','.patch','.S','.txt','.toml'}
+ALLOWED={'.py','.md','.json','.patch','.S','.c','.txt','.toml'}
 PATTERNS={
     'absolute personal directory':r'''(?:^|[\s"'=])/(?:home|Users)/[^\s"']+''',
     'Windows personal directory':r'[A-Za-z]:\\(?:Users|Documents and Settings)\\',
     'private lab path':r'Desktop/' + r'codex|firmware_' + r'test|\.venv-' + r'emu/lib/python',
     'private key':r'-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----',
-    'GitHub token':r'\b(?:ghp_[A-Za-z0-9]{30,}|github_pat_[A-Za-z0-9_]{40,})',
+    'GitHub token':r'\b(?:gh[pousr]_[A-Za-z0-9]{30,}|github_pat_[A-Za-z0-9_]{40,})',
     'Slack token':r'\bxox[baprs]-[A-Za-z0-9-]{20,}',
 }
 

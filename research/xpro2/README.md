@@ -4,6 +4,10 @@ This directory preserves a reproducible X-Pro2 emulation experiment and the
 information needed to continue it. It is a research contribution, not an
 installable camera modification or a completed port to today's runtime APIs.
 
+
+The [storage and shutter update](storage/README.md) documents the latest X-Pro2
+5.11 experiments and how to reproduce the DATE FOLDERS probe.
+
 ## What is included
 
 - A source patch for the **validated historical engine revision**, including
