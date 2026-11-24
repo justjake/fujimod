@@ -38,7 +38,12 @@ use it.
 DMA mappings, decoders, clocks and boot ROM behavior. Each core holds its own
 architecture, CPU model, identification registers, caches, reset state,
 affinity and timer interrupt lines. An alias of DRAM or another region at a
-second address is an address mapping, not a block.
+second address is an address mapping, not a block. The boot ROM is a `rom`
+memory region; its reset entry and the boot ROM's behavior sit with the
+processor's boot ROM record. A region's access follows its kind (`rom` reads
+and executes, RAM reads, writes and executes); there are no numeric
+permissions. Each clock is one `clocks` entry that blocks, cores and run
+inputs refer to by ID, never a rate repeated in device parameters.
 
 Each hardware block is one file, `soc/<id>/blocks/<block-id>.json`, and is the
 only place its facts appear:
@@ -76,7 +81,8 @@ either, and each `kind` allows a fixed set of models.
 It names the firmware IDs and code or data addresses the fact rests on.
 Prose explanations and citations live outside the record, in caller-supplied
 catalog annotations (`CatalogAnnotations`) keyed by record and field. Cores,
-mappings and body chips carry evidence the same way.
+mappings and body chips carry evidence the same way. A stand-in value carries
+`stand-in` evidence on the device parameter or part field it stands in for.
 
 A processor fact found by reading firmware is generated into
 `soc/<id>/<name>.generated.json` by a generator that runs over every
@@ -94,8 +100,11 @@ from processor pins and blocks to part pins, panels, DRAM size and regions
 (including the power-on RAM contents when measured), NAND geometry, card
 slots and power control. Processor blocks the board leaves unconnected are
 listed under `absent_blocks`. `bodies/<id>/controls.json` holds buttons, dials
-and switches: their positions, the pins or ADC channels they drive, including
-command dials, and startup combinations.
+and switches: their positions, the connections they drive and startup
+combinations. A connection carries every signal of one physical line, such as
+a GPIO input together with its interrupt line, or the timer channel and rest
+phase a command dial's quadrature drives. A control's measured ADC levels are
+body facts; the firmware's table of key bands is a generated firmware fact.
 
 A body changes a processor block only through `block_overrides`, which names a
 block ID and replaces its `device` with another value of the same model or
