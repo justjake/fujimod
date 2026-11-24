@@ -50,7 +50,9 @@ export function testCameraModule(shared = false) {
     calls.push({ action: 'create', options: {}, bytes: [] });
     return new TestCamera() as unknown as Camera;
   };
-  const disposable = { free() {}, [Symbol.dispose]() {} };
+  // The generated typings declare Symbol.dispose, but the bindings install it only where the
+  // browser defines Symbol.dispose; iOS Safari does not, so the doubles omit it too.
+  const disposable = { free() {} } as { free(): void; [Symbol.dispose](): void };
   class TestCamera implements Partial<Camera> {
     static fromGraph(_config: string, _dat: Uint8Array) {
       return created();
@@ -75,7 +77,6 @@ export function testCameraModule(shared = false) {
       return created();
     }
     free() {}
-    [Symbol.dispose]() {}
     close() {}
     runUntil(until: bigint, progress?: (ticks: number) => void) {
       if (failed) {

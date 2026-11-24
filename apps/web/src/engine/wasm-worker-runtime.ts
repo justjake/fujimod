@@ -314,8 +314,7 @@ export class WasmWorkerRuntime {
   }
   private observe(state: SessionState) {
     this.state = state;
-    using status = this.require().status();
-    this.send({ type: 'state', state, supplyOn: status.supplyOn });
+    this.send({ type: 'state', state, supplyOn: this.require().status().supplyOn });
   }
   private observeCurrent() {
     if (this.manifest && this.manifest.construction !== 'resolved')
@@ -818,8 +817,7 @@ export class WasmWorkerRuntime {
     );
   }
   private captureCheckpoint(): Checkpoint | undefined {
-    using status = this.require().status();
-    if (!status.supplyOn) {
+    if (!this.require().status().supplyOn) {
       this.points = [];
       return;
     }
