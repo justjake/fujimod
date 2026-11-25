@@ -38,17 +38,17 @@
         {
           "id": "bulk-source",
           "title": "Bulk read source located",
-          "result": "pass"
+          "result": "stale"
         },
         {
           "id": "flash-reader",
           "title": "Flash reader located",
-          "result": "pass"
+          "result": "stale"
         },
         {
           "id": "state-regions",
           "title": "State-dump regions located",
-          "result": "pass"
+          "result": "stale"
         },
         {
           "id": "restart-facts",
@@ -58,7 +58,7 @@
         {
           "id": "card-files",
           "title": "Optional card file access located",
-          "result": "pass"
+          "result": "stale"
         },
         {
           "id": "controls",
@@ -68,7 +68,7 @@
         {
           "id": "settings-layout",
           "title": "Settings layout located",
-          "result": "pass"
+          "result": "stale"
         },
         {
           "id": "sd-facts",
@@ -78,12 +78,12 @@
         {
           "id": "nand-boot-facts",
           "title": "EXR II NAND bootloader facts located",
-          "result": "pass"
+          "result": "stale"
         },
         {
           "id": "boot-patch-facts",
           "title": "Boot-patch triggers, clears and free spaces located",
-          "result": "pass"
+          "result": "stale"
         }
       ],
       "steps": [
@@ -125,25 +125,25 @@
           "id": "bulk-source",
           "label": "Bulk read source located",
           "stage": "bulk-source",
-          "result": "pass",
-          "passed": 1,
-          "total": 1
+          "result": "stale",
+          "passed": 0,
+          "total": 0
         },
         {
           "id": "flash-reader",
           "label": "Flash reader located",
           "stage": "flash-reader",
-          "result": "pass",
-          "passed": 1,
-          "total": 1
+          "result": "stale",
+          "passed": 0,
+          "total": 0
         },
         {
           "id": "state-regions",
           "label": "State-dump regions located",
           "stage": "state-regions",
-          "result": "pass",
-          "passed": 1,
-          "total": 1
+          "result": "stale",
+          "passed": 0,
+          "total": 0
         },
         {
           "id": "restart-facts",
@@ -157,9 +157,9 @@
           "id": "card-files",
           "label": "Optional card file access located",
           "stage": "card-files",
-          "result": "pass",
-          "passed": 1,
-          "total": 1
+          "result": "stale",
+          "passed": 0,
+          "total": 0
         },
         {
           "id": "controls",
@@ -174,7 +174,7 @@
           "id": "settings-layout",
           "label": "Settings layout located",
           "stage": "settings-layout",
-          "result": "pass",
+          "result": "stale",
           "passed": 1,
           "total": 1,
           "milestone": true
@@ -192,17 +192,17 @@
           "id": "nand-boot-facts",
           "label": "EXR II NAND bootloader facts located",
           "stage": "nand-boot-facts",
-          "result": "pass",
-          "passed": 1,
-          "total": 1
+          "result": "stale",
+          "passed": 0,
+          "total": 0
         },
         {
           "id": "boot-patch-facts",
           "label": "Boot-patch triggers, clears and free spaces located",
           "stage": "boot-patch-facts",
-          "result": "pass",
-          "passed": 1,
-          "total": 1
+          "result": "stale",
+          "passed": 0,
+          "total": 0
         },
         {
           "id": "boot-rom",
@@ -233,7 +233,7 @@
         {
           "id": "sd-boot-v2-autostart-starts-in-emulator",
           "title": "SD boot v2: autostart starts in the emulator",
-          "result": "stale"
+          "result": "pass"
         },
         {
           "id": "sd-boot-v2-patch-triggers-fire-in-emulator",
@@ -307,7 +307,7 @@
           "label": "Control input",
           "stage": "stock",
           "result": "stale",
-          "passed": 0,
+          "passed": 1,
           "total": 1,
           "milestone": true
         },
@@ -382,7 +382,7 @@
           "label": "SD",
           "stage": "stock",
           "result": "stale",
-          "passed": 0,
+          "passed": 1,
           "total": 1,
           "milestone": true
         },
@@ -390,9 +390,9 @@
           "id": "sd-boot-v2-autostart-starts-in-emulator",
           "label": "SD boot v2: autostart starts in the emulator",
           "stage": "sd-boot-v2-autostart-starts-in-emulator",
-          "result": "stale",
-          "passed": 0,
-          "total": 0
+          "result": "pass",
+          "passed": 1,
+          "total": 1
         },
         {
           "id": "sd-boot-v2-patch-triggers-fire-in-emulator",
@@ -425,8 +425,8 @@
           "label": "SD boot v2: FujiMod boots from an SD card in the emulator",
           "stage": "sd-boot-v2-fujimod-boots-in-emulator",
           "result": "stale",
-          "passed": 0,
-          "total": 0,
+          "passed": 1,
+          "total": 1,
           "milestone": true
         }
       ]
@@ -479,6 +479,11 @@
         {
           "id": "camera-debug",
           "title": "Debug mode saved persistently",
+          "result": "not-run"
+        },
+        {
+          "id": "camera-debug-card",
+          "title": "Debug access enabled by an SD boot gate card",
           "result": "not-run"
         },
         {
@@ -578,6 +583,14 @@
           "total": 0
         },
         {
+          "id": "camera-debug-card",
+          "label": "Debug access enabled by an SD boot gate card",
+          "stage": "camera-debug-card",
+          "result": "not-run",
+          "passed": 0,
+          "total": 0
+        },
+        {
           "id": "camera-normal",
           "label": "FF80 answers in normal mode",
           "stage": "camera-normal",
@@ -620,7 +633,7 @@
         {
           "id": "language-font-bank",
           "title": "Language font bank located and kept out of mod memory",
-          "result": "pass"
+          "result": "stale"
         },
         {
           "id": "mod-memory",
@@ -635,7 +648,7 @@
         {
           "id": "mod-build",
           "title": "Every shipped mod built",
-          "result": "pass"
+          "result": "stale"
         },
         {
           "id": "mod-effect",
@@ -650,7 +663,7 @@
         {
           "id": "sd-boot-v1-fujimod-built",
           "title": "SD boot v1: FujiMod SD image built",
-          "result": "pass"
+          "result": "stale"
         },
         {
           "id": "firmware-update-fujimod-built",
@@ -668,9 +681,9 @@
           "id": "language-font-bank",
           "label": "Language font bank located and kept out of mod memory",
           "stage": "language-font-bank",
-          "result": "pass",
-          "passed": 1,
-          "total": 1
+          "result": "stale",
+          "passed": 0,
+          "total": 0
         },
         {
           "id": "mod-memory",
@@ -694,9 +707,9 @@
           "id": "mod-build",
           "label": "Every shipped mod built",
           "stage": "mod-build",
-          "result": "pass",
-          "passed": 1,
-          "total": 1
+          "result": "stale",
+          "passed": 0,
+          "total": 0
         },
         {
           "id": "mod-effect",
@@ -711,7 +724,7 @@
           "id": "sd-boot-v1-fujimod-built",
           "label": "SD boot v1: FujiMod SD image built",
           "stage": "sd-boot-v1-fujimod-built",
-          "result": "pass",
+          "result": "stale",
           "passed": 1,
           "total": 1,
           "milestone": true
@@ -1022,6 +1035,14 @@
           "total": 1
         },
         {
+          "id": "walkthroughs/matte",
+          "label": "matte",
+          "stage": "walkthroughs",
+          "result": "not-run",
+          "passed": 0,
+          "total": 1
+        },
+        {
           "id": "walkthroughs/recipes",
           "label": "recipes",
           "stage": "walkthroughs",
@@ -1224,6 +1245,14 @@
         {
           "id": "walkthroughs/hardware-divide",
           "label": "hardware-divide",
+          "stage": "walkthroughs",
+          "result": "not-run",
+          "passed": 0,
+          "total": 1
+        },
+        {
+          "id": "walkthroughs/hardware-divide-history",
+          "label": "hardware-divide-history",
           "stage": "walkthroughs",
           "result": "not-run",
           "passed": 0,
@@ -1582,6 +1611,15 @@
           "milestone": true
         },
         {
+          "id": "mod-build/matte",
+          "label": "matte links",
+          "stage": "mod-build",
+          "result": "not-run",
+          "passed": 0,
+          "total": 1,
+          "milestone": true
+        },
+        {
           "id": "mod-build/recipes",
           "label": "recipes links",
           "stage": "mod-build",
@@ -1816,6 +1854,15 @@
           "milestone": true
         },
         {
+          "id": "mod-build/hardware-divide-history",
+          "label": "hardware-divide-history links",
+          "stage": "mod-build",
+          "result": "not-run",
+          "passed": 0,
+          "total": 1,
+          "milestone": true
+        },
+        {
           "id": "mod-build/live-view-speedups",
           "label": "live-view-speedups links",
           "stage": "mod-build",
@@ -1943,13 +1990,13 @@
     },
     "control-input": {
       "result": "stale",
-      "passed": 0,
-      "total": 1
+      "passed": 47,
+      "total": 47
     },
     "focus": {
       "result": "stale",
-      "passed": 0,
-      "total": 1
+      "passed": 3,
+      "total": 4
     },
     "lens": {
       "result": "stale",
@@ -1973,12 +2020,12 @@
     },
     "develop-raw": {
       "result": "stale",
-      "passed": 0,
+      "passed": 3,
       "total": 3
     },
     "sd": {
       "result": "stale",
-      "passed": 0,
+      "passed": 2,
       "total": 2
     },
     "control-layout": {
@@ -2024,6 +2071,7 @@
     "menu-animations": "not-run",
     "menu-tap": "inapplicable",
     "focalized-ui": "not-run",
+    "matte": "not-run",
     "recipes": "stale",
     "snap-focus": "not-run",
     "recipe-exif": "not-run",
@@ -2051,6 +2099,7 @@
     "internal-data-backup": "not-run",
     "welcome-sheet": "not-run",
     "hardware-divide": "not-run",
+    "hardware-divide-history": "not-run",
     "live-view-speedups": "not-run"
   }
 }
