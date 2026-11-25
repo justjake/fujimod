@@ -1,19 +1,22 @@
-//! Open the installed X70 firmware at REC, then press a control through
-//! `fujimod-remote`.
+//! Open the installed X70 firmware and the release SD card at REC, then press a
+//! control through `fujimod-remote`.
 //!
-//! The test needs a firmware library. Set `FUJIMOD_FIRMWARE_LIBRARY` to a
-//! directory holding the catalog's X70 update and boot ROM. Without it, the
-//! test returns without opening a camera.
+//! Set `FUJIMOD_FIRMWARE_LIBRARY` to a directory holding the catalog's X70
+//! update and boot ROM, and `FUJIMOD_TEST_SD_CARD` to a directory holding the
+//! release SD card. Without both, the test returns without opening a camera.
 use fujimod_catalog_remote::{Facts, Selection};
 use fujimod_catalog_resolution::ResolvedConfiguration;
 use fujimod_emulator_boot as boot;
 use fujimod_emulator_camera::{
-    Boot, ExecutionPolicy, Library, LibraryError, Opened, Request, open,
+    Boot, CardSource, ExecutionPolicy, Library, LibraryError, Opened, Request, Stage, open,
 };
 use fujimod_remote::{BoardRemote, Control, board::Options as RemoteOptions, operations};
+use std::path::PathBuf;
 
 const FIRMWARE: &str = "x70-110";
 const BUTTON: &str = "menu_ok_button";
+/// The SD card loader's stage 3 is linked at this guest address.
+const STAGE3: u64 = 0x1d02_0000;
 
 fn library() -> Option<Library> {
     match Library::from_env() {
@@ -85,23 +88,48 @@ fn press(opened: &mut Opened, name: &str) -> Result<(), String> {
     ))
 }
 
-#[test]
-fn stock_opens_to_rec_and_presses_menu_ok() {
-    let Some(library) = library() else {
-        eprintln!("skipped: set FUJIMOD_FIRMWARE_LIBRARY");
-        return;
-    };
+fn open_and_press(library: &Library, name: &str, boot: Boot) -> Opened {
     let started = std::time::Instant::now();
-    let mut opened =
-        open(&library, request(Boot::Stock)).unwrap_or_else(|error| panic!("stock: {error}"));
+    let mut opened = open(library, request(boot)).unwrap_or_else(|error| panic!("{name}: {error}"));
+    assert_eq!(opened.stage, Stage::Rec, "{name} did not report REC");
     let report =
-        boot::status(opened.session()).unwrap_or_else(|error| panic!("stock: status: {error}"));
-    assert_eq!(report.status, "rec", "stock did not reach REC");
-    press(&mut opened, BUTTON).unwrap_or_else(|error| panic!("stock: press {BUTTON}: {error}"));
+        boot::status(opened.session()).unwrap_or_else(|error| panic!("{name}: status: {error}"));
+    assert_eq!(report.status, "rec", "{name} did not reach REC");
+    press(&mut opened, BUTTON).unwrap_or_else(|error| panic!("{name}: press {BUTTON}: {error}"));
     let elapsed = started.elapsed();
-    eprintln!("stock: REC and {BUTTON} in {elapsed:?}");
+    eprintln!("{name}: REC and {BUTTON} in {elapsed:?}");
     assert!(
         elapsed < std::time::Duration::from_secs(60),
-        "stock open and press took {elapsed:?}"
+        "{name} open and press took {elapsed:?}"
     );
+    opened
+}
+
+#[test]
+fn stock_and_sd_card_open_to_rec_and_press_menu_ok() {
+    let Some(library) = library() else {
+        eprintln!("skipped: set FUJIMOD_FIRMWARE_LIBRARY and FUJIMOD_TEST_SD_CARD");
+        return;
+    };
+    let Some(card) = std::env::var_os("FUJIMOD_TEST_SD_CARD") else {
+        eprintln!("skipped: set FUJIMOD_FIRMWARE_LIBRARY and FUJIMOD_TEST_SD_CARD");
+        return;
+    };
+    open_and_press(&library, "stock", Boot::Stock);
+    let opened = open_and_press(
+        &library,
+        "SD card",
+        Boot::SdCard(CardSource::Directory(PathBuf::from(card))),
+    );
+    let mut stage3 = [0u8; 4];
+    opened
+        .session()
+        .board
+        .read_physical(STAGE3, &mut stage3)
+        .unwrap();
+    assert_ne!(
+        stage3, [0xff; 4],
+        "the SD card's stage 3 loader is not resident at {STAGE3:#x}"
+    );
+    eprintln!("SD card: stage 3 at {STAGE3:#x} is {stage3:02x?}");
 }

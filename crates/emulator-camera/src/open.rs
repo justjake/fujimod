@@ -1,11 +1,15 @@
 //! Turn a firmware, a boot choice and a request into a camera at REC.
 use crate::{Library, LibraryError};
 use fujimod_catalog_configuration::{RunEngine, RunInputs};
+use fujimod_catalog_controls::{BootCombination, BootMode, PhysicalControls};
 use fujimod_catalog_resolution::ResolvedConfiguration;
 use fujimod_emulator_boot::{self as boot, Camera};
 use fujimod_emulator_cpu::ExecutionPolicy;
 use fujimod_emulator_session::Session;
-use std::{fmt, path::PathBuf};
+use std::{
+    fmt,
+    path::{Path, PathBuf},
+};
 
 /// Largest instruction budget an open run may execute.
 const INSTRUCTION_LIMIT: u64 = 2_000_000_000;
@@ -49,7 +53,8 @@ pub enum Stage {
     FirmwareLoaded,
     /// The boot ROM handed off to the SD card's loader.
     SdLoader,
-    /// FujiMod was applied in RAM and the stock firmware started from it.
+    /// The card's stage 3 applied the firmware patch and the stock firmware
+    /// started from RAM.
     FujiModApplied,
     /// The firmware loaded and presented its REC user interface.
     Rec,
@@ -115,6 +120,9 @@ pub struct Opened {
     pub boot: Boot,
     pub policy: ExecutionPolicy,
     pub engine: RunEngine,
+    /// The boot stage the camera reached; always `Stage::Rec` here. An SD card
+    /// boot that reached REC has necessarily passed `Stage::FujiModApplied`.
+    pub stage: Stage,
     pub card_files: Vec<(String, PathBuf)>,
     /// The catalog resolution the camera was built from.
     pub resolved: ResolvedConfiguration,
@@ -151,12 +159,11 @@ pub fn open(library: &Library, request: Request) -> Result<Opened, OpenError> {
             )
         })?
         .engine;
-    if !matches!(request.boot, Boot::Stock) {
-        return Err(OpenError::at(
-            Stage::BootRom,
-            "SD card boots are not implemented yet",
-        ));
-    }
+    let boot_card_files = match &request.boot {
+        Boot::Stock => Vec::new(),
+        Boot::SdCard(CardSource::Directory(directory)) => directory_files(directory)?,
+        Boot::SdCard(CardSource::Files(_)) => Vec::new(),
+    };
     let update = library.update(&firmware)?;
     let boot_rom = library.boot_rom(&firmware)?;
     let camera_directory = camera_directory(library, &resolved)?;
@@ -169,7 +176,7 @@ pub fn open(library: &Library, request: Request) -> Result<Opened, OpenError> {
             settings: None,
             camera: camera_directory,
             application_plan: None,
-            card_files: Vec::new(),
+            card_files: boot_card_files,
             discovery: false,
         },
     )
@@ -179,31 +186,53 @@ pub fn open(library: &Library, request: Request) -> Result<Opened, OpenError> {
         .board
         .set_execution_policy(request.policy)
         .map_err(|error| OpenError::at(Stage::BootRom, error))?;
+    if let Boot::SdCard(CardSource::Files(files)) = &request.boot {
+        install_files(&mut camera.session, files)?;
+    }
     if !request.card_files.is_empty() {
         boot::media::attach(&mut camera.session, None, &request.card_files)
             .map_err(|error| OpenError::at(Stage::BootRom, error))?;
     }
+    let holds = match &request.boot {
+        Boot::Stock => Vec::new(),
+        Boot::SdCard(_) => sd_holds(&resolved)?,
+    };
+    hold_boot_inputs(
+        &mut camera.session,
+        &resolved,
+        &holds,
+        camera.ticks_per_second,
+    )?;
+    let card_before = card_revision(&camera.session, &request.boot);
     let report = boot::to_rec(&mut camera.session, INSTRUCTION_LIMIT)
         .map_err(|error| OpenError::at(Stage::BootRom, error))?;
     if report.status == "rec" && !report.pending && report.scanout_instance.is_some() {
-        fujimod_emulator_controls::connect(
+        finish_boot(
             &mut camera.session,
-            &resolved.reference,
+            &resolved,
+            &holds,
             camera.ticks_per_second,
-        )
-        .map_err(|error| OpenError::at(Stage::Rec, error))?;
+        )?;
         return Ok(Opened {
             camera,
             firmware,
             boot: request.boot,
             policy: request.policy,
             engine,
+            stage: Stage::Rec,
             card_files: request.card_files,
             resolved,
         });
     }
+    let stage = reached_stage(
+        &camera.session,
+        &resolved,
+        &request.boot,
+        card_before,
+        &report,
+    );
     Err(OpenError::at(
-        reached_stage(&report),
+        stage,
         format!(
             "{} with {} instructions at tick {}: ui_mode {}, system_mode {}, pending {}, scanout {}{}",
             report.status,
@@ -222,13 +251,216 @@ pub fn open(library: &Library, request: Request) -> Result<Opened, OpenError> {
     ))
 }
 
-/// How far a stock boot got before REC.
-fn reached_stage(report: &boot::RecReport) -> Stage {
-    if report.instructions == 0 || report.ui_mode == u32::MAX {
-        Stage::BootRom
-    } else {
-        Stage::FirmwareLoaded
+/// Release the boot holds and connect the controls the running firmware loads.
+fn finish_boot(
+    session: &mut Session,
+    resolved: &ResolvedConfiguration,
+    holds: &[fujimod_catalog_controls::BootHold],
+    ticks_per_second: u64,
+) -> Result<(), OpenError> {
+    if !holds.is_empty() {
+        for hold in holds {
+            let position = session
+                .contact_driver
+                .as_ref()
+                .ok_or_else(|| OpenError::at(Stage::Rec, "boot holds lost the contact driver"))?
+                .boot_release_position(&hold.id)
+                .map_err(|error| OpenError::at(Stage::Rec, error))?;
+            session
+                .set_position(&hold.id, &position)
+                .map_err(|error| OpenError::at(Stage::Rec, error))?;
+        }
+        // The boot panel was compiled before the firmware's calibration existed;
+        // connect again so presses answer the loaded firmware.
+        session.controls = None;
+        session.contact_driver = None;
     }
+    fujimod_emulator_controls::connect(session, &resolved.reference, ticks_per_second)
+        .map(|_| ())
+        .map_err(|error| OpenError::at(Stage::Rec, error))
+}
+
+/// The body controls document's boot.sd.hold list.
+fn sd_holds(
+    resolved: &ResolvedConfiguration,
+) -> Result<Vec<fujimod_catalog_controls::BootHold>, OpenError> {
+    let value = resolved
+        .reference
+        .physical_controls
+        .as_ref()
+        .ok_or_else(|| {
+            OpenError::at(
+                Stage::BootRom,
+                format!(
+                    "body {} has no physical controls document",
+                    resolved.reference.body.id
+                ),
+            )
+        })?;
+    let controls: PhysicalControls = serde_json::from_value(value.clone()).map_err(|error| {
+        OpenError::at(
+            Stage::BootRom,
+            format!(
+                "body {} physical controls: {error}",
+                resolved.reference.body.id
+            ),
+        )
+    })?;
+    let combination: &BootCombination = controls.boot.get(&BootMode::Sd).ok_or_else(|| {
+        OpenError::at(
+            Stage::BootRom,
+            format!(
+                "body {} declares no boot.sd controls",
+                resolved.reference.body.id
+            ),
+        )
+    })?;
+    Ok(combination.hold.clone())
+}
+
+/// Hold the catalog's boot controls through the session's contact driver.
+fn hold_boot_inputs(
+    session: &mut Session,
+    resolved: &ResolvedConfiguration,
+    holds: &[fujimod_catalog_controls::BootHold],
+    ticks_per_second: u64,
+) -> Result<(), OpenError> {
+    if holds.is_empty() {
+        return Ok(());
+    }
+    let located = fujimod_catalog_wiring::locate(&resolved.reference)
+        .map_err(|error| OpenError::at(Stage::BootRom, error))?;
+    let controls =
+        fujimod_emulator_controls::compile(&located, &session.definition, None, ticks_per_second)
+            .map_err(|error| OpenError::at(Stage::BootRom, error))?;
+    session
+        .configure_controls(controls.wiring)
+        .map_err(|error| OpenError::at(Stage::BootRom, error))?;
+    session
+        .configure_contact_driver(controls.confirmation)
+        .map_err(|error| OpenError::at(Stage::BootRom, error))?;
+    for hold in holds {
+        let position = session
+            .contact_driver
+            .as_ref()
+            .ok_or_else(|| OpenError::at(Stage::BootRom, "boot holds need the contact driver"))?
+            .boot_position(&hold.id, hold.stage.as_deref())
+            .map_err(|error| OpenError::at(Stage::BootRom, error))?;
+        session
+            .set_position(&hold.id, &position)
+            .map_err(|error| OpenError::at(Stage::BootRom, error))?;
+    }
+    Ok(())
+}
+
+fn card_revision(session: &Session, boot: &Boot) -> Option<u64> {
+    if matches!(boot, Boot::Stock) {
+        return None;
+    }
+    let name = session.contacts.keys().next()?;
+    session
+        .card_state(name)
+        .ok()
+        .and_then(|state| state.revision)
+}
+
+fn reached_stage(
+    session: &Session,
+    resolved: &ResolvedConfiguration,
+    boot: &Boot,
+    card_before: Option<u64>,
+    report: &boot::RecReport,
+) -> Stage {
+    if report.instructions == 0 {
+        return Stage::BootRom;
+    }
+    let sd = matches!(boot, Boot::SdCard(_));
+    if sd
+        && let Some(before) = card_before
+        && card_revision(session, boot).is_some_and(|after| after != before)
+    {
+        return Stage::FujiModApplied;
+    }
+    let loaded = configuration_loaded(session, resolved);
+    if sd {
+        return if loaded || report.ui_mode != u32::MAX {
+            Stage::FujiModApplied
+        } else {
+            Stage::SdLoader
+        };
+    }
+    if loaded || report.ui_mode != u32::MAX {
+        Stage::FirmwareLoaded
+    } else {
+        Stage::BootRom
+    }
+}
+
+/// Whether the firmware's generated configuration is readable from the session.
+fn configuration_loaded(session: &Session, resolved: &ResolvedConfiguration) -> bool {
+    resolved
+        .reference
+        .firmware
+        .generated_facts
+        .as_ref()
+        .and_then(|facts| facts.cfgdata_location.as_ref())
+        .and_then(|location| {
+            serde_json::from_value::<fujimod_catalog_controls::facts::ConfigurationLocation>(
+                location.clone(),
+            )
+            .ok()
+        })
+        .is_some_and(|location| {
+            fujimod_emulator_controls::LiveCalibration::new(session, location).is_ok()
+        })
+}
+
+fn install_files(session: &mut Session, files: &[(String, Vec<u8>)]) -> Result<(), OpenError> {
+    if files.is_empty() {
+        return Ok(());
+    }
+    let name =
+        session.contacts.keys().next().cloned().ok_or_else(|| {
+            OpenError::at(Stage::BootRom, "the run declares no modeled SD card slot")
+        })?;
+    session
+        .install_card_files(&name, None, files)
+        .map_err(|error| OpenError::at(Stage::BootRom, error))
+}
+
+/// Every file under a directory, named by its path relative to it.
+fn directory_files(directory: &Path) -> Result<Vec<(String, PathBuf)>, OpenError> {
+    let mut files = Vec::new();
+    let mut pending = vec![directory.to_owned()];
+    while let Some(next) = pending.pop() {
+        let entries = std::fs::read_dir(&next).map_err(|error| {
+            OpenError::at(Stage::BootRom, format!("{}: {error}", next.display()))
+        })?;
+        for entry in entries {
+            let path = entry
+                .map_err(|error| OpenError::at(Stage::BootRom, error.to_string()))?
+                .path();
+            if path.is_dir() {
+                pending.push(path);
+            } else {
+                let name = path
+                    .strip_prefix(directory)
+                    .map_err(|error| OpenError::at(Stage::BootRom, error.to_string()))?
+                    .to_str()
+                    .ok_or_else(|| OpenError::at(Stage::BootRom, "SD card file name is not UTF-8"))?
+                    .replace('\\', "/");
+                files.push((name, path));
+            }
+        }
+    }
+    files.sort();
+    if files.is_empty() {
+        return Err(OpenError::at(
+            Stage::BootRom,
+            format!("SD card directory {} is empty", directory.display()),
+        ));
+    }
+    Ok(files)
 }
 
 fn camera_directory(
