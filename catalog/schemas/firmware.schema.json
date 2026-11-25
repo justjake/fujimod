@@ -633,10 +633,24 @@
       "description": "Declared cpu facts.",
       "properties": {
         "cpsr": {
-          "description": "Declared cpsr.",
+          "description": "Declared cpsr for a legacy EL1 handoff.",
           "format": "uint64",
           "minimum": 0,
-          "type": "integer"
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "entry": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/FirmwareEntry"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Declared explicit entry descriptor."
         },
         "id": {
           "description": "Declared id.",
@@ -651,8 +665,15 @@
           "type": "integer"
         },
         "regs": {
-          "$ref": "#/$defs/FirmwareRegs",
-          "description": "Declared regs."
+          "anyOf": [
+            {
+              "$ref": "#/$defs/FirmwareRegs"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Declared legacy handoff registers."
         },
         "running": {
           "description": "Declared running.",
@@ -664,10 +685,8 @@
         }
       },
       "required": [
-        "cpsr",
         "id",
         "pc",
-        "regs",
         "running",
         "sysregs"
       ],
@@ -813,6 +832,62 @@
         "size"
       ],
       "type": "object"
+    },
+    "FirmwareEntry": {
+      "additionalProperties": false,
+      "description": "Declared entry descriptor facts.",
+      "properties": {
+        "level": {
+          "$ref": "#/$defs/FirmwareEntryLevel",
+          "description": "Declared entry level."
+        },
+        "pstate": {
+          "description": "Declared entry pstate.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "regs": {
+          "additionalProperties": {
+            "format": "uint64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "description": "Declared entry registers keyed by x0 through x30.",
+          "type": "object"
+        }
+      },
+      "required": [
+        "level",
+        "pstate",
+        "regs"
+      ],
+      "type": "object"
+    },
+    "FirmwareEntryLevel": {
+      "description": "Declared entry level.",
+      "oneOf": [
+        {
+          "const": "el1h",
+          "description": "EL1 handoff entry.",
+          "type": "string"
+        },
+        {
+          "const": "el2h",
+          "description": "EL2 entry.",
+          "type": "string"
+        },
+        {
+          "const": "el3h",
+          "description": "EL3 entry.",
+          "type": "string"
+        },
+        {
+          "const": "el3t",
+          "description": "EL3 entry with the SPSel-selected stack pointer (SP_EL0).",
+          "type": "string"
+        }
+      ]
     },
     "FirmwareFacts": {
       "additionalProperties": false,
@@ -2473,6 +2548,15 @@
           "minimum": 0,
           "type": "integer"
         },
+        "ELR_EL3": {
+          "description": "Declared ELR EL3.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
         "ICC_IGRPEN0_EL1": {
           "description": "Declared ICC IGRPEN0 EL1.",
           "format": "uint64",
@@ -2491,11 +2575,29 @@
           "minimum": 0,
           "type": "integer"
         },
+        "SCR_EL3": {
+          "description": "Declared SCR EL3.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
         "SCTLR_EL1": {
           "description": "Declared SCTLR EL1.",
           "format": "uint64",
           "minimum": 0,
           "type": "integer"
+        },
+        "SPSR_EL3": {
+          "description": "Declared SPSR EL3.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
         },
         "SP_EL0": {
           "description": "Declared SP EL0.",
@@ -2508,6 +2610,15 @@
           "format": "uint64",
           "minimum": 0,
           "type": "integer"
+        },
+        "SP_EL3": {
+          "description": "Declared SP EL3.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
         },
         "VBAR_EL1": {
           "description": "Declared VBAR EL1.",

@@ -3077,6 +3077,17 @@ impl Firmware {
         {
             return Err("remote facts differ from firmware identity".into());
         }
+        if let Some(layouts) = &self.layouts {
+            for (profile_name, profile) in &layouts.profiles {
+                if let Some(cpus) = &profile.cpu {
+                    for cpu in cpus {
+                        cpu.validate().map_err(|error| {
+                            format!("firmware {} profile {profile_name}: {error}", self.id)
+                        })?;
+                    }
+                }
+            }
+        }
         Ok(())
     }
 }
