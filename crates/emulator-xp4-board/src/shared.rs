@@ -366,9 +366,9 @@ impl Inputs {
     }
     /// Drive one external GPIO pin.
     pub fn set_gpio_input(&self, session: &mut Session, port: usize, pin: usize, high: bool) -> Result<(), String> {
-        let (port, pin) = (u8::try_from(port), u8::try_from(pin));
-        let (Ok(port), Ok(pin)) = (port, pin) else { return Err("Invalid XP4 external GPIO pin".into()) };
-        session.gpio("gpio", port, pin, high)
+        use fujimod_emulator_ip::socionext::gpio::Gpio;
+        let node = session.node("gpio")?;
+        session.board.with_device_inputs::<Gpio, _>(node, |gpio, _| gpio.set_input(port, pin, high))
     }
     /// Plug or unplug the USB cable: the condition strap the stock USB task
     /// reads and the DWC3 data lines change together.
