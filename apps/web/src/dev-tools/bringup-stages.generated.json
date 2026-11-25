@@ -6,21 +6,24 @@
       "requires": [
         "catalog",
         "service-facts"
-      ]
+      ],
+      "requires_any": []
     },
     {
       "id": "camera-read-gate",
       "title": "Debug read gate enabled in RAM",
       "requires": [
         "camera-identity"
-      ]
+      ],
+      "requires_any": []
     },
     {
       "id": "camera-code",
       "title": "Uploaded code runs in RAM and is cleaned up",
       "requires": [
         "camera-read-gate"
-      ]
+      ],
+      "requires_any": []
     },
     {
       "id": "camera-bulk",
@@ -28,7 +31,8 @@
       "requires": [
         "camera-read-gate",
         "bulk-source"
-      ]
+      ],
+      "requires_any": []
     },
     {
       "id": "camera-backup",
@@ -36,7 +40,8 @@
       "requires": [
         "camera-bulk",
         "flash-reader"
-      ]
+      ],
+      "requires_any": []
     },
     {
       "id": "camera-snapshot",
@@ -44,34 +49,48 @@
       "requires": [
         "camera-bulk",
         "state-regions"
-      ]
+      ],
+      "requires_any": []
     },
     {
       "id": "camera-fast-memory",
       "title": "Memory capture measured at 8 MiB/s or more",
       "requires": [
         "camera-snapshot"
-      ]
+      ],
+      "requires_any": []
     },
     {
       "id": "camera-fast-flash",
       "title": "Flash capture measured at 8 MiB/s or more",
       "requires": [
         "camera-backup"
-      ]
+      ],
+      "requires_any": []
     },
     {
       "id": "camera-debug",
       "title": "Debug mode saved persistently",
       "requires": [
         "camera-backup"
-      ]
+      ],
+      "requires_any": []
+    },
+    {
+      "id": "camera-debug-card",
+      "title": "Debug access enabled by an SD boot gate card",
+      "requires": [
+        "camera-backup"
+      ],
+      "requires_any": []
     },
     {
       "id": "camera-normal",
       "title": "FF80 answers in normal mode",
-      "requires": [
-        "camera-debug"
+      "requires": [],
+      "requires_any": [
+        "camera-debug",
+        "camera-debug-card"
       ]
     },
     {
@@ -80,7 +99,8 @@
       "requires": [
         "camera-normal",
         "restart-facts"
-      ]
+      ],
+      "requires_any": []
     },
     {
       "id": "camera-menu",
@@ -88,7 +108,8 @@
       "requires": [
         "camera-normal",
         "menu"
-      ]
+      ],
+      "requires_any": []
     },
     {
       "id": "camera-mods",
@@ -97,7 +118,8 @@
         "camera-normal",
         "camera-code",
         "mod-build"
-      ]
+      ],
+      "requires_any": []
     }
   ]
 }
