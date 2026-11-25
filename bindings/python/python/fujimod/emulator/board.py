@@ -404,6 +404,10 @@ class Board:
         sd_card: str | PathLike[str] | None = None,
         execution_policy: ExecutionPolicy = "exact",
         boot_cache: bool = True,
+        run_to_rec: bool = True,
+        sd_card_present: bool = True,
+        sd_card_write_protected: bool = False,
+        sd_card_transfer_ticks: int | None = None,
     ) -> Self:
         """Open a camera through the shared builder and return it at REC.
 
@@ -416,7 +420,13 @@ class Board:
         `execution_policy` is `exact` or `interactive`. `boot_cache`
         restores the library's saved boot when the same inputs were opened
         before and saves this one; `False` boots from scratch and saves
-        nothing.
+        nothing. With `run_to_rec` false the board is returned before its
+        first instruction with the boot controls held: run it and call
+        `release_holds` to finish the boot. The boot cache is not used then.
+        `sd_card_present` false models an empty slot, and
+        `sd_card_write_protected` asserts the card's write-protect contact.
+        `sd_card_transfer_ticks` replaces the catalog's guest ticks per SD
+        data transfer.
         """
         firmware = cls._identifier(firmware, "firmware")
         if boot not in ("stock", "sd-card", "automatic-boot"):
@@ -425,6 +435,20 @@ class Board:
             raise ValueError("execution_policy must be 'exact' or 'interactive'")
         if type(boot_cache) is not bool:
             raise TypeError("boot_cache must be a bool")
+        if type(run_to_rec) is not bool:
+            raise TypeError("run_to_rec must be a bool")
+        if type(sd_card_present) is not bool:
+            raise TypeError("sd_card_present must be a bool")
+        if type(sd_card_write_protected) is not bool:
+            raise TypeError("sd_card_write_protected must be a bool")
+        if sd_card_transfer_ticks is not None and (
+            type(sd_card_transfer_ticks) is not int or sd_card_transfer_ticks < 1
+        ):
+            raise ValueError("sd_card_transfer_ticks must be a positive integer")
+        if not run_to_rec and boot == "automatic-boot":
+            raise ValueError("an automatic boot cannot stop before REC")
+        if not sd_card_present and boot != "stock":
+            raise ValueError("a card boot needs the card present")
         card = None if sd_card is None else cls._input_path(sd_card, "sd_card")
         native = _native.Board.open_camera(
             firmware=firmware,
@@ -432,6 +456,10 @@ class Board:
             sd_card=card,
             execution_policy=execution_policy,
             boot_cache=boot_cache,
+            run_to_rec=run_to_rec,
+            sd_card_present=sd_card_present,
+            sd_card_write_protected=sd_card_write_protected,
+            sd_card_transfer_ticks=sd_card_transfer_ticks,
         )
         quantum = native.boot_quantum
         if type(quantum) is not int or quantum < 1:
@@ -453,6 +481,16 @@ class Board:
         """
         self._ensure_open()
         return _boot_report(json.loads(self._native.status()))
+
+    def release_holds(self) -> None:
+        """Release the boot controls held by a `run_to_rec=False` open.
+
+        The held controls go back to their neutral positions and the controls
+        the running firmware loads are connected. Calling this on a board
+        opened at REC does nothing.
+        """
+        self._ensure_open()
+        self._native.release_holds()
 
     def _adopt_native(
         self, native: _native.Board, quantum: int, *, boot_capable: bool
@@ -874,6 +912,10 @@ class Session:
     def control_state(self) -> dict[str, object]:
         """Return available controls, current positions and queued transitions."""
         return _json_object(json.loads(self._native_board().control_state()))
+
+    def card_state(self, node: str) -> dict[str, object]:
+        """Return the modeled SD card's contacts, capacity and faults."""
+        return _json_object(json.loads(self._native_board().card_state(self._node(node))))
 
     def set_position(self, control_id: str, position: str) -> None:
         """Set a named physical control to one of its declared positions."""

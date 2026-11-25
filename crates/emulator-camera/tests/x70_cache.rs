@@ -28,6 +28,8 @@ fn request(boot: Boot, card_files: Vec<(String, PathBuf)>, cache: BootCache) -> 
         engine: None,
         card_files,
         cache,
+        run_to_rec: true,
+        card: Default::default(),
     }
 }
 

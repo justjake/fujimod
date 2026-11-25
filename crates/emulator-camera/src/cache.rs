@@ -197,6 +197,14 @@ fn identity(
         Boot::SdCard(_) => b"sd-card",
         Boot::AutomaticBoot(_) => b"automatic",
     });
+    part(&[request.card.present as u8, request.card.protected as u8]);
+    match request.card.transfer_ticks {
+        Some(ticks) => {
+            part(b"transfer-ticks");
+            part(&ticks.to_le_bytes());
+        }
+        None => part(b"catalog-transfer-ticks"),
+    }
     for (name, bytes) in card(library, request)? {
         part(name.as_bytes());
         part(&bytes);

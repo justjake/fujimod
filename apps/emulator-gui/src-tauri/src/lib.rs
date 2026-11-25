@@ -234,6 +234,7 @@ fn launch_camera(request: LaunchRequest) -> Result<(LaunchedCamera, Running), St
                     application_plan: request.application_plan,
                     card_files: Vec::new(),
                     discovery: false,
+                    sd_card_transfer_ticks: None,
                 };
                 let mut camera = fujimod_emulator_boot::open_request(resolved, boot_request)
                     .inspect_err(|error| log_session(format!("session: {error}")))?;
@@ -349,6 +350,8 @@ fn open_with_builder(request: OpenCameraRequest) -> Result<(LaunchedCamera, Runn
         } else {
             camera::BootCache::Reuse
         },
+        run_to_rec: true,
+        card: Default::default(),
     };
     let room = fujimod_emulator_gui::Room::loopback()?;
     let endpoint = room.endpoint().url.clone();

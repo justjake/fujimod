@@ -1,6 +1,6 @@
 //! The camera builder's open, wrapped as the board the bindings already own.
 use super::*;
-use fujimod_emulator_camera::{Boot, BootCache, CardSource, Library, Request};
+use fujimod_emulator_camera::{Boot, BootCache, CardModel, CardSource, Library, Request};
 
 /// The catalog boot a `boot` argument names, with the card files a stock
 /// boot adds from a directory.
@@ -31,21 +31,35 @@ impl Board {
     /// Open a camera through the shared builder.
     ///
     /// The firmware's update, boot ROM and reference camera come from the
-    /// directory named by `FUJIMOD_FIRMWARE_LIBRARY`. Returns a board whose
-    /// session is already at REC or its first-start setup.
+    /// directory named by `FUJIMOD_FIRMWARE_LIBRARY`. With `run_to_rec` false
+    /// the board is returned before its first instruction, with the boot
+    /// controls held; running it and calling `release_holds` finishes the boot.
+    /// Otherwise the session is already at REC or its first-start setup.
     #[staticmethod]
-    #[pyo3(signature=(*, firmware, boot="stock", sd_card=None, execution_policy="exact", boot_cache=true))]
+    #[pyo3(signature=(*, firmware, boot="stock", sd_card=None, execution_policy="exact", boot_cache=true,
+        run_to_rec=true, sd_card_present=true, sd_card_write_protected=false, sd_card_transfer_ticks=None))]
     fn open_camera(
         firmware: String,
         boot: &str,
         sd_card: Option<PathBuf>,
         execution_policy: &str,
         boot_cache: bool,
+        run_to_rec: bool,
+        sd_card_present: bool,
+        sd_card_write_protected: bool,
+        sd_card_transfer_ticks: Option<u64>,
     ) -> PyResult<Self> {
         let library = Library::from_env().map_err(|failure| error(failure.to_string()))?;
         let policy =
             fujimod_emulator_cpu::ExecutionPolicy::parse(execution_policy).map_err(error)?;
         let (boot, card_files) = catalog_boot(boot, sd_card.as_ref())?;
+        if let Some(ticks) = sd_card_transfer_ticks
+            && ticks == 0
+        {
+            return Err(PyValueError::new_err(
+                "sd_card_transfer_ticks must be positive",
+            ));
+        }
         let opened = fujimod_emulator_camera::open(
             &library,
             Request {
@@ -59,11 +73,36 @@ impl Board {
                 } else {
                     BootCache::Bypass
                 },
+                run_to_rec,
+                card: CardModel {
+                    present: sd_card_present,
+                    protected: sd_card_write_protected,
+                    transfer_ticks: sd_card_transfer_ticks,
+                },
             },
         )
         .map_err(|failure| error(failure.to_string()))?;
-        let camera = opened.camera;
-        Ok(Self::from_graph_session(camera.session, camera.read_limit))
+        let fujimod_emulator_camera::Opened { camera, holds, .. } = opened;
+        let mut board = Self::from_graph_session(camera.session, camera.read_limit);
+        if !run_to_rec {
+            board.boot_holds = Some(holds);
+        }
+        Ok(board)
+    }
+
+    /// Release the boot controls a `run_to_rec=false` open holds, and connect
+    /// the controls the running firmware loads. Does nothing once released.
+    fn release_holds(&mut self) -> PyResult<()> {
+        let Some(holds) = self.boot_holds.take() else {
+            return Ok(());
+        };
+        match holds.release(self.session_mut()?) {
+            Ok(()) => Ok(()),
+            Err(failure) => {
+                self.boot_holds = Some(holds);
+                Err(error(failure.to_string()))
+            }
+        }
     }
 
     /// The builder's observation of the running session: the boot stage

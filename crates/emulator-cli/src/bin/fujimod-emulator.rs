@@ -257,6 +257,8 @@ impl Open {
             } else {
                 camera::BootCache::Bypass
             },
+            run_to_rec: true,
+            card: Default::default(),
         })
     }
 
@@ -612,6 +614,7 @@ fn run_exr2(
         camera: boot_options.path("--camera"),
         access_point: None,
         capability_reply: None,
+        sd_card_transfer_ticks: None,
     };
     let screenshot = boot_options.path("--screenshot");
     let limit = boot_options.instruction_limit()?.unwrap_or(2_000_000_000);
@@ -1024,6 +1027,7 @@ fn run_window(mut options: Boot, resolved: ResolvedConfiguration) -> Result<Outc
         application_plan: options.path("--application-plan"),
         card_files: options.sd_files()?,
         discovery: options.discovery,
+        sd_card_transfer_ticks: None,
     };
     let selection = resolved.reference.clone();
     let camera = boot::open_request(resolved, request)?;

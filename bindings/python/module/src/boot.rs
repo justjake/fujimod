@@ -127,6 +127,7 @@ impl Boot for CatalogBoot {
             camera: inputs.camera,
             access_point,
             capability_reply,
+            sd_card_transfer_ticks: None,
         };
         let mut session = boot::open(resolved, boot::StartupInputs::Exr2 { options, mode })?.session;
         #[cfg(not(target_arch = "wasm32"))]

@@ -51,6 +51,35 @@ pub struct Request {
     pub card_files: Vec<(String, PathBuf)>,
     /// Whether the open may restore a saved boot and keep a new one.
     pub cache: BootCache,
+    /// Run the camera to REC before returning. When false, the open applies
+    /// the boot holds and returns before the first instruction; the caller
+    /// runs the session and calls [`Opened::release_holds`]. The boot cache is
+    /// not used either way.
+    pub run_to_rec: bool,
+    /// The SD card in the slot at power-on.
+    pub card: CardModel,
+}
+
+/// How the modeled SD card starts a run.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct CardModel {
+    /// Whether the card is inserted at power-on.
+    pub present: bool,
+    /// Whether the card's write-protect contact is asserted.
+    pub protected: bool,
+    /// Guest ticks the host charges for each SD data transfer; the run's
+    /// catalog value when absent.
+    pub transfer_ticks: Option<u64>,
+}
+
+impl Default for CardModel {
+    fn default() -> Self {
+        Self {
+            present: true,
+            protected: false,
+            transfer_ticks: None,
+        }
+    }
 }
 
 /// Whether an open uses the boot cache.
@@ -131,7 +160,8 @@ impl From<LibraryError> for OpenError {
     }
 }
 
-/// A camera that reached REC, with the facts it was opened with.
+/// A camera built from a request, at REC unless the request stopped before
+/// the first instruction, with the facts it was opened with.
 pub struct Opened {
     pub camera: Camera,
     pub firmware: String,
@@ -149,6 +179,10 @@ pub struct Opened {
     pub release: Option<String>,
     /// Whether the camera was restored from the boot cache instead of booted.
     pub cached: bool,
+    /// The controls the boot holds from power-on.
+    pub holds: BootHolds,
+    /// Whether the holds are applied and not yet released.
+    holds_applied: bool,
 }
 
 impl Opened {
@@ -159,11 +193,72 @@ impl Opened {
     pub fn session_mut(&mut self) -> &mut Session {
         &mut self.camera.session
     }
+
+    /// Hold the boot controls without running the guest.
+    pub fn apply_holds(&mut self) -> Result<(), OpenError> {
+        if self.holds_applied {
+            return Ok(());
+        }
+        hold_boot_inputs(
+            &mut self.camera.session,
+            &self.holds.resolved,
+            &self.holds.holds,
+            self.holds.ticks_per_second,
+        )?;
+        self.holds_applied = true;
+        Ok(())
+    }
+
+    /// Release the boot holds and connect the controls the running firmware
+    /// loads. An open that ran to REC has already done this.
+    pub fn release_holds(&mut self) -> Result<(), OpenError> {
+        if !self.holds_applied {
+            return Ok(());
+        }
+        self.holds.release(&mut self.camera.session)?;
+        self.holds_applied = false;
+        Ok(())
+    }
+
+    /// Whether the boot holds are applied and not yet released.
+    pub fn holds_applied(&self) -> bool {
+        self.holds_applied
+    }
 }
 
-/// Open a camera and run it to REC or its first-start setup.
+/// The controls a boot holds from power-on, and what releasing them needs.
+#[derive(Clone)]
+pub struct BootHolds {
+    resolved: ResolvedConfiguration,
+    holds: Vec<fujimod_catalog_controls::BootHold>,
+    ticks_per_second: u64,
+}
+
+impl BootHolds {
+    /// The catalog ids of the controls the boot holds.
+    pub fn controls(&self) -> impl Iterator<Item = &str> {
+        self.holds.iter().map(|hold| hold.id.as_str())
+    }
+
+    /// Release each hold and connect the controls the running firmware loads.
+    pub fn release(&self, session: &mut Session) -> Result<(), OpenError> {
+        finish_boot(session, &self.resolved, &self.holds, self.ticks_per_second)
+    }
+}
+
+/// Open a camera and run it to REC or its first-start setup. A request with
+/// `run_to_rec` false builds it and applies its boot holds instead.
 pub fn open(library: &Library, request: Request) -> Result<Opened, OpenError> {
     let resolved = resolve(library, &request)?;
+    if !request.card.present && matches!(request.boot, Boot::SdCard(_) | Boot::AutomaticBoot(_)) {
+        return Err(OpenError::at(
+            Stage::BootRom,
+            "an SD card boot needs the card present",
+        ));
+    }
+    if !request.run_to_rec {
+        return open_held(library, request, resolved);
+    }
     let key = match request.cache {
         BootCache::Reuse => Some(crate::cache::Key::new(library, &request, &resolved)?),
         BootCache::Bypass => None,
@@ -181,6 +276,23 @@ pub fn open(library: &Library, request: Request) -> Result<Opened, OpenError> {
     if let Some(key) = &key {
         crate::cache::save(&opened, key);
     }
+    Ok(opened)
+}
+
+/// Build a camera, hold its boot controls and stop before the first instruction.
+fn open_held(
+    library: &Library,
+    request: Request,
+    resolved: ResolvedConfiguration,
+) -> Result<Opened, OpenError> {
+    if matches!(request.boot, Boot::AutomaticBoot(_)) {
+        return Err(OpenError::at(
+            Stage::BootRom,
+            "an automatic boot runs the card's installer and cannot stop before REC",
+        ));
+    }
+    let mut opened = construct(library, request, resolved)?;
+    opened.apply_holds()?;
     Ok(opened)
 }
 
@@ -204,40 +316,29 @@ fn open_booted(
     resolved: ResolvedConfiguration,
 ) -> Result<Opened, OpenError> {
     let mut opened = construct(library, request, resolved)?;
-    let holds = boot_holds(&opened)?;
-    boot_camera(&mut opened, &holds)?;
+    boot_camera(&mut opened)?;
     Ok(opened)
 }
 
 /// The controls a boot holds from power-on, from the catalog's boot entry.
-fn boot_holds(opened: &Opened) -> Result<Vec<fujimod_catalog_controls::BootHold>, OpenError> {
-    match &opened.boot {
+fn boot_holds(
+    boot: &Boot,
+    resolved: &ResolvedConfiguration,
+) -> Result<Vec<fujimod_catalog_controls::BootHold>, OpenError> {
+    match boot {
         Boot::Stock | Boot::AutomaticBoot(_) => Ok(Vec::new()),
-        Boot::SdCard(_) => sd_holds(&opened.resolved),
+        Boot::SdCard(_) => sd_holds(resolved),
     }
 }
 
-/// Run a constructed camera to REC, holding and releasing `holds` around it.
-fn boot_camera(
-    opened: &mut Opened,
-    holds: &[fujimod_catalog_controls::BootHold],
-) -> Result<(), OpenError> {
-    hold_boot_inputs(
-        &mut opened.camera.session,
-        &opened.resolved,
-        holds,
-        opened.camera.ticks_per_second,
-    )?;
+/// Run a constructed camera to REC, holding and releasing its controls around it.
+fn boot_camera(opened: &mut Opened) -> Result<(), OpenError> {
+    opened.apply_holds()?;
     let card_before = card_revision(&opened.camera.session, &opened.boot);
     let report = boot::to_rec(&mut opened.camera.session, INSTRUCTION_LIMIT)
         .map_err(|error| OpenError::at(Stage::BootRom, error))?;
     if report.status == "rec" && !report.pending && report.scanout_instance.is_some() {
-        finish_boot(
-            &mut opened.camera.session,
-            &opened.resolved,
-            holds,
-            opened.camera.ticks_per_second,
-        )?;
+        opened.release_holds()?;
         opened.stage = Stage::Rec;
         return Ok(());
     }
@@ -306,7 +407,7 @@ fn open_automatic(
     };
     let mut opened = construct(library, request, resolved)?;
     automatic::write_kept_flash(opened.session_mut(), facts, &kept)?;
-    boot_camera(&mut opened, &[])?;
+    boot_camera(&mut opened)?;
     fujimod_resident(&opened, facts.load_range.address)?;
     Ok(opened)
 }
@@ -324,8 +425,7 @@ fn install_automatic(
     installer.boot = Boot::SdCard(CardSource::Files(automatic::stock_menus(contents)?));
     installer.cache = BootCache::Bypass;
     let mut installer = construct(library, installer, resolved)?;
-    let holds = sd_holds(&installer.resolved)?;
-    boot_camera(&mut installer, &holds)?;
+    boot_camera(&mut installer)?;
     automatic::install(&mut installer, facts)
 }
 
@@ -463,6 +563,8 @@ pub(crate) fn construct(
         cache: _,
         engine: _,
         card_files,
+        run_to_rec: _,
+        card,
     } = request;
     let engine = resolved
         .configuration
@@ -494,6 +596,7 @@ pub(crate) fn construct(
             application_plan: None,
             card_files: boot_card_files,
             discovery: false,
+            sd_card_transfer_ticks: card.transfer_ticks,
         },
     )
     .map_err(|error| OpenError::at(Stage::BootRom, error))?;
@@ -511,6 +614,12 @@ pub(crate) fn construct(
         boot::media::attach(&mut camera.session, None, &card_files)
             .map_err(|error| OpenError::at(Stage::BootRom, error))?;
     }
+    apply_card_contacts(&mut camera.session, card)?;
+    let holds = BootHolds {
+        resolved: resolved.clone(),
+        holds: boot_holds(&boot, &resolved)?,
+        ticks_per_second: camera.ticks_per_second,
+    };
     Ok(Opened {
         camera,
         firmware,
@@ -522,7 +631,28 @@ pub(crate) fn construct(
         release,
         resolved,
         cached: false,
+        holds,
+        holds_applied: false,
     })
+}
+
+/// Put the caller's card into the modeled slot: its presence and write
+/// protection, after every source has installed its files.
+fn apply_card_contacts(session: &mut Session, card: CardModel) -> Result<(), OpenError> {
+    if card.present && !card.protected {
+        return Ok(());
+    }
+    let name =
+        session.contacts.keys().next().cloned().ok_or_else(|| {
+            OpenError::at(Stage::BootRom, "the run declares no modeled SD card slot")
+        })?;
+    let medium = session
+        .card_medium(&name)
+        .map_err(|error| OpenError::at(Stage::BootRom, error))?;
+    session
+        .insert_card(&name, medium, card.present, card.protected)
+        .map(|_| ())
+        .map_err(|error| OpenError::at(Stage::BootRom, error))
 }
 
 /// The card files a source contributes and the release tag when it is published.

@@ -70,6 +70,8 @@ pub struct Board {
     failures: Failures,
     read_limit: usize,
     last_continuation_stop: Option<fujimod_emulator::board::continuation::ContinuationStop>,
+    /// Boot controls a camera builder open holds for a caller that runs it.
+    boot_holds: Option<fujimod_emulator_camera::BootHolds>,
 }
 impl Board {
     /// The Python board that owns a session built elsewhere, such as the
@@ -88,6 +90,7 @@ impl Board {
             failures: Failures::default(),
             read_limit,
             last_continuation_stop: None,
+            boot_holds: None,
         }
     }
     /// A watched contact queue ends a run at its next change.
@@ -280,6 +283,7 @@ impl Board {
             objects: BTreeMap::new(),
             failures: Failures::default(),
             last_continuation_stop: None,
+            boot_holds: None,
         })
     }
     #[getter]
@@ -660,6 +664,7 @@ impl Board {
                 failures: Failures::default(),
                 read_limit,
                 last_continuation_stop: None,
+                boot_holds: None,
             });
         }
         let plan = Plan::parse(devices.as_bytes()).map_err(error)?;
@@ -746,6 +751,7 @@ impl Board {
             failures: adapters.failures,
             read_limit,
             last_continuation_stop: None,
+            boot_holds: None,
         })
     }
     fn __traverse__(&self, visit: PyVisit<'_>) -> Result<(), PyTraverseError> {

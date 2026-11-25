@@ -93,8 +93,18 @@ otherwise empty card for a stock boot. Omit it to use the release card for the
 two card boots, or add no files for a stock boot. `execution_policy` is
 `"exact"` or `"interactive"`. `boot_cache` restores the library's saved boot
 when the same inputs were opened before and saves this one; `False` boots from
-scratch and saves nothing. The board is already open, so `boot_to_rec` raises;
-`status` reports `"rec"`, `"running"` before REC or `"stopped"`.
+scratch and saves nothing. `sd_card_present=False` models an empty slot and
+`sd_card_write_protected=True` asserts the card's write-protect contact;
+`sd_card_transfer_ticks` replaces the catalog's guest ticks per SD data
+transfer. `session.card_state("sd")` reports the contacts and capacity. The
+board is already open, so `boot_to_rec` raises; `status` reports `"rec"`,
+`"running"` before REC or `"stopped"`.
+
+With `run_to_rec=False` the board returns before its first instruction, with
+the catalog's boot controls already held. Run it with `run(limit=...)` and
+call `release_holds()` once it reports `"rec"`; that releases the held
+controls and connects the controls the loaded firmware expects. The boot cache
+is not used for such an open.
 
 The checked identity catalog is available through
 `fujimod.emulator.catalog`. `resolve_reference(body_id, firmware_id)` returns a

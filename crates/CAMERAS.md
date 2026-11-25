@@ -82,8 +82,10 @@ MCP camera module and the CLI call the builder; the Python binding reaches
 it through its existing Rust bindings.
 
 Options: execution policy (`interactive` or `exact`), engine, language,
-clock, extra SD card files, a checkpoint to restore, and whether to use the
-boot cache.
+clock, extra SD card files, the SD card's presence and write protection, the
+host's SD data-transfer time, a checkpoint to restore, whether to use the
+boot cache, and whether to stop before the first instruction with the boot
+holds applied.
 
 ## Results
 
@@ -93,6 +95,10 @@ else is a failure that names how far the boot got:
 - `Stock`: boot ROM, firmware loaded, REC.
 - `SdCard` and `AutomaticBoot`: boot ROM, SD loader, FujiMod applied in RAM,
   REC, release confirmed.
+
+An open can also stop before the first instruction: the builder builds the
+session and applies the boot holds, the caller runs it, and a builder call
+releases the holds and connects the controls the loaded firmware expects.
 
 ## Boot cache
 

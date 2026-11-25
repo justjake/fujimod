@@ -74,6 +74,8 @@ impl OpenRequest {
             } else {
                 fujimod_emulator_camera::BootCache::Bypass
             },
+            run_to_rec: true,
+            card: Default::default(),
         })
     }
 

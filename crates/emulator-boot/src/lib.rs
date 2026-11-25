@@ -72,6 +72,9 @@ pub struct Options {
     /// Explicit 20-byte MT5931 capability fixture for a run that exercises
     /// stock Wi-Fi initialization. Absence refuses the capability query.
     pub capability_reply: Option<[u8; 20]>,
+    /// Guest ticks the modeled SD card host charges for each data transfer.
+    /// Absence keeps the run's catalog value.
+    pub sd_card_transfer_ticks: Option<u64>,
 }
 
 /// Largest compressed camera NAND section accepted from the caller.
@@ -830,6 +833,9 @@ pub struct Request {
     pub application_plan: Option<std::path::PathBuf>,
     pub card_files: Vec<(String, std::path::PathBuf)>,
     pub discovery: bool,
+    /// Guest ticks the modeled SD card host charges for each data transfer.
+    /// Absence keeps the run's catalog value.
+    pub sd_card_transfer_ticks: Option<u64>,
 }
 
 /// Open any configuration `open` supports from a host's files.
@@ -837,6 +843,14 @@ pub struct Request {
 pub fn open_request(resolved: ResolvedConfiguration, request: Request) -> Result<Camera, String> {
     // EXR II cards are formatted after the board opens; other starts build
     // their loader card from the files.
+    if request.sd_card_transfer_ticks.is_some()
+        && !matches!(
+            resolved.configuration.inputs.as_ref(),
+            Some(RunInputs::Exr2(_))
+        )
+    {
+        return Err("SD card transfer ticks apply only to EXR II runs".into());
+    }
     let mut card_after_open = Vec::new();
     let inputs = match resolved.configuration.inputs.as_ref() {
         Some(RunInputs::Exr2(_)) => StartupInputs::Exr2 {
@@ -850,6 +864,7 @@ pub fn open_request(resolved: ResolvedConfiguration, request: Request) -> Result
                 camera: request.camera,
                 access_point: None,
                 capability_reply: None,
+                sd_card_transfer_ticks: request.sd_card_transfer_ticks,
             },
             mode: {
                 card_after_open = request.card_files;
@@ -996,6 +1011,9 @@ fn open_exr2(resolved: ResolvedConfiguration, options: Options, mode: Mode) -> R
     if options.access_point.is_some() || options.capability_reply.is_some() {
         prepared.set_mt5931(options.access_point, options.capability_reply)?;
     }
+    if let Some(ticks) = options.sd_card_transfer_ticks {
+        prepared.set_sd_card_transfer_ticks(ticks)?;
+    }
     let update = checked(&options.update, &prepared.update)?;
     let boot_rom = checked(&options.boot_rom, &prepared.boot_rom.content)?;
     let inputs = InputBytes {
@@ -1024,6 +1042,33 @@ fn open_exr2(resolved: ResolvedConfiguration, options: Options, mode: Mode) -> R
 }
 
 impl Prepared {
+    /// Charge `ticks` of guest time for every data transfer on the modeled SD
+    /// host, in place of the catalog's value.
+    fn set_sd_card_transfer_ticks(&mut self, ticks: u64) -> Result<(), String> {
+        if ticks == 0 {
+            return Err("SD card transfer ticks must be positive".into());
+        }
+        let nodes = self
+            .devices_value
+            .get_mut("nodes")
+            .and_then(Value::as_array_mut)
+            .ok_or("prepared devices have no node list")?;
+        let sd = nodes
+            .iter_mut()
+            .find(|node| node.get("name").and_then(Value::as_str) == Some("sd"))
+            .ok_or("run has no modeled SD card host")?;
+        let options = sd
+            .pointer_mut("/model/options")
+            .and_then(Value::as_object_mut)
+            .ok_or("run SD card host has no options")?;
+        if options.contains_key("latency") {
+            return Err(
+                "run SD card host has a measured timing model, not transfer ticks".into(),
+            );
+        }
+        options.insert("transfer_ticks".into(), json!(ticks));
+        Ok(())
+    }
     fn set_mt5931(
         &mut self,
         access_point: Option<Value>,

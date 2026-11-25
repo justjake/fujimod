@@ -45,6 +45,7 @@ impl Board {
             failures: Failures::default(),
             read_limit,
             last_continuation_stop: None,
+            boot_holds: None,
         })
     }
 }

@@ -24,6 +24,8 @@ fn request() -> Request {
         engine: None,
         card_files: Vec::new(),
         cache: BootCache::Bypass,
+        run_to_rec: true,
+        card: Default::default(),
     }
 }
 
