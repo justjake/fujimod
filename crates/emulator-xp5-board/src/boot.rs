@@ -637,23 +637,12 @@ pub fn windows_from_blocks(
                 };
                 options.insert(option.into(), toml::Value::Integer(i64::try_from(value).map_err(|_| format!("block {}: latency overflows", block.id))?));
             }
-            if kind == "imaging-table" && block.size > 0x1000 {
-                for offset in (0..block.size).step_by(0x1000) {
-                    devices.push(DeviceWindow {
-                        base: block.base + offset,
-                        size: 0x1000,
-                        kind: kind.to_owned(),
-                        options: options.clone(),
-                    });
-                }
-            } else {
-                devices.push(DeviceWindow {
-                    base: block.base,
-                    size: block.size,
-                    kind: kind.to_owned(),
-                    options,
-                });
-            }
+            devices.push(DeviceWindow {
+                base: block.base,
+                size: block.size,
+                kind: kind.to_owned(),
+                options,
+            });
         }
     }
     // The firmware drains the bus by reading one word of each port and discarding it; a port
@@ -1188,8 +1177,7 @@ fn block_window(
                     toml::Value::Table(row)
                 }).collect()));
             }
-            if block.id.starts_with("imaging-table") { "imaging-table" }
-            else if block.id == "dma-routes" { "dma-request-routing" }
+            if block.id == "dma-routes" { "dma-request-routing" }
             else if block.id == "dma-address-high" { "dma-address-high" }
             else if *reads_back || block.registers.iter().any(|register| register.reads.is_some()) {
                 options.insert("registers".into(), stub_registers(block));

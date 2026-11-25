@@ -1,19 +1,20 @@
 {
   "$schema": "https://fujimod.com/schemas/soc-block.schema.json",
   "schema": 1,
-  "id": "imaging-table-955000",
-  "base": 4287975424,
-  "size": 16384,
+  "id": "imaging-words-959000",
+  "base": 4287991808,
+  "size": 4096,
   "kind": "imaging-controller",
   "device": {
     "model": "register_block",
     "idle_bits": [],
-    "basis": "imaging table page with unresolved read direction Located in catalog/firmware/xe5/1.12/xp5-boot/manifest.d/49-gap-stubs.toml."
+    "basis": "imaging table page with unresolved read direction Located in catalog/firmware/x100vi/1.31/xp5-boot/manifest.d/50-imaging.toml. Written only; no read found."
   },
   "evidence": [
     {
       "kind": "located",
       "firmware_ids": [
+        "x100vi-131",
         "xe5-112",
         "xt5-431"
       ]

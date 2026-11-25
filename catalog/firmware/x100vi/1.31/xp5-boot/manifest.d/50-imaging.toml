@@ -43,30 +43,34 @@ completion_us = 8000
 [[device]]
 base = 0xff96c000
 size = 0x1000
-kind = "imaging-table"
+kind = "bringup-stub"
+[device.options]
+registers = []
 
 # Write-only table window, same device; no word is read.
 [[device]]
 base = 0xff96e000
 size = 0x1000
-kind = "imaging-table"
+kind = "bringup-stub"
+[device.options]
+registers = []
 
 # Write-only word tables filled by byte-packing loops (nine 0x100-byte tables, then two sets of three
 # 0x400-byte tables); nothing reads them.
 [[device]]
 base = 0xff959000
 size = 0x1000
-kind = "imaging-table"
+kind = "write-only-registers"
 
 [[device]]
 base = 0xff95a000
 size = 0x1000
-kind = "imaging-table"
+kind = "write-only-registers"
 
 [[device]]
 base = 0xff95b000
 size = 0x1000
-kind = "imaging-table"
+kind = "write-only-registers"
 
 # Input-engine reset/ready gate used by native imgdc startup.
 [[device]]

@@ -1,20 +1,19 @@
 {
   "$schema": "https://fujimod.com/schemas/soc-block.schema.json",
   "schema": 1,
-  "id": "imaging-table-959000",
-  "base": 4287991808,
+  "id": "dram-channel-3-table",
+  "base": 4210266112,
   "size": 4096,
-  "kind": "imaging-controller",
+  "kind": "memory-controller",
   "device": {
     "model": "register_block",
     "idle_bits": [],
-    "basis": "imaging table page with unresolved read direction Located in catalog/firmware/x100vi/1.31/xp5-boot/manifest.d/50-imaging.toml."
+    "basis": "DRAM channel 3 memory-controller table page, written by the boot table writer and never read. Located in catalog/firmware/xe5/1.12/xp5-boot/manifest.d/49-table-writes.toml."
   },
   "evidence": [
     {
       "kind": "located",
       "firmware_ids": [
-        "x100vi-131",
         "xe5-112",
         "xt5-431"
       ]
