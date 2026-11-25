@@ -57,6 +57,11 @@ fn card_session_with_power_alias_and_fill(
             dram_alias: true,
             address_high: None,
             speed_dividers: None,
+            capabilities_1: None,
+            initialized_by_boot_rom: false,
+            supply: None,
+            write_busy_ticks: 0,
+            retained_registers: vec![],
         },
         sdhc::Wiring {
             card,

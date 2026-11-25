@@ -34,6 +34,19 @@ pub trait DriveInput: Send + Sync {
     fn set_input(&self, pin: Pin, high: bool);
 }
 
+/// How a driven output pad has moved: the count of low-to-high transitions
+/// and the length of the latest completed low interval, in virtual ticks.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct LowHistory {
+    pub rising_edges: u64,
+    pub last_low_ticks: u64,
+}
+/// Observe how long a driven output pad was held low. A consumer that is
+/// not accessed during a pulse still sees its count and length afterward.
+pub trait OutputLowHistory: Send + Sync {
+    fn low_history(&self, pin: Pin) -> LowHistory;
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct Selection {

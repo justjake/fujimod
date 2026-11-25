@@ -23,6 +23,11 @@ fn options(protocol: Protocol, initialization_fault: InitializationFault) -> Opt
         dram_alias: true,
         address_high: None,
         speed_dividers: None,
+        capabilities_1: None,
+        initialized_by_boot_rom: false,
+        supply: None,
+        write_busy_ticks: 0,
+        retained_registers: vec![],
     }
 }
 

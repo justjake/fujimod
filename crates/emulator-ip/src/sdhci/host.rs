@@ -9,6 +9,7 @@
 use super::{Clocks, registers::Registers};
 use fujimod_emulator_devices::bus::FastReadWord;
 use fujimod_emulator_devices::parts::card_contacts::Contacts;
+use fujimod_emulator_devices::parts::pins::{LowHistory, OutputLowHistory, Pin};
 use fujimod_emulator_devices::parts::read_fifo::ReadFifo;
 use fujimod_emulator_devices::parts::sd_card::Card;
 use fujimod_emulator_devices::parts::sd_card::faults::{DataDirection, DataFault, DataFaultEvent};
@@ -82,6 +83,31 @@ pub struct Options {
     /// Optional card timing model (see `latency`); none = `transfer_ticks`.
     #[serde(default)]
     pub latency: Option<super::latency::Latency>,
+    /// Explicit SDHCI Capabilities 1 register input.
+    #[serde(default)]
+    pub capabilities_1: Option<u32>,
+    /// The card was initialized before this host's guest ran (for example by
+    /// the boot ROM) and ignores initialization until its supply is cycled:
+    /// ACMD41 reports the voltage window with the ready bit clear. Requires
+    /// `supply` to ever leave this state. Absent means a freshly powered card.
+    #[serde(default)]
+    pub initialized_by_boot_rom: bool,
+    /// The GPIO output pad that enables the card supply.
+    #[serde(default)]
+    pub supply: Option<Supply>,
+    /// Ticks the card holds DAT0 busy while it programs the last block of a
+    /// write. Transfer complete follows the busy period, and commands and data
+    /// stay inhibited until then. Zero completes the write at once. The card
+    /// timing model draws its own busy period (`write_busy_us`), so a host
+    /// declares one or the other.
+    #[serde(default)]
+    pub write_busy_ticks: u64,
+    /// Vendor registers (offsets 0x100..0x200) the guest only stores and
+    /// reads back. Each holds its last write and resets to zero; no side
+    /// effect is modeled. A declared register takes precedence over the
+    /// built-in SDH30 vendor words it overlaps, which then refuse.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub retained_registers: Vec<RetainedRegister>,
 }
 /// See [`Options::speed_dividers`].
 #[derive(Clone, Copy, Debug, Deserialize, Serialize, PartialEq, Eq)]
@@ -98,6 +124,23 @@ fn dram_alias_default() -> bool {
 fn is_zero(value: &u32) -> bool {
     *value == 0
 }
+/// One declared vendor register outside the modeled SDHCI set.
+#[derive(Clone, Copy, Debug, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
+pub struct RetainedRegister {
+    pub offset: u16,
+    /// Access width in bytes: 2 or 4.
+    pub size: u8,
+}
+/// A card supply enable pad and the shortest power-off that resets the card.
+#[derive(Clone, Copy, Debug, Deserialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
+pub struct Supply {
+    pub pin: Pin,
+    /// Minimum low time, in virtual-time ticks, after which the card forgets
+    /// its earlier initialization. Only a measured working value is known.
+    pub off_min_ticks: u64,
+}
 const MAX_DATA_FAULTS: usize = 32;
 const COMMAND_TIMEOUT_ERROR: u16 = 1;
 const DATA_CRC_ERROR: u16 = 0x20;
@@ -106,6 +149,10 @@ pub struct Wiring {
     pub card: Card,
     pub contacts: Contacts,
     pub irq: InterruptLine,
+}
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+struct SupplyEpoch {
+    rising_edges: u64,
 }
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 enum State {
@@ -140,6 +187,11 @@ enum Phase {
     Ready,
     Sector,
     Boundary,
+    /// The last block of a write is on the card; it programs with DAT0 held
+    /// busy, then the transfer ends with this interrupt status.
+    Programming {
+        status: u16,
+    },
 }
 #[derive(Serialize, Deserialize)]
 struct Request {
@@ -181,6 +233,9 @@ pub struct SdHost {
     card: Card,
     contacts: Contacts,
     irq: Option<InterruptLine>,
+    supply: Option<Arc<dyn OutputLowHistory>>,
+    supply_seen: SupplyEpoch,
+    rom_initialized: bool,
     regs: Registers,
     clocks: Clocks,
     state: State,
@@ -204,6 +259,8 @@ pub struct SdHost {
     /// Last value written to the `address_high` word (DMA address bits 34..32).
     address_high: u32,
     latency: Option<super::latency::Model>,
+    /// Last writes to `Options::retained_registers`, in declaration order.
+    retained: Vec<u32>,
 }
 /// CMD6 status (SD Physical Layer 4.3.10) of a card whose group 1 offers
 /// default and high speed and whose groups 2-6 offer function 0 only.
@@ -260,6 +317,38 @@ impl SdHost {
     pub fn new(options: Options, wiring: Wiring) -> Result<Self, String> {
         Self::construct(options, wiring.card, wiring.contacts, Some(wiring.irq))
     }
+    /// Connect the card supply pad declared by `Options::supply`.
+    pub fn with_supply(mut self, history: Arc<dyn OutputLowHistory>) -> Result<Self, String> {
+        let Some(supply) = self.options.supply else {
+            return Err("SD supply history without a declared supply pad".into());
+        };
+        supply.pin.validate()?;
+        self.supply_seen = SupplyEpoch {
+            rising_edges: history.low_history(supply.pin).rising_edges,
+        };
+        self.supply = Some(history);
+        Ok(self)
+    }
+    /// A power cycle at least `off_min_ticks` long resets a card that an
+    /// earlier initializer left initialized. Sampled at each command, so the
+    /// guest need not touch this host while the supply is off.
+    fn observe_supply(&mut self) {
+        let (Some(history), Some(supply)) = (&self.supply, self.options.supply) else {
+            return;
+        };
+        let LowHistory {
+            rising_edges,
+            last_low_ticks,
+        } = history.low_history(supply.pin);
+        if rising_edges != self.supply_seen.rising_edges {
+            self.supply_seen.rising_edges = rising_edges;
+            if last_low_ticks >= supply.off_min_ticks {
+                self.rom_initialized = false;
+                self.state = State::Idle;
+                self.app = false;
+            }
+        }
+    }
     /// An explicitly unconnected interrupt output. Polling is supported; an
     /// enabled interrupt assertion refuses rather than inventing a route.
     pub fn new_polled(options: Options, card: Card, contacts: Contacts) -> Result<Self, String> {
@@ -286,6 +375,40 @@ impl SdHost {
             return Err("Invalid SD latency, RCA or DRAM extent".into());
         }
         let clocks = Clocks::new(&[(options.base + 0x2c, options.clock_ticks)])?;
+        if options.supply.is_some_and(|s| s.off_min_ticks == 0) {
+            return Err("SD supply minimum off time must be nonzero".into());
+        }
+        if options.write_busy_ticks != 0 && options.latency.is_some() {
+            return Err(
+                "SD write busy comes from either write_busy_ticks or the card timing model".into(),
+            );
+        }
+        let declared = &options.retained_registers;
+        for (index, register) in declared.iter().enumerate() {
+            let start = usize::from(register.offset);
+            let end = start + usize::from(register.size);
+            let modeled = (start.saturating_sub(3)..end).any(|at| {
+                [1u8, 2, 4]
+                    .into_iter()
+                    .any(|size| at + usize::from(size) > start && Self::modeled(&options, at, size))
+            });
+            if !matches!(register.size, 2 | 4)
+                || start % usize::from(register.size) != 0
+                || !(0x100..0x200).contains(&start)
+                || end > 0x200
+                || modeled
+                || declared[..index].iter().any(|other| {
+                    let other_start = usize::from(other.offset);
+                    other_start < end && start < other_start + usize::from(other.size)
+                })
+            {
+                return Err(format!(
+                    "SD retained register {:#x}/{} is misaligned, overlapping or modeled",
+                    register.offset, register.size
+                ));
+            }
+        }
+        let retained = vec![0; declared.len()];
         let latency = options
             .latency
             .clone()
@@ -293,6 +416,9 @@ impl SdHost {
             .transpose()?;
         Ok(Self {
             latency,
+            rom_initialized: options.initialized_by_boot_rom,
+            supply: None,
+            supply_seen: SupplyEpoch::default(),
             options,
             register_gate: None,
             reads: StorageReads::default(),
@@ -317,6 +443,7 @@ impl SdHost {
             cmd8_responses: 0,
             vendor: [0; 8],
             address_high: 0,
+            retained,
         })
     }
     /// Declare a data CRC failure for later multi-block transfers.
@@ -624,13 +751,17 @@ impl SdHost {
                 };
                 let inquiry = argument & 0x00ffffff == 0;
                 response = voltage;
-                if !inquiry {
+                // A card initialized earlier ignores initialization: the
+                // ready bit never sets and the card stays where it is.
+                let ignored = self.rom_initialized && !inquiry;
+                if !inquiry && !ignored {
                     request.state = State::Ready;
                     // SDHC, immediately ready, with no 1.8 V switch accepted.
                     response |= 0xc0000000;
                 }
                 self.state != State::Idle
                     || (!inquiry
+                        && !ignored
                         && (argument & !0x51ffff00 != 0
                             || argument & 0x40000000 == 0
                             || argument & voltage == 0))
@@ -848,6 +979,7 @@ impl SdHost {
             self.latch_error(COMMAND_TIMEOUT_ERROR);
             return self.signal(cx);
         }
+        self.observe_supply();
         let argument = self.regs.word(8);
         let mut r = self.plan(word, argument)?;
         if rom && r.command != 17 && word as u16 != 0 {
@@ -985,6 +1117,9 @@ impl SdHost {
             self.latch_error(COMMAND_TIMEOUT_ERROR);
             return self.signal(cx);
         }
+        if let Phase::Programming { status } = r.phase {
+            return self.finish(cx, r, status);
+        }
         r.due = None;
         self.response = r.response;
         if r.quantity == 0 {
@@ -1033,7 +1168,7 @@ impl SdHost {
                 return self.data_error(cx, r);
             }
             if r.cursor == r.quantity {
-                return self.finish(cx, r, 2);
+                return self.end_data(cx, r, 2);
             }
             if r.transfer == Transfer::PioRead {
                 let mut bytes = [0; 512];
@@ -1116,8 +1251,23 @@ impl SdHost {
             self.latch_normal(9);
             self.signal(cx)
         } else {
-            self.finish(cx, r, 3)
+            self.end_data(cx, r, 3)
         }
+    }
+    /// End a data transfer with `status`; a write first waits out the card's
+    /// programming busy.
+    fn end_data(&mut self, cx: &mut Cx<'_>, mut r: Request, status: u16) -> Result<(), String> {
+        if !matches!(r.payload, Payload::Write(_)) || self.options.write_busy_ticks == 0 {
+            return self.finish(cx, r, status);
+        }
+        r.phase = Phase::Programming { status };
+        r.due = Some(
+            cx.now()
+                .checked_add(self.options.write_busy_ticks)
+                .ok_or("SD programming deadline overflow")?,
+        );
+        self.request = Some(r);
+        Ok(())
     }
     fn pio(&mut self, cx: &mut Cx<'_>, write: Option<u32>) -> Result<u32, String> {
         if self.options.protocol == Protocol::Rom {
@@ -1179,6 +1329,9 @@ impl SdHost {
                 };
         }
         let offset = address.wrapping_sub(self.options.base) as usize;
+        if let Some(index) = self.retained_index(offset, size) {
+            return u64::from(self.retained[index]);
+        }
         if let Some(index) = self.vendor_index(offset, size) {
             return u64::from(self.vendor[index]);
         }
@@ -1189,6 +1342,9 @@ impl SdHost {
         self.advance(cx);
         if cx.refusal().is_some() {
             return 0;
+        }
+        if offset == 0x44 {
+            return u64::from(self.options.capabilities_1.unwrap());
         }
         if offset == 0x20 {
             return match self.pio(cx, None) {
@@ -1241,12 +1397,30 @@ impl SdHost {
         };
         self.fifo.publish(ready);
     }
+    /// A built-in vendor word that no declared retained register overlaps.
     fn vendor_index(&self, offset: usize, size: u8) -> Option<usize> {
-        (self.options.protocol == Protocol::Sdhc && size == 4 && (0x108..=0x124).contains(&offset) && offset % 4 == 0)
+        let declared = self.options.retained_registers.iter().any(|r| {
+            let start = usize::from(r.offset);
+            start < offset + 4 && offset < start + usize::from(r.size)
+        });
+        (self.options.protocol == Protocol::Sdhc
+            && size == 4
+            && (0x108..=0x124).contains(&offset)
+            && offset.is_multiple_of(4)
+            && !declared)
             .then(|| (offset - 0x108) / 4)
     }
     fn valid(&self, offset: usize, size: u8) -> bool {
-        if self.options.protocol == Protocol::Sdhc {
+        Self::modeled(&self.options, offset, size)
+    }
+    fn retained_index(&self, offset: usize, size: u8) -> Option<usize> {
+        self.options
+            .retained_registers
+            .iter()
+            .position(|r| usize::from(r.offset) == offset && r.size == size)
+    }
+    fn modeled(options: &Options, offset: usize, size: u8) -> bool {
+        if options.protocol == Protocol::Sdhc {
             Registers::valid(offset, size)
                 || matches!(
                     (offset, size),
@@ -1265,7 +1439,8 @@ impl SdHost {
                         | (0x2e, 1)
                         | (0x2f, 1)
                 )
-        } else if self.options.protocol == Protocol::Application {
+                || options.capabilities_1.is_some() && (offset, size) == (0x44, 4)
+        } else if options.protocol == Protocol::Application {
             Registers::valid(offset, size)
         } else {
             matches!(
@@ -1298,7 +1473,7 @@ impl SdHost {
         value: u32,
     ) -> Result<(), String> {
         let rom = self.options.protocol == Protocol::Rom;
-        if offset == 0x24 || offset == 0x3c || (16..32).contains(&offset) {
+        if offset == 0x24 || offset == 0x3c || offset == 0x44 || (16..32).contains(&offset) {
             return Err("SD response/present-state/auto-command status is read-only".into());
         }
         if offset == 0x20 {
@@ -1440,6 +1615,11 @@ struct Snapshot {
     vendor: [u32; 8],
     #[serde(default, skip_serializing_if = "is_zero")]
     address_high: u32,
+    capabilities_1: Option<u32>,
+    #[serde(default)]
+    rom_initialized: bool,
+    #[serde(default)]
+    supply_seen: SupplyEpoch,
     regs: Registers,
     clocks: Clocks,
     state: State,
@@ -1458,6 +1638,8 @@ struct Snapshot {
     rom_fifo_ready: bool,
     faults: Vec<DataFault>,
     fault_history: Vec<DataFaultEvent>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    retained: Vec<u32>,
 }
 impl Device for SdHost {
     fn card_slot(&self) -> Option<&(dyn fujimod_emulator_devices::capability::CardSlot + 'static)> {
@@ -1481,6 +1663,9 @@ impl Device for SdHost {
             vendor: [u32; 8],
             #[serde(skip_serializing_if = "is_zero")]
             address_high: u32,
+            capabilities_1: Option<u32>,
+            rom_initialized: bool,
+            supply_seen: SupplyEpoch,
             regs: &'a Registers,
             clocks: &'a Clocks,
             state: State,
@@ -1498,6 +1683,8 @@ impl Device for SdHost {
             rom_fifo_ready: bool,
             faults: &'a [DataFault],
             fault_history: &'a [DataFaultEvent],
+            #[serde(skip_serializing_if = "<[u32]>::is_empty")]
+            retained: &'a [u32],
         }
         fujimod_emulator_devices::checkpoint::Checkpoint::encode(
             self.name(),
@@ -1509,6 +1696,9 @@ impl Device for SdHost {
                 cmd8_responses: self.cmd8_responses,
                 vendor: self.vendor,
                 address_high: self.address_high,
+                capabilities_1: self.options.capabilities_1,
+                rom_initialized: self.rom_initialized,
+                supply_seen: self.supply_seen,
                 regs: &self.regs,
                 clocks: &self.clocks,
                 state: self.state,
@@ -1524,6 +1714,7 @@ impl Device for SdHost {
                 rom_fifo_ready: self.rom_fifo_ready,
                 faults: &self.faults,
                 fault_history: &self.fault_history,
+                retained: &self.retained,
             },
         )
     }
@@ -1534,6 +1725,12 @@ impl Device for SdHost {
         let state: Snapshot = saved.decode(self.name())?;
         if state.initialization_fault != self.options.initialization_fault {
             return Err("SD initialization fault policy differs".into());
+        }
+        if state.capabilities_1 != self.options.capabilities_1 {
+            return Err("SD Capabilities 1 input differs".into());
+        }
+        if state.retained.len() != self.options.retained_registers.len() {
+            return Err("SD retained register declaration differs".into());
         }
         state
             .reads
@@ -1553,6 +1750,8 @@ impl Device for SdHost {
         self.cmd8_responses = s.cmd8_responses;
         self.vendor = s.vendor;
         self.address_high = s.address_high;
+        self.rom_initialized = s.rom_initialized;
+        self.supply_seen = s.supply_seen;
         self.reads = s.reads;
         self.contacts.restore_level(s.contacts);
         self.regs = s.regs;
@@ -1568,6 +1767,7 @@ impl Device for SdHost {
         self.rom_fifo_ready = s.rom_fifo_ready;
         self.faults = s.faults;
         self.fault_history = s.fault_history;
+        self.retained = s.retained;
         self.publish_reads();
         Ok(())
     }
@@ -1594,7 +1794,11 @@ impl Device for SdHost {
             "response":self.response,"request":request,"fifo":fujimod_emulator_devices::state::bytes(&fifo),"scratch":fujimod_emulator_devices::state::bytes(&self.scratch),
             "fifo_position":fifo_position,"rom_fifo_ready":self.rom_fifo_ready,
             "initialization_fault":self.options.initialization_fault,"cmd8_responses":self.cmd8_responses,
-            "faults":self.faults,"fault_history":self.fault_history});
+            "capabilities_1":self.options.capabilities_1,"faults":self.faults,"fault_history":self.fault_history});
+        if self.options.initialized_by_boot_rom {
+            value["rom_initialized"] = self.rom_initialized.into();
+            value["supply_seen"] = self.supply_seen.rising_edges.into();
+        }
         if self.access_mode != 0 {
             value["access_mode"] = self.access_mode.into();
         }
@@ -1663,6 +1867,14 @@ impl Device for SdHost {
             return;
         }
         let offset = address.wrapping_sub(self.options.base) as usize;
+        if let Some(index) = self.retained_index(offset, size) {
+            if size == 2 && value > u64::from(u16::MAX) || value > u64::from(u32::MAX) {
+                cx.unmodeled();
+            } else {
+                self.retained[index] = value as u32;
+            }
+            return;
+        }
         if let Some(index) = self.vendor_index(offset, size) {
             self.vendor[index] = value as u32;
             return;
@@ -1723,6 +1935,7 @@ impl Device for SdHost {
                 "cursor":r.cursor,"quantity":r.quantity,"deadline":r.due})),
             "clocks":self.clocks.save(), "initialization_fault":self.options.initialization_fault,
             "cmd8_responses":self.cmd8_responses,
+            "capabilities_1":self.options.capabilities_1,
             "data_faults":self.faults, "fault_history":self.fault_history,
             "latency":self.latency.as_ref().map(|m| serde_json::json!({"stats":m.stats,"busy_until":m.busy_until}))
         })
@@ -1838,9 +2051,11 @@ mod tests {
             write(&mut m, &mut h, 0x3e, 2, value);
             assert_eq!(read(&mut m, &mut h, 0x3e, 2), value);
         }
-        let mut cx = h.cx();
-        m.write(&mut cx, BASE + 0x3e, 2, 0x1400);
-        assert!(cx.refusal().is_some());
+        for value in [0x1400, 0x40] {
+            let mut cx = h.cx();
+            m.write(&mut cx, BASE + 0x3e, 2, value);
+            assert!(cx.refusal().is_some(), "{value:#x}");
+        }
     }
     /// The slot's UHS-II port owns the lines while its interface enable is set:
     /// a command on this host then refuses, and runs again once the bit clears.
@@ -1918,13 +2133,37 @@ mod tests {
     }
     #[test]
     fn a_word_aligned_base_inside_a_page_is_accepted() {
-        let m = host_at(Protocol::Sdhc, BASE + 0x200);
+        let mut m = host_at(Protocol::Sdhc, BASE + 0x200);
         assert_eq!(m.options.base, BASE + 0x200);
+        let mut h = Ram::new(0x10000);
+        write(&mut m, &mut h, 0x23e, 2, 0x100);
+        assert_eq!(read(&mut m, &mut h, 0x23e, 2), 0x100);
+        let misaligned = Options {
+            base: BASE + 0x202,
+            ..m.options.clone()
+        };
+        let wiring = Wiring {
+            card: Card::new(sd_card::Options {
+                sectors: 0x800000,
+                max_dirty_sectors: 65536,
+            })
+            .unwrap(),
+            contacts: Contacts::new(true, false),
+            irq: InterruptLine::Shared(78),
+        };
+        assert!(SdHost::new(misaligned, wiring).is_err());
     }
     fn host(protocol: Protocol) -> SdHost {
         host_at(protocol, BASE)
     }
     fn host_at(protocol: Protocol, base: u64) -> SdHost {
+        host_with_capabilities(protocol, base, None)
+    }
+    fn host_with_capabilities(
+        protocol: Protocol,
+        base: u64,
+        capabilities_1: Option<u32>,
+    ) -> SdHost {
         SdHost::new(
             Options {
                 base,
@@ -1940,6 +2179,11 @@ mod tests {
                 dram_alias: true,
                 address_high: None,
                 speed_dividers: None,
+                capabilities_1,
+                initialized_by_boot_rom: false,
+                supply: None,
+                write_busy_ticks: 0,
+                retained_registers: vec![],
             },
             Wiring {
                 card: Card::new(sd_card::Options {
@@ -1953,6 +2197,97 @@ mod tests {
         )
         .unwrap()
     }
+    fn retained(offset: u16, size: u8) -> RetainedRegister {
+        RetainedRegister { offset, size }
+    }
+    fn host_with_retained(retained_registers: Vec<RetainedRegister>) -> Result<SdHost, String> {
+        SdHost::new(
+            Options {
+                retained_registers,
+                ..host(Protocol::Sdhc).options.clone()
+            },
+            Wiring {
+                card: Card::new(sd_card::Options {
+                    sectors: 0x800000,
+                    max_dirty_sectors: 65536,
+                })
+                .unwrap(),
+                contacts: Contacts::new(true, false),
+                irq: InterruptLine::Shared(78),
+            },
+        )
+    }
+    #[test]
+    fn retained_vendor_registers_read_back_their_last_write() {
+        use fujimod_emulator_devices::test_host::recording::RecordingHost;
+
+        let mut sd = host_with_retained(vec![retained(0x108, 2), retained(0x124, 4)]).unwrap();
+        let mut recording = RecordingHost::default();
+        let mut cx = Cx::new(&mut recording, 0, 0, 0);
+        assert_eq!(sd.read(&mut cx, BASE + 0x124, 4), 0);
+        sd.write(&mut cx, BASE + 0x124, 4, 0x200);
+        sd.write(&mut cx, BASE + 0x108, 2, 0x1ff);
+        assert_eq!(cx.refusal(), None);
+        assert_eq!(sd.read(&mut cx, BASE + 0x124, 4), 0x200);
+        assert_eq!(sd.read(&mut cx, BASE + 0x108, 2), 0x1ff);
+
+        let restored = sd.checkpoint().unwrap();
+        let mut copy = host_with_retained(sd.options.retained_registers.clone()).unwrap();
+        copy.restore_checkpoint(&restored).unwrap();
+        assert_eq!(copy.read(&mut cx, BASE + 0x124, 4), 0x200);
+        assert!(host(Protocol::Sdhc).validate_checkpoint(&restored).is_err());
+
+        // Undeclared widths and offsets refuse, as does a built-in vendor
+        // word under a declared register.
+        for (offset, size) in [(0x124, 2), (0x10c, 2), (0x128, 4), (0x108, 4)] {
+            let mut refused = RecordingHost::default();
+            let mut refused_cx = Cx::new(&mut refused, 0, 0, 0);
+            sd.read(&mut refused_cx, BASE + offset, size);
+            assert!(refused_cx.refusal().is_some(), "{offset:#x}/{size}");
+        }
+        for declared in [
+            retained(0x100, 2),
+            retained(0x104, 4),
+            retained(0x3c, 4),
+            retained(0x10a, 4),
+            retained(0x110, 1),
+        ] {
+            assert!(host_with_retained(vec![declared]).is_err(), "{declared:?}");
+        }
+        assert!(host_with_retained(vec![retained(0x110, 4), retained(0x112, 2)]).is_err());
+    }
+    #[test]
+    fn capabilities_1_is_an_explicit_read_only_host_input() {
+        use fujimod_emulator_devices::test_host::recording::RecordingHost;
+
+        for (capabilities_1, expected) in [(Some(0), Some(0)), (Some(8), Some(8)), (None, None)] {
+            let mut host = host_with_capabilities(Protocol::Sdhc, BASE, capabilities_1);
+            let mut recording = RecordingHost::default();
+            let mut cx = Cx::new(&mut recording, 0, 0, 0);
+            let value = host.read(&mut cx, BASE + 0x44, 4);
+            match expected {
+                Some(expected) => {
+                    assert_eq!(value, expected);
+                    assert_eq!(cx.refusal(), None);
+                    host.write(&mut cx, BASE + 0x44, 4, expected);
+                    assert!(cx.refusal().is_some());
+
+                    let mut width_host =
+                        host_with_capabilities(Protocol::Sdhc, BASE, Some(expected as u32));
+                    let mut width_recording = RecordingHost::default();
+                    let mut width_cx = Cx::new(&mut width_recording, 0, 0, 0);
+                    assert_eq!(width_host.read(&mut width_cx, BASE + 0x44, 2), 0);
+                    assert!(width_cx.refusal().is_some());
+                }
+                None => assert!(cx.refusal().is_some()),
+            }
+        }
+        let cap8 = host_with_capabilities(Protocol::Sdhc, BASE, Some(8));
+        let cap0 = host_with_capabilities(Protocol::Sdhc, BASE, Some(0));
+        let saved = cap8.checkpoint().unwrap();
+        assert!(cap0.validate_checkpoint(&saved).is_err());
+        assert_ne!(cap8.fingerprint().unwrap(), cap0.fingerprint().unwrap());
+    }
     #[test]
     fn rca_commands_ignore_reserved_bits_but_keep_card_selection() {
         let mut m = host(Protocol::Sdhc);
@@ -1961,6 +2296,69 @@ mod tests {
             assert!(m.plan(word, 0x12340600).is_ok());
             assert!(m.plan(word, 0x12350600).is_err());
         }
+    }
+    struct FakeSupply(std::sync::Mutex<LowHistory>);
+    impl OutputLowHistory for FakeSupply {
+        fn low_history(&self, _pin: Pin) -> LowHistory {
+            *self.0.lock().unwrap()
+        }
+    }
+    fn acmd41_ocr(m: &mut SdHost, h: &mut Ram) -> u64 {
+        command(m, h, 0x371a0000, 0);
+        due(m, h);
+        command(m, h, 0x29020000, 0x51ff8000);
+        due(m, h);
+        let ocr = read(m, h, 0x10, 4);
+        write(m, h, 0x30, 2, 0xffff);
+        write(m, h, 0x34, 4, u32::MAX.into());
+        ocr
+    }
+    fn supply_host(initialized: bool) -> (SdHost, Arc<FakeSupply>) {
+        let history = Arc::new(FakeSupply(std::sync::Mutex::new(LowHistory {
+            rising_edges: 0,
+            last_low_ticks: 0,
+        })));
+        let mut m = host(Protocol::Sdhc);
+        m.options.initialized_by_boot_rom = initialized;
+        m.rom_initialized = initialized;
+        m.options.supply = Some(Supply {
+            pin: Pin { port: 13, pin: 6 },
+            off_min_ticks: 500,
+        });
+        (m.with_supply(history.clone()).unwrap(), history)
+    }
+    #[test]
+    fn boot_rom_initialized_card_ignores_acmd41_until_supply_cycled_long_enough() {
+        let (mut m, supply) = supply_host(true);
+        let mut h = Ram::new(0x10000);
+        setup(&mut m, &mut h);
+        for _ in 0..3 {
+            assert_eq!(acmd41_ocr(&mut m, &mut h), 0x00ff8000);
+            assert_eq!(m.state, State::Idle);
+        }
+        // A pulse shorter than the minimum off time leaves the card as is.
+        *supply.0.lock().unwrap() = LowHistory {
+            rising_edges: 1,
+            last_low_ticks: 499,
+        };
+        assert_eq!(acmd41_ocr(&mut m, &mut h), 0x00ff8000);
+        *supply.0.lock().unwrap() = LowHistory {
+            rising_edges: 2,
+            last_low_ticks: 500,
+        };
+        assert_eq!(acmd41_ocr(&mut m, &mut h), 0xc0ff8000);
+        assert_eq!(m.state, State::Ready);
+    }
+    #[test]
+    fn card_without_boot_rom_initialization_is_ready_regardless_of_supply() {
+        let (mut m, _supply) = supply_host(false);
+        let mut h = Ram::new(0x10000);
+        setup(&mut m, &mut h);
+        assert_eq!(acmd41_ocr(&mut m, &mut h), 0xc0ff8000);
+        let mut plain = host(Protocol::Sdhc);
+        let mut h = Ram::new(0x10000);
+        setup(&mut plain, &mut h);
+        assert_eq!(acmd41_ocr(&mut plain, &mut h), 0xc0ff8000);
     }
     #[test]
     fn an_identified_card_is_deselected_and_publishes_a_new_rca_in_standby() {
@@ -2643,6 +3041,82 @@ mod tests {
         let mut cx = h.cx();
         m.write(&mut cx, BASE + 12, 4, 0x193a0026);
         assert!(cx.refusal().is_some());
+    }
+    /// On an X-H2 (2026-11-11) a single-block write reached the card, but
+    /// transfer complete did not arrive within 100,000 status polls: the card
+    /// was still programming. Transfer complete follows the declared busy.
+    #[test]
+    fn pio_write_completes_after_the_card_programming_busy() {
+        let mut m = host(Protocol::Application);
+        m.options.write_busy_ticks = 500;
+        let mut h = Ram::new(0x10000);
+        setup(&mut m, &mut h);
+        m.state = State::Transfer;
+        write(&mut m, &mut h, 4, 2, 512);
+        write(&mut m, &mut h, 6, 2, 1);
+        command(&mut m, &mut h, 0x193a0026, 4);
+        due(&mut m, &mut h);
+        for _ in 0..128 {
+            write(&mut m, &mut h, 0x20, 4, 0x12345678);
+        }
+        due(&mut m, &mut h);
+        let written = h.now;
+        assert_eq!(&m.card.sector(4).unwrap()[..4], &[0x78, 0x56, 0x34, 0x12]);
+        assert!(m.busy());
+        assert_eq!(read(&mut m, &mut h, 0x30, 2) & 2, 0);
+        assert_eq!(read(&mut m, &mut h, 0x24, 4) & 3, 3);
+        due(&mut m, &mut h);
+        assert_eq!(h.now, written + 500);
+        assert!(!m.busy());
+        assert_eq!(read(&mut m, &mut h, 0x30, 2) & 2, 2);
+        assert_eq!(read(&mut m, &mut h, 0x24, 4) & 3, 0);
+    }
+    /// The card timing model draws its own programming busy, so a host
+    /// declares either it or a fixed busy period.
+    #[test]
+    fn write_busy_and_the_card_timing_model_are_exclusive() {
+        let latency = super::super::latency::Latency {
+            seed: 1,
+            ticks_per_us: 1,
+            command_us: [10, 20],
+            read_access_us: [100, 200],
+            read_block_us: [30, 40],
+            write_block_us: [50, 60],
+            write_busy_us: [300, 400],
+            write_stall_permille: 0,
+            write_stall_us: [0, 0],
+            gc_permille: 0,
+            gc_us: [0, 0],
+            trace_us: 0,
+        };
+        let wiring = || Wiring {
+            card: Card::new(sd_card::Options {
+                sectors: 0x800000,
+                max_dirty_sectors: 65536,
+            })
+            .unwrap(),
+            contacts: Contacts::new(true, false),
+            irq: InterruptLine::Shared(78),
+        };
+        let base = host(Protocol::Application).options.clone();
+        let both = Options {
+            latency: Some(latency.clone()),
+            write_busy_ticks: 500,
+            ..base.clone()
+        };
+        assert!(SdHost::new(both, wiring()).is_err());
+        for options in [
+            Options {
+                latency: Some(latency),
+                ..base.clone()
+            },
+            Options {
+                write_busy_ticks: 500,
+                ..base
+            },
+        ] {
+            assert!(SdHost::new(options, wiring()).is_ok());
+        }
     }
     #[test]
     fn polling_driver_unmasks_buffer_ready_after_the_command_interrupt() {
