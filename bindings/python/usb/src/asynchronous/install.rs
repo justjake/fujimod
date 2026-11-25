@@ -157,14 +157,15 @@ impl AsyncSession {
         &self,
         image: OwnedUpload,
         pointer: u32,
-        original: u32,
+        original: u64,
+        pointer_bytes: u32,
         capacity_address: u32,
         capacity: u32,
     ) -> PyResult<()> {
         let destination = install::UploadDestination::new(
             Address(pointer),
-            u64::from(original),
-            4,
+            original,
+            pointer_bytes,
             Address(capacity_address),
             nz(capacity)?,
         )

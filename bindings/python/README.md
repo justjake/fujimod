@@ -158,6 +158,9 @@ bounded write/readback batches. `usb.OwnedUpload(allocation_address,
 allocation_size, address, data, piece_bytes, alignment)` validates padding inside
 an owned allocation; `await session.upload_owned(image, pointer, original,
 capacity_address, capacity)` borrows, uploads and restores its stock destination.
+On native Python, `await session.upload_owned_chunks(image, pointer, original,
+pointer_bytes, capacity_address, capacity)` repeats that sequence for each chunk
+of a larger image, with a four- or eight-byte destination pointer.
 `await session.verify_owned(image, window)` checks every image byte before the
 caller publishes hooks or runs initialization. Addresses and ownership must be
 qualified by the caller; the helpers never infer them from a camera name.

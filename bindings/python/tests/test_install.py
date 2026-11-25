@@ -9,6 +9,7 @@ from fujimod import usb
 from .test_async import opened, run
 from .test_sequence import write
 from .test_stream import LIMITS, E, control, memory_read
+from .test_stream import opened as opened_stream
 
 
 def query(tag: int, primary: int = 0, secondary: int = 0) -> list[E]:
@@ -151,3 +152,27 @@ def test_canceled_upload_retains_unknown_destination_without_restoration() -> No
 def test_invalid_padding_is_rejected_when_constructing_the_image() -> None:
     with pytest.raises(ValueError):
         usb.OwnedUpload(0x4000, 11, 0x4000, b"hello world", 8, 4)
+
+
+def test_owned_chunks_publish_and_restore_the_full_width_pointer() -> None:
+    async def test() -> None:
+        original = 0x1234_5678_0000_8000
+        old, new = struct.pack("<Q", original), struct.pack("<Q", 0x4000)
+        session, script = await opened_stream(
+            [
+                *memory_read(0x1000, old),
+                *memory_read(0x1008, struct.pack("<I", 32)),
+                *write(0x1000, new),
+                *memory_read(0x1000, new),
+                *upload_steps(),
+                *memory_read(0x1000, new),
+                *write(0x1000, old),
+                *memory_read(0x1000, old),
+            ],
+            packet_bytes=8,
+        )
+        image = usb.OwnedUpload(0x4000, 16, 0x4000, b"hello world", 8, 4)
+        await session.upload_owned_chunks(image, 0x1000, original, 8, 0x1008, 32)
+        assert script.remaining == 0 and session.state == usb.SessionState.Ready
+
+    run(test)
