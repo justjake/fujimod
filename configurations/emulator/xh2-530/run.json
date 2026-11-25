@@ -45,7 +45,7 @@
       {
         "kind": "flash",
         "block_id": "flash-aperture",
-        "part_id": "x100vi-serial-nor",
+        "part_id": "xh2-serial-nor",
         "source": "firmware_update",
         "erased_tail": 255,
         "seeds": []
