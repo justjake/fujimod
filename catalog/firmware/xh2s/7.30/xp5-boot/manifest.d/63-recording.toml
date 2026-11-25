@@ -44,3 +44,22 @@ ack = { offset = 0x310, mode = "w1c", status_offset = 0x314, bits = 0x1 }
 irq_mask_offset = 0x30c
 irq_mask_bit = 0
 irq_mask_set_masks = false
+
+# RZL2 reset at 0x17af544, completion at interrupt source 0xc (INTID 205).
+[[device]]
+base = 0xff984000
+size = 0x1000
+kind = "imaging-rzl2"
+[device.options]
+registers = [
+  { offset = 0x00, mode = "constant", value = 0x1 },
+  { offset = 0x100, mode = "constant", value = 0x01000100 },
+]
+irq = 205
+starts = [{ offset = 0x04, mask = 0x1 }]
+delay_us = 200
+completion = [{ offset = 0x104, set = 0x1 }, { offset = 0x04, clear = 0x1 }]
+ack = { offset = 0x108, mode = "w1c", status_offset = 0x104, bits = 0x7 }
+irq_mask_offset = 0x10c
+irq_mask_bit = 0
+irq_mask_set_masks = false
