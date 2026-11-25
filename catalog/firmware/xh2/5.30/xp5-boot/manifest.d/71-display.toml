@@ -1,0 +1,48 @@
+# Display pixel-clock PLLs, declared as on the X-T5 and X100VI; they replace four banks
+# of 26-clock-banks.toml. The PLL base table 0x18f4638 (four-byte rows) holds
+# 0xffa11000..0xffa14000 at indices 6..9, the X-T5 table 0x18f2138's layout. The
+# programmers 0x1424664 and 0x1424730, the setup 0x1424874 and the pixel-clock query
+# 0x1424e14 are the X-T5's 0x141ed3c, 0x141ee08, 0x141ef4c and 0x141f4ec instruction for
+# instruction apart from immediates, and 0x1420c14 and 0x14211a4 call the setup before
+# the display reset (0x1420c34 before 0x1420cd4, 0x1421460 before 0x1421734). The N and
+# divider values come from the configuration the stock code reads, not from this file.
+[[device]]
+base = 0xffa11000
+size = 0x1000
+kind = "panel-pll"
+[[device]]
+base = 0xffa12000
+size = 0x1000
+kind = "panel-pll"
+[[device]]
+base = 0xffa13000
+size = 0x1000
+kind = "panel-pll"
+[[device]]
+base = 0xffa14000
+size = 0x1000
+kind = "panel-pll"
+
+# Display controllers, the X-T5 and X100VI windows and kind. 0x1433b04(n) resets
+# controller n (write 0 to +0x00 through 0x5de10, poll bit 0 through 0x5de38) at
+# 0xff990000 (n = 0) or 0xff9a0000 (n = 1); the status snapshot 0x1431a18 (called from
+# 0x14203f8) reads +0x08 first (0x1431ad4..0x1431adc). The driver is the X-T5's:
+# 0x1433b04, 0x1431a18, 0x142acd4, 0x142ad10, 0x142adb4, 0x142c074, 0x142c9a8,
+# 0x143b04c, 0x143b664 and 0x143b694 match 0x142dfa8, 0x142bebc, 0x1424c0c, 0x1424c48,
+# 0x1424cec, 0x1425fac, 0x14268e0, 0x14354e8, 0x1435b00 and 0x1435b30 instruction for
+# instruction; 0x143302c, 0x14336e0 and 0x143b6c4 differ only in global offsets; the
+# panel configuration 0x1436380 (0x1430824) writes the same offsets with this body's
+# panel constants. Every offset the image reads or writes in both windows
+# (+0x04..+0x7d0) is one the model accepts. 0x143e2ac attaches the handlers through
+# descriptors 0x8f, 0x90, 0x8d (controller 0) and 0x8b, 0x8c, 0x8e (controller 1) of
+# the table 0x18ece30 (rows 0x18ed6e0..0x18ed730): INTIDs 177, 178, 183 and 186, 187,
+# 192, the lines the model raises. The scanout geometry comes from the registers the
+# stock code programs.
+[[device]]
+base = 0xff990000
+size = 0x1000
+kind = "display"
+[[device]]
+base = 0xff9a0000
+size = 0x1000
+kind = "display"

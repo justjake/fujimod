@@ -20,3 +20,17 @@ size = 0x80000000
 [[ram]]
 base = 0xfa200000
 size = 0x100000
+
+# The SD slot (host 0xff9b0000, 25-sd.toml) is empty. The format describes the volume a
+# run that inserts a card without an image would see; it is unused while the slot is empty.
+[[sd]]
+base = 0xff9b0000
+present = false
+protected = false
+files = []
+[sd.format]
+sectors = 0x3b9e000
+max_dirty_sectors = 65536
+partition_start = 8192
+sectors_per_cluster = 64
+label = "NO NAME"

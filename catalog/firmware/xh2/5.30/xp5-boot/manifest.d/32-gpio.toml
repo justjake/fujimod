@@ -4,6 +4,21 @@
 base = 0xff907000
 size = 0x1000
 kind = "gpio"
+[device.options]
+# EL1 handoff assumption: the two active-low panel selects on SSP7, GPIO 15.13 (rear LCD,
+# client 3) and 15.15 (EVF, clients 7 and 8), start inactive (output latch 1), as the
+# X-T5's 12.8 and 12.10 do. The selects are driven only through the serial descriptors'
+# select words; no code drives 15.15 before the first LCD transfer, so with a zero latch
+# both panels would be selected. Whether the reset image or a pull-up sets this is NOT
+# established. 15.11 (the audio codec) keeps a zero latch; its driver drives it first.
+initial_outputs = [{ port = 15, levels = 0xa000 }]
+# Run input: nothing in the hot shoe, as on the X-T5. The debounce 0x141ae50 (the X-T5's
+# 0x1416ba4) samples GPIO 11.4 (0x138331c(0xb0004) at 0x141b168) and latches (level == 1)
+# at 0x2592a64 after 17 differing samples, posting 0x2f for high and 0x82f for low; with
+# the latch at 1 the `flashext` identification 0x1412d64 opens SSP3 client 13 (instance 3,
+# select 11.4) for the external flash. The default pad level is 1, which would attach a
+# flash nobody modeled.
+initial_inputs = [{ port = 11, pin = 4, high = false }]
 
 [[device]]
 base = 0xff90b000
