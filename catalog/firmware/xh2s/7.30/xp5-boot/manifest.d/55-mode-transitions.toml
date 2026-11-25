@@ -1,0 +1,39 @@
+# Returning from FILTER to Movie programs the MIX and filter scaler windows.
+# Use the existing XP5 completion and scaling models. Their timing is functional.
+# MIX configuration/start stores at 0x301fc68/0x301fa6c reach +0x0c/+0x04.
+[[device]]
+base = 0xffd22000
+size = 0x1000
+kind = "completion-stub"
+[device.options]
+registers = [
+  { offset = 0x000, mode = "constant", value = 0x1 },
+  { offset = 0x208, mode = "constant", value = 0x10001 },
+]
+irq = 213
+starts = [{ offset = 0x04, mask = 0x1 }]
+delay_us = 200
+completion = [{ offset = 0x210, set = 0x1 }, { offset = 0x04, clear = 0x1 }]
+ack = { offset = 0x210, mode = "w1c" }
+irq_mask_offset = 0x20c
+irq_mask_bit = 0
+irq_mask_set_masks = false
+
+# Filter scaler reset and start at 0x16de954 and 0x16de9bc reach +0x00/+0x04.
+[[device]]
+base = 0xff983000
+size = 0x1000
+kind = "imaging-filter-scaler"
+[device.options]
+registers = [
+  { offset = 0x000, mode = "constant", value = 0x1 },
+  { offset = 0x100, mode = "constant", value = 0x01000100 },
+]
+irq = 204
+starts = [{ offset = 0x04, mask = 0x1 }]
+delay_us = 200
+completion = [{ offset = 0x104, set = 0x1 }, { offset = 0x04, clear = 0x1 }]
+ack = { offset = 0x108, mode = "w1c", status_offset = 0x104, bits = 0x7 }
+irq_mask_offset = 0x10c
+irq_mask_bit = 0
+irq_mask_set_masks = false
