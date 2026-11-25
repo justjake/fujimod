@@ -7,14 +7,11 @@ use std::{fs, path::PathBuf};
 #[serde(deny_unknown_fields)]
 struct Artifact {
     payload: Payload,
-    image: String,
+    image: Option<String>,
 }
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let path = PathBuf::from(std::env::args().nth(1).ok_or("artifact JSON required")?);
     let artifact: Artifact = serde_json::from_slice(&fs::read(&path)?)?;
-    if artifact.image.contains(['/', '\\']) {
-        return Err("image must be beside metadata".into());
-    }
     let selection =
         ReferenceCatalog::bundled()?.resolve_firmware(artifact.payload.firmware_id())?;
     let flash = selection.flash.ok_or("catalog has no flash fact")?;
@@ -27,11 +24,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     {
         return Err("firmware hash differs".into());
     }
-    let image = fs::read(
-        path.parent()
-            .ok_or("artifact directory")?
-            .join(artifact.image),
-    )?;
+    let image = if let Some(name) = artifact.image {
+        if name.contains(['/', '\\']) {
+            return Err("image must be beside metadata".into());
+        }
+        fs::read(path.parent().ok_or("artifact directory")?.join(name))?
+    } else {
+        Vec::new()
+    };
     artifact.payload.validate(&flash, &bulk, &image)?;
     println!(
         "{}: {} payload bytes, {} flash bytes, {}-byte buffer",

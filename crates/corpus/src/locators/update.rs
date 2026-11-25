@@ -1,5 +1,5 @@
 //! Update-container composition for the flash locators.
-use super::{exr2_control, exr2_flash, flash, image_offsets};
+use super::{exr2_control, exr2_flash, flash, flash::mapped_xp5_flash, image_offsets};
 use crate::Lookup;
 use serde_json::Value;
 
@@ -12,6 +12,40 @@ pub fn flash_update<L: Lookup>(
     jedec_id: Option<u32>,
     source: &[u8],
     flash_dat_bias: Option<u64>,
+) -> Result<Value, String> {
+    flash_update_with_route(
+        index,
+        firmware,
+        processor,
+        jedec_id,
+        source,
+        flash_dat_bias,
+        false,
+    )
+}
+
+/// Produce source-checked direct-E1 metadata without asserting a current
+/// installed NOR identity. Camera-side E1 control reads remain mandatory.
+pub fn flash_update_mapped_e1<L: Lookup>(
+    index: &L,
+    firmware: &str,
+    processor: &str,
+    source: &[u8],
+) -> Result<Value, String> {
+    if processor != "xp5" {
+        return Err("mapped E1 flash metadata requires X-Processor 5".into());
+    }
+    flash_update_with_route(index, firmware, processor, None, source, None, true)
+}
+
+fn flash_update_with_route<L: Lookup>(
+    index: &L,
+    firmware: &str,
+    processor: &str,
+    jedec_id: Option<u32>,
+    source: &[u8],
+    flash_dat_bias: Option<u64>,
+    mapped_only: bool,
 ) -> Result<Value, String> {
     if !matches!(processor, "xp4" | "xp5" | "xpp" | "exr2") {
         return Err(format!(
@@ -30,7 +64,11 @@ pub fn flash_update<L: Lookup>(
         flash(index, firmware, processor, jedec_id, bias, 0)?
     } else {
         let (origin, control) = image_offsets(index, firmware, &bytes, container_origin)?;
-        flash(index, firmware, processor, jedec_id, origin, control)?
+        if mapped_only {
+            mapped_xp5_flash(index, firmware, origin, control)?
+        } else {
+            flash(index, firmware, processor, jedec_id, origin, control)?
+        }
     };
     let offset = value["control"]["offset"]
         .as_u64()

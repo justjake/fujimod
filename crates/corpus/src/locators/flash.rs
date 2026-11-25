@@ -236,6 +236,43 @@ pub fn flash<L: Lookup>(
     image_origin: u64,
     control_offset: u64,
 ) -> Result<Value> {
+    flash_with_route(
+        index,
+        firmware,
+        processor,
+        jedec_id,
+        image_origin,
+        control_offset,
+        false,
+    )
+}
+
+pub(super) fn mapped_xp5_flash<L: Lookup>(
+    index: &L,
+    firmware: &str,
+    image_origin: u64,
+    control_offset: u64,
+) -> Result<Value> {
+    flash_with_route(
+        index,
+        firmware,
+        "xp5",
+        None,
+        image_origin,
+        control_offset,
+        true,
+    )
+}
+
+fn flash_with_route<L: Lookup>(
+    index: &L,
+    firmware: &str,
+    processor: &str,
+    jedec_id: Option<u32>,
+    image_origin: u64,
+    control_offset: u64,
+    mapped_only: bool,
+) -> Result<Value> {
     if processor == "xp4" {
         return xp4_flash(index, firmware, image_origin);
     }
@@ -321,6 +358,23 @@ pub fn flash<L: Lookup>(
         dispatcher.span("flash read dispatcher"),
         dma.span(dma_shape.range_name()),
     ];
+    if mapped_only {
+        if nand {
+            return Err("mapped E1 metadata requires a serial NOR reader graph".into());
+        }
+        ranges.push(cache.span("destination cache maintenance"));
+        return Ok(json!({
+            "device":{"kind":"serial-nor"},
+            "window":{"address":0xf0000000u64,"size":0x8000000},
+            "e1_window":{"address":0xf0000000u64,"size":0x8000000},
+            "update_image":{"dat_offset":image_origin,"xor":255},
+            "reader":null,
+            "transport":null,
+            "code_ranges":ranges,
+            "state_checks":[],
+            "control":{"offset":control_offset,"size":32768}
+        }));
+    }
     let mut checks = vec![];
     let device = if nand {
         let mode = one(
