@@ -6,6 +6,8 @@ use std::sync::{
     atomic::{AtomicBool, AtomicUsize, Ordering},
 };
 const CAPTURE: usize = 256;
+/// Console text is the payload the owner reads, so it is kept whole up to this bound.
+const CONSOLE_CAPTURE: usize = 64 * 1024;
 const QUEUE_BYTES: usize = 16 * 1024 * 1024;
 #[derive(Clone, Debug, Default, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -78,6 +80,17 @@ pub(crate) struct Recorder {
     command: Option<Decoded>,
     sequence: u64,
     subscribers: Vec<Subscriber>,
+}
+/// Offset and length of the console text in a console submit or poll reply payload.
+fn console_range(kind: u8, data: &[u8]) -> Option<(usize, usize)> {
+    if word(data, 0)? != 0x200001 {
+        return None;
+    }
+    match (kind, word(data, 16)?) {
+        (0xd0, 6) => Some((24, word(data, 20)? as usize)),
+        (0xd1, 7) => Some((32, word(data, 28)? as usize)),
+        _ => None,
+    }
 }
 fn word(data: &[u8], offset: usize) -> Option<u32> {
     data.get(offset..offset + 4)
@@ -283,10 +296,21 @@ impl Recorder {
         if input == matches!(frame.kind, 0xd0 | 0xe0) {
             return;
         }
-        let count = transferred
-            .min(data.len())
-            .min(CAPTURE.saturating_sub(frame.data.len()));
-        frame.data.extend_from_slice(&data[..count]);
+        let available = &data[..transferred.min(data.len())];
+        let header: Vec<u8> = frame
+            .data
+            .iter()
+            .chain(available)
+            .take(32)
+            .copied()
+            .collect();
+        let limit = console_range(frame.kind, &header).map_or(CAPTURE, |(offset, length)| {
+            offset
+                .saturating_add(length)
+                .clamp(CAPTURE, CONSOLE_CAPTURE)
+        });
+        let count = available.len().min(limit.saturating_sub(frame.data.len()));
+        frame.data.extend_from_slice(&available[..count]);
         frame.transferred = frame.transferred.saturating_add(transferred);
         frame.truncated = frame.transferred > frame.data.len();
         if error.is_some()
@@ -314,17 +338,13 @@ impl Recorder {
             frame.requested,
         );
         if frame.decoded.command == Some(0x200001) && frame.error.is_none() {
-            let range = match (frame.kind, word(&frame.data, 16)) {
-                (0xd0, Some(6)) => word(&frame.data, 20).map(|length| (24usize, length as usize)),
-                (0xd1, Some(7)) => word(&frame.data, 28).map(|length| (32usize, length as usize)),
-                _ => None,
-            };
-            frame.console_data = range.and_then(|(offset, length)| {
-                frame
-                    .data
-                    .get(offset..offset.checked_add(length)?)
-                    .map(<[u8]>::to_vec)
-            });
+            frame.console_data =
+                console_range(frame.kind, &frame.data).and_then(|(offset, length)| {
+                    frame
+                        .data
+                        .get(offset..offset.checked_add(length)?)
+                        .map(<[u8]>::to_vec)
+                });
         }
         if frame.kind == 0xd0 && frame.error.is_none() {
             self.command = Some(frame.decoded.clone());
@@ -463,15 +483,11 @@ mod tests {
                 let event = log.receiver.try_recv().unwrap();
                 assert_eq!(
                     event.console_data.as_deref(),
-                    if invalid || data.len() > 256 {
-                        None
-                    } else {
-                        Some(text)
-                    }
+                    if invalid { None } else { Some(text) }
                 );
-                assert_eq!(event.data, data[..data.len().min(256)]);
+                assert_eq!(event.data, data);
                 assert_eq!(event.transferred, data.len());
-                assert_eq!(event.truncated, data.len() > 256);
+                assert!(!event.truncated);
                 assert!(log.receiver.try_recv().is_err());
             }
         }
