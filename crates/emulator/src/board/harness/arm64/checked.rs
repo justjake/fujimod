@@ -84,6 +84,13 @@ pub struct CheckedOptions {
     /// Named read-only model registers and their expected values.
     #[serde(default)]
     pub system_reads: Vec<(String, u64)>,
+    /// Current values of registers the CPU core does not implement, such as
+    /// the A53-only `S3_1_C15_C2_1`. A declaration is the model: the guard
+    /// retires each read and write without executing it, returns the declared
+    /// value for reads, and updates it on writes. Every observation records
+    /// whether the value came from the model or from this declaration.
+    #[serde(default)]
+    pub system_values: Vec<(String, u64)>,
     /// Named system registers the routine may read or write. Writes require
     /// membership here; reads may also be declared through `system_reads`.
     #[serde(default)]
@@ -154,6 +161,14 @@ pub struct SystemReadObservation {
     pub encoding: u16,
     pub destination: u8,
     pub value: u64,
+    /// Whether the value came from the CPU model or from a caller declaration.
+    pub source: SystemValueSource,
+}
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum SystemValueSource {
+    Model,
+    Declared,
 }
 #[derive(Serialize)]
 pub struct SystemWriteObservation {
@@ -206,6 +221,9 @@ struct Guard {
     /// controller. Transfers into these windows are admitted even though
     /// they are not declared RAM; the board serves them on the MMIO path.
     interrupt_windows: Vec<Span>,
+    /// Declared values for registers the CPU core does not implement, keyed by
+    /// encoding. Reads return the stored value; writes replace it.
+    system_state: RefCell<std::collections::BTreeMap<u16, u64>>,
     observed: RefCell<Observed>,
 }
 fn contains(spans: &[Span], address: u64, size: u64) -> bool {
@@ -241,14 +259,52 @@ fn admitted_system_register(name: &str) -> Option<u16> {
         "VBAR_EL3" => 0xf600,
         "SPSR_EL3" => 0xf200,
         "ELR_EL3" => 0xf201,
-
-        _ => return None,
+        "CTR_EL0" => 0xd801,
+        "CLIDR_EL1" => 0xc801,
+        "CSSELR_EL1" => 0xd000,
+        "CCSIDR_EL1" => 0xc800,
+        "SPSel" => 0xc210,
+        "DAIF" => 0xda11,
+        _ => return parse_implementation_defined_name(name),
     })
+}
+/// Encoding for a systematic implementation-defined name such as
+/// `S3_1_C15_C2_1`, which is how the camera's Cortex-A53 register
+/// `CPUACTLR_EL1` appears in disassembly. These encodings carry no
+/// architectural meaning, so a caller must declare the value it models.
+fn parse_implementation_defined_name(name: &str) -> Option<u16> {
+    let mut parts = name.strip_prefix('S')?.split('_');
+    let op0 = parts.next()?.parse::<u16>().ok()?;
+    let op1 = parts.next()?.parse::<u16>().ok()?;
+    let crn = parts.next()?.strip_prefix('C')?.parse::<u16>().ok()?;
+    let crm = parts.next()?.strip_prefix('C')?.parse::<u16>().ok()?;
+    let op2 = parts.next()?.parse::<u16>().ok()?;
+    if parts.next().is_some() {
+        return None;
+    }
+    let encoding = (op0 << 14) | (op1 << 11) | (crn << 7) | (crm << 3) | op2;
+    implementation_defined_name(encoding)?;
+    Some(encoding)
+}
+/// Refuse the write that switches address translation on.
+///
+/// Every fetch and access after `SCTLR_EL1.M` is set has to walk page tables,
+/// and this harness has no translation model: continuing would keep fetching
+/// at flat addresses while claiming a checked execution. The condition is a
+/// guest register value, not a PC or a firmware global, so any routine that
+/// enables the MMU meets the same refusal at its own `MSR`.
+fn refuse_enabled_mmu(encoding: u16, value: u64, pc: u64) -> Result<(), String> {
+    if encoding == 0xc080 && value & 1 != 0 {
+        return Err(format!(
+            "Unsupported SCTLR_EL1.M set at {pc:#x}: address translation is not modeled"
+        ));
+    }
+    Ok(())
 }
 /// Canonical name for an admitted system-register encoding, used by the MSR
 /// and MRS paths to resolve the architectural register a word names.
-fn system_register_name(encoding: u16) -> Option<&'static str> {
-    Some(match encoding {
+fn system_register_name(encoding: u16) -> Option<String> {
+    let name = match encoding {
         0xc000 => "MIDR_EL1",
         0xc005 => "MPIDR_EL1",
         0xc212 => "CurrentEL",
@@ -262,8 +318,119 @@ fn system_register_name(encoding: u16) -> Option<&'static str> {
         0xf600 => "VBAR_EL3",
         0xf200 => "SPSR_EL3",
         0xf201 => "ELR_EL3",
-        _ => return None,
-    })
+        0xd801 => "CTR_EL0",
+        0xc801 => "CLIDR_EL1",
+        0xd000 => "CSSELR_EL1",
+        0xc800 => "CCSIDR_EL1",
+        0xc210 => "SPSel",
+        0xda11 => "DAIF",
+        _ => return implementation_defined_name(encoding),
+    };
+    Some(name.to_string())
+}
+/// Systematic name for the implementation-defined system-register space this
+/// firmware uses: `S3_<op1>_C<crn>_C<crm>_<op2>`. A53-only registers such as
+/// `CPUACTLR_EL1` (`S3_1_C15_C2_1`) live there and have no architectural value,
+/// so naming them only makes them declarable; nothing reads without a
+/// declaration. `S3_6_*` and `S3_7_*` are reserved for implementations, and
+/// `CRn=15` with `op1 != 0` is implementation defined at every exception level.
+fn implementation_defined_name(encoding: u16) -> Option<String> {
+    let op0 = encoding >> 14;
+    let op1 = (encoding >> 11) & 7;
+    let crn = (encoding >> 7) & 15;
+    let crm = (encoding >> 3) & 15;
+    let op2 = encoding & 7;
+    if op0 != 3 || op1 == 0 || (op1 < 6 && crn != 15) {
+        return None;
+    }
+    Some(format!("S{op0}_{op1}_C{crn}_C{crm}_{op2}"))
+}
+/// True for an architectural cache or TLB maintenance operation.
+/// The reserved encodings must not be admitted as TLB invalidations.
+fn tlbi_selects_a_valid_operand(op1: u32, crm: u32, op2: u32) -> bool {
+    let mask = match (op1, crm) {
+        // EL1: one, inner-shareable or outer-shareable scope and ranges.
+        (0, 1 | 3 | 7) => 0b1010_1111,
+        (0, 2 | 5 | 6) => 0b1010_1010,
+        // EL2: stage-two, range and EL1/EL2 selections.
+        (4, 0) => 0b0110_0110,
+        (4, 1 | 3 | 7) => 0b0111_0011,
+        (4, 2 | 5 | 6) => 0b0010_0010,
+        (4, 4) => 0b1111_1111,
+        // EL3: EL3 selections and physical-address ranges.
+        (6, 1 | 7) => 0b0011_0011,
+        (6, 3) => 0b0010_0011,
+        (6, 2 | 5 | 6) => 0b0010_0010,
+        (6, 4) => 0b1000_1000,
+        _ => return false,
+    };
+    mask & (1 << op2) != 0
+}
+
+/// Barriers, event hints and `NOP` that need no model in this harness.
+///
+/// A barrier only orders accesses against other observers. This harness runs
+/// one core, keeps no caches and no store buffer, and retires each store before
+/// decoding the next instruction, so admitted barriers need no pipeline model.
+/// `DSB` and `DMB` accept the defined shareability/load/store options. `SSBB`
+/// and `PSSBB` occupy `DSB` options 0 and 4; `ISB` accepts only option `0xf`.
+/// The supplied images use `dsb sy`, `dsb ish`, `dsb ishst`, `dmb sy` and
+/// `dmb ish`. `SEV`
+/// signals an event to other cores, and no second core here can be waiting.
+/// `NOP` names no state. Hints that would suspend the core (`WFI`, `WFE`) and
+/// hint-space words with no such justification stay refused.
+fn is_barrier_or_hint(word: u32) -> bool {
+    if word == 0xd503_201f || word == 0xd503_209f {
+        return true;
+    }
+    // Mask only the option field: the low byte distinguishes DSB, DMB and ISB.
+    let option = (word >> 8) & 0xf;
+    let standard = matches!(option, 1..=3 | 5..=7 | 9..=11 | 13..=15);
+    if word & 0xffff_f0ff == 0xd503_309f {
+        return standard || matches!(option, 0 | 4); // SSBB / PSSBB.
+    }
+    if word & 0xffff_f0ff == 0xd503_30bf {
+        return standard;
+    }
+    word == 0xd503_3fdf
+}
+
+/// True for an architectural cache or TLB maintenance operation.
+///
+/// Reserved SYS encodings are refused, as are AT (writes PAR_EL1) and DC
+/// ZVA (stores zeros to a cache line). Both operandless (Rt=31) and
+/// register-addressed forms use this decoder.
+fn is_cache_or_tlbi(word: u32) -> bool {
+    // SYS form: 1101 0101 00 L op0 op1 CRn CRm op2 Rt.
+    if word & 0xfff8_0000 != 0xd508_0000 {
+        return false;
+    }
+    let op1 = (word >> 16) & 7;
+    let crn = (word >> 12) & 0xf;
+    let crm = (word >> 8) & 0xf;
+    let op2 = (word >> 5) & 7;
+    if crn == 8 {
+        return tlbi_selects_a_valid_operand(op1, crm, op2);
+    }
+    if crn != 7 {
+        return false;
+    }
+    // IC and DC SYS selectors. The op2 field is part of the operation:
+    // accepting a CRm family without it also accepts unrelated SYS words.
+    // CRm=4 contains DC ZVA, which stores to memory.
+    match (op1, crm, op2) {
+        // IC IALLUIS / IALLU; DC invalidate by VA or set/way.
+        (0, 1 | 5, 0) | (0, 6, 1..=6) => true,
+        // DC clean / clean and invalidate by set/way; CIVAPS / CIGDVAPS.
+        (0, 10 | 14, 2 | 4 | 6) | (0, 15, 1 | 5) => true,
+        // IC IVAU.
+        (3, 5, 1) => true,
+        // DC maintenance by VA.
+        (3, 10 | 12 | 13 | 14, 1 | 3 | 5) => true,
+        // DC CVAOC / CVAU / CGDVAOC; CIVAOC / CIGDVAOC.
+        (3, 11, 0 | 1 | 7) | (3, 15, 0 | 7) => true,
+        _ => false,
+    }
 }
 fn model_value(cpu: &dyn Cpu, name: &str, encoding: u16) -> Result<u64, String> {
     if name == "CurrentEL" {
@@ -452,12 +619,28 @@ impl Guard {
             }
             return Ok(());
         }
-        // DSB SY, DMB ISH and ISB are ordering points in this single-core,
-        // bus-free routine: admitted RAM stores complete before the next
-        // instruction, and an instruction barrier needs no pipeline model.
-        // They share the MSR system-instruction top bits, so they must be
-        // admitted before the MSR/MRS class checks below.
-        if matches!(word, 0xd503_201f | 0xd503_3f9f | 0xd503_3bbf | 0xd503_3fdf) {
+        // Barrier, event-hint and NOP forms are ordering points in this
+        // single-core, cache-free routine: admitted RAM stores complete before
+        // the next instruction, and an instruction barrier needs no pipeline
+        // model. They share the MSR system-instruction top bits, so they must
+        // be admitted before the MSR/MRS class checks below.
+        if is_barrier_or_hint(word) {
+            return Ok(());
+        }
+        // MSR (immediate) with Rt=31 writes one PSTATE field: SPSel, DAIFSet,
+        // DAIFClr, UAO, PAN, SSBS, DIT and TCO all share this encoding and
+        // name no architectural system register, so the CPU model owns the
+        // whole effect. CRn=4 with Rt=31 separates the class from the hint,
+        // barrier and system-operation forms sharing the same top bits, and
+        // the register-form MRS/MSR classes differ in bit 20 (0xd52/0xd51),
+        // so this admission cannot reach them.
+        if word & 0xfff0_f01f == 0xd500_401f {
+            return Ok(());
+        }
+        // IC, DC and TLBI maintenance. The model keeps no caches and no TLB,
+        // so a valid operation changes no routine-visible state. Reserved
+        // encodings, address translation and DC ZVA remain refused.
+        if is_cache_or_tlbi(word) {
             return Ok(());
         }
         // Exact MRS class: all other system instructions retain the default refusal.
@@ -473,6 +656,28 @@ impl Guard {
                     "EL3 system register {name} requires an EL3 entry level"
                 ));
             }
+            // A caller-declared register is the model: the core implements no
+            // such register, so the guard writes the declared value and retires
+            // the instruction without executing it.
+            if let Some(declared_value) = self.system_state.borrow().get(&encoding).copied() {
+                let destination = (word & 31) as u8;
+                if destination != 31 {
+                    cpu.write_register(Register::X(destination), &declared_value.to_le_bytes())?;
+                }
+                self.observed
+                    .borrow_mut()
+                    .system_reads
+                    .push(SystemReadObservation {
+                        pc,
+                        name,
+                        encoding,
+                        destination,
+                        value: declared_value,
+                        source: SystemValueSource::Declared,
+                    });
+                cpu.write_register(Register::Pc, &pc.wrapping_add(4).to_le_bytes())?;
+                return self.pause(&*cpu);
+            }
             let declared = self
                 .options
                 .system_reads
@@ -483,13 +688,13 @@ impl Guard {
                     .options
                     .system_registers
                     .iter()
-                    .any(|n| n.eq_ignore_ascii_case(name))
+                    .any(|n| n.eq_ignore_ascii_case(&name))
             {
                 return Err(format!(
                     "Unsupported instruction {word:#010x} at {pc:#x}: undeclared MRS"
                 ));
             }
-            let value = model_value(&*cpu, name, encoding)?;
+            let value = model_value(&*cpu, &name, encoding)?;
             if let Some((_, expected)) = declared
                 && value != *expected
             {
@@ -503,6 +708,7 @@ impl Guard {
                 encoding,
                 destination: (word & 31) as u8,
                 value,
+                source: SystemValueSource::Model,
             });
             return Ok(());
         }
@@ -522,11 +728,26 @@ impl Guard {
                     "EL3 system register {name} requires an EL3 entry level"
                 ));
             }
+            if self.system_state.borrow().contains_key(&encoding) {
+                let value = if word & 31 == 31 {
+                    0
+                } else {
+                    scalar(&*cpu, Register::X((word & 31) as u8))?
+                };
+                refuse_enabled_mmu(encoding, value, pc)?;
+                self.system_state.borrow_mut().insert(encoding, value);
+                self.observed
+                    .borrow_mut()
+                    .system_writes
+                    .push(SystemWriteObservation { pc, name, value });
+                cpu.write_register(Register::Pc, &pc.wrapping_add(4).to_le_bytes())?;
+                return self.pause(&*cpu);
+            }
             if !self
                 .options
                 .system_registers
                 .iter()
-                .any(|n| n.eq_ignore_ascii_case(name))
+                .any(|n| n.eq_ignore_ascii_case(&name))
             {
                 return Err(format!(
                     "Unsupported instruction {word:#010x} at {pc:#x}: undeclared MSR"
@@ -537,6 +758,7 @@ impl Guard {
             } else {
                 scalar(&*cpu, Register::X((word & 31) as u8))?
             };
+            refuse_enabled_mmu(encoding, value, pc)?;
             cpu.write_register(
                 Register::Arm64System(fujimod_emulator_cpu::arm::SystemRegister::from_encoding(
                     encoding,
@@ -855,13 +1077,20 @@ pub fn checked_call_with(
     {
         return Err("Invalid explicit routine stop addresses".into());
     }
-    if options.system_reads.len() > 9 {
+    if options.system_reads.len() > 9 || options.system_values.len() > 9 {
         return Err("Too many declared system reads".into());
     }
     let mut names = std::collections::BTreeSet::new();
-    for (name, _) in &options.system_reads {
+    for (name, _) in options.system_reads.iter().chain(&options.system_values) {
         if admitted_system_register(name).is_none() || !names.insert(name) {
             return Err(format!("Unsupported or duplicate system register {name}"));
+        }
+    }
+    for (name, _) in &options.system_values {
+        if options.system_registers.iter().any(|n| n == name) {
+            return Err(format!(
+                "System register {name} is both declared to the model and given a value"
+            ));
         }
     }
     initialize(board, &call)?;
@@ -884,10 +1113,16 @@ pub fn checked_call_with(
     let initial = registers(board)?;
     let start = board.instruction_counts()[0];
     let tick = board.now();
+    let system_state = options
+        .system_values
+        .iter()
+        .filter_map(|(name, value)| Some((admitted_system_register(name)?, *value)))
+        .collect::<std::collections::BTreeMap<u16, u64>>();
     let mut guard = Box::new(Guard {
         cpu: Rc::downgrade(&board.cpus[0]),
         pause: board.host_pause.clone(),
         options,
+        system_state: RefCell::new(system_state),
         interrupt_windows: board.interrupt_windows(),
         observed: RefCell::new(Observed::default()),
     });
@@ -1493,6 +1728,45 @@ mod tests {
         );
     }
     #[test]
+    fn cache_identity_reads_name_their_own_encodings() {
+        // MRS x0, CLIDR_EL1. CLIDR sits one op2 above CCSIDR at the same op1,
+        // and CTR_EL0 sits at op1=3, so the three encodings never alias. An
+        // alias would serve one register's model value for another's read,
+        // which the declared-value check cannot detect.
+        let mut b = board(&[0xd5390020, 0xd65f03c0]);
+        let clidr = b
+            .read_register(
+                0,
+                Register::Arm64System(arm64::system_register("c801").unwrap()),
+            )
+            .unwrap();
+        let mut o = options();
+        o.system_reads = vec![("CLIDR_EL1".into(), clidr)];
+        let r = checked_call(&mut b, o).unwrap();
+        assert!(r.returned, "{:?}", r.failure);
+        assert_eq!(r.registers["x0"], clidr);
+        assert_eq!(r.system_read_observations[0].name, "CLIDR_EL1");
+        assert_eq!(r.system_read_observations[0].encoding, 0xc801);
+    }
+    #[test]
+    fn ctr_read_uses_its_op1_three_encoding() {
+        // MRS x0, CTR_EL0, the same shape at op1=3.
+        let mut b = board(&[0xd53b0020, 0xd65f03c0]);
+        let ctr = b
+            .read_register(
+                0,
+                Register::Arm64System(arm64::system_register("d801").unwrap()),
+            )
+            .unwrap();
+        let mut o = options();
+        o.system_reads = vec![("CTR_EL0".into(), ctr)];
+        let r = checked_call(&mut b, o).unwrap();
+        assert!(r.returned, "{:?}", r.failure);
+        assert_eq!(r.registers["x0"], ctr);
+        assert_eq!(r.system_read_observations[0].name, "CTR_EL0");
+        assert_eq!(r.system_read_observations[0].encoding, 0xd801);
+    }
+    #[test]
     fn invalid_declarations_fail_before_retirement() {
         for declarations in [
             vec![("unknown".to_string(), 0)],
@@ -1508,13 +1782,265 @@ mod tests {
         }
     }
     #[test]
+    fn barrier_admission_covers_the_forms_the_images_use() {
+        for word in [
+            0xd503_201f, // nop
+            0xd503_209f, // sev
+            0xd503_3f9f, // dsb sy
+            0xd503_3b9f, // dsb ish
+            0xd503_3a9f, // dsb ishst
+            0xd503_3fbf, // dmb sy
+            0xd503_3bbf, // dmb ish
+            0xd503_3fdf, // isb
+            0xd503_309f, // ssbb, which occupies the reserved dsb option-0 form
+        ] {
+            assert!(is_barrier_or_hint(word), "{word:#010x}");
+        }
+        for word in [
+            0xd503_3f5f, // clrex clears an exclusive monitor instead
+            0xd503_229f, // csdb: a hint this harness does not model
+            0xd503_389f, // reserved DSB option 0x8
+            0xd503_38bf, // reserved DMB option 0x8
+            0xd503_3edf, // reserved ISB option 0xe
+            0xd503_3f7f, // generic MSR, not a barrier
+            0xd503_3fef, // generic MSR, not an ISB encoding
+            0xd400_41bf, // svc enters an exception
+        ] {
+            assert!(!is_barrier_or_hint(word), "{word:#010x}");
+        }
+    }
+    #[test]
+    fn barrier_forms_retire_and_leave_state_alone() {
+        // DSB ISHST; ISB; ADD X1,SP,#0; RET reaches the return with the stack
+        // pointer the two barriers leave untouched.
+        let mut b = board(&[0xd503_3a9f, 0xd503_3fdf, 0x9100_03e1, 0xd65f_03c0]);
+        let r = checked_call(&mut b, options()).unwrap();
+        assert!(r.returned, "{:?}", r.failure);
+        assert_eq!(r.instructions, 4);
+        assert_eq!(r.registers["x1"], 0x9000);
+        assert_eq!(r.registers["sp"], 0x9000);
+    }
+    #[test]
+    fn declared_system_values_service_reads_the_core_does_not_implement() {
+        // MRS X1, S3_1_C15_C2_1; RET. The A53 CPUACTLR_EL1 encoding has no
+        // value in the CPU model, so a caller declaration is the model.
+        let mut b = board(&[0xd539_f221, 0xd65f_03c0]);
+        let mut o = options();
+        o.system_values = vec![("S3_1_C15_C2_1".into(), 0x1234_5678)];
+        let r = checked_call(&mut b, o).unwrap();
+        assert!(r.returned);
+        assert_eq!(r.system_read_observations.len(), 1);
+        let read = &r.system_read_observations[0];
+        assert_eq!(read.name, "S3_1_C15_C2_1");
+        assert_eq!(read.encoding, 0xcf91);
+        assert_eq!(read.destination, 1);
+        assert_eq!(read.value, 0x1234_5678);
+        assert_eq!(read.source, SystemValueSource::Declared);
+        assert_eq!(r.registers["x1"], 0x1234_5678);
+        // The read never reaches the CPU: the core implements no such
+        // register, so the guard retires it and the routine continues.
+        assert_eq!(r.failure, None);
+    }
+    #[test]
+    fn enabling_address_translation_refuses_at_the_transition() {
+        // MOVZ x0,#1; MSR SCTLR_EL1,x0; RET. Setting SCTLR_EL1.M asks for page
+        // table walks this harness does not model, so the transition itself is
+        // the refusal: the routine must not continue at flat addresses.
+        let mut b = board(&[0xd280_0020, 0xd518_1000, 0xd65f_03c0]);
+        let mut o = options();
+        o.system_registers = vec!["SCTLR_EL1".into()];
+        let r = checked_call(&mut b, o).unwrap();
+        assert_eq!(r.instructions, 1);
+        assert!(!r.returned);
+        let failure = r.failure.unwrap();
+        assert!(failure.contains("SCTLR_EL1.M set"), "{failure}");
+        assert!(
+            failure.contains("address translation is not modeled"),
+            "{failure}"
+        );
+        assert!(failure.contains("0x1004"), "{failure}");
+    }
+    #[test]
+    fn writing_sctlr_with_translation_off_retires() {
+        // MOVZ x0,#0; MSR SCTLR_EL1,x0; RET. The same write with M clear only
+        // replaces the declared register value, so an MMU-off routine still
+        // runs to its return.
+        let mut b = board(&[0xd280_0000, 0xd518_1000, 0xd65f_03c0]);
+        let mut o = options();
+        o.system_values = vec![("SCTLR_EL1".into(), 0x30d0_0800)];
+        let r = checked_call(&mut b, o).unwrap();
+        assert!(r.returned, "{:?}", r.failure);
+        // The guard retires the serviced MSR without counting it, so the two
+        // executed words are the MOVZ and the RET.
+        assert_eq!(r.instructions, 2);
+        assert_eq!(r.system_writes.len(), 1);
+        assert_eq!(r.system_writes[0].name, "SCTLR_EL1");
+        assert_eq!(r.system_writes[0].value, 0);
+    }
+    #[test]
+    fn declared_system_writes_update_the_declared_value() {
+        // MRS x1,S3_1_C15_C2_1; MOVZ x1,#7; MSR S3_1_C15_C2_1,x1;
+        // MRS x2,S3_1_C15_C2_1; RET. The declaration is the register state.
+        let mut b = board(&[
+            0xd539_f221,
+            0xd280_00e1,
+            0xd519_f221,
+            0xd539_f222,
+            0xd65f_03c0,
+        ]);
+        let mut o = options();
+        o.executable = vec![(4096, 4116)];
+        o.system_values = vec![("S3_1_C15_C2_1".into(), 0x11)];
+        let r = checked_call(&mut b, o).unwrap();
+        assert!(r.returned);
+        assert_eq!(r.registers["x1"], 7);
+        assert_eq!(r.registers["x2"], 7);
+        assert_eq!(r.system_read_observations.len(), 2);
+        assert_eq!(r.system_read_observations[0].value, 0x11);
+        assert_eq!(r.system_read_observations[1].value, 7);
+        assert_eq!(r.system_writes.len(), 1);
+        assert_eq!(r.system_writes[0].value, 7);
+    }
+    #[test]
+    fn contradictory_system_register_declarations_are_refused() {
+        let mut b = board(&[0xd539_f221, 0xd65f_03c0]);
+        let mut o = options();
+        o.system_values = vec![("S3_1_C15_C2_1".into(), 0)];
+        o.system_registers = vec!["S3_1_C15_C2_1".into()];
+        let error = match checked_call(&mut b, o) {
+            Ok(_) => panic!("contradictory declarations were accepted"),
+            Err(error) => error,
+        };
+        assert!(error.contains("both declared to the model and given a value"));
+        let mut b = board(&[0xd539_f221, 0xd65f_03c0]);
+        let mut o = options();
+        o.system_values = vec![("S3_1_C15_C2_1".into(), 0)];
+        o.system_reads = vec![("S3_1_C15_C2_1".into(), 0)];
+        let error = match checked_call(&mut b, o) {
+            Ok(_) => panic!("duplicate declaration was accepted"),
+            Err(error) => error,
+        };
+        assert!(error.contains("Unsupported or duplicate system register"));
+    }
+    #[test]
+    fn implementation_defined_names_are_systematic_and_declarable() {
+        // MRS X1, S3_1_C15_C2_1 is the A53 CPUACTLR_EL1 read at 0x5b580.
+        assert_eq!(
+            system_register_name(0xcf91).as_deref(),
+            Some("S3_1_C15_C2_1")
+        );
+        assert_eq!(
+            parse_implementation_defined_name("S3_1_C15_C2_1"),
+            Some(0xcf91)
+        );
+        assert_eq!(
+            system_register_name(0xdf80).as_deref(),
+            Some("S3_3_C15_C0_0")
+        );
+        assert_eq!(
+            parse_implementation_defined_name("S3_3_C15_C0_0"),
+            Some(0xdf80)
+        );
+        for (name, encoding) in [
+            ("MIDR_EL1", 0xc000u16),
+            ("CTR_EL0", 0xd801),
+            ("ELR_EL3", 0xf201),
+            ("CLIDR_EL1", 0xc801),
+        ] {
+            assert_eq!(system_register_name(encoding).as_deref(), Some(name));
+            assert_eq!(admitted_system_register(name), Some(encoding));
+        }
+        // Only the implementation-defined space becomes a systematic name, so
+        // an architectural register still needs its own table entry.
+        assert_eq!(system_register_name(0xdb02), None);
+        assert_eq!(system_register_name(0xda11).as_deref(), Some("DAIF"));
+        assert_eq!(system_register_name(0xc210).as_deref(), Some("SPSel"));
+        assert_eq!(admitted_system_register("DAIF"), Some(0xda11));
+        assert_eq!(admitted_system_register("SPSel"), Some(0xc210));
+        assert_eq!(parse_implementation_defined_name("S3_0_C15_C2_1"), None);
+        assert_eq!(parse_implementation_defined_name("S4_1_C15_C2_1"), None);
+        assert_eq!(parse_implementation_defined_name("S3_1_C15_C2"), None);
+        assert_eq!(parse_implementation_defined_name("S3_x_C15_C2_1"), None);
+    }
+    #[test]
+    fn implementation_defined_reads_require_a_declaration() {
+        // MRS X1, S3_1_C15_C2_1; RET names no architectural value, so the call
+        // refuses before retirement until the caller declares the register.
+        let mut b = board(&[0xd539_f221, 0xd65f_03c0]);
+        let r = checked_call(&mut b, options()).unwrap();
+        assert_eq!(r.instructions, 0);
+        assert!(r.failure.unwrap().contains("undeclared MRS"));
+    }
+    #[test]
+    fn cache_and_tlb_maintenance_without_an_operand_register_retire() {
+        // IC IALLU; TLBI VMALLE1; ADD X1,SP,#0; RET records the stack pointer
+        // the two maintenance operations leave untouched.
+        let mut b = board(&[0xd508_751f, 0xd508_871f, 0x9100_03e1, 0xd65f_03c0]);
+        let r = checked_call(&mut b, options()).unwrap();
+        assert!(r.returned, "{:?}", r.failure);
+        assert_eq!(r.instructions, 4);
+        assert_eq!(r.registers["x1"], 0x9000);
+        assert_eq!(r.registers["sp"], 0x9000);
+    }
+    #[test]
+    fn cache_and_tlbi_with_an_operand_register_retire() {
+        // DC ISW requires an actual set/way operand (x11 here); TLBI VAE1
+        // names an address in x0. Both leave no register or memory state
+        // observable to this bounded non-MMU fragment.
+        let mut b = board(&[0xd508_764b, 0xd508_871f, 0x9100_03e1, 0xd65f_03c0]);
+        let r = checked_call(&mut b, options()).unwrap();
+        assert!(r.returned, "{:?}", r.failure);
+        assert_eq!(r.instructions, 4);
+        assert_eq!(r.registers["x1"], 0x9000);
+        assert_eq!(r.registers["sp"], 0x9000);
+    }
+    #[test]
+    fn cache_and_tlbi_admission_accepts_documented_operations_only() {
+        for word in [
+            0xd508_751f, // ic iallu
+            0xd508_711f, // ic ialluis
+            0xd508_763f, // dc ivac, xzr
+            0xd50b_753f, // ic ivau, xzr
+            0xd50b_7c3f, // dc cvap, xzr
+            0xd50b_7e3f, // dc civac, xzr
+            0xd508_871f, // tlbi vmalle1
+            0xd50c_879f, // tlbi alle1
+            0xd508_8700, // tlbi vmalle1 (Rt is reserved)
+            0xd508_8720, // tlbi vae1, x0
+            0xd50e_871f, // tlbi alle3
+            0xd50b_7520, // ic ivau, x0
+        ] {
+            assert!(is_cache_or_tlbi(word), "{word:#010x}");
+        }
+        for word in [
+            0xd508_801f, // Reserved SYS #0,c8,c0,#0: never a TLBI operand
+            0xd508_713f, // SYS #0,c7,c1,#1: not IC IALLUIS
+            0xd50b_7540, // SYS #3,c7,c5,#2,x0: not IC IVAU
+            0xd50a_871f, // Reserved op1=2 CRn=8 encoding
+            0xd50e_839f, // SYS #6,c8,c3,#4: not a TLBI selector
+            0xd508_841f, // Reserved CRm=4 EL1 encoding
+            0xd508_883f, // Reserved CRm=8 EL1 encoding
+            0xd50c_783f, // AT S1E2R, xzr: writes PAR_EL1
+            0xd50b_743f, // DC ZVA, xzr: stores zeros to a cache line
+            0xd50a_6a5f, // AT S12E1RW, xzr: writes PAR_EL1
+            0xd508_7b9f, // SYS #0, c7, c11, #4: reserved cache operand
+            0xd503_201f, // nop
+            0xd400_41bf, // svc #0x20d
+            0xd440_0000, // hlt #0
+            0xd518_1000, // msr tcr_el1, x0
+            0xd538_0000, // mrs x0, midr_el1
+        ] {
+            assert!(!is_cache_or_tlbi(word), "{word:#010x}");
+        }
+    }
+    #[test]
     fn default_undeclared_and_other_system_instructions_remain_refused() {
         for (word, declared) in [
             (0xd5380000, false),
             (0xd538001f, true),
             (0xd5181000, true),
-            (0xd5033b9f, true), // DSB ISH remains outside this policy.
-            (0xd5033fbf, true), // DMB SY remains outside this policy.
+            (0xd5033f5f, true), // CLREX clears a monitor and stays outside this policy.
+            (0xd503229f, true), // CSDB is a hint this harness does not model.
         ] {
             let mut b = board(&[word, 0xd65f03c0]);
             let mut o = options();
@@ -1753,6 +2279,52 @@ mod tests {
         let r = checked_call(&mut b, options()).unwrap();
         assert!(r.returned, "{:?}", r.failure);
         assert_eq!(r.instructions, 2);
+    }
+    #[test]
+    fn msr_immediate_spsel_selects_the_stack_bank() {
+        let sp_el0 = sysreg(0xc208);
+        let sp_el1 = sysreg(0xe208);
+        let _ = (sp_el0, sp_el1);
+        // EL1h fragment: SPSel=#0 picks SP_EL0 (=0xaa80), ADD captures it,
+        // SPSel=#1 picks SP_EL1 (lee default harness stack = 0x9000).
+        // Declaring the post-swap SP as the fragment's exit stack lets the
+        // callee-save validator accept the bank without warning.
+        let mut b = board(&[0xd500_40bf, 0x9100_03e1, 0xd500_41bf, 0xd65f_03c0]);
+        b.write_register(0, sp_el0, 0xaa80).unwrap();
+        b.write_register(0, sp_el1, 0xbbc0).unwrap();
+        let mut o = options();
+        o.executable = vec![(0x1000, 0x1010)];
+        o.readable = vec![(0x1000, 0x1010), (0x4000, 0x4010), (0x8000, 0xa000)];
+        o.fragment_exit.insert("sp".into(), 0x9000);
+        let r = checked_call(&mut b, o).unwrap();
+        assert!(r.returned, "{:?}", r.failure);
+        assert_eq!(r.instructions, 4);
+        assert_eq!(r.registers["x1"], 0xaa80);
+        assert_eq!(r.registers["pstate"] & 1, 1);
+        assert_eq!(r.registers["sp"], 0x9000);
+    }
+    #[test]
+    fn msr_immediate_daif_clear_and_set_age_pstate() {
+        // MSR DAIFClr,#3 unmasks F and I; RET runs with them clear.
+        let mut b = board(&[0xd503_43ff, 0xd65f_03c0]);
+        let r = checked_call(&mut b, options()).unwrap();
+        assert!(r.returned, "{:?}", r.failure);
+        assert_eq!(r.instructions, 2);
+        assert_eq!(r.registers["pstate"] & 0x3c0, 0x300);
+        // MSR DAIFSet,#3 masks them again.
+        let mut b = board(&[0xd503_43df, 0xd65f_03c0]);
+        let r = checked_call(&mut b, options()).unwrap();
+        assert!(r.returned, "{:?}", r.failure);
+        assert_eq!(r.instructions, 2);
+        assert_eq!(r.registers["pstate"] & 0x3c0, 0x3c0);
+    }
+    #[test]
+    fn trap_instruction_sharing_the_low_bits_stays_refused() {
+        // SVC #0x20d: Rt=31 low bits from the immediate class, other top bits.
+        let mut b = board(&[0xd400_41bf, 0xd65f_03c0]);
+        let r = checked_call(&mut b, options()).unwrap();
+        assert_eq!(r.instructions, 0);
+        assert!(r.failure.unwrap().contains("Unsupported instruction"));
     }
     #[test]
     fn el3_eret_non_aarch64_spsr_mode_refuses() {

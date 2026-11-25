@@ -446,6 +446,7 @@ class Aarch64DriverHarness:
         fragment_exit: Mapping[str, int] | None = None,
         observer_limit: int = 4096,
         system_reads: Iterable[tuple[str, int]] = (),
+        system_values: Iterable[tuple[str, int]] = (),
         system_registers: Iterable[str] = (),
         entry_level: str = "el1",
         transaction_limit: int = 4096,
@@ -456,6 +457,13 @@ class Aarch64DriverHarness:
         its expected model value. Results include initial model values and MRS
         observations; for x31 the value is the model value because XZR discards
         the result. Values describe the execution model, not physical hardware.
+
+        Each ``system_values`` pair declares the value the model returns for a
+        register the CPU core does not implement, named either architecturally
+        or systematically such as ``S3_1_C15_C2_1``. The declaration is that
+        register's state for the call: the guard writes the declared value and
+        retires each read, updates it on each write, and records the value in
+        every observation as ``declared``.
         """
         if self._closed or self._failed:
             raise RuntimeError("Create a fresh caller after closing or a failed call")
@@ -525,6 +533,7 @@ class Aarch64DriverHarness:
             "observe_addresses": [o["address"] for o in self._observers],
             "observer_limit": observer_limit,
             "system_reads": [(name, _word(value)) for name, value in system_reads],
+            "system_values": [(name, _word(value)) for name, value in system_values],
             "system_registers": list(system_registers),
             "entry": entry,
             "entry_level": entry_level,
