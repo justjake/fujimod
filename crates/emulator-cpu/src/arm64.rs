@@ -73,6 +73,8 @@ pub fn system_register(name: &str) -> Result<super::arm::SystemRegister, String>
         "ICC_IGRPEN0_EL1" => 0xc666,
         "ICC_IGRPEN1_EL1" => 0xc667,
         "ICC_SRE_EL1" => 0xc665,
+        "ICC_SRE_EL2" => 0xe64d,
+        "ICC_IGRPEN1_EL3" => 0xf667,
         _ => u16::from_str_radix(name.trim_start_matches("0x"), 16)
             .map_err(|_| format!("unknown sysreg {name}"))?,
     };

@@ -881,6 +881,12 @@ pub trait Cpu {
     fn set_interrupt(&self, _line: Interrupt, _asserted: bool) -> Result<(), String> {
         Err("this backend does not expose architectural interrupt inputs".into())
     }
+    /// Stop each run before the first block entered after the processor
+    /// enters or leaves EL3, ahead of interrupt delivery, so the owner can
+    /// update inputs that depend on the processor's Security state.
+    fn stop_on_el3_transitions(&self) -> Result<(), String> {
+        Err("this backend cannot stop on EL3 transitions".into())
+    }
     /// `previous` permits sharing immutable private-memory pages between
     /// keyframes. It must belong to this CPU; backends without private RAM
     /// may ignore it. Physical board RAM is captured by the execution owner.
