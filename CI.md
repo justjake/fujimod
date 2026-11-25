@@ -1,10 +1,56 @@
 # Continuous integration
 
-[CI](.github/workflows/ci.yml) runs on every push and pull request, without path
-filters. Its five jobs check Python, JavaScript/TypeScript and Rust independently
-and run the native and browser suites. `CI required` fails if any job fails,
-is canceled or is skipped. Select **CI required** as a required status check in
-the repository's branch rules to enforce it on merges.
+[CI](.github/workflows/ci.yml) runs on every push to `main`, when started by
+hand, and for pull requests through [PR CI](.github/workflows/pr-ci.yml), without
+path filters. Its five jobs check Python, JavaScript/TypeScript and Rust
+independently and run the native and browser suites.
+
+## Pull requests
+
+PR CI tests a pull request into `main` on request:
+
+| Event | What PR CI does |
+| --- | --- |
+| A pull request opens ready, or a draft is marked ready | Runs, for a collaborator's pull request |
+| `ci:run` label | Runs on the latest commit, for anyone's pull request; the label is removed |
+| A push to a ready pull request | Cancels the run in progress; the new commit waits for `ci:run` |
+
+The result is the `CI required` commit status on the pull request's head:
+pending while untested or running, then passed or failed, linked to the run.
+There is no per-author run limit: runs use GitHub's hosted runners, which cost
+nothing for a public repository.
+
+GitHub runs `main`'s copy of PR CI, so a pull request cannot change when it is
+tested or what status it gets. The checks run the pull request's code with a
+read-only token. Because that code runs in `main`'s cache scope, the checks
+restore caches but never save them, and an outside contributor's pull request
+runs only after a maintainer reads it and adds `ci:run`.
+
+Runs on `main` save the caches. GitHub shares the default branch's caches with
+pull requests, so each push to `main` keeps them warm for every pull request.
+Pull request runs keep coverage in the job summary and upload no artifacts.
+
+## Planned structure
+
+This is the agreed design for what comes next; each part replaces the
+description above as it lands.
+
+- **`main` is protected.** Merges require `CI required`, and rebase is the only
+  merge method.
+- **Build once, fan out.** One build job produces the heavy outputs, the
+  WebAssembly emulator, the JavaScript bindings and the Python native extension,
+  and the test jobs download them instead of compiling their own. Rust compiles
+  go through a compiler cache, and each output restores only on the exact key of
+  the inputs it reads.
+- **`main` publishes its outputs.** Each passing `main` commit uploads those
+  outputs as artifacts named by commit, for builds that pin a FujiMod commit to
+  download instead of compiling; they build from source when no artifact exists.
+  Uploads expire after a few days, a cleanup step after each `main` run deletes
+  all but the newest five commits' outputs, and their total stays under a fixed
+  size cap below the account's artifact storage.
+- **The nightly web deploy ships the newest `main` commit that passed CI,**
+  reusing its outputs, instead of running the checks itself. A broken check
+  fails the pull request that broke it rather than blocking deploys.
 
 ## Language policy
 
