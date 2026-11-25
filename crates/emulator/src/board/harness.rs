@@ -795,9 +795,9 @@ impl Board {
         if core >= self.cpus.len() {
             return Err("invalid core".into());
         }
-        let (released, waiting) = {
+        let (released, waiting, waiting_event) = {
             let s = self.state.borrow();
-            (s.released.clone(), s.waiting.clone())
+            (s.released.clone(), s.waiting.clone(), s.waiting_event.clone())
         };
         {
             let mut s = self.state.borrow_mut();
@@ -812,7 +812,12 @@ impl Board {
         let mut s = self.state.borrow_mut();
         let ran = s.waiting[core];
         s.released = released;
-        s.waiting = waiting;
+        // A held peer's WFE that an event satisfied during the run stays awake.
+        for c in 0..waiting.len() {
+            if c != core {
+                s.waiting[c] = waiting[c] && !(waiting_event[c] && !s.waiting_event[c]);
+            }
+        }
         s.waiting[core] = ran;
         result
     }

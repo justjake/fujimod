@@ -59,6 +59,9 @@ impl Cpu for Core {
         self.execution.board_mpidr.set(supported);
         Ok(())
     }
+    fn set_armv7a_owner_exclusives(&self, on: bool) -> Result<(), String> {
+        self.set_owner_exclusives(on)
+    }
     fn select_armv7a_affinity_policy(&self, policy: ExecutionPolicy) -> Result<(), String> {
         let e = &self.execution;
         if e.board_mpidr.get() {

@@ -71,7 +71,7 @@ struct Execution {
     coherent: Cell<bool>,
     wide_code_watch: Cell<bool>,
     stores: RefCell<Vec<(Access, u64, i32, i64)>>,
-    // ARMv7-A owner options (see `Core::set_owner_exclusives` and the
+    // ARMv7-A owner options (see `Cpu::set_armv7a_owner_exclusives` and the
     // following setters).
     exclusive_exits: Cell<bool>,
     owner_mpidr: Cell<bool>,
@@ -233,10 +233,10 @@ impl Core {
         cell(e).set(on);
         Ok(())
     }
-    /// ARMv7-A owners that keep their own cluster-wide exclusive monitor:
-    /// LDREX/STREX (all widths) and CLREX also exit before entry, like the
-    /// framework instructions, so the owner performs them.
-    pub fn set_owner_exclusives(&self, on: bool) -> Result<(), String> {
+    pub(super) fn set_owner_exclusives(&self, on: bool) -> Result<(), String> {
+        if self.execution.exclusive_exits.get() == on {
+            return Ok(());
+        }
         self.owner_option(|e| &e.exclusive_exits, on)?;
         self.execution.cpu.invalidate_code(None)
     }

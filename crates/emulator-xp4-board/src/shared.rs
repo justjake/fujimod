@@ -29,6 +29,7 @@ pub fn build(
     mode: Mode,
     engine: RunEngine,
     record: serde_json::Value,
+    device_space: DeviceSpace,
 ) -> Result<(fujimod_emulator_session::Session, Inputs), String> {
     let cores = graph.processors.len();
     if cores != definition.cores || !(1..=4).contains(&cores) {
@@ -79,6 +80,27 @@ pub fn build(
         ));
     }
     windows.extend(fixed);
+    if device_space == DeviceSpace::Undeclared && mode == Mode::Discovery {
+        // Every page outside memory and the declared windows is hardware the
+        // discovery bus has yet to learn.
+        let mut used: Vec<(u64, u64)> = graph
+            .ram
+            .iter()
+            .map(|ram| (ram.base, ram.base + ram.size as u64))
+            .chain(windows.iter().copied())
+            .map(|(lo, hi)| (lo & !0xfff, (hi + 0xfff) & !0xfff))
+            .collect();
+        used.sort_unstable();
+        let mut next = 0u64;
+        let mut gaps = Vec::new();
+        for (lo, hi) in used.into_iter().chain([(1 << 32, 1 << 32)]) {
+            if next < lo {
+                gaps.push((next, lo));
+            }
+            next = next.max(hi);
+        }
+        windows.extend(gaps);
+    }
     for core in 0..cores {
         for &(lo, hi) in &windows {
             let size = usize::try_from(hi - lo).map_err(|_| "XP4 device window exceeds the host")?;
@@ -183,7 +205,16 @@ pub fn from_definition(
     };
     let mode = if definition.discovery { Mode::Discovery } else { Mode::Strict };
     let record = serde_json::json!({"cores": cores, "ram_size": definition.ram_size, "mode": mode.name()});
-    build(graph, definition, storage_image, card_files, card_media, mode, engine, record)
+    build(graph, definition, storage_image, card_files, card_media, mode, engine, record, DeviceSpace::Undeclared)
+}
+
+/// Whether the board's processor blocks are declared. A bare definition
+/// declares only its devices, so in discovery every other address is
+/// undeclared hardware; a catalog board maps only its blocks.
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub enum DeviceSpace {
+    Declared,
+    Undeclared,
 }
 
 /// The XP4 interval timer: eight channels, each pulsing its routed line.

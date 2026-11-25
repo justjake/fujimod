@@ -612,6 +612,12 @@ pub trait Cpu {
     fn set_armv7a_affinity(&self, _mpidr: u32) -> Result<(), String> {
         Ok(())
     }
+    /// Exit before every ARM-state LDREX/STREX (all widths) and CLREX, so the
+    /// board performs them against its cluster-wide exclusive monitor (exact
+    /// execution), or run them natively (`false`).
+    fn set_armv7a_owner_exclusives(&self, _on: bool) -> Result<(), String> {
+        Err("backend does not exit before ARMv7-A exclusives".into())
+    }
     /// Select the board's MPIDR execution path before a scheduler run.
     fn select_armv7a_affinity_policy(&self, _policy: ExecutionPolicy) -> Result<(), String> {
         Ok(())

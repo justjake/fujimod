@@ -866,7 +866,11 @@ impl Board {
             if !board.cpus[core].features().shared_physical_maps
                 && board.cpus.iter().any(|c| {
                     c.features().shared_physical_maps
-                        || c.model() == fujimod_emulator_cpu::Model::CortexM4
+                        || matches!(
+                            c.model(),
+                            fujimod_emulator_cpu::Model::CortexM4
+                                | fujimod_emulator_cpu::Model::CortexA7
+                        )
                 })
             {
                 // Without an M-profile controller (no alias stores to
@@ -1575,6 +1579,11 @@ impl Board {
             for (cpu, profile) in self.cpus.iter().zip(&state.armv7a) {
                 if profile.is_some() {
                     cpu.select_armv7a_affinity_policy(state.execution_policy)?;
+                    // Exact runs perform exclusives against the board monitor;
+                    // concurrent windows keep the engine's atomic exclusives.
+                    cpu.set_armv7a_owner_exclusives(
+                        state.execution_policy == ExecutionPolicy::Exact,
+                    )?;
                 }
             }
         }
@@ -2045,7 +2054,13 @@ impl Board {
         };
         let wanted = {
             let s = self.state.borrow();
-            s.execution_policy != ExecutionPolicy::Exact
+            // Concurrent windows keep ARMv7-A exclusives in the engine; an
+            // A7 core's stores need the hook there only for a framework
+            // monitor (M-profile) that reserves while peers run.
+            let concurrent_monitor = self.cpus[core].model()
+                != fujimod_emulator_cpu::Model::CortexA7
+                || s.mprofile.iter().any(Option::is_some);
+            (s.execution_policy != ExecutionPolicy::Exact && concurrent_monitor)
                 || s.memory.watching_writes()
                 || s.exclusive
                     .lock()
@@ -2695,7 +2710,7 @@ impl State {
                         let profile = self.armv7a[core]
                             .as_mut()
                             .ok_or("ARMv7-A framework instruction without a profile")?;
-                        match profile.before_counted(cpu, pc, now, word)? {
+                        match profile.before_counted(cpu, pc, now, word, &self.exclusive)? {
                             // A failed condition retires the instruction unexecuted.
                             armv7a::Entry::Execute => set(cpu, Register::Pc, pc.wrapping_add(4))?,
                             armv7a::Entry::Completed => (),
@@ -4132,14 +4147,11 @@ unsafe fn before(pc: u64, _: u32, data: *mut c_void) {
         }
         // Architectural counters follow the core's own position.
         let now = s.timeline.processor_clock(b.core)?.now;
-        if s.aarch64_before(cpu, b.core, pc)? {
-            return Ok(());
-        }
-        if let Some(p) = &mut s.armv7a[b.core] {
-            let entry = p.before(cpu, pc, now)?;
-            if let armv7a::Entry::Hint(hint) = entry {
-                s.hint(b.core, hint);
-            }
+        if s.aarch64_before(cpu, b.core, pc)? { return Ok(()); }
+        let st = &mut *s;
+        if let Some(p) = &mut st.armv7a[b.core] {
+            let entry = p.before(cpu, pc, now, &st.exclusive)?;
+            if let armv7a::Entry::Hint(hint) = entry { st.hint(b.core, hint); }
         }
         // The page just proven is mapped host memory: read the instruction
         // there instead of through the engine.
