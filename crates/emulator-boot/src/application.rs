@@ -54,8 +54,12 @@ struct Image {
 #[derive(Deserialize)]
 #[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
 enum Plan {
+    /// Each core's reset registers and the entry labels the firmware image
+    /// adds; the board itself comes from the catalog.
     Xp4 {
-        definition: Value,
+        registers: Vec<Vec<(Register, u64)>>,
+        #[serde(default)]
+        labels: Vec<u64>,
     },
     Xpp {
         registers: Vec<Vec<(Register, u64)>>,
@@ -457,23 +461,20 @@ pub fn open(resolved: &ResolvedConfiguration, startup: Startup) -> Result<Starte
     let body = &resolved.reference;
     let mut snapshot_identity = None;
     let board = match (body.soc.id.as_str(), document.board) {
-        ("xp4", Plan::Xp4 { definition }) => {
+        ("xp4", Plan::Xp4 { registers, labels }) => {
+            let checked = xp4::catalog::definition(resolved, registers, &labels)?;
+            let mut definition: xp4::Definition = serde_json::from_value(checked.clone())
+                .map_err(|error| format!("XP4 board definition: {error}"))?;
             let geometry = json!({
-                "configuration": resolved.configuration, "definition": definition,
+                "configuration": resolved.configuration, "definition": checked,
                 "images": document.images.iter().map(|image| (image.address, &image.sha256)).collect::<Vec<_>>(),
                 "flash": flash.as_ref().map(|bytes| format!("{:x}", Sha256::digest(bytes))),
                 "sd_card_files": files.iter().map(|(name, bytes)| (name, format!("{:x}", Sha256::digest(bytes)))).collect::<BTreeMap<_, _>>(),
             });
-            snapshot_identity = Some(format!(
-                "{:x}",
-                Sha256::digest(serde_json::to_vec(&geometry).map_err(|error| error.to_string())?)
-            ));
-            let mut definition: xp4::Definition = serde_json::from_value(definition)
-                .map_err(|error| format!("XP4 board definition: {error}"))?;
-            fujimod_emulator::board::factory::validate_engine(
-                engine,
-                [fujimod_emulator_cpu::Model::CortexA7],
-            )?;
+            snapshot_identity = Some(format!("{:x}", Sha256::digest(
+                serde_json::to_vec(&geometry).map_err(|error| error.to_string())?
+            )));
+            fujimod_emulator::board::factory::validate_engine(engine, [fujimod_emulator_cpu::Model::CortexA7])?;
             if definition.cores != body.soc.processors.len() {
                 return Err("XP4 startup plan core count differs from the selected SoC".into());
             }

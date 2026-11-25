@@ -599,6 +599,45 @@ impl Catalog {
     }
 }
 
+/// The XP4 board definition of a resolved run, checked against `Definition`: every catalog field, the
+/// boot SRAM as memory, and the caller's firmware-side inputs: each core's
+/// reset registers and the entry labels the firmware image adds.
+pub fn definition(
+    resolved: &ResolvedConfiguration,
+    registers: Vec<Vec<(fujimod_emulator_cpu::Register, u64)>>,
+    image_labels: &[u64],
+) -> Result<Value, String> {
+    let catalog = Catalog::new(resolved)?;
+    let mut fields = catalog.processor_fields()?;
+    fields.extend(catalog.body_fields()?);
+    let mut labels: Vec<u64> = serde_json::from_value(fields["labels"].take()).map_err(|e| e.to_string())?;
+    labels.extend(image_labels);
+    labels.sort_unstable();
+    labels.dedup();
+    fields.insert("labels".into(), json!(labels));
+    let regions: Vec<Value> = fields
+        .remove("boot_sram")
+        .into_iter()
+        .map(|sram| json!({"base": sram[0], "size": sram[1], "permissions": 7}))
+        .collect();
+    fields.insert("memory_regions".into(), json!(regions));
+    if registers.len() != fields["cores"].as_u64().unwrap_or(0) as usize {
+        return Err("XP4 reset registers must name every processor".into());
+    }
+    fields.insert("initial_registers".into(), serde_json::to_value(registers).map_err(|e| e.to_string())?);
+    fields.insert("discovery".into(), json!(false));
+    // The definition carries the statistics scene as its JSON text.
+    if let Some(scene) = fields.get_mut("imaging").and_then(|imaging| imaging.pointer_mut("/3/5")) {
+        if !scene.is_string() && !scene.is_null() {
+            *scene = json!(scene.to_string());
+        }
+    }
+    let definition = Value::Object(fields);
+    serde_json::from_value::<crate::Definition>(definition.clone())
+        .map_err(|error| format!("XP4 board definition: {error}"))?;
+    Ok(definition)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -618,6 +657,16 @@ mod tests {
             if let Ok(dir) = std::env::var("FUJIMOD_XP4_CATALOG_DIR") {
                 std::fs::write(format!("{dir}/{id}.json"), serde_json::to_string_pretty(&fields).unwrap()).unwrap();
             }
+        }
+    }
+
+    #[test]
+    fn every_xp4_configuration_is_a_definition() {
+        for id in ["xt3-511", "xt30-201-boot", "xe4-201-handoff"] {
+            let resolved = ResolvedConfiguration::bundled(id).unwrap();
+            let cores = resolved.reference.soc.processors.len();
+            let registers = vec![vec![(fujimod_emulator_cpu::Register::Pc, 0x40000)]; cores];
+            definition(&resolved, registers, &[0x1000]).unwrap_or_else(|e| panic!("{id}: {e}"));
         }
     }
 

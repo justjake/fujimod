@@ -14,6 +14,7 @@ pub mod memory;
 pub use definition::{Definition, GicCpuInitial, GicInitial, NorImmutablePrefix};
 pub use initial_security::InitialSecurity;
 pub mod observation;
+pub mod shared;
 use observation::Call;
 mod devices;
 mod dsp;
