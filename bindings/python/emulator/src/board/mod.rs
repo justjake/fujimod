@@ -1740,6 +1740,11 @@ impl Board {
         serde_json::to_string(&self.board()?.device_states(kind).map_err(error)?)
             .map_err(|e| error(e.to_string()))
     }
+    /// Device-published records as a JSON list of objects: `name` and fields.
+    fn device_records(&self) -> PyResult<String> {
+        serde_json::to_string(&self.board()?.device_records().map_err(error)?)
+            .map_err(|e| error(e.to_string()))
+    }
     fn device_state_values(&self, kind: &str) -> PyResult<String> {
         serde_json::to_string(&self.board()?.device_state_values(kind).map_err(error)?)
             .map_err(|e| error(e.to_string()))

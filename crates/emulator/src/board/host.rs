@@ -25,6 +25,26 @@ impl Board {
         Ok(serde_json::json!(state.bus.device_states(kind)))
     }
 
+    /// Every record devices have published, oldest first, each as its name
+    /// and its fields in order.
+    pub fn device_records(&self) -> Result<serde_json::Value, String> {
+        let state = self.state.try_borrow().map_err(|_| "board is executing")?;
+        Ok(serde_json::Value::Array(
+            state
+                .records
+                .iter()
+                .map(|record| {
+                    let mut row = serde_json::Map::new();
+                    row.insert("name".into(), serde_json::json!(record.name));
+                    for (key, value) in record.fields.iter() {
+                        row.insert(key.to_string(), plain(value));
+                    }
+                    serde_json::Value::Object(row)
+                })
+                .collect(),
+        ))
+    }
+
     /// Saved GIC state, for diagnostics.
     pub fn gic_state(&self) -> Result<serde_json::Value, String> {
         let state = self.state.try_borrow().map_err(|_| "board is executing")?;
@@ -216,4 +236,33 @@ fn missing_capability<C: ?Sized>(device: &dyn Device) -> String {
         device.name(),
         std::any::type_name::<C>()
     )
+}
+
+/// A record value as plain JSON: integers, strings, lists and objects.
+fn plain(value: &fujimod_emulator_devices::Value) -> serde_json::Value {
+    use fujimod_emulator_devices::Value;
+    use serde_json::json;
+    match value {
+        Value::None => serde_json::Value::Null,
+        Value::Int(v) => i64::try_from(*v)
+            .map(|v| json!(v))
+            .or_else(|_| u64::try_from(*v).map(|v| json!(v)))
+            .unwrap_or_else(|_| json!(v.to_string())),
+        Value::Float(v) => json!(v),
+        Value::Bool(v) => json!(v),
+        Value::Str(v) => json!(v),
+        Value::Static(v) => json!(v),
+        Value::Hex(v) => json!(format!("{v:#x}")),
+        Value::List(v) | Value::Tuple(v) => v.iter().map(plain).collect(),
+        Value::Bytes(v) => json!(v),
+        Value::Dict(v) => serde_json::Value::Object(
+            v.iter()
+                .map(|(k, v)| match k {
+                    Value::Str(k) => (k.clone(), plain(v)),
+                    Value::Static(k) => (k.to_string(), plain(v)),
+                    k => (plain(k).to_string(), plain(v)),
+                })
+                .collect(),
+        ),
+    }
 }

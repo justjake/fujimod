@@ -48,7 +48,9 @@ def _named_register(identifier: int | str) -> str:
     return json.dumps(_register(identifier))
 
 
-def _register_name(identifier: RegisterIdentifier) -> str:
+def register_name(identifier: RegisterIdentifier) -> str:
+    """The native board's name for a register: a registers constant, a
+    native name or a native identifier object."""
     if isinstance(identifier, dict):
         return json.dumps(identifier)
     return _named_register(identifier)
@@ -69,10 +71,10 @@ class Processor:
         self.core = core
 
     def reg_read(self, register: RegisterIdentifier) -> int:
-        return self.board.native.reg_read(self.core, _register_name(register))
+        return self.board.native.reg_read(self.core, register_name(register))
 
     def reg_write(self, register: RegisterIdentifier, value: int) -> None:
-        self.board.native.reg_write(self.core, _register_name(register), value)
+        self.board.native.reg_write(self.core, register_name(register), value)
 
     def cpr_read(
         self, cp: int, opc1: int, crn: int, crm: int, opc2: int, secure: int, wide: bool
