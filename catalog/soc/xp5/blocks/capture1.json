@@ -5,6 +5,13 @@
   "base": 4287795200,
   "size": 4096,
   "kind": "address-window",
+  "interrupts": [
+    {
+      "output": "channel0",
+      "line": 63,
+      "core": "core4"
+    }
+  ],
   "device": {
     "model": "input_capture",
     "transmit_requests": [
@@ -13,7 +20,7 @@
         "request": 35
       }
     ],
-    "basis": "input-capture channel The X-H2 companion streams words to capture channel 0 (0xff929004) through DMA descriptor [04 23 02 ...], request 35."
+    "basis": "input-capture channel The X-H2 companion streams words to capture channel 0 (0xff929004) through DMA descriptor [04 23 02 ...], request 35. Capture channel 0 raises companion NVIC line 63 (X-H2 5.30 M-core descriptor 0x45 of the table at 0x31180, line at 0x315d0; handler 0x31f8)."
   },
   "evidence": [
     {

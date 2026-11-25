@@ -94,6 +94,19 @@
       "kind": "sram"
     }
   ],
+  "clocks": [
+    {
+      "id": "cpu-tick",
+      "frequency_hz": 54000000
+    }
+  ],
+  "hardware": {
+    "profiles": {
+      "xp4": {
+        "cache_basis": "Declared catalog input."
+      }
+    }
+  },
   "mappings": [
     {
       "id": "dram-core0",
@@ -191,18 +204,5 @@
       "permissions": 3
     }
   ],
-  "clocks": [
-    {
-      "id": "cpu-tick",
-      "frequency_hz": 54000000
-    }
-  ],
-  "hardware": {
-    "profiles": {
-      "xp4": {
-        "cache_basis": "Declared catalog input."
-      }
-    }
-  },
   "reset": {}
 }

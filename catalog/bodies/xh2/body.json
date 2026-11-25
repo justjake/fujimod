@@ -13,24 +13,6 @@
         ]
       }
     },
-    "gpio_feedback": [
-      {
-        "output_connection_id": "sensor-power-enable",
-        "input_connection_id": "sensor-power-sense"
-      }
-    ],
-    "bus_drain": [
-      {
-        "address": 2147483648,
-        "processor_ids": [
-          "core0",
-          "core1",
-          "core2",
-          "core3"
-        ],
-        "basis": "The stock firmware drains the bus with a discarded read of the end of its first memory region: helper 0x14d1c00 (slot 1, 0x14d1c44) and classifier 0x14d1a1c read 0x80000000, as the X-H2S helpers do. PROVISIONAL: the address is the firmware's region boundary, not a measured bus port."
-      }
-    ],
     "serial_attachments": [
       {
         "part_id": "power-controller",
@@ -55,6 +37,46 @@
         "controller_id": "spi8",
         "connection_id": "serial-command-16-read-spi8-bus",
         "select_connection_id": "serial-command-16-read-spi8-select"
+      },
+      {
+        "part_id": "serial-command-16",
+        "controller_id": "spi7",
+        "connection_id": "serial-command-16-spi7-bus",
+        "select_connection_id": "serial-command-16-spi7-select"
+      },
+      {
+        "part_id": "serial-command-8",
+        "controller_id": "spi7",
+        "connection_id": "serial-command-8-spi7-bus",
+        "select_connection_id": "serial-command-8-spi7-select"
+      }
+    ],
+    "gpio_feedback": [
+      {
+        "output_connection_id": "sensor-power-enable",
+        "input_connection_id": "sensor-power-sense"
+      }
+    ],
+    "stabilizer": {
+      "part_id": "xt5-stabilizer-stage",
+      "capture_block_id": "capture1",
+      "capture_channel": 0,
+      "drive_channels": [
+        2,
+        4,
+        0
+      ]
+    },
+    "bus_drain": [
+      {
+        "address": 2147483648,
+        "processor_ids": [
+          "core0",
+          "core1",
+          "core2",
+          "core3"
+        ],
+        "basis": "The stock firmware drains the bus with a discarded read of the end of its first memory region: helper 0x14d1c00 (slot 1, 0x14d1c44) and classifier 0x14d1a1c read 0x80000000, as the X-H2S helpers do. PROVISIONAL: the address is the firmware's region boundary, not a measured bus port."
       }
     ]
   },
@@ -200,6 +222,38 @@
           "active_level": false
         }
       ]
+    },
+    {
+      "id": "serial-command-16-spi7-bus",
+      "kind": "control"
+    },
+    {
+      "id": "serial-command-16-spi7-select",
+      "kind": "control",
+      "signals": [
+        {
+          "kind": "gpio",
+          "port": 15,
+          "pin": 13,
+          "active_level": false
+        }
+      ]
+    },
+    {
+      "id": "serial-command-8-spi7-bus",
+      "kind": "control"
+    },
+    {
+      "id": "serial-command-8-spi7-select",
+      "kind": "control",
+      "signals": [
+        {
+          "kind": "gpio",
+          "port": 15,
+          "pin": 15,
+          "active_level": false
+        }
+      ]
     }
   ],
   "parts": [
@@ -207,7 +261,10 @@
     "power-controller",
     "bis-configuration",
     "lsm6ds",
-    "serial-command-16-read"
+    "serial-command-16-read",
+    "xt5-stabilizer-stage",
+    "serial-command-16",
+    "serial-command-8"
   ],
   "wiring": [
     {

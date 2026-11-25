@@ -35,6 +35,24 @@
         "source": "firmware_update",
         "erased_tail": 255,
         "seeds": []
+      },
+      {
+        "kind": "gpio",
+        "block_id": "gpio",
+        "levels": [],
+        "outputs": [
+          {
+            "port": 15,
+            "levels": 40960
+          }
+        ],
+        "pins": [
+          {
+            "port": 11,
+            "pin": 4,
+            "high": false
+          }
+        ]
       }
     ],
     "parts": [
@@ -171,5 +189,13 @@
   ],
   "unobserved_interrupt_blocks": [
     "spi5"
+  ],
+  "sd_clock_steps": [
+    {
+      "block_id": "sd-host-0",
+      "interface": 2,
+      "default_speed": 4,
+      "high_speed": 2
+    }
   ]
 }
