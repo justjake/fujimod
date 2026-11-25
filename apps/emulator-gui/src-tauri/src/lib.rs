@@ -319,7 +319,7 @@ fn open_with_builder(request: OpenCameraRequest) -> Result<(LaunchedCamera, Runn
         LauncherBoot::SdCard => camera::Boot::SdCard(camera::CardSource::Directory(
             request
                 .sd_card
-                .ok_or("An SD card boot needs a card folder.")?,
+                .ok_or("Choose an SD card folder.")?,
         )),
     };
     let body = resolved.reference.body.id.clone();
@@ -651,7 +651,7 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
                 "main",
                 tauri::WebviewUrl::App("index.html".into()),
             )
-            .title("FujiMod Emulator")
+            .title("Fujimod Emulator")
             .inner_size(window_width(720.0), 720.0)
             .min_inner_size(window_width(540.0), 540.0)
             .visible(false)

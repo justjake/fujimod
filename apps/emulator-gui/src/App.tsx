@@ -193,7 +193,7 @@ export default function App() {
 
   return (
     <main class="window">
-      <h1 id="emulator-title" class="visually-hidden">FujiMod Emulator</h1>
+      <h1 id="emulator-title" class="visually-hidden">Fujimod Emulator</h1>
       <EmulatorWorkspace
         state={state()}
         runtime={runtime()}
@@ -210,7 +210,6 @@ export default function App() {
             <Show when={bridge} fallback={<p class="status">{launcherError() || 'Start the emulator with a native session.'}</p>}>
               <div class="launcher-heading">
                 <h2>Open a camera</h2>
-                <p class="status">Cameras come from your firmware library.</p>
               </div>
               <label>
                 <span>Camera</span>
@@ -229,14 +228,12 @@ export default function App() {
                   <input type="radio" name="boot" value="stock" checked={boot() === 'stock'} onChange={() => setBoot('stock')} />
                   <span>
                     <strong>Stock</strong>
-                    <small>The firmware installed in internal flash</small>
                   </span>
                 </label>
                 <label class="boot-option" data-selected={boot() === 'sd-card'}>
                   <input type="radio" name="boot" value="sd-card" checked={boot() === 'sd-card'} onChange={() => setBoot('sd-card')} />
                   <span>
                     <strong>SD card</strong>
-                    <small>FujiMod from a card folder</small>
                   </span>
                 </label>
               </fieldset>
