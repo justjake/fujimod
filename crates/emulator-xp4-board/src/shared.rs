@@ -35,6 +35,7 @@ pub fn build(
         return Err("XP4 processor wiring differs from its definition".into());
     }
     let cbar = definition.cbar.ok_or("XP4 requires an explicit configuration base")?;
+    let gic_initial = definition.gic_initial.take();
     let memory = memory::allocate(std::mem::take(&mut definition.memory_regions), definition.ram_size)?;
     let timer = match (definition.timer_base, definition.timer_layout.take()) {
         (Some(base), Some(TimerLayout::Xp4)) => {
@@ -96,8 +97,12 @@ pub fn build(
     if let Some(&gpio) = nodes.get("masked-gpio") {
         nodes.insert("gpio".into(), gpio);
     }
+    let mut gic = gicv2::Gic::new(cores, GIC_LINES);
+    if let Some(initial) = gic_initial {
+        initial.apply(&mut gic, cores)?;
+    }
     let interrupts = InterruptMap {
-        gic: Box::new(gicv2::Gic::new(cores, GIC_LINES)),
+        gic: Box::new(gic),
         cores,
         registers: InterruptRegisters::GicV2 {
             distributor: u64::from(cbar) + 0x1000,

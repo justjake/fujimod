@@ -93,6 +93,21 @@ pub struct Options {
     /// read and write, while the session runs. Absent: devices are unguarded.
     #[serde(default)]
     pub device_policy: Option<arm32::DevicePolicy>,
+    /// Refuse A32 coprocessor instructions (CDP, MCR, MRC, LDC, STC) other
+    /// than the MPIDR read before they execute: an isolated routine may not
+    /// change or depend on system control state.
+    #[serde(default)]
+    pub coprocessor_guard: bool,
+}
+
+/// An A32 coprocessor instruction other than `MRC p15,0,Rt,c0,c0,5` (MPIDR).
+fn guarded_coprocessor(word: u32) -> bool {
+    if word >> 28 == 15 {
+        return false;
+    }
+    let coprocessor = (word >> 24) & 15 == 0b1110 || (word >> 25) & 7 == 0b110;
+    let mpidr = word & 0x0fff0fff == 0x0e100fb0 && (word >> 12) & 15 != 15;
+    coprocessor && !mpidr
 }
 
 /// An isolated caller's device policy (`Options::device_policy`). Processor
@@ -411,6 +426,17 @@ impl Session {
             drop(o);
             self.stop(&*cpu, json!({"kind":"breakpoint","pc":pc}), true);
             return Ok(());
+        }
+        if self.options.coprocessor_guard && size == 4 {
+            let mut bytes = [0; 4];
+            cpu.read_memory(pc, &mut bytes)?;
+            let word = u32::from_le_bytes(bytes);
+            if guarded_coprocessor(word) {
+                drop(o);
+                let message = format!("Driver guard unsupported coprocessor/system instruction {word:#010x} at {pc:#x}");
+                self.stop(&*cpu, json!({"kind":"failure","message":message}), true);
+                return Ok(());
+            }
         }
         o.entered = true;
         if self.options.coverage {

@@ -1,5 +1,5 @@
 //! Explicit physical ROM/SRAM windows alongside application DRAM.
-use super::{Backing, Cluster};
+use super::Backing;
 use serde::Deserialize;
 
 #[derive(Clone, Debug, Deserialize)]
@@ -12,7 +12,6 @@ pub struct Region {
 pub(super) struct Window {
     pub base: u64,
     pub data: Backing,
-    pub permissions: u32,
 }
 
 pub(super) fn allocate(regions: Vec<Region>, dram_size: usize) -> Result<Vec<Window>, String> {
@@ -35,87 +34,7 @@ pub(super) fn allocate(regions: Vec<Region>, dram_size: usize) -> Result<Vec<Win
         windows.push(Window {
             base: region.base,
             data: Backing::zeros(region.size),
-            permissions: region.permissions,
         });
     }
     Ok(windows)
-}
-
-impl Cluster {
-    /// The processor whose data cache a device access of this extent must
-    /// see through, when it overlaps a declared coherent range.
-    pub(super) fn coherent_core(
-        &self,
-        address: u64,
-        size: usize,
-    ) -> Option<&fujimod_emulator_cpu_unicorn::aprofile::Core> {
-        let end = address.saturating_add(size as u64);
-        if self.coherent.is_empty() || !self.coherent.iter().any(|&(b, e)| address < e && b < end) {
-            return None;
-        }
-        self.cpus.iter().find_map(|cpu| cpu.counted())
-    }
-    pub(super) fn memory_pointer(
-        &self,
-        address: u64,
-        size: usize,
-        permissions: u32,
-    ) -> Result<*mut u8, String> {
-        let end = address
-            .checked_add(size as u64)
-            .ok_or("Physical memory extent overflow")?;
-        if let Some(view) = &self.frozen_nor {
-            let base = fujimod_emulator_xp4_storage::storage::FLASH;
-            if address < base + view.len() as u64 && base < end {
-                if address < base
-                    || end > base + view.len() as u64
-                    || permissions == 0
-                    || permissions & 2 != 0
-                {
-                    return Err("Protected immutable NOR physical memory".into());
-                }
-                return Ok(unsafe { view.as_ptr().add((address - base) as usize).cast_mut() });
-            }
-        }
-        if let Some(view) = &self.executable_nor {
-            let base = fujimod_emulator_xp4_storage::storage::FLASH + view.offset() as u64;
-            if address < base + view.len() as u64 && base < end {
-                if address < base
-                    || end > base + view.len() as u64
-                    || permissions == 0
-                    || permissions & 2 != 0
-                {
-                    return Err("Protected executable NOR physical memory".into());
-                }
-                return Ok(unsafe { view.as_ptr().add((address - base) as usize).cast_mut() });
-            }
-        }
-        let low = unsafe { (*self.state.get()).low_alias }.map(|index| &self.memory[index]);
-        if let Some(window) = low
-            && end <= window.data.len() as u64
-        {
-            if window.permissions & permissions != permissions {
-                return Err("Protected ARM32 physical memory".into());
-            }
-            return Ok(unsafe { window.data.as_ptr().add(address as usize) });
-        }
-        if end <= self.ram.len() as u64 {
-            return Ok(unsafe { self.ram.as_ptr().add(address as usize) });
-        }
-        if let Some(alias) = self.dram_alias
-            && alias <= address
-            && end <= alias + self.ram.len() as u64
-        {
-            return Ok(unsafe { self.ram.as_ptr().add((address - alias) as usize) });
-        }
-        for window in &self.memory {
-            if window.base <= address && end <= window.base + window.data.len() as u64 {
-                if window.permissions & permissions != permissions {
-                    return Err("Protected ARM32 physical memory".into());
-                }
-                return Ok(unsafe { window.data.as_ptr().add((address - window.base) as usize) });
-            }
-        }
-        Err("Outside declared ARM32 physical memory".into())
-    }
 }

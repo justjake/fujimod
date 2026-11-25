@@ -1,14 +1,12 @@
 //! Common Device/Host adapter owned by the Unicorn application CPU profile.
 //! Devices receive physical RAM, guest time and IRQ lines, never CPU state.
-use super::Cluster;
-use fujimod_emulator_devices::graphics::scanout::Frame;
-use fujimod_emulator_devices::{Cx, Device, Host, Record, checkpoint::Checkpoint};
+use fujimod_emulator_devices::{Cx, Device, checkpoint::Checkpoint};
 use fujimod_emulator_ip::usb::dwc3::{self, Dwc3};
 use fujimod_emulator_xp4_io::adc::Adc;
 use fujimod_emulator_xp4_io::spi::Spi;
 use fujimod_emulator_xp4_storage::serial_link::{self, SerialLinks};
 use fujimod_emulator_xp4_storage::storage::{self, DmaController, SerialFlashController};
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeMap;
 use std::sync::{Arc, Mutex};
 
 /// A declared SPI controller as the XP4 DMA engine sees it: channels whose
@@ -166,268 +164,22 @@ impl<T: Device> Device for Connected<T> {
 }
 
 pub struct Devices {
-    nor_controller: Option<Arc<Mutex<SerialFlashController>>>,
     models: Vec<Option<Box<dyn Device>>>,
-    events: BTreeSet<(u64, usize, u64)>,
     windows: Vec<(u64, u64, usize)>,
-    /// Address-sorted copy of `windows` when none overlap, as of its length.
-    owner_index: std::cell::RefCell<(usize, Option<Vec<(u64, u64, usize)>>)>,
-    pub log: Vec<Record>,
-    prior_records: usize,
     pins: Option<fujimod_emulator_ip::socionext::gpio::SharedPins>,
     dials: BTreeMap<String, fujimod_emulator_devices::parts::encoder_input::EncoderInput>,
     adc: Option<(usize, Arc<Mutex<Adc>>)>,
     xpp_adc: Option<Arc<Mutex<fujimod_emulator_xpp::adc::Converter>>>,
     usb: Option<Arc<Mutex<Dwc3>>>,
     usb_presence: Option<Arc<std::sync::atomic::AtomicBool>>,
-    pub frames: BTreeMap<usize, Frame>,
-    pub outputs: BTreeMap<usize, serde_json::Value>,
     /// Single words owned by a declared model inside another block's range.
     carved: Vec<(u64, u64)>,
-    /// The model the last access reached.
-    last_access: Option<usize>,
-    /// Whether the last access was a stable status read (`Device::read_stable`).
-    last_read_stable: bool,
-    /// Epoch of the serial-flash array and its controller's read state, when this board has them.
-    nor_epoch: Option<Arc<std::sync::atomic::AtomicU64>>,
     /// Declared SPI controllers the XP4 DMA engine can move words through,
     /// whichever of the two is declared first.
     serial_links: SerialLinks,
 }
-const CHECKPOINT_KIND: &str = "xp4-devices-v1";
 
-#[derive(serde::Serialize, serde::Deserialize)]
-#[serde(deny_unknown_fields)]
-struct DeviceState {
-    windows: Vec<(u64, u64, usize)>,
-    events: BTreeSet<(u64, usize, u64)>,
-    log: Vec<Record>,
-    prior_records: usize,
-    outputs: BTreeMap<usize, serde_json::Value>,
-    frames: Vec<(usize, u64, u32, u32)>,
-    usb_present: Option<bool>,
-    nor_epoch: Option<u64>,
-}
 
-impl Devices {
-    pub fn checkpoint(&self) -> Result<Checkpoint, String> {
-        let mut children = Vec::with_capacity(self.models.len());
-        let mut errors = Vec::new();
-        for (index, model) in self.models.iter().enumerate() {
-            let model = model.as_ref().ok_or("XP4 device is in use")?;
-            match model.checkpoint() {
-                Ok(saved) => children.push(saved),
-                Err(error) => errors.push(format!("device {index} ({}): {error}", model.name())),
-            }
-        }
-        if !errors.is_empty() {
-            return Err(errors.join("; "));
-        }
-        let state = DeviceState {
-            windows: self.windows.clone(),
-            events: self.events.clone(),
-            log: self.log.clone(),
-            prior_records: self.prior_records,
-            outputs: self.outputs.clone(),
-            frames: self
-                .frames
-                .values()
-                .map(|frame| (frame.output, frame.sequence, frame.width, frame.height))
-                .collect(),
-            usb_present: self
-                .usb_presence
-                .as_ref()
-                .map(|level| level.load(std::sync::atomic::Ordering::Relaxed)),
-            nor_epoch: self
-                .nor_epoch
-                .as_ref()
-                .map(|epoch| epoch.load(std::sync::atomic::Ordering::Relaxed)),
-        };
-        Ok(Checkpoint::encode(CHECKPOINT_KIND, &state)?
-            .with_children(children)
-            .with_blobs(
-                self.frames
-                    .values()
-                    .map(|frame| Arc::from(frame.rgba.as_slice()))
-                    .collect(),
-            ))
-    }
-
-    pub fn validate_checkpoint(&self, saved: &Checkpoint) -> Result<(), String> {
-        let state: DeviceState = saved.decode(CHECKPOINT_KIND)?;
-        if state.windows != self.windows
-            || saved.children().len() != self.models.len()
-            || state.usb_present.is_some() != self.usb_presence.is_some()
-            || state.nor_epoch.is_some() != self.nor_epoch.is_some()
-            || state
-                .events
-                .iter()
-                .any(|(_, node, _)| *node >= self.models.len())
-            || state.frames.len() != saved.blobs().len()
-            || state.frames.windows(2).any(|row| row[0].0 >= row[1].0)
-            || state
-                .frames
-                .iter()
-                .zip(saved.blobs())
-                .any(|((_, _, w, h), blob)| {
-                    usize::try_from(u64::from(*w) * u64::from(*h))
-                        .ok()
-                        .and_then(|pixels| pixels.checked_mul(4))
-                        != Some(blob.len())
-                })
-        {
-            return Err("XP4 checkpoint device graph or frame geometry differs".into());
-        }
-        for (model, child) in self.models.iter().zip(saved.children()) {
-            let model = model.as_ref().ok_or("XP4 device is in use")?;
-            model
-                .validate_checkpoint(child)
-                .map_err(|error| format!("{}: {error}", model.name()))?;
-        }
-        Ok(())
-    }
-
-    pub fn restore_checkpoint(&mut self, saved: &Checkpoint) -> Result<(), String> {
-        self.validate_checkpoint(saved)?;
-        let state: DeviceState = saved.decode(CHECKPOINT_KIND)?;
-        for (model, child) in self.models.iter_mut().zip(saved.children()) {
-            model
-                .as_mut()
-                .ok_or("XP4 device is in use")?
-                .restore_checkpoint(child)?;
-        }
-        self.events = state.events;
-        self.log = state.log;
-        self.prior_records = state.prior_records;
-        self.outputs = state.outputs;
-        self.frames = state
-            .frames
-            .into_iter()
-            .zip(saved.blobs())
-            .map(|((output, sequence, width, height), rgba)| {
-                (
-                    output,
-                    Frame {
-                        output,
-                        sequence,
-                        width,
-                        height,
-                        rgba: rgba.to_vec(),
-                    },
-                )
-            })
-            .collect();
-        if let Some((presence, saved)) = self.usb_presence.as_ref().zip(state.usb_present) {
-            presence.store(saved, std::sync::atomic::Ordering::Relaxed);
-        }
-        if let Some((epoch, saved)) = self.nor_epoch.as_ref().zip(state.nor_epoch) {
-            epoch.store(saved, std::sync::atomic::Ordering::Relaxed);
-        }
-        Ok(())
-    }
-}
-
-struct PhysicalHost<'a> {
-    cluster: &'a Cluster,
-    events: &'a mut BTreeSet<(u64, usize, u64)>,
-    log: &'a mut Vec<Record>,
-    prior_records: usize,
-    frames: &'a mut BTreeMap<usize, Frame>,
-    outputs: &'a mut BTreeMap<usize, serde_json::Value>,
-}
-impl Host for PhysicalHost<'_> {
-    fn now(&self) -> u64 {
-        unsafe { (*self.cluster.state.get()).ticks }
-    }
-    fn schedule(&mut self, device: usize, at: u64, token: u64) {
-        self.events.insert((at, device, token));
-    }
-    fn set_irq(&mut self, line: u32, level: bool) {
-        unsafe {
-            (*self.cluster.state.get())
-                .gic
-                .set_line(line as usize, level);
-        }
-    }
-    /// An edge on a shared interrupt line; private lines below 32 are not wired.
-    fn raise_irq(&mut self, _cpu: usize, line: u32) -> Result<(), String> {
-        if line < 32 {
-            return Err("Per-core interrupt input is not wired for ARMv7-A".into());
-        }
-        unsafe { (*self.cluster.state.get()).gic.pulse(line as usize) };
-        Ok(())
-    }
-    // Applied once the MMU is off, as retained TLB entries keep the ROM
-    // page table in the old low window until then.
-    fn select_memory(&mut self, decoder: usize, choice: usize) -> Result<(), String> {
-        let state = unsafe { &mut *self.cluster.state.get() };
-        if (decoder, choice) != (0, 1) || state.low_alias.is_none() || state.remap_pending {
-            return Err("Unsupported ARMv7-A memory decoder selection".into());
-        }
-        state.remap_pending = true;
-        Ok(())
-    }
-    fn ram_read(&self, address: u64, out: &mut [u8]) -> Result<(), String> {
-        let source = self.cluster.memory_pointer(address, out.len(), 1)?;
-        unsafe {
-            if let Some(guard) = &mut (*self.cluster.state.get()).driver_guard {
-                guard.model_access(address, out.len() as u64, false)?;
-            }
-            if let Some(core) = self.cluster.coherent_core(address, out.len()) {
-                return core.coherent_device_read(address, out);
-            }
-            std::ptr::copy_nonoverlapping(source, out.as_mut_ptr(), out.len());
-        }
-        Ok(())
-    }
-    fn ram_write(&mut self, address: u64, bytes: &[u8]) -> Result<(), String> {
-        let target = self.cluster.memory_pointer(address, bytes.len(), 2)?;
-        unsafe {
-            if let Some(guard) = &mut (*self.cluster.state.get()).driver_guard {
-                guard.model_access(address, bytes.len() as u64, true)?;
-            }
-            match self.cluster.coherent_core(address, bytes.len()) {
-                Some(core) => core.coherent_device_write(address, bytes)?,
-                None => std::ptr::copy_nonoverlapping(bytes.as_ptr(), target, bytes.len()),
-            }
-            let state = &mut *self.cluster.state.get();
-            for monitor in &mut state.exclusive {
-                if monitor.is_some_and(|(a, n)| {
-                    a < address + bytes.len() as u64 && address < a + n as u64
-                }) {
-                    *monitor = None;
-                }
-            }
-            state.cache_dirty = true;
-            let skew = (address & 0xfff) as usize;
-            let first = address & !0xfff;
-            let last = (address + bytes.len() as u64 - 1) & !0xfff;
-            let page_pointer = (target as usize).wrapping_sub(skew);
-            for page in (first..=last).step_by(0x1000) {
-                state
-                    .dirty_pages
-                    .insert(page, page_pointer.wrapping_add((page - first) as usize));
-            }
-        }
-        Ok(())
-    }
-    fn scanout(&mut self, frame: Frame) -> Result<(), String> {
-        self.frames.insert(frame.output, frame);
-        Ok(())
-    }
-    fn output_status(&mut self, output: usize, state: serde_json::Value) -> Result<(), String> {
-        if state["active"] != true {
-            self.frames.remove(&output);
-        }
-        self.outputs.insert(output, state);
-        Ok(())
-    }
-    fn record(&mut self, record: Record) {
-        if self.prior_records + self.log.len() < 65536 {
-            self.log.push(record);
-        }
-    }
-}
 impl Devices {
     pub fn byte_i2c(&mut self, input: super::definition::ByteI2c) -> Result<(), String> {
         if !(32..512).contains(&input.irq)
@@ -455,75 +207,6 @@ impl Devices {
         Ok(())
     }
 
-    pub fn set_adc_input(
-        &mut self,
-        c: &Cluster,
-        channel: usize,
-        sample: u16,
-    ) -> Result<(), String> {
-        if let Some(adc) = &self.xpp_adc {
-            return adc.lock().unwrap().set_input(channel, sample);
-        }
-        let (id, adc) = self.adc.as_ref().ok_or("XP4 ADC inputs are not wired")?;
-        let mut host = PhysicalHost {
-            cluster: c,
-            events: &mut self.events,
-            log: &mut self.log,
-            prior_records: self.prior_records,
-            frames: &mut self.frames,
-            outputs: &mut self.outputs,
-        };
-        adc.lock()
-            .unwrap()
-            .set_input(&mut Cx::new(&mut host, 0, 0, *id), channel, sample)
-    }
-    /// Queue a contact script on the touch panel of the byte I2C bus.
-    pub fn touch(
-        &mut self,
-        now: u64,
-        script: &[fujimod_emulator_devices::parts::touch_input::ContactInput],
-    ) -> Result<(), String> {
-        let panel = self
-            .models
-            .iter_mut()
-            .flatten()
-            .find_map(|m| m.touch_panel_mut())
-            .ok_or("XP4 touch panel is not wired")?;
-        panel.touch(now, script)
-    }
-    /// Ticks between touch reports.
-    pub fn touch_period(&self) -> Result<u64, String> {
-        self.models
-            .iter()
-            .flatten()
-            .find_map(|m| m.touch_panel())
-            .ok_or("XP4 touch panel is not wired")?
-            .touch_period()
-    }
-    pub fn set_gpio_input(&mut self, port: usize, pin: usize, high: bool) -> Result<(), String> {
-        if port >= 16 || pin >= 16 {
-            return Err("Invalid XP4 external GPIO pin".into());
-        }
-        self.pins
-            .as_ref()
-            .ok_or("XP4 GPIO inputs are not wired")?
-            .lock()
-            .unwrap()
-            .set_input(port, pin, high);
-        Ok(())
-    }
-    pub fn dial(
-        &self,
-        name: &str,
-    ) -> Result<&fujimod_emulator_devices::parts::encoder_input::EncoderInput, String> {
-        self.dials
-            .get(name)
-            .ok_or_else(|| format!("No XP4 command dial named {name}"))
-    }
-    pub fn gpio_registers(&self) -> Option<Vec<[u32; 8]>> {
-        let pins = self.pins.as_ref()?.lock().unwrap();
-        Some((0..16).map(|port| pins.registers(port)).collect())
-    }
     pub fn gpio(
         &mut self,
         base: u64,
@@ -711,40 +394,6 @@ impl Devices {
         self.windows.extend(ranges.map(|(a, b)| (a, b, id)));
         Ok(())
     }
-    fn usb_model(&self) -> Result<std::sync::MutexGuard<'_, Dwc3>, String> {
-        Ok(self
-            .usb
-            .as_ref()
-            .ok_or("DWC3 is not wired")?
-            .lock()
-            .unwrap())
-    }
-    pub fn usb_link(&self, now: u64, connected: bool) -> Result<(), String> {
-        self.usb_model()?.link(now, connected)?;
-        // The condition strap the stock USB task reads follows the cable.
-        if let Some(presence) = &self.usb_presence {
-            presence.store(connected, std::sync::atomic::Ordering::SeqCst);
-        }
-        Ok(())
-    }
-    pub fn usb_reset(&self, now: u64) -> Result<(), String> {
-        self.usb_model()?.bus_reset(now)
-    }
-    pub fn usb_transaction(
-        &self,
-        now: u64,
-        endpoint: usize,
-        setup: bool,
-        out: Option<Vec<u8>>,
-    ) -> Result<u64, String> {
-        self.usb_model()?.transaction(now, endpoint, setup, out)
-    }
-    pub fn usb_reply(&self, id: u64) -> Result<Option<dwc3::Reply>, String> {
-        Ok(self.usb_model()?.reply(id).cloned())
-    }
-    pub fn usb_consume(&self, id: u64) -> Result<(), String> {
-        self.usb_model()?.consume_reply(id)
-    }
 
     pub fn dmp(&mut self, base: u64, irq: u32) -> Result<(), String> {
         if irq >= 512
@@ -841,23 +490,6 @@ impl Devices {
         self.models.push(Some(Box::new(model)));
         self.windows.push((base, base + 0x1000, id));
         Ok(())
-    }
-    /// The medium in the `host`th SD card slot (declaration order), once the host is idle.
-    pub fn card_medium(
-        &self,
-        host: usize,
-    ) -> Result<fujimod_emulator_devices::parts::sd_card::Card, String> {
-        let slot = self
-            .models
-            .iter()
-            .flatten()
-            .filter_map(|model| model.card_slot())
-            .nth(host)
-            .ok_or("No SD card slot with that index")?;
-        if slot.busy() {
-            return Err("SD host is busy; the medium is not at rest".into());
-        }
-        Ok(slot.card().clone())
     }
     pub fn sd_clocks(&mut self, words: &[(u64, u64)]) -> Result<(), String> {
         if words.iter().any(|&(address, _)| {
@@ -1395,25 +1027,15 @@ impl Devices {
     }
     pub fn empty() -> Self {
         Self {
-            nor_controller: None,
             models: vec![],
-            events: Default::default(),
             windows: vec![],
-            owner_index: Default::default(),
-            log: vec![],
-            prior_records: 0,
             pins: None,
             dials: BTreeMap::new(),
             adc: None,
             xpp_adc: None,
             usb: None,
             usb_presence: None,
-            frames: BTreeMap::new(),
-            outputs: BTreeMap::new(),
             carved: Vec::new(),
-            last_access: None,
-            last_read_stable: false,
-            nor_epoch: None,
             serial_links: SerialLinks::default(),
         }
     }
@@ -1527,26 +1149,6 @@ impl Devices {
         self.models.push(Some(Box::new(model)));
         Ok(())
     }
-    /// The serial-flash epoch: completed NOR mutations and changes of the controller's mapped-read state.
-    pub fn nor_epoch(&self) -> Option<Arc<std::sync::atomic::AtomicU64>> {
-        self.nor_epoch.clone()
-    }
-    pub fn partition_nor_range(&mut self, offset: usize, bytes: usize) {
-        let start = storage::FLASH + offset as u64;
-        let end = start + bytes as u64;
-        let mut tail = None;
-        for (lo, hi, id) in &mut self.windows {
-            if *lo == storage::FLASH && *hi == storage::FLASH + storage::FLASH_SIZE {
-                tail = Some((end, *hi, *id));
-                *hi = start;
-            }
-        }
-        if let Some(window) = tail {
-            self.windows.push(window);
-        }
-        self.windows.retain(|(lo, hi, _)| lo < hi);
-        self.owner_index = Default::default();
-    }
     pub fn storage(
         jedec: u32,
         routes: Vec<u32>,
@@ -1562,14 +1164,7 @@ impl Devices {
         strict_backing: bool,
         erased_ranges: Vec<storage::ErasedRange>,
         audio: Option<storage::AudioPacing>,
-    ) -> Result<
-        (
-            Self,
-            Option<storage::ImmutableView>,
-            Option<storage::ExecutableView>,
-        ),
-        String,
-    > {
+    ) -> Result<Self, String> {
         let routes: [u32; 16] = routes
             .try_into()
             .map_err(|_| "XP4 DMA requires 16 physical IRQ routes")?;
@@ -1589,26 +1184,12 @@ impl Devices {
                 page_ticks: geometry.3,
             },
         )?;
-        if let Some(prefix) = prefix {
-            nor = nor.with_immutable_prefix(prefix)?;
-        }
-        if let Some(range) = executable {
-            nor = nor.with_executable_range(range)?;
-        }
-        if write_protect {
-            nor = nor.with_write_protect();
-        }
-        if strict_backing {
-            nor = nor.with_strict_backing();
-        }
-        if !erased_ranges.is_empty() {
-            nor = nor.with_erased_ranges(erased_ranges)?;
-        }
-        if !write_ranges.is_empty() {
-            nor = nor.with_write_ranges(write_ranges)?;
-        }
-        let view = nor.immutable_view();
-        let executable_view = nor.executable_view();
+        if let Some(prefix) = prefix { nor = nor.with_immutable_prefix(prefix)?; }
+        if let Some(range) = executable { nor = nor.with_executable_range(range)?; }
+        if write_protect { nor = nor.with_write_protect(); }
+        if strict_backing { nor = nor.with_strict_backing(); }
+        if !erased_ranges.is_empty() { nor = nor.with_erased_ranges(erased_ranges)?; }
+        if !write_ranges.is_empty() { nor = nor.with_write_ranges(write_ranges)?; }
         let port = storage::try_port_from_nor(nor)?;
         let serial_links = SerialLinks::default();
         let mut dma = DmaController::new(port.clone(), routes)
@@ -1634,20 +1215,16 @@ impl Devices {
         let pad = controller.pad_register();
         let controller = Arc::new(Mutex::new(controller));
         let mut devices = Self {
-            nor_controller: Some(controller.clone()),
-            models: vec![Some(Box::new(Connected(controller))), Some(Box::new(dma))],
-            events: Default::default(),
-            log: Vec::new(),
-            prior_records: 0,
+            models: vec![
+                Some(Box::new(Connected(controller))),
+                Some(Box::new(dma)),
+            ],
             pins: None,
             dials: BTreeMap::new(),
             adc: None,
             xpp_adc: None,
             usb: None,
             usb_presence: None,
-            frames: BTreeMap::new(),
-            outputs: BTreeMap::new(),
-            owner_index: Default::default(),
             windows: vec![
                 (storage::CONTROLLER, storage::CONTROLLER + 0x100, 0),
                 (storage::FLASH, storage::FLASH + storage::FLASH_SIZE, 0),
@@ -1656,9 +1233,6 @@ impl Devices {
                 (0xfff4a800, 0xfff4a880, 1),
             ],
             carved: Vec::new(),
-            last_access: None,
-            last_read_stable: false,
-            nor_epoch: Some(port.lock().unwrap().epoch()),
             serial_links,
         };
         if let Some(pad) = pad {
@@ -1674,7 +1248,7 @@ impl Devices {
             devices.windows.push((pad, pad + 4, 0));
             devices.carved.push((pad, pad + 4));
         }
-        Ok((devices, view, executable_view))
+        Ok(devices)
     }
     /// X-Processor Pro flash controller, its read aperture and the PL330 that
     /// copies from it. The flash contents are an explicit board input.
@@ -2310,349 +1884,27 @@ impl Devices {
         self.models.push(Some(Box::new(model)));
         Ok(())
     }
-    fn owner(&self, address: u64, size: u32) -> Option<usize> {
-        let end = address + u64::from(size);
-        let mut index = self.owner_index.borrow_mut();
-        if index.0 != self.windows.len() {
-            // Windows only grow. Without overlaps the window holding an
-            // address is the last one starting at or below it.
-            let mut sorted: Vec<_> = self.windows.clone();
-            sorted.sort_unstable();
-            let disjoint = sorted.windows(2).all(|pair| pair[0].1 <= pair[1].0);
-            *index = (self.windows.len(), disjoint.then_some(sorted));
-        }
-        match &index.1 {
-            Some(sorted) => {
-                let at = sorted.partition_point(|&(lo, _, _)| lo <= address);
-                at.checked_sub(1)
-                    .map(|at| sorted[at])
-                    .filter(|&(_, hi, _)| end <= hi)
-                    .map(|x| x.2)
-            }
-            None => self
-                .windows
-                .iter()
-                .find(|&&(lo, hi, _)| lo <= address && end <= hi)
-                .map(|x| x.2),
-        }
-    }
-    pub fn owns(&self, address: u64, size: u32) -> bool {
-        self.owner(address, size).is_some()
-    }
     pub fn guard_windows(&self) -> Vec<(u64, u64)> {
         self.windows.iter().map(|&(lo, hi, _)| (lo, hi)).collect()
     }
-    pub fn access(
-        &mut self,
-        c: &Cluster,
-        core: usize,
-        address: u64,
-        size: u32,
-        write: bool,
-        value: u64,
-    ) -> Result<Option<(u64, bool)>, String> {
-        self.last_read_stable = false;
-        let Some(id) = self.owner(address, size) else {
-            return Ok(None);
-        };
-        self.last_access = Some(id);
-        let mut model = self.models[id].take().unwrap();
-        let mut host = PhysicalHost {
-            cluster: c,
-            events: &mut self.events,
-            log: &mut self.log,
-            prior_records: self.prior_records,
-            frames: &mut self.frames,
-            outputs: &mut self.outputs,
-        };
-        let mut cx = Cx::new(&mut host, core, 0, id);
-        let reply = if write {
-            model.write(&mut cx, address, size as u8, value);
-            0
-        } else {
-            model.read(&mut cx, address, size as u8)
-        };
-        let unmodeled = cx.is_unmodeled();
-        let refusal = cx.take_refusal();
-        self.last_read_stable =
-            !write && !unmodeled && refusal.is_none() && model.read_stable(address, size as u8);
-        self.models[id] = Some(model);
-        if let Some(reason) = refusal
-            && !unmodeled
-        {
-            return Err(reason);
-        }
-        Ok(Some((reply, unmodeled)))
-    }
-    /// Whether the last access was a stable status read.
-    pub fn last_read_stable(&self) -> bool {
-        self.last_read_stable
-    }
-    pub fn next_deadline(&self, now: u64) -> Option<u64> {
-        self.events
-            .iter()
-            .next()
-            .map(|e| e.0)
-            .into_iter()
-            .chain(
-                self.models
-                    .iter()
-                    .flatten()
-                    .filter_map(|m| m.next_deadline(now)),
-            )
-            .min()
-    }
-    /// The earliest deadline an access to one model can have created: that model's own and the scheduled events'.
-    pub fn deadline_after_access(&self, now: u64) -> Option<u64> {
-        let own = self
-            .last_access
-            .and_then(|id| self.models[id].as_ref())
-            .and_then(|m| m.next_deadline(now));
-        [self.events.first().map(|e| e.0), own]
-            .into_iter()
-            .flatten()
-            .min()
-    }
-    pub fn due(&mut self, c: &Cluster) -> Result<(), String> {
-        let now = unsafe { (*c.state.get()).ticks };
-        for _ in 0..64 {
-            let event = self.events.first().copied().filter(|e| e.0 <= now);
-            let id = event.map(|e| e.1).or_else(|| {
-                self.models.iter().position(|m| {
-                    m.as_ref()
-                        .is_some_and(|m| m.next_deadline(now).is_some_and(|at| at <= now))
-                })
-            });
-            let Some(id) = id else {
-                return Ok(());
-            };
-            let mut model = self.models[id].take().unwrap();
-            if let Some(e) = event {
-                self.events.remove(&e);
-            }
-            let mut host = PhysicalHost {
-                cluster: c,
-                events: &mut self.events,
-                log: &mut self.log,
-                prior_records: self.prior_records,
-                frames: &mut self.frames,
-                outputs: &mut self.outputs,
-            };
-            let mut cx = Cx::new(&mut host, 0, 0, id);
-            if let Some((_, _, token)) = event {
-                model.event(&mut cx, token);
-            } else {
-                model.advance(&mut cx);
-            }
-            let refusal = cx.take_refusal();
-            self.models[id] = Some(model);
-            if let Some(reason) = refusal {
-                return Err(reason);
-            }
-        }
-        Err("ARMv7-A device made no deadline progress".into())
-    }
-    pub fn set_scene(&mut self, input: &serde_json::Value) -> Result<(), String> {
-        let mut consumed = false;
-        for device in self.models.iter_mut().flatten() {
-            consumed |= device.set_scene(input)?;
-        }
-        if !consumed {
-            return Err("no device consumes scene input".into());
-        }
-        Ok(())
-    }
 
-    pub fn reset_nor_program_coverage(&self) -> Result<(), String> {
-        self.nor_controller
-            .as_ref()
-            .ok_or("Board has no XP4 NOR")?
-            .lock()
-            .map_err(|_| "NOR controller lock poisoned")?
-            .reset_nor_program_coverage()
-    }
-    pub fn nor_medium(&self) -> Result<Vec<u8>, String> {
-        self.nor_controller
-            .as_ref()
-            .ok_or("Board has no XP4 NOR")?
-            .lock()
-            .map_err(|_| "NOR controller lock poisoned")?
-            .nor_medium()
-    }
-    pub fn snapshots(&self) -> std::collections::BTreeMap<String, String> {
-        let mut counts = BTreeMap::new();
-        for model in self.models.iter().flatten() {
-            *counts.entry(model.name()).or_insert(0usize) += 1;
-        }
-        let mut indices = BTreeMap::new();
-        self.models
-            .iter()
-            .flatten()
-            .map(|model| {
-                let name = model.name();
-                let key = if counts[name] == 1 {
-                    name.to_owned()
-                } else {
-                    let index = indices.entry(name).or_insert(0usize);
-                    let key = format!("{name}#{index}");
-                    *index += 1;
-                    key
-                };
-                (key, model.save().to_string())
-            })
-            .collect()
-    }
 }
 
-impl Cluster {
-    pub fn devices_due(&self) -> Result<(), String> {
-        if unsafe { (*self.state.get()).ticks < (*self.state.get()).device_scan_at } {
-            return Ok(());
-        }
-        let devices = unsafe { (*self.state.get()).devices.take() };
-        if let Some(mut devices) = devices {
-            let result = devices.due(self);
-            let state = unsafe { &mut *self.state.get() };
-            state.device_scan_at = devices.next_deadline(state.ticks).unwrap_or(u64::MAX);
-            state.devices = Some(devices);
-            if self
-                .executable_nor
-                .as_ref()
-                .is_some_and(|view| view.dirty())
-            {
-                state.cache_dirty = true;
-                state.exclusive.fill(None);
-            }
-            result?;
-        }
-        Ok(())
-    }
-    pub fn device_access(
-        &self,
-        core: usize,
-        address: u64,
-        size: u32,
-        write: bool,
-        value: u64,
-    ) -> Result<Option<(u64, bool)>, String> {
-        let devices = unsafe { (*self.state.get()).devices.take() };
-        let Some(mut devices) = devices else {
-            return Ok(None);
-        };
-        let result = devices.access(self, core, address, size, write, value);
-        let state = unsafe { &mut *self.state.get() };
-        state.device_scan_at = state.device_scan_at.min(
-            devices
-                .deadline_after_access(state.ticks)
-                .unwrap_or(u64::MAX),
-        );
-        state.devices = Some(devices);
-        result
-    }
-    pub fn flush_dma(&self) -> Result<(), String> {
-        let state = unsafe { &mut *self.state.get() };
-        if state.remap_ready
-            && let Some(index) = state.low_alias.take()
-        {
-            let low = self.memory[index].data.len();
-            for cpu in &self.cpus {
-                cpu.unmap(0, low)?;
-                unsafe {
-                    cpu.map_backing(
-                        0,
-                        low,
-                        7,
-                        std::ptr::NonNull::new(self.ram.as_ptr()).unwrap(),
-                    )
-                }?;
-            }
-            state.remap_pending = false;
-            state.remap_ready = false;
-        }
-        if unsafe { (*self.state.get()).cache_dirty } {
-            let state = unsafe { &mut *self.state.get() };
-            let all = std::mem::take(&mut state.dirty_all);
-            let pages = std::mem::take(&mut state.dirty_pages);
-            state.cache_dirty = false;
-            if let Some(view) = &self.executable_nor {
-                unsafe {
-                    view.clear_dirty();
-                }
-            }
-            if all || pages.is_empty() {
-                for cpu in &self.cpus {
-                    cpu.invalidate_code(None)?;
-                }
-            } else {
-                // The engine drops only translations of the written bytes.
-                let mut runs: Vec<(u64, usize, usize)> = Vec::new();
-                for (page, pointer) in pages {
-                    match runs.last_mut() {
-                        Some(run)
-                            if run.0 + run.2 as u64 == page
-                                && run.1.wrapping_add(run.2) == pointer =>
-                        {
-                            run.2 += 0x1000;
-                        }
-                        _ => runs.push((page, pointer, 0x1000)),
-                    }
-                }
-                for (physical, pointer, bytes) in runs {
-                    let Some(backing) = std::ptr::NonNull::new(pointer as *mut u8) else {
-                        continue;
-                    };
-                    for cpu in &self.cpus {
-                        if unsafe { cpu.backing_written(physical, backing, bytes) }.is_err() {
-                            // Not a declared backing mapping: drop everything.
-                            for cpu in &self.cpus {
-                                cpu.invalidate_code(None)?;
-                            }
-                            return Ok(());
-                        }
-                    }
-                }
-            }
-        }
-        Ok(())
-    }
-}
 
 #[cfg(test)]
 mod io_group_admission_tests {
     use super::*;
     #[test]
     fn overflow_and_duplicate_windows_refuse_before_mutating_devices() {
-        let mut devices = Devices::empty();
-        let before = (
-            devices.models.len(),
-            devices.windows.clone(),
-            devices.snapshots(),
-        );
-        assert!(devices.io_groups(u64::MAX - 0x9f).is_err());
-        assert_eq!(
-            (
-                devices.models.len(),
-                devices.windows.clone(),
-                devices.snapshots()
-            ),
-            before
-        );
+        let mut devices=Devices::empty();
+        let before=(devices.models.len(),devices.windows.clone());
+        assert!(devices.io_groups(u64::MAX-0x9f).is_err());
+        assert_eq!((devices.models.len(),devices.windows.clone()),before);
         devices.io_groups(0xfff42000).unwrap();
-        let before = (
-            devices.models.len(),
-            devices.windows.clone(),
-            devices.snapshots(),
-        );
-        for base in [0xfff42000, 0xfff41fff, 0xfff4209f] {
+        let before=(devices.models.len(),devices.windows.clone());
+        for base in [0xfff42000,0xfff41fff,0xfff4209f] {
             assert!(devices.io_groups(base).is_err());
-            assert_eq!(
-                (
-                    devices.models.len(),
-                    devices.windows.clone(),
-                    devices.snapshots()
-                ),
-                before
-            );
+            assert_eq!((devices.models.len(),devices.windows.clone()),before);
         }
     }
 }
@@ -2662,37 +1914,15 @@ mod decompressor_admission_tests {
     use super::*;
     #[test]
     fn overflow_and_overlap_refuse_before_mutation() {
-        let mut devices = Devices::empty();
-        let before = (
-            devices.models.len(),
-            devices.windows.clone(),
-            devices.snapshots(),
-        );
-        assert!(devices.decompressor(u64::MAX - 0x6b, 128).is_err());
-        assert_eq!(
-            (
-                devices.models.len(),
-                devices.windows.clone(),
-                devices.snapshots()
-            ),
-            before
-        );
-        devices.decompressor(0xfff79000, 128).unwrap();
-        let before = (
-            devices.models.len(),
-            devices.windows.clone(),
-            devices.snapshots(),
-        );
-        for base in [0xfff79000, 0xfff78fff, 0xfff7906b] {
-            assert!(devices.decompressor(base, 128).is_err());
-            assert_eq!(
-                (
-                    devices.models.len(),
-                    devices.windows.clone(),
-                    devices.snapshots()
-                ),
-                before
-            );
+        let mut devices=Devices::empty();
+        let before=(devices.models.len(),devices.windows.clone());
+        assert!(devices.decompressor(u64::MAX-0x6b,128).is_err());
+        assert_eq!((devices.models.len(),devices.windows.clone()),before);
+        devices.decompressor(0xfff79000,128).unwrap();
+        let before=(devices.models.len(),devices.windows.clone());
+        for base in [0xfff79000,0xfff78fff,0xfff7906b] {
+            assert!(devices.decompressor(base,128).is_err());
+            assert_eq!((devices.models.len(),devices.windows.clone()),before);
         }
     }
 }

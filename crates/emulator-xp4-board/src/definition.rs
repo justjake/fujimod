@@ -25,24 +25,9 @@ pub struct StandaloneDma {
     pub timing_profile: String,
 }
 
-/// Physical ranges where the processor's data cache is modeled against bus
-/// masters (display, GPU): a store reaches them only once cleaned.
-#[derive(Clone, Debug, Deserialize)]
-#[serde(deny_unknown_fields)]
-pub struct CoherentRanges {
-    pub line_bytes: u32,
-    /// Half-open `[begin, end)` physical ranges.
-    pub ranges: Vec<(u64, u64)>,
-}
-
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Definition {
-    /// Declared data-cache coherence ranges; off when absent. Every core
-    /// shares one model. Selects counted execution and is refused for a
-    /// definition that keeps the per-instruction hook.
-    #[serde(default)]
-    pub coherent_ranges: Option<CoherentRanges>,
     #[serde(default)]
     pub discovery_tx_receiver: Option<DiscoveryTxReceiver>,
     /// Explicit byte I2C controllers and their declared external peers.
@@ -54,11 +39,7 @@ pub struct Definition {
     #[serde(default)]
     pub memory_regions: Vec<super::memory::Region>,
     #[serde(default)]
-    pub initial_registers: Vec<Vec<(Register, u64)>>,
-    /// Explicit Cortex-A7 SCR/NSACR inputs, one per core. Empty preserves
-    /// backend defaults; this declaration is not a physical reset measurement.
-    #[serde(default)]
-    pub initial_security: Vec<InitialSecurity>,
+    pub initial_registers: Vec<Vec<(fujimod_emulator_cpu::Register, u64)>>,
     #[serde(default)]
     pub labels: Vec<u32>,
     #[serde(default)]
@@ -717,14 +698,10 @@ pub struct GicCpuInitial {
 }
 
 impl GicInitial {
-    pub(super) fn apply(self, gic: &mut Gic, cores: usize) -> Result<(), String> {
-        if self.distributor_control > 1
-            || self.cpu_interfaces.len() != cores
-            || self
-                .cpu_interfaces
-                .iter()
-                .any(|cpu| cpu.control > 1 || cpu.priority_mask > 255 || cpu.binary_point > 7)
-        {
+    pub(super) fn apply(self, gic: &mut fujimod_emulator_ip_arm::gicv2::Gic, cores: usize) -> Result<(), String> {
+        if self.distributor_control > 1 || self.cpu_interfaces.len() != cores
+            || self.cpu_interfaces.iter().any(|cpu| cpu.control > 1
+                || cpu.priority_mask > 255 || cpu.binary_point > 7) {
             return Err("Invalid initial GIC registers or CPU interface count".into());
         }
         gic.access(0, true, 0, 4, true, self.distributor_control)?;

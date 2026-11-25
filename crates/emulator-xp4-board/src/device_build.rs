@@ -5,8 +5,6 @@ use super::*;
 /// The devices and the serial-flash views the processors map.
 pub(crate) struct Built {
     pub devices: Option<devices::Devices>,
-    pub frozen_nor: Option<fujimod_emulator_xp4_storage::storage::ImmutableView>,
-    pub executable_nor: Option<fujimod_emulator_xp4_storage::storage::ExecutableView>,
 }
 
 /// Build the definition's devices. `memory` holds the declared memory
@@ -166,10 +164,8 @@ pub(crate) fn build(
         if discovery_tx_receiver.is_some() && (!discovery || storage_jedec.is_none()) {
             return Err("Transmit receiver input requires discovery and XP4 storage DMA".into());
         }
-        let mut frozen_nor = None;
-        let mut executable_nor = None;
         let mut devices = if let Some(jedec) = storage_jedec {
-            let (devices, view, executable_view) = devices::Devices::storage(
+            let devices = devices::Devices::storage(
                 jedec,
                 storage_dma_routes,
                 storage_image.unwrap_or_default(),
@@ -187,8 +183,6 @@ pub(crate) fn build(
                 storage_erased_ranges,
                 storage_dma_audio,
             )?;
-            frozen_nor = view;
-            executable_nor = executable_view;
             Some(devices)
         } else if let Some(storage) = xpp_storage {
             if !storage_dma_routes.is_empty() || storage_geometry.is_some() || storage_irq.is_some()
@@ -724,5 +718,5 @@ pub(crate) fn build(
                 .get_or_insert_with(devices::Devices::empty)
                 .request_acknowledgment(ticks)?;
         }
-    Ok(Built { devices, frozen_nor, executable_nor })
+    Ok(Built { devices })
 }
