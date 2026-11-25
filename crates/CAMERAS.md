@@ -105,6 +105,10 @@ camera off and on again with its internal flash and SD card, optionally holding
 the catalog's SD-boot controls or replacing the card with a fresh one from the
 boot source.
 
+A stock boot can instead place a caller-verified image at address zero and
+start the first core at the native loader, skipping the boot ROM; the image's
+stock initialization, mod initialization and card I/O then run normally.
+
 ## Boot cache
 
 Each opened boot is saved as a portable checkpoint keyed by the firmware

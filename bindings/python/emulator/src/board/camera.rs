@@ -37,7 +37,8 @@ impl Board {
     /// Otherwise the session is already at REC or its first-start setup.
     #[staticmethod]
     #[pyo3(signature=(*, firmware, boot="stock", sd_card=None, execution_policy="exact", boot_cache=true,
-        run_to_rec=true, sd_card_present=true, sd_card_write_protected=false, sd_card_transfer_ticks=None))]
+        run_to_rec=true, sd_card_present=true, sd_card_write_protected=false, sd_card_transfer_ticks=None,
+        start="rom", image=None, image_sha256=None))]
     fn open_camera(
         firmware: String,
         boot: &str,
@@ -48,6 +49,9 @@ impl Board {
         sd_card_present: bool,
         sd_card_write_protected: bool,
         sd_card_transfer_ticks: Option<u64>,
+        start: &str,
+        image: Option<PathBuf>,
+        image_sha256: Option<String>,
     ) -> PyResult<Self> {
         let library = Library::from_env().map_err(|failure| error(failure.to_string()))?;
         let policy =
@@ -60,6 +64,32 @@ impl Board {
                 "sd_card_transfer_ticks must be positive",
             ));
         }
+        let image = match (start, image, image_sha256) {
+            ("rom", None, None) => None,
+            ("rom", _, _) => {
+                return Err(PyValueError::new_err("image requires start='loader'"));
+            }
+            ("loader", Some(path), Some(sha256)) => {
+                if sha256.len() != 64 || !sha256.bytes().all(|byte| byte.is_ascii_hexdigit()) {
+                    return Err(PyValueError::new_err(
+                        "image_sha256 must be 64 hexadecimal characters",
+                    ));
+                }
+                let bytes = std::fs::read(&path)
+                    .map_err(|failure| error(format!("{}: {failure}", path.display())))?;
+                Some(fujimod_emulator_camera::LoaderImage { bytes, sha256 })
+            }
+            ("loader", _, _) => {
+                return Err(PyValueError::new_err(
+                    "start='loader' requires image and image_sha256",
+                ));
+            }
+            (other, _, _) => {
+                return Err(PyValueError::new_err(format!(
+                    "start must be 'rom' or 'loader', not {other:?}"
+                )));
+            }
+        };
         let opened = fujimod_emulator_camera::open(
             &library,
             Request {
@@ -81,6 +111,7 @@ impl Board {
                 },
                 kept: Default::default(),
                 card_source: None,
+                image,
             },
         )
         .map_err(|failure| error(failure.to_string()))?;

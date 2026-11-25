@@ -32,6 +32,7 @@ fn request(boot: Boot, card_files: Vec<(String, PathBuf)>, cache: BootCache) -> 
         card: Default::default(),
         kept: Default::default(),
         card_source: None,
+        image: None,
     }
 }
 

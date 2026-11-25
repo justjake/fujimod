@@ -205,6 +205,10 @@ fn identity(
         }
         None => part(b"catalog-transfer-ticks"),
     }
+    if let Some(image) = &request.image {
+        part(b"ram-image");
+        part(image.sha256.to_ascii_lowercase().as_bytes());
+    }
     for (name, bytes) in card(library, request)? {
         part(name.as_bytes());
         part(&bytes);

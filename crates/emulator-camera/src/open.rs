@@ -81,6 +81,17 @@ pub struct Request {
     /// The SD card source a held power-on loads when `boot` is not itself a
     /// card boot. Kept across power-ons that start from internal flash.
     pub card_source: Option<CardSource>,
+    /// A verified image placed at address zero before execution, starting at
+    /// the native loader instead of the boot ROM.
+    pub image: Option<LoaderImage>,
+}
+
+/// A caller-verified RAM image and its SHA-256.
+#[derive(Clone)]
+pub struct LoaderImage {
+    pub bytes: Vec<u8>,
+    /// SHA-256 of `bytes`, case-insensitive.
+    pub sha256: String,
 }
 
 /// Media a power-on keeps from the camera's last use. Each part replaces what
@@ -318,6 +329,7 @@ impl Opened {
         request.run_to_rec = options.run_to_rec;
         request.cache = BootCache::Bypass;
         request.card_source = self.card_source.clone();
+        request.image = None;
         request.kept = KeptMedia {
             nand: Some(nand),
             card,
@@ -372,6 +384,12 @@ pub fn open(library: &Library, request: Request) -> Result<Opened, OpenError> {
         return Err(OpenError::at(
             Stage::BootRom,
             "an SD card boot needs the card present",
+        ));
+    }
+    if request.image.is_some() && !matches!(request.boot, Boot::Stock) {
+        return Err(OpenError::at(
+            Stage::BootRom,
+            "a RAM image starts at the loader; use a stock boot",
         ));
     }
     if !request.run_to_rec {
@@ -766,6 +784,7 @@ pub(crate) fn construct(
         card,
         kept,
         card_source,
+        image,
     } = request;
     let card_source = boot.card_source().cloned().or(card_source);
     let engine = resolved
@@ -818,6 +837,9 @@ pub(crate) fn construct(
     }
     apply_kept_media(&mut camera.session, kept)?;
     apply_card_contacts(&mut camera.session, card)?;
+    if let Some(image) = image {
+        place_loader_image(&mut camera.session, image)?;
+    }
     let holds = BootHolds {
         resolved: resolved.clone(),
         holds: boot_holds(&boot, &resolved)?,
@@ -857,6 +879,27 @@ fn apply_kept_media(session: &mut Session, kept: KeptMedia) -> Result<(), OpenEr
             .map(|_| ())
             .map_err(|error| OpenError::at(Stage::BootRom, format!("retained SD card: {error}")))?;
     }
+    Ok(())
+}
+
+/// Place a caller-verified image at address zero and start the first core at
+/// the native loader, before any instruction runs.
+fn place_loader_image(session: &mut Session, image: LoaderImage) -> Result<(), OpenError> {
+    let digest = format!("{:x}", Sha256::digest(&image.bytes));
+    if digest != image.sha256.to_ascii_lowercase() {
+        return Err(OpenError::at(
+            Stage::BootRom,
+            format!("RAM image sha256 is {digest}, not {}", image.sha256),
+        ));
+    }
+    session
+        .board
+        .write_physical(0, &image.bytes)
+        .map_err(|error| OpenError::at(Stage::BootRom, format!("RAM image: {error}")))?;
+    session
+        .board
+        .write_register(0, fujimod_emulator_cpu::arm::CORE[15], 0)
+        .map_err(|error| OpenError::at(Stage::BootRom, format!("loader entry: {error}")))?;
     Ok(())
 }
 

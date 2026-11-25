@@ -33,6 +33,7 @@ fn request(boot: Boot) -> Request {
         card: CardModel::default(),
         kept: Default::default(),
         card_source: None,
+        image: None,
     }
 }
 

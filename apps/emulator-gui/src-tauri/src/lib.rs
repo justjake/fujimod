@@ -354,6 +354,7 @@ fn open_with_builder(request: OpenCameraRequest) -> Result<(LaunchedCamera, Runn
         card: Default::default(),
         kept: Default::default(),
         card_source: None,
+        image: None,
     };
     let room = fujimod_emulator_gui::Room::loopback()?;
     let endpoint = room.endpoint().url.clone();

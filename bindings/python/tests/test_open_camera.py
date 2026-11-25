@@ -1,5 +1,6 @@
 """The camera builder's open through the Python bindings."""
 
+import hashlib
 import os
 from pathlib import Path
 
@@ -202,3 +203,38 @@ def test_a_stock_boot_cannot_power_on_holding_card_controls() -> None:
     ) as board:
         with pytest.raises(RuntimeError, match="SD card source"):
             board.power_on(hold_controls=True)
+
+
+def test_a_verified_image_starts_at_the_loader(tmp_path: Path) -> None:
+    library()
+    image = b"fujimod loader image"
+    path = tmp_path / "image.bin"
+    path.write_bytes(image)
+    digest = hashlib.sha256(image).hexdigest()
+    with Board.open_camera(
+        firmware="x70-110",
+        boot="stock",
+        execution_policy="interactive",
+        run_to_rec=False,
+        start="loader",
+        image=path,
+        image_sha256=digest,
+    ) as board:
+        assert board.status()["instructions"] == 0
+        assert board.read_physical(0, len(image)) == image
+        assert board.cpus[0].reg_read("Pc") == 0
+    with pytest.raises(RuntimeError, match="sha256"):
+        Board.open_camera(
+            firmware="x70-110",
+            boot="stock",
+            run_to_rec=False,
+            start="loader",
+            image=path,
+            image_sha256="0" * 64,
+        )
+    with pytest.raises(ValueError, match="start"):
+        Board.open_camera(firmware="x70-110", start="boot")
+    with pytest.raises(ValueError, match="requires image"):
+        Board.open_camera(firmware="x70-110", start="loader")
+    with pytest.raises(ValueError, match="image requires"):
+        Board.open_camera(firmware="x70-110", image=path, image_sha256=digest)

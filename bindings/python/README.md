@@ -112,6 +112,12 @@ session starts from internal flash with nothing held; `hold_controls=True`
 holds the catalog's SD-boot controls and starts from the card, and
 `fresh_card=True` puts the boot source's files on a new card instead.
 
+`Board.open_camera(start="loader", image=..., image_sha256=...)` places a
+caller-verified RAM image at address zero and starts the first core at the
+native loader, so the boot ROM never runs. The image must be given with a
+stock boot; `run_to_rec=False` then returns the board with the image in RAM
+before its first instruction.
+
 The checked identity catalog is available through
 `fujimod.emulator.catalog`. `resolve_reference(body_id, firmware_id)` returns a
 `ResolvedSelection` containing the resolved `Soc`, `Body`, `Firmware` and

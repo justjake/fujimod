@@ -408,6 +408,9 @@ class Board:
         sd_card_present: bool = True,
         sd_card_write_protected: bool = False,
         sd_card_transfer_ticks: int | None = None,
+        start: Literal["rom", "loader"] = "rom",
+        image: str | PathLike[str] | None = None,
+        image_sha256: str | None = None,
     ) -> Self:
         """Open a camera through the shared builder and return it at REC.
 
@@ -426,7 +429,10 @@ class Board:
         `sd_card_present` false models an empty slot, and
         `sd_card_write_protected` asserts the card's write-protect contact.
         `sd_card_transfer_ticks` replaces the catalog's guest ticks per SD
-        data transfer.
+        data transfer. `start="loader"` places a caller-verified RAM image at
+        address zero and starts the first core at the native loader before any
+        instruction runs; `image` names the image and `image_sha256` its
+        SHA-256. The boot ROM never runs for such an open.
         """
         firmware = cls._identifier(firmware, "firmware")
         if boot not in ("stock", "sd-card", "automatic-boot"):
@@ -449,7 +455,18 @@ class Board:
             raise ValueError("an automatic boot cannot stop before REC")
         if not sd_card_present and boot != "stock":
             raise ValueError("a card boot needs the card present")
+        if start not in ("rom", "loader"):
+            raise ValueError("start must be 'rom' or 'loader'")
+        if start == "loader" and (image is None or image_sha256 is None):
+            raise ValueError("start='loader' requires image and image_sha256")
+        if start == "rom" and (image is not None or image_sha256 is not None):
+            raise ValueError("image requires start='loader'")
+        if image_sha256 is not None and (
+            type(image_sha256) is not str or len(image_sha256) != 64
+        ):
+            raise ValueError("image_sha256 must be 64 hexadecimal characters")
         card = None if sd_card is None else cls._input_path(sd_card, "sd_card")
+        image_path = None if image is None else cls._input_path(image, "image")
         native = _native.Board.open_camera(
             firmware=firmware,
             boot=boot,
@@ -460,6 +477,9 @@ class Board:
             sd_card_present=sd_card_present,
             sd_card_write_protected=sd_card_write_protected,
             sd_card_transfer_ticks=sd_card_transfer_ticks,
+            start=start,
+            image=image_path,
+            image_sha256=image_sha256,
         )
         quantum = native.boot_quantum
         if type(quantum) is not int or quantum < 1:

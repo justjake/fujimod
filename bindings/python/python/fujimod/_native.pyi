@@ -87,6 +87,9 @@ class emulator:
             sd_card_present: bool = ...,
             sd_card_write_protected: bool = ...,
             sd_card_transfer_ticks: SupportsIndex | None = ...,
+            start: str = ...,
+            image: str | PathLike[str] | None = ...,
+            image_sha256: str | None = ...,
         ) -> emulator.Board: ...
         def release_holds(self, /) -> None: ...
         def power_on(
