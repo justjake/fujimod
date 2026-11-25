@@ -495,7 +495,7 @@ fn a32_code_rewritten_in_place_runs_the_new_code(base: u64) {
 }
 
 #[test]
-fn graph_mpidr_policy_preserves_interactive_exits_after_exact_runs() {
+fn graph_mpidr_policy_uses_native_reads_in_exact_and_interactive_runs() {
     let raw = crate::test_support::library()
         .open(Model::CortexA7, 1 << 20)
         .unwrap();
@@ -511,11 +511,8 @@ fn graph_mpidr_policy_preserves_interactive_exits_after_exact_runs() {
     assert_eq!(value(&cpu, arm::CORE[0]), 0x8000_0001);
 
     cpu.select_armv7a_affinity_policy(ExecutionPolicy::Interactive).unwrap();
-    assert!(matches!(run(&cpu, 0x1000, 1), Exit::BeforeInstruction(word) if word == mpidr));
-    assert_eq!(cpu.instruction_progress(), Some(0));
-
-    cpu.select_armv7a_affinity_policy(ExecutionPolicy::Exact).unwrap();
     assert!(matches!(run(&cpu, 0x1000, 1), Exit::Stopped));
+    assert_eq!(value(&cpu, arm::CORE[0]), 0x8000_0001);
     assert_eq!(cpu.instruction_progress(), Some(1));
 }
 
