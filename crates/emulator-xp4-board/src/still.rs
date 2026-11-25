@@ -173,10 +173,13 @@
 //! 0x422000): which color the firmware programs for the movie is not
 //! modeled. [`Engine::firmware_white_balance`] (opt-in, on top) first scales
 //! each channel by the tone page's channel gains (+0x088, +0x08c) relative
-//! to declared reference gains, and [`Engine::firmware_luma_bands`] (opt-in,
-//! on top) scales the chroma by the YCbCr page's luma bands
-//! (+0x258..+0x26c), both read when the pass ends
+//! to declared reference gains, [`Engine::firmware_chroma_matrix`] (opt-in,
+//! on top) passes the chroma through the 2x2 chroma matrix the YCbCr page
+//! switches on (+0x200 bit 4, +0x238, +0x23c), and
+//! [`Engine::firmware_luma_bands`] (opt-in, on top) scales the chroma by the
+//! YCbCr page's luma bands (+0x258..+0x26c), all read when the pass ends
 //! ([`FirmwareColor::with_white_balance`],
+//! [`FirmwareColor::with_chroma_matrix`],
 //! [`FirmwareColor::with_luma_bands`]).
 use fujimod_emulator_devices::{Cx, Device};
 use fujimod_emulator_xpp::development::{
@@ -762,6 +765,8 @@ pub struct Engine {
     firmware_white_balance: Option<[u32; 3]>,
     /// ... and with the YCbCr page's luma bands.
     firmware_luma_bands: bool,
+    /// ... and with the YCbCr page's 2x2 chroma matrix.
+    firmware_chroma_matrix: bool,
     state: State,
 }
 
@@ -781,6 +786,7 @@ impl Engine {
             firmware_color: false,
             firmware_white_balance: None,
             firmware_luma_bands: false,
+            firmware_chroma_matrix: false,
             state: State::default(),
         })
     }
@@ -848,6 +854,19 @@ impl Engine {
             ));
         }
         self.firmware_luma_bands = true;
+        Ok(self)
+    }
+    /// A firmware-color RECC also passes the chroma of its still bands through
+    /// the 2x2 chroma matrix of its YCbCr page, when the page switches it on
+    /// (opt-in, see the module notes).
+    pub fn firmware_chroma_matrix(mut self) -> Result<Self, String> {
+        if !self.firmware_color {
+            return Err(format!(
+                "{} chroma matrix needs the firmware color",
+                self.contract.name
+            ));
+        }
+        self.firmware_chroma_matrix = true;
         Ok(self)
     }
     /// The words of the parameter page at `page`, by their offset in it.
@@ -967,6 +986,9 @@ impl Engine {
                         color = color
                             .with_white_balance(&tone, reference)
                             .map_err(|e| format!("{name}: {e}"))?;
+                    }
+                    if self.firmware_chroma_matrix {
+                        color = color.with_chroma_matrix(&ycbcr);
                     }
                     if self.firmware_luma_bands {
                         color = color.with_luma_bands(&ycbcr);
@@ -2585,6 +2607,71 @@ mod tests {
         // The option needs the firmware color.
         let error = developing_recc().firmware_luma_bands().err();
         assert!(error.is_some_and(|e| e.contains("need the firmware color")));
+    }
+
+    /// With the chroma matrix, a band develops with the 2x2 chroma matrix its
+    /// YCbCr page holds and switches on when the pass ends.
+    #[test]
+    fn a_chroma_matrix_recc_develops_its_bands_with_its_programmed_matrix() {
+        let raw = raw_samples();
+        let (tone, ycbcr) = color_pages();
+        // PROVIA's switches (bit 4 on) and matrix (own gain low, cross term
+        // high).
+        let halves = |lo: i32, hi: i32| (lo as u32 & 0x1fff) | (hi as u32 & 0x1fff) << 16;
+        let matrix = [
+            (0x200, 0x3000_1515),
+            (0x238, halves(1109, -31)),
+            (0x23c, halves(1454, 111)),
+        ];
+        let mut programmed: BTreeMap<u64, u32> = ycbcr.iter().copied().collect();
+        programmed.extend(matrix);
+        let color =
+            FirmwareColor::from_words(&tone.iter().copied().collect(), &programmed).unwrap();
+        let plain = develop_firmware(&raw[64 + 4..], 64, 6, 12, (0, 3), &color).unwrap();
+        let color = color.with_chroma_matrix(&programmed);
+        let mixed = develop_firmware(&raw[64 + 4..], 64, 6, 12, (0, 3), &color).unwrap();
+        assert_ne!(mixed, plain);
+        // A monochrome film's switches and zero matrix: the engine keeps no
+        // zero word, and the band develops with neutral chroma.
+        let mono = [(0x200, 0x3000_1515), (0x238, 0), (0x23c, 0)];
+        let mut zero: BTreeMap<u64, u32> = ycbcr.iter().copied().collect();
+        zero.extend(mono);
+        let color = FirmwareColor::from_words(&tone.iter().copied().collect(), &zero)
+            .unwrap()
+            .with_chroma_matrix(&zero);
+        let grey = develop_firmware(&raw[64 + 4..], 64, 6, 12, (0, 3), &color).unwrap();
+        for row in &grey {
+            let (pixels, _) = row.as_chunks::<4>();
+            assert!(pixels.iter().all(|p| p[2] == 128 && p[3] == 128));
+        }
+        let mixing = || firmware_color_recc().firmware_chroma_matrix().unwrap();
+        // Matrix programmed: the mixed band; a zero one: the grey band. No
+        // switch, or the option absent: the plain firmware color.
+        for (mut e, written, rows) in [
+            (mixing(), &matrix[..], &mixed),
+            (mixing(), &mono[..], &grey),
+            (mixing(), &[][..], &plain),
+            (firmware_color_recc(), &matrix[..], &plain),
+        ] {
+            let mut h = RecordingHost {
+                ram: vec![0; 0x2000],
+                ..Default::default()
+            };
+            h.ram[..16 * 64].copy_from_slice(&raw);
+            program_color_pages(&mut e, &mut h);
+            for &(o, v) in written {
+                let mut cx = Cx::new(&mut h, 0, 0, 0);
+                e.write(&mut cx, RECC + 0x5000 + o, 4, v.into());
+            }
+            assert_eq!(recc_pass(&mut e, &mut h, &band(0)), None);
+            for (y, row) in rows.iter().enumerate() {
+                let at = 0x1000 + (2 + y) * 48 + 8;
+                assert_eq!(h.ram[at..at + 24], row[..], "band line {y}");
+            }
+        }
+        // The option needs the firmware color.
+        let error = developing_recc().firmware_chroma_matrix().err();
+        assert!(error.is_some_and(|e| e.contains("needs the firmware color")));
     }
 
     #[test]

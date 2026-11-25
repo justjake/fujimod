@@ -1,8 +1,8 @@
 //! The XP4 RECC engine's opt-in development (X-T3 5.11: page 0xfff82000,
 //! interrupt 129): the `raw` wiring is admitted on RECC alone and checked,
 //! and so is `firmware_color`, on a RECC with `raw`, and
-//! `firmware_white_balance` and `firmware_luma_bands`, on a RECC with
-//! `firmware_color`.
+//! `firmware_white_balance`, `firmware_luma_bands` and
+//! `firmware_chroma_matrix`, on a RECC with `firmware_color`.
 mod support;
 use fujimod_emulator_xp4_board::Definition;
 use serde_json::{Value, json};
@@ -104,4 +104,21 @@ fn the_firmware_luma_bands_need_the_firmware_color() {
     .err()
     .unwrap();
     assert!(error.contains("need the firmware color"), "{error}");
+}
+
+#[test]
+fn the_firmware_chroma_matrix_needs_the_firmware_color() {
+    let raw = json!({"address": 0x473d_8fd0_u32, "pitch": 0x31e0, "site": [5, 1]});
+    session(input(
+        "recc",
+        json!({"raw": raw, "firmware_color": true, "firmware_chroma_matrix": true}),
+    ))
+    .unwrap();
+    let error = session(input(
+        "recc",
+        json!({"raw": raw, "firmware_chroma_matrix": true}),
+    ))
+    .err()
+    .unwrap();
+    assert!(error.contains("needs the firmware color"), "{error}");
 }
