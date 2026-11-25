@@ -251,6 +251,24 @@ pub fn compile(
                 .retain(|(action, _)| action != "decrease" && action != "increase");
         }
     }
+    // A control whose rotation has no electrical key keeps its electrified
+    // actions: the dial reports rotation through the firmware's debug keys,
+    // and its press still has a scanner contact the panel can assert.
+    for row in &mut controls {
+        if row.mechanical || row.unavailable.is_some() {
+            continue;
+        }
+        let electrified: Vec<bool> = row
+            .actions
+            .iter()
+            .map(|(_, keys)| keys.iter().any(|key| row.input.contains_key(key)))
+            .collect();
+        if electrified.iter().any(|found| *found) && electrified.iter().any(|found| !*found) {
+            let mut keep = electrified.iter();
+            row.actions
+                .retain(|_| *keep.next().expect("one flag per action"));
+        }
+    }
     let mut plan = panel::compile(
         &controls,
         calibration,
