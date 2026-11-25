@@ -525,6 +525,362 @@ pub fn windows(
     Ok(devices)
 }
 
+/// The XP5 device graph built from the catalog's block records.
+///
+/// Firmware, body and run facts are joined by block identity: a block keeps the
+/// hardware window and model, the body supplies wiring and parts, and the run
+/// supplies ADC samples, GPIO levels and flash contents.
+pub fn windows_from_blocks(
+    resolved: &fujimod_catalog_resolution::ResolvedConfiguration,
+) -> Result<Vec<DeviceWindow>, String> {
+    use fujimod_catalog_configuration::application_inputs::ApplicationBlockInput;
+    use fujimod_catalog::reference::SocBlock;
+
+    let selection = &resolved.reference;
+    let inputs = resolved
+        .configuration
+        .inputs
+        .as_ref()
+        .and_then(|inputs| match inputs {
+            fujimod_catalog_configuration::RunInputs::Xp5(inputs) => Some(inputs.blocks.as_slice()),
+            _ => None,
+        })
+        .unwrap_or_default();
+    let flash_input = inputs.iter().find_map(|input| match input {
+        ApplicationBlockInput::Flash {
+            block_id,
+            part_id,
+            erased_tail,
+            seeds,
+            ..
+        } if block_id == "flash-aperture" => Some((part_id.as_str(), erased_tail, seeds)),
+        _ => None,
+    });
+    let samples = inputs.iter().find_map(|input| match input {
+        ApplicationBlockInput::Adc { samples, .. } => Some(samples.clone()),
+        _ => None,
+    });
+    let levels = inputs.iter().find_map(|input| match input {
+        ApplicationBlockInput::Gpio {
+            levels, outputs, ..
+        } => Some((levels, outputs)),
+        _ => None,
+    });
+    let profile = resolved
+        .configuration
+        .preset
+        .as_ref()
+        .and_then(|preset| preset.firmware_profile_id.as_ref())
+        .and_then(|id| selection.firmware.layouts.as_ref()?.profiles.get(id));
+    let flash_image = profile.and_then(|profile| profile.flash_image.as_ref());
+    let drains = selection
+        .body
+        .hardware
+        .as_ref()
+        .map(|hardware| hardware.bus_drain.as_slice())
+        .unwrap_or_default();
+    let mut devices = Vec::new();
+    for block in &selection.soc.blocks {
+        let Some(device) = &block.device else {
+            continue;
+        };
+        if let Some((kind, options)) = block_window(
+            block, device, selection, flash_input, flash_image, samples.as_deref(), levels,
+        )? {
+            if kind == "imaging-table" && block.size > 0x1000 {
+                for offset in (0..block.size).step_by(0x1000) {
+                    devices.push(DeviceWindow {
+                        base: block.base + offset,
+                        size: 0x1000,
+                        kind: kind.to_owned(),
+                        options: options.clone(),
+                    });
+                }
+            } else {
+                devices.push(DeviceWindow {
+                    base: block.base,
+                    size: block.size,
+                    kind: kind.to_owned(),
+                    options,
+                });
+            }
+        }
+    }
+    for drain in drains {
+        devices.push(DeviceWindow {
+            base: drain.address,
+            size: 4,
+            kind: "unmodeled-bus-drain".into(),
+            options: Default::default(),
+        });
+    }
+    Ok(devices)
+}
+
+type FlashInput<'a> = (&'a str, &'a Option<u8>, &'a Vec<fujimod_catalog_configuration::application_inputs::FlashSeed>);
+
+fn block_window(
+    block: &fujimod_catalog::reference::SocBlock,
+    device: &BlockDevice,
+    selection: &ResolvedSelection,
+    flash: Option<FlashInput<'_>>,
+    flash_image: Option<&fujimod_catalog::firmware::FlashImage>,
+    samples: Option<&[u16]>,
+    levels: Option<(&Vec<u16>, &Vec<fujimod_catalog_configuration::application_inputs::GpioOutputWord>)>,
+) -> Result<Option<(&'static str, toml::Table)>, String> {
+    let _ = levels;
+    let mut options = toml::Table::new();
+    let integer = |value: u64| toml::Value::Integer(i64::try_from(value).unwrap_or(i64::MAX));
+    let irq = |name: &str| block.interrupts.iter().find(|row| row.output == name).map(|row| row.line);
+    let kind = match device {
+        BlockDevice::Xp5Timer { focus_capture, .. } => {
+            if *focus_capture { "timer-focus-capture" } else { "timer" }
+        }
+        BlockDevice::Xp5TimerExtended { .. } => "timer-extended",
+        BlockDevice::SerialFlashAperture { .. } => {
+            options.insert("dat_origin".into(), integer(flash_image.map(|image| image.dat_origin).unwrap_or(0)));
+            options.insert("xor".into(), integer(flash_image.map(|image| u64::from(image.xor)).unwrap_or(255)));
+            options.insert("erased_tail".into(), integer(flash.and_then(|item| *item.1).map(u64::from).unwrap_or(255)));
+            if let Some((part_id, _, seeds)) = flash {
+                let part = selection.parts.iter().find(|part| part.id == part_id);
+                if let Some(part) = part {
+                    if let fujimod_catalog::reference::PartModel::Peripheral { interface } = &part.model {
+                        if matches!(interface, fujimod_catalog::assembly::PeripheralPart::SerialNandFlash { .. }) {
+                            options.insert("medium".into(), toml::Value::String("serial-nand".into()));
+                        }
+                    }
+                }
+                if !seeds.is_empty() {
+                    options.insert("seed".into(), toml::Value::Array(seeds.iter().map(|seed| {
+                        let mut row = toml::Table::new();
+                        row.insert("offset".into(), integer(seed.offset));
+                        row.insert("value".into(), integer(u64::from(seed.value)));
+                        toml::Value::Table(row)
+                    }).collect()));
+                }
+            }
+            "flash-storage"
+        }
+        BlockDevice::SerialFlashController { .. } => {
+            let jedec = flash.and_then(|(part_id, _, _)| selection.parts.iter().find(|part| part.id == part_id))
+                .and_then(|part| match &part.model {
+                    fujimod_catalog::reference::PartModel::Peripheral { interface } => match interface {
+                        fujimod_catalog::assembly::PeripheralPart::SerialNorFlash { jedec_id, .. }
+                        | fujimod_catalog::assembly::PeripheralPart::SerialNandFlash { jedec_id, .. } => *jedec_id,
+                        _ => None,
+                    },
+                    _ => None,
+                })
+                .ok_or("flash controller needs a body flash part with a JEDEC identity")?;
+            options.insert("jedec_id".into(), integer(u64::from(jedec)));
+            "flash-storage-controller"
+        }
+        BlockDevice::FlashStorageDma { .. } => "flash-storage-dma",
+        BlockDevice::Gates { configuration_word, .. } => {
+            if let Some(word) = configuration_word {
+                options.insert("configuration_word".into(), integer(*word));
+            }
+            if block.id == "clock-gates" { "clock-gates" } else { "power-gates" }
+        }
+        BlockDevice::ClockBanks { .. } => "clock-banks",
+        BlockDevice::PanelPll { .. } => "panel-pll",
+        BlockDevice::GeneralDma { companion_irq_base, a53_irq_base, .. } => {
+            if let Some(base) = companion_irq_base { options.insert("companion_irq_base".into(), integer(u64::from(*base))); }
+            if let Some(base) = a53_irq_base { options.insert("a53_irq_base".into(), integer(u64::from(*base))); }
+            "general-dma"
+        }
+        BlockDevice::AudioDma { setup_ticks, bytes_per_tick, .. } => {
+            options.insert("irq_base".into(), integer(u64::from(irq("irq").unwrap_or(0))));
+            options.insert("setup_ticks".into(), integer(*setup_ticks));
+            options.insert("bytes_per_tick".into(), integer(*bytes_per_tick));
+            "audio-dma"
+        }
+        BlockDevice::Xp5Gpio { .. } => "gpio",
+        BlockDevice::Xp5Adc { .. } => {
+            if let Some(samples) = samples {
+                options.insert("samples".into(), toml::Value::Array(samples.iter().map(|value| integer(u64::from(*value))).collect()));
+            }
+            "adc"
+        }
+        BlockDevice::Temperature { .. } => "soc-temperature",
+        BlockDevice::InterprocessorMailbox { .. } => "interprocessor-mailbox",
+        BlockDevice::AudioSerial { .. } => {
+            if block.id == "audio-serial-1" { "audio-serial" } else { "reset-handshake" }
+        }
+        BlockDevice::MemoryConfiguration { commit_ticks, .. } => {
+            options.insert("commit_ticks".into(), integer(*commit_ticks));
+            "memory-configuration"
+        }
+        BlockDevice::DdrPhy { .. } => { options.insert("registers".into(), toml::Value::Array(Vec::new())); "bringup-stub" }
+        BlockDevice::SdInterface { .. } => "sd-interface",
+        BlockDevice::SdhciUhs2 { clock_ticks, .. } => {
+            options.insert("slot".into(), integer(block.base.saturating_sub(0x2000)));
+            options.insert("capabilities".into(), integer(0x8_0000_0000));
+            options.insert("clock_ticks".into(), integer(*clock_ticks));
+            "sdhci-uhs2"
+        }
+        BlockDevice::DisplayOutputLink { .. } => "display-output-link",
+        BlockDevice::Renderer { .. } => "renderer",
+        BlockDevice::ImagingPhy { .. } => "imaging-phy",
+        BlockDevice::ImagingInput { .. } => "imaging-input",
+        BlockDevice::ImagingResize { .. } => {
+            options.insert("completion_us".into(), integer(1000));
+            "imaging-resize"
+        }
+        BlockDevice::ImagingPaf { .. } => "imaging-paf",
+        BlockDevice::ImagingPreview { .. } => {
+            options.insert("frame_period_us".into(), integer(1_000_000));
+            options.insert("source_luma".into(), integer(128));
+            "imaging-preview"
+        }
+        BlockDevice::ImagingRifpIo { .. } => "imaging-rifp-io",
+        BlockDevice::ImagingRifp { .. } => {
+            options.insert("completion_us".into(), integer(1000));
+            options.insert("source_luma".into(), integer(128));
+            "imaging-rifp"
+        }
+        BlockDevice::ImagingTnr { .. } => "imaging-tnr",
+        BlockDevice::ImagingFcnv { .. } => "imaging-fcnv",
+        BlockDevice::ImagingFilterScaler { .. } => "imaging-filter-scaler",
+        BlockDevice::ImagingRzl2 { .. } => "imaging-rzl2",
+        BlockDevice::ImagingResz { .. } => "imaging-resz",
+        BlockDevice::InputCapture { .. } => "input-capture",
+        BlockDevice::Pl011 { .. } => {
+            options.insert("irq".into(), integer(u64::from(irq("irq").unwrap_or(0))));
+            let mut rl78 = toml::Table::new();
+            rl78.insert("flash_bytes".into(), integer(49152));
+            options.insert("rl78".into(), toml::Value::Table(rl78));
+            "pl011"
+        }
+        BlockDevice::Pl022 { source_hz, ticks_per_second, receive_request, transmit_request, companion_irq_line, .. } => {
+            options.insert("source_hz".into(), integer(*source_hz));
+            options.insert("ticks_per_second".into(), integer(*ticks_per_second));
+            if let Some(value) = receive_request { options.insert("receive_request".into(), integer(u64::from(*value))); }
+            if let Some(value) = transmit_request { options.insert("transmit_request".into(), integer(u64::from(*value))); }
+            if let Some(value) = companion_irq_line { options.insert("companion_irq_line".into(), integer(u64::from(*value))); }
+            options.insert("wire".into(), toml::Value::Table(toml::Table::new()));
+            "pl022"
+        }
+        BlockDevice::Completion { fixed_words, starts, completion, ack, irq_mask, delay_ticks, .. } => {
+            if !fixed_words.is_empty() {
+                options.insert("registers".into(), toml::Value::Array(fixed_words.iter().map(|word| {
+                    let mut row = toml::Table::new();
+                    row.insert("offset".into(), integer(word.offset));
+                    row.insert("mode".into(), toml::Value::String("constant".into()));
+                    row.insert("value".into(), integer(u64::from(word.value)));
+                    toml::Value::Table(row)
+                }).collect()));
+            }
+            if !starts.is_empty() {
+                options.insert("starts".into(), toml::Value::Array(starts.iter().map(|start| {
+                    let mut row = toml::Table::new();
+                    row.insert("offset".into(), integer(start.offset));
+                    row.insert("mask".into(), integer(u64::from(start.mask)));
+                    toml::Value::Table(row)
+                }).collect()));
+            }
+            if !completion.is_empty() {
+                options.insert("completion".into(), toml::Value::Array(completion.iter().map(|write| {
+                    let mut row = toml::Table::new();
+                    row.insert("offset".into(), integer(write.offset));
+                    if let Some(set) = write.set { row.insert("set".into(), integer(u64::from(set))); }
+                    if let Some(clear) = write.clear { row.insert("clear".into(), integer(u64::from(clear))); }
+                    toml::Value::Table(row)
+                }).collect()));
+            }
+            if let Some(ack) = ack {
+                let mut row = toml::Table::new();
+                row.insert("offset".into(), integer(ack.offset));
+                row.insert("mode".into(), toml::Value::String("w1c".into()));
+                if let Some(offset) = ack.status_offset { row.insert("status_offset".into(), integer(offset)); }
+                if let Some(bits) = ack.bits { row.insert("bits".into(), integer(u64::from(bits))); }
+                options.insert("ack".into(), toml::Value::Table(row));
+            }
+            if let Some(mask) = irq_mask {
+                options.insert("irq_mask_offset".into(), integer(mask.offset));
+                options.insert("irq_mask_bit".into(), integer(u64::from(mask.bit)));
+                options.insert("irq_mask_set_masks".into(), toml::Value::Boolean(mask.set_masks));
+            }
+            options.insert("delay_us".into(), integer(delay_ticks / 1000));
+            if let Some(line) = irq("irq") { options.insert("irq".into(), integer(u64::from(line))); }
+            "completion-stub"
+        }
+        BlockDevice::VideoCodec { .. } => "xp5-codec",
+        BlockDevice::ImagingDsp { .. } => "completion-stub",
+        BlockDevice::RegisterBlock { idle_bits, fixed_words, .. } => {
+            if !idle_bits.is_empty() || !fixed_words.is_empty() {
+                options.insert("registers".into(), toml::Value::Array(fixed_words.iter().map(|word| {
+                    let mut row = toml::Table::new();
+                    row.insert("offset".into(), integer(word.offset));
+                    row.insert("mode".into(), toml::Value::String("constant".into()));
+                    row.insert("value".into(), integer(u64::from(word.value)));
+                    toml::Value::Table(row)
+                }).collect()));
+            }
+            if block.id.starts_with("imaging-table") { "imaging-table" }
+            else if block.id == "dma-routes" { "dma-request-routing" }
+            else if block.id == "dma-address-high" { "dma-address-high" }
+            else if block.id.starts_with("register-") || block.id == "usb-inner" || block.id == "dv720" {
+                options.insert("registers".into(), toml::Value::Array(Vec::new()));
+                "bringup-stub"
+            } else { "write-only-registers" }
+        }
+        BlockDevice::SdHost { transfer_ticks, clock_ticks, .. } => {
+            let mut controller = toml::Table::new();
+            controller.insert("base".into(), integer(block.base));
+            controller.insert("protocol".into(), toml::Value::String("sdhc".into()));
+            controller.insert("transfer_ticks".into(), integer(*transfer_ticks));
+            controller.insert("clock_ticks".into(), integer(*clock_ticks));
+            controller.insert("rca".into(), integer(1));
+            controller.insert("ram_bytes".into(), integer(0x8000_0000));
+            options.insert("controller".into(), toml::Value::Table(controller));
+            "sdhci"
+        }
+        BlockDevice::Decompressor { .. } => "lz",
+        BlockDevice::Movdc { .. } => {
+            options.insert("frame_period_us".into(), integer(1_000_000));
+            options.insert("source_luma".into(), integer(128));
+            "movdc"
+        }
+        BlockDevice::SensorCommand { .. } => {
+            options.insert("command_latency_us".into(), integer(1));
+            "imaging-sensor"
+        }
+        BlockDevice::ImagingReceiver { .. } => {
+            options.insert("frame_period_us".into(), integer(1_000_000));
+            options.insert("frame_active_us".into(), integer(10_000));
+            "imaging-receiver"
+        }
+        BlockDevice::Display { .. } => "display",
+        BlockDevice::IoGroups { .. } => "pin-control",
+        BlockDevice::Usb { .. } => {
+            options.insert("interrupt".into(), integer(u64::from(irq("irq").unwrap_or(0))));
+            options.insert("speed".into(), integer(0));
+            options.insert("command_ticks".into(), integer(1000));
+            options.insert("transaction_ticks".into(), integer(125000));
+            "usb-device-controller"
+        }
+        BlockDevice::UsbPhy { .. } => "usb-phy",
+        BlockDevice::JpegCodec { run_ticks, .. } => {
+            options.insert("irq".into(), integer(u64::from(irq("irq").unwrap_or(0))));
+            options.insert("run_ticks".into(), integer(*run_ticks));
+            if block.id.contains("decoder") { "jpeg-decoder" } else { "jpeg-encoder" }
+        }
+        BlockDevice::I2c { fifo_depth, clock_hz, tick_hz, .. } => {
+            let _ = (fifo_depth, clock_hz, tick_hz);
+            if let Some(line) = irq("interrupt") { options.insert("interrupt".into(), integer(u64::from(line))); }
+            options.insert("byte_ns".into(), integer(90_000));
+            "i2c-controller"
+        }
+        BlockDevice::ResetGates { .. } => "imaging-reset",
+        BlockDevice::GicV2 { .. } | BlockDevice::GicV3 { .. } => return Ok(None),
+        BlockDevice::UnmodeledBusDrain { .. } => return Ok(None),
+        BlockDevice::DramController { .. } => return Ok(None),
+        other => return Err(format!("block {} has no XP5 emulator window for {other:?}", block.id)),
+    };
+    Ok(Some((kind, options)))
+}
+
 /// The body's GPIO feedback wires: each drives an input pad from the output
 /// latch bit of the same pin number (register 0, the port's drive field).
 fn gpio_feedback(selection: &ResolvedSelection) -> Result<Vec<Feedback>, String> {
