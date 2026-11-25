@@ -55,7 +55,7 @@ fn event(display: &mut Display, host: &mut TestHost, at: u64, token: u64) {
 fn bank1_phase_pulses_irq_186_and_disabled_bank_stays_quiet() {
     let clocks = Clocks::new();
     let mut host = TestHost::default();
-    let mut pll = PanelPll::new(0xffa11000, clocks.clone()).unwrap();
+    let mut pll = PanelPll::new(0xffa11000, clocks.clone(), Default::default()).unwrap();
     write(&mut pll, &mut host, 0xffa11000, 99);
     write(&mut pll, &mut host, 0xffa11040, 8);
     let mut display = Display::new(

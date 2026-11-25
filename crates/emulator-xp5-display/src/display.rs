@@ -594,7 +594,9 @@ mod tests {
         let clocks = Clocks::new();
         let mut h = OutputHost::default();
         for (base, n, d) in [(0xffa13000, 99, 0x10f), (0xffa14000, 1, 0x100)] {
-            let mut pll = crate::panel_clock::PanelPll::new(base, clocks.clone()).unwrap();
+            let mut pll =
+                crate::panel_clock::PanelPll::new(base, clocks.clone(), Default::default())
+                    .unwrap();
             write(&mut pll, &mut h, base, n);
             write(&mut pll, &mut h, base + 0x40, d);
         }
@@ -649,7 +651,9 @@ mod tests {
                 16_666_666.667,
             ),
         ] {
-            let mut pll = crate::panel_clock::PanelPll::new(0xffa11000, clocks.clone()).unwrap();
+            let mut pll =
+                crate::panel_clock::PanelPll::new(0xffa11000, clocks.clone(), Default::default())
+                    .unwrap();
             write(&mut pll, &mut h, 0xffa11000, n);
             write(&mut pll, &mut h, 0xffa11040, divider);
             let mut d = Display::new(
@@ -750,7 +754,9 @@ mod tests {
         let (mut d, mut h) = setup(1);
         let base = d.base();
         // Give the empty bank a canvas and a programmed pixel clock.
-        let mut pll = crate::panel_clock::PanelPll::new(0xffa11000, d.clocks.clone()).unwrap();
+        let mut pll =
+            crate::panel_clock::PanelPll::new(0xffa11000, d.clocks.clone(), Default::default())
+                .unwrap();
         write(&mut pll, &mut h, 0xffa11000, 1);
         write(&mut d, &mut h, base + 0x14, 2);
         write(&mut d, &mut h, base + 0x24, 2);

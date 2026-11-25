@@ -3,7 +3,7 @@
 use fujimod_emulator_devices::graph::{DeviceGraph, DeviceWindow};
 use fujimod_emulator_xp5_io::{
     adc, connection_status, discarded_read, gates, gpio, mailbox, memory_configuration,
-    reset_handshake, timer, write_only_registers,
+    register_input, reset_handshake, sd_controller_wrapper, timer, write_only_registers,
 };
 use fujimod_emulator_xp5_display::{display, panel_clock, panel_serial};
 use fujimod_emulator_xp5_storage::{
@@ -54,6 +54,29 @@ fn register_with_resources(
     let clocks = &resources.clocks;
     let companion = resources.companion.as_ref().map(|c| c.pins.companion);
     match window.kind.as_str() {
+        "register-input" => {
+            if window.size != 4
+                || window.options.len() != 1
+                || !window.options.contains_key("value")
+            {
+                return Err("register-input requires a 4-byte window and only value".into());
+            }
+            let value = window
+                .options
+                .get("value")
+                .and_then(toml::Value::as_integer)
+                .and_then(|value| u32::try_from(value).ok())
+                .ok_or("register-input requires an unsigned 32-bit value")?;
+            bus.register(
+                window.base,
+                window.size,
+                Box::new(register_input::RegisterInput::new(
+                    window.base,
+                    window.size,
+                    value,
+                )?),
+            )?;
+        }
         "unmodeled-bus-drain" => {
             if !window.options.is_empty() { return Err("unmodeled bus drain takes no options".into()); }
             bus.register(window.base, window.size, Box::new(UnmodeledBusDrain))?;
@@ -62,7 +85,51 @@ fn register_with_resources(
             if window.size != 8 || !window.options.is_empty() {return Err("Invalid SD interface window".into());}
             bus.register(window.base,window.size,Box::new(fujimod_emulator_xp5_io::sd_interface::Interface::for_slot(window.base, resources.sd.get(&(window.base & !0xfff)).map(|slot| slot.contacts.clone()))?))?;
         }
-        "sdhci" => sd::register(bus, window, &mut resources.sd)?,
+        "sd-controller-wrapper" => {
+            if window.size != 4
+                || window.options.keys().any(|key| {
+                    !matches!(
+                        key.as_str(),
+                        "initial_word" | "writable_mask" | "write_width" | "readable"
+                    )
+                })
+            {
+                return Err("invalid SD controller wrapper window or options".into());
+            }
+            let integer = |key: &str| -> Result<u32, String> {
+                window
+                    .options
+                    .get(key)
+                    .and_then(toml::Value::as_integer)
+                    .and_then(|value| u32::try_from(value).ok())
+                    .ok_or_else(|| format!("SD controller wrapper requires {key}"))
+            };
+            let write_width = window
+                .options
+                .get("write_width")
+                .and_then(toml::Value::as_integer)
+                .and_then(|value| u8::try_from(value).ok())
+                .filter(|width| matches!(width, 2 | 4))
+                .ok_or("SD controller wrapper requires write_width 2 or 4")?;
+            let readable = window
+                .options
+                .get("readable")
+                .and_then(toml::Value::as_bool)
+                .ok_or("SD controller wrapper requires readable")?;
+            bus.register(
+                window.base,
+                window.size,
+                Box::new(sd_controller_wrapper::SdControllerWrapper::new(
+                    window.base,
+                    window.size,
+                    integer("initial_word")?,
+                    integer("writable_mask")?,
+                    write_width,
+                    readable,
+                )?),
+            )?;
+        }
+        "sdhci" => sd::register(bus, window, &mut resources.sd, &resources.pins)?,
         "sdhci-uhs2" => sd::register_uhs2(bus, window, &resources.sd)?,
         "boot-control" => {
             if window.base != 0xff90e000 || window.size != 4 {
@@ -309,11 +376,53 @@ fn register_with_resources(
             )?;
         }
         "write-only-registers" => {
-            let readback = window.options.get("readback").and_then(toml::Value::as_bool) == Some(true);
-            if window.options.len() > usize::from(window.options.contains_key("readback")) {
-                return Err("write-only-registers takes only the readback option".into());
+            if window
+                .options
+                .keys()
+                .any(|option| !matches!(option.as_str(), "width" | "allowed_values" | "readback"))
+            {
+                return Err(
+                    "write-only-registers accepts only width, allowed_values and readback".into(),
+                );
             }
-            let registers = write_only_registers::WriteOnlyRegisters::new(window.base, window.size)?;
+            let readback = window
+                .options
+                .get("readback")
+                .and_then(toml::Value::as_bool)
+                == Some(true);
+            let width = match window.options.get("width") {
+                None => 4,
+                Some(value) => value
+                    .as_integer()
+                    .and_then(|value| u8::try_from(value).ok())
+                    .filter(|width| matches!(width, 2 | 4))
+                    .ok_or("write-only-registers width must be 2 or 4")?,
+            };
+            let allowed_values = match window.options.get("allowed_values") {
+                None => None,
+                Some(value) => {
+                    let values = value
+                        .as_array()
+                        .ok_or("write-only-registers allowed_values must be an array")?
+                        .iter()
+                        .map(|value| {
+                            value
+                                .as_integer()
+                                .and_then(|value| u32::try_from(value).ok())
+                                .ok_or(
+                                    "write-only-registers allowed_values must contain u32 values",
+                                )
+                        })
+                        .collect::<Result<Vec<_>, _>>()?;
+                    Some(values)
+                }
+            };
+            let registers = write_only_registers::WriteOnlyRegisters::new(
+                window.base,
+                window.size,
+                width,
+                allowed_values,
+            )?;
             bus.register(
                 window.base,
                 window.size,
@@ -345,7 +454,7 @@ fn register_with_resources(
                 Box::new(display::Display::new(window.base, clocks.clone(), config)?),
             )?;
         }
-        "clock-banks" => clocks::register(bus, window.base, window.size)?,
+        "clock-banks" => clocks::register(bus, window.base, window.size, &window.options)?,
         "lz" => lz::register(bus, window.base, window.size)?,
         "jpeg-encoder" => jpeg::register(bus, window)?,
         "jpeg-decoder" => jpeg::register_decoder(bus, window)?,
@@ -383,10 +492,17 @@ fn register_with_resources(
             )?;
         }
         "panel-pll" => {
+            let options: panel_clock::Options = toml::Value::Table(window.options.clone())
+                .try_into()
+                .map_err(|e| format!("panel-pll options: {e}"))?;
             bus.register(
                 window.base,
                 window.size,
-                Box::new(panel_clock::PanelPll::new(window.base, clocks.clone())?),
+                Box::new(panel_clock::PanelPll::new(
+                    window.base,
+                    clocks.clone(),
+                    options,
+                )?),
             )?;
         }
         "clock-gates" | "power-gates" => {
@@ -731,7 +847,7 @@ pub fn register_all(
                     .filter(|w| w.kind == "panel-pll")
                     .map(|w| w.base)
                     .collect();
-                clocks::register_except(bus, w.base, w.size, &specialized)?;
+                clocks::register_except(bus, w.base, w.size, &specialized, &w.options)?;
             }
             "flash-storage-controller" => {
                 if w.base != 0xff90a000 || w.size != 0x1000 {
