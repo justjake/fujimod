@@ -24,6 +24,7 @@ fujimod-emulator-xp4-io.workspace = true
 fujimod-emulator-xp4-display.workspace = true
 fujimod-emulator-devices.workspace = true
 fujimod-emulator-parts-controls.workspace = true
+fujimod-emulator-parts-wifi.workspace = true
 fujimod-emulator-graphics.workspace = true
 fujimod-emulator-ip.workspace = true
 fujimod-emulator-ip-dmp.workspace = true

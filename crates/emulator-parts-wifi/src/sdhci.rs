@@ -1,11 +1,10 @@
-//! EXR II SDIO host1, FFF51000. Owns a one-function part; no memory outside
+//! SDHCI host for a one-function Wi-Fi module. No memory outside
 //! the programmed SDMA extent is inspected. Timing is declared.
+use crate::{Operation, Protocol, WifiModule};
 use fujimod_emulator_devices::{Cx, Device, bus::InterruptLine};
 use fujimod_emulator_ip::sdhci::Clocks;
 use fujimod_emulator_ip::sdhci::registers::Registers;
-use fujimod_emulator_parts_wifi::{Operation, Protocol, WifiModule};
 use serde::{Deserialize, Serialize};
-pub const BASE: u64 = 0xfff51000;
 #[derive(Clone, Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Options {
@@ -39,6 +38,8 @@ struct Request {
     gates: [u16; 4],
 }
 pub struct SdioHost {
+    base: u64,
+    name: &'static str,
     options: Options,
     module: WifiModule,
     irq: InterruptLine,
@@ -50,16 +51,25 @@ pub struct SdioHost {
     scratch: [u8; 2560],
 }
 impl SdioHost {
-    pub fn new(options: Options, wiring: Wiring) -> Result<Self, String> {
-        if options.transfer_ticks == 0
+    pub fn new(
+        base: u64,
+        name: &'static str,
+        options: Options,
+        wiring: Wiring,
+    ) -> Result<Self, String> {
+        if base & 3 != 0
+            || base > u32::MAX as u64 - 0x108
+            || options.transfer_ticks == 0
             || options.rca == 0
             || options.ram_bytes == 0
             || options.ram_bytes > 0x20000000
         {
             return Err("Invalid SDIO timing, RCA or RAM extent".into());
         }
-        let clocks = Clocks::new(&[(BASE + 0x2c, options.clock_ticks)])?;
+        let clocks = Clocks::new(&[(base + 0x2c, options.clock_ticks)])?;
         Ok(Self {
+            base,
+            name,
             options,
             module: wiring.module,
             irq: wiring.irq,
@@ -70,6 +80,16 @@ impl SdioHost {
             request: None,
             scratch: [0; 2560],
         })
+    }
+
+    /// Reset the host registers and outstanding command. The external SDIO
+    /// module keeps its state until its supply is removed or it is reset.
+    pub fn hardware_reset(&mut self, cx: &mut Cx<'_>) -> Result<(), String> {
+        self.request = None;
+        self.regs = Registers::new();
+        self.response = [0; 16];
+        self.clocks.write(cx, self.base + 0x2c, 2, 0);
+        self.signal(cx)
     }
     fn signal(&mut self, cx: &mut Cx<'_>) -> Result<(), String> {
         if self.module.interrupt() {
@@ -245,7 +265,7 @@ impl SdioHost {
                 self.regs.get(0x32)
             ));
         }
-        if self.clocks.read(cx, BASE + 0x2c, 2) & 7 != 7 || self.regs.get(0x2e) & 15 != 14 {
+        if self.clocks.read(cx, self.base + 0x2c, 2) & 7 != 7 || self.regs.get(0x2e) & 15 != 14 {
             return Err("SDIO command before clock/timeout setup".into());
         }
         let signal = if word >> 24 & 63 == 53 && word != 0x353a0010 {
@@ -432,13 +452,13 @@ impl Device for SdioHost {
     }
 
     fn name(&self) -> &'static str {
-        "exr2-sdio"
+        self.name
     }
     fn read(&mut self, cx: &mut Cx<'_>, address: u64, size: u8) -> u64 {
-        if address == BASE + 0x2c && size == 2 {
+        if address == self.base + 0x2c && size == 2 {
             return self.clocks.read(cx, address, size);
         }
-        let o = address.wrapping_sub(BASE) as usize;
+        let o = address.wrapping_sub(self.base) as usize;
         if !Registers::valid(o, size) {
             cx.unmodeled();
             return 0;
@@ -476,7 +496,7 @@ impl Device for SdioHost {
         }
     }
     fn write(&mut self, cx: &mut Cx<'_>, address: u64, size: u8, value: u64) {
-        if address == BASE + 0x2c && size == 2 {
+        if address == self.base + 0x2c && size == 2 {
             if self.request.is_some() {
                 cx.fail("SDIO clock changed during command");
             } else {
@@ -484,7 +504,7 @@ impl Device for SdioHost {
             }
             return;
         }
-        let o = address.wrapping_sub(BASE) as usize;
+        let o = address.wrapping_sub(self.base) as usize;
         if !Registers::valid(o, size) || value > if size == 4 { u32::MAX as u64 } else { 65535 } {
             cx.unmodeled();
             return;
@@ -521,9 +541,9 @@ impl Device for SdioHost {
             .min()
     }
     fn pollable(&self, address: u64, size: u8) -> bool {
-        address != BASE + 0x20
-            && (Registers::valid(address.wrapping_sub(BASE) as usize, size)
-                || address == BASE + 0x2c && size == 2)
+        address != self.base + 0x20
+            && (Registers::valid(address.wrapping_sub(self.base) as usize, size)
+                || address == self.base + 0x2c && size == 2)
     }
 }
 
@@ -531,8 +551,11 @@ impl Device for SdioHost {
 mod tests {
     use super::*;
     use fujimod_emulator_devices::test_host::ram::{Effect, Ram};
+    const BASE: u64 = 0xfff51000;
     fn model(protocol: Protocol) -> SdioHost {
         SdioHost::new(
+            BASE,
+            "exr2-sdio",
             Options {
                 transfer_ticks: 10,
                 clock_ticks: 2,
@@ -540,16 +563,14 @@ mod tests {
                 ram_bytes: 0x10000,
             },
             Wiring {
-                module: WifiModule::new(fujimod_emulator_parts_wifi::Options {
+                module: WifiModule::new(crate::Options {
                     protocol,
                     firmware_bytes: 64,
-                    mt5931: (protocol == Protocol::Mt5931).then_some(
-                        fujimod_emulator_parts_wifi::mt5931::Options {
-                            mac_address: [2, 0, 0, 0, 0, 1],
-                            access_point: None,
-                            capability_reply: None,
-                        },
-                    ),
+                    mt5931: (protocol == Protocol::Mt5931).then_some(crate::mt5931::Options {
+                        mac_address: [2, 0, 0, 0, 0, 1],
+                        access_point: None,
+                        capability_reply: None,
+                    }),
                 })
                 .unwrap(),
                 irq: InterruptLine::Shared(79),
