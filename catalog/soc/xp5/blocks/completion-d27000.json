@@ -54,7 +54,7 @@
       "bit": 0
     },
     "delay_ticks": 200000,
-    "basis": "completion handshake Located in catalog/firmware/xe5/1.12/xp5-boot/manifest.d/56-develop-stubs-2.toml."
+    "basis": "completion handshake"
   },
   "evidence": [
     {

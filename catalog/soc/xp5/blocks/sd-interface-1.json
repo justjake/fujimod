@@ -7,7 +7,7 @@
   "kind": "sd-card-controller",
   "device": {
     "model": "sd_interface",
-    "basis": "SD interface register set 1 Located in catalog/firmware/xe5/1.12/xp5-boot/manifest.d/25-sd.toml."
+    "basis": "SD interface register set 1"
   },
   "evidence": [
     {

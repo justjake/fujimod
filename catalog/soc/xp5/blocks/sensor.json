@@ -8,7 +8,7 @@
   "device": {
     "model": "sensor_command",
     "command_ticks": 1000,
-    "basis": "sensor command window; frame timing is a sensor-part fact Located in catalog/firmware/x100vi/1.31/xp5-boot/manifest.d/50-imaging.toml."
+    "basis": "sensor command window; frame timing is a sensor-part fact"
   },
   "evidence": [
     {

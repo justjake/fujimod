@@ -31,7 +31,7 @@
         "mode": "w1c"
       }
     },
-    "basis": "imaging DSP program memory and debug page Located in catalog/firmware/xe5/1.12/xp5-boot/manifest.d/63-hdr.toml."
+    "basis": "imaging DSP program memory and debug page"
   },
   "registers": [
     {

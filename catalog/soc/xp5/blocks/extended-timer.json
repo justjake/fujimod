@@ -7,7 +7,7 @@
   "kind": "timer",
   "device": {
     "model": "xp5_timer_extended",
-    "basis": "extended timer bank feeding input capture Located in catalog/firmware/x100vi/1.31/xp5-boot/manifest.d/10-timer.toml."
+    "basis": "extended timer bank feeding input capture"
   },
   "evidence": [
     {

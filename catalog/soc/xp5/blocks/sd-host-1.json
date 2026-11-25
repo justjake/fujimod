@@ -23,7 +23,7 @@
       }
     ],
     "address_high": 4287686628,
-    "basis": "SDHCI host 1 Located in catalog/firmware/xe5/1.12/xp5-boot/manifest.d/25-sd.toml."
+    "basis": "SDHCI host 1"
   },
   "evidence": [
     {

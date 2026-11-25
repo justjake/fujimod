@@ -12,7 +12,7 @@
     "receive_request": 14,
     "transmit_request": 15,
     "companion_irq_line": 105,
-    "basis": "PL022 serial controller; attached part and select pins are body facts Located in catalog/firmware/xh2s/7.30/xp5-boot/manifest.d/61-companion-serial.toml."
+    "basis": "PL022 serial controller; attached part and select pins are body facts"
   },
   "evidence": [
     {

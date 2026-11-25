@@ -8,7 +8,7 @@
   "device": {
     "model": "register_block",
     "idle_bits": [],
-    "basis": "DMA thread high address words Located in catalog/firmware/x100vi/1.31/xp5-boot/manifest.d/60-mcore.toml."
+    "basis": "DMA thread high address words"
   },
   "registers": [
     {

@@ -7,7 +7,7 @@
   "kind": "adc",
   "device": {
     "model": "xp5_adc",
-    "basis": "ADC with run-supplied key samples Located in catalog/firmware/x100vi/1.31/xp5-boot/manifest.d/30-power-input.toml."
+    "basis": "ADC with run-supplied key samples"
   },
   "evidence": [
     {

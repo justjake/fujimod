@@ -16,7 +16,7 @@
     "fifo_depth": 16,
     "clock_hz": 100000000,
     "tick_hz": 1000000000,
-    "basis": "DesignWare I2C controller Located in catalog/firmware/x100vi/1.31/xp5-boot/manifest.d/30-power-input.toml."
+    "basis": "DesignWare I2C controller"
   },
   "evidence": [
     {

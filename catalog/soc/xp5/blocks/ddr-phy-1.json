@@ -7,7 +7,7 @@
   "kind": "memory-controller",
   "device": {
     "model": "ddr_phy",
-    "basis": "DDR PHY 1 mailbox Located in catalog/firmware/x100vi/1.31/xp5-boot/manifest.d/48-ddr-phy.toml."
+    "basis": "DDR PHY 1 mailbox"
   },
   "registers": [
     {

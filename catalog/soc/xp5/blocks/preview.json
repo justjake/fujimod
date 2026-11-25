@@ -8,7 +8,7 @@
   "device": {
     "model": "imaging_preview",
     "focus_statistics": true,
-    "basis": "preview channel Located in catalog/firmware/x100vi/1.31/xp5-boot/manifest.d/50-imaging.toml. The +0x400 output fills statistics planes 0..3, which only the X-T5 4.31 AF service reads (0x2fea380, 0x2fe36e0), as 13 x 9 cells of its four contrast filters over the window of words +0x7c and +0x80 (catalog/firmware/xt5/4.31/xp5-boot/manifest.d/50-imaging.toml)."
+    "basis": "preview channel The +0x400 output fills statistics planes 0..3, which only the X-T5 4.31 AF service reads (0x2fea380, 0x2fe36e0), as 13 x 9 cells of its four contrast filters over the window of words +0x7c and +0x80."
   },
   "evidence": [
     {

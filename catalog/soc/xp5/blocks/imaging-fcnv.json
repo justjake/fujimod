@@ -39,7 +39,7 @@
         "bit": 0
       }
     },
-    "basis": "frame conversion Located in catalog/firmware/xe5/1.12/xp5-boot/manifest.d/57-develop-stubs-3.toml."
+    "basis": "frame conversion"
   },
   "registers": [
     {

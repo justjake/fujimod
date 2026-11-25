@@ -8,7 +8,7 @@
   "device": {
     "model": "register_block",
     "idle_bits": [],
-    "basis": "DRAM channel 3 memory-controller page written and polled by the X-T5 4.31 S1 path (0x13afe24 writes it; 0x13af930 waits for +0x800 bit 0 to read 1; 0x13afcec waits for +0x820 bit 0 to read 0, seen on channel 2 and given to channel 3 by symmetry). Located in catalog/firmware/xt5/4.31/xp5-boot/manifest.d/48-ddr-phy.toml."
+    "basis": "DRAM channel 3 memory-controller page written and polled by the X-T5 4.31 S1 path (0x13afe24 writes it; 0x13af930 waits for +0x800 bit 0 to read 1; 0x13afcec waits for +0x820 bit 0 to read 0, seen on channel 2 and given to channel 3 by symmetry)."
   },
   "registers": [
     {

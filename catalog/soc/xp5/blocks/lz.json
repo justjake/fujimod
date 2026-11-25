@@ -7,7 +7,7 @@
   "kind": "imaging-controller",
   "device": {
     "model": "decompressor",
-    "basis": "streaming decompressor Located in catalog/firmware/x100vi/1.31/xp5-boot/manifest.d/40-display.toml."
+    "basis": "streaming decompressor"
   },
   "evidence": [
     {

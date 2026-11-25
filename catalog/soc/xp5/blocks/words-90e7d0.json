@@ -8,7 +8,7 @@
   "device": {
     "model": "register_block",
     "idle_bits": [],
-    "basis": "SD slot 0 UHS-II port high address words Located in catalog/firmware/xt5/4.31/xp5-boot/manifest.d/49-gap-stubs.toml."
+    "basis": "SD slot 0 UHS-II port high address words"
   },
   "registers": [
     {

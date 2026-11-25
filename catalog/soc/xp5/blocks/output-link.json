@@ -7,7 +7,7 @@
   "kind": "display-controller",
   "device": {
     "model": "display_output_link",
-    "basis": "display output link request word Located in catalog/firmware/x100vi/1.31/xp5-boot/manifest.d/24-output-link.toml."
+    "basis": "display output link request word"
   },
   "evidence": [
     {

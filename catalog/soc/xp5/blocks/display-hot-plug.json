@@ -8,7 +8,7 @@
   "device": {
     "model": "cable_status",
     "connected_level": 0,
-    "basis": "HDMI hot-plug status word Located in catalog/firmware/x100vi/1.31/xp5-boot/manifest.d/42-hdmi.toml."
+    "basis": "HDMI hot-plug status word"
   },
   "evidence": [
     {

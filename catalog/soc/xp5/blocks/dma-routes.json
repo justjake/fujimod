@@ -8,7 +8,7 @@
   "device": {
     "model": "register_block",
     "idle_bits": [],
-    "basis": "DMA request routing and PL330 request-select words Located in catalog/firmware/x100vi/1.31/xp5-boot/manifest.d/60-mcore.toml."
+    "basis": "DMA request routing and PL330 request-select words"
   },
   "registers": [
     {

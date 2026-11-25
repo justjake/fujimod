@@ -58,37 +58,3 @@ kind = "bringup-stub"
 [device.options]
 registers = [{ offset = 0x780, mode = "constant", value = 1 }]
 
-# Memory-controller setup words the stock setup stores through its word writer 0xff80dffc and
-# never reads back (discovery run of the SD card start, 2026-11-20): 0xfae60000/0xfae61000/
-# 0xfae63000 (+0x0, +0x8, +0x10, +0x50 at +0x000, +0x200 and +0x400), 0xfae70050, 0xfae71050,
-# 0xfae72050, 0xfae8n000/+4 for n = 0..3, and 0xfaf09000/0xfaf19000 (+0x8..+0x4c). Store-only
-# latches: a read stays unmodeled and refuses. 0xfae62000 is the boot manifest's own window.
-[[device]]
-base = 0xfae60000
-size = 0x2000
-kind = "write-only-registers"
-
-[[device]]
-base = 0xfae63000
-size = 0x1000
-kind = "write-only-registers"
-
-[[device]]
-base = 0xfae70000
-size = 0x3000
-kind = "write-only-registers"
-
-[[device]]
-base = 0xfae80000
-size = 0x4000
-kind = "write-only-registers"
-
-[[device]]
-base = 0xfaf09000
-size = 0x1000
-kind = "write-only-registers"
-
-[[device]]
-base = 0xfaf19000
-size = 0x1000
-kind = "write-only-registers"

@@ -13,7 +13,7 @@
   ],
   "device": {
     "model": "usb",
-    "basis": "USB device controller Located in catalog/firmware/xe5/1.12/xp5-boot/manifest.d/64-usb.toml."
+    "basis": "USB device controller"
   },
   "evidence": [
     {

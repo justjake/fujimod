@@ -7,7 +7,7 @@
   "kind": "imaging-controller",
   "device": {
     "model": "imaging_phy",
-    "basis": "imaging PHY page Located in catalog/firmware/x100vi/1.31/xp5-boot/manifest.d/50-imaging.toml."
+    "basis": "imaging PHY page"
   },
   "evidence": [
     {

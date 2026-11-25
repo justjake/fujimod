@@ -9,7 +9,7 @@
     "model": "general_dma",
     "companion_irq_base": 83,
     "a53_irq_base": 237,
-    "basis": "general-purpose DMA controller Located in catalog/firmware/x100vi/1.31/xp5-boot/manifest.d/22-general-dma.toml."
+    "basis": "general-purpose DMA controller"
   },
   "evidence": [
     {

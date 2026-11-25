@@ -7,7 +7,7 @@
   "kind": "dma",
   "device": {
     "model": "flash_storage_dma",
-    "basis": "flash-storage DMA channel Located in catalog/firmware/x100vi/1.31/xp5-boot/manifest.d/20-storage.toml."
+    "basis": "flash-storage DMA channel"
   },
   "evidence": [
     {

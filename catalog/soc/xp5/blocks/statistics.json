@@ -7,7 +7,7 @@
   "kind": "imaging-controller",
   "device": {
     "model": "xp5_imaging_statistics",
-    "basis": "Two AE statistics banks the imaging engines fill and the stock AE service reads. Located in catalog/firmware/x100vi/1.31/xp5-boot/manifest.d/50-imaging.toml. On the X-T5 4.31 the same addresses are the boot-setup SRAM, where the banks are written into memory."
+    "basis": "Two AE statistics banks the imaging engines fill and the stock AE service reads. On the X-T5 4.31 the same addresses are the boot-setup SRAM, where the banks are written into memory."
   },
   "evidence": [
     {

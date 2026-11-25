@@ -9,7 +9,7 @@
     "model": "display",
     "picture_layout": null,
     "video_layout": null,
-    "basis": "display channel 0 Located in catalog/firmware/x100vi/1.31/xp5-boot/manifest.d/40-display.toml."
+    "basis": "display channel 0"
   },
   "evidence": [
     {

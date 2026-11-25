@@ -7,7 +7,7 @@
   "kind": "address-window",
   "device": {
     "model": "serial_flash_aperture",
-    "basis": "serial-flash memory aperture Located in catalog/firmware/x100vi/1.31/xp5-boot/manifest.d/20-storage.toml."
+    "basis": "serial-flash memory aperture"
   },
   "evidence": [
     {

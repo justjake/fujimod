@@ -13,7 +13,7 @@
   ],
   "device": {
     "model": "video_codec",
-    "basis": "video codec page Located in catalog/firmware/xt5/4.31/xp5-boot/manifest.d/61-codec.toml."
+    "basis": "video codec page"
   },
   "evidence": [
     {

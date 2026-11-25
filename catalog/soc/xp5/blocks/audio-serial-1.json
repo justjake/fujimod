@@ -8,7 +8,7 @@
   "device": {
     "model": "audio_serial",
     "reset_offset": 28,
-    "basis": "audio serial output with a 1 kHz test tone Located in catalog/firmware/xt5/4.31/xp5-boot/manifest.d/62-audio.toml."
+    "basis": "audio serial output with a 1 kHz test tone"
   },
   "evidence": [
     {

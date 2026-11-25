@@ -8,7 +8,7 @@
   "device": {
     "model": "register_block",
     "idle_bits": [],
-    "basis": "DRAM channel 3 memory-controller table page, written by the boot table writer and never read. Located in catalog/firmware/xe5/1.12/xp5-boot/manifest.d/49-table-writes.toml."
+    "basis": "DRAM channel 3 memory-controller table page, written by the boot table writer and never read."
   },
   "evidence": [
     {

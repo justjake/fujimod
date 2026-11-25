@@ -8,7 +8,7 @@
   "device": {
     "model": "xp5_timer",
     "focus_capture": true,
-    "basis": "general/PWM16 timer; five firmwares capture the focus pulse Located in catalog/firmware/x100vi/1.31/xp5-boot/manifest.d/10-timer.toml."
+    "basis": "general/PWM16 timer; five firmwares capture the focus pulse"
   },
   "evidence": [
     {
