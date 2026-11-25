@@ -76,6 +76,10 @@ pub struct RunConfiguration {
     /// Test signals this run presents to audio serial receivers; a block without one models only its reset handshake.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub audio_signals: Vec<RunAudioSignal>,
+    /// Imaging input blocks whose word 15 reports idle while their run bit is clear: an
+    /// inferred stand-in a run's recording task waits for.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub idle_status_blocks: Vec<String>,
     /// Named overlays to apply in declaration order.
     pub overlays: Vec<String>,
     /// Browser camera attachments declared by a selected overlay.

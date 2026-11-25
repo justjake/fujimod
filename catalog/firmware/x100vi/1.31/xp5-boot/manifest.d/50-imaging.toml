@@ -35,6 +35,8 @@ kind = "imaging-phy"
 base = 0xff945000
 size = 0x1000
 kind = "imaging-buffer"
+[device.options]
+completion_us = 8000
 
 # Table window: write-only words plus one status word at +0xb30. The status word reads zero; its
 # meaning and silicon reset value are unverified (no capture). Its only reader discards it.
@@ -141,6 +143,8 @@ base = 0xff974000
 size = 0x1000
 kind = "imaging-preview"
 [device.options]
+focus_window = true
+focus_filters = true
 retain_words = true
 frame_period_us = 1000000
 source_luma = 128

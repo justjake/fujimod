@@ -43,6 +43,8 @@ base = 0xff974000
 size = 0x1000
 kind = "imaging-preview"
 [device.options]
+focus_window = true
+focus_filters = true
 retain_words = true
 
 [[device]]

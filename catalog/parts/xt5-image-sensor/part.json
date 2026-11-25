@@ -1,0 +1,13 @@
+{
+  "$schema": "https://fujimod.com/schemas/part.schema.json",
+  "schema": 1,
+  "id": "xt5-image-sensor",
+  "model": {
+    "kind": "peripheral",
+    "interface": {
+      "kind": "timed-readout-sensor",
+      "fast_readout": 7,
+      "line_ns": 6000
+    }
+  }
+}

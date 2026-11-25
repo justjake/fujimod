@@ -195,6 +195,13 @@ pub enum PeripheralPart {
         /// Bits enabling the readout gate.
         read_gate_mask: u8,
     },
+    /// Image sensor with a fast autofocus readout of known line length.
+    TimedReadoutSensor {
+        /// Value of sensor register 0x01 that selects the fast readout.
+        fast_readout: u8,
+        /// Length of one line of that readout.
+        line_ns: u64,
+    },
     /// Power-controller register protocol.
     PowerController {
         /// Registers this controller answers and what each carries.

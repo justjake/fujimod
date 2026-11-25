@@ -417,7 +417,8 @@
     "serial-command-8-mode2",
     "unidentified-serial-device",
     "bis-configuration",
-    "lsm6ds"
+    "lsm6ds",
+    "xt5-image-sensor"
   ],
   "wiring": [
     {
