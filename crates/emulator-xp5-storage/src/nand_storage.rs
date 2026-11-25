@@ -75,6 +75,17 @@ impl NandStorage {
         Ok(())
     }
 
+    pub(crate) fn overlay_seed(&mut self, offset: u64, bytes: Vec<u8>) -> Result<(), String> {
+        let end = offset + bytes.len() as u64;
+        self.die = self.die.overlay_input(Overlay {
+            offset,
+            bytes: Arc::from(bytes),
+        })?;
+        self.dirty
+            .extend(offset / PAGE as u64..=(end - 1) / PAGE as u64);
+        Ok(())
+    }
+
     pub fn read(&self, offset: u64, n: usize) -> Result<Vec<u8>, String> {
         let mut bytes = vec![0xff; n];
         self.die.read(offset, &mut bytes)?;

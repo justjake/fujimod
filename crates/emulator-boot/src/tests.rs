@@ -1205,6 +1205,7 @@ fn common_open_checks_generation_before_loading_startup_files() {
         mode: Mode::Strict,
         quantum: None,
         camera_settings: Default::default(),
+        flash_seeds: Vec::new(),
     });
     assert_eq!(
         open(resolved, inputs).err().unwrap(),

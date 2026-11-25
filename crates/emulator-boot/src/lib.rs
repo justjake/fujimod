@@ -980,6 +980,7 @@ pub fn open_request(resolved: ResolvedConfiguration, request: Request) -> Result
                 mode: discovery_mode(request.discovery),
                 quantum: None,
                 camera_settings: Default::default(),
+                flash_seeds: Vec::new(),
             }),
             _ if resolved.reference.soc.id == "xpp" => {
                 StartupInputs::Application(application::Startup {

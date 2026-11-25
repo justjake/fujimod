@@ -18,6 +18,11 @@ impl Boot for CatalogBoot {
             &inputs.configuration_id,
             &inputs.overlays,
         )?;
+        if !inputs.flash_seeds.is_empty()
+            && !matches!(resolved.configuration.inputs, Some(RunInputs::Xp5(_)))
+        {
+            return Err("flash seeds require an XP5 run configuration".into());
+        }
         if let Some(engine) = inputs.engine {
             resolved.override_engine(
                 engine
@@ -128,6 +133,7 @@ impl Boot for CatalogBoot {
                     mode,
                     quantum: inputs.quantum,
                     camera_settings: inputs.camera_settings,
+                    flash_seeds: inputs.flash_seeds,
                 }),
             )?;
             let inputs = camera.take_xp5_inputs()?;

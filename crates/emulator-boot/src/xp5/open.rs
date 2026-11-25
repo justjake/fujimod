@@ -656,6 +656,57 @@ fn rom_boot_state(state: &BootState, rom: &RomStart) -> Result<BootState, String
     Ok(state)
 }
 
+fn seed_flash(
+    storage: Option<&flash_storage::Medium>,
+    profile: Option<&super::profile::Placed>,
+    seeds: &[(u64, std::path::PathBuf)],
+) -> Result<Vec<(u64, usize, String)>, String> {
+    use std::io::Read;
+
+    if seeds.is_empty() && profile.is_none() {
+        return Ok(Vec::new());
+    }
+    let storage = storage.ok_or("flash seeds or a user profile require flash storage")?;
+    if let Some(profile) = profile {
+        for (offset, bytes) in &profile.records {
+            storage.seed_bytes(*offset, bytes)?;
+        }
+    }
+
+    let mut seeds = seeds.iter().collect::<Vec<_>>();
+    seeds.sort_by_key(|(offset, _)| *offset);
+    let mut end = 0;
+    let mut applied = Vec::with_capacity(seeds.len());
+    for (offset, path) in seeds {
+        let offset = *offset;
+        if offset < end {
+            return Err(format!(
+                "flash seed at {offset:#x} overlaps an earlier seed"
+            ));
+        }
+        if offset >= flash_storage::SIZE {
+            return Err(format!("flash seed at {offset:#x} exceeds the device"));
+        }
+        let limit = flash_storage::SIZE - offset;
+        let file = std::fs::File::open(path)
+            .map_err(|error| format!("cannot open flash seed at {offset:#x}: {error}"))?;
+        let mut bytes = Vec::new();
+        file.take(limit + 1)
+            .read_to_end(&mut bytes)
+            .map_err(|error| format!("cannot read flash seed at {offset:#x}: {error}"))?;
+        if bytes.is_empty() {
+            return Err(format!("flash seed at {offset:#x} is empty"));
+        }
+        if bytes.len() as u64 > limit {
+            return Err(format!("flash seed at {offset:#x} exceeds the device"));
+        }
+        end = offset + bytes.len() as u64;
+        applied.push((offset, bytes.len(), format!("{:x}", Sha256::digest(&bytes))));
+        storage.overlay_seed(offset, bytes)?;
+    }
+    Ok(applied)
+}
+
 /// Open a caller-described XP5 input set through FujiMod's shared XP5 board, optionally resetting
 /// the A53 cores into the boot ROM.
 pub(crate) fn open_from(
@@ -669,6 +720,7 @@ pub(crate) fn open_from(
     rom: Option<&RomStart>,
     loader_cards: &[super::loader_card::LoaderCard],
     profile: Option<&super::profile::Placed>,
+    flash_seeds: &[(u64, std::path::PathBuf)],
 ) -> Result<Opened, String> {
     let mask_rom = rom.is_some_and(|start| matches!(start.entry, Entry::MaskRom(_)));
     let rom_state;
@@ -1168,17 +1220,11 @@ pub(crate) fn open_from(
     if windows.is_empty() {
         return Err("X100VI caller boot manifest has no device windows".into());
     }
-    if let Some(profile) = profile {
-        // The user profile's journal records, as declared seeds of the flash storage (a NOR
-        // session overlay or initial NAND main-area input), so snapshots carry them.
-        let storage = resources
-            .storage
-            .as_ref()
-            .ok_or("a user profile needs flash storage")?;
-        for (offset, bytes) in &profile.records {
-            storage.seed_bytes(*offset, bytes)?;
-        }
+    if !flash_seeds.is_empty() && windows.iter().filter(|w| w.kind == "flash-storage").count() != 1
+    {
+        return Err("flash seeds require a single flash storage device".into());
     }
+    let applied_seeds = seed_flash(resources.storage.as_ref(), profile, flash_seeds)?;
     let mut images = initial_images(firmware, state)?;
     if let Some(Entry::MaskRom(bytes)) = rom.map(|rom| &rom.entry) {
         images.push(MemoryImage {
@@ -1207,6 +1253,10 @@ pub(crate) fn open_from(
     });
     if let (Some(profile), Some(object)) = (profile, definition.as_object_mut()) {
         object.insert("camera_settings".into(), json!(profile.requested));
+    }
+    if !applied_seeds.is_empty() {
+        // Seed contents are part of the machine's checkpoint identity.
+        definition["flash_seeds"] = json!(applied_seeds);
     }
     // A manifest DRAM override changes the machine, so it is part of the run's identity.
     if let (Some(dram), Some(object)) = (&state.dram, definition.as_object_mut()) {
@@ -1371,8 +1421,81 @@ pub(crate) fn open_from(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use fujimod_emulator_devices::{Cx, Device, test_host::recording::RecordingHost};
 
     const DRAM: (u64, u64) = (0, 0x8000_0000);
+
+    #[test]
+    fn flash_seed_files_override_profile_and_read_back_at_the_aperture() {
+        let path = std::env::temp_dir().join(format!("flash-seed-{}", std::process::id()));
+        std::fs::write(&path, [0x21, 0x43, 0x65]).unwrap();
+        let offset = 4095;
+        let seeds = [(offset, path.clone())];
+        let profile = super::super::profile::Placed {
+            records: vec![(offset - 1, vec![0x12; 5])],
+            ..Default::default()
+        };
+        let media = [
+            flash_storage::Medium::Nor(Arc::new(Mutex::new(
+                flash_storage::Storage::new(vec![]).unwrap(),
+            ))),
+            flash_storage::Medium::Nand(Arc::new(Mutex::new(
+                nand_storage::NandStorage::new(vec![]).unwrap(),
+            ))),
+        ];
+        for medium in media {
+            let applied = seed_flash(Some(&medium), Some(&profile), &seeds).unwrap();
+            assert_eq!((applied[0].0, applied[0].1), (offset, 3));
+            let mut aperture = flash_storage::Aperture(medium);
+            let mut host = RecordingHost::default();
+            let mut context = Cx::new(&mut host, 0, 0, 0);
+            assert_eq!(
+                aperture.read(&mut context, flash_storage::BASE + offset - 1, 2),
+                0x2112
+            );
+            assert_eq!(
+                aperture.read(&mut context, flash_storage::BASE + offset + 1, 2),
+                0x6543
+            );
+            assert_eq!(
+                aperture.read(&mut context, flash_storage::BASE + offset + 3, 1),
+                0x12
+            );
+        }
+        assert!(
+            seed_flash(None, None, &seeds)
+                .unwrap_err()
+                .contains("require flash storage")
+        );
+        let medium = flash_storage::Medium::Nor(Arc::new(Mutex::new(
+            flash_storage::Storage::new(vec![]).unwrap(),
+        )));
+        for (seeds, message) in [
+            (
+                vec![(offset + 2, path.clone()), (offset, path.clone())],
+                "overlaps",
+            ),
+            (vec![(flash_storage::SIZE - 2, path.clone())], "exceeds"),
+        ] {
+            assert!(
+                seed_flash(Some(&medium), None, &seeds)
+                    .unwrap_err()
+                    .contains(message)
+            );
+        }
+        std::fs::write(&path, []).unwrap();
+        assert!(
+            seed_flash(Some(&medium), None, &seeds)
+                .unwrap_err()
+                .contains("empty")
+        );
+        std::fs::remove_file(&path).unwrap();
+        assert!(
+            seed_flash(Some(&medium), None, &seeds)
+                .unwrap_err()
+                .contains("cannot open")
+        );
+    }
 
     #[test]
     fn an_entry_extent_the_manifest_declares_as_ram_is_not_mapped_twice() {

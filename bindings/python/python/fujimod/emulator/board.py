@@ -246,6 +246,7 @@ class Board:
         access_point: Mapping[str, object] | None = None,
         capability_reply: Sequence[int] | None = None,
         camera_settings: Mapping[str, str] | None = None,
+        flash_seeds: Sequence[tuple[int, str | PathLike[str]]] = (),
         engine: str | None = None,
         manifest: str | PathLike[str] | None = None,
         application_plan: str | PathLike[str] | None = None,
@@ -291,6 +292,9 @@ class Board:
         ``capability_reply`` is an explicit 20-byte MT5931 capability body,
         needed before stock Wi-Fi initialization accepts command 0x80. It is a
         declared fixture, not a recovered chip reply.
+
+        ``flash_seeds`` supplies nonoverlapping (byte offset, path) ranges for XP5
+        flash. File bytes override the installed image and any user profile records.
 
         ``camera_settings`` names the settings of the user profile an XP5
         loader start boots with, such as ``{"setup": "done", "language":
@@ -386,6 +390,7 @@ class Board:
             access_point=access_point_text,
             capability_reply=capability,
             camera_settings=selected_settings,
+            flash_seeds=list(flash_seeds),
             engine=engine,
             manifest=manifest,
             application_plan=application_plan,

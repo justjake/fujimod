@@ -34,6 +34,7 @@ pub struct Inputs {
     pub capability_reply: Option<Vec<u8>>,
     /// Named camera settings of the user profile an XP5 loader start boots with.
     pub camera_settings: std::collections::BTreeMap<String, String>,
+    pub flash_seeds: Vec<(u64, PathBuf)>,
 }
 
 /// A native catalog session with its processor-specific physical input handle.

@@ -75,7 +75,7 @@ fn declared_power_on_ram_fill(definition: &serde_json::Value) -> Option<u8> {
 #[pymethods]
 impl Board {
     #[staticmethod]
-    #[pyo3(signature=(*, configuration_id, update, boot_rom=None, card_image=None, card_files=Vec::new(), second_card_image=None, second_card_files=Vec::new(), scene=None, overlays=Vec::new(), nand=None, settings=None, clock_seconds_2000=None, preferred_languages=Vec::new(), camera=None, access_point=None, capability_reply=None, camera_settings=std::collections::BTreeMap::new(), engine=None, manifest=None, application_plan=None, discovery=false, quantum=None, instruction_rate=None))]
+    #[pyo3(signature=(*, configuration_id, update, boot_rom=None, card_image=None, card_files=Vec::new(), second_card_image=None, second_card_files=Vec::new(), scene=None, overlays=Vec::new(), nand=None, settings=None, clock_seconds_2000=None, preferred_languages=Vec::new(), camera=None, access_point=None, capability_reply=None, camera_settings=std::collections::BTreeMap::new(), flash_seeds=Vec::new(), engine=None, manifest=None, application_plan=None, discovery=false, quantum=None, instruction_rate=None))]
     fn from_inputs(
         configuration_id: String,
         update: PathBuf,
@@ -94,6 +94,7 @@ impl Board {
         access_point: Option<String>,
         capability_reply: Option<Vec<u8>>,
         camera_settings: std::collections::BTreeMap<String, String>,
+        flash_seeds: Vec<(u64, PathBuf)>,
         engine: Option<String>,
         manifest: Option<PathBuf>,
         application_plan: Option<PathBuf>,
@@ -120,6 +121,7 @@ impl Board {
                 access_point,
                 capability_reply,
                 camera_settings,
+                flash_seeds,
                 engine,
                 manifest,
                 application_plan,
@@ -172,6 +174,19 @@ impl Board {
             .as_u64()
             .and_then(|v| v.try_into().ok())
             .ok_or_else(|| error("board was not constructed from boot inputs".into()))
+    }
+    /// Applied seed offsets and lengths, without file names or content.
+    #[getter]
+    fn flash_seed_ranges(&self) -> PyResult<Vec<(u64, usize)>> {
+        let Some(seeds) = self.session()?.definition.get("flash_seeds") else {
+            return Ok(Vec::new());
+        };
+        let seeds: Vec<(u64, usize, String)> =
+            serde_json::from_value(seeds.clone()).map_err(|failure| error(failure.to_string()))?;
+        Ok(seeds
+            .into_iter()
+            .map(|(offset, size, _)| (offset, size))
+            .collect())
     }
     /// The byte this board's DRAM holds at power-on, or None when no camera
     /// measured one (RAM then starts zeroed).
