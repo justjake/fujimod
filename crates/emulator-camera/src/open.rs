@@ -635,14 +635,6 @@ fn confirm(
     Ok(sha256)
 }
 
-/// The index of a card file name, or where to add it.
-pub(crate) fn card_index(files: &[(String, Vec<u8>)], name: &str) -> usize {
-    files
-        .iter()
-        .position(|(existing, _)| existing == name)
-        .unwrap_or(files.len())
-}
-
 /// Restore the media a power-on keeps: internal flash and the SD card medium.
 fn apply_kept_media(session: &mut Session, kept: KeptMedia) -> Result<(), OpenError> {
     if let Some(nand) = kept.nand {

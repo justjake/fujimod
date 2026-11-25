@@ -20,7 +20,6 @@
 mod autostart;
 mod release;
 
-use fujimod_catalog::nand_boot::FirmwareNandBoot;
 use fujimod_emulator_camera as emulator;
 use fujimod_emulator_camera::{
     CardInputs, Opened as EmulatorOpened, Request as EmulatorRequest, Start,
@@ -30,7 +29,7 @@ use serde_json::Value;
 use sha2::{Digest, Sha256};
 use std::{
     fs,
-    path::{Path, PathBuf},
+    path::PathBuf,
 };
 
 pub use autostart::stock_menus;
@@ -467,10 +466,3 @@ pub(crate) fn flash_path(state: &StateDir, firmware: &str, files: &[(String, Vec
         .join(format!("{}.flash", flash_key(firmware, files)))
 }
 
-/// The NAND facts the stage-1 blocks belong to.
-pub(crate) type NandFacts = FirmwareNandBoot;
-
-/// A path's display name for errors.
-pub(crate) fn display(path: &Path) -> String {
-    path.display().to_string()
-}
