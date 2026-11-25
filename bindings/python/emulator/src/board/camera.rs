@@ -114,7 +114,8 @@ impl Board {
         };
         let emulator_layer = matches!(files, emulator::FirmwareInput::Files { .. })
             || flash.is_some()
-            || combination.is_some();
+            || combination.is_some()
+            || image.is_some();
         if emulator_layer {
             if boot != "stock" {
                 return Err(PyValueError::new_err(
@@ -171,11 +172,6 @@ impl Board {
             )
             .map_err(|failure| error(failure.to_string()))?;
             return Ok(Self::from_emulator(opened));
-        }
-        if image.is_some() {
-            return Err(PyValueError::new_err(
-                "a RAM image opens the emulator layer; give update and boot_rom",
-            ));
         }
         let preset = Preset::parse(boot).ok_or_else(|| {
             PyValueError::new_err(format!(

@@ -501,7 +501,10 @@ class Board:
                 raise ValueError("card_layout needs the card present")
             layout_text = json.dumps(selected_layout)
         emulator_layer = (
-            update is not None or flash is not None or combination is not None
+            update is not None
+            or flash is not None
+            or combination is not None
+            or image is not None
         )
         if emulator_layer and boot != "stock":
             raise ValueError(
