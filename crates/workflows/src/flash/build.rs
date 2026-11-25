@@ -198,6 +198,9 @@ pub fn prepare(input: &Selection, selected: &ResolvedSelection) -> Result<(Artif
     if flash.transport.as_deref() == Some("xpp-cmd-callback") {
         return prepare_xpp(input, selected, flash, bulk);
     }
+    if flash.transport.as_deref() == Some("xp4-camera-code") {
+        return prepare_xp4(input, selected, flash, bulk);
+    }
     check(
         flash.transport.as_deref() == Some("xp5-cmd-callback"),
         "unsupported reader transport",
@@ -706,6 +709,242 @@ fn prepare_xpp(
     ))
 }
 
+/// Package a verified ARM32 XP4 reader, its `0x450006` callback profile and
+/// linked-symbol map into a staged command artifact.
+fn prepare_xp4(
+    input: &Selection,
+    selected: &ResolvedSelection,
+    flash: &FirmwareFlash,
+    bulk: &FirmwareBulk,
+) -> Result<(Artifact, Vec<u8>)> {
+    check(
+        flash.transport.as_deref() == Some("xp4-camera-code"),
+        "XP4 flash reading requires the xp4-camera-code transport",
+    )?;
+    let update_identity = selected
+        .firmware
+        .update
+        .as_ref()
+        .ok_or("no update identity")?;
+    let update = fs::read(&input.update)?;
+    check(
+        update.len() as u64 == update_identity.size && sha256(&update) == update_identity.sha256,
+        "update identity differs",
+    )?;
+    let inverted = invert(&update);
+    let profile = document(&input.callback)?;
+    check(
+        profile["schema"] == "xp4-cmd-callback-v1"
+            && profile["firmware_id"] == selected.firmware.id
+            && profile["firmware_sha256"] == update_identity.sha256,
+        "XP4 callback profile/source mismatch",
+    )?;
+    let callback = &profile["callback"];
+    let callback_address = num(callback, "address")?;
+    let callback_original = u32::try_from(num(callback, "original")?)?;
+    check(
+        callback_address.is_multiple_of(4) && callback_original.is_multiple_of(4),
+        "XP4 callback slot or original pointer is invalid",
+    )?;
+    let tag = u32::try_from(num(&profile, "tag")?)?;
+    check(tag != 0, "XP4 callback selector is zero")?;
+    let buffer_address = num(&profile["buffer"], "address")?;
+    let buffer_capacity = u32::try_from(num(&profile["buffer"], "size")?)?;
+
+    let map = document(&input.load_map)?;
+    check(
+        map["format_version"] == 2
+            && map["firmware_id"] == selected.firmware.id
+            && map["firmware_sha256"] == update_identity.sha256,
+        "load-map identity differs",
+    )?;
+    let units = sources(&map, &inverted)?;
+    check(
+        units.iter().any(|unit| {
+            callback_address >= unit.bss
+                && callback_address
+                    .checked_add(4)
+                    .is_some_and(|end| end <= unit.bss + unit.bss_size)
+        }),
+        "XP4 callback slot is not in resident BSS",
+    )?;
+    let callback_body = get(callback, "body")?;
+    let callback_check = CodeCheck {
+        address: num(callback_body, "address")?,
+        size: num(callback_body, "size")?,
+        sha256: String::new(),
+    };
+    let callback_check = CodeCheck {
+        sha256: sha256(source(&units, callback_check.address, callback_check.size)?),
+        ..callback_check
+    };
+
+    let manifest = document(&input.manifest)?;
+    check(
+        manifest["target"] == selected.firmware.id
+            && manifest["firmware_sha256"] == update_identity.sha256
+            && manifest["mode"] == "runtime"
+            && list(&manifest, "words")?.is_empty()
+            && list(&manifest, "overrides")?.is_empty()
+            && list(&manifest, "inits")?.is_empty(),
+        "unsupported XP4 payload build or identity",
+    )?;
+    let regions = list(&manifest, "regions")?;
+    check(regions.len() == 1, "XP4 build requires one region")?;
+    let region = &regions[0];
+    let file = text(region, "file")?;
+    check(
+        Path::new(file).components().count() == 1
+            && !matches!(file, "." | "..")
+            && !Path::new(file).is_absolute(),
+        "XP4 payload image must be beside its manifest",
+    )?;
+    let image = fs::read(
+        input
+            .manifest
+            .parent()
+            .ok_or("XP4 manifest directory")?
+            .join(file),
+    )?;
+    check(
+        image.len() as u64 == num(region, "size")? && sha256(&image) == text(region, "sha256")?,
+        "compiled XP4 image identity differs",
+    )?;
+    let base = num(region, "address")?;
+    let capacity = num(&manifest["region"], "size")?;
+    check(
+        num(&manifest["region"], "address")? == base
+            && !image.is_empty()
+            && image.len() as u64 <= capacity
+            && capacity <= super::xp4::CHUNK_CAPACITY,
+        "compiled XP4 region differs from its selected target",
+    )?;
+    let entry = symbol(&manifest, "flash_reader", None, base, image.len() as u64)?;
+    check(
+        num(
+            one(list(&manifest, "entrypoints")?, "name", "flash_reader")?,
+            "address",
+        )? == entry,
+        "entrypoint differs",
+    )?;
+    let request = symbol(
+        &manifest,
+        "flash_reader_request",
+        Some(16),
+        base,
+        image.len() as u64,
+    )?;
+    let result = symbol(
+        &manifest,
+        "flash_reader_result",
+        Some(24),
+        base,
+        image.len() as u64,
+    )?;
+    let mutable = list(&manifest, "symbols")?
+        .iter()
+        .filter(|symbol| symbol["type"] == "STT_OBJECT")
+        .map(|symbol| {
+            Ok(Range {
+                address: num(symbol, "address")?,
+                size: num(symbol, "size")?,
+            })
+        })
+        .collect::<Result<Vec<_>>>()?;
+    let overlaps = |a: u64, size_a: u64, b: u64, size_b: u64| {
+        a < b.saturating_add(size_b) && b < a.saturating_add(size_a)
+    };
+    let buffer_size = u64::from(buffer_capacity);
+    check(
+        !overlaps(base, capacity, buffer_address, buffer_size)
+            && !overlaps(buffer_address, buffer_size, callback_address, 4)
+            && !overlaps(buffer_address, buffer_size, request, 16)
+            && !overlaps(buffer_address, buffer_size, result, 24)
+            && !overlaps(base, capacity, callback_address, 4),
+        "XP4 owned buffer, callback, or executable ranges overlap",
+    )?;
+    check(
+        buffer_size <= super::xp4::CHUNK_CAPACITY
+            && buffer_size >= flash.control.size
+            && buffer_size.is_multiple_of(super::xp4::READ_ALIGNMENT)
+            && buffer_address.is_multiple_of(super::xp4::READ_ALIGNMENT),
+        "XP4 owned buffer exceeds its 32 KiB alignment bound",
+    )?;
+    let reader = flash
+        .reader
+        .as_ref()
+        .ok_or("XP4 flash reader contract is missing")?;
+    check(
+        reader.alignment != 0
+            && super::xp4::READ_ALIGNMENT.is_multiple_of(u64::from(reader.alignment))
+            && flash
+                .window
+                .address
+                .is_multiple_of(super::xp4::READ_ALIGNMENT),
+        "XP4 stock reader alignment differs",
+    )?;
+    let stock = one(list(&manifest, "stock_symbols")?, "name", &reader.symbol)?;
+    let stock_reader = num(stock, "address")?;
+    check(
+        flash
+            .code_ranges
+            .iter()
+            .any(|range| range.name == reader.symbol && range.address == stock_reader),
+        "XP4 stock reader import differs from the catalog",
+    )?;
+    let checks = flash
+        .code_ranges
+        .iter()
+        .map(|range| {
+            Ok(CodeCheck {
+                address: range.address,
+                size: range.size,
+                sha256: sha256(source(&units, range.address, range.size)?),
+            })
+        })
+        .collect::<Result<Vec<_>>>()?;
+    check(flash.update_image.xor == 255, "unsupported XP4 update XOR")?;
+    let update_size = (inverted.len() as u64)
+        .checked_sub(flash.update_image.dat_offset)
+        .ok_or("invalid XP4 update origin")?
+        .min(flash.window.size);
+    let update_bytes = extent(&inverted, flash.update_image.dat_offset, update_size)?;
+    let control = extent(update_bytes, flash.control.offset, flash.control.size)?;
+    let payload = super::xp4::Payload {
+        schema: 1,
+        firmware_id: selected.firmware.id.clone(),
+        firmware_sha256: update_identity.sha256.clone(),
+        address: base,
+        capacity,
+        sha256: sha256(&image),
+        entry,
+        request,
+        result,
+        buffer: buffer_address,
+        buffer_capacity,
+        stock_reader,
+        stock_reader_symbol: reader.symbol.clone(),
+        tag,
+        mutable,
+        transport: super::xp4::Callback {
+            address: callback_address,
+            original: callback_original,
+            checks: vec![callback_check],
+        },
+        checks,
+        control_sha256: sha256(control),
+        update_size,
+    };
+    payload.validate(flash, bulk, &image)?;
+    Ok((
+        Artifact {
+            payload: Payload::Xp4Command(payload),
+            image: Some("flash-reader.bin".into()),
+        },
+        image,
+    ))
+}
+
 /// Build every declared selection and stage metadata and binary images. The
 /// runtime catalog is replaced only after all payloads validate successfully.
 fn prepare_exr2(input: &Selection, selected: &ResolvedSelection) -> Result<(Artifact, Vec<u8>)> {
@@ -872,6 +1111,10 @@ pub fn stage(recipe: &Stage) -> Result<()> {
                 .bulk
                 .as_ref()
                 .ok_or("mapped firmware has no bulk contract")?;
+            check(
+                flash.transport.as_deref() != Some("xp4-camera-code"),
+                "XP4 staging requires a compiled reader command",
+            )?;
             let update = selected
                 .firmware
                 .update
@@ -950,3 +1193,7 @@ pub fn stage(recipe: &Stage) -> Result<()> {
     fs::rename(temporary, path)?;
     Ok(())
 }
+
+#[cfg(test)]
+#[path = "build_tests.rs"]
+mod tests;
