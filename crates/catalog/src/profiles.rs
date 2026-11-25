@@ -2227,70 +2227,6 @@ pub struct ResetRelease {
     pub target: u64,
 }
 
-/// Declared windows options facts.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
-#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
-#[serde(deny_unknown_fields)]
-#[cfg_attr(feature = "schema", schemars(rename = "HardwareBlockParameters"))]
-pub struct BlockParameters {
-    /// Declared memory-configuration commit latency in guest ticks.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub commit_ticks: Option<u64>,
-    /// Declared command latency us.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub command_latency_us: Option<u64>,
-    /// Declared read-only clock configuration input.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub configuration_word: Option<u32>,
-    /// Declared companion irq base.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub companion_irq_base: Option<u64>,
-    /// Declared virtual time from an I2C byte command to its completion.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub byte_ns: Option<u64>,
-    /// Declared interrupt line of the block.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub interrupt: Option<u32>,
-    /// Declared receive request.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub receive_request: Option<u64>,
-    /// Declared source hz.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub source_hz: Option<u64>,
-    /// Declared ticks per second.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub ticks_per_second: Option<u64>,
-    /// Declared self-clearing reset-request offset.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub trigger_offset: Option<u64>,
-    /// Declared transmit request.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub transmit_request: Option<u64>,
-}
-
-/// Declared windows facts.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
-#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
-#[serde(deny_unknown_fields)]
-#[cfg_attr(feature = "schema", schemars(rename = "HardwareRegisterWindow"))]
-pub struct RegisterWindow {
-    /// Declared attachment.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub attachment: Option<String>,
-    /// Declared base.
-    pub base: u64,
-    /// Declared kind.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub kind: Option<String>,
-    /// Declared name.
-    pub name: String,
-    /// Declared options.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub options: Option<BlockParameters>,
-    /// Declared size.
-    pub size: u64,
-}
-
 /// Declared soc profile facts.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
@@ -2299,9 +2235,6 @@ pub struct SocProfile {
     /// Qualification of the declared processor cache capacities.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub cache_basis: Option<String>,
-    /// Declared windows.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub windows: Option<Vec<RegisterWindow>>,
 }
 
 /// Device implementations selected by a declared hardware graph.

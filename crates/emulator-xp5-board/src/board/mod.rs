@@ -74,12 +74,6 @@ fn register_with_resources(
                 )?),
             )?;
         }
-        "unmodeled-bus-drain" => {
-            if !window.options.is_empty() {
-                return Err("unmodeled bus drain takes no options".into());
-            }
-            bus.register(window.base, window.size, Box::new(UnmodeledBusDrain))?;
-        }
         "sd-interface" => {
             if window.size != 8 || !window.options.is_empty() {
                 return Err("Invalid SD interface window".into());
@@ -884,7 +878,6 @@ pub fn register_all(
             | "imaging-rifp-io"
             | "imaging-preview"
             | "imaging-buffer"
-            | "imaging-table"
             | "imaging-input"
             | "imaging-reset"
             | "movdc"
@@ -1018,18 +1011,3 @@ pub fn register_all(
     Ok(())
 }
 
-// An explicitly unmodeled window can be present in a board graph. Every access
-// still refuses; its presence supplies no completion or register value.
-struct UnmodeledBusDrain;
-impl fujimod_emulator_devices::Device for UnmodeledBusDrain {
-    fn name(&self) -> &'static str {
-        "unmodeled-bus-drain"
-    }
-    fn read(&mut self, cx: &mut fujimod_emulator_devices::Cx<'_>, _: u64, _: u8) -> u64 {
-        cx.unmodeled();
-        0
-    }
-    fn write(&mut self, cx: &mut fujimod_emulator_devices::Cx<'_>, _: u64, _: u8, _: u64) {
-        cx.unmodeled();
-    }
-}

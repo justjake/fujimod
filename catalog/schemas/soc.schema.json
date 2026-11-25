@@ -3783,112 +3783,6 @@
         }
       ]
     },
-    "HardwareBlockParameters": {
-      "additionalProperties": false,
-      "description": "Declared windows options facts.",
-      "properties": {
-        "byte_ns": {
-          "description": "Declared virtual time from an I2C byte command to its completion.",
-          "format": "uint64",
-          "minimum": 0,
-          "type": [
-            "integer",
-            "null"
-          ]
-        },
-        "command_latency_us": {
-          "description": "Declared command latency us.",
-          "format": "uint64",
-          "minimum": 0,
-          "type": [
-            "integer",
-            "null"
-          ]
-        },
-        "commit_ticks": {
-          "description": "Declared memory-configuration commit latency in guest ticks.",
-          "format": "uint64",
-          "minimum": 0,
-          "type": [
-            "integer",
-            "null"
-          ]
-        },
-        "companion_irq_base": {
-          "description": "Declared companion irq base.",
-          "format": "uint64",
-          "minimum": 0,
-          "type": [
-            "integer",
-            "null"
-          ]
-        },
-        "configuration_word": {
-          "description": "Declared read-only clock configuration input.",
-          "format": "uint32",
-          "minimum": 0,
-          "type": [
-            "integer",
-            "null"
-          ]
-        },
-        "interrupt": {
-          "description": "Declared interrupt line of the block.",
-          "format": "uint32",
-          "minimum": 0,
-          "type": [
-            "integer",
-            "null"
-          ]
-        },
-        "receive_request": {
-          "description": "Declared receive request.",
-          "format": "uint64",
-          "minimum": 0,
-          "type": [
-            "integer",
-            "null"
-          ]
-        },
-        "source_hz": {
-          "description": "Declared source hz.",
-          "format": "uint64",
-          "minimum": 0,
-          "type": [
-            "integer",
-            "null"
-          ]
-        },
-        "ticks_per_second": {
-          "description": "Declared ticks per second.",
-          "format": "uint64",
-          "minimum": 0,
-          "type": [
-            "integer",
-            "null"
-          ]
-        },
-        "transmit_request": {
-          "description": "Declared transmit request.",
-          "format": "uint64",
-          "minimum": 0,
-          "type": [
-            "integer",
-            "null"
-          ]
-        },
-        "trigger_offset": {
-          "description": "Declared self-clearing reset-request offset.",
-          "format": "uint64",
-          "minimum": 0,
-          "type": [
-            "integer",
-            "null"
-          ]
-        }
-      },
-      "type": "object"
-    },
     "HardwareDisplayScanout": {
       "additionalProperties": false,
       "description": "Host output index and capture period of a display output's OSD layers.",
@@ -4050,59 +3944,6 @@
       "required": [
         "mask",
         "offset"
-      ],
-      "type": "object"
-    },
-    "HardwareRegisterWindow": {
-      "additionalProperties": false,
-      "description": "Declared windows facts.",
-      "properties": {
-        "attachment": {
-          "description": "Declared attachment.",
-          "type": [
-            "string",
-            "null"
-          ]
-        },
-        "base": {
-          "description": "Declared base.",
-          "format": "uint64",
-          "minimum": 0,
-          "type": "integer"
-        },
-        "kind": {
-          "description": "Declared kind.",
-          "type": [
-            "string",
-            "null"
-          ]
-        },
-        "name": {
-          "description": "Declared name.",
-          "type": "string"
-        },
-        "options": {
-          "anyOf": [
-            {
-              "$ref": "#/$defs/HardwareBlockParameters"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "description": "Declared options."
-        },
-        "size": {
-          "description": "Declared size.",
-          "format": "uint64",
-          "minimum": 0,
-          "type": "integer"
-        }
-      },
-      "required": [
-        "base",
-        "name",
-        "size"
       ],
       "type": "object"
     },
@@ -4959,16 +4800,6 @@
           "description": "Qualification of the declared processor cache capacities.",
           "type": [
             "string",
-            "null"
-          ]
-        },
-        "windows": {
-          "description": "Declared windows.",
-          "items": {
-            "$ref": "#/$defs/HardwareRegisterWindow"
-          },
-          "type": [
-            "array",
             "null"
           ]
         }
