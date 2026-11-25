@@ -164,7 +164,62 @@ impl Catalog {
             .map(|b| Ok(json!([b.base() + b.number("request_offset")?, b.number("ack_ticks")?])))
             .collect::<Result<Vec<_>, String>>()?;
         out.insert("control_requests".into(), json!(requests));
+        if self.soc["id"] == "xp4" {
+            self.xp4_fields(&mut out)?;
+        }
         Ok(out)
+    }
+
+    /// The XP4 imaging and still devices, each from the block that owns it.
+    fn xp4_fields(&self, out: &mut Map<String, Value>) -> Result<(), String> {
+        let required = |model: &str| {
+            self.device(model)
+                .ok_or_else(|| format!("XP4 requires a declared {model} block"))
+        };
+        let jpeg = self
+            .with_device("jpeg_codec")
+            .into_iter()
+            .find(|b| !b.id().contains("decoder"))
+            .ok_or("XP4 requires a declared JPEG encoder block")?;
+        let memory_type = self.block(jpeg.field("memory_type_block_id")?.as_str().unwrap_or_default())?;
+        out.insert("jpeg_encoder".into(), json!({"base": jpeg.base(), "irq": jpeg.interrupt(None),
+            "run_ticks": jpeg.number("run_ticks")?, "memory_type": memory_type.base()}));
+        let engines = self
+            .with_device("still_engine")
+            .into_iter()
+            .map(|b| Ok(json!({"engine": b.field("engine")?, "base": b.base(), "irq": b.interrupt(None),
+                "run_ticks": b.number("run_ticks")?})))
+            .collect::<Result<Vec<_>, String>>()?;
+        out.insert("still_engines".into(), json!(engines));
+        let dsp = required("dsp")?;
+        out.insert("dsp".into(), json!({"irq": dsp.interrupt(None), "run_ticks": dsp.number("run_ticks")?}));
+        let face = required("face_detection")?;
+        out.insert("face_detector".into(), json!({"base": face.base(), "irq": face.interrupt(None),
+            "run_ticks": face.number("run_ticks")?}));
+        let filter = required("filter_engine")?;
+        let types = self.block(filter.field("memory_types_block_id")?.as_str().unwrap_or_default())?;
+        out.insert("filter_engine".into(), json!({"base": filter.base(), "memory_types": types.base(),
+            "irq": filter.interrupt(None), "run_ticks": filter.number("run_ticks")?}));
+        let countdown = required("countdown_timer")?;
+        let routes = countdown
+            .interrupts()
+            .iter()
+            .map(|row| {
+                let channel = row["output"].as_str().and_then(|n| n.strip_prefix("channel"))
+                    .and_then(|n| n.parse::<u64>().ok()).ok_or("a countdown output is not a channel")?;
+                Ok((channel, row["line"].clone()))
+            })
+            .collect::<Result<Vec<_>, String>>()?;
+        let mut channels: Vec<u64> = routes.iter().map(|r| r.0).collect();
+        channels.sort_unstable();
+        if channels != (0..countdown.number("channels")?).collect::<Vec<_>>() {
+            return Err("the countdown timer block must route every channel once".into());
+        }
+        out.insert("countdown_timers".into(), json!([countdown.base(),
+            routes.iter().map(|(c, l)| json!([c, l])).collect::<Vec<_>>()]));
+        let usb = required("usb_condition")?;
+        out.insert("usb_condition".into(), json!([usb.base(), false]));
+        Ok(())
     }
 }
 
