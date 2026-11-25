@@ -2171,7 +2171,8 @@
       "event": 1,
       "debug_key": "EXE_M",
       "target": {
-        "kind": "unclaimed"
+        "kind": "control",
+        "control_id": "menu_ok_button"
       },
       "scanner": {
         "index": 30,
@@ -2190,7 +2191,8 @@
       "event": 2,
       "debug_key": "UP",
       "target": {
-        "kind": "unclaimed"
+        "kind": "control",
+        "control_id": "selector_up_button"
       },
       "scanner": {
         "index": 31,
@@ -2209,7 +2211,8 @@
       "event": 3,
       "debug_key": "DOWN",
       "target": {
-        "kind": "unclaimed"
+        "kind": "control",
+        "control_id": "selector_down_button"
       },
       "scanner": {
         "index": 32,
@@ -2228,7 +2231,8 @@
       "event": 4,
       "debug_key": "LEFT",
       "target": {
-        "kind": "unclaimed"
+        "kind": "control",
+        "control_id": "selector_left_button"
       },
       "scanner": {
         "index": 33,
@@ -2247,7 +2251,8 @@
       "event": 5,
       "debug_key": "RIGHT",
       "target": {
-        "kind": "unclaimed"
+        "kind": "control",
+        "control_id": "selector_right_button"
       },
       "scanner": {
         "index": 34,
