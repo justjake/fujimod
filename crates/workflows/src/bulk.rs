@@ -59,14 +59,33 @@ pub enum MappedPhase {
 /// Pre-I/O refusals keep `address` and `length` in flash-offset order. Once a
 /// command is issued, the same fields name the mapped CPU range of the failed
 /// command, so a timeout can be distinguished from a bounds or hash refusal.
-#[derive(Debug, thiserror::Error)]
-#[error("mapped E1 {phase:?} failed at address {address:#x} length {length:#x}: {source}")]
+/// The primary cause stays typed in `source`; a failed restore is kept typed in
+/// `cleanup` instead of being flattened into the primary message.
+#[derive(Debug)]
 pub struct MappedFailure {
     pub phase: MappedPhase,
     pub address: u64,
     pub length: u64,
-    #[source]
     pub source: Box<BulkError>,
+    pub cleanup: Option<Box<BulkError>>,
+}
+impl std::fmt::Display for MappedFailure {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "mapped E1 {:?} failed at address {:#x} length {:#x}: {}",
+            self.phase, self.address, self.length, self.source
+        )?;
+        if let Some(cleanup) = &self.cleanup {
+            write!(f, "; cleanup failed: {cleanup}")?;
+        }
+        Ok(())
+    }
+}
+impl std::error::Error for MappedFailure {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        Some(self.source.as_ref())
+    }
 }
 
 fn address(value: u64) -> Result<u32> {
@@ -315,6 +334,13 @@ impl<'a> Qualified<'a> {
     }
     pub(crate) fn capacity(&self) -> u32 {
         self.source.window.capacity().get()
+    }
+    /// CPU address and byte count of the saved publication words, if any.
+    pub(crate) fn saved(&self) -> Option<(u64, u64)> {
+        self.source
+            .saved
+            .as_ref()
+            .map(|(address, original, _)| (*address, original.len() as u64))
     }
     pub(crate) async fn read_progress(
         &mut self,
