@@ -32,7 +32,9 @@ pub struct Companion {
 pub struct Resources {
     pub sd: BTreeMap<u64, sd::Media>,
     /// The power-controller register that counts a command dial's detents.
-    pub counting_dial: Option<u8>,
+    /// Counting command dial: register, and whether the front dial counts in
+    /// bits 7..4 of the same register (the rear in bits 3..0).
+    pub counting_dial: Option<(u8, bool)>,
     pub pins: fujimod_emulator_devices::xp5::pins::SharedPins,
     pub clocks: fujimod_emulator_devices::xp5::panel_clocks::Clocks,
     pub companion: Option<Companion>,

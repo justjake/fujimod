@@ -423,38 +423,51 @@ pub fn compile(
         });
     }
     let mut interfaces = Vec::new();
-    let mut rotary =
-        |names: &Option<(String, String)>, node: Option<&String>| -> Result<(), String> {
-            let (Some((id, label)), Some(node)) = (names, node) else {
-                return Ok(());
-            };
-            catalog.push(ControlInput {
-                id: id.clone(),
-                label: label.clone(),
-                kind: "rotary".into(),
-                supported: true,
-                unavailable: None,
-                positions: None,
-                initial: None,
-                relative: Some(true),
-                width: None,
-                height: None,
-                stages: None,
-            });
-            interfaces.push(Interface::Rotary {
-                id: id.clone(),
-                node: node.clone(),
-                edges_per_step: 1,
-            });
-            Ok(())
+    let mut rotary = |names: &Option<(String, String)>,
+                      node: Option<&String>,
+                      edges_per_step: i32|
+     -> Result<(), String> {
+        let (Some((id, label)), Some(node)) = (names, node) else {
+            return Ok(());
         };
+        catalog.push(ControlInput {
+            id: id.clone(),
+            label: label.clone(),
+            kind: "rotary".into(),
+            supported: true,
+            unavailable: None,
+            positions: None,
+            initial: None,
+            relative: Some(true),
+            width: None,
+            height: None,
+            stages: None,
+        });
+        interfaces.push(Interface::Rotary {
+            id: id.clone(),
+            node: node.clone(),
+            edges_per_step,
+        });
+        Ok(())
+    };
     match &options.rear_dial {
-        Some(CommandDial::Counting(_)) => rotary(&names.rear_dial, Some(&nodes.power.0))?,
-        Some(CommandDial::Quadrature(_)) => rotary(&names.rear_dial, nodes.rear_dial.as_ref())?,
+        Some(CommandDial::Counting(dial)) => {
+            rotary(&names.rear_dial, Some(&nodes.power.0), 1)?;
+            // The front dial shares the register: its detents arrive as
+            // multiples of FRONT_EDGES so the controller can tell them apart.
+            if dial.front_high_nibble {
+                rotary(
+                    &names.front_dial,
+                    Some(&nodes.power.0),
+                    crate::board::serial::FRONT_EDGES,
+                )?;
+            }
+        }
+        Some(CommandDial::Quadrature(_)) => rotary(&names.rear_dial, nodes.rear_dial.as_ref(), 1)?,
         None => {}
     }
     if options.front_dial.is_some() {
-        rotary(&names.front_dial, nodes.front_dial.as_ref())?;
+        rotary(&names.front_dial, nodes.front_dial.as_ref(), 1)?;
     }
     Ok(Panel {
         wiring: Spec { controls, circuits },
@@ -688,7 +701,32 @@ mod tests {
         let full = half.transition("shutter_button", "full").unwrap();
         let signals = full.signals().unwrap();
         assert!(signals.contains(&pad(0, false)) && signals.contains(&pad(1, false)));
-        assert!(panel.confirmation.interfaces.is_empty());
+        // Both command dials share the power controller's register 0x41; the
+        // front dial's detents arrive as multiples of FRONT_EDGES.
+        let dials: Vec<_> = panel
+            .confirmation
+            .interfaces
+            .iter()
+            .map(|interface| match interface {
+                Interface::Rotary {
+                    id,
+                    node,
+                    edges_per_step,
+                } => (id.as_str(), node.as_str(), *edges_per_step),
+                _ => panic!("unexpected interface"),
+            })
+            .collect();
+        assert_eq!(
+            dials,
+            [
+                ("rear_command_dial", "spi", 1),
+                (
+                    "front_command_dial",
+                    "spi",
+                    crate::board::serial::FRONT_EDGES
+                )
+            ]
+        );
     }
 
     #[test]

@@ -102,7 +102,13 @@ struct CountingDial {
     inner: PowerController,
     register: u8,
     count: i32,
+    /// With a front dial in bits 7..4 of the same register, its count. Turns
+    /// arrive as edges: a multiple of [`FRONT_EDGES`] is front detents, any
+    /// other count is rear detents (see `ladders::CountingDial`).
+    front: Option<i32>,
 }
+/// Edges per front-dial detent on a register shared with the rear dial.
+pub const FRONT_EDGES: i32 = 64;
 /// Bound of detents the host may queue ahead of the guest's reads.
 const COUNT_LIMIT: i32 = 1 << 16;
 impl Endpoint for CountingDial {
@@ -123,12 +129,18 @@ impl Endpoint for CountingDial {
         {
             let steps = self.count.clamp(-8, 7);
             self.count -= steps;
-            self.inner.set_register(self.register, (steps as u16) & 0xf);
+            let mut value = (steps as u16) & 0xf;
+            if let Some(front) = &mut self.front {
+                let steps = (*front).clamp(-8, 7);
+                *front -= steps;
+                value |= ((steps as u16) & 0xf) << 4;
+            }
+            self.inner.set_register(self.register, value);
         }
         self.inner.transfer(frame, now_ns)
     }
     fn checkpoint(&self) -> Result<fujimod_emulator_devices::checkpoint::Checkpoint, String> {
-        if self.count != 0 {
+        if self.count != 0 || self.front.is_some_and(|front| front != 0) {
             return Err("command-dial detents are waiting for the guest; run before saving".into());
         }
         self.inner.checkpoint()
@@ -144,6 +156,9 @@ impl Endpoint for CountingDial {
         saved: &fujimod_emulator_devices::checkpoint::Checkpoint,
     ) -> Result<(), String> {
         self.count = 0;
+        if let Some(front) = &mut self.front {
+            *front = 0;
+        }
         self.inner.restore_checkpoint(saved)
     }
     fn save(&self) -> serde_json::Value {
@@ -151,6 +166,9 @@ impl Endpoint for CountingDial {
     }
     fn restore(&mut self, state: &serde_json::Value) -> Result<(), String> {
         self.count = 0;
+        if let Some(front) = &mut self.front {
+            *front = 0;
+        }
         self.inner.restore(state)
     }
     fn set_input_bits(&mut self, register: u8, mask: u16, value: u16) -> Result<(), String> {
@@ -160,14 +178,21 @@ impl Endpoint for CountingDial {
         self.inner.input_bits(register)
     }
     fn admit_steps(&self, steps: i32) -> Result<(), String> {
-        match self.count.checked_add(steps) {
+        let (count, steps) = match self.front {
+            Some(front) if steps != 0 && steps % FRONT_EDGES == 0 => (front, steps / FRONT_EDGES),
+            _ => (self.count, steps),
+        };
+        match count.checked_add(steps) {
             Some(count) if count.abs() <= COUNT_LIMIT => Ok(()),
             _ => Err("command-dial detents exceed their bound".into()),
         }
     }
     fn count_steps(&mut self, steps: i32) -> Result<(), String> {
         self.admit_steps(steps)?;
-        self.count += steps;
+        match &mut self.front {
+            Some(front) if steps != 0 && steps % FRONT_EDGES == 0 => *front += steps / FRONT_EDGES,
+            _ => self.count += steps,
+        }
         Ok(())
     }
 }
@@ -176,7 +201,7 @@ pub fn build(
     base: u64,
     pins: SharedPins,
     options: &toml::Table,
-    counting_dial: Option<u8>,
+    counting_dial: Option<(u8, bool)>,
 ) -> Result<Spi, String> {
     let wiring: Wiring = toml::Value::Table(options.clone())
         .try_into()
@@ -218,7 +243,7 @@ fn parse_power_registers(spec: &str) -> Result<Vec<(u8, u16)>, String> {
         })
         .collect()
 }
-fn endpoint(part: Part, counting_dial: Option<u8>) -> Result<Box<dyn Endpoint>, String> {
+fn endpoint(part: Part, counting_dial: Option<(u8, bool)>) -> Result<Box<dyn Endpoint>, String> {
     Ok(match part {
         Part::PowerController {
             rtc_seconds,
@@ -251,10 +276,11 @@ fn endpoint(part: Part, counting_dial: Option<u8>) -> Result<Box<dyn Endpoint>, 
                 }
             }
             match counting_dial {
-                Some(register) => Box::new(CountingDial {
+                Some((register, front)) => Box::new(CountingDial {
                     inner: part,
                     register,
                     count: 0,
+                    front: front.then_some(0),
                 }),
                 None => Box::new(part),
             }
@@ -294,7 +320,7 @@ fn endpoint(part: Part, counting_dial: Option<u8>) -> Result<Box<dyn Endpoint>, 
 }
 fn attachments(
     connections: Vec<Connection>,
-    counting_dial: Option<u8>,
+    counting_dial: Option<(u8, bool)>,
 ) -> Result<Vec<Attachment>, String> {
     connections
         .into_iter()
@@ -378,7 +404,7 @@ mod tests {
                 rtc_seconds: 0,
                 rtc_valid: true,
             },
-            Some(0x36),
+            Some((0x36, false)),
         )
         .unwrap();
         assert_eq!(read(endpoint.as_mut(), 0x36), 0);

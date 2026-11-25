@@ -1265,7 +1265,7 @@ pub(crate) fn open_from(
     use fujimod_emulator_xp5_board::ladders::CommandDial;
     let options = panel.as_ref().map(|(options, _)| options);
     resources.counting_dial = match options.and_then(|options| options.rear_dial.as_ref()) {
-        Some(CommandDial::Counting(dial)) => Some(dial.register),
+        Some(CommandDial::Counting(dial)) => Some((dial.register, dial.front_high_nibble)),
         _ => None,
     };
     let encoder = |dial: &fujimod_emulator_xp5_board::ladders::QuadratureDial| {

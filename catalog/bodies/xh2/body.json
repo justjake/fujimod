@@ -92,6 +92,16 @@
       ]
     },
     {
+      "id": "controls-adc-5",
+      "kind": "control",
+      "signals": [
+        {
+          "kind": "adc",
+          "channel": 5
+        }
+      ]
+    },
+    {
       "id": "controls-adc-6",
       "kind": "control",
       "signals": [
@@ -108,6 +118,62 @@
         {
           "kind": "adc",
           "channel": 13
+        }
+      ]
+    },
+    {
+      "id": "controls-gpio-0-4",
+      "kind": "control",
+      "signals": [
+        {
+          "kind": "gpio",
+          "port": 0,
+          "pin": 4,
+          "active_level": false
+        }
+      ]
+    },
+    {
+      "id": "controls-gpio-0-15",
+      "kind": "control",
+      "signals": [
+        {
+          "kind": "gpio",
+          "port": 0,
+          "pin": 15,
+          "active_level": false
+        }
+      ]
+    },
+    {
+      "id": "controls-adc-3",
+      "kind": "control",
+      "signals": [
+        {
+          "kind": "adc",
+          "channel": 3
+        }
+      ]
+    },
+    {
+      "id": "controls-adc-14",
+      "kind": "control",
+      "signals": [
+        {
+          "kind": "adc",
+          "channel": 14
+        }
+      ]
+    },
+    {
+      "id": "controls-gpio-15-7",
+      "kind": "control",
+      "signals": [
+        {
+          "kind": "gpio",
+          "port": 15,
+          "pin": 7,
+          "active_level": false
         }
       ]
     }

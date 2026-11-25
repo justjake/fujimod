@@ -201,8 +201,87 @@ fn extension(body: &str, options: &mut ladders::Options) -> Result<(), String> {
     match body {
         "xt5" => xt5_extension(options),
         "x100vi" => x100vi_extension(options),
+        "xh2" => xh2_extension(options),
         _ => Ok(()),
     }
+}
+
+const XH2_BANDS: &str = "X-H2 5.30 factory key-band table: configuration halfwords read through 0x149b0e0, \
+dumped in the emulator from configuration RAM 0x27008000 + offset. The sample is the band midpoint.";
+
+fn xh2_extension(options: &mut ladders::Options) -> Result<(), String> {
+    let lever = options
+        .ladders
+        .iter_mut()
+        .find(|ladder| ladder.wire == ladders::Wire::Adc { channel: 14 })
+        .ok_or("the X-H2 catalog ladders lack ADC 14")?;
+    // Focus-lever diagonals: table 0x1c520a8 rows for physical 0x2d..0x30
+    // (8DIR_R_U, 8DIR_R_D, 8DIR_L_U, 8DIR_L_D), decoder 0x140b6f8.
+    let rung = |key, low, high| ladders::Rung {
+        key,
+        band_low: low,
+        band_high: high,
+        sample: midpoint(low, high),
+        basis: XH2_BANDS.into(),
+    };
+    lever.rungs.extend([
+        rung(Key::StickUpRight, 100, 1230),
+        rung(Key::StickUpLeft, 1231, 1447),
+        rung(Key::StickDownRight, 1689, 1929),
+        rung(Key::StickDownLeft, 2220, 2605),
+    ]);
+    // Mode dial: scanner rows for physical 49..61 read ADC 3 against
+    // configuration halfwords 14072..14122 (UI MMOD_P .. FILTER).
+    options.dials = vec![ladders::PositionDial {
+        name: "mode".into(),
+        aliases: vec![],
+        channel: 3,
+        positions: positions(&[
+            ("P", &[], 100, 462, false),
+            ("S", &[], 463, 768, false),
+            ("A", &[], 769, 1072, false),
+            ("M", &[], 1073, 1374, false),
+            ("C1", &[], 1375, 1677, false),
+            ("C2", &[], 1678, 1981, false),
+            ("C3", &[], 1982, 2289, false),
+            ("C4", &[], 2290, 2600, false),
+            ("C5", &[], 2601, 2918, false),
+            ("C6", &[], 2919, 3243, false),
+            ("C7", &[], 3244, 3576, false),
+            ("F", &["MOVIE"], 3577, 3921, false),
+            ("FILTER", &[], 3922, 4095, false),
+        ]),
+        basis: XH2_BANDS.into(),
+    }];
+    options.rear_dial = Some(ladders::CommandDial::Counting(ladders::CountingDial {
+        register: 0x41,
+        front_high_nibble: true,
+        basis: "X-H2 5.30 dial handler 0x140b880 reads power-controller register 0x41 through \
+0x13d812c/0x13d8034 (command id << 24 | ~id, checksummed reply; table 0x1c51280 marks 0x41 as a \
+counter, cleared on read): bits 2..0 count and bit 3 sign the rear dial (CMD_LEFT/RIGHT, physical \
+0x99/0x9a), bits 6..4 and bit 7 the front dial (CMD2_L/R, 0x9c/0x9d)."
+            .into(),
+    }));
+    options.gpio_keys = vec![
+        ladders::GpioKey {
+            key: Key::StickPush,
+            pin: Pin { port: 15, pin: 6 },
+            active_high: false,
+            basis: "X-H2 5.30 focus-lever decoder 0x140b6f8 reads GPIO 15.6 through 0x140b6d4 \
+(0x138331c(0xf0006)); while it reads low the lever state machine 0x140b880 reports the push (state 5, \
+physical 0x28) and ignores directions. Pressed = low."
+                .into(),
+        },
+        ladders::GpioKey {
+            key: Key::AfOn,
+            pin: Pin { port: 15, pin: 7 },
+            active_high: false,
+            basis: "X-H2 5.30 scanner row 25 (UI event 8233, KEY_FUNC_AF_ON in the key-name switch \
+0x1141ee4) reads GPIO 15.7 low."
+                .into(),
+        },
+    ];
+    Ok(())
 }
 
 const X100VI_BANDS: &str = "Band of the X100VI 1.31 default configuration page, read in the emulator from \
@@ -449,6 +528,7 @@ copy of power-controller register 0x00 that 0x1407d2c refreshes each scan."
                 .into(),
     }];
     options.rear_dial = Some(ladders::CommandDial::Counting(ladders::CountingDial {
+        front_high_nibble: false,
         register: 0x36,
         basis:
             "0x1407d2c reads power-controller register 0x36 each scan through 0x13d5834: bits 2..0 \
@@ -531,6 +611,33 @@ fn extension_ids(
                 ("ss", "shutter_speed_dial"),
                 ("power", "power_switch"),
             ],
+        ),
+        "xh2" => (
+            &[
+                (
+                    Key::StickUpLeft,
+                    "focus_stick.up_left",
+                    "Focus stick up-left",
+                ),
+                (
+                    Key::StickUpRight,
+                    "focus_stick.up_right",
+                    "Focus stick up-right",
+                ),
+                (
+                    Key::StickDownLeft,
+                    "focus_stick.down_left",
+                    "Focus stick down-left",
+                ),
+                (
+                    Key::StickDownRight,
+                    "focus_stick.down_right",
+                    "Focus stick down-right",
+                ),
+                (Key::StickPush, "focus_stick", "Focus stick press"),
+                (Key::AfOn, "afon_button", "AF-ON button"),
+            ],
+            &[("mode", "mode_dial")],
         ),
         _ => (&[], &[]),
     }
@@ -750,7 +857,9 @@ mod tests {
             wires,
             [
                 ladders::Wire::Adc { channel: 6 },
-                ladders::Wire::Adc { channel: 13 }
+                ladders::Wire::Adc { channel: 5 },
+                ladders::Wire::Adc { channel: 13 },
+                ladders::Wire::Adc { channel: 14 }
             ]
         );
         let rung = |key: Key| {
@@ -768,7 +877,20 @@ mod tests {
         assert_eq!(rung(Key::Right), (1930, 2219, 2074));
         assert_eq!(rung(Key::Left), (2606, 3041, 2823));
         assert_eq!(rung(Key::Down), (3042, 3719, 3380));
-        assert!(options.gpio_keys.is_empty() && options.dials.is_empty());
+        assert_eq!(rung(Key::Quick), (3103, 3776, 3439));
+        assert_eq!(rung(Key::Play), (3103, 3776, 3439));
+        assert_eq!(rung(Key::AeLock), (2117, 2344, 2230));
+        assert_eq!(rung(Key::StickUpRight), (100, 1230, 665));
+        assert_eq!(options.dials.len(), 1);
+        assert_eq!(options.dials[0].positions.len(), 13);
+        let pins: Vec<_> = options
+            .gpio_keys
+            .iter()
+            .map(|key| (key.pin.port, key.pin.pin, key.active_high))
+            .collect();
+        assert!(pins.contains(&(15, 6, false)));
+        assert!(pins.contains(&(15, 7, false)));
+        assert!(!pins.contains(&(0, 13, false)) && !pins.contains(&(0, 14, false)));
     }
 
     #[test]
