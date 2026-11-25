@@ -1377,6 +1377,42 @@
         }
       ]
     },
+    "RunAudioSignal": {
+      "additionalProperties": false,
+      "description": "A host test signal presented to an audio serial receiver.",
+      "properties": {
+        "block_id": {
+          "description": "Audio serial block receiving the signal.",
+          "type": "string"
+        },
+        "sample_rate_hz": {
+          "description": "Declared sample rate; the serial clock dividers are not decoded.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "tone_amplitude_thousandths": {
+          "description": "Sine tone amplitude in thousandths of full scale.",
+          "format": "uint16",
+          "maximum": 65535,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "tone_hz": {
+          "description": "Sine tone frequency.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "block_id",
+        "sample_rate_hz",
+        "tone_hz",
+        "tone_amplitude_thousandths"
+      ],
+      "type": "object"
+    },
     "RunAuxiliaryControlProfile": {
       "description": "Closed selection for auxiliary control profile.",
       "enum": [
@@ -5042,6 +5078,13 @@
       "const": "https://fujimod.com/schemas/emulator-run-configuration.schema.json",
       "description": "Stable schema identifier for this document.",
       "type": "string"
+    },
+    "audio_signals": {
+      "description": "Test signals this run presents to audio serial receivers; a block without one models only its reset handshake.",
+      "items": {
+        "$ref": "#/$defs/RunAudioSignal"
+      },
+      "type": "array"
     },
     "body_id": {
       "description": "Selected body identity.",

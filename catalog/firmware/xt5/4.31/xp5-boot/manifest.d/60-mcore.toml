@@ -103,6 +103,8 @@ drive_gain = [6, 6, -3]
 base = 0xff929000
 size = 0x1000
 kind = "input-capture"
+[device.options]
+dma_transmit = [{ channel = 0, request = 35 }]
 
 # USB cable/jig connection status in bit 0: 0x14f61d8 latches it and posts event
 # 0x3047 when set, 0x2bfcd0c reads it with 0xffc0c70c. The default input is

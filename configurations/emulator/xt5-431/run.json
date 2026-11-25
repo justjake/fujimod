@@ -201,5 +201,19 @@
     "spi4",
     "spi5",
     "spi8"
+  ],
+  "audio_signals": [
+    {
+      "block_id": "audio-serial-0",
+      "sample_rate_hz": 48000,
+      "tone_hz": 1000,
+      "tone_amplitude_thousandths": 250
+    },
+    {
+      "block_id": "audio-serial-1",
+      "sample_rate_hz": 48000,
+      "tone_hz": 1000,
+      "tone_amplitude_thousandths": 250
+    }
   ]
 }

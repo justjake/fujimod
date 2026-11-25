@@ -612,8 +612,7 @@ pub fn windows_from_blocks(
         };
         if let Some((kind, options)) = block_window(
             block, device, selection, flash_input, flash_image, samples.as_deref(), levels,
-            &resolved.configuration.bus_byte_times, ticks_per_second, presented_jedec,
-            &resolved.configuration.polled_serial_blocks, part_inputs,
+            &resolved.configuration, ticks_per_second, presented_jedec, part_inputs,
         )? {
             let mut options = options;
             if !options.contains_key("registers") && block.registers.iter().any(|register| register.reads.is_some()) {
@@ -879,10 +878,9 @@ fn block_window(
     flash_image: Option<&fujimod_catalog::firmware::FlashImage>,
     samples: Option<&[u16]>,
     levels: Option<(&Vec<u16>, &Vec<fujimod_catalog_configuration::application_inputs::GpioOutputWord>)>,
-    byte_times: &[fujimod_catalog_configuration::RunBusByteTime],
+    run: &fujimod_catalog_configuration::RunConfiguration,
     ticks_per_second: u64,
     presented_jedec: Option<u32>,
-    polled: &[String],
     part_inputs: &[fujimod_catalog_configuration::application_inputs::ApplicationPartInput],
 ) -> Result<Option<(&'static str, toml::Table)>, String> {
     let _ = levels;
@@ -971,8 +969,19 @@ fn block_window(
         }
         BlockDevice::Temperature { .. } => "soc-temperature",
         BlockDevice::InterprocessorMailbox { .. } => "interprocessor-mailbox",
-        BlockDevice::AudioSerial { .. } => {
-            if block.id == "audio-serial-1" { "audio-serial" } else { "reset-handshake" }
+        BlockDevice::AudioSerial { reset_offset, .. } => {
+            match run.audio_signals.iter().find(|signal| signal.block_id == block.id) {
+                Some(signal) => {
+                    options.insert("sample_rate_hz".into(), integer(signal.sample_rate_hz));
+                    options.insert("tone_hz".into(), integer(signal.tone_hz));
+                    options.insert("tone_amplitude".into(), toml::Value::Float(f64::from(signal.tone_amplitude_thousandths) / 1000.0));
+                    "audio-serial"
+                }
+                None => {
+                    options.insert("trigger_offset".into(), integer(*reset_offset));
+                    "reset-handshake"
+                }
+            }
         }
         BlockDevice::MemoryConfiguration { commit_ticks, .. } => {
             options.insert("commit_ticks".into(), integer(*commit_ticks));
@@ -1023,7 +1032,17 @@ fn block_window(
             stage_handshake(&mut options, handshake.as_ref(), irq("irq"));
             "imaging-resz"
         }
-        BlockDevice::InputCapture { .. } => "input-capture",
+        BlockDevice::InputCapture { transmit_requests, .. } => {
+            if !transmit_requests.is_empty() {
+                options.insert("dma_transmit".into(), toml::Value::Array(transmit_requests.iter().map(|wire| {
+                    let mut row = toml::Table::new();
+                    row.insert("channel".into(), integer(u64::from(wire.channel)));
+                    row.insert("request".into(), integer(u64::from(wire.request)));
+                    toml::Value::Table(row)
+                }).collect()));
+            }
+            "input-capture"
+        }
         BlockDevice::Pl011 { .. } => {
             options.insert("irq".into(), integer(u64::from(irq("irq").unwrap_or(0))));
             let mut rl78 = toml::Table::new();
@@ -1034,7 +1053,7 @@ fn block_window(
         BlockDevice::Pl022 { .. } if port_device(selection, block)?.is_some() => {
             port_device(selection, block)?.expect("checked above")
         }
-        BlockDevice::Pl022 { source_hz, .. } if polled.contains(&block.id) => {
+        BlockDevice::Pl022 { source_hz, .. } if run.polled_serial_blocks.contains(&block.id) => {
             options.insert("source_hz".into(), integer(*source_hz));
             let endpoints = serial_endpoints(selection, block, part_inputs)?;
             if !endpoints.is_empty() { options.insert("endpoints".into(), toml::Value::Array(endpoints)); }
@@ -1166,7 +1185,7 @@ fn block_window(
                 targets.push(toml::Value::Table(row));
             }
             if !targets.is_empty() { options.insert("targets".into(), toml::Value::Array(targets)); }
-            if let Some(time) = byte_times.iter().find(|time| time.block_id == block.id) {
+            if let Some(time) = run.bus_byte_times.iter().find(|time| time.block_id == block.id) {
                 options.insert("byte_ns".into(), integer(time.ticks * 1_000_000_000 / ticks_per_second));
             }
             "i2c-controller"

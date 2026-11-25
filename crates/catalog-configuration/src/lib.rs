@@ -73,6 +73,9 @@ pub struct RunConfiguration {
     /// Serial blocks this run emulates with the polled transport in place of their full model.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub polled_serial_blocks: Vec<String>,
+    /// Test signals this run presents to audio serial receivers; a block without one models only its reset handshake.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub audio_signals: Vec<RunAudioSignal>,
     /// Named overlays to apply in declaration order.
     pub overlays: Vec<String>,
     /// Browser camera attachments declared by a selected overlay.
@@ -1223,6 +1226,27 @@ pub struct RunBusByteTime {
     pub block_id: String,
     /// Board ticks per byte.
     pub ticks: u64,
+}
+
+/// A host test signal presented to an audio serial receiver.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(deny_unknown_fields)]
+#[cfg_attr(feature = "schema", schemars(deny_unknown_fields))]
+#[cfg_attr(
+    all(target_arch = "wasm32", not(target_os = "emscripten")),
+    derive(tsify::Tsify),
+    tsify(hashmap_as_object, missing_as_null)
+)]
+pub struct RunAudioSignal {
+    /// Audio serial block receiving the signal.
+    pub block_id: String,
+    /// Declared sample rate; the serial clock dividers are not decoded.
+    pub sample_rate_hz: u64,
+    /// Sine tone frequency.
+    pub tone_hz: u64,
+    /// Sine tone amplitude in thousandths of full scale.
+    pub tone_amplitude_thousandths: u16,
 }
 
 /// Execution policy selected by the run configuration.

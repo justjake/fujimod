@@ -4,6 +4,8 @@
 base = 0xff928000
 size = 0x1000
 kind = "input-capture"
+[device.options]
+dma_transmit = [{ channel = 2, request = 32 }]
 
 # Transmit DMA: the companion's capture object 0x319dc (returned by 0x2366c) names
 # channel 5. 0x237cc maps it to bank 1 index 0 (0x23684, 0x236b4) and returns its data
