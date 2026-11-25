@@ -39,7 +39,6 @@ pub struct Inputs {
 /// A native catalog session with its processor-specific physical input handle.
 pub enum Opened {
     Graph(Box<Session>),
-    Xp4(Box<dyn crate::xp4_backend::Xp4Backend>),
     Xp5 {
         session: Box<Session>,
         inputs: Box<fujimod_emulator_xp5_board::session::Inputs>,

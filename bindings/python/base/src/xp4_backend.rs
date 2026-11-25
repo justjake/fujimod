@@ -1,130 +1,51 @@
-//! What the emulator bindings call on an XP4 session. `fujimod-python-xp4` implements it and
-//! registers its factory, so the emulator bindings depend on no XP4 crate.
-use crate::discovery::{FrontierEntry, Intervention};
-use fujimod_emulator_cpu::{Register, arm};
+//! The XP4 inputs the emulator bindings reach beside a shared session.
+//! `fujimod-python-xp4` implements them and registers the factory, so the
+//! emulator bindings depend on no XP4 crate.
 use fujimod_emulator_devices::parts::sd_card::Card;
-use pyo3::{
-    PyTraverseError, PyVisit,
-    prelude::*,
-    types::{PyBytes, PyDict, PyList},
-};
-use std::collections::BTreeMap;
+use fujimod_emulator_session::Session;
+use pyo3::prelude::*;
 use std::sync::OnceLock;
 
-pub trait Xp4Backend {
-    fn catalog_quantum(&self) -> Option<usize>;
-    fn run_board(&self, limit: u64, quantum: usize) -> PyResult<()>;
-    fn read_register(&self, core: usize, register: Register) -> PyResult<u64>;
-    fn write_register(&self, core: usize, register: Register, value: u64) -> PyResult<()>;
-    fn coprocessor(
-        &self,
-        core: usize,
-        selector: arm::Coprocessor,
-        value: Option<u64>,
-    ) -> PyResult<u64>;
-    fn driver_guard_begin(
-        &self,
-        executable: Vec<(u64, u64)>,
-        readable: Vec<(u64, u64)>,
-        writable: Vec<(u64, u64)>,
-        return_address: u64,
-        store_limit: usize,
-        core: usize,
-        device_policy: Option<String>,
-    ) -> PyResult<()>;
-    fn instruction_points(&self, core: usize, addresses: Vec<u64>) -> PyResult<()>;
-    fn function_watch_begin(
-        &self,
-        entries: Vec<u64>,
-        quota: u64,
-        edge_limit: usize,
-        state_limit: usize,
-        return_sites: Option<Vec<u64>>,
-        quota_per_edge: bool,
-    ) -> PyResult<()>;
-    fn memory_watch_begin(
-        &self,
-        ranges: Vec<(u64, u64)>,
-        limit: usize,
-        writes_only: bool,
-    ) -> PyResult<()>;
-    fn memory_watch_end(&self) -> PyResult<()>;
-    fn cpr_read(&self, core: usize, crn: u32, crm: u32, opc1: u32, opc2: u32) -> PyResult<u64>;
-    fn write(&self, address: usize, data: &[u8]) -> PyResult<()>;
-    fn run(&self, core: usize, budget: usize) -> PyResult<()>;
-    fn run_to(&self, core: usize, budget: usize, target: u64) -> PyResult<()>;
-    fn set_adc_input(&self, channel: usize, sample: u16) -> PyResult<()>;
-    fn set_gpio_input(&self, port: usize, pin: usize, high: bool) -> PyResult<()>;
-    fn turn_dial(&self, name: &str, edges: i32) -> PyResult<()>;
-    fn touch_period(&self) -> PyResult<u64>;
-    fn touch(&self, phase: &str, x: u16, y: u16) -> PyResult<()>;
-    fn set_usb_connected(&self, connected: bool) -> PyResult<()>;
-    fn usb_bus_reset(&self) -> PyResult<()>;
+/// External XP4 inputs and media the session's generic inputs do not name.
+pub trait Xp4Inputs {
+    fn turn_dial(&self, session: &mut Session, name: &str, edges: i32) -> PyResult<()>;
+    fn set_adc_input(&self, session: &mut Session, channel: usize, sample: u16) -> PyResult<()>;
+    fn set_gpio_input(&self, session: &mut Session, port: usize, pin: usize, high: bool) -> PyResult<()>;
+    fn set_usb_connected(&self, session: &mut Session, connected: bool) -> PyResult<()>;
+    fn usb_bus_reset(&self, session: &mut Session) -> PyResult<()>;
     fn usb_transaction(
         &self,
+        session: &mut Session,
         physical_endpoint: usize,
         setup: bool,
         out: Option<Vec<u8>>,
     ) -> PyResult<u64>;
-    fn usb_reply_json(&self, id: u64) -> PyResult<Option<String>>;
-    fn usb_consume_reply(&self, id: u64) -> PyResult<()>;
-    fn __traverse__(&self, visit: PyVisit<'_>) -> Result<(), PyTraverseError>;
-    fn __clear__(&self);
-    fn set_pc_handler(&self, callback: Option<Py<PyAny>>) -> PyResult<()>;
-    fn ram_bytes(&self) -> usize;
-    fn instructions(&self) -> Vec<u64>;
-    fn now(&self) -> u64;
-    fn quiescent(&self) -> bool;
-    fn driver_guard_end(&self) -> PyResult<()>;
-    fn driver_guard_state<'py>(&self, py: Python<'py>) -> PyResult<Option<Bound<'py, PyDict>>>;
-    fn function_watch_end(&self) -> PyResult<()>;
-    fn function_watch_state<'py>(&self, py: Python<'py>) -> PyResult<Option<Bound<'py, PyDict>>>;
-    fn memory_watch_enabled(&self) -> bool;
-    fn memory_watch_state(&self) -> String;
-    fn reg_read(&self, core: usize, register: i32) -> PyResult<u32>;
-    fn reg_write(&self, core: usize, register: i32, value: u32) -> PyResult<()>;
-    fn read<'py>(
-        &self,
-        py: Python<'py>,
-        address: usize,
-        size: usize,
-    ) -> PyResult<Bound<'py, PyBytes>>;
-    fn read_virtual<'py>(
-        &self,
-        py: Python<'py>,
-        core: usize,
-        address: u32,
-        size: usize,
-    ) -> PyResult<Bound<'py, PyBytes>>;
-    fn idle(&self) -> bool;
-    fn scanout_frames<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyList>>;
-    fn device_state_json(&self) -> BTreeMap<String, String>;
-    fn interrupt_state<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyList>>;
-    fn device_records<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyList>>;
-    fn translation_maintenance_state<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyDict>>;
-    fn state<'py>(&self, py: Python<'py>, observations: bool) -> PyResult<Bound<'py, PyDict>>;
-    fn scheduler_state<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyDict>>;
-    fn failure(&self) -> Option<String>;
-    fn frontier(&self, by_count: bool) -> Vec<FrontierEntry>;
-    fn discovery_shadow(&self) -> Vec<(u64, u8)>;
-    fn interventions(&self) -> Vec<Intervention>;
-    /// A copy of the medium in the `host`th SD card slot, refused while the host is mid-transfer.
-    fn card_medium(&self, host: usize) -> PyResult<Card>;
+    fn usb_reply_json(&self, session: &Session, id: u64) -> PyResult<Option<String>>;
+    fn usb_consume_reply(&self, session: &mut Session, id: u64) -> PyResult<()>;
+    /// A copy of the medium in the `host`th SD card slot.
+    fn card_medium(&self, session: &Session, host: usize) -> PyResult<Card>;
+    /// Completed NOR contents, without controller or processor state.
+    fn nor_medium(&self, session: &Session) -> PyResult<Vec<u8>>;
     /// Reset NOR program observation, refusing unsettled commands.
-    fn reset_nor_program_coverage(&self) -> PyResult<()>;
-    /// Completed NOR contents, without controller or CPU state.
-    fn nor_medium(&self) -> PyResult<Vec<u8>>;
+    fn reset_nor_program_coverage(&self, session: &mut Session) -> PyResult<()>;
 }
 
-/// Builds an XP4 session from its definition JSON, optional storage image, SD card files and
-/// existing SD card media (SD host index, medium) that replace the formatted SD card of those
-/// hosts.
+/// An XP4 session, its inputs and the bytes of RAM host reads may span.
+pub struct Opened {
+    pub session: Session,
+    pub inputs: Box<dyn Xp4Inputs>,
+    pub read_limit: usize,
+}
+
+/// Builds an XP4 session from its definition JSON, optional storage image,
+/// SD card files and existing SD card media (SD host index, medium) that
+/// replace the formatted SD card of those hosts.
 pub type Xp4Factory = fn(
     &str,
     Option<Vec<u8>>,
     Vec<(String, Vec<u8>)>,
     Vec<(usize, Card)>,
-) -> PyResult<Box<dyn Xp4Backend>>;
+) -> PyResult<Opened>;
 static FACTORY: OnceLock<Xp4Factory> = OnceLock::new();
 
 /// Set the factory `Board.from_xp4` uses; later calls are ignored.
@@ -137,7 +58,7 @@ pub fn open(
     storage_image: Option<Vec<u8>>,
     card_files: Vec<(String, Vec<u8>)>,
     card_media: Vec<(usize, Card)>,
-) -> PyResult<Box<dyn Xp4Backend>> {
+) -> PyResult<Opened> {
     let open = FACTORY.get().ok_or_else(|| {
         pyo3::exceptions::PyRuntimeError::new_err("XP4 boards need the fujimod-python-xp4 bindings")
     })?;

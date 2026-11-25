@@ -15,9 +15,9 @@ doctest = false
 [dependencies]
 fujimod-python-base = { path = "../base" }
 fujimod-emulator-xp4-board.workspace = true
-fujimod-emulator-cpu.workspace = true
 fujimod-emulator-devices.workspace = true
-fujimod-emulator.workspace = true
+fujimod-emulator-session.workspace = true
+fujimod-catalog-configuration.workspace = true
 pyo3.workspace = true
 serde_json.workspace = true
 fujimod-workspace-hack.workspace = true

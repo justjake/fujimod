@@ -3852,9 +3852,9 @@ dependencies = [
 name = "fujimod-python-xp4"
 version = "0.1.0"
 dependencies = [
- "fujimod-emulator",
- "fujimod-emulator-cpu",
+ "fujimod-catalog-configuration",
  "fujimod-emulator-devices",
+ "fujimod-emulator-session",
  "fujimod-emulator-xp4-board",
  "fujimod-python-base",
  "fujimod-workspace-hack",

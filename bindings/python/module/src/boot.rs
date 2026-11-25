@@ -68,22 +68,6 @@ impl Boot for CatalogBoot {
                 card_files: inputs.card_files,
                 camera_settings: Default::default(),
             };
-            if resolved.reference.soc.id == "xp4" {
-                let mut started = boot::application::open(&resolved, startup)?;
-                if let Some(path) = inputs.scene {
-                    started.board.set_scene(&boot::host::read_scene(&path)?)?;
-                }
-                return match started.board {
-                    boot::application::Board::Xp4(session) => {
-                        fujimod_python_xp4::adopt(*session, started.quantum)
-                            .map(Opened::Xp4)
-                            .map_err(|error| error.to_string())
-                    }
-                    boot::application::Board::Xpp(_) => {
-                        Err("XP4 startup returned another processor generation".into())
-                    }
-                };
-            }
             let mut camera = boot::open(resolved, boot::StartupInputs::Application(startup))?;
             if let Some(path) = inputs.scene {
                 camera

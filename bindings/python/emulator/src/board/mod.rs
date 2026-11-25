@@ -49,7 +49,7 @@ enum Backend {
     /// power it on again.
     Camera(Box<camera::CameraBoard>),
     Xp5(Box<xp5::Opened>),
-    Xp4(Box<dyn xp4_backend::Xp4Backend>),
+    Xp4(Box<xp4_backend::Opened>),
 }
 
 /// Optional interrupt controller admission for a device-free board.
@@ -247,9 +247,7 @@ impl Board {
             Some(Backend::Graph(session)) => Ok(session),
             Some(Backend::Camera(opened)) => Ok(opened.session()),
             Some(Backend::Xp5(opened)) => Ok(&opened.session),
-            Some(Backend::Xp4(_)) => Err(PyRuntimeError::new_err(
-                "Selected XP4 system does not support this graph operation",
-            )),
+            Some(Backend::Xp4(opened)) => Ok(&opened.session),
             None => Err(PyRuntimeError::new_err("runtime is closed")),
         }
     }
@@ -258,9 +256,7 @@ impl Board {
             Some(Backend::Graph(session)) => Ok(session),
             Some(Backend::Camera(opened)) => Ok(opened.session_mut()),
             Some(Backend::Xp5(opened)) => Ok(&mut opened.session),
-            Some(Backend::Xp4(_)) => Err(PyRuntimeError::new_err(
-                "Selected XP4 system does not support this graph operation",
-            )),
+            Some(Backend::Xp4(opened)) => Ok(&mut opened.session),
             None => Err(PyRuntimeError::new_err("runtime is closed")),
         }
     }
@@ -270,14 +266,12 @@ impl Board {
     fn board_mut(&mut self) -> PyResult<&mut ExecutionBoard> {
         Ok(&mut self.session_mut()?.board)
     }
-    fn xp4_session(&self) -> PyResult<&dyn xp4_backend::Xp4Backend> {
-        match self.backend.as_ref() {
-            Some(Backend::Xp4(session)) => Ok(session.as_ref()),
-            Some(Backend::Graph(_) | Backend::Camera(_) | Backend::Xp5(_)) => {
-                Err(PyRuntimeError::new_err(
-                    "Selected graph system does not support this XP4 operation",
-                ))
-            }
+    pub(crate) fn xp4_opened(&mut self) -> PyResult<&mut xp4_backend::Opened> {
+        match self.backend.as_mut() {
+            Some(Backend::Xp4(opened)) => Ok(opened),
+            Some(Backend::Graph(_) | Backend::Camera(_) | Backend::Xp5(_)) => Err(PyRuntimeError::new_err(
+                "Selected graph system does not support this XP4 operation",
+            )),
             None => Err(PyRuntimeError::new_err("runtime is closed")),
         }
     }
@@ -335,22 +329,22 @@ impl Board {
             .into_iter()
             .map(|(host, medium)| (host, medium.0.clone()))
             .collect();
-        let session = xp4_backend::open(definition, storage_image, card_files, card_media)?;
+        let opened = xp4_backend::open(definition, storage_image, card_files, card_media)?;
         Ok(Self {
             driver: None,
             memory_watch: None,
             function_watch: None,
             instruction_points: BTreeMap::new(),
-            read_limit: session.ram_bytes(),
-            backend: Some(Backend::Xp4(session)),
+            read_limit: opened.read_limit,
+            backend: Some(Backend::Xp4(Box::new(opened))),
             objects: BTreeMap::new(),
             failures: Failures::default(),
             last_continuation_stop: None,
         })
     }
     #[getter]
-    fn xp4(slf: PyRef<'_, Self>) -> PyResult<xp4::Xp4> {
-        slf.xp4_session()?;
+    fn xp4(mut slf: PyRefMut<'_, Self>) -> PyResult<xp4::Xp4> {
+        slf.xp4_opened()?;
         Ok(xp4::Xp4 { owner: slf.into() })
     }
     #[pyo3(signature=(entries, quota=4, edge_limit=1<<20, state_limit=1<<16,
@@ -858,9 +852,6 @@ impl Board {
         })
     }
     fn __traverse__(&self, visit: PyVisit<'_>) -> Result<(), PyTraverseError> {
-        if let Some(Backend::Xp4(session)) = &self.backend {
-            return session.__traverse__(visit);
-        }
         // The board's adapter and this table share one Arc, hence exactly one
         // owning Python reference to each model/context is visited here.
         for object in self.objects.values() {
@@ -875,9 +866,6 @@ impl Board {
             && let Ok(session) = self.session()
         {
             let _ = session.board.harness_end(&mut driver);
-        }
-        if let Some(Backend::Xp4(session)) = &self.backend {
-            session.__clear__();
         }
         self.backend.take();
         self.objects.clear();
@@ -1217,9 +1205,6 @@ impl Board {
     }
     #[getter]
     fn now(&self) -> PyResult<u64> {
-        if let Some(Backend::Xp4(session)) = &self.backend {
-            return Ok(session.now());
-        }
         Ok(self.board()?.now())
     }
     /// Opt in to ending a run when a device deadline passes and every released
@@ -1234,16 +1219,10 @@ impl Board {
     }
     #[getter]
     fn quiescent(&self) -> PyResult<bool> {
-        if let Some(Backend::Xp4(session)) = &self.backend {
-            return Ok(session.quiescent());
-        }
         Ok(self.board()?.quiescent())
     }
     #[getter]
     fn instructions(&self) -> PyResult<Vec<u64>> {
-        if let Some(Backend::Xp4(session)) = &self.backend {
-            return Ok(session.instructions());
-        }
         Ok(self.board()?.instruction_counts())
     }
     fn run_until(&mut self, py: Python<'_>, tick: u64, quantum: usize) -> PyResult<()> {
@@ -1260,12 +1239,6 @@ impl Board {
         count: u64,
         quantum: usize,
     ) -> PyResult<()> {
-        {
-            let owner = slf.try_borrow()?;
-            if let Some(Backend::Xp4(session)) = &owner.backend {
-                return session.run_board(count, quantum);
-            }
-        }
         let mut owner = slf.try_borrow_mut()?;
         owner.run_graph(py, count, quantum, None, None)
     }
@@ -1340,22 +1313,6 @@ impl Board {
         device_watches: Option<Vec<String>>,
         contact_watch: bool,
     ) -> PyResult<bool> {
-        {
-            let owner = slf.try_borrow()?;
-            if let Some(Backend::Xp4(session)) = &owner.backend {
-                if pause_after.is_some()
-                    || pause_at_tick.is_some()
-                    || store_watches.is_some()
-                    || device_watches.is_some()
-                    || contact_watch
-                {
-                    return Err(PyValueError::new_err(
-                        "XP4 execution does not support pause boundaries",
-                    ));
-                }
-                return session.run_board(count, quantum).map(|_| false);
-            }
-        }
         let mut owner = slf.try_borrow_mut()?;
         owner.last_continuation_stop = None;
         owner.begin_continuation(store_watches, device_watches)?;
@@ -1400,25 +1357,16 @@ impl Board {
         self.outcome(result).and(unwatched).and(cleanup)
     }
     fn reg_read(&self, core: usize, register: &str) -> PyResult<u64> {
-        if let Some(Backend::Xp4(session)) = &self.backend {
-            return session.read_register(core, json(register)?);
-        }
         self.board()?
             .read_register(core, json::<Register>(register)?)
             .map_err(error)
     }
     fn reg_write(&self, core: usize, register: &str, value: u64) -> PyResult<()> {
-        if let Some(Backend::Xp4(session)) = &self.backend {
-            return session.write_register(core, json(register)?, value);
-        }
         self.board()?
             .write_register(core, json::<Register>(register)?, value)
             .map_err(error)
     }
     fn coprocessor(&self, core: usize, selector: &str, value: Option<u64>) -> PyResult<u64> {
-        if let Some(Backend::Xp4(session)) = &self.backend {
-            return session.coprocessor(core, json(selector)?, value);
-        }
         self.board()?
             .cpu(core)
             .map_err(error)?
@@ -1468,13 +1416,6 @@ impl Board {
         size: usize,
     ) -> PyResult<Bound<'py, PyBytes>> {
         self.check_read(size)?;
-        if let Some(Backend::Xp4(session)) = &self.backend {
-            let address = u32::try_from(address)
-                .map_err(|_| PyValueError::new_err("ARMv7-A virtual address exceeds 32 bits"))?;
-            let result = session.read_virtual(py, core, address, size)?;
-            fujimod_perf::add_bytes(fujimod_perf::ByteCounter::GuestToPythonBytes, size as u64);
-            return Ok(result);
-        }
         let result = PyBytes::new_with(py, size, |out| {
             self.board()?.read_memory(core, address, out).map_err(error)
         })?;
@@ -1498,13 +1439,6 @@ impl Board {
         size: usize,
     ) -> PyResult<Bound<'py, PyBytes>> {
         self.check_read(size)?;
-        if let Some(Backend::Xp4(session)) = &self.backend {
-            let address = usize::try_from(address)
-                .map_err(|_| PyValueError::new_err("Physical address exceeds host size"))?;
-            let result = session.read(py, address, size)?;
-            fujimod_perf::add_bytes(fujimod_perf::ByteCounter::GuestToPythonBytes, size as u64);
-            return Ok(result);
-        }
         let result = PyBytes::new_with(py, size, |out| {
             self.board()?.read_physical(address, out).map_err(error)
         })?;
@@ -1519,11 +1453,6 @@ impl Board {
         size: usize,
     ) -> PyResult<Bound<'py, PyBytes>> {
         self.check_read(size)?;
-        if let Some(Backend::Xp4(session)) = &self.backend {
-            let address = usize::try_from(address)
-                .map_err(|_| PyValueError::new_err("Physical address exceeds host size"))?;
-            return session.read(py, address, size);
-        }
         PyBytes::new_with(py, size, |out| {
             self.board()?.inspect_physical(address, out).map_err(error)
         })
@@ -1548,16 +1477,6 @@ impl Board {
             .collect()
     }
     fn physical_write(&self, address: u64, bytes: &[u8]) -> PyResult<()> {
-        if let Some(Backend::Xp4(session)) = &self.backend {
-            let address = usize::try_from(address)
-                .map_err(|_| PyValueError::new_err("Physical address exceeds host size"))?;
-            session.write(address, bytes)?;
-            fujimod_perf::add_bytes(
-                fujimod_perf::ByteCounter::PythonToGuestBytes,
-                bytes.len() as u64,
-            );
-            return Ok(());
-        }
         self.board()?
             .write_physical(address, bytes)
             .map_err(error)?;
@@ -1789,34 +1708,15 @@ impl Board {
         let id = self.session()?.node(name).map_err(error)?;
         self.board_mut()?.inputs_changed(id).map_err(error)
     }
-    fn observation(&self, py: Python<'_>) -> PyResult<String> {
-        if let Some(Backend::Xp4(session)) = &self.backend {
-            return py
-                .import("json")?
-                .call_method1("dumps", (session.state(py, false)?,))?
-                .extract();
-        }
+    fn observation(&self) -> PyResult<String> {
         serde_json::to_string(&self.board()?.observation().map_err(error)?)
             .map_err(|e| error(e.to_string()))
     }
-    fn inspection_observation(&self, py: Python<'_>) -> PyResult<String> {
-        if let Some(Backend::Xp4(session)) = &self.backend {
-            return py
-                .import("json")?
-                .call_method1("dumps", (session.state(py, false)?,))?
-                .extract();
-        }
+    fn inspection_observation(&self) -> PyResult<String> {
         serde_json::to_string(&self.board()?.inspection_observation().map_err(error)?)
             .map_err(|e| error(e.to_string()))
     }
-    fn failure(&self, py: Python<'_>) -> PyResult<String> {
-        if let Some(Backend::Xp4(session)) = &self.backend {
-            let failure = session.failure();
-            return py
-                .import("json")?
-                .call_method1("dumps", (failure,))?
-                .extract();
-        }
+    fn failure(&self) -> PyResult<String> {
         serde_json::to_string(&self.board()?.failure().map_err(error)?)
             .map_err(|e| error(e.to_string()))
     }
@@ -2017,12 +1917,6 @@ impl Board {
         Ok(self.board()?.range_digest(address, length).to_string())
     }
     fn state(&self, py: Python<'_>) -> PyResult<String> {
-        if let Some(Backend::Xp4(session)) = &self.backend {
-            return py
-                .import("json")?
-                .call_method1("dumps", (session.state(py, false)?,))?
-                .extract();
-        }
         let mut state = self.board()?.state();
         let serializer = py.import("json")?;
         for (name, object) in &self.objects {
