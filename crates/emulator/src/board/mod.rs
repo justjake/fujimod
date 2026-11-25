@@ -49,12 +49,21 @@ mod schedule_tests;
 #[cfg(test)]
 mod tests;
 #[cfg(test)]
+mod translation_device_tests;
+#[cfg(test)]
+mod translation_execution_tests;
+#[cfg(test)]
+mod translation_matrix_tests;
+#[cfg(test)]
+mod translation_tests;
+#[cfg(test)]
 mod workers_tests;
 use bus::Bus;
 pub use fujimod_emulator_cpu::GuestProfilePhase;
 use fujimod_emulator_cpu::timeline::{Ratio, Target, Timeline};
 use fujimod_emulator_cpu::{
-    Cpu, ExecutionPolicy, Exit, Hook, HookId, HookRange, Interrupt, Mmio, Register, Run,
+    Access, Cpu, ExecutionPolicy, Exit, Hook, HookId, HookRange, Interrupt, Mmio, Model, Register,
+    Run, arm64,
 };
 use fujimod_emulator_devices::{Host, Record};
 use serde_json::{Value, json};
@@ -423,6 +432,26 @@ fn callback_service_sample(
     callback_timing::count(statistics, binding.core, kind)
 }
 
+/// Memory class the MAIR attribute of a translated page selects.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum MemoryKind {
+    Normal,
+    Device,
+}
+/// Classify one MAIR attribute byte. `None` is the MMU-disabled Device regime.
+/// Every attribute the walker cannot classify refuses instead of guessing.
+fn memory_kind(mair: u64, attribute: Option<u8>) -> Result<MemoryKind, String> {
+    let Some(index) = attribute else {
+        return Ok(MemoryKind::Device);
+    };
+    let attribute = ((mair >> (8 * u32::from(index & 7))) & 0xff) as u8;
+    match attribute & 0xc0 {
+        0x00 => Ok(MemoryKind::Device),
+        // Write-through, write-back and allocation hints behave alike without
+        // modeled caches, so every non-Device encoding is ordinary RAM.
+        _ => Ok(MemoryKind::Normal),
+    }
+}
 /// Devices and callbacks have one owner. Interactive native processors run
 /// concurrently between barriers; exact execution uses ordered slices.
 pub struct Board {
@@ -977,6 +1006,153 @@ impl Board {
         value: u64,
     ) -> Result<(), String> {
         set(self.cpu(core)?, register, value)
+    }
+    /// Whether this processor runs with EL1 stage-1 translation enabled.
+    ///
+    /// Only AArch64 processors have that translation; every other model keeps
+    /// the flat address view its backend applies.
+    fn translation_enabled(&self, core: usize) -> Result<bool, String> {
+        if self.cpu(core)?.model() != Model::ArmV8A {
+            return Ok(false);
+        }
+        Ok(self.aarch64_register(core, "SCTLR_EL1")? & 1 != 0)
+    }
+    fn aarch64_register(&self, core: usize, name: &str) -> Result<u64, String> {
+        self.read_register(core, Register::Arm64System(arm64::system_register(name)?))
+    }
+    /// EL1 stage-1 inputs for the address half that `address` selects.
+    fn translation_state(
+        &self,
+        core: usize,
+        address: u64,
+    ) -> Result<arm64::TranslationState, String> {
+        let upper = address & (1 << 55) != 0;
+        Ok(arm64::TranslationState {
+            sctlr: self.aarch64_register(core, "SCTLR_EL1")?,
+            tcr: self.aarch64_register(core, "TCR_EL1")?,
+            ttbr0: if upper {
+                0
+            } else {
+                self.aarch64_register(core, "TTBR0_EL1")?
+            },
+            ttbr1: if upper {
+                self.aarch64_register(core, "TTBR1_EL1")?
+            } else {
+                0
+            },
+            pstate: self.read_register(core, Register::Pstate)?,
+        })
+    }
+    fn table_word(&self, address: u64) -> Result<u64, String> {
+        let mut word = [0u8; 8];
+        self.physical_memory.read_host(address, &mut word)?;
+        Ok(u64::from_le_bytes(word))
+    }
+    fn ram_contains(&self, address: u64, length: u64) -> bool {
+        let end = address.saturating_add(length);
+        self.physical_memory
+            .regions()
+            .iter()
+            .any(|(base, backing)| *base <= address && end <= *base + backing.len() as u64)
+    }
+    /// Resolve a guest span to physical memory through EL1 stage-1 tables.
+    ///
+    /// `None` means translation is disabled, so the guest address is already
+    /// physical. A translated span must reach contiguous Normal-memory pages
+    /// inside modeled RAM, and its MAIR attribute must not change inside the
+    /// span. Table reads are observational, and the walker refuses every
+    /// translation feature it does not model.
+    fn translated_span(
+        &self,
+        core: usize,
+        address: u64,
+        length: u64,
+        access: Access,
+    ) -> Result<Option<u64>, String> {
+        if !self.translation_enabled(core)? {
+            return Ok(None);
+        }
+        let mair = self.aarch64_register(core, "MAIR_EL1")?;
+        let mut offset = 0;
+        let mut first: Option<u64> = None;
+        let mut kind: Option<MemoryKind> = None;
+        while offset < length {
+            let at = address + offset;
+            let state = self.translation_state(core, at)?;
+            let (physical, attribute) = state.walk(at, access, |table| self.table_word(table))?;
+            let page = memory_kind(mair, attribute)?;
+            if let Some(kind) = kind {
+                if page != kind {
+                    return Err(format!(
+                        "AArch64 {access:?} at {address:#x}: span crosses a memory attribute change"
+                    ));
+                }
+            } else {
+                kind = Some(page);
+            }
+            match first {
+                None => first = Some(physical),
+                Some(base) if physical != base + offset => {
+                    return Err(format!(
+                        "AArch64 {access:?} at {address:#x}: translated pages are not contiguous"
+                    ));
+                }
+                Some(_) => {}
+            }
+            offset += (0x1000 - (at & 0xfff)).min(length - offset);
+        }
+        let base = first.unwrap_or(address);
+        if kind == Some(MemoryKind::Device) {
+            return Err(format!(
+                "AArch64 {access:?} at {address:#x}: translated Device access at {base:#x} is only performed by the running core's MMIO path"
+            ));
+        }
+        if !self.ram_contains(base, length) {
+            return Err(format!(
+                "AArch64 {access:?} at {address:#x}: translated address {base:#x} is outside modeled RAM; translated device access is not modeled"
+            ));
+        }
+        Ok(Some(base))
+    }
+    /// Translate one guest address, returning it unchanged when translation is
+    /// disabled. This is the single seam guest fetch and data access share.
+    pub fn guest_physical(&self, core: usize, address: u64, access: Access) -> Result<u64, String> {
+        Ok(self
+            .translated_span(core, address, 1, access)?
+            .unwrap_or(address))
+    }
+    /// Read guest memory through the shared translation seam.
+    pub fn read_guest_memory(
+        &self,
+        core: usize,
+        address: u64,
+        bytes: &mut [u8],
+    ) -> Result<(), String> {
+        self.track_cpu_read(core, address, bytes.len())?;
+        let physical = self.translated_span(core, address, bytes.len() as u64, Access::Read)?;
+        self.cpu(core)?
+            .read_memory(physical.unwrap_or(address), bytes)
+    }
+    /// Write guest memory through the shared translation seam.
+    pub fn write_guest_memory(
+        &self,
+        core: usize,
+        address: u64,
+        bytes: &[u8],
+    ) -> Result<(), String> {
+        let physical = self.translated_span(core, address, bytes.len() as u64, Access::Write)?;
+        self.cpu(core)?
+            .write_memory(physical.unwrap_or(address), bytes)?;
+        let mut state = self.state.borrow_mut();
+        state.code_run = RunCode::Unknown;
+        notify_memory(
+            &self.cpus,
+            &state.mprofile,
+            &state.exclusive,
+            core,
+            address,
+            bytes.len(),
+        )
     }
     pub fn read_memory(&self, core: usize, address: u64, bytes: &mut [u8]) -> Result<(), String> {
         self.track_cpu_read(core, address, bytes.len())?;
