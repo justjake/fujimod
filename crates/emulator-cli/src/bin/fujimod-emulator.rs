@@ -46,6 +46,7 @@ XP5 --poke also takes ADDR=U32@MS: the word is written MS guest milliseconds aft
 Application-profile startup: --application-plan FILE.\n\
 Session observations: --load-snapshot FILE, --save-snapshot FILE, --pc-trace FILE [--pc-trace-limit N].\n\
 Native GUI: --gui opens the desktop window connected to this session.\n\
+XPP application runs: --adc MS:CHANNEL=SAMPLE[,...] sets an ADC channel's result MS guest milliseconds after the run starts.\n\
 Prints a JSON boot report; exits 0 at REC (EXR II) or at the end of the run (XP5), 2 at a stopped frontier.\n\
 \n\
 open names a catalog firmware whose update and boot ROM are found by SHA-256 in\n\
@@ -62,7 +63,7 @@ open boots to REC, prints a JSON report of the firmware, boot, stage and engine,
 --gui opens the desktop window on the opened session before the report.\n";
 
 /// Options that take a value, in help order; `--discovery` and `--gui` are flags.
-const VALUED: [&str; 42] = [
+const VALUED: [&str; 43] = [
     "--configuration",
     "--overlay",
     "--engine",
@@ -105,6 +106,7 @@ const VALUED: [&str; 42] = [
     "--camera-settings",
     "--load-snapshot",
     "--save-snapshot",
+    "--adc",
 ];
 
 /// The options of one `boot` command, before the processor generation is known.
@@ -869,6 +871,24 @@ fn run_application(mut options: Boot, resolved: ResolvedConfiguration) -> Result
         .map(boot::host::read_scene)
         .transpose()?;
     let gpio = options.text("--gpio")?;
+    let mut adc_events = options
+        .text("--adc")?
+        .unwrap_or_default()
+        .split(',')
+        .map(str::trim)
+        .filter(|item| !item.is_empty())
+        .map(|item| {
+            let malformed = || format!("--adc {item}: needs MS:CHANNEL=SAMPLE");
+            let (ms, rest) = item.split_once(':').ok_or_else(malformed)?;
+            let (channel, sample) = rest.split_once('=').ok_or_else(malformed)?;
+            let ms: u64 = ms.parse().map_err(|_| malformed())?;
+            let channel: usize = channel.parse().map_err(|_| malformed())?;
+            let sample: u16 = sample.parse().map_err(|_| malformed())?;
+            Ok((Duration::from_millis(ms), channel, sample))
+        })
+        .collect::<Result<Vec<_>, String>>()?;
+    adc_events.sort_by_key(|event| event.0);
+    let mut adc_events = std::collections::VecDeque::from(adc_events);
     let mut keys = boot::host::parse_keys(
         options.text("--keys")?.as_deref(),
         options.text("--press")?.as_deref(),
@@ -957,6 +977,16 @@ fn run_application(mut options: Boot, resolved: ResolvedConfiguration) -> Result
                 .gpio_input(wire.port, wire.pin, wire.active == *pressed)?;
             keys.pop_front();
         }
+        let mut next_adc = None;
+        while let Some(&(delay, channel, sample)) = adc_events.front() {
+            let at = deadline(delay);
+            if at > now {
+                next_adc = Some(at);
+                break;
+            }
+            board.board.adc_input(channel, sample)?;
+            adc_events.pop_front();
+        }
         let next_patch = patches.advance(&board.board, now, start, board.ticks_per_second)?;
         if let Some(loaded) = &mut loaded_mod {
             loaded.advance(&board.board, now, &stubbed)?;
@@ -983,6 +1013,7 @@ fn run_application(mut options: Boot, resolved: ResolvedConfiguration) -> Result
             .chain(next_frame)
             .chain(next_patch)
             .chain(next_key)
+            .chain(next_adc)
             .min())
     })?;
     if let Some(directory) = &output {
