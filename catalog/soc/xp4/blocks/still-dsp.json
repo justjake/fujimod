@@ -14,6 +14,11 @@
   "device": {
     "model": "dsp",
     "run_ticks": 108000,
+    "control_block_ids": [
+      "still-dsp-system",
+      "still-dsp-program",
+      "still-dsp-status"
+    ],
     "evidence": [
       {
         "kind": "stand-in"

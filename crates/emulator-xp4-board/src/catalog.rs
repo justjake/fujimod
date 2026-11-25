@@ -182,8 +182,81 @@ impl Catalog {
             .collect::<Result<Vec<_>, String>>()?;
         out.insert("control_requests".into(), json!(requests));
         self.output_fields(&mut out)?;
+        out.insert("register_banks".into(), json!(self.register_storage()?));
+        if let Some(sram) = self.soc["memory_regions"]
+            .as_array()
+            .into_iter()
+            .flatten()
+            .find(|row| row["id"] == "boot-sram")
+        {
+            out.insert("boot_sram".into(), json!([sram["base"], sram["size"]["bytes"]]));
+        }
         if self.soc["id"] == "xp4" {
             self.xp4_fields(&mut out)?;
+        }
+        Ok(out)
+    }
+
+    /// Whether the board builds a device for `block`. A block with no device,
+    /// a device this board does not model, or an SD host with no declared SD
+    /// card leaves its window to register storage.
+    pub fn builds(&self, block: Block<'_>) -> bool {
+        match block.device["model"].as_str() {
+            None | Some("register_storage" | "byte_i2c") => false,
+            Some("sd_host") => self.sd_card_hosts().contains(&block.base()),
+            Some(_) => true,
+        }
+    }
+
+    /// The SD host windows the body declares an SD card in.
+    fn sd_card_hosts(&self) -> Vec<u64> {
+        self.board["sd_cards"]
+            .as_array()
+            .into_iter()
+            .flatten()
+            .filter_map(|card| card["host_base"].as_u64())
+            .collect()
+    }
+
+    /// Register-storage windows less every address another selected block owns,
+    /// as `[low, high)` ranges in record order.
+    pub fn register_storage(&self) -> Result<Vec<(u64, u64)>, String> {
+        let mut owned: Vec<(u64, u64)> = Vec::new();
+        for block in self.blocks().filter(|&b| self.builds(b)) {
+            owned.push((block.base(), block.base() + block.size()));
+            // Windows the device names as its own (`*_block_id`, `*_block_ids`).
+            for (key, value) in block.device.as_object().into_iter().flatten() {
+                let ids: Vec<&Value> = match value {
+                    Value::String(_) if key.ends_with("_block_id") => vec![value],
+                    Value::Array(rows) if key.ends_with("_block_ids") => rows.iter().collect(),
+                    _ => continue,
+                };
+                for id in ids {
+                    let named = self.block(id.as_str().unwrap_or_default())?;
+                    owned.push((named.base(), named.base() + named.size()));
+                }
+            }
+        }
+        // Each SD clock model owns its halfword.
+        for clock in self.sd_clock_words()? {
+            owned.push((clock.0, clock.0 + 2));
+        }
+        let mut out = Vec::new();
+        for block in self.with_device("register_storage") {
+            let mut segments = vec![(block.base(), block.base() + block.size())];
+            for &(lo, hi) in &owned {
+                segments = segments
+                    .into_iter()
+                    .flat_map(|(a, b)| {
+                        if hi <= a || b <= lo {
+                            vec![(a, b)]
+                        } else {
+                            [(a, lo.max(a)), (hi.min(b), b)].into_iter().filter(|(x, y)| x < y).collect()
+                        }
+                    })
+                    .collect();
+            }
+            out.extend(segments);
         }
         Ok(out)
     }
@@ -242,6 +315,20 @@ impl Catalog {
         if let Some(gpio) = self.device("gpio") {
             out.insert("gpio_base".into(), json!(gpio.base()));
         }
+        let owned = self.sd_card_hosts();
+        let clocks: Vec<Value> = self
+            .sd_clock_words()?
+            .into_iter()
+            .filter(|(address, _)| !owned.contains(&(address & !0xfff)))
+            .map(|(a, t)| json!([a, t]))
+            .collect();
+        out.insert("sd_clocks".into(), json!(clocks));
+        Ok(())
+    }
+
+    /// Every SD interface clock halfword with its settle time: each host's
+    /// clock-control word and the free-standing clock blocks, sorted.
+    fn sd_clock_words(&self) -> Result<Vec<(u64, u64)>, String> {
         let mut clocks = self
             .with_device("sd_host_clock")
             .into_iter()
@@ -258,20 +345,7 @@ impl Catalog {
             clocks.extend(hosts.iter().map(|h| (h.base() + offset, settles[0])));
         }
         clocks.sort_unstable();
-        // A host with a declared SD card owns its page, clock halfword included.
-        let owned: Vec<u64> = self.board["sd_cards"]
-            .as_array()
-            .into_iter()
-            .flatten()
-            .filter_map(|card| card["host_base"].as_u64())
-            .collect();
-        let clocks: Vec<Value> = clocks
-            .into_iter()
-            .filter(|(address, _)| !owned.contains(&(address & !0xfff)))
-            .map(|(a, t)| json!([a, t]))
-            .collect();
-        out.insert("sd_clocks".into(), json!(clocks));
-        Ok(())
+        Ok(clocks)
     }
 
     /// The XP4 imaging and still devices, each from the block that owns it.

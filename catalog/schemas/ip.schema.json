@@ -1676,6 +1676,13 @@
                 "null"
               ]
             },
+            "control_block_ids": {
+              "description": "Blocks holding the DSP's system, program and status words.",
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
             "evidence": {
               "description": "Evidence for the declared timing, when it is a stand-in.",
               "items": {

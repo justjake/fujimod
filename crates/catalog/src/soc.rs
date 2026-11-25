@@ -513,6 +513,9 @@ pub enum BlockDevice {
     Dsp {
         /// Ticks for one command.
         run_ticks: u64,
+        /// Blocks holding the DSP's system, program and status words.
+        #[serde(default, skip_serializing_if = "Vec::is_empty")]
+        control_block_ids: Vec<String>,
         /// Evidence for the declared timing, when it is a stand-in.
         #[serde(default, skip_serializing_if = "Vec::is_empty")]
         evidence: Vec<crate::provenance::Evidence>,

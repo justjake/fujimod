@@ -3,10 +3,10 @@
   "schema": 1,
   "id": "register-storage-fffc4000",
   "base": 4294721536,
-  "size": 32768,
+  "size": 4096,
   "kind": "address-window",
   "device": {
     "model": "register_storage",
-    "basis": "Register words with no modeled behavior: SD host register pages; a selected SD host owns its page and each SD clock model its halfword."
+    "basis": "Register words with no modeled behavior: an SD host register page; a selected SD host owns its page and each SD clock model its halfword."
   }
 }
