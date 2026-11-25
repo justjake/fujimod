@@ -11,6 +11,15 @@ fn directories(path: &Path) -> Vec<std::path::PathBuf> {
     paths
 }
 
+fn include_from_checkout(path: &Path) -> String {
+    // Cargo can reuse this generated source across worktrees with a shared
+    // target directory. Resolve the include against the crate compiling it.
+    format!(
+        "include_str!(concat!(env!(\"CARGO_MANIFEST_DIR\"), \"/\", {:?}))",
+        path.to_str().expect("boot manifest path must be UTF-8"),
+    )
+}
+
 fn main() {
     if env::var_os("CARGO_FEATURE_XP5_STARTUP").is_none()
         || env::var("CARGO_CFG_TARGET_ARCH").as_deref() == Ok("wasm32")
@@ -26,7 +35,6 @@ fn main() {
             if !directory.is_dir() {
                 continue;
             }
-            let directory = directory.canonicalize().unwrap();
             let manifest = directory.join("manifest.toml");
             let manifest_text = fs::read_to_string(&manifest).unwrap();
             let id = manifest_text
@@ -50,13 +58,13 @@ fn main() {
             fragments.sort();
             let mut list = String::new();
             for fragment in fragments {
-                write!(list, "include_str!({:?}), ", fragment.display().to_string()).unwrap();
+                write!(list, "{}, ", include_from_checkout(&fragment)).unwrap();
             }
             writeln!(
                 source,
-                "    Bundled {{ firmware: {id:?}, manifest: include_str!({:?}), fragments: &[{list}], streams: include_str!({:?}) }},",
-                manifest.display().to_string(),
-                directory.join("streams.toml").display().to_string(),
+                "    Bundled {{ firmware: {id:?}, manifest: {}, fragments: &[{list}], streams: {} }},",
+                include_from_checkout(&manifest),
+                include_from_checkout(&directory.join("streams.toml")),
             )
             .unwrap();
         }
