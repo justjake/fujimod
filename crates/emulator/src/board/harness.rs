@@ -816,7 +816,8 @@ impl Board {
     }
     /// Run at most `count` instructions on `core` alone, the other cores held
     /// as they are: an explicit host scheduling input, as for an isolated
-    /// caller; no device sees it.
+    /// caller; no device sees it. The run ends once the core starts waiting;
+    /// a core already waiting runs on from its wake.
     pub fn run_core(&mut self, core: usize, count: u64, quantum: usize) -> Result<(), String> {
         if core >= self.cpus.len() {
             return Err("invalid core".into());
@@ -834,7 +835,12 @@ impl Board {
         }
         self.next_core.set(core);
         self.slice_left.set(0);
+        let isolated = self.isolated_core.get();
+        if !waiting[core] {
+            self.isolated_core.set(Some(core));
+        }
         let result = self.run_for_instructions(count, quantum);
+        self.isolated_core.set(isolated);
         let mut s = self.state.borrow_mut();
         let ran = s.waiting[core];
         s.released = released;

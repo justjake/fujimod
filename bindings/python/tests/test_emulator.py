@@ -39,8 +39,6 @@ NATIVE_EXPORTS = frozenset({
     "mono12_phase_gain",
     "jpeg_encode_yycbcr",
     "jpeg_decode_yycbcr",
-    "FrontierEntry",
-    "Intervention",
     "gpu_ui_render",
     "prepare_host_gpu",
     "UiBatch",
