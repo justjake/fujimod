@@ -511,7 +511,7 @@ pub fn panel_names(resolved: &ResolvedConfiguration) -> Result<crate::panel::Nam
         .map(|&(model, id)| Ok((model.to_owned(), (id.to_owned(), label(id)?))))
         .collect::<Result<_, String>>()?;
     let shutter = match controls.controls.get("shutter_button") {
-        Some(control) if matches!(body.as_str(), "xt5" | "x100vi") => Some((
+        Some(control) if matches!(body.as_str(), "xt5" | "x100vi" | "xh2") => Some((
             ("shutter_button".to_owned(), control.name.clone()),
             // S1 (half press) on GPIO 0.0 and S2 on 0.1, both active low.
             [Pin { port: 0, pin: 0 }, Pin { port: 0, pin: 1 }],
@@ -626,7 +626,7 @@ mod tests {
 
     #[test]
     fn every_mapped_identity_is_a_catalog_control() {
-        let bodies = [("xt5-431", "xt5"), ("xh2s-730", "xh2s"), ("xe5-112", "xe5")].map(|(configuration, body)| {
+        let bodies = [("xt5-431", "xt5"), ("xh2-530", "xh2"), ("xh2s-730", "xh2s"), ("xe5-112", "xe5")].map(|(configuration, body)| {
             let document = ResolvedConfiguration::bundled(configuration)
                 .unwrap()
                 .reference
@@ -656,6 +656,37 @@ mod tests {
             })
             .collect();
         assert_eq!(channels, [1, 2, 8, 11, 14]);
+    }
+
+    #[test]
+    fn xh2_ladders_become_the_ladder_wiring() {
+        let options = ladders(&ResolvedConfiguration::bundled("xh2-530").unwrap())
+            .unwrap()
+            .unwrap();
+        let wires: Vec<_> = options.ladders.iter().map(|ladder| ladder.wire).collect();
+        assert_eq!(
+            wires,
+            [
+                ladders::Wire::Adc { channel: 6 },
+                ladders::Wire::Adc { channel: 13 }
+            ]
+        );
+        let rung = |key: Key| {
+            options
+                .ladders
+                .iter()
+                .flat_map(|ladder| &ladder.rungs)
+                .find(|rung| rung.key == key)
+                .map(|rung| (rung.band_low, rung.band_high, rung.sample))
+                .unwrap()
+        };
+        assert_eq!(rung(Key::Menu), (0, 782, 391));
+        assert_eq!(rung(Key::Back), (2637, 3102, 2869));
+        assert_eq!(rung(Key::Up), (1448, 1688, 1568));
+        assert_eq!(rung(Key::Right), (1930, 2219, 2074));
+        assert_eq!(rung(Key::Left), (2606, 3041, 2823));
+        assert_eq!(rung(Key::Down), (3042, 3719, 3380));
+        assert!(options.gpio_keys.is_empty() && options.dials.is_empty());
     }
 
     #[test]
