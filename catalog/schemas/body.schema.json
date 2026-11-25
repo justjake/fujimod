@@ -3085,6 +3085,17 @@
           "description": "Named keypad positions and their declared analog sample levels.",
           "type": "object"
         },
+        "lens_mount": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/LensMount"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "The lens mount's serial controller, connector pads and mounted lens, when the body has one."
+        },
         "profiles": {
           "additionalProperties": {
             "$ref": "#/$defs/BodyProfile"
@@ -9787,6 +9798,80 @@
       "required": [
         "motor",
         "connection_id"
+      ],
+      "type": "object"
+    },
+    "LensMount": {
+      "additionalProperties": false,
+      "description": "An interchangeable-lens mount: its serial controller and connector pads.",
+      "properties": {
+        "controller_id": {
+          "description": "SoC serial controller carrying lens commands.",
+          "type": "string"
+        },
+        "detect_connection_id": {
+          "description": "Connection whose pad reads low while a lens is attached.",
+          "type": "string"
+        },
+        "lens_part_id": {
+          "description": "Lens mounted on the body, when one is.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "ready_connection_id": {
+          "description": "Connection whose pad the lens pulls low while busy.",
+          "type": "string"
+        },
+        "ready_function": {
+          "description": "Pad function that routes the ready pad to its interrupt lines.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "ready_high_line": {
+          "description": "Interrupt line raised when ready rises.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "ready_low_line": {
+          "description": "Interrupt line raised when ready falls.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "sense_connection_ids": {
+          "description": "Connections whose pads read the lens-type pattern before power.",
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 3,
+          "minItems": 3,
+          "type": "array"
+        },
+        "supply_connection_ids": {
+          "description": "Connections driving the lens supplies, in power-up order.",
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 2,
+          "minItems": 2,
+          "type": "array"
+        }
+      },
+      "required": [
+        "controller_id",
+        "detect_connection_id",
+        "sense_connection_ids",
+        "supply_connection_ids",
+        "ready_connection_id",
+        "ready_low_line",
+        "ready_high_line"
       ],
       "type": "object"
     },

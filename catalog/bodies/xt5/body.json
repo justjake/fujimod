@@ -64,6 +64,24 @@
     "thermal_connection_ids": [
       "thermal-0"
     ],
+    "lens_mount": {
+      "controller_id": "spi0",
+      "detect_connection_id": "lens-detect",
+      "sense_connection_ids": [
+        "lens-sense-0",
+        "lens-sense-1",
+        "lens-sense-2"
+      ],
+      "supply_connection_ids": [
+        "lens-supply-0",
+        "lens-supply-1"
+      ],
+      "ready_connection_id": "lens-ready",
+      "ready_function": 3,
+      "ready_low_line": 131,
+      "ready_high_line": 115,
+      "lens_part_id": "xf18-55-lens"
+    },
     "bus_drain": [
       {
         "address": 1610612736,
@@ -403,6 +421,90 @@
           "active_level": false
         }
       ]
+    },
+    {
+      "id": "lens-detect",
+      "kind": "lens",
+      "signals": [
+        {
+          "kind": "gpio",
+          "port": 0,
+          "pin": 11,
+          "active_level": false
+        }
+      ]
+    },
+    {
+      "id": "lens-sense-0",
+      "kind": "lens",
+      "signals": [
+        {
+          "kind": "gpio",
+          "port": 10,
+          "pin": 0,
+          "active_level": true
+        }
+      ]
+    },
+    {
+      "id": "lens-sense-1",
+      "kind": "lens",
+      "signals": [
+        {
+          "kind": "gpio",
+          "port": 10,
+          "pin": 1,
+          "active_level": true
+        }
+      ]
+    },
+    {
+      "id": "lens-sense-2",
+      "kind": "lens",
+      "signals": [
+        {
+          "kind": "gpio",
+          "port": 10,
+          "pin": 2,
+          "active_level": true
+        }
+      ]
+    },
+    {
+      "id": "lens-supply-0",
+      "kind": "lens",
+      "signals": [
+        {
+          "kind": "gpio",
+          "port": 15,
+          "pin": 9,
+          "active_level": true
+        }
+      ]
+    },
+    {
+      "id": "lens-supply-1",
+      "kind": "lens",
+      "signals": [
+        {
+          "kind": "gpio",
+          "port": 15,
+          "pin": 10,
+          "active_level": true
+        }
+      ]
+    },
+    {
+      "id": "lens-ready",
+      "kind": "lens",
+      "signals": [
+        {
+          "kind": "gpio",
+          "port": 14,
+          "pin": 1,
+          "active_level": true
+        }
+      ]
     }
   ],
   "parts": [
@@ -418,7 +520,8 @@
     "unidentified-serial-device",
     "bis-configuration",
     "lsm6ds",
-    "xt5-image-sensor"
+    "xt5-image-sensor",
+    "xf18-55-lens"
   ],
   "wiring": [
     {

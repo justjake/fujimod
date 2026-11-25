@@ -1523,6 +1523,91 @@
         },
         {
           "additionalProperties": false,
+          "description": "Full-duplex framed peer whose frame repeats the last command frame it received.",
+          "properties": {
+            "initial_frame": {
+              "description": "Frame the peer sends before its first command.",
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "kind": {
+              "const": "framed-command-peer",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "initial_frame"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Display panel programmed over a chip-selected serial port.",
+          "properties": {
+            "kind": {
+              "const": "display-panel-serial",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Interchangeable X-mount lens on a body's lens mount.",
+          "properties": {
+            "busy_us": {
+              "description": "From then until the lens releases ready high.",
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "kind": {
+              "const": "x-mount-lens",
+              "type": "string"
+            },
+            "operation_us": {
+              "description": "Shortest ready-low pulse for a focus or aperture request.",
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "preset": {
+              "description": "Emulated lens preset.",
+              "type": "string"
+            },
+            "sense_unpowered": {
+              "description": "Lens-type pattern the sense pads read before power.",
+              "items": {
+                "type": "boolean"
+              },
+              "maxItems": 3,
+              "minItems": 3,
+              "type": "array"
+            },
+            "startup_us": {
+              "description": "From both supplies high until the lens pulls ready low.",
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          "required": [
+            "kind",
+            "preset",
+            "sense_unpowered",
+            "startup_us",
+            "busy_us",
+            "operation_us"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
           "description": "Power-controller register protocol.",
           "properties": {
             "kind": {

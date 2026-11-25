@@ -1,0 +1,20 @@
+{
+  "$schema": "https://fujimod.com/schemas/part.schema.json",
+  "schema": 1,
+  "id": "xf18-55-lens",
+  "model": {
+    "kind": "peripheral",
+    "interface": {
+      "kind": "x-mount-lens",
+      "preset": "xf18-55",
+      "sense_unpowered": [
+        true,
+        false,
+        true
+      ],
+      "startup_us": 2000,
+      "busy_us": 50000,
+      "operation_us": 1000
+    }
+  }
+}
