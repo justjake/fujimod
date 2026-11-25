@@ -1331,6 +1331,10 @@ fn block_window(
                 wire.insert("kind".into(), toml::Value::String("gpio-selected".into()));
                 wire.insert("endpoints".into(), toml::Value::Array(endpoints));
             }
+            if wire.is_empty() {
+                // Nothing attached: a transfer refuses instead of inventing a reply.
+                wire.insert("kind".into(), toml::Value::String("unconnected".into()));
+            }
             options.insert("wire".into(), toml::Value::Table(wire));
             "pl022"
         }
