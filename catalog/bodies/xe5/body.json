@@ -53,7 +53,11 @@
     "xe5-serial-nand",
     "power-controller",
     "serial-calibration",
-    "bis-configuration"
+    "bis-configuration",
+    "fuel-gauge",
+    "tmd2772",
+    "control-bus-device-66",
+    "control-bus-device-68"
   ],
   "wiring": [
     {
@@ -75,6 +79,30 @@
       "source_id": "serial",
       "target_id": "bis-configuration",
       "signal": "serial_data"
+    },
+    {
+      "source_id": "i2c1",
+      "target_id": "fuel-gauge",
+      "signal": "serial_data",
+      "address": 54
+    },
+    {
+      "source_id": "i2c1",
+      "target_id": "tmd2772",
+      "signal": "serial_data",
+      "address": 57
+    },
+    {
+      "source_id": "i2c1",
+      "target_id": "control-bus-device-66",
+      "signal": "serial_data",
+      "address": 102
+    },
+    {
+      "source_id": "i2c1",
+      "target_id": "control-bus-device-68",
+      "signal": "serial_data",
+      "address": 104
     }
   ]
 }

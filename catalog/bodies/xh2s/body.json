@@ -85,7 +85,11 @@
   ],
   "parts": [
     "power-controller",
-    "xh2s-serial-nor"
+    "xh2s-serial-nor",
+    "fuel-gauge",
+    "tmd2772",
+    "control-bus-device-66",
+    "control-bus-device-68"
   ],
   "wiring": [
     {
@@ -97,6 +101,30 @@
       "source_id": "flash",
       "target_id": "xh2s-serial-nor",
       "signal": "storage"
+    },
+    {
+      "source_id": "i2c1",
+      "target_id": "fuel-gauge",
+      "signal": "serial_data",
+      "address": 54
+    },
+    {
+      "source_id": "i2c1",
+      "target_id": "tmd2772",
+      "signal": "serial_data",
+      "address": 57
+    },
+    {
+      "source_id": "i2c1",
+      "target_id": "control-bus-device-66",
+      "signal": "serial_data",
+      "address": 102
+    },
+    {
+      "source_id": "i2c1",
+      "target_id": "control-bus-device-68",
+      "signal": "serial_data",
+      "address": 104
     }
   ]
 }

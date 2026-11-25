@@ -17,7 +17,7 @@
         "value": 17891601
       }
     ],
-    "delay_ticks": 200000,
+    "delay_ticks": 100000,
     "basis": "completion handshake Located in catalog/firmware/xe5/1.12/xp5-boot/manifest.d/57-develop-stubs-3.toml."
   },
   "evidence": [

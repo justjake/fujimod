@@ -1368,6 +1368,27 @@
       ],
       "type": "object"
     },
+    "RunBusByteTime": {
+      "additionalProperties": false,
+      "description": "Board ticks one control-bus block takes to move a byte.",
+      "properties": {
+        "block_id": {
+          "description": "Control-bus block the time applies to.",
+          "type": "string"
+        },
+        "ticks": {
+          "description": "Board ticks per byte.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "block_id",
+        "ticks"
+      ],
+      "type": "object"
+    },
     "RunCardFilesystem": {
       "description": "Card filesystems a virtual card can declare.",
       "oneOf": [
@@ -4947,6 +4968,13 @@
         }
       ],
       "description": "Browser camera attachments declared by a selected overlay."
+    },
+    "bus_byte_times": {
+      "description": "Functional per-byte times the emulator gives control buses in this run; none is measured.",
+      "items": {
+        "$ref": "#/$defs/RunBusByteTime"
+      },
+      "type": "array"
     },
     "dram_address_space": {
       "anyOf": [

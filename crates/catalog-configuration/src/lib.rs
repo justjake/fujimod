@@ -67,6 +67,9 @@ pub struct RunConfiguration {
     /// External scene inputs generated for this run.
     #[serde(default)]
     pub scene: Option<RunScene>,
+    /// Functional per-byte times the emulator gives control buses in this run; none is measured.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub bus_byte_times: Vec<RunBusByteTime>,
     /// Named overlays to apply in declaration order.
     pub overlays: Vec<String>,
     /// Browser camera attachments declared by a selected overlay.
@@ -1200,6 +1203,23 @@ pub enum RunExecutionScope {
     IsolatedDriver,
     #[serde(rename = "offline-boot-development")]
     OfflineBootDevelopment,
+}
+
+/// Board ticks one control-bus block takes to move a byte.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(deny_unknown_fields)]
+#[cfg_attr(feature = "schema", schemars(deny_unknown_fields))]
+#[cfg_attr(
+    all(target_arch = "wasm32", not(target_os = "emscripten")),
+    derive(tsify::Tsify),
+    tsify(hashmap_as_object, missing_as_null)
+)]
+pub struct RunBusByteTime {
+    /// Control-bus block the time applies to.
+    pub block_id: String,
+    /// Board ticks per byte.
+    pub ticks: u64,
 }
 
 /// Execution policy selected by the run configuration.

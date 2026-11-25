@@ -62,6 +62,29 @@ pub struct ProcessorEmulation {
     /// Processor blocks the emulator backs privately for each CPU.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub private_mmio: Vec<String>,
+    /// Blocks whose unmodeled aligned words read back their last write instead of stopping.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub retained_word_blocks: Vec<String>,
+    /// Functional completion latencies the emulator gives blocks; none is measured.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub completion_latencies: Vec<BlockLatency>,
+}
+
+/// A functional completion latency for one block.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(deny_unknown_fields)]
+#[cfg_attr(feature = "schema", schemars(deny_unknown_fields))]
+#[cfg_attr(
+    all(target_arch = "wasm32", not(target_os = "emscripten")),
+    derive(tsify::Tsify),
+    tsify(hashmap_as_object, missing_as_null)
+)]
+pub struct BlockLatency {
+    /// Processor block the latency applies to.
+    pub block_id: String,
+    /// Board ticks from a start to its completion.
+    pub ticks: u64,
 }
 
 /// One discovery probe aperture, reserved below the high vectors.

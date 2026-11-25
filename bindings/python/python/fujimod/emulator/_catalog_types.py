@@ -1073,6 +1073,7 @@ class BodyRamRegion(TypedDict, total=False):
 
 
 class BodyWiring(TypedDict, total=False):
+    address: NotRequired[int | None]
     signal: Required[WireSignal]
     source_id: Required[str]
     target_id: Required[str]
@@ -4374,6 +4375,9 @@ type PeripheralPart = (
     | PeripheralPartVariant10
     | PeripheralPartVariant11
     | PeripheralPartVariant12
+    | PeripheralPartVariant13
+    | PeripheralPartVariant14
+    | PeripheralPartVariant15
 )
 
 
@@ -4386,13 +4390,28 @@ class PeripheralPartVariant1(TypedDict, total=False):
 
 
 class PeripheralPartVariant10(TypedDict, total=False):
+    kind: Required[Literal["tmd2772-proximity"]]
+
+
+class PeripheralPartVariant11(TypedDict, total=False):
+    kind: Required[Literal["retained-registers"]]
+
+
+class PeripheralPartVariant12(TypedDict, total=False):
+    commands: Required[list[StabilizerCommand]]
+    kind: Required[Literal["stabilizer"]]
+    status: Required[int]
+    telemetry: Required[int]
+
+
+class PeripheralPartVariant13(TypedDict, total=False):
     command_prefix: Required[int]
     data_prefix: Required[int]
     kind: Required[Literal["command-data-output"]]
     payload_bytes: Required[int]
 
 
-class PeripheralPartVariant11(TypedDict, total=False):
+class PeripheralPartVariant14(TypedDict, total=False):
     erase_bytes: NotRequired[int | None]
     jedec_id: NotRequired[int | None]
     kind: Required[Literal["serial-nor-flash"]]
@@ -4400,7 +4419,7 @@ class PeripheralPartVariant11(TypedDict, total=False):
     sampling: NotRequired[NorSampling | None]
 
 
-class PeripheralPartVariant12(TypedDict, total=False):
+class PeripheralPartVariant15(TypedDict, total=False):
     jedec_id: NotRequired[int | None]
     kind: Required[Literal["serial-nand-flash"]]
     page_bytes: NotRequired[int | None]
@@ -4442,10 +4461,7 @@ class PeripheralPartVariant8(TypedDict, total=False):
 
 
 class PeripheralPartVariant9(TypedDict, total=False):
-    commands: Required[list[StabilizerCommand]]
-    kind: Required[Literal["stabilizer"]]
-    status: Required[int]
-    telemetry: Required[int]
+    kind: Required[Literal["fuel-gauge"]]
 
 
 class PersistentJournalAppend(TypedDict, total=False):
@@ -4946,6 +4962,11 @@ class RunBrowserSensor(TypedDict, total=False):
     frames: Required[str]
 
 
+class RunBusByteTime(TypedDict, total=False):
+    block_id: Required[str]
+    ticks: Required[int]
+
+
 type RunCardFilesystem = Literal["fat32"]
 
 
@@ -4983,6 +5004,7 @@ RunConfiguration = TypedDict(
         ],
         "body_id": Required["str"],
         "browser_camera": NotRequired["RunBrowserCamera | None"],
+        "bus_byte_times": NotRequired["list[RunBusByteTime]"],
         "dram_address_space": NotRequired["RunDramAddressSpace | None"],
         "execution": NotRequired["RunExecution | None"],
         "firmware_id": Required["str"],

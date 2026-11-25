@@ -133,6 +133,7 @@ base = 0xff981000
 size = 0x1000
 kind = "completion-stub"
 [device.options]
+delay_us = 100
 registers = [
   { offset = 0x000, mode = "constant", value = 0x1 },
   { offset = 0x830, mode = "constant", value = 0x01110111 },

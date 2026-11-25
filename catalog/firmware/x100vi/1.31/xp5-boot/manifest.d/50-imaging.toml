@@ -4,6 +4,7 @@ base = 0xff948000
 size = 0x1000
 kind = "imaging-sensor"
 [device.options]
+retain_words = true
 # Functional scheduled latency, not measured camera timing.
 command_latency_us = 1
 
@@ -70,11 +71,15 @@ kind = "imaging-table"
 base = 0xff946000
 size = 0x1000
 kind = "imaging-input"
+[device.options]
+retain_words = true
 
 [[device]]
 base = 0xff950000
 size = 0x1000
 kind = "imaging-reset"
+[device.options]
+retain_words = true
 
 # MOVDC bank0 shares the reset-bit0 handshake (144b838).
 [[device]]
@@ -82,6 +87,7 @@ base = 0xff970000
 size = 0x1000
 kind = "movdc"
 [device.options]
+retain_words = true
 frame_period_us = 1000000
 source_luma = 128
 [[device]]
@@ -89,6 +95,7 @@ base = 0xff971000
 size = 0x1000
 kind = "movdc"
 [device.options]
+retain_words = true
 frame_period_us = 1000000
 source_luma = 128
 [[device]]
@@ -96,12 +103,15 @@ base = 0xff972000
 size = 0x1000
 kind = "movdc"
 [device.options]
+retain_words = true
 frame_period_us = 1000000
 source_luma = 128
 [[device]]
 base = 0xff973000
 size = 0x1000
 kind = "imaging-reset"
+[device.options]
+retain_words = true
 
 # MOVRSZ2f0aebc requires reset+0[0] and idle+54[0,16].
 [[device]]
@@ -109,6 +119,7 @@ base = 0xff982000
 size = 0x1000
 kind = "imaging-resize"
 [device.options]
+retain_words = true
 completion_us = 1000
 
 # Fixed Y0,Y1,Cb,Cr source at programmed DMA outputs. Native callbacks own
@@ -122,12 +133,15 @@ kind = "imaging-statistics"
 base = 0xff976000
 size = 0x1000
 kind = "imaging-paf"
+[device.options]
+retain_words = true
 
 [[device]]
 base = 0xff974000
 size = 0x1000
 kind = "imaging-preview"
 [device.options]
+retain_words = true
 frame_period_us = 1000000
 source_luma = 128
 
@@ -135,12 +149,15 @@ source_luma = 128
 base = 0xffd01000
 size = 0x1000
 kind = "imaging-rifp-io"
+[device.options]
+queue_completion_us = 5
 
 [[device]]
 base = 0xffd02000
 size = 0x1000
 kind = "imaging-rifp"
 [device.options]
+retain_words = true
 completion_us = 1000
 source_luma = 128
 

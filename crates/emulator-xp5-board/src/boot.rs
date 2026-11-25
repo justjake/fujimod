@@ -579,6 +579,19 @@ pub fn windows_from_blocks(
         .as_ref()
         .map(|hardware| hardware.bus_drain.as_slice())
         .unwrap_or_default();
+    let emulation = resolved.processor_emulation()?;
+    let ticks_per_second = emulation
+        .board_ticks_per_second
+        .ok_or("XP5 processor emulation declares no board time base")?;
+    for id in emulation
+        .retained_word_blocks
+        .iter()
+        .chain(emulation.completion_latencies.iter().map(|latency| &latency.block_id))
+    {
+        if !selection.soc.blocks.iter().any(|block| &block.id == id) {
+            return Err(format!("XP5 processor emulation names unknown block {id}"));
+        }
+    }
     let mut devices = Vec::new();
     for block in &selection.soc.blocks {
         let Some(device) = &block.device else {
@@ -586,10 +599,28 @@ pub fn windows_from_blocks(
         };
         if let Some((kind, options)) = block_window(
             block, device, selection, flash_input, flash_image, samples.as_deref(), levels,
+            &resolved.configuration.bus_byte_times, ticks_per_second,
         )? {
             let mut options = options;
             if !options.contains_key("registers") && block.registers.iter().any(|register| register.reads.is_some()) {
                 options.insert("registers".into(), stub_registers(block));
+            }
+            if emulation.retained_word_blocks.contains(&block.id) {
+                options.insert("retain_words".into(), toml::Value::Boolean(true));
+            }
+            if let Some(latency) = emulation.completion_latencies.iter().find(|latency| latency.block_id == block.id) {
+                let option = match kind {
+                    "completion-stub" | "imaging-tnr" | "imaging-fcnv" | "imaging-filter-scaler"
+                    | "imaging-rzl2" | "imaging-resz" => "delay_us",
+                    "imaging-rifp-io" => "queue_completion_us",
+                    "imaging-buffer" => "completion_us",
+                    _ => return Err(format!("block {}: {kind} takes no completion latency", block.id)),
+                };
+                let micros = u128::from(latency.ticks) * 1_000_000;
+                if micros % u128::from(ticks_per_second) != 0 {
+                    return Err(format!("block {}: latency is not a whole number of microseconds", block.id));
+                }
+                options.insert(option.into(), toml::Value::Integer((micros / u128::from(ticks_per_second)) as i64));
             }
             if kind == "imaging-table" && block.size > 0x1000 {
                 for offset in (0..block.size).step_by(0x1000) {
@@ -650,6 +681,8 @@ fn block_window(
     flash_image: Option<&fujimod_catalog::firmware::FlashImage>,
     samples: Option<&[u16]>,
     levels: Option<(&Vec<u16>, &Vec<fujimod_catalog_configuration::application_inputs::GpioOutputWord>)>,
+    byte_times: &[fujimod_catalog_configuration::RunBusByteTime],
+    ticks_per_second: u64,
 ) -> Result<Option<(&'static str, toml::Table)>, String> {
     let _ = levels;
     let mut options = toml::Table::new();
@@ -895,7 +928,24 @@ fn block_window(
         BlockDevice::I2c { fifo_depth, clock_hz, tick_hz, .. } => {
             let _ = (fifo_depth, clock_hz, tick_hz);
             if let Some(line) = irq("interrupt") { options.insert("interrupt".into(), integer(u64::from(line))); }
-            options.insert("byte_ns".into(), integer(90_000));
+            let mut targets = Vec::new();
+            for wire in selection.body.wiring.iter().filter(|wire| wire.source_id == block.id) {
+                let address = wire.address.ok_or_else(|| format!("wire {} -> {} has no bus address", wire.source_id, wire.target_id))?;
+                let part = selection.parts.iter().find(|part| part.id == wire.target_id)
+                    .ok_or_else(|| format!("wire {} -> {}: no such part", wire.source_id, wire.target_id))?;
+                let fujimod_catalog::reference::PartModel::Peripheral { interface } = &part.model else {
+                    return Err(format!("part {} is not a control-bus peripheral", part.id));
+                };
+                let interface = toml::Value::try_from(interface).map_err(|error| error.to_string())?;
+                let mut row = toml::Table::new();
+                row.insert("address".into(), integer(u64::from(address)));
+                row.insert("part".into(), interface);
+                targets.push(toml::Value::Table(row));
+            }
+            if !targets.is_empty() { options.insert("targets".into(), toml::Value::Array(targets)); }
+            if let Some(time) = byte_times.iter().find(|time| time.block_id == block.id) {
+                options.insert("byte_ns".into(), integer(time.ticks * 1_000_000_000 / ticks_per_second));
+            }
             "i2c-controller"
         }
         BlockDevice::ResetGates { .. } => "imaging-reset",

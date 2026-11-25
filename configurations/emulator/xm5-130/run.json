@@ -149,6 +149,12 @@
       }
     ]
   },
+  "bus_byte_times": [
+    {
+      "block_id": "i2c1",
+      "ticks": 25000
+    }
+  ],
   "overlays": [],
   "preset": {
     "factory_options": {},

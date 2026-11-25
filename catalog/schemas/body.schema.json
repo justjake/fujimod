@@ -3180,6 +3180,16 @@
       "additionalProperties": false,
       "description": "A physical wire between a body connection, part, or SoC block.",
       "properties": {
+        "address": {
+          "description": "Seven-bit address of the target on a control bus, for a wire from a bus controller.",
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
         "signal": {
           "$ref": "#/$defs/WireSignal",
           "description": "Named signal carried by the wire."

@@ -17,5 +17,48 @@
     "The reset-handshake request completes immediately as a functional session assumption; physical reset timing and effects are unmodeled.",
     "Memory-configuration commit completion uses an explicit 1000-tick functional latency; physical training and retention transfers are unmodeled.",
     "Write-only configuration bands retain 32-bit words; reads and physical side effects remain unmodeled."
+  ],
+  "retained_word_blocks": [
+    "input",
+    "input-reset",
+    "movdc-reset",
+    "movdc0",
+    "movdc1",
+    "movdc2",
+    "paf",
+    "preview",
+    "resize",
+    "rifp",
+    "sensor"
+  ],
+  "completion_latencies": [
+    {
+      "block_id": "image-dsp",
+      "ticks": 2000000
+    },
+    {
+      "block_id": "imaging-fcnv",
+      "ticks": 200000
+    },
+    {
+      "block_id": "imaging-filter-scaler",
+      "ticks": 200000
+    },
+    {
+      "block_id": "imaging-resz",
+      "ticks": 200000
+    },
+    {
+      "block_id": "imaging-rzl2",
+      "ticks": 200000
+    },
+    {
+      "block_id": "imaging-tnr",
+      "ticks": 200000
+    },
+    {
+      "block_id": "rifp-io",
+      "ticks": 5000
+    }
   ]
 }
