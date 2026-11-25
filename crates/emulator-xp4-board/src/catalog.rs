@@ -53,6 +53,9 @@ pub struct Catalog {
     soc: Value,
     rows: Vec<(Value, Value)>,
     ips: Map<String, Value>,
+    body: Value,
+    firmware: Value,
+    configuration: Value,
     pub board: Value,
 }
 impl Catalog {
@@ -105,7 +108,10 @@ impl Catalog {
                 }
             }
         }
-        Ok(Self { soc, rows, ips, board })
+        let body = serde_json::to_value(&resolved.reference.body).map_err(|e| e.to_string())?;
+        let firmware = serde_json::to_value(&resolved.reference.firmware).map_err(|e| e.to_string())?;
+        let configuration = serde_json::to_value(&resolved.configuration).map_err(|e| e.to_string())?;
+        Ok(Self { soc, rows, ips, body, firmware, configuration, board })
     }
     pub fn blocks(&self) -> impl Iterator<Item = Block<'_>> {
         self.rows.iter().map(|(raw, device)| Block { raw, device })
@@ -193,6 +199,102 @@ impl Catalog {
         }
         if self.soc["id"] == "xp4" {
             self.xp4_fields(&mut out)?;
+        }
+        Ok(out)
+    }
+
+    /// The definition fields the body's inputs decide.
+    pub fn body_fields(&self) -> Result<Map<String, Value>, String> {
+        let board = &self.board;
+        let mut out = Map::new();
+        let ram = self.configuration["dram_address_space"]["limit_bytes"]
+            .as_u64()
+            .or_else(|| self.body["dram_bytes"].as_u64())
+            .ok_or("the run declares no DRAM size")?;
+        out.insert("ram_size".into(), json!(ram));
+        let mut labels = self.firmware["installation"]["entry_labels"]
+            .as_object()
+            .into_iter()
+            .flatten()
+            .map(|(address, _)| {
+                u64::from_str_radix(address.trim_start_matches("0x"), 16)
+                    .map_err(|_| format!("entry label address {address} is not hexadecimal"))
+            })
+            .collect::<Result<Vec<u64>, String>>()?;
+        labels.sort_unstable();
+        out.insert("labels".into(), json!(labels));
+        let declared = &self.soc["instructions_per_tick"];
+        let rate = match &board["execution_clock"]["instructions_per_tick"] {
+            Value::Array(rate) => rate.clone(),
+            _ if declared.is_object() => vec![declared["numerator"].clone(), declared["denominator"].clone()],
+            _ => vec![json!(1), json!(1)],
+        };
+        let (n, d) = (rate.first().and_then(Value::as_u64), rate.get(1).and_then(Value::as_u64));
+        if rate.len() != 2 || !matches!((n, d), (Some(n), Some(d)) if d >= 1 && n >= d && n <= 1 << 32) {
+            return Err("A7 instruction throughput requires a positive ratio of at least one".into());
+        }
+        out.insert("instructions_per_tick".into(), json!(rate));
+        let chip = &board["serial_flash"];
+        if chip.is_object() {
+            let g = &chip["geometry"];
+            out.insert("storage_geometry".into(),
+                json!([g["erase_bytes"], g["page_bytes"], g["erase_ticks"], g["page_ticks"]]));
+            out.insert("storage_jedec".into(), chip["jedec_id"].clone());
+        }
+        if let Some(adc) = self.device("adc").filter(|b| b.id() != "temperature") {
+            let input = &board["adc_input"];
+            if !input.is_object() {
+                return Err("XP4 ADC controller requires its explicit external inputs".into());
+            }
+            out.insert("adc".into(), json!([input["samples"], adc.number("sample_ticks")?]));
+        }
+        if let Some(temperature) = self.with_device("adc").into_iter().find(|b| b.id() == "temperature") {
+            out.insert("temperature".into(), json!([board["temperature_input"]["millicelsius"],
+                temperature.number("sample_ticks")?]));
+        }
+        if self.device("gpio").is_some() {
+            out.insert("gpio".into(), board["gpio_input"]["levels"].clone());
+        }
+        let routes = board["gpio_interrupts"]["routes"].as_array().cloned().unwrap_or_default();
+        out.insert("gpio_interrupts".into(), json!(routes.iter().map(|r| json!({
+            "port": r["port"], "pin": r["pin"], "line": r["line"], "active_high": r["active_high"]})).collect::<Vec<_>>()));
+        let spi: Vec<(String, Block<'_>)> = self
+            .with_device("spi")
+            .into_iter()
+            .map(|b| (b.id().trim_start_matches("spi").to_string(), b))
+            .collect();
+        let inputs = board["spi_inputs"].as_object().cloned().unwrap_or_default();
+        let mut ports: Vec<&String> = spi.iter().map(|(p, _)| p).collect();
+        ports.sort();
+        let mut declared: Vec<&String> = inputs.keys().collect();
+        declared.sort();
+        if ports != declared {
+            return Err("XP4 SPI controller and explicit MISO input must be selected together".into());
+        }
+        let mut plain = Vec::new();
+        for (port, block) in &spi {
+            let pin = &inputs[port.as_str()];
+            let high = pin["level"] == "high";
+            if let Some(power) = pin.get("power_registers") {
+                let cs = &power["chip_select"];
+                out.insert("power_spi".into(), json!([block.base(), high, cs["port"], cs["pin"], cs["active_high"],
+                    power["inputs"], power["rtc_ticks_per_second"]]));
+            } else if let Some(power) = pin.get("power_checksum_registers") {
+                let cs = &power["chip_select"];
+                let writes: Vec<Value> = power["disable_writes"].as_array().into_iter().flatten()
+                    .map(|r| json!([r["register"], r["value"]])).collect();
+                out.insert("checksum_power_spi".into(), json!([block.base(), high, cs["port"], cs["pin"],
+                    cs["active_high"], power["inputs"], writes, power.get("rtc").cloned().unwrap_or(Value::Null),
+                    power["retained_registers"]]));
+            } else {
+                plain.push(json!([block.base(), high]));
+            }
+        }
+        out.insert("spi_inputs".into(), json!(plain));
+        if let Some(dials) = board["countdown_dials"]["dials"].as_array() {
+            out.insert("countdown_dials".into(), json!(dials.iter().map(|d| json!({"name": d["control"],
+                "channel": d["channel"], "phase_ticks": d["phase_ticks"], "rest_phase": d["rest_phase"]}))
+                .collect::<Vec<_>>()));
         }
         Ok(out)
     }
@@ -411,9 +513,13 @@ mod tests {
 
     #[test]
     fn xt3_processor_fields_come_from_its_blocks() {
-        let fields = xt3().processor_fields().unwrap();
+        let mut fields = xt3().processor_fields().unwrap();
+        fields.extend(xt3().body_fields().unwrap());
         if let Ok(path) = std::env::var("FUJIMOD_XP4_CATALOG_DUMP") {
             std::fs::write(path, serde_json::to_string_pretty(&fields).unwrap()).unwrap();
+            if let Ok(board) = std::env::var("FUJIMOD_XP4_BOARD_DUMP") {
+                std::fs::write(board, serde_json::to_string_pretty(&xt3().board).unwrap()).unwrap();
+            }
         }
         assert_eq!(fields["cores"], 4);
         assert_eq!(fields["cbar"], 0xffff0000u64);
