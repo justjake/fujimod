@@ -18,7 +18,7 @@ fn xp5_inputs(
 fn xp5_bodies_declare_only_the_devices_they_have() {
     for (id, blocks) in [
         ("x100vi-131", ["adc", "gpio", "flash-aperture"].as_slice()),
-        ("xt5-431", ["adc", "flash-aperture"].as_slice()),
+        ("xt5-431", ["adc", "flash-aperture", "gpio"].as_slice()),
     ] {
         let mut configuration = ResolvedConfiguration::bundled(id).unwrap().configuration;
         let declared: Vec<_> = xp5_inputs(&mut configuration)
