@@ -1,0 +1,39 @@
+# DV720 neural accelerator registers at ffe00000, the X-T5 and X100VI layout (47-dv720.toml
+# there). After the first-start screens the AI task 0x2ea34d8 zeroes +0x100..+0x14c one word
+# at a time (0x2ea368c..0x2ea36a8, end x23 = 0xffe00150 from 0x2ea3520) and calls 0x5a3b1d4
+# (0x2ea36ac). The initializer writes +0x800 = 0 through 0x5a3f184 (0x5a3b36c), which
+# stores the word (0x5a3f194) and cleans its cache line through 0x5a3f0d4 -> 0x14d1ae0; it
+# then writes +0x810, +0x820 = 0 and +0x800 = 1, reads +0x11c and writes +0x144 = 0x177654.
+# The X-T5's register helper skips the cache clean for 0xffe00000..0xfff00000; the X-H2's
+# does not, and the clean of a device window completes without a device access.
+# FujiMod's bring-up register file stores each write and reads it back. It is declared only
+# over those registers: the job start (+0x804, 0x5a3abf4) and the completion poll of +0x808
+# (0x5a3c504) stay unowned and refuse.
+# Not a model of the accelerator; nothing here is checked against the part.
+[[device]]
+base = 0xffe00100
+size = 0x50
+kind = "bringup-stub"
+[device.options]
+registers = []
+
+[[device]]
+base = 0xffe00800
+size = 0x4
+kind = "bringup-stub"
+[device.options]
+registers = []
+
+[[device]]
+base = 0xffe00810
+size = 0x4
+kind = "bringup-stub"
+[device.options]
+registers = []
+
+[[device]]
+base = 0xffe00820
+size = 0x4
+kind = "bringup-stub"
+[device.options]
+registers = []

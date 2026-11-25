@@ -1,0 +1,14 @@
+# IBUF, the imaging input buffer, the X-T5 layout (xt5/4.31/xp5-boot/manifest.d/49-gap-stubs.toml).
+# REC entry programs it from CPU1: 0x138d0e4 builds +0x14 at 0x138d144 and stores it through the
+# call at 0x138d14c. Open 0x138d938 (X-T5 0x138b9e0) clears +0x6c, clears +0x00 bit 0 through
+# 0x138c8c8 (0x138a970), waits without a timeout for bit 0 to read 1 in 0x138c834 (0x138a8dc,
+# poll at 0x138c850), re-arms and starts with +0x40 bit 0 (0x138c904). 0x138d490 (0x138b538)
+# registers the completion interrupt: descriptor 0x18ed5d0 (0x18eb0b8) begins with INTID 169;
+# the handler 0x138c880 (0x138a928) writes 1 to +0x6c through 0x138c860 (0x138a908).
+# completion_us is the X-T5's functional latency, not a measured transfer time.
+[[device]]
+base = 0xff945000
+size = 0x1000
+kind = "imaging-buffer"
+[device.options]
+completion_us = 8000

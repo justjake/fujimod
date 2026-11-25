@@ -1,0 +1,155 @@
+# Sensor communication block. The busy-bit reader 0x13597b8 (X-T5 0x1356788) builds
+# 0xff948204 (0x13597c8..0x13597cc) and reads it through 0x5de38 (0x13597d0); the start,
+# format and descriptor setters 0x1359780, 0x13597e8 and 0x1355540 and the packet senders
+# 0x2f7b2e0, 0x2f7b3dc and 0x2f7b5e4 match the X-T5's apart from relocations, and every
+# access they make is an aligned word the shared model accepts.
+[[device]]
+base = 0xff948000
+size = 0x1000
+kind = "imaging-sensor"
+[device.options]
+# Bring-up: the setup words +0x440..+0x480 and +0x4c0 read back their last write.
+retain_words = true
+# Functional scheduled latency per packet, not measured camera timing.
+command_latency_us = 1
+# The S1 contrast AF's fast readout, as on the X-T5: readout mode 0x117 selects row 96 of
+# the mode table 0x37adc08 (0x37ae808), whose register pairs include sensor register
+# 0x01 = 0x07 (0x3872690); lines are 432 clocks at 72 MHz. The AF frame period is
+# [0x4626838], set from 0x30f4434 (X-T5 [0x44a37d8] from 0x3032cfc).
+frame_timing_readout = 7
+frame_timing_line_ns = 6000
+
+# The other imaging windows are the X-T5's (xt5/4.31/xp5-boot/manifest.d/50-imaging.toml),
+# which adapts the X100VI's; the addresses are the XP5 SoC profile's (catalog/soc/xp5/soc.json).
+# Each X-H2 driver below uses the X-T5 counterpart's register offsets and poll bits.
+# Differences from the X-T5 fragment: no SSP3 sensor link at 0xff913000 (on the X-H2 that port
+# serves the hot shoe and stays unopened with the shoe empty, 32-gpio.toml).
+# Not checked against X-H2 hardware: the frame periods (33333 us), phase intervals, latencies
+# and synthetic luma are FujiMod's functional stand-ins, as on the X-T5.
+
+# Receivers. 0x136ef50/0x136efb0 read and write +0x0 of receiver n at (0xff940 + n) << 12
+# (0x136ef68); cause +0x108 (0x136fa94, 0x136fb84) and mask +0x10c (0x136fc18) repeat per
+# link at 0x100. Receiver 0 has two links, receiver 1 one (0x30ed0bc through 0x2f7cba0).
+[[device]]
+base = 0xff940000
+size = 0x1000
+kind = "imaging-receiver"
+[device.options]
+frame_period_us = 33333
+frame_active_us = 10000 # Functional phase interval; DMA completes after frame-end.
+
+[[device]]
+base = 0xff941000
+size = 0x1000
+kind = "imaging-receiver"
+[device.options]
+frame_period_us = 33333
+
+# Input engine. The REC check 0x30b978c calls 0x30f1d94 (X-T5 0x2ff7930 and 0x3030610),
+# which expects +0x17c bit 31 (0x2d330e4) set while +0x140 bit 0 (0x2d32c34) is clear.
+[[device]]
+base = 0xff946000
+size = 0x1000
+kind = "imaging-input"
+[device.options]
+idle_status = true
+# Bring-up: unmodeled aligned words read back their last write.
+retain_words = true
+
+# MOVDC channels 0..2. 0x13635a0 resets channel n at (0xff970 + n) << 12 (0x13635ac) and
+# polls +0x0 bit 0; 0x1364ff0 clears +0xd4 bit 28 and polls +0xdc bit 8; start is +0x4
+# bit 0 (0x1365d10, 0x1365dac); the diagnostic dump 0x2f4657c reads the retained words.
+[[device]]
+base = 0xff970000
+size = 0x1000
+kind = "movdc"
+[device.options]
+frame_period_us = 33333
+source_luma = 128
+retain_words = true
+
+[[device]]
+base = 0xff971000
+size = 0x1000
+kind = "movdc"
+[device.options]
+frame_period_us = 33333
+source_luma = 128
+retain_words = true
+
+[[device]]
+base = 0xff972000
+size = 0x1000
+kind = "movdc"
+[device.options]
+frame_period_us = 33333
+source_luma = 128
+retain_words = true
+
+# Second reset gate. 0x13635dc writes +0x0 = 0 and polls bit 0 (base 0x13635ec, poll
+# 0x1363608); 0x1365350 writes +0x4 bit 0. The stop poll of +0x30 bit 8 (0x1365c3c) and the
+# interrupt arm +0x3c (0x1365b78) have retention only.
+[[device]]
+base = 0xff973000
+size = 0x1000
+kind = "imaging-reset"
+[device.options]
+retain_words = true
+
+# Resize. 0x2d05ecc (X-T5 0x2c44ba4) sets +0x4c/+0x50 bit 16, then +0x4 bit 0; 0x2d05820
+# waits for +0x54 bits 0 and 16 (0x2d05854); the interrupt handler 0x2d0548c reads +0x58
+# and clears through +0x5c.
+[[device]]
+base = 0xff982000
+size = 0x1000
+kind = "imaging-resize"
+[device.options]
+completion_us = 1000 # Functional latency, not measured on hardware.
+retain_words = true
+
+# Phase AF. 0x2d11a90 (X-T5 0x2c50768) writes +0x0 = 0 and waits for bit 16 (base 0x2d11aa0,
+# poll 0x2d11abc); 0x2d12668 sets +0x300/+0x308 bit 8.
+[[device]]
+base = 0xff976000
+size = 0x1000
+kind = "imaging-paf"
+[device.options]
+retain_words = true
+
+# Preview. 0x135bb94 (X-T5 0x1358b64) polls +0x0 bit 0 and +0x504 bit 16 (0x135bbe8);
+# 0x135f4ec programs the output at +0x400/+0x404.
+[[device]]
+base = 0xff974000
+size = 0x1000
+kind = "imaging-preview"
+[device.options]
+frame_period_us = 33333 # Functional cadence, not measured sensor timing.
+source_luma = 128
+retain_words = true
+# The AF readers 0x30ac28c and 0x30a550c (X-T5 0x2fea380 and 0x2fe36e0's caller) read
+# planes 1, 0, 2 and 3, and 0x135cbf4/0x135cf68 program and decode the window words +0x7c
+# and +0x80 as on the X-T5. UNVERIFIED for the X-H2: the X-T5's coordinate calibration.
+focus_filters = true
+focus_window = true
+
+# RIFP I/O DMA. 0x2d132cc (X-T5 0x2c51f98) selects channel 1 register-list mode; the queue
+# appenders 0x13c2a74/0x13c2ab4 store 8-byte value and address entries in DRAM; START +0x40
+# (0x2d2fcc4), interrupt enable +0x44 and done +0x48 use bit 0.
+[[device]]
+base = 0xffd01000
+size = 0x1000
+kind = "imaging-rifp-io"
+[device.options]
+queue_completion_us = 5 # Functional latency, not measured on hardware.
+
+# RIFP and its retained sub-block pages 0xffd03000..0xffd0bfff. 0x2d13810 queues +0x4 = 1
+# and 0x2d143cc waits for +0x140 mask 0x101010 (0x2d14444); the interrupt handler 0x2d12b24
+# restarts in 0x500-line bands through 0x2d14640.
+[[device]]
+base = 0xffd02000
+size = 0xa000
+kind = "imaging-rifp"
+[device.options]
+completion_us = 1000 # Functional latency, not measured on hardware.
+source_luma = 128
+retain_words = true

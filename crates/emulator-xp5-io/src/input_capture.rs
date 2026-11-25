@@ -11,10 +11,14 @@
 //! 32-bit capture from `+0x10` per interrupt (handler `0x31e8`). The first
 //! capture carries two 16-bit samples (high, low), the second carries one in
 //! its low half; the servo (`0x284cc`) uses them as the three raw stage
-//! position samples. Word meanings below are inferred from that table, not
-//! from a datasheet:
-//! - `0xc6c1xxxx` sends one 16-bit word to the sensor (starts a sample frame),
-//! - `0xc6c2xxxx` clocks one 16-bit sample in (shifted into the capture word);
+//! position samples. The X-H2 5.30 companion runs the same table on capture
+//! channel 5 (bank 1 index 0, `fa2340dc -> ff929004`, NVIC line 63, handler
+//! `0x31f8`); its words differ from the X-T5's only in bits 31..29 (the X-T5
+//! sets bit 31 on its send, sample and pin words, the X-H2 does not), so the
+//! operation is bits 28..16. Word meanings below are inferred from those
+//! tables, not from a datasheet:
+//! - `0x06c1xxxx` sends one 16-bit word to the sensor (starts a sample frame),
+//! - `0x06c2xxxx` clocks one 16-bit sample in (shifted into the capture word);
 //!   the first one after a sent word reads axis 0, then axes 1 and 2,
 //! - `0x0007xxxx` ends a segment: the capture word is latched after
 //!   `latency_ns` and the channel interrupt is raised,
@@ -200,12 +204,12 @@ impl Sequencer {
     /// One word from the companion's DMA stream.
     fn word(&mut self, now: u64, word: u32) -> Result<(), String> {
         self.state.words += 1;
-        match word >> 16 {
-            0xc6c1 => {
+        match (word & 0x1fff_ffff) >> 16 {
+            0x06c1 => {
                 self.state.command = Some(word as u16);
                 self.state.reads = 0;
             }
-            0xc6c2 => {
+            0x06c2 => {
                 let axis = usize::from(self.state.reads);
                 if axis >= 3 {
                     return Err("position sensor read past its three axes".into());
@@ -643,6 +647,43 @@ mod tests {
         assert_eq!(service(&mut capture, &mut host) & 0xffff, 0x8000);
         assert_eq!(host.core_irqs, vec![(4, 62, true), (4, 62, false)]);
         assert_eq!(capture.next_deadline(1100), None);
+    }
+
+    /// The X-H2 5.30 companion's per-tick table (companion RAM `0x340dc`, 41 words).
+    const XH2_TABLE: [u32; 41] = [
+        0x000e0000, 0x0004002a, 0x00060000, 0x60060000, 0x00040027, 0x06c1e5dc, 0x600e0000,
+        0x00040001, 0x000e0000, 0x0004002a, 0x00060000, 0x00040027, 0x06c1ffff, 0x00040001,
+        0x000e0000, 0x0004002a, 0x00060000, 0x00040027, 0x06c2ffff, 0x00040001, 0x000e0000,
+        0x0004002a, 0x00060000, 0x00040027, 0x06c2ffff, 0x00070000, 0x00060000, 0x00060000,
+        0x00060000, 0x00060000, 0x00060000, 0x00060000, 0x00060000, 0x00060000, 0x00060000,
+        0x00040018, 0x00040027, 0x06c2ffff, 0x00040001, 0x000e0000, 0x00070000,
+    ];
+
+    #[test]
+    fn x_h2_table_differs_only_in_flag_bits_and_yields_the_same_captures() {
+        assert!(
+            TABLE
+                .iter()
+                .zip(XH2_TABLE)
+                .all(|(t5, h2)| t5 & 0x1fff_ffff == h2 & 0x1fff_ffff)
+        );
+        assert_ne!(TABLE, XH2_TABLE);
+        let frames = |table: [u32; 41]| {
+            let mut sequencer = Sequencer::new(options([600, -300, 50], 1), 5, None).unwrap();
+            sequencer.state.position = [0; 3];
+            let mut captures = vec![];
+            for tick in 0..8u64 {
+                for word in table {
+                    sequencer.word(tick * 10, word).unwrap();
+                }
+                sequencer.advance(tick * 10 + 1000);
+                captures.extend(sequencer.state.ready.drain(..));
+            }
+            captures
+        };
+        let xh2 = frames(XH2_TABLE);
+        assert_eq!(xh2.len(), 16);
+        assert_eq!(xh2, frames(TABLE));
     }
 
     #[test]
