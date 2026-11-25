@@ -3,7 +3,6 @@
 import json
 import os
 from pathlib import Path
-from typing import cast
 
 import pytest
 from fujimod._native import emulator as native
@@ -14,13 +13,12 @@ TERMINAL = int(os.environ.get("FUJIMOD_XPP_TERMINAL", "0"), 0)
 RAM = 0x20000000
 
 
-def options(terminal: int) -> dict[str, object]:
+def options() -> dict[str, object]:
     # GFX 50R wiring from the Agate ROM-to-card-loader execution record.
     return dict(
         ram_size=RAM,
         cores=2,
         discovery=True,
-        labels=[0, terminal],
         memory_regions=[
             dict(base=0xFFF00000, size=0x8000, permissions=5),
             dict(base=0xFFF0D000, size=0x1000, permissions=7),
@@ -76,25 +74,17 @@ def options(terminal: int) -> dict[str, object]:
 )
 def test_rom_loads_card_image_and_reaches_its_terminal_loop() -> None:
     assert ROM and CARD
-    files = [
-        (name, (Path(CARD) / name).read_bytes()) for name in ("ffsys.bin", "ffboot.bin")
-    ]
-    board = native.Board.from_xp4(json.dumps(options(TERMINAL)), card_files=files)
-    xp4 = board.xp4
-    xp4.write(0xFFF00000, Path(ROM).read_bytes()[:0x8000])
-    milestones: dict[tuple[int, int], int] = {}
+    files = [(name, (Path(CARD) / name).read_bytes()) for name in ("ffsys.bin", "ffboot.bin")]
+    board = native.Board.from_xp4(json.dumps(options()), card_files=files)
+    board.physical_write(0xFFF00000, Path(ROM).read_bytes()[:0x8000])
+    board.watch_pcs([0, TERMINAL])
+    reached: set[tuple[int, int]] = set()
     while sum(board.instructions) < 10_000_000:
-        board.run(100_000, 1000)
-        state = xp4.state()
-        assert state["failure"] is None
-        milestones = {
-            (core, address): n
-            for core, address, n in cast(
-                list[tuple[int, int, int]], state["milestones"]
-            )
-        }
-        if (0, TERMINAL) in milestones:
+        board.run(100_000, 1000, None, None)
+        assert json.loads(board.failure()) is None
+        reached = {(row["core"], row["pc"]) for row in json.loads(board.pc_entries())}
+        if (0, TERMINAL) in reached:
             break
-    assert (0, 0) in milestones and (0, TERMINAL) in milestones
+    assert (0, 0) in reached and (0, TERMINAL) in reached
     ffboot = files[1][1]
-    assert bytes(xp4.read(0, len(ffboot))) == ffboot
+    assert bytes(board.physical_read(0, len(ffboot))) == ffboot

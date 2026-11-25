@@ -1071,9 +1071,11 @@ impl Board {
             hooks: vec![],
         });
         for (core, cpu) in self.cpus.iter().enumerate() {
-            if cpu.model() != Model::CortexR5F {
+            // Watched entries are program-counter addresses; an A-profile
+            // core matches them before its MMU translation.
+            if !matches!(cpu.model(), Model::CortexR5F | Model::CortexA7) {
                 self.function_watch_end(&mut watch)?;
-                return Err("Function watch requires R-profile processors".into());
+                return Err("Function watch requires ARMv7 R- or A-profile processors".into());
             }
             watch.contexts.push(Box::new(FunctionContext {
                 state: Rc::downgrade(&self.state),
