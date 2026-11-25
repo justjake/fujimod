@@ -269,9 +269,10 @@ fn settings_validate_marker_checksum_and_route_extent() {
     let mut input = vec![0; 16];
     input[14] = 0xaa;
     input[15] = 0x56;
-    settings_packet(&mut spec.devices_value, &spec.mcu, &input).unwrap();
+    let mcu = spec.mcu.clone();
+    settings_packet(&mut spec.devices_value, mcu.as_ref(), &input).unwrap();
     input[0] = 1;
-    assert!(settings_packet(&mut spec.devices_value, &spec.mcu, &input).is_err());
+    assert!(settings_packet(&mut spec.devices_value, mcu.as_ref(), &input).is_err());
     input[0] = 0;
     input[14] = 0;
     input[15] = 0;
@@ -279,7 +280,7 @@ fn settings_validate_marker_checksum_and_route_extent() {
     assert!(packet(&input[..15]).is_err());
     input[14] = 0xaa;
     input[15] = 0x56;
-    assert!(settings_packet(&mut json!({}), &spec.mcu, &input).is_err());
+    assert!(settings_packet(&mut json!({}), mcu.as_ref(), &input).is_err());
 }
 
 #[test]
@@ -310,15 +311,16 @@ fn configured_start_inputs_change_prepared_devices_or_refuse() {
         inputs.mcu.packet[last] = inputs.mcu.packet[last].wrapping_sub(1);
     }
     let packet = prepared(resolved).unwrap();
-    let packet_value = model(&packet, "serial_spi1")["routes"][packet.mcu.route]["endpoint"]
-        ["options"]["registers"]
-        .as_array()
-        .unwrap()
-        .iter()
-        .find(|row| row[0] == packet.mcu.first_register)
-        .unwrap()[1]
-        .as_u64()
-        .unwrap();
+    let mcu = packet.mcu.as_ref().unwrap();
+    let packet_value =
+        model(&packet, "serial_spi1")["routes"][mcu.route]["endpoint"]["options"]["registers"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|row| row[0] == mcu.first_register)
+            .unwrap()[1]
+            .as_u64()
+            .unwrap();
     assert_eq!(packet_value, 1);
 
     let mut resolved = ResolvedConfiguration::bundled("x70-110-rec").unwrap();

@@ -69,6 +69,17 @@
       }
     ]
   },
+  "generated_facts": {
+    "observation": {
+      "menu_active": 9795068,
+      "menu_node": 9794000,
+      "pending_mode": 9765112,
+      "rec_mode": 3,
+      "scanout_required": false,
+      "setup_mode": 5,
+      "ui_mode": 9765100
+    }
+  },
   "reset_release": {
     "basis": "Declared catalog input.",
     "checks": [
@@ -109,6 +120,7 @@
           ]
         },
         "browser_configuration_id": "xm1-150-browser-camera",
+        "camera_configuration_id": "xm1-150-runtime",
         "control_bus_tables_id": "control-bus-xm1-150",
         "execution_scope": "offline-boot-development",
         "fe80_programs": [

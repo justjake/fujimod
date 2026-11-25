@@ -733,8 +733,52 @@
       ],
       "type": "object"
     },
+    "NativeContactActuatorInputsPin": {
+      "additionalProperties": false,
+      "description": "One contact or drive pin of a mechanical actuator.",
+      "properties": {
+        "pin": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "port": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "port",
+        "pin"
+      ],
+      "type": "object"
+    },
+    "NativeContactActuatorInputsPosition": {
+      "additionalProperties": false,
+      "description": "One detent of a mechanical actuator's travel.",
+      "properties": {
+        "contacts": {
+          "items": {
+            "type": "boolean"
+          },
+          "type": "array"
+        },
+        "drive": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "contacts",
+        "drive"
+      ],
+      "type": "object"
+    },
     "NativeControlBusProfile": {
       "enum": [
+        "endpoint7-and9-virtual-write-ack",
         "endpoint7-stationary-and9-heartbeat-latched-irq-unmeasured",
         "usbcharge-disconnected-pwic-startup-tagged"
       ],
@@ -743,6 +787,7 @@
     "NativeDisplayTimingInputsMode": {
       "description": "Closed NativeDisplayTimingInputsMode selection.",
       "enum": [
+        "external",
         "configured_clocked"
       ],
       "type": "string"
@@ -778,6 +823,7 @@
     "NativeFaceDetectorInputsMode": {
       "description": "Closed NativeFaceDetectorInputsMode selection.",
       "enum": [
+        "configuration",
         "retained_words"
       ],
       "type": "string"
@@ -881,7 +927,9 @@
     "NativeImageInputInputsClockMode": {
       "description": "Closed NativeImageInputInputsClockMode selection.",
       "enum": [
-        "input_enable"
+        "input_enable",
+        "register_periods",
+        "source_mask"
       ],
       "type": "string"
     },
@@ -922,14 +970,18 @@
     "NativeImageInputInputsCommand": {
       "description": "Closed NativeImageInputInputsCommand selection.",
       "enum": [
-        "packed_writes"
+        "packed_writes",
+        "packed_words"
       ],
       "type": "string"
     },
     "NativeImageInputInputsPhaseAck": {
       "description": "Closed NativeImageInputInputsPhaseAck selection.",
       "enum": [
-        "inactive"
+        "disabled",
+        "inactive",
+        "enabled",
+        "preserve_fields"
       ],
       "type": "string"
     },
@@ -1113,7 +1165,8 @@
     "NativeScanoutInputsRectangleProfile": {
       "description": "Closed NativeScanoutInputsRectangleProfile selection.",
       "enum": [
-        "exr2-signed-ycbcr-rectangle-overlay-unmeasured"
+        "exr2-signed-ycbcr-rectangle-overlay-unmeasured",
+        "xm1-150-declared-luma-rectangle-overlay-unmeasured"
       ],
       "type": "string"
     },
@@ -2790,6 +2843,34 @@
       ],
       "type": "object"
     },
+    "RunMcuPacket": {
+      "additionalProperties": false,
+      "description": "The native serial registers that carry an MCU packet.",
+      "properties": {
+        "first_register": {
+          "description": "First register the packet's bytes occupy.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "node": {
+          "description": "Native node owning the serial endpoint.",
+          "type": "string"
+        },
+        "route": {
+          "description": "Route index of the registers endpoint.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "node",
+        "route",
+        "first_register"
+      ],
+      "type": "object"
+    },
     "RunMcuProfile": {
       "description": "Closed selection for mcu profile.",
       "enum": [
@@ -3068,6 +3149,20 @@
         },
         {
           "additionalProperties": false,
+          "description": "Declared companion startup inputs.",
+          "properties": {
+            "kind": {
+              "const": "companion",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
           "description": "Declared NativeBlock98000Inputs startup inputs and execution limits.",
           "properties": {
             "boot_source": {
@@ -3147,6 +3242,10 @@
             "clock": {
               "$ref": "#/$defs/NativeStatisticsInputsClock"
             },
+            "diagnostic_reads": {
+              "default": false,
+              "type": "boolean"
+            },
             "external_statistics": {
               "type": "boolean"
             },
@@ -3179,6 +3278,10 @@
           "properties": {
             "clock": {
               "$ref": "#/$defs/NativeOutputChannelInputsClock"
+            },
+            "diagnostic_reads": {
+              "default": false,
+              "type": "boolean"
             },
             "geometry": {
               "$ref": "#/$defs/NativeOutputChannelInputsGeometry"
@@ -3461,6 +3564,44 @@
         },
         {
           "additionalProperties": false,
+          "description": "Declared serial-audio-transmitter startup inputs.",
+          "properties": {
+            "kind": {
+              "const": "serial-audio-transmitter",
+              "type": "string"
+            },
+            "max_transfer_bytes": {
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "minimum_ticks": {
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "ram_bytes": {
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "ticks_per_byte": {
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          "required": [
+            "kind",
+            "ram_bytes",
+            "max_transfer_bytes",
+            "ticks_per_byte",
+            "minimum_ticks"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
           "description": "Declared NativeExr2PulseInputs startup inputs and execution limits.",
           "properties": {
             "capture_channel": {
@@ -3545,7 +3686,10 @@
                 "minimum": 0,
                 "type": "integer"
               },
-              "type": "array"
+              "type": [
+                "array",
+                "null"
+              ]
             },
             "clock": {
               "$ref": "#/$defs/NativeImageInputInputsClock"
@@ -3612,8 +3756,7 @@
             "phase_ack",
             "clock",
             "raw_dma_ticks",
-            "readback_ticks",
-            "cfa"
+            "readback_ticks"
           ],
           "type": "object"
         },
@@ -3862,6 +4005,10 @@
             "mode": {
               "$ref": "#/$defs/NativeDisplayTimingInputsMode"
             },
+            "output_hold": {
+              "default": false,
+              "type": "boolean"
+            },
             "stop_ticks": {
               "format": "uint64",
               "minimum": 0,
@@ -3959,6 +4106,53 @@
         },
         {
           "additionalProperties": false,
+          "description": "Declared contact-actuator startup inputs.",
+          "properties": {
+            "contacts": {
+              "items": {
+                "$ref": "#/$defs/NativeContactActuatorInputsPin"
+              },
+              "type": "array"
+            },
+            "drive": {
+              "items": {
+                "$ref": "#/$defs/NativeContactActuatorInputsPin"
+              },
+              "type": "array"
+            },
+            "initial_position": {
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "kind": {
+              "const": "contact-actuator",
+              "type": "string"
+            },
+            "positions": {
+              "items": {
+                "$ref": "#/$defs/NativeContactActuatorInputsPosition"
+              },
+              "type": "array"
+            },
+            "settle_ticks": {
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          "required": [
+            "kind",
+            "contacts",
+            "drive",
+            "initial_position",
+            "positions",
+            "settle_ticks"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
           "description": "Control-bus startup model selection.",
           "properties": {
             "kind": {
@@ -3975,7 +4169,14 @@
               "type": "array"
             },
             "profile": {
-              "$ref": "#/$defs/NativeControlBusProfile"
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/NativeControlBusProfile"
+                },
+                {
+                  "type": "null"
+                }
+              ]
             },
             "transfer_ticks": {
               "format": "uint64",
@@ -3986,8 +4187,7 @@
           "required": [
             "kind",
             "modes",
-            "transfer_ticks",
-            "profile"
+            "transfer_ticks"
           ],
           "type": "object"
         }
@@ -4228,6 +4428,17 @@
           },
           "type": "array"
         },
+        "mcu": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/RunMcuPacket"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Native serial endpoint that carries the MCU packet for a body with no\nattached microcontroller part."
+        },
         "nand_inputs": {
           "additionalProperties": {
             "$ref": "#/$defs/RunNandSceneInput"
@@ -4264,6 +4475,17 @@
           ],
           "description": "Intended operation for this input selection."
         },
+        "settings": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/RunPowerOnSettings"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Settings the camera starts with when the run declares no startup inputs."
+        },
         "start": {
           "anyOf": [
             {
@@ -4274,6 +4496,15 @@
             }
           ],
           "description": "Boot entry when it differs from the base run."
+        },
+        "ticks_per_second": {
+          "description": "Board timer rate for a run that declares no startup inputs.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
         },
         "usb_connected": {
           "description": "Initial cable state, including for runs with no complete reset input set.",

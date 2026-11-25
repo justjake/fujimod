@@ -3661,6 +3661,20 @@
       "oneOf": [
         {
           "additionalProperties": false,
+          "description": "fixed hardware.",
+          "properties": {
+            "kind": {
+              "const": "fixed",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
           "description": "encoder_stages hardware.",
           "properties": {
             "kind": {
@@ -3769,7 +3783,14 @@
               "type": "array"
             },
             "focus": {
-              "$ref": "#/$defs/ConstructionFocus",
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/ConstructionFocus"
+                },
+                {
+                  "type": "null"
+                }
+              ],
               "description": "focus."
             },
             "gpio": {
@@ -3780,8 +3801,26 @@
               "const": "lens-unit",
               "type": "string"
             },
+            "nd": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/ConstructionNdFilter"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "ND filter."
+            },
             "optics": {
-              "$ref": "#/$defs/ConstructionOptics",
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/ConstructionOptics"
+                },
+                {
+                  "type": "null"
+                }
+              ],
               "description": "optics."
             },
             "options": {
@@ -3796,9 +3835,7 @@
           "required": [
             "kind",
             "completion",
-            "focus",
             "gpio",
-            "optics",
             "options",
             "pulses"
           ],
@@ -4081,6 +4118,20 @@
         },
         {
           "additionalProperties": false,
+          "description": "companion hardware.",
+          "properties": {
+            "kind": {
+              "const": "companion",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
           "description": "core-release hardware.",
           "properties": {
             "core": {
@@ -4197,6 +4248,25 @@
         },
         {
           "additionalProperties": false,
+          "description": "contact-actuator hardware.",
+          "properties": {
+            "gpio": {
+              "description": "GPIO output connection.",
+              "type": "string"
+            },
+            "kind": {
+              "const": "contact-actuator",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "gpio"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
           "description": "exr2-interrupt-controller hardware.",
           "properties": {
             "base": {
@@ -4285,7 +4355,14 @@
           "description": "external-frames hardware.",
           "properties": {
             "activity": {
-              "$ref": "#/$defs/ConstructionActivity",
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/ConstructionActivity"
+                },
+                {
+                  "type": "null"
+                }
+              ],
               "description": "activity."
             },
             "images": {
@@ -4303,7 +4380,6 @@
           },
           "required": [
             "kind",
-            "activity",
             "images",
             "statistics"
           ],
@@ -4507,11 +4583,17 @@
             },
             "memory_outputs": {
               "description": "memory outputs.",
-              "type": "string"
+              "type": [
+                "string",
+                "null"
+              ]
             },
             "parameters": {
               "description": "parameters.",
-              "type": "string"
+              "type": [
+                "string",
+                "null"
+              ]
             },
             "phase_irqs": {
               "description": "phase irqs.",
@@ -4553,8 +4635,6 @@
           "required": [
             "kind",
             "edges",
-            "memory_outputs",
-            "parameters",
             "phase_irqs",
             "raw_irq",
             "readback_irq"
@@ -4671,7 +4751,10 @@
             },
             "memory_outputs": {
               "description": "memory outputs.",
-              "type": "string"
+              "type": [
+                "string",
+                "null"
+              ]
             },
             "routes": {
               "description": "routes.",
@@ -4685,7 +4768,6 @@
             "channels",
             "frames",
             "irq",
-            "memory_outputs",
             "routes"
           ],
           "type": "object"
@@ -4893,6 +4975,33 @@
         },
         {
           "additionalProperties": false,
+          "description": "serial-audio-transmitter hardware.",
+          "properties": {
+            "kind": {
+              "const": "serial-audio-transmitter",
+              "type": "string"
+            },
+            "routes": {
+              "description": "routes.",
+              "type": "string"
+            },
+            "sinks": {
+              "description": "sinks.",
+              "items": {
+                "$ref": "#/$defs/ConstructionSerialAudioSink"
+              },
+              "type": "array"
+            }
+          },
+          "required": [
+            "kind",
+            "routes",
+            "sinks"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
           "description": "serial-dma hardware.",
           "properties": {
             "kind": {
@@ -4962,7 +5071,10 @@
           "properties": {
             "cable": {
               "description": "cable.",
-              "type": "string"
+              "type": [
+                "string",
+                "null"
+              ]
             },
             "endpoints": {
               "description": "endpoints.",
@@ -4977,8 +5089,7 @@
             }
           },
           "required": [
-            "kind",
-            "cable"
+            "kind"
           ],
           "type": "object"
         },
@@ -5085,6 +5196,55 @@
       ],
       "type": "object"
     },
+    "ConstructionNdFilter": {
+      "additionalProperties": false,
+      "description": "Declared built-in ND filter facts.",
+      "properties": {
+        "aperture": {
+          "description": "Aperture wire the filter scales.",
+          "type": "string"
+        },
+        "factor": {
+          "description": "Transmission factor while inserted.",
+          "format": "double",
+          "type": "number"
+        },
+        "insert_mask": {
+          "description": "Insert coil mask.",
+          "format": "uint16",
+          "maximum": 65535,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "register": {
+          "description": "Register the filter reports through.",
+          "format": "uint16",
+          "maximum": 65535,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "remove_mask": {
+          "description": "Remove coil mask.",
+          "format": "uint16",
+          "maximum": 65535,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "transmission": {
+          "description": "Transmission wire the filter drives.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "aperture",
+        "factor",
+        "insert_mask",
+        "register",
+        "remove_mask",
+        "transmission"
+      ],
+      "type": "object"
+    },
     "ConstructionNodes": {
       "additionalProperties": false,
       "description": "Declared nodes facts.",
@@ -5158,6 +5318,15 @@
       "additionalProperties": false,
       "description": "Declared options clock facts.",
       "properties": {
+        "initial_seconds": {
+          "description": "Declared initial wall-clock seconds since 2000-01-01.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
         "maximum_seconds": {
           "description": "Declared maximum seconds.",
           "format": "uint64",
@@ -5238,7 +5407,10 @@
               "description": "prefix address.",
               "format": "uint64",
               "minimum": 0,
-              "type": "integer"
+              "type": [
+                "integer",
+                "null"
+              ]
             },
             "prefix_high": {
               "description": "prefix high.",
@@ -5282,7 +5454,14 @@
               "type": "array"
             },
             "touch": {
-              "$ref": "#/$defs/ConstructionTouch",
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/ConstructionTouch"
+                },
+                {
+                  "type": "null"
+                }
+              ],
               "description": "touch."
             }
           },
@@ -5290,14 +5469,12 @@
             "kind",
             "commands",
             "heartbeat_register",
-            "prefix_address",
             "prefix_high",
             "sensor_address",
             "sensor_fields",
             "stationary",
             "status",
-            "topology",
-            "touch"
+            "topology"
           ],
           "type": "object"
         },
@@ -5307,7 +5484,10 @@
           "properties": {
             "connected": {
               "description": "connected.",
-              "type": "boolean"
+              "type": [
+                "boolean",
+                "null"
+              ]
             },
             "kind": {
               "const": "secondary",
@@ -5427,7 +5607,6 @@
           },
           "required": [
             "kind",
-            "connected",
             "pwic_address",
             "pwic_masks",
             "pwic_modes",
@@ -5690,6 +5869,20 @@
       "required": [
         "choice",
         "word"
+      ],
+      "type": "object"
+    },
+    "ConstructionSerialAudioSink": {
+      "additionalProperties": false,
+      "description": "One serial audio transmitter sink's declared connection.",
+      "properties": {
+        "connected": {
+          "description": "Declared connection state.",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "connected"
       ],
       "type": "object"
     },

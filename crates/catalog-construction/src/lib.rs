@@ -187,6 +187,26 @@ pub struct Optics {
     pub positions: Vec<Vec<f64>>,
 }
 
+/// Declared built-in ND filter facts.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(deny_unknown_fields)]
+#[cfg_attr(feature = "schema", schemars(rename = "ConstructionNdFilter"))]
+pub struct NdFilter {
+    /// Aperture wire the filter scales.
+    pub aperture: String,
+    /// Transmission factor while inserted.
+    pub factor: f64,
+    /// Insert coil mask.
+    pub insert_mask: u16,
+    /// Register the filter reports through.
+    pub register: u16,
+    /// Remove coil mask.
+    pub remove_mask: u16,
+    /// Transmission wire the filter drives.
+    pub transmission: String,
+}
+
 /// Declared counters facts.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
@@ -268,6 +288,9 @@ pub struct PanelOptions {
 #[serde(deny_unknown_fields)]
 #[cfg_attr(feature = "schema", schemars(rename = "ConstructionOptionsClock"))]
 pub struct OptionsClock {
+    /// Declared initial wall-clock seconds since 2000-01-01.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub initial_seconds: Option<u64>,
     /// Declared maximum seconds.
     pub maximum_seconds: u64,
     /// Declared registers.
@@ -386,6 +409,16 @@ pub struct ConstructionProfile {
     pub wires: BTreeMap<String, Wire>,
 }
 
+/// One serial audio transmitter sink's declared connection.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(deny_unknown_fields)]
+#[cfg_attr(feature = "schema", schemars(rename = "ConstructionSerialAudioSink"))]
+pub struct SerialAudioSink {
+    /// Declared connection state.
+    pub connected: bool,
+}
+
 /// Closed Parts implementation and its hardware connections.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
@@ -400,7 +433,8 @@ pub enum Parts {
         /// heartbeat register.
         heartbeat_register: u64,
         /// prefix address.
-        prefix_address: u64,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        prefix_address: Option<u64>,
         /// prefix high.
         prefix_high: u64,
         /// sensor address.
@@ -414,13 +448,15 @@ pub enum Parts {
         /// topology.
         topology: Vec<u64>,
         /// touch.
-        touch: Touch,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        touch: Option<Touch>,
     },
     /// secondary hardware.
     #[serde(rename = "secondary")]
     Secondary {
         /// connected.
-        connected: bool,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        connected: Option<bool>,
         /// pwic address.
         pwic_address: u64,
         /// pwic masks.
@@ -450,6 +486,9 @@ pub enum Parts {
 #[serde(tag = "kind", deny_unknown_fields)]
 #[cfg_attr(feature = "schema", schemars(rename = "ConstructionClock"))]
 pub enum Clock {
+    /// fixed hardware.
+    #[serde(rename = "fixed")]
+    Fixed,
     /// encoder_stages hardware.
     #[serde(rename = "encoder_stages")]
     EncoderStages {
@@ -494,11 +533,16 @@ pub enum Endpoint {
         /// completion.
         completion: Vec<Irqs>,
         /// focus.
-        focus: Focus,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        focus: Option<Focus>,
         /// gpio.
         gpio: String,
         /// optics.
-        optics: Optics,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        optics: Option<Optics>,
+        /// ND filter.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        nd: Option<Box<NdFilter>>,
         /// options.
         options: LensunitOptions,
         /// pulses.
@@ -579,6 +623,9 @@ pub enum ConstructionModel {
     /// clocks hardware.
     #[serde(rename = "clocks")]
     Clocks,
+    /// companion hardware.
+    #[serde(rename = "companion")]
+    Companion,
     /// core-release hardware.
     #[serde(rename = "core-release")]
     CoreRelease {
@@ -614,6 +661,12 @@ pub enum ConstructionModel {
         #[serde(default, skip_serializing_if = "Option::is_none")]
         adc: Option<String>,
     },
+    /// contact-actuator hardware.
+    #[serde(rename = "contact-actuator")]
+    ContactActuator {
+        /// GPIO output connection.
+        gpio: String,
+    },
     /// exr2-interrupt-controller hardware.
     #[serde(rename = "exr2-interrupt-controller")]
     Exr2InterruptController {
@@ -642,7 +695,8 @@ pub enum ConstructionModel {
     #[serde(rename = "external-frames")]
     ExternalFrames {
         /// activity.
-        activity: Activity,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        activity: Option<Activity>,
         /// images.
         images: String,
         /// statistics.
@@ -710,9 +764,11 @@ pub enum ConstructionModel {
         #[serde(default, skip_serializing_if = "Option::is_none")]
         frame_period: Option<String>,
         /// memory outputs.
-        memory_outputs: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        memory_outputs: Option<String>,
         /// parameters.
-        parameters: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        parameters: Option<String>,
         /// phase irqs.
         phase_irqs: Vec<Core>,
         /// raw irq.
@@ -765,7 +821,8 @@ pub enum ConstructionModel {
         /// irq.
         irq: u64,
         /// memory outputs.
-        memory_outputs: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        memory_outputs: Option<String>,
         /// routes.
         routes: String,
     },
@@ -827,6 +884,14 @@ pub enum ConstructionModel {
         /// sinks.
         sinks: Vec<Empty>,
     },
+    /// serial-audio-transmitter hardware.
+    #[serde(rename = "serial-audio-transmitter")]
+    SerialAudioTransmitter {
+        /// routes.
+        routes: String,
+        /// sinks.
+        sinks: Vec<SerialAudioSink>,
+    },
     /// serial-dma hardware.
     #[serde(rename = "serial-dma")]
     SerialDma,
@@ -850,7 +915,8 @@ pub enum ConstructionModel {
     #[serde(rename = "usb")]
     Usb {
         /// cable.
-        cable: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        cable: Option<String>,
         /// endpoints.
         #[serde(default, skip_serializing_if = "Option::is_none")]
         endpoints: Option<String>,

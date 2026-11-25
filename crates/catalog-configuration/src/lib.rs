@@ -335,6 +335,24 @@ pub struct RunPowerOnSettings {
     pub requested: BTreeMap<String, String>,
 }
 
+/// The native serial registers that carry an MCU packet.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(deny_unknown_fields)]
+#[cfg_attr(
+    all(target_arch = "wasm32", not(target_os = "emscripten")),
+    derive(tsify::Tsify),
+    tsify(hashmap_as_object, missing_as_null)
+)]
+pub struct RunMcuPacket {
+    /// Native node owning the serial endpoint.
+    pub node: String,
+    /// Route index of the registers endpoint.
+    pub route: u64,
+    /// First register the packet's bytes occupy.
+    pub first_register: u64,
+}
+
 impl RunPowerOnSettings {
     fn validate(&self) -> Result<(), String> {
         if let Some(camera) = &self.camera {
@@ -1027,6 +1045,16 @@ pub struct RunPreset {
     /// Startup values and scheduling limits keyed by native device identity.
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub native_device_inputs: BTreeMap<String, RunNativeDeviceInputs>,
+    /// Board timer rate for a run that declares no startup inputs.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ticks_per_second: Option<u64>,
+    /// Settings the camera starts with when the run declares no startup inputs.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub settings: Option<RunPowerOnSettings>,
+    /// Native serial endpoint that carries the MCU packet for a body with no
+    /// attached microcontroller part.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub mcu: Option<RunMcuPacket>,
     /// Caller-supplied persistent scene inputs keyed by medium identity.
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub nand_inputs: BTreeMap<String, RunNandSceneInput>,
@@ -1479,7 +1507,11 @@ mod tests {
         else {
             panic!("image input");
         };
-        input.cfa.pop();
+        input
+            .cfa
+            .as_mut()
+            .expect("catalog image input declares a CFA")
+            .pop();
         assert!(config.validate("x70-110-runtime").is_err());
     }
 

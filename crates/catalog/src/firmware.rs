@@ -416,6 +416,9 @@ pub struct FirmwareProfile {
     /// Declared browser configuration id.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub browser_configuration_id: Option<String>,
+    /// Declared native camera configuration id.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub camera_configuration_id: Option<String>,
     /// Declared control bus tables id.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub control_bus_tables_id: Option<String>,
