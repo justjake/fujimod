@@ -4115,13 +4115,8 @@
           ]
         },
         "restart": {
-          "status": "unavailable",
-          "errors": [
-            {
-              "locator": "restart",
-              "reason": "RestartCatalogError: Console callback facts need a running camera: cache-ready words; normal-mode UI cell and value"
-            }
-          ]
+          "status": "available",
+          "errors": []
         },
         "service": {
           "status": "unavailable",
