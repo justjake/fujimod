@@ -3667,6 +3667,8 @@ dependencies = [
  "fujimod-catalog-configuration",
  "fujimod-catalog-settings",
  "fujimod-emulator",
+ "fujimod-emulator-boot",
+ "fujimod-emulator-camera",
  "fujimod-emulator-cpu",
  "fujimod-emulator-devices",
  "fujimod-emulator-exr2-plan",

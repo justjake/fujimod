@@ -75,6 +75,16 @@ class emulator:
             quantum: int | None = None,
             instruction_rate: tuple[int, int] | None = None,
         ) -> emulator.Board: ...
+        @staticmethod
+        def open_camera(
+            *,
+            firmware: str,
+            boot: str = ...,
+            sd_card: str | PathLike[str] | None = ...,
+            execution_policy: str = ...,
+            boot_cache: bool = ...,
+        ) -> emulator.Board: ...
+        def status(self, /) -> str: ...
         def range_digest(self, address: int, length: int) -> str: ...
         def boot_to_rec(
             self, /, instruction_limit: SupportsIndex = ...

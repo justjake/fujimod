@@ -33,6 +33,27 @@ impl<'a> Owner<'a> {
     }
 }
 
+/// The most bytes a host may read from a graph session's RAM.
+fn graph_read_limit(session: &fujimod_emulator_session::Session) -> PyResult<usize> {
+    let graph: factory::Graph = serde_json::from_value(session.definition["execution"].clone())
+        .map_err(|e| error(e.to_string()))?;
+    graph
+        .ram
+        .iter()
+        .map(|r| r.size)
+        .chain(
+            graph
+                .processors
+                .iter()
+                .filter_map(|p| p.rprofile.clone())
+                .flat_map(|p| [p.tcm.atcm.bytes, p.tcm.btcm.bytes]),
+        )
+        .try_fold(0usize, |sum, n| {
+            sum.checked_add(n)
+                .ok_or_else(|| error("declared RAM extent overflows".into()))
+        })
+}
+
 /// The measured power-on RAM byte: a body's own measurement, else its
 /// processor's DRAM region.
 fn declared_power_on_ram_fill(definition: &serde_json::Value) -> Option<u8> {
@@ -107,24 +128,8 @@ impl Board {
             .map_err(error)?;
         let (backend, read_limit) = match opened {
             Opened::Graph(session) => {
-                let graph: factory::Graph = serde_json::from_value(session.definition["execution"].clone())
-                    .map_err(|e| error(e.to_string()))?;
-                let read_limit = graph
-                    .ram
-                    .iter()
-                    .map(|r| r.size)
-                    .chain(
-                        graph
-                            .processors
-                            .iter()
-                            .filter_map(|p| p.rprofile.clone())
-                            .flat_map(|p| [p.tcm.atcm.bytes, p.tcm.btcm.bytes]),
-                    )
-                    .try_fold(0usize, |sum, n| {
-                        sum.checked_add(n)
-                            .ok_or_else(|| error("declared RAM extent overflows".into()))
-                    })?;
-                (Backend::Graph(session), read_limit)
+                let read_limit = graph_read_limit(&session)?;
+                return Ok(Self::from_graph_session(session, read_limit));
             }
             Opened::Xp4(session) => {
                 let read_limit = session.ram_bytes();

@@ -22,6 +22,8 @@ fujimod-emulator-xp5-board.workspace = true
 fujimod-emulator-exr2-resources.workspace = true
 fujimod-python-base = { path = "../base" }
 fujimod-emulator.workspace = true
+fujimod-emulator-boot.workspace = true
+fujimod-emulator-camera.workspace = true
 fujimod-emulator-cpu.workspace = true
 fujimod-emulator-devices.workspace = true
 fujimod-emulator-storage.workspace = true

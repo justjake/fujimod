@@ -723,8 +723,9 @@ fn install_files(session: &mut Session, files: &[(String, Vec<u8>)]) -> Result<(
         .map_err(|error| OpenError::at(Stage::BootRom, error))
 }
 
-/// Every file under a directory, named by its path relative to it.
-fn directory_files(directory: &Path) -> Result<Vec<(String, PathBuf)>, OpenError> {
+/// Every file under a directory, named by its path relative to it, as the
+/// files a boot adds to a card.
+pub fn directory_files(directory: &Path) -> Result<Vec<(String, PathBuf)>, OpenError> {
     let mut files = Vec::new();
     let mut pending = vec![directory.to_owned()];
     while let Some(next) = pending.pop() {

@@ -17,7 +17,7 @@ from .. import perf as _perf
 from .definition import Definition, Xp4Definition
 from .processor import Processor
 
-BootStatus = Literal["rec", "instruction-limit", "stopped"]
+BootStatus = Literal["rec", "running", "instruction-limit", "stopped"]
 ExecutionPolicy = Literal["exact", "interactive"]
 
 
@@ -102,7 +102,7 @@ class BoardState(dict[str, object]):
 def _boot_report(value: object) -> BootReport:
     report = _json_object(value)
     status = report.get("status")
-    if status not in ("rec", "instruction-limit", "stopped"):
+    if status not in ("rec", "running", "instruction-limit", "stopped"):
         raise RuntimeError("Native boot report has an unknown status")
     failure = report.get("failure")
     if failure is not None and not isinstance(failure, str):
@@ -394,6 +394,65 @@ class Board:
             native.close()
             raise
         return instance
+
+    @classmethod
+    def open_camera(
+        cls,
+        *,
+        firmware: str,
+        boot: Literal["stock", "sd-card", "automatic-boot"] = "stock",
+        sd_card: str | PathLike[str] | None = None,
+        execution_policy: ExecutionPolicy = "exact",
+        boot_cache: bool = True,
+    ) -> Self:
+        """Open a camera through the shared builder and return it at REC.
+
+        The firmware's update, boot ROM and reference camera come from the
+        directory named by FUJIMOD_FIRMWARE_LIBRARY, so the caller names only
+        the firmware. `boot` is `stock`, `sd-card` or
+        `automatic-boot`. `sd_card` names an SD card directory, or is the
+        current release card when it is omitted for the two card boots, or the
+        extra files of an otherwise empty card for a stock boot.
+        `execution_policy` is `exact` or `interactive`. `boot_cache`
+        restores the library's saved boot when the same inputs were opened
+        before and saves this one; `False` boots from scratch and saves
+        nothing.
+        """
+        firmware = cls._identifier(firmware, "firmware")
+        if boot not in ("stock", "sd-card", "automatic-boot"):
+            raise ValueError("boot must be 'stock', 'sd-card' or 'automatic-boot'")
+        if execution_policy not in ("exact", "interactive"):
+            raise ValueError("execution_policy must be 'exact' or 'interactive'")
+        if type(boot_cache) is not bool:
+            raise TypeError("boot_cache must be a bool")
+        card = None if sd_card is None else cls._input_path(sd_card, "sd_card")
+        native = _native.Board.open_camera(
+            firmware=firmware,
+            boot=boot,
+            sd_card=card,
+            execution_policy=execution_policy,
+            boot_cache=boot_cache,
+        )
+        quantum = native.boot_quantum
+        if type(quantum) is not int or quantum < 1:
+            native.close()
+            raise RuntimeError("Native builder returned an invalid board quantum")
+        instance = cls.__new__(cls)
+        try:
+            instance._adopt_native(native, quantum, boot_capable=False)
+        except BaseException:
+            native.close()
+            raise
+        return instance
+
+    def status(self) -> BootReport:
+        """Return the builder's observation of the running session.
+
+        The status is `rec` at the recording interface, `running` before
+        then and `stopped` after a failure.
+        """
+        self._ensure_open()
+        return _boot_report(json.loads(self._native.status()))
 
     def _adopt_native(
         self, native: _native.Board, quantum: int, *, boot_capable: bool

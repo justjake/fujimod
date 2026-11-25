@@ -1,6 +1,7 @@
 //! Python client and transitional devices on the shared runtime.
 use fujimod_catalog_configuration::RunEngine;
 mod boot;
+mod camera;
 mod checkpoint;
 mod context;
 mod loops;
@@ -71,6 +72,24 @@ pub struct Board {
     last_continuation_stop: Option<fujimod_emulator::board::continuation::ContinuationStop>,
 }
 impl Board {
+    /// The Python board that owns a session built elsewhere, such as the
+    /// camera builder's open.
+    pub(super) fn from_graph_session(
+        session: fujimod_emulator_session::Session,
+        read_limit: usize,
+    ) -> Self {
+        Self {
+            driver: None,
+            memory_watch: None,
+            function_watch: None,
+            instruction_points: BTreeMap::new(),
+            backend: Some(Backend::Graph(session)),
+            objects: BTreeMap::new(),
+            failures: Failures::default(),
+            read_limit,
+            last_continuation_stop: None,
+        }
+    }
     /// A watched contact queue ends a run at its next change.
     fn watch_contacts(&mut self, watched: bool) -> PyResult<()> {
         if self.driver.is_some() {

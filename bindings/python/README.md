@@ -77,6 +77,25 @@ default. Policy changes require a stopped board.
 guest-time counters, observed mode and menu values, setup status and presses,
 plus an optional failure message.
 
+`Board.open_camera` opens a camera through the shared builder and returns it
+at REC or first-start setup. The firmware's update, boot ROM and reference
+camera come from the directory named by `FUJIMOD_FIRMWARE_LIBRARY`, so the
+caller names only the firmware:
+
+```python
+with Board.open_camera(firmware="x70-110", boot="sd-card") as board:
+    assert board.status()["status"] == "rec"
+```
+
+`boot` is `"stock"`, `"sd-card"` or `"automatic-boot"`. `sd_card` names an SD
+card directory: the card to run for the two card boots, or files added to an
+otherwise empty card for a stock boot. Omit it to use the release card for the
+two card boots, or add no files for a stock boot. `execution_policy` is
+`"exact"` or `"interactive"`. `boot_cache` restores the library's saved boot
+when the same inputs were opened before and saves this one; `False` boots from
+scratch and saves nothing. The board is already open, so `boot_to_rec` raises;
+`status` reports `"rec"`, `"running"` before REC or `"stopped"`.
+
 The checked identity catalog is available through
 `fujimod.emulator.catalog`. `resolve_reference(body_id, firmware_id)` returns a
 `ResolvedSelection` containing the resolved `Soc`, `Body`, `Firmware` and
