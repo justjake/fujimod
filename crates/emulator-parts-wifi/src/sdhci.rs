@@ -36,6 +36,8 @@ struct Request {
     pio: bool,
     pio_reads: usize,
     gates: [u16; 4],
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    fifo_address: Option<u32>,
 }
 pub struct SdioHost {
     base: u64,
@@ -49,6 +51,7 @@ pub struct SdioHost {
     state: State,
     request: Option<Request>,
     scratch: [u8; 2560],
+    buffered_io: bool,
 }
 impl SdioHost {
     pub fn new(
@@ -79,7 +82,13 @@ impl SdioHost {
             state: State::Idle,
             request: None,
             scratch: [0; 2560],
+            buffered_io: false,
         })
+    }
+
+    pub fn with_buffered_io(mut self) -> Self {
+        self.buffered_io = true;
+        self
     }
 
     /// Reset the host registers and outstanding command. The external SDIO
@@ -115,6 +124,7 @@ impl SdioHost {
             quantity: 0,
             pio: false,
             pio_reads: 0,
+            fifo_address: None,
             gates: [
                 self.regs.get(0x34),
                 self.regs.get(0x36),
@@ -166,13 +176,20 @@ impl SdioHost {
                 let increment = arg & 0x04000000 != 0;
                 let address = arg >> 9 & 0x1ffff;
                 let count = arg & 511;
-                let pio = word == 0x353a0010;
                 let expected = if block {
                     if write { 0x353a0023 } else { 0x353a0033 }
                 } else if write {
                     0x353a0001
                 } else {
                     0x353a0011
+                };
+                let buffered_io = self.buffered_io && word == expected & !1;
+                let legacy_pio = !self.buffered_io && word == 0x353a0010;
+                let pio = buffered_io || legacy_pio;
+                let block_size = if self.buffered_io {
+                    self.regs.get(4) & 0xfff
+                } else {
+                    self.regs.get(4)
                 };
                 let quantity = if block {
                     count as usize * 512
@@ -183,16 +200,16 @@ impl SdioHost {
                 };
                 if function != 1
                     || increment
-                    || pio && (write || block || quantity % 4 != 0)
+                    || legacy_pio && (write || block || quantity % 4 != 0)
                     || !pio && word != expected
                     || block
                         && (count == 0
                             || count > 5
-                            || self.regs.get(4) != 512
+                            || block_size != 512
                             || self.regs.get(6) as u32 != count
                             || self.module.block_size() != 512)
                     || !block
-                        && (self.regs.get(4) as u32 != if count == 0 { 512 } else { count }
+                        && (block_size as u32 != if count == 0 { 512 } else { count }
                             || self.regs.get(6) != 0)
                 {
                     return Err(format!(
@@ -209,7 +226,12 @@ impl SdioHost {
                     if self.module.block_size() != 512 {
                         return Err("Wi-Fi PIO requires 512-byte function block".into());
                     }
-                    r.operation = Some(self.module.vendor(address, false, &[], quantity)?);
+                    if buffered_io {
+                        r.fifo_address = Some(address);
+                    }
+                    if !write {
+                        r.operation = Some(self.module.vendor(address, false, &[], quantity)?);
+                    }
                 } else {
                     let address_dma = self.regs.word(0) as u64;
                     let physical = if (0x40000000..0x60000000).contains(&address_dma) {
@@ -268,7 +290,12 @@ impl SdioHost {
         if self.clocks.read(cx, self.base + 0x2c, 2) & 7 != 7 || self.regs.get(0x2e) & 15 != 14 {
             return Err("SDIO command before clock/timeout setup".into());
         }
-        let signal = if word >> 24 & 63 == 53 && word != 0x353a0010 {
+        let signal = if word >> 24 & 63 == 53
+            && if self.buffered_io {
+                word & 1 != 0
+            } else {
+                word != 0x353a0010
+            } {
             2
         } else {
             1
@@ -316,8 +343,16 @@ impl SdioHost {
         self.response = [0; 16];
         self.response[..4].copy_from_slice(&r.response.to_le_bytes());
         if r.pio {
+            let ready = if r.fifo_address.is_some() {
+                if r.write { 0x10 } else { 0x20 }
+            } else {
+                0
+            };
             self.request = Some(r);
-            self.regs.set(0x30, self.regs.get(0x30) | 1);
+            self.regs.set(
+                0x30,
+                self.regs.get(0x30) | 1 | (ready & self.regs.get(0x34)),
+            );
         } else {
             if r.quantity != 0 {
                 self.regs.set(6, 0);
@@ -329,6 +364,56 @@ impl SdioHost {
         }
         self.signal(cx)
     }
+    fn buffered_transfer(&mut self, cx: &mut Cx<'_>, value: Option<u32>) -> Result<u32, String> {
+        let r = self.request.as_mut().ok_or("Wi-Fi FIFO without request")?;
+        let address = r
+            .fifo_address
+            .ok_or("Wi-Fi FIFO without buffered request")?;
+        if r.due.is_some() || r.write != value.is_some() {
+            return Err("Wi-Fi FIFO not ready for this direction".into());
+        }
+        let offset = r.pio_reads * 4;
+        let bytes = (r.quantity - offset).min(4);
+        let mut word = [0; 4];
+        let mut operation = None;
+        if let Some(value) = value {
+            self.scratch[offset..offset + bytes].copy_from_slice(&value.to_le_bytes()[..bytes]);
+            if offset + bytes == r.quantity {
+                operation = Some(self.module.vendor(
+                    address,
+                    true,
+                    &self.scratch[..r.quantity],
+                    r.quantity,
+                )?);
+            }
+        } else {
+            let op = r.operation.as_ref().unwrap();
+            let response = op.response.to_le_bytes();
+            let data = if op.data.is_empty() {
+                &response[..]
+            } else {
+                &op.data
+            };
+            let end = (offset + bytes).min(data.len());
+            if offset < end {
+                word[..end - offset].copy_from_slice(&data[offset..end]);
+            }
+            if offset + bytes == r.quantity {
+                operation = r.operation.take();
+            }
+        }
+        if let Some(op) = operation {
+            self.module.commit(op);
+            self.request = None;
+            self.regs.set(6, 0);
+            self.regs.set(0x30, self.regs.get(0x30) | 2);
+            self.signal(cx)?;
+        } else {
+            r.pio_reads += 1;
+        }
+        Ok(u32::from_le_bytes(word))
+    }
+
     fn pio_read(&mut self, cx: &mut Cx<'_>) -> Result<u32, String> {
         let r = self.request.as_mut().ok_or("Wi-Fi PIO without request")?;
         if !r.pio
@@ -362,6 +447,9 @@ impl SdioHost {
         Ok(value)
     }
     fn store(&mut self, cx: &mut Cx<'_>, o: usize, size: u8, value: u32) -> Result<(), String> {
+        if self.buffered_io && o == 0x20 && size == 4 {
+            return self.buffered_transfer(cx, Some(value)).map(|_| ());
+        }
         if o == 0x24 || (16..32).contains(&o) || o == 0x20 {
             return Err("SDIO response/data/present-state write unsupported".into());
         }
@@ -468,7 +556,12 @@ impl Device for SdioHost {
             return 0;
         }
         if o == 0x20 {
-            return match self.pio_read(cx) {
+            let result = if self.buffered_io {
+                self.buffered_transfer(cx, None)
+            } else {
+                self.pio_read(cx)
+            };
+            return match result {
                 Ok(v) => v as u64,
                 Err(e) => {
                     cx.fail(e);
@@ -479,7 +572,9 @@ impl Device for SdioHost {
         if o == 0x24 {
             return 0x30000
                 | self.request.as_ref().map_or(0, |r| {
-                    if r.pio && r.due.is_none() {
+                    if r.fifo_address.is_some() && r.due.is_none() {
+                        if r.write { 0x400 } else { 0x800 }
+                    } else if r.pio && r.due.is_none() {
                         if r.pio_reads == 0 { 0x800 } else { 0 }
                     } else {
                         1
@@ -651,6 +746,35 @@ mod tests {
         assert!(cx.refusal().is_some());
         assert!(m.request.is_none());
     }
+    #[test]
+    fn buffered_io_transfers_radio_registers_without_dma() {
+        let mut m = model(Protocol::RomDownload).with_buffered_io();
+        let mut h = Ram::new(0);
+        setup(&mut m, &mut h);
+        m.state = State::Transfer;
+        command(&mut m, &mut h, 0x341a0000, 0x80022202);
+        due(&mut m, &mut h);
+        write(&mut m, &mut h, 4, 0x7004);
+        for value in [0x8000, 0] {
+            command(&mut m, &mut h, 0x353a0000, 0x90011804);
+            due(&mut m, &mut h);
+            let mut cx = h.cx();
+            assert_eq!(m.read(&mut cx, BASE + 0x24, 4), 0x30400);
+            assert_eq!(m.regs.get(0x30) & 2, 0);
+            m.write(&mut cx, BASE + 0x20, 4, value);
+            assert_eq!(cx.refusal(), None);
+            assert_eq!(m.read(&mut cx, BASE + 0x24, 4), 0x30000);
+            assert_eq!(m.regs.get(0x30) & 2, 2);
+        }
+        command(&mut m, &mut h, 0x353a0010, 0x10011804);
+        due(&mut m, &mut h);
+        let mut cx = h.cx();
+        assert_eq!(m.read(&mut cx, BASE + 0x24, 4), 0x30800);
+        assert_eq!(m.read(&mut cx, BASE + 0x20, 4), 0x800);
+        assert_eq!(cx.refusal(), None);
+        assert_eq!(m.regs.get(0x30) & 2, 2);
+    }
+
     #[test]
     fn bootstrap_dma_is_delayed_and_precedes_irq() {
         let mut m = model(Protocol::RomDownload);

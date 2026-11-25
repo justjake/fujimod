@@ -135,7 +135,8 @@ impl Controller {
                 ram_bytes: options.ram_bytes,
             },
             sdio::Wiring { module, irq },
-        )?;
+        )?
+        .with_buffered_io();
         Ok(Self::with_host(options, Bank::Io(Box::new(host))))
     }
     fn with_host(options: Options, host: Bank) -> Self {
@@ -188,7 +189,10 @@ impl Controller {
             }
             .into());
         }
-        if address == self.options.base && size == 4 {
+        let io = matches!(self.host, Bank::Io(_));
+        // Channel 2 is reset with a halfword read-modify-write at 0xc684a4
+        // and 0xc684c0 in the X-T20 2.11 SDIO initializer.
+        if address == self.options.base && (size == 4 || io && size == 2) {
             if let Some(v) = value {
                 if v != 1 {
                     return Err("Unsupported SD wrapper reset command".into());
@@ -220,7 +224,6 @@ impl Controller {
             return Err("SD register access during wrapper reset".into());
         }
         let address = self.options.base + offset;
-        let io = matches!(self.host, Bank::Io(_));
         let host = self.host.device_mut();
         if size == 4 && offset == 0x28 {
             if value.is_some_and(|v| v >> 16 != 0) {
@@ -413,13 +416,19 @@ mod tests {
         .unwrap();
         assert!(device.card_slot().is_none());
         let mut host = Ram::new(0x10000);
+        let mut cx = host.cx();
+        device.write(&mut cx, base, 2, 1);
+        assert_eq!(device.read(&mut cx, base, 2), 1);
+        assert_eq!(cx.refusal(), None);
+        host.now = 3;
+        device.advance(&mut host.cx());
         let write = |d: &mut Controller, h: &mut Ram, offset, width, value| {
             let mut cx = h.cx();
             d.write(&mut cx, bank + offset, width, value);
             assert_eq!(cx.refusal(), None, "register {offset:#x}");
         };
         write(&mut device, &mut host, 0x2c, 2, 5);
-        host.now = 2;
+        host.now += 2;
         device.advance(&mut host.cx());
         write(&mut device, &mut host, 0x28, 2, 0xf00);
         write(&mut device, &mut host, 0x2e, 2, 14);
