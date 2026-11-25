@@ -262,10 +262,11 @@ fn byte(v: i32) -> u8 {
 /// [`crate::imaging::WHITE`]), the points joined linearly, a curve's output
 /// taken as its top 8 bits and the chroma offset 128. White balance is off
 /// unless [`FirmwareColor::with_white_balance`] reads the tone page's
-/// channel gains, and the luma bands unless
-/// [`FirmwareColor::with_luma_bands`] reads the YCbCr page's. The pages'
-/// other units (brightness gain, chroma modes and matrix, 3D lookup table)
-/// are not applied.
+/// channel gains, the 2x2 chroma matrix unless
+/// [`FirmwareColor::with_chroma_matrix`] reads the YCbCr page's, and the
+/// luma bands unless [`FirmwareColor::with_luma_bands`] reads the YCbCr
+/// page's. The pages' other units (brightness gain, chroma modes, 3D lookup
+/// table) are not applied.
 #[derive(Clone, Debug, PartialEq)]
 pub struct FirmwareColor {
     matrix: [[i32; 3]; 3],
@@ -278,6 +279,9 @@ pub struct FirmwareColor {
     /// Q12 factors of the tone page's channel gains relative to a declared
     /// reference, when [`Self::with_white_balance`] reads programmed gains.
     white_balance: Option<[u32; 3]>,
+    /// The YCbCr page's Q10 2x2 chroma matrix (rows Cb, Cr), when
+    /// [`Self::with_chroma_matrix`] reads one that is switched on.
+    chroma: Option<[[i32; 2]; 2]>,
 }
 
 const TONE_MATRIX: u64 = 0x204;
@@ -291,6 +295,13 @@ const YCBCR_MATRIX: u64 = 0x204;
 /// (+0x25c..+0x26c, five words: signed 11-bit slope low, 10-bit gain high).
 const LUMA_BOUNDS: u64 = 0x258;
 const LUMA_BANDS: u64 = 0x25c;
+/// The YCbCr page's switches (+0x200): bit 4 turns the 2x2 chroma matrix on.
+const YCBCR_SWITCHES: u64 = 0x200;
+const CHROMA_SWITCH: u32 = 1 << 4;
+/// The YCbCr page's 2x2 chroma matrix, signed 13-bit halves: m00 low and m01
+/// high at +0x238, m11 low and m10 high at +0x23c.
+const CHROMA_MATRIX: [u64; 2] = [0x238, 0x23c];
+const CHROMA_IDENTITY: [[i32; 2]; 2] = [[1024, 0], [0, 1024]];
 
 fn signed13(v: u32) -> i32 {
     ((v << 19) as i32) >> 19
@@ -348,6 +359,7 @@ impl FirmwareColor {
             luma_bands: None,
             ycbcr,
             white_balance: None,
+            chroma: None,
         })
     }
     /// The same law with the white balance of the tone page's channel gains
@@ -377,9 +389,36 @@ impl FirmwareColor {
         self.white_balance = (!gains.contains(&0)).then(|| relative(gains, reference));
         Ok(self)
     }
+    /// The same law with the 2x2 chroma matrix of the YCbCr page's words
+    /// (opt-in): after the YCbCr matrix, the centred chroma becomes
+    /// `Cb' = (m00 * Cb + m01 * Cr) / 1024` and
+    /// `Cr' = (m10 * Cb + m11 * Cr) / 1024` (rounded), Y unchanged.
+    ///
+    /// Read (X-T3 5.11): the switch, bit 4 of +0x200, and the layout, each
+    /// word holding a row's own gain low and its cross term high (the filler
+    /// `0x1d75c24` builds them as clipped products of per-film gains, the
+    /// setter `0x1062e9c` writes them). The monochrome films program a zero
+    /// matrix, so their chroma stays neutral. Declared: the Q10 scale (the
+    /// films' own gains lie around 1024), which row acts on Cb and which on
+    /// Cr, the stage's place right after the YCbCr matrix and the rounding.
+    /// The XP5 board's chroma matrix (`emulator-xp5-imaging`) has the same
+    /// switch bit, layout, scale and law. The switch off or the identity
+    /// leave the stage out. A matrix word the page does not hold reads as
+    /// zero, as the monochrome films program it.
+    pub fn with_chroma_matrix(mut self, ycbcr: &BTreeMap<u64, u32>) -> Self {
+        let c = |o: u64| ycbcr.get(&o).copied().unwrap_or(0);
+        let [a, b] = CHROMA_MATRIX.map(c);
+        let m = [
+            [signed13(a), signed13(a >> 16)],
+            [signed13(b >> 16), signed13(b)],
+        ];
+        let switched = c(YCBCR_SWITCHES) & CHROMA_SWITCH != 0;
+        self.chroma = (switched && m != CHROMA_IDENTITY).then_some(m);
+        self
+    }
     /// Y, Cb, Cr of a 14-bit linear (R, G, B) level: the white balance when
-    /// read, the matrix, each output's curve, the YCbCr matrix, then the luma
-    /// bands when read.
+    /// read, the matrix, each output's curve, the YCbCr matrix, then the 2x2
+    /// chroma matrix and the luma bands when read.
     pub fn pixel(&self, linear: [u16; 3]) -> [i32; 3] {
         let mut linear = linear.map(|v| v.min(16383));
         if let Some(factors) = self.white_balance {
@@ -396,6 +435,12 @@ impl FirmwareColor {
             let m = self.ycbcr[row];
             (m[0] * rgb[0] + m[1] * rgb[1] + m[2] * rgb[2] + 512) >> 10
         });
+        if let Some(k) = self.chroma {
+            (cb, cr) = (
+                (k[0][0] * cb + k[0][1] * cr + 512) >> 10,
+                (k[1][0] * cb + k[1][1] * cr + 512) >> 10,
+            );
+        }
         if let Some(f) = self.luma_gain(y) {
             cb = (cb * f + 128) >> 8;
             cr = (cr * f + 128) >> 8;
@@ -907,6 +952,80 @@ pub(crate) mod tests {
         let declared = develop(&raw, stride, lines, width, (2, 2), None).unwrap();
         assert_ne!(declared, out);
         assert!(develop_firmware(&raw, stride, lines, width + 8, (2, 2), &color).is_err());
+    }
+
+    #[test]
+    fn the_chroma_matrix_follows_its_switch_keeps_greys_and_luma_and_greys_monochrome() {
+        let (tone, ycbcr) = firmware_units();
+        let plain = FirmwareColor::from_words(&tone, &ycbcr).unwrap();
+        assert_eq!(plain.chroma, None);
+        let inputs = [
+            [0; 3],
+            [16383; 3],
+            [4096; 3],
+            [8192, 2048, 2048],
+            [2048, 2048, 8192],
+            [500, 900, 300],
+            [16383, 9000, 12000],
+        ];
+        let halves = |lo: i32, hi: i32| (lo as u32 & 0x1fff) | (hi as u32 & 0x1fff) << 16;
+        let words = |switches: u32, m: [[i32; 2]; 2]| {
+            let mut words = ycbcr.clone();
+            words.insert(0x200, switches);
+            words.insert(0x238, halves(m[0][0], m[0][1]));
+            words.insert(0x23c, halves(m[1][1], m[1][0]));
+            words
+        };
+        // PROVIA, as X-T3 5.11 programs it for a still (switches 0x30001515,
+        // bit 4 on).
+        let provia = [[1109, -31], [111, 1454]];
+        let on = words(0x3000_1515, provia);
+        // The switch not programmed or off, or the identity: the stage is
+        // left out.
+        let mut unswitched = on.clone();
+        unswitched.remove(&0x200);
+        assert_eq!(plain.clone().with_chroma_matrix(&unswitched), plain);
+        assert_eq!(
+            plain
+                .clone()
+                .with_chroma_matrix(&words(0x3000_1505, provia)),
+            plain
+        );
+        let identity = words(0x3000_1515, [[1024, 0], [0, 1024]]);
+        assert_eq!(plain.clone().with_chroma_matrix(&identity), plain);
+        // A word the page does not hold reads as zero.
+        let mut half = on.clone();
+        half.remove(&0x23c);
+        let half = plain.clone().with_chroma_matrix(&half);
+        assert_eq!(half.chroma, Some([[1109, -31], [0, 0]]));
+        // Switched on: the signed halves decode, own gain low, cross term
+        // high.
+        let color = plain.clone().with_chroma_matrix(&on);
+        assert_eq!(color.chroma, Some(provia));
+        // Luma unchanged, centred chroma through the matrix; a grey stays
+        // grey.
+        for x in inputs {
+            let p = plain.pixel(x);
+            let (cb, cr) = (p[1] - 128, p[2] - 128);
+            let row = |k: [i32; 2]| ((k[0] * cb + k[1] * cr + 512) >> 10) + 128;
+            assert_eq!(color.pixel(x), [p[0], row([1109, -31]), row([111, 1454])]);
+        }
+        assert_eq!(color.pixel([4096; 3])[1..], [128, 128]);
+        // PROVIA's gains above 1024 saturate: a red's Cr moves away from 128.
+        let red = [8192, 2048, 2048];
+        let (p, q) = (plain.pixel(red), color.pixel(red));
+        assert!(q[2] > p[2] && p[2] > 128, "{p:?} {q:?}");
+        // A monochrome film's zero matrix, written or not held (the switch
+        // on, no matrix words): every chroma neutral, luma kept.
+        let zero = plain
+            .clone()
+            .with_chroma_matrix(&words(0x3000_1515, [[0; 2]; 2]));
+        let unheld = plain.clone().with_chroma_matrix(&ycbcr);
+        assert_eq!(unheld, zero);
+        for x in inputs {
+            let p = plain.pixel(x);
+            assert_eq!(zero.pixel(x), [p[0], 128, 128]);
+        }
     }
 
     #[test]
