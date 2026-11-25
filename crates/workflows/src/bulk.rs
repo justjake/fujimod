@@ -34,8 +34,40 @@ pub enum BulkError {
         operation: String,
         cleanup: Box<BulkError>,
     },
+    #[error("{0}")]
+    Mapped(#[from] MappedFailure),
 }
 pub type Result<T> = std::result::Result<T, BulkError>;
+
+/// Ordered stage of a direct mapped flash read, recorded on failure.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum MappedPhase {
+    Window,
+    Bounds,
+    Prepare,
+    ControlRead,
+    ControlHash,
+    Capacity,
+    Piece,
+    Delivery,
+    Progress,
+    Restore,
+}
+
+/// Failure receipt naming the phase and exact mapped range that failed.
+///
+/// Pre-I/O refusals keep `address` and `length` in flash-offset order. Once a
+/// command is issued, the same fields name the mapped CPU range of the failed
+/// command, so a timeout can be distinguished from a bounds or hash refusal.
+#[derive(Debug, thiserror::Error)]
+#[error("mapped E1 {phase:?} failed at address {address:#x} length {length:#x}: {source}")]
+pub struct MappedFailure {
+    pub phase: MappedPhase,
+    pub address: u64,
+    pub length: u64,
+    #[source]
+    pub source: Box<BulkError>,
+}
 
 fn address(value: u64) -> Result<u32> {
     u32::try_from(value)
