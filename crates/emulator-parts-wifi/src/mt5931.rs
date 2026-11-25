@@ -118,6 +118,7 @@ pub enum Change {
         events: Vec<Vec<u8>>,
         frames: Vec<(u8, Vec<u8>)>,
     },
+    TransmitBatch(Vec<Change>),
 }
 
 impl Endpoint {
@@ -380,7 +381,12 @@ impl Endpoint {
         if packet.len() != quantity || quantity < 8 {
             return Err("MT5931 truncated HIF header".into());
         }
-        let length = (u16::from_le_bytes(packet[..2].try_into().unwrap()) & 0xfff) as usize;
+        let length = tx_packet_length(packet);
+        if length < 8 || length > quantity {
+            return Err(format!(
+                "MT5931 unsupported HIF packet length {length}/{quantity}"
+            ));
+        }
         // Management frames reach the chip unpadded (a 30-byte authentication
         // frame is a 46-byte transfer), while commands and data frames are
         // padded to a word. A multi-block CMD53 carries whole 512-byte blocks,
@@ -390,10 +396,31 @@ impl Endpoint {
         let block_padded = quantity >= SDIO_BLOCK_BYTES
             && quantity.is_multiple_of(SDIO_BLOCK_BYTES)
             && quantity - length < SDIO_BLOCK_BYTES;
-        if length < 8 || length > quantity || (quantity > length + 3 && !block_padded) {
-            return Err(format!(
-                "MT5931 unsupported HIF packet length {length}/{quantity}"
-            ));
+        if quantity > length + 3 && !block_padded {
+            // Stock can put several word-aligned Ethernet packets in one
+            // byte-mode transfer. Validate the whole batch before delivering
+            // any frames to the network or completing any TX credits.
+            let mut frames = Vec::new();
+            let mut rest = packet;
+            while rest.len() >= 16 {
+                let length = tx_packet_length(rest);
+                let padded = length.next_multiple_of(4);
+                if length < 16 || padded > rest.len() || rest[3] >> 6 != 0 {
+                    break;
+                }
+                frames.push(&rest[..length]);
+                rest = &rest[padded..];
+            }
+            if !rest.is_empty() || frames.len() < 2 {
+                return Err(format!(
+                    "MT5931 unsupported HIF packet length {length}/{quantity}"
+                ));
+            }
+            let responses = frames
+                .into_iter()
+                .map(|frame| self.transmit_frame(frame))
+                .collect();
+            return Ok((Vec::new(), Some(Change::TransmitBatch(responses))));
         }
         let packet_type = packet[3] >> 6;
         if packet_type == 1 {
@@ -411,14 +438,16 @@ impl Endpoint {
         if length < 16 {
             return Err("MT5931 transmit header truncated".into());
         }
-        let frame = &packet[16..length];
+        Ok((Vec::new(), Some(self.transmit_frame(&packet[..length]))))
+    }
+
+    fn transmit_frame(&mut self, packet: &[u8]) -> Change {
+        let frame = &packet[16..];
         let class = (packet[3] >> 2) & 0xf;
         let selector = packet[10];
-        let mut frames = Vec::new();
-        if packet_type == 0 {
-            if self.access_point.is_some() {
-                let access_point = self.access_point.clone().unwrap();
-                frames = if frame.get(12..14) == Some(&[0x88, 0x8e]) {
+        let frames = if packet[3] >> 6 == 0 {
+            if let Some(access_point) = self.access_point.clone() {
+                if frame.get(12..14) == Some(&[0x88, 0x8e]) {
                     self.eapol(&access_point, frame)
                 } else if self.wpa2_ready() {
                     self.network
@@ -428,23 +457,22 @@ impl Endpoint {
                         .collect()
                 } else {
                     Vec::new()
-                };
+                }
+            } else {
+                Vec::new()
             }
         } else {
-            frames = self.management(frame);
-        }
+            self.management(frame)
+        };
         let mut body = [0u8; 16];
         body[0] = selector;
         body[1] = 0;
         let event = Self::event(EVENT_TX_DONE, 0, &body);
-        Ok((
-            Vec::new(),
-            Some(Change::Response {
-                class,
-                events: vec![event],
-                frames,
-            }),
-        ))
+        Change::Response {
+            class,
+            events: vec![event],
+            frames,
+        }
     }
 
     fn wpa2_ready(&self) -> bool {
@@ -893,8 +921,17 @@ impl Endpoint {
                     self.push_event(event);
                 }
             }
+            Change::TransmitBatch(responses) => {
+                for response in responses {
+                    self.commit(response);
+                }
+            }
         }
     }
+}
+
+fn tx_packet_length(packet: &[u8]) -> usize {
+    usize::from(u16::from_le_bytes([packet[0], packet[1]]) & 0xfff)
 }
 
 /// Drains the longest prefix of one receive FIFO whose padded lengths add up
@@ -1362,6 +1399,31 @@ mod tests {
         assert!(e.transfer(0x2c, true, &dirty, 1536).is_ok());
         // More than one block of tail means the length field is wrong.
         assert!(e.transfer(0x2c, true, &packet, 2048).is_err());
+    }
+
+    #[test]
+    fn transmit_batch_completes_each_packet_in_fifo_order() {
+        let mut e = endpoint();
+        let mut batch = [0u8; 152];
+        for (frame, class, selector) in [(0, 1, 11), (76, 3, 22)] {
+            batch[frame..frame + 2].copy_from_slice(&76u16.to_le_bytes());
+            batch[frame + 3] = class << 2;
+            batch[frame + 10] = selector;
+        }
+        assert!(e.transfer(0x2c, true, &batch[..151], 151).is_err());
+        assert_eq!(e.interrupt_status, 0);
+        assert!(e.rx1.is_empty());
+
+        let (_, change) = e.transfer(0x2c, true, &batch, batch.len()).unwrap();
+        assert_eq!(e.interrupt_status, 0);
+        e.commit(change.unwrap());
+        assert_eq!(e.tx_released, [0, 1, 0, 1, 0, 0, 0, 0]);
+        assert_eq!(e.commands, 2);
+        assert_eq!(
+            e.rx1.iter().map(|event| event[8]).collect::<Vec<_>>(),
+            [11, 22]
+        );
+        assert!(e.rx1.iter().all(|event| event[4] == EVENT_TX_DONE));
     }
 
     #[test]
