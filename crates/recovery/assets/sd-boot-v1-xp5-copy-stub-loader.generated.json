@@ -1,31 +1,43 @@
 {
   "schema": 1,
-  "image_bytes": 31664,
+  "image_bytes": 37808,
   "prelude_stack_max": 80,
   "symbols": {
     "xp5_setup_entry": 0,
-    "xp5_setup_configuration": 24376,
+    "xp5_setup_configuration": 30384,
     "xp5_setup_return_branch": 184,
-    "xp5_setup_stack": 29616,
-    "xp5_setup_stack_top": 31664,
+    "xp5_setup_stack": 35760,
+    "xp5_setup_stack_top": 37808,
     "setup_sd_initialize": 208,
-    "setup_sd_request": 24296,
-    "setup_sd_progress": 28864,
-    "setup_sd_board": 21696,
-    "a64_boot_ready": 29568,
-    "a64_boot_zero_gate": 18840,
-    "setup_sd_card_boot": 22744,
-    "setup_sd_phy_imem": 5328,
-    "setup_sd_phy_dmem": 5344,
-    "setup_sd_layout_marker": 5360,
-    "setup_sd_flash_info": 5376,
-    "setup_sd_runtime": 24336,
-    "setup_sd_firmware_read": 5408,
-    "setup_sd_training_backup": 6192,
-    "setup_sd_firmware_initialize": 6256,
-    "setup_sd_read_only": 24064,
-    "setup_sd_redirect": 24136,
-    "setup_sd_copy_stub": 22960
+    "setup_sd_request": 30008,
+    "setup_sd_progress": 35008,
+    "setup_sd_board_initialize": 9664,
+    "setup_sd_board_host_initialize": 9904,
+    "sd_card_initialize": 12096,
+    "setup_sd_board": 25392,
+    "setup_sd_host_prelude": 27592,
+    "setup_sd_host_variants": 27984,
+    "setup_sd_handoff_ranges": 26560,
+    "setup_sd_secondary_release": 28184,
+    "a64_boot_arrivals": 30368,
+    "setup_sd_host_observation_first": 35632,
+    "setup_sd_host_variant_results": 34920,
+    "xp5_xh2_host_continue": 10016,
+    "xp5_xh2_host_trace": 35648,
+    "a64_boot_ready": 35712,
+    "a64_boot_zero_gate": 22376,
+    "setup_sd_card_boot": 28456,
+    "setup_sd_phy_imem": 5360,
+    "setup_sd_phy_dmem": 5376,
+    "setup_sd_layout_marker": 5392,
+    "setup_sd_flash_info": 5408,
+    "setup_sd_runtime": 30320,
+    "setup_sd_firmware_read": 5440,
+    "setup_sd_training_backup": 6224,
+    "setup_sd_firmware_initialize": 6288,
+    "setup_sd_read_only": 29776,
+    "setup_sd_redirect": 29848,
+    "setup_sd_copy_stub": 28672
   },
   "externals": [
     {
@@ -49,57 +61,72 @@
       "symbol": "boot_setup_delay"
     },
     {
-      "offset": 1028,
+      "offset": 1060,
       "kind": 283,
       "symbol": "boot_setup_initialize"
     },
     {
-      "offset": 1824,
+      "offset": 1860,
       "kind": 283,
       "symbol": "boot_setup_initialize"
     },
     {
-      "offset": 2360,
+      "offset": 2392,
       "kind": 283,
       "symbol": "boot_setup_delay"
     },
     {
-      "offset": 2380,
+      "offset": 2412,
       "kind": 283,
       "symbol": "boot_setup_delay"
     },
     {
-      "offset": 2468,
+      "offset": 2500,
       "kind": 283,
       "symbol": "boot_setup_delay"
     },
     {
-      "offset": 6584,
+      "offset": 6664,
       "kind": 282,
       "symbol": "boot_setup_delay"
     },
     {
-      "offset": 6656,
+      "offset": 6736,
       "kind": 283,
       "symbol": "boot_setup_delay"
     },
     {
-      "offset": 6676,
+      "offset": 6756,
       "kind": 283,
       "symbol": "boot_setup_delay"
     },
     {
-      "offset": 6772,
+      "offset": 6852,
       "kind": 283,
       "symbol": "boot_setup_delay"
     },
     {
-      "offset": 6792,
+      "offset": 6872,
       "kind": 283,
       "symbol": "boot_setup_delay"
     },
     {
-      "offset": 6812,
+      "offset": 6892,
+      "kind": 283,
+      "symbol": "boot_setup_delay"
+    },
+    {
+      "offset": 8672,
+      "kind": 283,
+      "symbol": "boot_setup_delay"
+    },
+    {
+      "offset": 8692,
+      "kind": 283,
+      "symbol": "boot_setup_delay"
+    },
+    {
+      "offset": 8716,
       "kind": 283,
       "symbol": "boot_setup_delay"
     }
