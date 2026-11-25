@@ -1144,9 +1144,17 @@ impl SerialFlashController {
         Ok(0)
     }
 }
+impl fujimod_emulator_devices::capability::ExecuteInPlace for SerialFlashController {
+    fn epoch(&self) -> u64 {
+        self.port.lock().map_or(u64::MAX, |port| port.epoch().load(Ordering::SeqCst))
+    }
+}
 impl Device for SerialFlashController {
     fn name(&self) -> &'static str {
         "xp4-serial-flash"
+    }
+    fn execute_in_place(&self) -> Option<&(dyn fujimod_emulator_devices::capability::ExecuteInPlace + 'static)> {
+        Some(self)
     }
     fn read(&mut self, cx: &mut Cx<'_>, address: u64, size: u8) -> u64 {
         match self.access(cx, address, size, false, 0) {

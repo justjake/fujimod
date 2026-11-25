@@ -777,6 +777,21 @@ impl Bus {
                 .is_some_and(|id| self.windows[id].device.poll_stable(address, size))
     }
     /// The model that answers an access, as `dispatch` finds it.
+    /// The device whose window answers every read of the 4 KiB page at
+    /// `page` and offers it for execution (`ExecuteInPlace`), with its epoch.
+    pub fn execute_in_place(&self, page: u64) -> Option<(usize, u64)> {
+        let id = self.window_at(page, 4)?;
+        self.windows[id]
+            .mappings
+            .iter()
+            .any(|m| page >= m.base && page + 0x1000 <= m.base + m.size)
+            .then_some(())?;
+        Some((id, self.execute_in_place_epoch(id)?))
+    }
+    /// The current epoch of an execute-in-place device.
+    pub fn execute_in_place_epoch(&self, id: usize) -> Option<u64> {
+        Some(self.windows.get(id)?.device.execute_in_place()?.epoch())
+    }
     fn window_at(&self, address: u64, size: u8) -> Option<usize> {
         let end = address.checked_add(size as u64)?;
         self.pages.get(&(address >> 20)).and_then(|pages| {

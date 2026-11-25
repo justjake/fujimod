@@ -13,6 +13,9 @@ pub mod decoder;
 #[cfg(test)]
 mod decoder_tests;
 pub mod discovery;
+mod execute_in_place;
+#[cfg(test)]
+mod execute_in_place_tests;
 pub mod factory;
 pub mod harness;
 mod host;
@@ -523,6 +526,18 @@ pub struct Board {
     #[allow(clippy::vec_box)]
     discovery_stub_contexts: Vec<Box<discovery::CalleeStubContext>>,
     translation_cache_size_bytes: u32,
+    /// Execute-in-place pages, by physical page (`ExecuteInPlace`).
+    xip: RefCell<std::collections::BTreeMap<u64, XipPage>>,
+    /// Per (core, virtual page), the MMIO binding an execute-in-place page
+    /// returns to once its copy is stale. Native maps hold raw pointers.
+    xip_bindings: RefCell<std::collections::BTreeMap<(usize, u64), Box<Binding>>>,
+}
+/// A device page copied for execution, and where each processor maps it.
+struct XipPage {
+    data: Box<[u8; 4096]>,
+    device: usize,
+    epoch: u64,
+    maps: Vec<(usize, u64)>,
 }
 impl Board {
     /// Per processor translation cache size selected when the board was built.
@@ -766,6 +781,8 @@ impl Board {
             entries: Default::default(),
             discovery_stub_contexts: vec![],
             translation_cache_size_bytes: 0,
+            xip: RefCell::new(Default::default()),
+            xip_bindings: RefCell::new(Default::default()),
             cpus: Rc::new(cpus.into_iter().map(Rc::from).collect()),
             state,
             access_histogram: register_access_histogram,
@@ -1573,6 +1590,7 @@ impl Board {
                     next_progress = instructions.saturating_add(100_000);
                 }
             }
+            self.refresh_execute_in_place()?;
             let mut s = self.state.borrow_mut();
             s.apply_memory(&self.cpus)?;
             s.refresh_processors()?;
@@ -1835,6 +1853,7 @@ impl Board {
             // changed behind the engine, or (block execution) it changed the
             // PC. Resume the same slice at once: the stop is not a scheduling
             // boundary, so nothing else may run in between.
+            loop {
             while result.is_ok() {
                 let resync = self.code_resync(core)?;
                 let mut s = self.state.borrow_mut();
@@ -1861,6 +1880,46 @@ impl Board {
                     watchdog_us: 0,
                     instructions: (!blocks).then_some(limit),
                 });
+            }
+            // A fetch from a device page that offers execution: map its copy
+            // and resume the same slice.
+            let fetch = matches!(&result, Err(fujimod_emulator_cpu::ExecutionError::Memory {
+                fault: fujimod_emulator_cpu::Fault::FetchProtected
+                    | fujimod_emulator_cpu::Fault::FetchUnmapped,
+                ..
+            }));
+            if !fetch || !self.execute_in_place(core, scalar(&**cpu, Register::Pc)?)? {
+                break;
+            }
+            // The engine counts each run from zero: account the faulted run
+            // before resuming, and resume with what is left of the budget.
+            {
+                let mut s = self.state.borrow_mut();
+                let consumed = cpu.instruction_progress().unwrap_or(0).saturating_sub(s.accounted[core]);
+                s.sync(&**cpu, core)?;
+                s.accounted[core] = 0;
+                s.run_entries[core] = 0;
+                if !blocks {
+                    limit = limit.saturating_sub(consumed as usize);
+                    if limit == 0 {
+                        result = Ok(fujimod_emulator_cpu::Exit::Stopped);
+                        break;
+                    }
+                }
+            }
+            let resume = scalar(&**cpu, Register::Pc)?;
+            result = cpu.run(Run {
+                begin: if cpu.model() == fujimod_emulator_cpu::Model::CortexM4
+                    || scalar(&**cpu, Register::Pstate)? & 0x20 != 0
+                {
+                    resume | 1
+                } else {
+                    resume
+                },
+                until: None,
+                watchdog_us: 0,
+                instructions: (!blocks).then_some(limit),
+            });
             }
             engine_guard.stop();
             engine_guard.set_instructions(cpu.instruction_progress().unwrap_or(0));

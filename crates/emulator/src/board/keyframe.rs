@@ -261,6 +261,7 @@ impl Board {
         Ok(())
     }
     pub fn checkpoint(&self, previous: Option<&Keyframe>) -> Result<Keyframe, String> {
+        self.return_execute_in_place()?;
         let state = self
             .state
             .try_borrow()
@@ -310,6 +311,7 @@ impl Board {
         })
     }
     pub fn restore_keyframe(&mut self, saved: &Keyframe) -> Result<(), String> {
+        self.return_execute_in_place()?;
         self.keyframe_owner(saved)?;
         let mut state = self
             .state

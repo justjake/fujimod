@@ -195,6 +195,23 @@ impl Capability for dyn CardSlot {
     }
 }
 
+/// A memory device whose windows the processors may execute from. The board
+/// reads a fetched page once through the device's ordinary reads, in the
+/// device's state at the fetch, and maps that copy read-execute. The copy
+/// holds until `epoch` moves: the device advances it whenever a read of the
+/// window could return different bytes (array contents or read mode).
+pub trait ExecuteInPlace {
+    fn epoch(&self) -> u64;
+}
+impl Capability for dyn ExecuteInPlace {
+    fn of(device: &dyn Device) -> Option<&Self> {
+        device.execute_in_place()
+    }
+    fn of_mut(_device: &mut dyn Device) -> Option<&mut Self> {
+        None
+    }
+}
+
 /// A display controller's scanout, read through board RAM.
 pub trait ScanoutSource {
     fn metadata(&self) -> serde_json::Value;

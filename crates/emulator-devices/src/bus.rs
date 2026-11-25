@@ -393,6 +393,10 @@ pub trait Device: Send + std::any::Any {
     fn card_slot_mut(&mut self) -> Option<&mut (dyn crate::capability::CardSlot + 'static)> {
         None
     }
+    /// Instruction fetches this device's windows answer from a snapshot.
+    fn execute_in_place(&self) -> Option<&(dyn crate::capability::ExecuteInPlace + 'static)> {
+        None
+    }
     fn scanout_source(&self) -> Option<&(dyn crate::capability::ScanoutSource + 'static)> {
         None
     }
