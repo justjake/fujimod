@@ -353,6 +353,18 @@ def rebased_pin(
                 if patch_id(submodule, candidate) == wanted:
                     found = candidate
                     break
+            if found is None:
+                # A replay that resolved a conflict changes the patch id but
+                # keeps the subject, author and author time.
+                identity = "%an%x00%ae%x00%at%x00%s"
+                original = submodule.output("log", "-1", f"--format={identity}", pinned)
+                twins = [
+                    candidate for candidate in candidates
+                    if submodule.output("log", "-1", f"--format={identity}", candidate)
+                    == original
+                ]
+                if len(twins) == 1:
+                    found = twins[0]
     cache[key] = found
     return found
 

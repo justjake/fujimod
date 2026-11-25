@@ -1,17 +1,17 @@
 """Rebase pin mapping: submodule pins follow a rebased submodule."""
-
+import os
 import subprocess
 from pathlib import Path
-from typing import TypedDict
 
 import pytest
 from commit import Failure, Repository
 from sync import replay, resolve_pinned_submodules
 
 
-def run(*arguments: str, cwd: Path) -> str:
+def run(*arguments: str, cwd: Path, env: dict[str, str] | None = None) -> str:
     return subprocess.run(
-        arguments, cwd=cwd, check=True, capture_output=True, text=True
+        arguments, cwd=cwd, check=True, capture_output=True, text=True,
+        env=None if env is None else {**os.environ, **env},
     ).stdout
 
 
@@ -26,20 +26,11 @@ def head_of(path: Path) -> str:
     return run("git", "rev-parse", "HEAD", cwd=path).strip()
 
 
-class PinRepositories(TypedDict):
-    shared: Path
-    rebased: str
-    main: str
-    pinned: str
-    pin_commit: str
-    work_commit: str
-    new_base: str
-    base_commit: str
-    base: str
+def pin_repositories(tmp_path: Path, resolved: bool = False) -> dict[str, object]:
+    """A superproject pinning a submodule whose topic commit has a rebased twin.
 
-
-def pin_repositories(tmp_path: Path) -> PinRepositories:
-    """A superproject pinning a submodule whose topic commit has a rebased twin."""
+    ``resolved``: the twin's change differs, as a replay that resolved a
+    conflict leaves it, keeping only the subject, author and author time."""
     library = tmp_path / "library.git"
     run("git", "init", "-q", "--bare", "-b", "main", str(library), cwd=tmp_path)
     source = clone(library, tmp_path / "library")
@@ -61,9 +52,10 @@ def pin_repositories(tmp_path: Path) -> PinRepositories:
     library_main = head_of(source)
     run("git", "push", "-q", "origin", "main", cwd=source)
     run("git", "switch", "-q", "-c", "topic-rebased", "main", cwd=source)
-    (source / "a.txt").write_text("topic\n")
+    (source / "a.txt").write_text("topic resolved\n" if resolved else "topic\n")
     run("git", "add", "a.txt", cwd=source)
-    run("git", "commit", "-qm", "topic change", cwd=source)
+    when = run("git", "log", "-1", "--format=%ad", "--date=raw", pinned, cwd=source).strip()
+    run("git", "commit", "-qm", "topic change", cwd=source, env={"GIT_AUTHOR_DATE": when})
     rebased = head_of(source)
     assert rebased != pinned
     run("git", "push", "-q", "origin", "topic-rebased", cwd=source)
@@ -146,6 +138,17 @@ def test_replay_maps_a_moved_pin_to_the_rebased_submodule_commit(
     run("git", "cat-file", "-e", f"{head}:work.txt", cwd=shared)
     # Replay never moves a checkout.
     assert head_of(shared) == before
+
+
+def test_replay_maps_a_pin_whose_twin_resolved_a_conflict(tmp_path: Path) -> None:
+    repos = pin_repositories(tmp_path, resolved=True)
+    shared = repos["shared"]
+    assert isinstance(shared, Path)
+    head, kept, dropped = replay(
+        Repository(shared), repos["new_base"], [repos["pin_commit"], repos["work_commit"]]
+    )
+    assert (kept, dropped) == (2, 0)
+    assert run("git", "ls-tree", f"{head}^", "lib", cwd=shared).split()[2] == repos["rebased"]
 
 
 def test_replay_names_a_pin_with_no_rebased_commit(tmp_path: Path) -> None:
