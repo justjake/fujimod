@@ -146,6 +146,7 @@ impl State {
             code_write_deferred: _,
             parallel: _,
             decoders: _,
+            device_guard: _,
             memory_access: _,
             continuation: _,
             // Host loop fast-forward configuration, wiring and counters; the

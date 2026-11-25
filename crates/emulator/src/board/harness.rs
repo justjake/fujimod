@@ -89,6 +89,100 @@ pub struct Options {
     pub coverage: bool,
     pub count_ranges: Vec<Span>,
     pub trace: usize,
+    /// Device accesses the caller may make, and the RAM device models may
+    /// read and write, while the session runs. Absent: devices are unguarded.
+    #[serde(default)]
+    pub device_policy: Option<arm32::DevicePolicy>,
+}
+
+/// An isolated caller's device policy (`Options::device_policy`). Processor
+/// register accesses outside `mmio`, and device-model RAM transfers outside
+/// the model spans, refuse before the device or RAM sees them.
+pub struct DeviceGuard {
+    mmio: Vec<arm32::MmioAccess>,
+    model_readable: Vec<Span>,
+    model_writable: Vec<Span>,
+    limit: usize,
+    accesses: Vec<(u64, u32, bool)>,
+    model_writes: Vec<(u64, u64)>,
+}
+fn within(spans: &[Span], address: u64, size: u64) -> bool {
+    address
+        .checked_add(size)
+        .is_some_and(|end| spans.iter().any(|&(low, high)| low <= address && end <= high))
+}
+impl DeviceGuard {
+    fn new(policy: &arm32::DevicePolicy, limit: usize) -> Result<Self, String> {
+        let mut mmio = policy.mmio.clone();
+        mmio.sort_unstable_by_key(|entry| entry.start);
+        if mmio.len() > 4096
+            || mmio.iter().any(|e| {
+                !matches!(e.width, 1 | 2 | 4)
+                    || e.start >= e.end
+                    || e.end > 1 << 32
+                    || e.start % u64::from(e.width) != 0
+                    || e.end % u64::from(e.width) != 0
+                    || !(e.read || e.write)
+            })
+            || mmio.windows(2).any(|pair| pair[0].end > pair[1].start)
+        {
+            return Err("Device policy MMIO entries must be aligned, disjoint, readable or writable 1-, 2- or 4-byte spans".into());
+        }
+        for spans in [&policy.model_readable, &policy.model_writable] {
+            if spans.len() > 4096 || spans.iter().any(|&(low, high)| low >= high || high > 1 << 32) {
+                return Err("Device policy model spans must be nonempty 32-bit spans".into());
+            }
+        }
+        Ok(Self {
+            mmio,
+            model_readable: policy.model_readable.clone(),
+            model_writable: policy.model_writable.clone(),
+            limit,
+            accesses: Vec::new(),
+            model_writes: Vec::new(),
+        })
+    }
+    pub(super) fn mmio(&mut self, address: u64, size: u8, write: bool) -> Result<(), String> {
+        let width = u32::from(size);
+        let allowed = self.mmio.iter().any(|e| {
+            e.width == width
+                && e.start <= address
+                && address + u64::from(width) <= e.end
+                && address % u64::from(width) == 0
+                && if write { e.write } else { e.read }
+        });
+        if !allowed {
+            return Err(format!(
+                "Device policy refuses a {width}-byte MMIO {} at {address:#x}",
+                if write { "write" } else { "read" }
+            ));
+        }
+        if self.accesses.len() >= self.limit {
+            return Err("Device policy MMIO record limit reached".into());
+        }
+        self.accesses.push((address, width, write));
+        Ok(())
+    }
+    pub(super) fn model_read(&self, address: u64, size: u64) -> Result<(), String> {
+        if within(&self.model_readable, address, size) {
+            Ok(())
+        } else {
+            Err(format!("Device policy refuses a {size}-byte model read at {address:#x}"))
+        }
+    }
+    pub(super) fn model_write(&mut self, address: u64, size: u64) -> Result<(), String> {
+        if !within(&self.model_writable, address, size) {
+            return Err(format!("Device policy refuses a {size}-byte model write at {address:#x}"));
+        }
+        if self.model_writes.len() >= self.limit {
+            return Err("Device policy model-write record limit reached".into());
+        }
+        self.model_writes.push((address, size));
+        Ok(())
+    }
+    fn state(&self) -> Value {
+        json!({"mmio": self.accesses, "model_writes": self.model_writes})
+    }
 }
 #[derive(Default)]
 struct Observations {
@@ -118,6 +212,8 @@ pub struct Session {
     pause: Rc<Cell<bool>>,
     observed: RefCell<Observations>,
     hooks: Vec<HookId>,
+    /// The device policy's record once the session ended.
+    devices: Option<Value>,
 }
 fn contains(ranges: &[Span], address: u64, size: u64) -> Option<usize> {
     address.checked_add(size).and_then(|end| {
@@ -444,6 +540,8 @@ impl Session {
         let o = self.observed.borrow();
         json!({"memory":self.options.memory,"event":o.event,"faults":o.faults,"irq_events":o.irq_events,"executed":o.executed,"records":o.stores,"counts":o.counts,
             "trace":o.trace,"trace_total":o.trace_total,
+            "devices":self.devices.clone().or_else(|| self.board_state.upgrade()
+                .and_then(|state| state.try_borrow().ok()?.device_guard.as_ref().map(DeviceGuard::state))),
             "guard":{"enabled":self.options.ranges.is_some(),"block_accounting":self.block_guard,"checked_fetches":o.checked,
                 "accepted_fetches":o.accepted,"vector_fetches":o.vector_fetches,"range_fetches":o.range_fetches,
                 "vector_range_fetches":o.vector_range_fetches,"ranges":self.options.ranges,
@@ -537,6 +635,11 @@ impl Board {
         {
             return Err("invalid isolated caller observation bounds".into());
         }
+        let device_guard = options
+            .device_policy
+            .as_ref()
+            .map(|policy| DeviceGuard::new(policy, options.store_limit))
+            .transpose()?;
         let block_hooks = (cpu.model() == Model::CortexR5F && cpu.features().instruction_progress)
             .then(|| block_guard_hooks(&options))
             .flatten();
@@ -553,7 +656,15 @@ impl Board {
             block_guard: block_hooks.is_some(),
             pause: self.host_pause.clone(),
             hooks: vec![],
+            devices: None,
         });
+        {
+            let mut state = self.state.borrow_mut();
+            if state.device_guard.is_some() {
+                return Err("another isolated caller holds the device policy".into());
+            }
+            state.device_guard = device_guard;
+        }
         let data = (&*session as *const Session).cast_mut().cast();
         if let Some(ranges) = block_hooks {
             session.hooks.push(unsafe {
@@ -632,7 +743,9 @@ impl Board {
             cpu.remove_hook(hook)?;
         }
         self.isolated_core.set(None);
-        self.state.borrow_mut().interrupt_delivery.fill(true);
+        let mut state = self.state.borrow_mut();
+        state.interrupt_delivery.fill(true);
+        session.devices = state.device_guard.take().map(|guard| guard.state());
         Ok(())
     }
     /// Explicit single-caller scheduling input; no device sees this selection.
