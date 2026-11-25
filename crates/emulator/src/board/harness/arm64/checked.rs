@@ -188,6 +188,10 @@ struct Observed {
     system_reads: Vec<SystemReadObservation>,
     system_writes: Vec<SystemWriteObservation>,
     pending: Option<SystemReadObservation>,
+    /// System-register writes the guest made that must reach the backend from
+    /// outside a hook: the backend ignores table-register writes issued while
+    /// its own translation is being set up.
+    deferred: Vec<(u16, u64)>,
     /// Single-threaded exclusive monitor: the most recent exclusive load's
     /// (address, byte width). Only one core runs under this harness, so a
     /// single reservation is the entire architectural monitor.
@@ -293,14 +297,6 @@ fn parse_implementation_defined_name(name: &str) -> Option<u16> {
 /// at flat addresses while claiming a checked execution. The condition is a
 /// guest register value, not a PC or a firmware global, so any routine that
 /// enables the MMU meets the same refusal at its own `MSR`.
-fn refuse_enabled_mmu(encoding: u16, value: u64, pc: u64) -> Result<(), String> {
-    if encoding == 0xc080 && value & 1 != 0 {
-        return Err(format!(
-            "Unsupported SCTLR_EL1.M set at {pc:#x}: address translation is not modeled"
-        ));
-    }
-    Ok(())
-}
 /// Canonical name for an admitted system-register encoding, used by the MSR
 /// and MRS paths to resolve the architectural register a word names.
 fn system_register_name(encoding: u16) -> Option<String> {
@@ -498,6 +494,15 @@ impl Guard {
             },
         )?;
         let width = u64::from(exclusive.bytes);
+        let address = self.physical(
+            cpu,
+            address,
+            if exclusive.load {
+                Access::Read
+            } else {
+                Access::Write
+            },
+        )?;
         if address % width != 0 {
             return Err(format!(
                 "unaligned exclusive access at {address:#x} width {width} (pc {pc:#x})"
@@ -570,7 +575,14 @@ impl Guard {
             self.observed.borrow_mut().returned = true;
             return self.pause(&*cpu);
         }
-        if pc & 3 != 0 || size != 4 || !contains(&self.options.executable, pc, 4) {
+        if pc & 3 != 0
+            || size != 4
+            || !contains(
+                &self.options.executable,
+                self.physical(&*cpu, pc, Access::Fetch)?,
+                4,
+            )
+        {
             return Err(format!(
                 "Instruction fetch outside declared code range at {pc:#x}"
             ));
@@ -612,7 +624,11 @@ impl Guard {
                     0xf201,
                 )),
             )?;
-            if !contains(&self.options.executable, elr, 4) {
+            if !contains(
+                &self.options.executable,
+                self.physical(&*cpu, elr, Access::Fetch)?,
+                4,
+            ) {
                 return Err(format!(
                     "eret target outside declared code range at {elr:#x}"
                 ));
@@ -734,7 +750,7 @@ impl Guard {
                 } else {
                     scalar(&*cpu, Register::X((word & 31) as u8))?
                 };
-                refuse_enabled_mmu(encoding, value, pc)?;
+                self.defer_backend_write(encoding, &name, value);
                 self.system_state.borrow_mut().insert(encoding, value);
                 self.observed
                     .borrow_mut()
@@ -758,7 +774,7 @@ impl Guard {
             } else {
                 scalar(&*cpu, Register::X((word & 31) as u8))?
             };
-            refuse_enabled_mmu(encoding, value, pc)?;
+            self.defer_backend_write(encoding, &name, value);
             cpu.write_register(
                 Register::Arm64System(fujimod_emulator_cpu::arm::SystemRegister::from_encoding(
                     encoding,
@@ -800,7 +816,15 @@ impl Guard {
             // admitting the instruction. Padding in mapped pages is not RAM input.
             let mut records = 0;
             for transfer in &decoded.transfers {
-                let address = transfer.address;
+                let address = self.physical(
+                    &*cpu,
+                    transfer.address,
+                    if decoded.load {
+                        Access::Read
+                    } else {
+                        Access::Write
+                    },
+                )?;
                 let width = u64::from(transfer.size);
                 let allowed = if decoded.load {
                     &self.options.readable
@@ -866,6 +890,71 @@ impl Guard {
             return Ok(());
         }
         Err(format!("Unsupported instruction {word:#010x} at {pc:#x}"))
+    }
+    /// Queue a system-register write that must be applied outside this hook.
+    /// A backend ignores table-register writes issued while it is stepping, so
+    /// the outer loop applies them between runs and before the next fetch.
+    fn defer_backend_write(&self, encoding: u16, name: &str, value: u64) {
+        if matches!(
+            name,
+            "TTBR0_EL1" | "TTBR1_EL1" | "TCR_EL1" | "MAIR_EL1" | "SCTLR_EL1"
+        ) {
+            self.observed.borrow_mut().deferred.push((encoding, value));
+        }
+    }
+    /// The EL1 stage-1 inputs the guest has published, read from the CPU.
+    fn translation_state(&self, cpu: &dyn Cpu) -> Result<arm64::TranslationState, String> {
+        let read = |name: &str| -> Result<u64, String> {
+            let encoding = arm64::system_register(name).expect("named register");
+            if let Some(value) = self
+                .system_state
+                .borrow()
+                .get(&encoding.encoding().expect("architecture encoding"))
+            {
+                return Ok(*value);
+            }
+            scalar(cpu, Register::Arm64System(encoding))
+        };
+        Ok(arm64::TranslationState {
+            sctlr: read("SCTLR_EL1")?,
+            tcr: read("TCR_EL1")?,
+            ttbr0: read("TTBR0_EL1")?,
+            ttbr1: read("TTBR1_EL1").unwrap_or(0),
+            pstate: scalar(cpu, Register::Pstate).unwrap_or(0),
+        })
+    }
+    /// Resolve a guest address to the physical address this guard validates and
+    /// accesses. With translation off the address is unchanged.
+    fn physical(&self, cpu: &dyn Cpu, address: u64, access: Access) -> Result<u64, String> {
+        let state = self.translation_state(cpu)?;
+        if state.sctlr & 1 == 0 {
+            return Ok(address);
+        }
+        let mut table = [0u8; 8];
+        let (physical, attribute) = state.walk(address, access, |entry| {
+            cpu.read_memory(entry, &mut table)?;
+            Ok(u64::from_le_bytes(table))
+        })?;
+        let Some(index) = attribute else {
+            return Ok(physical);
+        };
+        let mair_encoding = arm64::system_register("MAIR_EL1").expect("named register");
+        let mair = match self
+            .system_state
+            .borrow()
+            .get(&mair_encoding.encoding().expect("architecture encoding"))
+        {
+            Some(value) => *value,
+            None => scalar(cpu, Register::Arm64System(mair_encoding))?,
+        };
+        let attribute = (mair >> (u32::from(index) * 8)) & 0xff;
+        // The running core performs the access itself, so the classification is
+        // only recorded: Device memory is reached by the core's own MMIO path,
+        // and the cacheability variants of Normal memory behave alike without
+        // modeled caches. The declared executable/readable/writable spans still
+        // bound every resolved physical address.
+        let _ = attribute;
+        Ok(physical)
     }
     fn fail(&self, message: String) {
         self.observed.borrow_mut().failure.get_or_insert(message);
@@ -1118,6 +1207,25 @@ pub fn checked_call_with(
         .iter()
         .filter_map(|(name, value)| Some((admitted_system_register(name)?, *value)))
         .collect::<std::collections::BTreeMap<u16, u64>>();
+    // Hand the declared translation state to the executing core as well, so the
+    // backend and the guard resolve the same physical addresses. Table bases and
+    // attributes land before the enable, so nothing runs against half-installed
+    // tables.
+    for name in ["TTBR0_EL1", "TTBR1_EL1", "TCR_EL1", "MAIR_EL1", "SCTLR_EL1"] {
+        let Some(encoding) = admitted_system_register(name) else {
+            continue;
+        };
+        let Some(value) = system_state.get(&encoding) else {
+            continue;
+        };
+        board.write_register(
+            0,
+            Register::Arm64System(fujimod_emulator_cpu::arm::SystemRegister::from_encoding(
+                encoding,
+            )),
+            *value,
+        )?;
+    }
     let mut guard = Box::new(Guard {
         cpu: Rc::downgrade(&board.cpus[0]),
         pause: board.host_pause.clone(),
@@ -1255,6 +1363,16 @@ pub fn checked_call_with(
             if board.read_register(0, Register::Pc)? == guard.options.return_address {
                 guard.observed.borrow_mut().returned = true;
                 break;
+            }
+            let deferred = std::mem::take(&mut guard.observed.borrow_mut().deferred);
+            for (encoding, value) in deferred {
+                board.write_register(
+                    0,
+                    Register::Arm64System(
+                        fujimod_emulator_cpu::arm::SystemRegister::from_encoding(encoding),
+                    ),
+                    value,
+                )?;
             }
             let used = board.instruction_counts()[0] - start;
             if used >= guard.options.max_instructions {
@@ -1841,24 +1959,174 @@ mod tests {
         // register, so the guard retires it and the routine continues.
         assert_eq!(r.failure, None);
     }
+    /// Three-level tables at physical 0x1000/0x2000/0x3000, the program's own
+    /// page identity-mapped, and a data virtual page that maps to a different
+    /// physical frame than its own address.
+    fn translated_board(program: &[u32]) -> Board {
+        translated_board_with(program, DATA_PA | 0x407)
+    }
+    fn translated_board_with(program: &[u32], data_leaf: u64) -> Board {
+        let graph: factory::Graph = serde_json::from_value(json!({
+            "processors":[{"model":"armv8a","registers":[],"released":true,"mprofile":null,"rprofile":null}],
+            "ram":[{"base":0,"size":262144}],
+            "mappings":[{"core":0,"address":0,"physical":0,"size":262144,"permissions":7}],
+            "dma_mappings":[{"address":0,"physical":0,"size":262144,"permissions":3}],
+            "decoders":[],"peripherals":[],"instructions_per_tick":[1,1]
+        }))
+        .unwrap();
+        let b = graph
+            .build(
+                factory::Options::new(RunEngine::Unicorn)
+                    .with_translation_cache_size_bytes(1 << 20),
+                Bus::new(Mode::Strict),
+                None,
+            )
+            .unwrap();
+        for (address, values) in [(0x1000u64, vec![0x2003u64]), (0x2000, vec![0x3003u64])] {
+            b.write_memory(
+                0,
+                address,
+                &values
+                    .iter()
+                    .flat_map(|v| v.to_le_bytes())
+                    .collect::<Vec<_>>(),
+            )
+            .unwrap();
+        }
+        let mut level3 = vec![0u64; 512];
+        level3[(CODE >> 12) as usize] = CODE | 0x407;
+        level3[(DATA_VA >> 12) as usize] = data_leaf;
+        b.write_memory(
+            0,
+            0x3000,
+            &level3
+                .iter()
+                .flat_map(|v| v.to_le_bytes())
+                .collect::<Vec<_>>(),
+        )
+        .unwrap();
+        b.write_memory(
+            0,
+            CODE,
+            &program
+                .iter()
+                .flat_map(|w| w.to_le_bytes())
+                .collect::<Vec<_>>(),
+        )
+        .unwrap();
+        b
+    }
+    const CODE: u64 = 0x6000;
+    const DATA_VA: u64 = 0x2_0000;
+    const DATA_PA: u64 = 0x7000;
+    fn translated_options() -> CheckedOptions {
+        serde_json::from_value(json!({
+            "entry":CODE,"entry_level":"el1","pstate":0x3c5,"arguments":[],"return_address":CODE + 0x100,
+            "stack_pointer":36864,"stack":[32768,40960],"max_instructions":20,"quantum":10,
+            "executable":[[CODE,CODE + 0x20]],"readable":[[CODE,CODE + 0x20],[32768,40960]],
+            "writable":[[DATA_PA,DATA_PA + 0x10],[32768,40960]],"store_limit":20,
+            "stubs":[],"registers":[],
+            "system_values":[["SCTLR_EL1",1],["TTBR0_EL1",0x1000],["TCR_EL1",0x20],["MAIR_EL1",0x4400]]
+        }))
+        .unwrap()
+    }
     #[test]
-    fn enabling_address_translation_refuses_at_the_transition() {
-        // MOVZ x0,#1; MSR SCTLR_EL1,x0; RET. Setting SCTLR_EL1.M asks for page
-        // table walks this harness does not model, so the transition itself is
-        // the refusal: the routine must not continue at flat addresses.
-        let mut b = board(&[0xd280_0020, 0xd518_1000, 0xd65f_03c0]);
-        let mut o = options();
-        o.system_registers = vec!["SCTLR_EL1".into()];
-        let r = checked_call(&mut b, o).unwrap();
-        assert_eq!(r.instructions, 1);
-        assert!(!r.returned);
-        let failure = r.failure.unwrap();
-        assert!(failure.contains("SCTLR_EL1.M set"), "{failure}");
-        assert!(
-            failure.contains("address translation is not modeled"),
-            "{failure}"
+    fn a_translated_checked_call_stores_through_a_nonidentity_page() {
+        // MOVZ X1,#0x2,LSL#16; MOVZ X2,#0xbeef; STR X2,[X1]; RET.
+        let mut b = translated_board(&[0xd2a0_0041, 0xd297_dde2, 0xf900_0022, 0xd65f_03c0]);
+        let result = checked_call(&mut b, translated_options()).unwrap();
+        assert_eq!(result.failure, None);
+        assert_eq!(result.instructions, 4);
+        let mut bytes = [0u8; 8];
+        b.read_memory(0, DATA_PA, &mut bytes).unwrap();
+        assert_eq!(u64::from_le_bytes(bytes), 0xbeef);
+        b.read_memory(0, DATA_VA, &mut bytes).unwrap();
+        assert_eq!(
+            u64::from_le_bytes(bytes),
+            0,
+            "the virtual address is a decoy"
         );
-        assert!(failure.contains("0x1004"), "{failure}");
+        assert_eq!(result.stores[0].address, DATA_PA);
+    }
+    #[test]
+    fn translation_enabled_inside_the_call_reaches_the_mapped_code_page() {
+        // The entry page is identity-mapped, but the page the program jumps to
+        // after enabling translation maps elsewhere: a stale flat fetch would
+        // run the decoy instructions at the virtual address instead.
+        let mut b = translated_board(&[
+            0xd280_0020, // MOVZ X0,#1
+            0xd518_1000, // MSR SCTLR_EL1,X0
+            0xd503_3fdf, // ISB
+            0xd28e_0005, // MOVZ X5,#0x7000
+            0xd61f_00a0, // BR X5
+        ]);
+        let mut level3 = [0u64; 512];
+        level3[(CODE >> 12) as usize] = CODE | 0x407;
+        level3[(JUMP_VA >> 12) as usize] = JUMP_PA | 0x407;
+        b.write_memory(
+            0,
+            0x3000,
+            &level3
+                .iter()
+                .flat_map(|v| v.to_le_bytes())
+                .collect::<Vec<_>>(),
+        )
+        .unwrap();
+        // A decoy at the virtual address and the real continuation elsewhere.
+        b.write_memory(
+            0,
+            JUMP_VA,
+            &[0xd503_201fu32; 8]
+                .iter()
+                .flat_map(|w| w.to_le_bytes())
+                .collect::<Vec<_>>(),
+        )
+        .unwrap();
+        b.write_memory(
+            0,
+            JUMP_PA,
+            &[0xd282_4680u32, 0xd65f_03c0]
+                .iter()
+                .flat_map(|w| w.to_le_bytes())
+                .collect::<Vec<_>>(),
+        )
+        .unwrap();
+        let mut options = translated_options();
+        options.system_values = vec![
+            ("SCTLR_EL1".into(), 0),
+            ("TTBR0_EL1".into(), 0x1000),
+            ("TCR_EL1".into(), 0x20),
+            ("MAIR_EL1".into(), 0x4400),
+        ];
+        options.executable = vec![(CODE, CODE + 0x20), (JUMP_PA, JUMP_PA + 0x10)];
+        options.readable = vec![
+            (CODE, CODE + 0x20),
+            (JUMP_PA, JUMP_PA + 0x10),
+            (32768, 40960),
+        ];
+        let result = checked_call(&mut b, options).unwrap();
+        assert_eq!(result.failure, None);
+        assert_eq!(result.registers["x0"], 0x1234);
+        assert!(result.returned);
+    }
+    const JUMP_VA: u64 = 0x7000;
+    const JUMP_PA: u64 = 0xB000;
+    #[test]
+    fn a_device_page_is_reached_by_the_running_core() {
+        // Attribute index 0 is Device in the declared MAIR: the walker still
+        // resolves the page, and the running core performs the access itself
+        // under the declared spans, which is how firmware reaches a GIC.
+        let program = [0xd2a0_0041u32, 0xd297_dde2, 0xf900_0022, 0xd65f_03c0];
+        let mut b = translated_board_with(&program, DATA_PA | 0x403);
+        let options = translated_options();
+        let result = checked_call(&mut b, options).unwrap();
+        assert_eq!(result.failure, None);
+        assert!(result.returned);
+        assert_eq!(result.stores[0].address, DATA_PA);
+        assert_eq!(result.stores[0].value, 0xbeef);
+        let mut bytes = [0u8; 8];
+        b.read_memory(0, DATA_PA, &mut bytes).unwrap();
+        assert_eq!(u64::from_le_bytes(bytes), 0xbeef);
     }
     #[test]
     fn writing_sctlr_with_translation_off_retires() {
