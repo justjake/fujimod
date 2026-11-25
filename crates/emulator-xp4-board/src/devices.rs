@@ -768,6 +768,9 @@ impl Devices {
         if wiring.firmware_luma_bands {
             model = model.firmware_luma_bands()?;
         }
+        if wiring.firmware_chroma_matrix {
+            model = model.firmware_chroma_matrix()?;
+        }
         let windows = model.windows();
         for &(lo, hi) in &windows {
             if let Some(&(base, end, owner)) =

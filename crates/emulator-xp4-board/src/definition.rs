@@ -406,6 +406,12 @@ pub struct StillEngine {
     /// (opt-in, see `crate::still`). Absent, no luma bands.
     #[serde(default)]
     pub firmware_luma_bands: bool,
+    /// RECC with `firmware_color` only: its still bands also pass their
+    /// chroma through the 2x2 chroma matrix the firmware programs and
+    /// switches on in the YCbCr page (opt-in, see `crate::still`). Absent, no
+    /// chroma matrix.
+    #[serde(default)]
+    pub firmware_chroma_matrix: bool,
 }
 
 /// The XP4 still DSP host interface: completion interrupt line and the
