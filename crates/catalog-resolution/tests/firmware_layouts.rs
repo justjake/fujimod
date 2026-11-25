@@ -1,4 +1,4 @@
-use fujimod_catalog::Firmware;
+use fujimod_catalog::{Firmware, reference::ConnectionSignal};
 use fujimod_catalog_run_inputs::HardwareInputs;
 use std::{fs, path::PathBuf};
 
@@ -100,4 +100,36 @@ fn xt3_boot_wires_the_touch_bus_to_a_declared_byte_i2c_controller() {
         bus.device,
         Some(fujimod_catalog::soc::BlockDevice::ByteI2c { byte_ticks, .. }) if byte_ticks > 0
     ));
+}
+
+#[test]
+fn xt4_boot_inputs_release_every_located_key() {
+    let body = fujimod_catalog::ReferenceCatalog::bundled()
+        .unwrap()
+        .resolve("xt4", "xt4-212")
+        .unwrap()
+        .body;
+    let reset = HardwareInputs::bundled("xt4-discovery").unwrap().reset;
+    let levels = reset.gpio_input.expect("declared GPIO levels").levels;
+    let mut located = 0;
+    for connection in &body.connections {
+        for signal in &connection.signals {
+            if let ConnectionSignal::Gpio {
+                port,
+                pin,
+                active_level: false,
+            } = signal
+            {
+                assert_eq!(levels[*port as usize] >> pin & 1, 1, "{}", connection.id);
+                located += 1;
+            }
+        }
+    }
+    assert_eq!(located, 16);
+    // The loader hands the firmware the same sixteen port levels.
+    let words = reset.loader_handoff.expect("declared loader handoff").words;
+    for (port, level) in levels.iter().enumerate() {
+        let word = words.iter().find(|word| word.offset == port as u64 * 4);
+        assert_eq!(word.map_or(0, |word| word.value), *level, "port {port}");
+    }
 }
