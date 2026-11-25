@@ -1720,6 +1720,11 @@ impl Board {
         serde_json::to_string(&self.board()?.inspection_observation().map_err(error)?)
             .map_err(|e| error(e.to_string()))
     }
+    /// The interrupt controller's saved state alone, or null without one.
+    fn gic_state(&self) -> PyResult<String> {
+        serde_json::to_string(&self.board()?.gic_state().map_err(error)?)
+            .map_err(|e| error(e.to_string()))
+    }
     fn failure(&self) -> PyResult<String> {
         serde_json::to_string(&self.board()?.failure().map_err(error)?)
             .map_err(|e| error(e.to_string()))
