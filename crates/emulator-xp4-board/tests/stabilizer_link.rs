@@ -5,7 +5,8 @@
 //! 12.3 held low. The first frame drives the ready pad high, which line 155
 //! (active high) reports.
 use fujimod_emulator_cpu::arm;
-use fujimod_emulator_xp4_board::{Definition, Session};
+mod support;
+use support::Board;
 use serde_json::{Value, json};
 const SPI2: u32 = 0xfff3_4000;
 const DATA: u32 = SPI2 + 8;
@@ -35,15 +36,11 @@ fn input() -> Value {
             "reset_profile":"experimental-zero-registers-v1",
             "timing_profile":"functional-16-setup-16-bytes-v1"}})
 }
-fn board(value: Value) -> Result<Session, String> {
-    Session::new(
-        serde_json::from_value::<Definition>(value).map_err(|e| e.to_string())?,
-        None,
-        vec![],
-    )
+fn board(value: Value) -> Result<Board, String> {
+    support::board(value)
 }
-fn step(session: &Session, instruction: u32, address: u32, value: u32) -> u32 {
-    let pc = 0x1000 + session.state(false).instructions as usize * 4;
+fn step(session: &Board, instruction: u32, address: u32, value: u32) -> u32 {
+    let pc = 0x1000 + session.instructions() as usize * 4;
     session.write(pc, &instruction.to_le_bytes()).unwrap();
     session.write_register(0, arm::PC, pc as u64).unwrap();
     session
@@ -55,38 +52,38 @@ fn step(session: &Session, instruction: u32, address: u32, value: u32) -> u32 {
     session.run(0, 1).unwrap_or_else(|error| {
         panic!(
             "{address:#x}: {}",
-            session.state(false).failure.unwrap_or(error)
+            session.failure().unwrap_or(error)
         )
     });
     session.read_register(0, arm::CORE[1]).unwrap() as u32
 }
-fn ww(session: &Session, address: u32, value: u32) {
+fn ww(session: &Board, address: u32, value: u32) {
     step(session, 0xe580_1000, address, value);
 }
-fn rw(session: &Session, address: u32) -> u32 {
+fn rw(session: &Board, address: u32) -> u32 {
     step(session, 0xe590_1000, address, 0)
 }
-fn ticks(session: &Session) -> u64 {
-    session.state(false).virtual_ticks
+fn ticks(session: &Board) -> u64 {
+    session.now()
 }
-fn run_to(session: &Session, tick: u64) {
-    session.run_board_window(1 << 22, 1, Some(tick)).unwrap();
+fn run_to(session: &Board, tick: u64) {
+    session.run_until(tick).unwrap();
 }
 /// A masked write of one output bit.
-fn output(session: &Session, port: u32, pin: u32, high: bool) {
+fn output(session: &Board, port: u32, pin: u32, high: bool) {
     ww(
         session,
         BANK + port * 64,
         1 << (pin + 16) | u32::from(high) << pin,
     );
 }
-fn ready_pad(session: &Session) -> bool {
+fn ready_pad(session: &Board) -> bool {
     rw(session, BANK + 0x14) & 1 << 4 != 0
 }
-fn pending(session: &Session, irq: u32) -> bool {
+fn pending(session: &Board, irq: u32) -> bool {
     session.interrupt_state().unwrap()[0].pending[(irq / 32) as usize] & 1 << (irq % 32) != 0
 }
-fn bytes(session: &Session, address: usize) -> [u8; 4] {
+fn bytes(session: &Board, address: usize) -> [u8; 4] {
     let mut out = [0; 4];
     session.read(address, &mut out).unwrap();
     out
@@ -94,7 +91,7 @@ fn bytes(session: &Session, address: usize) -> [u8; 4] {
 
 /// Powers the controller and pulses its reset; returns the tick the ready
 /// pad is due to fall.
-fn power_up(session: &Session) -> u64 {
+fn power_up(session: &Board) -> u64 {
     output(session, 12, 3, true);
     output(session, 0, 12, true);
     output(session, 1, 14, true);
@@ -102,7 +99,7 @@ fn power_up(session: &Session) -> u64 {
     let before = ticks(session);
     output(session, 12, 6, false);
     let after = ticks(session);
-    let due = session.state(false).next_device_tick.unwrap();
+    let due = session.next_device_tick().unwrap();
     assert!(
         (before + BOOT..=after + BOOT).contains(&due),
         "{before} {after} {due}"
@@ -111,7 +108,7 @@ fn power_up(session: &Session) -> u64 {
 }
 /// SPI2 as a driver opens it: 8-bit words, divider 0x24, both DMA requests,
 /// run; chip select asserted.
-fn open_link(session: &Session) {
+fn open_link(session: &Board) {
     ww(session, SPI2, 0xc7);
     ww(session, SPI2 + 4, 8);
     ww(session, SPI2 + 0x10, 0x24);
@@ -120,7 +117,7 @@ fn open_link(session: &Session) {
     ww(session, SPI2 + 4, 0xa);
     output(session, 12, 3, false);
 }
-fn program(session: &Session, channel: u32, source: u32, destination: u32, transmit: bool) {
+fn program(session: &Board, channel: u32, source: u32, destination: u32, transmit: bool) {
     let (source_config, destination_config) = if transmit { (0, 4) } else { (4, 0) };
     for (offset, value) in [
         (0x10, 3),
@@ -135,7 +132,7 @@ fn program(session: &Session, channel: u32, source: u32, destination: u32, trans
     }
 }
 /// One frame by DMA, as the observed driver runs it; returns the reply.
-fn frame(session: &Session, camera: [u8; 4]) -> [u8; 4] {
+fn frame(session: &Board, camera: [u8; 4]) -> [u8; 4] {
     session.write(TX_BUFFER, &camera).unwrap();
     ww(session, SPI2 + 0x20, 3);
     ww(session, SPI2 + 0x24, 3);
@@ -145,7 +142,7 @@ fn frame(session: &Session, camera: [u8; 4]) -> [u8; 4] {
         ww(session, channel + 0x30, 0);
         ww(session, channel + 0x28, 0x1020_1011);
     }
-    let end = session.state(false).next_device_tick.unwrap();
+    let end = session.next_device_tick().unwrap();
     run_to(session, end);
     assert_eq!(rw(session, RX + 0x30), 1, "receive channel done");
     ww(session, SPI2 + 0x24, 0);
@@ -173,7 +170,7 @@ fn the_ready_pad_falls_after_boot_and_rises_after_the_first_frame() {
     assert_eq!(frame(&session, [0x00, 0x00, 0x05, 0x14]), [0; 4]);
     assert!(ready_pad(&session), "high after the first frame");
     assert!(pending(&session, READY_HIGH) && !pending(&session, READY_LOW));
-    assert!(session.state(false).failure.is_none());
+    assert!(session.failure().is_none());
 }
 
 #[test]
@@ -194,7 +191,7 @@ fn the_worked_example_and_resync_over_the_link() {
     let words = session
         .device_records()
         .iter()
-        .filter(|r| r.name == "XP4 SPI DMA word")
+        .filter(|r| r["name"] == "XP4 SPI DMA word")
         .count();
     assert_eq!(words, 20);
 }
@@ -210,9 +207,9 @@ fn a_session_resumes_from_a_snapshot_taken_mid_link() {
         frame(&session, [0x08, 0x10, 0x80, 0x22]),
         [0x08, 0x00, 0x85, 0x26]
     );
-    let saved = session.export_snapshot("stabilizer").unwrap();
-    let mut resumed = board(input()).unwrap();
-    resumed.restore_snapshot("stabilizer", &saved).unwrap();
+    let saved = session.checkpoint().unwrap();
+    let resumed = board(input()).unwrap();
+    resumed.restore(&saved).unwrap();
     for board in [&session, &resumed] {
         assert_eq!(frame(board, [0, 0, 0, 0]), [0x12, 0x34, 0x05, 0x1c]);
         assert_eq!(
@@ -225,10 +222,10 @@ fn a_session_resumes_from_a_snapshot_taken_mid_link() {
         output(board, 1, 14, true);
         output(board, 12, 6, true);
         output(board, 12, 6, false);
-        let due = board.state(false).next_device_tick.unwrap();
+        let due = board.next_device_tick().unwrap();
         run_to(board, due);
         assert!(!ready_pad(board));
-        assert!(board.state(false).failure.is_none());
+        assert!(board.failure().is_none());
     }
     assert_eq!(session.device_state_json(), resumed.device_state_json());
 }

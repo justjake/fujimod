@@ -6,8 +6,8 @@
 //! the received word lands in the receive buffer; both channels complete
 //! when the last word has shifted.
 use fujimod_emulator_cpu::arm;
-use fujimod_emulator_devices::{Record, Value as Field};
-use fujimod_emulator_xp4_board::{Definition, Session};
+mod support;
+use support::Board;
 use serde_json::{Value, json};
 const SPI2: u32 = 0xfff3_4000;
 const DATA: u32 = SPI2 + 8;
@@ -29,17 +29,13 @@ fn input(pin: bool) -> Value {
             "reset_profile":"experimental-zero-registers-v1",
             "timing_profile":"functional-16-setup-16-bytes-v1"}})
 }
-fn board(value: Value) -> Result<Session, String> {
-    Session::new(
-        serde_json::from_value::<Definition>(value).map_err(|e| e.to_string())?,
-        None,
-        vec![],
-    )
+fn board(value: Value) -> Result<Board, String> {
+    support::board(value)
 }
 /// One instruction at a fresh address with `r0` = address and `r1` = value;
 /// a refusal comes back as the board's failure.
-fn try_step(session: &Session, instruction: u32, address: u32, value: u32) -> Result<u32, String> {
-    let pc = 0x1000 + session.state(false).instructions as usize * 4;
+fn try_step(session: &Board, instruction: u32, address: u32, value: u32) -> Result<u32, String> {
+    let pc = 0x1000 + session.instructions() as usize * 4;
     session.write(pc, &instruction.to_le_bytes()).unwrap();
     session.write_register(0, arm::PC, pc as u64).unwrap();
     session
@@ -50,45 +46,42 @@ fn try_step(session: &Session, instruction: u32, address: u32, value: u32) -> Re
         .unwrap();
     session
         .run(0, 1)
-        .map_err(|error| session.state(false).failure.unwrap_or(error))?;
+        .map_err(|error| session.failure().unwrap_or(error))?;
     Ok(session.read_register(0, arm::CORE[1]).unwrap() as u32)
 }
-fn try_ww(session: &Session, address: u32, value: u32) -> Result<(), String> {
+fn try_ww(session: &Board, address: u32, value: u32) -> Result<(), String> {
     try_step(session, 0xe580_1000, address, value).map(|_| ())
 }
-fn ww(session: &Session, address: u32, value: u32) {
+fn ww(session: &Board, address: u32, value: u32) {
     try_ww(session, address, value)
         .unwrap_or_else(|error| panic!("{address:#x} = {value:#x}: {error}"));
 }
-fn rw(session: &Session, address: u32) -> u32 {
+fn rw(session: &Board, address: u32) -> u32 {
     try_step(session, 0xe590_1000, address, 0)
         .unwrap_or_else(|error| panic!("{address:#x}: {error}"))
 }
-fn bytes(session: &Session, address: usize) -> [u8; 4] {
+fn bytes(session: &Board, address: usize) -> [u8; 4] {
     let mut out = [0; 4];
     session.read(address, &mut out).unwrap();
     out
 }
-fn pending(session: &Session, irq: u32) -> bool {
+fn pending(session: &Board, irq: u32) -> bool {
     session.interrupt_state().unwrap()[0].pending[(irq / 32) as usize] & 1 << (irq % 32) != 0
 }
-fn records(session: &Session, name: &str) -> Vec<Record> {
+fn records(session: &Board, name: &str) -> Vec<Value> {
     session
         .device_records()
         .into_iter()
-        .filter(|r| r.name == name)
+        .filter(|r| r["name"] == name)
         .collect()
 }
-fn field(record: &Record, key: &str) -> u64 {
-    match record.fields.iter().find(|(k, _)| k == key) {
-        Some((_, Field::Int(value))) => *value as u64,
-        other => panic!("{key}: {other:?}"),
-    }
+fn field(record: &Value, key: &str) -> u64 {
+    record[key].as_u64().unwrap_or_else(|| panic!("{key}: {record}"))
 }
 
 /// The observed open: 8-bit words, master, divider 0x24, both DMA requests,
 /// causes cleared, then run.
-fn open(session: &Session, requests: u32) {
+fn open(session: &Board, requests: u32) {
     let control = rw(session, SPI2);
     ww(session, SPI2, (control & 0xffff_00c0) | 0xc7);
     let enable = rw(session, SPI2 + 4);
@@ -103,7 +96,7 @@ fn open(session: &Session, requests: u32) {
 /// The observed frame preamble: clear both FIFOs, enable both requests and
 /// route request 4 to channel 5 (receive) and request 5 to channel 6
 /// (transmit).
-fn prepare(session: &Session, requests: u32) {
+fn prepare(session: &Board, requests: u32) {
     ww(session, SPI2 + 0x20, 3);
     let enabled = rw(session, SPI2 + 0x24);
     ww(session, SPI2 + 0x24, enabled | requests);
@@ -112,7 +105,7 @@ fn prepare(session: &Session, requests: u32) {
 }
 /// `+0x1c`/`+0x20`: fixed flag in bit 2, unit 1, byte width.
 fn program(
-    session: &Session,
+    session: &Board,
     channel: u32,
     bytes: u32,
     source: u32,
@@ -134,7 +127,7 @@ fn program(
     }
 }
 /// The observed start: acknowledge, clear the enable bit, wait for idle, set it.
-fn try_start(session: &Session, channel: u32) -> Result<(), String> {
+fn try_start(session: &Board, channel: u32) -> Result<(), String> {
     ww(session, channel + 0x30, 0);
     let control = rw(session, channel + 0x28);
     ww(session, channel + 0x28, control & !0x1000_0000);
@@ -142,7 +135,7 @@ fn try_start(session: &Session, channel: u32) -> Result<(), String> {
     let control = rw(session, channel + 0x28);
     try_ww(session, channel + 0x28, control | 0x1000_0000)
 }
-fn frame(session: &Session) {
+fn frame(session: &Board) {
     prepare(session, 3);
     program(session, RX, 4, DATA, RX_BUFFER as u32, false);
     program(session, TX, 4, TX_BUFFER as u32, DATA, true);
@@ -151,7 +144,7 @@ fn frame(session: &Session) {
 }
 /// The observed completion: requests off, both channels stopped once idle,
 /// routing back to idle (0x2c).
-fn finish(session: &Session) {
+fn finish(session: &Board) {
     let enabled = rw(session, SPI2 + 0x24);
     ww(session, SPI2 + 0x24, enabled & !3);
     for channel in [RX, TX] {
@@ -162,7 +155,7 @@ fn finish(session: &Session) {
     ww(session, 0xfff4_a50c, 0x0001_2c2c);
 }
 /// The exchange start record of the latest frame: its start and end ticks.
-fn exchange(session: &Session) -> (u64, u64) {
+fn exchange(session: &Board) -> (u64, u64) {
     let begun = records(session, "XP4 SPI DMA exchange start")
         .pop()
         .unwrap();
@@ -186,17 +179,17 @@ fn a_full_duplex_frame_exchanges_each_word_with_the_declared_pin() {
         // The controller's clock paces the whole exchange: four word times
         // from the transmit start, with no DMA setup charge.
         assert_eq!(end, start + 4 * WORD_TICKS);
-        assert_eq!(session.state(false).next_device_tick, Some(end));
+        assert_eq!(session.next_device_tick(), Some(end));
         assert_eq!(
             rw(&session, SPI2 + 0xc) & 0x10,
             0x10,
             "busy while the words shift"
         );
         assert_eq!(rw(&session, RX + 0x30), 0x1_0000);
-        session.run_board_window(1 << 20, 1, Some(end - 1)).unwrap();
+        session.run_until(end - 1).unwrap();
         assert_eq!(bytes(&session, RX_BUFFER), [0xaa; 4]);
         assert!(!pending(&session, RX_IRQ));
-        session.run_board_window(1 << 20, 1, Some(end)).unwrap();
+        session.run_until(end).unwrap();
         assert_eq!(rw(&session, RX + 0x30), 1, "receive channel done");
         assert_eq!(rw(&session, TX + 0x30), 1, "transmit channel done");
         assert_eq!(bytes(&session, RX_BUFFER), [expected; 4], "{pin}");
@@ -230,11 +223,11 @@ fn a_full_duplex_frame_exchanges_each_word_with_the_declared_pin() {
         session.write(RX_BUFFER, &[0x55; 4]).unwrap();
         frame(&session);
         let (_, end) = exchange(&session);
-        session.run_board_window(1 << 20, 1, Some(end)).unwrap();
+        session.run_until(end).unwrap();
         assert_eq!(rw(&session, RX + 0x30), 1);
         assert_eq!(bytes(&session, RX_BUFFER), [expected; 4]);
         finish(&session);
-        assert!(session.state(false).failure.is_none());
+        assert!(session.failure().is_none());
     }
 }
 
@@ -305,16 +298,16 @@ fn a_frame_resumes_from_a_snapshot_taken_mid_exchange() {
     open(&session, 3);
     frame(&session);
     let (_, end) = exchange(&session);
-    let saved = session.export_snapshot("spi-dma").unwrap();
-    let mut resumed = board(input(true)).unwrap();
-    resumed.restore_snapshot("spi-dma", &saved).unwrap();
+    let saved = session.checkpoint().unwrap();
+    let resumed = board(input(true)).unwrap();
+    resumed.restore(&saved).unwrap();
     for board in [&session, &resumed] {
         assert_eq!(rw(board, SPI2 + 0xc) & 0x10, 0x10);
-        board.run_board_window(1 << 20, 1, Some(end)).unwrap();
+        board.run_until(end).unwrap();
         assert_eq!(rw(board, RX + 0x30), 1);
         assert_eq!(bytes(board, RX_BUFFER), [0xff; 4]);
         finish(board);
-        assert!(board.state(false).failure.is_none());
+        assert!(board.failure().is_none());
     }
     assert_eq!(session.device_state_json(), resumed.device_state_json());
 }

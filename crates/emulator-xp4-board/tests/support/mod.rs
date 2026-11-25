@@ -68,6 +68,35 @@ impl Board {
     pub fn instructions(&self) -> u64 {
         self.0.borrow().board.instruction_counts()[0]
     }
+    /// Guest time.
+    pub fn now(&self) -> u64 {
+        self.0.borrow().board.now()
+    }
+    /// The next tick a device is due.
+    pub fn next_device_tick(&self) -> Option<u64> {
+        self.0.borrow().board.next_device_deadline()
+    }
+    /// Run until guest time reaches `tick`.
+    pub fn run_until(&self, tick: u64) -> Result<(), String> {
+        self.0.borrow_mut().board.run_until(tick, 1)
+    }
+    /// The whole session's checkpoint as portable bytes.
+    pub fn checkpoint(&self) -> Result<Vec<u8>, String> {
+        self.0.borrow().checkpoint(None)?.export()
+    }
+    /// Restore portable checkpoint bytes from an identically built session.
+    pub fn restore(&self, saved: &[u8]) -> Result<(), String> {
+        let imported = self.0.borrow().import_snapshot(saved)?;
+        self.0.borrow_mut().restore(&imported)
+    }
+    /// The records devices have published, oldest first: each its `name`
+    /// and its fields.
+    pub fn device_records(&self) -> Vec<Value> {
+        match self.0.borrow().board.device_records().unwrap() {
+            Value::Array(records) => records,
+            other => panic!("{other}"),
+        }
+    }
     /// The board's retained execution failure.
     pub fn failure(&self) -> Option<String> {
         self.0.borrow().board.failure().unwrap()
