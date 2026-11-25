@@ -32,6 +32,8 @@ pub enum LibraryError {
     UnknownFirmware(String),
     #[error("firmware {0} declares no browser run configuration")]
     UnregisteredFirmware(String),
+    #[error("release: {0}")]
+    Release(String),
     #[error("{0}")]
     Missing(String),
 }
@@ -74,6 +76,7 @@ impl Library {
         let mut files = BTreeMap::new();
         let mut cameras = BTreeMap::new();
         let camera_root = root.join("cameras");
+        let release_root = root.join(crate::release::CARD_DIRECTORY);
         if camera_root.is_dir() {
             for entry in read_dir(&camera_root)? {
                 if entry.is_dir() {
@@ -94,7 +97,7 @@ impl Library {
         let mut pending = vec![root.clone()];
         while let Some(directory) = pending.pop() {
             for entry in read_dir(&directory)? {
-                if entry.starts_with(&camera_root) {
+                if entry.starts_with(&camera_root) || entry.starts_with(&release_root) {
                     continue;
                 }
                 if entry.is_dir() {
@@ -164,6 +167,12 @@ impl Library {
                 })
             })
             .collect()
+    }
+
+    /// The current release's SD card tree for a firmware, fetched once into
+    /// [`CARD_DIRECTORY`](crate::release::CARD_DIRECTORY).
+    pub fn release_card(&self, firmware_id: &str) -> Result<PathBuf, LibraryError> {
+        crate::release::card(self, firmware_id)
     }
 
     /// The firmware's registered browser run configuration and overlay.

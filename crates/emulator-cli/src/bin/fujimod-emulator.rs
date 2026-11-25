@@ -50,8 +50,9 @@ Prints a JSON boot report; exits 0 at REC (EXR II) or at the end of the run (XP5
 \n\
 open names a catalog firmware whose update and boot ROM are found by SHA-256 in\n\
 FUJIMOD_FIRMWARE_LIBRARY. --boot stock starts the installed firmware; --boot sd-card starts\n\
-FujiMod from the --sd-card tree, which that boot requires. A stock boot adds the --sd-card files\n\
-to an otherwise empty card. --execution-policy defaults to exact.\n\
+FujiMod from --sd-card, or from the current release SD card fetched into the library when\n\
+--sd-card is omitted. A stock boot adds the --sd-card files to an otherwise empty card.\n\
+--execution-policy defaults to exact.\n\
 open boots to REC, prints a JSON report of the firmware, boot, stage and engine, and exits 0.\n\
 --gui opens the desktop window on the opened session before the report.\n";
 
@@ -234,11 +235,10 @@ impl Open {
                     .unwrap_or_default(),
             ),
             OpenBoot::SdCard => (
-                camera::Boot::SdCard(camera::CardSource::Directory(
-                    self.sd_card
-                        .clone()
-                        .ok_or("--boot sd-card requires --sd-card")?,
-                )),
+                camera::Boot::SdCard(match &self.sd_card {
+                    Some(directory) => camera::CardSource::Directory(directory.clone()),
+                    None => camera::CardSource::Release,
+                }),
                 Vec::new(),
             ),
         };
@@ -306,9 +306,6 @@ fn parse_open(args: impl Iterator<Item = OsString>) -> Result<Option<Open>, Stri
         .map(|value| ExecutionPolicy::parse(&value))
         .transpose()?;
     let sd_card = values.remove("--sd-card").map(PathBuf::from);
-    if boot == OpenBoot::SdCard && sd_card.is_none() {
-        return Err("--boot sd-card requires --sd-card".into());
-    }
     Ok(Some(Open {
         firmware,
         boot,
@@ -1195,17 +1192,17 @@ mod tests {
                 .unwrap_err()
                 .contains("--boot")
         );
-        assert!(
-            parse_open(args(&[
-                "open",
-                "--firmware",
-                "x70-110",
-                "--boot",
-                "sd-card"
-            ]))
-            .unwrap_err()
-            .contains("--sd-card")
-        );
+        let open = parse_open(args(&[
+            "open",
+            "--firmware",
+            "x70-110",
+            "--boot",
+            "sd-card",
+        ]))
+        .unwrap()
+        .unwrap();
+        assert_eq!(open.boot, OpenBoot::SdCard);
+        assert!(open.sd_card.is_none());
         assert!(
             parse_open(args(&[
                 "open",
@@ -1295,6 +1292,21 @@ mod tests {
         ));
         assert_eq!(request.policy, ExecutionPolicy::Interactive);
         assert!(request.card_files.is_empty());
+        let request = parse_open(args(&[
+            "open",
+            "--firmware",
+            "x70-110",
+            "--boot",
+            "sd-card",
+        ]))
+        .unwrap()
+        .unwrap()
+        .request()
+        .unwrap();
+        assert!(matches!(
+            request.boot,
+            camera::Boot::SdCard(camera::CardSource::Release)
+        ));
         assert!(
             parse_open(args(&[
                 "open",

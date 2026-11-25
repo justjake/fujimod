@@ -316,11 +316,10 @@ fn open_with_builder(request: OpenCameraRequest) -> Result<(LaunchedCamera, Runn
         .map_err(|error| error.to_string())?;
     let boot = match request.boot {
         LauncherBoot::Stock => camera::Boot::Stock,
-        LauncherBoot::SdCard => camera::Boot::SdCard(camera::CardSource::Directory(
-            request
-                .sd_card
-                .ok_or("Choose an SD card folder.")?,
-        )),
+        LauncherBoot::SdCard => camera::Boot::SdCard(match request.sd_card {
+            Some(directory) => camera::CardSource::Directory(directory),
+            None => camera::CardSource::Release,
+        }),
     };
     let body = resolved.reference.body.id.clone();
     let model = body.to_uppercase();

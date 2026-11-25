@@ -129,7 +129,7 @@ export default function App() {
       await startCamera(await bridge.openCamera({
         firmware: firmware(),
         boot: boot(),
-        sdCard: boot() === 'sd-card' ? sdCard() : undefined,
+        sdCard: boot() === 'sd-card' ? sdCard() || undefined : undefined,
       }));
     } catch (error) {
       setLauncherError(shownError(error));
@@ -242,11 +242,11 @@ export default function App() {
                   <button type="button" onClick={() => void bridge!.chooseSdCard().then((path) => path && setSdCard(path))}>
                     Choose SD card folder
                   </button>
-                  <span>{sdCard() ? sdCard().split(/[\\/]/).filter(Boolean).at(-1) : 'No folder selected'}</span>
+                  <span>{sdCard() ? sdCard().split(/[\\/]/).filter(Boolean).at(-1) : 'Release SD card'}</span>
                 </div>
               </Show>
               <button class="primary" type="button"
-                disabled={!firmware() || (boot() === 'sd-card' && !sdCard()) || busy()}
+                disabled={!firmware() || busy()}
                 onClick={() => void launch()}>
                 {busy() ? 'Opening…' : 'Open camera'}
               </button>

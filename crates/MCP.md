@@ -206,8 +206,9 @@ firmware identity and one of its boots:
 - `boot`: `stock` or `sd-card`. An `sd-card` boot holds the body's
   `boot.sd` controls through the session contact driver from power-on and
   releases them at REC.
-- `sd_card`: the directory for the virtual SD card. It is required for
-  `sd-card`; for `stock` its files are added to the otherwise empty card.
+- `sd_card`: the directory for the virtual SD card. An `sd-card` boot without
+  it fetches the current release card for the firmware; for `stock` its files
+  are added to the otherwise empty card.
 - `execution_policy`: `exact` (the default) or `interactive`.
 - `name`: the camera id later calls use.
 

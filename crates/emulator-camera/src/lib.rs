@@ -9,9 +9,11 @@
 //! reached.
 mod library;
 mod open;
+mod release;
 
 pub use library::{Library, LibraryError, LibraryFirmware};
 pub use open::{Boot, CardSource, OpenError, Opened, Request, Stage, open, open_unbooted};
+pub use release::RELEASES_URL;
 
 /// The scheduler engine a request may override.
 pub use fujimod_catalog_configuration::RunEngine;

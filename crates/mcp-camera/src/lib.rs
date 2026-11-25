@@ -151,11 +151,12 @@ pub struct OpenParams {
     /// Catalog firmware identity, for example `x70-110`. Its update, boot ROM
     /// and reference camera are found in `FUJIMOD_FIRMWARE_LIBRARY`.
     pub firmware: String,
-    /// `stock` boots the installed firmware; `sd-card` boots FujiMod from the
-    /// SD card directory in `sd_card`.
+    /// `stock` boots the installed firmware; `sd-card` boots FujiMod from
+    /// `sd_card`, or from the current release card when it is omitted.
     pub boot: OpenBoot,
-    /// Directory for the virtual SD card. Required for an `sd-card` boot; for a
-    /// `stock` boot its files are added to the otherwise empty card.
+    /// Directory for the virtual SD card. An `sd-card` boot without it fetches
+    /// the release SD card for the firmware; for a `stock` boot its files are
+    /// added to the otherwise empty card.
     pub sd_card: Option<String>,
     /// Checkpoint file to restore instead of booting. Give the same firmware,
     /// boot, SD card and execution policy as the camera that saved it.
@@ -269,7 +270,8 @@ pub struct DiffParams {
 impl Cameras {
     #[tool(
         description = "Open an emulated camera from a catalog firmware and boot. `boot` is \
-`stock` or `sd-card`; `sd_card` names the SD card directory. It boots to REC (or restores \
+`stock` or `sd-card`; `sd_card` names an SD card directory, or the release card is fetched \
+for the firmware when it is omitted. It boots to REC (or restores \
 `snapshot`) and stays running for later calls. Returns its name, state and screen."
     )]
     async fn camera_open(

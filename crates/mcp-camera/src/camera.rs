@@ -44,13 +44,10 @@ impl OpenRequest {
         };
         let boot = match self.boot {
             OpenBoot::Stock => BuilderBoot::Stock,
-            OpenBoot::SdCard => {
-                let directory = self
-                    .sd_card
-                    .as_ref()
-                    .ok_or("sd-card boot requires sd_card")?;
-                BuilderBoot::SdCard(CardSource::Directory(directory.clone()))
-            }
+            OpenBoot::SdCard => match &self.sd_card {
+                Some(directory) => BuilderBoot::SdCard(CardSource::Directory(directory.clone())),
+                None => BuilderBoot::SdCard(CardSource::Release),
+            },
         };
         let card_files = match (self.boot, &self.sd_card) {
             (OpenBoot::Stock, Some(directory)) => sd_card_files(directory)?,
@@ -578,12 +575,12 @@ mod tests {
     }
 
     #[test]
-    fn an_sd_card_boot_requires_its_directory() {
-        let error = request(OpenBoot::SdCard, None)
-            .builder_request()
-            .err()
-            .unwrap();
-        assert!(error.contains("sd_card"), "{error}");
+    fn an_sd_card_boot_without_a_directory_uses_the_release() {
+        let built = request(OpenBoot::SdCard, None).builder_request().unwrap();
+        assert!(matches!(
+            built.boot,
+            BuilderBoot::SdCard(CardSource::Release)
+        ));
     }
 
     #[test]

@@ -23,9 +23,11 @@ fujimod-catalog-configuration.workspace = true
 fujimod-catalog-controls.workspace = true
 fujimod-catalog-resolution.workspace = true
 fujimod-catalog-wiring.workspace = true
+serde.workspace = true
 serde_json.workspace = true
 sha2.workspace = true
 thiserror.workspace = true
+ureq.workspace = true
 fujimod-workspace-hack.workspace = true
 
 [dev-dependencies]

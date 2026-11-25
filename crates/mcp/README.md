@@ -32,7 +32,17 @@ boot ROM and reference camera sections come from the directory named by
 `FUJIMOD_FIRMWARE_LIBRARY`. It boots to REC, or restores a checkpoint file
 written by a camera built from the same inputs.
 
-To SD boot an X70 1.10 from a FujiMod SD card directory:
+To SD boot an X70 1.10 from its current release card:
+
+```json
+{
+  "firmware": "x70-110",
+  "boot": "sd-card",
+  "execution_policy": "interactive"
+}
+```
+
+Give `sd_card` to boot a FujiMod tree from a directory instead:
 
 ```json
 {
@@ -44,8 +54,10 @@ To SD boot an X70 1.10 from a FujiMod SD card directory:
 ```
 
 The builder holds the body's SD boot controls from power-on and releases
-them at REC. A `stock` boot takes no `sd_card`, or uses its files as extra
-files on the otherwise empty card. `execution_policy` defaults to `exact`.
+them at REC. It fetches a release card once into the firmware library and
+checks every file's SHA-256 before booting. A `stock` boot takes no
+`sd_card`, or uses its files as extra files on the otherwise empty card.
+`execution_policy` defaults to `exact`.
 
 | Tool | Does |
 |---|---|

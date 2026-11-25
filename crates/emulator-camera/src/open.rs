@@ -26,6 +26,8 @@ pub enum Boot {
 /// Where an SD card's files come from.
 #[derive(Clone, Debug)]
 pub enum CardSource {
+    /// The current release's SD card, fetched once into the firmware library.
+    Release,
     /// A folder holding an SD card tree.
     Directory(PathBuf),
     /// Name and bytes pairs, for callers without a host filesystem.
@@ -227,6 +229,10 @@ fn construct(library: &Library, request: Request) -> Result<Opened, OpenError> {
         .engine;
     let boot_card_files = match &boot {
         Boot::Stock => Vec::new(),
+        Boot::SdCard(CardSource::Release) => {
+            let directory = library.release_card(&firmware)?;
+            directory_files(&directory)?
+        }
         Boot::SdCard(CardSource::Directory(directory)) => directory_files(directory)?,
         Boot::SdCard(CardSource::Files(_)) => Vec::new(),
     };

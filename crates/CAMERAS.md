@@ -37,7 +37,9 @@ the resulting flash. Later opens start from it with no buttons held.
 ### SD card sources
 
 - `Release`: the published release SD card for the firmware, as the website
-  downloads it. It is fetched once into the firmware library.
+  downloads it. It is fetched once into the firmware library under
+  `sd-cards/<release>/<firmware>`, with every file's SHA-256 checked on the
+  fetch and again before reuse.
 - `Directory(path)`: a folder holding an SD card tree, such as a local mod
   build's SD card.
 - `Files(list)`: name and bytes pairs, for the browser.
