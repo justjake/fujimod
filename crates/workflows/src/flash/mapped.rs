@@ -19,12 +19,16 @@ pub(super) fn receipt(
     length: u64,
     source: BulkError,
 ) -> BulkError {
+    let (source, cleanup) = match source {
+        BulkError::Cleanup { operation, cleanup } => (operation, Some(cleanup)),
+        other => (Box::new(other), None),
+    };
     BulkError::Mapped(MappedFailure {
         phase,
         address,
         length,
-        source: Box::new(source),
-        cleanup: None,
+        source,
+        cleanup,
     })
 }
 
