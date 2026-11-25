@@ -49,6 +49,14 @@
         "select_connection_id": "lsm6ds-spi7-select"
       }
     ],
+    "gpio_feedback": [
+      {
+        "output_connection_id": "companion-peer-request",
+        "input_connection_id": "companion-peer-ready",
+        "rise_ns": 30000000,
+        "latch_high": true
+      }
+    ],
     "thermal_connection_ids": [
       "thermal-0"
     ],
@@ -189,6 +197,30 @@
           "port": 15,
           "pin": 13,
           "active_level": false
+        }
+      ]
+    },
+    {
+      "id": "companion-peer-request",
+      "kind": "microcontroller",
+      "signals": [
+        {
+          "kind": "gpio",
+          "port": 1,
+          "pin": 14,
+          "active_level": true
+        }
+      ]
+    },
+    {
+      "id": "companion-peer-ready",
+      "kind": "microcontroller",
+      "signals": [
+        {
+          "kind": "gpio",
+          "port": 0,
+          "pin": 4,
+          "active_level": true
         }
       ]
     }

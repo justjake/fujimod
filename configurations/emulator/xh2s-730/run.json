@@ -50,6 +50,24 @@
         "erased_tail": 255,
         "seeds": [],
         "presented_jedec_id": 2145056
+      },
+      {
+        "kind": "gpio",
+        "block_id": "gpio",
+        "levels": [],
+        "outputs": [
+          {
+            "port": 12,
+            "levels": 1280
+          }
+        ],
+        "pins": [
+          {
+            "port": 11,
+            "pin": 4,
+            "high": false
+          }
+        ]
       }
     ],
     "parts": [

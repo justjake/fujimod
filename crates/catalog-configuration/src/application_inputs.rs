@@ -208,6 +208,12 @@ pub enum ApplicationBlockInput {
         block_id: String,
         levels: Vec<u16>,
         outputs: Vec<GpioOutputWord>,
+        /// Levels of individual input pads at reset.
+        #[serde(default, skip_serializing_if = "Vec::is_empty")]
+        pins: Vec<GpioPinLevel>,
+        /// Port register values at reset, as read from the camera.
+        #[serde(default, skip_serializing_if = "Vec::is_empty")]
+        registers: Vec<GpioRegisterWord>,
     },
     /// Ambient temperature presented to a temperature-monitor block.
     Temperature { block_id: String, millicelsius: i32 },
@@ -239,6 +245,44 @@ impl ApplicationBlockInput {
             | Self::Flash { block_id, .. } => block_id,
         }
     }
+}
+
+/// One input pad level at reset.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(deny_unknown_fields)]
+#[cfg_attr(feature = "schema", schemars(deny_unknown_fields))]
+#[cfg_attr(
+    all(target_arch = "wasm32", not(target_os = "emscripten")),
+    derive(tsify::Tsify),
+    tsify(hashmap_as_object, missing_as_null)
+)]
+pub struct GpioPinLevel {
+    /// GPIO port number.
+    pub port: u8,
+    /// Pin within the port.
+    pub pin: u8,
+    /// Whether the pad reads high.
+    pub high: bool,
+}
+
+/// One GPIO port register value at reset.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(deny_unknown_fields)]
+#[cfg_attr(feature = "schema", schemars(deny_unknown_fields))]
+#[cfg_attr(
+    all(target_arch = "wasm32", not(target_os = "emscripten")),
+    derive(tsify::Tsify),
+    tsify(hashmap_as_object, missing_as_null)
+)]
+pub struct GpioRegisterWord {
+    /// GPIO port number.
+    pub port: u8,
+    /// Register index within the port.
+    pub register: u8,
+    /// Register value.
+    pub value: u32,
 }
 
 /// One explicitly initialized GPIO output word.

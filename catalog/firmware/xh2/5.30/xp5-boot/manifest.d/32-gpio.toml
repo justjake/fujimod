@@ -4,6 +4,8 @@
 base = 0xff907000
 size = 0x1000
 kind = "gpio"
+[device.options]
+pad_model = "data-latch"
 
 [[device]]
 base = 0xff90b000

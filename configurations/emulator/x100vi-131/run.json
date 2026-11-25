@@ -51,6 +51,13 @@
             "port": 12,
             "levels": 256
           }
+        ],
+        "pins": [
+          {
+            "port": 11,
+            "pin": 4,
+            "high": false
+          }
         ]
       },
       {

@@ -31,6 +31,7 @@ base = 0xff907000
 size = 0x1000
 kind = "gpio"
 [device.options]
+pad_model = "data-latch"
 # EL1 handoff assumption: the two active-low panel selects on SSP5, GPIO 12.8 (LCD,
 # descriptor 4) and 12.10 (EVF, descriptors 8 and 9), start inactive (output latch 1).
 # The application drives 12.8 before each LCD transfer (0x1438cbc) but no code before

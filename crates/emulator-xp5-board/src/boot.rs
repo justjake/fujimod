@@ -505,7 +505,7 @@ pub fn windows(
         kind: "unmodeled-bus-drain".into(),
         options: Default::default(),
     }));
-    let feedback = gpio_feedback(selection)?;
+    let feedback = gpio_feedback(selection, None)?;
     if !feedback.is_empty() {
         let gpio = devices
             .iter_mut()
@@ -573,12 +573,7 @@ pub fn windows_from_blocks(
         ApplicationBlockInput::Adc { samples, .. } => Some(samples.clone()),
         _ => None,
     });
-    let levels = inputs.iter().find_map(|input| match input {
-        ApplicationBlockInput::Gpio {
-            levels, outputs, ..
-        } => Some((levels, outputs)),
-        _ => None,
-    });
+    let levels = inputs.iter().find(|input| matches!(input, ApplicationBlockInput::Gpio { .. }));
     let profile = resolved
         .configuration
         .preset
@@ -877,13 +872,12 @@ fn block_window(
     flash: Option<FlashInput<'_>>,
     flash_image: Option<&fujimod_catalog::firmware::FlashImage>,
     samples: Option<&[u16]>,
-    levels: Option<(&Vec<u16>, &Vec<fujimod_catalog_configuration::application_inputs::GpioOutputWord>)>,
+    gpio_input: Option<&fujimod_catalog_configuration::application_inputs::ApplicationBlockInput>,
     run: &fujimod_catalog_configuration::RunConfiguration,
     ticks_per_second: u64,
     presented_jedec: Option<u32>,
     part_inputs: &[fujimod_catalog_configuration::application_inputs::ApplicationPartInput],
 ) -> Result<Option<(&'static str, toml::Table)>, String> {
-    let _ = levels;
     let mut options = toml::Table::new();
     let integer = |value: u64| toml::Value::Integer(i64::try_from(value).unwrap_or(i64::MAX));
     let irq = |name: &str| block.interrupts.iter().find(|row| row.output == name).map(|row| row.line);
@@ -950,7 +944,69 @@ fn block_window(
             options.insert("bytes_per_tick".into(), integer(*bytes_per_tick));
             "audio-dma"
         }
-        BlockDevice::Xp5Gpio { port: None, .. } => "gpio",
+        BlockDevice::Xp5Gpio { port: None, pad_model, .. } => {
+            use fujimod_catalog_configuration::application_inputs::ApplicationBlockInput;
+            let table = |pairs: Vec<(&str, toml::Value)>| {
+                toml::Value::Table(pairs.into_iter().map(|(key, value)| (key.to_string(), value)).collect())
+            };
+            if let Some(fujimod_catalog::soc::GpioPadModel::DataLatch) = pad_model {
+                options.insert("pad_model".into(), toml::Value::String("data-latch".into()));
+            }
+            // A pin's interrupt is wired when the body connects something to that pin; the
+            // companion core (core4) takes its pins on its own controller.
+            let mut irqs = [("input_irqs", Vec::new()), ("companion_input_irqs", Vec::new())];
+            for interrupt in &block.interrupts {
+                let Some((port, pin)) = interrupt.output.strip_prefix("port").and_then(|rest| rest.split_once("-pin")) else {
+                    continue;
+                };
+                let (Ok(port), Ok(pin)) = (port.parse::<u8>(), pin.parse::<u8>()) else {
+                    return Err(format!("block {}: interrupt output {} is not a pin", block.id, interrupt.output));
+                };
+                let Some(active) = selection.body.connections.iter().flat_map(|connection| &connection.signals).find_map(|signal| match signal {
+                    ConnectionSignal::Gpio { port: p, pin: n, active_level } if *p == port && *n == pin => Some(*active_level),
+                    _ => None,
+                }) else {
+                    continue;
+                };
+                let slot = usize::from(interrupt.core.as_deref() == Some("core4"));
+                irqs[slot].1.push(table(vec![
+                    ("port", integer(u64::from(port))),
+                    ("pin", integer(u64::from(pin))),
+                    ("line", integer(u64::from(interrupt.line))),
+                    ("active_high", toml::Value::Boolean(active)),
+                ]));
+            }
+            for (key, rows) in irqs {
+                if !rows.is_empty() { options.insert(key.into(), toml::Value::Array(rows)); }
+            }
+            let feedback = gpio_feedback(selection, Some(ticks_per_second))?;
+            if !feedback.is_empty() {
+                options.insert("feedback".into(), toml::Value::try_from(feedback).map_err(|error| error.to_string())?);
+            }
+            if let Some(ApplicationBlockInput::Gpio { outputs, pins, registers, .. }) = gpio_input {
+                if !outputs.is_empty() {
+                    options.insert("initial_outputs".into(), toml::Value::Array(outputs.iter().map(|word| table(vec![
+                        ("port", integer(u64::from(word.port))),
+                        ("levels", integer(u64::from(word.levels))),
+                    ])).collect()));
+                }
+                if !pins.is_empty() {
+                    options.insert("initial_inputs".into(), toml::Value::Array(pins.iter().map(|level| table(vec![
+                        ("port", integer(u64::from(level.port))),
+                        ("pin", integer(u64::from(level.pin))),
+                        ("high", toml::Value::Boolean(level.high)),
+                    ])).collect()));
+                }
+                if !registers.is_empty() {
+                    options.insert("initial_registers".into(), toml::Value::Array(registers.iter().map(|word| table(vec![
+                        ("port", integer(u64::from(word.port))),
+                        ("register", integer(u64::from(word.register))),
+                        ("value", integer(u64::from(word.value))),
+                    ])).collect()));
+                }
+            }
+            "gpio"
+        }
         BlockDevice::Xp5Gpio { port: Some(3), .. } => "gpio-port3",
         BlockDevice::Xp5Gpio { port: Some(port), .. } => return Err(format!("block {}: no XP5 single-port GPIO view of port {port}", block.id)),
         BlockDevice::CableStatus { connected_level, .. } => match block.kind {
@@ -1201,7 +1257,7 @@ fn block_window(
 
 /// The body's GPIO feedback wires: each drives an input pad from the output
 /// latch bit of the same pin number (register 0, the port's drive field).
-fn gpio_feedback(selection: &ResolvedSelection) -> Result<Vec<Feedback>, String> {
+fn gpio_feedback(selection: &ResolvedSelection, ticks_per_second: Option<u64>) -> Result<Vec<Feedback>, String> {
     let body = &selection.body;
     let Some(hardware) = body.hardware.as_ref() else {
         return Ok(vec![]);
@@ -1234,7 +1290,13 @@ fn gpio_feedback(selection: &ResolvedSelection) -> Result<Vec<Feedback>, String>
                     body.id, wire.output_connection_id, wire.input_connection_id
                 ));
             }
-            Ok(Feedback { port, register: 0, bit, input_port, input_pin, rise_delay: 0, latch_high: false })
+            let rise_delay = match (wire.rise_ns, ticks_per_second) {
+                (None, _) => 0,
+                (Some(ns), Some(rate)) => u64::try_from(u128::from(ns) * u128::from(rate) / 1_000_000_000)
+                    .map_err(|_| format!("body {} feedback rise time overflows", body.id))?,
+                (Some(_), None) => return Err(format!("body {} delayed GPIO feedback needs a run tick rate", body.id)),
+            };
+            Ok(Feedback { port, register: 0, bit, input_port, input_pin, rise_delay, latch_high: wire.latch_high })
         })
         .collect()
 }

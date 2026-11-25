@@ -54,6 +54,14 @@
         "select_connection_id": "lsm6ds-serial-select"
       }
     ],
+    "gpio_feedback": [
+      {
+        "output_connection_id": "companion-peer-request",
+        "input_connection_id": "companion-peer-ready",
+        "rise_ns": 30000000,
+        "latch_high": true
+      }
+    ],
     "bus_drain": [
       {
         "address": 1743781888,
@@ -203,6 +211,54 @@
           "port": 11,
           "pin": 3,
           "active_level": false
+        }
+      ]
+    },
+    {
+      "id": "gpio-input-0-0",
+      "kind": "control",
+      "signals": [
+        {
+          "kind": "gpio",
+          "port": 0,
+          "pin": 0,
+          "active_level": false
+        }
+      ]
+    },
+    {
+      "id": "gpio-input-0-1",
+      "kind": "control",
+      "signals": [
+        {
+          "kind": "gpio",
+          "port": 0,
+          "pin": 1,
+          "active_level": false
+        }
+      ]
+    },
+    {
+      "id": "companion-peer-request",
+      "kind": "microcontroller",
+      "signals": [
+        {
+          "kind": "gpio",
+          "port": 1,
+          "pin": 14,
+          "active_level": true
+        }
+      ]
+    },
+    {
+      "id": "companion-peer-ready",
+      "kind": "microcontroller",
+      "signals": [
+        {
+          "kind": "gpio",
+          "port": 0,
+          "pin": 4,
+          "active_level": true
         }
       ]
     }
