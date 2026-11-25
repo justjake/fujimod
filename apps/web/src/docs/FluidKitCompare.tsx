@@ -36,7 +36,7 @@ const comparisons: readonly CompareComponent[] = [
     previews: ['fluid-drag'],
     ported:
       'A sheet follows the finger exactly, pulls back like rubber past its last snap, and settles on the nearest one at the release’s speed.',
-    remaining: 'Bounds, the scroll-view handoff, and following the pointer on a spring.',
+    remaining: 'The scroll-view handoff, a handle, and following the pointer on a spring.',
   },
   {
     title: 'Morph',
