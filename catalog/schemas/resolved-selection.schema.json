@@ -11750,6 +11750,21 @@
       ],
       "type": "object"
     },
+    "FirmwareGicSecurityStates": {
+      "description": "Security states the firmware runs its GICv3 with (GICD_CTLR.DS).",
+      "oneOf": [
+        {
+          "const": "one",
+          "description": "A single Security state (DS=1).",
+          "type": "string"
+        },
+        {
+          "const": "two",
+          "description": "Secure and Non-secure states (DS=0).",
+          "type": "string"
+        }
+      ]
+    },
     "FirmwareHeader": {
       "additionalProperties": false,
       "description": "Declared header facts.",
@@ -12429,6 +12444,17 @@
             "array",
             "null"
           ]
+        },
+        "gic_security_states": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/FirmwareGicSecurityStates"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "GICv3 Security states; one when absent."
         },
         "hdmi_configuration_id": {
           "description": "Declared hdmi configuration id.",

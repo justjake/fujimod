@@ -9,7 +9,7 @@ use crate::board::{
 };
 use fujimod_emulator_cpu::{Cpu, Model, Register, memory::Backing, timeline::Ratio};
 use fujimod_emulator_cpu_unicorn::{Library, aprofile, memory::Memory};
-use fujimod_emulator_devices::{Cx, Device};
+use fujimod_emulator_devices::{Cx, Device, gic::SecurityStates};
 use fujimod_emulator_ip_arm::gicv3::Gic;
 use serde_json::{Value, json};
 use std::{
@@ -89,7 +89,7 @@ fn board(counted: bool, cores: usize, ratio: Ratio) -> Board {
     )
     .unwrap();
     let gic = InterruptMap {
-        gic: Box::new(Gic::new((0..cores as u32).collect(), 64).unwrap()),
+        gic: Box::new(Gic::new((0..cores as u32).collect(), 64, SecurityStates::One).unwrap()),
         registers: InterruptRegisters::GicV3 {
             distributor: 0xfa000000,
             redistributor: 0xfa080000,

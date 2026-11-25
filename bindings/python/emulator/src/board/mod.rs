@@ -59,6 +59,9 @@ enum InterruptAdmission {
         stride: u64,
         cores: usize,
         lines: usize,
+        /// The implemented Security states; one unless declared as two.
+        #[serde(default)]
+        security_states: fujimod_emulator_devices::gic::SecurityStates,
     },
 }
 
@@ -667,9 +670,17 @@ impl Board {
                     stride,
                     cores,
                     lines,
+                    security_states,
                 }) => Some(
-                    InterruptMap::gic_v3(distributor, redistributor, stride, cores, lines)
-                        .map_err(error)?,
+                    InterruptMap::gic_v3(
+                        distributor,
+                        redistributor,
+                        stride,
+                        cores,
+                        lines,
+                        security_states,
+                    )
+                    .map_err(error)?,
                 ),
             };
             let board = graph

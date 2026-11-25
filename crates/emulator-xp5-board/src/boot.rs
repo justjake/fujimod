@@ -13,13 +13,13 @@ use fujimod_emulator::board::{
 use fujimod_catalog_configuration::application_inputs::ApplicationRunScene;
 use fujimod_catalog_resolution::ResolvedConfiguration;
 use fujimod_catalog::{
-    firmware::FirmwareProfile,
+    firmware::{FirmwareProfile, GicSecurityStates},
     profiles::RegisterWindow,
     reference::{AProfileState, ConnectionSignal, ProcessorModel, ResolvedSelection, SocBlockKind},
     soc::BlockDevice,
 };
 use fujimod_emulator_cpu::{Register, arm64};
-use fujimod_emulator_devices::{graph::{DeviceGraph, DeviceWindow}, parts::gpio::Feedback};
+use fujimod_emulator_devices::{gic::SecurityStates, graph::{DeviceGraph, DeviceWindow}, parts::gpio::Feedback};
 use fujimod_emulator::board::aprofile::generic_timer;
 use fujimod_emulator_ip_arm::gicv3::Gic;
 use crate::board as xp5_board;
@@ -178,7 +178,13 @@ pub fn startup_from_profile(
                         })
                 })
                 .collect::<Result<Vec<_>, _>>()?;
-            let mut gic = Gic::new(affinity_values.clone(), *lines as usize)?;
+            // Profile ICC values below are written in the reset Security
+            // state (EL3, SCR_EL3.NS clear), so they address Secure banks.
+            let security_states = match profile.gic_security_states {
+                None | Some(GicSecurityStates::One) => SecurityStates::One,
+                Some(GicSecurityStates::Two) => SecurityStates::Two,
+            };
+            let mut gic = Gic::new(affinity_values.clone(), *lines as usize, security_states)?;
             if let Some(cpus) = &profile.cpu {
                 for cpu in cpus {
                     let core =

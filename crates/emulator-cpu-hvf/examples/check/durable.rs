@@ -7,6 +7,7 @@ use fujimod_emulator::board::{
 };
 use fujimod_emulator_cpu::{Model, Register, timeline::Ratio};
 use fujimod_emulator_devices::checkpoint::Checkpoint;
+use fujimod_emulator_devices::gic::SecurityStates;
 use fujimod_emulator_ip_arm::gicv3::Gic;
 fn board() -> Result<Board, String> {
     Graph {
@@ -43,7 +44,7 @@ fn board() -> Result<Board, String> {
         Bus::new(Mode::Strict),
         Some(InterruptMap {
             cores: 1,
-            gic: Box::new(Gic::new(vec![0], 128)?),
+            gic: Box::new(Gic::new(vec![0], 128, SecurityStates::One)?),
             registers: fujimod_emulator::board::InterruptRegisters::GicV3 {
                 distributor: 0x8000000,
                 redistributor: 0x80a0000,

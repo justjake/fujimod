@@ -1511,7 +1511,15 @@ mod tests {
             "mappings":[{"core":0,"address":0,"physical":0,"size":65536,"permissions":7}],
             "dma_mappings":[],"decoders":[],"peripherals":[],"instructions_per_tick":[1,1]
         })).unwrap();
-        let interrupts = InterruptMap::gic_v3(0xfa00_0000, 0xfa08_0000, 0x20000, 1, 512).unwrap();
+        let interrupts = InterruptMap::gic_v3(
+            0xfa00_0000,
+            0xfa08_0000,
+            0x20000,
+            1,
+            512,
+            fujimod_emulator_devices::gic::SecurityStates::One,
+        )
+        .unwrap();
         let mut b = graph
             .build(
                 factory::Options::new(RunEngine::Unicorn)

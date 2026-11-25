@@ -275,6 +275,18 @@ pub struct FlashImage {
     pub xor: u64,
 }
 
+/// Security states the firmware runs its GICv3 with (GICD_CTLR.DS).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(rename_all = "snake_case")]
+#[cfg_attr(feature = "schema", schemars(rename = "FirmwareGicSecurityStates"))]
+pub enum GicSecurityStates {
+    /// A single Security state (DS=1).
+    One,
+    /// Secure and Non-secure states (DS=0).
+    Two,
+}
+
 /// Declared gic redistributor initial facts.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
@@ -431,6 +443,9 @@ pub struct FirmwareProfile {
     /// Declared gic redistributor initial.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub gic_redistributor_initial: Option<Vec<GicRedistributorInitial>>,
+    /// GICv3 Security states; one when absent.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub gic_security_states: Option<GicSecurityStates>,
     /// Declared hdmi configuration id.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub hdmi_configuration_id: Option<String>,
