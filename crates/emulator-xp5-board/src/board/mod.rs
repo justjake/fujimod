@@ -4,8 +4,9 @@ use fujimod_emulator_devices::graph::{DeviceGraph, DeviceWindow};
 use fujimod_emulator_xp5_display::{display, panel_clock, panel_serial};
 use fujimod_emulator_xp5_imaging::serial_sink;
 use fujimod_emulator_xp5_io::{
-    adc, connection_status, discarded_read, gates, gpio, mailbox, memory_configuration,
-    register_input, reset_handshake, sd_controller_wrapper, timer, write_only_registers,
+    adc, connection_status, discarded_read, gates, gpio, hdmi_transmitter, mailbox,
+    memory_configuration, register_input, reset_handshake, sd_controller_wrapper, timer,
+    write_only_registers,
 };
 use fujimod_emulator_xp5_storage::{
     flash_storage, flash_storage_controller, flash_storage_dma, nand_controller,
@@ -222,6 +223,36 @@ fn register_with_resources(
         }
         "usb-phy" => {
             bus.register(window.base, window.size, Box::new(usb::phy(window)?))?;
+        }
+        "hdmi-transmitter" => {
+            let interrupt = window
+                .options
+                .get("interrupt")
+                .and_then(toml::Value::as_integer)
+                .and_then(|line| u32::try_from(line).ok())
+                .filter(|line| (32..1020).contains(line))
+                .ok_or("HDMI transmitter requires a shared interrupt")?;
+            if window.options.len() != 1 {
+                return Err("HDMI transmitter accepts only the interrupt option".into());
+            }
+            use fujimod_emulator_devices::graph::Mapping;
+            bus.register_windows(
+                vec![
+                    Mapping {
+                        base: window.base,
+                        size: window.size,
+                    },
+                    Mapping {
+                        base: hdmi_transmitter::HPD_WORD,
+                        size: 4,
+                    },
+                ],
+                Box::new(hdmi_transmitter::HdmiTransmitter::new(
+                    window.base,
+                    window.size,
+                    interrupt,
+                )?),
+            )?;
         }
         "hdmi-hot-plug-status" => {
             if window.options.keys().any(|key| key != "connected_level") {

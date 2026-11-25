@@ -736,11 +736,16 @@ pub fn assemble_devices(
             })
         })
         .transpose()?;
+    let hdmi = windows
+        .iter()
+        .find(|window| window.kind == "hdmi-transmitter")
+        .map(|window| graph.at(window.base))
+        .transpose()?;
     let bus = Bus::from_graph(mode, graph)?;
     Ok(DeviceAssembly {
         contacts,
         bus,
-        inputs: crate::session::Inputs::new(resources.pins, gpio_devices, usb),
+        inputs: crate::session::Inputs::new(resources.pins, gpio_devices, usb, hdmi),
         nodes,
     })
 }

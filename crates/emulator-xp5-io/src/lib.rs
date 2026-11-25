@@ -8,6 +8,7 @@ pub mod connection_status;
 pub mod discarded_read;
 pub mod gates;
 pub mod gpio;
+pub mod hdmi_transmitter;
 pub mod input_capture;
 pub mod mailbox;
 pub mod memory_configuration;
