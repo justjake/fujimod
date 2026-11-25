@@ -11,7 +11,9 @@ const IMAGE: &[u8] = b"fujimod loader image";
 const IMAGE_SHA256: &str = "7bc8d50a5e07c084670132737321751a74a9f565ca0ee78b7b5bdcb2071b7339";
 
 fn request(boot: Boot, image: Option<LoaderImage>) -> Request {
-    support::request(boot, image, BootCache::Bypass)
+    let mut request = support::request(boot, image, BootCache::Bypass);
+    request.run_to_rec = false;
+    request
 }
 
 fn start(library: &Library, request: Request) -> Result<Opened, OpenError> {
