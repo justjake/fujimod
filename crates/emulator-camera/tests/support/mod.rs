@@ -75,24 +75,6 @@ pub fn request(boot: Boot, image: Option<LoaderImage>, cache: BootCache) -> Requ
     }
 }
 
-/// The directory named by \`FUJIMOD_TEST_SD_CARD\`, when set.
-pub fn test_card() -> Option<PathBuf> {
-    std::env::var_os("FUJIMOD_TEST_SD_CARD").map(PathBuf::from)
-}
-
-/// The release card a preset test downloads, when the state directory holds one.
-pub fn release_card(state: &StateDir, firmware: &str) -> Option<PathBuf> {
-    let cards: Vec<PathBuf> = std::fs::read_dir(state.sd_cards())
-        .ok()?
-        .flatten()
-        .map(|entry| entry.path().join(firmware))
-        .filter(|path| path.is_dir())
-        .collect();
-    cards
-        .into_iter()
-        .max_by_key(|path| std::fs::metadata(path).ok().and_then(|m| m.modified().ok()))
-}
-
 /// A path's name, for a test message.
 pub fn display(path: &Path) -> String {
     path.display().to_string()

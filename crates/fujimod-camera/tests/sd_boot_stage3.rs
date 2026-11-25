@@ -7,93 +7,19 @@
 //! manifest and a stage 3 program that writes its marker. The boot stops at
 //! the boot ROM, runs until stage 3 writes the marker, then reads the record
 //! stage 2 wrote and the card's own release state. REC is not involved.
+mod support;
+use support::{MARKER_ADDRESS, STAGE3_MARKER, built_card, library, release_folder, state};
+
 use fujimod_camera::{
-    BootCache, CardSource, ExecutionPolicy, FirmwareInput, Library, LibraryError, Opened, Preset,
-    Request, Stage, StateDir, open,
+    BootCache, CardSource, ExecutionPolicy, FirmwareInput, Opened, Preset, Request, Stage, open,
 };
 use fujimod_emulator_session::Session;
-use fujimod_recovery::Recipe;
 
-/// Stage 3 runs at `0x1d020000` and writes its marker here; stage 2 writes the
-/// boot record below it.
-const MARKER_ADDRESS: u64 = 0x1d03_ff00;
 const RECORD_ADDRESS: u64 = 0x1d01_ff00;
 const RECORD_BYTES: usize = 44;
-const STAGE3_MARKER: u32 = 0x5a17_c0de;
-/// The store hash and file name a one-entry release manifest names.
-const STORE_HASH: &str = "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA";
-const STORE_PATH: &str = "FUJIMOD/SYSTEM/STORE/AAAAAAAA.AAA";
 /// One instruction window; the Python check uses the same 5M window.
 const WINDOW: u64 = 5_000_000;
 const WINDOWS: usize = 150;
-
-/// `ldr r0, =0x1d03ff00; ldr r1, =0x5a17c0de; str r1, [r0]; bx lr` plus its
-/// literal pool, as the stage 3 marker test program assembles.
-const STAGE3: [u32; 6] = [
-    0xe59f_0008,
-    0xe59f_1008,
-    0xe580_1000,
-    0xe12f_ff1e,
-    0x1d03_ff00,
-    0x5a17_c0de,
-];
-
-fn library() -> Option<Library> {
-    match Library::from_env() {
-        Ok(library) => Some(library),
-        Err(LibraryError::Environment) => None,
-        Err(error) => panic!("firmware library: {error}"),
-    }
-}
-
-fn state() -> StateDir {
-    StateDir::at(std::env::temp_dir().join(format!("fujimod-stage3-{}", std::process::id())))
-}
-
-/// The release identity and its 8.3 folder, as the release manifest and stage 2
-/// derive them: the firmware id uppercased, hyphens removed past eight bytes.
-fn release_folder(firmware: &str) -> String {
-    let identity = firmware.to_ascii_uppercase();
-    if identity.len() <= 8 {
-        identity
-    } else {
-        identity.replace('-', "")
-    }
-}
-
-fn stage3_program() -> Vec<u8> {
-    STAGE3.iter().flat_map(|word| word.to_le_bytes()).collect()
-}
-
-/// The card's boot files, its release manifest and the stage 3 marker program.
-fn card_files(library: &Library, firmware: &str) -> Vec<(String, Vec<u8>)> {
-    let recipe = Recipe::bundled(firmware)
-        .unwrap_or_else(|error| panic!("{firmware}: recipe: {error}"))
-        .unwrap_or_else(|| panic!("{firmware}: no SD card recipe"));
-    let update = std::fs::read(
-        library
-            .files(firmware)
-            .unwrap_or_else(|error| panic!("{firmware}: library files: {error}"))
-            .update,
-    )
-    .expect("read stock update");
-    let mut files: Vec<(String, Vec<u8>)> = recipe
-        .build_ota_startup(&update)
-        .expect("build the SD card entry")
-        .into_iter()
-        .map(|file| (file.name, file.bytes))
-        .collect();
-    let folder = release_folder(firmware);
-    let manifest = format!(
-        "{{\"gen\":1,\"version\":\"0.1.0\",\"fs\":{{\"/boot/fujimod.bin\":\"{STORE_HASH}\"}}}}"
-    );
-    files.push((
-        format!("FUJIMOD/SYSTEM/{folder}/A.JSN"),
-        manifest.into_bytes(),
-    ));
-    files.push((STORE_PATH.into(), stage3_program()));
-    files
-}
 
 fn request(firmware: &str, files: Vec<(String, Vec<u8>)>) -> Request {
     Request {
@@ -188,7 +114,7 @@ fn check_boot(firmware: &str) {
     let mut opened = open(
         &library,
         &state(),
-        request(firmware, card_files(&library, firmware)),
+        request(firmware, built_card(&library, firmware)),
     )
     .unwrap_or_else(|error| panic!("{firmware}: open: {error}"));
     assert_eq!(
