@@ -5,8 +5,42 @@
   "base": 4291870720,
   "size": 4096,
   "kind": "imaging-controller",
+  "interrupts": [
+    {
+      "output": "irq",
+      "line": 203
+    }
+  ],
   "device": {
     "model": "imaging_resz",
+    "handshake": {
+      "starts": [
+        {
+          "offset": 4,
+          "mask": 1
+        }
+      ],
+      "completion": [
+        {
+          "offset": 268,
+          "set": 1
+        },
+        {
+          "offset": 4,
+          "clear": 1
+        }
+      ],
+      "ack": {
+        "offset": 272,
+        "mode": "w1c",
+        "status_offset": 268,
+        "bits": 3
+      },
+      "irq_mask": {
+        "offset": 276,
+        "bit": 0
+      }
+    },
     "basis": "RESZ scaler Located in catalog/firmware/xe5/1.12/xp5-boot/manifest.d/55-develop-stubs.toml."
   },
   "registers": [

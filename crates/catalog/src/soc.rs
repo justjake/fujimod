@@ -315,6 +315,9 @@ pub enum BlockDevice {
     JpegCodec {
         /// Ticks for one run.
         run_ticks: u64,
+        /// Whether the codec decodes, when it is a single-direction block.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        direction: Option<JpegDirection>,
         /// Block holding the encoder's memory type word, when declared.
         #[serde(default, skip_serializing_if = "Option::is_none")]
         memory_type_block_id: Option<String>,
@@ -699,26 +702,41 @@ pub enum BlockDevice {
     },
     /// Temporal noise reduction stage.
     ImagingTnr {
+        /// Start, completion and acknowledgement handshake, when declared.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        handshake: Option<CompletionHandshake>,
         /// Declared basis.
         basis: String,
     },
     /// Frame conversion stage.
     ImagingFcnv {
+        /// Start, completion and acknowledgement handshake, when declared.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        handshake: Option<CompletionHandshake>,
         /// Declared basis.
         basis: String,
     },
     /// Filter and scaler stage.
     ImagingFilterScaler {
+        /// Start, completion and acknowledgement handshake, when declared.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        handshake: Option<CompletionHandshake>,
         /// Declared basis.
         basis: String,
     },
     /// RZL2 scaler.
     ImagingRzl2 {
+        /// Start, completion and acknowledgement handshake, when declared.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        handshake: Option<CompletionHandshake>,
         /// Declared basis.
         basis: String,
     },
     /// RESZ scaler page.
     ImagingResz {
+        /// Start, completion and acknowledgement handshake, when declared.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        handshake: Option<CompletionHandshake>,
         /// Declared basis.
         basis: String,
     },
@@ -779,6 +797,9 @@ pub enum BlockDevice {
     },
     /// Program memory and debug page of the imaging DSP.
     ImagingDsp {
+        /// Start, completion and acknowledgement handshake, when declared.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        handshake: Option<CompletionHandshake>,
         /// Declared basis.
         basis: String,
     },
@@ -1180,4 +1201,43 @@ pub struct SdDmaWindow {
     pub base: u64,
     /// Range size in bytes.
     pub size: u64,
+}
+
+/// The register handshake of a block that completes a started job.
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(deny_unknown_fields)]
+#[cfg_attr(feature = "schema", schemars(deny_unknown_fields))]
+#[cfg_attr(
+    all(target_arch = "wasm32", not(target_os = "emscripten")),
+    derive(tsify::Tsify),
+    tsify(hashmap_as_object, missing_as_null)
+)]
+pub struct CompletionHandshake {
+    /// Start writes and their mask.
+    pub starts: Vec<CompletionStart>,
+    /// Writes a completed job leaves.
+    pub completion: Vec<CompletionWrite>,
+    /// Acknowledgement behavior.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ack: Option<CompletionAck>,
+    /// Interrupt-enable word, when declared.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub irq_mask: Option<CompletionIrqMask>,
+}
+
+/// The direction of a single-direction JPEG block.
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(rename_all = "kebab-case")]
+#[cfg_attr(
+    all(target_arch = "wasm32", not(target_os = "emscripten")),
+    derive(tsify::Tsify),
+    tsify(hashmap_as_object, missing_as_null)
+)]
+pub enum JpegDirection {
+    /// Compresses pictures.
+    Encode,
+    /// Decompresses pictures.
+    Decode,
 }

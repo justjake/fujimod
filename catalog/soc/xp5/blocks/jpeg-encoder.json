@@ -5,9 +5,16 @@
   "base": 4291887104,
   "size": 4096,
   "kind": "imaging-controller",
+  "interrupts": [
+    {
+      "output": "irq",
+      "line": 207
+    }
+  ],
   "device": {
     "model": "jpeg_codec",
     "run_ticks": 1000,
+    "direction": "encode",
     "basis": "jpeg-encoder run Located in catalog/firmware/xe5/1.12/xp5-boot/manifest.d/52-jpeg.toml."
   },
   "evidence": [

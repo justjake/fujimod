@@ -1013,6 +1013,17 @@
               "description": "Declared basis.",
               "type": "string"
             },
+            "direction": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/JpegDirection"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Whether the codec decodes, when it is a single-direction block."
+            },
             "memory_type_block_id": {
               "description": "Block holding the encoder's memory type word, when declared.",
               "type": [
@@ -2395,6 +2406,17 @@
               "description": "Declared basis.",
               "type": "string"
             },
+            "handshake": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/CompletionHandshake"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Start, completion and acknowledgement handshake, when declared."
+            },
             "model": {
               "const": "imaging_tnr",
               "type": "string"
@@ -2413,6 +2435,17 @@
             "basis": {
               "description": "Declared basis.",
               "type": "string"
+            },
+            "handshake": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/CompletionHandshake"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Start, completion and acknowledgement handshake, when declared."
             },
             "model": {
               "const": "imaging_fcnv",
@@ -2433,6 +2466,17 @@
               "description": "Declared basis.",
               "type": "string"
             },
+            "handshake": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/CompletionHandshake"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Start, completion and acknowledgement handshake, when declared."
+            },
             "model": {
               "const": "imaging_filter_scaler",
               "type": "string"
@@ -2452,6 +2496,17 @@
               "description": "Declared basis.",
               "type": "string"
             },
+            "handshake": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/CompletionHandshake"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Start, completion and acknowledgement handshake, when declared."
+            },
             "model": {
               "const": "imaging_rzl2",
               "type": "string"
@@ -2470,6 +2525,17 @@
             "basis": {
               "description": "Declared basis.",
               "type": "string"
+            },
+            "handshake": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/CompletionHandshake"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Start, completion and acknowledgement handshake, when declared."
             },
             "model": {
               "const": "imaging_resz",
@@ -2675,6 +2741,17 @@
             "basis": {
               "description": "Declared basis.",
               "type": "string"
+            },
+            "handshake": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/CompletionHandshake"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Start, completion and acknowledgement handshake, when declared."
             },
             "model": {
               "const": "imaging_dsp",
@@ -3339,6 +3416,53 @@
           "type": "string"
         }
       ]
+    },
+    "CompletionHandshake": {
+      "additionalProperties": false,
+      "description": "The register handshake of a block that completes a started job.",
+      "properties": {
+        "ack": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/CompletionAck"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Acknowledgement behavior."
+        },
+        "completion": {
+          "description": "Writes a completed job leaves.",
+          "items": {
+            "$ref": "#/$defs/CompletionWrite"
+          },
+          "type": "array"
+        },
+        "irq_mask": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/CompletionIrqMask"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Interrupt-enable word, when declared."
+        },
+        "starts": {
+          "description": "Start writes and their mask.",
+          "items": {
+            "$ref": "#/$defs/CompletionStart"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "starts",
+        "completion"
+      ],
+      "type": "object"
     },
     "CompletionIrqMask": {
       "additionalProperties": false,
@@ -9440,6 +9564,21 @@
         "travel_limits"
       ],
       "type": "object"
+    },
+    "JpegDirection": {
+      "description": "The direction of a single-direction JPEG block.",
+      "oneOf": [
+        {
+          "const": "encode",
+          "description": "Compresses pictures.",
+          "type": "string"
+        },
+        {
+          "const": "decode",
+          "description": "Decompresses pictures.",
+          "type": "string"
+        }
+      ]
     },
     "LensAssembly": {
       "additionalProperties": false,
