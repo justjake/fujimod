@@ -1,0 +1,1632 @@
+{
+  "$schema": "https://fujimod.com/schemas/physical-controls.schema.json",
+  "schema": 1,
+  "id": "gfx100rf-controls",
+  "body_id": "gfx100rf",
+  "manual": {
+    "url": "https://fujifilm-dsc.com/en/manual/gfx100rf/gfx100rf_manual_en_s_f.pdf",
+    "title": "FUJIFILM GFX100RF Owner’s Manual (BL00005392-203 EN)",
+    "pages": [
+      2,
+      3,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      12,
+      13,
+      14,
+      17,
+      28,
+      34,
+      36,
+      48,
+      49,
+      59,
+      68,
+      69,
+      82,
+      92,
+      105,
+      110,
+      311,
+      339,
+      340,
+      344
+    ]
+  },
+  "controls": {
+    "ael_afl_button": {
+      "name": "AEL (exposure lock)/AFL (focus lock) button",
+      "location": "rear",
+      "manual_page": 339,
+      "face": "AEL/AFL",
+      "assignable": true,
+      "pushable": true,
+      "default_function": "AE/AF LOCK",
+      "mechanical": false,
+      "behavior": {
+        "kind": "button",
+        "press": {
+          "kind": "debug_key",
+          "name": "AEAF_LOCK"
+        }
+      }
+    },
+    "aperture_ring": {
+      "name": "Aperture ring",
+      "location": "front",
+      "manual_page": 82,
+      "short_name": "APERTURE",
+      "assignable": false,
+      "pushable": false,
+      "positions": [
+        {
+          "id": "A",
+          "label": "A"
+        },
+        {
+          "id": "22",
+          "label": "22"
+        },
+        {
+          "id": "20",
+          "label": "20"
+        },
+        {
+          "id": "18",
+          "label": "18"
+        },
+        {
+          "id": "16",
+          "label": "16"
+        },
+        {
+          "id": "14",
+          "label": "14"
+        },
+        {
+          "id": "13",
+          "label": "13"
+        },
+        {
+          "id": "11",
+          "label": "11"
+        },
+        {
+          "id": "10",
+          "label": "10"
+        },
+        {
+          "id": "9",
+          "label": "9"
+        },
+        {
+          "id": "8",
+          "label": "8"
+        },
+        {
+          "id": "7.1",
+          "label": "7.1"
+        },
+        {
+          "id": "6.4",
+          "label": "6.4"
+        },
+        {
+          "id": "5.6",
+          "label": "5.6"
+        },
+        {
+          "id": "5",
+          "label": "5"
+        },
+        {
+          "id": "4.5",
+          "label": "4.5"
+        },
+        {
+          "id": "4",
+          "label": "4"
+        }
+      ],
+      "default_function": "Sets aperture; A selects automatic aperture.",
+      "mechanical": false,
+      "behavior": {
+        "kind": "ring",
+        "motion": {
+          "kind": "positions",
+          "positions": [
+            {
+              "id": "A",
+              "key": {
+                "kind": "debug_key",
+                "name": "I-M_A"
+              },
+              "asserted": true
+            },
+            {
+              "id": "22",
+              "key": {
+                "kind": "debug_key",
+                "name": "I-M_F22"
+              },
+              "asserted": true
+            },
+            {
+              "id": "20",
+              "key": {
+                "kind": "debug_key",
+                "name": "I-M_F20"
+              },
+              "asserted": true
+            },
+            {
+              "id": "18",
+              "key": {
+                "kind": "debug_key",
+                "name": "I-M_F18"
+              },
+              "asserted": true
+            },
+            {
+              "id": "16",
+              "key": {
+                "kind": "debug_key",
+                "name": "I-M_F16"
+              },
+              "asserted": true
+            },
+            {
+              "id": "14",
+              "key": {
+                "kind": "debug_key",
+                "name": "I-M_F14"
+              },
+              "asserted": true
+            },
+            {
+              "id": "13",
+              "key": {
+                "kind": "debug_key",
+                "name": "I-M_F13"
+              },
+              "asserted": true
+            },
+            {
+              "id": "11",
+              "key": {
+                "kind": "debug_key",
+                "name": "I-M_F11"
+              },
+              "asserted": true
+            },
+            {
+              "id": "10",
+              "key": {
+                "kind": "debug_key",
+                "name": "I-M_F10"
+              },
+              "asserted": true
+            },
+            {
+              "id": "9",
+              "key": {
+                "kind": "debug_key",
+                "name": "I-M_F9"
+              },
+              "asserted": true
+            },
+            {
+              "id": "8",
+              "key": {
+                "kind": "debug_key",
+                "name": "I-M_F8.0"
+              },
+              "asserted": true
+            },
+            {
+              "id": "7.1",
+              "key": {
+                "kind": "debug_key",
+                "name": "I-M_F7.1"
+              },
+              "asserted": true
+            },
+            {
+              "id": "6.4",
+              "key": {
+                "kind": "debug_key",
+                "name": "I-M_F6.4"
+              },
+              "asserted": true
+            },
+            {
+              "id": "5.6",
+              "key": {
+                "kind": "debug_key",
+                "name": "I-M_F5.6"
+              },
+              "asserted": true
+            },
+            {
+              "id": "5",
+              "key": {
+                "kind": "debug_key",
+                "name": "I-M_F5.0"
+              },
+              "asserted": true
+            },
+            {
+              "id": "4.5",
+              "key": {
+                "kind": "debug_key",
+                "name": "I-M_F4.5"
+              },
+              "asserted": true
+            },
+            {
+              "id": "4",
+              "key": {
+                "kind": "debug_key",
+                "name": "I-M_F4.0"
+              },
+              "asserted": true
+            }
+          ]
+        }
+      }
+    },
+    "aspect_ratio_dial": {
+      "name": "Aspect ratio dial",
+      "location": "rear",
+      "manual_page": 9,
+      "short_name": "ASPECT",
+      "assignable": false,
+      "pushable": false,
+      "positions": [
+        {
+          "id": "4:3",
+          "label": "4:3"
+        },
+        {
+          "id": "3:2",
+          "label": "3:2"
+        },
+        {
+          "id": "16:9",
+          "label": "16:9"
+        },
+        {
+          "id": "65:24",
+          "label": "65:24"
+        },
+        {
+          "id": "17:6",
+          "label": "17:6"
+        },
+        {
+          "id": "3:4",
+          "label": "3:4"
+        },
+        {
+          "id": "1:1",
+          "label": "1:1"
+        },
+        {
+          "id": "7:6",
+          "label": "7:6"
+        },
+        {
+          "id": "5:4",
+          "label": "5:4"
+        },
+        {
+          "id": "C",
+          "label": "C"
+        }
+      ],
+      "default_function": "Changes the aspect ratio during still photography; at C the aspect ratio is chosen with a command dial.",
+      "mechanical": false,
+      "behavior": {
+        "kind": "dial",
+        "motion": {
+          "kind": "positions",
+          "positions": [
+            {
+              "id": "4:3",
+              "key": {
+                "kind": "debug_key",
+                "name": "ASP4_3"
+              },
+              "asserted": true
+            },
+            {
+              "id": "3:2",
+              "key": {
+                "kind": "debug_key",
+                "name": "ASP3_2"
+              },
+              "asserted": true
+            },
+            {
+              "id": "16:9",
+              "key": {
+                "kind": "debug_key",
+                "name": "ASP16_9"
+              },
+              "asserted": true
+            },
+            {
+              "id": "65:24",
+              "key": {
+                "kind": "debug_key",
+                "name": "ASP65_24"
+              },
+              "asserted": true
+            },
+            {
+              "id": "17:6",
+              "key": {
+                "kind": "debug_key",
+                "name": "ASP17_6"
+              },
+              "asserted": true
+            },
+            {
+              "id": "3:4",
+              "key": {
+                "kind": "debug_key",
+                "name": "ASP3_4"
+              },
+              "asserted": true
+            },
+            {
+              "id": "1:1",
+              "key": {
+                "kind": "debug_key",
+                "name": "ASP1_1"
+              },
+              "asserted": true
+            },
+            {
+              "id": "7:6",
+              "key": {
+                "kind": "debug_key",
+                "name": "ASP7_6"
+              },
+              "asserted": true
+            },
+            {
+              "id": "5:4",
+              "key": {
+                "kind": "debug_key",
+                "name": "ASP5_4"
+              },
+              "asserted": true
+            },
+            {
+              "id": "C",
+              "key": {
+                "kind": "debug_key",
+                "name": "ASP_C"
+              },
+              "asserted": true
+            }
+          ]
+        }
+      }
+    },
+    "battery_chamber_cover_latch": {
+      "name": "Battery-chamber cover latch",
+      "location": "bottom",
+      "manual_page": 48,
+      "short_name": "COVER",
+      "assignable": false,
+      "pushable": false,
+      "default_function": "Slide the latch to open the battery-chamber cover.",
+      "mechanical": false,
+      "behavior": {
+        "kind": "lever"
+      }
+    },
+    "battery_latch": {
+      "name": "Battery latch",
+      "location": "bottom",
+      "manual_page": 49,
+      "short_name": "BATTERY",
+      "assignable": false,
+      "pushable": true,
+      "default_function": "Press the battery latch to the side to remove the battery.",
+      "mechanical": false,
+      "behavior": {
+        "kind": "lever"
+      }
+    },
+    "control_lever": {
+      "name": "Control lever",
+      "location": "front",
+      "manual_page": 344,
+      "short_name": "LEVER",
+      "assignable": true,
+      "pushable": false,
+      "positions": [
+        {
+          "id": "toward-lens",
+          "label": "toward the lens"
+        },
+        {
+          "id": "toward-grip",
+          "label": "toward the grip"
+        }
+      ],
+      "default_function": "Pull toward the grip: SURROUND VIEW; pull and hold toward the grip: xF ND FILTER; pull toward the lens: VIEW MODE SETTING; pull and hold toward the lens: CONTROL RING SETTING.",
+      "mechanical": false,
+      "behavior": {
+        "kind": "lever",
+        "positions": [
+          {
+            "id": "toward-lens",
+            "key": {
+              "kind": "debug_key",
+              "name": "EVF_OVF"
+            },
+            "asserted": true
+          },
+          {
+            "id": "toward-grip",
+            "key": {
+              "kind": "debug_key",
+              "name": "ND"
+            },
+            "asserted": true
+          }
+        ]
+      }
+    },
+    "control_ring": {
+      "name": "Control ring",
+      "location": "front",
+      "manual_page": 12,
+      "short_name": "RING",
+      "assignable": true,
+      "pushable": false,
+      "default_function": "Performs the function selected in CONTROL RING SETTING: WHITE BALANCE or FILM SIMULATION; with the focus mode selector at M it is used only for manual focus.",
+      "mechanical": false,
+      "behavior": {
+        "kind": "ring",
+        "motion": {
+          "kind": "steps",
+          "decrease": {
+            "kind": "debug_key",
+            "name": "CRING-"
+          },
+          "increase": {
+            "kind": "debug_key",
+            "name": "CRING+"
+          }
+        },
+        "endless": true
+      }
+    },
+    "digital_teleconverter_selector": {
+      "name": "Digital tele-converter selector",
+      "location": "front",
+      "manual_page": 8,
+      "short_name": "TELE",
+      "assignable": false,
+      "pushable": false,
+      "default_function": "Changes the magnification of the digital teleconverter: 80mm, 63mm, 45mm or OFF.",
+      "mechanical": false,
+      "behavior": {
+        "kind": "lever"
+      }
+    },
+    "diopter_adjustment_control": {
+      "name": "Diopter adjustment control",
+      "location": "rear",
+      "manual_page": 17,
+      "short_name": "DIOPTER",
+      "assignable": false,
+      "pushable": false,
+      "default_function": "Adjusts viewfinder focus.",
+      "mechanical": false,
+      "behavior": {
+        "kind": "dial",
+        "motion": {
+          "kind": "steps"
+        }
+      }
+    },
+    "disp_back_button": {
+      "name": "DISP (display)/BACK button",
+      "location": "rear",
+      "manual_page": 28,
+      "face": "DISP/BACK",
+      "assignable": false,
+      "pushable": true,
+      "default_function": "Cycles display modes; returns to the previous menu.",
+      "mechanical": false,
+      "behavior": {
+        "kind": "button",
+        "press": {
+          "kind": "debug_key",
+          "name": "DISP_B"
+        }
+      }
+    },
+    "drive_delete_button": {
+      "name": "DRIVE/DELETE button",
+      "location": "rear",
+      "manual_page": 7,
+      "face": "DRIVE",
+      "assignable": false,
+      "pushable": true,
+      "default_function": "Displays the drive-mode menu during shooting; deletes pictures during playback.",
+      "mechanical": false,
+      "behavior": {
+        "kind": "button",
+        "press": {
+          "kind": "debug_key",
+          "name": "DRIVE"
+        }
+      }
+    },
+    "exposure_compensation_dial": {
+      "name": "Exposure compensation dial",
+      "location": "top",
+      "manual_page": 110,
+      "short_name": "EV",
+      "assignable": false,
+      "pushable": false,
+      "positions": [
+        {
+          "id": "−3",
+          "label": "−3"
+        },
+        {
+          "id": "−2.7",
+          "label": "−2.7"
+        },
+        {
+          "id": "−2.3",
+          "label": "−2.3"
+        },
+        {
+          "id": "−2",
+          "label": "−2"
+        },
+        {
+          "id": "−1.7",
+          "label": "−1.7"
+        },
+        {
+          "id": "−1.3",
+          "label": "−1.3"
+        },
+        {
+          "id": "−1",
+          "label": "−1"
+        },
+        {
+          "id": "−0.7",
+          "label": "−0.7"
+        },
+        {
+          "id": "−0.3",
+          "label": "−0.3"
+        },
+        {
+          "id": "0",
+          "label": "0"
+        },
+        {
+          "id": "+0.3",
+          "label": "+0.3"
+        },
+        {
+          "id": "+0.7",
+          "label": "+0.7"
+        },
+        {
+          "id": "+1",
+          "label": "+1"
+        },
+        {
+          "id": "+1.3",
+          "label": "+1.3"
+        },
+        {
+          "id": "+1.7",
+          "label": "+1.7"
+        },
+        {
+          "id": "+2",
+          "label": "+2"
+        },
+        {
+          "id": "+2.3",
+          "label": "+2.3"
+        },
+        {
+          "id": "+2.7",
+          "label": "+2.7"
+        },
+        {
+          "id": "+3",
+          "label": "+3"
+        },
+        {
+          "id": "C",
+          "label": "C"
+        }
+      ],
+      "default_function": "Chooses an exposure compensation amount; at C, exposure compensation is adjusted with a command dial.",
+      "mechanical": false,
+      "behavior": {
+        "kind": "dial",
+        "motion": {
+          "kind": "positions",
+          "positions": [
+            {
+              "id": "−3",
+              "key": {
+                "kind": "debug_key",
+                "name": "E-D-3.0"
+              },
+              "asserted": true
+            },
+            {
+              "id": "−2.7",
+              "key": {
+                "kind": "debug_key",
+                "name": "E-D-2.7"
+              },
+              "asserted": true
+            },
+            {
+              "id": "−2.3",
+              "key": {
+                "kind": "debug_key",
+                "name": "E-D-2.3"
+              },
+              "asserted": true
+            },
+            {
+              "id": "−2",
+              "key": {
+                "kind": "debug_key",
+                "name": "E-D-2.0"
+              },
+              "asserted": true
+            },
+            {
+              "id": "−1.7",
+              "key": {
+                "kind": "debug_key",
+                "name": "E-D-1.7"
+              },
+              "asserted": true
+            },
+            {
+              "id": "−1.3"
+            },
+            {
+              "id": "−1",
+              "key": {
+                "kind": "debug_key",
+                "name": "E-D-1.0"
+              },
+              "asserted": true
+            },
+            {
+              "id": "−0.7",
+              "key": {
+                "kind": "debug_key",
+                "name": "E-D-0.7"
+              },
+              "asserted": true
+            },
+            {
+              "id": "−0.3",
+              "key": {
+                "kind": "debug_key",
+                "name": "E-D-0.3"
+              },
+              "asserted": true
+            },
+            {
+              "id": "0",
+              "key": {
+                "kind": "debug_key",
+                "name": "E-D=0"
+              },
+              "asserted": true
+            },
+            {
+              "id": "+0.3",
+              "key": {
+                "kind": "debug_key",
+                "name": "E-D+0.3"
+              },
+              "asserted": true
+            },
+            {
+              "id": "+0.7",
+              "key": {
+                "kind": "debug_key",
+                "name": "E-D+0.7"
+              },
+              "asserted": true
+            },
+            {
+              "id": "+1",
+              "key": {
+                "kind": "debug_key",
+                "name": "E-D+1.0"
+              },
+              "asserted": true
+            },
+            {
+              "id": "+1.3",
+              "key": {
+                "kind": "debug_key",
+                "name": "E-D+1.3"
+              },
+              "asserted": true
+            },
+            {
+              "id": "+1.7"
+            },
+            {
+              "id": "+2",
+              "key": {
+                "kind": "debug_key",
+                "name": "E-D+2.0"
+              },
+              "asserted": true
+            },
+            {
+              "id": "+2.3",
+              "key": {
+                "kind": "debug_key",
+                "name": "E-D+2.3"
+              },
+              "asserted": true
+            },
+            {
+              "id": "+2.7",
+              "key": {
+                "kind": "debug_key",
+                "name": "E-D+2.7"
+              },
+              "asserted": true
+            },
+            {
+              "id": "+3",
+              "key": {
+                "kind": "debug_key",
+                "name": "E-D+3.0"
+              },
+              "asserted": true
+            },
+            {
+              "id": "C",
+              "key": {
+                "kind": "debug_key",
+                "name": "E-D=C"
+              },
+              "asserted": true
+            }
+          ]
+        }
+      }
+    },
+    "fn1_button": {
+      "name": "Fn1 button",
+      "location": "top",
+      "manual_page": 340,
+      "face": "Fn1",
+      "assignable": true,
+      "pushable": true,
+      "default_function": "FACE DETECTION ON/OFF",
+      "mechanical": false,
+      "behavior": {
+        "kind": "button",
+        "press": {
+          "kind": "debug_key",
+          "name": "FUNCTION"
+        }
+      }
+    },
+    "fn2_button": {
+      "name": "Fn2 button",
+      "location": "front",
+      "manual_page": 340,
+      "face": "Fn2",
+      "assignable": true,
+      "pushable": true,
+      "default_function": "FRONT COMMAND DIAL SWITCH",
+      "mechanical": false,
+      "behavior": {
+        "kind": "button",
+        "press": {
+          "kind": "debug_key",
+          "name": "FUNCTION2"
+        }
+      }
+    },
+    "focus_mode_selector": {
+      "name": "Focus mode selector",
+      "location": "rear",
+      "manual_page": 92,
+      "short_name": "FOCUS",
+      "assignable": false,
+      "pushable": false,
+      "positions": [
+        {
+          "id": "S",
+          "label": "S"
+        },
+        {
+          "id": "C",
+          "label": "C"
+        },
+        {
+          "id": "M",
+          "label": "M"
+        }
+      ],
+      "default_function": "Selects single AF, continuous AF, or manual focus.",
+      "mechanical": false,
+      "behavior": {
+        "kind": "switch",
+        "positions": [
+          {
+            "id": "S",
+            "key": {
+              "kind": "debug_key",
+              "name": "MF_AF_A"
+            },
+            "asserted": true
+          },
+          {
+            "id": "C",
+            "key": {
+              "kind": "debug_key",
+              "name": "MF_AF_C"
+            },
+            "asserted": true
+          },
+          {
+            "id": "M",
+            "key": {
+              "kind": "debug_key",
+              "name": "MF_AF_M"
+            },
+            "asserted": true
+          }
+        ]
+      }
+    },
+    "focus_stick": {
+      "name": "Focus stick (focus lever)",
+      "location": "rear",
+      "manual_page": 5,
+      "short_name": "STICK",
+      "assignable": true,
+      "pushable": true,
+      "default_function": "Tilts or presses to select the focus area and can navigate menus.",
+      "mechanical": false,
+      "behavior": {
+        "kind": "pad",
+        "directions": {
+          "up": {
+            "kind": "debug_key",
+            "name": "8DIR_U"
+          },
+          "down": {
+            "kind": "debug_key",
+            "name": "8DIR_D"
+          },
+          "left": {
+            "kind": "debug_key",
+            "name": "8DIR_L"
+          },
+          "right": {
+            "kind": "debug_key",
+            "name": "8DIR_R"
+          }
+        },
+        "press": {
+          "kind": "debug_key",
+          "name": "8DIR_PUSH"
+        }
+      }
+    },
+    "front_command_dial": {
+      "name": "Front command dial",
+      "location": "front",
+      "manual_page": 13,
+      "short_name": "FRONT DIAL",
+      "assignable": true,
+      "pushable": false,
+      "default_function": "Rotates to select menu tabs, adjust aperture, the aspect ratio, exposure compensation or sensitivity; it has no press.",
+      "mechanical": false,
+      "behavior": {
+        "kind": "dial",
+        "motion": {
+          "kind": "steps",
+          "decrease": {
+            "kind": "debug_key",
+            "name": "CMD2_L"
+          },
+          "increase": {
+            "kind": "debug_key",
+            "name": "CMD2_R"
+          }
+        },
+        "endless": true
+      }
+    },
+    "lcd_touchscreen": {
+      "name": "Touch screen",
+      "location": "rear",
+      "manual_page": 36,
+      "assignable": false,
+      "pushable": false,
+      "default_function": "Provides touch controls for shooting, focus, menus, and playback when enabled.",
+      "mechanical": false,
+      "behavior": {
+        "kind": "touch"
+      }
+    },
+    "menu_ok_button": {
+      "name": "MENU/OK button",
+      "location": "rear",
+      "manual_page": 34,
+      "face": "MENU/OK",
+      "assignable": false,
+      "pushable": true,
+      "default_function": "Displays the menus; confirms the highlighted item.",
+      "mechanical": false,
+      "behavior": {
+        "kind": "button",
+        "press": {
+          "kind": "debug_key",
+          "name": "EXE_M"
+        }
+      }
+    },
+    "play_button": {
+      "name": "PLAY (playback) button",
+      "location": "rear",
+      "manual_page": 69,
+      "face": "PLAY",
+      "assignable": false,
+      "pushable": true,
+      "default_function": "Starts playback.",
+      "mechanical": false,
+      "behavior": {
+        "kind": "button",
+        "press": {
+          "kind": "debug_key",
+          "name": "K_PLAY"
+        }
+      }
+    },
+    "power_switch": {
+      "name": "ON/OFF switch",
+      "location": "top",
+      "manual_page": 59,
+      "face": "ON/OFF",
+      "assignable": false,
+      "pushable": false,
+      "positions": [
+        {
+          "id": "ON",
+          "label": "ON"
+        },
+        {
+          "id": "OFF",
+          "label": "OFF"
+        }
+      ],
+      "default_function": "Turns the camera on and off.",
+      "mechanical": false,
+      "behavior": {
+        "kind": "switch",
+        "positions": [
+          {
+            "id": "ON"
+          },
+          {
+            "id": "OFF"
+          }
+        ]
+      }
+    },
+    "q_button": {
+      "name": "Q (quick menu) button",
+      "location": "rear",
+      "manual_page": 339,
+      "face": "Q",
+      "assignable": true,
+      "pushable": true,
+      "default_function": "QUICK MENU",
+      "mechanical": false,
+      "behavior": {
+        "kind": "button",
+        "press": {
+          "kind": "debug_key",
+          "name": "K_Q"
+        }
+      }
+    },
+    "rear_command_dial": {
+      "name": "Rear command dial",
+      "location": "rear",
+      "manual_page": 13,
+      "short_name": "REAR DIAL",
+      "assignable": true,
+      "pushable": true,
+      "default_function": "Rotates to adjust settings; center press is assigned FOCUS CHECK by default.",
+      "mechanical": false,
+      "behavior": {
+        "kind": "dial",
+        "motion": {
+          "kind": "steps",
+          "decrease": {
+            "kind": "debug_key",
+            "name": "CMD_LEFT"
+          },
+          "increase": {
+            "kind": "debug_key",
+            "name": "CMD_RIGHT"
+          }
+        },
+        "press": {
+          "kind": "debug_key",
+          "name": "CMD_PUSH"
+        },
+        "endless": true
+      }
+    },
+    "sensitivity_dial": {
+      "name": "Sensitivity dial",
+      "location": "top",
+      "manual_page": 105,
+      "short_name": "ISO",
+      "assignable": false,
+      "pushable": false,
+      "positions": [
+        {
+          "id": "A",
+          "label": "A"
+        },
+        {
+          "id": "C",
+          "label": "C"
+        },
+        {
+          "id": "80",
+          "label": "80"
+        },
+        {
+          "id": "100",
+          "label": "100"
+        },
+        {
+          "id": "125",
+          "label": "125"
+        },
+        {
+          "id": "160",
+          "label": "160"
+        },
+        {
+          "id": "200",
+          "label": "200"
+        },
+        {
+          "id": "250",
+          "label": "250"
+        },
+        {
+          "id": "320",
+          "label": "320"
+        },
+        {
+          "id": "400",
+          "label": "400"
+        },
+        {
+          "id": "500",
+          "label": "500"
+        },
+        {
+          "id": "640",
+          "label": "640"
+        },
+        {
+          "id": "800",
+          "label": "800"
+        },
+        {
+          "id": "1000",
+          "label": "1000"
+        },
+        {
+          "id": "1250",
+          "label": "1250"
+        },
+        {
+          "id": "1600",
+          "label": "1600"
+        },
+        {
+          "id": "2000",
+          "label": "2000"
+        },
+        {
+          "id": "2500",
+          "label": "2500"
+        },
+        {
+          "id": "3200",
+          "label": "3200"
+        },
+        {
+          "id": "4000",
+          "label": "4000"
+        },
+        {
+          "id": "5000",
+          "label": "5000"
+        },
+        {
+          "id": "6400",
+          "label": "6400"
+        },
+        {
+          "id": "8000",
+          "label": "8000"
+        }
+      ],
+      "default_function": "Lift and rotate the shutter speed dial to set sensitivity; at C, sensitivity is adjusted with the front command dial.",
+      "mechanical": false,
+      "behavior": {
+        "kind": "dial",
+        "motion": {
+          "kind": "positions",
+          "positions": [
+            {
+              "id": "A",
+              "key": {
+                "kind": "debug_key",
+                "name": "ISO_A"
+              },
+              "asserted": true
+            },
+            {
+              "id": "C"
+            },
+            {
+              "id": "80",
+              "key": {
+                "kind": "debug_key",
+                "name": "I80"
+              },
+              "asserted": true
+            },
+            {
+              "id": "100",
+              "key": {
+                "kind": "debug_key",
+                "name": "I100"
+              },
+              "asserted": true
+            },
+            {
+              "id": "125"
+            },
+            {
+              "id": "160"
+            },
+            {
+              "id": "200",
+              "key": {
+                "kind": "debug_key",
+                "name": "I200"
+              },
+              "asserted": true
+            },
+            {
+              "id": "250",
+              "key": {
+                "kind": "debug_key",
+                "name": "I200_1_3"
+              },
+              "asserted": true
+            },
+            {
+              "id": "320",
+              "key": {
+                "kind": "debug_key",
+                "name": "I200_2_3"
+              },
+              "asserted": true
+            },
+            {
+              "id": "400",
+              "key": {
+                "kind": "debug_key",
+                "name": "I400"
+              },
+              "asserted": true
+            },
+            {
+              "id": "500",
+              "key": {
+                "kind": "debug_key",
+                "name": "I400_1_3"
+              },
+              "asserted": true
+            },
+            {
+              "id": "640",
+              "key": {
+                "kind": "debug_key",
+                "name": "I400_2_3"
+              },
+              "asserted": true
+            },
+            {
+              "id": "800",
+              "key": {
+                "kind": "debug_key",
+                "name": "I800"
+              },
+              "asserted": true
+            },
+            {
+              "id": "1000",
+              "key": {
+                "kind": "debug_key",
+                "name": "I800_1_3"
+              },
+              "asserted": true
+            },
+            {
+              "id": "1250",
+              "key": {
+                "kind": "debug_key",
+                "name": "I800_2_3"
+              },
+              "asserted": true
+            },
+            {
+              "id": "1600",
+              "key": {
+                "kind": "debug_key",
+                "name": "I1600"
+              },
+              "asserted": true
+            },
+            {
+              "id": "2000",
+              "key": {
+                "kind": "debug_key",
+                "name": "I1600_1_3"
+              },
+              "asserted": true
+            },
+            {
+              "id": "2500",
+              "key": {
+                "kind": "debug_key",
+                "name": "I1600_2_3"
+              },
+              "asserted": true
+            },
+            {
+              "id": "3200",
+              "key": {
+                "kind": "debug_key",
+                "name": "I3200"
+              },
+              "asserted": true
+            },
+            {
+              "id": "4000",
+              "key": {
+                "kind": "debug_key",
+                "name": "I3200_1_3"
+              },
+              "asserted": true
+            },
+            {
+              "id": "5000",
+              "key": {
+                "kind": "debug_key",
+                "name": "I3200_2_3"
+              },
+              "asserted": true
+            },
+            {
+              "id": "6400",
+              "key": {
+                "kind": "debug_key",
+                "name": "I6400"
+              },
+              "asserted": true
+            },
+            {
+              "id": "8000",
+              "key": {
+                "kind": "debug_key",
+                "name": "I6400_1_3"
+              },
+              "asserted": true
+            }
+          ]
+        }
+      }
+    },
+    "shutter_button": {
+      "name": "Shutter button",
+      "location": "top",
+      "manual_page": 68,
+      "short_name": "SHUTTER",
+      "assignable": false,
+      "pushable": true,
+      "positions": [
+        {
+          "id": "half-press",
+          "label": "half-press"
+        },
+        {
+          "id": "full-press",
+          "label": "full-press"
+        }
+      ],
+      "default_function": "Half-press focuses and locks exposure when enabled; full-press takes a picture.",
+      "mechanical": false,
+      "behavior": {
+        "kind": "shutter",
+        "stages": {
+          "full_press": [
+            {
+              "kind": "debug_key",
+              "name": "S1"
+            },
+            {
+              "kind": "debug_key",
+              "name": "S2"
+            }
+          ],
+          "half_press": [
+            {
+              "kind": "debug_key",
+              "name": "S1"
+            }
+          ]
+        }
+      }
+    },
+    "shutter_speed_dial": {
+      "name": "Shutter speed dial",
+      "location": "top",
+      "manual_page": 6,
+      "short_name": "SPEED",
+      "assignable": false,
+      "pushable": false,
+      "positions": [
+        {
+          "id": "A",
+          "label": "A"
+        },
+        {
+          "id": "4000",
+          "label": "4000"
+        },
+        {
+          "id": "2000",
+          "label": "2000"
+        },
+        {
+          "id": "1000",
+          "label": "1000"
+        },
+        {
+          "id": "500",
+          "label": "500"
+        },
+        {
+          "id": "250",
+          "label": "250"
+        },
+        {
+          "id": "125",
+          "label": "125"
+        },
+        {
+          "id": "60",
+          "label": "60"
+        },
+        {
+          "id": "30",
+          "label": "30"
+        },
+        {
+          "id": "15",
+          "label": "15"
+        },
+        {
+          "id": "8",
+          "label": "8"
+        },
+        {
+          "id": "4",
+          "label": "4"
+        },
+        {
+          "id": "2",
+          "label": "2"
+        },
+        {
+          "id": "1",
+          "label": "1"
+        },
+        {
+          "id": "T",
+          "label": "T"
+        },
+        {
+          "id": "B",
+          "label": "B"
+        }
+      ],
+      "default_function": "Chooses the shutter speed.",
+      "mechanical": false,
+      "behavior": {
+        "kind": "dial",
+        "motion": {
+          "kind": "positions",
+          "positions": [
+            {
+              "id": "A",
+              "key": {
+                "kind": "debug_key",
+                "name": "S-A"
+              },
+              "asserted": true
+            },
+            {
+              "id": "4000",
+              "key": {
+                "kind": "debug_key",
+                "name": "S-1/4000"
+              },
+              "asserted": true
+            },
+            {
+              "id": "2000",
+              "key": {
+                "kind": "debug_key",
+                "name": "S-1/2000"
+              },
+              "asserted": true
+            },
+            {
+              "id": "1000",
+              "key": {
+                "kind": "debug_key",
+                "name": "S-1/1000"
+              },
+              "asserted": true
+            },
+            {
+              "id": "500",
+              "key": {
+                "kind": "debug_key",
+                "name": "S-1/500"
+              },
+              "asserted": true
+            },
+            {
+              "id": "250",
+              "key": {
+                "kind": "debug_key",
+                "name": "S-1/250"
+              },
+              "asserted": true
+            },
+            {
+              "id": "125",
+              "key": {
+                "kind": "debug_key",
+                "name": "S-1/125"
+              },
+              "asserted": true
+            },
+            {
+              "id": "60",
+              "key": {
+                "kind": "debug_key",
+                "name": "S-1/60"
+              },
+              "asserted": true
+            },
+            {
+              "id": "30",
+              "key": {
+                "kind": "debug_key",
+                "name": "S-1/30"
+              },
+              "asserted": true
+            },
+            {
+              "id": "15",
+              "key": {
+                "kind": "debug_key",
+                "name": "S-1/15"
+              },
+              "asserted": true
+            },
+            {
+              "id": "8",
+              "key": {
+                "kind": "debug_key",
+                "name": "S-1/8"
+              },
+              "asserted": true
+            },
+            {
+              "id": "4",
+              "key": {
+                "kind": "debug_key",
+                "name": "S-1/4"
+              },
+              "asserted": true
+            },
+            {
+              "id": "2",
+              "key": {
+                "kind": "debug_key",
+                "name": "S-1/2"
+              },
+              "asserted": true
+            },
+            {
+              "id": "1",
+              "key": {
+                "kind": "debug_key",
+                "name": "S-1/1"
+              },
+              "asserted": true
+            },
+            {
+              "id": "T",
+              "key": {
+                "kind": "debug_key",
+                "name": "S-T"
+              },
+              "asserted": true
+            },
+            {
+              "id": "B",
+              "key": {
+                "kind": "debug_key",
+                "name": "S-B"
+              },
+              "asserted": true
+            }
+          ]
+        }
+      }
+    }
+  }
+}

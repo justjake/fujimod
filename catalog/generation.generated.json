@@ -9,8 +9,13 @@
       "internal_version": "1.56",
       "tables": {
         "bulk": {
-          "status": "available",
-          "errors": []
+          "status": "unavailable",
+          "errors": [
+            {
+              "locator": "bulk",
+              "reason": "BulkCatalogError: ranges outside window 0x81000+0x1e2c0: 0x2ed4444+0x80, 0x2ed4e78+0x80, 0x2ed4000+0x1000, 0x81000+0x477f000"
+            }
+          ]
         },
         "card-files": {
           "status": "unavailable",
@@ -22,13 +27,8 @@
           ]
         },
         "controls": {
-          "status": "unavailable",
-          "errors": [
-            {
-              "locator": "controls",
-              "reason": "FileNotFoundError: [Errno 2] No such file or directory: '<input>'"
-            }
-          ]
+          "status": "available",
+          "errors": []
         },
         "flash": {
           "status": "available",
