@@ -12,7 +12,17 @@
   },
   "input_readers": {
     "calibration": null,
-    "scanner": null
+    "scanner": {
+      "stable_offset": 25,
+      "stable_width": 1,
+      "pressed_value": 1,
+      "released_value": 0,
+      "routine": {
+        "address": 17638996,
+        "size": 60,
+        "sha256": "6b94c138b2a9abbeb56cddd54aed2808be35fea51ae41f7a817e04dbfe165f9b"
+      }
+    }
   },
   "native_key_names": null,
   "event_translation": {
