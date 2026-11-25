@@ -495,6 +495,27 @@ fn main() -> Result<(), String> {
     run(&cpu, 0x10300, 2).unwrap();
     assert_eq!(io.reads, vec![(0, 8)]);
     assert_eq!(io.writes, vec![(8, 8, 0x1234567800000080)]);
+    // A data cache clean by address on a device window retires without a device access;
+    // one on an unmapped address faults.
+    code(&cpu, 0x10300, &[0xd50b7e21, 0xd50b7a21]);
+    cpu.invalidate_code(Some((0x10300, 0x10308)))?;
+    set(&cpu, Register::X(1), 0x8000040);
+    run(&cpu, 0x10300, 2).unwrap();
+    assert_eq!(get(&cpu, Register::Pc), 0x10308);
+    assert_eq!(io.reads, vec![(0, 8)]);
+    assert_eq!(io.writes, vec![(8, 8, 0x1234567800000080)]);
+    set(&cpu, Register::X(1), 0x9000000);
+    assert!(matches!(
+        run(&cpu, 0x10300, 1),
+        Err(ExecutionError::Memory {
+            fault: Fault::ReadUnmapped,
+            ..
+        })
+    ));
+    assert_eq!(get(&cpu, Register::Pc), 0x10300);
+    println!("PASS: data cache cleans by address retire on device windows");
+    code(&cpu, 0x10300, &[0xf9400020, 0xf9000420]);
+    cpu.invalidate_code(Some((0x10300, 0x10308)))?;
     // A pause raised inside the parked asynchronous MMIO callback must still
     // commit the load once before the run stops.
     code(&cpu, 0x10300, &[0xf9400020, 0x14000000]);

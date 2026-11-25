@@ -67,6 +67,9 @@ pub struct MmioAccess {
     pub transfers: arrayvec::ArrayVec<MmioTransfer, 2>,
     pub writeback: Option<(u8, u64)>,
     pub failure: Option<ExecutionError>,
+    /// A data cache clean by address (`arm64::is_data_cache_clean_by_va`); it has no
+    /// transfers.
+    pub cache_clean: bool,
 }
 impl MmioTransfer {
     /// The architectural register value of a loaded device word.
@@ -1071,6 +1074,7 @@ impl Processor {
             transfers: arrayvec::ArrayVec::new(),
             writeback: None,
             failure: None,
+            cache_clean: false,
         };
         let result = (|| -> Result<(), ExecutionError> {
             let pc = self.reg(ffi::PC)?;
@@ -1083,7 +1087,12 @@ impl Processor {
             let pa = translation.translate(pc, Access::Fetch, |a| self.table_word(a))?;
             self.vm.read(pa, &mut word)?;
             self.vm.check_access(pa, 4, 4)?;
-            let decoded = arm64::decode_load_store(u32::from_le_bytes(word), pc, |r| {
+            let word = u32::from_le_bytes(word);
+            if arm64::is_data_cache_clean_by_va(word) {
+                access.cache_clean = true;
+                return Ok(());
+            }
+            let decoded = arm64::decode_load_store(word, pc, |r| {
                 if r == 31 {
                     self.sys(self.sp()?)
                 } else {
