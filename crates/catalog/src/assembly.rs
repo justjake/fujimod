@@ -38,6 +38,9 @@ pub struct BodyHardware {
     /// The lens mount's serial controller, connector pads and mounted lens, when the body has one.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub lens_mount: Option<LensMount>,
+    /// The sensor-shift stage, its position sensor's capture channel and its coil drive.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub stabilizer: Option<StabilizerMount>,
     /// Addresses the firmware reads to drain the bus past this body's DRAM map.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub bus_drain: Vec<BusDrain>,
@@ -118,6 +121,27 @@ pub struct LensMount {
     pub lens_part_id: Option<String>,
 }
 
+/// How a sensor-shift stage is wired: its position sensor and its coil drive.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(deny_unknown_fields)]
+#[cfg_attr(feature = "schema", schemars(deny_unknown_fields))]
+#[cfg_attr(
+    all(target_arch = "wasm32", not(target_os = "emscripten")),
+    derive(tsify::Tsify),
+    tsify(hashmap_as_object, missing_as_null)
+)]
+pub struct StabilizerMount {
+    /// Installed stage part.
+    pub part_id: String,
+    /// Input-capture block reading the stage's position sensor.
+    pub capture_block_id: String,
+    /// Capture channel of that block.
+    pub capture_channel: u8,
+    /// Extended-timer general channels whose PWM drives each axis's coil.
+    pub drive_channels: [u8; 3],
+}
+
 /// A declared electrical feedback connection between GPIO pads.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
@@ -188,6 +212,11 @@ impl BodyHardware {
                 }
             }
         }
+        if let Some(stage) = &self.stabilizer {
+            if !body.parts.contains(&stage.part_id) {
+                return Err(format!("body {} wires an uninstalled stabilizer {}", body.id, stage.part_id));
+            }
+        }
         for feedback in &self.gpio_feedback {
             connection(&feedback.output_connection_id)?;
             connection(&feedback.input_connection_id)?;
@@ -256,6 +285,19 @@ pub enum PeripheralPart {
     FramedCommandPeer {
         /// Frame the peer sends before its first command.
         initial_frame: u32,
+    },
+    /// Sensor-shift stage with a position sensor and voice-coil drive.
+    StabilizerStage {
+        /// Delay from the segment-end word to the latched capture.
+        latency_ns: u64,
+        /// Raw sample of each axis at stage position zero.
+        center: [u16; 3],
+        /// Stage position of each axis at rest, in raw counts from center.
+        rest: [i32; 3],
+        /// First-order lag of the stage: position moves by (command - position) >> lag_shift.
+        lag_shift: u8,
+        /// Displacement (raw counts) per PWM count of drive, per axis.
+        drive_gain: [i32; 3],
     },
     /// Display panel programmed over a chip-selected serial port.
     DisplayPanelSerial,

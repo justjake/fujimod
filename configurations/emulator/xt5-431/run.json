@@ -236,5 +236,19 @@
   ],
   "idle_status_blocks": [
     "input"
+  ],
+  "sd_clock_steps": [
+    {
+      "block_id": "sd-host-0",
+      "interface": 2,
+      "default_speed": 4,
+      "high_speed": 2
+    },
+    {
+      "block_id": "sd-host-1",
+      "interface": 2,
+      "default_speed": 4,
+      "high_speed": 2
+    }
   ]
 }

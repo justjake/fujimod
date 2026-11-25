@@ -404,6 +404,11 @@ pub enum BlockDevice {
         /// Declared basis.
         basis: String,
     },
+    /// XP5 statistics SRAM: two banks the imaging engines write and the AE service reads.
+    Xp5ImagingStatistics {
+        /// Declared basis.
+        basis: String,
+    },
     /// HDMI transmitter with no sink.
     HdmiTx {
         /// Declared basis.
@@ -1062,6 +1067,7 @@ impl BlockDevice {
                         | BlockDevice::FaceDetection { .. }
                         | BlockDevice::ImagingControl { .. }
                         | BlockDevice::ImagingStatistics { .. }
+                        | BlockDevice::Xp5ImagingStatistics { .. }
                         | BlockDevice::FrameSync { .. }
                         | BlockDevice::H264Encoder { .. }
                         | BlockDevice::StillEngine { .. }

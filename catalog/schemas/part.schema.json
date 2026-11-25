@@ -1544,6 +1544,70 @@
         },
         {
           "additionalProperties": false,
+          "description": "Sensor-shift stage with a position sensor and voice-coil drive.",
+          "properties": {
+            "center": {
+              "description": "Raw sample of each axis at stage position zero.",
+              "items": {
+                "format": "uint16",
+                "maximum": 65535,
+                "minimum": 0,
+                "type": "integer"
+              },
+              "maxItems": 3,
+              "minItems": 3,
+              "type": "array"
+            },
+            "drive_gain": {
+              "description": "Displacement (raw counts) per PWM count of drive, per axis.",
+              "items": {
+                "format": "int32",
+                "type": "integer"
+              },
+              "maxItems": 3,
+              "minItems": 3,
+              "type": "array"
+            },
+            "kind": {
+              "const": "stabilizer-stage",
+              "type": "string"
+            },
+            "lag_shift": {
+              "description": "First-order lag of the stage: position moves by (command - position) >> lag_shift.",
+              "format": "uint8",
+              "maximum": 255,
+              "minimum": 0,
+              "type": "integer"
+            },
+            "latency_ns": {
+              "description": "Delay from the segment-end word to the latched capture.",
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "rest": {
+              "description": "Stage position of each axis at rest, in raw counts from center.",
+              "items": {
+                "format": "int32",
+                "type": "integer"
+              },
+              "maxItems": 3,
+              "minItems": 3,
+              "type": "array"
+            }
+          },
+          "required": [
+            "kind",
+            "latency_ns",
+            "center",
+            "rest",
+            "lag_shift",
+            "drive_gain"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
           "description": "Display panel programmed over a chip-selected serial port.",
           "properties": {
             "kind": {

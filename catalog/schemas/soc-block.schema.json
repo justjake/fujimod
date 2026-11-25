@@ -1301,6 +1301,25 @@
         },
         {
           "additionalProperties": false,
+          "description": "XP5 statistics SRAM: two banks the imaging engines write and the AE service reads.",
+          "properties": {
+            "basis": {
+              "description": "Declared basis.",
+              "type": "string"
+            },
+            "model": {
+              "const": "xp5_imaging_statistics",
+              "type": "string"
+            }
+          },
+          "required": [
+            "model",
+            "basis"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
           "description": "HDMI transmitter with no sink.",
           "properties": {
             "basis": {

@@ -84,6 +84,9 @@ pub struct RunConfiguration {
     /// never observes (no pending-register read); a raised interrupt reaches no input.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub unobserved_interrupt_blocks: Vec<String>,
+    /// SD clock dividers the run's stock driver programs; a faster clock than its step refuses.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub sd_clock_steps: Vec<RunSdClockSteps>,
     /// Named overlays to apply in declaration order.
     pub overlays: Vec<String>,
     /// Browser camera attachments declared by a selected overlay.
@@ -1234,6 +1237,27 @@ pub struct RunBusByteTime {
     pub block_id: String,
     /// Board ticks per byte.
     pub ticks: u64,
+}
+
+/// The clock-divider ladder a stock SD driver programs on one host.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(deny_unknown_fields)]
+#[cfg_attr(feature = "schema", schemars(deny_unknown_fields))]
+#[cfg_attr(
+    all(target_arch = "wasm32", not(target_os = "emscripten")),
+    derive(tsify::Tsify),
+    tsify(hashmap_as_object, missing_as_null)
+)]
+pub struct RunSdClockSteps {
+    /// SD host block.
+    pub block_id: String,
+    /// Interface clock configuration under which the steps hold.
+    pub interface: u8,
+    /// Divider for a default-speed card.
+    pub default_speed: u16,
+    /// Divider for a high-speed card.
+    pub high_speed: u16,
 }
 
 /// A host test signal presented to an audio serial receiver.

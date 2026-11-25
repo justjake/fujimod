@@ -1230,6 +1230,33 @@ fn block_window(
                     toml::Value::Table(row)
                 }).collect()));
             }
+            if let Some(stage) = selection.body.hardware.as_ref().and_then(|hardware| hardware.stabilizer.as_ref())
+                .filter(|stage| stage.capture_block_id == block.id)
+            {
+                let part = selection.parts.iter().find(|part| part.id == stage.part_id)
+                    .ok_or_else(|| format!("no stabilizer part {}", stage.part_id))?;
+                let fujimod_catalog::reference::PartModel::Peripheral {
+                    interface: fujimod_catalog::assembly::PeripheralPart::StabilizerStage { latency_ns, center, rest, lag_shift, drive_gain },
+                } = &part.model else {
+                    return Err(format!("part {} is not a stabilizer stage", part.id));
+                };
+                let output = format!("channel{}", stage.capture_channel);
+                let line = block.interrupts.iter()
+                    .find(|row| row.output == output && row.core.as_deref() == Some("core4"))
+                    .map(|row| row.line)
+                    .ok_or_else(|| format!("block {}: capture {output} has no companion interrupt", block.id))?;
+                let array = |values: Vec<i64>| toml::Value::Array(values.into_iter().map(toml::Value::Integer).collect());
+                let mut sequencer = toml::Table::new();
+                sequencer.insert("channel".into(), integer(u64::from(stage.capture_channel)));
+                sequencer.insert("companion_irq_line".into(), integer(u64::from(line)));
+                sequencer.insert("latency_ns".into(), integer(*latency_ns));
+                sequencer.insert("center".into(), array(center.iter().map(|v| i64::from(*v)).collect()));
+                sequencer.insert("rest".into(), array(rest.iter().map(|v| i64::from(*v)).collect()));
+                sequencer.insert("lag_shift".into(), integer(u64::from(*lag_shift)));
+                sequencer.insert("drive_channels".into(), array(stage.drive_channels.iter().map(|v| i64::from(*v)).collect()));
+                sequencer.insert("drive_gain".into(), array(drive_gain.iter().map(|v| i64::from(*v)).collect()));
+                options.insert("sequencer".into(), toml::Value::Table(sequencer));
+            }
             "input-capture"
         }
         BlockDevice::Pl011 { .. } => {
@@ -1300,6 +1327,7 @@ fn block_window(
             "xp5-codec"
         }
         BlockDevice::ImagingBuffer { .. } => "imaging-buffer",
+        BlockDevice::Xp5ImagingStatistics { .. } => "imaging-statistics",
         // A loader start is the direct-flash boot; a ROM start replaces the straps with its own.
         BlockDevice::BootControl { direct_flash_straps, .. } => {
             options.insert("source_straps".into(), integer(u64::from(*direct_flash_straps)));
@@ -1349,6 +1377,13 @@ fn block_window(
                 controller.insert("dram_alias".into(), toml::Value::Boolean(false));
             }
             if let Some(address) = address_high { controller.insert("address_high".into(), integer(*address)); }
+            if let Some(steps) = run.sd_clock_steps.iter().find(|steps| steps.block_id == block.id) {
+                let mut dividers = toml::Table::new();
+                dividers.insert("interface".into(), integer(u64::from(steps.interface)));
+                dividers.insert("default_speed".into(), integer(u64::from(steps.default_speed)));
+                dividers.insert("high_speed".into(), integer(u64::from(steps.high_speed)));
+                controller.insert("speed_dividers".into(), toml::Value::Table(dividers));
+            }
             options.insert("controller".into(), toml::Value::Table(controller));
             "sdhci"
         }

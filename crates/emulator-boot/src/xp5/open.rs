@@ -214,7 +214,6 @@ fn devices_and_resources(
     }
     for window in &mut windows {
         match window.kind.as_str() {
-            "interprocessor-mailbox" => window.options.clear(),
             "flash-storage" => {
                 let number = |key: &str| {
                     window

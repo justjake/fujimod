@@ -1,0 +1,28 @@
+{
+  "$schema": "https://fujimod.com/schemas/part.schema.json",
+  "schema": 1,
+  "id": "xt5-stabilizer-stage",
+  "model": {
+    "kind": "peripheral",
+    "interface": {
+      "kind": "stabilizer-stage",
+      "latency_ns": 20000,
+      "center": [
+        32768,
+        32768,
+        32768
+      ],
+      "rest": [
+        0,
+        0,
+        0
+      ],
+      "lag_shift": 2,
+      "drive_gain": [
+        6,
+        6,
+        -3
+      ]
+    }
+  }
+}

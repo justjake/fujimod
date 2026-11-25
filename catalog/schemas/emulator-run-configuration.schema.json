@@ -4815,6 +4815,44 @@
       ],
       "type": "string"
     },
+    "RunSdClockSteps": {
+      "additionalProperties": false,
+      "description": "The clock-divider ladder a stock SD driver programs on one host.",
+      "properties": {
+        "block_id": {
+          "description": "SD host block.",
+          "type": "string"
+        },
+        "default_speed": {
+          "description": "Divider for a default-speed card.",
+          "format": "uint16",
+          "maximum": 65535,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "high_speed": {
+          "description": "Divider for a high-speed card.",
+          "format": "uint16",
+          "maximum": 65535,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "interface": {
+          "description": "Interface clock configuration under which the steps hold.",
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "block_id",
+        "interface",
+        "default_speed",
+        "high_speed"
+      ],
+      "type": "object"
+    },
     "RunSecondaryBusProfile": {
       "description": "Closed selection for secondary bus profile.",
       "oneOf": [
@@ -5280,6 +5318,13 @@
       "format": "uint32",
       "minimum": 0,
       "type": "integer"
+    },
+    "sd_clock_steps": {
+      "description": "SD clock dividers the run's stock driver programs; a faster clock than its step refuses.",
+      "items": {
+        "$ref": "#/$defs/RunSdClockSteps"
+      },
+      "type": "array"
     },
     "start": {
       "$ref": "#/$defs/RunStart",
