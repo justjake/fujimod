@@ -1,0 +1,32 @@
+# UART port 0, an Arm PL011 at 0xff920000, for the stock firmware update program. The first
+# write the X-H2 5.30 update run made there is CR (+0x30) = 0 from the serial driver's port
+# setup (store from PC 0x5de10, the call at 0x1385974). The normal boot to REC never touches
+# the port.
+#
+# The X-H2 driver is the X-T5's (manifest of xt5-431, 65-uart.toml), checked by masked
+# instruction sequences: UART open 0x1383ba4 (X-T5 0x1381c10), register setup 0x13858e8
+# (0x1383954), divisors 0x1385300 (0x138336c), RL78 frame transfer 0x13d72b8 (0x13d4e8c),
+# frame builders and reply check 0x13d77e0/0x13d7628/0x13d7470/0x13d6694 (0x13d53b4/0x13d51fc/
+# 0x13d5044/0x13d484c), programming sequence 0x13d95b0 (0x13d766c; only GPIO pin ids differ),
+# install function 0x2e8d9c0 calling it at 0x2e8db68 (0x2dcb9c4; error 7 at 0x2e8eafc).
+# The serial configuration table 0x18eb4a0 and the interrupt records 0x18ece30 are byte-identical
+# to the X-T5's: port 0 at 115200, INTIDs 293..296.
+#
+# The peer is the virtual Renesas RL78 Protocol A programming target. What the program checks
+# in its replies: every frame starts 02, has the expected length, ends 03 or 17 with a correct
+# checksum; every status is 06 (a blank check may answer 1b, which makes it send an erase);
+# signature bytes 13..15 (code-flash end address) pick the image whose size is end + 1. Never
+# checked: the baud-set reply fields and the other signature bytes (device code, data-flash end,
+# version). Which size the real part reports is UNVERIFIED. The X-H2 update carries a 64 KiB and
+# a 48 KiB RL78 image (header entries 0 and 1); this declaration's 48 KiB flash selects the
+# 48 KiB one, an assumption carried over from the X-T5, not read from a camera. The program
+# also drives GPIO pins the X-T5's does not (0xa0004, and 0xa0005 where the X-T5 uses 0xf0002);
+# their roles are UNVERIFIED. The interrupt INTID 293 is the SoC's UART 0 as in the X-T5 table.
+[[device]]
+base = 0xff920000
+size = 0x1000
+kind = "pl011"
+
+[device.options]
+irq = 293
+rl78 = { flash_bytes = 0xc000 }
