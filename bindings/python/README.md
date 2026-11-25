@@ -106,6 +106,12 @@ call `release_holds()` once it reports `"rec"`; that releases the held
 controls and connects the controls the loaded firmware expects. The boot cache
 is not used for such an open.
 
+`Board.power_on()` powers the camera off and on again with the internal flash
+and SD card it last had, so installation and card writes survive. The new
+session starts from internal flash with nothing held; `hold_controls=True`
+holds the catalog's SD-boot controls and starts from the card, and
+`fresh_card=True` puts the boot source's files on a new card instead.
+
 The checked identity catalog is available through
 `fujimod.emulator.catalog`. `resolve_reference(body_id, firmware_id)` returns a
 `ResolvedSelection` containing the resolved `Soc`, `Body`, `Firmware` and

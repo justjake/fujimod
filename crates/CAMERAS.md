@@ -100,6 +100,11 @@ An open can also stop before the first instruction: the builder builds the
 session and applies the boot holds, the caller runs it, and a builder call
 releases the holds and connects the controls the loaded firmware expects.
 
+An open keeps its media available to the caller: `Opened::power_on` powers the
+camera off and on again with its internal flash and SD card, optionally holding
+the catalog's SD-boot controls or replacing the card with a fresh one from the
+boot source.
+
 ## Boot cache
 
 Each opened boot is saved as a portable checkpoint keyed by the firmware

@@ -6,7 +6,9 @@ use fujimod_catalog_remote::{Facts, Selection};
 use fujimod_catalog_resolution::ResolvedConfiguration;
 use fujimod_emulator_boot::{self as boot, Camera};
 use fujimod_emulator_cpu::ExecutionPolicy;
+use fujimod_emulator_devices::parts::{nand::Nand, sd_card::Card};
 use fujimod_emulator_session::Session;
+use serde_json::Value;
 use sha2::{Digest, Sha256};
 use std::{
     fmt, fs,
@@ -15,6 +17,12 @@ use std::{
 
 /// Largest instruction budget an open run may execute.
 const INSTRUCTION_LIMIT: u64 = 2_000_000_000;
+
+/// Guest instructions a FujiMod release may take to confirm after REC.
+const CONFIRM_INSTRUCTION_LIMIT: u64 = 1_000_000_000;
+
+/// Instructions per observation while waiting for a release confirmation.
+const CONFIRM_WINDOW: u64 = 50_000_000;
 
 /// How a camera starts.
 #[derive(Clone, Debug)]
@@ -25,6 +33,16 @@ pub enum Boot {
     SdCard(CardSource),
     /// FujiMod from the SD card, started by the automatic-boot installer.
     AutomaticBoot(CardSource),
+}
+
+impl Boot {
+    /// The SD card source a boot loads, when it loads one.
+    pub fn card_source(&self) -> Option<&CardSource> {
+        match self {
+            Self::Stock => None,
+            Self::SdCard(source) | Self::AutomaticBoot(source) => Some(source),
+        }
+    }
 }
 
 /// Where an SD card's files come from.
@@ -58,6 +76,46 @@ pub struct Request {
     pub run_to_rec: bool,
     /// The SD card in the slot at power-on.
     pub card: CardModel,
+    /// Internal flash and SD card kept from an earlier open.
+    pub kept: KeptMedia,
+    /// The SD card source a held power-on loads when `boot` is not itself a
+    /// card boot. Kept across power-ons that start from internal flash.
+    pub card_source: Option<CardSource>,
+}
+
+/// Media a power-on keeps from the camera's last use. Each part replaces what
+/// the open would otherwise build: the catalog's reference internal flash and
+/// the boot source's SD card files.
+#[derive(Clone, Default)]
+pub struct KeptMedia {
+    /// The medium the internal-flash controller last held.
+    pub nand: Option<Nand>,
+    /// The SD card's medium, including every file the camera wrote.
+    pub card: Option<Card>,
+}
+
+/// A power-on that keeps a camera's internal flash and SD card.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct PowerOn {
+    /// Hold the catalog's SD-boot controls from power-on. Otherwise the
+    /// firmware starts from internal flash with nothing held.
+    pub hold_controls: bool,
+    /// Put the boot source's files on a fresh card instead of the one the
+    /// camera had.
+    pub fresh_card: bool,
+    /// Run to REC before returning; otherwise stop before the first
+    /// instruction with the boot holds applied.
+    pub run_to_rec: bool,
+}
+
+impl Default for PowerOn {
+    fn default() -> Self {
+        Self {
+            hold_controls: false,
+            fresh_card: false,
+            run_to_rec: true,
+        }
+    }
 }
 
 /// How the modeled SD card starts a run.
@@ -183,6 +241,10 @@ pub struct Opened {
     pub holds: BootHolds,
     /// Whether the holds are applied and not yet released.
     holds_applied: bool,
+    /// The request that opened the camera, for a later power-on.
+    request: Request,
+    /// The SD card source this camera boots from when its controls are held.
+    card_source: Option<CardSource>,
 }
 
 impl Opened {
@@ -223,6 +285,62 @@ impl Opened {
     /// Whether the boot holds are applied and not yet released.
     pub fn holds_applied(&self) -> bool {
         self.holds_applied
+    }
+
+    /// Power the camera off and on again, keeping its internal flash and the
+    /// SD card it last had. The new session starts from those media instead of
+    /// the catalog's reference flash and the boot source's fresh card.
+    pub fn power_on(&self, library: &Library, options: PowerOn) -> Result<Opened, OpenError> {
+        let nand = self.camera.session.nand_medium("nand").map_err(|error| {
+            OpenError::at(
+                Stage::BootRom,
+                format!("the camera keeps no internal flash: {error}"),
+            )
+        })?;
+        let card = if options.fresh_card {
+            None
+        } else {
+            Some(self.card_medium()?)
+        };
+        let boot = if options.hold_controls {
+            let source = self.card_source.as_ref().ok_or_else(|| {
+                OpenError::at(
+                    Stage::BootRom,
+                    "this boot has no SD card source to hold the card's boot controls",
+                )
+            })?;
+            Boot::SdCard(source.clone())
+        } else {
+            Boot::Stock
+        };
+        let mut request = self.request.clone();
+        request.boot = boot;
+        request.run_to_rec = options.run_to_rec;
+        request.cache = BootCache::Bypass;
+        request.card_source = self.card_source.clone();
+        request.kept = KeptMedia {
+            nand: Some(nand),
+            card,
+        };
+        open(library, request)
+    }
+
+    /// The SD card medium the camera currently holds.
+    fn card_medium(&self) -> Result<Card, OpenError> {
+        let name = self
+            .camera
+            .session
+            .contacts
+            .keys()
+            .next()
+            .cloned()
+            .ok_or_else(|| {
+                OpenError::at(Stage::BootRom, "the run declares no modeled SD card slot")
+            })?;
+        self.camera
+            .session
+            .card_medium(&name)
+            .map_err(|error| OpenError::at(Stage::BootRom, error))
     }
 }
 
@@ -333,6 +451,7 @@ fn boot_holds(
 
 /// Run a constructed camera to REC, holding and releasing its controls around it.
 fn boot_camera(opened: &mut Opened) -> Result<(), OpenError> {
+    let before = release_attempt(&opened.camera.session, &opened.firmware);
     opened.apply_holds()?;
     let card_before = card_revision(&opened.camera.session, &opened.boot);
     let report = boot::to_rec(&mut opened.camera.session, INSTRUCTION_LIMIT)
@@ -340,6 +459,7 @@ fn boot_camera(opened: &mut Opened) -> Result<(), OpenError> {
     if report.status == "rec" && !report.pending && report.scanout_instance.is_some() {
         opened.release_holds()?;
         opened.stage = Stage::Rec;
+        confirm_release(opened, before)?;
         return Ok(());
     }
     let stage = reached_stage(
@@ -367,6 +487,84 @@ fn boot_camera(opened: &mut Opened) -> Result<(), OpenError> {
                 .unwrap_or_default()
         ),
     ))
+}
+
+/// Wait for FujiMod's runtime to confirm the release this boot applied. A
+/// card without a FujiMod release, or one already confirmed, needs nothing.
+fn confirm_release(opened: &mut Opened, before: Option<u64>) -> Result<(), OpenError> {
+    let Some(state) = release_state(&opened.camera.session, &opened.firmware) else {
+        return Ok(());
+    };
+    let last = state.get("last_boot");
+    let attempt = last
+        .and_then(|last| last.get("attempt"))
+        .and_then(Value::as_u64);
+    let result = last
+        .and_then(|last| last.get("result"))
+        .and_then(Value::as_str);
+    // A card the boot never touched keeps the previous boot's confirmation.
+    if result != Some("running") && attempt == before {
+        return Ok(());
+    }
+    let quantum = opened.camera.quantum;
+    let mut spent = 0u64;
+    while spent < CONFIRM_INSTRUCTION_LIMIT {
+        let state = release_state(&opened.camera.session, &opened.firmware);
+        let last = state.as_ref().and_then(|state| state.get("last_boot"));
+        if let Some(result) = last
+            .and_then(|last| last.get("result"))
+            .and_then(Value::as_str)
+        {
+            if result == "confirmed" {
+                return Ok(());
+            }
+            if result != "running" {
+                return Err(OpenError::at(
+                    Stage::Rec,
+                    format!("the release ended as {result}"),
+                ));
+            }
+        }
+        let window = CONFIRM_WINDOW.min(CONFIRM_INSTRUCTION_LIMIT - spent);
+        opened
+            .camera
+            .session
+            .run_with_limits(window, quantum, None, None)
+            .map_err(|error| OpenError::at(Stage::Rec, error))?;
+        spent += window;
+    }
+    Err(OpenError::at(
+        Stage::Rec,
+        format!("the release did not confirm within {CONFIRM_INSTRUCTION_LIMIT} instructions"),
+    ))
+}
+
+/// The attempt number the card's release state names, if any.
+fn release_attempt(session: &Session, firmware: &str) -> Option<u64> {
+    release_state(session, firmware)?
+        .get("last_boot")?
+        .get("attempt")?
+        .as_u64()
+}
+
+/// The release's persisted state, when the card has one.
+fn release_state(session: &Session, firmware: &str) -> Option<Value> {
+    let name = session.contacts.keys().next()?.clone();
+    let folder = release_folder(firmware);
+    let path = format!("FUJIMOD/SYSTEM/{folder}/STATE.JSN");
+    let bytes = session.card_read(&name, &path, None, 1 << 20).ok()?;
+    serde_json::from_slice(&bytes).ok()
+}
+
+/// The release's 8.3 directory under FUJIMOD/SYSTEM: the upper-case identity,
+/// or its hyphens removed when it is longer than eight characters.
+fn release_folder(firmware: &str) -> String {
+    let identity = firmware.to_ascii_uppercase();
+    if identity.len() <= 8 {
+        identity
+    } else {
+        identity.replace('-', "")
+    }
 }
 
 /// Open the installed automatic boot, creating its internal flash once with
@@ -556,6 +754,7 @@ pub(crate) fn construct(
     request: Request,
     resolved: ResolvedConfiguration,
 ) -> Result<Opened, OpenError> {
+    let opened_request = request.clone();
     let Request {
         firmware,
         boot,
@@ -565,7 +764,10 @@ pub(crate) fn construct(
         card_files,
         run_to_rec: _,
         card,
+        kept,
+        card_source,
     } = request;
+    let card_source = boot.card_source().cloned().or(card_source);
     let engine = resolved
         .configuration
         .execution
@@ -614,6 +816,7 @@ pub(crate) fn construct(
         boot::media::attach(&mut camera.session, None, &card_files)
             .map_err(|error| OpenError::at(Stage::BootRom, error))?;
     }
+    apply_kept_media(&mut camera.session, kept)?;
     apply_card_contacts(&mut camera.session, card)?;
     let holds = BootHolds {
         resolved: resolved.clone(),
@@ -633,7 +836,28 @@ pub(crate) fn construct(
         cached: false,
         holds,
         holds_applied: false,
+        request: opened_request,
+        card_source,
     })
+}
+
+/// Restore the media a power-on keeps: internal flash and the SD card medium.
+fn apply_kept_media(session: &mut Session, kept: KeptMedia) -> Result<(), OpenError> {
+    if let Some(nand) = kept.nand {
+        session.retain_nand("nand", nand).map_err(|error| {
+            OpenError::at(Stage::BootRom, format!("retained internal flash: {error}"))
+        })?;
+    }
+    if let Some(card) = kept.card {
+        let name = session.contacts.keys().next().cloned().ok_or_else(|| {
+            OpenError::at(Stage::BootRom, "the run declares no modeled SD card slot")
+        })?;
+        session
+            .insert_card(&name, card, true, false)
+            .map(|_| ())
+            .map_err(|error| OpenError::at(Stage::BootRom, format!("retained SD card: {error}")))?;
+    }
+    Ok(())
 }
 
 /// Put the caller's card into the modeled slot: its presence and write

@@ -231,7 +231,7 @@ impl Library {
     }
 
     /// The firmware's located NAND bootloader facts.
-    pub(crate) fn nand_boot(
+    pub fn nand_boot(
         &self,
         firmware_id: &str,
     ) -> Result<&fujimod_catalog::nand_boot::FirmwareNandBoot, LibraryError> {

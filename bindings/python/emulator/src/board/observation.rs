@@ -4,6 +4,7 @@ impl Board {
     pub(super) fn clear_observation(&mut self) {
         let session = match self.backend.as_ref() {
             Some(Backend::Graph(session)) => Some(session),
+            Some(Backend::Camera(opened)) => Some(opened.session()),
             Some(Backend::Xp5(opened)) => Some(&opened.session),
             _ => None,
         };

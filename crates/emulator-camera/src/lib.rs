@@ -19,8 +19,8 @@ mod release;
 
 pub use library::{Library, LibraryError, LibraryFirmware};
 pub use open::{
-    Boot, BootCache, BootHolds, CardModel, CardSource, OpenError, Opened, Request, Stage,
-    directory_files, open, open_unbooted, remote_facts, remote_options,
+    Boot, BootCache, BootHolds, CardModel, CardSource, KeptMedia, OpenError, Opened, PowerOn,
+    Request, Stage, directory_files, open, open_unbooted, remote_facts, remote_options,
 };
 pub use release::RELEASES_URL;
 

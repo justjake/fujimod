@@ -45,6 +45,8 @@ fn json<T: serde::de::DeserializeOwned>(value: &str) -> PyResult<T> {
 #[allow(clippy::large_enum_variant)]
 enum Backend {
     Graph(fujimod_emulator_session::Session),
+    /// A camera the builder opened, with the request needed to power it on again.
+    Camera(Box<fujimod_emulator_camera::Opened>),
     Xp5(Box<xp5::Opened>),
     Xp4(Box<dyn xp4_backend::Xp4Backend>),
 }
@@ -70,8 +72,6 @@ pub struct Board {
     failures: Failures,
     read_limit: usize,
     last_continuation_stop: Option<fujimod_emulator::board::continuation::ContinuationStop>,
-    /// Boot controls a camera builder open holds for a caller that runs it.
-    boot_holds: Option<fujimod_emulator_camera::BootHolds>,
 }
 impl Board {
     /// The Python board that owns a session built elsewhere, such as the
@@ -90,7 +90,21 @@ impl Board {
             failures: Failures::default(),
             read_limit,
             last_continuation_stop: None,
-            boot_holds: None,
+        }
+    }
+    /// The Python board that owns a camera the builder opened.
+    pub(super) fn from_camera(opened: fujimod_emulator_camera::Opened) -> Self {
+        let read_limit = opened.camera.read_limit;
+        Self {
+            driver: None,
+            memory_watch: None,
+            function_watch: None,
+            instruction_points: BTreeMap::new(),
+            backend: Some(Backend::Camera(Box::new(opened))),
+            objects: BTreeMap::new(),
+            failures: Failures::default(),
+            read_limit,
+            last_continuation_stop: None,
         }
     }
     /// A watched contact queue ends a run at its next change.
@@ -186,6 +200,7 @@ impl Board {
     fn session(&self) -> PyResult<&fujimod_emulator_session::Session> {
         match self.backend.as_ref() {
             Some(Backend::Graph(session)) => Ok(session),
+            Some(Backend::Camera(opened)) => Ok(opened.session()),
             Some(Backend::Xp5(opened)) => Ok(&opened.session),
             Some(Backend::Xp4(_)) => Err(PyRuntimeError::new_err(
                 "Selected XP4 system does not support this graph operation",
@@ -196,6 +211,7 @@ impl Board {
     pub fn session_mut(&mut self) -> PyResult<&mut fujimod_emulator_session::Session> {
         match self.backend.as_mut() {
             Some(Backend::Graph(session)) => Ok(session),
+            Some(Backend::Camera(opened)) => Ok(opened.session_mut()),
             Some(Backend::Xp5(opened)) => Ok(&mut opened.session),
             Some(Backend::Xp4(_)) => Err(PyRuntimeError::new_err(
                 "Selected XP4 system does not support this graph operation",
@@ -212,9 +228,11 @@ impl Board {
     fn xp4_session(&self) -> PyResult<&dyn xp4_backend::Xp4Backend> {
         match self.backend.as_ref() {
             Some(Backend::Xp4(session)) => Ok(session.as_ref()),
-            Some(Backend::Graph(_) | Backend::Xp5(_)) => Err(PyRuntimeError::new_err(
-                "Selected graph system does not support this XP4 operation",
-            )),
+            Some(Backend::Graph(_) | Backend::Camera(_) | Backend::Xp5(_)) => {
+                Err(PyRuntimeError::new_err(
+                    "Selected graph system does not support this XP4 operation",
+                ))
+            }
             None => Err(PyRuntimeError::new_err("runtime is closed")),
         }
     }
@@ -283,7 +301,6 @@ impl Board {
             objects: BTreeMap::new(),
             failures: Failures::default(),
             last_continuation_stop: None,
-            boot_holds: None,
         })
     }
     #[getter]
@@ -664,7 +681,6 @@ impl Board {
                 failures: Failures::default(),
                 read_limit,
                 last_continuation_stop: None,
-                boot_holds: None,
             });
         }
         let plan = Plan::parse(devices.as_bytes()).map_err(error)?;
@@ -751,7 +767,6 @@ impl Board {
             failures: adapters.failures,
             read_limit,
             last_continuation_stop: None,
-            boot_holds: None,
         })
     }
     fn __traverse__(&self, visit: PyVisit<'_>) -> Result<(), PyTraverseError> {

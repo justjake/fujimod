@@ -79,27 +79,59 @@ impl Board {
                     protected: sd_card_write_protected,
                     transfer_ticks: sd_card_transfer_ticks,
                 },
+                kept: Default::default(),
+                card_source: None,
             },
         )
         .map_err(|failure| error(failure.to_string()))?;
-        let fujimod_emulator_camera::Opened { camera, holds, .. } = opened;
-        let mut board = Self::from_graph_session(camera.session, camera.read_limit);
-        if !run_to_rec {
-            board.boot_holds = Some(holds);
-        }
-        Ok(board)
+        Ok(Self::from_camera(opened))
     }
 
     /// Release the boot controls a `run_to_rec=false` open holds, and connect
     /// the controls the running firmware loads. Does nothing once released.
     fn release_holds(&mut self) -> PyResult<()> {
-        let Some(holds) = self.boot_holds.take() else {
+        let Some(Backend::Camera(opened)) = self.backend.as_mut() else {
             return Ok(());
         };
-        match holds.release(self.session_mut()?) {
-            Ok(()) => Ok(()),
+        opened
+            .release_holds()
+            .map_err(|failure| error(failure.to_string()))
+    }
+
+    /// Power the camera off and on again, keeping its internal flash and the
+    /// SD card it last had.
+    #[pyo3(signature=(*, hold_controls=false, fresh_card=false, run_to_rec=true))]
+    fn power_on(
+        &mut self,
+        hold_controls: bool,
+        fresh_card: bool,
+        run_to_rec: bool,
+    ) -> PyResult<()> {
+        let library = Library::from_env().map_err(|failure| error(failure.to_string()))?;
+        let Some(backend) = self.backend.take() else {
+            return Err(error("runtime is closed".into()));
+        };
+        let Backend::Camera(opened) = backend else {
+            self.backend = Some(backend);
+            return Err(PyValueError::new_err(
+                "power_on requires a board created by open_camera",
+            ));
+        };
+        match opened.power_on(
+            &library,
+            fujimod_emulator_camera::PowerOn {
+                hold_controls,
+                fresh_card,
+                run_to_rec,
+            },
+        ) {
+            Ok(next) => {
+                self.read_limit = next.camera.read_limit;
+                self.backend = Some(Backend::Camera(Box::new(next)));
+                Ok(())
+            }
             Err(failure) => {
-                self.boot_holds = Some(holds);
+                self.backend = Some(Backend::Camera(opened));
                 Err(error(failure.to_string()))
             }
         }

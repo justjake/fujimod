@@ -171,3 +171,34 @@ def test_sd_card_transfer_ticks_slow_the_card_boot() -> None:
     finally:
         default.close()
         slow.close()
+
+
+def test_the_x70_powers_on_with_its_flash_and_card_kept() -> None:
+    card = release_card(library())
+    with Board.open_camera(
+        firmware="x70-110",
+        boot="sd-card",
+        sd_card=card,
+        execution_policy="interactive",
+    ) as board:
+        assert board.status()["status"] == "rec"
+        board.power_on()
+        assert board.status()["status"] == "rec"
+        board.power_on(hold_controls=True)
+        assert board.status()["status"] == "rec"
+        board.power_on(hold_controls=True, fresh_card=True)
+        assert board.status()["status"] == "rec"
+        with pytest.raises(TypeError, match="fresh_card"):
+            board.power_on(fresh_card=1)
+
+
+def test_a_stock_boot_cannot_power_on_holding_card_controls() -> None:
+    library()
+    with Board.open_camera(
+        firmware="x70-110",
+        boot="stock",
+        execution_policy="interactive",
+        boot_cache=False,
+    ) as board:
+        with pytest.raises(RuntimeError, match="SD card source"):
+            board.power_on(hold_controls=True)

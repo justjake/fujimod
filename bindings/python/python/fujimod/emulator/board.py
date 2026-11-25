@@ -492,6 +492,41 @@ class Board:
         self._ensure_open()
         self._native.release_holds()
 
+    def power_on(
+        self,
+        *,
+        hold_controls: bool = False,
+        fresh_card: bool = False,
+        run_to_rec: bool = True,
+    ) -> None:
+        """Power the camera off and on again with its internal flash and SD card.
+
+        The new session starts from the media the camera last had, so changes
+        the firmware made to internal flash or the card survive. With
+        `hold_controls` the catalog's SD-boot controls are held at power-on and
+        the boot runs from the card; otherwise the firmware starts from
+        internal flash with nothing held. `fresh_card` puts the boot source's
+        files on a new card instead of keeping the one the camera had. With
+        `run_to_rec` false the board stops before its first instruction with
+        the boot holds applied; call `release_holds` after running it.
+        """
+        self._ensure_open()
+        if type(hold_controls) is not bool:
+            raise TypeError("hold_controls must be a bool")
+        if type(fresh_card) is not bool:
+            raise TypeError("fresh_card must be a bool")
+        if type(run_to_rec) is not bool:
+            raise TypeError("run_to_rec must be a bool")
+        self._native.power_on(
+            hold_controls=hold_controls,
+            fresh_card=fresh_card,
+            run_to_rec=run_to_rec,
+        )
+        quantum = self._native.boot_quantum
+        if type(quantum) is not int or quantum < 1:
+            raise RuntimeError("Native builder returned an invalid board quantum")
+        self.quantum = quantum
+
     def _adopt_native(
         self, native: _native.Board, quantum: int, *, boot_capable: bool
     ) -> None:

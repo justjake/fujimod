@@ -37,6 +37,8 @@ fn request(boot: Boot) -> Request {
         cache: BootCache::Bypass,
         run_to_rec: true,
         card: Default::default(),
+        kept: Default::default(),
+        card_source: None,
     }
 }
 
