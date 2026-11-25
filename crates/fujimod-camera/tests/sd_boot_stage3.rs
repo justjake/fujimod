@@ -266,3 +266,8 @@ fn check_boot(firmware: &str) {
 fn xm1_sd_card_reaches_stage3() {
     check_boot("xm1-150");
 }
+
+#[test]
+fn xe2_sd_card_reaches_stage3() {
+    check_boot("xe2-411");
+}

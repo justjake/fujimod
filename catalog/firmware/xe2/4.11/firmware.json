@@ -69,6 +69,25 @@
       }
     ]
   },
+  "generated_facts": {
+    "observation": {
+      "menu_active": 13270568,
+      "menu_node": 13265600,
+      "pending_mode": 13453032,
+      "readiness": {
+        "category_one": 13450864,
+        "category_two": 13450872,
+        "excluded_mask": 16392,
+        "input_pending": 13454104,
+        "operation_alert_timer": 13451072,
+        "override_address": 13458176
+      },
+      "rec_mode": 3,
+      "setup_mode": 5,
+      "system_mode": 13371564,
+      "ui_mode": 13453020
+    }
+  },
   "reset_release": {
     "checks": [
       {
@@ -84,5 +103,15 @@
     "register": 4294656204,
     "source": 120,
     "target": 1073676288
+  },
+  "layouts": {
+    "profiles": {
+      "xe2-411": {
+        "camera_configuration_id": "xe2-411-runtime",
+        "execution_scope": "offline-boot-development",
+        "limits": [],
+        "rom_basis": "Declared catalog input."
+      }
+    }
   }
 }
