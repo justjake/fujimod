@@ -10,11 +10,21 @@ use fujimod_usb::ff80::Session;
 use sha2::{Digest, Sha256};
 
 fn fail(phase: MappedPhase, address: u64, length: u64, message: &str) -> BulkError {
+    receipt(phase, address, length, BulkError::Check(message.into()))
+}
+
+pub(super) fn receipt(
+    phase: MappedPhase,
+    address: u64,
+    length: u64,
+    source: BulkError,
+) -> BulkError {
     BulkError::Mapped(MappedFailure {
         phase,
         address,
         length,
-        source: Box::new(BulkError::Check(message.into())),
+        source: Box::new(source),
+        cleanup: None,
     })
 }
 
@@ -24,14 +34,7 @@ fn context<T>(
     length: u64,
     result: bulk::Result<T>,
 ) -> bulk::Result<T> {
-    result.map_err(|source| {
-        BulkError::Mapped(MappedFailure {
-            phase,
-            address,
-            length,
-            source: Box::new(source),
-        })
-    })
+    result.map_err(|source| receipt(phase, address, length, source))
 }
 
 pub(super) async fn read(
@@ -205,22 +208,22 @@ pub(super) async fn read(
         })
     }
     .await;
+    let saved = reader.saved();
     let restored = reader.restore().await;
     match (outcome, restored) {
         (Err(BulkError::Mapped(mut failure)), Err(cleanup)) => {
-            let primary = failure.source.to_string();
-            failure.source = Box::new(BulkError::Check(format!(
-                "{primary}; restore was withheld or failed: {cleanup}"
-            )));
+            failure.cleanup = Some(Box::new(cleanup));
             Err(BulkError::Mapped(failure))
         }
         (outcome, restored) => {
             let restored = restored.map_err(|source| {
+                let (address, length) = saved.unwrap_or((target.address, target.size));
                 BulkError::Mapped(MappedFailure {
                     phase: MappedPhase::Restore,
-                    address: target.address,
-                    length: target.size,
+                    address,
+                    length,
                     source: Box::new(source),
+                    cleanup: None,
                 })
             });
             bulk::finish(outcome, restored)
