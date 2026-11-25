@@ -43,3 +43,13 @@ rtc_valid = true
 # classifier could never report a host that connects after startup otherwise. Bit 0 is the installed
 # battery (the part's default).
 registers = { "0" = 0x8200, "e" = 0x11, "10" = 0x2 }
+
+# VERIFIED programming mode entry and protocol: application 0x014f5eb0 asserts GPIO 8.1
+# (0x01499ec4(0x80001, 1)), keeps SPI8 chip select GPIO 15.15 active, and exchanges 3-byte
+# frames (0x014f35e8 write, 0x014f3664 read) to erase, program, and verify a 64 KiB image
+# before lowering GPIO 8.1 and re-initializing normal power-controller register traffic
+# (0x014f4140, 0x014f4214, 0x014f48a8). Virtual flash size is derived from the update payload;
+# the physical MCU is not identified.
+[device.options.endpoints.part.programmer]
+mode = { port = 8, pin = 1, active_high = true }
+flash_bytes = 0x10000

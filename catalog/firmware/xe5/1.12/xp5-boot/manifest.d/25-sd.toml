@@ -10,30 +10,36 @@
 # 0x014c78a4).
 #
 # VERIFIED single-slot body wiring: only slot 0 (0xff9b0000) is wired on the X-E5: pins 11.11 and
-# 11.12 (0xb000b, 0xb000c, 0x014c5024; 11.12 also polled for SD card detect in 0x014c5c88), power
-# GPIOs 13.6 and 5.7 (0xd0006, 0x50007, driven high in 0x014c4e28 and low in 0x014c491c), clock and
-# reset controls (0x014c4ce8 -> 0xff90c940 bits 0..1 via 0x014ca2b0 and 0x50/0x51 via 0x014c9fac),
-# and interrupts (0x014c2e88: source 0x84 INTID 262 for UHS-I, 0x85 INTID 267 for UHS-II, table
-# 0x01a62c58). Slot 1 (0xff9b4000) has no pin, power, or interrupt wiring in those routines (0x014c5c88
-# passes 0xffffffff; 0x014c2e88 returns an error); its windows remain declared here only to match
-# the second [[sd]] entry in manifest.toml.
+# 11.12 (0xb000b, 0xb000c, 0x014c5024; 11.12 also polled active-low for SD card detect in
+# 0x014c5c88 -> 0x0149a244/0x0149a2c8/0x0149a30c, returning 0 when low and 2 when high to
+# 0x014c32b0), power GPIOs 13.6 and 5.7 (0xd0006, 0x50007, driven high in 0x014c4e28 and low in
+# 0x014c491c), clock and reset controls (0x014c4ce8 -> 0xff90c940 bits 0..1 via 0x014ca2b0 and
+# 0x50/0x51 via 0x014c9fac), and interrupts (0x014c2e88: source 0x84 INTID 262 for UHS-I, 0x85
+# INTID 267 for UHS-II, table 0x01a62c58). Slot 1 (0xff9b4000) has no pin, power, or interrupt
+# wiring in those routines (0x014c5c88 passes 0xffffffff; 0x014c2e88 returns an error); its windows
+# remain declared here only to match the second [[sd]] entry in manifest.toml.
 #
 # HARDWARE-ONLY / UNVERIFIED: protocol, transfer_ticks, clock_ticks, rca, and SD card responses are
-# session assumptions; ram_bytes is a session DRAM limit; capabilities sets bit 35 (the UHS-II bit
-# tested by 0x014c6d90) and leaves all other capability bits UNVERIFIED. No interrupt line is
-# declared: the boot polls.
+# session assumptions; ram_bytes matches manifest.toml DRAM (0x80000000) with dram_alias = false;
+# capabilities sets bit 35 (the UHS-II bit tested by 0x014c6d90) and leaves all other capability
+# bits UNVERIFIED. No interrupt line is declared here: a run that inserts a card adds INTID 262
+# through LoaderCard::apply.
 
 [[device]]
 base = 0xff9b0000
 size = 0x1e0
 kind = "sdhci"
+[device.options]
+detect_gpio = { port = 11, pin = 12, active_high = false }
 [device.options.controller]
 base = 0xff9b0000
 protocol = "sdhc"
 transfer_ticks = 1000
 clock_ticks = 1000
 rca = 1
-ram_bytes = 0x67f00000
+ram_bytes = 0x80000000
+dram_alias = false
+address_high = 0xff90e7d8
 
 [[device]]
 base = 0xff9b01e0

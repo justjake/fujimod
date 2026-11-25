@@ -42,6 +42,15 @@
       343
     ]
   },
+  "boot": {
+    "firmware_update": {
+      "hold": [
+        {
+          "id": "disp_back_button"
+        }
+      ]
+    }
+  },
   "controls": {
     "ael_afl_button": {
       "name": "AEL (exposure lock)/AFL (focus lock) button",

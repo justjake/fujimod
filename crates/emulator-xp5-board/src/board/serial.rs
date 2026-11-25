@@ -1,7 +1,10 @@
 //! Checked board wiring for serial controllers and their attached parts.
-use fujimod_emulator_devices::xp5::pins::SharedPins;
+use fujimod_emulator_devices::{checkpoint::Checkpoint, xp5::pins::SharedPins};
 use fujimod_emulator_parts_io::{
-    power_controller::PowerController, serial::Endpoint, serial_calibration::CalibrationRegisters,
+    power_controller::PowerController,
+    power_controller_programmer::{Config as ProgrammerConfig, Programmer as PowerProgrammer},
+    serial::Endpoint,
+    serial_calibration::CalibrationRegisters,
 };
 use fujimod_emulator_xp5_io::spi::{Attachment, Select, Spi};
 use serde::Deserialize;
@@ -19,6 +22,12 @@ pub(super) struct Connection {
     part: Part,
 }
 #[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+pub(super) struct PowerControllerProgrammer {
+    mode: Select,
+    flash_bytes: usize,
+}
+#[derive(Deserialize)]
 #[serde(tag = "kind", rename_all = "kebab-case", deny_unknown_fields)]
 pub(super) enum Part {
     PowerController {
@@ -28,6 +37,8 @@ pub(super) enum Part {
         /// example register 0 bit 7, which the X-T5 stage1 polls at boot.
         #[serde(default)]
         registers: std::collections::BTreeMap<String, u16>,
+        #[serde(default)]
+        programmer: Option<PowerControllerProgrammer>,
     },
     SerialCalibrationRegisters {
         miso_high: bool,
@@ -172,6 +183,101 @@ impl Endpoint for CountingDial {
     }
 }
 
+/// Power controller with an external mode-select GPIO pin that switches the
+/// shared SPI wire between normal register packets and three-byte flash programming.
+struct ModeSwitchedPowerController {
+    normal: Box<dyn Endpoint>,
+    programmer: PowerProgrammer,
+    pins: SharedPins,
+    mode: Select,
+    was_programming: bool,
+}
+impl ModeSwitchedPowerController {
+    fn is_programming(&self) -> bool {
+        let pins = self.pins.lock().expect("GPIO pins poisoned");
+        self.mode.active(&pins)
+    }
+}
+impl Endpoint for ModeSwitchedPowerController {
+    fn name(&self) -> &'static str {
+        self.normal.name()
+    }
+    fn validate(&self, frame: fujimod_emulator_parts_io::serial::Frame) -> Result<(), String> {
+        self.normal.validate(frame)
+    }
+    fn reset_transaction(&mut self) {
+        self.normal.reset_transaction();
+        self.programmer.reset_transaction();
+    }
+    fn transfer(&mut self, frame: fujimod_emulator_parts_io::serial::Frame, now_ns: u64) -> u16 {
+        let programming = self.is_programming();
+        if programming != self.was_programming {
+            self.was_programming = programming;
+            if programming {
+                self.programmer.reset_session();
+            } else {
+                self.normal.reset_transaction();
+            }
+        }
+        if programming {
+            self.programmer.transfer(frame, now_ns)
+        } else {
+            self.normal.transfer(frame, now_ns)
+        }
+    }
+    fn set_input_bits(&mut self, register: u8, mask: u16, value: u16) -> Result<(), String> {
+        self.normal.set_input_bits(register, mask, value)
+    }
+    fn input_bits(&self, register: u8) -> Result<u16, String> {
+        self.normal.input_bits(register)
+    }
+    fn admit_steps(&self, steps: i32) -> Result<(), String> {
+        self.normal.admit_steps(steps)
+    }
+    fn count_steps(&mut self, steps: i32) -> Result<(), String> {
+        self.normal.count_steps(steps)
+    }
+    fn checkpoint(&self) -> Result<Checkpoint, String> {
+        Ok(Checkpoint::encode(
+            "power-controller-with-programmer",
+            &(self.mode, self.was_programming),
+        )?
+        .with_children(vec![
+            self.normal.checkpoint()?,
+            self.programmer.checkpoint()?,
+        ]))
+    }
+    fn validate_checkpoint(&self, saved: &Checkpoint) -> Result<(), String> {
+        let (mode, _was_programming): (Select, bool) =
+            saved.decode("power-controller-with-programmer")?;
+        if mode != self.mode || saved.children().len() != 2 {
+            return Err("invalid power-controller programmer mode checkpoint".into());
+        }
+        self.normal.validate_checkpoint(&saved.children()[0])?;
+        self.programmer.validate_checkpoint(&saved.children()[1])
+    }
+    fn restore_checkpoint(&mut self, saved: &Checkpoint) -> Result<(), String> {
+        self.validate_checkpoint(saved)?;
+        let (_mode, was_programming): (Select, bool) =
+            saved.decode("power-controller-with-programmer")?;
+        self.normal.restore_checkpoint(&saved.children()[0])?;
+        self.programmer.restore_checkpoint(&saved.children()[1])?;
+        self.was_programming = was_programming;
+        Ok(())
+    }
+    fn save(&self) -> serde_json::Value {
+        serde_json::json!({
+            "normal": self.normal.save(),
+            "mode": self.mode,
+            "was_programming": self.was_programming,
+            "programmer": self.programmer.diagnostic_state(),
+        })
+    }
+    fn restore(&mut self, _state: &serde_json::Value) -> Result<(), String> {
+        Err("power-controller programmer binary flash requires a typed checkpoint".into())
+    }
+}
+
 pub fn build(
     base: u64,
     pins: SharedPins,
@@ -183,9 +289,9 @@ pub fn build(
         .map_err(|e| format!("SPI wiring: {e}"))?;
     Spi::new(
         base,
-        pins,
+        pins.clone(),
         wiring.source_hz,
-        attachments(wiring.endpoints, counting_dial)?,
+        attachments(wiring.endpoints, counting_dial, Some(pins))?,
     )
 }
 /// Parse `XT5_POWER_REGISTERS="REGISTER=VALUE,..."` (numbers decimal or `0x` hexadecimal):
@@ -218,12 +324,17 @@ fn parse_power_registers(spec: &str) -> Result<Vec<(u8, u16)>, String> {
         })
         .collect()
 }
-fn endpoint(part: Part, counting_dial: Option<u8>) -> Result<Box<dyn Endpoint>, String> {
+fn endpoint(
+    part: Part,
+    counting_dial: Option<u8>,
+    pins: Option<SharedPins>,
+) -> Result<Box<dyn Endpoint>, String> {
     Ok(match part {
         Part::PowerController {
             rtc_seconds,
             rtc_valid,
             registers,
+            programmer,
         } => {
             let mut part = PowerController::new();
             part.configure_rtc(rtc_seconds, rtc_valid);
@@ -250,13 +361,34 @@ fn endpoint(part: Part, counting_dial: Option<u8>) -> Result<Box<dyn Endpoint>, 
                     part.set_register(address, value);
                 }
             }
-            match counting_dial {
+            let normal: Box<dyn Endpoint> = match counting_dial {
                 Some(register) => Box::new(CountingDial {
                     inner: part,
                     register,
                     count: 0,
                 }),
                 None => Box::new(part),
+            };
+            match programmer {
+                Some(cfg) => {
+                    if cfg.mode.port >= 20 || cfg.mode.pin >= 16 {
+                        return Err(
+                            "power-controller programmer mode pin outside GPIO range".into()
+                        );
+                    }
+                    let pins = pins.ok_or("power-controller programmer requires GPIO pins")?;
+                    let programmer = PowerProgrammer::new(ProgrammerConfig {
+                        flash_bytes: cfg.flash_bytes,
+                    })?;
+                    Box::new(ModeSwitchedPowerController {
+                        normal,
+                        programmer,
+                        pins,
+                        mode: cfg.mode,
+                        was_programming: false,
+                    })
+                }
+                None => normal,
             }
         }
         Part::SerialCalibrationRegisters { miso_high } => {
@@ -295,13 +427,14 @@ fn endpoint(part: Part, counting_dial: Option<u8>) -> Result<Box<dyn Endpoint>, 
 fn attachments(
     connections: Vec<Connection>,
     counting_dial: Option<u8>,
+    pins: Option<SharedPins>,
 ) -> Result<Vec<Attachment>, String> {
     connections
         .into_iter()
         .map(|connection| {
             Ok(Attachment::new(
                 connection.select,
-                endpoint(connection.part, counting_dial)?,
+                endpoint(connection.part, counting_dial, pins.clone())?,
             ))
         })
         .collect()
@@ -310,7 +443,7 @@ pub(super) fn dedicated_wire(
     part: Part,
 ) -> Result<Box<dyn fujimod_emulator_parts_io::serial::Wire>, String> {
     Ok(Box::new(fujimod_emulator_parts_io::serial::Dedicated(
-        endpoint(part, None)?,
+        endpoint(part, None, None)?,
     )))
 }
 pub(super) fn gpio_wire(
@@ -318,8 +451,8 @@ pub(super) fn gpio_wire(
     connections: Vec<Connection>,
 ) -> Result<Box<dyn fujimod_emulator_parts_io::serial::Wire>, String> {
     Ok(Box::new(fujimod_emulator_xp5_io::spi::GpioWire::new(
-        pins,
-        attachments(connections, None)?,
+        pins.clone(),
+        attachments(connections, None, Some(pins))?,
     )?))
 }
 
@@ -377,8 +510,10 @@ mod tests {
                 registers: Default::default(),
                 rtc_seconds: 0,
                 rtc_valid: true,
+                programmer: None,
             },
             Some(0x36),
+            None,
         )
         .unwrap();
         assert_eq!(read(endpoint.as_mut(), 0x36), 0);
@@ -399,7 +534,7 @@ mod tests {
             "{ kind = 'serial-command-registers', bits = 8, mode = 0, read_flag = 1, miso_high = false }",
         )
         .unwrap();
-        let mut part = endpoint(burst.part, None).unwrap();
+        let mut part = endpoint(burst.part, None, None).unwrap();
         for word in [0x0a, 0x11, 0x22] {
             let frame = Frame {
                 bits: 8,
@@ -424,7 +559,6 @@ mod tests {
             .is_err()
         );
     }
-
     #[test]
     fn declared_registers_override_reset_values() {
         let power_controller = |registers: &str| {
@@ -433,7 +567,9 @@ mod tests {
                     rtc_seconds: 0,
                     rtc_valid: false,
                     registers: toml::from_str(registers).unwrap(),
+                    programmer: None,
                 },
+                None,
                 None,
             )
         };
@@ -447,5 +583,111 @@ mod tests {
         for registers in ["\"27\" = 0x200", "\"80\" = 0", "\"10\" = 1\n\"0x10\" = 2"] {
             assert!(power_controller(registers).is_err(), "{registers}");
         }
+    }
+
+    #[test]
+    fn mode_gpio_switches_power_controller_between_registers_and_programming_mode() {
+        use fujimod_emulator_devices::xp5::pins::Pins;
+        let pins = Pins::shared();
+        let make = || {
+            endpoint(
+                Part::PowerController {
+                    registers: [("0".to_string(), 0x8200)].into_iter().collect(),
+                    rtc_seconds: 0,
+                    rtc_valid: true,
+                    programmer: Some(PowerControllerProgrammer {
+                        mode: Select {
+                            port: 8,
+                            pin: 1,
+                            active_high: true,
+                        },
+                        flash_bytes: 0x1_0000,
+                    }),
+                },
+                Some(0x36),
+                Some(pins.clone()),
+            )
+            .unwrap()
+        };
+        let xfer3 = |ep: &mut dyn Endpoint, b0: u8, b1: u8, b2: u8| -> (u8, u8) {
+            let mut f = |w: u8| {
+                ep.transfer(
+                    Frame {
+                        bits: 8,
+                        mode: 3,
+                        word: w.into(),
+                    },
+                    0,
+                ) as u8
+            };
+            let _ = f(b0);
+            (f(b1), f(b2))
+        };
+
+        let mut ep = make();
+        assert_eq!(ep.name(), "power-controller");
+        // Normal register mode while GPIO 8.1 is low.
+        assert_eq!(read(ep.as_mut(), 0x00), 0x8200);
+        ep.set_input_bits(0x12, 0x30, 0x10).unwrap();
+        assert_eq!(ep.input_bits(0x12).unwrap(), 0x10);
+        assert_eq!(read(ep.as_mut(), 0x12), 0x10);
+        ep.admit_steps(2).unwrap();
+        ep.count_steps(2).unwrap();
+        assert_eq!(read(ep.as_mut(), 0x36), 2);
+
+        // Drive GPIO 8.1 high as output -> enters programming mode.
+        pins.lock().unwrap().ports[8].registers[0] |= 1 << 1;
+        assert_eq!(xfer3(ep.as_mut(), 0xab, 0x63, 0x59), (0, 0));
+        assert_eq!(xfer3(ep.as_mut(), 0xa4, 0x55, 0x0d), (0, 0));
+        assert_eq!(xfer3(ep.as_mut(), 0x01, 0, 0), (0x06, 0xe0));
+        assert_eq!(xfer3(ep.as_mut(), 0x1a, 0, 8), (0, 0));
+        assert_eq!(xfer3(ep.as_mut(), 0x01, 0, 0), (0x06, 0xc0));
+        assert_eq!(xfer3(ep.as_mut(), 0x1a, 0, 0), (0, 0));
+        for cmd in [0x96, 0x98, 0x9a, 0x9e, 0x9c] {
+            xfer3(ep.as_mut(), cmd, 0xff, 0xff);
+        }
+        assert_eq!(xfer3(ep.as_mut(), 0x91, 0, 0), (0, 0));
+        xfer3(ep.as_mut(), 0xce, 0, 1);
+        xfer3(ep.as_mut(), 0xc0, 0, 1);
+        xfer3(ep.as_mut(), 0xc6, 0, 0);
+        xfer3(ep.as_mut(), 0xc8, 0, 0);
+        xfer3(ep.as_mut(), 0xc2, 0, 5);
+        assert_eq!(xfer3(ep.as_mut(), 0xc5, 0, 0), (0, 0));
+        xfer3(ep.as_mut(), 0xce, 0, 0);
+
+        xfer3(ep.as_mut(), 0xce, 0, 1);
+        xfer3(ep.as_mut(), 0xc0, 0, 5);
+        xfer3(ep.as_mut(), 0xc6, 0, 0);
+        xfer3(ep.as_mut(), 0xc8, 0, 0);
+        xfer3(ep.as_mut(), 0xc2, 0, 4);
+        xfer3(ep.as_mut(), 0xd2, 0x78, 0x56);
+        xfer3(ep.as_mut(), 0xca, 0x34, 0x12);
+        assert_eq!(xfer3(ep.as_mut(), 0xc5, 0, 0), (0, 0));
+        xfer3(ep.as_mut(), 0xce, 0, 0);
+
+        // Checkpoint round-trip preserves both normal registers and programmed flash.
+        let cp = ep.checkpoint().unwrap();
+        let saved = ep.save();
+        assert_eq!(
+            saved["programmer"]["flash"],
+            serde_json::json!({ "bytes": 0x1_0000 })
+        );
+        assert!(ep.restore(&saved).is_err());
+
+        let mut restored = make();
+        restored.restore_checkpoint(&cp).unwrap();
+        xfer3(restored.as_mut(), 0xc0, 0, 3);
+        xfer3(restored.as_mut(), 0xc6, 0, 0);
+        xfer3(restored.as_mut(), 0xc8, 0, 0);
+        xfer3(restored.as_mut(), 0xc2, 0, 2);
+        xfer3(restored.as_mut(), 0xe6, 0, 3);
+        xfer3(restored.as_mut(), 0xe4, 0x78, 0x56);
+        xfer3(restored.as_mut(), 0xe2, 0x34, 0x12);
+        assert_eq!(xfer3(restored.as_mut(), 0xe7, 0, 0), (0, 3));
+
+        // Lower GPIO 8.1 -> resumes normal power-controller protocol with registers intact.
+        pins.lock().unwrap().ports[8].registers[0] &= !(1 << 1);
+        assert_eq!(read(restored.as_mut(), 0x00), 0x8200);
+        assert_eq!(read(restored.as_mut(), 0x12), 0x10);
     }
 }
