@@ -19,22 +19,6 @@ const ROOTS: &[&str] = &[
     "BootHold",
 ];
 
-/// Catalog types that Tsify-derived bindings name by their Rust identifier, with their schema definition.
-const ALIASES: &[(&str, &str)] = &[
-    ("BlockFrameSource", "BlockFrameSource"),
-    ("BlockRegisterBlockFrames", "BlockRegisterBlockFrames"),
-    ("BlockRegisterBlockJob", "BlockRegisterBlockJob"),
-    ("BlockSensorReadout", "BlockSensorReadout"),
-    ("DisplayScanout", "HardwareDisplayScanout"),
-    ("DisplayStatusBits", "HardwareDisplayStatusBits"),
-    ("DisplayTimingBanks", "HardwareDisplayTimingBanks"),
-    ("RegisterBlockCommand", "HardwareRegisterBlockCommand"),
-    ("RegisterFixedWord", "HardwareRegisterFixedWord"),
-    ("RegisterIdleBits", "HardwareRegisterIdleBits"),
-    ("ResetRelease", "HardwareResetRelease"),
-    ("TimerLayout", "HardwareTimerLayout"),
-];
-
 fn name(value: &str) -> String {
     if ROOTS.contains(&value) {
         value.into()
@@ -155,10 +139,6 @@ pub fn generate(directory: &Path, output: &Path) -> Result<(), String> {
     let mut pending: BTreeSet<String> = ROOTS.iter().map(|s| s.to_string()).collect();
     let mut emitted = BTreeSet::new();
     let mut source = String::from("// Generated from Rust catalog schemas.\n");
-    for (alias, key) in ALIASES {
-        pending.insert(key.to_string());
-        source.push_str(&format!("export type {alias} = {};\n", name(key)));
-    }
     while let Some(key) = pending.pop_first() {
         if !emitted.insert(key.clone()) {
             continue;
