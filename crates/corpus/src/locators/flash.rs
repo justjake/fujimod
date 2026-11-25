@@ -951,7 +951,7 @@ fn xpp_initialized_marker(reader: &Routine) -> Result<u64> {
 /// capture. The first checked firmware establishes the instruction grammar;
 /// each address and state input is recovered from its indexed routines.
 fn xp4_flash<L: Lookup>(index: &L, firmware: &str, image_origin: u64) -> Result<Value> {
-    if matches!(firmware, "xt3-511" | "xt30-201" | "xe4-201") {
+    if matches!(firmware, "xt3-511" | "xt30-201" | "xe4-201" | "xt4-212") {
         return xp4_packet_flash(index, firmware, image_origin);
     }
     if firmware != "xs10-311" {
@@ -1203,6 +1203,9 @@ fn xp4_packet_flash<L: Lookup>(index: &L, firmware: &str, image_origin: u64) -> 
         ),
         "xe4-201" => (
             0x011c79d0, 0x011c7d84, 0x011c7810, 0x011c8220, 0x011c8bc0, 61, 0x01711a1c, 0x138,
+        ),
+        "xt4-212" => (
+            0x011a65c4, 0x011a6978, 0x011a6404, 0x011a6e14, 0x011a77b4, 61, 0x01788d50, 0x138,
         ),
         _ => return Err("unsupported XP4 packet flash layout".into()),
     };
