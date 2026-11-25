@@ -340,6 +340,9 @@ pub enum Model {
         set_bits: Vec<(u64, u32)>,
         clear_bits: Vec<(u64, u32)>,
         scanout: Option<(usize, u64)>,
+        /// Page bases inside the window that the display timing banks own.
+        #[serde(default)]
+        holes: Vec<u64>,
     },
     DisplayFrames {
         irqs: Vec<u32>,
@@ -471,6 +474,37 @@ impl Built {
             recording_frames: Default::default(),
         })
     }
+}
+/// The display output window less the 4 KiB pages another node owns.
+fn output_windows(base: u64, size: u64, mut holes: Vec<u64>) -> Result<Vec<Mapping>, String> {
+    holes.sort_unstable();
+    let mut windows = Vec::new();
+    let mut at = base;
+    for hole in holes {
+        if hole & 0xfff != 0 || hole < at || hole + 0x1000 > base + size {
+            return Err("Invalid display output hole".into());
+        }
+        if hole > at {
+            windows.push(Mapping { base: at, size: hole - at });
+        }
+        at = hole + 0x1000;
+    }
+    if at < base + size {
+        windows.push(Mapping { base: at, size: base + size - at });
+    }
+    Ok(windows)
+}
+/// An external input: ADC `channel` reads `sample` until the next change.
+pub fn adc_input(
+    session: &mut fujimod_emulator_session::Session,
+    channel: usize,
+    sample: u16,
+) -> Result<(), String> {
+    session
+        .board
+        .edit_device(session.node("adc")?, |adc: &mut adc::Converter| {
+            adc.set_input(channel, sample)
+        })
 }
 /// Drive a named application GPIO bank through its modeled external pins.
 pub fn gpio_input(
@@ -1298,6 +1332,7 @@ pub fn build(
                 set_bits,
                 clear_bits,
                 scanout,
+                holes,
             } => {
                 let output = display::Output::new(
                     base,
@@ -1310,7 +1345,7 @@ pub fn build(
                     Some(ticks) => output.with_handshake(ticks)?,
                     None => output,
                 };
-                devices.register(base, size, Box::new(output))?
+                devices.register_windows(output_windows(base, size, holes)?, Box::new(output))?
             }
             Model::DisplayFrames {
                 irqs,
@@ -2011,5 +2046,16 @@ mod tests {
             scheduled: None,
         };
         assert!(miswired.restore_checkpoint(&saved).is_err());
+    }
+
+    #[test]
+    fn display_output_windows_leave_timing_pages_to_their_owner() {
+        let base = 0xfff6_4000;
+        let windows = output_windows(base, 0x3000, vec![0xfff6_5000]).unwrap();
+        let spans: Vec<_> = windows.iter().map(|w| (w.base, w.size)).collect();
+        assert_eq!(spans, [(base, 0x1000), (0xfff6_6000, 0x1000)]);
+        assert_eq!(output_windows(base, 0x3000, vec![]).unwrap().len(), 1);
+        assert!(output_windows(base, 0x3000, vec![0xfff6_5800]).is_err());
+        assert!(output_windows(base, 0x3000, vec![0xfff6_7000]).is_err());
     }
 }

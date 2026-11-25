@@ -1345,6 +1345,13 @@ fn nodes(
     } else if !reset.i2c_parts.is_empty() {
         return Err("I2C parts require the I2C buses".into());
     }
+    // Display timing banks, when declared, own their pages inside any display
+    // output window.
+    let timing_banks = maps
+        .display_frames
+        .as_ref()
+        .and_then(|f| f.timing.as_ref())
+        .map(|t| t.bases);
     for (n, output) in maps.display_outputs.iter().flatten().enumerate() {
         let status = |rows: &[fujimod_catalog::profiles::DisplayStatusBits]| {
             rows.iter()
@@ -1357,6 +1364,14 @@ fn nodes(
                 "set_bits": status(&output.set_bits), "clear_bits": status(&output.clear_bits),
                 "scanout": output.scanout.as_ref().map(|s| json!([s.output, s.period_ticks])),
             });
+            let holes = timing_banks
+                .into_iter()
+                .flatten()
+                .filter(|bank| (output.base..output.base + output.size).contains(bank))
+                .collect::<Vec<_>>();
+            if !holes.is_empty() {
+                model["holes"] = json!(holes);
+            }
             if let Some(ticks) = output.handshake_ticks {
                 model["handshake_ticks"] = json!(ticks);
             }

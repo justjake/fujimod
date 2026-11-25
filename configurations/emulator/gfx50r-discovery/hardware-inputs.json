@@ -379,9 +379,10 @@
     "pll_input": {
       "running": [
         0,
-        3
+        3,
+        4
       ],
-      "basis": "Declared loader-inherited PLL state for kernel-entry discovery: PLLs 0 and 3 running, like the shared XPP stage-2 configuration. This is an assumed input, not a GFX 50R measurement; ROM execution may reprogram the clock bank."
+      "basis": "Declared loader-inherited PLL state for kernel-entry discovery: PLLs 0, 3 and 4 running. PLLs 0 and 3 follow the shared XPP stage-2 configuration; 3.11 also waits for PLL 4's lock before it continues, as the X-T20 profile declares. This is an assumed input, not a GFX 50R measurement; ROM execution may reprogram the clock bank."
     }
   }
 }

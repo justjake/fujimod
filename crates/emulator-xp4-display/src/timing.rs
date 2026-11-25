@@ -50,6 +50,15 @@ impl XppTiming {
     pub fn windows(&self) -> [(u64, u64); 2] {
         self.state.bases.map(|b| (b, b + 0x1000))
     }
+    fn check_state(&self, state: &Timing) -> Result<(), String> {
+        if state.frame_period_ticks != self.state.frame_period_ticks
+            || state.stop_delay_ticks != self.state.stop_delay_ticks
+            || state.banks.iter().any(|b| b.next_phase_index >= 3)
+        {
+            return Err("Invalid X-Processor Pro display timing checkpoint".into());
+        }
+        Ok(())
+    }
 }
 
 impl Device for XppTiming {
@@ -93,6 +102,27 @@ impl Device for XppTiming {
     }
     fn next_deadline(&self, now: u64) -> Option<u64> {
         self.state.deadline_with_clock(now as i64, true).map(|v| v as u64)
+    }
+    // Bases and IRQ routes are wiring: they are not saved and come from self.
+    fn checkpoint(&self) -> Result<fujimod_emulator_devices::checkpoint::Checkpoint, String> {
+        fujimod_emulator_devices::checkpoint::Checkpoint::encode(self.name(), &self.state)
+    }
+    fn validate_checkpoint(&self, saved: &fujimod_emulator_devices::checkpoint::Checkpoint) -> Result<(), String> {
+        if !saved.children().is_empty() || !saved.blobs().is_empty() {
+            return Err("xpp-display-timing snapshot has unexpected parts".into());
+        }
+        let state: Timing = saved.decode(self.name())?;
+        self.check_state(&state)
+    }
+    fn restore_checkpoint(&mut self, saved: &fujimod_emulator_devices::checkpoint::Checkpoint) -> Result<(), String> {
+        self.validate_checkpoint(saved)?;
+        let mut state: Timing = saved.decode(self.name())?;
+        (state.bases, state.irqs) = (self.state.bases, self.state.irqs);
+        self.state = state;
+        Ok(())
+    }
+    fn fingerprint(&self) -> Result<Value, String> {
+        Ok(self.checkpoint()?.state())
     }
     fn save(&self) -> Value {
         serde_json::to_value(&self.state).unwrap()

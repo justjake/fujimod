@@ -113,6 +113,13 @@ impl Board {
         }
     }
 
+    pub fn adc_input(&mut self, channel: usize, sample: u16) -> Result<(), String> {
+        match self {
+            Self::Xp4(_) => Err("timed ADC inputs apply to X-Processor Pro runs".into()),
+            Self::Xpp(session) => fujimod_emulator_xpp::board::adc_input(session, channel, sample),
+        }
+    }
+
     pub fn set_scene(&mut self, scene: &Value) -> Result<(), String> {
         match self {
             Self::Xp4(board) => board.set_scene(scene),
