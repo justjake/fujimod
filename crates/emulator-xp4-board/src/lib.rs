@@ -1,6 +1,8 @@
 //! ARM application-profile cluster alongside the shared R-profile runtime.
 //! The typed CPU backend, backing owner and discovery ledger are shared.
 mod abort;
+pub mod catalog;
+mod client;
 mod checkpoint;
 mod client;
 mod counted;

@@ -3239,6 +3239,7 @@ dependencies = [
 name = "fujimod-emulator-xp4-board"
 version = "0.1.0"
 dependencies = [
+ "fujimod-catalog-resolution",
  "fujimod-emulator",
  "fujimod-emulator-cpu",
  "fujimod-emulator-cpu-unicorn",
