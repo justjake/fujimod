@@ -884,6 +884,13 @@
           "band_high": 3102,
           "sample": 2869,
           "basis": "Band 2637..3102, configuration tags 0x389b/0x3899 tested by the AF-ON (physical 18) scanner callback. The sample is the band midpoint."
+        },
+        {
+          "control_id": "focus_stick",
+          "band_low": 3103,
+          "band_high": 3776,
+          "sample": 3439,
+          "basis": "Band 3103..3776, configuration tags 0x389f/0x389d tested by the stick common-contact callback at 0x172a0b8. The sample is the band midpoint."
         }
       ]
     },

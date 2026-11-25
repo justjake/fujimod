@@ -207,6 +207,9 @@ pub struct Options {
     pub front_dial: Option<QuadratureDial>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub gpio_keys: Vec<GpioKey>,
+    /// Holding the first key also closes the second key's contact on another wire.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub coupled_contacts: Vec<(Key, Key)>,
 }
 
 fn band(low: u16, high: u16, sample: u16, maximum: u16) -> bool {
@@ -386,6 +389,26 @@ impl Options {
                     "{} position {} overlaps a key band on channel {}",
                     dial.name, position.label, dial.channel
                 ));
+            }
+        }
+        let mut links = BTreeSet::new();
+        for &(key, contact) in &self.coupled_contacts {
+            let wire = |key| {
+                self.ladders
+                    .iter()
+                    .find(|ladder| ladder.rungs.iter().any(|rung| rung.key == key))
+                    .map(|ladder| ladder.wire)
+            };
+            if !matches!((wire(key), wire(contact)), (Some(a), Some(b)) if a != b)
+                || !links.insert((key, contact))
+                || self
+                    .coupled_contacts
+                    .iter()
+                    .any(|&(source, _)| source == contact)
+            {
+                return Err(
+                    "coupled contacts must link distinct ladder wires without chaining".into(),
+                );
             }
         }
         let mut names = BTreeSet::new();

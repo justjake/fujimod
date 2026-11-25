@@ -93,6 +93,7 @@ pub fn ladders(resolved: &ResolvedConfiguration) -> Result<Option<ladders::Optio
         rear_dial: None,
         front_dial: None,
         gpio_keys: Vec::new(),
+        coupled_contacts: Vec::new(),
     };
     extension(body, &mut options)?;
     options.validate()?;
@@ -208,6 +209,29 @@ fn extension(body: &str, options: &mut ladders::Options) -> Result<(), String> {
 }
 
 fn xh2s_extension(options: &mut ladders::Options) -> Result<(), String> {
+    let stick = options
+        .ladders
+        .iter_mut()
+        .find(|ladder| ladder.wire == ladders::Wire::Adc { channel: 14 })
+        .ok_or("the X-H2S catalog ladders lack ADC 14")?;
+    for (key, low, high) in [
+        (Key::StickUpRight, 100, 1230),
+        (Key::StickDownRight, 1689, 1929),
+        (Key::StickUpLeft, 1231, 1447),
+        (Key::StickDownLeft, 2220, 2605),
+    ] {
+        stick.rungs.push(ladders::Rung {
+            key,
+            band_low: low,
+            band_high: high,
+            sample: midpoint(low, high),
+            basis: "Factory thresholds tested by the ADC14 stick decode table at 0x1f6dcb0.".into(),
+        });
+    }
+    options
+        .coupled_contacts
+        .extend(stick.rungs.iter().map(|rung| (rung.key, Key::StickPush)));
+
     options.gpio_keys.push(ladders::GpioKey {
         key: Key::MovieRecord,
         pin: Pin { port: 0, pin: 13 },
@@ -545,11 +569,33 @@ fn extension_ids(
             ],
         ),
         "xh2s" => (
-            &[(
-                Key::MovieRecord,
-                "movie_recording_button",
-                "Movie recording button",
-            )],
+            &[
+                (
+                    Key::MovieRecord,
+                    "movie_recording_button",
+                    "Movie recording button",
+                ),
+                (
+                    Key::StickUpLeft,
+                    "focus_stick.up_left",
+                    "Focus stick up-left",
+                ),
+                (
+                    Key::StickUpRight,
+                    "focus_stick.up_right",
+                    "Focus stick up-right",
+                ),
+                (
+                    Key::StickDownLeft,
+                    "focus_stick.down_left",
+                    "Focus stick down-left",
+                ),
+                (
+                    Key::StickDownRight,
+                    "focus_stick.down_right",
+                    "Focus stick down-right",
+                ),
+            ],
             &[],
         ),
         _ => (&[], &[]),

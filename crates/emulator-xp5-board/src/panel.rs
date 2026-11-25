@@ -149,7 +149,18 @@ fn ladder_circuit(
     idle: &Idle<'_>,
     controls: &mut Vec<Control>,
 ) -> Result<Circuit, String> {
-    let keys: Vec<Key> = ladder.rungs.iter().map(|r| r.key).collect();
+    let mut keys: Vec<Key> = ladder.rungs.iter().map(|r| r.key).collect();
+    let coupled: Vec<_> = options
+        .coupled_contacts
+        .iter()
+        .copied()
+        .filter(|(_, contact)| keys.contains(contact))
+        .collect();
+    for &(key, _) in &coupled {
+        if !keys.contains(&key) {
+            keys.push(key);
+        }
+    }
     let (dial, released, signal): (Option<&PositionDial>, u16, Box<dyn Fn(u16) -> Signal>) =
         match ladder.wire {
             Wire::Adc { channel } => {
@@ -184,9 +195,11 @@ fn ladder_circuit(
             }
         };
     let mut ids = Vec::new();
-    for &key in &keys {
+    for (index, &key) in keys.iter().enumerate() {
         let (id, label) = named(&names.keys, key)?;
-        controls.push(button(id, label));
+        if index < ladder.rungs.len() {
+            controls.push(button(id, label));
+        }
         ids.push(id.clone());
     }
     let positions = match dial {
@@ -207,7 +220,18 @@ fn ladder_circuit(
                 .filter(|i| held_mask & (1 << i) != 0)
                 .map(|i| keys[i])
                 .collect();
-            let Some(value) = level(ladder, &held, position.as_ref(), released) else {
+            let contacts: Vec<Key> = ladder
+                .rungs
+                .iter()
+                .map(|rung| rung.key)
+                .filter(|key| {
+                    held.contains(key)
+                        || coupled
+                            .iter()
+                            .any(|(held_key, contact)| contact == key && held.contains(held_key))
+                })
+                .collect();
+            let Some(value) = level(ladder, &contacts, position.as_ref(), released) else {
                 continue;
             };
             let mut pose: Vec<String> = (0..keys.len())
@@ -647,6 +671,42 @@ mod tests {
             .unwrap();
         assert!(pressed.signals().unwrap().contains(&record_pad(false)));
         assert!(switches.signals().unwrap().contains(&record_pad(true)));
+    }
+
+    #[test]
+    fn xh2s_stick_closes_two_wires_until_released() {
+        let switches = SwitchPanel::new(xh2s(3774).wiring).unwrap();
+        for (direction, sample) in [
+            ("up", 1568),
+            ("down", 3380),
+            ("left", 2823),
+            ("right", 2074),
+            ("up_left", 1339),
+            ("up_right", 665),
+            ("down_left", 2412),
+            ("down_right", 1809),
+        ] {
+            let id = format!("focus_stick.{direction}");
+            let tilting = switches.transition(&id, "pressed").unwrap();
+            let levels = tilting.signals().unwrap();
+            assert!(
+                levels.contains(&analog(11, 3439)) && levels.contains(&analog(14, sample)),
+                "{id}"
+            );
+            assert!(tilting.transition("af_on_button", "pressed").is_err());
+            let centered = tilting.transition(&id, "released").unwrap();
+            let levels = centered.signals().unwrap();
+            assert!(
+                levels.contains(&analog(11, 4095)) && levels.contains(&analog(14, 4095)),
+                "{id}"
+            );
+        }
+        let push = switches.transition("focus_stick", "pressed").unwrap();
+        let levels = push.signals().unwrap();
+        assert!(levels.contains(&analog(11, 3439)) && levels.contains(&analog(14, 4095)));
+        let tilting = push.transition("focus_stick.up", "pressed").unwrap();
+        let still_tilting = tilting.transition("focus_stick", "released").unwrap();
+        assert!(still_tilting.signals().unwrap().contains(&analog(11, 3439)));
     }
 
     #[test]
