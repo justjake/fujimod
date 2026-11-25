@@ -677,6 +677,55 @@ fn stub_registers(block: &fujimod_catalog::reference::SocBlock) -> toml::Value {
     }).collect())
 }
 
+/// The completion-stub options of a start, completion and acknowledgement handshake.
+fn handshake_options(
+    options: &mut toml::Table,
+    starts: &[fujimod_catalog::soc::CompletionStart],
+    completion: &[fujimod_catalog::soc::CompletionWrite],
+    ack: Option<&fujimod_catalog::soc::CompletionAck>,
+    irq_mask: Option<&fujimod_catalog::soc::CompletionIrqMask>,
+) {
+    let integer = |value: u64| toml::Value::Integer(i64::try_from(value).unwrap_or(i64::MAX));
+    if !starts.is_empty() {
+    options.insert("starts".into(), toml::Value::Array(starts.iter().map(|start| {
+        let mut row = toml::Table::new();
+        row.insert("offset".into(), integer(start.offset));
+        row.insert("mask".into(), integer(u64::from(start.mask)));
+        toml::Value::Table(row)
+    }).collect()));
+    }
+    if !completion.is_empty() {
+    options.insert("completion".into(), toml::Value::Array(completion.iter().map(|write| {
+        let mut row = toml::Table::new();
+        row.insert("offset".into(), integer(write.offset));
+        if let Some(set) = write.set { row.insert("set".into(), integer(u64::from(set))); }
+        if let Some(clear) = write.clear { row.insert("clear".into(), integer(u64::from(clear))); }
+        toml::Value::Table(row)
+    }).collect()));
+    }
+    if let Some(ack) = ack {
+    let mut row = toml::Table::new();
+    row.insert("offset".into(), integer(ack.offset));
+    row.insert("mode".into(), toml::Value::String("w1c".into()));
+    if let Some(offset) = ack.status_offset { row.insert("status_offset".into(), integer(offset)); }
+    if let Some(bits) = ack.bits { row.insert("bits".into(), integer(u64::from(bits))); }
+    options.insert("ack".into(), toml::Value::Table(row));
+    }
+    if let Some(mask) = irq_mask {
+    options.insert("irq_mask_offset".into(), integer(mask.offset));
+    options.insert("irq_mask_bit".into(), integer(u64::from(mask.bit)));
+    options.insert("irq_mask_set_masks".into(), toml::Value::Boolean(mask.set_masks));
+    }
+}
+
+/// A stage's handshake and interrupt line as completion-stub options.
+fn stage_handshake(options: &mut toml::Table, handshake: Option<&fujimod_catalog::soc::CompletionHandshake>, irq: Option<u32>) {
+    if let Some(handshake) = handshake {
+        handshake_options(options, &handshake.starts, &handshake.completion, handshake.ack.as_ref(), handshake.irq_mask.as_ref());
+    }
+    if let Some(line) = irq { options.insert("irq".into(), toml::Value::Integer(i64::from(line))); }
+}
+
 fn block_window(
     block: &fujimod_catalog::reference::SocBlock,
     device: &BlockDevice,
@@ -807,11 +856,26 @@ fn block_window(
             options.insert("completion_us".into(), integer(1000));
             "imaging-rifp"
         }
-        BlockDevice::ImagingTnr { .. } => "imaging-tnr",
-        BlockDevice::ImagingFcnv { .. } => "imaging-fcnv",
-        BlockDevice::ImagingFilterScaler { .. } => "imaging-filter-scaler",
-        BlockDevice::ImagingRzl2 { .. } => "imaging-rzl2",
-        BlockDevice::ImagingResz { .. } => "imaging-resz",
+        BlockDevice::ImagingTnr { handshake, .. } => {
+            stage_handshake(&mut options, handshake.as_ref(), irq("irq"));
+            "imaging-tnr"
+        }
+        BlockDevice::ImagingFcnv { handshake, .. } => {
+            stage_handshake(&mut options, handshake.as_ref(), irq("irq"));
+            "imaging-fcnv"
+        }
+        BlockDevice::ImagingFilterScaler { handshake, .. } => {
+            stage_handshake(&mut options, handshake.as_ref(), irq("irq"));
+            "imaging-filter-scaler"
+        }
+        BlockDevice::ImagingRzl2 { handshake, .. } => {
+            stage_handshake(&mut options, handshake.as_ref(), irq("irq"));
+            "imaging-rzl2"
+        }
+        BlockDevice::ImagingResz { handshake, .. } => {
+            stage_handshake(&mut options, handshake.as_ref(), irq("irq"));
+            "imaging-resz"
+        }
         BlockDevice::InputCapture { .. } => "input-capture",
         BlockDevice::Pl011 { .. } => {
             options.insert("irq".into(), integer(u64::from(irq("irq").unwrap_or(0))));
@@ -839,42 +903,16 @@ fn block_window(
                     toml::Value::Table(row)
                 }).collect()));
             }
-            if !starts.is_empty() {
-                options.insert("starts".into(), toml::Value::Array(starts.iter().map(|start| {
-                    let mut row = toml::Table::new();
-                    row.insert("offset".into(), integer(start.offset));
-                    row.insert("mask".into(), integer(u64::from(start.mask)));
-                    toml::Value::Table(row)
-                }).collect()));
-            }
-            if !completion.is_empty() {
-                options.insert("completion".into(), toml::Value::Array(completion.iter().map(|write| {
-                    let mut row = toml::Table::new();
-                    row.insert("offset".into(), integer(write.offset));
-                    if let Some(set) = write.set { row.insert("set".into(), integer(u64::from(set))); }
-                    if let Some(clear) = write.clear { row.insert("clear".into(), integer(u64::from(clear))); }
-                    toml::Value::Table(row)
-                }).collect()));
-            }
-            if let Some(ack) = ack {
-                let mut row = toml::Table::new();
-                row.insert("offset".into(), integer(ack.offset));
-                row.insert("mode".into(), toml::Value::String("w1c".into()));
-                if let Some(offset) = ack.status_offset { row.insert("status_offset".into(), integer(offset)); }
-                if let Some(bits) = ack.bits { row.insert("bits".into(), integer(u64::from(bits))); }
-                options.insert("ack".into(), toml::Value::Table(row));
-            }
-            if let Some(mask) = irq_mask {
-                options.insert("irq_mask_offset".into(), integer(mask.offset));
-                options.insert("irq_mask_bit".into(), integer(u64::from(mask.bit)));
-                options.insert("irq_mask_set_masks".into(), toml::Value::Boolean(mask.set_masks));
-            }
+            handshake_options(&mut options, starts, completion, ack.as_ref(), irq_mask.as_ref());
             options.insert("delay_us".into(), integer(delay_ticks / 1000));
             if let Some(line) = irq("irq") { options.insert("irq".into(), integer(u64::from(line))); }
             "completion-stub"
         }
         BlockDevice::VideoCodec { .. } => "xp5-codec",
-        BlockDevice::ImagingDsp { .. } => "completion-stub",
+        BlockDevice::ImagingDsp { handshake, .. } => {
+            stage_handshake(&mut options, handshake.as_ref(), irq("irq"));
+            "completion-stub"
+        }
         BlockDevice::RegisterBlock { idle_bits, fixed_words, reads_back, .. } => {
             if !idle_bits.is_empty() || !fixed_words.is_empty() {
                 options.insert("registers".into(), toml::Value::Array(fixed_words.iter().map(|word| {
@@ -938,10 +976,15 @@ fn block_window(
             "usb-device-controller"
         }
         BlockDevice::UsbPhy { .. } => "usb-phy",
-        BlockDevice::JpegCodec { run_ticks, .. } => {
-            options.insert("irq".into(), integer(u64::from(irq("irq").unwrap_or(0))));
+        BlockDevice::JpegCodec { run_ticks, direction, .. } => {
+            let line = irq("irq").ok_or_else(|| format!("block {}: JPEG codec has no interrupt", block.id))?;
+            options.insert("irq".into(), integer(u64::from(line)));
             options.insert("run_ticks".into(), integer(*run_ticks));
-            if block.id.contains("decoder") { "jpeg-decoder" } else { "jpeg-encoder" }
+            match direction {
+                Some(fujimod_catalog::soc::JpegDirection::Decode) => "jpeg-decoder",
+                Some(fujimod_catalog::soc::JpegDirection::Encode) => "jpeg-encoder",
+                None => return Err(format!("block {}: XP5 JPEG blocks declare a direction", block.id)),
+            }
         }
         BlockDevice::I2c { fifo_depth, clock_hz, tick_hz, .. } => {
             let _ = (fifo_depth, clock_hz, tick_hz);

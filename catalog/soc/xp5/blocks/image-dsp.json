@@ -5,8 +5,32 @@
   "base": 4278190080,
   "size": 4202496,
   "kind": "imaging-controller",
+  "interrupts": [
+    {
+      "output": "irq",
+      "line": 221
+    }
+  ],
   "device": {
     "model": "imaging_dsp",
+    "handshake": {
+      "starts": [
+        {
+          "offset": 28,
+          "mask": 4294967295
+        }
+      ],
+      "completion": [
+        {
+          "offset": 4198812,
+          "set": 1
+        }
+      ],
+      "ack": {
+        "offset": 4198812,
+        "mode": "w1c"
+      }
+    },
     "basis": "imaging DSP program memory and debug page Located in catalog/firmware/xe5/1.12/xp5-boot/manifest.d/63-hdr.toml."
   },
   "registers": [

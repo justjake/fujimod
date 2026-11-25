@@ -5,9 +5,16 @@
   "base": 4291891200,
   "size": 4096,
   "kind": "imaging-controller",
+  "interrupts": [
+    {
+      "output": "irq",
+      "line": 208
+    }
+  ],
   "device": {
     "model": "jpeg_codec",
     "run_ticks": 1000,
+    "direction": "decode",
     "basis": "jpeg-decoder run Located in catalog/firmware/xt5/4.31/xp5-boot/manifest.d/58-playback.toml."
   },
   "evidence": [

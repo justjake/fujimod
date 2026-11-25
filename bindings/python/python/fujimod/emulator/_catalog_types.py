@@ -540,6 +540,7 @@ class BlockDeviceVariant3(TypedDict, total=False):
 
 class BlockDeviceVariant30(TypedDict, total=False):
     basis: Required[str]
+    direction: NotRequired[JpegDirection | None]
     memory_type_block_id: NotRequired[str | None]
     model: Required[Literal["jpeg_codec"]]
     run_ticks: Required[int]
@@ -883,26 +884,31 @@ class BlockDeviceVariant80(TypedDict, total=False):
 
 class BlockDeviceVariant81(TypedDict, total=False):
     basis: Required[str]
+    handshake: NotRequired[CompletionHandshake | None]
     model: Required[Literal["imaging_tnr"]]
 
 
 class BlockDeviceVariant82(TypedDict, total=False):
     basis: Required[str]
+    handshake: NotRequired[CompletionHandshake | None]
     model: Required[Literal["imaging_fcnv"]]
 
 
 class BlockDeviceVariant83(TypedDict, total=False):
     basis: Required[str]
+    handshake: NotRequired[CompletionHandshake | None]
     model: Required[Literal["imaging_filter_scaler"]]
 
 
 class BlockDeviceVariant84(TypedDict, total=False):
     basis: Required[str]
+    handshake: NotRequired[CompletionHandshake | None]
     model: Required[Literal["imaging_rzl2"]]
 
 
 class BlockDeviceVariant85(TypedDict, total=False):
     basis: Required[str]
+    handshake: NotRequired[CompletionHandshake | None]
     model: Required[Literal["imaging_resz"]]
 
 
@@ -949,6 +955,7 @@ class BlockDeviceVariant90(TypedDict, total=False):
 
 class BlockDeviceVariant91(TypedDict, total=False):
     basis: Required[str]
+    handshake: NotRequired[CompletionHandshake | None]
     model: Required[Literal["imaging_dsp"]]
 
 
@@ -1237,6 +1244,13 @@ class CompletionAck(TypedDict, total=False):
 
 
 type CompletionAckMode = Literal["w1c"]
+
+
+class CompletionHandshake(TypedDict, total=False):
+    ack: NotRequired[CompletionAck | None]
+    completion: Required[list[CompletionWrite]]
+    irq_mask: NotRequired[CompletionIrqMask | None]
+    starts: Required[list[CompletionStart]]
 
 
 class CompletionIrqMask(TypedDict, total=False):
@@ -3690,6 +3704,9 @@ class IrisOptics(TypedDict, total=False):
     output: Required[OpticalQuantity]
     positions: Required[list[AperturePosition]]
     travel_limits: Required[list[int]]
+
+
+type JpegDirection = Literal["encode", "decode"]
 
 
 class LadderRung(TypedDict, total=False):

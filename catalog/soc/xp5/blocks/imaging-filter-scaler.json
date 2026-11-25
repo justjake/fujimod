@@ -5,8 +5,42 @@
   "base": 4288163840,
   "size": 4096,
   "kind": "imaging-controller",
+  "interrupts": [
+    {
+      "output": "irq",
+      "line": 204
+    }
+  ],
   "device": {
     "model": "imaging_filter_scaler",
+    "handshake": {
+      "starts": [
+        {
+          "offset": 4,
+          "mask": 1
+        }
+      ],
+      "completion": [
+        {
+          "offset": 260,
+          "set": 1
+        },
+        {
+          "offset": 4,
+          "clear": 1
+        }
+      ],
+      "ack": {
+        "offset": 264,
+        "mode": "w1c",
+        "status_offset": 260,
+        "bits": 7
+      },
+      "irq_mask": {
+        "offset": 268,
+        "bit": 0
+      }
+    },
     "basis": "filter and scaler stage Located in catalog/firmware/xe5/1.12/xp5-boot/manifest.d/57-develop-stubs-3.toml."
   },
   "registers": [

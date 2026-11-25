@@ -5,8 +5,40 @@
   "base": 4291977216,
   "size": 4096,
   "kind": "imaging-controller",
+  "interrupts": [
+    {
+      "output": "irq",
+      "line": 217
+    }
+  ],
   "device": {
     "model": "imaging_fcnv",
+    "handshake": {
+      "starts": [
+        {
+          "offset": 4,
+          "mask": 1
+        }
+      ],
+      "completion": [
+        {
+          "offset": 784,
+          "set": 1
+        },
+        {
+          "offset": 4,
+          "clear": 1
+        }
+      ],
+      "ack": {
+        "offset": 784,
+        "mode": "w1c"
+      },
+      "irq_mask": {
+        "offset": 780,
+        "bit": 0
+      }
+    },
     "basis": "frame conversion Located in catalog/firmware/xe5/1.12/xp5-boot/manifest.d/57-develop-stubs-3.toml."
   },
   "registers": [
