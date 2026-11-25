@@ -24,6 +24,7 @@ fn state() -> StateDir {
 fn request(preset: Preset) -> Request {
     Request {
         firmware: "x70-110".into(),
+        files: fujimod_camera::FirmwareInput::Library,
         preset,
         sd_card: None,
         policy: ExecutionPolicy::Interactive,

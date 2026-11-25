@@ -339,6 +339,7 @@ fn open_with_builder(request: OpenCameraRequest) -> Result<(LaunchedCamera, Runn
     let selection = resolved.reference.clone();
     let camera_request = camera::Request {
         firmware: request.firmware,
+        files: camera::FirmwareInput::Library,
         preset,
         sd_card,
         policy: fujimod_emulator_cpu::ExecutionPolicy::Interactive,

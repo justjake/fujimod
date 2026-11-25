@@ -102,6 +102,14 @@ impl Library {
         })
     }
 
+    /// The catalog's records without a directory of firmware files.
+    ///
+    /// An open that names its update and boot ROM reads no file through the
+    /// library, but still needs the catalog's hashes and run configuration.
+    pub fn without_directory() -> Result<Self, LibraryError> {
+        Self::new(PathBuf::new())
+    }
+
     /// The firmware library directory.
     pub fn path(&self) -> &Path {
         &self.root
@@ -139,6 +147,11 @@ impl Library {
     /// The firmware's catalog-named update and boot ROM, each hashed once.
     pub fn files(&self, firmware_id: &str) -> Result<FirmwareFiles, LibraryError> {
         self.firmware(firmware_id)?;
+        if self.root.as_os_str().is_empty() {
+            return Err(LibraryError::Missing(format!(
+                "no firmware library directory names {firmware_id}'s files"
+            )));
+        }
         let update = self.update_path(firmware_id);
         let boot_rom = self.boot_rom_path(firmware_id);
         let update_sha256 = self.hash(&update, firmware_id, "stock update")?;

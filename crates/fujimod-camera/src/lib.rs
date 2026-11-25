@@ -125,6 +125,9 @@ impl Default for CardOptions {
 pub struct Request {
     /// Catalog firmware identity, for example x70-110.
     pub firmware: String,
+    /// The firmware's update and boot ROM: the library's files, or two named
+    /// files.
+    pub files: FirmwareInput,
     pub preset: Preset,
     /// The SD card. A stock preset adds these files to an otherwise empty card;
     /// the card presets use it as the FujiMod SD card, or the release when none
@@ -319,7 +322,7 @@ fn emulator_request(
     Ok((
         EmulatorRequest {
             firmware: request.firmware.clone(),
-            files: FirmwareInput::Library,
+            files: request.files.clone(),
             start,
             flash,
             card: CardInputs {

@@ -237,6 +237,7 @@ impl Open {
     fn request(&self) -> Result<camera::Request, String> {
         Ok(camera::Request {
             firmware: self.firmware.clone(),
+            files: camera::FirmwareInput::Library,
             preset: match self.boot {
                 OpenBoot::Stock => camera::Preset::Stock,
                 OpenBoot::SdCard => camera::Preset::SdCard,

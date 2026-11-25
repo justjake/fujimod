@@ -76,6 +76,14 @@ impl fmt::Debug for LoaderImage {
     }
 }
 
+impl LoaderImage {
+    /// A RAM image and its SHA-256, computed here.
+    pub fn new(bytes: Vec<u8>) -> Self {
+        let sha256 = format!("{:x}", Sha256::digest(&bytes));
+        Self { bytes, sha256 }
+    }
+}
+
 /// The camera's internal flash at power-on.
 #[derive(Clone)]
 pub enum Flash {
