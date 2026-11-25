@@ -105,6 +105,57 @@ impl InterruptMap {
         }
         None
     }
+    /// Construct a relocated GIC-v3 distributor and redistributor block.
+    ///
+    /// The bounds mirror `fujimod_emulator_ip_arm::gicv3::Gic::new`, so they
+    /// are validated here first and reported as errors. Address geometry is
+    /// validated against a one-core board; the board constructor revalidates
+    /// the core count against its processors.
+    pub fn gic_v3(
+        distributor: u64,
+        redistributor: u64,
+        stride: u64,
+        cores: usize,
+        lines: usize,
+    ) -> Result<Self, String> {
+        if cores == 0 || cores > 256 {
+            return Err(format!("GICv3 core count {cores} outside 1..=256"));
+        }
+        if !(32..=1020).contains(&lines) {
+            return Err(format!("GICv3 line count {lines} outside 32..=1020"));
+        }
+        let map = InterruptMap {
+            gic: Box::new(fujimod_emulator_ip_arm::gicv3::Gic::new(
+                (0..cores as u32).collect(),
+                lines,
+            )?),
+            registers: InterruptRegisters::GicV3 {
+                distributor,
+                redistributor,
+                stride,
+            },
+            cores,
+        };
+        map.validate(cores)?;
+        Ok(map)
+    }
+    /// Identity-mapped MMIO windows this map serves, as (address, size).
+    pub fn windows(&self) -> Vec<(u64, u64)> {
+        match self.registers {
+            InterruptRegisters::GicV2 {
+                distributor,
+                cpu_interface,
+            } => vec![(distributor, 0x1000), (cpu_interface, 0x1000)],
+            InterruptRegisters::GicV3 {
+                distributor,
+                redistributor,
+                stride,
+            } => vec![
+                (distributor, 0x10000),
+                (redistributor, stride * self.cores as u64),
+            ],
+        }
+    }
 }
 
 #[cfg(test)]
@@ -144,5 +195,20 @@ mod tests {
             cpu_interface: 0x10000,
         };
         assert!(map.validate(2).is_err());
+    }
+    #[test]
+    fn gic_v3_constructor_reports_bounds_and_geometry() {
+        let map = InterruptMap::gic_v3(0xfa00_0000, 0xfa08_0000, 0x20000, 4, 512).unwrap();
+        assert_eq!(map.cores, 4);
+        assert_eq!(
+            map.windows(),
+            vec![(0xfa00_0000, 0x10000), (0xfa08_0000, 0x80000)]
+        );
+        assert!(InterruptMap::gic_v3(0, 0x10000, 0x20000, 0, 512).is_err());
+        assert!(InterruptMap::gic_v3(0, 0x10000, 0x20000, 257, 512).is_err());
+        assert!(InterruptMap::gic_v3(0, 0x10000, 0x20000, 4, 31).is_err());
+        assert!(InterruptMap::gic_v3(0, 0x10000, 0x20000, 4, 1021).is_err());
+        assert!(InterruptMap::gic_v3(0x10000, 0x20000, 0x10000, 4, 512).is_err());
+        assert!(InterruptMap::gic_v3(1, 0x20000, 0x20000, 4, 512).is_err());
     }
 }

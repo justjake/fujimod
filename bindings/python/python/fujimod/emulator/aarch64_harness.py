@@ -184,9 +184,14 @@ class Aarch64DriverHarness:
         ram_fixture: Iterable[Span],
         patches: Iterable[Span] = (),
         quantum: int = 1000,
+        interrupts: Mapping[str, object] | None = None,
     ) -> None:
         if not isinstance(inputs, Aarch64Inputs):
             raise TypeError("AArch64 caller requires Aarch64Inputs")
+        if interrupts is not None and not isinstance(interrupts, Mapping):
+            raise TypeError("Interrupts must be a mapping with a 'kind' discriminator")
+        if interrupts is not None and inputs.devices is not None:
+            raise ValueError("Interrupts apply only to a caller without a device set")
         if type(quantum) is not int or quantum < 1:
             raise ValueError("Quantum must be positive")
         self.inputs, self.quantum = inputs, quantum
@@ -288,7 +293,13 @@ class Aarch64DriverHarness:
                 "decoders": [],
                 "instructions_per_tick": [1, 1],
             },
-            devices=dict(devices.definition) if devices else {"kind": "none"},
+            devices=(
+                dict(devices.definition)
+                if devices
+                else {"kind": "none"}
+                if interrupts is None
+                else {"kind": "none", "interrupts": dict(interrupts)}
+            ),
             assets=tuple(Asset(name, len(data)) for name, data in assets.items()),
             images=tuple(Image(i.name, i.address) for i in inputs.images),
             quantum=quantum,

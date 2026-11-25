@@ -9,7 +9,7 @@ No file lookup or firmware selection occurs in this module.
 from __future__ import annotations
 
 import json
-from collections.abc import Callable, Iterable, Sequence
+from collections.abc import Callable, Iterable, Mapping, Sequence
 from typing import TYPE_CHECKING, Literal, TypedDict, TypeGuard
 
 from . import registers as regs
@@ -252,6 +252,7 @@ class DriverHarness:
         ram_fixture: Iterable[Span] | None = None,
         patches: Iterable[Span] = (),
         quantum: int = 1000,
+        interrupts: Mapping[str, object] | None = None,
         **kwargs: object,
     ) -> DriverHarness | Aarch64DriverHarness:
         if cls is DriverHarness:
@@ -271,6 +272,7 @@ class DriverHarness:
                     ),
                     patches=((address, bytes(data)) for address, data in patches),
                     quantum=quantum,
+                    interrupts=interrupts,
                 )
         return object.__new__(cls)
 
