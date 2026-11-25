@@ -205,9 +205,22 @@ fn endpoint(
         } => {
             let mut part = PowerController::new();
             part.configure_rtc(rtc_seconds, rtc_valid);
+            // Each address appears once and names a plain storage register; the
+            // RTC latch is refused.
+            let mut seen = [false; 0x80];
             for (address, value) in registers {
                 let address = u8::from_str_radix(address.trim_start_matches("0x"), 16)
                     .map_err(|e| format!("power-controller register {address}: {e}"))?;
+                if address >= 0x80 || address == 0x27 {
+                    return Err(format!(
+                        "power controller register {address:#x} is not a declarable storage register"
+                    ));
+                }
+                if std::mem::replace(&mut seen[address as usize], true) {
+                    return Err(format!(
+                        "power controller register {address:#x} is declared twice"
+                    ));
+                }
                 part.set_register(address, value);
             }
             if let Ok(spec) = std::env::var("XT5_POWER_REGISTERS") {
@@ -351,5 +364,29 @@ mod tests {
             )
             .is_err()
         );
+    }
+
+    #[test]
+    fn declared_registers_override_reset_values() {
+        let power_controller = |registers: &str| {
+            endpoint(
+                Part::PowerController {
+                    rtc_seconds: 0,
+                    rtc_valid: false,
+                    registers: toml::from_str(registers).unwrap(),
+                },
+                None,
+            )
+        };
+        let mut default_part = power_controller("").unwrap();
+        assert_eq!(read(default_part.as_mut(), 0), 0x200, "stock default");
+        assert_eq!(read(default_part.as_mut(), 0) & 0x8000, 0);
+
+        let mut ready_part = power_controller("\"0\" = 0x8200\n\"0x10\" = 2").unwrap();
+        assert_eq!(read(ready_part.as_mut(), 0), 0x8200, "bit-15 candidate");
+        assert_eq!(read(ready_part.as_mut(), 0x10), 2);
+        for registers in ["\"27\" = 0x200", "\"80\" = 0", "\"10\" = 1\n\"0x10\" = 2"] {
+            assert!(power_controller(registers).is_err(), "{registers}");
+        }
     }
 }

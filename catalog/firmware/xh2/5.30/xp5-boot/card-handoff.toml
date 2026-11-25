@@ -1,0 +1,211 @@
+# Firmware entry after the mask ROM loads the SD card startup stage.
+pc = 0xff800000
+sp = 0xff83c000
+slot = 0xff9b0000
+stage_max_bytes = 0x3c000
+
+[power_controller_registers]
+"0" = 0x8202
+"10" = 0x0002
+
+# DDR PHY register space (0xfb000000, 0xfb400000) is RAM in the boot manifest; the stage's first
+# fault was a write at 0xfb04017a (PC 0xff80dfc8).
+
+# Memory-controller status the stock setup polls (0xfaf07780 non-zero, low byte of 0xfaf07784 a
+# result code) after writing 0xfaf07680. Scripted answers, as the X-T5's.
+
+[[device]]
+base = 0xfaf07000
+size = 0x1000
+kind = "bringup-stub"
+[device.options]
+registers = [{ offset = 0x780, mode = "constant", value = 1 }]
+
+[[device]]
+base = 0xfaf17000
+size = 0x1000
+kind = "bringup-stub"
+[device.options]
+registers = [{ offset = 0x780, mode = "constant", value = 1 }]
+
+[[device]]
+base = 0xfaf27000
+size = 0x1000
+kind = "bringup-stub"
+[device.options]
+registers = [{ offset = 0x780, mode = "constant", value = 1 }]
+
+[[device]]
+base = 0xfaf37000
+size = 0x1000
+kind = "bringup-stub"
+[device.options]
+registers = [{ offset = 0x780, mode = "constant", value = 1 }]
+
+# Memory-controller setup words the stock setup stores through its word writer 0xff80dfb8 and
+# never reads back (first fault: write at 0xfae60000, PC 0xff80dfbc). Store-only latches.
+
+[[device]]
+base = 0xfae60000
+size = 0x2000
+kind = "write-only-registers"
+
+[[device]]
+base = 0xfae63000
+size = 0x1000
+kind = "write-only-registers"
+
+[[device]]
+base = 0xfae70000
+size = 0x3000
+kind = "write-only-registers"
+
+[[device]]
+base = 0xfae80000
+size = 0x4000
+kind = "write-only-registers"
+
+[[device]]
+base = 0xfaf09000
+size = 0x1000
+kind = "write-only-registers"
+
+[[device]]
+base = 0xfaf19000
+size = 0x1000
+kind = "write-only-registers"
+
+[[device]]
+base = 0xfae62000
+size = 0x1000
+kind = "write-only-registers"
+
+[[device]]
+base = 0xfaf29000
+size = 0x1000
+kind = "write-only-registers"
+
+[[device]]
+base = 0xfaf39000
+size = 0x1000
+kind = "write-only-registers"
+
+# The stage's loop 0xff801d24 stores 0x1ff to the word at +0xa0 of each of the 22 configuration banks
+# (0xfae00000 + 0x200 * n); the manifest declares only +0x20..+0x4c of each. Store-only latches.
+
+[[device]]
+base = 0xfae000a0
+size = 4
+kind = "write-only-registers"
+
+[[device]]
+base = 0xfae002a0
+size = 4
+kind = "write-only-registers"
+
+[[device]]
+base = 0xfae004a0
+size = 4
+kind = "write-only-registers"
+
+[[device]]
+base = 0xfae006a0
+size = 4
+kind = "write-only-registers"
+
+[[device]]
+base = 0xfae008a0
+size = 4
+kind = "write-only-registers"
+
+[[device]]
+base = 0xfae00aa0
+size = 4
+kind = "write-only-registers"
+
+[[device]]
+base = 0xfae00ca0
+size = 4
+kind = "write-only-registers"
+
+[[device]]
+base = 0xfae00ea0
+size = 4
+kind = "write-only-registers"
+
+[[device]]
+base = 0xfae010a0
+size = 4
+kind = "write-only-registers"
+
+[[device]]
+base = 0xfae012a0
+size = 4
+kind = "write-only-registers"
+
+[[device]]
+base = 0xfae014a0
+size = 4
+kind = "write-only-registers"
+
+[[device]]
+base = 0xfae016a0
+size = 4
+kind = "write-only-registers"
+
+[[device]]
+base = 0xfae018a0
+size = 4
+kind = "write-only-registers"
+
+[[device]]
+base = 0xfae01aa0
+size = 4
+kind = "write-only-registers"
+
+[[device]]
+base = 0xfae01ca0
+size = 4
+kind = "write-only-registers"
+
+[[device]]
+base = 0xfae01ea0
+size = 4
+kind = "write-only-registers"
+
+[[device]]
+base = 0xfae020a0
+size = 4
+kind = "write-only-registers"
+
+[[device]]
+base = 0xfae022a0
+size = 4
+kind = "write-only-registers"
+
+[[device]]
+base = 0xfae024a0
+size = 4
+kind = "write-only-registers"
+
+[[device]]
+base = 0xfae026a0
+size = 4
+kind = "write-only-registers"
+
+[[device]]
+base = 0xfae028a0
+size = 4
+kind = "write-only-registers"
+
+[[device]]
+base = 0xfae02aa0
+size = 4
+kind = "write-only-registers"
+
+# GPIO pad model of a start that runs the stock setup: the setup programs each port's +4 word
+# (output enables) and +8 word, which the default "legacy" model misreads. "data-latch" (+4 output
+# enable, +0 output data) is the X-T5, X100VI and X-H2S model. Set for ROM and SD card starts only.
+[[window_options]]
+base = 0xff907000
+set = { pad_model = "data-latch" }

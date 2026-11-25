@@ -131,6 +131,9 @@ impl Handoff {
             "xt5-431" => Some(toml::from_str(include_str!(
                 "../../../../catalog/firmware/xt5/4.31/xp5-boot/card-handoff.toml"
             )).map_err(|error| format!("card-handoff.toml: {error}"))),
+            "xh2-530" => Some(toml::from_str(include_str!(
+                "../../../../catalog/firmware/xh2/5.30/xp5-boot/card-handoff.toml"
+            )).map_err(|error| format!("card-handoff.toml: {error}"))),
             _ => None,
         }
     }
@@ -309,6 +312,27 @@ mod tests {
         extents.sort_unstable();
         assert!(extents.windows(2).all(|pair| pair[0].1 <= pair[1].0));
         assert!(Handoff::for_firmware("x100vi-131").is_none());
+    }
+
+    #[test]
+    fn the_xh2_card_handoff_declares_the_stock_setup_it_runs() {
+        let handoff = Handoff::for_firmware("xh2-530").unwrap().unwrap();
+        assert_eq!((handoff.pc, handoff.sp, handoff.slot), (0xff80_0000, 0xff83_c000, 0xff9b_0000));
+        assert_eq!(handoff.power_controller_registers["0"], 0x8202);
+        assert_eq!(handoff.power_controller_registers["10"], 2);
+        // The memory-controller status pages answer the setup's polls.
+        for base in [0xfaf0_7000, 0xfaf1_7000, 0xfaf2_7000, 0xfaf3_7000] {
+            let status = handoff.device.iter().find(|window| window.base == base).unwrap();
+            assert_eq!(status.kind, "bringup-stub");
+        }
+        // No window is declared twice, and none overlaps another.
+        let mut extents: Vec<(u64, u64)> =
+            handoff.device.iter().map(|window| (window.base, window.base + window.size)).collect();
+        extents.sort_unstable();
+        assert!(extents.windows(2).all(|pair| pair[0].1 <= pair[1].0));
+        let card = RomStart::from_card_handoff(handoff, vec![]).unwrap();
+        let gpio = card.setup_window_options.iter().find(|options| options.base == 0xff90_7000).unwrap();
+        assert_eq!(gpio.set["pad_model"].as_str(), Some("data-latch"));
     }
 
     #[test]
