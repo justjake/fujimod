@@ -20,7 +20,7 @@ const comparisons: readonly CompareComponent[] = [
     previews: ['fluid-glass'],
     ported:
       'Glass draws the resolved material: the calibrated fill, the volume as nine slices along the top and bottom edges, the light rims and the dark hairline, with content in flow between them. All ten variants resolve from the stylesheet’s numbers.',
-    remaining: 'Attaching the press feedback to the glass, and a preview of a group melting its children.',
+    remaining: 'Attaching the press feedback to the glass.',
   },
   {
     title: 'Indicator',
