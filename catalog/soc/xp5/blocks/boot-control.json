@@ -8,7 +8,7 @@
   "device": {
     "model": "boot_control",
     "direct_flash_straps": 1,
-    "basis": "Boot-source strap word; the control words at 0xff90e400 and 0xfa140000 belong to the same block and reset to 0. Setup samples bit 0 and, set, initializes the serial-flash controller (the direct-flash path; catalog/firmware/xe5/1.12/xp5-boot/setup-handoff.toml). The X-E5 1.12 loader path writes 0xff90e400 through 0x1498ac4 (catalog/firmware/xe5/1.12/xp5-boot/manifest.d/67-boot-control.toml)."
+    "basis": "Boot-source strap word; the control words at 0xff90e400 and 0xfa140000 belong to the same block and reset to 0. Setup samples bit 0 and, set, initializes the serial-flash controller (the direct-flash path; catalog/firmware/xe5/1.12/xp5-boot/setup-handoff.toml). The X-E5 1.12 loader path writes 0xff90e400 through 0x1498ac4."
   },
   "evidence": [
     {

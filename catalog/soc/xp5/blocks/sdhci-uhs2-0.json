@@ -8,7 +8,7 @@
   "device": {
     "model": "sdhci_uhs2",
     "clock_ticks": 1000,
-    "basis": "UHS-II capabilities page 0 Located in catalog/firmware/xe5/1.12/xp5-boot/manifest.d/25-sd.toml."
+    "basis": "UHS-II capabilities page 0"
   },
   "evidence": [
     {

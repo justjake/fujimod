@@ -7,7 +7,7 @@
   "kind": "address-window",
   "device": {
     "model": "unmodeled_bus_drain",
-    "basis": "bus-drain port discarded by the firmware Located in catalog/firmware/x100vi/1.31/xp5-boot/manifest.d/20-storage.toml."
+    "basis": "bus-drain port discarded by the firmware"
   },
   "evidence": [
     {

@@ -12,7 +12,7 @@
     "receive_request": 4,
     "transmit_request": 5,
     "companion_irq_line": 100,
-    "basis": "PL022 serial controller; attached part and select pins are body facts Located in catalog/firmware/xh2/5.30/xp5-boot/manifest.d/34-power-controller.toml."
+    "basis": "PL022 serial controller; attached part and select pins are body facts"
   },
   "evidence": [
     {

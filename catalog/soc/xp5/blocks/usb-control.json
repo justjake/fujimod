@@ -25,7 +25,7 @@
       "bits": 1
     },
     "delay_ticks": 100000,
-    "basis": "completion handshake Located in catalog/firmware/xe5/1.12/xp5-boot/manifest.d/64-usb.toml."
+    "basis": "completion handshake"
   },
   "evidence": [
     {

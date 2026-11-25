@@ -8,7 +8,7 @@
   "device": {
     "model": "gates",
     "configuration_word": 0,
-    "basis": "clock gates Located in catalog/firmware/x100vi/1.31/xp5-boot/manifest.d/20-storage.toml."
+    "basis": "clock gates"
   },
   "evidence": [
     {

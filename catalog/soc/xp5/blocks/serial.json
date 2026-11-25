@@ -12,7 +12,7 @@
     "receive_request": 2,
     "transmit_request": 3,
     "companion_irq_line": 99,
-    "basis": "PL022 serial controller; attached part and select pins are body facts Located in catalog/firmware/x100vi/1.31/xp5-boot/manifest.d/60-mcore.toml."
+    "basis": "PL022 serial controller; attached part and select pins are body facts"
   },
   "evidence": [
     {

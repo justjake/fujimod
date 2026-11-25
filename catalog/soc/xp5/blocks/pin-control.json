@@ -7,7 +7,7 @@
   "kind": "gpio",
   "device": {
     "model": "io_groups",
-    "basis": "keyed-I/O group page Located in catalog/firmware/x100vi/1.31/xp5-boot/manifest.d/30-power-input.toml."
+    "basis": "keyed-I/O group page"
   },
   "evidence": [
     {

@@ -7,7 +7,7 @@
   "kind": "imaging-controller",
   "device": {
     "model": "imaging_rifp",
-    "basis": "RIFP processing page; the 0xa000 extent covers the develop sub-blocks Located in catalog/firmware/x100vi/1.31/xp5-boot/manifest.d/50-imaging.toml."
+    "basis": "RIFP processing page; the 0xa000 extent covers the develop sub-blocks"
   },
   "evidence": [
     {

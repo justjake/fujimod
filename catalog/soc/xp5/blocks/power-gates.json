@@ -7,7 +7,7 @@
   "kind": "clock-controller",
   "device": {
     "model": "gates",
-    "basis": "power gates Located in catalog/firmware/x100vi/1.31/xp5-boot/manifest.d/20-storage.toml."
+    "basis": "power gates"
   },
   "evidence": [
     {

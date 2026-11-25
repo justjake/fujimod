@@ -8,7 +8,7 @@
   "device": {
     "model": "audio_serial",
     "reset_offset": 28,
-    "basis": "audio serial interface and its +0x1c reset handshake Located in catalog/firmware/x100vi/1.31/xp5-boot/manifest.d/20-storage.toml."
+    "basis": "audio serial interface and its +0x1c reset handshake"
   },
   "evidence": [
     {

@@ -7,7 +7,7 @@
   "kind": "clock-controller",
   "device": {
     "model": "panel_pll",
-    "basis": "panel PLL 2 Located in catalog/firmware/x100vi/1.31/xp5-boot/manifest.d/40-display.toml."
+    "basis": "panel PLL 2"
   },
   "evidence": [
     {

@@ -8,7 +8,7 @@
   "device": {
     "model": "register_block",
     "idle_bits": [],
-    "basis": "ROM-start write-only latch Located in the XP5 processor record."
+    "basis": "The stock setup's first control write: 0xff800114 calls the word writer 0xff80dfb8 with 0xfe000000 = 1 after the ICE BOOT cookie check. Its meaning is unresolved and nothing reads it back (a read on the X-M5 returned 0), so it is a store-only latch."
   },
   "evidence": [
     {

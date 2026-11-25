@@ -15,7 +15,7 @@
     "model": "audio_dma",
     "setup_ticks": 1000,
     "bytes_per_tick": 1,
-    "basis": "audio DMA channel Located in catalog/firmware/xt5/4.31/xp5-boot/manifest.d/62-audio.toml."
+    "basis": "audio DMA channel"
   },
   "evidence": [
     {

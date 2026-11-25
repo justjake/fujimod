@@ -8,7 +8,7 @@
   "device": {
     "model": "cable_status",
     "connected_level": 1,
-    "basis": "USB cable connection status word Located in catalog/firmware/x100vi/1.31/xp5-boot/manifest.d/60-mcore.toml."
+    "basis": "USB cable connection status word"
   },
   "evidence": [
     {

@@ -9,7 +9,7 @@
     "model": "register_block",
     "idle_bits": [],
     "reads_back": true,
-    "basis": "sensor/IBUF table pages Located in catalog/firmware/xe5/1.12/xp5-boot/manifest.d/49-gap-stubs.toml. Words the firmware reads read back their last write (the X-T5 4.31 table reader 0x1370f00 reads 0xff960000 with the 0xff96cb00 group)."
+    "basis": "sensor/IBUF table pages Words the firmware reads read back their last write (the X-T5 4.31 table reader 0x1370f00 reads 0xff960000 with the 0xff96cb00 group)."
   },
   "registers": [
     {

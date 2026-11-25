@@ -7,7 +7,7 @@
   "kind": "clock-controller",
   "device": {
     "model": "clock_banks",
-    "basis": "17 clock banks; panel PLLs are separate blocks inside the envelope Located in catalog/firmware/x100vi/1.31/xp5-boot/manifest.d/21-clocks.toml."
+    "basis": "17 clock banks; panel PLLs are separate blocks inside the envelope"
   },
   "evidence": [
     {

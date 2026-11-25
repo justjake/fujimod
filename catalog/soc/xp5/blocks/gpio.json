@@ -23,7 +23,7 @@
   "device": {
     "model": "xp5_gpio",
     "pad_model": "data-latch",
-    "basis": "GPIO controller Located in catalog/firmware/x100vi/1.31/xp5-boot/manifest.d/30-power-input.toml. Input pads read their data latch while it is set (the X-H2S companion START configures pad 0.4 and the peer-ready status depends on it: catalog/firmware/xh2s/7.30/xp5-boot/manifest.d/30-power-input.toml). Pins 0.0 and 0.1 raise INTIDs 116 and 117 (records 1 and 2 of the X-E5 1.12 table at 0x01a62c58); pin 0.4 raises companion NVIC line 27 (X-H2S companion handler 0x18d50)."
+    "basis": "GPIO controller Input pads read their data latch while it is set (the X-H2S companion START configures pad 0.4 and the peer-ready status depends on it). Pins 0.0 and 0.1 raise INTIDs 116 and 117 (records 1 and 2 of the X-E5 1.12 table at 0x01a62c58); pin 0.4 raises companion NVIC line 27 (X-H2S companion handler 0x18d50)."
   },
   "evidence": [
     {

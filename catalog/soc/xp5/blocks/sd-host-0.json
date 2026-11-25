@@ -23,7 +23,7 @@
       }
     ],
     "address_high": 4287686616,
-    "basis": "SDHCI host 0 Located in catalog/firmware/x100vi/1.31/xp5-boot/manifest.d/25-sd.toml."
+    "basis": "SDHCI host 0"
   },
   "evidence": [
     {

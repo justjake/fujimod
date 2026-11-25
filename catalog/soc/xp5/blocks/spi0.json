@@ -17,7 +17,7 @@
     "ticks_per_second": 1000000000,
     "receive_request": 0,
     "transmit_request": 1,
-    "basis": "PL022 serial controller; attached part and select pins are body facts Located in catalog/firmware/x100vi/1.31/xp5-boot/manifest.d/30-power-input.toml. Its controller interrupt is INTID 36, edge (X-T5 4.31 logical interrupt 0x18e8258[0] = 0x1c, record 0x18ea918 + 0x1c * 16; catalog/firmware/xt5/4.31/xp5-boot/manifest.d/45-lens.toml)."
+    "basis": "PL022 serial controller; attached part and select pins are body facts Its controller interrupt is INTID 36, edge (X-T5 4.31 logical interrupt 0x18e8258[0] = 0x1c, record 0x18ea918 + 0x1c * 16)."
   },
   "evidence": [
     {

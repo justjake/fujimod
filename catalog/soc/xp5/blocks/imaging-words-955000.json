@@ -8,7 +8,7 @@
   "device": {
     "model": "register_block",
     "idle_bits": [],
-    "basis": "imaging table page with unresolved read direction Located in catalog/firmware/xe5/1.12/xp5-boot/manifest.d/49-gap-stubs.toml. Written only; no read found."
+    "basis": "imaging table page with unresolved read direction Written only; no read found."
   },
   "evidence": [
     {

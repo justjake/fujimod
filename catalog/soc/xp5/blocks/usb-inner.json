@@ -9,7 +9,7 @@
     "model": "register_block",
     "idle_bits": [],
     "reads_back": true,
-    "basis": "USB inner register page Located in catalog/firmware/xe5/1.12/xp5-boot/manifest.d/64-usb.toml."
+    "basis": "USB inner register page"
   },
   "evidence": [
     {

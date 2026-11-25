@@ -7,7 +7,7 @@
   "kind": "imaging-controller",
   "device": {
     "model": "imaging_receiver",
-    "basis": "imaging receiver 1; frame law is a sensor/run fact Located in catalog/firmware/x100vi/1.31/xp5-boot/manifest.d/50-imaging.toml."
+    "basis": "imaging receiver 1; frame law is a sensor/run fact"
   },
   "evidence": [
     {

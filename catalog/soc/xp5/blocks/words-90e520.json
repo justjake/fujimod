@@ -8,7 +8,7 @@
   "device": {
     "model": "register_block",
     "idle_bits": [],
-    "basis": "audio DMA select words Located in catalog/firmware/xt5/4.31/xp5-boot/manifest.d/62-audio.toml."
+    "basis": "audio DMA select words"
   },
   "registers": [
     {

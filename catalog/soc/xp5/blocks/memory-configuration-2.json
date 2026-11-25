@@ -8,7 +8,7 @@
   "device": {
     "model": "memory_configuration",
     "commit_ticks": 1000,
-    "basis": "DDR channel 2 configuration page commits in 1000 ticks Located in catalog/firmware/x100vi/1.31/xp5-boot/manifest.d/20-storage.toml."
+    "basis": "DDR channel 2 configuration page commits in 1000 ticks"
   },
   "evidence": [
     {

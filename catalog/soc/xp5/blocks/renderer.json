@@ -7,7 +7,7 @@
   "kind": "display-controller",
   "device": {
     "model": "renderer",
-    "basis": "2D/3D renderer Located in catalog/firmware/x100vi/1.31/xp5-boot/manifest.d/40-display.toml."
+    "basis": "2D/3D renderer"
   },
   "evidence": [
     {

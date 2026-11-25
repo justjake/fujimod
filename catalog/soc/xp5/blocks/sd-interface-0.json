@@ -7,7 +7,7 @@
   "kind": "sd-card-controller",
   "device": {
     "model": "sd_interface",
-    "basis": "SD interface register set 0 Located in catalog/firmware/x100vi/1.31/xp5-boot/manifest.d/25-sd.toml."
+    "basis": "SD interface register set 0"
   },
   "evidence": [
     {

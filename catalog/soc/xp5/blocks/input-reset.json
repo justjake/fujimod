@@ -7,7 +7,7 @@
   "kind": "reset-controller",
   "device": {
     "model": "reset_gates",
-    "basis": "imaging input reset Located in catalog/firmware/x100vi/1.31/xp5-boot/manifest.d/50-imaging.toml."
+    "basis": "imaging input reset"
   },
   "evidence": [
     {

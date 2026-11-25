@@ -9,7 +9,7 @@
     "model": "register_block",
     "idle_bits": [],
     "reads_back": true,
-    "basis": "imaging table page with unresolved read direction Located in catalog/firmware/x100vi/1.31/xp5-boot/manifest.d/50-imaging.toml. The X-T5 4.31 and X-E5 1.12 boot lists keep it as a register file whose words read back their last write."
+    "basis": "imaging table page with unresolved read direction The X-T5 4.31 and X-E5 1.12 boot lists keep it as a register file whose words read back their last write."
   },
   "evidence": [
     {

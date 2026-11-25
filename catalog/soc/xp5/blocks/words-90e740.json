@@ -8,7 +8,7 @@
   "device": {
     "model": "register_block",
     "idle_bits": [],
-    "basis": "imaging DSP high address word Located in catalog/firmware/xe5/1.12/xp5-boot/manifest.d/63-hdr.toml."
+    "basis": "imaging DSP high address word"
   },
   "registers": [
     {

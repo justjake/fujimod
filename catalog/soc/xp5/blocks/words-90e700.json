@@ -9,7 +9,7 @@
     "model": "register_block",
     "idle_bits": [],
     "reads_back": true,
-    "basis": "TPSP high address words Located in catalog/firmware/xe5/1.12/xp5-boot/manifest.d/63-hdr.toml."
+    "basis": "TPSP high address words"
   },
   "registers": [
     {

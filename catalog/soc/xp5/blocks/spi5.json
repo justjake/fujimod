@@ -11,7 +11,7 @@
     "ticks_per_second": 1000000000,
     "receive_request": 10,
     "transmit_request": 11,
-    "basis": "PL022 serial controller; attached part and select pins are body facts Located in catalog/firmware/x100vi/1.31/xp5-boot/manifest.d/50-imaging.toml."
+    "basis": "PL022 serial controller; attached part and select pins are body facts"
   },
   "evidence": [
     {

@@ -7,7 +7,7 @@
   "kind": "usb-controller",
   "device": {
     "model": "usb_phy",
-    "basis": "USB PHY programming port Located in catalog/firmware/xe5/1.12/xp5-boot/manifest.d/64-usb.toml."
+    "basis": "USB PHY programming port"
   },
   "evidence": [
     {

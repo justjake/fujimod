@@ -13,7 +13,7 @@
   ],
   "device": {
     "model": "pl011",
-    "basis": "UART port; RL78 peer is a part Located in catalog/firmware/xt5/4.31/xp5-boot/manifest.d/65-uart.toml."
+    "basis": "UART port; RL78 peer is a part"
   },
   "evidence": [
     {

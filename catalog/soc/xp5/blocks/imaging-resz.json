@@ -41,7 +41,7 @@
         "bit": 0
       }
     },
-    "basis": "RESZ scaler Located in catalog/firmware/xe5/1.12/xp5-boot/manifest.d/55-develop-stubs.toml."
+    "basis": "RESZ scaler"
   },
   "registers": [
     {

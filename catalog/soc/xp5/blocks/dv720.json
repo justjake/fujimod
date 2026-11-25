@@ -9,7 +9,7 @@
     "model": "register_block",
     "idle_bits": [],
     "reads_back": true,
-    "basis": "DV720 neural accelerator aperture; the part record carries its identity Located in catalog/firmware/x100vi/1.31/xp5-boot/manifest.d/47-dv720.toml."
+    "basis": "DV720 neural accelerator aperture; the part record carries its identity"
   },
   "evidence": [
     {

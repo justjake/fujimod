@@ -7,7 +7,7 @@
   "kind": "memory-controller",
   "device": {
     "model": "dram_controller",
-    "basis": "DDR channel 3 controller with its status page at +0x7000 Located in catalog/firmware/x100vi/1.31/xp5-boot/manifest.d/20-storage.toml."
+    "basis": "DDR channel 3 controller with its status page at +0x7000"
   },
   "evidence": [
     {

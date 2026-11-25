@@ -2,15 +2,6 @@
 # The default boot enters at the EL1t loader hand-off and never runs the mask ROM, stage one or
 # stock setup, so it needs none of these.
 
-# The stock setup's first control write: 0xff800114 calls the word writer 0xff80dfb8 with
-# 0xfe000000 = 1 right after the ICE BOOT cookie check (step 2 of the stock setup). The store returns on the camera. Its physical
-# meaning is unresolved, and nothing is known to read it back (a read on the X-M5 returned 0). It
-# is modeled as a store-only latch; a read of it stays an unmodeled access and refuses.
-[[device]]
-base = 0xfe000000
-size = 4
-kind = "write-only-registers"
-
 # DDR controller status the stock setup polls before training: 0xfaf07780 reads non-zero once
 # 0xfaf07680 is written (the poll helper 0xff80dc24 checks offset 0x7800 & 1 == 1 on each of the
 # four controllers 0xfaf00000..0xfaf30000), and 0xfaf07784's low byte is a result code (0 = ok).
