@@ -68,12 +68,19 @@
       "location": "rear",
       "manual_page": 297,
       "face": "AEL",
+      "connection_ids": [
+        "controls-adc-6"
+      ],
       "assignable": true,
       "pushable": true,
       "default_function": "AE LOCK ONLY.",
       "mechanical": false,
       "behavior": {
-        "kind": "button"
+        "kind": "button",
+        "press": {
+          "kind": "debug_key",
+          "name": "AE-LOCK"
+        }
       }
     },
     "afon_button": {
@@ -81,12 +88,19 @@
       "location": "rear",
       "manual_page": 297,
       "face": "AFON",
+      "connection_ids": [
+        "controls-gpio-15-7"
+      ],
       "assignable": true,
       "pushable": true,
       "default_function": "AF-ON.",
       "mechanical": false,
       "behavior": {
-        "kind": "button"
+        "kind": "button",
+        "press": {
+          "kind": "debug_key",
+          "name": "AF-ON"
+        }
       }
     },
     "battery_chamber_cover_latch": {
@@ -182,12 +196,19 @@
       "location": "rear",
       "manual_page": 9,
       "face": "DRIVE",
+      "connection_ids": [
+        "controls-adc-5"
+      ],
       "assignable": false,
       "pushable": true,
       "default_function": "Display the drive-mode menu during shooting; delete pictures during playback.",
       "mechanical": false,
       "behavior": {
-        "kind": "button"
+        "kind": "button",
+        "press": {
+          "kind": "debug_key",
+          "name": "DRIVE"
+        }
       }
     },
     "fn1_button": {
@@ -195,12 +216,19 @@
       "location": "top",
       "manual_page": 298,
       "face": "Fn1",
+      "connection_ids": [
+        "controls-gpio-0-4"
+      ],
       "assignable": true,
       "pushable": true,
       "default_function": "FACE DETECTION ON/OFF.",
       "mechanical": false,
       "behavior": {
-        "kind": "button"
+        "kind": "button",
+        "press": {
+          "kind": "debug_key",
+          "name": "FUNCTION"
+        }
       }
     },
     "fn2_button": {
@@ -208,12 +236,19 @@
       "location": "front",
       "manual_page": 298,
       "face": "Fn2",
+      "connection_ids": [
+        "controls-gpio-0-15"
+      ],
       "assignable": true,
       "pushable": true,
       "default_function": "ELECTRONIC LEVEL SWITCH.",
       "mechanical": false,
       "behavior": {
-        "kind": "button"
+        "kind": "button",
+        "press": {
+          "kind": "debug_key",
+          "name": "FUNCTION2"
+        }
       }
     },
     "fn3_button": {
@@ -234,6 +269,9 @@
       "location": "rear",
       "manual_page": 7,
       "short_name": "FOCUS",
+      "connection_ids": [
+        "controls-adc-14"
+      ],
       "assignable": true,
       "pushable": true,
       "default_function": "Tilt to select the focus area or navigate menus; press the center for the configured focus-area action.",
@@ -241,10 +279,22 @@
       "behavior": {
         "kind": "pad",
         "directions": {
-          "up": null,
-          "down": null,
-          "left": null,
-          "right": null
+          "up": {
+            "kind": "debug_key",
+            "name": "8DIR_U"
+          },
+          "down": {
+            "kind": "debug_key",
+            "name": "8DIR_D"
+          },
+          "left": {
+            "kind": "debug_key",
+            "name": "8DIR_L"
+          },
+          "right": {
+            "kind": "debug_key",
+            "name": "8DIR_R"
+          }
         }
       }
     },
@@ -340,6 +390,9 @@
       "location": "top",
       "manual_page": 8,
       "short_name": "MODE",
+      "connection_ids": [
+        "controls-adc-3"
+      ],
       "assignable": false,
       "pushable": false,
       "positions": [
@@ -495,12 +548,19 @@
       "location": "rear",
       "manual_page": 59,
       "icon": "playback",
+      "connection_ids": [
+        "controls-adc-5"
+      ],
       "assignable": false,
       "pushable": true,
       "default_function": "View pictures.",
       "mechanical": false,
       "behavior": {
-        "kind": "button"
+        "kind": "button",
+        "press": {
+          "kind": "debug_key",
+          "name": "K_PLAY"
+        }
       }
     },
     "q_button": {
@@ -508,12 +568,19 @@
       "location": "rear",
       "manual_page": 297,
       "face": "Q",
+      "connection_ids": [
+        "controls-adc-6"
+      ],
       "assignable": true,
       "pushable": true,
       "default_function": "QUICK MENU.",
       "mechanical": false,
       "behavior": {
-        "kind": "button"
+        "kind": "button",
+        "press": {
+          "kind": "debug_key",
+          "name": "K_Q"
+        }
       }
     },
     "rear_command_dial": {
@@ -665,12 +732,19 @@
       "location": "rear",
       "manual_page": 298,
       "face": "VIEW/MODE",
+      "connection_ids": [
+        "controls-adc-5"
+      ],
       "assignable": true,
       "pushable": true,
       "default_function": "VIEW MODE SETTING.",
       "mechanical": false,
       "behavior": {
-        "kind": "button"
+        "kind": "button",
+        "press": {
+          "kind": "debug_key",
+          "name": "VIEW"
+        }
       }
     },
     "wb_button": {
@@ -704,11 +778,56 @@
           "basis": "Band 0..782, derived from the firmware's factory key-band table (scanner row 30, physical code 0xd, UI event KEY_OK 1); no other control on this wire accepts it. The sample is the band midpoint."
         },
         {
+          "control_id": "ael_button",
+          "band_low": 2117,
+          "band_high": 2344,
+          "sample": 2230,
+          "basis": "Band 2117..2344, derived from the firmware's factory key-band table: X-H2 5.30 scanner row 29 (UI event 8230, KEY_FUNC_AE_LOCK), reader 0x140a588 with configuration halfwords 0x38bb/0x38b9. That reader also accepts 1894..2116 (with Q) and 1712..1893 (with DISP/BACK), the chord bands; only this band is AEL alone. The sample is the band midpoint."
+        },
+        {
           "control_id": "disp_back_button",
           "band_low": 2637,
           "band_high": 3102,
           "sample": 2869,
           "basis": "Band 2637..3102, derived from the firmware's factory key-band table (scanner row 28, physical code 0xf, UI event KEY_DISP_BACK 9); no other control on this wire accepts it. The sample is the band midpoint."
+        },
+        {
+          "control_id": "q_button",
+          "band_low": 3103,
+          "band_high": 3776,
+          "sample": 3439,
+          "basis": "Band 3103..3776, derived from the X-H2 5.30 firmware's factory key-band table (scanner row 27, physical code 0x11, UI event K_Q 44); its reader 0x140a6b0 also accepts 2345..2636, which the DISP/BACK reader 0x140a61c accepts too (the Q + DISP/BACK chord), so only the Q-only band is declared. The sample is the band midpoint."
+        }
+      ]
+    },
+    {
+      "wire": {
+        "kind": "adc",
+        "channel": 5
+      },
+      "levels": 4096,
+      "basis": "The X-H2 5.30 key readers 0x140a8b8 (PLAY), 0x140a824 (DRIVE) and 0x140a790 (VIEW) compare the cached ADC channel 5 sample (0x207aae2, the channel 6 cache 0x207aae4 minus 2) with the factory key-band table words 0x36c8..0x36ea, read through 0x149b0e0. The bands repeat the channel 6 ladder's: 0..782, 783..1711, 1712..1893, 1894..2116, 2117..2344, 2345..2636, 2637..3102, 3103..3776, 3777..4095 (no key). Values read from emulated configuration RAM 0x2700b6c8 of a 5.20 boot. No released level is established; the board's ADC input sample for this channel is 4095.",
+      "rungs": [
+        {
+          "control_id": "playback_button",
+          "band_low": 3103,
+          "band_high": 3776,
+          "sample": 3439,
+          "basis": "Band 3103..3776, derived from the X-H2 5.30 firmware's factory key-band table (scanner row 20, physical code 0xe, UI event K_PLAY 10); its reader also accepts 2345..2636, which the DRIVE reader accepts too (the PLAY + DRIVE chord), so only the PLAY-only band is declared. The sample is the band midpoint."
+        },
+        {
+          "control_id": "drive_delete_button",
+          "band_low": 2637,
+          "band_high": 3102,
+          "sample": 2869,
+          "basis": "Band 2637..3102, derived from the X-H2 5.30 firmware's factory key-band table (scanner row 21, physical code 0x10, UI event DRIVE 18); no other control's first band is this one. The sample is the band midpoint."
+        },
+        {
+          "control_id": "view_mode_button",
+          "band_low": 2117,
+          "band_high": 2344,
+          "sample": 2230,
+          "basis": "Band 2117..2344, derived from the X-H2 5.30 firmware's factory key-band table (scanner row 22, physical code 0x1c, UI event VIEW 8250); its reader also accepts 1894..2116, whose other user is not established, so only the first band is declared. The sample is the band midpoint."
         }
       ]
     },
@@ -747,6 +866,44 @@
           "band_high": 3719,
           "sample": 3380,
           "basis": "Band 3042..3719, derived from the firmware's factory key-band table (scanner row 32, physical code 0x16, UI event KEY_DOWN 3); no other control on this wire accepts it. The sample is the band midpoint."
+        }
+      ]
+    },
+    {
+      "wire": {
+        "kind": "adc",
+        "channel": 14
+      },
+      "levels": 4096,
+      "basis": "The focus-lever decoder 0x140b6f8 (X-H2 5.30) reads this ADC channel through 0x13aad30(14) and compares it with eight band pairs from table 0x1c520a8. Bands come from the firmware's factory key-band table; a body with its own valid configuration store reads its own bands. No released level is established: it is this channel's idle sample, a property of the body.",
+      "rungs": [
+        {
+          "control_id": "focus_stick.up",
+          "band_low": 1448,
+          "band_high": 1688,
+          "sample": 1568,
+          "basis": "Band 1448..1688, read from the factory configuration halfwords that focus-lever table 0x1c520a8 names (lever decoder 0x140b6f8 compares ADC 14 against them; physical code 0x29, UI event 8DIR_U 59); no other control on this wire accepts it. The sample is the band midpoint."
+        },
+        {
+          "control_id": "focus_stick.right",
+          "band_low": 1930,
+          "band_high": 2219,
+          "sample": 2074,
+          "basis": "Band 1930..2219, read from the factory configuration halfwords that focus-lever table 0x1c520a8 names (lever decoder 0x140b6f8 compares ADC 14 against them; physical code 0x2b, UI event 8DIR_R 61); no other control on this wire accepts it. The sample is the band midpoint."
+        },
+        {
+          "control_id": "focus_stick.left",
+          "band_low": 2606,
+          "band_high": 3041,
+          "sample": 2823,
+          "basis": "Band 2606..3041, read from the factory configuration halfwords that focus-lever table 0x1c520a8 names (lever decoder 0x140b6f8 compares ADC 14 against them; physical code 0x2c, UI event 8DIR_L 65); no other control on this wire accepts it. The sample is the band midpoint."
+        },
+        {
+          "control_id": "focus_stick.down",
+          "band_low": 3042,
+          "band_high": 3719,
+          "sample": 3380,
+          "basis": "Band 3042..3719, read from the factory configuration halfwords that focus-lever table 0x1c520a8 names (lever decoder 0x140b6f8 compares ADC 14 against them; physical code 0x2a, UI event 8DIR_D 63); no other control on this wire accepts it. The sample is the band midpoint."
         }
       ]
     }
