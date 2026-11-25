@@ -10,7 +10,7 @@
 mod library;
 mod open;
 
-pub use library::{Library, LibraryError};
+pub use library::{Library, LibraryError, LibraryFirmware};
 pub use open::{Boot, CardSource, OpenError, Opened, Request, Stage, open, open_unbooted};
 
 /// The scheduler engine a request may override.

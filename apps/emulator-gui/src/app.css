@@ -40,7 +40,17 @@ p { margin: 0; }
 }
 .launcher { display: grid; align-content: center; gap: 18px; min-height: 520px; max-width: 420px; margin: auto; padding: 32px; }
 .launcher label { display: grid; gap: 7px; color: #aeaeb2; font-size: 12px; }
+.launcher-heading { display: grid; gap: 4px; }
+.launcher-heading h2 { margin: 0; font-size: 22px; font-weight: 600; letter-spacing: -0.01em; }
 select, .file-row { width: 100%; border: 1px solid #3a3a3c; border-radius: 10px; background: #1c1c1e; padding: 10px 12px; }
+.boot-choice { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 0; padding: 0; border: 0; }
+.boot-choice legend { margin-bottom: 7px; padding: 0; color: #aeaeb2; font-size: 12px; }
+.launcher .boot-option { display: flex; align-items: flex-start; gap: 9px; padding: 11px 12px; border: 1px solid #3a3a3c; border-radius: 10px; background: #161618; color: #aeaeb2; font-size: 12px; cursor: pointer; }
+.launcher .boot-option[data-selected='true'] { border-color: #f2f2f7; background: #242426; }
+.boot-option input { margin: 2px 0 0; accent-color: #f2f2f7; }
+.boot-option span { display: grid; gap: 3px; }
+.boot-option strong { color: #f2f2f7; font-size: 13px; font-weight: 600; }
+.boot-option small { color: #8e8e93; font-size: 11px; line-height: 1.35; }
 .file-row { display: flex; align-items: center; gap: 10px; font-size: 12px; color: #8e8e93; }
 .file-row span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .file-row button, .launcher button { border: 1px solid #3a3a3c; border-radius: 9px; background: #2c2c2e; padding: 9px 13px; cursor: pointer; }

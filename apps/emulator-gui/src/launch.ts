@@ -13,6 +13,18 @@ export interface LaunchRequest {
   engine?: RunEngine;
   endpoint?: string;
 }
+export type BootChoice = 'stock' | 'sd-card';
+export interface LauncherCamera {
+  firmware: string;
+  body: string;
+  model: string;
+  version: string;
+}
+export interface OpenCameraRequest {
+  firmware: string;
+  boot: BootChoice;
+  sdCard?: string;
+}
 export interface LaunchedCamera {
   id: string;
   configuration: string;
@@ -25,6 +37,9 @@ export interface DesktopBridge {
   configurations(): Promise<RunConfiguration[]>;
   chooseUpdate(): Promise<string | undefined>;
   launch(request: LaunchRequest): Promise<LaunchedCamera>;
+  launcherCameras(): Promise<LauncherCamera[]>;
+  chooseSdCard(): Promise<string | undefined>;
+  openCamera(request: OpenCameraRequest): Promise<LaunchedCamera>;
   connect(endpoint: string): Promise<LaunchedCamera>;
   launchConnection(): Promise<LaunchRequest | undefined>;
   connection(): Promise<string | undefined>;

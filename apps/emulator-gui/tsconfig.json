@@ -8,7 +8,7 @@
     "resolveJsonModule": true,
     "allowJs": false,
     "lib": ["ES2022", "DOM", "DOM.Iterable"],
-    "types": ["vite/client"],
+    "types": ["vite/client", "node"],
     "noEmit": true,
     "allowImportingTsExtensions": true,
     "jsx": "preserve",

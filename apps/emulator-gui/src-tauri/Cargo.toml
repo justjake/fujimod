@@ -19,6 +19,7 @@ tauri-build = { version = "2.6.3", features = [] }
 fujimod-catalog-configuration.workspace = true
 fujimod-catalog-resolution.workspace = true
 fujimod-emulator-boot = { workspace = true, features = ["xp5-startup"] }
+fujimod-emulator-camera.workspace = true
 fujimod-emulator-cpu.workspace = true
 fujimod-emulator-exr2-board = { path = "../../../crates/emulator-exr2-board" }
 fujimod-emulator-gui.workspace = true

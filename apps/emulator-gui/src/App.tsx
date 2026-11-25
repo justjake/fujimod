@@ -10,7 +10,7 @@ import { shownError } from '@fujimod/emulator-ui/ui/shown-error';
 import { nativePanel } from './panel';
 import { RemoteEngine } from '@fujimod/emulator-ui/engine/remote';
 import type { NativeCamera, NativeCatalog, NativeSessionState } from './native';
-import type { LaunchRequest, RunConfiguration, RunEngine } from './launch';
+import type { BootChoice, LauncherCamera, LaunchRequest } from './launch';
 import { desktopBridge } from './desktop';
 import '@fujimod/emulator-ui/viewport-controls.css';
 import './app.css';
@@ -18,10 +18,10 @@ import './app.css';
 export default function App() {
   const bridge = desktopBridge();
   const [state, setState] = createSignal(sessionState(), { equals: false });
-  const [configurations, setConfigurations] = createSignal<RunConfiguration[]>([]);
-  const [selected, setSelected] = createSignal('');
-  const [update, setUpdate] = createSignal('');
-  const [runEngine, setRunEngine] = createSignal<RunEngine>('unicorn');
+  const [cameras, setCameras] = createSignal<LauncherCamera[]>([]);
+  const [firmware, setFirmware] = createSignal('');
+  const [boot, setBoot] = createSignal<BootChoice>('stock');
+  const [sdCard, setSdCard] = createSignal('');
   const [launcherError, setLauncherError] = createSignal('');
   const [pageError, setPageError] = createSignal('');
   const [busy, setBusy] = createSignal(false);
@@ -126,9 +126,11 @@ export default function App() {
     setBusy(true);
     setLauncherError('');
     try {
-      await startCamera(
-        await bridge.launch({ configuration: selected(), update: update(), engine: runEngine() }),
-      );
+      await startCamera(await bridge.openCamera({
+        firmware: firmware(),
+        boot: boot(),
+        sdCard: boot() === 'sd-card' ? sdCard() : undefined,
+      }));
     } catch (error) {
       setLauncherError(shownError(error));
     } finally {
@@ -160,10 +162,10 @@ export default function App() {
       setPageError(shownError(event.reason));
     });
     if (!bridge) return;
-    void bridge.configurations().then((rows) => {
-      setConfigurations(rows);
-      setSelected(rows[0]?.configuration ?? '');
-    });
+    void bridge.launcherCameras().then((rows) => {
+      setCameras(rows);
+      setFirmware(rows[0]?.firmware ?? '');
+    }).catch((error) => setLauncherError(shownError(error)));
     void bridge.connection().then(async (endpoint) => {
       if (!endpoint) return;
       try {
@@ -174,8 +176,6 @@ export default function App() {
     });
     void bridge.launchConnection().then((connection) => {
       if (!connection) return;
-      setSelected(connection.configuration);
-      setUpdate(connection.update);
       void openCamera(connection).catch((error) => {
         setLauncherError(shownError(error));
         updateState((value) => {
@@ -208,30 +208,49 @@ export default function App() {
         <Show when={state().idle}>
           <section class="launcher" aria-labelledby="emulator-title">
             <Show when={bridge} fallback={<p class="status">{launcherError() || 'Start the emulator with a native session.'}</p>}>
+              <div class="launcher-heading">
+                <h2>Open a camera</h2>
+                <p class="status">Cameras come from your firmware library.</p>
+              </div>
               <label>
-                <span>Run configuration</span>
-                <select value={selected()} onChange={(event) => setSelected(event.currentTarget.value)}>
-                  <For each={configurations()}>{(configuration) => (
-                    <option value={configuration.configuration}>
-                      {configuration.model} · {configuration.firmware}
-                    </option>
+                <span>Camera</span>
+                <select value={firmware()} onChange={(event) => setFirmware(event.currentTarget.value)}>
+                  <For each={cameras()}>{(camera) => (
+                    <option value={camera.firmware}>{camera.model} · {camera.version}</option>
                   )}</For>
                 </select>
               </label>
-              <label>
-                <span>Engine</span>
-                <select value={runEngine()} onChange={(event) => setRunEngine(event.currentTarget.value as RunEngine)}>
-                  <option value="unicorn">Unicorn</option>
-                  <option value="hypervisor">Hypervisor</option>
-                </select>
-              </label>
-              <div class="file-row">
-                <button type="button" onClick={() => void bridge!.chooseUpdate().then((path) => path && setUpdate(path))}>
-                  Choose firmware DAT
-                </button>
-                <span>{update() ? update().split(/[\\/]/).at(-1) : 'No file selected'}</span>
-              </div>
-              <button class="primary" type="button" disabled={!selected() || !update() || busy()} onClick={() => void launch()}>
+              <Show when={cameras().length === 0}>
+                <p class="status">No catalog firmware is available in the library.</p>
+              </Show>
+              <fieldset class="boot-choice">
+                <legend>Boot</legend>
+                <label class="boot-option" data-selected={boot() === 'stock'}>
+                  <input type="radio" name="boot" value="stock" checked={boot() === 'stock'} onChange={() => setBoot('stock')} />
+                  <span>
+                    <strong>Stock</strong>
+                    <small>The firmware installed in internal flash</small>
+                  </span>
+                </label>
+                <label class="boot-option" data-selected={boot() === 'sd-card'}>
+                  <input type="radio" name="boot" value="sd-card" checked={boot() === 'sd-card'} onChange={() => setBoot('sd-card')} />
+                  <span>
+                    <strong>SD card</strong>
+                    <small>FujiMod from a card folder</small>
+                  </span>
+                </label>
+              </fieldset>
+              <Show when={boot() === 'sd-card'}>
+                <div class="file-row">
+                  <button type="button" onClick={() => void bridge!.chooseSdCard().then((path) => path && setSdCard(path))}>
+                    Choose SD card folder
+                  </button>
+                  <span>{sdCard() ? sdCard().split(/[\\/]/).filter(Boolean).at(-1) : 'No folder selected'}</span>
+                </div>
+              </Show>
+              <button class="primary" type="button"
+                disabled={!firmware() || (boot() === 'sd-card' && !sdCard()) || busy()}
+                onClick={() => void launch()}>
                 {busy() ? 'Opening…' : 'Open camera'}
               </button>
               <Show when={launcherError()}><p class="error" role="alert">{launcherError()}</p></Show>

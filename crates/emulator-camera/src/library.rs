@@ -46,6 +46,14 @@ pub struct Library {
     cameras: BTreeMap<String, PathBuf>,
 }
 
+/// A catalog firmware whose update and boot ROM this library holds.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct LibraryFirmware {
+    pub id: String,
+    pub body_id: String,
+    pub version: String,
+}
+
 impl Library {
     /// Read the directory named by the library environment variable.
     pub fn from_env() -> Result<Self, LibraryError> {
@@ -132,6 +140,30 @@ impl Library {
         self.catalog
             .firmware(id)
             .ok_or_else(|| LibraryError::UnknownFirmware(id.into()))
+    }
+
+    /// Catalog firmwares with both files and a browser run configuration in
+    /// this library, in catalog identity order.
+    pub fn firmwares(&self) -> Vec<LibraryFirmware> {
+        self.catalog
+            .firmware_ids()
+            .filter_map(|id| {
+                let firmware = self.catalog.firmware(id)?;
+                let update = firmware.update.as_ref()?;
+                let boot_rom = firmware.boot_rom.as_ref()?;
+                if !self.files.contains_key(&update.sha256)
+                    || !self.files.contains_key(&boot_rom.content.sha256)
+                {
+                    return None;
+                }
+                self.resolved(id).ok()?;
+                Some(LibraryFirmware {
+                    id: firmware.id.clone(),
+                    body_id: firmware.body_id.clone(),
+                    version: firmware.version.clone(),
+                })
+            })
+            .collect()
     }
 
     /// The firmware's registered browser run configuration and overlay.
@@ -294,5 +326,39 @@ mod tests {
         assert!(camera.is_dir(), "{} is not a directory", camera.display());
         assert!(camera.join("nand-configuration.bin.zst").is_file());
         fs::remove_dir_all(&directory).unwrap();
+    }
+
+    #[test]
+    fn firmwares_need_both_files_and_a_run_configuration() {
+        let catalog = ReferenceCatalog::bundled().unwrap();
+        let firmware = catalog.firmware("x70-110").unwrap();
+        let update = firmware.update.as_ref().unwrap().sha256.clone();
+        let boot_rom = firmware.boot_rom.as_ref().unwrap().content.sha256.clone();
+        let mut files = BTreeMap::new();
+        files.insert(update.clone(), PathBuf::from("update"));
+        files.insert(boot_rom.clone(), PathBuf::from("boot-rom"));
+        let library = Library {
+            root: PathBuf::new(),
+            catalog,
+            files,
+            cameras: BTreeMap::new(),
+        };
+        assert_eq!(
+            library.firmwares(),
+            [LibraryFirmware {
+                id: "x70-110".into(),
+                body_id: "x70".into(),
+                version: "1.10".into(),
+            }]
+        );
+        let mut partial = BTreeMap::new();
+        partial.insert(update, PathBuf::from("update"));
+        let library = Library {
+            root: PathBuf::new(),
+            catalog: ReferenceCatalog::bundled().unwrap(),
+            files: partial,
+            cameras: BTreeMap::new(),
+        };
+        assert!(library.firmwares().is_empty());
     }
 }

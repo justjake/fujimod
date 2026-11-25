@@ -1,6 +1,7 @@
 use fujimod_catalog_configuration::{RunInputs, RunStart};
 use fujimod_catalog_resolution::ResolvedConfiguration;
 use fujimod_emulator_boot::xp5::RunHost;
+use fujimod_emulator_camera::{self as camera, Library, LibraryFirmware};
 use serde::{Deserialize, Serialize};
 use std::{
     path::PathBuf,
@@ -68,6 +69,33 @@ struct LaunchedCamera {
     model: String,
     firmware: String,
     endpoint: String,
+}
+
+/// One firmware the desktop launcher can open.
+#[derive(Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct LauncherCamera {
+    firmware: String,
+    body: String,
+    model: String,
+    version: String,
+}
+
+/// A camera the desktop app opens itself through the camera builder.
+#[derive(Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct OpenCameraRequest {
+    firmware: String,
+    boot: LauncherBoot,
+    #[serde(default)]
+    sd_card: Option<PathBuf>,
+}
+
+#[derive(Clone, Copy, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+enum LauncherBoot {
+    Stock,
+    SdCard,
 }
 
 struct Running {
@@ -233,7 +261,7 @@ fn launch_camera(request: LaunchRequest) -> Result<(LaunchedCamera, Running), St
             fujimod_emulator_gui::serve(run, room, &mut || {
                 !thread_stop.load(std::sync::atomic::Ordering::Acquire)
             })
-                .inspect_err(|error| log_session(format!("session: {error}")))
+            .inspect_err(|error| log_session(format!("session: {error}")))
         })
         .map_err(|error| error.to_string())?;
     let launched = LaunchedCamera {
@@ -253,6 +281,119 @@ fn launch_camera(request: LaunchRequest) -> Result<(LaunchedCamera, Running), St
     ))
 }
 
+/// Launcher rows for firmwares the library holds.
+fn launcher_rows(firmwares: Vec<LibraryFirmware>) -> Vec<LauncherCamera> {
+    firmwares
+        .into_iter()
+        .map(|firmware| LauncherCamera {
+            model: firmware.body_id.to_uppercase(),
+            firmware: firmware.id,
+            body: firmware.body_id,
+            version: firmware.version,
+        })
+        .collect()
+}
+
+#[tauri::command]
+fn launcher_cameras() -> Result<Vec<LauncherCamera>, String> {
+    let library = Library::from_env().map_err(|error| error.to_string())?;
+    Ok(launcher_rows(library.firmwares()))
+}
+
+#[tauri::command]
+async fn choose_sd_card() -> Option<String> {
+    rfd::AsyncFileDialog::new()
+        .pick_folder()
+        .await
+        .map(|folder| folder.path().display().to_string())
+}
+
+/// Open a camera through the builder and serve the opened session live.
+fn open_with_builder(request: OpenCameraRequest) -> Result<(LaunchedCamera, Running), String> {
+    let library = Library::from_env().map_err(|error| error.to_string())?;
+    let resolved = library
+        .resolved(&request.firmware)
+        .map_err(|error| error.to_string())?;
+    let boot = match request.boot {
+        LauncherBoot::Stock => camera::Boot::Stock,
+        LauncherBoot::SdCard => camera::Boot::SdCard(camera::CardSource::Directory(
+            request
+                .sd_card
+                .ok_or("An SD card boot needs a card folder.")?,
+        )),
+    };
+    let body = resolved.reference.body.id.clone();
+    let model = body.to_uppercase();
+    let configuration = resolved.configuration.id.clone();
+    let firmware = resolved.reference.firmware.id.clone();
+    let engine = resolved
+        .configuration
+        .execution
+        .map(|execution| execution.engine);
+    let selection = resolved.reference.clone();
+    let builder_request = camera::Request {
+        firmware: request.firmware,
+        boot,
+        policy: fujimod_emulator_cpu::ExecutionPolicy::Interactive,
+        engine: None,
+        card_files: Vec::new(),
+    };
+    let room = fujimod_emulator_gui::Room::loopback()?;
+    let endpoint = room.endpoint().url.clone();
+    let stop = Arc::new(AtomicBool::new(false));
+    let thread_stop = stop.clone();
+    let (report, received) = std::sync::mpsc::channel::<Result<(), String>>();
+    let thread = thread::Builder::new()
+        .name("fujimod-emulator-session".into())
+        .spawn(move || {
+            log_session(format!("session: opening camera engine={:?}", engine));
+            let opened = match camera::open(&library, builder_request) {
+                Ok(opened) => {
+                    let _ = report.send(Ok(()));
+                    opened
+                }
+                Err(error) => {
+                    log_session(format!("session: {error}"));
+                    let error = error.to_string();
+                    let _ = report.send(Err(error.clone()));
+                    return Err(error);
+                }
+            };
+            log_session("session: camera opened");
+            fujimod_emulator_gui::serve(
+                fujimod_emulator_gui::Live::new(opened.camera, selection),
+                room,
+                &mut || !thread_stop.load(Ordering::Acquire),
+            )
+            .inspect_err(|error| log_session(format!("session: {error}")))
+        })
+        .map_err(|error| error.to_string())?;
+    let running = Running {
+        stop,
+        thread: Some(thread),
+    };
+    match received.recv() {
+        Ok(Ok(())) => {}
+        Ok(Err(error)) => {
+            drop(running);
+            return Err(error);
+        }
+        Err(_) => {
+            drop(running);
+            return Err("The camera thread stopped before the boot finished.".into());
+        }
+    }
+    let launched = LaunchedCamera {
+        id: endpoint.clone(),
+        configuration,
+        body,
+        model,
+        firmware,
+        endpoint,
+    };
+    Ok((launched, running))
+}
+
 /// Accept a session that another process serves in a loopback share room.
 fn checked_endpoint(endpoint: &str) -> Result<(), String> {
     let ticket = fujimod_webrtc::share::Ticket::from_url(endpoint)
@@ -267,7 +408,7 @@ fn checked_endpoint(endpoint: &str) -> Result<(), String> {
 
 #[cfg(test)]
 mod tests {
-    use super::checked_endpoint;
+    use super::*;
 
     #[test]
     fn a_session_endpoint_is_a_loopback_share_room() {
@@ -275,6 +416,47 @@ mod tests {
         assert!(checked_endpoint(room.link()).is_ok());
         assert!(checked_endpoint("ws://127.0.0.1:48123/emulator").is_err());
         assert!(checked_endpoint("https://example.com/").is_err());
+    }
+
+    #[test]
+    fn launcher_rows_name_each_held_firmware() {
+        let rows = launcher_rows(vec![
+            LibraryFirmware {
+                id: "x70-110".into(),
+                body_id: "x70".into(),
+                version: "1.10".into(),
+            },
+            LibraryFirmware {
+                id: "x100vi-131".into(),
+                body_id: "x100vi".into(),
+                version: "1.31".into(),
+            },
+        ]);
+        assert_eq!(rows.len(), 2);
+        assert_eq!(rows[0].firmware, "x70-110");
+        assert_eq!(rows[0].body, "x70");
+        assert_eq!(rows[0].model, "X70");
+        assert_eq!(rows[0].version, "1.10");
+        assert_eq!(rows[1].firmware, "x100vi-131");
+        assert_eq!(rows[1].model, "X100VI");
+    }
+
+    #[test]
+    fn the_launcher_lists_firmwares_the_library_holds() {
+        let library = match Library::from_env() {
+            Ok(library) => library,
+            Err(fujimod_emulator_camera::LibraryError::Environment) => {
+                eprintln!("skipped: set FUJIMOD_FIRMWARE_LIBRARY");
+                return;
+            }
+            Err(error) => panic!("firmware library: {error}"),
+        };
+        let rows = launcher_rows(library.firmwares());
+        assert!(rows.iter().any(|row| row.firmware == "x70-110"));
+        for row in &rows {
+            assert_eq!(row.model, row.body.to_uppercase());
+            assert!(library.resolved(&row.firmware).is_ok());
+        }
     }
 }
 
@@ -307,6 +489,21 @@ async fn launch(
     state: tauri::State<'_, AppState>,
 ) -> Result<LaunchedCamera, String> {
     let (launched, running) = launch_camera(request)?;
+    let previous = state
+        .running
+        .lock()
+        .map_err(|_| "emulator state is poisoned".to_owned())?
+        .replace(running);
+    drop(previous);
+    Ok(launched)
+}
+
+#[tauri::command]
+async fn open_camera(
+    request: OpenCameraRequest,
+    state: tauri::State<'_, AppState>,
+) -> Result<LaunchedCamera, String> {
+    let (launched, running) = open_with_builder(request)?;
     let previous = state
         .running
         .lock()
@@ -468,6 +665,9 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
             configurations,
             choose_update,
             launch,
+            launcher_cameras,
+            choose_sd_card,
+            open_camera,
             connect,
             connection,
             launch_connection,

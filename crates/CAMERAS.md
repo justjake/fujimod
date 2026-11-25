@@ -92,7 +92,9 @@ the same key restores it in about a second instead of booting.
 
 - MCP `camera_open` takes `firmware`, `boot` and options. The raw `gpio`,
   `keys` and overlay options go.
-- The desktop launcher offers Stock, SD card and Automatic boot.
+- The desktop launcher lists the firmware library's cameras and opens Stock
+  or SD card boots; `--endpoint` still connects to a session another host
+  serves.
 - The CLI `open` takes `--firmware ID --boot stock|sd-card [--sd-card DIR]
   [--execution-policy interactive|exact] [--gui]`.
 - The website keeps its interface and calls the builder inside its Wasm
