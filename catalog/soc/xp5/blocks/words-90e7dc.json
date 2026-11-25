@@ -1,0 +1,30 @@
+{
+  "$schema": "https://fujimod.com/schemas/soc-block.schema.json",
+  "schema": 1,
+  "id": "words-90e7dc",
+  "base": 4287686620,
+  "size": 8,
+  "kind": "address-window",
+  "device": {
+    "model": "register_block",
+    "idle_bits": [],
+    "basis": "SD slot 1 UHS-II port high address words Located in catalog/firmware/xt5/4.31/xp5-boot/manifest.d/49-gap-stubs.toml."
+  },
+  "registers": [
+    {
+      "name": "word-00dc",
+      "offset": 0,
+      "width_bytes": 4,
+      "access": "read-write"
+    }
+  ],
+  "evidence": [
+    {
+      "kind": "located",
+      "firmware_ids": [
+        "xe5-112",
+        "xt5-431"
+      ]
+    }
+  ]
+}

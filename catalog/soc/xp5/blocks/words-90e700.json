@@ -1,0 +1,37 @@
+{
+  "$schema": "https://fujimod.com/schemas/soc-block.schema.json",
+  "schema": 1,
+  "id": "words-90e700",
+  "base": 4287686400,
+  "size": 8,
+  "kind": "address-window",
+  "device": {
+    "model": "register_block",
+    "idle_bits": [],
+    "reads_back": true,
+    "basis": "TPSP high address words Located in catalog/firmware/xe5/1.12/xp5-boot/manifest.d/63-hdr.toml."
+  },
+  "registers": [
+    {
+      "name": "word-0000",
+      "offset": 0,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "word-0004",
+      "offset": 4,
+      "width_bytes": 4,
+      "access": "read-write"
+    }
+  ],
+  "evidence": [
+    {
+      "kind": "located",
+      "firmware_ids": [
+        "xe5-112",
+        "xt5-431"
+      ]
+    }
+  ]
+}

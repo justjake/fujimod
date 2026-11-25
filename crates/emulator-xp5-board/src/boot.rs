@@ -830,7 +830,7 @@ fn block_window(
         }
         BlockDevice::VideoCodec { .. } => "xp5-codec",
         BlockDevice::ImagingDsp { .. } => "completion-stub",
-        BlockDevice::RegisterBlock { idle_bits, fixed_words, .. } => {
+        BlockDevice::RegisterBlock { idle_bits, fixed_words, reads_back, .. } => {
             if !idle_bits.is_empty() || !fixed_words.is_empty() {
                 options.insert("registers".into(), toml::Value::Array(fixed_words.iter().map(|word| {
                     let mut row = toml::Table::new();
@@ -843,8 +843,7 @@ fn block_window(
             if block.id.starts_with("imaging-table") { "imaging-table" }
             else if block.id == "dma-routes" { "dma-request-routing" }
             else if block.id == "dma-address-high" { "dma-address-high" }
-            else if block.registers.iter().any(|register| register.reads.is_some())
-                || block.id.starts_with("register-") || block.id == "usb-inner" || block.id == "dv720" {
+            else if *reads_back || block.registers.iter().any(|register| register.reads.is_some()) {
                 options.insert("registers".into(), stub_registers(block));
                 "bringup-stub"
             } else { "write-only-registers" }

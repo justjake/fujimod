@@ -8267,18 +8267,24 @@
       }
     },
     "dma-address-high": {
-      "base": 4287686400,
+      "base": 4287686472,
       "evidence": {
         "base": [
           {
             "findings": [
               {
                 "addresses": [
-                  49561532,
-                  49561796
+                  9703612,
+                  9703980,
+                  9707028,
+                  9707160,
+                  21490956,
+                  21491324,
+                  21494372,
+                  21494504
                 ],
                 "kind": "code-constant",
-                "matches": 2
+                "matches": 8
               }
             ],
             "firmware": "gfx100rf-113"
@@ -8287,11 +8293,17 @@
             "findings": [
               {
                 "addresses": [
-                  49462244,
-                  49462508
+                  9654692,
+                  9655060,
+                  9658108,
+                  9658240,
+                  21471828,
+                  21472196,
+                  21475244,
+                  21475376
                 ],
                 "kind": "code-constant",
-                "matches": 2
+                "matches": 9
               }
             ],
             "firmware": "x100vi-131"
@@ -8300,11 +8312,17 @@
             "findings": [
               {
                 "addresses": [
-                  51244308,
-                  51244572
+                  9688032,
+                  9688400,
+                  9691448,
+                  9691580,
+                  21683452,
+                  21683820,
+                  21686868,
+                  21687000
                 ],
                 "kind": "code-constant",
-                "matches": 2
+                "matches": 8
               }
             ],
             "firmware": "xe5-112"
@@ -8313,11 +8331,13 @@
             "findings": [
               {
                 "addresses": [
-                  47342844,
-                  47343108
+                  20516960,
+                  20517328,
+                  20520376,
+                  20520508
                 ],
                 "kind": "code-constant",
-                "matches": 2
+                "matches": 4
               }
             ],
             "firmware": "xh2-530"
@@ -8326,11 +8346,13 @@
             "findings": [
               {
                 "addresses": [
-                  50580380,
-                  50580644
+                  23784512,
+                  23784880,
+                  23787928,
+                  23788060
                 ],
                 "kind": "code-constant",
-                "matches": 2
+                "matches": 4
               }
             ],
             "firmware": "xh2s-730"
@@ -8339,11 +8361,17 @@
             "findings": [
               {
                 "addresses": [
-                  51732240,
-                  51732504
+                  23208,
+                  9676100,
+                  9676468,
+                  9679516,
+                  9679648,
+                  21638996,
+                  21639364,
+                  21642412
                 ],
                 "kind": "code-constant",
-                "matches": 2
+                "matches": 10
               }
             ],
             "firmware": "xm5-130"
@@ -8352,11 +8380,13 @@
             "findings": [
               {
                 "addresses": [
-                  46765060,
-                  46765324
+                  20517856,
+                  20518224,
+                  20521272,
+                  20521404
                 ],
                 "kind": "code-constant",
-                "matches": 2
+                "matches": 4
               }
             ],
             "firmware": "xs20-330"
@@ -8365,11 +8395,17 @@
             "findings": [
               {
                 "addresses": [
-                  51257632,
-                  51257896
+                  9686988,
+                  9687356,
+                  9690404,
+                  9690536,
+                  21693768,
+                  21694136,
+                  21697184,
+                  21697316
                 ],
                 "kind": "code-constant",
-                "matches": 2
+                "matches": 8
               }
             ],
             "firmware": "xt30iii-110"
@@ -8378,11 +8414,13 @@
             "findings": [
               {
                 "addresses": [
-                  46551496,
-                  46551760
+                  20508936,
+                  20509304,
+                  20512352,
+                  20512484
                 ],
                 "kind": "code-constant",
-                "matches": 2
+                "matches": 4
               }
             ],
             "firmware": "xt5-431"
@@ -8391,11 +8429,17 @@
             "findings": [
               {
                 "addresses": [
-                  50140788,
-                  50141052
+                  9655824,
+                  9656192,
+                  9659240,
+                  9659372,
+                  21506404,
+                  21506772,
+                  21509820,
+                  21509952
                 ],
                 "kind": "code-constant",
-                "matches": 2
+                "matches": 8
               }
             ],
             "firmware": "xt50-132"
@@ -28483,6 +28527,482 @@
                 ],
                 "kind": "code-constant",
                 "matches": 1
+              }
+            ],
+            "firmware": "xt50-132"
+          }
+        ]
+      }
+    },
+    "words-90e700": {
+      "base": 4287686400,
+      "evidence": {
+        "base": [
+          {
+            "findings": [
+              {
+                "addresses": [
+                  49561532,
+                  49561796
+                ],
+                "kind": "code-constant",
+                "matches": 2
+              }
+            ],
+            "firmware": "gfx100rf-113"
+          },
+          {
+            "findings": [
+              {
+                "addresses": [
+                  49462244,
+                  49462508
+                ],
+                "kind": "code-constant",
+                "matches": 2
+              }
+            ],
+            "firmware": "x100vi-131"
+          },
+          {
+            "findings": [
+              {
+                "addresses": [
+                  51244308,
+                  51244572
+                ],
+                "kind": "code-constant",
+                "matches": 2
+              }
+            ],
+            "firmware": "xe5-112"
+          },
+          {
+            "findings": [
+              {
+                "addresses": [
+                  47342844,
+                  47343108
+                ],
+                "kind": "code-constant",
+                "matches": 2
+              }
+            ],
+            "firmware": "xh2-530"
+          },
+          {
+            "findings": [
+              {
+                "addresses": [
+                  50580380,
+                  50580644
+                ],
+                "kind": "code-constant",
+                "matches": 2
+              }
+            ],
+            "firmware": "xh2s-730"
+          },
+          {
+            "findings": [
+              {
+                "addresses": [
+                  51732240,
+                  51732504
+                ],
+                "kind": "code-constant",
+                "matches": 2
+              }
+            ],
+            "firmware": "xm5-130"
+          },
+          {
+            "findings": [
+              {
+                "addresses": [
+                  46765060,
+                  46765324
+                ],
+                "kind": "code-constant",
+                "matches": 2
+              }
+            ],
+            "firmware": "xs20-330"
+          },
+          {
+            "findings": [
+              {
+                "addresses": [
+                  51257632,
+                  51257896
+                ],
+                "kind": "code-constant",
+                "matches": 2
+              }
+            ],
+            "firmware": "xt30iii-110"
+          },
+          {
+            "findings": [
+              {
+                "addresses": [
+                  46551496,
+                  46551760
+                ],
+                "kind": "code-constant",
+                "matches": 2
+              }
+            ],
+            "firmware": "xt5-431"
+          },
+          {
+            "findings": [
+              {
+                "addresses": [
+                  50140788,
+                  50141052
+                ],
+                "kind": "code-constant",
+                "matches": 2
+              }
+            ],
+            "firmware": "xt50-132"
+          }
+        ]
+      }
+    },
+    "words-90e720": {
+      "base": 4287686432,
+      "evidence": {
+        "base": [
+          {
+            "findings": [
+              {
+                "addresses": [
+                  51181980
+                ],
+                "kind": "code-constant",
+                "matches": 1
+              }
+            ],
+            "firmware": "gfx100rf-113"
+          },
+          {
+            "findings": [
+              {
+                "addresses": [
+                  51074992
+                ],
+                "kind": "code-constant",
+                "matches": 1
+              }
+            ],
+            "firmware": "x100vi-131"
+          },
+          {
+            "findings": [
+              {
+                "addresses": [
+                  52891196
+                ],
+                "kind": "code-constant",
+                "matches": 1
+              }
+            ],
+            "firmware": "xe5-112"
+          },
+          {
+            "findings": [
+              {
+                "addresses": [
+                  53366892
+                ],
+                "kind": "code-constant",
+                "matches": 1
+              }
+            ],
+            "firmware": "xm5-130"
+          },
+          {
+            "findings": [
+              {
+                "addresses": [
+                  52907184
+                ],
+                "kind": "code-constant",
+                "matches": 1
+              }
+            ],
+            "firmware": "xt30iii-110"
+          },
+          {
+            "findings": [
+              {
+                "addresses": [
+                  51773052
+                ],
+                "kind": "code-constant",
+                "matches": 1
+              }
+            ],
+            "firmware": "xt50-132"
+          }
+        ]
+      }
+    },
+    "words-90e740": {
+      "base": 4287686464,
+      "evidence": {
+        "base": [
+          {
+            "findings": [
+              {
+                "addresses": [
+                  21470636
+                ],
+                "kind": "code-constant",
+                "matches": 1
+              }
+            ],
+            "firmware": "gfx100rf-113"
+          },
+          {
+            "findings": [
+              {
+                "addresses": [
+                  21451508
+                ],
+                "kind": "code-constant",
+                "matches": 1
+              }
+            ],
+            "firmware": "x100vi-131"
+          },
+          {
+            "findings": [
+              {
+                "addresses": [
+                  21663132
+                ],
+                "kind": "code-constant",
+                "matches": 1
+              }
+            ],
+            "firmware": "xe5-112"
+          },
+          {
+            "findings": [
+              {
+                "addresses": [
+                  20496908
+                ],
+                "kind": "code-constant",
+                "matches": 1
+              }
+            ],
+            "firmware": "xh2-530"
+          },
+          {
+            "findings": [
+              {
+                "addresses": [
+                  23764460
+                ],
+                "kind": "code-constant",
+                "matches": 1
+              }
+            ],
+            "firmware": "xh2s-730"
+          },
+          {
+            "findings": [
+              {
+                "addresses": [
+                  21618676
+                ],
+                "kind": "code-constant",
+                "matches": 1
+              }
+            ],
+            "firmware": "xm5-130"
+          },
+          {
+            "findings": [
+              {
+                "addresses": [
+                  20497756
+                ],
+                "kind": "code-constant",
+                "matches": 1
+              }
+            ],
+            "firmware": "xs20-330"
+          },
+          {
+            "findings": [
+              {
+                "addresses": [
+                  21673448
+                ],
+                "kind": "code-constant",
+                "matches": 1
+              }
+            ],
+            "firmware": "xt30iii-110"
+          },
+          {
+            "findings": [
+              {
+                "addresses": [
+                  20488884
+                ],
+                "kind": "code-constant",
+                "matches": 1
+              }
+            ],
+            "firmware": "xt5-431"
+          },
+          {
+            "findings": [
+              {
+                "addresses": [
+                  21486084
+                ],
+                "kind": "code-constant",
+                "matches": 1
+              }
+            ],
+            "firmware": "xt50-132"
+          }
+        ]
+      }
+    },
+    "words-90e7d0": {
+      "base": 4287686608,
+      "evidence": {
+        "base": [
+          {
+            "findings": [
+              {
+                "addresses": [
+                  9689628,
+                  21597208
+                ],
+                "kind": "code-constant",
+                "matches": 2
+              }
+            ],
+            "firmware": "gfx100rf-113"
+          },
+          {
+            "findings": [
+              {
+                "addresses": [
+                  9640708,
+                  21576964
+                ],
+                "kind": "code-constant",
+                "matches": 2
+              }
+            ],
+            "firmware": "x100vi-131"
+          },
+          {
+            "findings": [
+              {
+                "addresses": [
+                  9674048,
+                  21788948
+                ],
+                "kind": "code-constant",
+                "matches": 2
+              }
+            ],
+            "firmware": "xe5-112"
+          },
+          {
+            "findings": [
+              {
+                "addresses": [
+                  20622160
+                ],
+                "kind": "code-constant",
+                "matches": 1
+              }
+            ],
+            "firmware": "xh2-530"
+          },
+          {
+            "findings": [
+              {
+                "addresses": [
+                  23889712
+                ],
+                "kind": "code-constant",
+                "matches": 1
+              }
+            ],
+            "firmware": "xh2s-730"
+          },
+          {
+            "findings": [
+              {
+                "addresses": [
+                  9662116,
+                  21744132
+                ],
+                "kind": "code-constant",
+                "matches": 2
+              }
+            ],
+            "firmware": "xm5-130"
+          },
+          {
+            "findings": [
+              {
+                "addresses": [
+                  20623076
+                ],
+                "kind": "code-constant",
+                "matches": 1
+              }
+            ],
+            "firmware": "xs20-330"
+          },
+          {
+            "findings": [
+              {
+                "addresses": [
+                  9673004,
+                  21798904
+                ],
+                "kind": "code-constant",
+                "matches": 2
+              }
+            ],
+            "firmware": "xt30iii-110"
+          },
+          {
+            "findings": [
+              {
+                "addresses": [
+                  20614928
+                ],
+                "kind": "code-constant",
+                "matches": 1
+              }
+            ],
+            "firmware": "xt5-431"
+          },
+          {
+            "findings": [
+              {
+                "addresses": [
+                  9641840,
+                  21611900
+                ],
+                "kind": "code-constant",
+                "matches": 2
               }
             ],
             "firmware": "xt50-132"

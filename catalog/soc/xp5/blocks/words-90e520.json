@@ -1,0 +1,119 @@
+{
+  "$schema": "https://fujimod.com/schemas/soc-block.schema.json",
+  "schema": 1,
+  "id": "words-90e520",
+  "base": 4287685920,
+  "size": 64,
+  "kind": "address-window",
+  "device": {
+    "model": "register_block",
+    "idle_bits": [],
+    "basis": "audio DMA select words Located in catalog/firmware/xt5/4.31/xp5-boot/manifest.d/62-audio.toml."
+  },
+  "registers": [
+    {
+      "name": "word-0020",
+      "offset": 0,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "word-0024",
+      "offset": 4,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "word-0028",
+      "offset": 8,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "word-002c",
+      "offset": 12,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "word-0030",
+      "offset": 16,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "word-0034",
+      "offset": 20,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "word-0038",
+      "offset": 24,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "word-003c",
+      "offset": 28,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "word-0040",
+      "offset": 32,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "word-0044",
+      "offset": 36,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "word-0048",
+      "offset": 40,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "word-004c",
+      "offset": 44,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "word-0050",
+      "offset": 48,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "word-0054",
+      "offset": 52,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "word-0058",
+      "offset": 56,
+      "width_bytes": 4,
+      "access": "read-write"
+    },
+    {
+      "name": "word-005c",
+      "offset": 60,
+      "width_bytes": 4,
+      "access": "read-write"
+    }
+  ],
+  "evidence": [
+    {
+      "kind": "located",
+      "firmware_ids": [
+        "xt5-431"
+      ]
+    }
+  ]
+}

@@ -504,6 +504,7 @@ class BlockDeviceVariant27(TypedDict, total=False):
     job: NotRequired[BlockRegisterBlockJob | None]
     model: Required[Literal["register_block"]]
     order: NotRequired[int | None]
+    reads_back: NotRequired[bool]
 
 
 class BlockDeviceVariant28(TypedDict, total=False):

@@ -334,6 +334,7 @@ fn block_register_layouts(
                 job,
                 basis,
                 order,
+                ..
             } => {
                 let frames = frames.as_ref().map(|frames| RegisterBlockFrames {
                     start: frames.start.clone(),

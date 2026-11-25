@@ -2,240 +2,108 @@
   "$schema": "https://fujimod.com/schemas/soc-block.schema.json",
   "schema": 1,
   "id": "dma-address-high",
-  "base": 4287686400,
-  "size": 296,
+  "base": 4287686472,
+  "size": 64,
   "kind": "address-window",
   "device": {
     "model": "register_block",
     "idle_bits": [],
-    "basis": "DMA thread high words, TPSP, PL330 and codec words Located in catalog/firmware/xe5/1.12/xp5-boot/manifest.d/63-hdr.toml."
+    "basis": "DMA thread high address words Located in catalog/firmware/x100vi/1.31/xp5-boot/manifest.d/60-mcore.toml."
   },
   "registers": [
     {
-      "name": "word-0000",
+      "name": "word-0048",
       "offset": 0,
       "width_bytes": 4,
       "access": "read-write"
     },
     {
-      "name": "word-0004",
+      "name": "word-004c",
       "offset": 4,
       "width_bytes": 4,
       "access": "read-write"
     },
     {
-      "name": "word-0008",
+      "name": "word-0050",
       "offset": 8,
       "width_bytes": 4,
       "access": "read-write"
     },
     {
-      "name": "word-000c",
+      "name": "word-0054",
       "offset": 12,
       "width_bytes": 4,
       "access": "read-write"
     },
     {
-      "name": "word-0010",
+      "name": "word-0058",
       "offset": 16,
       "width_bytes": 4,
       "access": "read-write"
     },
     {
-      "name": "word-0014",
+      "name": "word-005c",
       "offset": 20,
       "width_bytes": 4,
       "access": "read-write"
     },
     {
-      "name": "word-0018",
+      "name": "word-0060",
       "offset": 24,
       "width_bytes": 4,
       "access": "read-write"
     },
     {
-      "name": "word-001c",
+      "name": "word-0064",
       "offset": 28,
       "width_bytes": 4,
       "access": "read-write"
     },
     {
-      "name": "word-0020",
+      "name": "word-0068",
       "offset": 32,
       "width_bytes": 4,
       "access": "read-write"
     },
     {
-      "name": "word-0024",
+      "name": "word-006c",
       "offset": 36,
       "width_bytes": 4,
       "access": "read-write"
     },
     {
-      "name": "word-0028",
+      "name": "word-0070",
       "offset": 40,
       "width_bytes": 4,
       "access": "read-write"
     },
     {
-      "name": "word-002c",
+      "name": "word-0074",
       "offset": 44,
       "width_bytes": 4,
       "access": "read-write"
     },
     {
-      "name": "word-0030",
+      "name": "word-0078",
       "offset": 48,
       "width_bytes": 4,
       "access": "read-write"
     },
     {
-      "name": "word-0034",
+      "name": "word-007c",
       "offset": 52,
       "width_bytes": 4,
       "access": "read-write"
     },
     {
-      "name": "word-0038",
+      "name": "word-0080",
       "offset": 56,
       "width_bytes": 4,
       "access": "read-write"
     },
     {
-      "name": "word-003c",
-      "offset": 60,
-      "width_bytes": 4,
-      "access": "read-write"
-    },
-    {
-      "name": "word-0040",
-      "offset": 64,
-      "width_bytes": 4,
-      "access": "read-write"
-    },
-    {
-      "name": "word-0044",
-      "offset": 68,
-      "width_bytes": 4,
-      "access": "read-write"
-    },
-    {
-      "name": "word-0048",
-      "offset": 72,
-      "width_bytes": 4,
-      "access": "read-write"
-    },
-    {
-      "name": "word-004c",
-      "offset": 76,
-      "width_bytes": 4,
-      "access": "read-write"
-    },
-    {
-      "name": "word-0050",
-      "offset": 80,
-      "width_bytes": 4,
-      "access": "read-write"
-    },
-    {
-      "name": "word-0054",
-      "offset": 84,
-      "width_bytes": 4,
-      "access": "read-write"
-    },
-    {
-      "name": "word-0058",
-      "offset": 88,
-      "width_bytes": 4,
-      "access": "read-write"
-    },
-    {
-      "name": "word-005c",
-      "offset": 92,
-      "width_bytes": 4,
-      "access": "read-write"
-    },
-    {
-      "name": "word-0060",
-      "offset": 96,
-      "width_bytes": 4,
-      "access": "read-write"
-    },
-    {
-      "name": "word-0064",
-      "offset": 100,
-      "width_bytes": 4,
-      "access": "read-write"
-    },
-    {
-      "name": "word-0068",
-      "offset": 104,
-      "width_bytes": 4,
-      "access": "read-write"
-    },
-    {
-      "name": "word-006c",
-      "offset": 108,
-      "width_bytes": 4,
-      "access": "read-write"
-    },
-    {
-      "name": "word-0070",
-      "offset": 112,
-      "width_bytes": 4,
-      "access": "read-write"
-    },
-    {
-      "name": "word-0074",
-      "offset": 116,
-      "width_bytes": 4,
-      "access": "read-write"
-    },
-    {
-      "name": "word-0078",
-      "offset": 120,
-      "width_bytes": 4,
-      "access": "read-write"
-    },
-    {
-      "name": "word-007c",
-      "offset": 124,
-      "width_bytes": 4,
-      "access": "read-write"
-    },
-    {
-      "name": "word-0080",
-      "offset": 128,
-      "width_bytes": 4,
-      "access": "read-write"
-    },
-    {
       "name": "word-0084",
-      "offset": 132,
-      "width_bytes": 4,
-      "access": "read-write"
-    },
-    {
-      "name": "word-0088",
-      "offset": 136,
-      "width_bytes": 4,
-      "access": "read-write"
-    },
-    {
-      "name": "word-008c",
-      "offset": 140,
-      "width_bytes": 4,
-      "access": "read-write"
-    },
-    {
-      "name": "word-00d0",
-      "offset": 208,
-      "width_bytes": 4,
-      "access": "read-write"
-    },
-    {
-      "name": "word-00dc",
-      "offset": 220,
+      "offset": 60,
       "width_bytes": 4,
       "access": "read-write"
     }
@@ -244,7 +112,11 @@
     {
       "kind": "located",
       "firmware_ids": [
+        "x100vi-131",
         "xe5-112",
+        "xh2-530",
+        "xh2s-730",
+        "xm5-130",
         "xt5-431"
       ]
     }
