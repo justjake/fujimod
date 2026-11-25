@@ -396,20 +396,84 @@ fn mapped_public_restore_only_failure_reports_saved_publication_words() {
 }
 
 #[test]
-fn mapped_timeout_receipt_preserves_typed_usb_cause() {
-    let result: bulk::Result<()> = Err(BulkError::Usb(fujimod_usb::Error::Timeout(
-        fujimod_usb::error::TransferStage::BulkIn,
-    )));
-    let error = super::context(MappedPhase::Piece, 0x1020, 32, result).unwrap_err();
+fn mapped_public_qualification_cancellation_keeps_typed_usb_cause_and_withheld_restore() {
+    let mut steps = prepared();
+    steps.truncate(steps.len() - 6);
+    let mut failing = api::read(0x1000, b"stoc");
+    failing.pop();
+    failing.push(E::ReadFailure {
+        maximum: 36 + 4,
+        error: nusb::transfer::TransferError::Cancelled,
+        partial: Vec::new(),
+    });
+    steps.extend(failing);
+    let (mut session, script) = api::opened(steps);
+    let bulk = api::query_camera();
+    let flash = flash();
+    let payload = mapped_payload(&flash);
+    let error = block_on(crate::flash::read_range(
+        &mut session,
+        &bulk,
+        &flash,
+        &payload,
+        &[],
+        api::limits(),
+        0,
+        64,
+    ))
+    .unwrap_err();
+    let receipt = failure(&error);
+    assert_eq!(receipt.phase, MappedPhase::Prepare);
+    assert_eq!(receipt.address, 0x1000);
+    assert_eq!(receipt.length, 0x1000);
+    assert!(
+        matches!(&*receipt.source, BulkError::Usb(_)),
+        "primary USB cause must stay typed during qualification: {}",
+        receipt.source
+    );
+    let cleanup = receipt.cleanup.as_ref().expect("withheld restore receipt");
+    assert!(cleanup.to_string().contains("not restored"));
+    assert_eq!(session.state(), SessionState::CompletionUnknown);
+    assert_eq!(script.remaining(), 0);
+}
+
+#[test]
+fn mapped_public_transfer_cancellation_keeps_typed_usb_cause_and_withheld_restore() {
+    let first = vec![0xa0; 32];
+    let mut steps = prepared();
+    steps.extend(api::data(0, CONTROL));
+    steps.extend(api::data(0, &first));
+    steps.push(E::ReadFailure {
+        maximum: 32,
+        error: nusb::transfer::TransferError::Cancelled,
+        partial: Vec::new(),
+    });
+    let (mut session, script) = api::opened(steps);
+    let bulk = api::query_camera();
+    let flash = flash();
+    let payload = mapped_payload(&flash);
+    let error = block_on(crate::flash::read_range(
+        &mut session,
+        &bulk,
+        &flash,
+        &payload,
+        &[],
+        api::limits(),
+        0,
+        64,
+    ))
+    .unwrap_err();
     let receipt = failure(&error);
     assert_eq!(receipt.phase, MappedPhase::Piece);
     assert_eq!(receipt.address, 0x1020);
     assert_eq!(receipt.length, 32);
-    assert!(matches!(
-        &*receipt.source,
-        BulkError::Usb(fujimod_usb::Error::Timeout(
-            fujimod_usb::error::TransferStage::BulkIn
-        ))
-    ));
-    assert!(receipt.cleanup.is_none());
+    assert!(
+        matches!(&*receipt.source, BulkError::Usb(_)),
+        "primary USB cause must stay typed during transfer: {}",
+        receipt.source
+    );
+    let cleanup = receipt.cleanup.as_ref().expect("withheld restore receipt");
+    assert!(cleanup.to_string().contains("not restored"));
+    assert_eq!(session.state(), SessionState::CompletionUnknown);
+    assert_eq!(script.remaining(), 0);
 }

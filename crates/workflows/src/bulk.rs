@@ -31,7 +31,7 @@ pub enum BulkError {
     Check(String),
     #[error("{operation}; restoring the bulk source failed: {cleanup}")]
     Cleanup {
-        operation: String,
+        operation: Box<BulkError>,
         cleanup: Box<BulkError>,
     },
     #[error("{0}")]
@@ -274,7 +274,7 @@ pub(crate) fn finish<T>(outcome: Result<T>, restored: Result<()>) -> Result<T> {
         (Err(error), Ok(())) => Err(error),
         (Ok(_), Err(cleanup)) => Err(cleanup),
         (Err(error), Err(cleanup)) => Err(BulkError::Cleanup {
-            operation: error.to_string(),
+            operation: Box::new(error),
             cleanup: Box::new(cleanup),
         }),
     }
@@ -781,7 +781,7 @@ impl Source {
                     return Err(match cleanup {
                         Ok(()) => error,
                         Err(cleanup) => BulkError::Cleanup {
-                            operation: error.to_string(),
+                            operation: Box::new(error),
                             cleanup: Box::new(cleanup),
                         },
                     });
