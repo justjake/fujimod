@@ -267,6 +267,26 @@ fn xh2s_extension(options: &mut ladders::Options, initial_mode: u16) -> Result<(
         basis: "ADC3 factory thresholds, configuration offsets 0x36f8..0x372a, in physical scanner order 49..61.".into(),
     });
 
+    let dial = |channels, edges_per_step, basis: &str| ladders::QuadratureDial {
+        outputs: ladders::QuadratureOutputs::Adc { channels },
+        rest_phase: 3,
+        edge_period_ms: 50,
+        edges_per_step,
+        basis: basis.into(),
+    };
+    // The command dials have different mechanical detents. Clockwise is
+    // 3 → 1 → 0 for the front's half cycle and continues to 2 → 3 on the rear.
+    options.front_dial = Some(dial(
+        [1, 2],
+        -2,
+        "Encoder sampler 0x172d364 reads ADC1/2; the front dial advances two phases per detent.",
+    ));
+    options.rear_dial = Some(ladders::CommandDial::Quadrature(dial(
+        [8, 9],
+        -4,
+        "Encoder sampler 0x172d364 reads ADC8/9; the rear dial advances four phases per detent.",
+    )));
+
     options.gpio_keys.push(ladders::GpioKey {
         key: Key::MovieRecord,
         pin: Pin { port: 0, pin: 13 },
@@ -296,8 +316,10 @@ fn x100vi_extension(options: &mut ladders::Options) -> Result<(), String> {
         basis: X100VI_BANDS.into(),
     });
     let dial = |pins: [Pin; 2], basis: &str| ladders::QuadratureDial {
-        pins,
+        outputs: ladders::QuadratureOutputs::Gpio { pins },
         rest_phase: 0,
+        edge_period_ms: 2,
+        edges_per_step: 1,
         basis: basis.into(),
     };
     options.rear_dial = Some(ladders::CommandDial::Quadrature(dial(
@@ -527,8 +549,12 @@ count, bit 3 sign. The firmware never writes it, so the controller clears the co
                 .into(),
     }));
     options.front_dial = Some(ladders::QuadratureDial {
-        pins: [Pin { port: 0, pin: 9 }, Pin { port: 0, pin: 10 }],
+        outputs: ladders::QuadratureOutputs::Gpio {
+            pins: [Pin { port: 0, pin: 9 }, Pin { port: 0, pin: 10 }],
+        },
         rest_phase: 3,
+        edge_period_ms: 2,
+        edges_per_step: 1,
         basis:
             "Sampler 0x140a5bc: phase = level(0.9) << 1 | level(0.10), idle 3; transition table \
 0x1c0af58 steps 3, 2, 0, 1, 3 for CMD2_R (physical 0x8e) and 3, 1, 0, 2, 3 for CMD2_L (0x8f)."

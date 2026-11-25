@@ -162,14 +162,22 @@ pub struct CountingDial {
     pub basis: String,
 }
 
-/// A command dial read as a two-pad quadrature phase. `pins` are phase bit 1
-/// then phase bit 0. `FRONT+` steps 3, 2, 0, 1, 3 (from rest, bit 0 falls
-/// first) and `FRONT-` steps 3, 1, 0, 2, 3; each edge is one detent.
+/// Where an encoder's two Gray-code phase bits reach the processor, bit 1 first.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
+pub enum QuadratureOutputs {
+    Gpio { pins: [Pin; 2] },
+    Adc { channels: [u8; 2] },
+}
+
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct QuadratureDial {
-    pub pins: [Pin; 2],
+    pub outputs: QuadratureOutputs,
     pub rest_phase: u8,
+    pub edge_period_ms: u32,
+    /// Signed Gray-code transitions for a positive detent.
+    pub edges_per_step: i32,
     pub basis: String,
 }
 
@@ -515,15 +523,38 @@ impl Options {
             },
             self.front_dial.as_ref(),
         ];
+        channels.extend(
+            self.ladders
+                .iter()
+                .filter_map(|ladder| ladder.wire.channel()),
+        );
         for dial in quadrature.into_iter().flatten() {
-            for pin in dial.pins {
-                pin.validate()?;
-                if !pads.insert((pin.port, pin.pin)) {
-                    return Err("quadrature dial pads repeat".into());
+            match dial.outputs {
+                QuadratureOutputs::Gpio { pins } => {
+                    for pin in pins {
+                        pin.validate()?;
+                        if !pads.insert((pin.port, pin.pin)) {
+                            return Err("quadrature dial pads repeat".into());
+                        }
+                    }
+                }
+                QuadratureOutputs::Adc { channels: outputs } => {
+                    for channel in outputs {
+                        if channel >= ADC_CHANNELS || !channels.insert(channel) {
+                            return Err(
+                                "quadrature ADC channel is invalid or already driven".into()
+                            );
+                        }
+                    }
                 }
             }
-            if dial.rest_phase > 3 || dial.basis.trim().is_empty() {
-                return Err("quadrature dial needs a two-bit rest phase and a basis".into());
+            if dial.rest_phase > 3
+                || dial.edge_period_ms == 0
+                || dial.edges_per_step == 0
+                || dial.edges_per_step.unsigned_abs() > 64
+                || dial.basis.trim().is_empty()
+            {
+                return Err("quadrature dial needs valid phase timing, detents and a basis".into());
             }
         }
         for gpio in &self.gpio_keys {

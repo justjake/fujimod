@@ -672,19 +672,41 @@ pub fn assemble_devices(
     if !resources.displays.is_empty() {
         return Err("XP5 profile has unused display configurations".into());
     }
+    use fujimod_emulator_parts_controls::encoder::{Encoder, OutputWiring, Outputs, Wiring};
     let mut encoders = Vec::new();
+    let mut gpio_sources = Vec::new();
+    let mut adc_sources = Vec::new();
     for (name, options) in [(REAR_DIAL_NODE, dials.rear), (FRONT_DIAL_NODE, dials.front)] {
         let Some(options) = options else { continue };
-        let encoder = fujimod_emulator_parts_controls::encoder::Encoder::new(
+        let (outputs, sources) = match &options.outputs {
+            Outputs::Gpio => (
+                OutputWiring::Gpio(Box::new(DialPads(resources.pins.clone()))),
+                &mut gpio_sources,
+            ),
+            Outputs::Adc { .. } => (
+                OutputWiring::Adc(
+                    resources
+                        .adc_samples
+                        .clone()
+                        .ok_or("ADC dial needs an ADC")?,
+                ),
+                &mut adc_sources,
+            ),
+        };
+        let encoder = Encoder::new(
             options,
-            fujimod_emulator_parts_controls::encoder::Wiring {
-                outputs: fujimod_emulator_parts_controls::encoder::OutputWiring::Gpio(Box::new(
-                    DialPads(resources.pins.clone()),
-                )),
+            Wiring {
+                outputs,
                 counter: None,
             },
         )?;
-        encoders.push((name, graph.attach(Box::new(encoder))));
+        let node = graph.attach(Box::new(encoder));
+        sources.push(node);
+        encoders.push((name, node));
+    }
+    if !adc_sources.is_empty() {
+        let adc = graph.at(fujimod_emulator_xp5_io::adc::BASE)?;
+        graph.depend_on(adc, adc_sources)?;
     }
     let gpio_devices = windows
         .iter()
@@ -712,7 +734,7 @@ pub fn assemble_devices(
     }
     for &device in &gpio_devices {
         let mut causes = graph.nodes[device].native_dependencies.clone();
-        causes.extend(encoders.iter().map(|(_, node)| *node));
+        causes.extend(&gpio_sources);
         graph.depend_on(device, causes)?;
     }
     for (name, node) in encoders {

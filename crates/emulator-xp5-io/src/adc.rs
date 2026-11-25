@@ -1,21 +1,28 @@
 //! XP5 15-channel ADC sequencer. External resistor values are explicit inputs.
-use fujimod_emulator_devices::{Cx, Device};
+use fujimod_emulator_devices::{Cx, Device, parts::analog::Samples};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 
 pub const BASE: u64 = 0xff906000;
-#[derive(Serialize, Deserialize)]
-struct State {
+#[derive(Clone, Serialize, Deserialize)]
+struct Registers {
     enable: u32,
     config: [u32; 2],
     ack: u32,
     mask: u32,
     #[serde(default)]
     timing: u32,
+}
+
+#[derive(Serialize, Deserialize)]
+struct State {
+    #[serde(flatten)]
+    registers: Registers,
     samples: [u16; 15],
 }
 pub struct Adc {
-    state: State,
+    registers: Registers,
+    samples: Samples,
     /// Host overrides of the idle samples (`XT5_ADC`), read in place of `state.samples`. They are
     /// kept outside the checkpointed state and the manifest, so a snapshot loads with any value.
     overrides: [Option<u16>; 15],
@@ -61,23 +68,44 @@ impl Adc {
             Err(_) => [None; 15],
         };
         Ok(Self {
-            state: State {
+            registers: Registers {
                 enable: 0,
                 config: [0; 2],
                 ack: 0,
                 mask: 0,
                 timing: 0,
-                samples,
             },
+            samples: Samples::new(samples.to_vec())?,
             overrides,
         })
     }
-}
-impl Adc {
-    fn validate_state(&self, state: &State) -> Result<(), String> {
+
+    pub fn external_samples(&self) -> Samples {
+        self.samples.clone()
+    }
+
+    fn snapshot(&self) -> State {
+        State {
+            registers: self.registers.clone(),
+            samples: self
+                .samples
+                .values()
+                .try_into()
+                .expect("XP5 ADC has 15 channels"),
+        }
+    }
+
+    fn validate_state(state: &State) -> Result<(), String> {
         if state.samples.iter().any(|&value| value > 4095) {
             return Err("ADC checkpoint sample exceeds 12-bit range".into());
         }
+        Ok(())
+    }
+
+    fn restore_state(&mut self, state: State) -> Result<(), String> {
+        Self::validate_state(&state)?;
+        self.samples.replace(&state.samples)?;
+        self.registers = state.registers;
         Ok(())
     }
 }
@@ -85,19 +113,17 @@ impl Adc {
 /// The idle external levels; a host override (`XT5_ADC`) wins while it is set.
 impl fujimod_emulator_devices::capability::AnalogInputs for Adc {
     fn samples(&self) -> Vec<u16> {
-        (0..15)
-            .map(|n| self.overrides[n].unwrap_or(self.state.samples[n]))
-            .collect()
+        let mut levels = self.samples.values();
+        for (level, override_value) in levels.iter_mut().zip(self.overrides) {
+            *level = override_value.unwrap_or(*level);
+        }
+        levels
     }
     fn set_sample(&mut self, channel: usize, value: u16) -> Result<(), String> {
         if value > 4095 {
             return Err("XP5 ADC input levels are 12-bit".into());
         }
-        *self
-            .state
-            .samples
-            .get_mut(channel)
-            .ok_or("XP5 ADC channel is outside 0..=14")? = value;
+        self.samples.set(channel, value)?;
         self.overrides[channel] = None;
         Ok(())
     }
@@ -124,16 +150,18 @@ impl Device for Adc {
             return 0;
         }
         match offset {
-            0 => self.state.enable as u64,
-            4 | 8 => self.state.config[(offset / 4 - 1) as usize] as u64,
-            0xc => self.state.ack as u64,
+            0 => self.registers.enable as u64,
+            4 | 8 => self.registers.config[(offset / 4 - 1) as usize] as u64,
+            0xc => self.registers.ack as u64,
             0x10..=0x48 => {
                 let n = ((offset - 0x10) / 4) as usize;
-                self.overrides[n].unwrap_or(self.state.samples[n]) as u64
+                self.overrides[n]
+                    .unwrap_or_else(|| self.samples.get(n).expect("XP5 ADC has 15 channels"))
+                    as u64
             }
-            0x4c => self.state.mask as u64,
+            0x4c => self.registers.mask as u64,
             0x50 => 8,
-            0x54 => self.state.timing as u64,
+            0x54 => self.registers.timing as u64,
             _ => {
                 cx.unmodeled();
                 0
@@ -148,36 +176,50 @@ impl Device for Adc {
         }
         match offset {
             0 => {
-                self.state.enable = value as u32;
+                self.registers.enable = value as u32;
                 if value & 1 != 0 {
-                    self.state.ack |= 1;
+                    self.registers.ack |= 1;
                 }
             }
-            4 | 8 => self.state.config[(offset / 4 - 1) as usize] = value as u32,
-            0xc => self.state.ack = value as u32 & 1,
-            0x4c => self.state.mask = value as u32 & 0x7fff,
+            4 | 8 => self.registers.config[(offset / 4 - 1) as usize] = value as u32,
+            0xc => self.registers.ack = value as u32 & 1,
+            0x4c => self.registers.mask = value as u32 & 0x7fff,
             0x54 => {
                 if value > 15 {
                     cx.fail("unmodeled ADC +54 configuration outside stock 4-bit range");
                 } else {
-                    self.state.timing = value as u32;
+                    self.registers.timing = value as u32;
                 }
             }
             _ => cx.unmodeled(),
         }
     }
-    fujimod_emulator_devices::checkpoint_state!(state: State, Self::validate_state);
-    fn save(&self) -> Value {
-        json!({"adc":self.state})
+    fn checkpoint(&self) -> Result<fujimod_emulator_devices::checkpoint::Checkpoint, String> {
+        fujimod_emulator_devices::checkpoint::Checkpoint::encode(self.name(), &self.snapshot())
     }
+
+    fn validate_checkpoint(
+        &self,
+        checkpoint: &fujimod_emulator_devices::checkpoint::Checkpoint,
+    ) -> Result<(), String> {
+        Self::validate_state(&checkpoint.decode(self.name())?)
+    }
+
+    fn restore_checkpoint(
+        &mut self,
+        checkpoint: &fujimod_emulator_devices::checkpoint::Checkpoint,
+    ) -> Result<(), String> {
+        self.restore_state(checkpoint.decode(self.name())?)
+    }
+
+    fn save(&self) -> Value {
+        json!({"adc":self.snapshot()})
+    }
+
     fn restore(&mut self, v: &Value) -> Result<(), String> {
-        let state: State =
+        let state =
             serde_json::from_value(v["adc"].clone()).map_err(|e| format!("ADC checkpoint: {e}"))?;
-        if state.samples.iter().any(|v| *v > 4095) {
-            return Err("ADC checkpoint sample exceeds 12-bit range".into());
-        }
-        self.state = state;
-        Ok(())
+        self.restore_state(state)
     }
 }
 
@@ -211,6 +253,28 @@ mod tests {
         adc.restore_checkpoint(&checkpoint).unwrap();
         assert_eq!(adc.read(&mut cx, BASE + 0x10 + 3 * 4, 4), 3500);
     }
+    #[test]
+    fn wired_samples_follow_the_adc_checkpoint() {
+        use fujimod_emulator_devices::capability::AnalogInputs;
+
+        let mut adc = Adc::new([4095; 15]).unwrap();
+        let mut host = RecordingHost::default();
+        let mut cx = Cx::new(&mut host, 0, 0, 0);
+        let encoder_levels = adc.external_samples();
+        encoder_levels.set(8, 0).unwrap();
+        assert_eq!(adc.samples()[8], 0);
+        assert_eq!(adc.read(&mut cx, BASE + 0x30, 4), 0);
+        let saved = adc.checkpoint().unwrap();
+        encoder_levels.set(8, 4095).unwrap();
+        adc.restore_checkpoint(&saved).unwrap();
+        assert_eq!(encoder_levels.get(8).unwrap(), 0);
+
+        adc.set_sample(11, 3439).unwrap();
+        assert_eq!(encoder_levels.get(11).unwrap(), 3439);
+        assert_eq!(adc.save()["adc"]["samples"][8], 0);
+        assert_eq!(adc.save()["adc"]["enable"], 0);
+    }
+
     #[test]
     fn sample_overrides_are_validated() {
         assert_eq!(parse_overrides("").unwrap(), [None; 15]);

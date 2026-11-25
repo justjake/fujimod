@@ -447,38 +447,48 @@ pub fn compile(
         });
     }
     let mut interfaces = Vec::new();
-    let mut rotary =
-        |names: &Option<(String, String)>, node: Option<&String>| -> Result<(), String> {
-            let (Some((id, label)), Some(node)) = (names, node) else {
-                return Ok(());
-            };
-            catalog.push(ControlInput {
-                id: id.clone(),
-                label: label.clone(),
-                kind: "rotary".into(),
-                supported: true,
-                unavailable: None,
-                positions: None,
-                initial: None,
-                relative: Some(true),
-                width: None,
-                height: None,
-                stages: None,
-            });
-            interfaces.push(Interface::Rotary {
-                id: id.clone(),
-                node: node.clone(),
-                edges_per_step: 1,
-            });
-            Ok(())
+    let mut rotary = |names: &Option<(String, String)>,
+                      node: Option<&String>,
+                      edges_per_step|
+     -> Result<(), String> {
+        let (Some((id, label)), Some(node)) = (names, node) else {
+            return Ok(());
         };
+        catalog.push(ControlInput {
+            id: id.clone(),
+            label: label.clone(),
+            kind: "rotary".into(),
+            supported: true,
+            unavailable: None,
+            positions: None,
+            initial: None,
+            relative: Some(true),
+            width: None,
+            height: None,
+            stages: None,
+        });
+        interfaces.push(Interface::Rotary {
+            id: id.clone(),
+            node: node.clone(),
+            edges_per_step,
+        });
+        Ok(())
+    };
     match &options.rear_dial {
-        Some(CommandDial::Counting(_)) => rotary(&names.rear_dial, Some(&nodes.power.0))?,
-        Some(CommandDial::Quadrature(_)) => rotary(&names.rear_dial, nodes.rear_dial.as_ref())?,
+        Some(CommandDial::Counting(_)) => rotary(&names.rear_dial, Some(&nodes.power.0), 1)?,
+        Some(CommandDial::Quadrature(dial)) => rotary(
+            &names.rear_dial,
+            nodes.rear_dial.as_ref(),
+            dial.edges_per_step,
+        )?,
         None => {}
     }
-    if options.front_dial.is_some() {
-        rotary(&names.front_dial, nodes.front_dial.as_ref())?;
+    if let Some(dial) = &options.front_dial {
+        rotary(
+            &names.front_dial,
+            nodes.front_dial.as_ref(),
+            dial.edges_per_step,
+        )?;
     }
     Ok(Panel {
         wiring: Spec { controls, circuits },
@@ -741,6 +751,31 @@ mod tests {
             );
         }
         assert!(switches.transition("mode_dial", "C8").is_err());
+    }
+
+    #[test]
+    fn xh2s_dials_use_half_and_full_gray_cycles() {
+        let panel = xh2s(3774);
+        let dials: Vec<_> = panel
+            .confirmation
+            .interfaces
+            .iter()
+            .map(|interface| match interface {
+                Interface::Rotary {
+                    id,
+                    node,
+                    edges_per_step,
+                } => (id.as_str(), node.as_str(), *edges_per_step),
+                _ => panic!("only command dials are interfaces"),
+            })
+            .collect();
+        assert_eq!(
+            dials,
+            [
+                ("rear_command_dial", "rear-dial", -4),
+                ("front_command_dial", "front-dial", -2),
+            ]
+        );
     }
 
     #[test]

@@ -33,6 +33,8 @@ pub struct Resources {
     pub sd: BTreeMap<u64, sd::Media>,
     /// The power-controller register that counts a command dial's detents.
     pub counting_dial: Option<u8>,
+    /// External ADC levels supplied by the registered sequencer.
+    pub adc_samples: Option<fujimod_emulator_devices::parts::analog::Samples>,
     pub pins: fujimod_emulator_devices::xp5::pins::SharedPins,
     pub clocks: fujimod_emulator_devices::xp5::panel_clocks::Clocks,
     pub companion: Option<Companion>,
@@ -617,22 +619,18 @@ fn register_with_resources(
             {
                 return Err("invalid ADC window or options".into());
             }
-            bus.register(
-                window.base,
-                window.size,
-                Box::new(adc::Adc::new(
-                    serde_json::from_value(
-                        serde_json::to_value(
-                            window
-                                .options
-                                .get("samples")
-                                .ok_or("ADC requires samples")?,
-                        )
-                        .map_err(|e| e.to_string())?,
-                    )
+            let samples = window
+                .options
+                .get("samples")
+                .ok_or("ADC requires samples")?;
+            let adc = adc::Adc::new(
+                samples
+                    .clone()
+                    .try_into()
                     .map_err(|e| format!("ADC samples: {e}"))?,
-                )?),
             )?;
+            resources.adc_samples = Some(adc.external_samples());
+            bus.register(window.base, window.size, Box::new(adc))?;
         }
         "gpio" | "gpio-port3" => {
             if window.options.keys().any(|k| {
