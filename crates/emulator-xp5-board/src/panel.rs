@@ -561,6 +561,68 @@ mod tests {
     }
 
     #[test]
+    fn xh2_controls_compile_to_one_panel() {
+        let resolved = ResolvedConfiguration::bundled("xh2-530").unwrap();
+        let options = crate::ladder_controls::ladders(&resolved).unwrap().unwrap();
+        let names = crate::ladder_controls::panel_names(&resolved).unwrap();
+        let nodes = Nodes {
+            adc: "adc".into(),
+            gpio: "gpio".into(),
+            power: ("spi".into(), 0),
+            rear_dial: None,
+            front_dial: None,
+        };
+        let panel = compile(
+            &options,
+            &names,
+            &nodes,
+            &Idle {
+                adc: &[4095; 15],
+                register: &|_| Ok(0),
+            },
+            1_000_000_000,
+        )
+        .unwrap();
+        let switches = SwitchPanel::new(panel.wiring.clone()).unwrap();
+        let analog = |channel, value| Signal::Analog {
+            node: "adc".into(),
+            channel,
+            value,
+        };
+        let menu = switches.transition("menu_ok_button", "pressed").unwrap();
+        assert!(menu.signals().unwrap().contains(&analog(6, 391)));
+        let back = switches.transition("disp_back_button", "pressed").unwrap();
+        assert!(back.signals().unwrap().contains(&analog(6, 2869)));
+        // MENU/OK with DISP/BACK has no declared band on ADC 6.
+        assert!(menu.transition("disp_back_button", "pressed").is_err());
+        for (id, value) in [
+            ("selector_up_button", 1568),
+            ("selector_right_button", 2074),
+            ("selector_left_button", 2823),
+            ("selector_down_button", 3380),
+        ] {
+            let pressed = switches.transition(id, "pressed").unwrap();
+            assert!(
+                pressed.signals().unwrap().contains(&analog(13, value)),
+                "{id}"
+            );
+        }
+        // S1 on GPIO 0.0 and S2 on 0.1, both active low; a full press holds S1 too.
+        let pad = |pin, high| Signal::Gpio {
+            node: "gpio".into(),
+            pin: Pin { port: 0, pin },
+            high,
+        };
+        let half = switches.transition("shutter_button", "half").unwrap();
+        let signals = half.signals().unwrap();
+        assert!(signals.contains(&pad(0, false)) && signals.contains(&pad(1, true)));
+        let full = half.transition("shutter_button", "full").unwrap();
+        let signals = full.signals().unwrap();
+        assert!(signals.contains(&pad(0, false)) && signals.contains(&pad(1, false)));
+        assert!(panel.confirmation.interfaces.is_empty());
+    }
+
+    #[test]
     fn x100vi_controls_compile_to_one_panel() {
         let resolved = ResolvedConfiguration::bundled("x100vi-131").unwrap();
         let options = crate::ladder_controls::ladders(&resolved).unwrap().unwrap();
