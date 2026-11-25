@@ -556,6 +556,10 @@ pub fn windows_from_blocks(
         } if block_id == "flash-aperture" => Some((part_id.as_str(), erased_tail, seeds)),
         _ => None,
     });
+    let presented_jedec = inputs.iter().find_map(|input| match input {
+        ApplicationBlockInput::Flash { presented_jedec_id, .. } => *presented_jedec_id,
+        _ => None,
+    });
     let samples = inputs.iter().find_map(|input| match input {
         ApplicationBlockInput::Adc { samples, .. } => Some(samples.clone()),
         _ => None,
@@ -599,7 +603,7 @@ pub fn windows_from_blocks(
         };
         if let Some((kind, options)) = block_window(
             block, device, selection, flash_input, flash_image, samples.as_deref(), levels,
-            &resolved.configuration.bus_byte_times, ticks_per_second,
+            &resolved.configuration.bus_byte_times, ticks_per_second, presented_jedec,
         )? {
             let mut options = options;
             if !options.contains_key("registers") && block.registers.iter().any(|register| register.reads.is_some()) {
@@ -683,6 +687,7 @@ fn block_window(
     levels: Option<(&Vec<u16>, &Vec<fujimod_catalog_configuration::application_inputs::GpioOutputWord>)>,
     byte_times: &[fujimod_catalog_configuration::RunBusByteTime],
     ticks_per_second: u64,
+    presented_jedec: Option<u32>,
 ) -> Result<Option<(&'static str, toml::Table)>, String> {
     let _ = levels;
     let mut options = toml::Table::new();
@@ -718,7 +723,7 @@ fn block_window(
             "flash-storage"
         }
         BlockDevice::SerialFlashController { .. } => {
-            let jedec = flash.and_then(|(part_id, _, _)| selection.parts.iter().find(|part| part.id == part_id))
+            let jedec = presented_jedec.or_else(|| flash.and_then(|(part_id, _, _)| selection.parts.iter().find(|part| part.id == part_id))
                 .and_then(|part| match &part.model {
                     fujimod_catalog::reference::PartModel::Peripheral { interface } => match interface {
                         fujimod_catalog::assembly::PeripheralPart::SerialNorFlash { jedec_id, .. }
@@ -727,7 +732,7 @@ fn block_window(
                     },
                     _ => None,
                 })
-                .ok_or("flash controller needs a body flash part with a JEDEC identity")?;
+                ).ok_or("flash controller needs a body flash part with a JEDEC identity")?;
             options.insert("jedec_id".into(), integer(u64::from(jedec)));
             "flash-storage-controller"
         }
@@ -888,14 +893,27 @@ fn block_window(
                 "bringup-stub"
             } else { "write-only-registers" }
         }
-        BlockDevice::SdHost { transfer_ticks, clock_ticks, .. } => {
+        BlockDevice::SdHost { transfer_ticks, clock_ticks, dma_windows, address_high, .. } => {
             let mut controller = toml::Table::new();
             controller.insert("base".into(), integer(block.base));
             controller.insert("protocol".into(), toml::Value::String("sdhc".into()));
             controller.insert("transfer_ticks".into(), integer(*transfer_ticks));
             controller.insert("clock_ticks".into(), integer(*clock_ticks));
             controller.insert("rca".into(), integer(1));
-            controller.insert("ram_bytes".into(), integer(0x8000_0000));
+            if !dma_windows.is_empty() {
+                let (low, banks): (Vec<&fujimod_catalog::soc::SdDmaWindow>, Vec<_>) = dma_windows.iter().partition(|window| window.base == 0);
+                let [low] = low.as_slice() else {
+                    return Err(format!("block {}: SD DMA needs one range from address 0", block.id));
+                };
+                controller.insert("ram_bytes".into(), integer(low.size));
+                if !banks.is_empty() {
+                    controller.insert("ram_banks".into(), toml::Value::Array(banks.iter().map(|bank| {
+                        toml::Value::Array(vec![integer(bank.base), integer(bank.size)])
+                    }).collect()));
+                }
+                controller.insert("dram_alias".into(), toml::Value::Boolean(false));
+            }
+            if let Some(address) = address_high { controller.insert("address_high".into(), integer(*address)); }
             options.insert("controller".into(), toml::Value::Table(controller));
             "sdhci"
         }

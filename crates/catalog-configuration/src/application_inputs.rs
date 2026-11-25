@@ -221,6 +221,10 @@ pub enum ApplicationBlockInput {
         #[serde(default)]
         erased_tail: Option<u8>,
         seeds: Vec<FlashSeed>,
+        /// JEDEC identity the emulator answers in place of the part's, while the part's own
+        /// read path is unmodeled.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        presented_jedec_id: Option<u32>,
     },
 }
 

@@ -630,6 +630,15 @@
             "part_id": {
               "type": "string"
             },
+            "presented_jedec_id": {
+              "description": "JEDEC identity the emulator answers in place of the part's, while the part's own\nread path is unmodeled.",
+              "format": "uint32",
+              "minimum": 0,
+              "type": [
+                "integer",
+                "null"
+              ]
+            },
             "seeds": {
               "items": {
                 "$ref": "#/$defs/FlashSeed"
@@ -2240,6 +2249,15 @@
           "additionalProperties": false,
           "description": "Standard SDHCI host page.",
           "properties": {
+            "address_high": {
+              "description": "Word holding DMA address bits 34..32 for this host, when it has one.",
+              "format": "uint64",
+              "minimum": 0,
+              "type": [
+                "integer",
+                "null"
+              ]
+            },
             "basis": {
               "description": "Declared basis.",
               "type": "string"
@@ -2261,6 +2279,13 @@
               "format": "uint64",
               "minimum": 0,
               "type": "integer"
+            },
+            "dma_windows": {
+              "description": "Physical address ranges the host's DMA reaches, when declared.",
+              "items": {
+                "$ref": "#/$defs/SdDmaWindow"
+              },
+              "type": "array"
             },
             "model": {
               "const": "sd_host",
@@ -27290,6 +27315,29 @@
         "channel",
         "pointer_address",
         "address_mask"
+      ],
+      "type": "object"
+    },
+    "SdDmaWindow": {
+      "additionalProperties": false,
+      "description": "One physical address range an SD host's DMA reaches.",
+      "properties": {
+        "base": {
+          "description": "First physical address.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "size": {
+          "description": "Range size in bytes.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "base",
+        "size"
       ],
       "type": "object"
     },

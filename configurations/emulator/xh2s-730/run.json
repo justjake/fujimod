@@ -48,7 +48,8 @@
         "part_id": "xh2s-serial-nor",
         "source": "firmware_update",
         "erased_tail": 255,
-        "seeds": []
+        "seeds": [],
+        "presented_jedec_id": 2145056
       }
     ],
     "parts": [

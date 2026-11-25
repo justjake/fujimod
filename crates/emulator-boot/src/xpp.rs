@@ -397,7 +397,7 @@ fn block_register_layouts(
                     size: block.size,
                 });
             }
-            BlockDevice::SdHost { capabilities, capabilities_2, clock_ticks, slot_and_version, transfer_ticks, vendor_offsets, basis } => {
+            BlockDevice::SdHost { capabilities, capabilities_2, clock_ticks, slot_and_version, transfer_ticks, vendor_offsets, basis, .. } => {
                 sd_hosts.push(SdHost {
                     base: block.base,
                     basis: basis.clone(),
