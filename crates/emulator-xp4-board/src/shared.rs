@@ -3,7 +3,7 @@
 //! and every device the definition selects.
 use super::{definition::TimerLayout, device_build, memory, Definition};
 use fujimod_catalog_configuration::RunEngine;
-use fujimod_emulator::board::{Board, InterruptMap, InterruptRegisters, armv7a, bus::{Bus, Mode}, factory};
+use fujimod_emulator::board::{InterruptMap, InterruptRegisters, armv7a, bus::{Bus, Mode}, factory};
 use fujimod_emulator_devices::{Cx, Device, checkpoint::Checkpoint};
 use fujimod_emulator_ip_arm::gicv2;
 use fujimod_emulator_xp4_io::interval_timers::IntervalTimers;
@@ -15,17 +15,20 @@ const CYCLES_PER_TICK: u64 = 64;
 /// Register window of the XP4 interval timer.
 const TIMER_WINDOW: u64 = 0x50;
 
-/// Build the XP4 board. `graph` holds the processors and memory the run
-/// selected; the definition's devices join it on the board bus.
+/// Build the XP4 board as a shared session. `graph` holds the processors
+/// and memory the run selected, its instruction rate per core; the
+/// definition's devices join it on the board bus. `record` is the
+/// definition the session reports.
 pub fn build(
-    graph: factory::Graph,
+    mut graph: factory::Graph,
     mut definition: Definition,
     storage_image: Option<Vec<u8>>,
     card_files: Vec<(String, Vec<u8>)>,
     card_media: Vec<(usize, fujimod_emulator_devices::parts::sd_card::Card)>,
     mode: Mode,
     engine: RunEngine,
-) -> Result<Board, String> {
+    record: serde_json::Value,
+) -> Result<fujimod_emulator_session::Session, String> {
     let cores = graph.processors.len();
     if cores != definition.cores || !(1..=4).contains(&cores) {
         return Err("XP4 processor wiring differs from its definition".into());
@@ -46,9 +49,28 @@ pub fn build(
     let built = device_build::build(definition, &memory, storage_image, card_files, card_media)?;
     // Serial-flash execution is served by the controller's execute-in-place
     // pages, so the views the old engine mapped are not needed here.
-    let mut devices = built.devices.ok_or("the XP4 definition selects no devices")?.into_graph()?;
+    let devices = built.devices.ok_or("the XP4 definition selects no devices")?;
+    // The XP4 physical map is the identity on every core: each device
+    // window, the timer and the GIC's distributor and CPU interface.
+    let mut windows = devices.guard_windows();
+    windows.push((u64::from(cbar) + 0x1000, u64::from(cbar) + 0x3000));
+    if let Some((base, _)) = &timer {
+        windows.push((*base, base + TIMER_WINDOW));
+    }
+    for core in 0..cores {
+        for &(lo, hi) in &windows {
+            let size = usize::try_from(hi - lo).map_err(|_| "XP4 device window exceeds the host")?;
+            graph.peripherals.push(factory::Peripheral { core, address: lo, physical: lo, size });
+        }
+    }
+    let (mut devices, mut nodes) = devices.into_graph()?;
     if let Some((base, model)) = timer {
-        devices.register(base, TIMER_WINDOW, Box::new(Timers { base, model, scheduled: None }))?;
+        let id = devices.register(base, TIMER_WINDOW, Box::new(Timers { base, model, scheduled: None }))?;
+        nodes.insert("xp4-interval-timers".into(), id);
+    }
+    // The session's GPIO bank, which pin inputs address by this name.
+    if let Some(&gpio) = nodes.get("masked-gpio") {
+        nodes.insert("gpio".into(), gpio);
     }
     let interrupts = InterruptMap {
         gic: Box::new(gicv2::Gic::new(cores, GIC_LINES)),
@@ -67,7 +89,18 @@ pub fn build(
             cache_sizes,
         })?;
     }
-    Ok(board)
+    Ok(fujimod_emulator_session::Session {
+        definition: record,
+        board,
+        controls: None,
+        contact_driver: None,
+        resources: fujimod_emulator_exr2_resources::Resources::default(),
+        nodes,
+        contacts: Default::default(),
+        power_cycle: None,
+        window_action: None,
+        recording_frames: Default::default(),
+    })
 }
 
 /// The XP4 interval timer: eight channels, each pulsing its routed line.
@@ -117,8 +150,7 @@ impl Device for Timers {
             return;
         }
         for irq in self.model.tick(cx.now()) {
-            cx.set_irq(irq as u32, true);
-            cx.set_irq(irq as u32, false);
+            cx.pulse_irq(irq as u32);
         }
         self.schedule(cx);
     }
@@ -153,4 +185,38 @@ impl Device for Timers {
     fn fingerprint(&self) -> Result<serde_json::Value, String> {
         Ok(self.checkpoint()?.state())
     }
+}
+
+/// Present a sample at an input of the XP4 external ADC, as a key's resistor
+/// band does; a sample that changes a sampled channel arms a conversion.
+pub fn set_adc_input(
+    session: &mut fujimod_emulator_session::Session,
+    channel: usize,
+    sample: u16,
+) -> Result<(), String> {
+    use fujimod_emulator_xp4_io::adc::Adc;
+    let id = session.node("xp4-adc").map_err(|_| "XP4 ADC inputs are not wired".to_string())?;
+    session.board.device_input::<super::devices::Connected<Adc>, _>(id, |adc, cx| {
+        adc.0.lock().unwrap().set_input(cx, channel, sample)
+    })
+}
+
+/// The medium in the `host`th SD card slot (node order), once the host is idle.
+pub fn card_medium(
+    session: &fujimod_emulator_session::Session,
+    host: usize,
+) -> Result<fujimod_emulator_devices::parts::sd_card::Card, String> {
+    use fujimod_emulator_devices::capability::CardSlot;
+    let mut ids: Vec<usize> = session.nodes.values().copied().collect();
+    ids.sort_unstable();
+    let mut slots = ids.into_iter().filter(|&id| {
+        session.board.inspect_capability::<dyn CardSlot, _>(id, |_| Ok(())).is_ok()
+    });
+    let id = slots.nth(host).ok_or("No SD card slot with that index")?;
+    session.board.inspect_capability::<dyn CardSlot, _>(id, |slot| {
+        if slot.busy() {
+            return Err("SD host is busy; the medium is not at rest".into());
+        }
+        Ok(slot.card().clone())
+    })
 }

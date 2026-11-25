@@ -125,6 +125,12 @@ pub trait Host {
     fn schedule(&mut self, device: usize, at: u64, token: u64);
     /// Assert or release a level interrupt line (GIC-style boards).
     fn set_irq(&mut self, line: u32, level: bool);
+    /// Latch an edge on interrupt `line` (GIC-style boards): it stays
+    /// pending until acknowledged. Default: the line rises and falls.
+    fn pulse_irq(&mut self, line: u32) {
+        self.set_irq(line, true);
+        self.set_irq(line, false);
+    }
     /// Latch interrupt `line` for core `cpu` (per-core controllers, X70).
     fn raise_irq(&mut self, cpu: usize, line: u32) -> Result<(), String>;
     /// Drive a level input on a particular processor's interrupt controller.
@@ -226,6 +232,9 @@ impl<'a> Cx<'a> {
     }
     pub fn set_irq(&mut self, line: u32, level: bool) {
         self.host.set_irq(line, level);
+    }
+    pub fn pulse_irq(&mut self, line: u32) {
+        self.host.pulse_irq(line);
     }
     pub fn raise_irq(&mut self, cpu: usize, line: u32) -> Result<(), String> {
         self.host.raise_irq(cpu, line)

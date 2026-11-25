@@ -41,6 +41,13 @@ pub trait InterruptController: Send {
         Ok(false)
     }
     fn set_spi(&mut self, id: usize, high: bool) -> Result<(), String>;
+    /// Latch an edge on shared interrupt `id`: it pends whatever the line's
+    /// configuration, and stays pending until acknowledged. Default: the
+    /// line rises and falls.
+    fn pulse_spi(&mut self, id: usize) -> Result<(), String> {
+        self.set_spi(id, true)?;
+        self.set_spi(id, false)
+    }
     fn set_ppi(&mut self, core: usize, id: usize, high: bool) -> Result<(), String>;
     /// A guest CPU interface system-register access that trapped.
     fn system(&mut self, core: usize, register: u16, value: Option<u64>) -> Result<u64, String>;

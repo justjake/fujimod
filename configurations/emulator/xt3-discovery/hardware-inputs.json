@@ -162,8 +162,11 @@
       ]
     },
     "execution_clock": {
-      "basis": "Estimated, not measured: four Cortex-A7 cores at roughly 1.2 GHz against the 54 MHz device tick give about 22 instructions per tick at one instruction per cycle; 24 is the ratio the other bodies' overlays declare. At one instruction per tick the sensor command and SD card paths overlap in time (a card in slot 1 stops the strict boot at 646,309,679 instructions with 'reconfiguring active sensor command'); at 24 the same run reaches REC with the card-inserted message posted.",
-      "instructions_per_tick": [24, 1]
+      "basis": "Estimated, not measured, for each core: a Cortex-A7 at roughly 1.2 GHz against the 54 MHz device tick gives about 22 instructions per tick at one instruction per cycle; the boots run 6, a quarter of that. At 24 per core the X-T3 5.11 boot reads the pointer at 0x18181ec before another core sets it (at 0x33bd548) and halts in the exception reporter; at 6 it reaches the first-start language menu.",
+      "instructions_per_tick": [
+        6,
+        1
+      ]
     },
     "sd_cards": [
       {
@@ -197,7 +200,10 @@
             7215, 7218, 7219, 7224, 7228, 7229, 7230, 7231, 7321, 7360, 7361, 7362, 7363, 7364,
             7365, 7376, 7168, 7176
           ],
-          "contact_ids": [1, 2],
+          "contact_ids": [
+            1,
+            2
+          ],
           "input_ready_irq": 153,
           "ticks_per_second": 54000000,
           "basis": "Touch chip of X-T3 5.11 at seven-bit address 0x55 with 16-bit register addresses, high byte first. The writable registers are the 30 start-up configuration registers 0x1c02..0x1cd0 plus the mode register 0x1c00 (2 enables reports) and 0x1c08. The eleven-byte two-contact report starts at register 0, the heartbeat counter is register 0x1c06, and the input-ready edge is interrupt line 153. Contact IDs 1 and 2 and the 54 MHz virtual timebase are declared, not measured."

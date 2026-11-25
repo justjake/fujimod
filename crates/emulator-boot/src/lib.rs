@@ -1008,11 +1008,7 @@ pub fn open_request(resolved: ResolvedConfiguration, request: Request) -> Result
 }
 
 /// Open a supported configured board from caller-selected files.
-/// XP4 keeps its separate application/cluster path and cannot be opened as a `Camera`.
 pub fn open(resolved: ResolvedConfiguration, inputs: StartupInputs) -> Result<Camera, String> {
-    if resolved.reference.soc.id == "xp4" {
-        return Err("XP4 uses the application CLI path and cannot be opened as a Camera".into());
-    }
     let exr2_run = is_exr2_run(&resolved);
     let exr2_ticks = match resolved.configuration.inputs.as_ref() {
         Some(RunInputs::Exr2(inputs)) => Some(inputs.mcu.rtc.ticks_per_second),
@@ -1046,14 +1042,12 @@ pub fn open(resolved: ResolvedConfiguration, inputs: StartupInputs) -> Result<Ca
         }
         #[cfg(all(feature = "xp5-startup", not(target_arch = "wasm32")))]
         (Some(RunInputs::Xp4(_)) | None, StartupInputs::Application(inputs))
-            if resolved.reference.soc.id == "xpp" =>
+            if matches!(resolved.reference.soc.id.as_str(), "xp4" | "xpp") =>
         {
             let started = application::open(&resolved, inputs)?;
             let quantum = started.quantum;
             let ticks_per_second = started.ticks_per_second;
-            let application::Board::Xpp(session) = started.board else {
-                return Err("X-Processor Pro startup returned another processor generation".into());
-            };
+            let application::Board::Shared(session) = started.board;
             let read_limit = graph_read_limit(&session)?;
             Ok(Camera {
                 session: *session,
@@ -1097,15 +1091,8 @@ impl TraceOutput {
         &self,
         trace: fujimod_emulator::board::observation::PcTrace,
     ) -> Result<(), String> {
-        self.write_entries(trace.take())
-    }
-
-    pub fn write_entries(
-        &self,
-        entries: fujimod_emulator::board::observation::PcEntries,
-    ) -> Result<(), String> {
-        let file = File::create(&self.path)
-            .map_err(|error| format!("{}: {error}", self.path.display()))?;
+        let entries = trace.take();
+        let file = File::create(&self.path).map_err(|error| format!("{}: {error}", self.path.display()))?;
         let mut writer = std::io::BufWriter::new(file);
         serde_json::to_writer(&mut writer, &entries).map_err(|error| error.to_string())?;
         std::io::Write::flush(&mut writer).map_err(|error| error.to_string())

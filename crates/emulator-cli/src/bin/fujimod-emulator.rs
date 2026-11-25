@@ -866,23 +866,13 @@ fn run_application(mut options: Boot, resolved: ResolvedConfiguration) -> Result
     if let Some(path) = load_snapshot {
         started.load_snapshot(&path)?;
     }
-    let trace = match &mut started.board {
-        boot::application::Board::Xpp(session) => {
-            session.board.set_execution_policy(policy)?;
-            session.board.install_discovery_callee_stubs(&stubs)?;
-            trace_output
-                .as_ref()
-                .map(|output| output.begin(session))
-                .transpose()?
-        }
-        boot::application::Board::Xp4(board) => {
-            board.install_discovery_callee_stubs(&stubs)?;
-            if let Some(trace) = &trace_output {
-                board.begin_pc_trace(trace.limit)?;
-            }
-            None
-        }
-    };
+    let boot::application::Board::Shared(session) = &mut started.board;
+    session.board.set_execution_policy(policy)?;
+    session.board.install_discovery_callee_stubs(&stubs)?;
+    let trace = trace_output
+        .as_ref()
+        .map(|output| output.begin(session))
+        .transpose()?;
     if let Some(scene) = scene {
         started.board.set_scene(&scene)?;
     }
@@ -955,13 +945,10 @@ fn run_application(mut options: Boot, resolved: ResolvedConfiguration) -> Result
     if let Some(output) = trace_output {
         if let Some(trace) = trace {
             output.write(trace)?;
-        } else if let boot::application::Board::Xp4(board) = &started.board {
-            output.write_entries(board.take_pc_trace()?)?;
         }
     }
-    if let boot::application::Board::Xpp(session) = &started.board {
-        session.board.check_discovery_callee_stubs()?;
-    }
+    let boot::application::Board::Shared(session) = &started.board;
+    session.board.check_discovery_callee_stubs()?;
     started.write_back_card()?;
     if let Some(path) = save_snapshot {
         started.save_snapshot(&path)?;

@@ -3901,6 +3901,14 @@ impl Host for Services<'_> {
             .and_then(|g| g.gic.set_spi(line as usize, level));
         self.remember(r);
     }
+    fn pulse_irq(&mut self, line: u32) {
+        let r = self
+            .interrupts
+            .as_mut()
+            .ok_or("SPI without interrupt controller".into())
+            .and_then(|g| g.gic.pulse_spi(line as usize));
+        self.remember(r);
+    }
     fn raise_irq(&mut self, cpu: usize, line: u32) -> Result<(), String> {
         if let Some(Some(controller)) = self.core_interrupts.get(cpu) {
             controller.inputs.pulse(line)?;
@@ -3914,6 +3922,13 @@ impl Host for Services<'_> {
         }
         if let Some(Some(p)) = self.mprofile.get_mut(cpu) {
             return p.pulse(line);
+        }
+        // On a GIC board, an edge on a shared line latches the line in the
+        // distributor, which routes it by its own targets.
+        if line >= 32
+            && let Some(interrupts) = self.interrupts.as_mut()
+        {
+            return interrupts.gic.pulse_spi(line as usize);
         }
         self.set_core_irq(cpu, line, true)
     }

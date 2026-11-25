@@ -44,7 +44,7 @@ impl serial_link::SerialPeer for SpiLink {
     }
 }
 
-struct Connected<T>(Arc<Mutex<T>>);
+pub(crate) struct Connected<T>(pub(crate) Arc<Mutex<T>>);
 impl<T: Device> Device for Connected<T> {
     fn name(&self) -> &'static str {
         self.0.lock().unwrap().name()
@@ -1266,11 +1266,19 @@ impl Devices {
     /// The device models as nodes of the shared board's device graph, in
     /// model order, each with its windows. A word another model owns inside
     /// a block's range (`carved`) is cut out of that block's mappings.
-    pub fn into_graph(self) -> Result<fujimod_emulator_devices::graph::DeviceGraph, String> {
+    /// The models as a device graph, each node named by its model (a second
+    /// model of a name takes its node index as a suffix).
+    pub fn into_graph(
+        self,
+    ) -> Result<(fujimod_emulator_devices::graph::DeviceGraph, BTreeMap<String, usize>), String> {
         use fujimod_emulator_devices::graph::{DeviceGraph, Mapping};
         let mut graph = DeviceGraph::new();
+        let mut names = BTreeMap::new();
         for (index, model) in self.models.into_iter().enumerate() {
             let model = model.ok_or("an XP4 device model is lent out")?;
+            let name = model.name().to_string();
+            let name = if names.contains_key(&name) { format!("{name}-{index}") } else { name };
+            names.insert(name, index);
             let mut mappings = Vec::new();
             for &(lo, hi, owner) in &self.windows {
                 if owner != index {
@@ -1300,7 +1308,14 @@ impl Devices {
                 graph.register_windows(mappings, model)?;
             }
         }
-        Ok(graph)
+        // XP4 models share state through ports they do not declare (the
+        // serial-flash controller and its DMA, the imaging chain), and this
+        // board re-checks every model's deadline after any device access.
+        let count = graph.nodes.len();
+        for device in 0..count {
+            graph.depend_on(device, (0..count).filter(|&source| source != device).collect())?;
+        }
+        Ok((graph, names))
     }
     pub fn empty() -> Self {
         Self {
@@ -2651,7 +2666,7 @@ mod graph_tests {
         let mut devices = Devices::empty();
         devices.io_groups(0xfff10000).unwrap();
         devices.spi(0xfff32000, true).unwrap();
-        let graph = devices.into_graph().unwrap();
+        let (graph, _) = devices.into_graph().unwrap();
         assert_eq!(graph.nodes.len(), 2);
         assert_eq!(graph.at(0xfff10000).unwrap(), 0);
         assert_eq!(graph.at(0xfff32024).unwrap(), 1);
@@ -2666,7 +2681,7 @@ mod graph_tests {
         // The SPI controller owns one word inside the IO groups' range.
         devices.windows.push((0xfff10010, 0xfff10014, 1));
         devices.carved.push((0xfff10010, 0xfff10014));
-        let graph = devices.into_graph().unwrap();
+        let (graph, _) = devices.into_graph().unwrap();
         assert_eq!(graph.at(0xfff1000c).unwrap(), 0);
         assert_eq!(graph.at(0xfff10010).unwrap(), 1);
         assert_eq!(graph.at(0xfff10014).unwrap(), 0);

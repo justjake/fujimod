@@ -286,6 +286,13 @@
           "sectors": 16777216
         }
       }
-    ]
+    ],
+    "execution_clock": {
+      "basis": "Estimated, not measured, for each core: a Cortex-A7 at roughly 1.2 GHz against the 54 MHz device tick gives about 22 instructions per tick at one instruction per cycle; the boots run 6, a quarter of that. At 24 per core the X-T3 5.11 boot reads the pointer at 0x18181ec before another core sets it (at 0x33bd548) and halts in the exception reporter; at 6 it reaches the first-start language menu.",
+      "instructions_per_tick": [
+        6,
+        1
+      ]
+    }
   }
 }

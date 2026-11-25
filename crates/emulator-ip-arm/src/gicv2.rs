@@ -405,6 +405,13 @@ impl fujimod_emulator_devices::gic::InterruptController for Gic {
         self.set_line(id, high);
         Ok(())
     }
+    fn pulse_spi(&mut self, id: usize) -> Result<(), String> {
+        if !(32..self.lines).contains(&id) {
+            return Err("GICv2 SPI outside configured lines".into());
+        }
+        self.pulse(id);
+        Ok(())
+    }
     fn set_ppi(&mut self, _core: usize, _id: usize, _high: bool) -> Result<(), String> {
         Err("GICv2 private level inputs are not modeled".into())
     }
