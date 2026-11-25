@@ -3,6 +3,18 @@
   "schema": 1,
   "firmwares": [
     {
+      "firmware_id": "gfx100rf-112",
+      "product": "GFX100RF",
+      "version": "1.12",
+      "internal_version": "1.56",
+      "tables": {
+        "bulk": {
+          "status": "available",
+          "errors": []
+        }
+      }
+    },
+    {
       "firmware_id": "gfx100rf-113",
       "product": "GFX100RF",
       "version": "1.13",
