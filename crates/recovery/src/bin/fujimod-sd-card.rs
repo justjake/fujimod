@@ -1,6 +1,6 @@
 //! Offline construction and catalog inspection. No device access.
 use fujimod_recovery::ram_patch::RamPatches;
-use fujimod_recovery::{CheckedRedirect, Recipe, StartupOptions, StartupStop, availability};
+use fujimod_recovery::{Recipe, StartupOptions, StartupStop, availability};
 use std::{env, fs, path::PathBuf};
 fn construction_args(
     args: &[String],
@@ -81,58 +81,6 @@ fn take_fallback_wait(
         return Err("--fallback-wait-seconds was specified twice".into());
     }
     Ok(Some(value))
-}
-
-/// Remove `--destination ADDRESS` from the arguments (the read-only and checked-redirect startups
-/// require it, no other command takes it). ADDRESS is decimal or `0x` hexadecimal.
-fn take_destination(
-    args: &mut Vec<String>,
-    allowed: bool,
-) -> Result<Option<u64>, Box<dyn std::error::Error>> {
-    let Some(at) = args.iter().position(|arg| arg == "--destination") else {
-        return if allowed {
-            Err("sd-boot-v1-read-only-startup, sd-boot-v1-checked-redirect-startup and sd-boot-v1-copy-stub-startup require --destination ADDRESS".into())
-        } else {
-            Ok(None)
-        };
-    };
-    if !allowed {
-        return Err("--destination requires sd-boot-v1-read-only-startup, sd-boot-v1-checked-redirect-startup or sd-boot-v1-copy-stub-startup".into());
-    }
-    let text = args.get(at + 1).ok_or("Missing --destination value")?;
-    let value = match text.strip_prefix("0x") {
-        Some(hex) => u64::from_str_radix(hex, 16),
-        None => text.parse::<u64>(),
-    }
-    .map_err(|_| "--destination requires an address, decimal or 0x hexadecimal")?;
-    args.drain(at..=at + 1);
-    if args.iter().any(|arg| arg == "--destination") {
-        return Err("--destination was specified twice".into());
-    }
-    Ok(Some(value))
-}
-
-/// Remove `--verify-only` or `--apply` (exactly one, required by `sd-boot-v1-checked-redirect-startup`,
-/// taken by no other command).
-fn take_redirect_mode(
-    args: &mut Vec<String>,
-    required: bool,
-) -> Result<Option<CheckedRedirect>, Box<dyn std::error::Error>> {
-    let flags = ["--verify-only", "--apply"];
-    let given: Vec<&str> = flags.into_iter().filter(|f| args.iter().any(|a| a == f)).collect();
-    if !required {
-        return if given.is_empty() {
-            Ok(None)
-        } else {
-            Err("--verify-only and --apply require sd-boot-v1-checked-redirect-startup or sd-boot-v1-copy-stub-startup".into())
-        };
-    }
-    let count = args.iter().filter(|a| flags.contains(&a.as_str())).count();
-    if given.len() != 1 || count != 1 {
-        return Err("sd-boot-v1-checked-redirect-startup and sd-boot-v1-copy-stub-startup require exactly one of --verify-only and --apply".into());
-    }
-    args.retain(|a| !flags.contains(&a.as_str()));
-    Ok(Some(if given[0] == "--apply" { CheckedRedirect::Apply } else { CheckedRedirect::VerifyOnly }))
 }
 
 /// Remove `--ram-overlay FILE` from the arguments (only the XP5 startup commands take it).
@@ -235,7 +183,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         Some(
             command @ ("sd-card-recovery-build" | "green-led" | "sd-boot-v1-startup" | "sd-boot-v1-sd-card-startup" | "sd-boot-v1-stage-one"
             | "sd-boot-v1-card-init-check" | "sd-boot-v1-card-error-check" | "sd-boot-v1-setup-check" | "sd-boot-v1-read-check" | "sd-boot-v1-card-read-check"
-            | "sd-boot-v1-ram-startup" | "sd-boot-v1-read-only-startup" | "sd-boot-v1-checked-redirect-startup" | "sd-boot-v1-copy-stub-startup" | "sd-boot-v1-marker-startup" | "sd-boot-v1-os-startup" | "sd-boot-v1-exif-startup" | "sd-boot-v1-hook-startup" | "sd-card-recovery-baseline" | "sd-boot-v2-sd-card"),
+            | "sd-boot-v1-ram-startup" | "sd-card-recovery-baseline" | "sd-boot-v2-sd-card"),
         ) => {
             let mut inputs = args[1..].to_vec();
             let storage = if command == "sd-boot-v1-sd-card-startup" {
@@ -248,17 +196,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             };
             let fallback_wait_seconds =
                 take_fallback_wait(&mut inputs, command == "sd-boot-v1-ram-startup")?;
-            let marker_command = command == "sd-boot-v1-marker-startup";
-            let os_command = command == "sd-boot-v1-os-startup";
-            let exif_command = command == "sd-boot-v1-exif-startup";
-            let hook_command = command == "sd-boot-v1-hook-startup";
-            let stub_command = command == "sd-boot-v1-copy-stub-startup" || marker_command || os_command || exif_command || hook_command;
-            let redirect_command = command == "sd-boot-v1-checked-redirect-startup" || stub_command;
-            let checked_redirect = take_redirect_mode(&mut inputs, redirect_command)?;
-            let read_only_destination = take_destination(
-                &mut inputs,
-                matches!(command, "sd-boot-v1-read-only-startup" | "sd-boot-v1-checked-redirect-startup" | "sd-boot-v1-copy-stub-startup" | "sd-boot-v1-marker-startup" | "sd-boot-v1-os-startup" | "sd-boot-v1-exif-startup" | "sd-boot-v1-hook-startup"),
-            )?;
             let overlay = take_ram_overlay(
                 &mut inputs,
                 matches!(command, "sd-boot-v1-startup" | "sd-boot-v1-ram-startup"),
@@ -276,17 +213,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 command == "sd-boot-v1-startup" || CHECKS.contains(&command),
             )?;
             let (firmware, dat, output, hold) =
-                construction_args(&inputs, matches!(command, "sd-boot-v1-startup" | "sd-boot-v1-stage-one" | "sd-boot-v1-ram-startup" | "sd-boot-v1-read-only-startup" | "sd-boot-v1-checked-redirect-startup" | "sd-boot-v1-copy-stub-startup" | "sd-boot-v1-marker-startup" | "sd-boot-v1-os-startup" | "sd-boot-v1-exif-startup" | "sd-boot-v1-hook-startup"))?;
+                construction_args(&inputs, matches!(command, "sd-boot-v1-startup" | "sd-boot-v1-stage-one" | "sd-boot-v1-ram-startup"))?;
             let options = StartupOptions {
                 internal_flash: command == "sd-boot-v1-ram-startup",
                 fallback_wait_seconds,
-                read_only_destination,
-                checked_redirect,
-                copy_stub: stub_command,
-                marker: marker_command,
-                os: os_command,
-                exif: exif_command,
-                hook: hook_command,
                 stop: startup_stop(command),
                 prepare_installed_flash,
                 ..hold
@@ -309,7 +239,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 recipe.build_ota_startup(&source)?
             } else if command == "sd-boot-v1-stage-one" {
                 recipe.build_stage_one_with_options(&source, options)?
-            } else if matches!(command, "sd-boot-v1-ram-startup" | "sd-boot-v1-read-only-startup" | "sd-boot-v1-checked-redirect-startup" | "sd-boot-v1-copy-stub-startup" | "sd-boot-v1-marker-startup" | "sd-boot-v1-os-startup" | "sd-boot-v1-exif-startup" | "sd-boot-v1-hook-startup") {
+            } else if command == "sd-boot-v1-ram-startup" {
                 // The update stays an independent input and is not written.
                 recipe.build_boot_files(&source, options)?
             } else {
@@ -326,7 +256,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
         _ => {
             return Err(
-                "Usage: fujimod-sd-card list | sd-card-recovery-build|green-led|sd-boot-v1-startup|sd-boot-v1-stage-one|sd-boot-v1-ram-startup|sd-boot-v1-read-only-startup|sd-boot-v1-checked-redirect-startup|sd-boot-v1-copy-stub-startup|sd-boot-v1-marker-startup|sd-boot-v1-os-startup|sd-boot-v1-exif-startup|sd-boot-v1-hook-startup|sd-card-recovery-baseline|sd-boot-v2-sd-card|sd-boot-v1-card-init-check|sd-boot-v1-card-error-check|sd-boot-v1-setup-check|sd-boot-v1-read-check|sd-boot-v1-card-read-check FIRMWARE DAT NEW_DIRECTORY [--success-hold-seconds N | --success-hold-units N] [--fallback-wait-seconds N (sd-boot-v1-ram-startup)] [--destination ADDRESS (sd-boot-v1-read-only-startup, sd-boot-v1-checked-redirect-startup and sd-boot-v1-copy-stub-startup, required)] [--verify-only | --apply (sd-boot-v1-checked-redirect-startup, sd-boot-v1-copy-stub-startup, sd-boot-v1-marker-startup, sd-boot-v1-os-startup and sd-boot-v1-exif-startup, one required)] [--ram-overlay FILE (sd-boot-v1-startup, sd-boot-v1-ram-startup)] [--ram-patches FILE (sd-boot-v1-startup)] [--prepare-installed-flash (sd-boot-v1-startup and the checks)] | sd-boot-v1-sd-card-startup FIRMWARE DAT STORAGE_IMAGE NEW_DIRECTORY"
+                "Usage: fujimod-sd-card list | sd-card-recovery-build|green-led|sd-boot-v1-startup|sd-boot-v1-stage-one|sd-boot-v1-ram-startup|sd-card-recovery-baseline|sd-boot-v2-sd-card|sd-boot-v1-card-init-check|sd-boot-v1-card-error-check|sd-boot-v1-setup-check|sd-boot-v1-read-check|sd-boot-v1-card-read-check FIRMWARE DAT NEW_DIRECTORY [--success-hold-seconds N | --success-hold-units N] [--fallback-wait-seconds N (sd-boot-v1-ram-startup)] [--ram-overlay FILE (sd-boot-v1-startup, sd-boot-v1-ram-startup)] [--ram-patches FILE (sd-boot-v1-startup)] [--prepare-installed-flash (sd-boot-v1-startup and the checks)] | sd-boot-v1-sd-card-startup FIRMWARE DAT STORAGE_IMAGE NEW_DIRECTORY"
                     .into(),
             );
         }
@@ -337,7 +267,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 #[cfg(test)]
 mod tests {
     use super::{
-        construction_args, startup_stop, take_destination, take_fallback_wait,
+        construction_args, startup_stop, take_fallback_wait,
         take_prepare_installed_flash, take_ram_overlay, take_ram_patches,
     };
     use fujimod_recovery::{StartupOptions, StartupStop};
@@ -369,41 +299,6 @@ mod tests {
         assert!(
             take_fallback_wait(&mut args(&["--fallback-wait-seconds", "1"]), false).is_err()
         );
-    }
-    #[test]
-    fn the_redirect_mode_is_exactly_one_flag_and_only_for_its_command() {
-        use super::take_redirect_mode;
-        use fujimod_recovery::CheckedRedirect::{Apply, VerifyOnly};
-        let mut values = args(&["--apply", "camera"]);
-        assert_eq!(take_redirect_mode(&mut values, true).unwrap(), Some(Apply));
-        assert_eq!(values, args(&["camera"]));
-        assert_eq!(take_redirect_mode(&mut args(&["camera", "--verify-only"]), true).unwrap(), Some(VerifyOnly));
-        assert_eq!(take_redirect_mode(&mut args(&["camera"]), false).unwrap(), None);
-        for bad in [args(&["camera"]), args(&["--apply", "--verify-only"]), args(&["--apply", "--apply"])] {
-            assert!(take_redirect_mode(&mut bad.clone(), true).is_err(), "{bad:?}");
-        }
-        assert!(take_redirect_mode(&mut args(&["--apply"]), false).is_err());
-    }
-    #[test]
-    fn destination_is_required_by_the_read_only_command_and_by_no_other() {
-        let mut values = args(&["--destination", "0x30000000", "camera", "update", "output"]);
-        assert_eq!(take_destination(&mut values, true).unwrap(), Some(0x3000_0000));
-        assert_eq!(values, args(&["camera", "update", "output"]));
-        let mut values = args(&["camera", "update", "output", "--destination", "805306368"]);
-        assert_eq!(take_destination(&mut values, true).unwrap(), Some(0x3000_0000));
-        assert_eq!(values, args(&["camera", "update", "output"]));
-        assert_eq!(take_destination(&mut args(&["camera", "update", "output"]), false).unwrap(), None);
-        assert!(take_destination(&mut args(&["camera", "update", "output"]), true).is_err());
-        assert!(take_destination(&mut args(&["--destination", "0x2000"]), false).is_err());
-        for bad in [
-            args(&["camera", "--destination"]),
-            args(&["camera", "--destination", "-1"]),
-            args(&["camera", "--destination", "0xzz"]),
-            args(&["camera", "--destination", "x"]),
-            args(&["--destination", "0x1000", "--destination", "0x2000"]),
-        ] {
-            assert!(take_destination(&mut bad.clone(), true).is_err(), "{bad:?}");
-        }
     }
     #[test]
     fn success_hold_defaults_to_zero_and_accepts_either_position() {
