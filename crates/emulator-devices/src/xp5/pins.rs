@@ -1,5 +1,5 @@
 //! XP5 GPIO pin state that the controller, its drivers and its inputs share.
-use crate::parts::pins::{DriveInput, Pin};
+use crate::parts::pins::{DriveInput, LowHistory, OutputLowHistory, Pin};
 use serde::{Deserialize, Serialize};
 use std::sync::{Arc, Mutex};
 
@@ -8,6 +8,12 @@ pub struct Port {
     pub registers: [u32; 9],
     pub input: u16,
     pub output_rising_edges: [u64; 16],
+    /// Time the output-data latch last fell, while the pin is still low.
+    #[serde(default)]
+    pub output_low_since: [Option<u64>; 16],
+    /// Duration of the most recently completed low interval of the latch.
+    #[serde(default)]
+    pub output_last_low_ticks: [u64; 16],
 }
 /// How the pad-sampling word (+0x14) is formed from a port's registers.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -44,6 +50,17 @@ impl DriveInput for PinBank {
         self.lock()
             .unwrap()
             .set_input(usize::from(pin.port), usize::from(pin.pin), high);
+    }
+}
+impl OutputLowHistory for PinBank {
+    fn low_history(&self, pin: Pin) -> LowHistory {
+        let pins = self.lock().unwrap();
+        let port = &pins.ports[usize::from(pin.port)];
+        let pin = usize::from(pin.pin);
+        LowHistory {
+            rising_edges: port.output_rising_edges[pin],
+            last_low_ticks: port.output_last_low_ticks[pin],
+        }
     }
 }
 impl Default for Pins {

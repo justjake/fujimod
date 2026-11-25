@@ -347,7 +347,7 @@ impl Device for Gpio {
                 return;
             }
             let old = pins.ports[p].registers[r];
-            // Bits16..31 are write masks for 0/4/8/c/10/20, never pin
+            // Bits16..31 are write masks for 0/4/8/c/10/14/20, never pin
             // levels. +18/+1c are ordinary 2-bit fields read/modified by stock.
             pins.ports[p].registers[r] = if matches!(r, 6 | 7) {
                 value as u32
@@ -356,14 +356,24 @@ impl Device for Gpio {
             };
             if r == 0 {
                 let risen = !old & pins.ports[p].registers[0];
-                for (pin, edges) in pins.ports[p]
+                let fallen = old & !pins.ports[p].registers[0];
+                let now = cx.now();
+                let port = &mut pins.ports[p];
+                for (pin, ((edges, low_since), last_low)) in port
                     .output_rising_edges
                     .iter_mut()
+                    .zip(&mut port.output_low_since)
+                    .zip(&mut port.output_last_low_ticks)
                     .enumerate()
-                    .take(16)
                 {
                     if risen & (1 << pin) != 0 {
                         *edges += 1;
+                        if let Some(since) = low_since.take() {
+                            *last_low = now.saturating_sub(since);
+                        }
+                    }
+                    if fallen & (1 << pin) != 0 {
+                        *low_since = Some(now);
                     }
                 }
             }
@@ -770,5 +780,76 @@ mod wiring_tests {
         copy.restore_checkpoint(&saved).unwrap();
         assert_eq!(copy.held, [true]);
         assert!(cx.refusal().is_none());
+    }
+
+    #[test]
+    fn output_latch_records_the_length_of_each_completed_low_interval() {
+        use fujimod_emulator_devices::parts::pins::{LowHistory, OutputLowHistory, Pin};
+        let pins = Pins::shared();
+        let mut gpio = Gpio::new(0xff907000, pins.clone(), false, Vec::new()).unwrap();
+        let pin = Pin { port: 13, pin: 6 };
+        let set = |gpio: &mut Gpio, now: u64, high: bool| {
+            let mut host = RecordingHost {
+                now,
+                ..RecordingHost::default()
+            };
+            let mut cx = Cx::new(&mut host, 0, 0, 0);
+            gpio.write(
+                &mut cx,
+                0xff907340,
+                4,
+                (1u64 << 22) | (u64::from(high) << 6),
+            );
+            assert!(cx.refusal().is_none());
+        };
+        set(&mut gpio, 10, true);
+        set(&mut gpio, 100, false);
+        assert_eq!(pins.low_history(pin).last_low_ticks, 0);
+        set(&mut gpio, 700, true);
+        assert_eq!(
+            pins.low_history(pin),
+            LowHistory {
+                rising_edges: 2,
+                last_low_ticks: 600
+            }
+        );
+    }
+
+    #[test]
+    fn port3_register_five_retains_masked_writes_through_a_checkpoint() {
+        let base = 0xff90b000;
+        let pins = Pins::shared();
+        let mut gpio = Gpio::new(base, pins.clone(), true, Vec::new()).unwrap();
+        let mut host = RecordingHost::default();
+
+        for value in [0x0005_0001, 0x000a_0008] {
+            let mut cx = Cx::new(&mut host, 0, 0, 0);
+            gpio.write(&mut cx, base + 0x14, 4, value);
+            assert!(cx.refusal().is_none());
+        }
+        assert_eq!(pins.lock().unwrap().ports[3].registers[5], 9);
+
+        let mut cx = Cx::new(&mut host, 0, 0, 0);
+        assert_eq!(gpio.read(&mut cx, base + 0x14, 4), 9);
+        assert!(cx.refusal().is_none());
+
+        let saved = gpio.save();
+        let mut cx = Cx::new(&mut host, 0, 0, 0);
+        gpio.write(&mut cx, base + 0x14, 2, 0x0001);
+        assert!(cx.is_unmodeled());
+        assert_eq!(pins.lock().unwrap().ports[3].registers[5], 9);
+
+        let restored_pins = Pins::shared();
+        let mut restored = Gpio::new(base, restored_pins.clone(), true, Vec::new()).unwrap();
+        restored.restore(&saved).unwrap();
+        assert_eq!(restored_pins.lock().unwrap().ports[3].registers[5], 9);
+        let mut cx = Cx::new(&mut host, 0, 0, 0);
+        assert_eq!(restored.read(&mut cx, base + 0x14, 4), 9);
+        assert!(cx.refusal().is_none());
+
+        let mut ordinary = Gpio::new(0xff907000, Pins::shared(), false, Vec::new()).unwrap();
+        let mut cx = Cx::new(&mut host, 0, 0, 0);
+        ordinary.write(&mut cx, 0xff907014, 4, 0x0001_0001);
+        assert!(cx.is_unmodeled());
     }
 }
