@@ -1,0 +1,51 @@
+# The X-H2S 7.30 device driver at 0x02fd358c initializes DWC3 global and
+# device registers at 0xffc0c100 and 0xffc0c700 and programs a 4 KiB event
+# ring at 0x03af3000.
+# 0x02fd4624 registers handler 0x02fd2db4 through descriptor 0x72
+# (0x01c0a6b8): GIC INTID 283, priority 0xd0, level triggered.
+# The other device path registers 0x0322bfb4 through descriptor 0xc5
+# (0x01c0abe8) on the same line, with priority 0xc0.
+# 0x02fd4734 selects the negotiated speed using the existing cable status
+# word at 0xff90e300. The supply classifier at 0x016f5b94 recognizes a
+# data host when power-controller register 0x12 bits 5:4 read 01.
+# Model a high-speed host and functional bus latencies.
+[[device]]
+base = 0xffc00000
+size = 0x10000
+kind = "usb-device-controller"
+[device.options]
+interrupt = 283
+speed = 0
+command_ticks = 1000
+transaction_ticks = 125000
+
+# 0x02fd285c selects index bits 12:8, reads data at +0x400, and pulses bit 16
+# to write the low byte. 0x02fd358c also configures the parallel word at +4.
+# PHY reset values are unmeasured. Use the model's zero defaults.
+[[device]]
+base = 0xffc23800
+size = 0x404
+kind = "usb-phy"
+
+# Bring-up stubs for the PHY control sequence in 0x01659d64. The driver
+# clears and sets clock mask 0x27 at 0xff90c918, sets bits 2 and 0 in this glue word,
+# and starts the sequence at 0xffc30014. The clock already has a board model.
+[[device]]
+base = 0xffc10c08
+size = 4
+kind = "bringup-stub"
+[device.options]
+registers = []
+
+# 0x01659d64 polls status +0x08 for bit 0 after writing +0x14. On success,
+# 0x01659d14 sets the low nibble at +0x40 to 5. The completion delay and
+# write-one-to-clear behavior are functional assumptions of this stub.
+[[device]]
+base = 0xffc30000
+size = 0x44
+kind = "completion-stub"
+[device.options]
+starts = [{ offset = 0x14, mask = 0x10 }]
+delay_us = 100
+completion = [{ offset = 0x08, set = 0x1 }]
+ack = { offset = 0x08, mode = "w1c", bits = 0x1 }
