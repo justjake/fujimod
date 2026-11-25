@@ -47,6 +47,37 @@ fn flash() -> FirmwareFlash {
     }
 }
 
+fn mapped_payload(flash: &FirmwareFlash) -> crate::flash::Payload {
+    crate::flash::Payload::MappedE1(crate::flash::MappedPayload {
+        schema: 1,
+        firmware_id: flash.firmware_id.clone(),
+        firmware_sha256: "00".repeat(32),
+    })
+}
+
+fn no_window() -> FirmwareFlash {
+    let mut flash = flash();
+    flash.e1_window = None;
+    flash.reader = Some(FlashReader {
+        symbol: "flash_read".into(),
+        alignment: 1,
+        nand: None,
+    });
+    flash.code_ranges = vec![FlashCodeRange {
+        name: "flash_read".into(),
+        address: 0x1000,
+        size: 4,
+    }];
+    flash.state_checks = vec![FlashStateCheck {
+        name: "driver".into(),
+        address: 0x1000,
+        size: 1,
+        value: 0,
+    }];
+    flash.validate().unwrap();
+    flash
+}
+
 fn source_state() -> Vec<u8> {
     api::words(&[0x1000, 32])
 }
@@ -126,8 +157,10 @@ fn failure(error: &BulkError) -> &crate::bulk::MappedFailure {
 }
 
 #[test]
-fn mapped_pre_io_bounds_and_missing_window_are_receipts_without_traffic() {
+fn mapped_public_read_range_bounds_and_missing_window_are_receipts() {
+    let bulk = api::query_camera();
     let flash = flash();
+    let payload = mapped_payload(&flash);
     for target in [
         BulkRange {
             address: 0,
@@ -143,52 +176,75 @@ fn mapped_pre_io_bounds_and_missing_window_are_receipts_without_traffic() {
         },
     ] {
         let (mut session, script) = api::opened(Vec::new());
-        let (result, chunks, progress) = run(&mut session, &flash, target);
-        let error = result.unwrap_err();
+        let error = block_on(crate::flash::read_range(
+            &mut session,
+            &bulk,
+            &flash,
+            &payload,
+            &[],
+            api::limits(),
+            target.address,
+            target.size as u32,
+        ))
+        .unwrap_err();
         let receipt = failure(&error);
         assert_eq!(receipt.phase, MappedPhase::Bounds);
         assert_eq!(receipt.address, target.address);
         assert_eq!(receipt.length, target.size);
-        assert!(chunks.is_empty());
-        assert!(progress.is_empty());
+        assert!(receipt.cleanup.is_none());
         assert_eq!(session.state(), SessionState::Ready);
         assert_eq!(script.remaining(), 0);
     }
 
-    let mut missing = flash;
-    missing.e1_window = None;
-    missing.reader = Some(FlashReader {
-        symbol: "flash_read".into(),
-        alignment: 1,
-        nand: None,
-    });
-    missing.code_ranges = vec![FlashCodeRange {
-        name: "flash_read".into(),
-        address: 0x1000,
-        size: 4,
-    }];
-    missing.state_checks = vec![FlashStateCheck {
-        name: "driver".into(),
-        address: 0x1000,
-        size: 1,
-        value: 0,
-    }];
-    missing.validate().unwrap();
+    let missing = no_window();
+    let payload = mapped_payload(&missing);
     let (mut session, script) = api::opened(Vec::new());
-    let (result, _, _) = run(
+    let error = block_on(crate::flash::read_range(
         &mut session,
+        &bulk,
         &missing,
-        BulkRange {
-            address: 0,
-            size: 4,
-        },
-    );
-    let error = result.unwrap_err();
+        &payload,
+        &[],
+        api::limits(),
+        0,
+        4,
+    ))
+    .unwrap_err();
     let receipt = failure(&error);
     assert_eq!(receipt.phase, MappedPhase::Window);
     assert_eq!(receipt.address, 0);
     assert_eq!(receipt.length, 4);
-    assert!(receipt.source.to_string().contains("window is absent"));
+    assert!(receipt.source.to_string().contains("metadata differs"));
+    assert_eq!(session.state(), SessionState::Ready);
+    assert_eq!(script.remaining(), 0);
+}
+
+#[test]
+fn mapped_public_backup_missing_window_is_a_mapped_receipt() {
+    let bulk = api::query_camera();
+    let flash = no_window();
+    let payload = mapped_payload(&flash);
+    let (mut session, script) = api::opened(Vec::new());
+    let mut chunk = |_: u64, _: Vec<u8>| -> Result<(), String> { Ok(()) };
+    let mut progress = |_: u64, _: u64| -> Result<(), String> { Ok(()) };
+    let error = block_on(crate::flash::backup(
+        &mut session,
+        &bulk,
+        &flash,
+        &payload,
+        &[],
+        api::limits(),
+        &mut Callbacks {
+            chunk: &mut chunk,
+            progress: &mut progress,
+        },
+    ))
+    .unwrap_err();
+    let receipt = failure(&error);
+    assert_eq!(receipt.phase, MappedPhase::Window);
+    assert_eq!(receipt.address, 0);
+    assert_eq!(receipt.length, flash.window.size);
+    assert!(receipt.source.to_string().contains("metadata differs"));
     assert_eq!(session.state(), SessionState::Ready);
     assert_eq!(script.remaining(), 0);
 }
@@ -223,7 +279,9 @@ fn mapped_control_read_and_hash_mismatch_record_control_scope() {
     assert_eq!(receipt.phase, MappedPhase::ControlRead);
     assert_eq!(receipt.address, 0x1000);
     assert_eq!(receipt.length, CONTROL.len() as u64);
-    assert!(receipt.source.to_string().contains("restore was withheld"));
+    assert!(matches!(&*receipt.source, BulkError::Usb(_)));
+    let cleanup = receipt.cleanup.as_ref().expect("cleanup receipt");
+    assert!(cleanup.to_string().contains("not restored"));
     assert!(chunks.is_empty());
     assert_eq!(progress, vec![(0, target().size)]);
     assert_eq!(session.state(), SessionState::CompletionUnknown);
@@ -254,7 +312,7 @@ fn mapped_known_completion_restores_and_finishes_cleanly() {
 }
 
 #[test]
-fn mapped_timeouts_fence_restore_and_record_failing_phase_address_length() {
+fn mapped_cancellations_fence_restore_and_record_failing_phase_address_length() {
     let mut steps = prepared();
     steps.push(E::ReadFailure {
         maximum: CONTROL.len(),
@@ -268,7 +326,8 @@ fn mapped_timeouts_fence_restore_and_record_failing_phase_address_length() {
     assert_eq!(receipt.phase, MappedPhase::ControlRead);
     assert_eq!(receipt.address, 0x1000);
     assert_eq!(receipt.length, CONTROL.len() as u64);
-    assert!(receipt.source.to_string().contains("restore was withheld"));
+    let cleanup = receipt.cleanup.as_ref().expect("cleanup receipt");
+    assert!(cleanup.to_string().contains("not restored"));
     assert!(chunks.is_empty());
     assert_eq!(progress, vec![(0, target().size)]);
     assert_eq!(session.state(), SessionState::CompletionUnknown);
@@ -290,9 +349,67 @@ fn mapped_timeouts_fence_restore_and_record_failing_phase_address_length() {
     assert_eq!(receipt.phase, MappedPhase::Piece);
     assert_eq!(receipt.address, 0x1020);
     assert_eq!(receipt.length, 32);
-    assert!(receipt.source.to_string().contains("restore was withheld"));
+    let cleanup = receipt.cleanup.as_ref().expect("cleanup receipt");
+    assert!(cleanup.to_string().contains("not restored"));
     assert_eq!(chunks, vec![(0, first)]);
     assert_eq!(progress, vec![(0, 64), (32, 64)]);
     assert_eq!(session.state(), SessionState::CompletionUnknown);
     assert_eq!(script.remaining(), 0);
+}
+
+#[test]
+fn mapped_public_restore_only_failure_reports_saved_publication_words() {
+    let first = vec![0xa0; 32];
+    let second = vec![0xb0; 32];
+    let mut steps = prepared();
+    steps.extend(api::data(0, CONTROL));
+    steps.extend(api::data(0, &first));
+    steps.extend(api::data(32, &second));
+    steps.push(E::ReadFailure {
+        maximum: 8,
+        error: nusb::transfer::TransferError::Disconnected,
+        partial: Vec::new(),
+    });
+    let (mut session, script) = api::opened(steps);
+    let bulk = api::query_camera();
+    let flash = flash();
+    let payload = mapped_payload(&flash);
+    let error = block_on(crate::flash::read_range(
+        &mut session,
+        &bulk,
+        &flash,
+        &payload,
+        &[],
+        api::limits(),
+        0,
+        64,
+    ))
+    .unwrap_err();
+    let receipt = failure(&error);
+    assert_eq!(receipt.phase, MappedPhase::Restore);
+    assert_eq!(receipt.address, 0x1200);
+    assert_eq!(receipt.length, 8);
+    assert!(matches!(&*receipt.source, BulkError::Usb(_)));
+    assert!(receipt.cleanup.is_none());
+    assert_eq!(session.state(), SessionState::CompletionUnknown);
+    assert_eq!(script.remaining(), 0);
+}
+
+#[test]
+fn mapped_timeout_receipt_preserves_typed_usb_cause() {
+    let result: bulk::Result<()> = Err(BulkError::Usb(fujimod_usb::Error::Timeout(
+        fujimod_usb::error::TransferStage::BulkIn,
+    )));
+    let error = super::context(MappedPhase::Piece, 0x1020, 32, result).unwrap_err();
+    let receipt = failure(&error);
+    assert_eq!(receipt.phase, MappedPhase::Piece);
+    assert_eq!(receipt.address, 0x1020);
+    assert_eq!(receipt.length, 32);
+    assert!(matches!(
+        &*receipt.source,
+        BulkError::Usb(fujimod_usb::Error::Timeout(
+            fujimod_usb::error::TransferStage::BulkIn
+        ))
+    ));
+    assert!(receipt.cleanup.is_none());
 }

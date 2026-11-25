@@ -280,7 +280,9 @@ pub async fn backup(
 ) -> bulk::Result<Backup> {
     match payload {
         Payload::MappedE1(_) => {
-            payload.validate(flash, bulk, image)?;
+            payload.validate(flash, bulk, image).map_err(|source| {
+                mapped::receipt(bulk::MappedPhase::Window, 0, flash.window.size, source)
+            })?;
             mapped::read(
                 session,
                 bulk,
@@ -359,10 +361,18 @@ pub async fn read_range(
     size: u32,
 ) -> bulk::Result<Vec<u8>> {
     let target = match payload {
+        Payload::MappedE1(_) => enclosing(flash, offset, size).map_err(|source| {
+            mapped::receipt(bulk::MappedPhase::Bounds, offset, u64::from(size), source)
+        })?,
         Payload::XppCommand(_) => enclosing_alignment(flash, offset, size, xpp::READ_ALIGNMENT)?,
         _ => enclosing(flash, offset, size)?,
     };
-    payload.validate(flash, bulk, image)?;
+    match payload {
+        Payload::MappedE1(_) => payload.validate(flash, bulk, image).map_err(|source| {
+            mapped::receipt(bulk::MappedPhase::Window, offset, u64::from(size), source)
+        })?,
+        _ => payload.validate(flash, bulk, image)?,
+    }
     let mut data = vec![0; size as usize];
     let mut spans = std::collections::BTreeMap::<u64, u64>::new();
     let mut delivered = 0u64;
