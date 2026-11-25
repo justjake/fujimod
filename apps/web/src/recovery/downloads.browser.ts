@@ -5,8 +5,9 @@ import { unzipSync } from 'fflate';
 import { chromium, webkit } from 'playwright';
 import { createHash } from 'node:crypto';
 import { catalog, initialize, sdCardTools } from 'fujimod';
+import { firmwareMirrors } from '../cameras/firmware-mirrors.ts';
 
-const cases: { firmwareId: string; dat: string }[] = JSON.parse(
+const cases: { firmwareId: string; dat: string; mirror?: boolean }[] = JSON.parse(
   process.env.FUJIMOD_RECOVERY_CASES ?? '[]',
 );
 const expectedFiles: Record<string, Record<string, { bytes: number; sha256: string }>> = JSON.parse(
@@ -45,18 +46,32 @@ for (const engine of engines) {
       await page.getByRole('searchbox', { name: 'Search cameras' }).waitFor({ state: 'visible' });
       console.log(`${engine.name()}: page loaded`);
       console.log(`${engine.name()}: selecting ${test.firmwareId}`);
-      await page.locator('#recovery-file').setInputFiles(test.dat);
+      if (test.mirror) {
+        const mirror = firmwareMirrors[test.firmwareId];
+        assert.ok(mirror, `No mirror for ${test.firmwareId}`);
+        await page.route('**/proxy?*', (route) => {
+          assert.equal(new URL(route.request().url()).searchParams.get('url'), mirror);
+          return route.fulfill({ path: test.dat, contentType: 'application/octet-stream' });
+        });
+        await page.getByRole('combobox', { name: 'Camera firmware' }).selectOption(test.firmwareId);
+        await page.getByRole('button', { name: 'Download firmware', exact: true }).click();
+      } else {
+        await page.locator('#recovery-file').setInputFiles(test.dat);
+      }
       const release = catalog
         .firmwareVersions()
         .find((entry) => entry.firmware_id === test.firmwareId);
       assert.ok(release);
       const identity = `${release.product.toLowerCase().replace(/\s+/g, '-')}-${release.version}`;
-      await page
-        .getByRole('radio', {
-          name: `${release.product} · ${release.version}`,
-          exact: true,
-        })
-        .check();
+      const saved = page.getByRole('radio', {
+        name: `${release.product} · ${release.version}`,
+        exact: true,
+      });
+      if (test.mirror) {
+        await saved.and(page.locator(':checked')).waitFor({ state: 'attached' });
+      } else {
+        await saved.check();
+      }
       const led = page.getByRole('button', { name: 'Download green LED image', exact: true });
       const system = page.getByRole('button', { name: 'Download full system image', exact: true });
       await led.waitFor({ state: 'visible' });

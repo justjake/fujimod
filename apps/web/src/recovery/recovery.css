@@ -40,6 +40,24 @@
   gap: 24px;
   max-width: 620px;
 }
+.recovery-mirror {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+.recovery-mirror select {
+  font: inherit;
+  color: inherit;
+  background: var(--key);
+  border: 1px solid rgb(84 84 88 / 65%);
+  border-radius: 8px;
+  padding: 8px 12px;
+}
+.recovery-mirror button:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
 .recovery .downloads-table {
   height: 320px;
 }

@@ -1,6 +1,6 @@
 import { BatteryCycleIcon } from '../ui/battery-cycle';
 import { PowerComboKeys } from '@fujimod/emulator-ui/ui/power-combo';
-import { Show, createEffect, createMemo, createSignal, onSettled } from 'solid-js';
+import { For, Show, createEffect, createMemo, createSignal, onSettled } from 'solid-js';
 import { downloadBlob } from '@fujimod/emulator-ui/ui/download';
 import { zipBlob } from '@fujimod/emulator-ui/archive';
 import { catalog as reference, initialize } from 'fujimod';
@@ -10,6 +10,8 @@ import { recoveryCameras, recoveryPlan } from './identify';
 import type { LibraryFirmware } from '../cameras/store';
 import { FirmwarePicker } from '../cameras/FirmwarePicker';
 import { createFirmwareLibrary } from '../cameras/firmware-library';
+import { firmwareMirrors } from '../cameras/firmware-mirrors';
+import type { Catalog, Firmware } from '../catalog';
 import { Steps, Step, FileList } from '../install/Steps';
 import { FormatGuide } from '../install/FormatGuide';
 import { FirmwareDownloads, type DownloadRow } from '../cameras/FirmwareDownloads';
@@ -20,6 +22,7 @@ import './recovery.css';
 import { firmwareDownloadName } from '../firmware-download';
 
 declare const __FUJIMOD_BUILD_SHA__: string;
+declare const __FUJIMOD_INITIAL_CATALOG__: Catalog;
 
 export default function Recovery() {
   const library = createFirmwareLibrary();
@@ -30,6 +33,9 @@ export default function Recovery() {
   const [buildError, setBuildError] = createSignal('');
   const [downloadType, setDownloadType] = createSignal<SdCardUtilityDownload>('system');
   const [cameras, setCameras] = createSignal<DownloadRow[]>([]);
+  const [mirrored, setMirrored] = createSignal<Firmware[]>([]);
+  const [mirrorSelection, setMirrorSelection] = createSignal('');
+  const [fetching, setFetching] = createSignal(false);
 
   const chosen = library.chosen;
   createEffect(
@@ -49,10 +55,36 @@ export default function Recovery() {
     initialize()
       .then(() => {
         setCameras(recoveryCameras());
+        setMirrored(
+          __FUJIMOD_INITIAL_CATALOG__.firmwares
+            .filter((firmware) => {
+              if (!firmwareMirrors[firmware.id]) return false;
+              const recovery = recoveryPlan(firmware.id);
+              return recovery.canBuild || recovery.greenLedFiles.length > 0;
+            })
+            .sort(
+              (a, b) =>
+                a.model.localeCompare(b.model, 'en', { numeric: true }) ||
+                b.version.localeCompare(a.version, 'en', { numeric: true }),
+            ),
+        );
         setCatalogReady(true);
       })
       .catch((caught: unknown) => setError(shownError(caught)));
   });
+
+  async function importMirroredFirmware() {
+    const firmware = mirrored().find((entry) => entry.id === mirrorSelection());
+    if (!firmware || !library.ready() || library.busy() || building()) return;
+    setFetching(true);
+    try {
+      await library.get(firmware);
+    } catch {
+      // The firmware picker displays the library's error.
+    } finally {
+      setFetching(false);
+    }
+  }
 
   async function download(firmware: LibraryFirmware, kind: SdCardUtilityDownload) {
     setBuildError('');
@@ -100,6 +132,35 @@ export default function Recovery() {
 
           <Step title="Choose the official Fujifilm firmware">
             <div class="recovery-firmware">
+              <Show when={mirrored().length}>
+                <div class="recovery-mirror">
+                  <select
+                    aria-label="Camera firmware"
+                    value={mirrorSelection()}
+                    disabled={!library.ready() || library.busy() || building()}
+                    onChange={(event) => setMirrorSelection(event.currentTarget.value)}
+                  >
+                    <option value="">Choose a camera</option>
+                    <For each={mirrored()}>
+                      {(firmware) => (
+                        <option value={firmware.id}>
+                          {firmware.model} · {firmware.version}
+                        </option>
+                      )}
+                    </For>
+                  </select>
+                  <button
+                    type="button"
+                    class="launcher-button"
+                    disabled={
+                      !mirrorSelection() || !library.ready() || library.busy() || building()
+                    }
+                    onClick={() => void importMirroredFirmware()}
+                  >
+                    {fetching() ? 'Downloading firmware…' : 'Download firmware'}
+                  </button>
+                </div>
+              </Show>
               <FirmwarePicker library={library} inputId="recovery-file" disabled={building()} />
               <Show when={error()}>
                 <p class="recovery-error" role="alert">
@@ -121,7 +182,7 @@ export default function Recovery() {
                 <>
                   <button
                     class="launcher-button recovery-download"
-                    disabled={building() || !card().canBuild}
+                    disabled={building() || library.busy() || !card().canBuild}
                     onClick={() => {
                       const firmware = chosen();
                       if (firmware) void download(firmware, 'system');
@@ -221,7 +282,7 @@ export default function Recovery() {
                     </p>
                     <button
                       class="launcher-button recovery-download recovery-led-download"
-                      disabled={building() || !result().greenLedFiles.length}
+                      disabled={building() || library.busy() || !result().greenLedFiles.length}
                       onClick={() => {
                         const firmware = chosen();
                         if (firmware) void download(firmware, 'green-led');
