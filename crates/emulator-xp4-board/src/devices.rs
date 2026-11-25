@@ -1263,6 +1263,45 @@ impl Devices {
         }
         Ok(())
     }
+    /// The device models as nodes of the shared board's device graph, in
+    /// model order, each with its windows. A word another model owns inside
+    /// a block's range (`carved`) is cut out of that block's mappings.
+    pub fn into_graph(self) -> Result<fujimod_emulator_devices::graph::DeviceGraph, String> {
+        use fujimod_emulator_devices::graph::{DeviceGraph, Mapping};
+        let mut graph = DeviceGraph::new();
+        for (index, model) in self.models.into_iter().enumerate() {
+            let model = model.ok_or("an XP4 device model is lent out")?;
+            let mut mappings = Vec::new();
+            for &(lo, hi, owner) in &self.windows {
+                if owner != index {
+                    continue;
+                }
+                let mut start = lo;
+                let mut holes: Vec<(u64, u64)> = self
+                    .carved
+                    .iter()
+                    .copied()
+                    .filter(|&(a, b)| (a, b) != (lo, hi) && lo <= a && b <= hi)
+                    .collect();
+                holes.sort_unstable();
+                for (a, b) in holes {
+                    if start < a {
+                        mappings.push(Mapping { base: start, size: a - start });
+                    }
+                    start = b;
+                }
+                if start < hi {
+                    mappings.push(Mapping { base: start, size: hi - start });
+                }
+            }
+            if mappings.is_empty() {
+                graph.attach(model);
+            } else {
+                graph.register_windows(mappings, model)?;
+            }
+        }
+        Ok(graph)
+    }
     pub fn empty() -> Self {
         Self {
             nor_controller: None,
@@ -2600,5 +2639,36 @@ mod imaging_admission_tests {
                 .unwrap();
             assert_eq!(devices.windows.len(), 2);
         }
+    }
+}
+
+#[cfg(test)]
+mod graph_tests {
+    use super::Devices;
+
+    #[test]
+    fn models_become_graph_nodes_with_their_windows() {
+        let mut devices = Devices::empty();
+        devices.io_groups(0xfff10000).unwrap();
+        devices.spi(0xfff32000, true).unwrap();
+        let graph = devices.into_graph().unwrap();
+        assert_eq!(graph.nodes.len(), 2);
+        assert_eq!(graph.at(0xfff10000).unwrap(), 0);
+        assert_eq!(graph.at(0xfff32024).unwrap(), 1);
+        assert!(graph.at(0xfff32028).is_err());
+    }
+
+    #[test]
+    fn a_carved_word_leaves_its_host_block() {
+        let mut devices = Devices::empty();
+        devices.io_groups(0xfff10000).unwrap();
+        devices.spi(0xfff32000, true).unwrap();
+        // The SPI controller owns one word inside the IO groups' range.
+        devices.windows.push((0xfff10010, 0xfff10014, 1));
+        devices.carved.push((0xfff10010, 0xfff10014));
+        let graph = devices.into_graph().unwrap();
+        assert_eq!(graph.at(0xfff1000c).unwrap(), 0);
+        assert_eq!(graph.at(0xfff10010).unwrap(), 1);
+        assert_eq!(graph.at(0xfff10014).unwrap(), 0);
     }
 }
