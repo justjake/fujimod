@@ -133,7 +133,37 @@ impl<L: Lookup> Locator<'_, L> {
         verify: impl Fn(&Routine) -> bool,
         name: &str,
     ) -> Result<Routine> {
-        one(self.small_routines(limit, verify), name)
+        one(self.application(self.small_routines(limit, verify))?, name)
+    }
+    /// Of several routines found by shape, those of the application.
+    ///
+    /// An update can hold more than one program with the same driver. GFX100RF 1.13 has two
+    /// flash readers: 0x90a6d4 in the stream mapped at 0x881000, which is the updater (it holds
+    /// the update file names `A:\\GXUP0001.DAT`, `A:\\XFUPDATE.DAT` and `recovery_update`), and
+    /// 0x1475004 in the application; its window helper is doubled the same way. The service
+    /// connection runs in the application, whose mapped ranges lie above the updater's, so
+    /// routines in a lower mapped range than the highest one holding a candidate are left
+    /// out. Candidates that share that range still refuse as ambiguous.
+    fn application(&self, mut routines: Vec<Routine>) -> Result<Vec<Routine>> {
+        if routines.len() > 1 {
+            let ranges: Vec<(u64, u64)> = self
+                .index
+                .units(self.firmware, Some(&self.unit))
+                .map_err(|e| e.to_string())?
+                .iter()
+                .flat_map(|unit| unit.layout.address_ranges.clone())
+                .collect();
+            let range_of = |routine: &Routine| {
+                ranges
+                    .iter()
+                    .copied()
+                    .find(|range| (range.0..range.1).contains(&routine.header.key.address))
+            };
+            if let Some(highest) = routines.iter().filter_map(range_of).max() {
+                routines.retain(|routine| range_of(routine) == Some(highest));
+            }
+        }
+        Ok(routines)
     }
     /// The routine nominated by `name`, or, when no function in this unit
     /// carries that name, the unique small routine accepted by `verify`. A
@@ -1525,6 +1555,7 @@ fn unnamed_reader<L: Lookup>(
                 request.has("mov", "w0, #0x6555") && request.has("movk", "w0, #0x7766, lsl #16")
             })
     });
+    let readers = locator.application(readers)?;
     one(readers, "flash_read")
 }
 
