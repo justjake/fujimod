@@ -22,7 +22,10 @@ protocol = "sdhc"
 transfer_ticks = 1000
 clock_ticks = 1000
 rca = 1
-ram_bytes = 0x80000000
+ram_bytes = 0xc0000000
+ram_banks = [[0x1c0000000, 0x40000000]]
+dram_alias = false
+address_high = 0xff90e7d8
 
 [[device]]
 base = 0xff9b01e0

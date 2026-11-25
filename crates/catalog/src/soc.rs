@@ -343,6 +343,12 @@ pub enum BlockDevice {
         /// Vendor words that read back their last write.
         #[serde(default, skip_serializing_if = "Vec::is_empty")]
         vendor_offsets: Vec<u64>,
+        /// Physical address ranges the host's DMA reaches, when declared.
+        #[serde(default, skip_serializing_if = "Vec::is_empty")]
+        dma_windows: Vec<SdDmaWindow>,
+        /// Word holding DMA address bits 34..32 for this host, when it has one.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        address_high: Option<u64>,
         /// Declared basis.
         basis: String,
     },
@@ -1157,4 +1163,21 @@ pub enum PictureLayout {
 pub enum VideoLayout {
     /// Two luma samples followed by shared chroma samples.
     Yycbcr422,
+}
+
+/// One physical address range an SD host's DMA reaches.
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(deny_unknown_fields)]
+#[cfg_attr(feature = "schema", schemars(deny_unknown_fields))]
+#[cfg_attr(
+    all(target_arch = "wasm32", not(target_os = "emscripten")),
+    derive(tsify::Tsify),
+    tsify(hashmap_as_object, missing_as_null)
+)]
+pub struct SdDmaWindow {
+    /// First physical address.
+    pub base: u64,
+    /// Range size in bytes.
+    pub size: u64,
 }

@@ -135,6 +135,15 @@
             "part_id": {
               "type": "string"
             },
+            "presented_jedec_id": {
+              "description": "JEDEC identity the emulator answers in place of the part's, while the part's own\nread path is unmodeled.",
+              "format": "uint32",
+              "minimum": 0,
+              "type": [
+                "integer",
+                "null"
+              ]
+            },
             "seeds": {
               "items": {
                 "$ref": "#/$defs/FlashSeed"

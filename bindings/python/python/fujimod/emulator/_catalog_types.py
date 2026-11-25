@@ -146,6 +146,7 @@ class ApplicationBlockInputVariant4(TypedDict, total=False):
     erased_tail: NotRequired[int | None]
     kind: Required[Literal["flash"]]
     part_id: Required[str]
+    presented_jedec_id: NotRequired[int | None]
     seeds: Required[list[FlashSeed]]
     source: Required[ApplicationFlashSource]
 
@@ -550,10 +551,12 @@ class BlockDeviceVariant31(TypedDict, total=False):
 
 
 class BlockDeviceVariant32(TypedDict, total=False):
+    address_high: NotRequired[int | None]
     basis: Required[str]
     capabilities: Required[int]
     capabilities_2: Required[int]
     clock_ticks: Required[int]
+    dma_windows: NotRequired[list[SdDmaWindow]]
     model: Required[Literal["sd_host"]]
     slot_and_version: Required[int]
     transfer_ticks: Required[int]
@@ -6071,6 +6074,11 @@ class Scanout(TypedDict, total=False):
     pointer_address: Required[int]
     stride_bytes: Required[int]
     width: Required[int]
+
+
+class SdDmaWindow(TypedDict, total=False):
+    base: Required[int]
+    size: Required[int]
 
 
 type SectionLength = (
