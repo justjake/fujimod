@@ -247,7 +247,42 @@ pub(crate) fn preload_length(preload: &Preload) -> Result<u64, String> {
 
 #[cfg(test)]
 mod tests {
-    use super::Dram;
+    use super::{BootState, Dram};
+
+    #[test]
+    fn xh2s_movie_start_selects_the_dial_position_and_routes_recorder_dma() {
+        let state = BootState::for_firmware("xh2s-730", None).unwrap();
+        let adc = state
+            .device
+            .iter()
+            .find(|window| window.kind == "adc")
+            .unwrap();
+        let samples = adc.options["samples"].as_array().unwrap();
+        assert_eq!(samples[3].as_integer(), Some(3774));
+
+        let dma = state
+            .device
+            .iter()
+            .find(|window| window.kind == "general-dma")
+            .unwrap();
+        assert_eq!(dma.options["a53_irq_base"].as_integer(), Some(237));
+    }
+
+    #[test]
+    fn xh2s_movie_statistics_are_in_boot_sram() {
+        let state = BootState::for_firmware("xh2s-730", None).unwrap();
+        let address = 0xff80_1060;
+        let covered_by_ram = state
+            .ram
+            .iter()
+            .any(|region| (region.base..region.base + region.size).contains(&address));
+        let covered_by_device = state
+            .device
+            .iter()
+            .any(|window| (window.base..window.base + window.size).contains(&address));
+        assert!(covered_by_ram);
+        assert!(!covered_by_device);
+    }
 
     #[test]
     fn dram_override_refuses_what_the_run_could_not_honor() {

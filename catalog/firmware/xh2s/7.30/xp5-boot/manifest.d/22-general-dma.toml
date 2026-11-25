@@ -7,6 +7,8 @@ kind = "general-dma"
 
 [device.options]
 companion_irq_base = 83
+# Recorder DDR training waits for the channel-1 completion on INTID 238.
+a53_irq_base = 237
 
 [[device]]
 base = 0xff90e748

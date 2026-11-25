@@ -1,0 +1,47 @@
+# Movie startup enters recorder DDR power setup and writes 0xfaf27000.
+# Reuse the XP5 warm-training register behavior from the X-H2 and X-T5.
+# PHY +0x08 alternates for the acknowledgment handshake, and +0x64 reports
+# completion. These are functional bring-up values.
+[[device]]
+base = 0xfb1a0000
+size = 0x1000
+kind = "bringup-stub"
+[device.options]
+registers = [{ offset = 0x08, mode = "toggle", value = 1 }, { offset = 0x64, mode = "constant", value = 7 }]
+
+[[device]]
+base = 0xfb5a0000
+size = 0x1000
+kind = "bringup-stub"
+[device.options]
+registers = [{ offset = 0x08, mode = "toggle", value = 1 }, { offset = 0x64, mode = "constant", value = 7 }]
+
+# Controller pages for warm training on channels 2 and 3.
+[[device]]
+base = 0xfaf27000
+size = 0x1000
+kind = "bringup-stub"
+[device.options]
+registers = [{ offset = 0x800, mode = "constant", value = 1 }, { offset = 0x820, mode = "constant", value = 0 }]
+
+[[device]]
+base = 0xfaf37000
+size = 0x1000
+kind = "bringup-stub"
+[device.options]
+registers = [{ offset = 0x800, mode = "constant", value = 1 }, { offset = 0x820, mode = "constant", value = 0 }]
+
+[[device]]
+base = 0xfaf29000
+size = 0x1000
+kind = "write-only-registers"
+
+[[device]]
+base = 0xfaf39000
+size = 0x1000
+kind = "write-only-registers"
+
+[[device]]
+base = 0xfae62000
+size = 0x1000
+kind = "write-only-registers"

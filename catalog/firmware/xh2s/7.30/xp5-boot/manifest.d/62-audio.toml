@@ -1,0 +1,42 @@
+# Movie initialization resets both XP5 audio serial interfaces and reads
+# instance 0 format at +0x0c. Use the X-T5 model and its test input signal.
+[[device]]
+base = 0xff91c000
+size = 0x1000
+kind = "audio-serial"
+[device.options]
+sample_rate_hz = 48000
+tone_hz = 1000
+tone_amplitude = 0.25
+
+[[device]]
+base = 0xff991000
+size = 0x1000
+kind = "audio-serial"
+[device.options]
+sample_rate_hz = 48000
+tone_hz = 1000
+tone_amplitude = 0.25
+
+# PL330 and its routing and upper-address registers. Recorder startup
+# writes the thread address view at 0xff90e788.
+[[device]]
+base = 0xff938000
+size = 0x1000
+kind = "audio-dma"
+[device.options]
+irq_base = 253
+setup_ticks = 1000
+bytes_per_tick = 1
+
+[[device]]
+base = 0xff90e520
+size = 0x40
+kind = "write-only-registers"
+
+[[device]]
+base = 0xff90e788
+size = 0x40
+kind = "bringup-stub"
+[device.options]
+registers = []

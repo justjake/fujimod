@@ -1,0 +1,25 @@
+# Imaging parameter storage. The 0xff95a000 and 0xff95b000 pages take table
+# writes. The 0xff96c000 and 0xff96e000 pages also have readback users.
+[[device]]
+base = 0xff95a000
+size = 0x1000
+kind = "write-only-registers"
+
+[[device]]
+base = 0xff95b000
+size = 0x1000
+kind = "write-only-registers"
+
+[[device]]
+base = 0xff96c000
+size = 0x1000
+kind = "write-only-registers"
+[device.options]
+readback = true
+
+[[device]]
+base = 0xff96e000
+size = 0x1000
+kind = "write-only-registers"
+[device.options]
+readback = true

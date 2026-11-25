@@ -13,6 +13,32 @@ load_firmware = true
 base = 0
 size = 0x80000000
 
+# Movie buffers use DRAM behind the two high bus-drain ports. Extents use the
+# X-T5 channel layout as the functional model.
+[[ram]]
+base = 0x100004000
+size = 0x3fffc000
+
+[[ram]]
+base = 0x180004000
+size = 0x3fffc000
+
+# Two DDR PHY register ranges used as read/write backing during warm training.
+# The mailbox pages immediately above them are declared in 48-ddr-phy.toml.
+[[ram]]
+base = 0xfb000000
+size = 0x1a0000
+
+[[ram]]
+base = 0xfb400000
+size = 0x1a0000
+
+# Boot SRAM remains memory after start. The Movie exposure task reads its
+# statistics buffers directly (first observed read at 0xff801060).
+[[ram]]
+base = 0xff800000
+size = 0x40000
+
 # M-core SRAM (same XP5 SoC window as the X-T5 4.31 manifest).
 [[ram]]
 base = 0xfa200000

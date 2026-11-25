@@ -17,9 +17,9 @@ base = 0xff906000
 size = 0x1000
 kind = "adc"
 [device.options]
-# The X-T5 placeholder samples (xt5-431.d/30-power-input.toml); the X-H2S channel
-# assignment is not decoded. UNVERIFIED.
-samples = [2713, 4095, 4095, 4095, 4095, 4095, 4095, 4095, 4095, 4095, 4095, 4095, 4095, 4095, 4095]
+# Channel 3 selects the mode dial; 3774 is the observed Film-position sample.
+# Channel 0 keeps the inherited thermistor input.
+samples = [2713, 4095, 4095, 3774, 4095, 4095, 4095, 4095, 4095, 4095, 4095, 4095, 4095, 4095, 4095]
 
 [[device]]
 base = 0xff907000
@@ -36,16 +36,25 @@ pad_model = "data-latch"
 # Panel selects GPIO 12.8 (LCD, client 3) and 12.10 (EVF, clients 7 and 8) start
 # inactive (output latch 1), the xt5-431 assumption for the same clients.
 initial_outputs = [{ port = 12, levels = 0x500 }]
-# Nothing in the hot shoe: GPIO 11.4 (client 13, instance 3) reads 0. The camera's
-# reset pad word for port 11 is 0x0040 (bit 4 clear; hardware-info buffer +0x2c).
-initial_inputs = [{ port = 11, pin = 4, high = false }]
+# Empty hot shoe 11.4. Monitor selection uses the 9.3/11.5/11.13 pattern 1/0/0 for the LCD.
+initial_inputs = [
+  { port = 11, pin = 4, high = false },
+  { port = 9, pin = 3, high = true },
+  { port = 11, pin = 5, high = false },
+  { port = 11, pin = 13, high = false },
+]
 # DISCOVERY peer-ready (UNVERIFIED, not camera-confirmed): the companion START drives
 # 1.14 high (0x17176b4) and the companion reads pad 0.4 low at boot (0x18bd8), then
 # reports STATUS bit1 on its rise (0x18c54, or IRQ handler 0x18d50 on NVIC 27). The
 # peer answers 1.14 on 0.4 after rise_delay ticks (ns); the delay is a board guess.
 # On the camera in REC pad 0.4 reads 1 while 1.14 is low (port 1 latch 0x13), so the
 # peer holds 0.4 once it has answered: the wire latches high after its first rise.
-feedback = [{ port = 1, register = 0, bit = 14, input_port = 0, input_pin = 4, rise_delay = 30000000, latch_high = true }]
+# The imaging power getter samples 4.4. Follow its drive latch as on the X-T5;
+# an undriven input otherwise reads high even with the sensor supply off.
+feedback = [
+  { port = 1, register = 0, bit = 14, input_port = 0, input_pin = 4, rise_delay = 30000000, latch_high = true },
+  { port = 4, register = 0, bit = 4, input_port = 4, input_pin = 4 },
+]
 companion_input_irqs = [{ port = 0, pin = 4, line = 27, active_high = true }]
 
 

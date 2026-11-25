@@ -31,14 +31,6 @@ kind = "clock-gates"
 [device.options]
 configuration_word = 0
 
-[[device]]
-# Immediate reset completion is a session assumption (xt5-431.d/20-storage.toml).
-base = 0xff91c000
-size = 0x1000
-kind = "reset-handshake"
-[device.options]
-trigger_offset = 0x1c
-
 # The 1000-tick commit latency is a session assumption, as for x100vi-131.
 [[device]]
 base = 0xfaf05000
