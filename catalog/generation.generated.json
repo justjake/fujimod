@@ -4610,20 +4610,19 @@
           ]
         },
         "controls": {
-          "status": "unavailable",
-          "errors": [
-            {
-              "locator": "controls",
-              "reason": "ControlIdsError: No catalog firmware, body, and physical-control records are published"
-            }
-          ]
+          "status": "available",
+          "errors": []
         },
         "facts": {
           "status": "unavailable",
           "errors": [
             {
-              "locator": "inputs",
-              "reason": "firmware image not available"
+              "locator": "app80",
+              "reason": "Checked 185-row dispatch32 table with its dispatcher, 32-byte rows (command@0, handler@8, parameters@16, modes@24, next_mode@28); the 64-bit App80 mailbox and projection are not verified"
+            },
+            {
+              "locator": "framebuffer",
+              "reason": "Runtime scanout is required; static inspection cannot confirm a live framebuffer"
             }
           ]
         },
@@ -4637,17 +4636,12 @@
           ]
         },
         "flash": {
-          "status": "unavailable",
-          "errors": [
-            {
-              "locator": "flash_error",
-              "reason": "mapped loader missing"
-            },
-            {
-              "locator": "publication",
-              "reason": "No catalog firmware and body record is published"
-            }
-          ]
+          "status": "available",
+          "errors": []
+        },
+        "memory-reservations": {
+          "status": "available",
+          "errors": []
         },
         "progress": {
           "status": "unavailable",
@@ -4659,13 +4653,8 @@
           ]
         },
         "restart": {
-          "status": "unavailable",
-          "errors": [
-            {
-              "locator": "restart",
-              "reason": "ValueError: power-cut routine: no verified family match (0x13823f0: no four settle calls with w0 = -6); 0 structural candidates "
-            }
-          ]
+          "status": "available",
+          "errors": []
         },
         "service": {
           "status": "unavailable",
@@ -4677,26 +4666,12 @@
           ]
         },
         "settings": {
-          "status": "unavailable",
-          "errors": [
-            {
-              "locator": "settings",
-              "reason": "FileNotFoundError: [Errno 2] No such file or directory: '<input>'"
-            }
-          ]
+          "status": "available",
+          "errors": []
         },
         "state": {
-          "status": "unavailable",
-          "errors": [
-            {
-              "locator": "boot_rom_error",
-              "reason": "xp5: no established safely readable boot ROM extent"
-            },
-            {
-              "locator": "publication",
-              "reason": "No catalog firmware and body record is published"
-            }
-          ]
+          "status": "available",
+          "errors": []
         },
         "ui_setting_names": {
           "status": "available",

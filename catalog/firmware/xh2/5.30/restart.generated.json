@@ -1,0 +1,131 @@
+{
+  "$schema": "https://fujimod.com/schemas/restart.generated.schema.json",
+  "schema": 2,
+  "id": "xh2-530-restart",
+  "firmware_id": "xh2-530",
+  "product": "X-H2",
+  "internal_version": "3.51",
+  "code_alias": 0,
+  "code_checks": [
+    {
+      "name": "power_off_sender",
+      "address": 47421788,
+      "size": 248,
+      "sha256": "eb04f612beef9d234006d5fffecdfe89466748a25289ccf45266b6a12be319a4"
+    },
+    {
+      "name": "power_off",
+      "address": 48797476,
+      "size": 604,
+      "sha256": "4a80720ce3416ec2a1052cf63f243a461743148f485e5171d173fb39a2a4ca64"
+    },
+    {
+      "name": "power_cut",
+      "address": 20456432,
+      "size": 252,
+      "sha256": "f6808f15bc08d5bc08e3854f1229163123c6f1173e60600cf91b8f19c438e101"
+    },
+    {
+      "name": "console_handler",
+      "address": 20173608,
+      "size": 300,
+      "sha256": "e953b5247236ade011d946c0bd867ec7317f45ef5a21010b0cccc83b3d4f0085"
+    },
+    {
+      "name": "console_callback",
+      "address": 46961936,
+      "size": 768,
+      "sha256": "b32a5bba002f1dbc85b6a4c50b66a6c1a948273cbd762f7c31f40369691935fd"
+    },
+    {
+      "name": "data_cache_clean",
+      "address": 21829548,
+      "size": 264,
+      "sha256": "d4bc612942646c4f3fc083289befd32300a42c02a55f7fbf58bf3e461caa9c16"
+    },
+    {
+      "name": "instruction_cache_sync",
+      "address": 374904,
+      "size": 380,
+      "sha256": "da344f492ec3bd2a4a75c92be95d1a1e36b0977a233f63c12163047201bfedcf"
+    }
+  ],
+  "mechanism": {
+    "transport": {
+      "kind": "console_callback",
+      "slot": 33903480,
+      "stock_callback": 46961936,
+      "stub_area": 2162624,
+      "stub_bytes": 64,
+      "translation": [
+        {
+          "address": 673152,
+          "size": 8,
+          "value": 778240
+        },
+        {
+          "address": 778240,
+          "size": 8,
+          "value": 790531
+        },
+        {
+          "address": 790536,
+          "size": 8,
+          "value": 2098697
+        }
+      ],
+      "ready_words": [
+        {
+          "address": 29786352,
+          "size": 4,
+          "value": 1
+        },
+        {
+          "address": 29786356,
+          "size": 4,
+          "value": 15
+        },
+        {
+          "address": 36286744,
+          "size": 4,
+          "value": 655361
+        }
+      ],
+      "data_cache_clean": 21829768,
+      "instruction_cache_sync": 374928
+    },
+    "sender": 47421788,
+    "request": 135,
+    "request_offset": 0,
+    "deadline_offset": 4,
+    "parameter_bytes": 12,
+    "ui": {
+      "mode_address": 40601696,
+      "mode_size": 4,
+      "rec_mode": 3,
+      "pending_mode_address": null,
+      "menu_active_address": null
+    },
+    "power_off": {
+      "entry": 48797476,
+      "halt": 48797908,
+      "power_cut": 20456432,
+      "request_deadline_offset": 8,
+      "alarm": {
+        "seconds": [
+          37,
+          38
+        ],
+        "enable": 18,
+        "enable_value": 257
+      },
+      "deadline_parameter": null,
+      "rollover_parameter": 5,
+      "fixed_interval": null,
+      "boot_flag": {
+        "address": 39218124,
+        "mask": 32
+      }
+    }
+  }
+}
