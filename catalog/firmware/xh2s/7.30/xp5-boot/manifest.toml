@@ -5,8 +5,6 @@ version = 1
 firmware = "xh2s-730"
 load_firmware = true
 
-# Device windows: manifest.d/*.toml, merged in filename order.
-
 # The stock bus-drain helper 0x17f1794 splits memory at 0x80000000, the body's
 # dram_bytes (catalog/bodies/xh2s/body.json). Installed capacity is unmeasured.
 [[ram]]

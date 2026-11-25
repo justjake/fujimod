@@ -16,7 +16,7 @@ size = 0x100000
 
 # DDR PHY register and firmware space, as on the X-T5. Boot setup writes PHY registers at
 # 0xfb000000 / 0xfb400000 + 2*index (boot_ddr_phy_write16, 0xff80dd6c); the mailbox pages above
-# each region are stubs (manifest.d/48-ddr-phy.toml).
+# each region are stubs (processor blocks).
 [[ram]]
 base = 0xfb000000
 size = 0x1a0000
