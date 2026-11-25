@@ -1,7 +1,8 @@
 //! X-T30 2.01 reads battery-monitor selector 27 once per five-phase poll and
 //! keeps the word at `0x0150b692`, which nothing reads back. The declared word
 //! is strict hardware; the register stays read-only.
-use fujimod_emulator_xp4_board::{Definition, Session};
+mod support;
+use fujimod_emulator_xp4_board::Definition;
 use serde_json::{Value, json};
 
 fn definition(sample: Option<u16>) -> Value {
@@ -14,12 +15,8 @@ fn definition(sample: Option<u16>) -> Value {
         "power_spi":[0xfff33000u32,false,12,5,true,inputs,54000000]})
 }
 
-fn session(value: Value) -> Result<Session, String> {
-    Session::new(
-        serde_json::from_value::<Definition>(value).map_err(|e| e.to_string())?,
-        None,
-        vec![],
-    )
+fn session(value: Value) -> Result<support::Board, String> {
+    support::open(serde_json::from_value::<Definition>(value).map_err(|e| e.to_string())?)
 }
 
 #[test]

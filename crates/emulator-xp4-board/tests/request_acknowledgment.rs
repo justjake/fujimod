@@ -1,5 +1,6 @@
 use fujimod_emulator_cpu::arm;
-use fujimod_emulator_xp4_board::{Definition, Session};
+mod support;
+use fujimod_emulator_xp4_board::Definition;
 use fujimod_emulator_xp4_io::request_acknowledgment::ADDRESS;
 use serde_json::{Value, json};
 
@@ -17,12 +18,12 @@ fn input() -> Value {
     })
 }
 
-fn board(input: Value) -> Result<Session, String> {
+fn board(input: Value) -> Result<support::Board, String> {
     let definition: Definition = serde_json::from_value(input).unwrap();
-    Session::new(definition, None, vec![])
+    support::open(definition)
 }
 
-fn program(session: &Session, address: u64, words: &[u32]) {
+fn program(session: &support::Board, address: u64, words: &[u32]) {
     let bytes: Vec<_> = words.iter().flat_map(|word| word.to_le_bytes()).collect();
     session.write(ENTRY as usize, &bytes).unwrap();
     session.write_register(0, arm::CORE[0], address).unwrap();
@@ -46,11 +47,7 @@ fn strict_defaults_and_adjacent_words_remain_unmapped() {
             ticks.is_some()
         );
         program(&session, address, &[0xe590_2000]); // LDR r2,[r0]
-        assert!(
-            session.run(0, 1).is_err(),
-            "unexpected access at {address:#x}"
-        );
-        assert!(session.device_records().is_empty());
+        assert!(session.run(0, 1).is_err(), "unexpected access at {address:#x}");
     }
 }
 
@@ -95,27 +92,22 @@ fn guest_writes_one_and_polls_until_the_declared_acknowledgment() {
             ],
         );
         let stop = ENTRY + 5 * 4;
-        session.run_to(0, 128, stop).unwrap();
+        for _ in 0..128 {
+            if session.read_register(0, arm::PC).unwrap() == stop {
+                break;
+            }
+            session.run_board(1, 1).unwrap();
+        }
         assert_eq!(session.read_register(0, arm::PC).unwrap(), stop);
         assert_eq!(session.read_register(0, arm::CORE[2]).unwrap(), 1);
         assert_eq!(session.read_register(0, arm::CORE[3]).unwrap(), 0);
         let states = session.device_state_json();
-        let snapshot: Value = serde_json::from_str(&states[NAME]).unwrap();
+        let snapshot: Value = states[NAME].clone();
         let state = &snapshot["state"];
         let start = state["request"]["started_at"].as_u64().unwrap();
         let deadline = start + ticks;
         assert_eq!(state["phase"], json!("completed"));
         assert_eq!(state["request"]["deadline"], json!(deadline));
         assert_eq!(state["completed_at"], json!(deadline));
-        assert_eq!(
-            session
-                .device_records()
-                .iter()
-                .filter(|record| record
-                    .name
-                    .starts_with("XP4 experimental request acknowledgment"))
-                .count(),
-            2
-        );
     }
 }

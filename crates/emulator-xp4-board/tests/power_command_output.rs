@@ -1,4 +1,5 @@
-use fujimod_emulator_xp4_board::{Definition, Session};
+mod support;
+use fujimod_emulator_xp4_board::Definition;
 use serde_json::{Value, json};
 fn definition() -> Value {
     json!({"ram_size":65536,"cores":1,"discovery":false,"cbar":0xffff0000u32,
@@ -6,12 +7,8 @@ fn definition() -> Value {
         "power_spi":[0xfff33000u32,false,12,5,true,
             {"0":0,"1":0,"2":0,"3":0,"32":0,"34":0,"35":0},54000000]})
 }
-fn session(value: Value) -> Result<Session, String> {
-    Session::new(
-        serde_json::from_value::<Definition>(value).map_err(|e| e.to_string())?,
-        None,
-        vec![],
-    )
+fn session(value: Value) -> Result<support::Board,String> {
+    support::open(serde_json::from_value::<Definition>(value).map_err(|e|e.to_string())?)
 }
 #[test]
 fn command_output_is_optional_typed_and_requires_its_peer() {

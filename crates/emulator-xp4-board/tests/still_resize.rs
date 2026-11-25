@@ -2,7 +2,8 @@
 //! 0xfff7e000, interrupt 132): wiring admission, and one halving job driven
 //! by guest stores and loads the way the firmware's drivers drive it.
 use fujimod_emulator_cpu::arm;
-use fujimod_emulator_xp4_board::{Definition, Session};
+mod support;
+use fujimod_emulator_xp4_board::Definition;
 use serde_json::{Value, json};
 
 const CBAR: u32 = 0x2000_0000;
@@ -21,12 +22,12 @@ fn input(engine: &str, compute: bool) -> Value {
             "compute": compute}]})
 }
 
-fn session(value: Value) -> Result<Session, String> {
+fn session(value: Value) -> Result<support::Board, String> {
     let definition: Definition = serde_json::from_value(value).map_err(|e| e.to_string())?;
-    Session::new(definition, None, vec![])
+    support::open(definition)
 }
 
-fn word(session: &Session, address: usize) -> u32 {
+fn word(session: &support::Board, address: usize) -> u32 {
     let mut bytes = [0; 4];
     session.read(address, &mut bytes).unwrap();
     u32::from_le_bytes(bytes)
@@ -123,7 +124,7 @@ fn a_guest_resize_job_halves_the_picture_and_holds_its_line_until_acknowledged()
             .unwrap();
     }
     board.run_board(4000, 100).unwrap();
-    assert!(board.state(false).failure.is_none());
+    assert!(board.failure().is_none());
 
     assert_eq!(word(&board, RESULT), 0x0100_0101, "done");
     assert_eq!(word(&board, RESULT + 4), 0x0100_0100, "acknowledged");

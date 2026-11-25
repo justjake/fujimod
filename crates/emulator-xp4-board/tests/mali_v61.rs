@@ -2,7 +2,8 @@
 //! 138): wiring admission, and one JOB answered through guest stores and
 //! loads in the order the firmware's driver uses.
 use fujimod_emulator_cpu::arm;
-use fujimod_emulator_xp4_board::{Definition, Session};
+mod support;
+use fujimod_emulator_xp4_board::Definition;
 use serde_json::{Value, json};
 
 const CBAR: u32 = 0x2000_0000;
@@ -26,18 +27,18 @@ fn unit(base: u32, irq: u32, ticks: u64) -> Value {
     json!({"base": base, "irq": irq, "ticks": ticks, "queues": QUEUES})
 }
 
-fn session(value: Value) -> Result<Session, String> {
+fn session(value: Value) -> Result<support::Board, String> {
     let definition: Definition = serde_json::from_value(value).map_err(|e| e.to_string())?;
-    Session::new(definition, None, vec![])
+    support::open(definition)
 }
 
-fn word(session: &Session, address: usize) -> u32 {
+fn word(session: &support::Board, address: usize) -> u32 {
     let mut bytes = [0; 4];
     session.read(address, &mut bytes).unwrap();
     u32::from_le_bytes(bytes)
 }
 
-fn half(session: &Session, address: usize) -> u16 {
+fn half(session: &support::Board, address: usize) -> u16 {
     let mut bytes = [0; 2];
     session.read(address, &mut bytes).unwrap();
     u16::from_le_bytes(bytes)
@@ -134,7 +135,7 @@ fn a_guest_job_is_answered_on_the_declared_interrupt_line() {
     }
     board.write(RESULT + 8, &0xdeadu32.to_le_bytes()).unwrap();
     board.run_board(4000, 100).unwrap();
-    assert!(board.state(false).failure.is_none());
+    assert!(board.failure().is_none());
 
     assert_eq!(word(&board, RESULT), 0xffff, "no session on any core");
     assert_eq!(word(&board, RESULT + 4) & 1, 1, "message pending");
@@ -143,7 +144,7 @@ fn a_guest_job_is_answered_on_the_declared_interrupt_line() {
     assert_eq!(half(&board, PAGES + 0x1000 + 2), 3);
     assert_eq!(half(&board, PAGES + 0x1000), 1);
     assert_eq!(word(&board, PAGES + 0x1010), 2001);
-    let line = |board: &Session| {
+    let line = |board: &support::Board| {
         let pending = &board.interrupt_state().unwrap()[0].pending;
         pending[(IRQ / 32) as usize] & 1 << (IRQ % 32) != 0
     };
@@ -151,7 +152,7 @@ fn a_guest_job_is_answered_on_the_declared_interrupt_line() {
 
     board.write(RESULT + 12, &1u32.to_le_bytes()).unwrap();
     board.run_board(4000, 100).unwrap();
-    assert!(board.state(false).failure.is_none());
+    assert!(board.failure().is_none());
     assert_eq!(word(&board, RESULT + 8), 0, "acknowledged");
     assert!(!line(&board), "level line lowered");
 }

@@ -1,4 +1,5 @@
-use fujimod_emulator_xp4_board::{Definition, Session};
+mod support;
+use fujimod_emulator_xp4_board::Definition;
 use serde_json::{Value, json};
 
 fn definition(status: Option<u16>) -> Value {
@@ -15,12 +16,12 @@ fn definition(status: Option<u16>) -> Value {
 fn declared_accessory_status_word_is_strict_hardware() {
     for status in [0x00a5, 0xff0c] {
         let strict: Definition = serde_json::from_value(definition(Some(status))).unwrap();
-        Session::new(strict, None, vec![]).expect("a declared status word is strict hardware");
+        support::open(strict).expect("a declared status word is strict hardware");
     }
 }
 
 #[test]
 fn ordinary_power_inputs_remain_available_in_strict_mode() {
     let strict: Definition = serde_json::from_value(definition(None)).unwrap();
-    assert!(Session::new(strict, None, vec![]).is_ok());
+    assert!(support::open(strict).is_ok());
 }

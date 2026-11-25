@@ -5,7 +5,8 @@
 //! (0xfff7801c, which the firmware writes to 1 and reads back until bit 0 is
 //! clear).
 use fujimod_emulator_cpu::arm;
-use fujimod_emulator_xp4_board::{Definition, Session};
+mod support;
+use fujimod_emulator_xp4_board::Definition;
 use serde_json::{Value, json};
 
 const CBAR: u32 = 0x2000_0000;
@@ -25,12 +26,12 @@ fn input() -> Value {
     ]})
 }
 
-fn session(value: Value) -> Result<Session, String> {
+fn session(value: Value) -> Result<support::Board, String> {
     let definition: Definition = serde_json::from_value(value).map_err(|e| e.to_string())?;
-    Session::new(definition, None, vec![])
+    support::open(definition)
 }
 
-fn word(session: &Session, address: usize) -> u32 {
+fn word(session: &support::Board, address: usize) -> u32 {
     let mut bytes = [0; 4];
     session.read(address, &mut bytes).unwrap();
     u32::from_le_bytes(bytes)
@@ -89,7 +90,7 @@ fn a_guest_busy_wait_on_a_self_clearing_command_completes() {
             .unwrap();
     }
     board.run_board(4000, 100).unwrap();
-    assert!(board.state(false).failure.is_none());
+    assert!(board.failure().is_none());
     assert_eq!(word(&board, RESULT), 0, "busy bit read clear");
     assert_eq!(word(&board, RESULT + 4), 0x5a, "shared page word");
 }

@@ -1,7 +1,8 @@
 //! XP4 on the shared board: the caller's execution graph (processors, RAM,
 //! memory windows and maps), a GICv2 at the processors' configuration base,
 //! and every device the definition selects.
-use super::{definition::TimerLayout, device_build, memory, Definition};
+use super::{definition::TimerLayout, device_build, devices::Connected, memory, Definition};
+use fujimod_emulator_xp4_storage::storage::SerialFlashController;
 use fujimod_catalog_configuration::RunEngine;
 use fujimod_emulator::board::{InterruptMap, InterruptRegisters, armv7a, bus::{Bus, Mode}, factory};
 use fujimod_emulator_devices::{Cx, Device, checkpoint::Checkpoint};
@@ -52,10 +53,17 @@ pub fn build(
     // The XP4 physical map is the identity on every core: each device
     // window, the timer and the GIC's distributor and CPU interface.
     let mut windows = built.devices.as_ref().map(|devices| devices.guard_windows()).unwrap_or_default();
-    windows.push((u64::from(cbar) + 0x1000, u64::from(cbar) + 0x3000));
+    let mut fixed = vec![(u64::from(cbar) + 0x1000, u64::from(cbar) + 0x3000)];
     if let Some((base, _)) = &timer {
-        windows.push((*base, base + TIMER_WINDOW));
+        fixed.push((*base, base + TIMER_WINDOW));
     }
+    // A device window may not cover memory, the GIC or the interval timer.
+    let memory_ranges = graph.ram.iter().map(|ram| (ram.base, ram.base + ram.size as u64));
+    let taken: Vec<(u64, u64)> = memory_ranges.chain(fixed.iter().copied()).collect();
+    if windows.iter().any(|&(lo, hi)| taken.iter().any(|&(a, b)| lo < b && a < hi)) {
+        return Err("Overlapping XP4 device window and memory or interrupt controller".into());
+    }
+    windows.extend(fixed);
     for core in 0..cores {
         for &(lo, hi) in &windows {
             let size = usize::try_from(hi - lo).map_err(|_| "XP4 device window exceeds the host")?;
@@ -243,6 +251,41 @@ impl Device for Timers {
     }
 }
 
+/// The node of the board's serial-flash controller.
+fn serial_flash(session: &fujimod_emulator_session::Session) -> Result<usize, String> {
+    session.node("xp4-serial-flash").map_err(|_| "Board has no XP4 NOR".to_string())
+}
+
+/// Completed NOR contents, without controller or processor state.
+pub fn nor_medium(session: &fujimod_emulator_session::Session) -> Result<Vec<u8>, String> {
+    session.board.with_device::<Connected<SerialFlashController>, _>(serial_flash(session)?, |flash| {
+        flash.0.lock().map_err(|_| "NOR controller lock poisoned")?.nor_medium()
+    })?
+}
+
+/// Reset NOR program observation, refusing unsettled commands.
+pub fn reset_nor_program_coverage(session: &mut fujimod_emulator_session::Session) -> Result<(), String> {
+    let node = serial_flash(session)?;
+    session.board.edit_device::<Connected<SerialFlashController>, _>(node, |flash| {
+        flash.0.lock().map_err(|_| "NOR controller lock poisoned")?.reset_nor_program_coverage()
+    })
+}
+
+/// A copy of the medium in the `host`th SD card slot, in node order.
+pub fn card_medium(
+    session: &fujimod_emulator_session::Session,
+    host: usize,
+) -> Result<fujimod_emulator_devices::parts::sd_card::Card, String> {
+    let mut nodes: Vec<(&String, &usize)> = session.nodes.iter().collect();
+    nodes.sort_by_key(|&(_, id)| *id);
+    nodes.dedup_by_key(|(_, id)| **id);
+    nodes
+        .into_iter()
+        .filter_map(|(name, _)| session.card_medium(name).ok())
+        .nth(host)
+        .ok_or_else(|| "No SD card slot with that index".into())
+}
+
 /// Present a sample at an input of the XP4 external ADC, as a key's resistor
 /// band does; a sample that changes a sampled channel arms a conversion.
 pub fn set_adc_input(
@@ -254,25 +297,5 @@ pub fn set_adc_input(
     let id = session.node("xp4-adc").map_err(|_| "XP4 ADC inputs are not wired".to_string())?;
     session.board.device_input::<super::devices::Connected<Adc>, _>(id, |adc, cx| {
         adc.0.lock().unwrap().set_input(cx, channel, sample)
-    })
-}
-
-/// The medium in the `host`th SD card slot (node order), once the host is idle.
-pub fn card_medium(
-    session: &fujimod_emulator_session::Session,
-    host: usize,
-) -> Result<fujimod_emulator_devices::parts::sd_card::Card, String> {
-    use fujimod_emulator_devices::capability::CardSlot;
-    let mut ids: Vec<usize> = session.nodes.values().copied().collect();
-    ids.sort_unstable();
-    let mut slots = ids.into_iter().filter(|&id| {
-        session.board.inspect_capability::<dyn CardSlot, _>(id, |_| Ok(())).is_ok()
-    });
-    let id = slots.nth(host).ok_or("No SD card slot with that index")?;
-    session.board.inspect_capability::<dyn CardSlot, _>(id, |slot| {
-        if slot.busy() {
-            return Err("SD host is busy; the medium is not at rest".into());
-        }
-        Ok(slot.card().clone())
     })
 }

@@ -1,5 +1,6 @@
 //! Source coverage applies to ordinary board execution without a driver guard.
-use fujimod_emulator_xp4_board::{Definition, Session};
+mod support;
+use fujimod_emulator_xp4_board::Definition;
 use serde_json::{Value, json};
 
 const FLASH: u64 = 0xf0000000;
@@ -17,13 +18,8 @@ fn definition(strict: bool) -> Value {
     })
 }
 
-fn session(strict: bool, bytes: Vec<u8>) -> Session {
-    Session::new(
-        serde_json::from_value::<Definition>(definition(strict)).unwrap(),
-        Some(bytes),
-        vec![],
-    )
-    .unwrap()
+fn session(strict: bool, bytes: Vec<u8>) -> support::Board {
+    support::open_with(serde_json::from_value::<Definition>(definition(strict)).unwrap(), Some(bytes), Vec::new(), Vec::new()).unwrap()
 }
 
 fn mov32(code: &mut Vec<u32>, register: u32, value: u32) {
@@ -38,24 +34,14 @@ fn store(code: &mut Vec<u32>, address: u64, value: u32) {
     code.push(0xe5801000);
 }
 
-fn run(session: &Session, code: &[u32]) {
+fn run(session: &support::Board, code: &[u32]) {
     let bytes: Vec<_> = code.iter().flat_map(|word| word.to_le_bytes()).collect();
     session.write(0x1000, &bytes).unwrap();
-    // DMA writes may yield for translated-code invalidation. Resume the same
-    // bounded session; no guard is used to supply the source bound.
-    for _ in 0..8 {
-        let state = session.state(false);
-        if state.failure.is_some() || state.instructions >= code.len() as u64 {
-            break;
-        }
-        let remaining = 1000u64.saturating_sub(state.instructions);
-        assert!(remaining > 0, "native caller instruction bound reached");
-        let _ = session.run(0, remaining as usize);
-    }
+    let _ = session.run_board(code.len() as u64, code.len());
 }
 
-fn device(session: &Session, name: &str) -> Value {
-    serde_json::from_str(&session.device_state_json()[name]).unwrap()
+fn device(session: &support::Board, name: &str) -> Value {
+    session.device_state_json()[name].clone()
 }
 
 #[test]
@@ -79,18 +65,12 @@ fn ordinary_cpu_reads_refuse_crossing_the_asset_and_default_to_erased_bytes_when
         session.read(OUTPUT, &mut actual).unwrap();
         match expected {
             Some(bytes) => {
-                assert!(session.state(false).failure.is_none());
+                assert!(session.failure().is_none());
                 assert_eq!(&actual[..4], &bytes);
                 assert_eq!(&actual[4..], &[0xa5; 4]);
             }
             None => {
-                assert!(
-                    session
-                        .state(false)
-                        .failure
-                        .unwrap()
-                        .contains("outside supplied backing")
-                );
+                assert!(session.failure().unwrap().contains("outside supplied backing"));
                 assert_eq!(actual, [0xa5; 8]);
             }
         }
@@ -127,7 +107,7 @@ fn ordinary_dma_read_checks_entire_source_before_destination_copy() {
         let channel = &device(&session, "xp4-dma")["channels"][0];
         let serial = device(&session, "xp4-serial-flash");
         if success {
-            assert!(session.state(false).failure.is_none());
+            assert!(session.failure().is_none());
             let expected: Vec<u8> = (offset..offset + 32)
                 .map(|n| if n < 32 { n as u8 } else { 255 })
                 .collect();
@@ -136,13 +116,7 @@ fn ordinary_dma_read_checks_entire_source_before_destination_copy() {
             assert_eq!(channel["completed"], 1);
             assert_eq!(channel["submitted"], false);
         } else {
-            assert!(
-                session
-                    .state(false)
-                    .failure
-                    .unwrap()
-                    .contains("outside supplied backing")
-            );
+            assert!(session.failure().unwrap().contains("outside supplied backing"));
             assert_eq!(actual, [0xa5; 64]);
             assert_eq!(channel["completed"], 0);
             assert!(serial["stream"].is_null());
@@ -153,24 +127,10 @@ fn ordinary_dma_read_checks_entire_source_before_destination_copy() {
 
 #[test]
 fn strict_backing_requires_explicit_contents_and_a_nor_owner() {
-    assert!(
-        Session::new(
-            serde_json::from_value::<Definition>(definition(true)).unwrap(),
-            None,
-            vec![]
-        )
-        .is_err()
-    );
+    assert!(support::open(serde_json::from_value::<Definition>(definition(true)).unwrap()).is_err());
     let mut no_owner = definition(true);
     no_owner["storage_jedec"] = Value::Null;
-    assert!(
-        Session::new(
-            serde_json::from_value::<Definition>(no_owner).unwrap(),
-            Some(vec![]),
-            vec![]
-        )
-        .is_err()
-    );
+    assert!(support::open_with(serde_json::from_value::<Definition>(no_owner).unwrap(), Some(vec![]), Vec::new(), Vec::new()).is_err());
     // An explicit empty source is valid for identity/status-only callers.
     let session = session(true, vec![]);
     let mut code = vec![];
@@ -181,7 +141,7 @@ fn strict_backing_requires_explicit_contents_and_a_nor_owner() {
     mov32(&mut code, 1, OUTPUT as u32);
     code.extend([0xe5812000, 0xe320f003]);
     run(&session, &code);
-    assert!(session.state(false).failure.is_none());
+    assert!(session.failure().is_none());
     let mut identity = [0; 4];
     session.read(OUTPUT, &mut identity).unwrap();
     assert_eq!(u32::from_le_bytes(identity), 0x20);
@@ -197,20 +157,10 @@ fn erased_definition() -> Value {
 
 #[test]
 fn explicit_erased_ranges_admit_cpu_reads_and_keep_holes_inaccessible() {
-    for (offset, expected) in [
-        (28, Some([28, 29, 255, 255])),
-        (32, None),
-        (92, None),
-        (96, Some([255; 4])),
-        (124, Some([255; 4])),
-        (128, None),
-    ] {
-        let session = Session::new(
-            serde_json::from_value(erased_definition()).unwrap(),
-            Some((0..30).collect()),
-            vec![],
-        )
-        .unwrap();
+    for (offset, expected) in [(28, Some([28, 29, 255, 255])),
+                                (32, None), (92, None),
+                                (96, Some([255; 4])), (124, Some([255; 4])), (128, None)] {
+        let session = support::open_with(serde_json::from_value(erased_definition()).unwrap(), Some((0..30).collect()), Vec::new(), Vec::new()).unwrap();
         session.write(OUTPUT, &[0xa5; 8]).unwrap();
         let mut code = vec![];
         mov32(&mut code, 0, (FLASH + offset) as u32);
@@ -221,16 +171,10 @@ fn explicit_erased_ranges_admit_cpu_reads_and_keep_holes_inaccessible() {
         let mut actual = [0; 8];
         session.read(OUTPUT, &mut actual).unwrap();
         if let Some(bytes) = expected {
-            assert!(session.state(false).failure.is_none());
+            assert!(session.failure().is_none());
             assert_eq!(&actual[..4], &bytes);
         } else {
-            assert!(
-                session
-                    .state(false)
-                    .failure
-                    .unwrap()
-                    .contains("outside supplied backing")
-            );
+            assert!(session.failure().unwrap().contains("outside supplied backing"));
             assert_eq!(&actual[..4], &[0xa5; 4]);
         }
         assert_eq!(&actual[4..], &[0xa5; 4]);
@@ -244,12 +188,7 @@ fn explicit_erased_ranges_admit_cpu_reads_and_keep_holes_inaccessible() {
 #[test]
 fn declared_erased_input_is_copied_by_original_dma_routing_without_filling_gaps() {
     for (offset, success) in [(96, true), (16, false)] {
-        let session = Session::new(
-            serde_json::from_value(erased_definition()).unwrap(),
-            Some((0..30).collect()),
-            vec![],
-        )
-        .unwrap();
+        let session = support::open_with(serde_json::from_value(erased_definition()).unwrap(), Some((0..30).collect()), Vec::new(), Vec::new()).unwrap();
         session.write(OUTPUT, &[0xa5; 64]).unwrap();
         let mut code = vec![];
         for (address, value) in [
@@ -274,17 +213,11 @@ fn declared_erased_input_is_copied_by_original_dma_routing_without_filling_gaps(
         let mut actual = [0; 64];
         session.read(OUTPUT, &mut actual).unwrap();
         if success {
-            assert!(session.state(false).failure.is_none());
+            assert!(session.failure().is_none());
             assert_eq!(&actual[..32], &[255; 32]);
             assert_eq!(&actual[32..], &[0xa5; 32]);
         } else {
-            assert!(
-                session
-                    .state(false)
-                    .failure
-                    .unwrap()
-                    .contains("outside supplied backing")
-            );
+            assert!(session.failure().unwrap().contains("outside supplied backing"));
             assert_eq!(actual, [0xa5; 64]);
             assert!(device(&session, "xp4-serial-flash")["stream"].is_null());
         }
@@ -294,43 +227,17 @@ fn declared_erased_input_is_copied_by_original_dma_routing_without_filling_gaps(
 #[test]
 fn erased_input_requires_strict_explicit_nor_contents_and_valid_ranges() {
     let selected = erased_definition();
-    assert!(
-        Session::new(
-            serde_json::from_value(selected.clone()).unwrap(),
-            None,
-            vec![]
-        )
-        .is_err()
-    );
-    for (field, value) in [
-        ("storage_strict_backing", json!(false)),
-        ("storage_jedec", Value::Null),
-        ("storage_erased_ranges", json!([{"offset":29,"length":1}])),
-        ("storage_erased_ranges", json!([{"offset":32,"length":0}])),
-        (
-            "storage_erased_ranges",
-            json!([{"offset":0x8000000,"length":1}]),
-        ),
-    ] {
+    assert!(support::open(serde_json::from_value(selected.clone()).unwrap()).is_err());
+    for (field, value) in [("storage_strict_backing", json!(false)),
+                           ("storage_jedec", Value::Null),
+                           ("storage_erased_ranges", json!([{"offset":29,"length":1}])),
+                           ("storage_erased_ranges", json!([{"offset":32,"length":0}])),
+                           ("storage_erased_ranges", json!([{"offset":0x8000000,"length":1}]))] {
         let mut bad = selected.clone();
         bad[field] = value;
-        assert!(
-            Session::new(
-                serde_json::from_value(bad).unwrap(),
-                Some(vec![0; 30]),
-                vec![]
-            )
-            .is_err()
-        );
+        assert!(support::open_with(serde_json::from_value(bad).unwrap(), Some(vec![0;30]), Vec::new(), Vec::new()).is_err());
     }
     let mut empty = definition(false);
     empty["storage_erased_ranges"] = json!([]);
-    assert!(
-        Session::new(
-            serde_json::from_value(empty).unwrap(),
-            Some(vec![0; 30]),
-            vec![]
-        )
-        .is_ok()
-    );
+    assert!(support::open_with(serde_json::from_value(empty).unwrap(), Some(vec![0;30]), Vec::new(), Vec::new()).is_ok());
 }

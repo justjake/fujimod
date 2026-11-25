@@ -7,7 +7,8 @@
 //! keep every readiness result labelled synthetic. No GFX100S firmware runs
 //! here, and nothing here claims training, timing or a physical result.
 use fujimod_emulator_cpu::arm;
-use fujimod_emulator_xp4_board::{Definition, Session};
+mod support;
+use fujimod_emulator_xp4_board::Definition;
 use serde_json::Value;
 use serde_json::json;
 
@@ -34,17 +35,13 @@ fn input(idle: Value) -> Value {
     ]})
 }
 
-fn session(value: Value) -> Result<Session, String> {
+fn session(value: Value) -> Result<support::Board, String> {
     let definition: Definition = serde_json::from_value(value).map_err(|e| e.to_string())?;
-    Session::new(definition, None, vec![])
+    support::open(definition)
 }
 
-fn run(
-    board: &Session,
-    code: usize,
-    program: &[u32],
-    registers: &[(usize, u32)],
-) -> Result<(), String> {
+fn run(board: &support::Board, code: usize, program: &[u32],
+       registers: &[(usize, u32)]) -> Result<(), String> {
     // Each program gets its own address: the board caches translations, so
     // overwriting one entry point would re-run the previous body.
     let bytes: Vec<u8> = program.iter().flat_map(|w| w.to_le_bytes()).collect();
@@ -60,7 +57,7 @@ fn run(
     board.run_board(4000, 100)
 }
 
-fn word(board: &Session, address: usize) -> u32 {
+fn word(board: &support::Board, address: usize) -> u32 {
     let mut bytes = [0; 4];
     board.read(address, &mut bytes).unwrap();
     u32::from_le_bytes(bytes)
@@ -254,7 +251,7 @@ fn catalog_declared_idle_and_fixed_words_satisfy_the_polls_from_reset() {
 fn unsupported_controller_access_is_refused() {
     let board = session(input(json!([]))).unwrap();
     let result = run(&board, CODE, &LOAD, &[(0, 0xFF61_F000), (3, RESULT as u32)]);
-    assert!(result.is_err() || board.state(false).failure.is_some());
+    assert!(result.is_err() || board.failure().is_some());
 }
 
 #[test]
@@ -262,11 +259,6 @@ fn an_unmodeled_block_is_refused_rather_than_ready() {
     let mut value = input(json!([]));
     value["xpp_register_blocks"] = json!([]);
     let board = session(value).unwrap();
-    let result = run(
-        &board,
-        CODE,
-        &COPY,
-        &[(0, LOCK), (1, 0x30000), (3, RESULT as u32)],
-    );
-    assert!(result.is_err() || board.state(false).failure.is_some());
+    let result = run(&board, CODE, &COPY, &[(0, LOCK), (1, 0x30000), (3, RESULT as u32)]);
+    assert!(result.is_err() || board.failure().is_some());
 }

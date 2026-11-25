@@ -45,9 +45,18 @@ impl serial_link::SerialPeer for SpiLink {
 }
 
 pub(crate) struct Connected<T>(pub(crate) Arc<Mutex<T>>);
+/// The shared model's execute-in-place epoch, read through its lock.
+impl<T: Device> fujimod_emulator_devices::capability::ExecuteInPlace for Connected<T> {
+    fn epoch(&self) -> u64 {
+        self.0.lock().unwrap().execute_in_place().map_or(u64::MAX, |model| model.epoch())
+    }
+}
 impl<T: Device> Device for Connected<T> {
     fn name(&self) -> &'static str {
         self.0.lock().unwrap().name()
+    }
+    fn execute_in_place(&self) -> Option<&(dyn fujimod_emulator_devices::capability::ExecuteInPlace + 'static)> {
+        if self.0.lock().unwrap().execute_in_place().is_some() { Some(self) } else { None }
     }
     fn read(&mut self, cx: &mut Cx<'_>, address: u64, size: u8) -> u64 {
         self.0.lock().unwrap().read(cx, address, size)
@@ -1274,10 +1283,23 @@ impl Devices {
         use fujimod_emulator_devices::graph::{DeviceGraph, Mapping};
         let mut graph = DeviceGraph::new();
         let mut names = BTreeMap::new();
+        // A model's node is named by its kind, numbered `kind#n` in
+        // registration order when the board has several of that kind.
+        let mut counts = BTreeMap::new();
+        for model in self.models.iter().flatten() {
+            *counts.entry(model.name()).or_insert(0usize) += 1;
+        }
+        let mut seen = BTreeMap::new();
         for (index, model) in self.models.into_iter().enumerate() {
             let model = model.ok_or("an XP4 device model is lent out")?;
-            let name = model.name().to_string();
-            let name = if names.contains_key(&name) { format!("{name}-{index}") } else { name };
+            let kind = model.name();
+            let name = if counts[kind] == 1 {
+                kind.to_string()
+            } else {
+                let n = seen.entry(kind).or_insert(0usize);
+                *n += 1;
+                format!("{kind}#{}", *n - 1)
+            };
             names.insert(name, index);
             let mut mappings = Vec::new();
             for &(lo, hi, owner) in &self.windows {

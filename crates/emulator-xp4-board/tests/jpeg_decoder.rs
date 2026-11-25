@@ -3,7 +3,8 @@
 //! firmware's playback driver drives it.
 use fujimod_emulator_cpu::arm;
 use fujimod_emulator_image_codecs::jpeg::Codec;
-use fujimod_emulator_xp4_board::{Definition, Session};
+mod support;
+use fujimod_emulator_xp4_board::Definition;
 use serde_json::{Value, json};
 
 const CBAR: u32 = 0x2000_0000;
@@ -23,12 +24,12 @@ fn decoder(base: u32, irq: u32, run_ticks: u64) -> Value {
     json!({"base": base, "irq": irq, "run_ticks": run_ticks})
 }
 
-fn session(value: Value) -> Result<Session, String> {
+fn session(value: Value) -> Result<support::Board, String> {
     let definition: Definition = serde_json::from_value(value).map_err(|e| e.to_string())?;
-    Session::new(definition, None, vec![])
+    support::open(definition)
 }
 
-fn word(session: &Session, address: usize) -> u32 {
+fn word(session: &support::Board, address: usize) -> u32 {
     let mut bytes = [0; 4];
     session.read(address, &mut bytes).unwrap();
     u32::from_le_bytes(bytes)
@@ -123,7 +124,7 @@ fn a_guest_decode_completes_on_the_declared_interrupt_line() {
     }
     // The board scheduler advances time and the decoder's deadline.
     board.run_board(4000, 100).unwrap();
-    assert!(board.state(false).failure.is_none());
+    assert!(board.failure().is_none());
 
     assert_eq!(word(&board, RESULT), 1 << 16, "initialised");
     assert_eq!(word(&board, RESULT + 4) & 0x10, 0x10, "done");
