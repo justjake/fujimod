@@ -1,0 +1,192 @@
+{
+  "$schema": "https://fujimod.com/schemas/restart.generated.schema.json",
+  "schema": 3,
+  "id": "xt30-201-restart",
+  "firmware_id": "xt30-201",
+  "product": "X-T30",
+  "internal_version": "1.64",
+  "code_alias": 0,
+  "code_checks": [
+    {
+      "name": "sender",
+      "address": 30807456,
+      "size": 236,
+      "sha256": "2bbfd9396a26ee4acda21c70ba5feffaf4701b111228f54a310e2b4a6796f6cf"
+    },
+    {
+      "name": "queue_sender",
+      "address": 30805656,
+      "size": 64,
+      "sha256": "0f2507e0981a9bd404a5ff0f8a1251e40157f3fe336adff1b7e4a8c71c72447f"
+    },
+    {
+      "name": "clock_reader",
+      "address": 17415252,
+      "size": 84,
+      "sha256": "5708986ed1260b52f85e4a0f020f2155945c11a6aaac946a69ba3b2b3b19f76e"
+    },
+    {
+      "name": "clock_writer",
+      "address": 17415336,
+      "size": 80,
+      "sha256": "60aee10eb094b2c92b31e8ec0bb58647dc0bc79c346622425b7fe303f71b323d"
+    },
+    {
+      "name": "register_reader",
+      "address": 17410376,
+      "size": 80,
+      "sha256": "78c65e0854c4a5e24393f7b61eddc9f95d660f1924c550484f51a7bb06cf33f9"
+    },
+    {
+      "name": "register_writer",
+      "address": 17410456,
+      "size": 72,
+      "sha256": "4a93181dcbf9838f4ba776ccaa9c66604d11b409d6b1a7041fd76fe87029447a"
+    },
+    {
+      "name": "bulk_poll",
+      "address": 30524560,
+      "size": 252,
+      "sha256": "1b6c006effd04b84e7f33a91453c472b5fe3777cacc07f256456f015190c75dc"
+    },
+    {
+      "name": "bulk_e1",
+      "address": 30527476,
+      "size": 196,
+      "sha256": "f95fdd6babaed5d4d87889fa98c7537d6be0c4013e01461c3dc6d9491c661650"
+    },
+    {
+      "name": "bulk_query",
+      "address": 30530812,
+      "size": 144,
+      "sha256": "93f3592405d8b419cfeeea58d3e49e59c30a51e0aa1d24377cc63449ad3f5804"
+    },
+    {
+      "name": "bulk_forward",
+      "address": 30540524,
+      "size": 40,
+      "sha256": "842e1e258d3828673456b68eda26e8a9cc28559e9ad60a49650eeb6275a3f3fc"
+    },
+    {
+      "name": "bulk_source",
+      "address": 30856384,
+      "size": 40,
+      "sha256": "8cfccf210c7d66f52a9a6631a7d64359a8e318f864cd52bd756091a1e93ff99e"
+    },
+    {
+      "name": "bulk_be32",
+      "address": 30525540,
+      "size": 52,
+      "sha256": "82d680da35e199be8abad7f4180a111dd128fc64e91c6153a3b040da5bff664d"
+    },
+    {
+      "name": "bulk_selector_0",
+      "address": 30905584,
+      "size": 624,
+      "sha256": "87ddbc8df732e77ff9a6b4b7a71a3fdd4dd8d02d88732e6d82c0f5779c642da3"
+    },
+    {
+      "name": "bulk_opcode_compare",
+      "address": 30532112,
+      "size": 16,
+      "sha256": "f52d8aa121164b6c5ba2e55a666c3570de9f476c6c30cada02d4e09e9294aa99"
+    },
+    {
+      "name": "bulk_opcode_case",
+      "address": 30532288,
+      "size": 20,
+      "sha256": "42e1ae54e524526bd10a67fdd18f537af86c133fb972ae74c747c15b7d65dc1e"
+    },
+    {
+      "name": "restart_query_tag_u32",
+      "address": 30525592,
+      "size": 52,
+      "sha256": "fd8d195a69e3ab7f1ea4fb72ba93c30a87131e866fa973f2fd509d0b05c87a1c"
+    },
+    {
+      "name": "restart_query_full_forward",
+      "address": 30540524,
+      "size": 144,
+      "sha256": "72a8e927c35c82c691742f222c35452a98285ae56071f8a1778df3f47242c826"
+    }
+  ],
+  "mechanism": {
+    "kind": "xp4-wake-deadline",
+    "transport": {
+      "kind": "borrowed_query",
+      "callback_table": 44322708,
+      "callback_offset": 12,
+      "stock_callback": 30905584,
+      "output_fields": 45974336,
+      "output_bytes": 8,
+      "tag_decoder": 30525592,
+      "forward": 30540524,
+      "command": 58
+    },
+    "sender": 30807456,
+    "request": 134,
+    "request_offset": 0,
+    "deadline_offset": 4,
+    "parameter_bytes": 12,
+    "deadline": {
+      "payload_offset": 8,
+      "unit": "epoch-seconds"
+    },
+    "queue": {
+      "id": 2,
+      "sender": 30805656,
+      "enqueue": 17965320,
+      "payload_bytes": 16,
+      "parameters": {
+        "0": 0,
+        "8": 4,
+        "12": 8
+      },
+      "uninitialized_payload_offsets": [
+        4
+      ]
+    },
+    "request_conversion": {
+      "source": 281,
+      "target": 134
+    },
+    "configuration_override": {
+      "enable_key": 949,
+      "delay_keys": [
+        946,
+        947,
+        948
+      ]
+    },
+    "clock": {
+      "reader": 17415252,
+      "writer": 17415336,
+      "register_reader": 17410376,
+      "register_writer": 17410456,
+      "transaction": 17406664,
+      "bank_pointer": 22066744,
+      "registers": {
+        "control": 32,
+        "low": 34,
+        "high": 35
+      },
+      "read_order": [
+        34,
+        35,
+        34
+      ],
+      "start_value": 32768,
+      "stop_value": 0
+    },
+    "ui": {
+      "mode_address": 25606448,
+      "mode_size": 1,
+      "rec_mode": 3,
+      "pending_mode_address": 25606451,
+      "menu_active_address": 24679884
+    },
+    "power_off": null,
+    "parameter_storage": null,
+    "runtime_qualified": false
+  }
+}

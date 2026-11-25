@@ -7554,6 +7554,10 @@
             }
           ]
         },
+        "restart": {
+          "status": "available",
+          "errors": []
+        },
         "service": {
           "status": "unavailable",
           "errors": [

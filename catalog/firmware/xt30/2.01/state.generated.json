@@ -1,0 +1,20 @@
+{
+  "$schema": "https://fujimod.com/schemas/state.generated.schema.json",
+  "schema": 1,
+  "id": "xt30-201-state",
+  "firmware_id": "xt30-201",
+  "regions": [
+    {
+      "name": "resident-5",
+      "address": 15863808,
+      "size": 5833048,
+      "constant": false
+    },
+    {
+      "name": "resident-6",
+      "address": 28250112,
+      "size": 7774208,
+      "constant": false
+    }
+  ]
+}
