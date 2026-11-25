@@ -254,6 +254,7 @@ impl Open {
                 camera::BootCache::Bypass
             },
             run_to_rec: true,
+            card: Default::default(),
         })
     }
 }

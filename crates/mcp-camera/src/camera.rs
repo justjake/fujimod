@@ -65,6 +65,7 @@ impl OpenRequest {
                 fujimod_camera::BootCache::Bypass
             },
             run_to_rec: true,
+            card: Default::default(),
         })
     }
 
@@ -620,6 +621,7 @@ impl Camera {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::path::Path;
 
     fn request(boot: OpenBoot, sd_card: Option<PathBuf>) -> OpenRequest {
         OpenRequest {
@@ -690,13 +692,13 @@ mod tests {
         let mut request = request(OpenBoot::Stock, None);
         request.execution_policy = Some("interactive".into());
         assert_eq!(
-            request.builder_request().unwrap().policy,
+            request.camera_request().unwrap().policy,
             ExecutionPolicy::Interactive
         );
         request.execution_policy = Some("fast".into());
         assert!(
             request
-                .builder_request()
+                .camera_request()
                 .err()
                 .unwrap()
                 .contains("unknown CPU execution policy")
