@@ -1,0 +1,54 @@
+# USB device controller and PHY of the X-H2 5.30 ff80 driver (0x2cbb774..): the same DesignWare
+# USB3 core, indexed USB2 PHY port, PHY/PLL control and completion stub as the X-T5 4.31
+# fragment, which this one copies at the SoC addresses. The driver's speed getter 0x2cbc91c
+# reads the shared `usb-connection-status` word and classifies 0xffc0c70c & 7, as the X-T5's
+# 0x2bfcd0c does. The interrupt number and the PHY/PLL control words are the X-T5's and are not
+# yet checked against this image's interrupt table.
+
+[[device]]
+base = 0xffc00000
+size = 0x10000
+kind = "usb-device-controller"
+[device.options]
+interrupt = 283
+speed = 0
+command_ticks = 1000
+transaction_ticks = 125000
+
+# Indexed USB2 PHY port, the XP4 protocol (X-T3 0xffb23800): index[12:8],
+# data[7:0], write strobe = rising edge of bit 16, readback at +0x400 (helper
+# 0x2bfae38). The parallel word at +0x04 is read-modify-written with masks
+# 0x70 (0x2bfc2f8) and 0x1 (0x2bfc310). Initial values are unknown; zeros.
+[[device]]
+base = 0xffc23800
+size = 0x404
+kind = "usb-phy"
+
+# ---------------------------------------------------------------------------------------------
+# Bring-up stubs, NOT models (same status as 49-gap-stubs.toml). The ff80 device init 0x2bfbb68
+# calls 0x13391f8(mode) at 0x2bfbd1c (also called by the host side, 0x14bcb5c). It toggles clock
+# gate bit 0x27 of 0xff90c918, then:
+#   0xffc10c08 |= 5                         (USB glue word; read-modify-write)
+#   0xffc30010 |= 0x10; 0xffc30008 = 0xffff (status clear); 0xffc30004 = 0x1003;
+#   0xffc30014 = mode word (bits 1:0 = 1, bit 2 = mode == 1, bit 4 set, bit 3 clear);
+#   poll 0xffc30008 until bits 1:0 != 0; bit 0 -> success, then 0x13391a8(1) sets
+#   0xffc30040 bits 3:0 = 0b0101 (0x13391a8(0) clears them on unplug).
+# The real block (a USB PHY/PLL control, unidentified; X100VI peripherals.md lists 0xffc10000 and
+# 0xffc30000 as unmodeled) is unknown. The completion below only answers the poll: the write of
+# +0x14 with bit 4 set "starts", and 100 us later +0x08 bit 0 is set; +0x08 is write-one-to-clear.
+[[device]]
+base = 0xffc10000
+size = 0x1000
+kind = "bringup-stub"
+[device.options]
+registers = []
+
+[[device]]
+base = 0xffc30000
+size = 0x1000
+kind = "completion-stub"
+[device.options]
+starts = [{ offset = 0x14, mask = 0x10 }]
+delay_us = 100
+completion = [{ offset = 0x08, set = 0x1 }]
+ack = { offset = 0x08, mode = "w1c", bits = 0x1 }
