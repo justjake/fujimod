@@ -70,7 +70,7 @@ mod tests {
     /// and the board refuses options it does not know.
     #[test]
     fn the_xt5_decoder_window_opens() {
-        use fujimod_emulator_devices::graph::{DeviceGraph, DeviceWindow};
+        use fujimod_emulator_devices::graph::DeviceGraph;
         let windows = crate::boot::xt5_windows(&["jpeg-decoder"]);
         let window = windows
             .iter()

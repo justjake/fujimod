@@ -14,7 +14,6 @@ use fujimod_catalog_configuration::application_inputs::ApplicationRunScene;
 use fujimod_catalog_resolution::ResolvedConfiguration;
 use fujimod_catalog::{
     firmware::FirmwareProfile,
-    profiles::RegisterWindow,
     reference::{AProfileState, ConnectionSignal, ProcessorModel, ResolvedSelection, SocBlockKind},
     soc::BlockDevice,
 };
@@ -398,131 +397,6 @@ pub fn apply_run_scene(
         }
     }
     Ok(())
-}
-
-fn attachment_kind(
-    selection: &ResolvedSelection,
-    window: &RegisterWindow,
-) -> Result<&'static str, String> {
-    let attachment = window.attachment.as_deref().ok_or_else(|| {
-        format!(
-            "XP5 window {} has no device kind or attachment",
-            window.name
-        )
-    })?;
-    let block = selection
-        .soc
-        .blocks
-        .iter()
-        .find(|block| block.id == attachment)
-        .ok_or_else(|| {
-            format!(
-                "XP5 window {} attaches to missing SoC block {attachment}",
-                window.name
-            )
-        })?;
-    match block.kind {
-        SocBlockKind::Timer => Ok("timer"),
-        SocBlockKind::SerialController => Ok("spi-controller"),
-        kind => Err(format!(
-            "XP5 window {} cannot attach SoC block {} of kind {:?}",
-            window.name, block.id, kind
-        )),
-    }
-}
-
-/// Convert one catalog window into the device graph's checked register window.
-fn device_window(
-    selection: &ResolvedSelection,
-    window: &RegisterWindow,
-) -> Result<DeviceWindow, String> {
-    let kind = window
-        .kind
-        .as_deref()
-        .map(str::to_owned)
-        .map(Ok)
-        .unwrap_or_else(|| attachment_kind(selection, window).map(str::to_owned))?;
-    let options = window
-        .options
-        .as_ref()
-        .map(serde_json::to_value)
-        .transpose()
-        .map_err(|error| format!("XP5 window {} options: {error}", window.name))?
-        .map(|value| {
-            toml::Value::try_from(value)
-                .map_err(|error| format!("XP5 window {} options: {error}", window.name))
-        })
-        .transpose()?
-        .and_then(|value| value.as_table().cloned())
-        .unwrap_or_default();
-    Ok(DeviceWindow {
-        base: window.base,
-        size: window.size,
-        kind,
-        options,
-    })
-}
-
-/// Resolve the selected XP5 profile's explicit device windows.
-pub fn windows(
-    selection: &ResolvedSelection,
-    profile_id: &str,
-) -> Result<Vec<DeviceWindow>, String> {
-    let profile = selection
-        .soc
-        .hardware
-        .as_ref()
-        .and_then(|hardware| hardware.profiles.get(profile_id))
-        .ok_or_else(|| {
-            format!(
-                "SoC {} has no hardware profile {profile_id}",
-                selection.soc.id
-            )
-        })?;
-    let windows = profile
-        .windows
-        .as_ref()
-        .ok_or_else(|| format!("SoC profile {profile_id} declares no register windows"))?;
-    let drains = selection
-        .body
-        .hardware
-        .as_ref()
-        .map(|hardware| hardware.bus_drain.as_slice())
-        .filter(|drains| !drains.is_empty())
-        .ok_or_else(|| {
-            format!(
-                "body {} declares no bus-drain address the XP5 firmware reads",
-                selection.body.id
-            )
-        })?;
-    let mut devices = windows
-        .iter()
-        .map(|window| device_window(selection, window))
-        .collect::<Result<Vec<_>, _>>()?;
-    devices.extend(drains.iter().map(|drain| DeviceWindow {
-        base: drain.address,
-        size: 4,
-        kind: "unmodeled-bus-drain".into(),
-        options: Default::default(),
-    }));
-    let feedback = gpio_feedback(selection, None)?;
-    if !feedback.is_empty() {
-        let gpio = devices
-            .iter_mut()
-            .find(|window| window.kind == "gpio")
-            .ok_or_else(|| format!("SoC profile {profile_id} has no GPIO window for body feedback"))?;
-        if gpio.options.contains_key("feedback") {
-            return Err(format!(
-                "SoC profile {profile_id} GPIO window and body {} both declare feedback",
-                selection.body.id
-            ));
-        }
-        gpio.options.insert(
-            "feedback".into(),
-            toml::Value::try_from(feedback).map_err(|error| error.to_string())?,
-        );
-    }
-    Ok(devices)
 }
 
 /// The run's XP5 device windows. `dram` is a firmware's own DRAM extent and the
@@ -1782,28 +1656,22 @@ pub fn open(
 
 #[cfg(test)]
 mod bus_drain_tests {
-    use super::windows;
+    use super::device_windows;
+    use fujimod_catalog_resolution::ResolvedConfiguration;
 
-    fn selection(body: &str, firmware: &str) -> fujimod_catalog::ResolvedSelection {
-        fujimod_catalog::ReferenceCatalog::bundled()
-            .unwrap()
-            .resolve(body, firmware)
-            .unwrap()
-    }
-
-    fn drains(selection: &fujimod_catalog::ResolvedSelection) -> Vec<u64> {
-        windows(selection, "xp5")
+    fn drains(resolved: &ResolvedConfiguration) -> Vec<u64> {
+        device_windows(resolved, None)
             .unwrap()
             .iter()
-            .filter(|window| window.kind == "unmodeled-bus-drain")
+            .filter(|window| window.kind == "discarded-read")
             .map(|window| window.base)
             .collect()
     }
 
     #[test]
     fn each_body_gets_its_own_drain_beside_the_soc_ones() {
-        let x100vi = drains(&selection("x100vi", "x100vi-131"));
-        let xt5 = drains(&selection("xt5", "xt5-431"));
+        let x100vi = drains(&ResolvedConfiguration::bundled("x100vi-131").unwrap());
+        let xt5 = drains(&ResolvedConfiguration::bundled("xt5-431").unwrap());
         assert!(x100vi.contains(&0x6800_0000) && !x100vi.contains(&0x6000_0000));
         assert!(xt5.contains(&0x6000_0000) && !xt5.contains(&0x6800_0000));
         for drains in [&x100vi, &xt5] {
@@ -1812,62 +1680,68 @@ mod bus_drain_tests {
     }
 
     #[test]
-    fn a_body_without_a_declared_drain_is_refused() {
-        let mut selection = selection("xt5", "xt5-431");
-        selection.body.hardware.as_mut().unwrap().bus_drain.clear();
-        let error = windows(&selection, "xp5").err().unwrap();
-        assert!(error.contains("no bus-drain address"), "{error}");
+    fn a_dram_override_moves_the_one_body_drain() {
+        let mut resolved = ResolvedConfiguration::bundled("xt5-431").unwrap();
+        let hardware = resolved.reference.body.hardware.as_mut().unwrap();
+        hardware.bus_drain.truncate(1);
+        let moved = device_windows(&resolved, Some((0xc000_0000, 0xc000_0000))).unwrap();
+        assert!(moved.iter().any(|window| window.base == 0xc000_0000 && window.kind == "discarded-read"));
+        resolved.reference.body.hardware.as_mut().unwrap().bus_drain.clear();
+        let error = device_windows(&resolved, Some((0xc000_0000, 0xc000_0000))).err().unwrap();
+        assert!(error.contains("does not declare once"), "{error}");
     }
 }
 
 #[cfg(test)]
 mod gpio_feedback_tests {
-    use super::windows;
+    use super::device_windows;
     use fujimod_catalog::reference::ConnectionSignal;
-    use serde_json::json;
+    use fujimod_catalog_resolution::ResolvedConfiguration;
 
-    fn selection(body: &str, firmware: &str) -> fujimod_catalog::ResolvedSelection {
-        fujimod_catalog::ReferenceCatalog::bundled()
-            .unwrap()
-            .resolve(body, firmware)
-            .unwrap()
+    fn resolved(firmware: &str) -> ResolvedConfiguration {
+        ResolvedConfiguration::bundled(firmware).unwrap()
     }
 
-    fn feedback(selection: &fujimod_catalog::ResolvedSelection) -> serde_json::Value {
-        let windows = windows(selection, "xp5").unwrap();
+    fn feedback(resolved: &ResolvedConfiguration) -> Result<serde_json::Value, String> {
+        let windows = device_windows(resolved, None)?;
         let gpio = windows.iter().find(|window| window.kind == "gpio").unwrap();
-        serde_json::to_value(gpio.options.get("feedback")).unwrap()
+        Ok(serde_json::to_value(gpio.options.get("feedback")).unwrap())
     }
 
     #[test]
     fn declared_bodies_feed_the_sensor_power_enable_back_to_its_pad() {
-        let wire = json!([{"port": 4, "register": 0, "bit": 4, "input_port": 4, "input_pin": 4}]);
-        assert_eq!(feedback(&selection("x100vi", "x100vi-131")), wire);
-        assert_eq!(feedback(&selection("xt5", "xt5-431")), wire);
+        for firmware in ["x100vi-131", "xt5-431"] {
+            let wire = &feedback(&resolved(firmware)).unwrap()[0];
+            assert_eq!(
+                (&wire["port"], &wire["register"], &wire["bit"], &wire["input_port"], &wire["input_pin"]),
+                (&4.into(), &0.into(), &4.into(), &4.into(), &4.into()),
+                "{firmware}"
+            );
+        }
     }
 
     #[test]
     fn a_body_without_feedback_leaves_the_gpio_window_unchanged() {
-        let mut selection = selection("xt5", "xt5-431");
-        selection.body.hardware.as_mut().unwrap().gpio_feedback.clear();
-        assert_eq!(feedback(&selection), serde_json::Value::Null);
+        let mut resolved = resolved("xt5-431");
+        resolved.reference.body.hardware.as_mut().unwrap().gpio_feedback.clear();
+        assert_eq!(feedback(&resolved).unwrap(), serde_json::Value::Null);
     }
 
     #[test]
     fn inverting_and_non_gpio_feedback_wires_are_refused() {
-        let mut inverted = selection("xt5", "xt5-431");
-        let input = inverted.body.hardware.as_ref().unwrap().gpio_feedback[0]
+        let mut inverted = resolved("xt5-431");
+        let input = inverted.reference.body.hardware.as_ref().unwrap().gpio_feedback[0]
             .input_connection_id
             .clone();
-        let connection = inverted.body.connections.iter_mut().find(|c| c.id == input).unwrap();
+        let connection = inverted.reference.body.connections.iter_mut().find(|c| c.id == input).unwrap();
         connection.signals = vec![ConnectionSignal::Gpio { port: 4, pin: 4, active_level: false }];
-        let error = windows(&inverted, "xp5").err().unwrap();
+        let error = feedback(&inverted).err().unwrap();
         assert!(error.contains("inverting GPIO feedback"), "{error}");
 
-        let mut analog = selection("xt5", "xt5-431");
-        let connection = analog.body.connections.iter_mut().find(|c| c.id == input).unwrap();
+        let mut analog = resolved("xt5-431");
+        let connection = analog.reference.body.connections.iter_mut().find(|c| c.id == input).unwrap();
         connection.signals = vec![ConnectionSignal::Adc { channel: 0, threshold: None }];
-        let error = windows(&analog, "xp5").err().unwrap();
+        let error = feedback(&analog).err().unwrap();
         assert!(error.contains("exactly one GPIO pin"), "{error}");
     }
 }

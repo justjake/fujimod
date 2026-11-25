@@ -3246,20 +3246,6 @@ class HardwareAfExtraction(TypedDict, total=False):
     profile: Required[str]
 
 
-class HardwareBlockParameters(TypedDict, total=False):
-    byte_ns: NotRequired[int | None]
-    command_latency_us: NotRequired[int | None]
-    commit_ticks: NotRequired[int | None]
-    companion_irq_base: NotRequired[int | None]
-    configuration_word: NotRequired[int | None]
-    interrupt: NotRequired[int | None]
-    receive_request: NotRequired[int | None]
-    source_hz: NotRequired[int | None]
-    ticks_per_second: NotRequired[int | None]
-    transmit_request: NotRequired[int | None]
-    trigger_offset: NotRequired[int | None]
-
-
 class HardwareBusSensor(TypedDict, total=False):
     address: Required[int]
     basis: Required[str]
@@ -3568,15 +3554,6 @@ class HardwareRegisterFixedWord(TypedDict, total=False):
 class HardwareRegisterIdleBits(TypedDict, total=False):
     mask: Required[int]
     offset: Required[int]
-
-
-class HardwareRegisterWindow(TypedDict, total=False):
-    attachment: NotRequired[str | None]
-    base: Required[int]
-    kind: NotRequired[str | None]
-    name: Required[str]
-    options: NotRequired[HardwareBlockParameters | None]
-    size: Required[int]
 
 
 class HardwareResetCheck(TypedDict, total=False):
@@ -6317,7 +6294,6 @@ class SocHardware(TypedDict, total=False):
 
 class SocProfile(TypedDict, total=False):
     cache_basis: NotRequired[str | None]
-    windows: NotRequired[list[HardwareRegisterWindow] | None]
 
 
 class SocReset(TypedDict, total=False):
