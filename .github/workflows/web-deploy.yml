@@ -1,9 +1,5 @@
 name: Web deploy
-# The schedule is an exception to running workflows only when started by hand;
-# remove it to keep deploys manual.
 on:
-  schedule:
-    - cron: '23 4 * * *'
   workflow_dispatch:
     inputs:
       force:
