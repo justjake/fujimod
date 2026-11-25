@@ -8,6 +8,7 @@ use fujimod_emulator::board::{InterruptMap, InterruptRegisters, armv7a, bus::{Bu
 use fujimod_emulator_devices::{Cx, Device, checkpoint::Checkpoint};
 use fujimod_emulator_ip_arm::gicv2;
 use fujimod_emulator_xp4_io::interval_timers::IntervalTimers;
+use fujimod_emulator_xpp::timer::{self as xpp_timer, TickTimers};
 
 /// GIC lines the XP4 board wires.
 const GIC_LINES: usize = 512;
@@ -38,15 +39,22 @@ pub fn build(
     let cbar = definition.cbar.ok_or("XP4 requires an explicit configuration base")?;
     let gic_initial = definition.gic_initial.take();
     let memory = memory::allocate(std::mem::take(&mut definition.memory_regions), definition.ram_size)?;
-    let timer = match (definition.timer_base, definition.timer_layout.take()) {
+    let timer: Option<(u64, u64, Box<dyn Device>)> = match (definition.timer_base, definition.timer_layout.take()) {
         (Some(base), Some(TimerLayout::Xp4)) => {
             if definition.timer_routes.iter().any(|&(channel, _)| channel >= 8) {
                 return Err("Invalid XP4 interval-timer route".into());
             }
-            Some((u64::from(base), IntervalTimers::new(&definition.timer_routes)))
+            let base = u64::from(base);
+            let model = IntervalTimers::new(&definition.timer_routes);
+            Some((base, TIMER_WINDOW, Box::new(Timers { base, model, scheduled: None })))
+        }
+        (Some(base), Some(TimerLayout::Xpp)) => {
+            let base = u64::from(base);
+            let model = TickTimers::new(&definition.timer_routes)?;
+            Some((base, u64::from(xpp_timer::WINDOW), Box::new(Timers { base, model, scheduled: None })))
         }
         (None, None) => None,
-        _ => return Err("the XP4 board needs an XP4 interval timer with its window".into()),
+        _ => return Err("the XP4 board needs an interval timer with its window and layout".into()),
     };
     let cache_sizes = definition.cache_sizes.map(|(d, i, l2)| (d, i, l2));
     let dials = definition.countdown_dials.iter().map(|dial| (dial.name.clone(), dial.channel)).collect();
@@ -57,8 +65,8 @@ pub fn build(
     // window, the timer and the GIC's distributor and CPU interface.
     let mut windows = built.devices.as_ref().map(|devices| devices.guard_windows()).unwrap_or_default();
     let mut fixed = vec![(u64::from(cbar) + 0x1000, u64::from(cbar) + 0x3000)];
-    if let Some((base, _)) = &timer {
-        fixed.push((*base, base + TIMER_WINDOW));
+    if let Some((base, size, _)) = &timer {
+        fixed.push((*base, base + size));
     }
     // A memory region a device window covers is that device's (the input
     // buffer SRAM behind the imaging model); any other overlap with memory,
@@ -111,9 +119,10 @@ pub fn build(
         Some(devices) => devices.into_graph()?,
         None => Default::default(),
     };
-    if let Some((base, model)) = timer {
-        let id = devices.register(base, TIMER_WINDOW, Box::new(Timers { base, model, scheduled: None }))?;
-        nodes.insert("xp4-interval-timers".into(), id);
+    if let Some((base, size, timers)) = timer {
+        let name = timers.name();
+        let id = devices.register(base, size, timers)?;
+        nodes.insert(name.into(), id);
     }
     // The session's GPIO bank, which pin inputs address by this name.
     if let Some(&gpio) = nodes.get("masked-gpio") {
@@ -217,14 +226,60 @@ pub enum DeviceSpace {
     Undeclared,
 }
 
-/// The XP4 interval timer: eight channels, each pulsing its routed line.
-struct Timers {
+/// A timer register model: the XP4 interval timer or the X-Processor Pro
+/// tick timer. Each channel pulses its routed line.
+trait TimerModel: Clone + serde::Serialize + serde::de::DeserializeOwned + Send + 'static {
+    const NAME: &'static str;
+    fn access(&mut self, now: u64, offset: u32, size: u32, write: bool, value: u32) -> Result<u32, String>;
+    fn tick(&mut self, now: u64) -> Vec<usize>;
+    fn next_event_tick(&self, now: u64) -> Option<u64>;
+    fn save(&self) -> serde_json::Value;
+    fn restore(&mut self, value: &serde_json::Value) -> Result<(), String>;
+}
+impl TimerModel for IntervalTimers {
+    const NAME: &'static str = "xp4-interval-timers";
+    fn access(&mut self, now: u64, offset: u32, size: u32, write: bool, value: u32) -> Result<u32, String> {
+        IntervalTimers::access(self, now, offset, size, write, value)
+    }
+    fn tick(&mut self, now: u64) -> Vec<usize> {
+        IntervalTimers::tick(self, now)
+    }
+    fn next_event_tick(&self, now: u64) -> Option<u64> {
+        IntervalTimers::next_event_tick(self, now)
+    }
+    fn save(&self) -> serde_json::Value {
+        IntervalTimers::save(self)
+    }
+    fn restore(&mut self, value: &serde_json::Value) -> Result<(), String> {
+        IntervalTimers::restore(self, value)
+    }
+}
+impl TimerModel for TickTimers {
+    const NAME: &'static str = "xpp-tick-timers";
+    fn access(&mut self, now: u64, offset: u32, size: u32, write: bool, value: u32) -> Result<u32, String> {
+        TickTimers::access(self, now, offset, size, write, value)
+    }
+    fn tick(&mut self, now: u64) -> Vec<usize> {
+        TickTimers::tick(self, now)
+    }
+    fn next_event_tick(&self, now: u64) -> Option<u64> {
+        TickTimers::next_event_tick(self, now)
+    }
+    fn save(&self) -> serde_json::Value {
+        TickTimers::save(self)
+    }
+    fn restore(&mut self, value: &serde_json::Value) -> Result<(), String> {
+        TickTimers::restore(self, value)
+    }
+}
+
+struct Timers<M> {
     base: u64,
-    model: IntervalTimers,
+    model: M,
     // Earliest pending event; later expiries wait for it to re-arm.
     scheduled: Option<u64>,
 }
-impl Timers {
+impl<M: TimerModel> Timers<M> {
     fn schedule(&mut self, cx: &mut Cx<'_>) {
         let now = cx.now();
         if self.scheduled.is_some_and(|at| at <= now) {
@@ -249,9 +304,9 @@ impl Timers {
         })
     }
 }
-impl Device for Timers {
+impl<M: TimerModel> Device for Timers<M> {
     fn name(&self) -> &'static str {
-        "xp4-interval-timers"
+        M::NAME
     }
     fn read(&mut self, cx: &mut Cx<'_>, address: u64, size: u8) -> u64 {
         self.access(cx, address, size, false, 0)
@@ -288,7 +343,7 @@ impl Device for Timers {
         if !saved.children().is_empty() || !saved.blobs().is_empty() {
             return Err("Timer checkpoint has unexpected parts".into());
         }
-        let (model, _): (IntervalTimers, Option<u64>) = saved.decode(self.name())?;
+        let (model, _): (M, Option<u64>) = saved.decode(self.name())?;
         self.model.clone().restore(&model.save())
     }
     fn restore_checkpoint(&mut self, saved: &Checkpoint) -> Result<(), String> {
