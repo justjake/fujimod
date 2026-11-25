@@ -276,3 +276,8 @@ fn xe2_sd_card_reaches_stage3() {
 fn xe2s_sd_card_reaches_stage3() {
     check_boot("xe2s-111");
 }
+
+#[test]
+fn xt10_sd_card_reaches_stage3() {
+    check_boot("xt10-131");
+}
