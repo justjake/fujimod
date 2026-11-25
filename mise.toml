@@ -26,7 +26,6 @@ ninja = "1.13.2"
 "conda:protobuf" = "7.36.2"
 "cargo:cargo-hakari" = "0.9.39"
 "cargo:cargo-sweep" = "0.8.0"
-"cargo:cargo-llvm-cov" = "0.9.1"
 
 [tasks.commit]
 description = "Commit chosen paths or hunks to the checked-out branch and push"
@@ -144,7 +143,7 @@ run = [
 run = ["mise run python-build-test", "mise run python-pytest"]
 
 [tasks.python-pytest]
-run = "uv run --locked pytest --cov --cov-report=term-missing --cov-report=xml --cov-report=html --junitxml=target/coverage/python/junit.xml"
+run = "uv run --locked pytest"
 
 [tasks.javascript-lint]
 run = "pnpm run lint"
@@ -158,9 +157,3 @@ run = "pnpm run test:node"
 [tasks.rust-format-check]
 run = "cargo fmt --all -- --check"
 
-[tasks.rust-coverage]
-run = "cargo llvm-cov --workspace --all-features --locked --no-report"
-
-[tasks.web-coverage]
-dir = "{{config_root}}/apps/web"
-run = "pnpm test -- --coverage --coverage.reportOnFailure --coverage.provider=v8 --coverage.reporter=text --coverage.reporter=lcov --coverage.reporter=html --coverage.reporter=json-summary --coverage.reportsDirectory=../../target/coverage/web --coverage.include='src/**/*.{ts,tsx}' --coverage.include='devices/**/*.ts' --coverage.include='scripts/**/*.ts' --coverage.exclude='**/*.test.*' --coverage.exclude='**/*.d.ts' --coverage.exclude='**/*.fixture.*'"

@@ -3891,11 +3891,6 @@ version = "0.9.39"
 backend = "cargo:cargo-hakari"
 specifiers = ["0.9.39"]
 
-[[tools."cargo:cargo-llvm-cov"]]
-version = "0.9.1"
-backend = "cargo:cargo-llvm-cov"
-specifiers = ["0.9.1"]
-
 [[tools."cargo:cargo-sweep"]]
 version = "0.8.0"
 backend = "cargo:cargo-sweep"

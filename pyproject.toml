@@ -73,29 +73,6 @@ norecursedirs = [
 ]
 addopts = "--strict-config --strict-markers --continue-on-collection-errors -ra"
 
-[tool.coverage.run]
-branch = true
-relative_files = true
-data_file = "target/coverage/python/.coverage"
-source = [
-  "bindings/python/python/fujimod",
-  "apps/web/src/engine",
-  "crates/simulation/environments",
-  "scripts/ci",
-  "scripts/git",
-]
-omit = ["*/test_*.py"]
-
-[tool.coverage.report]
-show_missing = true
-skip_empty = true
-
-[tool.coverage.html]
-directory = "target/coverage/python/html"
-
-[tool.coverage.xml]
-output = "target/coverage/python/coverage.xml"
-
 [dependency-groups]
 dev = [
   "pillow>=12.3",
@@ -103,7 +80,6 @@ dev = [
   "pyodide-py>=314.0.7",
   "pytest>=9.2.0",
   "pytest-asyncio>=1.4.1",
-  "pytest-cov>=7",
   "ruff>=0.17.3",
   "ty>=0.0.94",
 ]
