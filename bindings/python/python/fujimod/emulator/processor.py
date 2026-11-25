@@ -57,7 +57,7 @@ def register_name(identifier: RegisterIdentifier) -> str:
 
 
 @functools.cache
-def _coprocessor_name(
+def coprocessor_name(
     cp: int, opc1: int, crn: int, crm: int, opc2: int, secure: int, wide: bool
 ) -> str:
     return json.dumps(
@@ -81,7 +81,7 @@ class Processor:
     ) -> int:
         return self.board.native.coprocessor(
             self.core,
-            _coprocessor_name(cp, opc1, crn, crm, opc2, secure, wide),
+            coprocessor_name(cp, opc1, crn, crm, opc2, secure, wide),
             None,
         )
 
@@ -98,7 +98,7 @@ class Processor:
     ) -> int:
         return self.board.native.coprocessor(
             self.core,
-            _coprocessor_name(cp, opc1, crn, crm, opc2, secure, wide),
+            coprocessor_name(cp, opc1, crn, crm, opc2, secure, wide),
             value,
         )
 
