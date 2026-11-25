@@ -250,6 +250,26 @@ mod tests {
     use super::{BootState, Dram};
 
     #[test]
+    fn xh2s_viewfinder_writes_use_spi_mode_zero() {
+        let state = BootState::for_firmware("xh2s-730", None).unwrap();
+        let spi = state
+            .device
+            .iter()
+            .find(|device| device.base == 0xff91_5000)
+            .unwrap();
+        let endpoints = spi.options["endpoints"].as_array().unwrap();
+        let evf = endpoints
+            .iter()
+            .find(|endpoint| {
+                endpoint["select"]["port"].as_integer() == Some(12)
+                    && endpoint["select"]["pin"].as_integer() == Some(10)
+            })
+            .unwrap();
+        assert_eq!(evf["part"]["bits"].as_integer(), Some(8));
+        assert_eq!(evf["part"]["mode"].as_integer(), Some(0));
+    }
+
+    #[test]
     fn xh2s_movie_start_selects_the_dial_position_and_routes_recorder_dma() {
         let state = BootState::for_firmware("xh2s-730", None).unwrap();
         let adc = state
