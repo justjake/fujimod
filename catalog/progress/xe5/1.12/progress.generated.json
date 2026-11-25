@@ -5,8 +5,8 @@
   "model": "X-E5",
   "version": "1.12",
   "facts": {
-    "located": 20,
-    "total": 21
+    "located": 21,
+    "total": 22
   },
   "boot_rom": null,
   "tracks": [
@@ -289,9 +289,10 @@
           "id": "stock/control-input",
           "label": "Control input",
           "stage": "stock",
-          "result": "not-run",
-          "passed": 0,
-          "total": 1,
+          "result": "partial",
+          "passed": 12,
+          "total": 59,
+          "detail": "12 of 59",
           "milestone": true
         },
         {
@@ -396,27 +397,27 @@
         {
           "id": "camera-identity",
           "title": "Identified over FF80 in service mode",
-          "result": "not-run"
+          "result": "pass"
         },
         {
           "id": "camera-read-gate",
           "title": "Debug read gate enabled in RAM",
-          "result": "not-run"
+          "result": "pass"
         },
         {
           "id": "camera-code",
           "title": "Uploaded code runs in RAM and is cleaned up",
-          "result": "not-run"
+          "result": "pass"
         },
         {
           "id": "camera-bulk",
           "title": "Bulk reads at 1 MiB/s or more",
-          "result": "not-run"
+          "result": "pass"
         },
         {
           "id": "camera-backup",
           "title": "Internal flash backed up",
-          "result": "not-run"
+          "result": "pass"
         },
         {
           "id": "camera-snapshot",
@@ -431,7 +432,7 @@
         {
           "id": "camera-fast-flash",
           "title": "Flash capture measured at 8 MiB/s or more",
-          "result": "not-run"
+          "result": "stale"
         },
         {
           "id": "camera-debug",
@@ -469,42 +470,42 @@
           "id": "camera-identity",
           "label": "Identified over FF80 in service mode",
           "stage": "camera-identity",
-          "result": "not-run",
-          "passed": 0,
-          "total": 0
+          "result": "pass",
+          "passed": 1,
+          "total": 1
         },
         {
           "id": "camera-read-gate",
           "label": "Debug read gate enabled in RAM",
           "stage": "camera-read-gate",
-          "result": "not-run",
-          "passed": 0,
-          "total": 0
+          "result": "pass",
+          "passed": 1,
+          "total": 1
         },
         {
           "id": "camera-code",
           "label": "Uploaded code runs in RAM and is cleaned up",
           "stage": "camera-code",
-          "result": "not-run",
-          "passed": 0,
-          "total": 0,
+          "result": "pass",
+          "passed": 1,
+          "total": 1,
           "milestone": true
         },
         {
           "id": "camera-bulk",
           "label": "Bulk reads at 1 MiB/s or more",
           "stage": "camera-bulk",
-          "result": "not-run",
-          "passed": 0,
-          "total": 0
+          "result": "pass",
+          "passed": 1,
+          "total": 1
         },
         {
           "id": "camera-backup",
           "label": "Internal flash backed up",
           "stage": "camera-backup",
-          "result": "not-run",
-          "passed": 0,
-          "total": 0,
+          "result": "pass",
+          "passed": 1,
+          "total": 1,
           "milestone": true
         },
         {
@@ -527,7 +528,7 @@
           "id": "camera-fast-flash",
           "label": "Flash capture measured at 8 MiB/s or more",
           "stage": "camera-fast-flash",
-          "result": "not-run",
+          "result": "stale",
           "passed": 0,
           "total": 0
         },
@@ -1967,7 +1968,9 @@
       "result": "not-run"
     },
     "control-input": {
-      "result": "not-run"
+      "result": "partial",
+      "passed": 12,
+      "total": 59
     },
     "focus": {
       "result": "not-run"
