@@ -48,6 +48,7 @@ fn main() -> Result<(), String> {
             factory::*,
         };
         use fujimod_emulator::board::aprofile::generic_timer::Clock;
+        use fujimod_emulator_devices::gic::SecurityStates;
         use fujimod_emulator_ip_arm::gicv3::Gic;
         let graph = |processors: Vec<Processor>| Graph {
             decoders: vec![],
@@ -118,7 +119,7 @@ fn main() -> Result<(), String> {
             for quantum in [1, 100] {
                 for split in [false, true] {
                     let line = if virtual_timer { 27 } else { 30 };
-                    let mut gic = Gic::new(vec![0], 512)?;
+                    let mut gic = Gic::new(vec![0], 512, SecurityStates::One)?;
                     gic.distributor(0, 4, Some(7))?;
                     gic.redistributor(0, 0x14, 4, Some(0))?;
                     gic.redistributor(0, 0x10080, 4, Some(1 << line))?;
@@ -360,8 +361,9 @@ fn main() -> Result<(), String> {
     // A framework-owned GIC injects the architectural pin before observation.
     // ICC accesses trap to that same model; no in-kernel GIC runs asynchronously.
     for group in [1, 0] {
+        use fujimod_emulator_devices::gic::SecurityStates;
         use fujimod_emulator_ip_arm::gicv3::Gic;
-        let mut gic = Gic::new(vec![0], 512)?;
+        let mut gic = Gic::new(vec![0], 512, SecurityStates::One)?;
         gic.distributor(0, 4, Some(7))?;
         gic.redistributor(0, 0x14, 4, Some(0))?;
         gic.distributor(0x84, 4, Some(group))?;
@@ -988,6 +990,7 @@ fn main() -> Result<(), String> {
             bus::{Bus, Mode},
             factory::*,
         };
+        use fujimod_emulator_devices::gic::SecurityStates;
         use fujimod_emulator_ip_arm::gicv3::Gic;
         use fujimod_emulator_devices::{Cx, Device};
         struct Deadline {
@@ -1031,7 +1034,7 @@ fn main() -> Result<(), String> {
                 fired: vec![],
             }),
         )?;
-        let mut gic = Gic::new(vec![0], 512)?;
+        let mut gic = Gic::new(vec![0], 512, SecurityStates::One)?;
         gic.distributor(0, 4, Some(7))?;
         gic.redistributor(0, 0x14, 4, Some(0))?;
         gic.distributor(0x84, 4, Some(1))?;
@@ -1137,6 +1140,7 @@ fn main() -> Result<(), String> {
             factory::*,
             mprofile,
         };
+        use fujimod_emulator_devices::gic::SecurityStates;
         use fujimod_emulator_ip_arm::gicv3::Gic;
         use fujimod_emulator_xp5_io::mailbox::{Channel, Mailbox, Pins};
         use fujimod_emulator_devices::{Cx, Device};
@@ -1172,7 +1176,7 @@ fn main() -> Result<(), String> {
                 Channel::default(),
             )),
         )?;
-        let mut gic = Gic::new(vec![0], 512)?;
+        let mut gic = Gic::new(vec![0], 512, SecurityStates::One)?;
         gic.distributor(0, 4, Some(7))?;
         gic.redistributor(0, 0x14, 4, Some(0))?;
         gic.distributor(0x90, 4, Some(1 << 13))?;

@@ -250,6 +250,9 @@ impl Cpu for Core {
         if e.memory.flush_pending() {
             e.memory.flush()?;
         }
+        if e.el3_transitions.get() {
+            e.run_at_el3.set(e.at_el3()?);
+        }
         let mut begin = request.begin;
         loop {
             // The engine installs the start PC itself. Seed it early only
@@ -343,6 +346,13 @@ impl Cpu for Core {
                 .ok_or("missing A-profile entry")?,
         );
         self.stop()
+    }
+    fn stop_on_el3_transitions(&self) -> Result<(), String> {
+        if self.execution.a32 {
+            return Err("AArch32 A-profile processors have no EL3 transitions to stop on".into());
+        }
+        self.execution.el3_transitions.set(true);
+        Ok(())
     }
     fn set_interrupt(&self, line: Interrupt, asserted: bool) -> Result<(), String> {
         let e = &self.execution;

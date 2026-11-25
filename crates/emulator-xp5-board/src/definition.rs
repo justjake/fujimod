@@ -114,12 +114,15 @@ pub struct Interrupts {
     distributor: u64,
     redistributor: u64,
     stride: u64,
+    /// The implemented Security states; one unless declared as two.
+    #[serde(default)]
+    security_states: fujimod_emulator_devices::gic::SecurityStates,
     initial: Vec<InterruptWrite>,
 }
 impl Interrupts {
     fn open(self) -> Result<InterruptMap, String> {
         let cores = self.affinities.len();
-        let mut gic = Gic::new(self.affinities, self.lines)?;
+        let mut gic = Gic::new(self.affinities, self.lines, self.security_states)?;
         for write in self.initial {
             match write {
                 InterruptWrite::Distributor {

@@ -2751,6 +2751,9 @@ class FirmwareGicRedistributorInitial(TypedDict, total=False):
     value: Required[int]
 
 
+type FirmwareGicSecurityStates = Literal["one", "two"]
+
+
 class FirmwareHeader(TypedDict, total=False):
     checksum_offset: Required[int]
     registers_view: Required[str]
@@ -2865,6 +2868,7 @@ class FirmwareProfile(TypedDict, total=False):
     flash_image: NotRequired[FirmwareFlashImage | None]
     gic_initial: NotRequired[dict[str, int] | None]
     gic_redistributor_initial: NotRequired[list[FirmwareGicRedistributorInitial] | None]
+    gic_security_states: NotRequired[FirmwareGicSecurityStates | None]
     hdmi_configuration_id: NotRequired[str | None]
     limits: NotRequired[list[str] | None]
     persistent_inputs: NotRequired[FirmwarePersistentInputs | None]

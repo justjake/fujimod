@@ -42,6 +42,9 @@ struct Interrupts {
     distributor: u64,
     redistributor: u64,
     stride: u64,
+    /// The implemented Security states; one unless declared as two.
+    #[serde(default)]
+    security_states: fujimod_emulator_devices::gic::SecurityStates,
 }
 #[derive(Deserialize)]
 #[serde(rename_all = "kebab-case")]
@@ -225,6 +228,7 @@ impl Session {
                     gic: Box::new(fujimod_emulator_ip_arm::gicv3::Gic::new(
                         g.affinities,
                         g.lines,
+                        g.security_states,
                     )?),
                     registers: fujimod_emulator::board::InterruptRegisters::GicV3 {
                         distributor: g.distributor,

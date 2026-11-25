@@ -1,15 +1,38 @@
-//! Bounded GICv3: affinity routing, one Security state (DS=1), eight priority
-//! bits, SGIs/PPIs/SPIs and the EL1 ICC system interface. No ITS, LPIs, legacy
-//! GICC, 1-of-N routing, virtualization or security-bank emulation.
-//! Register law: Arm IHI0069H.b, chapters4 and12; no program state is visible.
+//! Bounded GICv3: affinity routing, eight priority bits, SGIs/PPIs/SPIs and
+//! the EL1 ICC system interface. No ITS, LPIs, legacy GICC, 1-of-N routing or
+//! virtualization. Register law: Arm IHI0069H.b, chapters 4 and 12; no
+//! program state is visible.
+//!
+//! The implemented Security states are declared at construction:
+//! - One (GICD_CTLR.DS=1): IGRPMODR is RAZ/WI, Group 0 signals FIQ and
+//!   Group 1 signals IRQ, independent of the processor.
+//! - Two (GICD_CTLR.DS=0): IGROUPR/IGRPMODR select Secure Group 0 (0,0),
+//!   Secure Group 1 (0,1) or Non-secure Group 1 (1,0); the reserved (1,1)
+//!   encoding is treated as Non-secure Group 1. Each processor's Security
+//!   state is an input delivered by the processor framework. At Secure EL1/EL0
+//!   Secure Group 1 signals IRQ, at Non-secure EL1/EL0 Non-secure Group 1
+//!   does; every other group signals FIQ, and at EL3 all groups signal FIQ.
+//!   ICC_*1_EL1 registers address the Group 1 bank of SCR_EL3.NS. Distributor
+//!   and redistributor accesses use the Secure register view. ICC_BPR1_EL1
+//!   and ICC_CTLR_EL1 keep one (Secure) copy; Non-secure accesses to them and
+//!   to Group 0 registers, and EL3 acknowledgment, are refused.
+use fujimod_emulator_devices::gic::{ProcessorSecurity, SecurityStates};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 mod checkpoint;
+
+/// Interrupt groups, indexing per-group enables and pending candidates. With
+/// one Security state every Group 1 interrupt is Non-secure Group 1.
+const GROUP0: usize = 0;
+const GROUP1_NON_SECURE: usize = 1;
+const GROUP1_SECURE: usize = 2;
 
 #[derive(Clone, Default, Serialize, Deserialize)]
 struct Line {
     enabled: bool,
     group1: bool,
+    /// GICD_IGRPMODR/GICR_IGRPMODR0; always clear with one Security state.
+    modifier: bool,
     priority: u8,
     edge: bool,
     level: bool,
@@ -19,6 +42,14 @@ struct Line {
 impl Line {
     fn pending(&self) -> bool {
         self.latched || self.level && !self.edge && !self.active
+    }
+    fn group(&self) -> usize {
+        match (self.group1, self.modifier) {
+            (false, false) => GROUP0,
+            (false, true) => GROUP1_SECURE,
+            // (1,1) is reserved and treated as Non-secure Group 1.
+            (true, _) => GROUP1_NON_SECURE,
+        }
     }
 }
 #[derive(Clone, Serialize, Deserialize)]
@@ -34,35 +65,36 @@ struct Interface {
     /// ICC_SRE_EL2.Enable: lets EL1 access ICC_SRE_EL1. Retained, not gating.
     #[serde(default)]
     hypervisor_enable: bool,
-    /// ICC_IGRPEN1_EL3.EnableGrp1S (bit 1). EnableGrp1NS (bit 0) is the Group 1 enable
-    /// `enabled[1]`, the one modeled security state, so an EL1 and an EL3 access agree.
-    /// Retained, not gating.
-    #[serde(default)]
-    el3_group1_secure: bool,
-    enabled: [bool; 2],
+    /// ICC_IGRPEN0, Non-secure ICC_IGRPEN1 and Secure ICC_IGRPEN1. With one
+    /// Security state no line is Secure Group 1, so ICC_IGRPEN1_EL3.EnableGrp1S
+    /// is retained without gating.
+    enabled: [bool; 3],
     pmr: u8,
     bpr: [u8; 2],
     split_eoi: bool,
     asleep: bool,
     active: Vec<Active>,
+    /// The processor's delivered Security state; used with two states only.
+    security: ProcessorSecurity,
 }
 impl Default for Interface {
     fn default() -> Self {
         Self {
             system_register_enable: false,
             hypervisor_enable: false,
-            el3_group1_secure: false,
-            enabled: [false; 2],
+            enabled: [false; 3],
             pmr: 0,
             bpr: [0; 2],
             split_eoi: false,
             asleep: true,
             active: vec![],
+            security: ProcessorSecurity::RESET,
         }
     }
 }
 #[derive(Clone, Serialize, Deserialize)]
 struct State {
+    security_states: SecurityStates,
     affinities: Vec<u32>,
     distributor: u32,
     private: Vec<Vec<Line>>,
@@ -73,13 +105,18 @@ struct State {
 #[derive(Clone)]
 pub struct Gic {
     state: State,
-    // Derived pin outputs, excluded from architectural/checkpoint state.
-    eligible: Vec<[Option<usize>; 2]>,
+    // Derived per-group candidates, excluded from architectural/checkpoint
+    // state.
+    eligible: Vec<[Option<usize>; 3]>,
     /// Scratch of `refresh`; no state.
     candidates: Vec<usize>,
 }
 impl Gic {
-    pub fn new(affinities: Vec<u32>, lines: usize) -> Result<Self, String> {
+    pub fn new(
+        affinities: Vec<u32>,
+        lines: usize,
+        security_states: SecurityStates,
+    ) -> Result<Self, String> {
         if affinities.is_empty()
             || affinities.len() > 256
             || !(32..=1020).contains(&lines)
@@ -99,6 +136,7 @@ impl Gic {
         }
         Ok(Self {
             state: State {
+                security_states,
                 affinities,
                 distributor: 0,
                 private,
@@ -106,9 +144,41 @@ impl Gic {
                 routes: vec![0; lines],
                 interfaces: vec![Interface::default(); cores],
             },
-            eligible: vec![[None; 2]; cores],
+            eligible: vec![[None; 3]; cores],
             candidates: Vec::new(),
         })
+    }
+    fn two_states(&self) -> bool {
+        self.state.security_states == SecurityStates::Two
+    }
+    /// The Group 1 bank ICC_*1_EL1 accesses address: SCR_EL3.NS selects it
+    /// with two Security states.
+    fn group1(&self, core: usize) -> usize {
+        if self.two_states() && !self.state.interfaces[core].security.non_secure {
+            GROUP1_SECURE
+        } else {
+            GROUP1_NON_SECURE
+        }
+    }
+    fn refuse_non_secure(&self, core: usize, what: &str) -> Result<(), String> {
+        if self.two_states() && self.state.interfaces[core].security.non_secure {
+            Err(format!(
+                "GICv3 Non-secure {what} with two Security states is not implemented"
+            ))
+        } else {
+            Ok(())
+        }
+    }
+    fn refuse_el3(&self, core: usize) -> Result<(), String> {
+        if self.two_states() && self.state.interfaces[core].security.el3 {
+            Err("GICv3 EL3 acknowledgment with two Security states is not implemented".into())
+        } else {
+            Ok(())
+        }
+    }
+    /// Distributor group-enable bits written through GICD_CTLR.
+    fn distributor_enables(&self) -> u32 {
+        if self.two_states() { 7 } else { 3 }
     }
     fn core(&self, core: usize) -> Result<(), String> {
         if core < self.state.affinities.len() {
@@ -155,9 +225,9 @@ impl Gic {
     }
     fn refresh_from(&mut self, candidates: &[usize]) {
         for core in 0..self.eligible.len() {
-            for group in 0..2 {
+            for group in [GROUP0, GROUP1_NON_SECURE, GROUP1_SECURE] {
                 let interface = &self.state.interfaces[core];
-                let shift = interface.bpr[group] + 1;
+                let shift = interface.bpr[group.min(1)] + 1;
                 let running = interface
                     .active
                     .iter()
@@ -176,7 +246,7 @@ impl Gic {
                         .filter(|&id| {
                             let line = self.line(core, id);
                             line.enabled
-                                && usize::from(line.group1) == group
+                                && line.group() == group
                                 && line.pending()
                                 && !line.active
                                 && line.priority < interface.pmr
@@ -196,13 +266,35 @@ impl Gic {
         self.core(core)?;
         Ok((0..16).any(|id| self.state.private[core][id].pending()))
     }
-    /// Group0 signals FIQ; Group1 signals IRQ. This never acknowledges an ID.
+    /// The (IRQ, FIQ) outputs. This never acknowledges an ID.
     pub fn pins(&self, core: usize) -> Result<(bool, bool), String> {
         self.core(core)?;
-        Ok((
-            self.eligible[core][1].is_some(),
-            self.eligible[core][0].is_some(),
-        ))
+        let [group0, non_secure, secure] = self.eligible[core].map(|id| id.is_some());
+        if !self.two_states() {
+            return Ok((non_secure, group0));
+        }
+        let security = self.state.interfaces[core].security;
+        Ok(if security.el3 {
+            (false, group0 || non_secure || secure)
+        } else if security.non_secure {
+            (non_secure, group0 || secure)
+        } else {
+            (secure, group0 || non_secure)
+        })
+    }
+    /// The processor's current Security state, from the processor framework.
+    pub fn set_processor_security(
+        &mut self,
+        core: usize,
+        security: ProcessorSecurity,
+    ) -> Result<(), String> {
+        self.core(core)?;
+        if !self.two_states() {
+            return Err("GICv3 has one Security state".into());
+        }
+        // Candidates are per group, so only the pin mapping changes.
+        self.state.interfaces[core].security = security;
+        Ok(())
     }
     pub fn set_spi(&mut self, id: usize, high: bool) -> Result<(), String> {
         if !(32..self.state.shared.len()).contains(&id) {
@@ -271,6 +363,13 @@ impl Gic {
         Ok(())
     }
     fn sgi(&mut self, core: usize, group0_only: bool, value: u64) -> Result<(), String> {
+        // With two Security states an SGI register forwards only to targets
+        // configured in the group it generates (no GICR_NSACR grants).
+        let generated = if group0_only {
+            GROUP0
+        } else {
+            self.group1(core)
+        };
         if value & (15 << 44) != 0 {
             return Err("GICv3 SGI range selection is not implemented".into());
         }
@@ -287,7 +386,13 @@ impl Gic {
             } else {
                 affinity & 0xffffff00 == cluster && aff0 < 16 && value & (1 << aff0) != 0
             };
-            if selected && (!group0_only || !self.state.private[target][id].group1) {
+            let line = &self.state.private[target][id];
+            let forwarded = if self.two_states() {
+                line.group() == generated
+            } else {
+                !group0_only || !line.group1
+            };
+            if selected && forwarded {
                 self.state.private[target][id].latched = true;
             }
         }
@@ -335,15 +440,22 @@ impl Gic {
                 Ok(7 | (u64::from(self.state.interfaces[core].hypervisor_enable) * 8))
             }
             0xf667 => {
-                if let Some(v) = value {
-                    if v & !3 != 0 {
+                // ICC_IGRPEN1_EL3: EnableGrp1NS (bit 0) and EnableGrp1S (bit 1).
+                // EnableGrp1NS is the Group 1 enable ICC_IGRPEN1_EL1 also
+                // addresses with one Security state, so an EL1 and an EL3
+                // access agree.
+                let enabled = &mut self.state.interfaces[core].enabled;
+                if let Some(word) = value {
+                    if word & !3 != 0 {
                         return Err("unsupported GICv3 ICC_IGRPEN1_EL3 bits".into());
                     }
-                    self.state.interfaces[core].enabled[1] = v & 1 != 0;
-                    self.state.interfaces[core].el3_group1_secure = v & 2 != 0;
+                    enabled[GROUP1_NON_SECURE] = word & 1 != 0;
+                    enabled[GROUP1_SECURE] = word & 2 != 0;
                 }
-                let interface = &self.state.interfaces[core];
-                Ok(u64::from(interface.enabled[1]) | (u64::from(interface.el3_group1_secure) << 1))
+                Ok(
+                    u64::from(enabled[GROUP1_NON_SECURE])
+                        | (u64::from(enabled[GROUP1_SECURE]) << 1),
+                )
             }
             0xc230 => {
                 if let Some(v) = value {
@@ -353,12 +465,21 @@ impl Gic {
             }
             0xc643 | 0xc663 => {
                 let g = usize::from(register == 0xc663);
+                self.refuse_non_secure(
+                    core,
+                    if g == 0 {
+                        "Group 0 ICC access"
+                    } else {
+                        "ICC_BPR1_EL1"
+                    },
+                )?;
                 if let Some(v) = value {
                     self.state.interfaces[core].bpr[g] = (v & 7) as u8;
                 }
                 Ok(self.state.interfaces[core].bpr[g].into())
             }
             0xc664 => {
+                self.refuse_non_secure(core, "ICC_CTLR_EL1")?;
                 if let Some(v) = value {
                     if v & !(0x700 | 2) != 0 {
                         return Err("unsupported GICv3 ICC_CTLR mode".into());
@@ -369,27 +490,30 @@ impl Gic {
             }
             0xc665 => Ok(7), // System interface only; SRE/DIB/DFB are RAO/WI.
             0xc666 | 0xc667 => {
-                let g = usize::from(register == 0xc667);
+                let g = self.register_group(core, register == 0xc667)?;
                 if let Some(v) = value {
                     self.state.interfaces[core].enabled[g] = v & 1 != 0;
                 }
                 Ok(self.state.interfaces[core].enabled[g].into())
             }
             0xc640 | 0xc660 if value.is_none() => {
-                Ok(self.acknowledge(core, usize::from(register == 0xc660)))
+                let g = self.register_group(core, register == 0xc660)?;
+                self.refuse_el3(core)?;
+                Ok(self.acknowledge(core, g))
             }
             0xc642 | 0xc662 if value.is_none() => {
-                Ok(self.eligible[core][usize::from(register == 0xc662)].unwrap_or(1023) as u64)
+                let g = self.register_group(core, register == 0xc662)?;
+                self.refuse_el3(core)?;
+                Ok(self.eligible[core][g].unwrap_or(1023) as u64)
             }
             0xc641 | 0xc661 if value.is_some() => {
-                self.eoi(
-                    core,
-                    usize::from(register == 0xc661),
-                    (value.unwrap() & 0xffffff) as usize,
-                )?;
+                let g = self.register_group(core, register == 0xc661)?;
+                self.refuse_el3(core)?;
+                self.eoi(core, g, (value.unwrap() & 0xffffff) as usize)?;
                 Ok(0)
             }
             0xc659 if value.is_some() => {
+                self.refuse_el3(core)?;
                 let id = (value.unwrap() & 0xffffff) as usize;
                 if id >= 1020 {
                     return Ok(0);
@@ -413,12 +537,15 @@ impl Gic {
                 .unwrap_or(255)
                 .into()),
             0xc65d | 0xc65f if value.is_some() => {
+                if register == 0xc65f {
+                    self.refuse_non_secure(core, "Group 0 ICC access")?;
+                }
                 self.sgi(core, register == 0xc65f, value.unwrap())?;
                 Ok(0)
             }
             // Other-security SGIs require an explicit security-bank model.
             0xc644..=0xc64b => {
-                let group = usize::from(register >= 0xc648);
+                let group = self.register_group(core, register >= 0xc648)?;
                 let n = (register - 0xc644) % 4;
                 let bits = self.state.interfaces[core]
                     .active
@@ -431,6 +558,15 @@ impl Gic {
                 Ok(bits)
             }
             _ => Err(format!("unsupported GICv3 ICC register {register:#x}")),
+        }
+    }
+    /// The group an ICC_*0_EL1 or ICC_*1_EL1 register addresses.
+    fn register_group(&self, core: usize, group1: bool) -> Result<usize, String> {
+        if group1 {
+            Ok(self.group1(core))
+        } else {
+            self.refuse_non_secure(core, "Group 0 ICC access")?;
+            Ok(GROUP0)
         }
     }
     pub fn distributor(
@@ -512,11 +648,22 @@ impl Gic {
                 match offset {
                     0 => {
                         if let Some(v) = value {
-                            self.state.distributor = v as u32 & 3;
+                            if self.two_states() && v & (1 << 6) != 0 {
+                                return Err("GICv3 GICD_CTLR.DS switch is not implemented".into());
+                            }
+                            self.state.distributor = v as u32 & self.distributor_enables();
                         }
-                        return Ok(0x50 | u64::from(self.state.distributor));
+                        // Affinity routing only: ARE (ARE_S/ARE_NS) is RAO/WI;
+                        // DS reads as the declared Security states.
+                        let fixed = if self.two_states() { 0x30 } else { 0x50 };
+                        return Ok(fixed | u64::from(self.state.distributor));
                     }
-                    4 => return Ok((self.state.shared.len().div_ceil(32) - 1) as u64 | (0xf << 19)), // 16-bit IDs, no LPIs/security extensions.
+                    // 16-bit IDs, no LPIs; SecurityExtn reports two states.
+                    4 => {
+                        return Ok((self.state.shared.len().div_ceil(32) - 1) as u64
+                            | (0xf << 19)
+                            | u64::from(self.two_states()) << 10);
+                    }
                     8 | 12 => return Ok(0),
                     0xffe8 => return Ok(0x30),
                     _ => {}
@@ -543,10 +690,12 @@ impl Gic {
                 return Ok((self.state.routes[id] >> shift)
                     & if size == 8 { u64::MAX } else { 0xffffffff });
             }
-            // Legacy target interface and security modifiers are RAZ/WI with
-            // affinity routing and the selected single Security state.
+            // The legacy target interface is RAZ/WI with affinity routing.
+            // Group modifiers are RAZ/WI with one Security state, and
+            // non-secure access control and GICD_SGIR are always RAZ/WI.
+            let modifiers = self.two_states() && (0xd00..0xd80).contains(&offset);
             if (0x800..0xc00).contains(&offset) && matches!(size, 1 | 2 | 4)
-                || (0xd00..0xf04).contains(&offset) && size == 4
+                || (0xd00..0xf04).contains(&offset) && size == 4 && !modifiers
             {
                 return Ok(0);
             }
@@ -597,8 +746,9 @@ impl Gic {
             (0x280, 4),
             (0x300, 5),
             (0x380, 6),
+            (0xd00, 7),
         ] {
-            if !(start..start + limit / 8).contains(&offset) {
+            if !(start..start + limit / 8).contains(&offset) || kind == 7 && !self.two_states() {
                 continue;
             }
             let first = ((offset - start) * 8) as usize;
@@ -612,6 +762,8 @@ impl Gic {
                 if let Some(v) = value {
                     if kind == 0 {
                         line.group1 = v & (1 << n) != 0;
+                    } else if kind == 7 {
+                        line.modifier = v & (1 << n) != 0;
                     } else if v & (1 << n) != 0 {
                         match kind {
                             1 => line.enabled = true,
@@ -626,6 +778,7 @@ impl Gic {
                 }
                 let bit = match kind {
                     0 => line.group1,
+                    7 => line.modifier,
                     1 | 2 => line.enabled,
                     3 | 4 => line.pending(),
                     5 | 6 => line.active,
@@ -656,17 +809,25 @@ impl Gic {
     fn restore_state(&mut self, s: State) -> Result<(), String> {
         let cores = self.state.affinities.len();
         let lines = self.state.shared.len();
-        if s.affinities != self.state.affinities
+        let groups = if s.security_states == SecurityStates::Two {
+            3
+        } else {
+            2
+        };
+        if s.security_states != self.state.security_states
+            || s.affinities != self.state.affinities
             || s.shared.len() != lines
             || s.routes.len() != lines
             || s.private.len() != cores
             || s.private.iter().any(|p| p.len() != 32)
             || s.interfaces.len() != cores
-            || s.distributor & !3 != 0
+            || s.distributor & !self.distributor_enables() != 0
             || s.interfaces.iter().any(|i| {
                 i.bpr.iter().any(|b| *b > 7)
-                    || i.active.iter().any(|a| a.id >= lines || a.group > 1)
+                    || i.active.iter().any(|a| a.id >= lines || a.group >= groups)
             })
+            || groups == 2
+                && (s.shared.iter().chain(s.private.iter().flatten())).any(|l| l.modifier)
             || s.routes.iter().any(|r| r & !0xff00ffffff != 0)
             || s.private.iter().any(|p| p[..16].iter().any(|l| !l.edge))
         {
@@ -693,6 +854,16 @@ impl fujimod_emulator_devices::gic::InterruptController for Gic {
     }
     fn system(&mut self, core: usize, register: u16, value: Option<u64>) -> Result<u64, String> {
         Gic::system(self, core, register, value)
+    }
+    fn tracks_processor_security(&self) -> bool {
+        self.two_states()
+    }
+    fn set_processor_security(
+        &mut self,
+        core: usize,
+        security: ProcessorSecurity,
+    ) -> Result<(), String> {
+        Gic::set_processor_security(self, core, security)
     }
     fn distributor(
         &mut self,
@@ -727,7 +898,7 @@ impl fujimod_emulator_devices::gic::InterruptController for Gic {
 mod tests {
     #[test]
     fn el3_system_interface_enable_is_per_core_and_survives_checkpoint() {
-        let mut g = super::Gic::new(vec![0, 1], 128).unwrap();
+        let mut g = super::Gic::new(vec![0, 1], 128, super::SecurityStates::One).unwrap();
         assert_eq!(g.system(0, 0xf665, None).unwrap(), 7);
         assert_eq!(g.system(0, 0xf665, Some(9)).unwrap(), 15);
         assert_eq!(g.system(1, 0xf665, None).unwrap(), 7);
@@ -739,7 +910,7 @@ mod tests {
     }
     #[test]
     fn el2_sre_and_el3_group_enables_are_per_core_and_survive_checkpoint() {
-        let mut g = super::Gic::new(vec![0, 1], 128).unwrap();
+        let mut g = super::Gic::new(vec![0, 1], 128, super::SecurityStates::One).unwrap();
         assert_eq!(g.system(0, 0xe64d, None).unwrap(), 7);
         assert_eq!(g.system(0, 0xe64d, Some(0xf)).unwrap(), 15);
         assert_eq!(g.system(1, 0xe64d, None).unwrap(), 7);
@@ -762,7 +933,7 @@ mod tests {
     }
     use super::*;
     fn enabled(affinities: Vec<u32>) -> Gic {
-        let mut g = Gic::new(affinities, 512).unwrap();
+        let mut g = Gic::new(affinities, 512, SecurityStates::One).unwrap();
         g.distributor(0, 4, Some(7)).unwrap();
         for core in 0..g.state.affinities.len() {
             g.redistributor(core, 0x14, 4, Some(0)).unwrap();
@@ -916,7 +1087,7 @@ mod tests {
         g.system(1, 0xc660, None).unwrap();
         g.set_spi(33, true).unwrap();
         let saved = g.save();
-        let mut restored = Gic::new(vec![0, 1], 512).unwrap();
+        let mut restored = Gic::new(vec![0, 1], 512, SecurityStates::One).unwrap();
         restored.restore(&saved).unwrap();
         assert_eq!(restored.save(), saved);
         // Durable decoding reconstructs the derived eligibility cache as well.
@@ -929,12 +1100,164 @@ mod tests {
         assert_eq!(restored.pins(0).unwrap(), (false, true));
         assert_eq!(restored.pins(1).unwrap(), (false, false));
         assert_eq!(restored.system(1, 0xc65b, None).unwrap(), 0x40);
-        assert!(Gic::new(vec![1, 0], 512).unwrap().restore(&saved).is_err());
+        assert!(
+            Gic::new(vec![1, 0], 512, SecurityStates::One)
+                .unwrap()
+                .restore(&saved)
+                .is_err()
+        );
         assert!(g.distributor(0x6100, 8, Some(1 << 31)).is_err());
         assert!(g.system(0, 0xc65e, Some(0)).is_err());
         assert!(g.redistributor(0, 0, 4, Some(1)).is_err());
         // Architecture-reserved and unimplemented trailing IDs are RAZ/WI.
         assert_eq!(g.distributor(0x17c, 4, Some(u32::MAX.into())).unwrap(), 0);
         assert_eq!(g.distributor(0x880, 4, Some(u32::MAX.into())).unwrap(), 0);
+    }
+    const SECURE_EL1: ProcessorSecurity = ProcessorSecurity {
+        el3: false,
+        non_secure: false,
+    };
+    const NON_SECURE_EL1: ProcessorSecurity = ProcessorSecurity {
+        el3: false,
+        non_secure: true,
+    };
+    /// Two Security states, initialized at EL3 with SCR_EL3.NS clear.
+    fn two_states(affinities: Vec<u32>) -> Gic {
+        let mut g = Gic::new(affinities, 512, SecurityStates::Two).unwrap();
+        assert_eq!(g.distributor(0, 4, Some(0x37)).unwrap(), 0x37);
+        for core in 0..g.state.affinities.len() {
+            g.redistributor(core, 0x14, 4, Some(0)).unwrap();
+            g.system(core, 0xf665, Some(15)).unwrap();
+            g.system(core, 0xc230, Some(255)).unwrap();
+            g.system(core, 0xc666, Some(1)).unwrap();
+            g.system(core, 0xc667, Some(1)).unwrap();
+            assert_eq!(g.system(core, 0xf667, Some(3)).unwrap(), 3);
+        }
+        g
+    }
+    /// Configure an SPI's IGROUPR and IGRPMODR bits, then enable it.
+    fn grouped_spi(g: &mut Gic, id: usize, group1: bool, modifier: bool) {
+        spi(g, id, group1, 0x80, 0);
+        let word = 0xd00 + (id / 32) as u64 * 4;
+        let old = g.distributor(word, 4, None).unwrap();
+        let bit = 1 << (id % 32);
+        g.distributor(word, 4, Some(if modifier { old | bit } else { old & !bit }))
+            .unwrap();
+        assert_eq!(g.distributor(word, 4, None).unwrap() & bit != 0, modifier);
+    }
+    #[test]
+    fn secure_group1_signals_irq_to_secure_el1_and_is_acknowledged_by_iar1() {
+        let mut g = two_states(vec![0]);
+        grouped_spi(&mut g, 40, false, true);
+        g.set_spi(40, true).unwrap();
+        // At EL3 every group signals FIQ, and acknowledgment is refused.
+        assert_eq!(g.pins(0).unwrap(), (false, true));
+        assert!(g.system(0, 0xc660, None).is_err());
+        g.set_processor_security(0, SECURE_EL1).unwrap();
+        assert_eq!(g.pins(0).unwrap(), (true, false));
+        assert_eq!(g.system(0, 0xc642, None).unwrap(), 1023);
+        assert_eq!(g.system(0, 0xc640, None).unwrap(), 1023);
+        assert_eq!(g.system(0, 0xc662, None).unwrap(), 40);
+        assert_eq!(g.system(0, 0xc660, None).unwrap(), 40);
+        assert!(g.system(0, 0xc641, Some(40)).is_err()); // Group mismatch.
+        g.set_spi(40, false).unwrap();
+        g.system(0, 0xc661, Some(40)).unwrap();
+        assert_eq!(g.pins(0).unwrap(), (false, false));
+        // The Secure Group 1 enable gates only that group.
+        g.set_spi(40, true).unwrap();
+        g.system(0, 0xc667, Some(0)).unwrap();
+        assert_eq!(g.pins(0).unwrap(), (false, false));
+        g.set_processor_security(0, ProcessorSecurity::RESET)
+            .unwrap();
+        assert_eq!(g.system(0, 0xf667, None).unwrap(), 1);
+    }
+    #[test]
+    fn group0_signals_fiq_and_is_acknowledged_by_iar0() {
+        let mut g = two_states(vec![0]);
+        g.set_processor_security(0, SECURE_EL1).unwrap();
+        grouped_spi(&mut g, 41, false, false);
+        g.set_spi(41, true).unwrap();
+        assert_eq!(g.pins(0).unwrap(), (false, true));
+        assert_eq!(g.system(0, 0xc660, None).unwrap(), 1023);
+        assert_eq!(g.system(0, 0xc640, None).unwrap(), 41);
+        g.set_spi(41, false).unwrap();
+        g.system(0, 0xc641, Some(41)).unwrap();
+        assert_eq!(g.pins(0).unwrap(), (false, false));
+        // Non-secure Group 0 access is outside the model.
+        g.set_processor_security(0, NON_SECURE_EL1).unwrap();
+        assert!(g.system(0, 0xc640, None).is_err());
+        assert!(g.system(0, 0xc666, Some(1)).is_err());
+    }
+    #[test]
+    fn non_secure_group1_signals_fiq_to_secure_el1_and_irq_to_non_secure_el1() {
+        let mut g = two_states(vec![0]);
+        g.set_processor_security(0, SECURE_EL1).unwrap();
+        grouped_spi(&mut g, 42, true, false);
+        // The reserved (1,1) encoding is Non-secure Group 1.
+        grouped_spi(&mut g, 43, true, true);
+        g.set_spi(42, true).unwrap();
+        assert_eq!(g.pins(0).unwrap(), (false, true));
+        assert_eq!(g.system(0, 0xc660, None).unwrap(), 1023);
+        assert_eq!(g.system(0, 0xc640, None).unwrap(), 1023);
+        g.set_processor_security(0, NON_SECURE_EL1).unwrap();
+        assert_eq!(g.pins(0).unwrap(), (true, false));
+        assert_eq!(g.system(0, 0xc660, None).unwrap(), 42);
+        g.set_spi(43, true).unwrap();
+        g.set_spi(42, false).unwrap();
+        g.system(0, 0xc661, Some(42)).unwrap();
+        assert_eq!(g.system(0, 0xc660, None).unwrap(), 43);
+        // Banked Group 1 registers keep one Secure copy.
+        assert!(g.system(0, 0xc664, None).is_err());
+        assert!(g.system(0, 0xc663, None).is_err());
+    }
+    #[test]
+    fn sgis_forward_only_to_the_generated_group_with_two_states() {
+        let mut g = two_states(vec![0, 1]);
+        for core in 0..2 {
+            g.set_processor_security(core, SECURE_EL1).unwrap();
+            g.redistributor(core, 0x10100, 4, Some(3)).unwrap();
+            // SGI 0 is Secure Group 1; SGI 1 is Non-secure Group 1.
+            g.redistributor(core, 0x10080, 4, Some(2)).unwrap();
+            g.redistributor(core, 0x10d00, 4, Some(1)).unwrap();
+            assert_eq!(g.redistributor(core, 0x10d00, 4, None).unwrap(), 1);
+        }
+        g.system(0, 0xc65d, Some(2)).unwrap();
+        g.system(0, 0xc65d, Some((1 << 24) | 2)).unwrap();
+        assert_eq!(g.pins(1).unwrap(), (true, false));
+        assert_eq!(g.system(1, 0xc660, None).unwrap(), 0);
+        g.system(1, 0xc661, Some(0)).unwrap();
+        assert_eq!(g.pins(1).unwrap(), (false, false));
+    }
+    #[test]
+    fn security_configuration_is_declared_and_checkpointed() {
+        let mut one = enabled(vec![0]);
+        assert_eq!(one.distributor(0, 4, Some(0x77)).unwrap(), 0x53);
+        assert_eq!(one.distributor(4, 4, None).unwrap() & (1 << 10), 0);
+        assert_eq!(one.distributor(0xd04, 4, Some(u32::MAX.into())).unwrap(), 0);
+        assert_eq!(
+            one.redistributor(0, 0x10d00, 4, Some(u32::MAX.into()))
+                .unwrap(),
+            0
+        );
+        assert!(one.set_processor_security(0, SECURE_EL1).is_err());
+        let mut g = two_states(vec![0]);
+        assert_ne!(g.distributor(4, 4, None).unwrap() & (1 << 10), 0);
+        assert!(g.distributor(0, 4, Some(0x77)).is_err());
+        grouped_spi(&mut g, 40, false, true);
+        g.set_processor_security(0, SECURE_EL1).unwrap();
+        g.set_spi(40, true).unwrap();
+        let saved = g.save();
+        let encoded = fujimod_emulator_devices::checkpoint::Checkpoint::encode("gic", &g).unwrap();
+        let mut decoded: Gic = encoded.decode("gic").unwrap();
+        assert_eq!(decoded.save(), saved);
+        assert_eq!(decoded.pins(0).unwrap(), (true, false));
+        assert_eq!(decoded.system(0, 0xc660, None).unwrap(), 40);
+        assert!(
+            Gic::new(vec![0], 512, SecurityStates::One)
+                .unwrap()
+                .restore(&saved)
+                .is_err()
+        );
+        assert!(one.restore(&saved).is_err());
     }
 }

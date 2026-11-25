@@ -52,6 +52,10 @@ struct Execution {
     stopped: Cell<bool>,
     irq: Cell<bool>,
     fiq: Cell<bool>,
+    // Stop before the first block entered across an EL3 boundary, and
+    // whether the current run started at EL3.
+    el3_transitions: Cell<bool>,
+    run_at_el3: Cell<bool>,
     restart: Cell<Option<u64>>,
     exit: Cell<Option<u32>>,
     // ARMv7-A abort reported by the engine, entered after the run.
@@ -133,6 +137,8 @@ impl Core {
             stopped: Cell::new(false),
             irq: Cell::new(false),
             fiq: Cell::new(false),
+            el3_transitions: Cell::new(false),
+            run_at_el3: Cell::new(false),
             restart: Cell::new(None),
             exit: Cell::new(None),
             exception: Cell::new(None),
@@ -488,6 +494,10 @@ impl Execution {
             self.reset();
             return self.cpu.stop();
         }
+        if self.el3_transitions.get() && self.at_el3()? != self.run_at_el3.get() {
+            self.reset();
+            return self.cpu.stop();
+        }
         if self.deliver_interrupt()? {
             self.reset();
             return self.cpu.stop();
@@ -583,6 +593,9 @@ impl Execution {
         self.at_instruction.set(false);
         self.reset();
         Ok(())
+    }
+    fn at_el3(&self) -> Result<bool, String> {
+        Ok((self.scalar(Register::Pstate)? >> 2) & 3 == 3)
     }
     fn deliver_interrupt(&self) -> Result<bool, String> {
         if self.a32 {

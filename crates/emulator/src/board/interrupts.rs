@@ -1,5 +1,5 @@
 //! Architectural GIC register windows, including the banked GICv2 CPU interface.
-use fujimod_emulator_devices::gic::InterruptController;
+use fujimod_emulator_devices::gic::{InterruptController, SecurityStates};
 
 pub enum InterruptRegisters {
     GicV2 {
@@ -117,6 +117,7 @@ impl InterruptMap {
         stride: u64,
         cores: usize,
         lines: usize,
+        security_states: SecurityStates,
     ) -> Result<Self, String> {
         if cores == 0 || cores > 256 {
             return Err(format!("GICv3 core count {cores} outside 1..=256"));
@@ -128,6 +129,7 @@ impl InterruptMap {
             gic: Box::new(fujimod_emulator_ip_arm::gicv3::Gic::new(
                 (0..cores as u32).collect(),
                 lines,
+                security_states,
             )?),
             registers: InterruptRegisters::GicV3 {
                 distributor,
@@ -198,17 +200,27 @@ mod tests {
     }
     #[test]
     fn gic_v3_constructor_reports_bounds_and_geometry() {
-        let map = InterruptMap::gic_v3(0xfa00_0000, 0xfa08_0000, 0x20000, 4, 512).unwrap();
+        let map = InterruptMap::gic_v3(
+            0xfa00_0000,
+            0xfa08_0000,
+            0x20000,
+            4,
+            512,
+            SecurityStates::One,
+        )
+        .unwrap();
         assert_eq!(map.cores, 4);
         assert_eq!(
             map.windows(),
             vec![(0xfa00_0000, 0x10000), (0xfa08_0000, 0x80000)]
         );
-        assert!(InterruptMap::gic_v3(0, 0x10000, 0x20000, 0, 512).is_err());
-        assert!(InterruptMap::gic_v3(0, 0x10000, 0x20000, 257, 512).is_err());
-        assert!(InterruptMap::gic_v3(0, 0x10000, 0x20000, 4, 31).is_err());
-        assert!(InterruptMap::gic_v3(0, 0x10000, 0x20000, 4, 1021).is_err());
-        assert!(InterruptMap::gic_v3(0x10000, 0x20000, 0x10000, 4, 512).is_err());
-        assert!(InterruptMap::gic_v3(1, 0x20000, 0x20000, 4, 512).is_err());
+        assert!(InterruptMap::gic_v3(0, 0x10000, 0x20000, 0, 512, SecurityStates::One).is_err());
+        assert!(InterruptMap::gic_v3(0, 0x10000, 0x20000, 257, 512, SecurityStates::One).is_err());
+        assert!(InterruptMap::gic_v3(0, 0x10000, 0x20000, 4, 31, SecurityStates::One).is_err());
+        assert!(InterruptMap::gic_v3(0, 0x10000, 0x20000, 4, 1021, SecurityStates::One).is_err());
+        assert!(
+            InterruptMap::gic_v3(0x10000, 0x20000, 0x10000, 4, 512, SecurityStates::One).is_err()
+        );
+        assert!(InterruptMap::gic_v3(1, 0x20000, 0x20000, 4, 512, SecurityStates::One).is_err());
     }
 }
