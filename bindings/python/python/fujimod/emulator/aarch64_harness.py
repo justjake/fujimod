@@ -435,6 +435,8 @@ class Aarch64DriverHarness:
         fragment_exit: Mapping[str, int] | None = None,
         observer_limit: int = 4096,
         system_reads: Iterable[tuple[str, int]] = (),
+        system_registers: Iterable[str] = (),
+        entry_level: str = "el1",
         transaction_limit: int = 4096,
     ) -> dict:
         """Execute a routine with optional expected CPU-model system reads.
@@ -512,7 +514,9 @@ class Aarch64DriverHarness:
             "observe_addresses": [o["address"] for o in self._observers],
             "observer_limit": observer_limit,
             "system_reads": [(name, _word(value)) for name, value in system_reads],
+            "system_registers": list(system_registers),
             "entry": entry,
+            "entry_level": entry_level,
             "arguments": args,
             "return_address": self.inputs.return_address,
             "stack_pointer": sp,
