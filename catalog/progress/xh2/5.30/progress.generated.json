@@ -5,8 +5,8 @@
   "model": "X-H2",
   "version": "5.30",
   "facts": {
-    "located": 18,
-    "total": 19
+    "located": 21,
+    "total": 22
   },
   "boot_rom": null,
   "tracks": [
@@ -38,37 +38,37 @@
         {
           "id": "bulk-source",
           "title": "Bulk read source located",
-          "result": "stale"
+          "result": "pass"
         },
         {
           "id": "flash-reader",
           "title": "Flash reader located",
-          "result": "stale"
+          "result": "pass"
         },
         {
           "id": "state-regions",
           "title": "State-dump regions located",
-          "result": "stale"
+          "result": "pass"
         },
         {
           "id": "restart-facts",
           "title": "USB restart request located",
-          "result": "stale"
+          "result": "pass"
         },
         {
           "id": "card-files",
           "title": "Optional card file access located",
-          "result": "stale"
+          "result": "not-run"
         },
         {
           "id": "controls",
           "title": "Physical controls mapped to firmware inputs",
-          "result": "stale"
+          "result": "pass"
         },
         {
           "id": "settings-layout",
           "title": "Settings layout located",
-          "result": "stale"
+          "result": "pass"
         },
         {
           "id": "sd-facts",
@@ -125,39 +125,39 @@
           "id": "bulk-source",
           "label": "Bulk read source located",
           "stage": "bulk-source",
-          "result": "stale",
-          "passed": 0,
-          "total": 0
+          "result": "pass",
+          "passed": 1,
+          "total": 1
         },
         {
           "id": "flash-reader",
           "label": "Flash reader located",
           "stage": "flash-reader",
-          "result": "stale",
-          "passed": 0,
-          "total": 0
+          "result": "pass",
+          "passed": 1,
+          "total": 1
         },
         {
           "id": "state-regions",
           "label": "State-dump regions located",
           "stage": "state-regions",
-          "result": "stale",
-          "passed": 0,
-          "total": 0
+          "result": "pass",
+          "passed": 1,
+          "total": 1
         },
         {
           "id": "restart-facts",
           "label": "USB restart request located",
           "stage": "restart-facts",
-          "result": "stale",
-          "passed": 0,
-          "total": 0
+          "result": "pass",
+          "passed": 1,
+          "total": 1
         },
         {
           "id": "card-files",
           "label": "Optional card file access located",
           "stage": "card-files",
-          "result": "stale",
+          "result": "not-run",
           "passed": 0,
           "total": 0
         },
@@ -165,18 +165,18 @@
           "id": "controls",
           "label": "Physical controls mapped to firmware inputs",
           "stage": "controls",
-          "result": "stale",
-          "passed": 0,
-          "total": 0,
+          "result": "pass",
+          "passed": 1,
+          "total": 1,
           "milestone": true
         },
         {
           "id": "settings-layout",
           "label": "Settings layout located",
           "stage": "settings-layout",
-          "result": "stale",
-          "passed": 0,
-          "total": 0,
+          "result": "pass",
+          "passed": 1,
+          "total": 1,
           "milestone": true
         },
         {
@@ -206,12 +206,12 @@
         {
           "id": "rec",
           "title": "Boots to the shooting screen",
-          "result": "not-run"
+          "result": "pass"
         },
         {
           "id": "emulator-screen",
           "title": "First usable emulator screen",
-          "result": "not-run"
+          "result": "pass"
         },
         {
           "id": "sd-boot-v2-autostart-starts-in-emulator",
@@ -226,22 +226,22 @@
         {
           "id": "menu",
           "title": "Menus respond to remote control",
-          "result": "not-run"
+          "result": "pass"
         },
         {
           "id": "stock",
           "title": "Stock features reproduced",
-          "result": "not-run"
+          "result": "partial"
         },
         {
           "id": "sd-boot-v1-stock-boots-in-emulator",
           "title": "SD boot v1: stock firmware boots from an SD card in the emulator",
-          "result": "not-run"
+          "result": "pass"
         },
         {
           "id": "firmware-update-stock-installs-in-emulator",
           "title": "Firmware update: stock updater installs an update from an SD card in the emulator",
-          "result": "not-run"
+          "result": "pass"
         },
         {
           "id": "sd-boot-v2-fujimod-boots-in-emulator",
@@ -254,18 +254,18 @@
           "id": "emulator-screen",
           "label": "First usable screen",
           "stage": "emulator-screen",
-          "result": "not-run",
-          "passed": 0,
-          "total": 0,
+          "result": "pass",
+          "passed": 1,
+          "total": 1,
           "milestone": true
         },
         {
           "id": "rec",
           "label": "Boot",
           "stage": "rec",
-          "result": "not-run",
-          "passed": 0,
-          "total": 0,
+          "result": "pass",
+          "passed": 1,
+          "total": 1,
           "milestone": true
         },
         {
@@ -289,8 +289,8 @@
           "id": "stock/control-input",
           "label": "Control input",
           "stage": "stock",
-          "result": "not-run",
-          "passed": 0,
+          "result": "pass",
+          "passed": 1,
           "total": 1,
           "milestone": true
         },
@@ -306,9 +306,9 @@
           "id": "menu",
           "label": "Menus",
           "stage": "menu",
-          "result": "not-run",
-          "passed": 0,
-          "total": 0,
+          "result": "pass",
+          "passed": 1,
+          "total": 1,
           "milestone": true
         },
         {
@@ -373,18 +373,18 @@
           "id": "sd-boot-v1-stock-boots-in-emulator",
           "label": "SD boot v1: stock firmware boots from an SD card in the emulator",
           "stage": "sd-boot-v1-stock-boots-in-emulator",
-          "result": "not-run",
-          "passed": 0,
-          "total": 0,
+          "result": "pass",
+          "passed": 1,
+          "total": 1,
           "milestone": true
         },
         {
           "id": "firmware-update-stock-installs-in-emulator",
           "label": "Firmware update: stock updater installs an update from an SD card in the emulator",
           "stage": "firmware-update-stock-installs-in-emulator",
-          "result": "not-run",
-          "passed": 0,
-          "total": 0
+          "result": "pass",
+          "passed": 1,
+          "total": 1
         }
       ]
     },
@@ -401,32 +401,32 @@
         {
           "id": "camera-read-gate",
           "title": "Debug read gate enabled in RAM",
-          "result": "not-run"
+          "result": "pass"
         },
         {
           "id": "camera-code",
           "title": "Uploaded code runs in RAM and is cleaned up",
-          "result": "not-run"
+          "result": "pass"
         },
         {
           "id": "camera-bulk",
           "title": "Bulk reads at 1 MiB/s or more",
-          "result": "not-run"
+          "result": "pass"
         },
         {
           "id": "camera-backup",
           "title": "Internal flash backed up",
-          "result": "not-run"
+          "result": "pass"
         },
         {
           "id": "camera-snapshot",
           "title": "Camera state dumped (RAM at least)",
-          "result": "not-run"
+          "result": "pass"
         },
         {
           "id": "camera-fast-memory",
           "title": "Memory capture measured at 8 MiB/s or more",
-          "result": "not-run"
+          "result": "stale"
         },
         {
           "id": "camera-fast-flash",
@@ -439,9 +439,14 @@
           "result": "not-run"
         },
         {
+          "id": "camera-debug-card",
+          "title": "Debug access enabled by an SD boot gate card",
+          "result": "pass"
+        },
+        {
           "id": "camera-normal",
           "title": "FF80 answers in normal mode",
-          "result": "not-run"
+          "result": "pass"
         },
         {
           "id": "camera-restart",
@@ -472,49 +477,49 @@
           "id": "camera-read-gate",
           "label": "Debug read gate enabled in RAM",
           "stage": "camera-read-gate",
-          "result": "not-run",
-          "passed": 0,
-          "total": 0
+          "result": "pass",
+          "passed": 1,
+          "total": 1
         },
         {
           "id": "camera-code",
           "label": "Uploaded code runs in RAM and is cleaned up",
           "stage": "camera-code",
-          "result": "not-run",
-          "passed": 0,
-          "total": 0,
+          "result": "pass",
+          "passed": 1,
+          "total": 1,
           "milestone": true
         },
         {
           "id": "camera-bulk",
           "label": "Bulk reads at 1 MiB/s or more",
           "stage": "camera-bulk",
-          "result": "not-run",
-          "passed": 0,
-          "total": 0
+          "result": "pass",
+          "passed": 1,
+          "total": 1
         },
         {
           "id": "camera-backup",
           "label": "Internal flash backed up",
           "stage": "camera-backup",
-          "result": "not-run",
-          "passed": 0,
-          "total": 0,
+          "result": "pass",
+          "passed": 1,
+          "total": 1,
           "milestone": true
         },
         {
           "id": "camera-snapshot",
           "label": "Camera state dumped (RAM at least)",
           "stage": "camera-snapshot",
-          "result": "not-run",
-          "passed": 0,
-          "total": 0
+          "result": "pass",
+          "passed": 1,
+          "total": 1
         },
         {
           "id": "camera-fast-memory",
           "label": "Memory capture measured at 8 MiB/s or more",
           "stage": "camera-fast-memory",
-          "result": "not-run",
+          "result": "stale",
           "passed": 0,
           "total": 0
         },
@@ -535,12 +540,20 @@
           "total": 0
         },
         {
+          "id": "camera-debug-card",
+          "label": "Debug access enabled by an SD boot gate card",
+          "stage": "camera-debug-card",
+          "result": "pass",
+          "passed": 1,
+          "total": 1
+        },
+        {
           "id": "camera-normal",
           "label": "FF80 answers in normal mode",
           "stage": "camera-normal",
-          "result": "not-run",
-          "passed": 0,
-          "total": 0
+          "result": "pass",
+          "passed": 1,
+          "total": 1
         },
         {
           "id": "camera-restart",
@@ -577,7 +590,7 @@
         {
           "id": "language-font-bank",
           "title": "Language font bank located and kept out of mod memory",
-          "result": "stale"
+          "result": "pass"
         },
         {
           "id": "mod-memory",
@@ -625,9 +638,9 @@
           "id": "language-font-bank",
           "label": "Language font bank located and kept out of mod memory",
           "stage": "language-font-bank",
-          "result": "stale",
-          "passed": 0,
-          "total": 0
+          "result": "pass",
+          "passed": 1,
+          "total": 1
         },
         {
           "id": "mod-memory",
@@ -986,6 +999,14 @@
           "total": 1
         },
         {
+          "id": "walkthroughs/matte",
+          "label": "matte",
+          "stage": "walkthroughs",
+          "result": "not-run",
+          "passed": 0,
+          "total": 1
+        },
+        {
           "id": "walkthroughs/recipes",
           "label": "recipes",
           "stage": "walkthroughs",
@@ -1196,6 +1217,14 @@
         {
           "id": "walkthroughs/hardware-divide",
           "label": "hardware-divide",
+          "stage": "walkthroughs",
+          "result": "not-run",
+          "passed": 0,
+          "total": 1
+        },
+        {
+          "id": "walkthroughs/hardware-divide-history",
+          "label": "hardware-divide-history",
           "stage": "walkthroughs",
           "result": "not-run",
           "passed": 0,
@@ -1572,6 +1601,15 @@
           "milestone": true
         },
         {
+          "id": "mod-build/matte",
+          "label": "matte links",
+          "stage": "mod-build",
+          "result": "not-run",
+          "passed": 0,
+          "total": 1,
+          "milestone": true
+        },
+        {
           "id": "mod-build/recipes",
           "label": "recipes links",
           "stage": "mod-build",
@@ -1815,6 +1853,15 @@
           "milestone": true
         },
         {
+          "id": "mod-build/hardware-divide-history",
+          "label": "hardware-divide-history links",
+          "stage": "mod-build",
+          "result": "not-run",
+          "passed": 0,
+          "total": 1,
+          "milestone": true
+        },
+        {
           "id": "mod-build/live-view-speedups",
           "label": "live-view-speedups links",
           "stage": "mod-build",
@@ -1833,7 +1880,7 @@
         {
           "id": "boot-rom-loads-sd-card-on-camera",
           "title": "Boot ROM: loads an SD card on a camera",
-          "result": "not-run"
+          "result": "pass"
         },
         {
           "id": "sd-boot-v1-stock-boots-on-camera",
@@ -1871,9 +1918,9 @@
           "id": "boot-rom-loads-sd-card-on-camera",
           "label": "Boot ROM: loads an SD card on a camera",
           "stage": "boot-rom-loads-sd-card-on-camera",
-          "result": "not-run",
-          "passed": 0,
-          "total": 0,
+          "result": "pass",
+          "passed": 1,
+          "total": 1,
           "milestone": true
         },
         {
@@ -1920,7 +1967,9 @@
       "result": "not-run"
     },
     "control-input": {
-      "result": "not-run"
+      "result": "pass",
+      "passed": 6,
+      "total": 6
     },
     "focus": {
       "result": "not-run"
@@ -1986,6 +2035,7 @@
     "menu-animations": "not-run",
     "menu-tap": "not-run",
     "focalized-ui": "not-run",
+    "matte": "not-run",
     "recipes": "not-run",
     "snap-focus": "not-run",
     "recipe-exif": "not-run",
@@ -2013,6 +2063,7 @@
     "internal-data-backup": "not-run",
     "welcome-sheet": "not-run",
     "hardware-divide": "not-run",
+    "hardware-divide-history": "not-run",
     "live-view-speedups": "not-run"
   }
 }

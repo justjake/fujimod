@@ -43,17 +43,17 @@
         {
           "id": "flash-reader",
           "title": "Flash reader located",
-          "result": "pass"
+          "result": "stale"
         },
         {
           "id": "state-regions",
           "title": "State-dump regions located",
-          "result": "pass"
+          "result": "stale"
         },
         {
           "id": "restart-facts",
           "title": "USB restart request located",
-          "result": "stale"
+          "result": "pass"
         },
         {
           "id": "card-files",
@@ -68,7 +68,7 @@
         {
           "id": "settings-layout",
           "title": "Settings layout located",
-          "result": "pass"
+          "result": "stale"
         },
         {
           "id": "sd-facts",
@@ -133,25 +133,25 @@
           "id": "flash-reader",
           "label": "Flash reader located",
           "stage": "flash-reader",
-          "result": "pass",
-          "passed": 1,
-          "total": 1
+          "result": "stale",
+          "passed": 0,
+          "total": 0
         },
         {
           "id": "state-regions",
           "label": "State-dump regions located",
           "stage": "state-regions",
-          "result": "pass",
-          "passed": 1,
-          "total": 1
+          "result": "stale",
+          "passed": 0,
+          "total": 0
         },
         {
           "id": "restart-facts",
           "label": "USB restart request located",
           "stage": "restart-facts",
-          "result": "stale",
-          "passed": 0,
-          "total": 0
+          "result": "pass",
+          "passed": 1,
+          "total": 1
         },
         {
           "id": "card-files",
@@ -174,7 +174,7 @@
           "id": "settings-layout",
           "label": "Settings layout located",
           "stage": "settings-layout",
-          "result": "pass",
+          "result": "stale",
           "passed": 1,
           "total": 1,
           "milestone": true
@@ -241,7 +241,7 @@
         {
           "id": "firmware-update-stock-installs-in-emulator",
           "title": "Firmware update: stock updater installs an update from an SD card in the emulator",
-          "result": "not-run"
+          "result": "pass"
         },
         {
           "id": "sd-boot-v2-fujimod-boots-in-emulator",
@@ -382,9 +382,9 @@
           "id": "firmware-update-stock-installs-in-emulator",
           "label": "Firmware update: stock updater installs an update from an SD card in the emulator",
           "stage": "firmware-update-stock-installs-in-emulator",
-          "result": "not-run",
-          "passed": 0,
-          "total": 0
+          "result": "pass",
+          "passed": 1,
+          "total": 1
         }
       ]
     },
@@ -426,7 +426,7 @@
         {
           "id": "camera-fast-memory",
           "title": "Memory capture measured at 8 MiB/s or more",
-          "result": "pass"
+          "result": "stale"
         },
         {
           "id": "camera-fast-flash",
@@ -437,6 +437,11 @@
           "id": "camera-debug",
           "title": "Debug mode saved persistently",
           "result": "pass"
+        },
+        {
+          "id": "camera-debug-card",
+          "title": "Debug access enabled by an SD boot gate card",
+          "result": "not-run"
         },
         {
           "id": "camera-normal",
@@ -514,9 +519,9 @@
           "id": "camera-fast-memory",
           "label": "Memory capture measured at 8 MiB/s or more",
           "stage": "camera-fast-memory",
-          "result": "pass",
-          "passed": 1,
-          "total": 1
+          "result": "stale",
+          "passed": 0,
+          "total": 0
         },
         {
           "id": "camera-fast-flash",
@@ -533,6 +538,14 @@
           "result": "pass",
           "passed": 1,
           "total": 1
+        },
+        {
+          "id": "camera-debug-card",
+          "label": "Debug access enabled by an SD boot gate card",
+          "stage": "camera-debug-card",
+          "result": "not-run",
+          "passed": 0,
+          "total": 0
         },
         {
           "id": "camera-normal",
@@ -986,6 +999,14 @@
           "total": 1
         },
         {
+          "id": "walkthroughs/matte",
+          "label": "matte",
+          "stage": "walkthroughs",
+          "result": "not-run",
+          "passed": 0,
+          "total": 1
+        },
+        {
           "id": "walkthroughs/recipes",
           "label": "recipes",
           "stage": "walkthroughs",
@@ -1196,6 +1217,14 @@
         {
           "id": "walkthroughs/hardware-divide",
           "label": "hardware-divide",
+          "stage": "walkthroughs",
+          "result": "not-run",
+          "passed": 0,
+          "total": 1
+        },
+        {
+          "id": "walkthroughs/hardware-divide-history",
+          "label": "hardware-divide-history",
           "stage": "walkthroughs",
           "result": "not-run",
           "passed": 0,
@@ -1572,6 +1601,15 @@
           "milestone": true
         },
         {
+          "id": "mod-build/matte",
+          "label": "matte links",
+          "stage": "mod-build",
+          "result": "not-run",
+          "passed": 0,
+          "total": 1,
+          "milestone": true
+        },
+        {
           "id": "mod-build/recipes",
           "label": "recipes links",
           "stage": "mod-build",
@@ -1815,6 +1853,15 @@
           "milestone": true
         },
         {
+          "id": "mod-build/hardware-divide-history",
+          "label": "hardware-divide-history links",
+          "stage": "mod-build",
+          "result": "not-run",
+          "passed": 0,
+          "total": 1,
+          "milestone": true
+        },
+        {
           "id": "mod-build/live-view-speedups",
           "label": "live-view-speedups links",
           "stage": "mod-build",
@@ -1838,7 +1885,7 @@
         {
           "id": "sd-boot-v1-stock-boots-on-camera",
           "title": "SD boot v1: stock firmware boots from an SD card on a camera",
-          "result": "not-run"
+          "result": "pass"
         },
         {
           "id": "sd-boot-v1-fujimod-boots-on-camera",
@@ -1880,9 +1927,9 @@
           "id": "sd-boot-v1-stock-boots-on-camera",
           "label": "SD boot v1: stock firmware boots from an SD card on a camera",
           "stage": "sd-boot-v1-stock-boots-on-camera",
-          "result": "not-run",
-          "passed": 0,
-          "total": 0
+          "result": "pass",
+          "passed": 1,
+          "total": 1
         },
         {
           "id": "sd-boot-v1-fujimod-boots-on-camera",
@@ -1986,6 +2033,7 @@
     "menu-animations": "not-run",
     "menu-tap": "not-run",
     "focalized-ui": "not-run",
+    "matte": "not-run",
     "recipes": "not-run",
     "snap-focus": "not-run",
     "recipe-exif": "not-run",
@@ -2013,6 +2061,7 @@
     "internal-data-backup": "not-run",
     "welcome-sheet": "not-run",
     "hardware-divide": "not-run",
+    "hardware-divide-history": "not-run",
     "live-view-speedups": "not-run"
   }
 }

@@ -439,6 +439,11 @@
           "result": "not-run"
         },
         {
+          "id": "camera-debug-card",
+          "title": "Debug access enabled by an SD boot gate card",
+          "result": "not-run"
+        },
+        {
           "id": "camera-normal",
           "title": "FF80 answers in normal mode",
           "result": "not-run"
@@ -530,6 +535,14 @@
           "id": "camera-debug",
           "label": "Debug mode saved persistently",
           "stage": "camera-debug",
+          "result": "not-run",
+          "passed": 0,
+          "total": 0
+        },
+        {
+          "id": "camera-debug-card",
+          "label": "Debug access enabled by an SD boot gate card",
+          "stage": "camera-debug-card",
           "result": "not-run",
           "passed": 0,
           "total": 0
@@ -986,6 +999,14 @@
           "total": 1
         },
         {
+          "id": "walkthroughs/matte",
+          "label": "matte",
+          "stage": "walkthroughs",
+          "result": "not-run",
+          "passed": 0,
+          "total": 1
+        },
+        {
           "id": "walkthroughs/recipes",
           "label": "recipes",
           "stage": "walkthroughs",
@@ -1196,6 +1217,14 @@
         {
           "id": "walkthroughs/hardware-divide",
           "label": "hardware-divide",
+          "stage": "walkthroughs",
+          "result": "not-run",
+          "passed": 0,
+          "total": 1
+        },
+        {
+          "id": "walkthroughs/hardware-divide-history",
+          "label": "hardware-divide-history",
           "stage": "walkthroughs",
           "result": "not-run",
           "passed": 0,
@@ -1572,6 +1601,15 @@
           "milestone": true
         },
         {
+          "id": "mod-build/matte",
+          "label": "matte links",
+          "stage": "mod-build",
+          "result": "not-run",
+          "passed": 0,
+          "total": 1,
+          "milestone": true
+        },
+        {
           "id": "mod-build/recipes",
           "label": "recipes links",
           "stage": "mod-build",
@@ -1815,6 +1853,15 @@
           "milestone": true
         },
         {
+          "id": "mod-build/hardware-divide-history",
+          "label": "hardware-divide-history links",
+          "stage": "mod-build",
+          "result": "not-run",
+          "passed": 0,
+          "total": 1,
+          "milestone": true
+        },
+        {
           "id": "mod-build/live-view-speedups",
           "label": "live-view-speedups links",
           "stage": "mod-build",
@@ -2006,6 +2053,7 @@
     "menu-animations": "not-run",
     "menu-tap": "not-run",
     "focalized-ui": "not-run",
+    "matte": "not-run",
     "recipes": "not-run",
     "snap-focus": "not-run",
     "recipe-exif": "not-run",
@@ -2033,6 +2081,7 @@
     "internal-data-backup": "not-run",
     "welcome-sheet": "not-run",
     "hardware-divide": "not-run",
+    "hardware-divide-history": "not-run",
     "live-view-speedups": "not-run"
   }
 }

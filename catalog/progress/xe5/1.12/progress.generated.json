@@ -439,6 +439,11 @@
           "result": "not-run"
         },
         {
+          "id": "camera-debug-card",
+          "title": "Debug access enabled by an SD boot gate card",
+          "result": "not-run"
+        },
+        {
           "id": "camera-normal",
           "title": "FF80 answers in normal mode",
           "result": "not-run"
@@ -530,6 +535,14 @@
           "id": "camera-debug",
           "label": "Debug mode saved persistently",
           "stage": "camera-debug",
+          "result": "not-run",
+          "passed": 0,
+          "total": 0
+        },
+        {
+          "id": "camera-debug-card",
+          "label": "Debug access enabled by an SD boot gate card",
+          "stage": "camera-debug-card",
           "result": "not-run",
           "passed": 0,
           "total": 0
@@ -980,6 +993,14 @@
         {
           "id": "walkthroughs/focalized-ui",
           "label": "focalized-ui",
+          "stage": "walkthroughs",
+          "result": "not-run",
+          "passed": 0,
+          "total": 1
+        },
+        {
+          "id": "walkthroughs/matte",
+          "label": "matte",
           "stage": "walkthroughs",
           "result": "not-run",
           "passed": 0,
@@ -1580,6 +1601,15 @@
           "milestone": true
         },
         {
+          "id": "mod-build/matte",
+          "label": "matte links",
+          "stage": "mod-build",
+          "result": "not-run",
+          "passed": 0,
+          "total": 1,
+          "milestone": true
+        },
+        {
           "id": "mod-build/recipes",
           "label": "recipes links",
           "stage": "mod-build",
@@ -2003,6 +2033,7 @@
     "menu-animations": "not-run",
     "menu-tap": "not-run",
     "focalized-ui": "not-run",
+    "matte": "not-run",
     "recipes": "not-run",
     "snap-focus": "not-run",
     "recipe-exif": "not-run",
