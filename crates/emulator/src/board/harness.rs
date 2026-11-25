@@ -215,6 +215,9 @@ struct Observations {
     range_fetches: Vec<u64>,
     vector_range_fetches: Vec<u64>,
     halt: Option<Value>,
+    /// The bytes a refused store replaced. The engine completes a store
+    /// whose hook stops it, so the session writes them back once stopped.
+    denied: Option<(u64, Vec<u8>)>,
     faults: Vec<Value>,
     irq_events: Vec<Value>,
     pending_block: Option<(usize, u64)>,
@@ -511,6 +514,12 @@ impl Session {
             None
         };
         if let Some(message) = violation {
+            if !stack {
+                // The hook runs before the store: these are the bytes it replaces.
+                let mut bytes = vec![0; width as usize];
+                cpu.read_memory(physical, &mut bytes)?;
+                o.denied.get_or_insert((physical, bytes));
+            }
             drop(o);
             self.stop(
                 &*cpu,
@@ -551,12 +560,28 @@ impl Session {
                 && (pc == self.options.return_address || self.options.stop_addresses.contains(&pc)))
         .then_some(step)
     }
+    /// Undo a refused store the engine completed after its hook stopped it.
+    fn restore_denied(&self) {
+        let Some((physical, bytes)) = self.observed.borrow_mut().denied.take() else {
+            return;
+        };
+        let result = self
+            .cpu
+            .upgrade()
+            .ok_or_else(|| "isolated caller processor is gone".to_string())
+            .and_then(|cpu| cpu.write_memory(physical, &bytes));
+        if let Err(error) = result {
+            self.observed.borrow_mut().event = Some(json!({"kind":"failure","message":error}));
+        }
+    }
     pub fn resume(&self, skip_once: Option<u64>) {
+        self.restore_denied();
         let mut o = self.observed.borrow_mut();
         o.event = None;
         o.skip_once = skip_once;
     }
     pub fn state(&self) -> Value {
+        self.restore_denied();
         if self.block_guard
             && let Some(cpu) = self.cpu.upgrade()
             && let Ok(through) = self.progress(&*cpu)
@@ -764,6 +789,7 @@ impl Board {
         Ok(session)
     }
     pub fn harness_end(&self, session: &mut Session) -> Result<(), String> {
+        session.restore_denied();
         let cpu = self.cpu(session.options.core)?;
         for hook in session.hooks.drain(..) {
             cpu.remove_hook(hook)?;
