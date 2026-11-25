@@ -587,6 +587,10 @@ pub fn windows_from_blocks(
         if let Some((kind, options)) = block_window(
             block, device, selection, flash_input, flash_image, samples.as_deref(), levels,
         )? {
+            let mut options = options;
+            if !options.contains_key("registers") && block.registers.iter().any(|register| register.reads.is_some()) {
+                options.insert("registers".into(), stub_registers(block));
+            }
             if kind == "imaging-table" && block.size > 0x1000 {
                 for offset in (0..block.size).step_by(0x1000) {
                     devices.push(DeviceWindow {
@@ -618,6 +622,25 @@ pub fn windows_from_blocks(
 }
 
 type FlashInput<'a> = (&'a str, &'a Option<u8>, &'a Vec<fujimod_catalog_configuration::application_inputs::FlashSeed>);
+
+/// The bring-up register file answers of a block's registers that do not read back their last write.
+fn stub_registers(block: &fujimod_catalog::reference::SocBlock) -> toml::Value {
+    use fujimod_catalog::ip::RegisterReads;
+    let integer = |value: u64| toml::Value::Integer(value as i64);
+    toml::Value::Array(block.registers.iter().filter_map(|register| {
+        let (mode, value) = match register.reads? {
+            RegisterReads::Fixed { value } => ("constant", value),
+            RegisterReads::Alternates { value } => ("toggle", value),
+            RegisterReads::SelfClearing => ("command", 0),
+            RegisterReads::AfterWrite { value } => ("after_write", value),
+        };
+        let mut row = toml::Table::new();
+        row.insert("offset".into(), integer(register.offset));
+        row.insert("mode".into(), toml::Value::String(mode.into()));
+        if !matches!(register.reads, Some(RegisterReads::SelfClearing)) { row.insert("value".into(), integer(value)); }
+        Some(toml::Value::Table(row))
+    }).collect())
+}
 
 fn block_window(
     block: &fujimod_catalog::reference::SocBlock,
@@ -711,7 +734,7 @@ fn block_window(
             options.insert("commit_ticks".into(), integer(*commit_ticks));
             "memory-configuration"
         }
-        BlockDevice::DdrPhy { .. } => { options.insert("registers".into(), toml::Value::Array(Vec::new())); "bringup-stub" }
+        BlockDevice::DdrPhy { .. } => { options.insert("registers".into(), stub_registers(block)); "bringup-stub" }
         BlockDevice::SdInterface { .. } => "sd-interface",
         BlockDevice::SdhciUhs2 { clock_ticks, .. } => {
             options.insert("slot".into(), integer(block.base.saturating_sub(0x2000)));
@@ -820,8 +843,9 @@ fn block_window(
             if block.id.starts_with("imaging-table") { "imaging-table" }
             else if block.id == "dma-routes" { "dma-request-routing" }
             else if block.id == "dma-address-high" { "dma-address-high" }
-            else if block.id.starts_with("register-") || block.id == "usb-inner" || block.id == "dv720" {
-                options.insert("registers".into(), toml::Value::Array(Vec::new()));
+            else if block.registers.iter().any(|register| register.reads.is_some())
+                || block.id.starts_with("register-") || block.id == "usb-inner" || block.id == "dv720" {
+                options.insert("registers".into(), stub_registers(block));
                 "bringup-stub"
             } else { "write-only-registers" }
         }

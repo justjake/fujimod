@@ -959,6 +959,7 @@ class BlockRegister(TypedDict, total=False):
     fields: NotRequired[list[RegisterField]]
     name: Required[str]
     offset: Required[int]
+    reads: NotRequired[RegisterReads | None]
     reset: NotRequired[int | None]
     width_bytes: Required[int]
     write_mask: NotRequired[int | None]
@@ -4758,6 +4759,33 @@ class RegisterRange(TypedDict, total=False):
     count: Required[int]
     first: Required[int]
     width_bytes: Required[int]
+
+
+type RegisterReads = (
+    RegisterReadsVariant0
+    | RegisterReadsVariant1
+    | RegisterReadsVariant2
+    | RegisterReadsVariant3
+)
+
+
+class RegisterReadsVariant0(TypedDict, total=False):
+    kind: Required[Literal["fixed"]]
+    value: Required[int]
+
+
+class RegisterReadsVariant1(TypedDict, total=False):
+    kind: Required[Literal["alternates"]]
+    value: Required[int]
+
+
+class RegisterReadsVariant2(TypedDict, total=False):
+    kind: Required[Literal["self-clearing"]]
+
+
+class RegisterReadsVariant3(TypedDict, total=False):
+    kind: Required[Literal["after-write"]]
+    value: Required[int]
 
 
 class RegisterValue(TypedDict, total=False):

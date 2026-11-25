@@ -9,6 +9,18 @@
     "model": "imaging_dsp",
     "basis": "imaging DSP program memory and debug page Located in catalog/firmware/xe5/1.12/xp5-boot/manifest.d/63-hdr.toml."
   },
+  "registers": [
+    {
+      "name": "word-400604",
+      "offset": 4195844,
+      "width_bytes": 4,
+      "access": "read-write",
+      "reads": {
+        "kind": "fixed",
+        "value": 73727
+      }
+    }
+  ],
   "evidence": [
     {
       "kind": "located",

@@ -10,6 +10,28 @@
     "idle_bits": [],
     "basis": "output configuration page Located in catalog/firmware/xe5/1.12/xp5-boot/manifest.d/66-output-config.toml."
   },
+  "registers": [
+    {
+      "name": "word-74",
+      "offset": 116,
+      "width_bytes": 4,
+      "access": "read-write",
+      "reads": {
+        "kind": "fixed",
+        "value": 1
+      }
+    },
+    {
+      "name": "word-b0",
+      "offset": 176,
+      "width_bytes": 4,
+      "access": "read-write",
+      "reads": {
+        "kind": "fixed",
+        "value": 2704
+      }
+    }
+  ],
   "evidence": [
     {
       "kind": "located",
