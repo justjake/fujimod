@@ -68,7 +68,6 @@ fn the_x70_sd_card_boot_is_saved_and_restored() {
     let entries = saved(&directory, "held-sd-interactive");
     assert_eq!(entries.len(), 1, "one saved boot: {entries:?}");
     let saved_boot = entries[0].clone();
-    let before = stamp(&saved_boot);
 
     let started = Instant::now();
     let second = open_at(&library, request(boot(), Vec::new(), BootCache::Reuse)).unwrap();
@@ -77,6 +76,8 @@ fn the_x70_sd_card_boot_is_saved_and_restored() {
     assert!(second.cached, "the second open restores the saved boot");
     let report = fujimod_emulator_boot::status(second.session()).unwrap();
     assert_eq!(report.status, "rec");
+    // A restore marks the save as the most recently used one.
+    let before = stamp(&saved_boot);
 
     let started = Instant::now();
     let third = open_at(&library, request(boot(), Vec::new(), BootCache::Bypass)).unwrap();
