@@ -284,9 +284,6 @@ def replay(
             GIT_AUTHOR_NAME=fields[0],
             GIT_AUTHOR_EMAIL=fields[1],
             GIT_AUTHOR_DATE=fields[2],
-            GIT_COMMITTER_NAME=fields[0],
-            GIT_COMMITTER_EMAIL=fields[1],
-            GIT_COMMITTER_DATE=fields[2],
         )
         message = repository.git("log", "-1", "--format=%B", commit).stdout
         head = repository.git(
@@ -331,15 +328,14 @@ def rebased_pin(
     if key in cache:
         return cache[key]
     found = None
-    if (
-        submodule.git("cat-file", "-e", f"{pinned}^{{commit}}", check=False).returncode
-        == 0
-        and submodule.git(
+    if submodule.git("cat-file", "-e", f"{pinned}^{{commit}}", check=False).returncode:
+        # A pin from a merged and deleted branch: fetch it to find its twin.
+        submodule.git("fetch", "-q", "origin", pinned, check=False)
+    if submodule.git("cat-file", "-e", f"{pinned}^{{commit}}", check=False).returncode == 0:
+        if submodule.git(
             "merge-base", "--is-ancestor", pinned, "HEAD", check=False
-        ).returncode
-        == 0
-    ):
-        found = pinned
+        ).returncode == 0:
+            found = pinned
     if found is None:
         wanted = patch_id(submodule, pinned)
         if wanted is not None:
