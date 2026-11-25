@@ -23,6 +23,17 @@ fn compare(firmware: &str, manifest: &[DeviceWindow], built: &[DeviceWindow]) ->
     for window in manifest {
         let at: Vec<_> = built.iter().filter(|candidate| candidate.base == window.base).collect();
         let label = format!("{firmware} {:#x} {}", window.base, window.kind);
+        // A manifest window that describes part of a catalog window, with the same kind and
+        // settings, is the same hardware at a finer granularity; the catalog only adds the gaps.
+        let contains = |candidate: &&DeviceWindow| {
+            candidate.base <= window.base
+                && window.base + window.size <= candidate.base + candidate.size
+                && candidate.kind == window.kind
+                && candidate.options == window.options
+        };
+        if built.iter().any(|candidate| contains(&candidate)) {
+            continue;
+        }
         match at.as_slice() {
             [] => differences.push(format!("{label}: no catalog window")),
             [one] => {
@@ -57,7 +68,7 @@ mod tests {
     use super::*;
 
     /// Differences left before the switch; lower it as facts move, never raise it.
-    const REMAINING: usize = 553;
+    const REMAINING: usize = 472;
 
     #[test]
     fn catalog_windows_match_the_boot_manifests() {
