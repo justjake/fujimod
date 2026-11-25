@@ -29,7 +29,7 @@ pub fn build(
     mode: Mode,
     engine: RunEngine,
     record: serde_json::Value,
-) -> Result<fujimod_emulator_session::Session, String> {
+) -> Result<(fujimod_emulator_session::Session, Inputs), String> {
     let cores = graph.processors.len();
     if cores != definition.cores || !(1..=4).contains(&cores) {
         return Err("XP4 processor wiring differs from its definition".into());
@@ -47,6 +47,7 @@ pub fn build(
         _ => return Err("the XP4 board needs an XP4 interval timer with its window".into()),
     };
     let cache_sizes = definition.cache_sizes.map(|(d, i, l2)| (d, i, l2));
+    let dials = definition.countdown_dials.iter().map(|dial| (dial.name.clone(), dial.channel)).collect();
     let built = device_build::build(definition, &memory, storage_image, card_files, card_media)?;
     // Serial-flash execution is served by the controller's execute-in-place
     // pages, so the views the old engine mapped are not needed here.
@@ -109,7 +110,7 @@ pub fn build(
             cache_sizes,
         })?;
     }
-    Ok(fujimod_emulator_session::Session {
+    let session = fujimod_emulator_session::Session {
         definition: record,
         board,
         controls: None,
@@ -120,7 +121,8 @@ pub fn build(
         power_cycle: None,
         window_action: None,
         recording_frames: Default::default(),
-    })
+    };
+    Ok((session, Inputs { dials }))
 }
 
 /// Build the XP4 board from its definition alone: its cores start from
@@ -133,7 +135,7 @@ pub fn from_definition(
     card_files: Vec<(String, Vec<u8>)>,
     card_media: Vec<(usize, fujimod_emulator_devices::parts::sd_card::Card)>,
     engine: RunEngine,
-) -> Result<fujimod_emulator_session::Session, String> {
+) -> Result<(fujimod_emulator_session::Session, Inputs), String> {
     use fujimod_emulator::board::memory::BusMapping;
     let cores = definition.cores;
     if definition.initial_registers.len() > cores {
@@ -296,16 +298,78 @@ pub fn card_medium(
         .ok_or_else(|| "No SD card slot with that index".into())
 }
 
-/// Present a sample at an input of the XP4 external ADC, as a key's resistor
-/// band does; a sample that changes a sampled channel arms a conversion.
-pub fn set_adc_input(
-    session: &mut fujimod_emulator_session::Session,
-    channel: usize,
-    sample: u16,
-) -> Result<(), String> {
-    use fujimod_emulator_xp4_io::adc::Adc;
-    let id = session.node("xp4-adc").map_err(|_| "XP4 ADC inputs are not wired".to_string())?;
-    session.board.device_input::<super::devices::Connected<Adc>, _>(id, |adc, cx| {
-        adc.0.lock().unwrap().set_input(cx, channel, sample)
-    })
+/// External XP4 inputs the shared session's generic inputs do not name: the
+/// command dials of the countdown timers, the USB cable with its condition
+/// strap and the DWC3 host transactions, single ADC channels, GPIO pins and
+/// the touch panel.
+pub struct Inputs {
+    /// Countdown-timer channel of each named command dial.
+    dials: std::collections::BTreeMap<String, usize>,
+}
+
+type Dwc3 = Connected<fujimod_emulator_ip::usb::dwc3::Dwc3>;
+type Session = fujimod_emulator_session::Session;
+
+impl Inputs {
+    /// Queue `edges` detent edges on a named command dial.
+    pub fn turn_dial(&self, session: &mut Session, name: &str, edges: i32) -> Result<(), String> {
+        use fujimod_emulator_xp4_io::countdown_timers::CountdownTimers;
+        let channel = *self.dials.get(name).ok_or_else(|| format!("No XP4 command dial named {name}"))?;
+        let node = session.node("xp4-countdown-timers")?;
+        session.board.with_device_inputs::<CountdownTimers, _>(node, |timers, now| {
+            timers.dial_input(channel).ok_or("Unwired XP4 countdown dial")?.queue_edges(now, edges)
+        })
+    }
+    /// Set one external ADC channel (XP4 ADC or X-Processor Pro converter).
+    pub fn set_adc_input(&self, session: &mut Session, channel: usize, sample: u16) -> Result<(), String> {
+        use fujimod_emulator_devices::capability::AnalogInputs;
+        let node = session.node("xp4-adc").or_else(|_| session.node("xpp-adc")).map_err(|_| "XP4 ADC inputs are not wired")?;
+        session.board.edit_capability::<dyn AnalogInputs, _>(node, |adc| adc.set_sample(channel, sample))
+    }
+    /// Drive one external GPIO pin.
+    pub fn set_gpio_input(&self, session: &mut Session, port: usize, pin: usize, high: bool) -> Result<(), String> {
+        let (port, pin) = (u8::try_from(port), u8::try_from(pin));
+        let (Ok(port), Ok(pin)) = (port, pin) else { return Err("Invalid XP4 external GPIO pin".into()) };
+        session.gpio("gpio", port, pin, high)
+    }
+    /// Plug or unplug the USB cable: the condition strap the stock USB task
+    /// reads and the DWC3 data lines change together.
+    pub fn set_usb_connected(&self, session: &mut Session, connected: bool) -> Result<(), String> {
+        use fujimod_emulator_xp4_io::usb_condition::UsbCondition;
+        if let Ok(node) = session.node("xp4-usb-condition") {
+            session.board.with_device_inputs::<UsbCondition, _>(node, |strap, _| {
+                strap.presence().store(connected, std::sync::atomic::Ordering::SeqCst);
+                Ok(())
+            })?;
+        }
+        self.with_usb(session, |usb, now| usb.link(now, connected))
+    }
+    pub fn usb_bus_reset(&self, session: &mut Session) -> Result<(), String> {
+        self.with_usb(session, |usb, now| usb.bus_reset(now))
+    }
+    /// Queue one host transaction on a DWC3 physical endpoint; returns its id.
+    pub fn usb_transaction(
+        &self,
+        session: &mut Session,
+        endpoint: usize,
+        setup: bool,
+        out: Option<Vec<u8>>,
+    ) -> Result<u64, String> {
+        self.with_usb(session, |usb, now| usb.transaction(now, endpoint, setup, out))
+    }
+    pub fn usb_reply(&self, session: &Session, id: u64) -> Result<Option<fujimod_emulator_ip::usb::dwc3::Reply>, String> {
+        let node = session.node("dwc3").map_err(|_| "DWC3 is not wired")?;
+        session.board.with_device::<Dwc3, _>(node, |usb| usb.0.lock().unwrap().reply(id).cloned())
+    }
+    pub fn usb_consume_reply(&self, session: &mut Session, id: u64) -> Result<(), String> {
+        self.with_usb(session, |usb, _| usb.consume_reply(id))
+    }
+    fn with_usb<R>(
+        &self,
+        session: &mut Session,
+        f: impl FnOnce(&mut fujimod_emulator_ip::usb::dwc3::Dwc3, u64) -> Result<R, String>,
+    ) -> Result<R, String> {
+        let node = session.node("dwc3").map_err(|_| "DWC3 is not wired")?;
+        session.board.with_device_inputs::<Dwc3, _>(node, |usb, now| f(&mut usb.0.lock().unwrap(), now))
+    }
 }

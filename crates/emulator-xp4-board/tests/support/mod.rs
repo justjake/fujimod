@@ -24,7 +24,7 @@ pub fn open_with(
     card_media: Vec<(usize, fujimod_emulator_devices::parts::sd_card::Card)>,
 ) -> Result<Board, String> {
     shared::from_definition(definition, storage_image, card_files, card_media, RunEngine::Unicorn)
-        .map(|session| Board(RefCell::new(session)))
+        .map(|(session, _)| Board(RefCell::new(session)))
 }
 
 /// The session a definition JSON builds.
