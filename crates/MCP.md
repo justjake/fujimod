@@ -138,7 +138,7 @@ used.
 
 | Group | Tool | Does | Status | USB |
 |---|---|---|---|---|
-| Cameras | `camera_open` | Boot a run configuration (ROM or SD boot) or restore a checkpoint file | implemented | planned |
+| Cameras | `camera_open` | Open a firmware with a boot from [CAMERAS.md](CAMERAS.md), or restore a checkpoint file | implemented | planned |
 | | `camera_list` | Open cameras and how each was opened | implemented | yes |
 | | `camera_close` | Release the camera | implemented | yes |
 | | `camera_checkpoint` | Save the whole machine under a name, optionally to a file | implemented | no |
@@ -195,28 +195,10 @@ cloud machine with Mesa's software Vulkan driver:
 - A snapshot taken with SD card files attached restored into a board built
   with the same SD card files and continued running.
 
-### SD boot
+### Opening cameras
 
-The `fujimod-emulator` CLI SD boots a FujiMod SD card today, although the
-X70 boot refuses a configuration whose start is `sd_card`
-(`emulator-boot/src/lib.rs`). A ROM-start run expresses the same boot:
-
-```sh
-fujimod-emulator boot --configuration x70-110-rec \
-  --overlay x70-110-browser-camera \
-  --update FPUPDATE.DAT --boot-rom bootrom.bin --camera DIR \
-  --card-file FFBOOT.BIN=PATH --card-file FFSYS.BIN=PATH ... \
-  --gpio 0:10=0,0:11=0 \
-  --keys 't=0.3:-controls-gpio-0-10;t=0.3:-controls-gpio-0-11'
-```
-
-The overlay adds the SD host and its virtual SD card. GPIO 0:10 and 0:11
-are the two buttons held from power-on to select SD boot; the key script
-releases them 0.3 s into the run. With a FujiMod 0.0.2 SD card this reached
-REC after 718 million guest instructions in 2.9 s of wall time; eight guest
-seconds later the FujiMod welcome sheet was on screen.
-
-`camera_open` uses this path.
+`camera_open` opens a firmware with one of the boots in
+[CAMERAS.md](CAMERAS.md): stock, the FujiMod SD card, or automatic boot.
 
 ### Rules
 
