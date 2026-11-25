@@ -435,6 +435,23 @@ impl Board {
         }
         Ok(())
     }
+    /// Observe bounded CPU writes, without reads, including on AArch64
+    /// cores. `memory_watch_state` and `memory_watch_end` read and end it.
+    #[pyo3(signature=(ranges,limit=1_000_000))]
+    fn memory_write_watch_begin(&mut self, ranges: Vec<(u64, u64)>, limit: usize) -> PyResult<()> {
+        if self.memory_watch.is_some() {
+            return Err(error("Another memory watch is active".into()));
+        }
+        let maps =
+            serde_json::from_value(self.session()?.definition["execution"]["mappings"].clone())
+                .map_err(|e| error(e.to_string()))?;
+        self.memory_watch = Some(
+            self.board()?
+                .memory_write_watch_begin(ranges, limit, maps)
+                .map_err(error)?,
+        );
+        Ok(())
+    }
     fn memory_watch_enabled(&self) -> bool {
         self.memory_watch.is_some()
     }
@@ -932,6 +949,11 @@ impl Board {
     }
     fn raise_irq(&mut self, core: usize, line: u32) -> PyResult<()> {
         self.board_mut()?.raise_irq(core, line).map_err(error)
+    }
+    /// Apply an explicit external reset input to a processor core; releasing
+    /// it starts the core from its declared reset state.
+    fn reset_core(&mut self, core: usize, asserted: bool) -> PyResult<()> {
+        self.board_mut()?.reset_core(core, asserted).map_err(error)
     }
     fn rprofile_identity(&self, core: usize, value: Option<u32>) -> PyResult<u32> {
         self.board()?

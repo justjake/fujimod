@@ -156,6 +156,26 @@ fn a_guest_reset_release_tightens_the_active_run_to_the_next_quantum_boundary() 
 }
 
 #[test]
+fn a_host_reset_release_starts_a_held_core_without_guest_code() {
+    for counted in [false, true] {
+        let (mut board, writes) = board(counted);
+        board.run_until(100, 50).unwrap();
+        assert_eq!(board.instruction_counts()[1], 0);
+        board.reset_core(1, false).unwrap();
+        board.run_until(130, 50).unwrap();
+        // The guest's own release store comes at tick 136, after this run.
+        assert!(writes.lock().unwrap().is_empty());
+        assert!(board.instruction_counts()[1] > 0);
+        assert!(
+            board
+                .read_register(1, fujimod_emulator_cpu::arm::CORE[4])
+                .unwrap()
+                > 0
+        );
+    }
+}
+
+#[test]
 fn native_software_interrupt_wiring_releases_the_declared_entry_at_the_existing_slice_boundary() {
     use factory::{Graph, MemoryMap, Options, Peripheral, Processor, Ram};
     use fujimod_emulator_exr2_plan::{Plan, RefuseAdapters};
