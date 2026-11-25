@@ -1,0 +1,22 @@
+{
+  "$schema": "https://fujimod.com/schemas/body.schema.json",
+  "schema": 1,
+  "id": "x100f",
+  "soc_id": "xpp",
+  "connections": [
+    {
+      "id": "flash-storage",
+      "kind": "control"
+    }
+  ],
+  "parts": [
+    "x100f-flash"
+  ],
+  "wiring": [
+    {
+      "source_id": "flash-controller",
+      "target_id": "x100f-flash",
+      "signal": "storage"
+    }
+  ]
+}
