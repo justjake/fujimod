@@ -6,7 +6,7 @@
   "body_id": "xh2s",
   "firmware_id": "xh2s-730",
   "start": {
-    "kind": "loader"
+    "kind": "setup"
   },
   "execution": {
     "mode": "strict",

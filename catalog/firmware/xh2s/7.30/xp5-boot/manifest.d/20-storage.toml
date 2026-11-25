@@ -14,8 +14,8 @@ base = 0xff90a000
 size = 0x1000
 kind = "flash-storage-controller"
 [device.options]
-# Selected stock descriptor geometry; not an observed camera chip ID.
-jedec_id = 0x20bb20
+# The stock setup probes the body's declared NOR part.
+jedec_id = 0x2c5b1b
 
 [[device]]
 # Functional 1us completion, level INTID225 until masked ACK at +1c.

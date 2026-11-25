@@ -1,0 +1,19 @@
+# Start the stock setup stage in boot SRAM so it builds the hardware-info handoff
+# and initializes the board before the OS starts. The stage comes from the update.
+pc = 0xff800000
+sp = 0
+dat_offset = 0xa74
+length = 0x12000
+sha256 = "c7b32c535c67394220e8d5f4428e830f6fffa37c67c51ab50d5bce2c211a6c83"
+source_straps = 0
+
+# The setup stage writes controller configuration after the initial DDR polls.
+[[device]]
+base = 0xfaf09000
+size = 0x1000
+kind = "write-only-registers"
+
+[[device]]
+base = 0xfaf19000
+size = 0x1000
+kind = "write-only-registers"

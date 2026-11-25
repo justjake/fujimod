@@ -42,6 +42,6 @@ size = 0x1000
 kind = "write-only-registers"
 
 [[device]]
-base = 0xfae62000
-size = 0x1000
+base = 0xfae60000
+size = 0x24000
 kind = "write-only-registers"

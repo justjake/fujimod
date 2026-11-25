@@ -78,3 +78,6 @@ select = { port = 15, pin = 15, active_high = true }
 kind = "power-controller"
 rtc_seconds = 0x325ffea2
 rtc_valid = true
+# Stage one polls register 0 for bit 15 and reads the wake cause from 0x10.
+# The other registers describe an installed battery at 26 C.
+registers = { "0" = 0x8200, "10" = 0x2, "3" = 672, "e" = 0x4811, "2f" = 2080, "30" = 1825, "31" = 24408, "32" = 2992, "48" = 17 }
