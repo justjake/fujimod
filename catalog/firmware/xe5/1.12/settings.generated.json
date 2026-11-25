@@ -28,7 +28,7 @@
     "power_register": 31,
     "records": {
       "settings": {
-        "block": 489,
+        "block": 1956,
         "bytes": 65536,
         "defaults": {
           "address": 30326784,
@@ -77,7 +77,7 @@
         ]
       },
       "system": {
-        "block": 483,
+        "block": 1932,
         "bytes": 8192,
         "defaults": {
           "address": 29979472,

@@ -54,17 +54,21 @@ impl Dma {
     }
     fn copy(&mut self, cx: &mut Cx<'_>, n: usize) -> Result<(), String> {
         // +0x2c is 3 on channel 0 and 5 elsewhere where a driver programs it (the NOR loader, the
-        // NAND stage's channel 2 fill). The NAND stage's own flash read channel never writes it, so
-        // its reset value 0 is also accepted for the serial-NAND medium.
+        // NAND stage's channel 2 fill). The boot-setup stage's own flash read channel never writes
+        // it, so its reset value 0 is accepted on either medium: the X-E5 1.12 stage reads its
+        // serial NOR through channel 0 that way (the identical stage reads serial NAND on the X-M5).
         let programmed = if n == 0 { 3 } else { 5 };
-        let reset_mode_accepted = matches!(&self.medium, crate::flash_storage::Medium::Nand(_));
+        let reset_mode_accepted = true;
         let r = &mut self.state.channels[n];
         if r[0] != 0
             || r[12] != 2
             || r[13] != 0
             || !(r[11] == programmed || (reset_mode_accepted && r[11] == 0))
         {
-            return Err("unsupported DMA channel mode".into());
+            return Err(format!(
+                "unsupported DMA channel mode: channel {n} word0 {:#x} mode {:#x} word12 {:#x} word13 {:#x}",
+                r[0], r[11], r[12], r[13]
+            ));
         }
         let src = r[2] as u64 | ((r[1] & 7) as u64) << 32;
         let dst = r[7] as u64 | ((r[6] & 7) as u64) << 32;

@@ -3,12 +3,14 @@
 # same copy from the update image. The extent is the boot-setup stage (update-file offset 0xabc,
 # size 0x2c000, base 0xff800000); its SHA-256 is checked on load. The stage sets its own stack
 # (SP_EL0 = 0xff830d00 at 0xff800004..0xff800020); sp is only the entry value.
-# source_straps = 1 selects the direct-flash path: setup samples 0xff90e000 bit 0 and
-# initializes the serial-flash controller. The strap value is carried over from the other XP5
-# bodies and is UNVERIFIED for the X-E5.
+# source_straps = 0: setup samples 0xff90e000 bit 0 (0xff810a34). Bit 0 set takes the initialization
+# at 0xff811bbc, which clocks a serial NAND (JEDEC 0xefdc21) and spins at 0xff811de4 when the
+# identity's first byte is not 0xef. This body's flash is serial NOR (JEDEC 0x2c5b1b), so the
+# stage must take the bit-clear path at 0xff80fb94 instead. The value is chosen from that
+# reachability and is UNVERIFIED as the physical strap level of the X-E5.
 pc = 0xff800000
 sp = 0xff830d00
 dat_offset = 0xabc
 length = 0x2c000
 sha256 = "d65899f242562666e9986e5fc5b7b23136c1b06fc224e7db6511b5ebe8d36426"
-source_straps = 1
+source_straps = 0

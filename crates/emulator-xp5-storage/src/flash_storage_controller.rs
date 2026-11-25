@@ -190,11 +190,18 @@ impl Controller {
                 | 0x44
                 | 0x48
                 | 0x50
+                // The X-E5 1.12 loader initializes the controller's slot registers
+                // (0x60, 0x70, 0x90) whatever the installed flash technology; their
+                // accessor stubs start at 0xff81578c (0x60). Plain latches, as in the
+                // serial-NAND model.
+                | 0x60
                 | 0x64
                 | 0x68
+                | 0x70
                 | 0x74
                 | 0x78
                 | 0x80
+                | 0x90
                 | 0x94
                 | 0x98
                 | 0xa0
@@ -442,8 +449,11 @@ impl Device for Controller {
                 Ok(())
             }
             0xd0 => {
-                if v & !0x101 != 0 {
-                    Err("unsupported flash storage FIFO reset".into())
+                // Self-clearing resets: bits 0, 8 and 9 (reads return 0), as on the serial-NAND
+                // controller. The X-E5 1.12 mixed flash driver sets bit 8 (0x14a5850) and
+                // bit 9 (0x14a5878) from its reset routine at 0x14a3dcc.
+                if v & !0x301 != 0 {
+                    Err(format!("unsupported flash storage FIFO reset {v:#x}"))
                 } else {
                     Ok(())
                 }
@@ -717,5 +727,25 @@ mod tests {
         // A bad dummy count alone is also refused at read time.
         controller.write(&mut cx, 0xff90a074, 4, 10);
         assert!(medium.read_device(0, 4).unwrap_err().contains("0xfd with 10"));
+    }
+    #[test]
+    fn the_self_clearing_resets_and_slot_registers_of_the_x_e5_loader_are_accepted() {
+        use fujimod_emulator_devices::test_host::recording::RecordingHost;
+        let (_, mut controller) = mt35xu();
+        let mut host = RecordingHost::default();
+        let mut cx = Cx::new(&mut host, 0, 0, 0);
+        // The X-E5 1.12 mixed flash driver sets bit 8 (0x14a5850) and bit 9 (0x14a5878).
+        for reset in [0x1, 0x100, 0x200, 0x301] {
+            controller.write(&mut cx, 0xff90a0d0, 4, reset);
+            assert_eq!(cx.refusal(), None, "reset {reset:#x}");
+            assert_eq!(controller.read(&mut cx, 0xff90a0d0, 4), 0);
+        }
+        for slot in [0x60, 0x70, 0x90] {
+            controller.write(&mut cx, 0xff90a000 + slot, 4, 0x1234);
+            assert_eq!(cx.refusal(), None, "slot register {slot:#x}");
+            assert_eq!(controller.read(&mut cx, 0xff90a000 + slot, 4), 0x1234);
+        }
+        controller.write(&mut cx, 0xff90a0d0, 4, 0x400);
+        assert!(cx.refusal().is_some());
     }
 }
