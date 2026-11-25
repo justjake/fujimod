@@ -1,7 +1,0 @@
-# Clock banks, the same SoC window as xt5-431.d/21-clocks.toml.
-# Factory registers the known banks only; holes and unknown offsets still stop.
-# PLL words/dividers start zero by session assumption; no rate/lock-time claim.
-[[device]]
-base = 0xffa00000
-size = 0x20000
-kind = "clock-banks"

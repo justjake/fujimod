@@ -5,8 +5,6 @@
 //! this crate assembles its inputs, drives the run in slices and records the outcome.
 
 mod card_image;
-#[cfg(test)]
-mod catalog_parity;
 mod display_output;
 pub mod firmware;
 mod loader_card;
@@ -80,11 +78,9 @@ pub(super) fn open_startup(
         return Err("XP5 SD card startup requires marble_init.bin or an SD card image".into());
     }
     let firmware_id = configuration.configuration.firmware_id.clone();
-    let mut state = manifest::BootState::for_firmware(&firmware_id, manifest.as_deref())?;
-    let preloads = configuration
-        .configuration
-        .preset
-        .as_ref()
+    let mut state = manifest::BootState::for_firmware(&firmware_id, manifest.as_deref())?
+        .with_catalog_windows(configuration)?;
+    let preloads = configuration.configuration.preset.as_ref()
         .and_then(|preset| preset.firmware_profile_id.as_ref())
         .and_then(|id| {
             configuration

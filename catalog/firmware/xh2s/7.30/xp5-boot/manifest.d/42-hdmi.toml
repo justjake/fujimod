@@ -1,8 +1,0 @@
-# HDMI hot-plug status word, the same SoC word and kind as xt5-431.d/42-hdmi.toml.
-# No cable is attached; connected_level = 0 is the inferred X-T5 polarity.
-[[device]]
-base = 0xff90e200
-size = 4
-kind = "hdmi-hot-plug-status"
-[device.options]
-connected_level = 0

@@ -473,19 +473,8 @@ mod tests {
     /// The X-T5 4.31 manifest's RESZ and RZL2 windows register as their scaling stubs.
     #[test]
     fn the_xt5_resz_and_rzl2_windows_register() {
-        #[derive(serde::Deserialize)]
-        struct Fragment {
-            device: Vec<DeviceWindow>,
-        }
-        let fragment: Fragment = toml::from_str(include_str!(
-            "../../../../catalog/firmware/xt5/4.31/xp5-boot/manifest.d/55-develop-stubs.toml"
-        ))
-        .unwrap();
-        let windows: Vec<_> = fragment
-            .device
-            .into_iter()
-            .filter(|w| matches!(w.kind.as_str(), "imaging-resz" | "imaging-rzl2"))
-            .collect();
+        let mut windows = crate::boot::xt5_windows(&["imaging-resz", "imaging-rzl2"]);
+        windows.sort_by(|a, b| a.kind.cmp(&b.kind));
         assert_eq!(
             windows
                 .iter()
@@ -516,30 +505,9 @@ mod tests {
     /// only at that base.
     #[test]
     fn the_xt5_filter_scaler_window_registers() {
-        #[derive(serde::Deserialize)]
-        struct Fragment {
-            device: Vec<DeviceWindow>,
-        }
-        let fragment: Fragment = toml::from_str(include_str!(
-            "../../../../catalog/firmware/xt5/4.31/xp5-boot/manifest.d/57-develop-stubs-3.toml"
-        ))
-        .unwrap();
-        let windows: Vec<_> = fragment
-            .device
-            .into_iter()
-            .filter(|w| w.kind == "imaging-filter-scaler")
-            .collect();
-        assert_eq!(
-            windows.iter().map(|w| w.base).collect::<Vec<_>>(),
-            [0xff983000]
-        );
-        assert_eq!(
-            windows[0]
-                .options
-                .get("irq")
-                .and_then(toml::Value::as_integer),
-            Some(204)
-        );
+        let windows = crate::boot::xt5_windows(&["imaging-filter-scaler"]);
+        assert_eq!(windows.iter().map(|w| w.base).collect::<Vec<_>>(), [0xff983000]);
+        assert_eq!(windows[0].options.get("irq").and_then(toml::Value::as_integer), Some(204));
         let pins = fujimod_emulator_devices::xp5::pins::Pins::shared();
         register_all(&mut DeviceGraph::new(), &windows, &pins).unwrap();
         let mut moved = windows[0].clone();

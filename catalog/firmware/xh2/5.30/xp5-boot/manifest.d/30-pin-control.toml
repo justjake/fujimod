@@ -1,5 +1,0 @@
-# Pin control (the SoC's `pin-control` block): 0x1381d0c reads +0x18 into its caller's word.
-[[device]]
-base = 0xff904000
-size = 0x1000
-kind = "pin-control"

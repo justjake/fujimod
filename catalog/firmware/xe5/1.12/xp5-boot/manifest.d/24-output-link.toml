@@ -1,9 +1,0 @@
-# X-E5 1.12 VERIFIED: 0x155f018 reads and modifies +0x04 and +0x18 and writes
-# packed settings at +0x08, +0x0c, +0x10, and +0x14. At 0x155f2d8 it writes 0
-# to 0xff9a1000, then polls bit 0 there at 0x155f2ec until it is set. The word at
-# +0x18 ends at the declared window boundary. Initial configuration words of 0,
-# the full ready word, and immediate completion are UNVERIFIED device behavior.
-[[device]]
-base = 0xff9a1000
-size = 0x1c
-kind = "display-output-link"

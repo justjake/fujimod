@@ -104,17 +104,11 @@ mod tests {
         fn record(&mut self, _: Record) {}
     }
 
-    /// The X-T5 4.31 catalog fragment that declares these devices.
+    /// The X-T5 4.31 windows of these devices.
     fn xt5_windows() -> Vec<DeviceWindow> {
-        #[derive(Deserialize)]
-        struct Fragment {
-            device: Vec<DeviceWindow>,
-        }
-        let text = include_str!(concat!(
-            env!("CARGO_MANIFEST_DIR"),
-            "/../../catalog/firmware/xt5/4.31/xp5-boot/manifest.d/64-usb.toml"
-        ));
-        toml::from_str::<Fragment>(text).unwrap().device
+        let mut windows = crate::boot::xt5_windows(&["usb-device-controller", "usb-phy", "bringup-stub", "completion-stub"]);
+        windows.retain(|window| (0xffc0_0000..0xffd0_0000).contains(&window.base));
+        windows
     }
 
     fn write(d: &mut Dwc3, b: &mut Board, offset: u64, value: u32) {

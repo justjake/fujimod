@@ -1,8 +1,0 @@
-[[device]]
-# The application reads the gate bank at 0xff90c300. Known gate/reset latches
-# start zero; this is a session assumption.
-base = 0xff90c000
-size = 0x1000
-kind = "clock-gates"
-[device.options]
-configuration_word = 0

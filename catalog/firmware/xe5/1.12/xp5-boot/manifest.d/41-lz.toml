@@ -1,7 +1,0 @@
-# The SoC's `lz` block (lazy-code and font streaming DMA and conversion, the shared `lz` model),
-# declared as on the X-T5 and X-H2. The reset stage writes 0 to +0x00 as the first step of the same
-# reset handshake the application uses. Completion timing is the model's functional assumption.
-[[device]]
-base = 0xff980000
-size = 0x1000
-kind = "lz"

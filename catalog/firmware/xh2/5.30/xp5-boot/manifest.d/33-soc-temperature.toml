@@ -1,5 +1,0 @@
-# SoC temperature sensor (the SoC's `temperature` block); 0x13be028 writes +0xc.
-[[device]]
-base = 0xff905000
-size = 0x1000
-kind = "soc-temperature"

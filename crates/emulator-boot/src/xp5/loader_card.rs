@@ -29,7 +29,7 @@ use std::{
     path::{Path, PathBuf},
 };
 
-/// Slot 1: the UHS-I host of SD instance 0 (manifest.d/25-sd.toml).
+/// Slot 1: the UHS-I host of SD instance 0.
 pub(crate) const SLOT: u64 = 0xff9b_0000;
 /// Slot 2: the UHS-I host of SD instance 1.
 pub(crate) const SLOT_2: u64 = 0xff9b_4000;
