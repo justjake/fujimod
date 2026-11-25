@@ -400,7 +400,7 @@ class Board:
         cls,
         *,
         firmware: str,
-        boot: Literal["stock", "sd-card", "automatic-boot"] = "stock",
+        boot: Literal["stock", "sd-card", "autostart"] = "stock",
         sd_card: str | PathLike[str] | None = None,
         execution_policy: ExecutionPolicy = "exact",
         boot_cache: bool = True,
@@ -412,15 +412,23 @@ class Board:
         start: Literal["rom", "loader"] = "rom",
         image: str | PathLike[str] | None = None,
         image_sha256: str | None = None,
+        update: str | PathLike[str] | None = None,
+        boot_rom: str | PathLike[str] | None = None,
+        flash: str | PathLike[str] | None = None,
+        combination: str | None = None,
     ) -> Self:
         """Open a camera through the shared builder and return it at REC.
 
         The firmware's update, boot ROM and reference camera come from the
         directory named by FUJIMOD_FIRMWARE_LIBRARY, so the caller names only
-        the firmware. `boot` is `stock`, `sd-card` or
-        `automatic-boot`. `sd_card` names an SD card directory, or is the
-        current release card when it is omitted for the two card boots, or the
-        extra files of an otherwise empty card for a stock boot.
+        the firmware. `boot` is `stock`, `sd-card` or `autostart`. `sd_card`
+        names an SD card directory, or is the current release card when it is
+        omitted for the two card boots, or the extra files of an otherwise
+        empty card for a stock boot. `update` and `boot_rom` name the two
+        firmware files instead of the library, `flash` starts from a saved
+        internal-flash image, and `combination` holds a catalog power-on
+        combination (`sd`, `firmware_update` or `service`); those open the
+        emulator layer, whose SD card is the `sd_card` directory's files.
         `execution_policy` is `exact` or `interactive`. `boot_cache`
         restores the library's saved boot when the same inputs were opened
         before and saves this one; `False` boots from scratch and saves
@@ -440,8 +448,10 @@ class Board:
         such an open.
         """
         firmware = cls._identifier(firmware, "firmware")
-        if boot not in ("stock", "sd-card", "automatic-boot"):
-            raise ValueError("boot must be 'stock', 'sd-card' or 'automatic-boot'")
+        if boot not in ("stock", "sd-card", "autostart"):
+            raise ValueError("boot must be 'stock', 'sd-card' or 'autostart'")
+        if (update is None) != (boot_rom is None):
+            raise ValueError("update and boot_rom are named together, or not at all")
         if execution_policy not in ("exact", "interactive"):
             raise ValueError("execution_policy must be 'exact' or 'interactive'")
         if type(boot_cache) is not bool:
@@ -480,8 +490,17 @@ class Board:
             if not sd_card_present:
                 raise ValueError("card_layout needs the card present")
             layout_text = json.dumps(selected_layout)
-        if not run_to_rec and boot == "automatic-boot":
-            raise ValueError("an automatic boot cannot stop before REC")
+        emulator_layer = (
+            update is not None or flash is not None or combination is not None
+        )
+        if emulator_layer and boot != "stock":
+            raise ValueError(
+                "files, flash and a combination open the emulator layer; boot must be 'stock'"
+            )
+        if not run_to_rec and boot == "autostart":
+            raise ValueError("an autostart open cannot stop before REC")
+        if emulator_layer and image is not None and combination is not None:
+            raise ValueError("a RAM image and a power-on combination are exclusive")
         if not sd_card_present and boot != "stock":
             raise ValueError("a card boot needs the card present")
         if start not in ("rom", "loader"):
@@ -496,6 +515,9 @@ class Board:
             raise ValueError("image_sha256 must be 64 hexadecimal characters")
         card = None if sd_card is None else cls._input_path(sd_card, "sd_card")
         image_path = None if image is None else cls._input_path(image, "image")
+        update_path = None if update is None else cls._input_path(update, "update")
+        boot_rom_path = None if boot_rom is None else cls._input_path(boot_rom, "boot_rom")
+        flash_path = None if flash is None else cls._input_path(flash, "flash")
         native = _native.Board.open_camera(
             firmware=firmware,
             boot=boot,
@@ -510,6 +532,10 @@ class Board:
             start=start,
             image=image_path,
             image_sha256=image_sha256,
+            update=update_path,
+            boot_rom=boot_rom_path,
+            flash=flash_path,
+            combination=combination,
         )
         quantum = native.boot_quantum
         if type(quantum) is not int or quantum < 1:
