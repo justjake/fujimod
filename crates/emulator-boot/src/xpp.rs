@@ -741,7 +741,8 @@ fn block_register_layouts(
             | BlockDevice::Xp5ImagingStatistics { .. }
             | BlockDevice::ImagingDsp { .. }
             | BlockDevice::ByteI2c { .. }
-            | BlockDevice::UnmodeledBusDrain { .. } => {}
+            | BlockDevice::UnmodeledBusDrain { .. }
+            | BlockDevice::RegisterStorage { .. } => {}
         }
     }
 

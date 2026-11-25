@@ -1,0 +1,12 @@
+{
+  "$schema": "https://fujimod.com/schemas/soc-block.schema.json",
+  "schema": 1,
+  "id": "register-storage-fff6b000",
+  "base": 4294356992,
+  "size": 4096,
+  "kind": "address-window",
+  "device": {
+    "model": "register_storage",
+    "basis": "Register words with no modeled behavior: imaging lane map and mux words; the camera reads 0x10003 at 0xfff6b004 in REC."
+  }
+}

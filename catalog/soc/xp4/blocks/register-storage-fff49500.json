@@ -1,0 +1,12 @@
+{
+  "$schema": "https://fujimod.com/schemas/soc-block.schema.json",
+  "schema": 1,
+  "id": "register-storage-fff49500",
+  "base": 4294219008,
+  "size": 2816,
+  "kind": "address-window",
+  "device": {
+    "model": "register_storage",
+    "basis": "Register words with no modeled behavior: interface power-up and per-slot gates (0xfff49700)."
+  }
+}

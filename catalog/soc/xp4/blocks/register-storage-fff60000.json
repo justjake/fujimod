@@ -1,0 +1,12 @@
+{
+  "$schema": "https://fujimod.com/schemas/soc-block.schema.json",
+  "schema": 1,
+  "id": "register-storage-fff60000",
+  "base": 4294311936,
+  "size": 36864,
+  "kind": "address-window",
+  "device": {
+    "model": "register_storage",
+    "basis": "Register words with no modeled behavior: imaging pipeline stage words below the receiver; first accessed during the X-T3 5.11 live-view start (0x104f1a4 and neighbors)."
+  }
+}

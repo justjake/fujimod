@@ -1,0 +1,12 @@
+{
+  "$schema": "https://fujimod.com/schemas/soc-block.schema.json",
+  "schema": 1,
+  "id": "register-storage-fff4a880",
+  "base": 4294224000,
+  "size": 1920,
+  "kind": "address-window",
+  "device": {
+    "model": "register_storage",
+    "basis": "Register words with no modeled behavior: reset, clock and configuration words; the still DSP owns 0xfff4aa10, 0xfff4aa1c and 0xfff4aa20 (X-T3 5.11 0x10790ac, 0x10790e4, 0x1079080)."
+  }
+}

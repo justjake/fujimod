@@ -1,0 +1,12 @@
+{
+  "$schema": "https://fujimod.com/schemas/soc-block.schema.json",
+  "schema": 1,
+  "id": "register-storage-ff500000",
+  "base": 4283432960,
+  "size": 1048576,
+  "kind": "address-window",
+  "device": {
+    "model": "register_storage",
+    "basis": "Register words with no modeled behavior: DRAM controller window; the controller's register blocks own their pages."
+  }
+}

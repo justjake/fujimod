@@ -2997,6 +2997,25 @@
             "basis"
           ],
           "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Register words with no modeled behavior: each reads back its last\nwrite. The window yields every address another selected device owns.",
+          "properties": {
+            "basis": {
+              "description": "Declared basis.",
+              "type": "string"
+            },
+            "model": {
+              "const": "register_storage",
+              "type": "string"
+            }
+          },
+          "required": [
+            "model",
+            "basis"
+          ],
+          "type": "object"
         }
       ]
     },

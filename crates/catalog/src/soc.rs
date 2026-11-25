@@ -838,6 +838,12 @@ pub enum BlockDevice {
         /// Declared basis.
         basis: String,
     },
+    /// Register words with no modeled behavior: each reads back its last
+    /// write. The window yields every address another selected device owns.
+    RegisterStorage {
+        /// Declared basis.
+        basis: String,
+    },
 }
 
 /// One start write of a completion block.
@@ -1105,6 +1111,7 @@ impl BlockDevice {
                         | BlockDevice::InterprocessorMailbox { .. }
                         | BlockDevice::InputCapture { .. }
                         | BlockDevice::UnmodeledBusDrain { .. }
+                        | BlockDevice::RegisterStorage { .. }
                 )
                 | (
                     SocBlockKind::ControlBus,

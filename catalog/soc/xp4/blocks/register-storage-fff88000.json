@@ -1,0 +1,12 @@
+{
+  "$schema": "https://fujimod.com/schemas/soc-block.schema.json",
+  "schema": 1,
+  "id": "register-storage-fff88000",
+  "base": 4294475776,
+  "size": 12288,
+  "kind": "address-window",
+  "device": {
+    "model": "register_storage",
+    "basis": "Register words with no modeled behavior: still-pipeline words loaded by the X-T3 5.11 register-load tables 0x14eae1c and 0x14f236c during the still RECC step, above RECC's parameter pages."
+  }
+}
