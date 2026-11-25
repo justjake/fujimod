@@ -35,7 +35,7 @@ fn compare(firmware: &str, manifest: &[DeviceWindow], built: &[DeviceWindow]) ->
             continue;
         }
         match at.as_slice() {
-            [] => differences.push(format!("{label}: no catalog window")),
+            [] => differences.push(format!("{label}: no catalog window (size {:#x}, options {})", window.size, toml::Value::Table(window.options.clone()))),
             [one] => {
                 if one.size != window.size {
                     differences.push(format!("{label}: size {:#x} != {:#x}", one.size, window.size));
@@ -68,13 +68,13 @@ mod tests {
     use super::*;
 
     /// Differences left before the switch; lower it as facts move, never raise it.
-    const REMAINING: usize = 448;
+    const REMAINING: usize = 431;
 
     #[test]
     fn catalog_windows_match_the_boot_manifests() {
         let mut all = Vec::new();
         for firmware in FIRMWARES {
-            all.extend(differences(firmware).unwrap_or_else(|error| vec![format!("{firmware}: {error}")]));
+            all.extend(differences(firmware).unwrap_or_else(|error| panic!("{firmware}: {error}")));
         }
         let report = std::env::temp_dir().join("xp5-catalog-parity.txt");
         std::fs::write(&report, all.join("\n") + "\n").unwrap();

@@ -8,6 +8,7 @@
   "device": {
     "model": "register_block",
     "idle_bits": [],
+    "reads_back": true,
     "basis": "output configuration page Located in catalog/firmware/xe5/1.12/xp5-boot/manifest.d/66-output-config.toml."
   },
   "registers": [

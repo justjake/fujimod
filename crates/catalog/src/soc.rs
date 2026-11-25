@@ -286,6 +286,9 @@ pub enum BlockDevice {
         /// Job law, when declared.
         #[serde(default, skip_serializing_if = "Option::is_none")]
         job: Option<BlockRegisterBlockJob>,
+        /// Reads return the last write to a word, 0 before one; otherwise reads are refused.
+        #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+        reads_back: bool,
         /// Declared basis.
         basis: String,
         /// Position in the declared register-block order.

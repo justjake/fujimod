@@ -935,6 +935,10 @@
                 "integer",
                 "null"
               ]
+            },
+            "reads_back": {
+              "description": "Reads return the last write to a word, 0 before one; otherwise reads are refused.",
+              "type": "boolean"
             }
           },
           "required": [
