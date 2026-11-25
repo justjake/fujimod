@@ -57,6 +57,8 @@ pub struct Idle<'a> {
 
 pub use fujimod_emulator_session::inputs::Panel;
 
+const EYE_SENSOR_BUS: &str = "0xff925000";
+const EYE_SENSOR_ADDRESS: u8 = 0x39;
 const RELEASED: &str = "released";
 const PRESSED: &str = "pressed";
 
@@ -389,8 +391,8 @@ pub fn compile(
                 .map(|(position, sample)| Case {
                     positions: vec![position.into()],
                     signals: vec![Signal::Proximity {
-                        node: "0xff925000".into(),
-                        address: 0x39,
+                        node: EYE_SENSOR_BUS.into(),
+                        address: EYE_SENSOR_ADDRESS,
                         sample,
                     }],
                 })
@@ -502,11 +504,27 @@ pub fn connect(
     session: &mut fujimod_emulator_session::Session,
     inputs: &mut crate::session::Inputs,
     options: Options,
-    names: Names,
+    mut names: Names,
     gpio: String,
     ticks_per_second: u64,
 ) -> Result<(), String> {
+    use fujimod_emulator_devices::capability::ProximityInput;
     use fujimod_emulator_xp5_io::spi::Spi;
+
+    // A caller-supplied manifest may still declare the fixed empty finder.
+    if names.eye_sensor.is_some() {
+        let wired = session.nodes.get(EYE_SENSOR_BUS).is_some_and(|&node| {
+            session
+                .board
+                .inspect_capability::<dyn ProximityInput, _>(node, |input| {
+                    input.admit_sample(EYE_SENSOR_ADDRESS, 0)
+                })
+                .is_ok()
+        });
+        if !wired {
+            names.eye_sensor = None;
+        }
+    }
     let adc = format!("{:#x}", fujimod_emulator_xp5_io::adc::BASE);
     let mut power: Option<(usize, String, usize)> = None;
     for (name, &id) in &session.nodes {
