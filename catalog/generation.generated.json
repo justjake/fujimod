@@ -7590,13 +7590,8 @@
           "errors": []
         },
         "card-files": {
-          "status": "unavailable",
-          "errors": [
-            {
-              "locator": "card_files.locate",
-              "reason": "ValueError: module_open: 0 checked card bindings"
-            }
-          ]
+          "status": "available",
+          "errors": []
         },
         "controls": {
           "status": "unavailable",
