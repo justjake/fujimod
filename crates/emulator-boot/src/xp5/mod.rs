@@ -5,6 +5,8 @@
 //! this crate assembles its inputs, drives the run in slices and records the outcome.
 
 mod card_image;
+#[cfg(test)]
+mod catalog_parity;
 mod display_output;
 pub mod firmware;
 mod loader_card;
