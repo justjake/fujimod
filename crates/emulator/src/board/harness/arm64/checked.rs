@@ -120,6 +120,10 @@ struct Observed {
     observations: Vec<RegisterObservation>,
     system_reads: Vec<SystemReadObservation>,
     pending: Option<SystemReadObservation>,
+    /// Single-threaded exclusive monitor: the most recent exclusive load's
+    /// (address, byte width). Only one core runs under this harness, so a
+    /// single reservation is the entire architectural monitor.
+    exclusive: Option<(u64, u8)>,
 }
 #[derive(Serialize)]
 pub struct CheckedResult {
@@ -218,6 +222,93 @@ impl Guard {
         }
         Ok(())
     }
+    /// Emulate one base A64 exclusive access (LDXR/LDAXR/STXR/STLXR) with a
+    /// single-threaded monitor. This harness runs exactly one core, so one
+    /// (address, width) reservation is the whole architectural monitor; there
+    /// is no cross-core or multi-threaded interleaving to model. Register-pair
+    /// exclusives are refused because their two-register width does not fit
+    /// the simple reservation this guard guarantees.
+    fn exclusive_access(
+        &self,
+        cpu: &dyn Cpu,
+        pc: u64,
+        exclusive: arm64::Exclusive,
+    ) -> Result<(), String> {
+        if exclusive.pair {
+            return Err(format!(
+                "Unsupported memory instruction at {pc:#x}: register-pair exclusive"
+            ));
+        }
+        let address = scalar(
+            cpu,
+            if exclusive.base == 31 {
+                Register::Sp
+            } else {
+                Register::X(exclusive.base)
+            },
+        )?;
+        let width = u64::from(exclusive.bytes);
+        if address % width != 0 {
+            return Err(format!(
+                "unaligned exclusive access at {address:#x} width {width} (pc {pc:#x})"
+            ));
+        }
+        if exclusive.load {
+            if !contains(&self.options.readable, address, width) {
+                return Err(format!(
+                    "exclusive read outside declared RAM at {address:#x} width {width} (pc {pc:#x})"
+                ));
+            }
+            let mut bytes = vec![0u8; width as usize];
+            cpu.read_memory(address, &mut bytes)?;
+            let mut value = [0u8; 8];
+            value[..width as usize].copy_from_slice(&bytes);
+            // A load into the zero register discards the value.
+            if exclusive.first != 31 {
+                cpu.write_register(Register::X(exclusive.first), &value)?;
+            }
+            self.observed.borrow_mut().exclusive = Some((address, exclusive.bytes));
+        } else {
+            if !contains(&self.options.writable, address, width) {
+                return Err(format!(
+                    "exclusive store outside declared RAM at {address:#x} width {width} (pc {pc:#x})"
+                ));
+            }
+            // The stored value register is read as zero when it is the zero
+            // register, which is the ordinary release-to-zero idiom.
+            let value = if exclusive.first == 31 {
+                0
+            } else {
+                scalar(cpu, Register::X(exclusive.first))?
+            };
+            let matches = self.observed.borrow().exclusive == Some((address, exclusive.bytes));
+            let status: u64 = if matches {
+                if self.observed.borrow().stores.len() + 1 > self.options.store_limit {
+                    return Err("Store limit reached before instruction".into());
+                }
+                let bytes = value.to_le_bytes();
+                cpu.write_memory(address, &bytes[..width as usize])?;
+                let mask = u64::MAX >> (64 - u32::from(exclusive.bytes) * 8);
+                self.observed.borrow_mut().stores.push(Store {
+                    pc,
+                    address,
+                    size: width as u32,
+                    value: value & mask,
+                });
+                0
+            } else {
+                1
+            };
+            // A matching store clears the monitor after writing; a failed
+            // store performs no write and clears it too.
+            self.observed.borrow_mut().exclusive = None;
+            if exclusive.status != 31 {
+                cpu.write_register(Register::X(exclusive.status), &status.to_le_bytes())?;
+            }
+        }
+        cpu.write_register(Register::Pc, &pc.wrapping_add(4).to_le_bytes())?;
+        self.pause(cpu)
+    }
     fn instruction(&self, pc: u64, size: u32) -> Result<(), String> {
         let cpu = self.cpu.upgrade().ok_or("Routine CPU disappeared")?;
         self.finish_system_read(&*cpu)?;
@@ -277,41 +368,15 @@ impl Guard {
             });
             return Ok(());
         }
-        // Exclusive load/store on declared RAM: this single-core routine has no
-        // other observer, so the native monitor's outcome is the routine's.
-        // Exclusive access to device windows stays refused.
-        if let Some(exclusive) = arm64::decode_exclusive(word)
-            .map_err(|e| format!("Unsupported exclusive instruction at {pc:#x}: {e}"))?
-        {
-            let address = scalar(
-                &*cpu,
-                if exclusive.base == 31 {
-                    Register::Sp
-                } else {
-                    Register::X(exclusive.base)
-                },
-            )?;
-            let width = u64::from(exclusive.bytes) * if exclusive.pair { 2 } else { 1 };
-            let allowed = if exclusive.load {
-                &self.options.readable
-            } else {
-                &self.options.writable
-            };
-            if address % width != 0 || !contains(allowed, address, width) {
-                return Err(format!(
-                    "exclusive {} outside declared RAM at {address:#x} width {width} (pc {pc:#x})",
-                    if exclusive.load { "read" } else { "store" }
-                ));
-            }
-            if !exclusive.load
-                && self.observed.borrow().stores.len() + width.div_ceil(8) as usize
-                    > self.options.store_limit
-            {
-                return Err("Store limit reached before instruction".into());
-            }
-            return Ok(());
-        }
         if word & 0x0a00_0000 == 0x0800_0000 {
+            // Exclusives are emulated by this guard with a single-threaded
+            // monitor; the CPU never executes them. Pair forms and exclusive
+            // access to device windows stay refused.
+            if let Some(exclusive) = arm64::decode_exclusive(word)
+                .map_err(|error| format!("Unsupported memory instruction at {pc:#x}: {error}"))?
+            {
+                return self.exclusive_access(&*cpu, pc, exclusive);
+            }
             let decoded = arm64::decode_load_store(word, pc, |r| {
                 scalar(
                     &*cpu,
@@ -418,7 +483,16 @@ unsafe fn store(_: Access, address: u64, size: i32, value: i64, data: *mut c_voi
             return;
         }
         let pc = scalar(&*cpu, Register::Pc).unwrap_or(0);
-        guard.observed.borrow_mut().stores.push(Store {
+        let mut observed = guard.observed.borrow_mut();
+        // Any non-exclusive store to the reserved range clears the monitor.
+        if let Some((reserved, bytes)) = observed.exclusive {
+            let reserved_end = reserved.saturating_add(u64::from(bytes));
+            let store_end = address.saturating_add(u64::from(width));
+            if address < reserved_end && reserved < store_end {
+                observed.exclusive = None;
+            }
+        }
+        observed.stores.push(Store {
             pc,
             address,
             size: width,
@@ -821,12 +895,12 @@ pub fn checked_call_with(
 
 #[cfg(test)]
 mod tests {
-    use fujimod_catalog_configuration::RunEngine;
     use super::*;
     use crate::board::{
         bus::{Bus, Mode},
         factory,
     };
+    use fujimod_catalog_configuration::RunEngine;
     use serde_json::json;
     fn board(words: &[u32]) -> Board {
         let graph:factory::Graph=serde_json::from_value(json!({
@@ -1203,5 +1277,94 @@ mod tests {
         let r = checked_call(&mut b, options()).unwrap();
         assert_eq!(r.instructions, 0);
         assert!(r.failure.unwrap().contains("Unsupported instruction"));
+    }
+    #[test]
+    fn exclusive_store_after_matching_load_stores_and_reports_zero() {
+        // LDXR W1,[X0]; STXR W2,W1,[X0]; RET.
+        let mut b = board(&[0x885f7c01, 0x88027c01, 0xd65f03c0]);
+        b.write_memory(0, 0x4000, &0x1122_3344u32.to_le_bytes())
+            .unwrap();
+        let mut o = options();
+        o.arguments = vec![0x4000];
+        let r = checked_call(&mut b, o).unwrap();
+        assert!(r.returned, "{:?}", r.failure);
+        assert_eq!(r.registers["x1"], 0x1122_3344);
+        assert_eq!(r.registers["x2"], 0);
+        assert_eq!(r.stores.len(), 1);
+        assert_eq!((r.stores[0].address, r.stores[0].size), (0x4000, 4));
+        assert_eq!(r.stores[0].value, 0x1122_3344);
+        let mut bytes = [0; 4];
+        b.read_memory(0, 0x4000, &mut bytes).unwrap();
+        assert_eq!(bytes, 0x1122_3344u32.to_le_bytes());
+    }
+    #[test]
+    fn exclusive_store_without_monitor_reports_one_and_does_not_store() {
+        // STXR W2,W1,[X0]; RET with no preceding exclusive load.
+        let mut b = board(&[0x88027c01, 0xd65f03c0]);
+        let mut o = options();
+        o.arguments = vec![0x4000, 0xdead_beef];
+        let r = checked_call(&mut b, o).unwrap();
+        assert!(r.returned, "{:?}", r.failure);
+        assert_eq!(r.registers["x2"], 1);
+        assert!(r.stores.is_empty());
+        let mut bytes = [0; 4];
+        b.read_memory(0, 0x4000, &mut bytes).unwrap();
+        assert_eq!(bytes, [0; 4]);
+    }
+    #[test]
+    fn intervening_store_to_monitored_address_fails_exclusive_store() {
+        // LDXR W1,[X0]; STR W3,[X0]; STXR W2,W1,[X0]; RET.
+        let mut b = board(&[0x885f7c01, 0xb9000003, 0x88027c01, 0xd65f03c0]);
+        let mut o = options();
+        o.arguments = vec![0x4000, 0, 0, 0x55];
+        let r = checked_call(&mut b, o).unwrap();
+        assert!(r.returned, "{:?}", r.failure);
+        assert_eq!(r.registers["x2"], 1);
+        assert_eq!(r.stores.len(), 1);
+        assert_eq!((r.stores[0].address, r.stores[0].value), (0x4000, 0x55));
+        let mut bytes = [0; 4];
+        b.read_memory(0, 0x4000, &mut bytes).unwrap();
+        assert_eq!(bytes, 0x55u32.to_le_bytes());
+    }
+    #[test]
+    fn mismatched_exclusive_width_fails() {
+        // LDXR W1,[X0]; STXRH W2,W1,[X0]; RET.
+        let mut b = board(&[0x885f7c01, 0x48027c01, 0xd65f03c0]);
+        let mut o = options();
+        o.arguments = vec![0x4000, 0x1234_5678];
+        let r = checked_call(&mut b, o).unwrap();
+        assert!(r.returned, "{:?}", r.failure);
+        assert_eq!(r.registers["x2"], 1);
+        assert!(r.stores.is_empty());
+        let mut bytes = [0; 4];
+        b.read_memory(0, 0x4000, &mut bytes).unwrap();
+        assert_eq!(bytes, [0; 4]);
+    }
+    #[test]
+    fn exclusive_access_obeys_declared_ranges() {
+        // LDXR W1,[X0] where X0 points outside readable ranges: refused.
+        let mut b = board(&[0x885f7c01, 0xd65f03c0]);
+        let mut o = options();
+        o.arguments = vec![0x5000];
+        let r = checked_call(&mut b, o).unwrap();
+        assert!(!r.returned);
+        assert!(
+            r.failure
+                .unwrap()
+                .contains("exclusive read outside declared RAM")
+        );
+        assert!(r.stores.is_empty());
+    }
+    #[test]
+    fn misaligned_exclusive_load_is_refused_before_retirement() {
+        // LDXR W1,[X0]; RET with a four-byte access at an unaligned address.
+        let mut b = board(&[0x885f7c01, 0xd65f03c0]);
+        let mut o = options();
+        o.arguments = vec![0x4001];
+        let r = checked_call(&mut b, o).unwrap();
+        assert!(!r.returned);
+        assert_eq!(r.instructions, 0);
+        assert!(r.failure.unwrap().contains("unaligned exclusive access"));
+        assert!(r.stores.is_empty());
     }
 }
