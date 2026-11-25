@@ -47,13 +47,6 @@ TYPE_OVERRIDES = {
     ("UiBatch", "render", "targets"): "dict[int, bytes]",
     ("UiBatch", "render", "textures"): "dict[tuple[int, int, int], bytes]",
     ("UiBatch", "render", "return"): "tuple[list[tuple[int, bytes]], int]",
-    ("Xp4", "device_records", "return"): "list[dict[str, object]]",
-    ("Xp4", "driver_guard_state", "return"): "dict[str, object] | None",
-    ("Xp4", "function_watch_state", "return"): "dict[str, object] | None",
-    ("Xp4", "interrupt_state", "return"): "list[dict[str, int | bool]]",
-    ("Xp4", "scanout_frames", "return"): "list[dict[str, object]]",
-    ("Xp4", "state", "return"): "dict[str, object]",
-    ("Xp4", "translation_maintenance_state", "return"): "dict[str, object]",
 }
 
 

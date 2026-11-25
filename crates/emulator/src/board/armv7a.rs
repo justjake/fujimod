@@ -169,7 +169,9 @@ impl Profile {
                     let selector = cpu.coprocessor(cp(2, 0, 0, 0), None)? as usize;
                     Some(*ids.get(selector).ok_or("Reserved Cortex-A7 cache selector")?)
                 }
-                None => None,
+                // The backend's own value, read for the guest so the selector
+                // it uses is the core's current CSSELR.
+                None => Some(cpu.coprocessor(register, None)? as u32),
             },
             _ => None,
         })

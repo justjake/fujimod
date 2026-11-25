@@ -196,7 +196,9 @@ impl MemoryContext {
         let extra = cpu
             .instruction_progress()
             .unwrap_or(state.accounted[self.core])
-            .saturating_sub(state.accounted[self.core]);
+            .saturating_sub(state.accounted[self.core])
+            // A fetch precedes its instruction, which progress already counts.
+            .saturating_sub(u64::from(source == "cpu-fetch"));
         let instructions = state.instructions.iter().sum::<u64>().saturating_add(extra);
         let elapsed = state
             .timeline
@@ -288,6 +290,21 @@ unsafe fn access(access: Access, address: u64, size: i32, value: i64, data: *mut
 unsafe fn fetch(address: u64, size: u32, data: *mut c_void) {
     let context = unsafe { &*data.cast::<MemoryContext>() };
     if let Err(error) = context.record("cpu-fetch", address, size as u64, None) {
+        context.fail(error);
+    }
+}
+/// `fetch` of an A-profile core: the program counter is virtual, so record
+/// the fetch at the address its MMU translates it to.
+unsafe fn translated_fetch(address: u64, size: u32, data: *mut c_void) {
+    let context = unsafe { &*data.cast::<MemoryContext>() };
+    let Some(cpu) = context.cpu.upgrade() else {
+        return;
+    };
+    // An untranslatable fetch aborts in the processor; it reads no memory.
+    let Ok(physical) = cpu.translate(address, Access::Fetch) else {
+        return;
+    };
+    if let Err(error) = context.record("cpu-fetch", physical, size as u64, None) {
         context.fail(error);
     }
 }
@@ -551,9 +568,9 @@ impl Board {
                     },
                 }];
                 // Instruction hooks compare the virtual program counter, which
-                // only equals the physical range on an MPU/R-profile core with
-                // no MMU. An A-profile fetch of a watched range is not
-                // observable here; data reads and stores are.
+                // equals the physical range on an MPU/R-profile core with no
+                // MMU. An A-profile core observes every fetch once (below) and
+                // translates it through its MMU, as data accesses arrive.
                 if cpu.model() == Model::CortexR5F {
                     hooks.push(Hook::Instruction {
                         callback: fetch,
@@ -571,6 +588,20 @@ impl Board {
                             self.memory_watch_end(&mut watch)?;
                             return Err(error);
                         }
+                    }
+                }
+            }
+            if cpu.model() == Model::CortexA7 {
+                let hook = Hook::Instruction {
+                    callback: translated_fetch,
+                    data,
+                    range: HookRange::All,
+                };
+                match unsafe { cpu.install_hook(hook) } {
+                    Ok(id) => watch.hooks.push((core, id)),
+                    Err(error) => {
+                        self.memory_watch_end(&mut watch)?;
+                        return Err(error);
                     }
                 }
             }

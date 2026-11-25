@@ -65,6 +65,9 @@ pub fn build(
         let end = ram.base + ram.size as u64;
         !windows.iter().any(|&(lo, hi)| lo <= ram.base && end <= hi)
     });
+    // Every remaining memory window is on the physical bus, for host and DMA access.
+    graph.dma_mappings =
+        graph.ram.iter().map(|ram| fujimod_emulator::board::memory::BusMapping::ram(ram.base, ram.size)).collect();
     let memory_ranges = graph.ram.iter().map(|ram| (ram.base, ram.base + ram.size as u64));
     let taken: Vec<(u64, u64)> = memory_ranges.chain(fixed.iter().copied()).collect();
     if let Some((lo, hi, a, b)) = windows.iter().find_map(|&(lo, hi)| {
@@ -136,7 +139,6 @@ pub fn from_definition(
     card_media: Vec<(usize, fujimod_emulator_devices::parts::sd_card::Card)>,
     engine: RunEngine,
 ) -> Result<(fujimod_emulator_session::Session, Inputs), String> {
-    use fujimod_emulator::board::memory::BusMapping;
     let cores = definition.cores;
     if definition.initial_registers.len() > cores {
         return Err("XP4 initial registers name more cores than the definition".into());
@@ -155,7 +157,7 @@ pub fn from_definition(
             })
             .collect(),
         ram: memory.iter().map(|&(base, size, _)| factory::Ram { base, size }).collect(),
-        dma_mappings: vec![BusMapping::ram(0, definition.ram_size)],
+        dma_mappings: Vec::new(),
         decoders: Vec::new(),
         mappings: (0..cores)
             .flat_map(|core| {

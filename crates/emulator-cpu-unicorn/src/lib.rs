@@ -195,6 +195,7 @@ impl Library {
             memory_region_queries: Cell::new(0),
             mmio: RefCell::new(BTreeMap::new()),
             mmio_contexts: RefCell::new(Vec::new()),
+            unmapped: Box::new(Cell::new(None)),
         };
         check(&core.api, unsafe {
             (core.api.uc_ctl)(raw, ffi::ctl(7, 1, 1), id)
@@ -231,6 +232,19 @@ impl Library {
                 .ok_or("CPU backend has no block guard refusal diagnostics")?;
             check(&core.api, unsafe { enable(raw, true) })?;
         }
+        // UC_HOOK_MEM_{READ,WRITE,FETCH}_UNMAPPED: record, never handle.
+        let mut key = 0;
+        check(&core.api, unsafe {
+            (core.api.uc_hook_add)(
+                raw,
+                &mut key,
+                0x70,
+                (record_unmapped as *const ()).cast_mut().cast(),
+                (&*core.unmapped as *const Cell<Option<u64>>).cast_mut().cast(),
+                1,
+                0,
+            )
+        })?;
         Ok(core)
     }
 }
@@ -267,6 +281,8 @@ pub struct Core {
     #[allow(clippy::vec_box)]
     mmio_contexts: RefCell<Vec<Box<MmioData>>>,
     mmio: RefCell<BTreeMap<u64, MmioMapping>>,
+    // The address of the latest unmapped access, which failure messages name.
+    unmapped: Box<Cell<Option<u64>>>,
 }
 
 struct InstalledTranslationHooks {
@@ -1242,6 +1258,7 @@ impl Cpu for Core {
             self.run_until.set(request.until);
         }
         self.callback_error.borrow_mut().take();
+        self.unmapped.set(None);
         let status = unsafe {
             (self.api.uc_emu_start)(
                 self.raw,
@@ -1260,6 +1277,10 @@ impl Cpu for Core {
             let message = match self.read_register(Register::Pc, &mut pc) {
                 Ok(_) => format!("{message} at PC {:#x}", u32::from_le_bytes(pc)),
                 Err(_) => message,
+            };
+            let message = match (status, self.unmapped.get()) {
+                (6..=8, Some(address)) => format!("{message}, address {address:#x}"),
+                _ => message,
             };
             return Err(match status {
                 10 => ExecutionError::InvalidInstruction(message),
@@ -1765,7 +1786,25 @@ unsafe extern "C" fn memory(
         }
     }
 }
-unsafe fn memory_restart_boundary_noop(_: Access, _: u64, _: i32, _: i64, _: *mut c_void) {}
+unsafe fn memory_restart_boundary_noop(
+    _: Access,
+    _: u64,
+    _: i32,
+    _: i64,
+    _: *mut c_void,
+) {
+}
+unsafe extern "C" fn record_unmapped(
+    _raw: ffi::Engine,
+    _kind: i32,
+    address: u64,
+    _size: i32,
+    _value: i64,
+    data: *mut c_void,
+) -> bool {
+    unsafe { &*data.cast::<Cell<Option<u64>>>() }.set(Some(address));
+    false
+}
 unsafe extern "C" fn fault(
     raw: ffi::Engine,
     kind: i32,
