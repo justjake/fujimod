@@ -465,7 +465,9 @@ fn boot_camera(opened: &mut Opened) -> Result<(), OpenError> {
     let card_before = card_revision(&opened.camera.session, &opened.start);
     let report = boot::to_rec(&mut opened.camera.session, INSTRUCTION_LIMIT)
         .map_err(|error| OpenError::at(Stage::BootRom, error))?;
-    if report.status == "rec" && !report.pending && report.scanout_instance.is_some() {
+    // `to_rec` reports `rec` only after its observation's scanout requirement:
+    // X-M1's REC screen is never presented, and its firmware facts say so.
+    if report.status == "rec" && !report.pending {
         opened.release_holds()?;
         opened.stage = Stage::Rec;
         return Ok(());
