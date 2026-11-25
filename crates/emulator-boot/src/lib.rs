@@ -75,6 +75,44 @@ pub struct Options {
     /// Guest ticks the modeled SD card host charges for each data transfer.
     /// Absence keeps the run's catalog value.
     pub sd_card_transfer_ticks: Option<u64>,
+    /// FAT geometry for the SD card, in place of the run's catalog layout.
+    pub card_layout: Option<CardLayout>,
+}
+
+/// A declared FAT card geometry for a stock SD card.
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct CardLayout {
+    /// Sectors on the blank card.
+    pub sectors: u32,
+    /// One to eleven ASCII bytes.
+    pub label: String,
+    /// First sector of the FAT partition.
+    pub partition_start: u32,
+    /// Sectors per FAT cluster: a power of two from 1 to 128.
+    pub sectors_per_cluster: u8,
+}
+
+impl CardLayout {
+    /// Check the geometry a FAT formatter accepts.
+    pub fn validate(&self) -> Result<(), String> {
+        if !(1..=11).contains(&self.label.len()) || !self.label.is_ascii() {
+            return Err("card layout label must be one to eleven ASCII bytes".into());
+        }
+        if self.sectors == 0 {
+            return Err("card layout needs at least one sector".into());
+        }
+        if self.partition_start == 0 || self.partition_start >= self.sectors {
+            return Err("card layout partition start must lie inside the card".into());
+        }
+        if !matches!(
+            self.sectors_per_cluster,
+            1 | 2 | 4 | 8 | 16 | 32 | 64 | 128
+        ) {
+            return Err("card layout cluster size must be 1, 2, 4, 8, 16, 32, 64 or 128".into());
+        }
+        Ok(())
+    }
 }
 
 /// Largest compressed camera NAND section accepted from the caller.
@@ -836,6 +874,8 @@ pub struct Request {
     /// Guest ticks the modeled SD card host charges for each data transfer.
     /// Absence keeps the run's catalog value.
     pub sd_card_transfer_ticks: Option<u64>,
+    /// FAT geometry for the SD card, in place of the run's catalog layout.
+    pub card_layout: Option<CardLayout>,
 }
 
 /// Open any configuration `open` supports from a host's files.
@@ -843,13 +883,13 @@ pub struct Request {
 pub fn open_request(resolved: ResolvedConfiguration, request: Request) -> Result<Camera, String> {
     // EXR II cards are formatted after the board opens; other starts build
     // their loader card from the files.
-    if request.sd_card_transfer_ticks.is_some()
+    if (request.sd_card_transfer_ticks.is_some() || request.card_layout.is_some())
         && !matches!(
             resolved.configuration.inputs.as_ref(),
             Some(RunInputs::Exr2(_))
         )
     {
-        return Err("SD card transfer ticks apply only to EXR II runs".into());
+        return Err("SD card options apply only to EXR II runs".into());
     }
     let mut card_after_open = Vec::new();
     let inputs = match resolved.configuration.inputs.as_ref() {
@@ -865,6 +905,7 @@ pub fn open_request(resolved: ResolvedConfiguration, request: Request) -> Result
                 access_point: None,
                 capability_reply: None,
                 sd_card_transfer_ticks: request.sd_card_transfer_ticks,
+                card_layout: request.card_layout.clone(),
             },
             mode: {
                 card_after_open = request.card_files;
@@ -1014,6 +1055,9 @@ fn open_exr2(resolved: ResolvedConfiguration, options: Options, mode: Mode) -> R
     if let Some(ticks) = options.sd_card_transfer_ticks {
         prepared.set_sd_card_transfer_ticks(ticks)?;
     }
+    if let Some(layout) = &options.card_layout {
+        prepared.set_card_layout(layout)?;
+    }
     let update = checked(&options.update, &prepared.update)?;
     let boot_rom = checked(&options.boot_rom, &prepared.boot_rom.content)?;
     let inputs = InputBytes {
@@ -1042,6 +1086,37 @@ fn open_exr2(resolved: ResolvedConfiguration, options: Options, mode: Mode) -> R
 }
 
 impl Prepared {
+    /// Format the modeled SD card with the caller's declared FAT geometry.
+    fn set_card_layout(&mut self, layout: &CardLayout) -> Result<(), String> {
+        layout.validate()?;
+        let nodes = self
+            .devices_value
+            .get_mut("nodes")
+            .and_then(Value::as_array_mut)
+            .ok_or("prepared devices have no node list")?;
+        let sd = nodes
+            .iter_mut()
+            .find(|node| node.get("name").and_then(Value::as_str) == Some("sd"))
+            .ok_or("run has no modeled SD card host")?;
+        let card = sd
+            .pointer_mut("/model/card")
+            .ok_or("run has no modeled SD card")?;
+        if card.get("kind").and_then(Value::as_str) != Some("formatted") {
+            return Err("run SD card is not a formatted FAT card".into());
+        }
+        let options = card
+            .get_mut("options")
+            .and_then(Value::as_object_mut)
+            .ok_or("run SD card has no format options")?;
+        options.insert("sectors".into(), json!(layout.sectors));
+        options.insert("label".into(), json!(layout.label));
+        options.insert("partition_start".into(), json!(layout.partition_start));
+        options.insert(
+            "sectors_per_cluster".into(),
+            json!(layout.sectors_per_cluster),
+        );
+        Ok(())
+    }
     /// Charge `ticks` of guest time for every data transfer on the modeled SD
     /// host, in place of the catalog's value.
     fn set_sd_card_transfer_ticks(&mut self, ticks: u64) -> Result<(), String> {

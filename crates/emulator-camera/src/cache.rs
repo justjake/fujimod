@@ -205,6 +205,12 @@ fn identity(
         }
         None => part(b"catalog-transfer-ticks"),
     }
+    if let Some(layout) = &request.card.layout {
+        part(b"card-layout");
+        let bytes = serde_json::to_vec(layout)
+            .map_err(|failure| OpenError::at(Stage::BootRom, format!("card layout: {failure}")))?;
+        part(&bytes);
+    }
     if let Some(image) = &request.image {
         part(b"ram-image");
         part(image.sha256.to_ascii_lowercase().as_bytes());

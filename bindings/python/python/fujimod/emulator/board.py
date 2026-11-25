@@ -408,6 +408,7 @@ class Board:
         sd_card_present: bool = True,
         sd_card_write_protected: bool = False,
         sd_card_transfer_ticks: int | None = None,
+        card_layout: Mapping[str, object] | None = None,
         start: Literal["rom", "loader"] = "rom",
         image: str | PathLike[str] | None = None,
         image_sha256: str | None = None,
@@ -429,10 +430,14 @@ class Board:
         `sd_card_present` false models an empty slot, and
         `sd_card_write_protected` asserts the card's write-protect contact.
         `sd_card_transfer_ticks` replaces the catalog's guest ticks per SD
-        data transfer. `start="loader"` places a caller-verified RAM image at
-        address zero and starts the first core at the native loader before any
-        instruction runs; `image` names the image and `image_sha256` its
-        SHA-256. The boot ROM never runs for such an open.
+        data transfer. `card_layout` declares the FAT geometry of a stock
+        SD card in place of the catalog's layout: `sectors`, `label`,
+        `partition_start` and `sectors_per_cluster`; it applies only to a
+        stock boot with the card present. `start="loader"` places a
+        caller-verified RAM image at address zero and starts the first core at
+        the native loader before any instruction runs; `image` names the
+        image and `image_sha256` its SHA-256. The boot ROM never runs for
+        such an open.
         """
         firmware = cls._identifier(firmware, "firmware")
         if boot not in ("stock", "sd-card", "automatic-boot"):
@@ -451,6 +456,30 @@ class Board:
             type(sd_card_transfer_ticks) is not int or sd_card_transfer_ticks < 1
         ):
             raise ValueError("sd_card_transfer_ticks must be a positive integer")
+        layout_text = None
+        if card_layout is not None:
+            if not isinstance(card_layout, Mapping):
+                raise TypeError("card_layout must be a mapping or None")
+            selected_layout = dict(card_layout)
+            if set(selected_layout) != {
+                "sectors",
+                "label",
+                "partition_start",
+                "sectors_per_cluster",
+            }:
+                raise ValueError(
+                    "card_layout needs sectors, label, partition_start, sectors_per_cluster"
+                )
+            for key in ("sectors", "partition_start", "sectors_per_cluster"):
+                if type(selected_layout[key]) is not int:
+                    raise TypeError(f"card_layout {key} must be an integer")
+            if type(selected_layout["label"]) is not str:
+                raise TypeError("card_layout label must be a string")
+            if boot != "stock":
+                raise ValueError("card_layout applies only to a stock SD card boot")
+            if not sd_card_present:
+                raise ValueError("card_layout needs the card present")
+            layout_text = json.dumps(selected_layout)
         if not run_to_rec and boot == "automatic-boot":
             raise ValueError("an automatic boot cannot stop before REC")
         if not sd_card_present and boot != "stock":
@@ -477,6 +506,7 @@ class Board:
             sd_card_present=sd_card_present,
             sd_card_write_protected=sd_card_write_protected,
             sd_card_transfer_ticks=sd_card_transfer_ticks,
+            card_layout=layout_text,
             start=start,
             image=image_path,
             image_sha256=image_sha256,

@@ -26,5 +26,7 @@ pub use release::RELEASES_URL;
 
 /// The scheduler engine a request may override.
 pub use fujimod_catalog_configuration::RunEngine;
+/// A declared FAT geometry for a stock SD card.
+pub use fujimod_emulator_boot::CardLayout;
 /// The CPU execution policy a request selects.
 pub use fujimod_emulator_cpu::ExecutionPolicy;

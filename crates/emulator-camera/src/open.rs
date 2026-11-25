@@ -4,7 +4,7 @@ use fujimod_catalog_configuration::{RunEngine, RunInputs};
 use fujimod_catalog_controls::{BootCombination, BootMode, PhysicalControls};
 use fujimod_catalog_remote::{Facts, Selection};
 use fujimod_catalog_resolution::ResolvedConfiguration;
-use fujimod_emulator_boot::{self as boot, Camera};
+use fujimod_emulator_boot::{self as boot, Camera, CardLayout};
 use fujimod_emulator_cpu::ExecutionPolicy;
 use fujimod_emulator_devices::parts::{nand::Nand, sd_card::Card};
 use fujimod_emulator_session::Session;
@@ -130,7 +130,7 @@ impl Default for PowerOn {
 }
 
 /// How the modeled SD card starts a run.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct CardModel {
     /// Whether the card is inserted at power-on.
     pub present: bool,
@@ -139,6 +139,8 @@ pub struct CardModel {
     /// Guest ticks the host charges for each SD data transfer; the run's
     /// catalog value when absent.
     pub transfer_ticks: Option<u64>,
+    /// FAT geometry for a stock card, in place of the run's catalog layout.
+    pub layout: Option<CardLayout>,
 }
 
 impl Default for CardModel {
@@ -147,6 +149,7 @@ impl Default for CardModel {
             present: true,
             protected: false,
             transfer_ticks: None,
+            layout: None,
         }
     }
 }
@@ -390,6 +393,18 @@ pub fn open(library: &Library, request: Request) -> Result<Opened, OpenError> {
         return Err(OpenError::at(
             Stage::BootRom,
             "a RAM image starts at the loader; use a stock boot",
+        ));
+    }
+    if request.card.layout.is_some() && !matches!(request.boot, Boot::Stock) {
+        return Err(OpenError::at(
+            Stage::BootRom,
+            "a card layout applies only to a stock SD card boot",
+        ));
+    }
+    if request.card.layout.is_some() && !request.card.present {
+        return Err(OpenError::at(
+            Stage::BootRom,
+            "a card layout needs the card present",
         ));
     }
     if !request.run_to_rec {
@@ -818,6 +833,7 @@ pub(crate) fn construct(
             card_files: boot_card_files,
             discovery: false,
             sd_card_transfer_ticks: card.transfer_ticks,
+            card_layout: card.layout.clone(),
         },
     )
     .map_err(|error| OpenError::at(Stage::BootRom, error))?;

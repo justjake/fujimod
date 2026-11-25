@@ -174,6 +174,39 @@ def test_sd_card_transfer_ticks_slow_the_card_boot() -> None:
         slow.close()
 
 
+def test_a_declared_card_layout_formats_the_stock_card() -> None:
+    library()
+    layout = {
+        "sectors": 8_388_608,
+        "label": "LAYOUT",
+        "partition_start": 16_384,
+        "sectors_per_cluster": 32,
+    }
+    with Board.open_camera(
+        firmware="x70-110",
+        boot="stock",
+        execution_policy="interactive",
+        boot_cache=False,
+        card_layout=layout,
+    ) as board:
+        assert board.status()["status"] == "rec"
+        state = board.session.card_state("sd")
+        assert state["capacity_bytes"] == layout["sectors"] * 512
+    with pytest.raises(ValueError, match="only to a stock"):
+        Board.open_camera(firmware="x70-110", boot="sd-card", card_layout=layout)
+    with pytest.raises(ValueError, match="sectors_per_cluster"):
+        Board.open_camera(firmware="x70-110", card_layout={"sectors": 8_388_608})
+    with pytest.raises(TypeError, match="integer"):
+        Board.open_camera(firmware="x70-110", card_layout={**layout, "sectors": "big"})
+    with pytest.raises(ValueError, match="card present"):
+        Board.open_camera(firmware="x70-110", sd_card_present=False, card_layout=layout)
+    with pytest.raises(ValueError, match="cluster size"):
+        Board.open_camera(
+            firmware="x70-110",
+            card_layout={**layout, "sectors_per_cluster": 3},
+        )
+
+
 def test_the_x70_powers_on_with_its_flash_and_card_kept() -> None:
     card = release_card(library())
     with Board.open_camera(
@@ -195,14 +228,16 @@ def test_the_x70_powers_on_with_its_flash_and_card_kept() -> None:
 
 def test_a_stock_boot_cannot_power_on_holding_card_controls() -> None:
     library()
-    with Board.open_camera(
-        firmware="x70-110",
-        boot="stock",
-        execution_policy="interactive",
-        boot_cache=False,
-    ) as board:
-        with pytest.raises(RuntimeError, match="SD card source"):
-            board.power_on(hold_controls=True)
+    with (
+        Board.open_camera(
+            firmware="x70-110",
+            boot="stock",
+            execution_policy="interactive",
+            boot_cache=False,
+        ) as board,
+        pytest.raises(RuntimeError, match="SD card source"),
+    ):
+        board.power_on(hold_controls=True)
 
 
 def test_a_verified_image_starts_at_the_loader(tmp_path: Path) -> None:

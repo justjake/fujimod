@@ -530,6 +530,7 @@ fn shipped_preparation_opens_the_same_board_as_selected_files() {
             access_point: None,
             capability_reply: None,
             sd_card_transfer_ticks: None,
+            card_layout: None,
         }, Mode::Strict)
         .unwrap(),
     );
@@ -563,6 +564,7 @@ fn restart_payload_reconstructs_the_rom_board_after_wake() {
         update: update.into(), boot_rom: boot_rom.into(), nand: None, settings: None,
         clock_seconds_2000: None, preferred_languages: vec![], camera: Some(reference_camera()),
         access_point: None, capability_reply: None, sd_card_transfer_ticks: None,
+        card_layout: None,
     }, Mode::Strict).unwrap();
     session.run_with_limits(5_000_000, 1000, None, None).unwrap();
     session.logic_input("usb_cable", true).unwrap();

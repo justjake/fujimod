@@ -38,7 +38,7 @@ impl Board {
     #[staticmethod]
     #[pyo3(signature=(*, firmware, boot="stock", sd_card=None, execution_policy="exact", boot_cache=true,
         run_to_rec=true, sd_card_present=true, sd_card_write_protected=false, sd_card_transfer_ticks=None,
-        start="rom", image=None, image_sha256=None))]
+        card_layout=None, start="rom", image=None, image_sha256=None))]
     fn open_camera(
         firmware: String,
         boot: &str,
@@ -49,6 +49,7 @@ impl Board {
         sd_card_present: bool,
         sd_card_write_protected: bool,
         sd_card_transfer_ticks: Option<u64>,
+        card_layout: Option<&str>,
         start: &str,
         image: Option<PathBuf>,
         image_sha256: Option<String>,
@@ -64,6 +65,15 @@ impl Board {
                 "sd_card_transfer_ticks must be positive",
             ));
         }
+        let card_layout = match card_layout {
+            None => None,
+            Some(text) => {
+                let layout: fujimod_emulator_camera::CardLayout = serde_json::from_str(text)
+                    .map_err(|failure| PyValueError::new_err(format!("card_layout: {failure}")))?;
+                layout.validate().map_err(PyValueError::new_err)?;
+                Some(layout)
+            }
+        };
         let image = match (start, image, image_sha256) {
             ("rom", None, None) => None,
             ("rom", _, _) => {
@@ -108,6 +118,7 @@ impl Board {
                     present: sd_card_present,
                     protected: sd_card_write_protected,
                     transfer_ticks: sd_card_transfer_ticks,
+                    layout: card_layout,
                 },
                 kept: Default::default(),
                 card_source: None,

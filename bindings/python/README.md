@@ -96,7 +96,10 @@ when the same inputs were opened before and saves this one; `False` boots from
 scratch and saves nothing. `sd_card_present=False` models an empty slot and
 `sd_card_write_protected=True` asserts the card's write-protect contact;
 `sd_card_transfer_ticks` replaces the catalog's guest ticks per SD data
-transfer. `session.card_state("sd")` reports the contacts and capacity. The
+transfer. `card_layout` declares a stock card's FAT geometry (`sectors`,
+`label`, `partition_start` and `sectors_per_cluster`) in place of the
+catalog's layout; it applies only to a stock boot with the card present.
+`session.card_state("sd")` reports the contacts and capacity. The
 board is already open, so `boot_to_rec` raises; `status` reports `"rec"`,
 `"running"` before REC or `"stopped"`.
 

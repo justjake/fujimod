@@ -83,9 +83,9 @@ it through its existing Rust bindings.
 
 Options: execution policy (`interactive` or `exact`), engine, language,
 clock, extra SD card files, the SD card's presence and write protection, the
-host's SD data-transfer time, a checkpoint to restore, whether to use the
-boot cache, and whether to stop before the first instruction with the boot
-holds applied.
+host's SD data-transfer time, the stock card's declared FAT geometry, a
+checkpoint to restore, whether to use the boot cache, and whether to stop
+before the first instruction with the boot holds applied.
 
 ## Results
 
@@ -108,6 +108,9 @@ boot source.
 A stock boot can instead place a caller-verified image at address zero and
 start the first core at the native loader, skipping the boot ROM; the image's
 stock initialization, mod initialization and card I/O then run normally.
+A stock boot also takes a declared FAT geometry for the card it formats:
+sector count, label, partition start and sectors per cluster. Card boots keep
+the catalog's layout.
 
 ## Boot cache
 

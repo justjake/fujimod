@@ -235,6 +235,7 @@ fn launch_camera(request: LaunchRequest) -> Result<(LaunchedCamera, Running), St
                     card_files: Vec::new(),
                     discovery: false,
                     sd_card_transfer_ticks: None,
+                    card_layout: None,
                 };
                 let mut camera = fujimod_emulator_boot::open_request(resolved, boot_request)
                     .inspect_err(|error| log_session(format!("session: {error}")))?;
