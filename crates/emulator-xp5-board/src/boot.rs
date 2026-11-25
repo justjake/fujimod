@@ -762,14 +762,11 @@ fn block_window(
         }
         BlockDevice::ImagingPaf { .. } => "imaging-paf",
         BlockDevice::ImagingPreview { .. } => {
-            options.insert("frame_period_us".into(), integer(1_000_000));
-            options.insert("source_luma".into(), integer(128));
             "imaging-preview"
         }
         BlockDevice::ImagingRifpIo { .. } => "imaging-rifp-io",
         BlockDevice::ImagingRifp { .. } => {
             options.insert("completion_us".into(), integer(1000));
-            options.insert("source_luma".into(), integer(128));
             "imaging-rifp"
         }
         BlockDevice::ImagingTnr { .. } => "imaging-tnr",
@@ -871,8 +868,6 @@ fn block_window(
         }
         BlockDevice::Decompressor { .. } => "lz",
         BlockDevice::Movdc { .. } => {
-            options.insert("frame_period_us".into(), integer(1_000_000));
-            options.insert("source_luma".into(), integer(128));
             "movdc"
         }
         BlockDevice::SensorCommand { .. } => {
@@ -880,8 +875,6 @@ fn block_window(
             "imaging-sensor"
         }
         BlockDevice::ImagingReceiver { .. } => {
-            options.insert("frame_period_us".into(), integer(1_000_000));
-            options.insert("frame_active_us".into(), integer(10_000));
             "imaging-receiver"
         }
         BlockDevice::Display { .. } => "display",

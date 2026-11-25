@@ -81,9 +81,65 @@
   },
   "scene": {
     "kind": "xp5",
-    "frames": [],
+    "frames": [
+      {
+        "block_ids": [
+          "receiver0"
+        ],
+        "period_ticks": 33333000,
+        "active_ticks": 10000000,
+        "luma": null
+      },
+      {
+        "block_ids": [
+          "receiver1"
+        ],
+        "period_ticks": 33333000,
+        "active_ticks": null,
+        "luma": null
+      },
+      {
+        "block_ids": [
+          "movdc0"
+        ],
+        "period_ticks": 33333000,
+        "active_ticks": null,
+        "luma": 128
+      },
+      {
+        "block_ids": [
+          "movdc1"
+        ],
+        "period_ticks": 33333000,
+        "active_ticks": null,
+        "luma": 128
+      },
+      {
+        "block_ids": [
+          "movdc2"
+        ],
+        "period_ticks": 33333000,
+        "active_ticks": null,
+        "luma": 128
+      },
+      {
+        "block_ids": [
+          "preview"
+        ],
+        "period_ticks": 33333000,
+        "active_ticks": null,
+        "luma": 128
+      }
+    ],
     "statistics": [],
-    "command_images": []
+    "command_images": [
+      {
+        "block_ids": [
+          "rifp"
+        ],
+        "luma": 128
+      }
+    ]
   },
   "overlays": [],
   "preset": {

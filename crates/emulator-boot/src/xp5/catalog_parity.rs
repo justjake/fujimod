@@ -14,8 +14,18 @@ const FIRMWARES: [&str; 6] = ["x100vi-131", "xe5-112", "xh2-530", "xh2s-730", "x
 pub(crate) fn differences(firmware: &str) -> Result<Vec<String>, String> {
     let state = BootState::for_firmware(firmware, None)?;
     let resolved = ResolvedConfiguration::bundled(firmware)?;
-    let built = fujimod_emulator_xp5_board::boot::windows_from_blocks(&resolved)?;
-    Ok(compare(firmware, &state.device, &built))
+    let mut built = fujimod_emulator_xp5_board::boot::windows_from_blocks(&resolved)?;
+    // The boot applies the run's scene on top of its windows; compare what each side boots with.
+    let mut manifest = state.device.clone();
+    if let Some(fujimod_catalog_configuration::RunScene::Xp5(scene)) = resolved.configuration.scene.as_ref() {
+        let ticks = match resolved.configuration.inputs.as_ref() {
+            Some(fujimod_catalog_configuration::RunInputs::Xp5(inputs)) => inputs.ticks_per_second,
+            _ => return Err(format!("{firmware}: run has no XP5 inputs")),
+        };
+        fujimod_emulator_xp5_board::boot::apply_run_scene(&resolved, &mut manifest, scene, ticks)?;
+        fujimod_emulator_xp5_board::boot::apply_run_scene(&resolved, &mut built, scene, ticks)?;
+    }
+    Ok(compare(firmware, &manifest, &built))
 }
 
 fn compare(firmware: &str, manifest: &[DeviceWindow], built: &[DeviceWindow]) -> Vec<String> {
@@ -68,7 +78,7 @@ mod tests {
     use super::*;
 
     /// Differences left before the switch; lower it as facts move, never raise it.
-    const REMAINING: usize = 408;
+    const REMAINING: usize = 378;
 
     #[test]
     fn catalog_windows_match_the_boot_manifests() {
