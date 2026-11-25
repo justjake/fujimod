@@ -96,6 +96,30 @@ impl CardSource {
     }
 }
 
+/// The SD card's contacts and options, on top of a preset's files.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct CardOptions {
+    /// Whether the card is inserted at power-on.
+    pub present: bool,
+    /// Whether the card's write-protect contact is asserted.
+    pub protected: bool,
+    /// Guest ticks the host charges for each SD data transfer.
+    pub transfer_ticks: Option<u64>,
+    /// FAT geometry for a stock card.
+    pub layout: Option<CardLayout>,
+}
+
+impl Default for CardOptions {
+    fn default() -> Self {
+        Self {
+            present: true,
+            protected: false,
+            transfer_ticks: None,
+            layout: None,
+        }
+    }
+}
+
 /// One camera to open with FujiMod.
 #[derive(Clone)]
 pub struct Request {
@@ -113,6 +137,8 @@ pub struct Request {
     pub cache: BootCache,
     /// Run the camera to REC before returning.
     pub run_to_rec: bool,
+    /// The SD card's contacts and options.
+    pub card: CardOptions,
 }
 
 /// A power-on that keeps the camera's internal flash and SD card.
@@ -152,6 +178,8 @@ impl From<Error> for OpenError {
 /// A camera opened with FujiMod, at REC unless the request stopped earlier.
 pub struct Opened {
     pub camera: EmulatorOpened,
+    /// Whether the request named an SD card source to hold.
+    has_card_source: bool,
     /// The preset that opened it.
     pub preset: Preset,
     /// The release tag when the boot used the published release card.
@@ -190,6 +218,11 @@ impl Opened {
         state: &StateDir,
         options: PowerOn,
     ) -> Result<Opened, Error> {
+        if options.hold_controls && !self.has_card_source {
+            return Err(Error::Missing(
+                "this open named no SD card source to hold the card's boot controls".into(),
+            ));
+        }
         let camera = self.camera.power_on(
             library,
             state,
@@ -203,6 +236,7 @@ impl Opened {
             camera,
             preset: self.preset,
             release: self.release.clone(),
+            has_card_source: self.has_card_source,
         };
         opened.check(library)?;
         Ok(opened)
@@ -211,6 +245,9 @@ impl Opened {
     /// The FujiMod checks after a boot reaches REC: the card's loader is in
     /// RAM, and the release it applied is confirmed.
     fn check(&mut self, library: &Library) -> Result<(), Error> {
+        if self.camera.stage != Stage::Rec {
+            return Ok(());
+        }
         if matches!(self.preset, Preset::Autostart) {
             let facts = library.nand_boot(&self.camera.firmware)?;
             fujimod_resident(&self.camera, facts.load_range.address)?;
@@ -229,6 +266,7 @@ pub fn open(library: &Library, state: &StateDir, request: Request) -> Result<Ope
         camera: emulator::open(library, state, emulator_request)?,
         preset: request.preset,
         release,
+        has_card_source: card_source(&request).is_some(),
     };
     opened.check(library)?;
     Ok(opened)
@@ -245,6 +283,7 @@ pub fn open_unbooted(
         camera: emulator::open_unbooted(library, emulator_request)?,
         preset: request.preset,
         release,
+        has_card_source: card_source(&request).is_some(),
     })
 }
 
@@ -285,10 +324,10 @@ fn emulator_request(
             flash,
             card: CardInputs {
                 files,
-                present: true,
-                protected: false,
-                transfer_ticks: None,
-                layout: None,
+                present: request.card.present,
+                protected: request.card.protected,
+                transfer_ticks: request.card.transfer_ticks,
+                layout: request.card.layout.clone(),
             },
             policy: request.policy,
             engine: request.engine,

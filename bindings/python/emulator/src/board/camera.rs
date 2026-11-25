@@ -194,6 +194,12 @@ impl Board {
                 engine: None,
                 cache,
                 run_to_rec,
+                card: fujimod_camera::CardOptions {
+                    present: sd_card_present,
+                    protected: sd_card_write_protected,
+                    transfer_ticks: sd_card_transfer_ticks,
+                    layout,
+                },
             },
         )
         .map_err(|failure| error(failure.to_string()))?;

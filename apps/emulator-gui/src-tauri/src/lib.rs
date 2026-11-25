@@ -349,6 +349,7 @@ fn open_with_builder(request: OpenCameraRequest) -> Result<(LaunchedCamera, Runn
             camera::BootCache::Reuse
         },
         run_to_rec: true,
+        card: Default::default(),
     };
     let state = StateDir::from_env();
     let room = fujimod_emulator_gui::Room::loopback()?;

@@ -30,6 +30,7 @@ fn request(preset: Preset) -> Request {
         engine: None,
         cache: BootCache::Bypass,
         run_to_rec: true,
+        card: Default::default(),
     }
 }
 
