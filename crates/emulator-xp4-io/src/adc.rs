@@ -14,6 +14,10 @@ struct State {
     samples: [u16; 12],
     deadline: Option<u64>,
     last_edge: Option<u64>,
+    /// An input changed on an enabled continuous channel; the next advance
+    /// re-arms the conversion clock.
+    #[serde(default)]
+    rearm: bool,
 }
 pub struct Adc {
     inputs: [u16; 12],
@@ -39,6 +43,7 @@ impl Adc {
                 samples: [0; 12],
                 deadline: None,
                 last_edge: None,
+                rearm: false,
             },
         })
     }
@@ -59,6 +64,26 @@ impl Adc {
             }
         }
         Ok(())
+    }
+    /// Sample the masked channels when the conversion deadline has passed.
+    fn convert(&mut self, cx: &mut Cx<'_>) {
+        let Some(at) = self.state.deadline.filter(|at| *at <= cx.now()) else {
+            return;
+        };
+        for n in 0..12 {
+            if self.mask() & (1 << n) != 0 {
+                self.state.samples[n] = self.inputs[n];
+            }
+        }
+        self.state.status = 1;
+        self.state.deadline = None;
+        self.state.last_edge = Some(at);
+        if self.state.control & 2 == 0 {
+            self.state.control &= !1;
+        }
+        // With fixed external inputs and the completion flag already set,
+        // further continuous sweeps have no observable effect. A W1C schedules
+        // the next actual clock edge, rather than a new polling interval.
     }
     fn mask(&self) -> u32 {
         self.state.control >> 16 & 0xfff
@@ -179,26 +204,20 @@ impl Device for Adc {
         }
     }
     fn advance(&mut self, cx: &mut Cx<'_>) {
-        let Some(at) = self.state.deadline.filter(|at| *at <= cx.now()) else {
-            return;
-        };
-        for n in 0..12 {
-            if self.mask() & (1 << n) != 0 {
-                self.state.samples[n] = self.inputs[n];
-            }
+        self.convert(cx);
+        if std::mem::take(&mut self.state.rearm) {
+            self.arm(cx, false);
         }
-        self.state.status = 1;
-        self.state.deadline = None;
-        self.state.last_edge = Some(at);
-        if self.state.control & 2 == 0 {
-            self.state.control &= !1;
-        }
-        // With fixed external inputs and the completion flag already set,
-        // further continuous sweeps have no observable effect. A W1C schedules
-        // the next actual clock edge, rather than a new polling interval.
     }
-    fn next_deadline(&self, _: u64) -> Option<u64> {
-        self.state.deadline
+    fn analog_inputs(&self) -> Option<&(dyn fujimod_emulator_devices::capability::AnalogInputs + 'static)> {
+        Some(self)
+    }
+    fn analog_inputs_mut(&mut self) -> Option<&mut (dyn fujimod_emulator_devices::capability::AnalogInputs + 'static)> {
+        Some(self)
+    }
+
+    fn next_deadline(&self, now: u64) -> Option<u64> {
+        if self.state.rearm { Some(now) } else { self.state.deadline }
     }
     fn save(&self) -> Value {
         serde_json::json!({"inputs":self.inputs,"sample_ticks":self.sample_ticks,"adc":self.state})
@@ -241,6 +260,23 @@ impl Device for Adc {
         })?;
         self.inputs = inputs;
         self.state = state;
+        Ok(())
+    }
+}
+impl fujimod_emulator_devices::capability::AnalogInputs for Adc {
+    fn samples(&self) -> Vec<u16> {
+        self.inputs.to_vec()
+    }
+    fn set_sample(&mut self, channel: usize, value: u16) -> Result<(), String> {
+        if channel >= 12 || value > 4095 {
+            return Err("Invalid XP4 external ADC sample".into());
+        }
+        if self.inputs[channel] != value {
+            self.inputs[channel] = value;
+            if self.state.control & 2 != 0 && self.mask() & (1 << channel) != 0 {
+                self.state.rearm = true;
+            }
+        }
         Ok(())
     }
 }

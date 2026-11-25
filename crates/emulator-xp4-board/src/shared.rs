@@ -57,11 +57,21 @@ pub fn build(
     if let Some((base, _)) = &timer {
         fixed.push((*base, base + TIMER_WINDOW));
     }
-    // A device window may not cover memory, the GIC or the interval timer.
+    // A memory region a device window covers is that device's (the input
+    // buffer SRAM behind the imaging model); any other overlap with memory,
+    // the GIC or the interval timer refuses.
+    graph.ram.retain(|ram| {
+        let end = ram.base + ram.size as u64;
+        !windows.iter().any(|&(lo, hi)| lo <= ram.base && end <= hi)
+    });
     let memory_ranges = graph.ram.iter().map(|ram| (ram.base, ram.base + ram.size as u64));
     let taken: Vec<(u64, u64)> = memory_ranges.chain(fixed.iter().copied()).collect();
-    if windows.iter().any(|&(lo, hi)| taken.iter().any(|&(a, b)| lo < b && a < hi)) {
-        return Err("Overlapping XP4 device window and memory or interrupt controller".into());
+    if let Some((lo, hi, a, b)) = windows.iter().find_map(|&(lo, hi)| {
+        taken.iter().find(|&&(a, b)| lo < b && a < hi).map(|&(a, b)| (lo, hi, a, b))
+    }) {
+        return Err(format!(
+            "Overlapping XP4 device window {lo:#x}..{hi:#x} and memory or interrupt controller {a:#x}..{b:#x}"
+        ));
     }
     windows.extend(fixed);
     for core in 0..cores {

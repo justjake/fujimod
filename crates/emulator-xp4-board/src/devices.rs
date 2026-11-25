@@ -51,9 +51,63 @@ impl<T: Device> fujimod_emulator_devices::capability::ExecuteInPlace for Connect
         self.0.lock().unwrap().execute_in_place().map_or(u64::MAX, |model| model.epoch())
     }
 }
+/// The shared model's analog inputs, through its lock.
+impl<T: Device> fujimod_emulator_devices::capability::AnalogInputs for Connected<T> {
+    fn samples(&self) -> Vec<u16> {
+        self.0.lock().unwrap().analog_inputs().map(|adc| adc.samples()).unwrap_or_default()
+    }
+    fn set_sample(&mut self, channel: usize, value: u16) -> Result<(), String> {
+        self.0.lock().unwrap().analog_inputs_mut().ok_or("not an analog input")?.set_sample(channel, value)
+    }
+}
+/// The shared model's USB port, through its lock.
+impl<T: Device> fujimod_emulator_devices::capability::UsbPort for Connected<T> {
+    fn cable_connected(&self) -> bool {
+        self.0.lock().unwrap().usb_port().is_some_and(|port| port.cable_connected())
+    }
+    fn bus_status(&self) -> Result<serde_json::Value, String> {
+        self.0.lock().unwrap().usb_port().ok_or("not a USB port")?.bus_status()
+    }
+    fn host_reset(&mut self, cx: &mut Cx<'_>) -> Result<(), String> {
+        self.0.lock().unwrap().usb_port_mut().ok_or("not a USB port")?.host_reset(cx)
+    }
+    fn host_setup(&mut self, cx: &mut Cx<'_>, packet: &[u8]) -> Result<(), String> {
+        self.0.lock().unwrap().usb_port_mut().ok_or("not a USB port")?.host_setup(cx, packet)
+    }
+    fn host_out(&mut self, cx: &mut Cx<'_>, endpoint: u8, packet: &[u8]) -> Result<(), String> {
+        self.0.lock().unwrap().usb_port_mut().ok_or("not a USB port")?.host_out(cx, endpoint, packet)
+    }
+    fn host_in(&mut self, cx: &mut Cx<'_>, endpoint: u8, size: usize) -> Result<Vec<u8>, String> {
+        self.0.lock().unwrap().usb_port_mut().ok_or("not a USB port")?.host_in(cx, endpoint, size)
+    }
+    fn host_in_token(&mut self, cx: &mut Cx<'_>, endpoint: u8) -> Result<(), String> {
+        self.0.lock().unwrap().usb_port_mut().ok_or("not a USB port")?.host_in_token(cx, endpoint)
+    }
+    fn host_ready(&self, wait: fujimod_emulator_devices::capability::UsbHostWait) -> Result<bool, String> {
+        self.0.lock().unwrap().usb_port().ok_or("not a USB port")?.host_ready(wait)
+    }
+    fn host_in_wants_token(&self, endpoint: u8) -> Result<bool, String> {
+        self.0.lock().unwrap().usb_port().ok_or("not a USB port")?.host_in_wants_token(endpoint)
+    }
+    fn packet_bytes(&self) -> Result<usize, String> {
+        self.0.lock().unwrap().usb_port().ok_or("not a USB port")?.packet_bytes()
+    }
+}
 impl<T: Device> Device for Connected<T> {
     fn name(&self) -> &'static str {
         self.0.lock().unwrap().name()
+    }
+    fn analog_inputs(&self) -> Option<&(dyn fujimod_emulator_devices::capability::AnalogInputs + 'static)> {
+        if self.0.lock().unwrap().analog_inputs().is_some() { Some(self) } else { None }
+    }
+    fn analog_inputs_mut(&mut self) -> Option<&mut (dyn fujimod_emulator_devices::capability::AnalogInputs + 'static)> {
+        if self.0.lock().unwrap().analog_inputs().is_some() { Some(self) } else { None }
+    }
+    fn usb_port(&self) -> Option<&(dyn fujimod_emulator_devices::capability::UsbPort + 'static)> {
+        if self.0.lock().unwrap().usb_port().is_some() { Some(self) } else { None }
+    }
+    fn usb_port_mut(&mut self) -> Option<&mut (dyn fujimod_emulator_devices::capability::UsbPort + 'static)> {
+        if self.0.lock().unwrap().usb_port().is_some() { Some(self) } else { None }
     }
     fn execute_in_place(&self) -> Option<&(dyn fujimod_emulator_devices::capability::ExecuteInPlace + 'static)> {
         if self.0.lock().unwrap().execute_in_place().is_some() { Some(self) } else { None }
