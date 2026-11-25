@@ -9,8 +9,8 @@ serves `share.fujimod.com`; its signaling endpoint is
 
 Website deployment is independent of mod publication. Merging to `main` does not
 deploy: `fujimod.com` shows the site code and the camera progress in
-`catalog/progress/` as of its last deploy, which a maintainer runs from a checkout or through the
-[Web deploy workflow](#web-deploy-workflow). GitHub Releases contain
+`catalog/progress/` as of its last deploy, which is a maintainer's manual deploy
+or the [nightly deploy](#nightly-deploy). GitHub Releases contain
 `patches.json`, mod patches, optional `notes.md`, and camera update assets.
 Generated emulator runtimes, the camera catalog, feature media, and FocalUI SDK docs are uploaded
 directly to Cloudflare with the website.
@@ -58,10 +58,10 @@ Use `--prepare-only` to stage assets without building or deploying. The generate
 Every deploy also publishes `deployment.json` with the deployed commit and whether
 the checkout had uncommitted changes to tracked files.
 
-### Web deploy workflow
+### Nightly deploy
 
-The [Web deploy](../../.github/workflows/web-deploy.yml) workflow runs only when
-started by hand. It deploys `main` unless `fujimod.com/deployment.json`
+The [Web deploy](../../.github/workflows/web-deploy.yml) workflow runs nightly and
+when started by hand. It deploys `main` unless `fujimod.com/deployment.json`
 already names `main`'s commit from a clean checkout; the manual run's `force`
 input deploys anyway. It runs the Web checks workflow first, then:
 
@@ -77,7 +77,7 @@ Camera API before running the same checks, tests, build and upload as a manual
 deploy. A size or hash mismatch, or a runtime missing a Camera method, stops the
 deploy. A runtime SBOM without linker provenance also requires a fresh runtime
 build. A maintainer deploys fresh inputs with `--runtime`, `--media`, and
-`--sdk-docs`. The workflow carries the SDK bundle forward after the first
+`--sdk-docs`. The nightly deploy carries the SDK bundle forward after the first
 deploy that publishes it.
 
 The workflow needs the repository secret `CLOUDFLARE_API_TOKEN`: a Cloudflare API
