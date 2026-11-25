@@ -3,10 +3,18 @@ use boot::host::Memory;
 use fujimod_catalog_configuration::{RunEngine, RunInputs};
 use fujimod_catalog_resolution::ResolvedConfiguration;
 use fujimod_emulator_boot::{self as boot, Options, xp5};
+use fujimod_emulator_camera::{self as camera, Library};
 use fujimod_emulator_cpu::ExecutionPolicy;
-use std::{collections::BTreeMap, ffi::OsString, path::PathBuf, process::ExitCode, time::Duration};
+use std::{
+    collections::BTreeMap,
+    ffi::OsString,
+    path::{Path, PathBuf},
+    process::ExitCode,
+    time::{Duration, Instant},
+};
 
-const HELP: &str = "Usage: fujimod-emulator boot --configuration ID --update UPDATE.DAT [--boot-rom ROM.BIN] [--gui] \\\n  [--overlay ID]... [--engine unicorn|hypervisor] [--screenshot LCD.PNG] [--instruction-limit COUNT] [--execution-policy interactive|exact]\n\n\
+const HELP: &str = "Usage: fujimod-emulator boot --configuration ID --update UPDATE.DAT [--boot-rom ROM.BIN] [--gui] \\\n  [--overlay ID]... [--engine unicorn|hypervisor] [--screenshot LCD.PNG] [--instruction-limit COUNT] [--execution-policy interactive|exact]\n\
+  fujimod-emulator open --firmware ID --boot stock|sd-card [--sd-card DIR] [--execution-policy interactive|exact] [--gui]\n\n\
 The run configuration selects the camera, its firmware and how the run starts; the processor\n\
 generation only decides which of these options apply.\n\n\
 Boot configuration: x70-110-rec. The ROM dump is required.\n\
@@ -38,7 +46,14 @@ XP5 --poke also takes ADDR=U32@MS: the word is written MS guest milliseconds aft
 Application-profile startup: --application-plan FILE.\n\
 Session observations: --load-snapshot FILE, --save-snapshot FILE, --pc-trace FILE [--pc-trace-limit N].\n\
 Native GUI: --gui opens the desktop window connected to this session.\n\
-Prints a JSON boot report; exits 0 at REC (EXR II) or at the end of the run (XP5), 2 at a stopped frontier.\n";
+Prints a JSON boot report; exits 0 at REC (EXR II) or at the end of the run (XP5), 2 at a stopped frontier.\n\
+\n\
+open names a catalog firmware whose update and boot ROM are found by SHA-256 in\n\
+FUJIMOD_FIRMWARE_LIBRARY. --boot stock starts the installed firmware; --boot sd-card starts\n\
+FujiMod from the --sd-card tree, which that boot requires. A stock boot adds the --sd-card files\n\
+to an otherwise empty card. --execution-policy defaults to exact.\n\
+open boots to REC, prints a JSON report of the firmware, boot, stage and engine, and exits 0.\n\
+--gui opens the desktop window on the opened session before the report.\n";
 
 /// Options that take a value, in help order; `--discovery` and `--gui` are flags.
 const VALUED: [&str; 42] = [
@@ -172,6 +187,169 @@ fn parse(args: impl Iterator<Item = OsString>) -> Result<Option<Boot>, String> {
     Ok(Some(boot))
 }
 
+/// How an `open` command starts the camera.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum OpenBoot {
+    Stock,
+    SdCard,
+}
+
+impl OpenBoot {
+    fn parse(value: &str) -> Result<Self, String> {
+        match value {
+            "stock" => Ok(Self::Stock),
+            "sd-card" => Ok(Self::SdCard),
+            _ => Err(format!("unknown boot: {value}")),
+        }
+    }
+
+    fn name(self) -> &'static str {
+        match self {
+            Self::Stock => "stock",
+            Self::SdCard => "sd-card",
+        }
+    }
+}
+
+/// The options of one `open` command.
+#[derive(Debug)]
+struct Open {
+    firmware: String,
+    boot: OpenBoot,
+    sd_card: Option<PathBuf>,
+    policy: Option<ExecutionPolicy>,
+    gui: bool,
+}
+
+impl Open {
+    /// The camera builder request these options describe.
+    fn request(&self) -> Result<camera::Request, String> {
+        let (boot, card_files) = match self.boot {
+            OpenBoot::Stock => (
+                camera::Boot::Stock,
+                self.sd_card
+                    .as_deref()
+                    .map(card_directory_files)
+                    .transpose()?
+                    .unwrap_or_default(),
+            ),
+            OpenBoot::SdCard => (
+                camera::Boot::SdCard(camera::CardSource::Directory(
+                    self.sd_card
+                        .clone()
+                        .ok_or("--boot sd-card requires --sd-card")?,
+                )),
+                Vec::new(),
+            ),
+        };
+        Ok(camera::Request {
+            firmware: self.firmware.clone(),
+            boot,
+            policy: self.policy.unwrap_or(ExecutionPolicy::Exact),
+            engine: None,
+            card_files,
+        })
+    }
+}
+
+fn parse_open(args: impl Iterator<Item = OsString>) -> Result<Option<Open>, String> {
+    let mut args = args.peekable();
+    if args.peek().is_some_and(|a| a == "--help" || a == "-h") {
+        return Ok(None);
+    }
+    if args.next().as_deref() != Some(std::ffi::OsStr::new("open")) {
+        return Err(HELP.into());
+    }
+    if args.peek().is_some_and(|a| a == "--help" || a == "-h") {
+        return Ok(None);
+    }
+    let mut values = BTreeMap::new();
+    let mut gui = false;
+    while let Some(key) = args.next() {
+        let key = key.to_str().ok_or("option name is not UTF-8")?.to_owned();
+        if key == "--gui" {
+            if std::mem::replace(&mut gui, true) {
+                return Err("duplicate option: --gui".into());
+            }
+            continue;
+        }
+        if !matches!(
+            key.as_str(),
+            "--firmware" | "--boot" | "--sd-card" | "--execution-policy"
+        ) {
+            return Err(format!("unknown option: {key}"));
+        }
+        let value = args
+            .next()
+            .ok_or_else(|| format!("missing value for {key}"))?;
+        if values.insert(key.clone(), value).is_some() {
+            return Err(format!("duplicate option: {key}"));
+        }
+    }
+    let mut take = |key: &str| {
+        values
+            .remove(key)
+            .ok_or_else(|| format!("required option: {key}"))?
+            .into_string()
+            .map_err(|_| format!("{key} must be UTF-8"))
+    };
+    let firmware = take("--firmware")?;
+    let boot = OpenBoot::parse(&take("--boot")?)?;
+    let policy = values
+        .remove("--execution-policy")
+        .map(|value| {
+            value
+                .into_string()
+                .map_err(|_| "--execution-policy must be UTF-8".to_owned())
+        })
+        .transpose()?
+        .map(|value| ExecutionPolicy::parse(&value))
+        .transpose()?;
+    let sd_card = values.remove("--sd-card").map(PathBuf::from);
+    if boot == OpenBoot::SdCard && sd_card.is_none() {
+        return Err("--boot sd-card requires --sd-card".into());
+    }
+    Ok(Some(Open {
+        firmware,
+        boot,
+        sd_card,
+        policy,
+        gui,
+    }))
+}
+
+/// Every file under a directory, named by its path relative to it.
+fn card_directory_files(directory: &Path) -> Result<Vec<(String, PathBuf)>, String> {
+    let mut files = Vec::new();
+    let mut pending = vec![directory.to_owned()];
+    while let Some(next) = pending.pop() {
+        let entries =
+            std::fs::read_dir(&next).map_err(|error| format!("{}: {error}", next.display()))?;
+        for entry in entries {
+            let path = entry.map_err(|error| error.to_string())?.path();
+            if path.is_dir() {
+                pending.push(path);
+            } else {
+                let name = path
+                    .strip_prefix(directory)
+                    .map_err(|error| error.to_string())?
+                    .to_str()
+                    .ok_or("SD card file name is not UTF-8")?
+                    .replace('\\', "/");
+                files.push((name, path));
+            }
+        }
+    }
+    files.sort();
+    if files.is_empty() {
+        return Err(format!(
+            "SD card directory {} is empty",
+            directory.display()
+        ));
+    }
+    Ok(files)
+}
+
 impl Boot {
     fn take(&mut self, key: &str) -> Option<OsString> {
         self.values.remove(key)
@@ -234,13 +412,20 @@ impl Boot {
         Self::named_files(&self.second_card_files, "--card-file-2")
     }
 
-    fn named_files(specifications: &[String], option: &str) -> Result<Vec<(String, PathBuf)>, String> {
-        specifications.iter().map(|specification| {
-            specification.split_once('=')
-                .filter(|(name, path)| !name.is_empty() && !path.is_empty())
-                .map(|(name, path)| (name.to_owned(), PathBuf::from(path)))
-                .ok_or(format!("{option} needs NAME=PATH"))
-        }).collect()
+    fn named_files(
+        specifications: &[String],
+        option: &str,
+    ) -> Result<Vec<(String, PathBuf)>, String> {
+        specifications
+            .iter()
+            .map(|specification| {
+                specification
+                    .split_once('=')
+                    .filter(|(name, path)| !name.is_empty() && !path.is_empty())
+                    .map(|(name, path)| (name.to_owned(), PathBuf::from(path)))
+                    .ok_or(format!("{option} needs NAME=PATH"))
+            })
+            .collect()
     }
 
     /// The second card slot is modeled for XP5 loader starts only.
@@ -295,7 +480,12 @@ impl Boot {
 /// `NAME=VALUE[,NAME=VALUE...]` camera settings; each name at most once.
 fn camera_settings(text: Option<&str>) -> Result<BTreeMap<String, String>, String> {
     let mut settings = BTreeMap::new();
-    for item in text.unwrap_or_default().split(',').map(str::trim).filter(|item| !item.is_empty()) {
+    for item in text
+        .unwrap_or_default()
+        .split(',')
+        .map(str::trim)
+        .filter(|item| !item.is_empty())
+    {
         let (name, value) = item
             .split_once('=')
             .filter(|(name, value)| !name.is_empty() && !value.is_empty())
@@ -411,8 +601,7 @@ fn run_exr2(
         .iter()
         .map(|specification| boot::host::parse_stub(specification))
         .collect::<Result<Vec<_>, _>>()?;
-    let mut session =
-        boot::open(resolved, boot::StartupInputs::Exr2 { options, mode })?.session;
+    let mut session = boot::open(resolved, boot::StartupInputs::Exr2 { options, mode })?.session;
     session.board.install_discovery_callee_stubs(&stubs)?;
     if let Some(path) = boot_options.path("--load-snapshot") {
         boot::load_snapshot(&mut session, &path)?;
@@ -831,11 +1020,70 @@ fn run_window(mut options: Boot, resolved: ResolvedConfiguration) -> Result<Outc
     Ok(Outcome { success: true })
 }
 
+/// Open a camera from a firmware library and report the boot it reached.
+fn run_open(open: Open) -> Result<Outcome, String> {
+    let started = Instant::now();
+    let library = Library::from_env().map_err(|error| error.to_string())?;
+    let request = open.request()?;
+    let opened = camera::open(&library, request).map_err(|error| error.to_string())?;
+    let mut report = serde_json::json!({
+        "firmware": opened.firmware,
+        "boot": open.boot.name(),
+        "sd_card": open
+            .sd_card
+            .as_ref()
+            .map(|path| path.display().to_string()),
+        "execution_policy": opened.policy.name(),
+        "engine": opened.engine,
+        "stage": opened.stage.name(),
+        "wall_seconds": started.elapsed().as_secs_f64(),
+    });
+    if open.gui {
+        let selection = opened.resolved.reference.clone();
+        let room = fujimod_emulator_gui::Room::loopback()?;
+        let mut window = fujimod_emulator_gui::launch::connect(&room.endpoint().url)?;
+        let served = fujimod_emulator_gui::serve(
+            fujimod_emulator_gui::Live::new(opened.camera, selection),
+            room,
+            &mut || window.open(),
+        )?;
+        window.wait()?;
+        report["window"] = served;
+    }
+    println!(
+        "{}",
+        serde_json::to_string_pretty(&report).map_err(|error| error.to_string())?
+    );
+    Ok(Outcome { success: true })
+}
+
+enum Command {
+    Boot(Boot),
+    Open(Open),
+}
+
+fn parse_command(args: impl Iterator<Item = OsString>) -> Result<Option<Command>, String> {
+    let mut args = args.peekable();
+    match args.peek().and_then(|argument| argument.to_str()) {
+        Some("boot") => Ok(parse(args)?.map(Command::Boot)),
+        Some("open") => Ok(parse_open(args)?.map(Command::Open)),
+        Some("--help" | "-h") => Ok(None),
+        _ => Err(HELP.into()),
+    }
+}
+
 fn run() -> Result<Outcome, String> {
-    let Some(mut boot_options) = parse(std::env::args_os().skip(1))? else {
-        print!("{HELP}");
-        return Ok(Outcome { success: true });
-    };
+    match parse_command(std::env::args_os().skip(1))? {
+        None => {
+            print!("{HELP}");
+            Ok(Outcome { success: true })
+        }
+        Some(Command::Open(open)) => run_open(open),
+        Some(Command::Boot(boot)) => run_boot(boot),
+    }
+}
+
+fn run_boot(mut boot_options: Boot) -> Result<Outcome, String> {
     let configuration_id = boot_options
         .text("--configuration")?
         .ok_or("required option: --configuration")?;
@@ -910,6 +1158,188 @@ mod tests {
     }
 
     #[test]
+    fn subcommands_dispatch_and_help_prints() {
+        assert!(parse_command(args(&["--help"])).unwrap().is_none());
+        assert!(parse_command(args(&["-h"])).unwrap().is_none());
+        assert!(matches!(
+            parse_command(args(&["boot"])).unwrap(),
+            Some(Command::Boot(_))
+        ));
+        assert!(matches!(
+            parse_command(args(&["open", "--firmware", "x70-110", "--boot", "stock"])).unwrap(),
+            Some(Command::Open(_))
+        ));
+        assert!(parse_command(args(&["xp5", "boot"])).is_err());
+        assert!(parse_command(args(&[])).is_err());
+    }
+
+    #[test]
+    fn open_options_are_required_unique_and_known() {
+        let open = parse_open(args(&["open", "--firmware", "x70-110", "--boot", "stock"]))
+            .unwrap()
+            .unwrap();
+        assert_eq!(open.firmware, "x70-110");
+        assert_eq!(open.boot, OpenBoot::Stock);
+        assert!(open.sd_card.is_none());
+        assert!(open.policy.is_none());
+        assert!(!open.gui);
+        assert!(parse_open(args(&["open", "--help"])).unwrap().is_none());
+        assert!(parse_open(args(&["open", "-h"])).unwrap().is_none());
+        assert!(
+            parse_open(args(&["open", "--boot", "stock"]))
+                .unwrap_err()
+                .contains("--firmware")
+        );
+        assert!(
+            parse_open(args(&["open", "--firmware", "x70-110"]))
+                .unwrap_err()
+                .contains("--boot")
+        );
+        assert!(
+            parse_open(args(&[
+                "open",
+                "--firmware",
+                "x70-110",
+                "--boot",
+                "sd-card"
+            ]))
+            .unwrap_err()
+            .contains("--sd-card")
+        );
+        assert!(
+            parse_open(args(&[
+                "open",
+                "--firmware",
+                "x70-110",
+                "--boot",
+                "automatic-boot"
+            ]))
+            .is_err()
+        );
+        assert!(
+            parse_open(args(&[
+                "open",
+                "--firmware",
+                "x70-110",
+                "--boot",
+                "stock",
+                "--nand",
+                "image.bin"
+            ]))
+            .is_err()
+        );
+        assert!(
+            parse_open(args(&[
+                "open",
+                "--firmware",
+                "a",
+                "--firmware",
+                "b",
+                "--boot",
+                "stock"
+            ]))
+            .is_err()
+        );
+        assert!(
+            parse_open(args(&[
+                "open",
+                "--firmware",
+                "x70-110",
+                "--boot",
+                "stock",
+                "--gui",
+                "--gui"
+            ]))
+            .is_err()
+        );
+    }
+
+    #[test]
+    fn open_requests_default_to_exact_and_select_the_boot() {
+        let request = parse_open(args(&[
+            "open",
+            "--firmware",
+            "x70-110",
+            "--boot",
+            "stock",
+            "--gui",
+        ]))
+        .unwrap()
+        .unwrap()
+        .request()
+        .unwrap();
+        assert_eq!(request.firmware, "x70-110");
+        assert!(matches!(request.boot, camera::Boot::Stock));
+        assert_eq!(request.policy, ExecutionPolicy::Exact);
+        assert!(request.engine.is_none());
+        assert!(request.card_files.is_empty());
+        let request = parse_open(args(&[
+            "open",
+            "--firmware",
+            "x70-110",
+            "--boot",
+            "sd-card",
+            "--sd-card",
+            "card",
+            "--execution-policy",
+            "interactive",
+        ]))
+        .unwrap()
+        .unwrap()
+        .request()
+        .unwrap();
+        assert!(matches!(
+            request.boot,
+            camera::Boot::SdCard(camera::CardSource::Directory(ref path))
+                if path == Path::new("card")
+        ));
+        assert_eq!(request.policy, ExecutionPolicy::Interactive);
+        assert!(request.card_files.is_empty());
+        assert!(
+            parse_open(args(&[
+                "open",
+                "--firmware",
+                "x70-110",
+                "--boot",
+                "stock",
+                "--execution-policy",
+                "approximate"
+            ]))
+            .is_err()
+        );
+    }
+
+    #[test]
+    fn stock_open_adds_the_card_directory_files() {
+        let root = std::env::temp_dir().join(format!("fujimod-open-{}", std::process::id()));
+        let nested = root.join("DCIM");
+        std::fs::create_dir_all(&nested).unwrap();
+        std::fs::write(root.join("A.TXT"), b"a").unwrap();
+        std::fs::write(nested.join("B.JPG"), b"b").unwrap();
+        let request = parse_open(args(&[
+            "open",
+            "--firmware",
+            "x70-110",
+            "--boot",
+            "stock",
+            "--sd-card",
+            root.to_str().unwrap(),
+        ]))
+        .unwrap()
+        .unwrap()
+        .request()
+        .unwrap();
+        assert_eq!(
+            request.card_files,
+            [
+                ("A.TXT".to_owned(), root.join("A.TXT")),
+                ("DCIM/B.JPG".to_owned(), nested.join("B.JPG")),
+            ]
+        );
+        std::fs::remove_dir_all(&root).unwrap();
+    }
+
+    #[test]
     fn explicit_engine_applies_after_overlays() {
         let id = "x100vi-131";
         let flags = ["boot", "--overlay", "x100vi-131-rom-start"];
@@ -955,7 +1385,10 @@ mod tests {
             ("language".to_owned(), "en".to_owned()),
             ("setup".to_owned(), "done".to_owned()),
         ]);
-        assert_eq!(camera_settings(Some("setup=done, language=en")).unwrap(), expected);
+        assert_eq!(
+            camera_settings(Some("setup=done, language=en")).unwrap(),
+            expected
+        );
         assert!(camera_settings(None).unwrap().is_empty());
         assert!(camera_settings(Some("setup")).is_err());
         assert!(camera_settings(Some("setup=done,setup=done")).is_err());
@@ -977,20 +1410,59 @@ mod tests {
     #[test]
     fn second_card_options_parse_and_are_refused_outside_xp5() {
         let mut boot = parse(args(&[
-            "boot", "--card-image-2", "second.img", "--card-file-2", "A.TXT=a.txt", "--card-file-2", "B.TXT=b.txt",
-            "--card-file", "A.TXT=first.txt",
-        ])).unwrap().unwrap();
-        assert_eq!(boot.sd_files().unwrap(), [("A.TXT".to_owned(), PathBuf::from("first.txt"))]);
+            "boot",
+            "--card-image-2",
+            "second.img",
+            "--card-file-2",
+            "A.TXT=a.txt",
+            "--card-file-2",
+            "B.TXT=b.txt",
+            "--card-file",
+            "A.TXT=first.txt",
+        ]))
+        .unwrap()
+        .unwrap();
+        assert_eq!(
+            boot.sd_files().unwrap(),
+            [("A.TXT".to_owned(), PathBuf::from("first.txt"))]
+        );
         assert_eq!(
             boot.second_sd_files().unwrap(),
-            [("A.TXT".to_owned(), PathBuf::from("a.txt")), ("B.TXT".to_owned(), PathBuf::from("b.txt"))]
+            [
+                ("A.TXT".to_owned(), PathBuf::from("a.txt")),
+                ("B.TXT".to_owned(), PathBuf::from("b.txt"))
+            ]
         );
-        assert!(boot.refuse_second_card("EXR II").unwrap_err().contains("--card-image-2 does not apply"));
-        assert_eq!(boot.path("--card-image-2"), Some(PathBuf::from("second.img")));
-        assert!(boot.refuse_second_card("EXR II").unwrap_err().contains("--card-file-2 does not apply"));
-        let files = parse(args(&["boot", "--card-file-2", "A.TXT"])).unwrap().unwrap();
-        assert!(files.second_sd_files().unwrap_err().contains("--card-file-2 needs NAME=PATH"));
-        assert!(parse(args(&["boot"])).unwrap().unwrap().refuse_second_card("EXR II").is_ok());
+        assert!(
+            boot.refuse_second_card("EXR II")
+                .unwrap_err()
+                .contains("--card-image-2 does not apply")
+        );
+        assert_eq!(
+            boot.path("--card-image-2"),
+            Some(PathBuf::from("second.img"))
+        );
+        assert!(
+            boot.refuse_second_card("EXR II")
+                .unwrap_err()
+                .contains("--card-file-2 does not apply")
+        );
+        let files = parse(args(&["boot", "--card-file-2", "A.TXT"]))
+            .unwrap()
+            .unwrap();
+        assert!(
+            files
+                .second_sd_files()
+                .unwrap_err()
+                .contains("--card-file-2 needs NAME=PATH")
+        );
+        assert!(
+            parse(args(&["boot"]))
+                .unwrap()
+                .unwrap()
+                .refuse_second_card("EXR II")
+                .is_ok()
+        );
     }
 
     #[test]

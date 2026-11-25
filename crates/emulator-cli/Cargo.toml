@@ -15,6 +15,7 @@ path = "src/bin/fujimod-emulator.rs"
 [dependencies]
 fujimod-emulator-models = { path = "../../crates/emulator-models" }
 fujimod-emulator-boot = { workspace = true, features = ["xp5-startup"] }
+fujimod-emulator-camera.workspace = true
 fujimod-catalog-configuration.workspace = true
 fujimod-catalog-resolution.workspace = true
 fujimod-catalog-wiring.workspace = true

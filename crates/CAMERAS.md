@@ -93,7 +93,8 @@ the same key restores it in about a second instead of booting.
 - MCP `camera_open` takes `firmware`, `boot` and options. The raw `gpio`,
   `keys` and overlay options go.
 - The desktop launcher offers Stock, SD card and Automatic boot.
-- The CLI takes `--firmware ID --boot stock|sd-card|automatic-boot`.
+- The CLI `open` takes `--firmware ID --boot stock|sd-card [--sd-card DIR]
+  [--execution-policy interactive|exact] [--gui]`.
 - The website keeps its interface and calls the builder inside its Wasm
   module.
 
