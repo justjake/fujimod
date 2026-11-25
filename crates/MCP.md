@@ -206,7 +206,7 @@ firmware identity and one of its boots:
 - `boot`: `stock`, `sd-card` or `automatic-boot`. An `sd-card` boot holds
   the body's `boot.sd` controls through the session contact driver from
   power-on and releases them at REC; an `automatic-boot` holds nothing and
-  installs the card's loader into internal flash once.
+  drives the card's AUTOMATIC boot installer into internal flash once.
 - `sd_card`: the directory for the virtual SD card. An `sd-card` or
   `automatic-boot` without it fetches the current release card for the
   firmware; for `stock` its files are added to the otherwise empty card.

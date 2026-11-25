@@ -1,7 +1,7 @@
 //! One emulated camera, owned by its thread.
 use std::{collections::BTreeMap, path::PathBuf};
 
-use fujimod_catalog_remote::{Facts, Selection};
+use fujimod_catalog_remote::Facts;
 use fujimod_catalog_resolution::ResolvedConfiguration;
 use fujimod_emulator_boot as boot;
 use fujimod_emulator_camera::{
@@ -10,7 +10,7 @@ use fujimod_emulator_camera::{
 };
 use fujimod_emulator_cpu::ExecutionPolicy;
 use fujimod_emulator_session::{Session, checkpoint::Snapshot};
-use fujimod_remote::{BoardRemote, Control, board::Options as RemoteOptions, operations};
+use fujimod_remote::{BoardRemote, Control, operations};
 use serde_json::{Value, json};
 
 use crate::{OpenBoot, OpenParams};
@@ -135,33 +135,6 @@ impl fujimod_emulator_gui::Run for Camera {
 }
 
 /// The catalog facts `fujimod-remote` needs for a resolved selection.
-fn remote_facts(resolved: &ResolvedConfiguration) -> Result<Facts, String> {
-    let selection = &resolved.reference;
-    let input = Selection {
-        firmware_id: &selection.firmware.id,
-        body_id: &selection.body.id,
-        firmware_sha256: selection
-            .firmware
-            .update
-            .as_ref()
-            .map(|content| content.sha256.as_str()),
-        remote_facts: selection
-            .firmware
-            .generated_facts
-            .as_ref()
-            .and_then(|facts| facts.remote.as_ref()),
-        physical_controls: selection.physical_controls.as_ref(),
-        control_ids: selection.control_ids.as_ref(),
-        connections: selection
-            .body
-            .connections
-            .iter()
-            .map(|connection| connection.id.as_str())
-            .collect(),
-    };
-    Facts::from_selection(&input, None)
-}
-
 /// Every file under `directory`, named by its path relative to it.
 fn sd_card_files(directory: &PathBuf) -> Result<Vec<(String, PathBuf)>, String> {
     let mut files = Vec::new();
@@ -215,7 +188,7 @@ impl Camera {
         };
         let quantum = opened.camera.quantum;
         let ticks_per_second = opened.camera.ticks_per_second;
-        let facts = remote_facts(&opened.resolved);
+        let facts = fujimod_emulator_camera::remote_facts(&opened.resolved);
         let stage = opened.stage;
         let release = opened.release.clone();
         let mut camera = Self {
@@ -461,15 +434,7 @@ impl Camera {
     ) -> Result<(), String> {
         let facts = self.facts.clone()?;
         self.connect()?;
-        let options = RemoteOptions {
-            quantum: self.quantum,
-            window_instructions: 100_000,
-            scanout_node: boot::scanout_node(&self.session)?,
-            output: "lcd".into(),
-            // The EXR II display-timing model counts completed LCD frames here.
-            frame_counter_kind: "display-timing".into(),
-            frame_counter_pointer: "/0/banks/1/frames".into(),
-        };
+        let options = fujimod_emulator_camera::remote_options(&self.session, self.quantum)?;
         let deadline = self.session.board.now() + 5 * self.ticks_per_second;
         let mut remote = BoardRemote::new(&mut self.session, facts, options)?;
         futures_lite::future::block_on(operation(&mut remote, deadline))

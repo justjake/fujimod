@@ -9,12 +9,16 @@
 //! Opening returns only when the camera reaches REC (or its first-start
 //! setup). Every other outcome is an OpenError that names the boot stage it
 //! reached.
+mod automatic;
 mod library;
 mod open;
 mod release;
 
 pub use library::{Library, LibraryError, LibraryFirmware};
-pub use open::{Boot, CardSource, OpenError, Opened, Request, Stage, open, open_unbooted};
+pub use open::{
+    Boot, CardSource, OpenError, Opened, Request, Stage, open, open_unbooted, remote_facts,
+    remote_options,
+};
 pub use release::RELEASES_URL;
 
 /// The scheduler engine a request may override.

@@ -275,17 +275,3 @@ fn boot_files_are_an_allowlist_and_never_the_update() {
     }
 }
 
-#[test]
-fn the_configured_nand_loader_is_found_in_a_card_patch() {
-    let mut configured = NAND_STAGE1_TEMPLATE.to_vec();
-    configured[NAND_STAGE1_COMMON_BYTES..].fill(0x5a);
-    let mut card = vec![0u8; 37];
-    card.extend_from_slice(&configured);
-    card.extend_from_slice(&[0u8; 11]);
-    assert_eq!(nand_stage1_loader(&card), Some(configured.as_slice()));
-
-    // A card whose loader does not match the template is not mistaken for one.
-    let mut other = configured;
-    other[41] ^= 0xff;
-    assert_eq!(nand_stage1_loader(&other), None);
-}

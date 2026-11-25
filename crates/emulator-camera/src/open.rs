@@ -1,7 +1,8 @@
 //! Turn a firmware, a boot choice and a request into a camera at REC.
-use crate::{Library, LibraryError};
+use crate::{Library, LibraryError, automatic};
 use fujimod_catalog_configuration::{RunEngine, RunInputs};
 use fujimod_catalog_controls::{BootCombination, BootMode, PhysicalControls};
+use fujimod_catalog_remote::{Facts, Selection};
 use fujimod_catalog_resolution::ResolvedConfiguration;
 use fujimod_emulator_boot::{self as boot, Camera};
 use fujimod_emulator_cpu::ExecutionPolicy;
@@ -92,7 +93,7 @@ pub struct OpenError {
 }
 
 impl OpenError {
-    fn at(stage: Stage, detail: impl Into<String>) -> Self {
+    pub(crate) fn at(stage: Stage, detail: impl Into<String>) -> Self {
         Self {
             stage,
             detail: detail.into(),
@@ -220,12 +221,13 @@ fn boot_camera(
     ))
 }
 
-/// Open the installed automatic boot, creating its internal flash once from
-/// the loader the SD card carries.
+/// Open the installed automatic boot, creating its internal flash once with
+/// the card's own installer.
 fn open_automatic(library: &Library, request: Request) -> Result<Opened, OpenError> {
     let Boot::AutomaticBoot(source) = &request.boot else {
         return Err(OpenError::at(Stage::BootRom, "not an automatic boot"));
     };
+    let facts = library.nand_boot(&request.firmware)?;
     let contents = card_contents(library, &request.firmware, source)?;
     let key = automatic_key(&request.firmware, &contents);
     let directory = library
@@ -233,20 +235,15 @@ fn open_automatic(library: &Library, request: Request) -> Result<Opened, OpenErr
         .join(crate::library::AUTOMATIC_DIRECTORY)
         .join(&request.firmware);
     let flash = directory.join(format!("{key}.flash"));
-    let facts = library.nand_boot(&request.firmware)?;
-    let mut opened = construct(library, request)?;
-    let installed = match fs::read(&flash) {
-        Ok(bytes) => {
-            restore_automatic_boot(opened.session_mut(), facts, &bytes)?;
-            None
-        }
+    let kept = match fs::read(&flash) {
+        Ok(bytes) => bytes,
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
-            let loader = automatic_loader(&contents)?;
-            Some(install_automatic_boot(
-                opened.session_mut(),
-                facts,
-                &loader,
-            )?)
+            let installed = install_automatic(library, &request, &contents, facts)?;
+            fs::create_dir_all(&directory)
+                .map_err(|error| OpenError::at(Stage::Rec, error.to_string()))?;
+            fs::write(&flash, &installed)
+                .map_err(|error| OpenError::at(Stage::Rec, error.to_string()))?;
+            installed
         }
         Err(error) => {
             return Err(OpenError::at(
@@ -255,14 +252,79 @@ fn open_automatic(library: &Library, request: Request) -> Result<Opened, OpenErr
             ));
         }
     };
+    let mut opened = construct(library, request)?;
+    automatic::write_kept_flash(opened.session_mut(), facts, &kept)?;
     boot_camera(&mut opened, &[])?;
     fujimod_resident(&opened, facts.load_range.address)?;
-    if let Some(bytes) = installed {
-        fs::create_dir_all(&directory)
-            .map_err(|error| OpenError::at(Stage::Rec, error.to_string()))?;
-        fs::write(&flash, bytes).map_err(|error| OpenError::at(Stage::Rec, error.to_string()))?;
-    }
     Ok(opened)
+}
+
+/// Boot the card through the body's SD holds and let its installer write the
+/// stage-1 blocks, returning the blocks it kept.
+fn install_automatic(
+    library: &Library,
+    request: &Request,
+    contents: &[(String, Vec<u8>)],
+    facts: &fujimod_catalog::nand_boot::FirmwareNandBoot,
+) -> Result<Vec<u8>, OpenError> {
+    let mut installer = construct(
+        library,
+        Request {
+            firmware: request.firmware.clone(),
+            boot: Boot::SdCard(CardSource::Files(automatic::stock_menus(contents)?)),
+            policy: request.policy,
+            engine: request.engine,
+            card_files: request.card_files.clone(),
+        },
+    )?;
+    let holds = sd_holds(&installer.resolved)?;
+    boot_camera(&mut installer, &holds)?;
+    automatic::install(&mut installer, facts)
+}
+
+/// The `fujimod-remote` facts for a resolved camera: the menu, control and
+/// readiness tables a remote reads.
+pub fn remote_facts(resolved: &ResolvedConfiguration) -> Result<Facts, String> {
+    let selection = &resolved.reference;
+    let input = Selection {
+        firmware_id: &selection.firmware.id,
+        body_id: &selection.body.id,
+        firmware_sha256: selection
+            .firmware
+            .update
+            .as_ref()
+            .map(|content| content.sha256.as_str()),
+        remote_facts: selection
+            .firmware
+            .generated_facts
+            .as_ref()
+            .and_then(|facts| facts.remote.as_ref()),
+        physical_controls: selection.physical_controls.as_ref(),
+        control_ids: selection.control_ids.as_ref(),
+        connections: selection
+            .body
+            .connections
+            .iter()
+            .map(|connection| connection.id.as_str())
+            .collect(),
+    };
+    Facts::from_selection(&input, None)
+}
+
+/// How `fujimod-remote` reads this session's screen and completed frames.
+pub fn remote_options(
+    session: &Session,
+    quantum: usize,
+) -> Result<fujimod_remote::board::Options, String> {
+    Ok(fujimod_remote::board::Options {
+        quantum,
+        window_instructions: 100_000,
+        scanout_node: boot::scanout_node(session)?,
+        output: "lcd".into(),
+        // The EXR II display-timing model counts completed LCD frames here.
+        frame_counter_kind: "display-timing".into(),
+        frame_counter_pointer: "/0/banks/1/frames".into(),
+    })
 }
 
 /// Every file on a card source, sorted by its name.
@@ -295,158 +357,6 @@ fn automatic_key(firmware: &str, contents: &[(String, Vec<u8>)]) -> String {
         hash.update(bytes);
     }
     format!("{:x}", hash.finalize())
-}
-
-/// The configured NAND stage-1 loader the card's firmware patch carries.
-fn automatic_loader(contents: &[(String, Vec<u8>)]) -> Result<Vec<u8>, OpenError> {
-    contents
-        .iter()
-        .find_map(|(_, bytes)| fujimod_recovery::nand_stage1_loader(bytes))
-        .map(<[u8]>::to_vec)
-        .ok_or_else(|| {
-            OpenError::at(
-                Stage::BootRom,
-                "the SD card carries no automatic-boot loader",
-            )
-        })
-}
-
-/// Write the card's loader into the body's NAND code space and point the
-/// boot block's reset literal at it.
-fn install_automatic_boot(
-    session: &mut Session,
-    facts: &fujimod_catalog::nand_boot::FirmwareNandBoot,
-    loader: &[u8],
-) -> Result<Vec<u8>, OpenError> {
-    let block = facts.stage1.blocks.first().ok_or_else(|| {
-        OpenError::at(
-            Stage::BootRom,
-            "the firmware's NAND boot has no stage-1 block",
-        )
-    })?;
-    let code = facts.code_space;
-    if loader.len() as u64 > code.capacity {
-        return Err(OpenError::at(
-            Stage::BootRom,
-            format!(
-                "the automatic-boot loader is {} bytes; the code space holds {}",
-                loader.len(),
-                code.capacity
-            ),
-        ));
-    }
-    let stage = &facts.stage1;
-    let code_at = code
-        .native_offset
-        .checked_sub(block.native_offset)
-        .ok_or_else(|| OpenError::at(Stage::BootRom, "the NAND code space precedes its block"))?;
-    let literal_at = stage.entry.literal_address as u64;
-    if literal_at + 4 > block.bytes {
-        return Err(OpenError::at(
-            Stage::BootRom,
-            "the NAND reset literal lies outside the stage-1 block",
-        ));
-    }
-    let mut medium = session
-        .nand_medium("nand")
-        .map_err(|error| OpenError::at(Stage::BootRom, error))?;
-    let page = medium.options().page_bytes as u64;
-    let pages = medium.options().pages_per_block;
-    let spare_bytes = medium.options().spare_bytes;
-    let mut image = vec![0u8; block.bytes as usize];
-    medium
-        .read(block.native_offset, &mut image)
-        .map_err(|error| OpenError::at(Stage::BootRom, error))?;
-    let at = code_at as usize;
-    image[at..at + loader.len()].copy_from_slice(loader);
-    image[literal_at as usize..literal_at as usize + 4]
-        .copy_from_slice(&(code.address as u32).to_le_bytes());
-    let first = (block.native_offset / page) as u32;
-    let saved: Vec<Vec<u8>> = (0..pages)
-        .map(|index| {
-            let start = index as usize * page as usize;
-            image[start..start + page as usize].to_vec()
-        })
-        .collect();
-    let spares: Vec<Vec<u8>> = (0..pages)
-        .map(|index| {
-            let mut bytes = vec![0u8; spare_bytes];
-            medium.read_spare(first + index, &mut bytes).map(|_| bytes)
-        })
-        .collect::<Result<_, _>>()
-        .map_err(|error| OpenError::at(Stage::BootRom, error))?;
-    // Erasing clears the block's spare tags with its data, so program both back.
-    medium
-        .erase(first)
-        .map_err(|error| OpenError::at(Stage::BootRom, error))?;
-    for (index, (bytes, spare)) in saved.iter().zip(&spares).enumerate() {
-        medium
-            .program(first + index as u32, bytes, spare)
-            .map_err(|error| OpenError::at(Stage::BootRom, error))?;
-    }
-    session
-        .retain_nand("nand", medium)
-        .map_err(|error| OpenError::at(Stage::BootRom, error))?;
-    Ok(block_image(&saved, &spares))
-}
-
-/// A stage-1 block's pages followed by its spares, as the kept internal flash.
-fn block_image(pages: &[Vec<u8>], spares: &[Vec<u8>]) -> Vec<u8> {
-    let mut bytes = Vec::with_capacity(
-        pages.iter().map(Vec::len).sum::<usize>() + spares.iter().map(Vec::len).sum::<usize>(),
-    );
-    for page in pages {
-        bytes.extend_from_slice(page);
-    }
-    for spare in spares {
-        bytes.extend_from_slice(spare);
-    }
-    bytes
-}
-
-/// Put the kept internal-flash block back in the camera's NAND.
-fn restore_automatic_boot(
-    session: &mut Session,
-    facts: &fujimod_catalog::nand_boot::FirmwareNandBoot,
-    bytes: &[u8],
-) -> Result<(), OpenError> {
-    let block = facts.stage1.blocks.first().ok_or_else(|| {
-        OpenError::at(
-            Stage::BootRom,
-            "the firmware's NAND boot has no stage-1 block",
-        )
-    })?;
-    let mut medium = session
-        .nand_medium("nand")
-        .map_err(|error| OpenError::at(Stage::BootRom, error))?;
-    let page = medium.options().page_bytes;
-    let pages = medium.options().pages_per_block as usize;
-    let spare_bytes = medium.options().spare_bytes;
-    let expected = pages * page + pages * spare_bytes;
-    if bytes.len() != expected {
-        return Err(OpenError::at(
-            Stage::BootRom,
-            format!(
-                "the kept internal flash is {} bytes; this NAND's stage-1 block needs {expected}",
-                bytes.len()
-            ),
-        ));
-    }
-    let first = (block.native_offset / page as u64) as u32;
-    medium
-        .erase(first)
-        .map_err(|error| OpenError::at(Stage::BootRom, error))?;
-    for index in 0..pages {
-        let data = &bytes[index * page..(index + 1) * page];
-        let spare =
-            &bytes[pages * page + index * spare_bytes..pages * page + (index + 1) * spare_bytes];
-        medium
-            .program(first + index as u32, data, spare)
-            .map_err(|error| OpenError::at(Stage::BootRom, error))?;
-    }
-    session
-        .retain_nand("nand", medium)
-        .map_err(|error| OpenError::at(Stage::BootRom, error))
 }
 
 fn read_files(files: &[(String, PathBuf)]) -> Result<Vec<(String, Vec<u8>)>, OpenError> {

@@ -22,7 +22,7 @@ open(firmware = "x70-110", boot = AutomaticBoot { card: Release })
 |---|---|---|---|---|
 | `Stock` | The installed firmware | The catalog's reference camera settings | Empty, or files the caller adds | Nothing |
 | `SdCard` | FujiMod from the SD card | As `Stock` | The FujiMod SD card | The catalog's `boot.sd` controls |
-| `AutomaticBoot` | FujiMod from the SD card, started by the automatic-boot installer | As `Stock`, with the installer applied | The FujiMod SD card | Nothing |
+| `AutomaticBoot` | FujiMod from the SD card, started by the card's AUTOMATIC boot | As `Stock`, with the card's AUTOMATIC boot installed | The FujiMod SD card | Nothing |
 
 The `boot.sd` controls are the body's controls document entry, the same one
 the website reads (X70: command control press and movie-record button). The
@@ -31,10 +31,17 @@ releases them when the catalog says the boot ROM has sampled them. Callers
 never name pins.
 
 `AutomaticBoot` internal flash is made once per firmware and SD card: the
-builder writes the stage-1 loader the card carries into the body's NAND code
-space, points the boot block's reset literal at it, and keeps the resulting
-flash in the firmware library. Later opens restore that flash and start from
-it with no buttons held.
+builder boots the card with its `boot.sd` holds, opens FUJIMOD SET-UP's BOOT
+SETUP page and chooses AUTOMATIC, the same presses a person makes. The card's
+installer backs the internal data up to the SD card and rewrites the stage-1
+blocks the boot ROM loads. The builder powers the camera off and keeps those
+blocks in the firmware library under the firmware and the card's contents.
+Later opens program them back into a stock boot and start from internal flash
+with no buttons held.
+
+The installer run boots the card with stock-style menus, which is how the
+stock menu descriptors expose the mod's pages; every other boot uses the card
+as the caller gave it.
 
 ### SD card sources
 

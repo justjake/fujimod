@@ -2411,7 +2411,6 @@ dependencies = [
  "fujimod-emulator-exr2-board",
  "fujimod-emulator-models",
  "fujimod-emulator-session",
- "fujimod-recovery",
  "fujimod-remote",
  "fujimod-workspace-hack",
  "futures-lite",

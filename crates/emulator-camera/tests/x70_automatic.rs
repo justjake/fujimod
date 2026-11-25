@@ -1,9 +1,10 @@
 //! Open the current release's automatic boot for the installed X70 firmware.
 //!
 //! Set `FUJIMOD_FIRMWARE_LIBRARY` to a directory holding the catalog's X70
-//! update and boot ROM. The release card is fetched into that library; its
-//! loader is installed into the camera's internal flash once, and the second
-//! open starts from the kept flash without holding a button.
+//! update and boot ROM. The release card is fetched into that library; the
+//! first open drives the card's installer to write the camera's internal
+//! flash, and the second open starts from the kept flash without holding a
+//! button.
 use fujimod_emulator_camera::{
     Boot, CardSource, ExecutionPolicy, Library, LibraryError, Request, Stage, open,
 };
