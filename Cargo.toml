@@ -43,6 +43,7 @@ members = [
   "crates/emulator",
   "crates/perf",
   "crates/emulator-boot",
+  "crates/emulator-camera",
   "crates/emulator-board-graph",
   "crates/emulator-session",
   "crates/emulator-cli",

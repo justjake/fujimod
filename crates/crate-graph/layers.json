@@ -84,6 +84,7 @@
     ],
     "final": [
       "fujimod-emulator-cli",
+      "fujimod-emulator-camera",
       "fujimod-emulator-xp5-bringup",
       "fujimod-emulator-ip-dmp-webgpu",
       "fujimod-emulator-javascript",

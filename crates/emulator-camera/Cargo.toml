@@ -1,0 +1,34 @@
+[package]
+name = "fujimod-emulator-camera"
+description = "Open an emulated camera from a firmware library and a boot choice"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+repository.workspace = true
+publish.workspace = true
+license.workspace = true
+
+[lib]
+doctest = false
+
+[dependencies]
+fujimod-emulator-boot = { workspace = true, features = ["xp5-startup"] }
+fujimod-emulator-exr2-board.workspace = true
+fujimod-emulator-models.workspace = true
+fujimod-emulator-session.workspace = true
+fujimod-emulator-controls.workspace = true
+fujimod-emulator-cpu.workspace = true
+fujimod-catalog.workspace = true
+fujimod-catalog-configuration.workspace = true
+fujimod-catalog-resolution.workspace = true
+sha2.workspace = true
+thiserror.workspace = true
+fujimod-workspace-hack.workspace = true
+
+[dev-dependencies]
+fujimod-catalog-remote.workspace = true
+fujimod-remote = { path = "../remote", default-features = false, features = ["board"] }
+futures-lite.workspace = true
+
+[lints.rust]
+unsafe_op_in_unsafe_fn = "deny"
