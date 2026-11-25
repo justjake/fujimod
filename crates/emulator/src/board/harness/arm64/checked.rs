@@ -635,6 +635,12 @@ impl Guard {
             }
             return Ok(());
         }
+        // CLREX clears the guard's one-core exclusive monitor. The CPU also
+        // executes it to clear its own reservation; it makes no RAM access.
+        if word & 0xffff_f0ff == 0xd503_305f {
+            self.observed.borrow_mut().exclusive = None;
+            return Ok(());
+        }
         // Barrier, event-hint and NOP forms are ordering points in this
         // single-core, cache-free routine: admitted RAM stores complete before
         // the next instruction, and an instruction barrier needs no pipeline
@@ -2315,7 +2321,6 @@ mod tests {
             (0xd5380000, false),
             (0xd538001f, true),
             (0xd5181000, true),
-            (0xd5033f5f, true), // CLREX clears a monitor and stays outside this policy.
             (0xd503229f, true), // CSDB is a hint this harness does not model.
         ] {
             let mut b = board(&[word, 0xd65f03c0]);
@@ -2423,6 +2428,22 @@ mod tests {
         let mut bytes = [0; 4];
         b.read_memory(0, 0x4000, &mut bytes).unwrap();
         assert_eq!(bytes, [0; 4]);
+    }
+    #[test]
+    fn clrex_clears_the_exclusive_monitor() {
+        // LDXR W1,[X0]; CLREX; STXR W2,W1,[X0]; RET.
+        let mut b = board(&[0x885f7c01, 0xd5033f5f, 0x88027c01, 0xd65f03c0]);
+        b.write_memory(0, 0x4000, &0x1122_3344u32.to_le_bytes())
+            .unwrap();
+        let mut o = options();
+        o.arguments = vec![0x4000];
+        let r = checked_call(&mut b, o).unwrap();
+        assert!(r.returned, "{:?}", r.failure);
+        assert_eq!(r.registers["x2"], 1);
+        assert!(r.stores.is_empty());
+        let mut bytes = [0; 4];
+        b.read_memory(0, 0x4000, &mut bytes).unwrap();
+        assert_eq!(bytes, 0x1122_3344u32.to_le_bytes());
     }
     #[test]
     fn intervening_store_to_monitored_address_fails_exclusive_store() {
