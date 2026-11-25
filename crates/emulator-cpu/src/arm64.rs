@@ -64,6 +64,11 @@ pub fn system_register(name: &str) -> Result<super::arm::SystemRegister, String>
         "CNTV_CTL_EL0" => 0xdf19,
         "CNTV_CVAL_EL0" => 0xdf1a,
         "SP_EL1" => 0xe208,
+        "SP_EL3" => 0xf208,
+        "SPSR_EL3" => 0xf200,
+        "ELR_EL3" => 0xf201,
+        "SCR_EL3" => 0xf080,
+        "VBAR_EL3" => 0xf600,
         "ICC_PMR_EL1" => 0xc230,
         "ICC_IGRPEN0_EL1" => 0xc666,
         "ICC_IGRPEN1_EL1" => 0xc667,
@@ -489,6 +494,25 @@ mod tests {
         } else {
             0x1000 + r as u64 * 16
         })
+    }
+    #[test]
+    fn el3_system_register_names_resolve_to_their_encodings() {
+        for (name, encoding) in [
+            ("SP_EL3", 0xf208),
+            ("SPSR_EL3", 0xf200),
+            ("ELR_EL3", 0xf201),
+            ("SCR_EL3", 0xf080),
+            ("VBAR_EL3", 0xf600),
+        ] {
+            assert_eq!(system_register(name).unwrap().encoding().unwrap(), encoding);
+            assert_eq!(
+                system_register(&name.to_ascii_lowercase())
+                    .unwrap()
+                    .encoding()
+                    .unwrap(),
+                encoding
+            );
+        }
     }
     #[test]
     fn indexed_and_pair() {

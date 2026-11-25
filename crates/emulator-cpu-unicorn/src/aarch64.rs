@@ -306,6 +306,42 @@ mod tests {
         cpu.restore(saved.as_ref()).unwrap();
         assert_eq!(value(&cpu, Register::X(2)), 16);
     }
+    #[test]
+    fn el3t_entry_reads_and_writes_the_el3_stack_pointer() {
+        let cpu = crate::test_support::library()
+            .open(Model::ArmV8A, 1 << 20)
+            .unwrap();
+        cpu.map_zeroed(0x1000, 0x1000, 7).unwrap();
+        let sys = |encoding| Register::Arm64System(arm::SystemRegister::from_encoding(encoding));
+        cpu.write_register(Register::Pstate, &0x3ccu64.to_le_bytes())
+            .unwrap(); // EL3t: SPSel=0 selects SP_EL0.
+        cpu.write_register(sys(0xf208), &0x1f840u64.to_le_bytes())
+            .unwrap(); // SP_EL3.
+        cpu.write_register(sys(0xc208), &0x2a000u64.to_le_bytes())
+            .unwrap(); // SP_EL0.
+        // MRS x3,SP_EL3; ADD x4,x3,#8; MSR SP_EL3,x4; MRS x5,SP_EL3.
+        cpu.write_memory(
+            0x1000,
+            &[
+                0x03, 0x41, 0x3e, 0xd5, // mrs x3, sp_el3
+                0x64, 0x20, 0x00, 0x91, // add x4, x3, #8
+                0x04, 0x41, 0x1e, 0xd5, // msr sp_el3, x4
+                0x05, 0x41, 0x3e, 0xd5, // mrs x5, sp_el3
+            ],
+        )
+        .unwrap();
+        cpu.run(Run {
+            begin: 0x1000,
+            until: Some(0x1010),
+            instructions: Some(4),
+            watchdog_us: 1_000_000,
+        })
+        .unwrap();
+        assert_eq!(value(&cpu, Register::X(3)), 0x1f840);
+        assert_eq!(value(&cpu, Register::X(4)), 0x1f848);
+        assert_eq!(value(&cpu, Register::X(5)), 0x1f848);
+        assert_eq!(value(&cpu, sys(0xf208)), 0x1f848);
+    }
 }
 
 #[cfg(test)]

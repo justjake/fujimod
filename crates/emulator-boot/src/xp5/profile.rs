@@ -141,7 +141,8 @@ fn handoff_block(resolved: &ResolvedConfiguration) -> Result<u64, String> {
         .and_then(|layouts| layouts.profiles.get(profile_id))
         .and_then(|profile| profile.cpu.as_ref())
         .and_then(|cpus| cpus.iter().find(|cpu| cpu.id == 0))
-        .map(|cpu| cpu.regs.x21)
+        .and_then(|cpu| cpu.regs.as_ref())
+        .map(|regs| regs.x21)
         .filter(|&address| address != 0)
         .ok_or_else(|| "the startup profile names no hand-off block".into())
 }
