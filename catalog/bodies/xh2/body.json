@@ -59,12 +59,12 @@
     }
   ],
   "parts": [
-    "x100vi-serial-nor"
+    "xh2-serial-nor"
   ],
   "wiring": [
     {
       "source_id": "flash",
-      "target_id": "x100vi-serial-nor",
+      "target_id": "xh2-serial-nor",
       "signal": "storage"
     }
   ]
