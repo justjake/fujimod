@@ -3,7 +3,7 @@
 use objc2::runtime::{AnyClass, AnyObject, Imp, Sel};
 use objc2::{msg_send, sel};
 use objc2_foundation::{NSRect, NSSize};
-use super::{PANEL, SCREEN, window_width as width};
+use super::{BAR, PANEL, SCREEN, window_width as width};
 
 /// `windowWillResize:toSize:`: follow the edge the person drags most and
 /// derive the other.
@@ -25,7 +25,7 @@ extern "C-unwind" fn will_resize(_: &AnyObject, _: Sel, window: &AnyObject, prop
 /// and derive the other from it.
 fn fit((w, h): (f64, f64), (current_w, current_h): (f64, f64)) -> (f64, f64) {
     if (w - current_w).abs() >= (h - current_h).abs() {
-        (w, (w - PANEL) / SCREEN)
+        (w, (w - PANEL) / SCREEN + BAR)
     } else {
         (width(h), h)
     }
@@ -65,10 +65,10 @@ mod tests {
     use super::fit;
 
     #[test]
-    fn keeps_the_screen_three_by_two_beside_the_panel() {
+    fn keeps_the_screen_three_by_two_beside_the_panel_and_above_the_bar() {
         // Dragging mostly sideways keeps the width.
-        assert_eq!(fit((1200.0, 760.0), (1440.0, 720.0)), (1200.0, 560.0));
+        assert_eq!(fit((1200.0, 760.0), (1440.0, 720.0)), (1200.0, 588.0));
         // Dragging mostly downward keeps the height.
-        assert_eq!(fit((1460.0, 900.0), (1440.0, 720.0)), (1710.0, 900.0));
+        assert_eq!(fit((1460.0, 900.0), (1440.0, 720.0)), (1668.0, 900.0));
     }
 }

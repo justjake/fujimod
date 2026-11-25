@@ -35,6 +35,15 @@ pub(crate) enum Event {
         /// Catalog control document used to lay out the body's physical controls.
         controls: Value,
     },
+    /// Camera time against wall time; speed is their ratio over about two seconds.
+    #[serde(rename_all = "camelCase")]
+    Metrics {
+        guest_ticks: u64,
+        virtual_seconds: f64,
+        wall_seconds: f64,
+        speed: f64,
+        average_speed: f64,
+    },
     State {
         inputs: Vec<fujimod_emulator_session::contact_driver::ControlInput>,
         positions: std::collections::BTreeMap<String, String>,

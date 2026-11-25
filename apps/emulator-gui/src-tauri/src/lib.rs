@@ -646,10 +646,12 @@ mod window_shape;
 const PANEL: f64 = 360.0;
 /// Width over height of the camera screen.
 const SCREEN: f64 = 3.0 / 2.0;
+/// Height of the status bar under the camera screen, in points.
+const BAR: f64 = 28.0;
 
 /// Content width of the camera window for a content height.
 fn window_width(height: f64) -> f64 {
-    height * SCREEN + PANEL
+    (height - BAR) * SCREEN + PANEL
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]

@@ -22,6 +22,9 @@ impl Run for RunHost {
     fn session_mut(&mut self) -> &mut fujimod_emulator_session::Session {
         RunHost::session_mut(self)
     }
+    fn ticks_per_second(&self) -> u64 {
+        RunHost::ticks_per_second(self)
+    }
     fn step(&mut self) -> Result<(), String> {
         RunHost::step(self).map(drop)
     }
@@ -65,6 +68,9 @@ impl Run for Live {
     }
     fn session_mut(&mut self) -> &mut fujimod_emulator_session::Session {
         &mut self.camera.session
+    }
+    fn ticks_per_second(&self) -> u64 {
+        self.camera.ticks_per_second
     }
     fn step(&mut self) -> Result<(), String> {
         // About one LCD frame of guest time per slice keeps the window responsive.
