@@ -189,6 +189,7 @@ impl Catalog {
         out.insert("control_requests".into(), json!(requests));
         self.output_fields(&mut out)?;
         out.insert("register_banks".into(), json!(self.register_storage()?));
+        out.insert("xpp_register_blocks".into(), json!(self.register_blocks()?));
         if let Some(sram) = self.soc["memory_regions"]
             .as_array()
             .into_iter()
@@ -356,6 +357,42 @@ impl Catalog {
                 .collect::<Vec<_>>()));
         }
         Ok(out)
+    }
+
+    /// Register blocks with their declared behaviors, those with an `order`
+    /// first in that order, the rest in record order.
+    fn register_blocks(&self) -> Result<Vec<Value>, String> {
+        let mut blocks = self.with_device("register_block");
+        blocks.sort_by_key(|b| (b.device["order"].is_null(), b.device["order"].as_u64().unwrap_or(0)));
+        let bits = |b: &Value| json!([b["offset"], b["mask"]]);
+        let optional = |b: &Value| if b.is_null() { Value::Null } else { bits(b) };
+        let period = |declared: &Value| match &self.board["imaging_frames"]["period_ticks"] {
+            Value::Null => declared.clone(),
+            period => period.clone(),
+        };
+        blocks
+            .into_iter()
+            .map(|b| {
+                let d = b.device;
+                let rows = |key: &str| d[key].as_array().cloned().unwrap_or_default();
+                let frames = &d["frames"];
+                let job = &d["job"];
+                Ok(json!({
+                    "base": b.base(), "size": b.size(),
+                    "idle": rows("idle_bits").iter().map(bits).collect::<Vec<_>>(),
+                    "frames": if frames.is_null() { Value::Null } else { json!({
+                        "start": bits(&frames["start"]), "stopped": bits(&frames["stopped"]),
+                        "irq": b.interrupt(Some("frame")).or(b.interrupt(None)),
+                        "period_ticks": period(&frames["period_ticks"])}) },
+                    "job": if job.is_null() { Value::Null } else { json!({
+                        "start": bits(&job["start"]), "status": optional(&job["status"]),
+                        "stop": optional(&job["stop"]),
+                        "irq": b.interrupt(Some("interrupt")).or(b.interrupt(None)), "ticks": job["ticks"]}) },
+                    "fixed": rows("fixed_words").iter().map(|w| json!([w["offset"], w["value"]])).collect::<Vec<_>>(),
+                    "commands": rows("commands"),
+                }))
+            })
+            .collect()
     }
 
     /// Whether the board builds a device for `block`. A block with no device,
