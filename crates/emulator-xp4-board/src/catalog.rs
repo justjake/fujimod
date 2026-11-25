@@ -291,6 +291,65 @@ impl Catalog {
             }
         }
         out.insert("spi_inputs".into(), json!(plain));
+        let mut hosts = Vec::new();
+        for card in board["sd_cards"].as_array().into_iter().flatten() {
+            let base = card["host_base"].as_u64().ok_or("an SD card names no host")?;
+            let host = self
+                .with_device("sd_host")
+                .into_iter()
+                .find(|h| h.base() == base)
+                .ok_or_else(|| format!("SD card host {base:#x} is not a declared SD host"))?;
+            let c = &card["card"];
+            let d = host.device;
+            hosts.push(json!({
+                "options": {"base": base, "transfer_ticks": d["transfer_ticks"], "clock_ticks": d["clock_ticks"],
+                    "rca": c["rca"], "ram_bytes": ram, "high_speed": c["high_speed"],
+                    "capabilities": d["capabilities"], "capabilities_2": d["capabilities_2"],
+                    "slot_and_version": d["slot_and_version"],
+                    "vendor_offsets": d.get("vendor_offsets").cloned().unwrap_or(json!([]))},
+                "card": {"sectors": c["sectors"], "max_dirty_sectors": 1u64 << 21,
+                    "partition_start": c["format"]["partition_start"],
+                    "sectors_per_cluster": c["format"]["sectors_per_cluster"], "label": c["format"]["label"]},
+                "irq": host.interrupt(None)}));
+        }
+        out.insert("sd_hosts".into(), json!(hosts));
+        if let Some(command) = self.device("sensor_command") {
+            let receiver = self.device("imaging_receiver").ok_or("the sensor command block needs a receiver")?;
+            let sensor = &board["sensor_input"];
+            let lines = |block: Block<'_>, prefix: &str| -> Vec<Value> {
+                block.interrupts().iter()
+                    .filter(|row| row["output"].as_str().is_some_and(|o| o.starts_with(prefix)))
+                    .map(|row| row["line"].clone()).collect()
+            };
+            let buffer = match self.device("imaging_input_buffer") {
+                None => Value::Null,
+                Some(buffer) => {
+                    let region = buffer.field("sram_region_id")?;
+                    let sram = self.soc["memory_regions"].as_array().into_iter().flatten()
+                        .find(|row| &row["id"] == region)
+                        .ok_or("the input buffer names an absent memory region")?;
+                    json!([buffer.base(), buffer.interrupt(None), buffer.number("reset_ticks")?, sram["base"],
+                        buffer.number("bank_bytes")?, sensor["statistics_scene"]])
+                }
+            };
+            out.insert("imaging".into(), json!([
+                [command.base(), receiver.base(), lines(receiver, "normal"), lines(receiver, "error"),
+                 lines(command, "timing"), lines(receiver, "raw-dma")],
+                [sensor["frame_period_ticks"], sensor["frame_active_ticks"],
+                 command.number("command_ticks")?, command.number("reset_ticks")?],
+                [sensor["read_gate"]["register"], sensor["read_gate"]["mask"]],
+                buffer]));
+        }
+        let usb_input = &board["usb_input"];
+        if let Some(usb) = self.device("usb").filter(|_| usb_input.is_object()) {
+            let speed = match usb_input["speed"].as_str() {
+                Some("high") => 0,
+                Some("super") => 4,
+                other => return Err(format!("unknown USB speed {other:?}")),
+            };
+            out.insert("usb".into(), json!([usb.base(), usb.interrupt(None), usb.number("command_ticks")?,
+                usb.number("transaction_ticks")?, speed]));
+        }
         if let Some(dials) = board["countdown_dials"]["dials"].as_array() {
             out.insert("countdown_dials".into(), json!(dials.iter().map(|d| json!({"name": d["control"],
                 "channel": d["channel"], "phase_ticks": d["phase_ticks"], "rest_phase": d["rest_phase"]}))
@@ -509,6 +568,20 @@ mod tests {
 
     fn xt3() -> Catalog {
         Catalog::new(&ResolvedConfiguration::bundled("xt3-511").unwrap()).unwrap()
+    }
+
+    /// Writes each configuration's fields to `FUJIMOD_XP4_CATALOG_DIR/<id>.json`
+    /// when set, for comparison with another builder.
+    #[test]
+    fn every_xp4_configuration_builds() {
+        for id in ["xt3-511", "xt30-201-boot", "xe4-201-handoff"] {
+            let catalog = Catalog::new(&ResolvedConfiguration::bundled(id).unwrap()).unwrap();
+            let mut fields = catalog.processor_fields().unwrap();
+            fields.extend(catalog.body_fields().unwrap_or_else(|e| panic!("{id}: {e}")));
+            if let Ok(dir) = std::env::var("FUJIMOD_XP4_CATALOG_DIR") {
+                std::fs::write(format!("{dir}/{id}.json"), serde_json::to_string_pretty(&fields).unwrap()).unwrap();
+            }
+        }
     }
 
     #[test]
