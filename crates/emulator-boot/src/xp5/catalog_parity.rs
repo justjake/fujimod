@@ -13,8 +13,20 @@ const FIRMWARES: [&str; 6] = ["x100vi-131", "xe5-112", "xh2-530", "xh2s-730", "x
 /// Every difference between the manifest windows of `firmware` and the catalog's.
 pub(crate) fn differences(firmware: &str) -> Result<Vec<String>, String> {
     let state = BootState::for_firmware(firmware, None)?;
-    let resolved = ResolvedConfiguration::bundled(firmware)?;
-    let mut built = fujimod_emulator_xp5_board::boot::windows_from_blocks(&resolved)?;
+    let mut resolved = ResolvedConfiguration::bundled(firmware)?;
+    // A manifest DRAM map moves the body's one bus drain past it, as the boot does.
+    let dram_limit = match &state.dram {
+        Some(dram) => {
+            let drains = resolved.reference.body.hardware.as_mut().map(|hardware| &mut hardware.bus_drain);
+            let Some([drain]) = drains.map(|drains| drains.as_mut_slice()) else {
+                return Err(format!("{firmware}: the manifest moves a bus drain the body does not declare once"));
+            };
+            drain.address = dram.bus_drain;
+            dram.limit
+        }
+        None => resolved.dram_address_space_limit_bytes()?,
+    };
+    let mut built = fujimod_emulator_xp5_board::boot::windows_from_blocks(&resolved, dram_limit)?;
     // The boot applies the run's scene on top of its windows; compare what each side boots with.
     let mut manifest = state.device.clone();
     if let Some(fujimod_catalog_configuration::RunScene::Xp5(scene)) = resolved.configuration.scene.as_ref() {
@@ -78,7 +90,7 @@ mod tests {
     use super::*;
 
     /// Differences left before the switch; lower it as facts move, never raise it.
-    const REMAINING: usize = 98;
+    const REMAINING: usize = 89;
 
     #[test]
     fn catalog_windows_match_the_boot_manifests() {
