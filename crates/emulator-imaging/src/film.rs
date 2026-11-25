@@ -207,10 +207,8 @@ impl Film {
         }
         let (shift, gain) = self.bands[band];
         let mut f = gain + ((shift * y) >> 8);
-        let mut tint = [0, 0];
         if let Some(hue) = &self.hue {
             f = (f * hue.gain(cb, cr)) >> 10;
-            tint = hue.tint;
         }
         let fade = |n: i32, d: i32| if d > 0 { n.clamp(0, d) } else { 1 };
         let [lo, hi] = self.tone_fade;
@@ -218,8 +216,8 @@ impl Film {
         let tone = [self.tone[0] * wn / wd, self.tone[1] * wn / wd];
         [
             y as u8,
-            (128 + (((cb + tone[0]).clamp(-512, 511) * f + 512) >> 10) + tint[0]).clamp(0, 255) as u8,
-            (128 + (((cr + tone[1]).clamp(-512, 511) * f + 512) >> 10) + tint[1]).clamp(0, 255) as u8,
+            (128 + (((cb + tone[0]).clamp(-512, 511) * f + 512) >> 10)).clamp(0, 255) as u8,
+            (128 + (((cr + tone[1]).clamp(-512, 511) * f + 512) >> 10)).clamp(0, 255) as u8,
         ]
     }
     #[inline(always)]
@@ -243,17 +241,13 @@ impl Film {
 /// height 0.45 and half-width 15 deg at `d = 3 deg`, whatever the bytes.
 ///
 /// With no bank 0 axis, the stage's form for Sepia (`0, 0, 512, 136, -120`),
-/// bank 0's vector (`FFF4454c`, Cr low, Cb high) is also added to the output
-/// chroma in eighths of a level: an assumed law, chosen so that Sepia's
-/// constants give a sepia-strength warm tint, not a measured one.
+/// byte 1 applies at every hue. Sepia's vector (`FFF4454c`) is the film's
+/// constant toning, which `Film` adds from the same words.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct HueStage {
     axis: f64,
     window: f64,
     bytes: [f64; 2],
-    /// Output (Cb, Cr) offset in levels.
-    #[serde(default)]
-    tint: [i32; 2],
 }
 impl HueStage {
     /// From FFF44000-relative still words, or None when the stage is off.
@@ -267,13 +261,10 @@ impl HueStage {
         if cr == 0 && cb == 0 {
             // Bank 1 alone keeps nothing at bytes 0, 0: without an axis,
             // byte 1 applies everywhere.
-            let eighths = |v: i32| (v + 4).div_euclid(8);
-            let w = r(0x54c);
             return Some(Self {
                 axis: 0.0,
                 window: 0.0,
                 bytes: [bytes[1]; 2],
-                tint: [eighths(signed(w >> 16, 13)), eighths(signed(w, 13))],
             });
         }
         // Bank 0 alone keeps 1.7 times the window of both factory banks, and
@@ -284,7 +275,6 @@ impl HueStage {
             axis: libm::atan2(f64::from(cr), f64::from(cb)).to_degrees(),
             window: 0.45 * banks * libm::pow(width, 2.5),
             bytes,
-            tint: [0, 0],
         })
     }
     /// Q10 chroma gain for chroma (cb, cr).
@@ -582,30 +572,30 @@ mod tests {
         }
     }
     #[test]
-    fn hue_stage_without_an_axis_tints_gray() {
-        // Sepia's code constants: no axis, width 512, vector (136, -120).
-        let sepia = |o: usize| match o {
+    fn sepia_still_tones_gray_once() {
+        // Sepia's still words: the hue stage on with no axis (width 512, vector
+        // 136, -120, bytes 16, 16). The film reads the same three words as its
+        // toning, so the still's chroma takes the vector once.
+        let still = |o: usize| match o {
             0x500 => 1 << 12,
             0x548 => 512,
             0x54c => (136 & 0x1fff) | (-120i32 as u32 & 0x1fff) << 16,
             0x55c => 0x0010_0010,
             _ => 0,
         };
-        let stage = HueStage::from_still(sepia).unwrap();
-        assert_eq!(stage.tint, [-15, 17]);
-        let mut film = Film {
-            bands: [(0, 256); 5],
-            bounds: [255; 4],
-            curves: std::array::from_fn(|_| (0..4096).map(|x| (x * 4) as u16).collect()),
-            matrix: [[1024, 0, 0], [0, 1024, 0], [0, 0, 1024]],
-            gain: vec![2048; 4096],
-            ..Default::default()
-        };
-        let gray = film.develop([6000, 6000, 6000]);
-        film.hue = Some(stage);
-        let toned = film.develop([6000, 6000, 6000]);
-        assert_eq!((gray[1], gray[2]), (128, 128));
-        assert_eq!((toned[0], toned[1], toned[2]), (gray[0], 113, 145));
+        let mut film = Film::default();
+        film.update(|o| still(still_offset(o).unwrap())).unwrap();
+        assert_eq!((film.tone, film.tone_fade), ([-60, 68], [16, 16]));
+        film.bands = [(0, 256); 5];
+        film.bounds = [255; 4];
+        film.curves = std::array::from_fn(|_| (0..4096).map(|x| (x * 4) as u16).collect());
+        film.matrix = [[1024, 0, 0], [0, 1024, 0], [0, 0, 1024]];
+        film.gain = vec![2048; 4096];
+        let toned = film.develop([2000, 2000, 2000]);
+        film.hue = HueStage::from_still(still);
+        assert!(film.hue.is_some());
+        assert_eq!(film.develop([2000, 2000, 2000]), toned);
+        assert_eq!((toned[1], toned[2]), (113, 145));
     }
     #[test]
     fn sepia_toning_registers_decode_and_fade_to_neutral_black() {
