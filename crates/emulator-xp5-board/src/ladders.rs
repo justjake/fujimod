@@ -159,6 +159,11 @@ pub struct RegisterSwitch {
 #[serde(deny_unknown_fields)]
 pub struct CountingDial {
     pub register: u8,
+    /// The front dial counts in bits 7..4 of the same register (X-H2). Its
+    /// turns reach the controller as multiples of 64 edges; a rear turn of 64
+    /// or more detents in one command would read as front and is refused.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub front_high_nibble: bool,
     pub basis: String,
 }
 
