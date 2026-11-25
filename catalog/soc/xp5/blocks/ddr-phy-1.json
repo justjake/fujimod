@@ -9,6 +9,28 @@
     "model": "ddr_phy",
     "basis": "DDR PHY 1 mailbox Located in catalog/firmware/x100vi/1.31/xp5-boot/manifest.d/48-ddr-phy.toml."
   },
+  "registers": [
+    {
+      "name": "training-status",
+      "offset": 8,
+      "width_bytes": 2,
+      "access": "read-write",
+      "reads": {
+        "kind": "alternates",
+        "value": 1
+      }
+    },
+    {
+      "name": "training-message",
+      "offset": 100,
+      "width_bytes": 4,
+      "access": "read-write",
+      "reads": {
+        "kind": "fixed",
+        "value": 7
+      }
+    }
+  ],
   "evidence": [
     {
       "kind": "located",

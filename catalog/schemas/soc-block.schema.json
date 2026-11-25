@@ -2658,6 +2658,17 @@
           "minimum": 0,
           "type": "integer"
         },
+        "reads": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/RegisterReads"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "What reads return, when they do not return the register's last write."
+        },
         "reset": {
           "description": "Value the register holds after reset, when known.",
           "format": "uint64",
@@ -3287,6 +3298,85 @@
         "value"
       ],
       "type": "object"
+    },
+    "RegisterReads": {
+      "description": "What reads of a register return in place of its last write.",
+      "oneOf": [
+        {
+          "additionalProperties": false,
+          "description": "Every read returns `value`.",
+          "properties": {
+            "kind": {
+              "const": "fixed",
+              "type": "string"
+            },
+            "value": {
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          "required": [
+            "kind",
+            "value"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Reads alternate between 0 and `value`, starting with 0.",
+          "properties": {
+            "kind": {
+              "const": "alternates",
+              "type": "string"
+            },
+            "value": {
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          "required": [
+            "kind",
+            "value"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Reads return 0: the register clears itself once written.",
+          "properties": {
+            "kind": {
+              "const": "self-clearing",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Reads return 0 before the first write and `value` after it.",
+          "properties": {
+            "kind": {
+              "const": "after-write",
+              "type": "string"
+            },
+            "value": {
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          "required": [
+            "kind",
+            "value"
+          ],
+          "type": "object"
+        }
+      ]
     },
     "SocBlockInterrupt": {
       "additionalProperties": false,

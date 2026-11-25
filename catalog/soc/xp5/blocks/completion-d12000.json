@@ -36,6 +36,17 @@
     "delay_ticks": 200000,
     "basis": "completion handshake Located in catalog/firmware/xe5/1.12/xp5-boot/manifest.d/59-raw-stubs.toml."
   },
+  "registers": [
+    {
+      "name": "command",
+      "offset": 0,
+      "width_bytes": 4,
+      "access": "read-write",
+      "reads": {
+        "kind": "self-clearing"
+      }
+    }
+  ],
   "evidence": [
     {
       "kind": "located",

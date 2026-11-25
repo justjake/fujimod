@@ -101,6 +101,33 @@ pub struct BlockRegister {
     /// Named bit fields and the values they carry.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub fields: Vec<RegisterField>,
+    /// What reads return, when they do not return the register's last write.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(
+        all(target_arch = "wasm32", not(target_os = "emscripten")),
+        tsify(type = "RegisterReads | null")
+    )]
+    pub reads: Option<RegisterReads>,
+}
+
+/// What reads of a register return in place of its last write.
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(tag = "kind", rename_all = "kebab-case", deny_unknown_fields)]
+#[cfg_attr(
+    all(target_arch = "wasm32", not(target_os = "emscripten")),
+    derive(tsify::Tsify),
+    tsify(hashmap_as_object, missing_as_null)
+)]
+pub enum RegisterReads {
+    /// Every read returns `value`.
+    Fixed { value: u64 },
+    /// Reads alternate between 0 and `value`, starting with 0.
+    Alternates { value: u64 },
+    /// Reads return 0: the register clears itself once written.
+    SelfClearing,
+    /// Reads return 0 before the first write and `value` after it.
+    AfterWrite { value: u64 },
 }
 
 /// Accesses a register accepts.

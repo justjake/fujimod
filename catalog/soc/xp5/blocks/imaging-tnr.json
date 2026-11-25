@@ -9,6 +9,18 @@
     "model": "imaging_tnr",
     "basis": "temporal noise reduction Located in catalog/firmware/xe5/1.12/xp5-boot/manifest.d/57-develop-stubs-3.toml."
   },
+  "registers": [
+    {
+      "name": "word-0",
+      "offset": 0,
+      "width_bytes": 4,
+      "access": "read-write",
+      "reads": {
+        "kind": "fixed",
+        "value": 1
+      }
+    }
+  ],
   "evidence": [
     {
       "kind": "located",
