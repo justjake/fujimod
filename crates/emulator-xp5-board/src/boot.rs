@@ -735,6 +735,29 @@ fn stage_handshake(options: &mut toml::Table, handshake: Option<&fujimod_catalog
 }
 
 /// The device a serial port is emulated as when its one wired part is a whole-port output.
+/// The chip-select pad of a display panel the body attaches to `block`.
+fn panel_select(selection: &ResolvedSelection, block: &fujimod_catalog::reference::SocBlock) -> Result<Option<(u8, u8)>, String> {
+    let attachments = selection.body.hardware.iter().flat_map(|hardware| &hardware.serial_attachments);
+    for attachment in attachments.filter(|attachment| attachment.controller_id == block.id) {
+        let panel = selection.parts.iter().any(|part| part.id == attachment.part_id && matches!(
+            &part.model,
+            fujimod_catalog::reference::PartModel::Peripheral { interface: fujimod_catalog::assembly::PeripheralPart::DisplayPanelSerial }
+        ));
+        if !panel {
+            continue;
+        }
+        let select = attachment.select_connection_id.as_ref()
+            .ok_or_else(|| format!("display panel on {} has no chip-select connection", block.id))?;
+        let connection = selection.body.connections.iter().find(|connection| &connection.id == select)
+            .ok_or_else(|| format!("display panel on {}: no connection {select}", block.id))?;
+        let [ConnectionSignal::Gpio { port, pin, .. }] = connection.signals.as_slice() else {
+            return Err(format!("connection {select} is not one GPIO line"));
+        };
+        return Ok(Some((*port, *pin)));
+    }
+    Ok(None)
+}
+
 fn port_device(selection: &ResolvedSelection, block: &fujimod_catalog::reference::SocBlock) -> Result<Option<&'static str>, String> {
     use fujimod_catalog::assembly::PeripheralPart;
     let mut kinds = selection.body.wiring.iter()
@@ -761,6 +784,97 @@ fn port_device(selection: &ResolvedSelection, block: &fujimod_catalog::reference
     }
 }
 
+/// The wire of a port whose one attached part has no chip select.
+fn dedicated_wire(
+    selection: &ResolvedSelection,
+    block: &fujimod_catalog::reference::SocBlock,
+) -> Result<Option<toml::Table>, String> {
+    use fujimod_catalog::assembly::PeripheralPart;
+    let attachments: Vec<_> = selection.body.hardware.iter()
+        .flat_map(|hardware| &hardware.serial_attachments)
+        .filter(|attachment| attachment.controller_id == block.id && attachment.select_connection_id.is_none())
+        .collect();
+    let [attachment] = attachments.as_slice() else {
+        return if attachments.is_empty() { Ok(None) } else { Err(format!("block {}: several parts share a port without chip selects", block.id)) };
+    };
+    let part = selection.parts.iter().find(|part| part.id == attachment.part_id)
+        .ok_or_else(|| format!("serial attachment {}: no such part", attachment.part_id))?;
+    let fujimod_catalog::reference::PartModel::Peripheral { interface } = &part.model else {
+        return Err(format!("part {} is not a serial peripheral", part.id));
+    };
+    let mut wire = toml::Table::new();
+    match interface {
+        PeripheralPart::FramedCommandPeer { initial_frame } => {
+            wire.insert("kind".into(), toml::Value::String("dedicated".into()));
+            let mut peer = toml::Table::new();
+            peer.insert("kind".into(), toml::Value::String("framed-command-peer".into()));
+            peer.insert("initial_frame".into(), toml::Value::Integer(i64::from(*initial_frame)));
+            wire.insert("part".into(), toml::Value::Table(peer));
+        }
+        // A driver that never answers leaves its input at the idle level.
+        PeripheralPart::UnidentifiedSerialDevice { miso_high } => {
+            wire.insert("kind".into(), toml::Value::String("input-level".into()));
+            wire.insert("high".into(), toml::Value::Boolean(*miso_high));
+        }
+        // Whole-port outputs are their own windows.
+        PeripheralPart::FocusActuator | PeripheralPart::IrisActuator
+        | PeripheralPart::AudioSerialOutput | PeripheralPart::ImagingSerialOutput => return Ok(None),
+        other => return Err(format!("part {}: {other:?} cannot own a port", part.id)),
+    }
+    Ok(Some(wire))
+}
+
+/// The X-mount lens wire of the body's lens mount on `block`, with its mounted lens.
+fn lens_wire(
+    selection: &ResolvedSelection,
+    block: &fujimod_catalog::reference::SocBlock,
+) -> Result<Option<toml::Table>, String> {
+    let Some(mount) = selection.body.hardware.as_ref().and_then(|hardware| hardware.lens_mount.as_ref()) else {
+        return Ok(None);
+    };
+    if mount.controller_id != block.id {
+        return Ok(None);
+    }
+    let pin = |id: &str| -> Result<toml::Value, String> {
+        let connection = selection.body.connections.iter().find(|connection| connection.id == id)
+            .ok_or_else(|| format!("lens mount: no connection {id}"))?;
+        connection.signals.iter().find_map(|signal| match signal {
+            ConnectionSignal::Gpio { port, pin, .. } => {
+                let mut row = toml::Table::new();
+                row.insert("port".into(), toml::Value::Integer(i64::from(*port)));
+                row.insert("pin".into(), toml::Value::Integer(i64::from(*pin)));
+                Some(toml::Value::Table(row))
+            }
+            _ => None,
+        }).ok_or_else(|| format!("lens mount connection {id} carries no GPIO pad"))
+    };
+    let integer = |value: u64| toml::Value::Integer(i64::try_from(value).unwrap_or(i64::MAX));
+    let mut wire = toml::Table::new();
+    wire.insert("kind".into(), toml::Value::String("x-mount-lens".into()));
+    wire.insert("detect".into(), pin(&mount.detect_connection_id)?);
+    wire.insert("sense".into(), toml::Value::Array(mount.sense_connection_ids.iter().map(|id| pin(id)).collect::<Result<_, _>>()?));
+    wire.insert("supplies".into(), toml::Value::Array(mount.supply_connection_ids.iter().map(|id| pin(id)).collect::<Result<_, _>>()?));
+    wire.insert("ready".into(), pin(&mount.ready_connection_id)?);
+    if let Some(function) = mount.ready_function { wire.insert("ready_mux".into(), integer(u64::from(function))); }
+    wire.insert("ready_low_line".into(), integer(u64::from(mount.ready_low_line)));
+    wire.insert("ready_high_line".into(), integer(u64::from(mount.ready_high_line)));
+    let Some(lens_id) = &mount.lens_part_id else {
+        return Err(format!("body {}: an empty lens mount is unmodeled", selection.body.id));
+    };
+    let lens = selection.parts.iter().find(|part| &part.id == lens_id).ok_or_else(|| format!("no lens part {lens_id}"))?;
+    let fujimod_catalog::reference::PartModel::Peripheral {
+        interface: fujimod_catalog::assembly::PeripheralPart::XMountLens { preset, sense_unpowered, startup_us, busy_us, operation_us },
+    } = &lens.model else {
+        return Err(format!("part {lens_id} is not an X-mount lens"));
+    };
+    wire.insert("lens".into(), toml::Value::String(preset.clone()));
+    wire.insert("sense_unpowered".into(), toml::Value::Array(sense_unpowered.iter().map(|level| toml::Value::Boolean(*level)).collect()));
+    wire.insert("startup_us".into(), integer(*startup_us));
+    wire.insert("busy_us".into(), integer(*busy_us));
+    wire.insert("operation_us".into(), integer(*operation_us));
+    Ok(Some(wire))
+}
+
 /// The chip-selected endpoints body wiring attaches to a serial port, with their run inputs.
 fn serial_endpoints(
     selection: &ResolvedSelection,
@@ -775,6 +889,12 @@ fn serial_endpoints(
     for attachment in attachments.filter(|attachment| {
         attachment.controller_id == block.id && attachment.select_connection_id.is_some()
     }) {
+        if selection.parts.iter().any(|part| part.id == attachment.part_id && matches!(
+            &part.model,
+            fujimod_catalog::reference::PartModel::Peripheral { interface: PeripheralPart::DisplayPanelSerial }
+        )) {
+            continue;
+        }
         let Some(select_id) = &attachment.select_connection_id else {
             return Err(format!("serial attachment {} on {} has no chip-select connection", attachment.part_id, block.id));
         };
@@ -1119,6 +1239,13 @@ fn block_window(
             options.insert("rl78".into(), toml::Value::Table(rl78));
             "pl011"
         }
+        BlockDevice::Pl022 { source_hz, .. } if panel_select(selection, block)?.is_some() => {
+            let (port, pin) = panel_select(selection, block)?.expect("checked above");
+            options.insert("select_port".into(), integer(u64::from(port)));
+            options.insert("select_pin".into(), integer(u64::from(pin)));
+            options.insert("source_hz".into(), integer(*source_hz));
+            "panel-spi"
+        }
         BlockDevice::Pl022 { .. } if port_device(selection, block)?.is_some() => {
             port_device(selection, block)?.expect("checked above")
         }
@@ -1134,9 +1261,19 @@ fn block_window(
             if let Some(value) = receive_request { options.insert("receive_request".into(), integer(u64::from(*value))); }
             if let Some(value) = transmit_request { options.insert("transmit_request".into(), integer(u64::from(*value))); }
             if let Some(value) = companion_irq_line { options.insert("companion_irq_line".into(), integer(u64::from(*value))); }
+            if let Some(line) = irq("irq") { options.insert("gic_line".into(), integer(u64::from(line))); }
+            if run.unobserved_interrupt_blocks.contains(&block.id) {
+                options.insert("companion_irq_unconnected".into(), toml::Value::Boolean(true));
+            }
             let endpoints = serial_endpoints(selection, block, part_inputs)?;
-            let mut wire = toml::Table::new();
+            let mut wire = match lens_wire(selection, block)? {
+                Some(wire) => wire,
+                None => dedicated_wire(selection, block)?.unwrap_or_default(),
+            };
             if !endpoints.is_empty() {
+                if !wire.is_empty() {
+                    return Err(format!("block {}: a lens mount shares its port with chip-selected endpoints", block.id));
+                }
                 wire.insert("kind".into(), toml::Value::String("gpio-selected".into()));
                 wire.insert("endpoints".into(), toml::Value::Array(endpoints));
             }

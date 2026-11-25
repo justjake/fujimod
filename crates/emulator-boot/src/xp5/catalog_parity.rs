@@ -90,7 +90,7 @@ mod tests {
     use super::*;
 
     /// Differences left before the switch; lower it as facts move, never raise it.
-    const REMAINING: usize = 24;
+    const REMAINING: usize = 9;
 
     #[test]
     fn catalog_windows_match_the_boot_manifests() {

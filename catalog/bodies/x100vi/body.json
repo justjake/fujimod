@@ -55,6 +55,12 @@
         "controller_id": "serial",
         "connection_id": "lsm6ds-bus",
         "select_connection_id": "lsm6ds-select"
+      },
+      {
+        "part_id": "x100vi-display-panel",
+        "controller_id": "spi9",
+        "connection_id": "display-bus",
+        "select_connection_id": "display-select"
       }
     ],
     "gpio_feedback": [
@@ -267,6 +273,10 @@
           "active_level": true
         }
       ]
+    },
+    {
+      "id": "display-bus",
+      "kind": "display"
     }
   ],
   "parts": [
@@ -282,7 +292,8 @@
     "fuel-gauge",
     "tmd2772",
     "control-bus-device-66",
-    "control-bus-device-68"
+    "control-bus-device-68",
+    "x100vi-display-panel"
   ],
   "wiring": [
     {

@@ -80,6 +80,10 @@ pub struct RunConfiguration {
     /// inferred stand-in a run's recording task waits for.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub idle_status_blocks: Vec<String>,
+    /// Serial blocks whose companion interrupt line is unknown and which this run's firmware
+    /// never observes (no pending-register read); a raised interrupt reaches no input.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub unobserved_interrupt_blocks: Vec<String>,
     /// Named overlays to apply in declaration order.
     pub overlays: Vec<String>,
     /// Browser camera attachments declared by a selected overlay.

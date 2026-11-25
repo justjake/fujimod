@@ -35,6 +35,9 @@ pub struct BodyHardware {
     /// Body connections carrying thermal sensor voltages.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub thermal_connection_ids: Vec<String>,
+    /// The lens mount's serial controller, connector pads and mounted lens, when the body has one.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub lens_mount: Option<LensMount>,
     /// Addresses the firmware reads to drain the bus past this body's DRAM map.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub bus_drain: Vec<BusDrain>,
@@ -80,6 +83,39 @@ pub struct SerialAttachment {
     /// Connection selecting the endpoint, when declared.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub select_connection_id: Option<String>,
+}
+
+/// An interchangeable-lens mount: its serial controller and connector pads.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(deny_unknown_fields)]
+#[cfg_attr(feature = "schema", schemars(deny_unknown_fields))]
+#[cfg_attr(
+    all(target_arch = "wasm32", not(target_os = "emscripten")),
+    derive(tsify::Tsify),
+    tsify(hashmap_as_object, missing_as_null)
+)]
+pub struct LensMount {
+    /// SoC serial controller carrying lens commands.
+    pub controller_id: String,
+    /// Connection whose pad reads low while a lens is attached.
+    pub detect_connection_id: String,
+    /// Connections whose pads read the lens-type pattern before power.
+    pub sense_connection_ids: [String; 3],
+    /// Connections driving the lens supplies, in power-up order.
+    pub supply_connection_ids: [String; 2],
+    /// Connection whose pad the lens pulls low while busy.
+    pub ready_connection_id: String,
+    /// Pad function that routes the ready pad to its interrupt lines.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ready_function: Option<u32>,
+    /// Interrupt line raised when ready falls.
+    pub ready_low_line: u32,
+    /// Interrupt line raised when ready rises.
+    pub ready_high_line: u32,
+    /// Lens mounted on the body, when one is.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub lens_part_id: Option<String>,
 }
 
 /// A declared electrical feedback connection between GPIO pads.
@@ -136,6 +172,20 @@ impl BodyHardware {
             connection(&attachment.connection_id)?;
             if let Some(id) = &attachment.select_connection_id {
                 connection(id)?;
+            }
+        }
+        if let Some(mount) = &self.lens_mount {
+            for id in std::iter::once(&mount.detect_connection_id)
+                .chain(&mount.sense_connection_ids)
+                .chain(&mount.supply_connection_ids)
+                .chain(std::iter::once(&mount.ready_connection_id))
+            {
+                connection(id)?;
+            }
+            if let Some(lens) = &mount.lens_part_id {
+                if !body.parts.contains(lens) {
+                    return Err(format!("body {} mounts an uninstalled lens {lens}", body.id));
+                }
             }
         }
         for feedback in &self.gpio_feedback {
@@ -201,6 +251,26 @@ pub enum PeripheralPart {
         fast_readout: u8,
         /// Length of one line of that readout.
         line_ns: u64,
+    },
+    /// Full-duplex framed peer whose frame repeats the last command frame it received.
+    FramedCommandPeer {
+        /// Frame the peer sends before its first command.
+        initial_frame: u32,
+    },
+    /// Display panel programmed over a chip-selected serial port.
+    DisplayPanelSerial,
+    /// Interchangeable X-mount lens on a body's lens mount.
+    XMountLens {
+        /// Emulated lens preset.
+        preset: String,
+        /// Lens-type pattern the sense pads read before power.
+        sense_unpowered: [bool; 3],
+        /// From both supplies high until the lens pulls ready low.
+        startup_us: u64,
+        /// From then until the lens releases ready high.
+        busy_us: u64,
+        /// Shortest ready-low pulse for a focus or aperture request.
+        operation_us: u64,
     },
     /// Power-controller register protocol.
     PowerController {

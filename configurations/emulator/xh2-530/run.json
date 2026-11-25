@@ -126,5 +126,8 @@
   "polled_serial_blocks": [
     "spi2",
     "spi8"
+  ],
+  "unobserved_interrupt_blocks": [
+    "spi5"
   ]
 }

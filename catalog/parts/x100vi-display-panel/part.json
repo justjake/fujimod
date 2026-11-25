@@ -1,0 +1,11 @@
+{
+  "$schema": "https://fujimod.com/schemas/part.schema.json",
+  "schema": 1,
+  "id": "x100vi-display-panel",
+  "model": {
+    "kind": "peripheral",
+    "interface": {
+      "kind": "display-panel-serial"
+    }
+  }
+}

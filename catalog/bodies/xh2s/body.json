@@ -47,6 +47,16 @@
         "controller_id": "spi7",
         "connection_id": "lsm6ds-spi7-bus",
         "select_connection_id": "lsm6ds-spi7-select"
+      },
+      {
+        "part_id": "framed-command-peer",
+        "controller_id": "spi2",
+        "connection_id": "companion-peer-bus"
+      },
+      {
+        "part_id": "unidentified-serial-device",
+        "controller_id": "spi9",
+        "connection_id": "stabilizer-driver-bus"
       }
     ],
     "gpio_feedback": [
@@ -223,6 +233,14 @@
           "active_level": true
         }
       ]
+    },
+    {
+      "id": "companion-peer-bus",
+      "kind": "microcontroller"
+    },
+    {
+      "id": "stabilizer-driver-bus",
+      "kind": "control"
     }
   ],
   "parts": [
@@ -236,7 +254,9 @@
     "serial-command-16",
     "serial-command-8-mode2",
     "bis-configuration",
-    "lsm6ds"
+    "lsm6ds",
+    "framed-command-peer",
+    "unidentified-serial-device"
   ],
   "wiring": [
     {

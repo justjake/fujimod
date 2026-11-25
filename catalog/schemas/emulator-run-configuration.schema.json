@@ -5284,6 +5284,13 @@
     "start": {
       "$ref": "#/$defs/RunStart",
       "description": "Firmware entry mode selected for this run."
+    },
+    "unobserved_interrupt_blocks": {
+      "description": "Serial blocks whose companion interrupt line is unknown and which this run's firmware\nnever observes (no pending-register read); a raised interrupt reaches no input.",
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
     }
   },
   "required": [
