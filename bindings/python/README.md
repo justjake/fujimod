@@ -123,9 +123,10 @@ internal-flash image, and `combination` holds a catalog power-on combination
 (`sd`, `firmware_update` or `service`). Its SD card is the `sd_card`
 directory's files.
 
-`Board.open_camera(update=..., boot_rom=..., start="loader", image=...,
-image_sha256=...)` places a caller-verified RAM image at address zero and
-starts the first core at the native loader, so the boot ROM never runs.
+`Board.open_camera(start="loader", image=..., image_sha256=...)` places a
+caller-verified RAM image at address zero and starts the first core at the
+native loader, so the boot ROM never runs; the firmware files come from the
+library unless `update` and `boot_rom` name them.
 `run_to_rec=False` then returns the board with the image in RAM before its
 first instruction.
 
