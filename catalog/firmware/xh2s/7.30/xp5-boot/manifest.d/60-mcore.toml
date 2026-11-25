@@ -19,6 +19,8 @@ dma_transmit = [{ channel = 2, request = 32 }]
 base = 0xff929000
 size = 0x1000
 kind = "input-capture"
+[device.options]
+dma_transmit = [{ channel = 0, request = 35 }]
 
 # USB cable/jig connection status in bit 0; disconnected.
 [[device]]

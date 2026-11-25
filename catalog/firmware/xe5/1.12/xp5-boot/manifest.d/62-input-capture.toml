@@ -20,6 +20,8 @@ dma_transmit = [{ channel = 2, request = 32 }]
 base = 0xff929000
 size = 0x1000
 kind = "input-capture"
+[device.options]
+dma_transmit = [{ channel = 0, request = 35 }]
 
 # VERIFIED: USB connection status word at 0xff90e300 (size 4), bit 0 tested in 0x032e9808
 # (0x032e9810..0x032e9814), 0x03072d0c, 0x03072d2c (paired with 0xffc0c70c), 0x01617fd4 (latches

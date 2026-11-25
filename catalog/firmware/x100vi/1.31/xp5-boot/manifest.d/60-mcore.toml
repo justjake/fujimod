@@ -77,6 +77,8 @@ dma_transmit = [{ channel = 2, request = 32 }]
 base = 0xff929000
 size = 0x1000
 kind = "input-capture"
+[device.options]
+dma_transmit = [{ channel = 0, request = 35 }]
 
 # Local227d0/227f8 use two high-address words per bank;22820 request lanes.
 [[device]]

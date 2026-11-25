@@ -7,7 +7,13 @@
   "kind": "address-window",
   "device": {
     "model": "input_capture",
-    "basis": "input-capture channel Located in catalog/firmware/x100vi/1.31/xp5-boot/manifest.d/60-mcore.toml."
+    "transmit_requests": [
+      {
+        "channel": 0,
+        "request": 35
+      }
+    ],
+    "basis": "input-capture channel Located in catalog/firmware/x100vi/1.31/xp5-boot/manifest.d/60-mcore.toml. The X-H2 companion streams words to capture channel 0 (0xff929004) through DMA descriptor [04 23 02 ...], request 35 (catalog/firmware/xh2/5.30/xp5-boot/manifest.d/61-input-capture.toml)."
   },
   "evidence": [
     {

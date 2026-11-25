@@ -803,6 +803,7 @@ class BlockDeviceVariant65(TypedDict, total=False):
 class BlockDeviceVariant66(TypedDict, total=False):
     basis: Required[str]
     model: Required[Literal["audio_serial"]]
+    reset_offset: Required[int]
 
 
 class BlockDeviceVariant67(TypedDict, total=False):
@@ -926,6 +927,7 @@ class BlockDeviceVariant85(TypedDict, total=False):
 class BlockDeviceVariant86(TypedDict, total=False):
     basis: Required[str]
     model: Required[Literal["input_capture"]]
+    transmit_requests: NotRequired[list[CaptureTransmit]]
 
 
 class BlockDeviceVariant87(TypedDict, total=False):
@@ -1203,6 +1205,11 @@ class CaptureScope(TypedDict, total=False):
     basis: Required[str]
     name: Required[str]
     ranges: Required[list[NamedRange]]
+
+
+class CaptureTransmit(TypedDict, total=False):
+    channel: Required[int]
+    request: Required[int]
 
 
 class CardSlotAssembly(TypedDict, total=False):
@@ -5089,6 +5096,13 @@ class RunAdcInputs(TypedDict, total=False):
 type RunAudioInputProfile = Literal["declared-silent-stereo-pcm48000"]
 
 
+class RunAudioSignal(TypedDict, total=False):
+    block_id: Required[str]
+    sample_rate_hz: Required[int]
+    tone_amplitude_thousandths: Required[int]
+    tone_hz: Required[int]
+
+
 type RunAuxiliaryControlProfile = Literal["stock-control3-bit0-clear-ack-unmeasured"]
 
 
@@ -5152,6 +5166,7 @@ RunConfiguration = TypedDict(
         "$schema": Required[
             'Literal["https://fujimod.com/schemas/emulator-run-configuration.schema.json"]'
         ],
+        "audio_signals": NotRequired["list[RunAudioSignal]"],
         "body_id": Required["str"],
         "browser_camera": NotRequired["RunBrowserCamera | None"],
         "bus_byte_times": NotRequired["list[RunBusByteTime]"],

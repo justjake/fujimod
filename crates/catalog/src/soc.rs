@@ -621,6 +621,8 @@ pub enum BlockDevice {
     },
     /// Audio serial interface and its reset handshake.
     AudioSerial {
+        /// Offset of the self-clearing soft-reset request.
+        reset_offset: u64,
         /// Declared basis.
         basis: String,
     },
@@ -742,6 +744,9 @@ pub enum BlockDevice {
     },
     /// Input-capture channel.
     InputCapture {
+        /// DMA request lines wired to capture channels' transmit registers.
+        #[serde(default, skip_serializing_if = "Vec::is_empty")]
+        transmit_requests: Vec<CaptureTransmit>,
         /// Declared basis.
         basis: String,
     },
@@ -1156,6 +1161,23 @@ impl BlockDevice {
                 )
         )
     }
+}
+
+/// A DMA request line wired to one capture channel's transmit register.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(deny_unknown_fields)]
+#[cfg_attr(feature = "schema", schemars(deny_unknown_fields))]
+#[cfg_attr(
+    all(target_arch = "wasm32", not(target_os = "emscripten")),
+    derive(tsify::Tsify),
+    tsify(hashmap_as_object, missing_as_null)
+)]
+pub struct CaptureTransmit {
+    /// Capture channel within the block.
+    pub channel: u8,
+    /// DMA request line.
+    pub request: u8,
 }
 
 /// Picture-plane pixel packing declared by a display controller.

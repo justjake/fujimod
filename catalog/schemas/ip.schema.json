@@ -2068,10 +2068,17 @@
             "model": {
               "const": "audio_serial",
               "type": "string"
+            },
+            "reset_offset": {
+              "description": "Offset of the self-clearing soft-reset request.",
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
             }
           },
           "required": [
             "model",
+            "reset_offset",
             "basis"
           ],
           "type": "object"
@@ -2525,6 +2532,13 @@
             "model": {
               "const": "input_capture",
               "type": "string"
+            },
+            "transmit_requests": {
+              "description": "DMA request lines wired to capture channels' transmit registers.",
+              "items": {
+                "$ref": "#/$defs/CaptureTransmit"
+              },
+              "type": "array"
             }
           },
           "required": [
@@ -2935,6 +2949,31 @@
         "basis",
         "offset",
         "ticks"
+      ],
+      "type": "object"
+    },
+    "CaptureTransmit": {
+      "additionalProperties": false,
+      "description": "A DMA request line wired to one capture channel's transmit register.",
+      "properties": {
+        "channel": {
+          "description": "Capture channel within the block.",
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "request": {
+          "description": "DMA request line.",
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "channel",
+        "request"
       ],
       "type": "object"
     },

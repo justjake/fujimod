@@ -7,7 +7,13 @@
   "kind": "address-window",
   "device": {
     "model": "input_capture",
-    "basis": "input-capture channel Located in catalog/firmware/x100vi/1.31/xp5-boot/manifest.d/60-mcore.toml."
+    "transmit_requests": [
+      {
+        "channel": 2,
+        "request": 32
+      }
+    ],
+    "basis": "input-capture channel Located in catalog/firmware/x100vi/1.31/xp5-boot/manifest.d/60-mcore.toml. The X100VI, X-T5, X-E5 and X-H2S companions stream words to capture channel 2 through DMA descriptor [04 20 02 ...], request 32 (catalog/firmware/xh2/5.30/xp5-boot/manifest.d/61-input-capture.toml)."
   },
   "evidence": [
     {
