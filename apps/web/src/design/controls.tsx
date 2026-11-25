@@ -133,11 +133,79 @@ function useDialGesture(o: {
   return { shown, active, handlers, dragged: () => dragged };
 }
 
+/* The card a choice strip or slider row is drawn in: the row's track, a
+   recessed well filling it or under a title line, the focus outline, the
+   changed dot, and LEFT and RIGHT chevrons. Focused, a chevron sits at each
+   end of the well, or of the title line when there is one, dim at the end the
+   value cannot go past. The control puts only what slides in the well. */
+function RowCard(props: {
+  /** The title line's name; without one the well fills the card. */
+  name?: string;
+  /** The title line's right end: a slider's value. */
+  trailing?: JSX.Element;
+  width: number;
+  height?: number;
+  focused: boolean;
+  changed?: boolean;
+  /** The value is at its first or last step: that end's chevron is dim. */
+  atStart: boolean;
+  atEnd: boolean;
+  handlers: ReturnType<typeof useDialGesture>['handlers'];
+  children: JSX.Element;
+}) {
+  const chevrons = (title: boolean) => (
+    <For each={[0, 1] as const}>
+      {(side) => (
+        <span
+          class={`pointer-events-none absolute z-10 flex items-center justify-center ${title ? 'top-[6px] h-[28px] w-[16px]' : 'inset-y-0 px-[3px]'}`}
+          style={{
+            [side ? 'right' : 'left']: title ? '10px' : side === 0 && props.changed ? '7px' : '0',
+            color: (side ? props.atEnd : props.atStart) ? 'rgb(255 255 255 / 0.25)' : '#fff',
+          }}
+        >
+          <Chevron dir={side ? 'right' : 'left'} size={16} />
+        </span>
+      )}
+    </For>
+  );
+  return (
+    <div
+      class="relative shrink-0 overflow-hidden select-none"
+      style={{ width: `${props.width}px`, height: `${props.height ?? 88}px`, 'touch-action': 'pan-y', ...TRACK(props.focused) }}
+      {...props.handlers}
+    >
+      <Show when={props.name !== undefined}>
+        <Show when={props.focused}>{chevrons(true)}</Show>
+        <span class={`absolute top-[9px] left-[34px] flex items-center gap-[6px] ${TEXT} tracking-[0.06em]`} style={{ color: props.focused ? '#fff' : 'rgb(255 255 255 / 0.7)' }}>
+          {props.name}
+          {/* Changed from the film as opened: the same dot the rail uses. */}
+          <Show when={props.changed}>
+            <span class="size-[8px] rounded-full" style={{ background: ACCENT }} />
+          </Show>
+        </span>
+        {props.trailing}
+      </Show>
+      <div class="absolute inset-x-0 bottom-0 overflow-hidden" style={{ top: props.name === undefined ? '0' : 'auto', height: props.name === undefined ? 'auto' : '44px', ...WELL, 'border-radius': props.name === undefined ? 'inherit' : '0 0 13px 13px' }}>
+        {props.children}
+        <Show when={props.focused && props.name === undefined}>{chevrons(false)}</Show>
+      </div>
+      {/* Focus is drawn last, over the recessed strip, so it is the same
+          bright outline as everywhere else. */}
+      <Show when={props.focused}>
+        <span class="pointer-events-none absolute inset-0 z-20 rounded-[inherit]" style={{ 'box-shadow': 'var(--m-focus-edge)' }} />
+      </Show>
+      {/* Without a name, changed is a dot at the card's left edge. */}
+      <Show when={props.name === undefined && props.changed}>
+        <span class="absolute top-1/2 left-[3px] z-10 size-[6px] -translate-y-1/2 rounded-full" style={{ background: ACCENT }} />
+      </Show>
+    </div>
+  );
+}
+
 /* A choice row: the slider's dial for a list of choices. The choices sit
    as words or artwork in the recessed strip; the chosen one is a white
    plate with black ink, the others fading with their distance from it. The
-   strip keeps the chosen cell in the middle, with a chevron at an end that
-   has more past it. A thumb sliding sideways moves the strip with it and
+   strip keeps the chosen cell in the middle. A thumb sliding sideways moves the strip with it and
    chooses each cell as it reaches the middle; a swipe coasts and settles. A
    tap on a cell chooses it; LEFT, RIGHT and the dial step. */
 /** A choice: a word, or artwork drawn in the given ink. */
@@ -202,33 +270,24 @@ export function Choice(props: {
   /* The chosen cell always sits under the fixed plate in the middle. */
   const offset = createMemo(() => at(dial.shown(), 'center') - props.width / 2);
   const plate = createMemo(() => at(dial.shown(), 'width'));
-  const ends = (): [boolean, boolean] => {
-    const c = cells();
-    const o = offset();
-    return [c.length > 0 && c[0].center - c[0].width / 2 < o, c.length > 0 && c[c.length - 1].center + c[c.length - 1].width / 2 > o + props.width];
-  };
   const motion = () => (dial.active() ? 'none' : 'transform 150ms ease-out, width 150ms ease-out');
   return (
-    <div
-      class="relative shrink-0 overflow-hidden select-none"
-      style={{ width: `${props.width}px`, height: `${props.height ?? 88}px`, 'touch-action': 'pan-y', ...TRACK(props.focused || dial.active()) }}
-      {...dial.handlers}
+    <RowCard
+      name={props.name}
+      width={props.width}
+      height={props.height}
+      focused={props.focused || dial.active()}
+      changed={props.changed}
+      atStart={props.value <= 0}
+      atEnd={props.value >= props.items.length - 1}
+      handlers={dial.handlers}
     >
-      <Show when={props.name !== undefined}>
-        <span class={`absolute top-[9px] left-[12px] flex items-center gap-[6px] ${TEXT} tracking-[0.06em]`} style={{ color: props.focused ? '#fff' : 'rgb(255 255 255 / 0.7)' }}>
-          {props.name}
-          <Show when={props.changed}>
-            <span class="size-[8px] rounded-full" style={{ background: ACCENT }} />
-          </Show>
-        </span>
-      </Show>
-      <div class="absolute inset-x-0 bottom-0 overflow-hidden" style={{ top: props.name === undefined ? '0' : 'auto', height: props.name === undefined ? 'auto' : '44px', ...WELL, 'border-radius': props.name === undefined ? 'inherit' : '0 0 13px 13px' }}>
-        {/* The fixed plate: it stays in the middle and takes the chosen cell's width. */}
-        <span
-          class="absolute inset-y-[5px] left-1/2 -translate-x-1/2 rounded-[9px]"
-          style={{ width: `${plate()}px`, ...CHOSEN, transition: dial.active() ? 'none' : 'width 150ms ease-out' }}
-        />
-        <div class="absolute inset-0" style={{ 'mask-image': 'linear-gradient(to right, transparent, #000 32px, #000 calc(100% - 32px), transparent)' }}>
+      {/* The fixed plate: it stays in the middle and takes the chosen cell's width. */}
+      <span
+        class="absolute inset-y-[5px] left-1/2 -translate-x-1/2 rounded-[9px]"
+        style={{ width: `${plate()}px`, ...CHOSEN, transition: dial.active() ? 'none' : 'width 150ms ease-out' }}
+      />
+      <div class="absolute inset-0" style={{ 'mask-image': 'linear-gradient(to right, transparent, #000 32px, #000 calc(100% - 32px), transparent)' }}>
         <div
           ref={(element) => (track = element)}
           class="absolute inset-y-0 left-0 flex items-stretch gap-[2px] py-[5px]"
@@ -249,27 +308,8 @@ export function Choice(props: {
             }}
           </For>
         </div>
-        </div>
-        <For each={[0, 1] as const}>
-          {(side) => (
-            <Show when={ends()[side]}>
-              <span class="pointer-events-none absolute inset-y-0 flex items-center px-[3px] text-white/80" style={{ [side ? 'right' : 'left']: '0' }}>
-                <Chevron dir={side ? 'right' : 'left'} size={14} />
-              </span>
-            </Show>
-          )}
-        </For>
       </div>
-      {/* Focus is drawn last, over the recessed strip, so it is the same
-          bright outline as everywhere else. */}
-      <Show when={props.focused || dial.active()}>
-        <span class="pointer-events-none absolute inset-0 z-20 rounded-[inherit]" style={{ 'box-shadow': 'var(--m-focus-edge)' }} />
-      </Show>
-      {/* Without a name, changed is a dot at the card's left edge. */}
-      <Show when={props.name === undefined && props.changed}>
-        <span class="absolute top-1/2 left-[3px] z-10 size-[6px] -translate-y-1/2 rounded-full" style={{ background: ACCENT }} />
-      </Show>
-    </div>
+    </RowCard>
   );
 }
 
@@ -322,97 +362,54 @@ export function Dial(props: {
   const shown = dial.shown;
   const active = dial.active;
   return (
-    <div
-      class="relative shrink-0 overflow-hidden select-none"
-      style={{ width: `${props.width}px`, height: `${props.height ?? 88}px`, 'touch-action': 'pan-y', ...TRACK(props.focused || active()) }}
-      {...dial.handlers}
-    >
-      <Show when={props.name !== undefined}>
-        {/* LEFT and RIGHT step it: a chevron at each end of the title line,
-            in space always kept for it, shown while focused and dim where
-            the scale stops. */}
-        <For each={[0, 1] as const}>
-          {(side) => (
-            <span
-              class="pointer-events-none absolute top-[6px] flex h-[28px] w-[16px] items-center justify-center"
-              style={{
-                [side ? 'right' : 'left']: '10px',
-                color: !(props.focused || active()) ? 'transparent' : (side ? props.value >= props.max : props.value <= props.min) ? 'rgb(255 255 255 / 0.25)' : '#fff',
-              }}
-            >
-              <Chevron dir={side ? 'right' : 'left'} size={16} />
-            </span>
-          )}
-        </For>
-        <span class={`absolute top-[9px] left-[34px] flex items-center gap-[6px] ${TEXT} tracking-[0.06em]`} style={{ color: props.focused || active() ? '#fff' : 'rgb(255 255 255 / 0.7)' }}>
-          {props.name}
-          {/* Changed from the film as opened: the same dot the rail uses. */}
-          <Show when={props.changed}>
-            <span class="size-[8px] rounded-full" style={{ background: ACCENT }} />
-          </Show>
-        </span>
+    <RowCard
+      name={props.name}
+      trailing={
         <span class={`absolute top-[6px] right-[34px] origin-right font-semibold tabular-nums transition-transform duration-100 ${HEADING}`} style={{ color: '#fff', transform: active() ? 'scale(1.2)' : 'none' }}>
           {label(props.value)}
         </span>
-      </Show>
-      {/* The scale: a recessed strip along the bottom, the track's colors on
-          its bottom edge, labels over the major ticks, the mark at the center. */}
-      <div class="absolute inset-x-0 bottom-0" style={{ top: props.name === undefined ? '0' : 'auto', height: props.name === undefined ? 'auto' : '44px', ...WELL, 'border-radius': props.name === undefined ? 'inherit' : '0 0 13px 13px' }}>
-        <div class="absolute inset-0" style={{ 'mask-image': 'linear-gradient(to right, transparent, #000 32px, #000 calc(100% - 32px), transparent)' }}>
-          <div class="absolute inset-y-0 left-0" style={{ transform: `translateX(${props.width / 2 - shown() * SPACING}px)`, transition: active() ? 'none' : 'transform 160ms ease-out', 'will-change': 'transform' }}>
-            <For each={Array.from({ length: count() }, (_, i) => i)}>
-              {(i) => {
-                const major = () => (i - Math.round(zero())) % MAJOR === 0;
-                const near = () => (active() ? Math.max(0, 1 - Math.abs(i - shown()) / 2.5) : 0);
-                return (
-                  <>
-                    <Show when={major()}>
-                      <span class={`absolute top-[3px] -translate-x-1/2 font-medium tabular-nums ${SMALL}`} style={{ left: `${i * SPACING}px`, color: `rgb(255 255 255 / ${0.55 + near() * 0.45})` }}>
-                        {label(props.min + i * props.step)}
-                      </span>
-                    </Show>
-                    <span
-                      class="fm-round absolute bottom-[6px] w-[3px] -translate-x-1/2 rounded-[1.5px]"
-                      style={{ left: `${i * SPACING}px`, height: `${major() ? 20 : 12}px`, background: `rgb(255 255 255 / ${(major() ? 0.75 : 0.45) + near() * 0.25})` }}
-                    />
-                    <Show when={i < count() - 1 && SPACING >= 15}>
-                      <For each={[1, 2]}>
-                        {(third) => <span class="fm-round absolute bottom-[6px] h-[7px] w-[2px] -translate-x-1/2 rounded-[1px]" style={{ left: `${(i + third / 3) * SPACING}px`, background: 'rgb(255 255 255 / 0.28)' }} />}
-                      </For>
-                    </Show>
-                  </>
-                );
-              }}
-            </For>
-          </div>
-        </div>
-        <Show when={props.track}>{(track) => <div class="absolute inset-x-0 bottom-0 h-[4px]" style={{ background: track() }} />}</Show>
-        {/* A nameless slider has no title line: focused, its chevrons sit at
-            the ends of the scale, dim where it stops. */}
-        <Show when={(props.focused || active()) && props.name === undefined}>
-          <For each={[0, 1] as const}>
-            {(side) => (
-              <span
-                class="pointer-events-none absolute inset-y-0 flex items-center px-[3px]"
-                style={{ [side ? 'right' : 'left']: '0', color: (side ? props.value >= props.max : props.value <= props.min) ? 'rgb(255 255 255 / 0.25)' : '#fff' }}
-              >
-                <Chevron dir={side ? 'right' : 'left'} size={16} />
-              </span>
-            )}
+      }
+      width={props.width}
+      height={props.height}
+      focused={props.focused || active()}
+      changed={props.changed}
+      atStart={props.value <= props.min}
+      atEnd={props.value >= props.max}
+      handlers={dial.handlers}
+    >
+      {/* The scale: labels over the major ticks, the track's colors on the
+          well's bottom edge, the mark at the center. */}
+      <div class="absolute inset-0" style={{ 'mask-image': 'linear-gradient(to right, transparent, #000 32px, #000 calc(100% - 32px), transparent)' }}>
+        <div class="absolute inset-y-0 left-0" style={{ transform: `translateX(${props.width / 2 - shown() * SPACING}px)`, transition: active() ? 'none' : 'transform 160ms ease-out', 'will-change': 'transform' }}>
+          <For each={Array.from({ length: count() }, (_, i) => i)}>
+            {(i) => {
+              const major = () => (i - Math.round(zero())) % MAJOR === 0;
+              const near = () => (active() ? Math.max(0, 1 - Math.abs(i - shown()) / 2.5) : 0);
+              return (
+                <>
+                  <Show when={major()}>
+                    <span class={`absolute top-[3px] -translate-x-1/2 font-medium tabular-nums ${SMALL}`} style={{ left: `${i * SPACING}px`, color: `rgb(255 255 255 / ${0.55 + near() * 0.45})` }}>
+                      {label(props.min + i * props.step)}
+                    </span>
+                  </Show>
+                  <span
+                    class="fm-round absolute bottom-[6px] w-[3px] -translate-x-1/2 rounded-[1.5px]"
+                    style={{ left: `${i * SPACING}px`, height: `${major() ? 20 : 12}px`, background: `rgb(255 255 255 / ${(major() ? 0.75 : 0.45) + near() * 0.25})` }}
+                  />
+                  <Show when={i < count() - 1 && SPACING >= 15}>
+                    <For each={[1, 2]}>
+                      {(third) => <span class="fm-round absolute bottom-[6px] h-[7px] w-[2px] -translate-x-1/2 rounded-[1px]" style={{ left: `${(i + third / 3) * SPACING}px`, background: 'rgb(255 255 255 / 0.28)' }} />}
+                    </For>
+                  </Show>
+                </>
+              );
+            }}
           </For>
-        </Show>
-        <span class="fm-round absolute bottom-[4px] w-[4px] -translate-x-1/2 rounded-[2px] transition-[height] duration-100" style={{ left: `${props.width / 2}px`, height: active() ? '30px' : '24px', background: 'var(--m-mark)', 'box-shadow': '0 0 0 1px rgb(0 0 0 / 0.55)' }} />
+        </div>
       </div>
-      {/* Focus is drawn last, over the recessed strip, so it is the same
-          bright outline as everywhere else. */}
-      <Show when={props.focused || active()}>
-        <span class="pointer-events-none absolute inset-0 z-20 rounded-[inherit]" style={{ 'box-shadow': 'var(--m-focus-edge)' }} />
-      </Show>
-      {/* Without a name, changed is a dot at the card's left edge. */}
-      <Show when={props.name === undefined && props.changed}>
-        <span class="absolute top-1/2 left-[3px] z-10 size-[6px] -translate-y-1/2 rounded-full" style={{ background: ACCENT }} />
-      </Show>
-    </div>
+      <Show when={props.track}>{(track) => <div class="absolute inset-x-0 bottom-0 h-[4px]" style={{ background: track() }} />}</Show>
+      <span class="fm-round absolute bottom-[4px] w-[4px] -translate-x-1/2 rounded-[2px] transition-[height] duration-100" style={{ left: `${props.width / 2}px`, height: active() ? '30px' : '24px', background: 'var(--m-mark)', 'box-shadow': '0 0 0 1px rgb(0 0 0 / 0.55)' }} />
+    </RowCard>
   );
 }
 
