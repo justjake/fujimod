@@ -4040,6 +4040,32 @@
         },
         {
           "additionalProperties": false,
+          "description": "Boot-source strap word and boot control words.",
+          "properties": {
+            "basis": {
+              "description": "Declared basis.",
+              "type": "string"
+            },
+            "direct_flash_straps": {
+              "description": "Strap value that selects the direct-flash boot.",
+              "format": "uint32",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "model": {
+              "const": "boot_control",
+              "type": "string"
+            }
+          },
+          "required": [
+            "model",
+            "direct_flash_straps",
+            "basis"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
           "description": "Imaging input buffer whose +0x40 start completes with an interrupt.",
           "properties": {
             "basis": {

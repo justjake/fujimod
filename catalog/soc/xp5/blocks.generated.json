@@ -832,6 +832,53 @@
         ]
       }
     },
+    "boot-control": {
+      "base": 4287684608,
+      "evidence": {
+        "base": [
+          {
+            "findings": [
+              {
+                "addresses": [
+                  4293929976
+                ],
+                "kind": "code-constant",
+                "matches": 1
+              },
+              {
+                "addresses": [
+                  4293929976
+                ],
+                "kind": "code-page",
+                "matches": 1,
+                "value": 4287684608
+              }
+            ],
+            "firmware": "x100vi-131"
+          },
+          {
+            "findings": [
+              {
+                "addresses": [
+                  4286646828
+                ],
+                "kind": "code-constant",
+                "matches": 1
+              },
+              {
+                "addresses": [
+                  4286646828
+                ],
+                "kind": "code-page",
+                "matches": 1,
+                "value": 4287684608
+              }
+            ],
+            "firmware": "xm5-130"
+          }
+        ]
+      }
+    },
     "bus-drain-100000000": {
       "base": 4294967296,
       "evidence": {

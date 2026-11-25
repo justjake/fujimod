@@ -1163,6 +1163,13 @@ fn block_window(
             "xp5-codec"
         }
         BlockDevice::ImagingBuffer { .. } => "imaging-buffer",
+        // A loader start is the direct-flash boot; a ROM start replaces the straps with its own.
+        BlockDevice::BootControl { direct_flash_straps, .. } => {
+            options.insert("source_straps".into(), integer(u64::from(*direct_flash_straps)));
+            options.insert("initial_control".into(), integer(0));
+            options.insert("initial_primary_control".into(), integer(0));
+            "boot-control"
+        }
         BlockDevice::ImagingDsp { handshake, .. } => {
             stage_handshake(&mut options, handshake.as_ref(), irq("irq"));
             "completion-stub"

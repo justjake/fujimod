@@ -390,6 +390,7 @@ type BlockDevice = (
     | BlockDeviceVariant91
     | BlockDeviceVariant92
     | BlockDeviceVariant93
+    | BlockDeviceVariant94
 )
 
 
@@ -974,16 +975,22 @@ class BlockDeviceVariant90(TypedDict, total=False):
 
 class BlockDeviceVariant91(TypedDict, total=False):
     basis: Required[str]
-    model: Required[Literal["imaging_buffer"]]
+    direct_flash_straps: Required[int]
+    model: Required[Literal["boot_control"]]
 
 
 class BlockDeviceVariant92(TypedDict, total=False):
+    basis: Required[str]
+    model: Required[Literal["imaging_buffer"]]
+
+
+class BlockDeviceVariant93(TypedDict, total=False):
     basis: Required[str]
     handshake: NotRequired[CompletionHandshake | None]
     model: Required[Literal["imaging_dsp"]]
 
 
-class BlockDeviceVariant93(TypedDict, total=False):
+class BlockDeviceVariant94(TypedDict, total=False):
     basis: Required[str]
     model: Required[Literal["unmodeled_bus_drain"]]
 

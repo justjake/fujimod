@@ -808,6 +808,13 @@ pub enum BlockDevice {
         /// Declared basis.
         basis: String,
     },
+    /// Boot-source strap word and boot control words.
+    BootControl {
+        /// Strap value that selects the direct-flash boot.
+        direct_flash_straps: u32,
+        /// Declared basis.
+        basis: String,
+    },
     /// Imaging input buffer whose +0x40 start completes with an interrupt.
     ImagingBuffer {
         /// Declared basis.
@@ -1080,7 +1087,8 @@ impl BlockDevice {
                 )
                 | (
                     SocBlockKind::AddressWindow,
-                    BlockDevice::SerialFlash { .. }
+                    BlockDevice::BootControl { .. }
+                        | BlockDevice::SerialFlash { .. }
                         | BlockDevice::Decompressor { .. }
                         | BlockDevice::Adc { .. }
                         | BlockDevice::PowerControl { .. }
