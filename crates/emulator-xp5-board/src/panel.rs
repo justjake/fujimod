@@ -575,6 +575,80 @@ mod tests {
         .unwrap()
     }
 
+    fn xh2s(adc3: u16) -> Panel {
+        let resolved = ResolvedConfiguration::bundled("xh2s-730").unwrap();
+        let options = crate::ladder_controls::ladders(&resolved).unwrap().unwrap();
+        let names = crate::ladder_controls::panel_names(&resolved).unwrap();
+        let mut adc = [4095; 15];
+        adc[3] = adc3;
+        let nodes = Nodes {
+            adc: "adc".into(),
+            gpio: "gpio".into(),
+            power: ("spi".into(), 0),
+            rear_dial: Some("rear-dial".into()),
+            front_dial: Some("front-dial".into()),
+        };
+        compile(
+            &options,
+            &names,
+            &nodes,
+            &Idle {
+                adc: &adc,
+                register: &|_| Ok(0),
+            },
+            1_000_000_000,
+        )
+        .unwrap()
+    }
+
+    fn analog(channel: usize, value: u16) -> Signal {
+        Signal::Analog {
+            node: "adc".into(),
+            channel,
+            value,
+        }
+    }
+
+    #[test]
+    fn xh2s_buttons_use_catalog_ladders_and_the_record_pad() {
+        let switches = SwitchPanel::new(xh2s(3774).wiring).unwrap();
+        for (id, channel, sample) in [
+            ("menu_ok_button", 6, 391),
+            ("disp_back_button", 6, 2869),
+            ("quick_menu_button", 6, 3439),
+            ("ael_button", 6, 2230),
+            ("playback_button", 5, 3439),
+            ("af_on_button", 11, 2869),
+            ("fn1_button", 12, 2869),
+            ("fn2_button", 12, 2230),
+            ("fn3_button", 11, 2230),
+        ] {
+            let pressed = switches.transition(id, "pressed").unwrap();
+            assert!(
+                pressed
+                    .signals()
+                    .unwrap()
+                    .contains(&analog(channel, sample)),
+                "{id}"
+            );
+            let released = pressed.transition(id, "released").unwrap();
+            assert!(
+                released.signals().unwrap().contains(&analog(channel, 4095)),
+                "{id}"
+            );
+        }
+        let record_pad = |high| Signal::Gpio {
+            node: "gpio".into(),
+            pin: Pin { port: 0, pin: 13 },
+            high,
+        };
+        let pressed = switches
+            .transition("movie_recording_button", "pressed")
+            .unwrap();
+        assert!(pressed.signals().unwrap().contains(&record_pad(false)));
+        assert!(switches.signals().unwrap().contains(&record_pad(true)));
+    }
+
     #[test]
     fn xt5_controls_compile_to_one_panel() {
         let panel = xt5();

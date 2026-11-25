@@ -25,7 +25,7 @@ use fujimod_emulator_devices::parts::pins::Pin;
 
 /// Catalog control identities, including pad directions, and the emulator key
 /// that presses each. A ladder rung on any other identity is refused.
-const CONTROL_KEYS: [(&str, Key); 24] = [
+const CONTROL_KEYS: [(&str, Key); 25] = [
     ("menu_ok_button", Key::Menu),
     ("disp_back_bluetooth_button", Key::Back),
     ("disp_back_button", Key::Back),
@@ -38,6 +38,7 @@ const CONTROL_KEYS: [(&str, Key); 24] = [
     ("view_mode_button", Key::ViewMode),
     ("fn1_button", Key::Fn1),
     ("fn2_button", Key::Fn2),
+    ("fn3_button", Key::Fn3),
     ("quick_menu_button", Key::Quick),
     ("focus_stick.up", Key::StickUp),
     ("focus_stick.down", Key::StickDown),
@@ -201,8 +202,19 @@ fn extension(body: &str, options: &mut ladders::Options) -> Result<(), String> {
     match body {
         "xt5" => xt5_extension(options),
         "x100vi" => x100vi_extension(options),
+        "xh2s" => xh2s_extension(options),
         _ => Ok(()),
     }
+}
+
+fn xh2s_extension(options: &mut ladders::Options) -> Result<(), String> {
+    options.gpio_keys.push(ladders::GpioKey {
+        key: Key::MovieRecord,
+        pin: Pin { port: 0, pin: 13 },
+        active_high: false,
+        basis: "Physical scanner code 63 (FUNC_REC) reads GPIO 0.13 active low.".into(),
+    });
+    Ok(())
 }
 
 const X100VI_BANDS: &str = "Band of the X100VI 1.31 default configuration page, read in the emulator from \
@@ -531,6 +543,14 @@ fn extension_ids(
                 ("ss", "shutter_speed_dial"),
                 ("power", "power_switch"),
             ],
+        ),
+        "xh2s" => (
+            &[(
+                Key::MovieRecord,
+                "movie_recording_button",
+                "Movie recording button",
+            )],
+            &[],
         ),
         _ => (&[], &[]),
     }
