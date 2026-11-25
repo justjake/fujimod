@@ -1,0 +1,126 @@
+{
+  "$schema": "https://fujimod.com/schemas/restart.generated.schema.json",
+  "schema": 2,
+  "id": "xe5-112-restart",
+  "firmware_id": "xe5-112",
+  "product": "X-E5",
+  "internal_version": "1.63",
+  "code_alias": 0,
+  "code_checks": [
+    {
+      "name": "power_off_sender",
+      "address": 51324380,
+      "size": 248,
+      "sha256": "5e4ff93b8f5097cb4fddfaa0ed0eb9a1f999a7a8bbef2a01e1dbc4bb83cb31b3"
+    },
+    {
+      "name": "power_off",
+      "address": 52771680,
+      "size": 328,
+      "sha256": "5639ca12d11ec7bc0cad96e941ec7a22d5cc14b26348217eafff699b69222ea2"
+    },
+    {
+      "name": "power_cut",
+      "address": 21598940,
+      "size": 472,
+      "sha256": "b1be195d3d0d13244a822240ab49ea47149005ec976a1fa060f6fb803d2d33bb"
+    },
+    {
+      "name": "console_handler",
+      "address": 21291388,
+      "size": 300,
+      "sha256": "bec035bf05d5525658afafcd68bbfe54a3869bd2ae85eba463a9667204455d69"
+    },
+    {
+      "name": "console_callback",
+      "address": 50854444,
+      "size": 768,
+      "sha256": "49cbfb7a3bb1b6b47656df6e93185be4fba760ba763f66ece06062bb7ad9dc62"
+    },
+    {
+      "name": "data_cache_clean",
+      "address": 22982236,
+      "size": 264,
+      "sha256": "970d9b44af230bbd8f2b62ac604220a01d04e6964a672d58c324dd677f9c93b9"
+    },
+    {
+      "name": "instruction_cache_sync",
+      "address": 641176,
+      "size": 380,
+      "sha256": "da344f492ec3bd2a4a75c92be95d1a1e36b0977a233f63c12163047201bfedcf"
+    }
+  ],
+  "mechanism": {
+    "transport": {
+      "kind": "console_callback",
+      "slot": 35869296,
+      "stock_callback": 50854444,
+      "stub_area": 2162624,
+      "stub_bytes": 64,
+      "translation": [
+        {
+          "address": 978584,
+          "size": 8,
+          "value": 1081344
+        },
+        {
+          "address": 1081344,
+          "size": 8,
+          "value": 1093635
+        },
+        {
+          "address": 1093640,
+          "size": 8,
+          "value": 2098697
+        }
+      ],
+      "ready_words": [
+        {
+          "address": 31557192,
+          "size": 4,
+          "value": 1
+        },
+        {
+          "address": 31557196,
+          "size": 4,
+          "value": 15
+        },
+        {
+          "address": 38470632,
+          "size": 4,
+          "value": 655361
+        }
+      ],
+      "data_cache_clean": 22982456,
+      "instruction_cache_sync": 641200
+    },
+    "sender": 51324380,
+    "request": 135,
+    "request_offset": 0,
+    "deadline_offset": 4,
+    "parameter_bytes": 12,
+    "ui": {
+      "mode_address": 44221352,
+      "mode_size": 4,
+      "rec_mode": 3,
+      "pending_mode_address": null,
+      "menu_active_address": null
+    },
+    "power_off": {
+      "entry": 52771680,
+      "halt": 52772004,
+      "power_cut": 21598940,
+      "request_deadline_offset": 8,
+      "alarm": {
+        "seconds": [
+          37
+        ],
+        "enable": 18,
+        "enable_value": 257
+      },
+      "deadline_parameter": null,
+      "rollover_parameter": 5,
+      "fixed_interval": null
+    }
+  }
+}
