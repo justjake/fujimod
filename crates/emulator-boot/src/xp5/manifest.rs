@@ -19,6 +19,9 @@ pub struct BootState {
     /// (FUN_0159dd8c) still reads 0x68000000, 0x80000000 and 0x1c0000000.
     #[serde(default)]
     pub dram: Option<Dram>,
+    /// The serial flash as the stages before the hand-off leave it.
+    #[serde(default)]
+    pub flash: Option<FlashHandoff>,
     #[serde(default)]
     pub preload: Vec<Preload>,
     /// Address windows the companion core sees in addition to the SoC's own, for a body whose
@@ -51,6 +54,13 @@ fn version() -> u32 {
 }
 fn yes() -> bool {
     true
+}
+/// Serial-flash state at the loader hand-off.
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct FlashHandoff {
+    /// Dummy cycles the part's volatile configuration register selects.
+    pub volatile_dummy_cycles: u8,
 }
 /// Options a control experiment sets on, and removes from, the catalog window at `base`.
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -174,6 +184,17 @@ impl BootState {
     ) -> Result<Self, String> {
         let dram = self.dram.as_ref().map(|dram| (dram.limit, dram.bus_drain));
         self.device = fujimod_emulator_xp5_board::boot::device_windows(resolved, dram)?;
+        if let Some(flash) = &self.flash {
+            let controller = self
+                .device
+                .iter_mut()
+                .find(|window| window.kind == "flash-storage-controller")
+                .ok_or("the manifest's flash hand-off needs a serial-flash controller")?;
+            controller.options.insert(
+                "volatile_dummy_cycles".into(),
+                toml::Value::Integer(i64::from(flash.volatile_dummy_cycles)),
+            );
+        }
         for base in &self.remove_windows {
             let before = self.device.len();
             self.device.retain(|window| window.base != *base);

@@ -119,6 +119,12 @@ pub struct Controller {
     part: Part,
 }
 impl Controller {
+    /// A controller whose part's volatile dummy-cycle register already holds
+    /// `cycles`, as an earlier boot stage left it.
+    pub fn with_volatile_dummy_cycles(mut self, cycles: u8) -> Result<Self, String> {
+        self.state.volatile_dummy_cycles = Some(self.part.volatile_dummy_cycles(1, cycles)?);
+        Ok(self)
+    }
     pub fn new(flash_storage: Shared, part: Part) -> Self {
         let mut regs = vec![0; 64];
         regs[0x10 / 4] = 0x10001; // Explicit inherited enabled/idle controller assumption.

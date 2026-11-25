@@ -54,7 +54,7 @@ size = 0x40000000
 # 0x1df800004 (0x5733b60) about 1 s after PLAY. The main image also uses fixed addresses in this
 # channel (0x1d6fc0000, 0x1d70c0000, 0x1d86c0000).
 # As for channel 2, the first 16 KiB granule stays with the 4-byte bus-drain read window at
-# 0x1c0000000 (manifest.d/20-storage.toml).
+# 0x1c0000000 (a body bus drain).
 [[ram]]
 base = 0x1c0004000
 size = 0x3fffc000
@@ -66,7 +66,7 @@ size = 0x100000
 
 # DDR PHY register and firmware space, RAM in every start mode. The first half-press (S1) DMA-copies
 # the PHY firmware (0x10000 bytes from 0x10c0800) to 0xfb4a0000 and writes PHY registers at
-# 0xfb400000 + 2*reg. The mailbox pages above each region are stubs (manifest.d/48-ddr-phy.toml).
+# 0xfb400000 + 2*reg. The mailbox pages above each region are stubs (processor blocks).
 [[ram]]
 base = 0xfb000000
 size = 0x1a0000

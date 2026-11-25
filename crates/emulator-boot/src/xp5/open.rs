@@ -479,6 +479,12 @@ fn rom_boot_state(state: &BootState, rom: &RomStart) -> Result<BootState, String
     let mut state = state.clone();
     state.load_firmware = false;
     state.preload.clear();
+    // Stage one configures the serial flash itself.
+    if state.flash.take().is_some() {
+        for window in state.device.iter_mut().filter(|window| window.kind == "flash-storage-controller") {
+            window.options.remove("volatile_dummy_cycles");
+        }
+    }
     let mut options = toml::Table::new();
     options.insert("source_straps".into(), toml::Value::Integer(rom.source_straps.into()));
     options.insert("initial_control".into(), toml::Value::Integer(0));

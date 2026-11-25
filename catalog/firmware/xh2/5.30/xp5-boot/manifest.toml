@@ -5,7 +5,10 @@ version = 1
 firmware = "xh2-530"
 load_firmware = true
 
-# Device windows: manifest.d/*.toml, merged in filename order.
+# Stage one leaves the MT35XU flash reading with 20 dummy cycles: the loader's first aperture
+# read (octal I/O 0xfd at PC 0x457c8) comes before any volatile configuration write.
+[flash]
+volatile_dummy_cycles = 20
 
 # The body's DRAM extent: the stock bus-drain classifier 0x14d1a1c splits memory at
 # 0x80000000 (body hardware.bus_drain). PROVISIONAL: installed capacity is unmeasured.

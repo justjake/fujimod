@@ -746,11 +746,15 @@ pub fn register_all(
                 {
                     flash_storage::Medium::Nor(storage) => {
                         let part = flash_storage_controller::Part::from_jedec(jedec)?;
-                        bus.register(
-                            w.base,
-                            w.size,
-                            Box::new(flash_storage_controller::Controller::new(storage, part)),
-                        )?;
+                        let mut controller = flash_storage_controller::Controller::new(storage, part);
+                        if let Some(cycles) = w.options.get("volatile_dummy_cycles") {
+                            let cycles = cycles
+                                .as_integer()
+                                .and_then(|n| u8::try_from(n).ok())
+                                .ok_or("volatile_dummy_cycles must be a byte")?;
+                            controller = controller.with_volatile_dummy_cycles(cycles)?;
+                        }
+                        bus.register(w.base, w.size, Box::new(controller))?;
                     }
                     flash_storage::Medium::Nand(storage) => {
                         // The X-E5 part identifies as W25N01JW-family 0xEFDC21.
