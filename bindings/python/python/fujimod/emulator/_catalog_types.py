@@ -392,6 +392,7 @@ type BlockDevice = (
     | BlockDeviceVariant93
     | BlockDeviceVariant94
     | BlockDeviceVariant95
+    | BlockDeviceVariant96
 )
 
 
@@ -638,6 +639,7 @@ class BlockDeviceVariant40(TypedDict, total=False):
     interrupts: Required[int]
     model: Required[Literal["frame_sync"]]
     period_ticks: Required[int]
+    reads_set_after_clear: NotRequired[bool]
     sources: Required[list[BlockFrameSource]]
 
 
@@ -709,6 +711,7 @@ class BlockDeviceVariant5(TypedDict, total=False):
 
 class BlockDeviceVariant50(TypedDict, total=False):
     basis: NotRequired[str | None]
+    control_block_ids: NotRequired[list[str]]
     evidence: NotRequired[list[Evidence]]
     model: Required[Literal["dsp"]]
     run_ticks: Required[int]
@@ -998,6 +1001,11 @@ class BlockDeviceVariant94(TypedDict, total=False):
 class BlockDeviceVariant95(TypedDict, total=False):
     basis: Required[str]
     model: Required[Literal["unmodeled_bus_drain"]]
+
+
+class BlockDeviceVariant96(TypedDict, total=False):
+    basis: Required[str]
+    model: Required[Literal["register_storage"]]
 
 
 class BlockFrameSource(TypedDict, total=False):
