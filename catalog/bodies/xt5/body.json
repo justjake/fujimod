@@ -82,6 +82,16 @@
       "ready_high_line": 115,
       "lens_part_id": "xf18-55-lens"
     },
+    "stabilizer": {
+      "part_id": "xt5-stabilizer-stage",
+      "capture_block_id": "capture0",
+      "capture_channel": 2,
+      "drive_channels": [
+        2,
+        4,
+        0
+      ]
+    },
     "bus_drain": [
       {
         "address": 1610612736,
@@ -521,7 +531,8 @@
     "bis-configuration",
     "lsm6ds",
     "xt5-image-sensor",
-    "xf18-55-lens"
+    "xf18-55-lens",
+    "xt5-stabilizer-stage"
   ],
   "wiring": [
     {

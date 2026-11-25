@@ -1335,6 +1335,25 @@
         },
         {
           "additionalProperties": false,
+          "description": "XP5 statistics SRAM: two banks the imaging engines write and the AE service reads.",
+          "properties": {
+            "basis": {
+              "description": "Declared basis.",
+              "type": "string"
+            },
+            "model": {
+              "const": "xp5_imaging_statistics",
+              "type": "string"
+            }
+          },
+          "required": [
+            "model",
+            "basis"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
           "description": "HDMI transmitter with no sink.",
           "properties": {
             "basis": {
@@ -3109,6 +3128,17 @@
             "$ref": "#/$defs/SerialAttachment"
           },
           "type": "array"
+        },
+        "stabilizer": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/StabilizerMount"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "The sensor-shift stage, its position sensor's capture channel and its coil drive."
         },
         "thermal_connection_ids": {
           "description": "Body connections carrying thermal sensor voltages.",
@@ -10318,6 +10348,46 @@
         "endpoint_id",
         "select_connection_id",
         "word_bits"
+      ],
+      "type": "object"
+    },
+    "StabilizerMount": {
+      "additionalProperties": false,
+      "description": "How a sensor-shift stage is wired: its position sensor and its coil drive.",
+      "properties": {
+        "capture_block_id": {
+          "description": "Input-capture block reading the stage's position sensor.",
+          "type": "string"
+        },
+        "capture_channel": {
+          "description": "Capture channel of that block.",
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "drive_channels": {
+          "description": "Extended-timer general channels whose PWM drives each axis's coil.",
+          "items": {
+            "format": "uint8",
+            "maximum": 255,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "maxItems": 3,
+          "minItems": 3,
+          "type": "array"
+        },
+        "part_id": {
+          "description": "Installed stage part.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "part_id",
+        "capture_block_id",
+        "capture_channel",
+        "drive_channels"
       ],
       "type": "object"
     },

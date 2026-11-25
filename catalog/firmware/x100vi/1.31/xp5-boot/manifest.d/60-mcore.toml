@@ -6,17 +6,7 @@
 base = 0xff90e100
 size = 0x24
 kind = "interprocessor-mailbox"
-[device.options]
-# Provisional600MHz /6000000 reload =100Hz; silicon rate remains unmeasured.
-clock_hz = 600000000
-# Shooting-mode bring-up policy: unknown M-core peripherals keep running.
-peripheral_mode = "discovery"
-# Virtual timer period used only when the copied calibration field is zero.
-calibration_period = 1000
-# Calibration worker gate5580/55b4: shared+1b8 completes with ff.
-virtual_calibration = true
-# Replies always execute stock M-core handlers and mailbox_reply at3780.
-# The calibration options above are enabled only by --discovery.
+# Replies always execute stock M-core handlers and mailbox_reply at 0x3780.
 
 # 0x15c9a8c reads USB cable/jig connection status from bit 0; the default input is disconnected.
 [[device]]

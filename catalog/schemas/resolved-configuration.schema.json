@@ -2610,6 +2610,25 @@
         },
         {
           "additionalProperties": false,
+          "description": "XP5 statistics SRAM: two banks the imaging engines write and the AE service reads.",
+          "properties": {
+            "basis": {
+              "description": "Declared basis.",
+              "type": "string"
+            },
+            "model": {
+              "const": "xp5_imaging_statistics",
+              "type": "string"
+            }
+          },
+          "required": [
+            "model",
+            "basis"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
           "description": "HDMI transmitter with no sink.",
           "properties": {
             "basis": {
@@ -4635,6 +4654,17 @@
             "$ref": "#/$defs/SerialAttachment"
           },
           "type": "array"
+        },
+        "stabilizer": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/StabilizerMount"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "The sensor-shift stage, its position sensor's capture channel and its coil drive."
         },
         "thermal_connection_ids": {
           "description": "Body connections carrying thermal sensor voltages.",
@@ -21705,6 +21735,70 @@
         },
         {
           "additionalProperties": false,
+          "description": "Sensor-shift stage with a position sensor and voice-coil drive.",
+          "properties": {
+            "center": {
+              "description": "Raw sample of each axis at stage position zero.",
+              "items": {
+                "format": "uint16",
+                "maximum": 65535,
+                "minimum": 0,
+                "type": "integer"
+              },
+              "maxItems": 3,
+              "minItems": 3,
+              "type": "array"
+            },
+            "drive_gain": {
+              "description": "Displacement (raw counts) per PWM count of drive, per axis.",
+              "items": {
+                "format": "int32",
+                "type": "integer"
+              },
+              "maxItems": 3,
+              "minItems": 3,
+              "type": "array"
+            },
+            "kind": {
+              "const": "stabilizer-stage",
+              "type": "string"
+            },
+            "lag_shift": {
+              "description": "First-order lag of the stage: position moves by (command - position) >> lag_shift.",
+              "format": "uint8",
+              "maximum": 255,
+              "minimum": 0,
+              "type": "integer"
+            },
+            "latency_ns": {
+              "description": "Delay from the segment-end word to the latched capture.",
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "rest": {
+              "description": "Stage position of each axis at rest, in raw counts from center.",
+              "items": {
+                "format": "int32",
+                "type": "integer"
+              },
+              "maxItems": 3,
+              "minItems": 3,
+              "type": "array"
+            }
+          },
+          "required": [
+            "kind",
+            "latency_ns",
+            "center",
+            "rest",
+            "lag_shift",
+            "drive_gain"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
           "description": "Display panel programmed over a chip-selected serial port.",
           "properties": {
             "kind": {
@@ -24987,6 +25081,13 @@
           "format": "uint32",
           "minimum": 0,
           "type": "integer"
+        },
+        "sd_clock_steps": {
+          "description": "SD clock dividers the run's stock driver programs; a faster clock than its step refuses.",
+          "items": {
+            "$ref": "#/$defs/RunSdClockSteps"
+          },
+          "type": "array"
         },
         "start": {
           "$ref": "#/$defs/RunStart",
@@ -28336,6 +28437,44 @@
       ],
       "type": "string"
     },
+    "RunSdClockSteps": {
+      "additionalProperties": false,
+      "description": "The clock-divider ladder a stock SD driver programs on one host.",
+      "properties": {
+        "block_id": {
+          "description": "SD host block.",
+          "type": "string"
+        },
+        "default_speed": {
+          "description": "Divider for a default-speed card.",
+          "format": "uint16",
+          "maximum": 65535,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "high_speed": {
+          "description": "Divider for a high-speed card.",
+          "format": "uint16",
+          "maximum": 65535,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "interface": {
+          "description": "Interface clock configuration under which the steps hold.",
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "block_id",
+        "interface",
+        "default_speed",
+        "high_speed"
+      ],
+      "type": "object"
+    },
     "RunSecondaryBusProfile": {
       "description": "Closed selection for secondary bus profile.",
       "oneOf": [
@@ -30074,6 +30213,46 @@
           "type": "object"
         }
       ]
+    },
+    "StabilizerMount": {
+      "additionalProperties": false,
+      "description": "How a sensor-shift stage is wired: its position sensor and its coil drive.",
+      "properties": {
+        "capture_block_id": {
+          "description": "Input-capture block reading the stage's position sensor.",
+          "type": "string"
+        },
+        "capture_channel": {
+          "description": "Capture channel of that block.",
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "drive_channels": {
+          "description": "Extended-timer general channels whose PWM drives each axis's coil.",
+          "items": {
+            "format": "uint8",
+            "maximum": 255,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "maxItems": 3,
+          "minItems": 3,
+          "type": "array"
+        },
+        "part_id": {
+          "description": "Installed stage part.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "part_id",
+        "capture_block_id",
+        "capture_channel",
+        "drive_channels"
+      ],
+      "type": "object"
     },
     "StateRegion": {
       "additionalProperties": false,
