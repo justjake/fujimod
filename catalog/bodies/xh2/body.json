@@ -30,6 +30,32 @@
         ],
         "basis": "The stock firmware drains the bus with a discarded read of the end of its first memory region: helper 0x14d1c00 (slot 1, 0x14d1c44) and classifier 0x14d1a1c read 0x80000000, as the X-H2S helpers do. PROVISIONAL: the address is the firmware's region boundary, not a measured bus port."
       }
+    ],
+    "serial_attachments": [
+      {
+        "part_id": "power-controller",
+        "controller_id": "spi2",
+        "connection_id": "power-controller-spi2-bus",
+        "select_connection_id": "power-controller-spi2-select"
+      },
+      {
+        "part_id": "bis-configuration",
+        "controller_id": "spi5",
+        "connection_id": "bis-configuration-spi5-bus",
+        "select_connection_id": "bis-configuration-spi5-select"
+      },
+      {
+        "part_id": "lsm6ds",
+        "controller_id": "spi5",
+        "connection_id": "lsm6ds-spi5-bus",
+        "select_connection_id": "lsm6ds-spi5-select"
+      },
+      {
+        "part_id": "serial-command-16-read",
+        "controller_id": "spi8",
+        "connection_id": "serial-command-16-read-spi8-bus",
+        "select_connection_id": "serial-command-16-read-spi8-select"
+      }
     ]
   },
   "connections": [
@@ -110,10 +136,78 @@
           "channel": 13
         }
       ]
+    },
+    {
+      "id": "power-controller-spi2-bus",
+      "kind": "power-control"
+    },
+    {
+      "id": "power-controller-spi2-select",
+      "kind": "power-control",
+      "signals": [
+        {
+          "kind": "gpio",
+          "port": 11,
+          "pin": 6,
+          "active_level": true
+        }
+      ]
+    },
+    {
+      "id": "bis-configuration-spi5-bus",
+      "kind": "control"
+    },
+    {
+      "id": "bis-configuration-spi5-select",
+      "kind": "control",
+      "signals": [
+        {
+          "kind": "gpio",
+          "port": 12,
+          "pin": 8,
+          "active_level": false
+        }
+      ]
+    },
+    {
+      "id": "lsm6ds-spi5-bus",
+      "kind": "control"
+    },
+    {
+      "id": "lsm6ds-spi5-select",
+      "kind": "control",
+      "signals": [
+        {
+          "kind": "gpio",
+          "port": 12,
+          "pin": 9,
+          "active_level": false
+        }
+      ]
+    },
+    {
+      "id": "serial-command-16-read-spi8-bus",
+      "kind": "control"
+    },
+    {
+      "id": "serial-command-16-read-spi8-select",
+      "kind": "control",
+      "signals": [
+        {
+          "kind": "gpio",
+          "port": 15,
+          "pin": 11,
+          "active_level": false
+        }
+      ]
     }
   ],
   "parts": [
-    "xh2-serial-nor"
+    "xh2-serial-nor",
+    "power-controller",
+    "bis-configuration",
+    "lsm6ds",
+    "serial-command-16-read"
   ],
   "wiring": [
     {

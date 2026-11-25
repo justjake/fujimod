@@ -69,8 +69,38 @@
       {
         "kind": "bis_revision",
         "part_id": "bis-configuration",
-        "revision": [0, 0],
-        "idle_high": false
+        "revision": [
+          0,
+          0
+        ],
+        "idle_high": false,
+        "samples": [
+          0,
+          0
+        ],
+        "block": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      {
+        "kind": "motion",
+        "part_id": "lsm6ds",
+        "temperature": 0,
+        "angular_rate": [
+          0,
+          0,
+          0
+        ],
+        "acceleration": [
+          0,
+          0,
+          0
+        ]
       }
     ],
     "timings": [

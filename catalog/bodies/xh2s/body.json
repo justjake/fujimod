@@ -17,6 +17,36 @@
         "controller_id": "spi8",
         "connection_id": "power-controller-bus",
         "select_connection_id": "power-controller-select"
+      },
+      {
+        "part_id": "serial-command-16-read",
+        "controller_id": "spi4",
+        "connection_id": "serial-command-16-read-spi4-bus",
+        "select_connection_id": "serial-command-16-read-spi4-select"
+      },
+      {
+        "part_id": "serial-command-16",
+        "controller_id": "spi5",
+        "connection_id": "serial-command-16-spi5-bus",
+        "select_connection_id": "serial-command-16-spi5-select"
+      },
+      {
+        "part_id": "serial-command-8-mode2",
+        "controller_id": "spi5",
+        "connection_id": "serial-command-8-mode2-spi5-bus",
+        "select_connection_id": "serial-command-8-mode2-spi5-select"
+      },
+      {
+        "part_id": "bis-configuration",
+        "controller_id": "spi7",
+        "connection_id": "bis-configuration-spi7-bus",
+        "select_connection_id": "bis-configuration-spi7-select"
+      },
+      {
+        "part_id": "lsm6ds",
+        "controller_id": "spi7",
+        "connection_id": "lsm6ds-spi7-bus",
+        "select_connection_id": "lsm6ds-spi7-select"
       }
     ],
     "thermal_connection_ids": [
@@ -81,6 +111,86 @@
           "channel": 0
         }
       ]
+    },
+    {
+      "id": "serial-command-16-read-spi4-bus",
+      "kind": "control"
+    },
+    {
+      "id": "serial-command-16-read-spi4-select",
+      "kind": "control",
+      "signals": [
+        {
+          "kind": "gpio",
+          "port": 12,
+          "pin": 7,
+          "active_level": false
+        }
+      ]
+    },
+    {
+      "id": "serial-command-16-spi5-bus",
+      "kind": "control"
+    },
+    {
+      "id": "serial-command-16-spi5-select",
+      "kind": "control",
+      "signals": [
+        {
+          "kind": "gpio",
+          "port": 12,
+          "pin": 8,
+          "active_level": false
+        }
+      ]
+    },
+    {
+      "id": "serial-command-8-mode2-spi5-bus",
+      "kind": "control"
+    },
+    {
+      "id": "serial-command-8-mode2-spi5-select",
+      "kind": "control",
+      "signals": [
+        {
+          "kind": "gpio",
+          "port": 12,
+          "pin": 10,
+          "active_level": false
+        }
+      ]
+    },
+    {
+      "id": "bis-configuration-spi7-bus",
+      "kind": "control"
+    },
+    {
+      "id": "bis-configuration-spi7-select",
+      "kind": "control",
+      "signals": [
+        {
+          "kind": "gpio",
+          "port": 15,
+          "pin": 12,
+          "active_level": false
+        }
+      ]
+    },
+    {
+      "id": "lsm6ds-spi7-bus",
+      "kind": "control"
+    },
+    {
+      "id": "lsm6ds-spi7-select",
+      "kind": "control",
+      "signals": [
+        {
+          "kind": "gpio",
+          "port": 15,
+          "pin": 13,
+          "active_level": false
+        }
+      ]
     }
   ],
   "parts": [
@@ -89,7 +199,12 @@
     "fuel-gauge",
     "tmd2772",
     "control-bus-device-66",
-    "control-bus-device-68"
+    "control-bus-device-68",
+    "serial-command-16-read",
+    "serial-command-16",
+    "serial-command-8-mode2",
+    "bis-configuration",
+    "lsm6ds"
   ],
   "wiring": [
     {

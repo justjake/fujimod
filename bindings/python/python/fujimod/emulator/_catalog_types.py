@@ -177,6 +177,7 @@ type ApplicationPartInput = (
     | ApplicationPartInputVariant1
     | ApplicationPartInputVariant2
     | ApplicationPartInputVariant3
+    | ApplicationPartInputVariant4
 )
 
 
@@ -190,6 +191,7 @@ class ApplicationPartInputVariant0(TypedDict, total=False):
 class ApplicationPartInputVariant1(TypedDict, total=False):
     kind: Required[Literal["clock"]]
     part_id: Required[str]
+    registers: NotRequired[list[RegisterWord]]
     seconds: Required[int]
     valid: Required[bool]
 
@@ -201,10 +203,20 @@ class ApplicationPartInputVariant2(TypedDict, total=False):
 
 
 class ApplicationPartInputVariant3(TypedDict, total=False):
+    block: Required[list[int]]
     idle_high: Required[bool]
     kind: Required[Literal["bis_revision"]]
     part_id: Required[str]
     revision: Required[list[int]]
+    samples: Required[list[int]]
+
+
+class ApplicationPartInputVariant4(TypedDict, total=False):
+    acceleration: Required[list[int]]
+    angular_rate: Required[list[int]]
+    kind: Required[Literal["motion"]]
+    part_id: Required[str]
+    temperature: Required[int]
 
 
 class ApplicationStatisticsInput(TypedDict, total=False):
@@ -4500,6 +4512,8 @@ type PeripheralPart = (
     | PeripheralPartVariant13
     | PeripheralPartVariant14
     | PeripheralPartVariant15
+    | PeripheralPartVariant16
+    | PeripheralPartVariant17
 )
 
 
@@ -4512,28 +4526,37 @@ class PeripheralPartVariant1(TypedDict, total=False):
 
 
 class PeripheralPartVariant10(TypedDict, total=False):
-    kind: Required[Literal["tmd2772-proximity"]]
+    kind: Required[Literal["unidentified-serial-device"]]
+    miso_high: Required[bool]
 
 
 class PeripheralPartVariant11(TypedDict, total=False):
-    kind: Required[Literal["retained-registers"]]
+    kind: Required[Literal["fuel-gauge"]]
 
 
 class PeripheralPartVariant12(TypedDict, total=False):
+    kind: Required[Literal["tmd2772-proximity"]]
+
+
+class PeripheralPartVariant13(TypedDict, total=False):
+    kind: Required[Literal["retained-registers"]]
+
+
+class PeripheralPartVariant14(TypedDict, total=False):
     commands: Required[list[StabilizerCommand]]
     kind: Required[Literal["stabilizer"]]
     status: Required[int]
     telemetry: Required[int]
 
 
-class PeripheralPartVariant13(TypedDict, total=False):
+class PeripheralPartVariant15(TypedDict, total=False):
     command_prefix: Required[int]
     data_prefix: Required[int]
     kind: Required[Literal["command-data-output"]]
     payload_bytes: Required[int]
 
 
-class PeripheralPartVariant14(TypedDict, total=False):
+class PeripheralPartVariant16(TypedDict, total=False):
     erase_bytes: NotRequired[int | None]
     jedec_id: NotRequired[int | None]
     kind: Required[Literal["serial-nor-flash"]]
@@ -4541,7 +4564,7 @@ class PeripheralPartVariant14(TypedDict, total=False):
     sampling: NotRequired[NorSampling | None]
 
 
-class PeripheralPartVariant15(TypedDict, total=False):
+class PeripheralPartVariant17(TypedDict, total=False):
     jedec_id: NotRequired[int | None]
     kind: Required[Literal["serial-nand-flash"]]
     page_bytes: NotRequired[int | None]
@@ -4583,7 +4606,12 @@ class PeripheralPartVariant8(TypedDict, total=False):
 
 
 class PeripheralPartVariant9(TypedDict, total=False):
-    kind: Required[Literal["fuel-gauge"]]
+    bits: Required[int]
+    data_words: NotRequired[int | None]
+    kind: Required[Literal["serial-command-registers"]]
+    miso_high: Required[bool]
+    mode: Required[int]
+    read_flag: NotRequired[int | None]
 
 
 class PersistentJournalAppend(TypedDict, total=False):
