@@ -1614,7 +1614,8 @@
       "event": 51,
       "debug_key": null,
       "target": {
-        "kind": "unclaimed"
+        "kind": "connection",
+        "connection_id": "lens-detect"
       },
       "scanner": {
         "index": 0,

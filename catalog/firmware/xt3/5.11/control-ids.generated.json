@@ -11,7 +11,7 @@
     "sha256": "f95aa65368945a1dd099b1d3b0a38513dc696a85bf45a6592987cf337b72b3b2"
   },
   "input_readers": {
-    "calibration": null,
+    "calibration": 17952004,
     "scanner": {
       "stable_offset": 25,
       "stable_width": 1,
@@ -1884,7 +1884,8 @@
       "event": 7,
       "debug_key": "S1",
       "target": {
-        "kind": "unclaimed"
+        "kind": "control",
+        "control_id": "shutter_button"
       },
       "scanner": {
         "index": 4,
@@ -1903,7 +1904,8 @@
       "event": 8,
       "debug_key": "S2",
       "target": {
-        "kind": "unclaimed"
+        "kind": "control",
+        "control_id": "shutter_button"
       },
       "scanner": {
         "index": 5,
@@ -1922,7 +1924,8 @@
       "event": 56,
       "debug_key": "8DIR_D",
       "target": {
-        "kind": "unclaimed"
+        "kind": "control",
+        "control_id": "focus_stick.down"
       },
       "scanner": {
         "index": 6,
@@ -1934,14 +1937,27 @@
           "upper": 14355
         }
       },
-      "electrical": null
+      "electrical": {
+        "kind": "adc",
+        "connection_id": "xt3-key-ladder-9",
+        "intervals": [
+          {
+            "kind": "configuration_u16",
+            "lower": 14357,
+            "upper": 14355
+          }
+        ],
+        "callback": null,
+        "expected_result": null
+      }
     },
     {
       "id": "row-7",
       "event": 58,
       "debug_key": "8DIR_L",
       "target": {
-        "kind": "unclaimed"
+        "kind": "control",
+        "control_id": "focus_stick.left"
       },
       "scanner": {
         "index": 7,
@@ -1953,7 +1969,19 @@
           "upper": 14359
         }
       },
-      "electrical": null
+      "electrical": {
+        "kind": "adc",
+        "connection_id": "xt3-key-ladder-9",
+        "intervals": [
+          {
+            "kind": "configuration_u16",
+            "lower": 14361,
+            "upper": 14359
+          }
+        ],
+        "callback": null,
+        "expected_result": null
+      }
     },
     {
       "id": "row-8",
@@ -1972,14 +2000,27 @@
           "upper": 14363
         }
       },
-      "electrical": null
+      "electrical": {
+        "kind": "adc",
+        "connection_id": "xt3-key-ladder-9",
+        "intervals": [
+          {
+            "kind": "configuration_u16",
+            "lower": 14365,
+            "upper": 14363
+          }
+        ],
+        "callback": null,
+        "expected_result": null
+      }
     },
     {
       "id": "row-9",
       "event": 54,
       "debug_key": "8DIR_R",
       "target": {
-        "kind": "unclaimed"
+        "kind": "control",
+        "control_id": "focus_stick.right"
       },
       "scanner": {
         "index": 9,
@@ -1991,7 +2032,19 @@
           "upper": 14367
         }
       },
-      "electrical": null
+      "electrical": {
+        "kind": "adc",
+        "connection_id": "xt3-key-ladder-9",
+        "intervals": [
+          {
+            "kind": "configuration_u16",
+            "lower": 14369,
+            "upper": 14367
+          }
+        ],
+        "callback": null,
+        "expected_result": null
+      }
     },
     {
       "id": "row-10",
@@ -2010,14 +2063,27 @@
           "upper": 14371
         }
       },
-      "electrical": null
+      "electrical": {
+        "kind": "adc",
+        "connection_id": "xt3-key-ladder-9",
+        "intervals": [
+          {
+            "kind": "configuration_u16",
+            "lower": 14373,
+            "upper": 14371
+          }
+        ],
+        "callback": null,
+        "expected_result": null
+      }
     },
     {
       "id": "row-11",
       "event": 52,
       "debug_key": "8DIR_U",
       "target": {
-        "kind": "unclaimed"
+        "kind": "control",
+        "control_id": "focus_stick.up"
       },
       "scanner": {
         "index": 11,
@@ -2029,7 +2095,19 @@
           "upper": 14375
         }
       },
-      "electrical": null
+      "electrical": {
+        "kind": "adc",
+        "connection_id": "xt3-key-ladder-9",
+        "intervals": [
+          {
+            "kind": "configuration_u16",
+            "lower": 14377,
+            "upper": 14375
+          }
+        ],
+        "callback": null,
+        "expected_result": null
+      }
     },
     {
       "id": "row-12",
@@ -2048,7 +2126,19 @@
           "upper": 14379
         }
       },
-      "electrical": null
+      "electrical": {
+        "kind": "adc",
+        "connection_id": "xt3-key-ladder-9",
+        "intervals": [
+          {
+            "kind": "configuration_u16",
+            "lower": 14381,
+            "upper": 14379
+          }
+        ],
+        "callback": null,
+        "expected_result": null
+      }
     },
     {
       "id": "row-13",
@@ -2067,7 +2157,19 @@
           "upper": 14383
         }
       },
-      "electrical": null
+      "electrical": {
+        "kind": "adc",
+        "connection_id": "xt3-key-ladder-9",
+        "intervals": [
+          {
+            "kind": "configuration_u16",
+            "lower": 14385,
+            "upper": 14383
+          }
+        ],
+        "callback": null,
+        "expected_result": null
+      }
     },
     {
       "id": "row-14",
@@ -2114,7 +2216,8 @@
       "event": 35,
       "debug_key": "CMD_PUSH",
       "target": {
-        "kind": "unclaimed"
+        "kind": "control",
+        "control_id": "rear_command_dial"
       },
       "scanner": {
         "index": 16,
@@ -2146,7 +2249,19 @@
           "upper": 14296
         }
       },
-      "electrical": null
+      "electrical": {
+        "kind": "adc",
+        "connection_id": "xt3-key-ladder-3",
+        "intervals": [
+          {
+            "kind": "configuration_u16",
+            "lower": 14298,
+            "upper": 14296
+          }
+        ],
+        "callback": null,
+        "expected_result": null
+      }
     },
     {
       "id": "row-18",
@@ -2166,7 +2281,19 @@
           "upper": 14300
         }
       },
-      "electrical": null
+      "electrical": {
+        "kind": "adc",
+        "connection_id": "xt3-key-ladder-3",
+        "intervals": [
+          {
+            "kind": "configuration_u16",
+            "lower": 14302,
+            "upper": 14300
+          }
+        ],
+        "callback": null,
+        "expected_result": null
+      }
     },
     {
       "id": "row-19",
@@ -2186,7 +2313,19 @@
           "upper": 14304
         }
       },
-      "electrical": null
+      "electrical": {
+        "kind": "adc",
+        "connection_id": "xt3-key-ladder-3",
+        "intervals": [
+          {
+            "kind": "configuration_u16",
+            "lower": 14306,
+            "upper": 14304
+          }
+        ],
+        "callback": null,
+        "expected_result": null
+      }
     },
     {
       "id": "row-20",
@@ -2206,7 +2345,19 @@
           "upper": 14308
         }
       },
-      "electrical": null
+      "electrical": {
+        "kind": "adc",
+        "connection_id": "xt3-key-ladder-3",
+        "intervals": [
+          {
+            "kind": "configuration_u16",
+            "lower": 14310,
+            "upper": 14308
+          }
+        ],
+        "callback": null,
+        "expected_result": null
+      }
     },
     {
       "id": "row-21",
@@ -2226,7 +2377,19 @@
           "upper": 14312
         }
       },
-      "electrical": null
+      "electrical": {
+        "kind": "adc",
+        "connection_id": "xt3-key-ladder-3",
+        "intervals": [
+          {
+            "kind": "configuration_u16",
+            "lower": 14314,
+            "upper": 14312
+          }
+        ],
+        "callback": null,
+        "expected_result": null
+      }
     },
     {
       "id": "row-22",
@@ -2252,7 +2415,8 @@
       "event": 42,
       "debug_key": "K_Q",
       "target": {
-        "kind": "unclaimed"
+        "kind": "control",
+        "control_id": "quick_menu_button"
       },
       "scanner": {
         "index": 23,
@@ -2264,7 +2428,19 @@
           "upper": 14320
         }
       },
-      "electrical": null
+      "electrical": {
+        "kind": "adc",
+        "connection_id": "xt3-key-ladder-3",
+        "intervals": [
+          {
+            "kind": "configuration_u16",
+            "lower": 14322,
+            "upper": 14320
+          }
+        ],
+        "callback": null,
+        "expected_result": null
+      }
     },
     {
       "id": "row-24",
@@ -2284,7 +2460,19 @@
           "upper": 14324
         }
       },
-      "electrical": null
+      "electrical": {
+        "kind": "adc",
+        "connection_id": "xt3-key-ladder-3",
+        "intervals": [
+          {
+            "kind": "configuration_u16",
+            "lower": 14326,
+            "upper": 14324
+          }
+        ],
+        "callback": null,
+        "expected_result": null
+      }
     },
     {
       "id": "row-25",
@@ -2551,7 +2739,8 @@
       "event": 32,
       "debug_key": "FUNCTION",
       "target": {
-        "kind": "unclaimed"
+        "kind": "control",
+        "control_id": "fn1_button"
       },
       "scanner": {
         "index": 38,
@@ -2570,7 +2759,8 @@
       "event": 8227,
       "debug_key": "AF-LOCK",
       "target": {
-        "kind": "unclaimed"
+        "kind": "control",
+        "control_id": "af_lock_button"
       },
       "scanner": {
         "index": 39,
@@ -2589,7 +2779,8 @@
       "event": 8226,
       "debug_key": "AE-LOCK",
       "target": {
-        "kind": "unclaimed"
+        "kind": "control",
+        "control_id": "ae_lock_button"
       },
       "scanner": {
         "index": 40,
@@ -4437,56 +4628,12 @@
       "electrical": null
     },
     {
-      "id": "debug-7",
-      "event": 7,
-      "debug_key": "S1",
-      "target": {
-        "kind": "control",
-        "control_id": "shutter_button"
-      },
-      "scanner": null,
-      "electrical": null
-    },
-    {
-      "id": "debug-8",
-      "event": 8,
-      "debug_key": "S2",
-      "target": {
-        "kind": "control",
-        "control_id": "shutter_button"
-      },
-      "scanner": null,
-      "electrical": null
-    },
-    {
       "id": "debug-30",
       "event": 30,
       "debug_key": "EVF_LCD",
       "target": {
         "kind": "control",
         "control_id": "view_mode_button"
-      },
-      "scanner": null,
-      "electrical": null
-    },
-    {
-      "id": "debug-32",
-      "event": 32,
-      "debug_key": "FUNCTION",
-      "target": {
-        "kind": "control",
-        "control_id": "fn1_button"
-      },
-      "scanner": null,
-      "electrical": null
-    },
-    {
-      "id": "debug-35",
-      "event": 35,
-      "debug_key": "CMD_PUSH",
-      "target": {
-        "kind": "control",
-        "control_id": "rear_command_dial"
       },
       "scanner": null,
       "electrical": null
@@ -4509,61 +4656,6 @@
       "target": {
         "kind": "control",
         "control_id": "rear_command_dial"
-      },
-      "scanner": null,
-      "electrical": null
-    },
-    {
-      "id": "debug-42",
-      "event": 42,
-      "debug_key": "K_Q",
-      "target": {
-        "kind": "control",
-        "control_id": "quick_menu_button"
-      },
-      "scanner": null,
-      "electrical": null
-    },
-    {
-      "id": "debug-52",
-      "event": 52,
-      "debug_key": "8DIR_U",
-      "target": {
-        "kind": "control",
-        "control_id": "focus_stick.up"
-      },
-      "scanner": null,
-      "electrical": null
-    },
-    {
-      "id": "debug-54",
-      "event": 54,
-      "debug_key": "8DIR_R",
-      "target": {
-        "kind": "control",
-        "control_id": "focus_stick.right"
-      },
-      "scanner": null,
-      "electrical": null
-    },
-    {
-      "id": "debug-56",
-      "event": 56,
-      "debug_key": "8DIR_D",
-      "target": {
-        "kind": "control",
-        "control_id": "focus_stick.down"
-      },
-      "scanner": null,
-      "electrical": null
-    },
-    {
-      "id": "debug-58",
-      "event": 58,
-      "debug_key": "8DIR_L",
-      "target": {
-        "kind": "control",
-        "control_id": "focus_stick.left"
       },
       "scanner": null,
       "electrical": null
@@ -4608,28 +4700,6 @@
       "target": {
         "kind": "control",
         "control_id": "front_command_dial"
-      },
-      "scanner": null,
-      "electrical": null
-    },
-    {
-      "id": "debug-8226",
-      "event": 8226,
-      "debug_key": "AE-LOCK",
-      "target": {
-        "kind": "control",
-        "control_id": "ae_lock_button"
-      },
-      "scanner": null,
-      "electrical": null
-    },
-    {
-      "id": "debug-8227",
-      "event": 8227,
-      "debug_key": "AF-LOCK",
-      "target": {
-        "kind": "control",
-        "control_id": "af_lock_button"
       },
       "scanner": null,
       "electrical": null
