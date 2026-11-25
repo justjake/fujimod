@@ -879,7 +879,27 @@ impl Guard {
             word & 0xffff_fc00,
             0x1e26_0000 | 0x1e27_0000 | 0x9e66_0000 | 0x9e67_0000
         ); // FMOV W/S and X/D bit transfers; other SIMD register moves refuse.
-        let scalar_ucvtf = matches!(word & 0xffff_fc00, 0x1e23_0000 | 0x7e21_d800); // UCVTF S,W and S,S; other conversion widths refuse.
+        let scalar_fmov_register_copy = word & 0xffbf_fc00 == 0x1e20_4000; // FMOV S,S and D,D; only bit 22 varies by width.
+        let scalar_fsqrt = word & 0xffbf_fc00 == 0x1e21_c000; // FSQRT S/D; only bit 22 varies by width.
+        let scalar_fcmpe_zero = word & 0xffbf_fc1f == 0x1e20_2018; // FCMPE S/D,#0.0; width and Rn vary.
+        let scalar_fcvtzs_x_from_s = word & 0xffff_fc00 == 0x9e38_0000; // FCVTZS X,S.
+        let scalar_fcvtzs_w_from_s = word & 0xffff_fc00 == 0x1e38_0000; // FCVTZS W,S.
+        let scalar_ucvtf = matches!(word & 0xffff_fc00, 0x1e23_0000 | 0x9e23_0000 | 0x7e21_d800); // UCVTF S,W; S,X; S,S; other conversion widths refuse.
+        let scalar_scvtf = matches!(word & 0xffff_fc00, 0x1e22_0000 | 0x9e22_0000 | 0x5e21_d800); // SCVTF S,W, S,X and S,S; other conversion widths refuse.
+        let scalar_ucvtf_d_from_w = word & 0xffff_fc00 == 0x1e63_0000; // UCVTF D,W.
+        let scalar_scvtf_d_from_w = word & 0xffff_fc00 == 0x1e62_0000; // SCVTF D,W.
+        let scalar_fcvtzs_w_from_d = word & 0xffff_fc00 == 0x1e78_0000; // FCVTZS W,D.
+        let scalar_fcvtzu_w_from_s = word & 0xffff_fc00 == 0x1e39_0000; // FCVTZU W,S.
+        let scalar_fcmpe_register = word & 0xffa0_fc1f == 0x1e20_2010; // FCMPE S,S and D,D; only bit 22 varies by width.
+        let scalar_fcmp_zero = word & 0xffbf_fc1f == 0x1e20_2008; // FCMP S/D,#0.0; width and Rn vary.
+        let scalar_fadd = word & 0xffa0_fc00 == 0x1e20_2800; // FADD S/D; only bit 22 varies by width.
+        let scalar_fdiv = word & 0xffa0_fc00 == 0x1e20_1800; // FDIV S/D; only bit 22 varies by width.
+        let scalar_fsub = word & 0xffa0_fc00 == 0x1e20_3800; // FSUB S/D; only bit 22 varies by width.
+        let scalar_fcvt_s_from_h = word & 0xffff_fc00 == 0x1ee2_4000; // FCVT S,H; other precision conversions refuse.
+        let scalar_fnmul_d = word & 0xffe0_fc00 == 0x1e60_8800; // FNMUL D,D,D.
+        let scalar_fcvtzu_w_from_d = word & 0xffff_fc00 == 0x1e79_0000; // FCVTZU W,D.
+        let scalar_movi_d = word & 0xfff8_fc00 == 0x2f00_e400; // MOVI Dd,#imm64; vector forms refuse.
+        let movi_2s_zero = word & 0xffff_ffe0 == 0x0f00_0400; // MOVI Vd.2S,#0; only Rd varies.
         let scalar_fp_math = ((word & 0xff20_fc00 == 0x1e20_0800 // FMUL S/D.
             || word & 0xff20_0c00 == 0x1e20_0c00 // FCSEL S/D.
             || word & 0xff20_fc1f == 0x1e20_2000) // FCMP S/D.
@@ -890,7 +910,27 @@ impl Guard {
             || branch
             || scalar_fmov_immediate
             || scalar_fmov_register_transfer
+            || scalar_fmov_register_copy
+            || scalar_fsqrt
+            || scalar_fcmpe_zero
+            || scalar_fcvtzs_x_from_s
+            || scalar_fcvtzs_w_from_s
             || scalar_ucvtf
+            || scalar_scvtf
+            || scalar_ucvtf_d_from_w
+            || scalar_scvtf_d_from_w
+            || scalar_fcvtzs_w_from_d
+            || scalar_fcvtzu_w_from_s
+            || scalar_fcmpe_register
+            || scalar_fcmp_zero
+            || scalar_fadd
+            || scalar_fdiv
+            || scalar_fsub
+            || scalar_fcvt_s_from_h
+            || scalar_fnmul_d
+            || scalar_fcvtzu_w_from_d
+            || scalar_movi_d
+            || movi_2s_zero
             || scalar_fp_math
         {
             return Ok(());
@@ -1668,7 +1708,7 @@ mod tests {
         assert_eq!((r.stores[0].pc, r.stores[0].address), (0x1000, 0x4000));
     }
     #[test]
-    fn scalar_fmov_immediate_retires_without_admitting_fadd() {
+    fn scalar_fmov_immediate_retires_without_admitting_half_fadd() {
         for (word, expected) in [
             (0x1e2e_1008, 0x3f80_0000u64),        // FMOV S8,#1.0.
             (0x1e6e_1008, 0x3ff0_0000_0000_0000), // FMOV D8,#1.0.
@@ -1686,10 +1726,39 @@ mod tests {
                 expected
             );
         }
-        let mut b = board(&[0x1e20_2800, 0xd65f_03c0]); // FADD S0,S0,S0.
+        let mut b = board(&[0x1ee0_2800, 0xd65f_03c0]); // FADD H0,H0,H0.
         let r = checked_call(&mut b, options()).unwrap();
         assert_eq!(r.instructions, 0);
         assert!(r.failure.unwrap().contains("Unsupported instruction"));
+    }
+
+    #[test]
+    fn checked_movi_2s_zero_is_admitted_without_admitting_other_vector_immediates() {
+        let mut b = board(&[
+            0x1e2e_1008, // FMOV S8,#1.0.
+            0x0f00_0408, // MOVI V8.2S,#0.
+            0x1e26_0100, // FMOV W0,S8.
+            0xd65f_03c0,
+        ]);
+        let r = checked_call(&mut b, options()).unwrap();
+        assert!(r.returned, "{:?}", r.failure);
+        assert_eq!(r.instructions, 4);
+        assert_eq!(r.registers["x0"], 0);
+        let mut vector = [0xff; 16];
+        b.cpu(0)
+            .unwrap()
+            .read_register(Register::V(8), &mut vector)
+            .unwrap();
+        assert_eq!(&vector[..8], &[0; 8]);
+
+        let mut b = board(&[0x0f00_0428, 0xd65f_03c0]);
+        let r = checked_call(&mut b, options()).unwrap();
+        assert_eq!(r.instructions, 0);
+        assert!(
+            r.failure
+                .unwrap()
+                .contains("Unsupported instruction 0x0f000428")
+        );
     }
     #[test]
     fn scalar_fmov_register_transfer_round_trips_integer_bits() {
@@ -1717,6 +1786,138 @@ mod tests {
         }
     }
     #[test]
+    fn scalar_fmov_register_copy_is_admitted_without_admitting_half_fadd() {
+        let mut b = board(&[
+            0x1e2e_1000, // FMOV S0,#1.0.
+            0x1e20_4008, // FMOV S8,S0.
+            0xd65f_03c0,
+        ]);
+        let r = checked_call(&mut b, options()).unwrap();
+        assert!(r.returned, "{:?}", r.failure);
+        assert_eq!(r.instructions, 3);
+        let mut vector = [0; 16];
+        b.cpu(0)
+            .unwrap()
+            .read_register(Register::V(8), &mut vector)
+            .unwrap();
+        assert_eq!(
+            u32::from_le_bytes(vector[..4].try_into().unwrap()),
+            1.0f32.to_bits()
+        );
+
+        let mut b = board(&[0x1ee0_2800, 0xd65f_03c0]); // FADD H0,H0,H0.
+        let r = checked_call(&mut b, options()).unwrap();
+        assert_eq!(r.instructions, 0);
+        assert!(
+            r.failure
+                .unwrap()
+                .contains("Unsupported instruction 0x1ee02800")
+        );
+    }
+    #[test]
+    fn scalar_fsqrt_is_admitted_without_admitting_half_fadd() {
+        let mut b = board(&[
+            0x1e22_1000, // FMOV S0,#4.0.
+            0x1e21_c000, // FSQRT S0,S0.
+            0x1e26_0001, // FMOV W1,S0.
+            0xd65f_03c0,
+        ]);
+        let r = checked_call(&mut b, options()).unwrap();
+        assert!(r.returned, "{:?}", r.failure);
+        assert_eq!(r.instructions, 4);
+        assert_eq!(r.registers["x1"], 2.0f32.to_bits() as u64);
+
+        let mut b = board(&[0x1ee0_2800, 0xd65f_03c0]); // FADD H0,H0,H0.
+        let r = checked_call(&mut b, options()).unwrap();
+        assert_eq!(r.instructions, 0);
+        assert!(
+            r.failure
+                .unwrap()
+                .contains("Unsupported instruction 0x1ee02800")
+        );
+    }
+    #[test]
+    fn scalar_fcmpe_zero_sets_negative_condition_without_admitting_half_fadd() {
+        let mut b = board(&[
+            0x1e3e_1000, // FMOV S0,#-1.0.
+            0x1e20_2018, // FCMPE S0,#0.0.
+            0x5400_0044, // B.MI +8.
+            0x5280_0000, // MOV W0,#0.
+            0x5280_0020, // MOV W0,#1.
+            0xd65f_03c0,
+        ]);
+        let mut o = options();
+        o.executable = vec![(0x1000, 0x1018)];
+        o.readable[0] = (0x1000, 0x1018);
+        let r = checked_call(&mut b, o).unwrap();
+        assert!(r.returned, "{:?}", r.failure);
+        assert_eq!(r.registers["x0"], 1);
+
+        let mut b = board(&[0x1ee0_2800, 0xd65f_03c0]); // FADD H0,H0,H0.
+        let r = checked_call(&mut b, options()).unwrap();
+        assert_eq!(r.instructions, 0);
+        assert!(
+            r.failure
+                .unwrap()
+                .contains("Unsupported instruction 0x1ee02800")
+        );
+    }
+    #[test]
+    fn scalar_fcmp_zero_drives_ordered_conditions_and_rejects_half_precision() {
+        for (input, branch) in [
+            (4.0f32, 0x5400_004c),  // B.GT.
+            (0.0f32, 0x5400_0040),  // B.EQ.
+            (-1.0f32, 0x5400_0044), // B.MI.
+        ] {
+            let mut b = board(&[
+                0x1e27_0000, // FMOV S0,W0.
+                0x1e20_2008, // FCMP S0,#0.0.
+                branch,      // Branch on the expected condition.
+                0x5280_0000, // MOV W0,#0.
+                0x5280_0020, // MOV W0,#1.
+                0xd65f_03c0,
+            ]);
+            let mut o = options();
+            o.executable = vec![(0x1000, 0x1018)];
+            o.readable[0] = (0x1000, 0x1018);
+            o.arguments = vec![input.to_bits() as u64];
+            let r = checked_call(&mut b, o).unwrap();
+            assert!(r.returned, "{:?}", r.failure);
+            assert_eq!(r.instructions, 5);
+            assert_eq!(r.registers["x0"], 1);
+        }
+
+        let mut b = board(&[0x1ee0_2008, 0xd65f_03c0]); // FCMP H0,#0.0.
+        let r = checked_call(&mut b, options()).unwrap();
+        assert_eq!(r.instructions, 0);
+        assert!(
+            r.failure
+                .unwrap()
+                .contains("Unsupported instruction 0x1ee02008")
+        );
+    }
+    #[test]
+    fn scalar_fcvtzs_x_from_s_is_admitted_without_admitting_d_to_x() {
+        let mut b = board(&[
+            0x1e22_1000, // FMOV S0,#4.0.
+            0x9e38_0001, // FCVTZS X1,S0.
+            0xd65f_03c0,
+        ]);
+        let r = checked_call(&mut b, options()).unwrap();
+        assert!(r.returned, "{:?}", r.failure);
+        assert_eq!(r.instructions, 3);
+        assert_eq!(r.registers["x1"], 4);
+
+        let mut b = board(&[0x9e78_0001, 0xd65f_03c0]); // FCVTZS X1,D0.
+        let r = checked_call(&mut b, options()).unwrap();
+        assert_eq!(r.instructions, 0);
+        assert!(
+            r.failure
+                .unwrap()
+                .contains("Unsupported instruction 0x9e780001")
+        );
+    }
+    #[test]
     fn scalar_ucvtf_from_integer_register_and_scalar_bits_retires() {
         for (words, expected_instructions) in [
             (
@@ -1740,6 +1941,257 @@ mod tests {
             assert!(r.returned, "{:?}", r.failure);
             assert_eq!(r.instructions, expected_instructions);
             assert_eq!(r.registers["x1"], 640.0f32.to_bits() as u64);
+        }
+    }
+    #[test]
+    fn scalar_ucvtf_s_from_x_uses_full_unsigned_register() {
+        let mut b = board(&[
+            0x9e23_0000, // UCVTF S0,X0.
+            0x1e26_0001, // FMOV W1,S0.
+            0xd65f_03c0,
+        ]);
+        let mut o = options();
+        o.arguments = vec![1u64 << 40];
+        let r = checked_call(&mut b, o).unwrap();
+        assert!(r.returned, "{:?}", r.failure);
+        assert_eq!(r.registers["x1"], ((1u64 << 40) as f32).to_bits() as u64);
+    }
+    #[test]
+    fn scalar_scvtf_signed_x_to_s_is_admitted_without_admitting_d_x() {
+        let mut b = board(&[
+            0x9e22_0000, // SCVTF S0,X0.
+            0x1e26_0001, // FMOV W1,S0.
+            0xd65f_03c0,
+        ]);
+        let mut o = options();
+        o.arguments = vec![(-640i64) as u64];
+        let r = checked_call(&mut b, o).unwrap();
+        assert!(r.returned, "{:?}", r.failure);
+        assert_eq!(r.instructions, 3);
+        assert_eq!(r.registers["x1"], (-640.0f32).to_bits() as u64);
+
+        let mut b = board(&[0x9e62_0000, 0xd65f_03c0]); // SCVTF D0,X0.
+        let r = checked_call(&mut b, options()).unwrap();
+        assert_eq!(r.instructions, 0);
+        assert!(
+            r.failure
+                .unwrap()
+                .contains("Unsupported instruction 0x9e620000")
+        );
+    }
+    #[test]
+    fn scalar_scvtf_signed_w_to_s_retires() {
+        let mut b = board(&[
+            0x1e22_0000, // SCVTF S0,W0.
+            0x1e26_0001, // FMOV W1,S0.
+            0xd65f_03c0,
+        ]);
+        let mut o = options();
+        o.arguments = vec![(-640i32 as u32) as u64];
+        let r = checked_call(&mut b, o).unwrap();
+        assert!(r.returned, "{:?}", r.failure);
+        assert_eq!(r.instructions, 3);
+        assert_eq!(r.registers["x1"], (-640.0f32).to_bits() as u64);
+    }
+    #[test]
+    fn scalar_fcvtzu_w_from_s_retires() {
+        let mut b = board(&[
+            0x1e27_0000, // FMOV S0,W0.
+            0x1e39_0001, // FCVTZU W1,S0.
+            0xd65f_03c0,
+        ]);
+        let mut o = options();
+        o.arguments = vec![5.75f32.to_bits() as u64];
+        let r = checked_call(&mut b, o).unwrap();
+        assert!(r.returned, "{:?}", r.failure);
+        assert_eq!(r.instructions, 3);
+        assert_eq!(r.registers["x1"], 5);
+    }
+    #[test]
+    fn scalar_fcvtzs_w_from_s_truncates_both_signs_and_rejects_half_source() {
+        for (input, expected) in [(5.75f32, 5u64), (-5.75f32, (-5i32) as u32 as u64)] {
+            let mut b = board(&[
+                0x1e27_0000, // FMOV S0,W0.
+                0x1e38_0001, // FCVTZS W1,S0.
+                0xd65f_03c0,
+            ]);
+            let mut o = options();
+            o.arguments = vec![input.to_bits() as u64];
+            let r = checked_call(&mut b, o).unwrap();
+            assert!(r.returned, "{:?}", r.failure);
+            assert_eq!(r.instructions, 3);
+            assert_eq!(r.registers["x1"], expected);
+        }
+
+        let mut b = board(&[0x1ef8_0001, 0xd65f_03c0]); // FCVTZS W1,H0.
+        let r = checked_call(&mut b, options()).unwrap();
+        assert_eq!(r.instructions, 0);
+        assert!(
+            r.failure
+                .unwrap()
+                .contains("Unsupported instruction 0x1ef80001")
+        );
+    }
+    #[test]
+    fn checked_scalar_double_polynomial_forms_are_narrowly_admitted() {
+        for word in [
+            0x1e63_0000, // UCVTF D0,W0.
+            0x1e62_0001, // SCVTF D1,W0.
+            0x1e60_2820, // FADD D0,D1,D0.
+            0x1e61_1800, // FDIV D0,D0,D1.
+            0x1e61_2010, // FCMPE D0,D1.
+            0x1e78_0000, // FCVTZS W0,D0.
+        ] {
+            let mut b = board(&[word, 0xd65f_03c0]);
+            let r = checked_call(&mut b, options()).unwrap();
+            assert!(r.returned, "{word:#010x}: {:?}", r.failure);
+            assert_eq!(r.instructions, 2, "{word:#010x}");
+        }
+
+        for word in [
+            0x9e63_0000, // UCVTF D0,X0.
+            0x9e62_0000, // SCVTF D0,X0.
+            0x1ee0_2820, // FADD H0,H1,H0.
+            0x1ee1_1800, // FDIV H0,H0,H1.
+            0x1ee1_2010, // FCMPE H0,H1.
+            0x9e78_0000, // FCVTZS X0,D0.
+        ] {
+            let mut b = board(&[word, 0xd65f_03c0]);
+            let r = checked_call(&mut b, options()).unwrap();
+            assert_eq!(r.instructions, 0, "{word:#010x}");
+            assert!(
+                r.failure.unwrap().contains("Unsupported instruction"),
+                "{word:#010x}"
+            );
+        }
+    }
+    #[test]
+    fn checked_scalar_double_difference_forms_compute_and_stay_narrow() {
+        // FMOV D0,#4; FMOV D1,#1; FMOV D4,#1; FSUB D2,D0,D1; FNMUL D3,D0,D1;
+        // FCVTZU W0,D2; FCVTZU W1,D3; MOVI D4,#0; FMOV X2,D4; RET.
+        let code = [
+            0x1e62_1000,
+            0x1e6e_1001,
+            0x1e6e_1004,
+            0x1e61_3802,
+            0x1e61_8803,
+            0x1e79_0040,
+            0x1e79_0061,
+            0x2f00_e404,
+            0x9e66_0082,
+            0xd65f_03c0,
+        ];
+        let mut b = board(&code);
+        let mut o = options();
+        o.executable = vec![(0x1000, 0x1028)];
+        o.readable = vec![(0x1000, 0x1028), (0x4000, 0x4010), (0x8000, 0xa000)];
+        let r = checked_call(&mut b, o).unwrap();
+        assert!(r.returned, "{:?}", r.failure);
+        assert_eq!(r.registers["x0"], 3);
+        assert_eq!(r.registers["x1"], 0); // Round toward zero saturates negatives to 0.
+        assert_eq!(r.registers["x2"], 0);
+        let mut vector = [0; 16];
+        for (register, bits) in [(2, 0x4008_0000_0000_0000u64), (3, 0xc010_0000_0000_0000)] {
+            b.cpu(0)
+                .unwrap()
+                .read_register(Register::V(register), &mut vector)
+                .unwrap();
+            assert_eq!(u64::from_le_bytes(vector[..8].try_into().unwrap()), bits);
+        }
+
+        for word in [
+            0x1ee0_3800, // FSUB H0,H0,H0.
+            0x1e20_8800, // FNMUL S0,S0,S0.
+            0x9e79_0000, // FCVTZU X0,D0.
+            0x6f00_e400, // MOVI V0.2D,#0.
+            0x0f00_e400, // MOVI V0.8B,#0.
+        ] {
+            let mut b = board(&[word, 0xd65f_03c0]);
+            let r = checked_call(&mut b, options()).unwrap();
+            assert_eq!(r.instructions, 0, "{word:#010x}");
+            assert!(
+                r.failure.unwrap().contains("Unsupported instruction"),
+                "{word:#010x}"
+            );
+        }
+    }
+    #[test]
+    fn checked_scalar_single_quotient_and_half_load_forms_compute_and_stay_narrow() {
+        // FMOV S0,W0; SCVTF S0,S0; FMOV S1,#2; FDIV S2,S0,S1; FADD S3,S2,S1;
+        // FSUB S4,S1,S3; FCMPE S3,S4; CSET W1,MI; LDR H5,[X2,X3,LSL#1];
+        // FCVT S5,H5; LDR H6,[X2]; FCVT S6,H6; FMOV W6..W10 from S2..S6; RET.
+        let code = [
+            0x1e27_0000,
+            0x5e21_d800,
+            0x1e20_1001,
+            0x1e21_1802,
+            0x1e21_2843,
+            0x1e23_3824,
+            0x1e24_2070,
+            0x1a9f_57e1,
+            0x7c63_7845,
+            0x1ee2_40a5,
+            0x7d40_0046,
+            0x1ee2_40c6,
+            0x1e26_0046,
+            0x1e26_0067,
+            0x1e26_0088,
+            0x1e26_00a9,
+            0x1e26_00ca,
+            0xd65f_03c0,
+        ];
+        let mut b = board(&code);
+        // A subnormal half at 0x4000 and -1.5 at 0x4002.
+        b.write_memory(0, 0x4000, &[0x01, 0x00, 0x00, 0xbe])
+            .unwrap();
+        let mut o = options();
+        o.arguments = vec![0xffff_fffd, 0, 0x4000, 1]; // W0 = -3.
+        o.executable = vec![(0x1000, 0x1048)];
+        o.readable = vec![(0x1000, 0x1048), (0x4000, 0x4004), (0x8000, 0xa000)];
+        let r = checked_call(&mut b, o).unwrap();
+        assert!(r.returned, "{:?}", r.failure);
+        assert_eq!(r.instructions, 18);
+        assert_eq!(r.registers["x1"], 1); // 0.5 < 1.5.
+        for (register, value) in [
+            ("x6", (-1.5f32).to_bits()),
+            ("x7", 0.5f32.to_bits()),
+            ("x8", 1.5f32.to_bits()),
+            ("x9", (-1.5f32).to_bits()),
+            ("x10", 2.0f32.powi(-24).to_bits()),
+        ] {
+            assert_eq!(r.registers[register], u64::from(value), "{register}");
+        }
+
+        // The half load is a checked two-byte read: one byte past the range refuses.
+        let mut b = board(&[0x7d40_0000, 0xd65f_03c0]); // LDR H0,[X0].
+        let mut o = options();
+        o.arguments = vec![0x400f];
+        let r = checked_call(&mut b, o).unwrap();
+        assert_eq!(r.instructions, 0);
+        assert!(
+            r.failure
+                .unwrap()
+                .contains("read outside declared range at 0x400f width 2")
+        );
+
+        for word in [
+            0x5e61_d800, // SCVTF D0,D0.
+            0x5e79_d800, // SCVTF H0,H0.
+            0x4e21_d800, // SCVTF V0.4S,V0.4S.
+            0x1ee0_1800, // FDIV H0,H0,H0.
+            0x1ee0_2010, // FCMPE H0,H0.
+            0x0e20_d400, // FADD V0.2S,V0.2S,V0.2S.
+            0x1ee2_c000, // FCVT D0,H0.
+            0x1e23_c000, // FCVT H0,S0.
+            0x1e62_4000, // FCVT S0,D0.
+        ] {
+            let mut b = board(&[word, 0xd65f_03c0]);
+            let r = checked_call(&mut b, options()).unwrap();
+            assert_eq!(r.instructions, 0, "{word:#010x}");
+            assert!(
+                r.failure.unwrap().contains("Unsupported instruction"),
+                "{word:#010x}"
+            );
         }
     }
     #[test]
