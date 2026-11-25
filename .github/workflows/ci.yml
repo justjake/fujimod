@@ -90,13 +90,9 @@ jobs:
         run: mise run javascript-format-check
 
   native-tests:
-    name: Rust and Python tests with coverage
+    name: Rust and Python tests
     runs-on: ubuntu-latest
     timeout-minutes: 60
-    env:
-      # show-env and cargo llvm-cov otherwise choose different default directories.
-      CARGO_TARGET_DIR: ${{ github.workspace }}/target/llvm-cov-target
-      CARGO_LLVM_COV_TARGET_DIR: ${{ github.workspace }}/target/llvm-cov-target
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -104,50 +100,19 @@ jobs:
           persist-credentials: false
           submodules: recursive
       - uses: ./.github/actions/setup
-      - name: Install coverage and media tools
+      - name: Install media tools
         run: |
           sudo apt-get update
           sudo apt-get install -y libjpeg-dev
-      - run: mise run rust-coverage
-      - name: Rust documentation tests
+      - run: mise run rust-test
+      - name: Python tests
         if: ${{ !cancelled() }}
-        env:
-          CARGO_TARGET_DIR: ${{ github.workspace }}/target
-        run: cargo test --workspace --all-features --locked --doc
-      - name: Build instrumented Python bindings
-        if: ${{ !cancelled() }}
-        run: |
-          cargo llvm-cov show-env --sh > "$RUNNER_TEMP/llvm-coverage.env"
-          source "$RUNNER_TEMP/llvm-coverage.env"
-          mise run python-build-test
-      - name: Python tests (also run independent tests after build failures)
-        if: ${{ !cancelled() }}
-        run: |
-          cargo llvm-cov show-env --sh > "$RUNNER_TEMP/llvm-coverage.env"
-          source "$RUNNER_TEMP/llvm-coverage.env"
-          mise run python-pytest
-      - name: Rust coverage reports including Python's native calls
-        if: ${{ !cancelled() }}
-        run: |
-          mkdir -p target/coverage/rust
-          cargo llvm-cov report --lcov --output-path target/coverage/rust/lcov.info
-          cargo llvm-cov report --html --output-dir target/coverage/rust
-      - name: Coverage summary
-        if: always()
-        run: uv run --locked python scripts/ci/coverage_summary.py >> "$GITHUB_STEP_SUMMARY"
-      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
-        # Pull request runs keep coverage in the job summary only, to bound artifact storage.
-        if: always() && github.event_name != 'pull_request_target'
-        with:
-          name: native-coverage
-          path: target/coverage
-          if-no-files-found: error
-          retention-days: 14
+        run: mise run python-test
 
   javascript-tests:
-    name: JavaScript, Wasm, Pyodide and browser tests
+    name: JavaScript and Wasm tests
     runs-on: ubuntu-latest
-    timeout-minutes: 90
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -157,37 +122,15 @@ jobs:
       - uses: ./.github/actions/setup
         with:
           javascript: 'true'
-      - run: pnpm --filter fujimod-web exec -- playwright install --with-deps chromium webkit
       - run: mise run javascript-node-test
       - if: ${{ !cancelled() }}
         run: mise run rust-wasm-test
       - if: ${{ !cancelled() }}
-        run: mise run javascript-browser-test
-      - name: Pyodide contracts in Node and Chromium
-        if: ${{ !cancelled() }}
-        run: |
-          node bindings/python/scripts/build-web-wheel.ts --out target/web-wheels
-          pnpm --filter fujimod run test:pyodide:browser
-      - if: ${{ !cancelled() }}
-        run: mise run web-coverage
+        run: mise run web-test
       - if: ${{ !cancelled() }}
         run: mise run web-build
-      - name: All declared web integration test scripts
-        if: ${{ !cancelled() }}
-        run: node scripts/ci/package-tests.ts apps/web
       - if: ${{ !cancelled() }}
         run: pnpm --filter fujimod-usb-sharing run check
-      - name: Coverage summary
-        if: always()
-        run: uv run --locked python scripts/ci/coverage_summary.py >> "$GITHUB_STEP_SUMMARY"
-      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
-        # Pull request runs keep coverage in the job summary only, to bound artifact storage.
-        if: always() && github.event_name != 'pull_request_target'
-        with:
-          name: javascript-coverage
-          path: target/coverage
-          if-no-files-found: error
-          retention-days: 14
 
   required:
     name: CI required

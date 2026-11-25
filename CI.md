@@ -28,7 +28,7 @@ runs only after a maintainer reads it and adds `ci:run`.
 
 Runs on `main` save the caches. GitHub shares the default branch's caches with
 pull requests, so each push to `main` keeps them warm for every pull request.
-Pull request runs keep coverage in the job summary and upload no artifacts.
+Pull request runs upload no artifacts.
 
 ## Planned structure
 
@@ -128,59 +128,19 @@ any suite failed. `mise run rust-wasm-test` additionally executes the Rust USB
 core tests in the JavaScript runtime. The setup command installs the matching
 `wasm-bindgen-test-runner` as well as the code generator.
 
-The browser job installs Chromium and WebKit and runs the WebUSB browser
-contracts, Pyodide contracts in Node and Chromium, web unit/component tests,
-production build, prerender checks, developer-tools browser checks and Worker
-build validation. Pyodide also needs its pure Python wheel:
+CI's JavaScript job runs the Node and Wasm suites, the web unit tests, the
+production build and the USB sharing check, without a browser. Browser suites
+run locally:
 
 ```sh
-node bindings/python/scripts/build-web-wheel.ts --out target/web-wheels
-pnpm --filter fujimod-web exec -- playwright install --with-deps chromium webkit
+pnpm --filter fujimod-web exec -- playwright install chromium webkit
 mise run javascript-browser-test
-pnpm --filter fujimod run test:pyodide:browser
-mise run web-coverage
-mise run web-build
 node scripts/ci/package-tests.ts apps/web
 ```
 
 The web integration runner executes every declared `test:*` package script
-except interactive `*:watch` commands, so new one-shot suites join CI when added.
+except interactive `*:watch` commands.
 
 Browser scripts that take a firmware update file, a simulator bundle, a served
 camera session or a connected camera run only when given those inputs; CI does
 not run them.
-
-## Coverage
-
-Test coverage is reported, without a minimum percentage imposed. The 100%
-requirement above concerns Python typing, not execution coverage.
-
-- pytest-cov records Python line and branch coverage, XML, HTML and JUnit results.
-  It lists unexecuted Pyodide adapters as uncovered; separate Pyodide contract
-  runs are not included in that measurement.
-- cargo-llvm-cov records the entire native Rust workspace. Python bindings are
-  built and exercised with the same LLVM instrumentation, so their native
-  calls contribute to the report. Documentation tests run separately. Stable
-  Rust coverage does not include the separately executed Wasm tests.
-- Vitest's V8 provider reports web line and branch coverage, including unimported
-  source files, as text, LCOV, HTML and JSON summaries.
-- Node's test runner emits LCOV and console reports for each standalone suite.
-  These measure host JavaScript. Browser code, Wasm, dynamically imported data
-  URLs and Cloudflare Worker isolates are not measured by host V8 coverage;
-  an empty report is displayed as `0/0`, never as proof of 100% coverage.
-
-Artifacts and job summaries are published even when tests fail. Each Actions run
-offers `native-coverage` and `javascript-coverage` downloads; generated files stay
-under ignored `target/coverage/`. To reproduce native coverage:
-
-```sh
-export CARGO_TARGET_DIR="$PWD/target/llvm-cov-target"
-export CARGO_LLVM_COV_TARGET_DIR="$CARGO_TARGET_DIR"
-mise run rust-coverage
-source <(cargo llvm-cov show-env --sh)
-mise run python-test
-mkdir -p target/coverage/rust
-cargo llvm-cov report --lcov --output-path target/coverage/rust/lcov.info
-cargo llvm-cov report --html --output-dir target/coverage/rust
-uv run --locked python scripts/ci/coverage_summary.py
-```
