@@ -1,5 +1,6 @@
 //! Offline construction and catalog inspection. No device access.
-use fujimod_recovery::{CheckedRedirect, Recipe, StartupOptions, availability};
+use fujimod_recovery::ram_patch::RamPatches;
+use fujimod_recovery::{CheckedRedirect, Recipe, StartupOptions, StartupStop, availability};
 use std::{env, fs, path::PathBuf};
 fn construction_args(
     args: &[String],
@@ -153,6 +154,70 @@ fn take_ram_overlay(
     Ok(Some(PathBuf::from(value)))
 }
 
+/// Remove `--ram-patches FILE` from the arguments (only `sd-boot-v1-startup` takes it).
+fn take_ram_patches(
+    args: &mut Vec<String>,
+    allowed: bool,
+) -> Result<Option<PathBuf>, Box<dyn std::error::Error>> {
+    let Some(at) = args.iter().position(|arg| arg == "--ram-patches") else {
+        return Ok(None);
+    };
+    if !allowed {
+        return Err("--ram-patches requires sd-boot-v1-startup".into());
+    }
+    let value = args
+        .get(at + 1)
+        .ok_or("Missing --ram-patches file")?
+        .clone();
+    args.drain(at..=at + 1);
+    if args.iter().any(|arg| arg == "--ram-patches") {
+        return Err("--ram-patches was specified twice".into());
+    }
+    Ok(Some(PathBuf::from(value)))
+}
+
+/// Remove `--prepare-installed-flash` from the arguments (only `sd-boot-v1-startup` and the XP5
+/// diagnostic checks take it).
+fn take_prepare_installed_flash(
+    args: &mut Vec<String>,
+    allowed: bool,
+) -> Result<bool, Box<dyn std::error::Error>> {
+    let flag = "--prepare-installed-flash";
+    match args.iter().filter(|arg| *arg == flag).count() {
+        0 => Ok(false),
+        _ if !allowed => Err(format!(
+            "{flag} requires sd-boot-v1-startup or {}",
+            CHECKS.join(", ")
+        )
+        .into()),
+        1 => {
+            args.retain(|arg| arg != flag);
+            Ok(true)
+        }
+        _ => Err(format!("{flag} was specified twice").into()),
+    }
+}
+
+/// The XP5 diagnostic checks: the card startup, stopped where the command names.
+const CHECKS: [&str; 5] = [
+    "sd-boot-v1-card-init-check",
+    "sd-boot-v1-card-error-check",
+    "sd-boot-v1-setup-check",
+    "sd-boot-v1-read-check",
+    "sd-boot-v1-card-read-check",
+];
+
+fn startup_stop(command: &str) -> StartupStop {
+    match command {
+        "sd-boot-v1-card-init-check" => StartupStop::AfterCardInit,
+        "sd-boot-v1-card-error-check" => StartupStop::AfterCardInitWithErrorBlink,
+        "sd-boot-v1-setup-check" => StartupStop::AfterSetup,
+        "sd-boot-v1-read-check" => StartupStop::AfterCrc,
+        "sd-boot-v1-card-read-check" => StartupStop::AfterCrcWithErrorPackets,
+        _ => StartupStop::Continue,
+    }
+}
+
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let args: Vec<_> = env::args().skip(1).collect();
     match args.first().map(String::as_str) {
@@ -169,6 +234,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
         Some(
             command @ ("sd-card-recovery-build" | "green-led" | "sd-boot-v1-startup" | "sd-boot-v1-sd-card-startup" | "sd-boot-v1-stage-one"
+            | "sd-boot-v1-card-init-check" | "sd-boot-v1-card-error-check" | "sd-boot-v1-setup-check" | "sd-boot-v1-read-check" | "sd-boot-v1-card-read-check"
             | "sd-boot-v1-ram-startup" | "sd-boot-v1-read-only-startup" | "sd-boot-v1-checked-redirect-startup" | "sd-boot-v1-copy-stub-startup" | "sd-boot-v1-marker-startup" | "sd-boot-v1-os-startup" | "sd-boot-v1-exif-startup" | "sd-boot-v1-hook-startup" | "sd-card-recovery-baseline" | "sd-boot-v2-sd-card"),
         ) => {
             let mut inputs = args[1..].to_vec();
@@ -199,6 +265,16 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             )?
             .map(|path| fujimod_recovery::image::Overlay::read(&path))
             .transpose()?;
+            let ram_patches = take_ram_patches(&mut inputs, command == "sd-boot-v1-startup")?
+                .map(|path| RamPatches::read(&path))
+                .transpose()?;
+            if overlay.is_some() && ram_patches.is_some() {
+                return Err("--ram-overlay and --ram-patches are mutually exclusive".into());
+            }
+            let prepare_installed_flash = take_prepare_installed_flash(
+                &mut inputs,
+                command == "sd-boot-v1-startup" || CHECKS.contains(&command),
+            )?;
             let (firmware, dat, output, hold) =
                 construction_args(&inputs, matches!(command, "sd-boot-v1-startup" | "sd-boot-v1-stage-one" | "sd-boot-v1-ram-startup" | "sd-boot-v1-read-only-startup" | "sd-boot-v1-checked-redirect-startup" | "sd-boot-v1-copy-stub-startup" | "sd-boot-v1-marker-startup" | "sd-boot-v1-os-startup" | "sd-boot-v1-exif-startup" | "sd-boot-v1-hook-startup"))?;
             let options = StartupOptions {
@@ -211,12 +287,16 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 os: os_command,
                 exif: exif_command,
                 hook: hook_command,
+                stop: startup_stop(command),
+                prepare_installed_flash,
                 ..hold
             };
             let recipe = Recipe::bundled(firmware)?.ok_or("Missing SD card recipe")?;
             let source = fs::read(dat)?;
             let files = if let Some(overlay) = &overlay {
                 recipe.build_startup_with_overlay(&source, options, overlay)?
+            } else if let Some(patches) = &ram_patches {
+                recipe.build_startup_with_ram_patches(&source, options, patches)?
             } else if let Some(storage) = storage {
                 recipe.build_startup_with_storage(&source, &storage, options)?
             } else if command == "sd-card-recovery-build" {
@@ -246,7 +326,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
         _ => {
             return Err(
-                "Usage: fujimod-sd-card list | sd-card-recovery-build|green-led|sd-boot-v1-startup|sd-boot-v1-stage-one|sd-boot-v1-ram-startup|sd-boot-v1-read-only-startup|sd-boot-v1-checked-redirect-startup|sd-boot-v1-copy-stub-startup|sd-boot-v1-marker-startup|sd-boot-v1-os-startup|sd-boot-v1-exif-startup|sd-boot-v1-hook-startup|sd-card-recovery-baseline|sd-boot-v2-sd-card FIRMWARE DAT NEW_DIRECTORY [--success-hold-seconds N | --success-hold-units N] [--fallback-wait-seconds N (sd-boot-v1-ram-startup)] [--destination ADDRESS (sd-boot-v1-read-only-startup, sd-boot-v1-checked-redirect-startup and sd-boot-v1-copy-stub-startup, required)] [--verify-only | --apply (sd-boot-v1-checked-redirect-startup, sd-boot-v1-copy-stub-startup, sd-boot-v1-marker-startup, sd-boot-v1-os-startup and sd-boot-v1-exif-startup, one required)] [--ram-overlay FILE (sd-boot-v1-startup, sd-boot-v1-ram-startup)] | sd-boot-v1-sd-card-startup FIRMWARE DAT STORAGE_IMAGE NEW_DIRECTORY"
+                "Usage: fujimod-sd-card list | sd-card-recovery-build|green-led|sd-boot-v1-startup|sd-boot-v1-stage-one|sd-boot-v1-ram-startup|sd-boot-v1-read-only-startup|sd-boot-v1-checked-redirect-startup|sd-boot-v1-copy-stub-startup|sd-boot-v1-marker-startup|sd-boot-v1-os-startup|sd-boot-v1-exif-startup|sd-boot-v1-hook-startup|sd-card-recovery-baseline|sd-boot-v2-sd-card|sd-boot-v1-card-init-check|sd-boot-v1-card-error-check|sd-boot-v1-setup-check|sd-boot-v1-read-check|sd-boot-v1-card-read-check FIRMWARE DAT NEW_DIRECTORY [--success-hold-seconds N | --success-hold-units N] [--fallback-wait-seconds N (sd-boot-v1-ram-startup)] [--destination ADDRESS (sd-boot-v1-read-only-startup, sd-boot-v1-checked-redirect-startup and sd-boot-v1-copy-stub-startup, required)] [--verify-only | --apply (sd-boot-v1-checked-redirect-startup, sd-boot-v1-copy-stub-startup, sd-boot-v1-marker-startup, sd-boot-v1-os-startup and sd-boot-v1-exif-startup, one required)] [--ram-overlay FILE (sd-boot-v1-startup, sd-boot-v1-ram-startup)] [--ram-patches FILE (sd-boot-v1-startup)] [--prepare-installed-flash (sd-boot-v1-startup and the checks)] | sd-boot-v1-sd-card-startup FIRMWARE DAT STORAGE_IMAGE NEW_DIRECTORY"
                     .into(),
             );
         }
@@ -256,8 +336,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 #[cfg(test)]
 mod tests {
-    use super::{construction_args, take_destination, take_fallback_wait, take_ram_overlay};
-    use fujimod_recovery::StartupOptions;
+    use super::{
+        construction_args, startup_stop, take_destination, take_fallback_wait,
+        take_prepare_installed_flash, take_ram_overlay, take_ram_patches,
+    };
+    use fujimod_recovery::{StartupOptions, StartupStop};
     fn seconds(n: u32) -> StartupOptions {
         StartupOptions {
             success_hold_seconds: n,
@@ -451,6 +534,70 @@ mod tests {
             (args(&["--ram-overlay", "a", "--ram-overlay", "b"]), true),
         ] {
             assert!(take_ram_overlay(&mut bad.clone(), allowed).is_err(), "{bad:?}");
+        }
+    }
+
+    #[test]
+    fn card_read_check_selects_stop_five_while_read_check_stays_stop_two() {
+        assert_eq!(
+            startup_stop("sd-boot-v1-card-read-check"),
+            StartupStop::AfterCrcWithErrorPackets
+        );
+        assert_eq!(startup_stop("sd-boot-v1-card-read-check") as u64, 5);
+        assert_eq!(startup_stop("sd-boot-v1-read-check"), StartupStop::AfterCrc);
+        assert_eq!(startup_stop("sd-boot-v1-read-check") as u64, 2);
+        assert_eq!(startup_stop("sd-boot-v1-startup"), StartupStop::Continue);
+    }
+
+    #[test]
+    fn installed_flash_option_is_explicit_and_only_allowed_for_full_xp5_builds() {
+        let mut values = args(&["camera", "update", "output", "--prepare-installed-flash"]);
+        assert!(take_prepare_installed_flash(&mut values, true).unwrap());
+        assert_eq!(values, args(&["camera", "update", "output"]));
+        assert!(!take_prepare_installed_flash(&mut values, true).unwrap());
+        assert!(!take_prepare_installed_flash(&mut values, false).unwrap());
+        assert!(
+            take_prepare_installed_flash(
+                &mut args(&["camera", "--prepare-installed-flash"]),
+                false
+            )
+            .is_err()
+        );
+        let mut duplicate = args(&[
+            "camera",
+            "--prepare-installed-flash",
+            "--prepare-installed-flash",
+        ]);
+        assert!(take_prepare_installed_flash(&mut duplicate, true).is_err());
+    }
+
+    #[test]
+    fn ram_patches_are_only_accepted_for_startup_and_once() {
+        let mut values = args(&[
+            "camera",
+            "update",
+            "output",
+            "--ram-patches",
+            "patches.json",
+        ]);
+        assert_eq!(
+            take_ram_patches(&mut values, true).unwrap(),
+            Some(std::path::PathBuf::from("patches.json"))
+        );
+        assert_eq!(values, args(&["camera", "update", "output"]));
+        assert_eq!(take_ram_patches(&mut values, false).unwrap(), None);
+        for (bad, allowed) in [
+            (args(&["camera", "--ram-patches", "patches.json"]), false),
+            (args(&["camera", "--ram-patches"]), true),
+            (
+                args(&["--ram-patches", "a.json", "--ram-patches", "b.json"]),
+                true,
+            ),
+        ] {
+            assert!(
+                take_ram_patches(&mut bad.clone(), allowed).is_err(),
+                "{bad:?}"
+            );
         }
     }
 }

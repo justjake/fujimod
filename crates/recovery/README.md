@@ -161,6 +161,34 @@ no filesystem, USB, camera, or network access.
 
 The native CLI exposes `list`, `build FIRMWARE DAT NEW_DIRECTORY`, and
 `sd-boot-v1-startup FIRMWARE DAT NEW_DIRECTORY`, and `sd-boot-v1-stage-one FIRMWARE DAT NEW_DIRECTORY`.
+For an XP5 transport check, `sd-boot-v1-read-check FIRMWARE DAT NEW_DIRECTORY` builds
+the same card image as `sd-boot-v1-startup` but makes its first stage stop after the
+complete `ffboot.bin` read and CRC32 match. The status lamp starts green, changes to
+orange when the card entry prelude hands off to stock setup, and turns steady
+red after the read and CRC32 match. It does not release the other cores or
+execute the loaded image, so red identifies successful card transport
+independently of image handoff. If the lamp remains green or orange, inspect
+the earlier prelude, initial card mount, stock setup and card-read stages.
+`sd-boot-v1-card-init-check FIRMWARE DAT NEW_DIRECTORY` stops with a steady red lamp
+after the initial card mount, before stock setup. `sd-boot-v1-setup-check FIRMWARE DAT
+NEW_DIRECTORY` stops with steady red after stock setup returns, before the
+second card initialization and `ffboot.bin` read. Orange without red in the
+setup check does not distinguish the first card mount from stock setup.
+Neither diagnostic executes the loaded image.
+`sd-boot-v1-card-error-check FIRMWARE DAT NEW_DIRECTORY` also stops after the initial
+card mount. It shows steady red on success, or repeatedly blinks the red lamp
+for the failed step: two blinks for board setup, four for card initialization,
+and five for the FAT32 mount. Host setup gives six blinks for invalid
+arguments, seven for a clock timeout, or eight for a handshake timeout. A
+single blink means the first-stage request or card configuration was rejected
+before setup.
+For XP5 `sd-boot-v1-startup`, `sd-boot-v1-card-init-check`, `sd-boot-v1-card-error-check`,
+`sd-boot-v1-setup-check`, `sd-boot-v1-read-check` and `sd-boot-v1-card-read-check`,
+`--prepare-installed-flash` runs the
+checked installed-flash controller initialization and timing scan before
+continuing stock setup. It changes only that entry-source choice; the SD image
+and its CRC remain the same. Use it when the stock setup needs that installed
+flash state, and keep its dependency on readable installed flash explicit.
 
 `rescue-baseline FIRMWARE DAT NEW_DIRECTORY` reconstructs the original XP4 cold
 pair before firmware-reader redirection. `Recipe::build_rescue_baseline` exposes
@@ -405,6 +433,14 @@ startup may clear BSS after the image is loaded. An edit must replace the expect
 initialized bytes outside the regions. Nothing is written unless every check passes.
 `sd-boot-v1-read-only-startup`, `sd-boot-v1-checked-redirect-startup`, `sd-boot-v1-copy-stub-startup`, `sd-boot-v1-marker-startup`, `sd-boot-v1-os-startup`, `sd-boot-v1-exif-startup` and `sd-boot-v1-hook-startup` refuse an overlay, since their RAM image is never run.
 
+`sd-boot-v1-startup` also accepts `--ram-patches FILE` (XP5, not together with `--ram-overlay`;
+`Recipe::build_startup_with_ram_patches` and `ram_patch::RamPatches` are the library forms). It
+lists `words` (`address`, `old`, `new`) inside the image and `payloads` (`address`, `file`,
+`sha256`, and `replaces`, the SHA-256 of the stock bytes a payload inside the image replaces);
+each file is relative to the list's directory. A payload past the image's end grows the image
+with zeros, payloads end below 1 GiB, and no two changes overlap. The changes are applied before
+the loader's length and CRC are taken, and nothing is written unless every check passes.
+
 `sd-boot-v1-startup`, `sd-boot-v1-ram-startup`, `sd-boot-v1-read-only-startup`, `sd-boot-v1-checked-redirect-startup`, `sd-boot-v1-copy-stub-startup`, `sd-boot-v1-marker-startup`, `sd-boot-v1-os-startup`, `sd-boot-v1-exif-startup`, `sd-boot-v1-hook-startup` and `sd-boot-v1-stage-one` accept `--success-hold-seconds N` (default `0`).
 After sampling and header operations succeed, a nonzero value holds steady
 green using a counted loop before continuing. Each second requests 2,048 units
@@ -440,6 +476,9 @@ pre-setup stack bound and the two relocations against stock setup routines. The
 build script turns that layout into constants and the crate loads the image with
 `include_bytes!`. The image contains empty camera-data placeholders; card
 construction needs only the official DAT and the compiled catalog recipes.
+Card construction also lists the RAM image's all-zero 64 KiB runs after its
+first block in the loader request, at most 16 and the longest first; the
+loader fills them instead of reading them, and its CRC32 still covers them.
 
 The EXR compiled SD loader is `assets/sd-boot-v1-exr-loader.generated.bin`; its
 companion `assets/sd-boot-v1-exr-loader.generated.json` gives the startup loader and

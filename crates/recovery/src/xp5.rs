@@ -1,10 +1,13 @@
 //! Raw XP5 entry, serial NOR preparation, and optional post-DDR FAT32 loading.
 use crate::image::{self, File, Result, Source, extent, put, require, word};
+use crate::StartupStop;
 use serde::{Deserialize, Serialize};
 mod banks;
 pub use banks::Banks;
 mod card_boot;
 pub use card_boot::CardBoot;
+pub mod handoff_result;
+pub use handoff_result::HandoffRange;
 mod redirect;
 mod template {
     include!(concat!(env!("OUT_DIR"), "/xp5_sd_loader.rs"));
@@ -112,6 +115,12 @@ struct Loader {
     sd_request: usize,
     sd_progress: usize,
     sd_board: usize,
+    /// The host prelude, the root host setups, the stop-5 handoff ranges and the secondary-core
+    /// release list: every build carries these tables, which stay empty unless the setup names them.
+    sd_host_prelude: usize,
+    sd_host_variants: usize,
+    sd_handoff_ranges: usize,
+    sd_secondary_release: usize,
     boot_ready: usize,
     boot_zero_gate: usize,
     externals: &'static [(usize, u32, &'static str)],
@@ -156,6 +165,10 @@ const CARD: Loader = Loader {
     sd_request: template::SETUP_SD_REQUEST,
     sd_progress: template::SETUP_SD_PROGRESS,
     sd_board: template::SETUP_SD_BOARD,
+    sd_host_prelude: template::SETUP_SD_HOST_PRELUDE,
+    sd_host_variants: template::SETUP_SD_HOST_VARIANTS,
+    sd_handoff_ranges: template::SETUP_SD_HANDOFF_RANGES,
+    sd_secondary_release: template::SETUP_SD_SECONDARY_RELEASE,
     boot_ready: template::A64_BOOT_READY,
     boot_zero_gate: template::A64_BOOT_ZERO_GATE,
     externals: template::EXTERNALS,
@@ -180,6 +193,10 @@ const INTERNAL_FLASH: Loader = Loader {
     sd_request: flash_template::SETUP_SD_REQUEST,
     sd_progress: flash_template::SETUP_SD_PROGRESS,
     sd_board: flash_template::SETUP_SD_BOARD,
+    sd_host_prelude: flash_template::SETUP_SD_HOST_PRELUDE,
+    sd_host_variants: flash_template::SETUP_SD_HOST_VARIANTS,
+    sd_handoff_ranges: flash_template::SETUP_SD_HANDOFF_RANGES,
+    sd_secondary_release: flash_template::SETUP_SD_SECONDARY_RELEASE,
     boot_ready: flash_template::A64_BOOT_READY,
     boot_zero_gate: flash_template::A64_BOOT_ZERO_GATE,
     externals: flash_template::EXTERNALS,
@@ -204,6 +221,10 @@ const READ_ONLY: Loader = Loader {
     sd_request: read_only_template::SETUP_SD_REQUEST,
     sd_progress: read_only_template::SETUP_SD_PROGRESS,
     sd_board: read_only_template::SETUP_SD_BOARD,
+    sd_host_prelude: read_only_template::SETUP_SD_HOST_PRELUDE,
+    sd_host_variants: read_only_template::SETUP_SD_HOST_VARIANTS,
+    sd_handoff_ranges: read_only_template::SETUP_SD_HANDOFF_RANGES,
+    sd_secondary_release: read_only_template::SETUP_SD_SECONDARY_RELEASE,
     boot_ready: read_only_template::A64_BOOT_READY,
     boot_zero_gate: read_only_template::A64_BOOT_ZERO_GATE,
     externals: read_only_template::EXTERNALS,
@@ -228,6 +249,10 @@ const CHECKED_REDIRECT: Loader = Loader {
     sd_request: checked_redirect_template::SETUP_SD_REQUEST,
     sd_progress: checked_redirect_template::SETUP_SD_PROGRESS,
     sd_board: checked_redirect_template::SETUP_SD_BOARD,
+    sd_host_prelude: checked_redirect_template::SETUP_SD_HOST_PRELUDE,
+    sd_host_variants: checked_redirect_template::SETUP_SD_HOST_VARIANTS,
+    sd_handoff_ranges: checked_redirect_template::SETUP_SD_HANDOFF_RANGES,
+    sd_secondary_release: checked_redirect_template::SETUP_SD_SECONDARY_RELEASE,
     boot_ready: checked_redirect_template::A64_BOOT_READY,
     boot_zero_gate: checked_redirect_template::A64_BOOT_ZERO_GATE,
     externals: checked_redirect_template::EXTERNALS,
@@ -252,6 +277,10 @@ const COPY_STUB: Loader = Loader {
     sd_request: copy_stub_template::SETUP_SD_REQUEST,
     sd_progress: copy_stub_template::SETUP_SD_PROGRESS,
     sd_board: copy_stub_template::SETUP_SD_BOARD,
+    sd_host_prelude: copy_stub_template::SETUP_SD_HOST_PRELUDE,
+    sd_host_variants: copy_stub_template::SETUP_SD_HOST_VARIANTS,
+    sd_handoff_ranges: copy_stub_template::SETUP_SD_HANDOFF_RANGES,
+    sd_secondary_release: copy_stub_template::SETUP_SD_SECONDARY_RELEASE,
     boot_ready: copy_stub_template::A64_BOOT_READY,
     boot_zero_gate: copy_stub_template::A64_BOOT_ZERO_GATE,
     externals: copy_stub_template::EXTERNALS,
@@ -276,6 +305,10 @@ const MARKER: Loader = Loader {
     sd_request: marker_loader_template::SETUP_SD_REQUEST,
     sd_progress: marker_loader_template::SETUP_SD_PROGRESS,
     sd_board: marker_loader_template::SETUP_SD_BOARD,
+    sd_host_prelude: marker_loader_template::SETUP_SD_HOST_PRELUDE,
+    sd_host_variants: marker_loader_template::SETUP_SD_HOST_VARIANTS,
+    sd_handoff_ranges: marker_loader_template::SETUP_SD_HANDOFF_RANGES,
+    sd_secondary_release: marker_loader_template::SETUP_SD_SECONDARY_RELEASE,
     boot_ready: marker_loader_template::A64_BOOT_READY,
     boot_zero_gate: marker_loader_template::A64_BOOT_ZERO_GATE,
     externals: marker_loader_template::EXTERNALS,
@@ -300,6 +333,10 @@ const OS: Loader = Loader {
     sd_request: os_loader_template::SETUP_SD_REQUEST,
     sd_progress: os_loader_template::SETUP_SD_PROGRESS,
     sd_board: os_loader_template::SETUP_SD_BOARD,
+    sd_host_prelude: os_loader_template::SETUP_SD_HOST_PRELUDE,
+    sd_host_variants: os_loader_template::SETUP_SD_HOST_VARIANTS,
+    sd_handoff_ranges: os_loader_template::SETUP_SD_HANDOFF_RANGES,
+    sd_secondary_release: os_loader_template::SETUP_SD_SECONDARY_RELEASE,
     boot_ready: os_loader_template::A64_BOOT_READY,
     boot_zero_gate: os_loader_template::A64_BOOT_ZERO_GATE,
     externals: os_loader_template::EXTERNALS,
@@ -324,6 +361,10 @@ const EXIF: Loader = Loader {
     sd_request: exif_loader_template::SETUP_SD_REQUEST,
     sd_progress: exif_loader_template::SETUP_SD_PROGRESS,
     sd_board: exif_loader_template::SETUP_SD_BOARD,
+    sd_host_prelude: exif_loader_template::SETUP_SD_HOST_PRELUDE,
+    sd_host_variants: exif_loader_template::SETUP_SD_HOST_VARIANTS,
+    sd_handoff_ranges: exif_loader_template::SETUP_SD_HANDOFF_RANGES,
+    sd_secondary_release: exif_loader_template::SETUP_SD_SECONDARY_RELEASE,
     boot_ready: exif_loader_template::A64_BOOT_READY,
     boot_zero_gate: exif_loader_template::A64_BOOT_ZERO_GATE,
     externals: exif_loader_template::EXTERNALS,
@@ -348,6 +389,10 @@ const HOOK: Loader = Loader {
     sd_request: hook_loader_template::SETUP_SD_REQUEST,
     sd_progress: hook_loader_template::SETUP_SD_PROGRESS,
     sd_board: hook_loader_template::SETUP_SD_BOARD,
+    sd_host_prelude: hook_loader_template::SETUP_SD_HOST_PRELUDE,
+    sd_host_variants: hook_loader_template::SETUP_SD_HOST_VARIANTS,
+    sd_handoff_ranges: hook_loader_template::SETUP_SD_HANDOFF_RANGES,
+    sd_secondary_release: hook_loader_template::SETUP_SD_SECONDARY_RELEASE,
     boot_ready: hook_loader_template::A64_BOOT_READY,
     boot_zero_gate: hook_loader_template::A64_BOOT_ZERO_GATE,
     externals: hook_loader_template::EXTERNALS,
@@ -375,6 +420,18 @@ pub struct Operation {
     pub mask: u32,
     pub value: u32,
     pub kind: u32,
+}
+/// One root SD host setup tried in order by a diagnostic loader. Times are
+/// milliseconds; `clock_configuration_field` is 0-3 or `u32::MAX` to leave
+/// the field unchanged.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct HostVariant {
+    pub identification_divider: u32,
+    pub clock_configuration_field: u32,
+    pub power_off_ms: u32,
+    pub power_on_ms: u32,
+    pub clock_on_ms: u32,
 }
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -483,6 +540,20 @@ pub struct Setup {
     pub flash: Flash,
     pub lamp: Lamp,
     pub board: Board,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub host_prelude: Vec<Operation>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub host_variants: Vec<HostVariant>,
+    /// Ranges of 32-bit words that stop 5 reads after the CRC match and
+    /// writes to the card's [`handoff_result::NAME`].
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub handoff_ranges: Vec<HandoffRange>,
+    /// Aff0 of each core (1 to 3) that the loader wakes with Group 0 SGI 0
+    /// once the image is in place, before the boot core runs it. A boot ROM
+    /// that parks the other cores branches them to physical 0 on that SGI.
+    /// Card boot releases the cores it holds itself and takes no list.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub secondary_release: Vec<u8>,
     pub proofs: Vec<SourceProof>,
     pub banks: Banks,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -495,6 +566,33 @@ pub struct Setup {
     /// When present, `Recipe::build_startup` builds the stock-selector startup.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub stock_selector: Option<StockSelector>,
+}
+/// Request ABI 3: six words, then the count and offset/length pairs of the
+/// RAM prefix's zero runs, which the loader fills instead of reading.
+const REQUEST_BYTES: usize = 56 + ZERO_RUNS * 16;
+const ZERO_RUNS: usize = 16;
+const ZERO_BLOCK: usize = 0x10000;
+
+/// The prefix's all-zero 64 KiB blocks after its first, merged into runs; when
+/// there are more runs than the request holds, the longest are kept.
+fn zero_runs(prefix: &[u8]) -> Vec<(u64, u64)> {
+    let mut runs: Vec<(u64, u64)> = Vec::new();
+    for start in (ZERO_BLOCK..prefix.len() / ZERO_BLOCK * ZERO_BLOCK).step_by(ZERO_BLOCK) {
+        if prefix[start..start + ZERO_BLOCK].iter().all(|v| *v == 0) {
+            match runs.last_mut() {
+                Some((offset, bytes)) if *offset + *bytes == start as u64 => {
+                    *bytes += ZERO_BLOCK as u64
+                }
+                _ => runs.push((start as u64, ZERO_BLOCK as u64)),
+            }
+        }
+    }
+    if runs.len() > ZERO_RUNS {
+        runs.sort_by_key(|run| std::cmp::Reverse(run.1));
+        runs.truncate(ZERO_RUNS);
+        runs.sort_unstable();
+    }
+    runs
 }
 fn put64(data: &mut [u8], at: usize, value: u64) -> Result<()> {
     extent(data, at, 8)?;
@@ -511,6 +609,48 @@ fn branch(at: u64, target: u64, link: bool) -> Result<u32> {
 }
 fn mmio(address: u64) -> bool {
     (0xf0000000..0xfffff000).contains(&address) && address.is_multiple_of(4)
+}
+fn mmio_halfword(address: u64) -> bool {
+    (0xf0000000..0xfffff000).contains(&address) && address.is_multiple_of(2)
+}
+/// Whether the loader runs `op` as a board operation: 0 writes a word, 1 changes the masked bits
+/// of a word, 2 waits `value` (or the startup delay when 0), 3 changes the masked bits of a
+/// halfword, 4 polls a halfword until its masked bits equal `value`, 5 reads a word, changes its
+/// masked bits and writes it back as a halfword, and 6 waits `value`.
+fn board_operation(op: &Operation) -> bool {
+    match op.kind {
+        0 | 1 => mmio(op.address),
+        2 => true,
+        3 | 4 => {
+            mmio_halfword(op.address) && op.mask <= u16::MAX.into() && op.value & !op.mask == 0
+        }
+        5 => mmio(op.address) && op.mask <= u16::MAX.into() && op.value & !op.mask == 0,
+        6 => op.address == 0 && op.mask == 0 && (1..=1000).contains(&op.value),
+        _ => false,
+    }
+}
+/// Whether the loader runs `op` in the host prelude: a board operation, or 7 sets `mask` in a
+/// halfword and polls its ready bit 1 up to `value` times, 8 records the word at `address` as
+/// host observation `value`, or 9 continues the selected root host's setup, gated by the word at
+/// `mask`, for up to `value` polls.
+fn host_prelude_operation(op: &Operation, host: u64) -> bool {
+    board_operation(op)
+        || match op.kind {
+            7 => {
+                mmio_halfword(op.address)
+                    && op.mask != 0
+                    && op.mask <= u16::MAX.into()
+                    && (1..=10_000).contains(&op.value)
+            }
+            8 => mmio(op.address) && op.mask == 0 && op.value < 3,
+            9 => {
+                op.address == host
+                    && op.mask != 0
+                    && op.mask & 3 == 0
+                    && (1..=1000).contains(&op.value)
+            }
+            _ => false,
+        }
 }
 impl Setup {
     fn verify(&self, inverted: &[u8]) -> Result<Vec<u8>> {
@@ -590,15 +730,30 @@ pub fn package(
     setup: &Setup,
     ram: Option<Vec<u8>>,
     success_hold_units: u64,
+    stop: StartupStop,
+    prepare_installed_flash: bool,
 ) -> Result<Vec<File>> {
-    package_with_storage(inverted, setup, ram, success_hold_units, None)
+    package_with_storage(
+        inverted,
+        setup,
+        ram,
+        success_hold_units,
+        stop,
+        prepare_installed_flash,
+        None,
+    )
 }
 
+/// `stop` ends the load at a diagnostic point instead of running the image, and
+/// `prepare_installed_flash` makes the prelude set up and scan the installed flash as stage one
+/// does; neither changes the SD image or its CRC.
 pub(crate) fn package_with_storage(
     inverted: &[u8], setup: &Setup, ram: Option<Vec<u8>>, success_hold_units: u64,
-    storage: Option<&[u8]>,
+    stop: StartupStop, prepare_installed_flash: bool, storage: Option<&[u8]>,
 ) -> Result<Vec<File>> {
-    package_inner(inverted, setup, ram, success_hold_units, storage, None, None, None)
+    package_inner(
+        inverted, setup, ram, success_hold_units, stop, prepare_installed_flash, storage, None, None, None,
+    )
 }
 
 /// Startup with the installed flash left attached: the card supplies the RAM
@@ -631,6 +786,8 @@ pub(crate) fn package_internal_flash(
                     .into(),
             )
         })?;
+    // The loader wakes the cores it holds itself, once the CRC has passed.
+    setup.secondary_release = Vec::new();
     setup.banks = Banks {
         copies: Vec::new(),
         edits: Vec::new(),
@@ -640,6 +797,8 @@ pub(crate) fn package_internal_flash(
         &setup,
         Some(ram),
         success_hold_units,
+        StartupStop::Continue,
+        false,
         None,
         Some(InternalFlash {
             fallback_wait_seconds,
@@ -656,9 +815,13 @@ pub(crate) fn package_internal_flash(
 /// tables in SRAM, and a RAM image changed after the reset-copy comparison. The preloaded
 /// selector goes back to the update's own word, the recipe's edits are applied and its cleared
 /// extents are zeroed; the CRC the loader checks covers the result. The loader holds, gates and
-/// wakes no core.
+/// wakes no core. `stop` is the card startup's diagnostic stop.
 pub(crate) fn package_stock_selector(
-    inverted: &[u8], setup: &Setup, ram: Vec<u8>, success_hold_units: u64,
+    inverted: &[u8],
+    setup: &Setup,
+    ram: Vec<u8>,
+    success_hold_units: u64,
+    stop: StartupStop,
 ) -> Result<Vec<File>> {
     let mut setup = setup.clone();
     let stock = setup.stock_selector.take().ok_or_else(|| {
@@ -675,11 +838,15 @@ pub(crate) fn package_stock_selector(
     };
     // The boot ROM read the loader from this card: its card routing stays.
     setup.board.operations = Vec::new();
+    // The reset stage wakes the parked cores itself; a wake at the hand-off is too early.
+    setup.secondary_release = Vec::new();
     package_inner(
         inverted,
         &setup,
         Some(ram),
         success_hold_units,
+        stop,
+        false,
         None,
         None,
         None,
@@ -704,6 +871,8 @@ pub(crate) fn package_read_only(
         &setup,
         Some(ram),
         success_hold_units,
+        StartupStop::Continue,
+        false,
         None,
         None,
         Some(ReadOnly { destination, redirect: None, stub: None, marker: None, os: None, exif: None, hook: None, file: None }),
@@ -766,6 +935,8 @@ pub(crate) fn package_marker(
         &setup,
         Some(ram),
         success_hold_units,
+        StartupStop::Continue,
+        false,
         None,
         None,
         Some(ReadOnly {
@@ -790,6 +961,8 @@ fn read_only_inputs(inverted: &[u8], setup: &Setup, ram: Vec<u8>) -> Result<(Set
     setup.internal_flash_ram_edits = Vec::new();
     // Nothing of the card-resident setup is used: no tables, no unit cache, no interrupt frames.
     setup.card_boot = None;
+    // The stock boot that follows wakes the parked cores; this loader wakes none.
+    setup.secondary_release = Vec::new();
     setup.banks = Banks {
         copies: Vec::new(),
         edits: Vec::new(),
@@ -854,6 +1027,8 @@ pub(crate) fn package_checked_redirect(
         &setup,
         Some(ram),
         success_hold_units,
+        StartupStop::Continue,
+        false,
         None,
         None,
         Some(ReadOnly { destination, redirect: Some(binding), stub: None, marker: None, os: None, exif: None, hook: None, file: None }),
@@ -905,6 +1080,8 @@ pub(crate) fn package_copy_stub(
         &setup,
         Some(ram),
         success_hold_units,
+        StartupStop::Continue,
+        false,
         None,
         None,
         Some(ReadOnly { destination, redirect: Some(redirect::Binding(binding.redirect.0)), stub: Some(binding), marker: None, os: None, exif: None, hook: None, file: None }),
@@ -966,6 +1143,8 @@ pub(crate) fn package_exif(
         &setup,
         Some(ram),
         success_hold_units,
+        StartupStop::Continue,
+        false,
         None,
         None,
         Some(ReadOnly {
@@ -1026,6 +1205,8 @@ pub(crate) fn package_hook(
         &setup,
         Some(ram),
         success_hold_units,
+        StartupStop::Continue,
+        false,
         None,
         None,
         Some(ReadOnly {
@@ -1088,6 +1269,8 @@ pub(crate) fn package_os(
         &setup,
         Some(ram),
         success_hold_units,
+        StartupStop::Continue,
+        false,
         None,
         None,
         Some(ReadOnly {
@@ -1312,9 +1495,14 @@ fn bind_read_only(
 
 fn package_inner(
     inverted: &[u8], setup: &Setup, ram: Option<Vec<u8>>, success_hold_units: u64,
-    storage: Option<&[u8]>, internal_flash: Option<InternalFlash>, read_only: Option<ReadOnly>,
+    stop: StartupStop, prepare_installed_flash: bool, storage: Option<&[u8]>,
+    internal_flash: Option<InternalFlash>, read_only: Option<ReadOnly>,
     stock_selector: Option<&StockSelector>,
 ) -> Result<Vec<File>> {
+    require(
+        stop == StartupStop::Continue || ram.is_some(),
+        "Diagnostic stop requires an SD image",
+    )?;
     require(
         internal_flash.is_none() || read_only.is_none(),
         "An XP5 startup is internal-flash or read-only, not both",
@@ -1395,10 +1583,10 @@ fn package_inner(
         "XP5 prelude exceeds private stack",
     )?;
     let cfg = loader.setup_configuration;
-    let mut empty = vec![0; 208];
+    let mut empty = vec![0; 216];
     empty[0] = 2;
     require(
-        extent(&program, cfg, 208)? == empty,
+        extent(&program, cfg, 216)? == empty,
         "XP5 setup configuration template changed",
     )?;
     let flash = &setup.flash;
@@ -1479,13 +1667,20 @@ fn package_inner(
     put64(
         &mut program,
         cfg + 200,
-        // The prelude sets up and scans the installed flash whenever it stays in use.
+        // The prelude sets up and scans the installed flash whenever it stays in use, and when
+        // a card startup asks for it.
         u64::from(
             ram.is_none()
+                || prepare_installed_flash
                 || internal_flash.is_some()
                 || read_only.is_some()
                 || stock_selector.is_some(),
         ),
+    )?;
+    put64(
+        &mut program,
+        cfg + 208,
+        u64::from(stop != StartupStop::Continue),
     )?;
     if let Some(flash) = &internal_flash {
         bind_internal_flash(&mut program, loader, setup, flash, ram.as_deref(), inverted)?;
@@ -1620,33 +1815,18 @@ fn package_inner(
         let board = &setup.board;
         let cfg = loader.sd_board;
         require(
-            board.operations.len() <= 32 && board.timeout_setting <= 14 && mmio(board.host),
+            board.operations.len() <= 48 && board.timeout_setting <= 14 && mmio(board.host),
             "Invalid XP5 SD binding",
         )?;
         require(
-            extent(&program, cfg, 16 + 32 * 24)?.iter().all(|v| *v == 0),
+            extent(&program, cfg, 16 + 48 * 24)?.iter().all(|v| *v == 0),
             "XP5 board template changed",
         )?;
         put64(&mut program, cfg, board.host)?;
         put(&mut program, cfg + 8, u32::from(board.timeout_setting))?;
         put(&mut program, cfg + 12, board.operations.len() as u32)?;
         for (n, op) in board.operations.iter().enumerate() {
-            let valid = match op.kind {
-                0 | 1 => mmio(op.address),
-                2 => true,
-                3 | 4 => (0xf0000000..0xfffff000).contains(&op.address)
-                    && op.address.is_multiple_of(2)
-                    && op.mask <= u16::MAX.into()
-                    && op.value & !op.mask == 0,
-                5 => mmio(op.address) && op.mask <= u16::MAX.into()
-                    && op.value & !op.mask == 0,
-                6 => op.address == 0 && op.mask == 0 && (1..=1000).contains(&op.value),
-                _ => false,
-            };
-            require(
-                valid,
-                "Invalid XP5 SD operation",
-            )?;
+            require(board_operation(op), "Invalid XP5 SD operation")?;
             let at = cfg + 16 + n * 24;
             put64(&mut program, at, op.address)?;
             put(&mut program, at + 8, op.mask)?;
@@ -1656,9 +1836,115 @@ fn package_inner(
         if let Some(divider) = stock_selector.and_then(|stock| stock.transfer_clock_divider) {
             bind_transfer_clock(&mut program, divider)?;
         }
-        let request = loader.sd_request;
+        let host_prelude = loader.sd_host_prelude;
         require(
-            extent(&program, request, 40)? == [1u64, 0, 0, 0, 0].map(u64::to_le_bytes).concat(),
+            setup.host_prelude.len() <= 16,
+            "XP5 host prelude exceeds operation limit",
+        )?;
+        require(
+            extent(&program, host_prelude, 8 + 16 * 24)?
+                .iter()
+                .all(|v| *v == 0),
+            "XP5 host prelude template changed",
+        )?;
+        put(&mut program, host_prelude, setup.host_prelude.len() as u32)?;
+        for (n, op) in setup.host_prelude.iter().enumerate() {
+            require(
+                host_prelude_operation(op, setup.board.host),
+                "Invalid XP5 SD host prelude operation",
+            )?;
+            let at = host_prelude + 8 + n * 24;
+            put64(&mut program, at, op.address)?;
+            put(&mut program, at + 8, op.mask)?;
+            put(&mut program, at + 12, op.value)?;
+            put(&mut program, at + 16, op.kind)?;
+        }
+        let variants = loader.sd_host_variants;
+        require(
+            setup.host_variants.len() <= 8,
+            "XP5 host variants exceed their limit",
+        )?;
+        require(
+            extent(&program, variants, 8 + 8 * 24)?
+                .iter()
+                .all(|v| *v == 0),
+            "XP5 host variant template changed",
+        )?;
+        put(&mut program, variants, setup.host_variants.len() as u32)?;
+        for (n, variant) in setup.host_variants.iter().enumerate() {
+            require(
+                (1..=0xff).contains(&variant.identification_divider)
+                    && (variant.clock_configuration_field <= 3
+                        || variant.clock_configuration_field == u32::MAX)
+                    && [
+                        variant.power_off_ms,
+                        variant.power_on_ms,
+                        variant.clock_on_ms,
+                    ]
+                    .iter()
+                    .all(|ms| *ms <= 2000),
+                "Invalid XP5 host variant",
+            )?;
+            let at = variants + 8 + n * 24;
+            for (k, value) in [
+                variant.identification_divider,
+                variant.clock_configuration_field,
+                variant.power_off_ms,
+                variant.power_on_ms,
+                variant.clock_on_ms,
+            ]
+            .into_iter()
+            .enumerate()
+            {
+                put(&mut program, at + 4 * k, value)?;
+            }
+        }
+        let ranges = loader.sd_handoff_ranges;
+        handoff_result::check(&setup.handoff_ranges)?;
+        require(
+            setup.handoff_ranges.is_empty()
+                || matches!(stop, StartupStop::AfterCrcWithErrorPackets),
+            "XP5 handoff ranges require the after-CRC packet stop",
+        )?;
+        require(
+            extent(&program, ranges, 8 + handoff_result::RANGES * 16)?
+                .iter()
+                .all(|v| *v == 0),
+            "XP5 handoff range template changed",
+        )?;
+        if !setup.handoff_ranges.is_empty() {
+            put(&mut program, ranges, setup.handoff_ranges.len() as u32)?;
+            put(&mut program, ranges + 4, handoff_result::BYTES as u32)?;
+        }
+        for (n, range) in setup.handoff_ranges.iter().enumerate() {
+            put64(&mut program, ranges + 8 + n * 16, range.address)?;
+            put(&mut program, ranges + 16 + n * 16, range.words)?;
+        }
+        let release = loader.sd_secondary_release;
+        require(
+            setup.secondary_release.is_empty()
+                || (setup.card_boot.is_none()
+                    && setup.secondary_release.is_sorted_by(|a, b| a < b)
+                    && setup
+                        .secondary_release
+                        .iter()
+                        .all(|core| (1..=3).contains(core))),
+            "Invalid XP5 secondary release",
+        )?;
+        require(
+            extent(&program, release, 8)?.iter().all(|v| *v == 0),
+            "XP5 secondary release template changed",
+        )?;
+        let targets = setup
+            .secondary_release
+            .iter()
+            .fold(0u64, |mask, core| mask | 1 << core);
+        put64(&mut program, release, targets)?;
+        let request = loader.sd_request;
+        let mut empty = vec![0; REQUEST_BYTES];
+        empty[0] = 3;
+        require(
+            extent(&program, request, REQUEST_BYTES)? == empty,
             "XP5 request template changed",
         )?;
         let override_file = read_only.as_ref().and_then(|r| r.file.clone());
@@ -1667,11 +1953,12 @@ fn package_inner(
             None => (ram.len(), crate::xp4::crc32(&ram)),
         };
         for (n, value) in [
-            1,
+            3,
             file_len as u64,
             u64::from(file_crc),
             100,
             100000,
+            stop as u64,
         ]
         .into_iter()
         .enumerate()
@@ -1705,7 +1992,24 @@ fn package_inner(
         } else {
             require(storage.is_none(), "Setup has no card storage binding")?;
         }
-        files.push(File::new("ffboot.bin", override_file.unwrap_or(ram))?);
+        // Runs come from the final file: card boot patches the RAM prefix above.
+        let file = override_file.unwrap_or(ram);
+        let bytes = u64::from_le_bytes(extent(&program, request + 8, 8)?.try_into().unwrap());
+        let head = extent(&file, 0, bytes as usize)?;
+        require(
+            word(&program, request + 16)? == crate::xp4::crc32(head),
+            "XP5 request CRC differs from the file it reads",
+        )?;
+        let runs = zero_runs(head);
+        put64(&mut program, request + 48, runs.len() as u64)?;
+        for (n, (offset, length)) in runs.into_iter().enumerate() {
+            put64(&mut program, request + 56 + n * 16, offset)?;
+            put64(&mut program, request + 64 + n * 16, length)?;
+        }
+        files.push(File::new("ffboot.bin", file)?);
+        if !setup.handoff_ranges.is_empty() {
+            files.push(File::new(handoff_result::NAME, handoff_result::pattern())?);
+        }
     }
     require(
         extent(&program, loader.sd_progress, 64)?
@@ -1820,6 +2124,10 @@ mod tests {
                     kind: 0,
                 }],
             },
+            host_prelude: vec![],
+            host_variants: vec![],
+            handoff_ranges: vec![],
+            secondary_release: vec![],
             proofs: vec![SourceProof {
                 source: prefix,
                 offset: 0,
@@ -1866,11 +2174,63 @@ mod tests {
     }
 
     #[test]
+    fn zero_runs_merge_whole_zero_blocks_after_the_first() {
+        let block = ZERO_BLOCK;
+        let mut prefix = vec![0; 5 * block + 0x800];
+        prefix[3 * block + 7] = 1;
+        assert_eq!(
+            zero_runs(&prefix),
+            [
+                (block as u64, 2 * block as u64),
+                (4 * block as u64, block as u64)
+            ]
+        );
+        // More runs than the request holds: the longest stay, in order.
+        let mut many = vec![1; 90 * block];
+        for n in 0..20 {
+            let length = if n == 7 { 3 } else { 1 };
+            many[(2 + 4 * n) * block..(2 + 4 * n + length) * block].fill(0);
+        }
+        let runs = zero_runs(&many);
+        assert_eq!(runs.len(), ZERO_RUNS);
+        assert!(runs.contains(&((30 * block) as u64, 3 * block as u64)));
+        assert!(runs.is_sorted());
+    }
+    #[test]
+    fn the_request_lists_the_ram_prefix_zero_runs() {
+        let (data, s, mut ram) = fixture();
+        ram.resize(5 * ZERO_BLOCK, 0);
+        ram[3 * ZERO_BLOCK] = 9;
+        let files = package(
+            &data,
+            &s,
+            Some(ram.clone()),
+            0,
+            StartupStop::Continue,
+            false,
+        )
+        .unwrap();
+        let request = 0xc000 + template::SETUP_SD_REQUEST;
+        let raw = &files[0].bytes;
+        let value =
+            |at: usize| u64::from_le_bytes(raw[request + at..request + at + 8].try_into().unwrap());
+        assert_eq!((value(0), value(8), value(48)), (3, ram.len() as u64, 2));
+        assert_eq!(
+            [value(56), value(64), value(72), value(80)],
+            [0x10000, 0x20000, 0x40000, 0x10000]
+        );
+        assert!(
+            raw[request + 88..request + REQUEST_BYTES]
+                .iter()
+                .all(|v| *v == 0)
+        );
+    }
+    #[test]
     fn startup_skips_installed_flash_probe_while_stage_one_preserves_it() {
         let (data, s, ram) = fixture();
         for payload in [None, Some(ram.clone())] {
             let combined = payload.is_some();
-            let files = package(&data, &s, payload, 0).unwrap();
+            let files = package(&data, &s, payload, 0, StartupStop::Continue, false).unwrap();
             let raw = &files[0].bytes;
             assert_eq!(files.len(), if combined { 2 } else { 1 });
             assert_eq!(files[0].name, "marble_init.bin");
@@ -1931,7 +2291,7 @@ mod tests {
             let source = 0xc000 + configuration + 200;
             u64::from_le_bytes(raw[source..source + 8].try_into().unwrap())
         };
-        let card = package(&data, &s, Some(ram.clone()), 0).unwrap();
+        let card = package(&data, &s, Some(ram.clone()), 0, StartupStop::Continue, false).unwrap();
         let flash = package_internal_flash(&data, &with_frames(s.clone()), ram.clone(), 0, None).unwrap();
         assert_eq!(
             flash.iter().map(|f| f.name.as_str()).collect::<Vec<_>>(),
@@ -1950,7 +2310,7 @@ mod tests {
         assert!(flash[0].bytes.len() < 0x20000);
         // Against a card start with no extras, the flash-probe word differs, and so does the
         // loader build (checked in the next test).
-        let bare = package(&data, &plain, Some(ram), 0).unwrap();
+        let bare = package(&data, &plain, Some(ram), 0, StartupStop::Continue, false).unwrap();
         assert_eq!(bare[1].bytes, flash[1].bytes);
         assert_eq!(flag(&bare[0].bytes, template::XP5_SETUP_CONFIGURATION), 0);
     }
@@ -1980,7 +2340,8 @@ mod tests {
     #[test]
     fn stock_selector_startup_keeps_the_updates_selector_and_the_installed_flash() {
         let (data, setup, ram) = stock_selector_fixture();
-        let files = package_stock_selector(&data, &setup, ram.clone(), 0).unwrap();
+        let files =
+            package_stock_selector(&data, &setup, ram.clone(), 0, StartupStop::Continue).unwrap();
         assert_eq!(
             files.iter().map(|f| f.name.as_str()).collect::<Vec<_>>(),
             ["marble_init.bin", "ffboot.bin"]
@@ -2001,7 +2362,15 @@ mod tests {
         // carries the changed image's CRC.
         let mut plain = setup.clone();
         plain.stock_selector = None;
-        let card = package(&data, &plain, Some(ram.clone()), 0).unwrap();
+        let card = package(
+            &data,
+            &plain,
+            Some(ram.clone()),
+            0,
+            StartupStop::Continue,
+            false,
+        )
+        .unwrap();
         let (raw, stock) = (&card[0].bytes, &files[0].bytes);
         assert_eq!(raw.len(), stock.len());
         let source = 0xc000 + template::XP5_SETUP_CONFIGURATION + 200;
@@ -2033,9 +2402,9 @@ mod tests {
     #[test]
     fn stock_selector_startup_binds_the_recipes_transfer_clock_divider() {
         let (data, mut setup, ram) = stock_selector_fixture();
-        let own = package_stock_selector(&data, &setup, ram.clone(), 0).unwrap();
+        let own = package_stock_selector(&data, &setup, ram.clone(), 0, StartupStop::Continue).unwrap();
         setup.stock_selector.as_mut().unwrap().transfer_clock_divider = Some(4);
-        let bound = package_stock_selector(&data, &setup, ram.clone(), 0).unwrap();
+        let bound = package_stock_selector(&data, &setup, ram.clone(), 0, StartupStop::Continue).unwrap();
         assert_eq!(own[1].bytes, bound[1].bytes);
         let (own, bound) = (&own[0].bytes, &bound[0].bytes);
         let differing: Vec<usize> = (0..own.len()).filter(|&at| own[at] != bound[at]).map(|at| at & !3).collect();
@@ -2045,7 +2414,7 @@ mod tests {
         assert_eq!(word(bound, differing[0]).unwrap(), 0x52808021);
         for divider in [0, 3, 0xff] {
             setup.stock_selector.as_mut().unwrap().transfer_clock_divider = Some(divider);
-            assert!(package_stock_selector(&data, &setup, ram.clone(), 0).is_err(), "{divider}");
+            assert!(package_stock_selector(&data, &setup, ram.clone(), 0, StartupStop::Continue).is_err(), "{divider}");
         }
         let mut program = template::IMAGE.to_vec();
         bind_transfer_clock(&mut program, 4).unwrap();
@@ -2060,7 +2429,7 @@ mod tests {
         let with = |change: &dyn Fn(&mut StockSelector)| {
             let mut setup = setup.clone();
             change(setup.stock_selector.as_mut().unwrap());
-            package_stock_selector(&data, &setup, ram.clone(), 0)
+            package_stock_selector(&data, &setup, ram.clone(), 0, StartupStop::Continue)
         };
         assert!(with(&|_| {}).is_ok());
         // An edit whose old word differs, or one of the selector.
@@ -2081,10 +2450,29 @@ mod tests {
         // A recipe without the startup, or with a card-resident setup as well.
         let mut plain = setup.clone();
         plain.stock_selector = None;
-        assert!(package_stock_selector(&data, &plain, ram.clone(), 0).is_err());
-        assert!(package_stock_selector(&data, &with_frames(setup.clone()), ram.clone(), 0).is_err());
+        assert!(
+            package_stock_selector(&data, &plain, ram.clone(), 0, StartupStop::Continue).is_err()
+        );
+        assert!(
+            package_stock_selector(
+                &data,
+                &with_frames(setup.clone()),
+                ram.clone(),
+                0,
+                StartupStop::Continue
+            )
+            .is_err()
+        );
         // Nothing of it reaches the other startups of the same recipe.
-        let card = package(&data, &setup, Some(ram.clone()), 0).unwrap();
+        let card = package(
+            &data,
+            &setup,
+            Some(ram.clone()),
+            0,
+            StartupStop::Continue,
+            false,
+        )
+        .unwrap();
         assert_eq!(card[1].bytes, ram);
     }
 
@@ -2120,7 +2508,15 @@ mod tests {
         // A card start does not use them.
         let mut card_setup = s.clone();
         card_setup.internal_flash_ram_edits = vec![edit(0x100, 0xffff_ffff)];
-        let card = package(&data, &card_setup, Some(ram.clone()), 0).unwrap();
+        let card = package(
+            &data,
+            &card_setup,
+            Some(ram.clone()),
+            0,
+            StartupStop::Continue,
+            false,
+        )
+        .unwrap();
         assert_eq!(card[1].bytes, ram);
         // A changed old word, a repeat or the selector refuses.
         for edits in [
@@ -2200,18 +2596,31 @@ mod tests {
         assert!(stage_one.build_boot_files(&update, options).is_err());
     }
 
-    /// Every word of the internal-flash loader the packager may touch: the setup configuration,
-    /// the SD board and request tables, its own binding, the restore branch and the calls into
-    /// the stock setup.
+    /// Every word of the internal-flash loader the packager may touch: the words of every build
+    /// and its own binding.
     fn bound_ranges() -> Vec<std::ops::Range<usize>> {
-        let mut ranges = vec![
-            flash_template::XP5_SETUP_CONFIGURATION..flash_template::XP5_SETUP_CONFIGURATION + 208,
-            flash_template::SETUP_SD_BOARD..flash_template::SETUP_SD_BOARD + 16 + 32 * 24,
-            flash_template::SETUP_SD_REQUEST..flash_template::SETUP_SD_REQUEST + 40,
+        let mut ranges = shared_bound_ranges(&INTERNAL_FLASH);
+        ranges.push(
             flash_template::SETUP_SD_INTERNAL_FLASH..flash_template::SETUP_SD_INTERNAL_FLASH + 96,
-            flash_template::XP5_SETUP_RETURN_BRANCH..flash_template::XP5_SETUP_RETURN_BRANCH + 4,
+        );
+        ranges
+    }
+
+    /// The words every loader build lets the packager touch: the setup configuration, the SD
+    /// board, host prelude, root host setup, handoff range, secondary release and request tables,
+    /// the restore branch and the calls into the stock setup.
+    fn shared_bound_ranges(loader: &Loader) -> Vec<std::ops::Range<usize>> {
+        let mut ranges = vec![
+            loader.setup_configuration..loader.setup_configuration + 216,
+            loader.sd_board..loader.sd_board + 16 + 48 * 24,
+            loader.sd_host_prelude..loader.sd_host_prelude + 8 + 16 * 24,
+            loader.sd_host_variants..loader.sd_host_variants + 8 + 8 * 24,
+            loader.sd_handoff_ranges..loader.sd_handoff_ranges + 8 + handoff_result::RANGES * 16,
+            loader.sd_secondary_release..loader.sd_secondary_release + 8,
+            loader.sd_request..loader.sd_request + REQUEST_BYTES,
+            loader.setup_return_branch..loader.setup_return_branch + 4,
         ];
-        ranges.extend(flash_template::EXTERNALS.iter().map(|&(at, _, _)| at..at + 4));
+        ranges.extend(loader.externals.iter().map(|&(at, _, _)| at..at + 4));
         ranges
     }
 
@@ -2342,11 +2751,20 @@ mod tests {
         let (data, s, ram) = fixture();
         assert_eq!(crate::StartupOptions::default().success_hold_seconds, 0);
         for payload in [None, Some(ram)] {
-            let normal = package(&data, &s, payload.clone(), 0).unwrap();
+            let normal =
+                package(&data, &s, payload.clone(), 0, StartupStop::Continue, false).unwrap();
             let at = 0xc000 + template::XP5_SETUP_CONFIGURATION + 192;
             assert_eq!(&normal[0].bytes[at..at + 8], &[0; 8]);
             for units in [1, 32, 6_144, u64::from(u32::MAX) * 2_048] {
-                let held = package(&data, &s, payload.clone(), units).unwrap();
+                let held = package(
+                    &data,
+                    &s,
+                    payload.clone(),
+                    units,
+                    StartupStop::Continue,
+                    false,
+                )
+                .unwrap();
                 let mut expected = normal[0].bytes.clone();
                 put64(&mut expected, at, units).unwrap();
                 assert_eq!(expected, held[0].bytes);
@@ -2356,16 +2774,72 @@ mod tests {
             }
         }
     }
+    #[test]
+    fn diagnostic_stops_change_only_the_stop_request() {
+        let (data, setup, ram) = fixture();
+        let normal = package(
+            &data,
+            &setup,
+            Some(ram.clone()),
+            0,
+            StartupStop::Continue,
+            false,
+        )
+        .unwrap();
+        let at = 0xc000 + template::SETUP_SD_REQUEST + 40;
+        for stop in [
+            StartupStop::AfterCardInit,
+            StartupStop::AfterCardInitWithErrorBlink,
+            StartupStop::AfterSetup,
+            StartupStop::AfterCrc,
+        ] {
+            assert!(package(&data, &setup, None, 0, stop, false).is_err());
+            let checked = package(&data, &setup, Some(ram.clone()), 0, stop, false).unwrap();
+            let mut expected = normal[0].bytes.clone();
+            put64(
+                &mut expected,
+                0xc000 + template::XP5_SETUP_CONFIGURATION + 208,
+                1,
+            )
+            .unwrap();
+            put64(&mut expected, at, stop as u64).unwrap();
+            assert_eq!(checked[0].bytes, expected);
+            assert_eq!(checked[1].bytes, normal[1].bytes);
+        }
+    }
+    #[test]
+    fn installed_flash_preparation_changes_only_the_entry_source() {
+        let (data, setup, ram) = fixture();
+        let normal = package(
+            &data,
+            &setup,
+            Some(ram.clone()),
+            0,
+            StartupStop::AfterCrc,
+            false,
+        )
+        .unwrap();
+        let prepared = package(&data, &setup, Some(ram), 0, StartupStop::AfterCrc, true).unwrap();
+        let mut expected = normal[0].bytes.clone();
+        put64(
+            &mut expected,
+            0xc000 + template::XP5_SETUP_CONFIGURATION + 200,
+            1,
+        )
+        .unwrap();
+        assert_eq!(prepared[0].bytes, expected);
+        assert_eq!(prepared[1].bytes, normal[1].bytes);
+    }
 
     #[test]
     fn startup_accepts_a_shorter_checked_setup_prefix() {
         let (data, mut setup, ram) = fixture();
         setup.prefix = source(&data[..0x28000]);
         setup.proofs[0].source = setup.prefix.clone();
-        assert!(package(&data, &setup, Some(ram), 0).is_ok());
+        assert!(package(&data, &setup, Some(ram), 0, StartupStop::Continue, false).is_ok());
         setup.prefix = source(&data[..0x800]);
         setup.proofs[0].source = setup.prefix.clone();
-        assert!(package(&data, &setup, None, 0).is_err());
+        assert!(package(&data, &setup, None, 0, StartupStop::Continue, false).is_err());
     }
 
     #[test]
@@ -2373,45 +2847,444 @@ mod tests {
         let (data, s, ram) = fixture();
         let mut changed = data.clone();
         changed[0x1000] ^= 1;
-        assert!(package(&changed, &s, None, 0).is_err());
+        assert!(package(&changed, &s, None, 0, StartupStop::Continue, false).is_err());
         let mut changed = s.clone();
         changed.flash.pins.clear();
-        assert!(package(&data, &changed, None, 0).is_err());
+        assert!(package(&data, &changed, None, 0, StartupStop::Continue, false).is_err());
         let mut changed = s.clone();
         changed.initializer.sha256 = "0".repeat(64);
-        assert!(package(&data, &changed, None, 0).is_err());
+        assert!(package(&data, &changed, None, 0, StartupStop::Continue, false).is_err());
         let mut changed = s.clone();
         changed.board.operations[0].kind = 7;
-        assert!(package(&data, &changed, Some(ram.clone()), 0).is_err());
+        assert!(
+            package(
+                &data,
+                &changed,
+                Some(ram.clone()),
+                0,
+                StartupStop::Continue,
+                false
+            )
+            .is_err()
+        );
         let mut changed = s.clone();
         changed.gate_offset = 0x940;
-        assert!(package(&data, &changed, Some(ram), 0).is_err());
+        assert!(package(&data, &changed, Some(ram), 0, StartupStop::Continue, false).is_err());
         let mut changed = s.clone();
         changed.stack = s.base + 0x38000;
-        assert!(package(&data, &changed, None, 0).is_err());
+        assert!(package(&data, &changed, None, 0, StartupStop::Continue, false).is_err());
+    }
+
+    #[test]
+    fn board_operations_accept_checked_halfword_widths() {
+        let (data, mut setup, ram) = fixture();
+        setup.board.operations = vec![
+            Operation {
+                address: 0xff906002,
+                mask: 0x1100,
+                value: 0x1100,
+                kind: 3,
+            },
+            Operation {
+                address: 0xff906004,
+                mask: 1,
+                value: 1,
+                kind: 5,
+            },
+        ];
+        package(
+            &data,
+            &setup,
+            Some(ram.clone()),
+            0,
+            StartupStop::Continue,
+            false,
+        )
+        .unwrap();
+        setup.board.operations[0].mask = 0x10000;
+        assert!(
+            package(
+                &data,
+                &setup,
+                Some(ram.clone()),
+                0,
+                StartupStop::Continue,
+                false
+            )
+            .is_err()
+        );
+        setup.board.operations[0].mask = 0x1100;
+        setup.board.operations[1].address += 2;
+        assert!(package(&data, &setup, Some(ram), 0, StartupStop::Continue, false).is_err());
+    }
+    #[test]
+    fn host_prelude_serializes_separately_and_enforces_its_limit() {
+        let (data, mut setup, ram) = fixture();
+        setup.host_prelude = vec![Operation {
+            address: 0xff907000,
+            mask: 0x10,
+            value: 0x10,
+            kind: 1,
+        }];
+        let files = package(
+            &data,
+            &setup,
+            Some(ram.clone()),
+            0,
+            StartupStop::Continue,
+            false,
+        )
+        .unwrap();
+        let at = 0xc000 + template::SETUP_SD_HOST_PRELUDE;
+        assert_eq!(word(&files[0].bytes, at).unwrap(), 1);
+        assert_eq!(word(&files[0].bytes, at + 4).unwrap(), 0);
+        assert_eq!(
+            u64::from_le_bytes(files[0].bytes[at + 8..at + 16].try_into().unwrap()),
+            0xff907000
+        );
+        assert_eq!(word(&files[0].bytes, at + 16).unwrap(), 0x10);
+        assert_eq!(word(&files[0].bytes, at + 20).unwrap(), 0x10);
+        assert_eq!(word(&files[0].bytes, at + 24).unwrap(), 1);
+
+        setup.host_prelude = vec![
+            Operation {
+                address: 0xff907000,
+                mask: 0,
+                value: 0,
+                kind: 0,
+            };
+            17
+        ];
+        assert!(package(&data, &setup, Some(ram), 0, StartupStop::Continue, false).is_err());
+    }
+    #[test]
+    fn host_variants_serialize_in_order_and_are_bounded() {
+        let (data, mut setup, ram) = fixture();
+        let variant = HostVariant {
+            identification_divider: 0x3e,
+            clock_configuration_field: u32::MAX,
+            power_off_ms: 500,
+            power_on_ms: 250,
+            clock_on_ms: 10,
+        };
+        setup.host_variants = vec![variant.clone(); 2];
+        setup.host_variants[0].identification_divider = 0xfa;
+        let build = |setup: &Setup| {
+            package(
+                &data,
+                setup,
+                Some(ram.clone()),
+                0,
+                StartupStop::Continue,
+                false,
+            )
+        };
+        let files = build(&setup).unwrap();
+        let at = 0xc000 + template::SETUP_SD_HOST_VARIANTS;
+        let words: Vec<u32> = (0..14)
+            .map(|n| word(&files[0].bytes, at + 4 * n).unwrap())
+            .collect();
+        assert_eq!(
+            words,
+            [
+                2,
+                0,
+                0xfa,
+                u32::MAX,
+                500,
+                250,
+                10,
+                0,
+                0x3e,
+                u32::MAX,
+                500,
+                250,
+                10,
+                0
+            ]
+        );
+        for broken in [
+            HostVariant {
+                identification_divider: 0,
+                ..variant.clone()
+            },
+            HostVariant {
+                identification_divider: 0x100,
+                ..variant.clone()
+            },
+            HostVariant {
+                clock_configuration_field: 4,
+                ..variant.clone()
+            },
+            HostVariant {
+                power_off_ms: 2001,
+                ..variant.clone()
+            },
+        ] {
+            setup.host_variants = vec![broken];
+            assert!(build(&setup).is_err());
+        }
+        setup.host_variants = vec![variant; 9];
+        assert!(build(&setup).is_err());
+    }
+    #[test]
+    fn handoff_ranges_serialize_and_add_the_result_file_for_the_after_crc_stop() {
+        let (data, mut setup, ram) = fixture();
+        setup.handoff_ranges = vec![
+            HandoffRange {
+                address: 0xff90e104,
+                words: 3,
+            },
+            HandoffRange {
+                address: 0xfa0b0100,
+                words: 1,
+            },
+        ];
+        let build = |setup: &Setup, stop| package(&data, setup, Some(ram.clone()), 0, stop, false);
+        let files = build(&setup, StartupStop::AfterCrcWithErrorPackets).unwrap();
+        let at = 0xc000 + template::SETUP_SD_HANDOFF_RANGES;
+        let words: Vec<u32> = (0..10)
+            .map(|n| word(&files[0].bytes, at + 4 * n).unwrap())
+            .collect();
+        assert_eq!(
+            words,
+            [2, 1 << 20, 0xff90e104, 0, 3, 0, 0xfa0b0100, 0, 1, 0]
+        );
+        let names: Vec<&str> = files.iter().map(|f| f.name.as_str()).collect();
+        assert_eq!(
+            names,
+            ["marble_init.bin", "ffboot.bin", handoff_result::NAME]
+        );
+        assert_eq!(files[2].bytes, handoff_result::pattern());
+        assert!(build(&setup, StartupStop::Continue).is_err());
+        setup.handoff_ranges[1].address = 0xfa0b0102;
+        assert!(build(&setup, StartupStop::AfterCrcWithErrorPackets).is_err());
+        setup.handoff_ranges = vec![];
+        let plain = build(&setup, StartupStop::AfterCrcWithErrorPackets).unwrap();
+        assert_eq!(plain.len(), 2);
+        assert_eq!(word(&plain[0].bytes, at).unwrap(), 0);
+    }
+    #[test]
+    fn secondary_release_writes_the_sgi_target_list() {
+        let (data, mut setup, ram) = fixture();
+        let build = |setup: &Setup| {
+            package(
+                &data,
+                setup,
+                Some(ram.clone()),
+                0,
+                StartupStop::Continue,
+                false,
+            )
+        };
+        let at = 0xc000 + template::SETUP_SD_SECONDARY_RELEASE;
+        let plain = build(&setup).unwrap();
+        assert_eq!(word(&plain[0].bytes, at).unwrap(), 0);
+        setup.secondary_release = vec![1, 2, 3];
+        let files = build(&setup).unwrap();
+        assert_eq!(word(&files[0].bytes, at).unwrap(), 0xe);
+        assert_eq!(word(&files[0].bytes, at + 4).unwrap(), 0);
+        for broken in [vec![0], vec![4], vec![2, 1], vec![1, 1]] {
+            setup.secondary_release = broken;
+            assert!(build(&setup).is_err());
+        }
+    }
+    #[test]
+    fn startups_that_wake_no_core_at_the_hand_off_drop_the_secondary_release() {
+        let (data, mut setup, ram) = stock_selector_fixture();
+        setup.secondary_release = vec![1, 2, 3];
+        let release = |raw: &[u8], at: usize| word(raw, 0xc000 + at).unwrap();
+        let stock =
+            package_stock_selector(&data, &setup, ram.clone(), 0, StartupStop::Continue).unwrap();
+        assert_eq!(
+            release(&stock[0].bytes, template::SETUP_SD_SECONDARY_RELEASE),
+            0
+        );
+        let only = package_read_only(&data, &setup, ram.clone(), 0, 0x3000_0000).unwrap();
+        assert_eq!(
+            release(
+                &only[0].bytes,
+                read_only_template::SETUP_SD_SECONDARY_RELEASE
+            ),
+            0
+        );
+        let flash =
+            package_internal_flash(&data, &with_frames(setup.clone()), ram.clone(), 0, None)
+                .unwrap();
+        assert_eq!(
+            release(&flash[0].bytes, flash_template::SETUP_SD_SECONDARY_RELEASE),
+            0
+        );
+        setup.stock_selector = None;
+        let card = package(&data, &setup, Some(ram), 0, StartupStop::Continue, false).unwrap();
+        assert_eq!(
+            release(&card[0].bytes, template::SETUP_SD_SECONDARY_RELEASE),
+            0xe
+        );
+    }
+    #[test]
+    fn the_stock_selector_startup_takes_the_diagnostic_stop() {
+        let (data, setup, ram) = stock_selector_fixture();
+        let stopped =
+            package_stock_selector(&data, &setup, ram.clone(), 0, StartupStop::AfterCrc).unwrap();
+        let raw = &stopped[0].bytes;
+        let stop = 0xc000 + template::XP5_SETUP_CONFIGURATION + 208;
+        assert_eq!(word(raw, stop).unwrap(), 1);
+        assert_eq!(
+            word(raw, 0xc000 + template::SETUP_SD_REQUEST + 40).unwrap(),
+            2
+        );
+        let plain = package_stock_selector(&data, &setup, ram, 0, StartupStop::Continue).unwrap();
+        assert_eq!(word(&plain[0].bytes, stop).unwrap(), 0);
+    }
+    #[test]
+    fn host_prelude_handshake_serializes_and_bounds_attempts() {
+        let (data, mut setup, ram) = fixture();
+        setup.host_prelude = vec![
+            Operation {
+                address: 0xff9b222c,
+                mask: 1,
+                value: 1000,
+                kind: 7,
+            },
+            Operation {
+                address: 0xff9b2244,
+                mask: 0,
+                value: 0,
+                kind: 8,
+            },
+        ];
+        let files = package(
+            &data,
+            &setup,
+            Some(ram.clone()),
+            0,
+            StartupStop::AfterCrcWithErrorPackets,
+            false,
+        )
+        .unwrap();
+        let at = 0xc000 + template::SETUP_SD_HOST_PRELUDE;
+        assert_eq!(word(&files[0].bytes, at).unwrap(), 2);
+        assert_eq!(word(&files[0].bytes, at + 16).unwrap(), 1);
+        assert_eq!(word(&files[0].bytes, at + 20).unwrap(), 1000);
+        assert_eq!(word(&files[0].bytes, at + 24).unwrap(), 7);
+        assert_eq!(word(&files[0].bytes, at + 8 + 24 + 12).unwrap(), 0);
+        assert_eq!(word(&files[0].bytes, at + 8 + 24 + 16).unwrap(), 8);
+        setup.host_prelude[1].value = 3;
+        assert!(
+            package(
+                &data,
+                &setup,
+                Some(ram.clone()),
+                0,
+                StartupStop::AfterCrcWithErrorPackets,
+                false
+            )
+            .is_err()
+        );
+        setup.host_prelude[1].value = 0;
+        setup.host_prelude[0].value = 0;
+        assert!(
+            package(
+                &data,
+                &setup,
+                Some(ram.clone()),
+                0,
+                StartupStop::AfterCrcWithErrorPackets,
+                false
+            )
+            .is_err()
+        );
+        setup.host_prelude[0].value = 1000;
+        setup.host_prelude[0].address += 1;
+        assert!(
+            package(
+                &data,
+                &setup,
+                Some(ram),
+                0,
+                StartupStop::AfterCrcWithErrorPackets,
+                false
+            )
+            .is_err()
+        );
+    }
+
+    #[test]
+    fn host_continuation_requires_selected_root_and_bounded_gate() {
+        let (data, mut setup, ram) = fixture();
+        setup.host_prelude = vec![Operation {
+            address: setup.board.host,
+            mask: 0x205c344,
+            value: 1000,
+            kind: 9,
+        }];
+        assert!(
+            package(
+                &data,
+                &setup,
+                Some(ram.clone()),
+                0,
+                StartupStop::AfterCrcWithErrorPackets,
+                false
+            )
+            .is_ok()
+        );
+        setup.host_prelude[0].address += 4;
+        assert!(
+            package(
+                &data,
+                &setup,
+                Some(ram.clone()),
+                0,
+                StartupStop::AfterCrcWithErrorPackets,
+                false
+            )
+            .is_err()
+        );
+        setup.host_prelude[0].address = setup.board.host;
+        setup.host_prelude[0].mask |= 1;
+        assert!(
+            package(
+                &data,
+                &setup,
+                Some(ram.clone()),
+                0,
+                StartupStop::AfterCrcWithErrorPackets,
+                false
+            )
+            .is_err()
+        );
+        setup.host_prelude[0].mask &= !1;
+        setup.host_prelude[0].value = 1001;
+        assert!(
+            package(
+                &data,
+                &setup,
+                Some(ram),
+                0,
+                StartupStop::AfterCrcWithErrorPackets,
+                false
+            )
+            .is_err()
+        );
     }
     #[test]
     fn oversized_header_and_changed_payload_refuse() {
         let (mut data, mut s, mut ram) = fixture();
         ram[0x20] ^= 1;
-        assert!(package(&data, &s, Some(ram), 0).is_err());
+        assert!(package(&data, &s, Some(ram), 0, StartupStop::Continue, false).is_err());
         put(&mut data, 0x14, 254).unwrap();
         s.prefix = source(&data[..0x40000]);
         s.proofs[0].source = s.prefix.clone();
-        assert!(package(&data, &s, None, 0).is_err());
+        assert!(package(&data, &s, None, 0, StartupStop::Continue, false).is_err());
     }
 
     /// Every word of the read-only loader the packager may touch.
     fn read_only_bound_ranges() -> Vec<std::ops::Range<usize>> {
         use read_only_template as t;
-        let mut ranges = vec![
-            t::XP5_SETUP_CONFIGURATION..t::XP5_SETUP_CONFIGURATION + 208,
-            t::SETUP_SD_BOARD..t::SETUP_SD_BOARD + 16 + 32 * 24,
-            t::SETUP_SD_REQUEST..t::SETUP_SD_REQUEST + 40,
-            t::SETUP_SD_READ_ONLY..t::SETUP_SD_READ_ONLY + 72,
-            t::XP5_SETUP_RETURN_BRANCH..t::XP5_SETUP_RETURN_BRANCH + 4,
-        ];
-        ranges.extend(t::EXTERNALS.iter().map(|&(at, _, _)| at..at + 4));
+        let mut ranges = shared_bound_ranges(&READ_ONLY);
+        ranges.push(t::SETUP_SD_READ_ONLY..t::SETUP_SD_READ_ONLY + 72);
         ranges
     }
 
