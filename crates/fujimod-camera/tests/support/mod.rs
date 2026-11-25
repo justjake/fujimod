@@ -44,6 +44,8 @@ pub fn request(
         cache,
         run_to_rec,
         card: Default::default(),
+        nand_image: None,
+        face_result_profile: None,
     }
 }
 

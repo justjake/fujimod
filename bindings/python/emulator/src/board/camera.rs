@@ -48,6 +48,8 @@ impl Board {
     /// `flash` starts from a saved internal-flash image and `combination`
     /// holds a catalog power-on combination (`sd`, `firmware_update` or
     /// `service`); those, and a RAM image, select the emulator layer.
+    /// `nand` restores a saved internal-flash image and `face_result_profile`
+    /// supplies external detector results in place of the passive face bank.
     ///
     /// With `run_to_rec` false the board is returned before its first
     /// instruction, with the boot controls held; running it and calling
@@ -57,7 +59,8 @@ impl Board {
     #[pyo3(signature=(*, firmware, boot="stock", sd_card=None, execution_policy="exact", boot_cache=true,
         run_to_rec=true, sd_card_present=true, sd_card_write_protected=false, sd_card_transfer_ticks=None,
         card_layout=None, start="rom", image=None, image_sha256=None, update=None, boot_rom=None,
-        flash=None, combination=None, sd_card_files=None, image_bytes=None))]
+        flash=None, combination=None, sd_card_files=None, image_bytes=None, nand=None,
+        face_result_profile=None))]
     #[allow(clippy::too_many_arguments)]
     fn open_camera(
         firmware: String,
@@ -79,6 +82,8 @@ impl Board {
         combination: Option<String>,
         sd_card_files: Option<std::collections::HashMap<String, Vec<u8>>>,
         image_bytes: Option<Vec<u8>>,
+        nand: Option<Vec<u8>>,
+        face_result_profile: Option<String>,
     ) -> PyResult<Self> {
         let files = match (update, boot_rom) {
             (None, None) => emulator::FirmwareInput::Library,
@@ -114,6 +119,19 @@ impl Board {
             }
         };
         let image = loader_image(start, image, image_sha256, image_bytes)?;
+        let face_result_profile = match face_result_profile {
+            None => None,
+            Some(name) => Some(
+                serde_json::from_value::<emulator::RunFaceResultProfile>(
+                    serde_json::Value::String(name),
+                )
+                .map_err(|_| {
+                    PyValueError::new_err(
+                        "face_result_profile must be empty, box64x20 or box172x120",
+                    )
+                })?,
+            ),
+        };
         let cache = if boot_cache {
             fujimod_camera::BootCache::Reuse
         } else {
@@ -192,6 +210,8 @@ impl Board {
                     engine: None,
                     cache,
                     run_to_rec,
+                    nand_image: nand.clone(),
+                    face_result_profile: face_result_profile.clone(),
                     kept: Default::default(),
                 },
             )
@@ -224,6 +244,8 @@ impl Board {
                 engine: None,
                 cache,
                 run_to_rec,
+                nand_image: nand,
+                face_result_profile,
                 card: fujimod_camera::CardOptions {
                     present: sd_card_present,
                     protected: sd_card_write_protected,

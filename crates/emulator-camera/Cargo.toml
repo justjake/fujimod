@@ -24,6 +24,7 @@ fujimod-catalog-configuration.workspace = true
 fujimod-catalog-controls.workspace = true
 fujimod-catalog-remote.workspace = true
 fujimod-catalog-resolution.workspace = true
+fujimod-catalog-run-inputs.workspace = true
 fujimod-catalog-wiring.workspace = true
 fujimod-remote = { path = "../remote", default-features = false, features = ["board"] }
 serde.workspace = true

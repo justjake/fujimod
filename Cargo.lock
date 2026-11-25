@@ -2423,6 +2423,7 @@ dependencies = [
  "fujimod-catalog-controls",
  "fujimod-catalog-remote",
  "fujimod-catalog-resolution",
+ "fujimod-catalog-run-inputs",
  "fujimod-catalog-wiring",
  "fujimod-emulator-boot",
  "fujimod-emulator-controls",

@@ -71,6 +71,8 @@ pub fn request(boot: Boot, image: Option<LoaderImage>, cache: BootCache) -> Requ
         engine: None,
         cache,
         run_to_rec: true,
+        nand_image: None,
+        face_result_profile: None,
         kept: Default::default(),
     }
 }

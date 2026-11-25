@@ -305,6 +305,19 @@ fn identity(request: &Request, resolved: &ResolvedConfiguration) -> Result<Strin
     part(resolved.configuration.id.as_bytes());
     part(request.policy.name().as_bytes());
     part(engine_name(resolved).as_bytes());
+    match &request.face_result_profile {
+        Some(profile) => {
+            part(b"face-result-profile");
+            let bytes = serde_json::to_vec(profile).map_err(|failure| {
+                OpenError::at(
+                    Stage::BootRom,
+                    format!("face result profile: {failure}"),
+                )
+            })?;
+            part(&bytes);
+        }
+        None => part(b"passive-face-bank"),
+    }
     match &request.start {
         Start::Rom => part(b"stock"),
         Start::Held { combination } => {
@@ -322,6 +335,13 @@ fn identity(request: &Request, resolved: &ResolvedConfiguration) -> Result<Strin
             part(b"flash-image");
             part(&Sha256::digest(bytes));
         }
+    }
+    match &request.nand_image {
+        Some(bytes) => {
+            part(b"saved-nand");
+            part(&Sha256::digest(bytes));
+        }
+        None => part(b"catalog-nand"),
     }
     part(&[request.card.present as u8, request.card.protected as u8]);
     match request.card.transfer_ticks {

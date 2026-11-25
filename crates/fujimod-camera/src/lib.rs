@@ -36,7 +36,8 @@ pub use autostart::stock_menus;
 pub use emulator::{
     BootCache, CardLayout, ExecutionPolicy, FirmwareInput, Flash, Library, LibraryError,
     LibraryFirmware, LoaderImage, OpenError, PowerOn as EmulatorPowerOn,
-    Request as EmulatorRequestBase, RunEngine, Stage, StateDir, directory_files, read_flash,
+    Request as EmulatorRequestBase, RunEngine, RunFaceResultProfile, Stage, StateDir,
+    directory_files, read_flash,
 };
 pub use release::{RELEASES_URL, card as release_card};
 
@@ -142,6 +143,11 @@ pub struct Request {
     pub run_to_rec: bool,
     /// The SD card's contacts and options.
     pub card: CardOptions,
+    /// A saved internal-flash image, restored before the first instruction.
+    pub nand_image: Option<Vec<u8>>,
+    /// External face detector results, in place of the run's passive face
+    /// bank.
+    pub face_result_profile: Option<RunFaceResultProfile>,
 }
 
 /// A power-on that keeps the camera's internal flash and SD card.
@@ -336,6 +342,8 @@ fn emulator_request(
             engine: request.engine,
             cache: request.cache,
             run_to_rec: request.run_to_rec,
+            nand_image: request.nand_image.clone(),
+            face_result_profile: request.face_result_profile.clone(),
             kept: Default::default(),
         },
         release,

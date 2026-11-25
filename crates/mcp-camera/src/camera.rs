@@ -67,6 +67,8 @@ impl OpenRequest {
             },
             run_to_rec: true,
             card: Default::default(),
+            nand_image: None,
+            face_result_profile: None,
         })
     }
 

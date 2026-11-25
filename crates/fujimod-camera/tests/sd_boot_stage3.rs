@@ -32,6 +32,8 @@ fn request(firmware: &str, files: Vec<(String, Vec<u8>)>) -> Request {
         cache: BootCache::Bypass,
         run_to_rec: false,
         card: Default::default(),
+        nand_image: None,
+        face_result_profile: None,
     }
 }
 

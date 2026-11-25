@@ -6,7 +6,8 @@ mod support;
 use support::{Boot, CardSource, library};
 
 use fujimod_emulator_camera::{
-    BootCache, CardLayout, Library, OpenError, Opened, Request, Stage, open_unbooted,
+    BootCache, CardLayout, Library, OpenError, Opened, Request, RunFaceResultProfile, Stage,
+    open_unbooted,
 };
 
 fn state() -> fujimod_emulator_camera::StateDir {
@@ -29,6 +30,30 @@ fn sd_node(opened: &Opened) -> serde_json::Value {
         .find(|node| node["name"] == "sd")
         .expect("SD card node")
         .clone()
+}
+
+fn face_node(opened: &Opened) -> serde_json::Value {
+    opened.session().definition["devices"]["nodes"]
+        .as_array()
+        .expect("device node list")
+        .iter()
+        .find(|node| node["name"] == "face_detector")
+        .expect("face node")
+        .clone()
+}
+
+#[test]
+fn a_declared_face_result_profile_replaces_the_passive_face_bank() {
+    let Some(library) = library() else {
+        eprintln!("skipped: set FUJIMOD_FIRMWARE_LIBRARY");
+        return;
+    };
+    let mut request = request(Boot::Stock);
+    request.face_result_profile = Some(RunFaceResultProfile::Box172x120);
+    let opened = open_unbooted(&library, request).expect("construct with declared face results");
+    let node = face_node(&opened);
+    assert_eq!(node["model"]["kind"], "face-results");
+    assert_eq!(node["model"]["profile"], "box172x120");
 }
 
 #[test]

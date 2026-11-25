@@ -2208,6 +2208,20 @@ pub(super) fn assemble(
             };
             recipe["options"]["backend"] = json!(selected);
         }
+        // An external face result profile replaces the passive detector bank
+        // with explicitly supplied results, as the host factory's scene does.
+        if rule.name == "face_detector"
+            && let Some(profile) = configuration
+                .preset
+                .as_ref()
+                .and_then(|p| p.factory_options.face_result_profile.as_ref())
+        {
+            recipe = json!({
+                "kind": "face-results",
+                "profile": profile,
+                "routes": "imaging_routes",
+            });
+        }
         apply_soc_blocks(&mut recipe, rule, selection)?;
         apply_body_facts(
             &mut recipe,

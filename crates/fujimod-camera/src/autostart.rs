@@ -631,6 +631,8 @@ fn install_flash(
             engine: request.engine,
             cache: fujimod_emulator_camera::BootCache::Bypass,
             run_to_rec: true,
+            nand_image: None,
+            face_result_profile: None,
             kept: Default::default(),
         },
     )?;

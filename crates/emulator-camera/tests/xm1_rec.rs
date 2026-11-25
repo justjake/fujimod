@@ -35,6 +35,8 @@ fn request() -> Request {
         engine: None,
         cache: BootCache::Bypass,
         run_to_rec: false,
+        nand_image: None,
+        face_result_profile: None,
         kept: Default::default(),
     }
 }

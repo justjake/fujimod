@@ -14,6 +14,7 @@ use fujimod_catalog_configuration::{RunEngine, RunInputs};
 use fujimod_catalog_controls::{BootCombination, BootMode, PhysicalControls};
 use fujimod_catalog_remote::{Facts, Selection};
 use fujimod_catalog_resolution::ResolvedConfiguration;
+use fujimod_catalog_run_inputs::RunFaceResultProfile;
 use fujimod_emulator_boot::{self as boot, Camera, CardLayout};
 use fujimod_emulator_cpu::ExecutionPolicy;
 use fujimod_emulator_devices::parts::{nand::Nand, sd_card::Card};
@@ -144,6 +145,11 @@ pub struct Request {
     /// runs the session and calls [`Opened::release_holds`]. The boot cache is
     /// not used either way.
     pub run_to_rec: bool,
+    /// A saved internal-flash image, restored before the first instruction.
+    pub nand_image: Option<Vec<u8>>,
+    /// External face detector results, in place of the run's passive face
+    /// bank: a declared result the guest's own detector start consumes.
+    pub face_result_profile: Option<RunFaceResultProfile>,
     /// Internal flash and SD card kept from an earlier open, for a power-on.
     pub kept: KeptMedia,
 }
@@ -435,6 +441,15 @@ fn resolve(library: &Library, request: &Request) -> Result<ResolvedConfiguration
             .override_engine(engine)
             .map_err(|error| OpenError::at(Stage::BootRom, error))?;
     }
+    if let Some(profile) = request.face_result_profile.clone() {
+        let preset = resolved.configuration.preset.as_mut().ok_or_else(|| {
+            OpenError::at(
+                Stage::BootRom,
+                "a face result profile needs a run configuration with a preset",
+            )
+        })?;
+        preset.factory_options.face_result_profile = Some(profile);
+    }
     Ok(resolved)
 }
 
@@ -521,6 +536,8 @@ pub(crate) fn construct(
         engine: _,
         cache: _,
         run_to_rec: _,
+        nand_image,
+        face_result_profile: _,
         kept,
     } = request;
     let engine = resolved
@@ -557,6 +574,19 @@ pub(crate) fn construct(
         .set_execution_policy(policy)
         .map_err(|error| OpenError::at(Stage::BootRom, error))?;
     install_files(&mut camera.session, &card.files)?;
+    if let Some(bytes) = nand_image.as_ref() {
+        let medium = camera
+            .session
+            .nand_medium("nand")
+            .map_err(|error| OpenError::at(Stage::BootRom, error))?;
+        let restored = medium.restore_committed(bytes).map_err(|error| {
+            OpenError::at(Stage::BootRom, format!("saved internal flash: {error}"))
+        })?;
+        camera.session.retain_nand("nand", restored).map_err(|error| {
+            OpenError::at(Stage::BootRom, format!("saved internal flash: {error}"))
+        })?;
+    }
+    // A power-on's kept medium replaces the flash this request would build.
     apply_kept_media(&mut camera.session, kept)?;
     if let Flash::Image(bytes) = &flash {
         flash::write(&mut camera.session, library.nand_boot(&firmware)?, bytes)?;

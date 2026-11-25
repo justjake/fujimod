@@ -64,6 +64,8 @@ impl std::fmt::Display for Stage {
 
 /// The scheduler engine a request may override.
 pub use fujimod_catalog_configuration::RunEngine;
+/// The external face detector results a request may select.
+pub use fujimod_catalog_run_inputs::RunFaceResultProfile;
 /// The camera a boot reaches.
 pub use fujimod_emulator_boot::Camera;
 /// A declared FAT geometry for a stock SD card.

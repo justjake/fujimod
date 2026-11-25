@@ -423,6 +423,8 @@ class Board:
         start: Literal["rom", "loader"] = "rom",
         image: str | PathLike[str] | bytes | None = None,
         image_sha256: str | None = None,
+        nand: bytes | None = None,
+        face_result_profile: str | None = None,
         update: str | PathLike[str] | None = None,
         boot_rom: str | PathLike[str] | None = None,
         flash: str | PathLike[str] | None = None,
@@ -458,7 +460,12 @@ class Board:
         caller-verified RAM image at address zero and starts the first core at
         the native loader before any instruction runs; `image` is the image's
         path, with `image_sha256`, or its bytes. The boot ROM never runs for
-        such an open.
+        such an open. `nand` is a saved internal-flash image, laid over the
+        board's own medium before the first instruction (the bytes
+        `nand_medium(name).to_bytes()` returns). `face_result_profile` is
+        one of `empty`, `box64x20` or `box172x120`: external detector
+        results the guest's own start consumes in place of the passive face
+        bank.
         """
         firmware = cls._identifier(firmware, "firmware")
         if boot not in ("stock", "sd-card", "autostart"):
@@ -572,6 +579,8 @@ class Board:
             image=image_path,
             image_sha256=image_sha256,
             image_bytes=image_contents,
+            nand=nand,
+            face_result_profile=face_result_profile,
             update=update_path,
             boot_rom=boot_rom_path,
             flash=flash_path,
