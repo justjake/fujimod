@@ -532,6 +532,7 @@ pub fn windows(
 /// supplies ADC samples, GPIO levels and flash contents.
 pub fn windows_from_blocks(
     resolved: &fujimod_catalog_resolution::ResolvedConfiguration,
+    dram_limit: u64,
 ) -> Result<Vec<DeviceWindow>, String> {
     use fujimod_catalog_configuration::application_inputs::ApplicationBlockInput;
     use fujimod_catalog::reference::SocBlock;
@@ -649,11 +650,19 @@ pub fn windows_from_blocks(
             }
         }
     }
-    for drain in drains {
+    // The firmware drains the bus by reading one word of each port and discarding it; a port
+    // the run's DRAM covers is RAM instead.
+    let ports = selection.soc.blocks.iter()
+        .filter(|block| matches!(block.device, Some(BlockDevice::UnmodeledBusDrain { .. })))
+        .map(|block| block.base)
+        .chain(drains.iter().map(|drain| drain.address))
+        .filter(|&address| address >= dram_limit)
+        .collect::<std::collections::BTreeSet<_>>();
+    for address in ports {
         devices.push(DeviceWindow {
-            base: drain.address,
+            base: address,
             size: 4,
-            kind: "unmodeled-bus-drain".into(),
+            kind: "discarded-read".into(),
             options: Default::default(),
         });
     }
