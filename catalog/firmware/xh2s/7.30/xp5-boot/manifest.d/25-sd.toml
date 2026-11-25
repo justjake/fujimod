@@ -18,7 +18,7 @@ transfer_ticks = 1000
 clock_ticks = 1000
 rca = 1
 ram_bytes = 0x80000000
-ram_banks = [[0x100004000, 0x3fffc000], [0x180004000, 0x7fffc000]]
+ram_banks = [[0x80004000, 0x6fffc000], [0x100004000, 0x7fffc000], [0x180004000, 0x7fffc000]]
 dram_alias = false
 address_high = 0xff90e7d8
 
@@ -47,7 +47,7 @@ transfer_ticks = 1000
 clock_ticks = 1000
 rca = 1
 ram_bytes = 0x80000000
-ram_banks = [[0x100004000, 0x3fffc000], [0x180004000, 0x7fffc000]]
+ram_banks = [[0x80004000, 0x6fffc000], [0x100004000, 0x7fffc000], [0x180004000, 0x7fffc000]]
 dram_alias = false
 address_high = 0xff90e7e4
 

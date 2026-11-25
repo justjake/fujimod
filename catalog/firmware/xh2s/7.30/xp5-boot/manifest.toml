@@ -14,16 +14,14 @@ base = 0
 size = 0x80000000
 
 # The X-H2S firmware defines the three high apertures in its remap table
-# at 0x1c11b70. Where a discarded-read device owns the first granule, RAM
-# starts after it.
+# at 0x1c11b70. The initial granule of each holds the bus-drain register.
 [[ram]]
 base = 0x80004000
 size = 0x6fffc000
 
-# Movie buffers use DRAM behind the high bus-drain ports.
 [[ram]]
 base = 0x100004000
-size = 0x3fffc000
+size = 0x7fffc000
 
 # The firmware remaps the last DRAM region using the base and size at
 # 0x1c11b90 (caller 0x16cd050): [0x180000000, 0x200000000). The first

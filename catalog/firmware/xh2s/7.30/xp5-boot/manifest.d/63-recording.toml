@@ -1,3 +1,13 @@
+# Movie REC programs these XP5 blocks. Their completion timings are functional.
+# The X-H2S interrupt table maps source 0x10 (row 0x1c0a098) to INTID 210.
+[[device]]
+base = 0xffd14000
+size = 0x2000
+kind = "xp5-codec"
+[device.options]
+irq = 210
+run_ticks = 1000000
+
 # X-H2S interrupt source 0xa at 0x1c0a038 maps to INTID 203.
 [[device]]
 base = 0xffd0c000
