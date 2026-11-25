@@ -12,6 +12,20 @@ pub const BASE: u64 = 0xf0000000;
 pub const SIZE: u64 = 0x08000000;
 const PAGE: usize = 4096;
 pub type Shared = Arc<Mutex<Storage>>;
+#[derive(Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+enum WriteKind {
+    Erase,
+    Program,
+}
+
+#[derive(Serialize, Deserialize)]
+struct WriteOperation {
+    kind: WriteKind,
+    offset: u64,
+    size: usize,
+}
+
 #[derive(Default, Serialize, Deserialize)]
 pub struct Session {
     pages: BTreeMap<u64, Vec<u8>>,
@@ -24,6 +38,8 @@ pub struct Session {
     #[serde(default)]
     pub aperture_fault: Option<String>,
     pub reads: StorageReads,
+    #[serde(default)]
+    writes: Vec<WriteOperation>,
 }
 impl Session {
     fn validate(&self) -> Result<(), String> {
@@ -32,6 +48,12 @@ impl Session {
             || self.pages.values().any(|page| page.len() != PAGE)
         {
             return Err("Invalid flash storage checkpoint pages".into());
+        }
+        for write in &self.writes {
+            Storage::extent(write.offset, write.size)?;
+            if write.size == 0 {
+                return Err("Empty flash storage checkpoint write".into());
+            }
         }
         self.reads.validate(SIZE)
     }
@@ -142,6 +164,11 @@ impl Storage {
         for (a, &b) in (offset..).zip(bytes) {
             self.page(a / PAGE as u64)[a as usize % PAGE] &= b;
         }
+        self.session.writes.push(WriteOperation {
+            kind: WriteKind::Program,
+            offset,
+            size: bytes.len(),
+        });
         self.session.write_enable = false;
         Ok(())
     }
@@ -157,6 +184,11 @@ impl Storage {
         for a in offset..offset + size as u64 {
             self.page(a / PAGE as u64)[a as usize % PAGE] = 0xff;
         }
+        self.session.writes.push(WriteOperation {
+            kind: WriteKind::Erase,
+            offset,
+            size: size,
+        });
         self.session.write_enable = false;
         Ok(())
     }
@@ -367,6 +399,37 @@ impl Aperture {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn journal_records_only_successful_guest_writes_and_survives_checkpoints() {
+        let storage = Arc::new(Mutex::new(Storage::new(vec![]).unwrap()));
+        let mut aperture = Aperture(Medium::Nor(storage.clone()));
+        {
+            let mut s = storage.lock().unwrap();
+            s.seed(4096, 0).unwrap();
+            assert!(s.erase(4096, 4096).is_err());
+            s.session.write_enable = true;
+            s.erase(4096, 4096).unwrap();
+            s.session.write_enable = true;
+            assert!(s.program(4351, &[0, 0]).is_err());
+            s.program(4096, &[0, 0xff]).unwrap();
+            s.session.write_enable = true;
+            s.program(4096, &[0, 0xff]).unwrap();
+        }
+        let saved = aperture.save();
+        assert_eq!(
+            saved["session"]["writes"],
+            serde_json::json!([
+                {"kind": "erase", "offset": 4096, "size": 4096},
+                {"kind": "program", "offset": 4096, "size": 2},
+                {"kind": "program", "offset": 4096, "size": 2},
+            ])
+        );
+        let checkpoint = aperture.checkpoint().unwrap();
+        storage.lock().unwrap().session.writes.clear();
+        aperture.restore_checkpoint(&checkpoint).unwrap();
+        assert_eq!(aperture.save(), saved);
+    }
+
     #[test]
     fn guest_reads_are_checkpointed_but_host_inspection_is_observational() {
         use fujimod_emulator_devices::test_host::recording::RecordingHost;
