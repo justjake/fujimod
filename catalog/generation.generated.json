@@ -1605,12 +1605,8 @@
           "status": "unavailable",
           "errors": [
             {
-              "locator": "flash_error",
-              "reason": "xpp: flash reader contract is not implemented"
-            },
-            {
-              "locator": "publication",
-              "reason": "No catalog firmware and body record is published"
+              "locator": "publication_error",
+              "reason": "empty state capture"
             }
           ]
         },
@@ -1649,8 +1645,8 @@
               "reason": "xpp: no established safely readable boot ROM extent"
             },
             {
-              "locator": "publication",
-              "reason": "No catalog firmware and body record is published"
+              "locator": "publication_error",
+              "reason": "empty state capture"
             }
           ]
         },
