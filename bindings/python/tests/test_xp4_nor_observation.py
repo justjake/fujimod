@@ -27,15 +27,16 @@ def test_nor_media_and_observation_are_available_without_running() -> None:
         {"nor": medium},
     )
     try:
-        xp4 = board.native.xp4
-        before = xp4.state(False)
-        flash = json.loads(xp4.device_state_json()["xp4-serial-flash"])
+        native = board.native
+        xp4 = native.xp4
+        before = native.state()
+        [flash] = json.loads(native.device_states("xp4-serial-flash"))
         assert flash["nor"]["program_count"] == 0
         assert flash["nor"]["programmed_ranges"] == []
         assert xp4.nor_medium() == medium
         xp4.reset_nor_program_coverage()
         assert xp4.nor_medium() == medium
-        assert xp4.state(False) == before
+        assert native.state() == before
     finally:
         board.close()
 
