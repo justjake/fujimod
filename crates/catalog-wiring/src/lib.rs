@@ -916,7 +916,8 @@ pub struct DigitalKey {
 }
 
 /// The GPIO contact a debug key name or body connection id drives, when it
-/// is one direct GPIO contact.
+/// is one direct GPIO contact. Interrupt lines the connection also declares
+/// (the line the contact's edges raise) do not change the contact.
 pub fn digital_key(
     selection: &ResolvedSelection,
     name: &str,
@@ -950,13 +951,18 @@ pub fn digital_key(
     else {
         return Ok(None);
     };
-    let [
-        ConnectionSignal::Gpio {
+    let mut contacts = connection
+        .signals
+        .iter()
+        .filter(|signal| !matches!(signal, ConnectionSignal::Interrupt { .. }));
+    let (
+        Some(ConnectionSignal::Gpio {
             port,
             pin,
             active_level,
-        },
-    ] = connection.signals.as_slice()
+        }),
+        None,
+    ) = (contacts.next(), contacts.next())
     else {
         return Ok(None);
     };
@@ -990,6 +996,36 @@ mod tests {
             resolved += 1;
         }
         assert!(resolved >= 31, "only {resolved} firmwares resolved");
+    }
+
+    #[test]
+    fn xt3_shutter_contacts_are_keys_beside_their_interrupt_lines() {
+        let selection = ReferenceCatalog::bundled()
+            .unwrap()
+            .resolve_firmware("xt3-511")
+            .unwrap();
+        for (name, pin) in [("xt3-shutter-s1", 0), ("xt3-shutter-s2", 1)] {
+            let wire = selection
+                .body
+                .connections
+                .iter()
+                .find(|wire| wire.id == name)
+                .unwrap();
+            assert!(wire.signals.iter().any(|signal| matches!(
+                signal,
+                fujimod_catalog::reference::ConnectionSignal::Interrupt { .. }
+            )));
+            assert_eq!(
+                super::digital_key(&selection, name).unwrap(),
+                Some(super::DigitalKey {
+                    port: 0,
+                    pin,
+                    active: false
+                })
+            );
+        }
+        // The firmware's S1 and S2 rows are not claimed by a wired input yet.
+        assert_eq!(super::digital_key(&selection, "S1").unwrap(), None);
     }
 
     #[test]
