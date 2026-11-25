@@ -1,157 +1,155 @@
 # Opening a camera: design (2026-11-25)
 
-Status: agreed with the owner; steps 1-4 done, step 5 next.
+Status: agreed with the owner. The layered design below replaces the single
+builder; the steps at the end move the code to it.
 
 ## Goal
 
-A person or an agent opens an emulated camera by naming a firmware and a
-boot. Everything else comes from the catalog. The website, the desktop app,
+A person or an agent opens an emulated camera by naming a firmware and how it
+starts. Everything else comes from the catalog. The website, the desktop app,
 the MCP camera module, the `fujimod-emulator` CLI and the Python binding all
-open cameras through one builder, so a camera boots and behaves the same in
-each of them.
+open cameras the same way, so a camera boots and behaves the same in each of
+them.
 
-```text
-open(firmware = "x70-110", boot = Stock)
-open(firmware = "x70-110", boot = SdCard { card: Release })
-open(firmware = "x70-110", boot = AutomaticBoot { card: Release })
-```
+Two layers do this. The emulator layer knows cameras: firmware, internal
+flash, SD card and the controls held at power-on. The FujiMod layer above it
+knows FujiMod: its SD card, its SD card boot and its autostart.
 
-## Boots
+## Emulator layer
 
-| Boot | What runs | Internal flash | SD card | Held at power-on |
-|---|---|---|---|---|
-| `Stock` | The installed firmware | The catalog's reference camera settings | Empty, or files the caller adds | Nothing |
-| `SdCard` | FujiMod from the SD card | As `Stock` | The FujiMod SD card | The catalog's `boot.sd` controls |
-| `AutomaticBoot` | FujiMod from the SD card, started by the card's AUTOMATIC boot | As `Stock`, with the card's AUTOMATIC boot installed | The FujiMod SD card | Nothing |
+Opening a camera takes:
 
-The `boot.sd` controls are the body's controls document entry, the same one
-the website reads (X70: command control press and movie-record button). The
-builder holds them through the session's contact driver from power-on and
-releases them when the catalog says the boot ROM has sampled them. Callers
-never name pins.
-
-`AutomaticBoot` internal flash is made once per firmware and SD card: the
-builder boots the card with its `boot.sd` holds, opens FUJIMOD SET-UP's BOOT
-SETUP page and chooses AUTOMATIC, the same presses a person makes. The card's
-installer backs the internal data up to the SD card and rewrites the stage-1
-blocks the boot ROM loads. The builder powers the camera off and keeps those
-blocks in the firmware library under the firmware and the card's contents.
-Later opens program them back into a stock boot and start from internal flash
-with no buttons held.
-
-The installer run boots the card with stock-style menus, which is how the
-stock menu descriptors expose the mod's pages; every other boot uses the card
-as the caller gave it.
-
-### SD card sources
-
-- `Release`: the published release SD card for the firmware, as the website
-  downloads it. It is fetched once into the firmware library under
-  `sd-cards/<release>/<firmware>`, with every file's SHA-256 checked on the
-  fetch and again before reuse.
-- `Directory(path)`: a folder holding an SD card tree, such as a local mod
-  build's SD card.
-- `Files(list)`: name and bytes pairs, for the browser.
-
-The SD card's startup files that derive from the stock update are built by
-the builder from the firmware library, as `fujimod-sd-card
-sd-boot-v2-sd-card` builds them, so a caller supplies only the FujiMod tree.
-
-## Firmware library
-
-Callers name firmware by id. The builder finds the stock update, the boot
-ROM and the reference camera's settings in a firmware library: a directory
-of files found by content hash, named by `FUJIMOD_FIRMWARE_LIBRARY`. A file
-whose hash the catalog does not list is refused. The browser supplies the
-same files in memory.
-
-## The builder
-
-One crate owns turning `(firmware, boot, options)` into a running session.
-It holds what the browser binding builds today and native hosts lack:
-
-- the virtual SD card, formatted and filled;
-- boot holds and their release, and power cycles;
-- the sensor scene input (RGB and RAF) and LCD preview cadence;
-- the generated controls and contact driver;
-- the durable storage identity.
-
-These are derived from the resolved run configuration and catalog, never
-from a host-written document. The browser binding, the desktop app, the
-MCP camera module and the CLI call the builder; the Python binding reaches
-it through its existing Rust bindings.
+- **Firmware**: the stock update and the boot ROM, as files or bytes. Each is
+  hashed once and must match the catalog's entry for the firmware.
+- **Internal flash**: stock, or a saved flash image.
+- **SD card**: name and bytes pairs, or none. Options: present or absent,
+  write protection, the host's data-transfer time and a declared FAT
+  geometry (sector count, label, partition start, sectors per cluster).
+- **Power-on combination**: none, or the name of a combination in the body's
+  controls document (`sd`, `firmware_update`, `service`). The catalog says
+  which controls each holds and when the boot ROM has sampled them; the
+  emulator holds and releases them through the session's contact driver.
+  Callers never name pins.
 
 Options: execution policy (`interactive` or `exact`), engine, language,
-clock, extra SD card files, the SD card's presence and write protection, the
-host's SD data-transfer time, the stock card's declared FAT geometry, a
-checkpoint to restore, whether to use the boot cache, and whether to stop
-before the first instruction with the boot holds applied.
+clock, a checkpoint to restore, whether to use the boot cache, and where to
+stop: at REC or first-start setup, or before the first instruction with the
+combination held (a later call releases it and connects the controls the
+loaded firmware expects).
 
-## Results
+An opened camera can power off and on again keeping its internal flash and
+SD card, optionally with a combination held or another SD card inserted. A
+stock start can instead place a caller-verified image at address zero and
+start the first core at the native loader.
 
-Opening returns when the camera reaches REC or first-start setup. Anything
-else is a failure that names how far the boot got:
+Opening writes nothing to disk. The emulator reads only the inputs it is
+given; the boot cache is the one exception and is optional.
 
-- `Stock`: boot ROM, firmware loaded, REC.
-- `SdCard` and `AutomaticBoot`: boot ROM, SD loader, FujiMod applied in RAM,
-  REC, release confirmed.
+A failed open names how far the boot got: boot ROM, firmware loaded, REC.
 
-An open can also stop before the first instruction: the builder builds the
-session and applies the boot holds, the caller runs it, and a builder call
-releases the holds and connects the controls the loaded firmware expects.
+## FujiMod layer
 
-An open keeps its media available to the caller: `Opened::power_on` powers the
-camera off and on again with its internal flash and SD card, optionally holding
-the catalog's SD-boot controls or replacing the card with a fresh one from the
-boot source.
+A small crate above the emulator turns FujiMod presets into emulator inputs:
 
-A stock boot can instead place a caller-verified image at address zero and
-start the first core at the native loader, skipping the boot ROM; the image's
-stock initialization, mod initialization and card I/O then run normally.
-A stock boot also takes a declared FAT geometry for the card it formats:
-sector count, label, partition start and sectors per cluster. Card boots keep
-the catalog's layout.
+| Preset | Internal flash | SD card | Combination |
+|---|---|---|---|
+| Stock | Stock | None, or files the caller adds | None |
+| SD card boot | Stock | The FujiMod SD card | `sd` |
+| Autostart | Stock with the internal-flash stage 1 installed | The FujiMod SD card | None |
+
+- The FujiMod SD card is a folder or files the caller gives, or the
+  published release SD card for the firmware. A release SD card is
+  downloaded once into the state directory, and every file's SHA-256 is
+  checked on download and before reuse. The startup files derived from the
+  stock update are built from it, as `fujimod-sd-card sd-boot-v2-sd-card`
+  builds them.
+- Autostart flash is made once per firmware and SD card the way an owner
+  makes it: an SD card boot, then FUJIMOD SET-UP > BOOT SETUP > AUTOMATIC,
+  the installer backs the internal data up to the SD card and rewrites the
+  stage-1 blocks, and the camera powers off. The resulting flash is kept in
+  the state directory; later opens start from it with nothing held. The
+  installer run uses stock-style menus, which expose the mod's pages to
+  presses.
+- After an SD card boot or autostart reaches REC, the layer confirms FujiMod
+  is in RAM and that the release was confirmed. A failure names the stage:
+  boot ROM, SD loader, FujiMod applied, REC, release confirmed.
+
+The MCP camera module, the CLI, the desktop app and the Python binding call
+this layer. Anything that wants a camera without FujiMod calls the emulator
+layer directly.
+
+## Files
+
+### Firmware library (read-only)
+
+Callers may name a firmware by id instead of passing files. The library is a
+directory named by `FUJIMOD_FIRMWARE_LIBRARY`, laid out by name:
+
+```text
+<firmware-id>/FPUPDATE.DAT
+<body-id>/boot-rom.bin
+```
+
+Each file is found by its name and hashed once to confirm it matches the
+catalog. The library is never scanned and never written.
+
+### State directory
+
+Everything FujiMod writes and does not commit lives in one state directory,
+named by `FUJIMOD_STATE_DIR`, or `/tmp/fujimod` when unset:
+
+- `sd-cards/<release>/<firmware>/`: downloaded release SD cards.
+- `autostart/<firmware>/<sd-card-key>.flash`: kept autostart flash.
+- `boot-cache/`: saved boots.
+
+Everything in it can be made again: a release SD card downloads again and an
+autostart installs again.
 
 ## Boot cache
 
-Each opened boot is saved as a portable checkpoint keyed by the firmware
-update, the resolved configuration, the boot, the SD card's files, the
-execution policy, the engine and the builder's version. A later open with
-the same key restores it in about a second instead of booting.
+Each boot that reaches REC is saved as a portable checkpoint keyed by the
+firmware files, the resolved configuration, the internal flash, the SD card's
+files and options, the combination, the execution policy, the engine and the
+builder's version. A later open with the same key restores it in about 0.4 s
+instead of booting (about 1.2 s on the X70). A saved boot is used only when
+it restores into a freshly built session that still reports REC.
 
-Saved boots live in `boot-cache/<firmware>/` in the firmware library, one per
-firmware, boot, policy and engine: saving a boot with another card or another
-builder replaces the slot's earlier entry. A saved boot is reused only when
-its checkpoint restores into a freshly built session and still reports REC;
-anything else boots the camera and replaces the entry. A snapshot is the whole
-machine, about 100 MB for an X70 at REC, so a library holds one per slot.
-
-Every caller can boot without it: MCP `camera_open` takes `boot_cache: false`,
-the CLI open takes `--no-boot-cache`, and the desktop launcher offers Boot
-from scratch. A bypass reads no saved boot and saves none.
+- The cache holds at most 1 GiB, or `FUJIMOD_BOOT_CACHE_MAX` bytes. Saving
+  past the limit deletes the least recently used saves first.
+- Saves are compressed.
+- A save is written to a temporary file and renamed into place. Opening the
+  cache deletes leftover temporary files and saves from other builder
+  versions.
+- Any open can skip the cache: MCP `boot_cache: false`, CLI
+  `--no-boot-cache`, the desktop launcher's Boot from scratch.
+- Tests of the cache itself use a scratch state directory under `/tmp`.
 
 ## Callers
 
-- MCP `camera_open` takes `firmware`, `boot` and options. The raw `gpio`,
-  `keys` and overlay options go. `camera_set` moves a dial, switch, ring or
-  lever to a catalog position through the contact driver and returns once the
-  firmware's own observation of the control shows the new pose.
-- The desktop launcher lists the firmware library's cameras and opens Stock,
-  SD card or automatic boots; `--endpoint` still connects to a session
-  another host serves.
-- The CLI `open` takes `--firmware ID --boot stock|sd-card|automatic
+- MCP `camera_open` takes `firmware`, `boot` (`stock`, `sd-card`,
+  `autostart`), an SD card folder and options. `camera_set` moves a dial,
+  switch, ring or lever to a catalog position and returns once the firmware
+  observes the new pose.
+- The desktop launcher lists the library's cameras and opens Stock, SD card
+  or Autostart; `--endpoint` still connects to a session another host serves.
+- The CLI `open` takes `--firmware ID --boot stock|sd-card|autostart
   [--sd-card DIR] [--execution-policy interactive|exact] [--gui]`.
-- The website keeps its interface and calls the builder inside its Wasm
+- The Python binding's `Board.open_camera` takes the same choices, or files,
+  flash, SD card files and a combination for the emulator layer.
+- The website keeps its interface and calls the same layers inside its Wasm
   module.
 
 ## Steps
 
-1. Move the browser binding's construction into the builder with the three
-   boots and the firmware library. A test boots the current X70 release SD
-   card to REC and presses a button.
-2. Switch the MCP camera module, the desktop app and the CLI to it.
-3. `AutomaticBoot`, built from the installer once and kept.
-4. The boot cache, and an MCP tool that sets dial, switch, ring and lever
-   positions.
-5. Hosts that build boards another way move to the builder, one body at a
+1. Split the builder: the emulator layer takes files, flash, SD card files
+   and a combination name; the FujiMod layer holds the presets, the release
+   SD card download, the autostart install and the FujiMod checks. Rename
+   automatic boot to autostart everywhere.
+2. The library finds files by name with one confirming hash and is never
+   written; the state directory holds downloads, autostart flash and the boot
+   cache.
+3. The boot cache's size limit, compression and cleanup.
+4. Every caller passes inputs directly and writes nothing to disk to start a
+   camera.
+5. Hosts that build boards another way move to these layers, one body at a
    time.
