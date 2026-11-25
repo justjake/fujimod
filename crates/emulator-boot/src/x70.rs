@@ -395,7 +395,10 @@ const CARD_NODE_RULE: NodeRule = NodeRule {
 };
 
 /// The one GPIO signal of a card contact, with its active level.
-fn card_contact(selection: &ResolvedSelection, connection_id: &str) -> Result<(Pin, bool), String> {
+fn card_contact(
+    selection: &ResolvedSelection,
+    connection_id: &str,
+) -> Result<(Pin, bool), String> {
     match gpio_signals(selection, connection_id)?.as_slice() {
         [(pin, active)] => Ok((*pin, *active)),
         _ => Err(format!(
@@ -523,7 +526,10 @@ fn apply_soc_blocks(
     Ok(())
 }
 
-fn block<'a>(selection: &'a ResolvedSelection, id: &str) -> Result<&'a SocBlock, String> {
+fn block<'a>(
+    selection: &'a ResolvedSelection,
+    id: &str,
+) -> Result<&'a SocBlock, String> {
     selection
         .soc
         .blocks
@@ -2127,38 +2133,6 @@ fn apply_run_inputs(
     Ok(())
 }
 
-fn scene(selection: &ResolvedSelection, scene: &Exr2RunScene) -> Result<Value, String> {
-    let nand = selection.body.nand.ok_or("X70 body has no NAND geometry")?;
-    let image = &scene.images.live_image;
-    let statistics = scene
-        .statistics
-        .live_statistics
-        .iter()
-        .map(|span| json!({"destination":span.destination,"offset":span.offset,"asset":span.asset}))
-        .collect::<Vec<_>>();
-    Ok(json!({
-        "images": { "live_image": {
-            "width": image.width,
-            "height": image.height,
-            "stride": image.stride,
-            "asset": image.asset,
-        }},
-        "statistics": { "live_statistics": statistics },
-        "nands": { "nand": {
-            "kind": "raw",
-            "options": {
-                "bytes": nand.bytes,
-                "page_bytes": nand.page_bytes,
-                "pages_per_block": nand.pages_per_block,
-                "spare_bytes": nand.spare_bytes,
-            },
-            "base": "nand_base",
-            "overlays": [],
-            "spare": [],
-        }},
-    }))
-}
-
 /// Build the closed EXR II plan from a resolved X70 identity and its run inputs.
 pub(super) fn assemble(
     selection: &ResolvedSelection,
@@ -2350,7 +2324,7 @@ pub(super) fn assemble(
         plan_value["wires"]["sensor_frame_period"] = json!("frame-period");
         plan_value["wires"]["sensor_statistics_grid"] = json!("image-grid");
     }
-    let mut scene_value = scene(selection, scene_input)?;
+    let mut scene_value = super::exr2::scene(selection, scene_input)?;
     if let Some(browser) = browser {
         scene_value["files"] = json!({"virtual_card_files": {}});
         let frames = &browser.sensor.frames;

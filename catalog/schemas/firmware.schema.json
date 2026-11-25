@@ -1554,7 +1554,14 @@
           "type": "integer"
         },
         "readiness": {
-          "$ref": "#/$defs/ReadinessAddresses",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ReadinessAddresses"
+            },
+            {
+              "type": "null"
+            }
+          ],
           "description": "Readiness observer addresses."
         },
         "rec_mode": {
@@ -1562,6 +1569,13 @@
           "format": "uint32",
           "minimum": 0,
           "type": "integer"
+        },
+        "scanout_required": {
+          "description": "Whether REC requires a presented scanout instance.",
+          "type": [
+            "boolean",
+            "null"
+          ]
         },
         "setup_mode": {
           "description": "Setup mode value.",
@@ -1573,7 +1587,10 @@
           "description": "Firmware address containing the system mode.",
           "format": "uint64",
           "minimum": 0,
-          "type": "integer"
+          "type": [
+            "integer",
+            "null"
+          ]
         },
         "ui_mode": {
           "description": "Firmware address containing the UI mode.",
@@ -1584,13 +1601,11 @@
       },
       "required": [
         "ui_mode",
-        "system_mode",
         "menu_active",
         "pending_mode",
         "menu_node",
         "rec_mode",
-        "setup_mode",
-        "readiness"
+        "setup_mode"
       ],
       "type": "object"
     },
@@ -1798,6 +1813,13 @@
         },
         "browser_configuration_id": {
           "description": "Declared browser configuration id.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "camera_configuration_id": {
+          "description": "Declared native camera configuration id.",
           "type": [
             "string",
             "null"

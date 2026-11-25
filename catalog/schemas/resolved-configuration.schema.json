@@ -5924,6 +5924,20 @@
       "oneOf": [
         {
           "additionalProperties": false,
+          "description": "fixed hardware.",
+          "properties": {
+            "kind": {
+              "const": "fixed",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
           "description": "encoder_stages hardware.",
           "properties": {
             "kind": {
@@ -6032,7 +6046,14 @@
               "type": "array"
             },
             "focus": {
-              "$ref": "#/$defs/ConstructionFocus",
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/ConstructionFocus"
+                },
+                {
+                  "type": "null"
+                }
+              ],
               "description": "focus."
             },
             "gpio": {
@@ -6043,8 +6064,26 @@
               "const": "lens-unit",
               "type": "string"
             },
+            "nd": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/ConstructionNdFilter"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "ND filter."
+            },
             "optics": {
-              "$ref": "#/$defs/ConstructionOptics",
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/ConstructionOptics"
+                },
+                {
+                  "type": "null"
+                }
+              ],
               "description": "optics."
             },
             "options": {
@@ -6059,9 +6098,7 @@
           "required": [
             "kind",
             "completion",
-            "focus",
             "gpio",
-            "optics",
             "options",
             "pulses"
           ],
@@ -6344,6 +6381,20 @@
         },
         {
           "additionalProperties": false,
+          "description": "companion hardware.",
+          "properties": {
+            "kind": {
+              "const": "companion",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
           "description": "core-release hardware.",
           "properties": {
             "core": {
@@ -6460,6 +6511,25 @@
         },
         {
           "additionalProperties": false,
+          "description": "contact-actuator hardware.",
+          "properties": {
+            "gpio": {
+              "description": "GPIO output connection.",
+              "type": "string"
+            },
+            "kind": {
+              "const": "contact-actuator",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "gpio"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
           "description": "exr2-interrupt-controller hardware.",
           "properties": {
             "base": {
@@ -6548,7 +6618,14 @@
           "description": "external-frames hardware.",
           "properties": {
             "activity": {
-              "$ref": "#/$defs/ConstructionActivity",
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/ConstructionActivity"
+                },
+                {
+                  "type": "null"
+                }
+              ],
               "description": "activity."
             },
             "images": {
@@ -6566,7 +6643,6 @@
           },
           "required": [
             "kind",
-            "activity",
             "images",
             "statistics"
           ],
@@ -6770,11 +6846,17 @@
             },
             "memory_outputs": {
               "description": "memory outputs.",
-              "type": "string"
+              "type": [
+                "string",
+                "null"
+              ]
             },
             "parameters": {
               "description": "parameters.",
-              "type": "string"
+              "type": [
+                "string",
+                "null"
+              ]
             },
             "phase_irqs": {
               "description": "phase irqs.",
@@ -6816,8 +6898,6 @@
           "required": [
             "kind",
             "edges",
-            "memory_outputs",
-            "parameters",
             "phase_irqs",
             "raw_irq",
             "readback_irq"
@@ -6934,7 +7014,10 @@
             },
             "memory_outputs": {
               "description": "memory outputs.",
-              "type": "string"
+              "type": [
+                "string",
+                "null"
+              ]
             },
             "routes": {
               "description": "routes.",
@@ -6948,7 +7031,6 @@
             "channels",
             "frames",
             "irq",
-            "memory_outputs",
             "routes"
           ],
           "type": "object"
@@ -7156,6 +7238,33 @@
         },
         {
           "additionalProperties": false,
+          "description": "serial-audio-transmitter hardware.",
+          "properties": {
+            "kind": {
+              "const": "serial-audio-transmitter",
+              "type": "string"
+            },
+            "routes": {
+              "description": "routes.",
+              "type": "string"
+            },
+            "sinks": {
+              "description": "sinks.",
+              "items": {
+                "$ref": "#/$defs/ConstructionSerialAudioSink"
+              },
+              "type": "array"
+            }
+          },
+          "required": [
+            "kind",
+            "routes",
+            "sinks"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
           "description": "serial-dma hardware.",
           "properties": {
             "kind": {
@@ -7225,7 +7334,10 @@
           "properties": {
             "cable": {
               "description": "cable.",
-              "type": "string"
+              "type": [
+                "string",
+                "null"
+              ]
             },
             "endpoints": {
               "description": "endpoints.",
@@ -7240,8 +7352,7 @@
             }
           },
           "required": [
-            "kind",
-            "cable"
+            "kind"
           ],
           "type": "object"
         },
@@ -7348,6 +7459,55 @@
       ],
       "type": "object"
     },
+    "ConstructionNdFilter": {
+      "additionalProperties": false,
+      "description": "Declared built-in ND filter facts.",
+      "properties": {
+        "aperture": {
+          "description": "Aperture wire the filter scales.",
+          "type": "string"
+        },
+        "factor": {
+          "description": "Transmission factor while inserted.",
+          "format": "double",
+          "type": "number"
+        },
+        "insert_mask": {
+          "description": "Insert coil mask.",
+          "format": "uint16",
+          "maximum": 65535,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "register": {
+          "description": "Register the filter reports through.",
+          "format": "uint16",
+          "maximum": 65535,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "remove_mask": {
+          "description": "Remove coil mask.",
+          "format": "uint16",
+          "maximum": 65535,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "transmission": {
+          "description": "Transmission wire the filter drives.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "aperture",
+        "factor",
+        "insert_mask",
+        "register",
+        "remove_mask",
+        "transmission"
+      ],
+      "type": "object"
+    },
     "ConstructionNodes": {
       "additionalProperties": false,
       "description": "Declared nodes facts.",
@@ -7421,6 +7581,15 @@
       "additionalProperties": false,
       "description": "Declared options clock facts.",
       "properties": {
+        "initial_seconds": {
+          "description": "Declared initial wall-clock seconds since 2000-01-01.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
         "maximum_seconds": {
           "description": "Declared maximum seconds.",
           "format": "uint64",
@@ -7501,7 +7670,10 @@
               "description": "prefix address.",
               "format": "uint64",
               "minimum": 0,
-              "type": "integer"
+              "type": [
+                "integer",
+                "null"
+              ]
             },
             "prefix_high": {
               "description": "prefix high.",
@@ -7545,7 +7717,14 @@
               "type": "array"
             },
             "touch": {
-              "$ref": "#/$defs/ConstructionTouch",
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/ConstructionTouch"
+                },
+                {
+                  "type": "null"
+                }
+              ],
               "description": "touch."
             }
           },
@@ -7553,14 +7732,12 @@
             "kind",
             "commands",
             "heartbeat_register",
-            "prefix_address",
             "prefix_high",
             "sensor_address",
             "sensor_fields",
             "stationary",
             "status",
-            "topology",
-            "touch"
+            "topology"
           ],
           "type": "object"
         },
@@ -7570,7 +7747,10 @@
           "properties": {
             "connected": {
               "description": "connected.",
-              "type": "boolean"
+              "type": [
+                "boolean",
+                "null"
+              ]
             },
             "kind": {
               "const": "secondary",
@@ -7690,7 +7870,6 @@
           },
           "required": [
             "kind",
-            "connected",
             "pwic_address",
             "pwic_masks",
             "pwic_modes",
@@ -7953,6 +8132,20 @@
       "required": [
         "choice",
         "word"
+      ],
+      "type": "object"
+    },
+    "ConstructionSerialAudioSink": {
+      "additionalProperties": false,
+      "description": "One serial audio transmitter sink's declared connection.",
+      "properties": {
+        "connected": {
+          "description": "Declared connection state.",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "connected"
       ],
       "type": "object"
     },
@@ -12572,7 +12765,14 @@
           "type": "integer"
         },
         "readiness": {
-          "$ref": "#/$defs/ReadinessAddresses",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ReadinessAddresses"
+            },
+            {
+              "type": "null"
+            }
+          ],
           "description": "Readiness observer addresses."
         },
         "rec_mode": {
@@ -12580,6 +12780,13 @@
           "format": "uint32",
           "minimum": 0,
           "type": "integer"
+        },
+        "scanout_required": {
+          "description": "Whether REC requires a presented scanout instance.",
+          "type": [
+            "boolean",
+            "null"
+          ]
         },
         "setup_mode": {
           "description": "Setup mode value.",
@@ -12591,7 +12798,10 @@
           "description": "Firmware address containing the system mode.",
           "format": "uint64",
           "minimum": 0,
-          "type": "integer"
+          "type": [
+            "integer",
+            "null"
+          ]
         },
         "ui_mode": {
           "description": "Firmware address containing the UI mode.",
@@ -12602,13 +12812,11 @@
       },
       "required": [
         "ui_mode",
-        "system_mode",
         "menu_active",
         "pending_mode",
         "menu_node",
         "rec_mode",
-        "setup_mode",
-        "readiness"
+        "setup_mode"
       ],
       "type": "object"
     },
@@ -12816,6 +13024,13 @@
         },
         "browser_configuration_id": {
           "description": "Declared browser configuration id.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "camera_configuration_id": {
+          "description": "Declared native camera configuration id.",
           "type": [
             "string",
             "null"
@@ -18727,8 +18942,52 @@
       ],
       "type": "object"
     },
+    "NativeContactActuatorInputsPin": {
+      "additionalProperties": false,
+      "description": "One contact or drive pin of a mechanical actuator.",
+      "properties": {
+        "pin": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "port": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "port",
+        "pin"
+      ],
+      "type": "object"
+    },
+    "NativeContactActuatorInputsPosition": {
+      "additionalProperties": false,
+      "description": "One detent of a mechanical actuator's travel.",
+      "properties": {
+        "contacts": {
+          "items": {
+            "type": "boolean"
+          },
+          "type": "array"
+        },
+        "drive": {
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "contacts",
+        "drive"
+      ],
+      "type": "object"
+    },
     "NativeControlBusProfile": {
       "enum": [
+        "endpoint7-and9-virtual-write-ack",
         "endpoint7-stationary-and9-heartbeat-latched-irq-unmeasured",
         "usbcharge-disconnected-pwic-startup-tagged"
       ],
@@ -18737,6 +18996,7 @@
     "NativeDisplayTimingInputsMode": {
       "description": "Closed NativeDisplayTimingInputsMode selection.",
       "enum": [
+        "external",
         "configured_clocked"
       ],
       "type": "string"
@@ -18772,6 +19032,7 @@
     "NativeFaceDetectorInputsMode": {
       "description": "Closed NativeFaceDetectorInputsMode selection.",
       "enum": [
+        "configuration",
         "retained_words"
       ],
       "type": "string"
@@ -18875,7 +19136,9 @@
     "NativeImageInputInputsClockMode": {
       "description": "Closed NativeImageInputInputsClockMode selection.",
       "enum": [
-        "input_enable"
+        "input_enable",
+        "register_periods",
+        "source_mask"
       ],
       "type": "string"
     },
@@ -18916,14 +19179,18 @@
     "NativeImageInputInputsCommand": {
       "description": "Closed NativeImageInputInputsCommand selection.",
       "enum": [
-        "packed_writes"
+        "packed_writes",
+        "packed_words"
       ],
       "type": "string"
     },
     "NativeImageInputInputsPhaseAck": {
       "description": "Closed NativeImageInputInputsPhaseAck selection.",
       "enum": [
-        "inactive"
+        "disabled",
+        "inactive",
+        "enabled",
+        "preserve_fields"
       ],
       "type": "string"
     },
@@ -19171,7 +19438,8 @@
     "NativeScanoutInputsRectangleProfile": {
       "description": "Closed NativeScanoutInputsRectangleProfile selection.",
       "enum": [
-        "exr2-signed-ycbcr-rectangle-overlay-unmeasured"
+        "exr2-signed-ycbcr-rectangle-overlay-unmeasured",
+        "xm1-150-declared-luma-rectangle-overlay-unmeasured"
       ],
       "type": "string"
     },
@@ -24757,6 +25025,34 @@
       ],
       "type": "object"
     },
+    "RunMcuPacket": {
+      "additionalProperties": false,
+      "description": "The native serial registers that carry an MCU packet.",
+      "properties": {
+        "first_register": {
+          "description": "First register the packet's bytes occupy.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "node": {
+          "description": "Native node owning the serial endpoint.",
+          "type": "string"
+        },
+        "route": {
+          "description": "Route index of the registers endpoint.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "node",
+        "route",
+        "first_register"
+      ],
+      "type": "object"
+    },
     "RunMcuProfile": {
       "description": "Closed selection for mcu profile.",
       "enum": [
@@ -25035,6 +25331,20 @@
         },
         {
           "additionalProperties": false,
+          "description": "Declared companion startup inputs.",
+          "properties": {
+            "kind": {
+              "const": "companion",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
           "description": "Declared NativeBlock98000Inputs startup inputs and execution limits.",
           "properties": {
             "boot_source": {
@@ -25114,6 +25424,10 @@
             "clock": {
               "$ref": "#/$defs/NativeStatisticsInputsClock"
             },
+            "diagnostic_reads": {
+              "default": false,
+              "type": "boolean"
+            },
             "external_statistics": {
               "type": "boolean"
             },
@@ -25146,6 +25460,10 @@
           "properties": {
             "clock": {
               "$ref": "#/$defs/NativeOutputChannelInputsClock"
+            },
+            "diagnostic_reads": {
+              "default": false,
+              "type": "boolean"
             },
             "geometry": {
               "$ref": "#/$defs/NativeOutputChannelInputsGeometry"
@@ -25428,6 +25746,44 @@
         },
         {
           "additionalProperties": false,
+          "description": "Declared serial-audio-transmitter startup inputs.",
+          "properties": {
+            "kind": {
+              "const": "serial-audio-transmitter",
+              "type": "string"
+            },
+            "max_transfer_bytes": {
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "minimum_ticks": {
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "ram_bytes": {
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "ticks_per_byte": {
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          "required": [
+            "kind",
+            "ram_bytes",
+            "max_transfer_bytes",
+            "ticks_per_byte",
+            "minimum_ticks"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
           "description": "Declared NativeExr2PulseInputs startup inputs and execution limits.",
           "properties": {
             "capture_channel": {
@@ -25512,7 +25868,10 @@
                 "minimum": 0,
                 "type": "integer"
               },
-              "type": "array"
+              "type": [
+                "array",
+                "null"
+              ]
             },
             "clock": {
               "$ref": "#/$defs/NativeImageInputInputsClock"
@@ -25579,8 +25938,7 @@
             "phase_ack",
             "clock",
             "raw_dma_ticks",
-            "readback_ticks",
-            "cfa"
+            "readback_ticks"
           ],
           "type": "object"
         },
@@ -25829,6 +26187,10 @@
             "mode": {
               "$ref": "#/$defs/NativeDisplayTimingInputsMode"
             },
+            "output_hold": {
+              "default": false,
+              "type": "boolean"
+            },
             "stop_ticks": {
               "format": "uint64",
               "minimum": 0,
@@ -25926,6 +26288,53 @@
         },
         {
           "additionalProperties": false,
+          "description": "Declared contact-actuator startup inputs.",
+          "properties": {
+            "contacts": {
+              "items": {
+                "$ref": "#/$defs/NativeContactActuatorInputsPin"
+              },
+              "type": "array"
+            },
+            "drive": {
+              "items": {
+                "$ref": "#/$defs/NativeContactActuatorInputsPin"
+              },
+              "type": "array"
+            },
+            "initial_position": {
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "kind": {
+              "const": "contact-actuator",
+              "type": "string"
+            },
+            "positions": {
+              "items": {
+                "$ref": "#/$defs/NativeContactActuatorInputsPosition"
+              },
+              "type": "array"
+            },
+            "settle_ticks": {
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          "required": [
+            "kind",
+            "contacts",
+            "drive",
+            "initial_position",
+            "positions",
+            "settle_ticks"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
           "description": "Control-bus startup model selection.",
           "properties": {
             "kind": {
@@ -25942,7 +26351,14 @@
               "type": "array"
             },
             "profile": {
-              "$ref": "#/$defs/NativeControlBusProfile"
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/NativeControlBusProfile"
+                },
+                {
+                  "type": "null"
+                }
+              ]
             },
             "transfer_ticks": {
               "format": "uint64",
@@ -25953,8 +26369,7 @@
           "required": [
             "kind",
             "modes",
-            "transfer_ticks",
-            "profile"
+            "transfer_ticks"
           ],
           "type": "object"
         }
@@ -26195,6 +26610,17 @@
           },
           "type": "array"
         },
+        "mcu": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/RunMcuPacket"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Native serial endpoint that carries the MCU packet for a body with no\nattached microcontroller part."
+        },
         "nand_inputs": {
           "additionalProperties": {
             "$ref": "#/$defs/RunNandSceneInput"
@@ -26231,6 +26657,17 @@
           ],
           "description": "Intended operation for this input selection."
         },
+        "settings": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/RunPowerOnSettings"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Settings the camera starts with when the run declares no startup inputs."
+        },
         "start": {
           "anyOf": [
             {
@@ -26241,6 +26678,15 @@
             }
           ],
           "description": "Boot entry when it differs from the base run."
+        },
+        "ticks_per_second": {
+          "description": "Board timer rate for a run that declares no startup inputs.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
         },
         "usb_connected": {
           "description": "Initial cable state, including for runs with no complete reset input set.",
