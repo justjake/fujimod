@@ -3,8 +3,10 @@
 //! port opened and written by guest stores the way the firmware's serial
 //! driver opens it.
 use fujimod_emulator_cpu::arm;
-use fujimod_emulator_xp4_board::{Definition, Session};
+mod support;
+use fujimod_emulator_xp4_board::Definition;
 use serde_json::{Value, json};
+use support::Board;
 
 const CBAR: u32 = 0x2000_0000;
 const PORT: u32 = 0xfff3_9000;
@@ -17,44 +19,23 @@ fn input() -> Value {
         "initial_registers": [[["Pc", CODE]]]})
 }
 
-fn session(value: Value) -> Result<Session, String> {
-    let definition: Definition = serde_json::from_value(value).map_err(|e| e.to_string())?;
-    Session::new(definition, None, vec![])
-}
-
-fn word(session: &Session, address: usize) -> u32 {
-    let mut bytes = [0; 4];
-    session.read(address, &mut bytes).unwrap();
-    u32::from_le_bytes(bytes)
+fn session(value: Value) -> Result<Board, String> {
+    support::board(value)
 }
 
 #[test]
 fn the_ports_are_explicit_and_own_their_pages() {
-    let absent = session(input()).unwrap();
-    assert!(
-        !absent
-            .device_state_json()
-            .keys()
-            .any(|k| k.starts_with("pl011"))
-    );
+    assert!(session(input()).unwrap().states("pl011").is_empty());
     let mut one = input();
     one["pl011_uarts"] = json!([{"base": PORT, "irq": IRQ}]);
-    assert!(
-        session(one.clone())
-            .unwrap()
-            .device_state_json()
-            .contains_key("pl011")
-    );
+    assert_eq!(session(one.clone()).unwrap().states("pl011").len(), 1);
     let mut three = input();
     three["pl011_uarts"] = json!([
         {"base": PORT, "irq": IRQ},
         {"base": PORT + 0x1000},
         {"base": PORT + 0x2000},
     ]);
-    let states = session(three.clone()).unwrap().device_state_json();
-    for key in ["pl011#0", "pl011#1", "pl011#2"] {
-        assert!(states.contains_key(key), "{key}");
-    }
+    assert_eq!(session(three.clone()).unwrap().states("pl011").len(), 3);
     for address in [PORT, PORT + 0x44, PORT + 0xffc] {
         let mut conflict = one.clone();
         conflict["control_requests"] = json!([[address, 4]]);
@@ -92,7 +73,7 @@ fn a_guest_opens_port_0_and_its_transmit_interrupt_reaches_the_declared_line() {
         {"base": PORT + 0x1000},
         {"base": PORT + 0x2000},
     ]);
-    let board = session(selected).unwrap();
+    let mut board = session(selected).unwrap();
 
     // The driver's open: CR = 0, the baud rate divisors, a read-modify-write
     // of LCR_H; then enable the port, unmask the transmit interrupt, send one
@@ -131,28 +112,24 @@ fn a_guest_opens_port_0_and_its_transmit_interrupt_reaches_the_declared_line() {
             .write_register(0, arm::CORE[register], value.into())
             .unwrap();
     }
-    board.run_board(4000, 100).unwrap();
-    assert!(board.state(false).failure.is_none());
+    board.run(4000, 100).unwrap();
 
-    assert_eq!(word(&board, RESULT), 0x90, "FR: both FIFOs empty");
-    assert_eq!(word(&board, RESULT + 4), 1 << 5, "MIS: transmit");
-    assert_eq!(word(&board, RESULT + 8), 11, "IBRD");
-    let states = board.device_state_json();
-    let port0: Value = serde_json::from_str(&states["pl011#0"]).unwrap();
-    assert_eq!(port0["sent"], json!([0x41]));
-    assert_eq!(port0["lcr_h"], json!(0x60));
-    let port1: Value = serde_json::from_str(&states["pl011#1"]).unwrap();
-    assert_eq!(port1["sent"], json!([]));
+    assert_eq!(board.word(RESULT), 0x90, "FR: both FIFOs empty");
+    assert_eq!(board.word(RESULT + 4), 1 << 5, "MIS: transmit");
+    assert_eq!(board.word(RESULT + 8), 11, "IBRD");
+    let ports = board.states("pl011");
+    assert_eq!(ports[0]["sent"], json!([0x41]));
+    assert_eq!(ports[0]["lcr_h"], json!(0x60));
+    assert_eq!(ports[1]["sent"], json!([]));
     // The level interrupt stays pending until ICR clears the transmit bit.
-    let pending = &board.interrupt_state().unwrap()[0].pending;
-    assert_ne!(pending[(IRQ / 32) as usize] & 1 << (IRQ % 32), 0);
+    assert!(board.pending(IRQ));
 }
 
 #[test]
 fn declared_rl78_peer_replies_to_a_guest_uart_exchange() {
     let mut selected = input();
     selected["pl011_uarts"] = json!([{"base": PORT, "irq": IRQ, "rl78": {"flash_bytes": 49152}}]);
-    let board = session(selected).unwrap();
+    let mut board = session(selected).unwrap();
     let mut program = Vec::new();
     for byte in [1u32, 3, 0x9a, 0, 0x21, 0x42, 3] {
         program.extend([0xe3a0_2000 | byte, 0xe5c0_2000]); // MOV r2, byte; STRB r2, [r0]
@@ -170,13 +147,11 @@ fn declared_rl78_peer_replies_to_a_guest_uart_exchange() {
     board
         .write_register(0, arm::CORE[3], (RESULT as u32).into())
         .unwrap();
-    board.run_board(4000, 100).unwrap();
-    assert!(board.state(false).failure.is_none());
+    board.run(4000, 100).unwrap();
     let mut reply = [0u8; 7];
     board.read(RESULT, &mut reply).unwrap();
     assert_eq!(reply, [2, 3, 6, 32, 0, 0xd7, 3]);
-    let states = board.device_state_json();
-    let uart: Value = serde_json::from_str(&states["pl011"]).unwrap();
+    let uart = board.state("pl011");
     assert_eq!(uart["rl78"]["baud_set"], true);
     assert_eq!(uart["rl78"]["flash"], json!({"bytes": 49152}));
     assert_eq!(uart["rl78"]["frame"], json!({"bytes": 0}));

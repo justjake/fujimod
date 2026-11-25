@@ -49,10 +49,9 @@ pub fn build(
     let built = device_build::build(definition, &memory, storage_image, card_files, card_media)?;
     // Serial-flash execution is served by the controller's execute-in-place
     // pages, so the views the old engine mapped are not needed here.
-    let devices = built.devices.ok_or("the XP4 definition selects no devices")?;
     // The XP4 physical map is the identity on every core: each device
     // window, the timer and the GIC's distributor and CPU interface.
-    let mut windows = devices.guard_windows();
+    let mut windows = built.devices.as_ref().map(|devices| devices.guard_windows()).unwrap_or_default();
     windows.push((u64::from(cbar) + 0x1000, u64::from(cbar) + 0x3000));
     if let Some((base, _)) = &timer {
         windows.push((*base, base + TIMER_WINDOW));
@@ -63,7 +62,10 @@ pub fn build(
             graph.peripherals.push(factory::Peripheral { core, address: lo, physical: lo, size });
         }
     }
-    let (mut devices, mut nodes) = devices.into_graph()?;
+    let (mut devices, mut nodes) = match built.devices {
+        Some(devices) => devices.into_graph()?,
+        None => Default::default(),
+    };
     if let Some((base, model)) = timer {
         let id = devices.register(base, TIMER_WINDOW, Box::new(Timers { base, model, scheduled: None }))?;
         nodes.insert("xp4-interval-timers".into(), id);
@@ -101,6 +103,60 @@ pub fn build(
         window_action: None,
         recording_frames: Default::default(),
     })
+}
+
+/// Build the XP4 board from its definition alone: its cores start from
+/// `initial_registers`, DRAM from address 0 and each declared memory region
+/// are mapped identically on every core, and each core runs the definition's
+/// instruction rate. A discovery definition builds a discovery-mode bus.
+pub fn from_definition(
+    definition: Definition,
+    storage_image: Option<Vec<u8>>,
+    card_files: Vec<(String, Vec<u8>)>,
+    card_media: Vec<(usize, fujimod_emulator_devices::parts::sd_card::Card)>,
+    engine: RunEngine,
+) -> Result<fujimod_emulator_session::Session, String> {
+    use fujimod_emulator::board::memory::BusMapping;
+    let cores = definition.cores;
+    if definition.initial_registers.len() > cores {
+        return Err("XP4 initial registers name more cores than the definition".into());
+    }
+    let mut memory = vec![(0, definition.ram_size, 7)];
+    memory.extend(definition.memory_regions.iter().map(|r| (r.base, r.size, r.permissions)));
+    let graph = factory::Graph {
+        processors: (0..cores)
+            .map(|core| factory::Processor {
+                model: fujimod_emulator_cpu::Model::CortexA7,
+                registers: definition.initial_registers.get(core).cloned().unwrap_or_default(),
+                released: true,
+                parked_until_sgi: false,
+                mprofile: None,
+                rprofile: None,
+            })
+            .collect(),
+        ram: memory.iter().map(|&(base, size, _)| factory::Ram { base, size }).collect(),
+        dma_mappings: vec![BusMapping::ram(0, definition.ram_size)],
+        decoders: Vec::new(),
+        mappings: (0..cores)
+            .flat_map(|core| {
+                memory.iter().map(move |&(address, size, permissions)| factory::MemoryMap {
+                    core,
+                    address,
+                    physical: address,
+                    size,
+                    permissions,
+                })
+            })
+            .collect(),
+        peripherals: Vec::new(),
+        instructions_per_tick: fujimod_emulator_cpu::timeline::Ratio::new(
+            definition.instructions_per_tick.0,
+            definition.instructions_per_tick.1,
+        )?,
+    };
+    let mode = if definition.discovery { Mode::Discovery } else { Mode::Strict };
+    let record = serde_json::json!({"cores": cores, "ram_size": definition.ram_size, "mode": mode.name()});
+    build(graph, definition, storage_image, card_files, card_media, mode, engine, record)
 }
 
 /// The XP4 interval timer: eight channels, each pulsing its routed line.
