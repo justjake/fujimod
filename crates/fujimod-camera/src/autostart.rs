@@ -15,7 +15,7 @@
 //! is known.
 use fujimod_catalog::nand_boot::FirmwareNandBoot;
 use fujimod_catalog_remote::{Facts, FirmwareObservation, MenuTables};
-use fujimod_emulator_camera::{OpenError, Opened, Stage, read_flash, write_flash};
+use fujimod_emulator_camera::{OpenError, Opened, Stage, read_flash};
 use fujimod_emulator_session::Session;
 use fujimod_remote::{
     BoardRemote, Control, Remote, RemoteReader,
