@@ -1,26 +1,20 @@
 //! The boot cache: an open saves its compressed checkpoint and a later open
 //! with the same inputs restores it instead of booting.
 //!
-//! Set `FUJIMOD_FIRMWARE_LIBRARY` to a library laid out by name, and
-//! `FUJIMOD_TEST_SD_CARD` to a directory holding the release SD card.
+//! Set `FUJIMOD_FIRMWARE_LIBRARY` to a library laid out by name. Without it a
+//! test returns without opening a camera. The SD card is the published release
+//! card, downloaded once into the state directory.
 mod support;
-use support::{Boot, CardSource, library, state, test_card};
+use support::{FIRMWARE, library, request, state};
 
-use fujimod_emulator_camera::{BootCache, Library, Opened, Request, Stage, open};
+use fujimod_camera::{
+    BootCache, CardSource, Error, Library, Opened, Preset, Request, Stage, StateDir, open,
+};
 use std::{
     fs,
     path::{Path, PathBuf},
     time::{Duration, Instant, SystemTime},
 };
-
-fn request(boot: Boot, files: Vec<(String, Vec<u8>)>, cache: BootCache) -> Request {
-    let mut request = support::request(boot, None, cache);
-    if !files.is_empty() {
-        request.card.files = files;
-        request.start = fujimod_emulator_camera::Start::Rom;
-    }
-    request
-}
 
 /// The saved boots of one slot, sorted.
 fn saved(directory: &Path, slot: &str) -> Vec<PathBuf> {
@@ -46,22 +40,23 @@ fn stamp(path: &Path) -> (u64, SystemTime) {
     (metadata.len(), metadata.modified().unwrap())
 }
 
-fn open_at(library: &Library, request: Request) -> Result<Opened, String> {
-    open(library, &state(), request).map_err(|error| error.to_string())
+fn open_at(library: &Library, state: &StateDir, request: Request) -> Result<Opened, Error> {
+    open(library, state, request)
 }
 
 #[test]
 fn the_x70_sd_card_boot_is_saved_and_restored() {
-    let (Some(library), Some(card)) = (library(), test_card()) else {
-        eprintln!("skipped: set FUJIMOD_FIRMWARE_LIBRARY and FUJIMOD_TEST_SD_CARD");
+    let Some(library) = library() else {
+        eprintln!("skipped: set FUJIMOD_FIRMWARE_LIBRARY");
         return;
     };
-    let directory = state().boot_cache().join("x70-110");
+    let state = state();
+    let directory = state.boot_cache().join(FIRMWARE);
     let _ = fs::remove_dir_all(&directory);
-    let boot = || Boot::SdCard(CardSource::Directory(card.clone()));
+    let boot = || request(FIRMWARE, Preset::SdCard, None, BootCache::Reuse, true);
 
     let started = Instant::now();
-    let first = open_at(&library, request(boot(), Vec::new(), BootCache::Reuse)).unwrap();
+    let first = open_at(&library, &state, boot()).unwrap();
     let booted = started.elapsed();
     assert_eq!(first.stage, Stage::Rec);
     assert!(!first.cached, "the first open boots");
@@ -70,7 +65,7 @@ fn the_x70_sd_card_boot_is_saved_and_restored() {
     let saved_boot = entries[0].clone();
 
     let started = Instant::now();
-    let second = open_at(&library, request(boot(), Vec::new(), BootCache::Reuse)).unwrap();
+    let second = open_at(&library, &state, boot()).unwrap();
     let restored = started.elapsed();
     assert_eq!(second.stage, Stage::Rec);
     assert!(second.cached, "the second open restores the saved boot");
@@ -80,7 +75,12 @@ fn the_x70_sd_card_boot_is_saved_and_restored() {
     let before = stamp(&saved_boot);
 
     let started = Instant::now();
-    let third = open_at(&library, request(boot(), Vec::new(), BootCache::Bypass)).unwrap();
+    let third = open_at(
+        &library,
+        &state,
+        request(FIRMWARE, Preset::SdCard, None, BootCache::Bypass, true),
+    )
+    .unwrap();
     let bypassed = started.elapsed();
     assert_eq!(third.stage, Stage::Rec);
     assert!(!third.cached, "a bypass boots");
@@ -105,7 +105,8 @@ fn a_changed_card_saves_its_own_x70_boot() {
         eprintln!("skipped: set FUJIMOD_FIRMWARE_LIBRARY");
         return;
     };
-    let directory = state().boot_cache().join("x70-110");
+    let state = state();
+    let directory = state.boot_cache().join(FIRMWARE);
     let slot = "stock-interactive";
     for entry in saved(&directory, slot) {
         fs::remove_file(entry).unwrap();
@@ -115,18 +116,43 @@ fn a_changed_card_saves_its_own_x70_boot() {
 
     let first = open_at(
         &library,
-        request(Boot::Stock, one.clone(), BootCache::Reuse),
+        &state,
+        request(
+            FIRMWARE,
+            Preset::Stock,
+            Some(CardSource::Files(one.clone())),
+            BootCache::Reuse,
+            true,
+        ),
     )
     .unwrap();
     assert!(!first.cached);
     assert_eq!(saved(&directory, slot).len(), 1);
 
-    let reused = open_at(&library, request(Boot::Stock, one, BootCache::Reuse)).unwrap();
+    let reused = open_at(
+        &library,
+        &state,
+        request(
+            FIRMWARE,
+            Preset::Stock,
+            Some(CardSource::Files(one)),
+            BootCache::Reuse,
+            true,
+        ),
+    )
+    .unwrap();
     assert!(reused.cached, "the same card restores");
 
     let changed = open_at(
         &library,
-        request(Boot::Stock, two.clone(), BootCache::Reuse),
+        &state,
+        request(
+            FIRMWARE,
+            Preset::Stock,
+            Some(CardSource::Files(two.clone())),
+            BootCache::Reuse,
+            true,
+        ),
     )
     .unwrap();
     assert!(!changed.cached, "a changed card boots");
@@ -137,6 +163,17 @@ fn a_changed_card_saves_its_own_x70_boot() {
         saved(&directory, slot)
     );
 
-    let reused = open_at(&library, request(Boot::Stock, two, BootCache::Reuse)).unwrap();
+    let reused = open_at(
+        &library,
+        &state,
+        request(
+            FIRMWARE,
+            Preset::Stock,
+            Some(CardSource::Files(two)),
+            BootCache::Reuse,
+            true,
+        ),
+    )
+    .unwrap();
     assert!(reused.cached, "the changed card's boot was saved");
 }

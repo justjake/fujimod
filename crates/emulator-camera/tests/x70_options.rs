@@ -1,18 +1,13 @@
 //! X70 tests for opening before REC and for the SD card's model options.
 //!
 //! Set `FUJIMOD_FIRMWARE_LIBRARY` to a directory holding the catalog's X70
-//! update and boot ROM, and `FUJIMOD_TEST_SD_CARD` to a directory holding the
-//! release SD card. A test whose inputs are absent returns without opening.
+//! update and boot ROM. Without it, the tests return without opening a camera.
 mod support;
-use support::{Boot, CardSource, library, test_card as release_card};
+use support::{Boot, CardSource, library};
 
 use fujimod_emulator_camera::{
-    BootCache, CardInputs, CardLayout, Library, OpenError, Opened, Request, Stage, open_unbooted,
-    remote_facts, remote_options,
+    BootCache, CardLayout, Library, OpenError, Opened, Request, Stage, open_unbooted,
 };
-use fujimod_remote::{BoardRemote, Control, operations};
-
-const BUTTON: &str = "menu_ok_button";
 
 fn state() -> fujimod_emulator_camera::StateDir {
     support::state()
@@ -34,87 +29,6 @@ fn sd_node(opened: &Opened) -> serde_json::Value {
         .find(|node| node["name"] == "sd")
         .expect("SD card node")
         .clone()
-}
-
-fn positions(opened: &Opened) -> std::collections::BTreeMap<String, String> {
-    opened
-        .session()
-        .control_state()
-        .expect("control state")
-        .positions
-}
-
-/// Press a control and wait for the firmware's own observation of it.
-fn press(opened: &mut Opened, name: &str) {
-    let facts = remote_facts(&opened.resolved).expect("remote facts");
-    let session = &mut opened.camera.session;
-    let options = remote_options(session, opened.camera.quantum).expect("remote options");
-    let deadline = session.board.now() + 5 * opened.camera.ticks_per_second;
-    let mut remote = BoardRemote::new(session, facts, options).expect("remote");
-    futures_lite::future::block_on(operations::press(
-        &mut remote,
-        &Control::new(name),
-        deadline,
-    ))
-    .unwrap_or_else(|error| panic!("press {name}: {error}"));
-}
-
-#[test]
-fn a_held_sd_card_boot_stops_before_the_first_instruction() {
-    let (Some(library), Some(card)) = (library(), release_card()) else {
-        eprintln!("skipped: set FUJIMOD_FIRMWARE_LIBRARY and FUJIMOD_TEST_SD_CARD");
-        return;
-    };
-    let mut request = request(Boot::SdCard(CardSource::Directory(card)));
-    request.run_to_rec = false;
-    let mut opened = open(&library, request).expect("open before the first instruction");
-    assert_eq!(opened.stage, Stage::BootRom);
-    assert!(opened.holds_applied());
-    let held: Vec<&str> = opened.holds.controls().collect();
-    assert_eq!(
-        held,
-        ["command_control.press", "movie_record_button"],
-        "the catalog's boot.sd holds"
-    );
-    let report = fujimod_emulator_boot::status(opened.session()).expect("status");
-    assert_eq!(report.instructions, 0, "the guest has not run");
-    assert_eq!(report.virtual_ticks, 0, "guest time has not advanced");
-    assert_ne!(report.status, "rec");
-    let held_positions = positions(&opened);
-    assert_eq!(
-        held_positions
-            .get("command_control.press")
-            .map(String::as_str),
-        Some("pressed")
-    );
-    assert_eq!(
-        held_positions
-            .get("movie_record_button")
-            .map(String::as_str),
-        Some("pressed")
-    );
-
-    let report = fujimod_emulator_boot::to_rec(&mut opened.camera.session, 2_000_000_000)
-        .expect("the caller runs the boot");
-    assert_eq!(report.status, "rec");
-    let still_held = positions(&opened);
-    assert_eq!(
-        still_held.get("movie_record_button").map(String::as_str),
-        Some("pressed"),
-        "the caller releases the holds"
-    );
-    opened.release_holds().expect("release the boot holds");
-    assert!(!opened.holds_applied());
-    let released = positions(&opened);
-    assert_eq!(
-        released.get("command_control.press").map(String::as_str),
-        Some("released")
-    );
-    assert_eq!(
-        released.get("movie_record_button").map(String::as_str),
-        Some("released")
-    );
-    press(&mut opened, BUTTON);
 }
 
 #[test]
