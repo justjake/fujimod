@@ -52,6 +52,7 @@ impl<'a> Block<'a> {
 pub struct Catalog {
     soc: Value,
     rows: Vec<(Value, Value)>,
+    ips: Map<String, Value>,
     pub board: Value,
 }
 impl Catalog {
@@ -65,10 +66,17 @@ impl Catalog {
             .and_then(|machine| {
                 resolved.reference.body.hardware.as_ref()?.profiles.get(&machine.body_profile_id)
             });
-        let board = match profile {
+        let mut board = match profile {
             Some(profile) => serde_json::to_value(profile).map_err(|e| e.to_string())?,
             None => json!({}),
         };
+        // The run's reset inputs join the body profile, as the Python builder merges them.
+        if let Some(inputs) = resolved.hardware_inputs()? {
+            let inputs = serde_json::to_value(inputs).map_err(|e| e.to_string())?;
+            if let (Some(board), Some(reset)) = (board.as_object_mut(), inputs["reset"].as_object()) {
+                board.extend(reset.clone());
+            }
+        }
         let mut replacements = Map::new();
         for row in board["block_overrides"].as_array().into_iter().flatten() {
             let id = row["block_id"].as_str().ok_or("a block override names no block")?;
@@ -80,7 +88,7 @@ impl Catalog {
                 return Err(format!("body override names an absent processor block: {id}"));
             }
         }
-        let rows = blocks
+        let rows: Vec<(Value, Value)> = blocks
             .iter()
             .map(|row| {
                 let id = row["id"].as_str().unwrap_or_default();
@@ -88,7 +96,16 @@ impl Catalog {
                 (row.clone(), device)
             })
             .collect();
-        Ok(Self { soc, rows, board })
+        let reference = fujimod_catalog::reference::ReferenceCatalog::bundled()?;
+        let mut ips = Map::new();
+        for (row, _) in &rows {
+            if let Some(id) = row["ip"].as_str() {
+                if let Some(ip) = reference.ip(id) {
+                    ips.insert(id.into(), serde_json::to_value(ip).map_err(|e| e.to_string())?);
+                }
+            }
+        }
+        Ok(Self { soc, rows, ips, board })
     }
     pub fn blocks(&self) -> impl Iterator<Item = Block<'_>> {
         self.rows.iter().map(|(raw, device)| Block { raw, device })
@@ -164,10 +181,97 @@ impl Catalog {
             .map(|b| Ok(json!([b.base() + b.number("request_offset")?, b.number("ack_ticks")?])))
             .collect::<Result<Vec<_>, String>>()?;
         out.insert("control_requests".into(), json!(requests));
+        self.output_fields(&mut out)?;
         if self.soc["id"] == "xp4" {
             self.xp4_fields(&mut out)?;
         }
         Ok(out)
+    }
+
+    /// The offset of `register` in the design `block` instantiates.
+    fn register_offset(&self, block: Block<'_>, register: &str) -> Result<u64, String> {
+        let ip = block.raw["ip"].as_str().ok_or_else(|| format!("block {} names no design", block.id()))?;
+        self.ips
+            .get(ip)
+            .and_then(|design| design["registers"].as_array())
+            .and_then(|rows| rows.iter().find(|row| row["name"] == register))
+            .and_then(|row| row["offset"].as_u64())
+            .ok_or_else(|| format!("design {ip} declares no {register} register"))
+    }
+
+    /// Displays, video outputs, USB, input pins and SD card clocks.
+    fn output_fields(&self, out: &mut Map<String, Value>) -> Result<(), String> {
+        let lcdc = self
+            .with_device("display")
+            .into_iter()
+            .filter(|b| b.device.get("pixel_clock_ticks").is_some())
+            .map(|b| {
+                let mut row = vec![json!(b.base()), b.device["pixel_clock_ticks"].clone()];
+                row.extend(b.lines().into_iter().map(Value::from));
+                row.push(b.device.get("picture_layout").cloned().unwrap_or(Value::Null));
+                row.push(b.device.get("video_layout").cloned().unwrap_or(Value::Null));
+                Ok(Value::Array(row))
+            })
+            .collect::<Result<Vec<_>, String>>()?;
+        out.insert("lcdc".into(), json!(lcdc));
+        let movdc = self.with_device("movdc");
+        let frames = &self.board["processed_frame_input"];
+        if !movdc.is_empty() && !frames.is_object() {
+            return Err("video outputs require the body's processed frame input".into());
+        }
+        let movdc = movdc
+            .into_iter()
+            .map(|b| Ok(json!([b.base(), b.interrupt(None), b.number("reset_ticks")?,
+                frames["frame_period_ticks"], frames["luma"]])))
+            .collect::<Result<Vec<_>, String>>()?;
+        out.insert("movdc".into(), json!(movdc));
+        if let Some(phy) = self.device("usb_phy") {
+            let input = &self.board["usb_phy_input"];
+            out.insert("usb_phy".into(), json!([phy.base(), input["registers"], input["parallel"]]));
+        }
+        let cable = &self.board["usb_cable"];
+        if let Some(usb) = self.device("xpp_usb").filter(|_| cable.is_object()) {
+            let speed = match cable["speed"].as_str() {
+                Some("high") => 0,
+                Some("super") => 4,
+                other => return Err(format!("unknown USB cable speed {other:?}")),
+            };
+            out.insert("xpp_usb".into(), json!([usb.base(), usb.interrupt(None),
+                usb.number("command_ticks")?, usb.number("transaction_ticks")?, speed]));
+        }
+        if let Some(gpio) = self.device("gpio") {
+            out.insert("gpio_base".into(), json!(gpio.base()));
+        }
+        let mut clocks = self
+            .with_device("sd_host_clock")
+            .into_iter()
+            .map(|b| Ok((b.base(), b.number("settle_ticks")?)))
+            .collect::<Result<Vec<_>, String>>()?;
+        let hosts = self.with_device("sd_host");
+        if let Some(&first) = hosts.first() {
+            let mut settles = hosts.iter().map(|h| h.number("clock_ticks")).collect::<Result<Vec<_>, _>>()?;
+            settles.dedup();
+            if settles.len() != 1 {
+                return Err("XP4 SD hosts declare different clock settle times".into());
+            }
+            let offset = self.register_offset(first, "clock_control")?;
+            clocks.extend(hosts.iter().map(|h| (h.base() + offset, settles[0])));
+        }
+        clocks.sort_unstable();
+        // A host with a declared SD card owns its page, clock halfword included.
+        let owned: Vec<u64> = self.board["sd_cards"]
+            .as_array()
+            .into_iter()
+            .flatten()
+            .filter_map(|card| card["host_base"].as_u64())
+            .collect();
+        let clocks: Vec<Value> = clocks
+            .into_iter()
+            .filter(|(address, _)| !owned.contains(&(address & !0xfff)))
+            .map(|(a, t)| json!([a, t]))
+            .collect();
+        out.insert("sd_clocks".into(), json!(clocks));
+        Ok(())
     }
 
     /// The XP4 imaging and still devices, each from the block that owns it.
