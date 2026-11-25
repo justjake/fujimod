@@ -483,8 +483,9 @@ impl SdioHost {
         if let Some(r) = &self.request {
             let [normal, error, signal, error_signal] = r.gates;
             let masked = normal & 0xfe3f & 0xffc4;
-            let allowed = r.pio
-                && r.due.is_none()
+            // XPP can service a card IRQ while a command is pending. Its
+            // handler masks the interrupt gates without changing the command.
+            let allowed = (self.buffered_io || r.pio && r.due.is_none())
                 && match o {
                     0x34 => [
                         0,
@@ -931,5 +932,29 @@ mod tests {
         m.start(&mut cx, 0x341a0010).unwrap();
         assert!(m.request.is_some());
         assert_eq!(cx.refusal(), None);
+    }
+
+    #[test]
+    fn xpp_card_interrupt_can_mask_gates_during_cmd52() {
+        let mut m = model(Protocol::Mt5931).with_buffered_io();
+        let mut h = Ram::new(0x10000);
+        setup(&mut m, &mut h);
+        m.state = State::Transfer;
+        command(&mut m, &mut h, 0x341a0000, 0x90000801);
+        let deadline = m.request.as_ref().unwrap().due;
+        m.regs.set(0x30, 0x100);
+        write(&mut m, &mut h, 0x30, 0x100);
+        write(&mut m, &mut h, 0x34, 0xfe3f);
+        assert_eq!(m.request.as_ref().unwrap().due, deadline);
+        let mut cx = h.cx();
+        m.write(&mut cx, BASE + 8, 2, 0x1234);
+        assert_eq!(
+            cx.refusal(),
+            Some("SDIO configuration changed during command")
+        );
+        due(&mut m, &mut h);
+        assert!(m.request.is_none());
+        assert_eq!(m.regs.get(0x30), 1);
+        assert_eq!(u32::from_le_bytes(m.response[..4].try_into().unwrap()), 0);
     }
 }
