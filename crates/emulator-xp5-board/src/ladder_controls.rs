@@ -274,17 +274,17 @@ fn xh2s_extension(options: &mut ladders::Options, initial_mode: u16) -> Result<(
         edges_per_step,
         basis: basis.into(),
     };
-    // The command dials have different mechanical detents. Clockwise is
-    // 3 → 1 → 0 for the front's half cycle and continues to 2 → 3 on the rear.
+    // Match one stock firmware event per scripted step. The front emits
+    // on each transition and the rear emits once per full cycle.
     options.front_dial = Some(dial(
         [1, 2],
-        -2,
-        "Encoder sampler 0x172d364 reads ADC1/2; the front dial advances two phases per detent.",
+        -1,
+        "Encoder sampler 0x172d364 reads ADC1/2. Phase 3 to 1 emits CMD2_RIGHT (0x45).",
     ));
     options.rear_dial = Some(ladders::CommandDial::Quadrature(dial(
         [8, 9],
-        -4,
-        "Encoder sampler 0x172d364 reads ADC8/9; the rear dial advances four phases per detent.",
+        4,
+        "Encoder sampler 0x172d364 reads ADC8/9. Phase 3 to 2 to 0 to 1 to 3 emits CMDL_RIGHT (0x27).",
     )));
 
     options.gpio_keys.push(ladders::GpioKey {

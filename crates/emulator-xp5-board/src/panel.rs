@@ -754,7 +754,7 @@ mod tests {
     }
 
     #[test]
-    fn xh2s_dials_use_half_and_full_gray_cycles() {
+    fn xh2s_dial_steps_match_the_stock_decoder() {
         let panel = xh2s(3774);
         let dials: Vec<_> = panel
             .confirmation
@@ -772,8 +772,8 @@ mod tests {
         assert_eq!(
             dials,
             [
-                ("rear_command_dial", "rear-dial", -4),
-                ("front_command_dial", "front-dial", -2),
+                ("rear_command_dial", "rear-dial", 4),
+                ("front_command_dial", "front-dial", -1),
             ]
         );
     }
