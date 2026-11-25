@@ -14,6 +14,10 @@ export function stepNumber(stage: SetupStage): number {
   return SETUP_PATH.indexOf(stage) + 1;
 }
 
-/** The bring-up graph's camera stages: id, title and prerequisites. */
-export const CAMERA_STAGES: readonly { id: string; title: string; requires: readonly string[] }[] =
-  stages.stages;
+/** The bring-up graph's camera stages: id, title, prerequisites and alternatives (at least one must pass). */
+export const CAMERA_STAGES: readonly {
+  id: string;
+  title: string;
+  requires: readonly string[];
+  requires_any: readonly string[];
+}[] = stages.stages;
