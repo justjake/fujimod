@@ -55,22 +55,22 @@ Give `sd_card` to boot a FujiMod tree from a directory instead:
 }
 ```
 
-For automatic boot, let the card's installer write internal flash once:
+For autostart, let the card's installer write internal flash once:
 
 ```json
 {
   "firmware": "x70-110",
-  "boot": "automatic-boot",
+  "boot": "autostart",
   "execution_policy": "interactive"
 }
 ```
 
 The builder holds the body's SD boot controls from power-on and releases
-them at REC; an automatic boot holds nothing and starts from the kept flash.
-The first automatic open boots the card, chooses AUTOMATIC on its FUJIMOD
+them at REC; an autostart holds nothing and starts from the kept flash.
+The first autostart open boots the card, chooses AUTOMATIC on its FUJIMOD
 SET-UP BOOT SETUP page, and keeps the stage-1 blocks the card's installer
 wrote.
-It fetches a release card once into the firmware library and checks every
+It downloads a release card once into the state directory and checks every
 file's SHA-256 before booting. A `stock` boot takes no `sd_card`, or uses
 its files as extra files on the otherwise empty card. `execution_policy`
 defaults to `exact`.

@@ -204,12 +204,13 @@ cloud machine with Mesa's software Vulkan driver:
 firmware identity and one of its boots:
 
 - `firmware`: the catalog release, such as `x70-110`.
-- `boot`: `stock`, `sd-card` or `automatic-boot`. An `sd-card` boot holds
+- `boot`: `stock`, `sd-card` or `autostart`. An `sd-card` boot holds
   the body's `boot.sd` controls through the session contact driver from
-  power-on and releases them at REC; an `automatic-boot` holds nothing and
+  power-on and releases them at REC; an `autostart` holds nothing and
   drives the card's AUTOMATIC boot installer into internal flash once.
 - `sd_card`: the directory for the virtual SD card. An `sd-card` or
-  `automatic-boot` without it fetches the current release card for the
+  `autostart` without it downloads the current release card into the state
+  directory for the
   firmware; for `stock` its files are added to the otherwise empty card.
 - `execution_policy`: `exact` (the default) or `interactive`.
 - `boot_cache`: restore a saved boot with the same inputs instead of
@@ -217,8 +218,10 @@ firmware identity and one of its boots:
   saves nothing.
 - `name`: the camera id later calls use.
 
-The builder finds the firmware update, boot ROM and reference camera
-sections in the directory named by `FUJIMOD_FIRMWARE_LIBRARY`, resolves
+The FujiMod layer finds the firmware update and boot ROM by name in the
+directory named by `FUJIMOD_FIRMWARE_LIBRARY` (`<firmware-id>/FPUPDATE.DAT`
+and `<body-id>/boot-rom.bin`), keeps downloads, autostart flash and the boot
+cache under `FUJIMOD_STATE_DIR` (default `/tmp/fujimod`), and resolves
 the firmware's registered run configuration, and owns the boot holds, card
 media and control connection. Callers never name a configuration,
 overlays, update files, boot ROMs, NAND images, GPIO levels or key
