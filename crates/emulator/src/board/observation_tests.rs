@@ -591,6 +591,73 @@ fn watch_refuses_processors_it_cannot_observe() {
 }
 
 #[test]
+fn a53_write_watch_ignores_read_spin_and_bounds_matching_stores() {
+    let mut graph = a7_graph();
+    graph.processors[0].model = Model::ArmV8A;
+    graph.processors[0].registers = vec![(Register::Pc, CODE), (Register::Pstate, 0x3c5)];
+    graph.processors.push(Processor {
+        model: Model::CortexM4,
+        registers: vec![],
+        released: false,
+        parked_until_sgi: false,
+        mprofile: Some(super::mprofile::Config {
+            clock_hz: 600_000_000,
+            board_ticks_per_second: 1_000_000_000,
+            vector_base: 0,
+        }),
+        rprofile: None,
+    });
+    graph.mappings.push(MemoryMap {
+        core: 1,
+        address: 0,
+        physical: OTHER,
+        size: 0x1000,
+        permissions: 7,
+    });
+    let mut board = graph
+        .build(
+            Options::new(RunEngine::Unicorn).with_translation_cache_size_bytes(1 << 20),
+            Bus::new(Mode::Strict),
+            None,
+        )
+        .unwrap();
+    board.write_register(0, Register::X(1), PAGE).unwrap();
+    board.write_register(0, Register::X(2), 0x1234).unwrap();
+
+    // Forty loads exceed the watch limit, but only the following store is observed.
+    let mut read_spin = vec![0xb940_0020; 40]; // ldr w0, [x1]
+    read_spin.push(0xb900_0022); // str w2, [x1]
+    words(&board, CODE, &read_spin);
+    let mut watch = board
+        .memory_write_watch_begin(vec![(PAGE, PAGE + 16)], 32, board.mappings().to_vec())
+        .unwrap();
+    run(&mut board, read_spin.len() as u64);
+    let first = records(&watch);
+    assert_eq!(first.len(), 1, "{first:?}");
+    assert_eq!(first[0]["source"], "cpu-write");
+    assert_eq!(first[0]["physical"], PAGE);
+    assert_eq!(first[0]["address"], PAGE);
+    assert_eq!(first[0]["size"], 4);
+    assert_eq!(first[0]["value"], 0x1234);
+    assert_eq!(first[0]["byte_order"], "little");
+    assert_eq!(first[0]["before"], serde_json::json!([0, 0, 0, 0]));
+    assert_eq!(first[0]["core"], 0);
+    assert_eq!(first[0]["pc"], CODE + 40 * 4);
+    assert_ne!(first[0]["before"], serde_json::Value::Null);
+    assert_ne!(first[0]["tick"], serde_json::Value::Null);
+    assert!(watch.records.borrow().state()["violation"].is_null());
+
+    // The same observer stores 32 records and marks overflow on the next match.
+    let stores = vec![0xb900_0022; 33]; // str w2, [x1]
+    words(&board, CODE + 0x200, &stores);
+    board.write_register(0, Register::Pc, CODE + 0x200).unwrap();
+    run(&mut board, stores.len() as u64);
+    assert_eq!(records(&watch).len(), 32);
+    assert!(!watch.records.borrow().state()["violation"].is_null());
+    board.memory_watch_end(&mut watch).unwrap();
+}
+
+#[test]
 fn range_digest_reports_the_hash_and_the_nonzero_page_runs_of_bus_memory() {
     use sha2::{Digest, Sha256};
     let board = a7_board();

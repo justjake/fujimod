@@ -1295,6 +1295,13 @@ impl Board {
         s.with_host(&self.cpus, |_, host| host.set_core_irq(core, line, high))?;
         s.refresh_deadlines()
     }
+    /// Apply an explicit external reset input to a processor core.
+    pub fn reset_core(&mut self, core: usize, asserted: bool) -> Result<(), String> {
+        let mut s = self.state.borrow_mut();
+        s.with_host(&self.cpus, |_, host| host.reset_core(core, asserted))?;
+        s.refresh_deadlines()?;
+        s.refresh_processors()
+    }
     pub fn configure_mprofile(
         &mut self,
         core: usize,
