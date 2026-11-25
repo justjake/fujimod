@@ -66,6 +66,26 @@ def test_arguments_and_returns_preserve_all_64_bits() -> None:
         assert result["allowed_code"] == [[CODE, CODE + len(code)]]
 
 
+def test_scalar_conversion_sqrt_and_zero_compare_execute_without_stubs() -> None:
+    code = words(
+        0x9E220000,  # SCVTF S0,X0.
+        0x1E204001,  # FMOV S1,S0.
+        0x1E21C000,  # FSQRT S0,S0.
+        0x9E380001,  # FCVTZS X1,S0.
+        0x1E202038,  # FCMPE S1,#0.0.
+        0x54000044,  # B.MI +8; the positive input does not take it.
+        0x52800042,  # MOV W2,#2.
+        0xD65F03C0,  # RET.
+    )
+    with harness(code) as h:
+        result = h.call(CODE, args=(16,), max_instructions=10)
+        assert result["failure"] is None and result["returned"]
+        assert result["registers"]["x1"] == 4
+        assert result["registers"]["x2"] == 2
+        assert result["instructions"] == 8
+        assert result["stubs"] == []
+
+
 @pytest.mark.parametrize(
     "code, reason",
     [
