@@ -195,6 +195,20 @@ impl YcOutput {
     pub fn take_deferred(&self) -> Option<ReszJob> {
         self.0.lock().unwrap().deferred.take()
     }
+
+    /// A class-3 RAW movie start is fed by the separate packed RAW input path.
+    pub fn take_raw_movie_job(&self) -> Option<ReszJob> {
+        let mut shared = self.0.lock().unwrap();
+        if shared
+            .deferred
+            .as_ref()
+            .is_some_and(ReszJob::class_three_inline)
+        {
+            shared.deferred.take()
+        } else {
+            None
+        }
+    }
 }
 
 /// Where a scaler of the RESZ family keeps its address words (see the module notes); the size
@@ -537,6 +551,15 @@ impl ReszJob {
         (word(0x10) >> 4) & 3 == 2 && (word(dst + 0xc) != 0 || word(dst + 8) & 7 != 0)
     }
 
+    fn class_three_inline(&self) -> bool {
+        let word = |o| self.words.get(&o).copied().unwrap_or(0);
+        let dst = self.layout.output;
+        self.base == 0xffd0c000
+            && word(0x10) == 0x1000_0131
+            && self.inline_source()
+            && (word(dst + 8) & 7 != 0 || word(dst + 0xc) != 0)
+    }
+
     /// Whether the source address words are zero: the source is the RIFP inline stream.
     pub fn inline_source(&self) -> bool {
         let word = |o: u64| self.words.get(&o).copied().unwrap_or(0);
@@ -571,6 +594,55 @@ impl ReszJob {
                 line[2 * pair + 1] = chroma[at + x + 1];
             }
             cx.ram_write(p.out_chroma + (y * p.out_pitch) as u64, &line)?;
+        }
+        Ok(p.geometry)
+    }
+
+    /// Scale a class-3 inline RIFP movie stream. The stream uses limited-range
+    /// 8-bit Y/Cb/Cr and the output stores Cb/Cr interleaved every second row.
+    pub fn scale_raw_movie(
+        &self,
+        cx: &mut Cx<'_>,
+        width: usize,
+        lines: usize,
+        sample: impl Fn(usize, usize) -> [i32; 3],
+    ) -> Result<String, String> {
+        if !self.class_three_inline() {
+            return Err("RIFP RAW movie requires a class-3 inline RESZ start".into());
+        }
+        let size = self.words[&0x14];
+        let source_width = (size & 0xffff) as usize + 1;
+        let source_lines = (size >> 16) as usize + 1;
+        let p = self.two_plane_plan(TwoPlaneSource::Stream(source_width, source_lines))?;
+        // The source extent includes padding. Only the programmed crop needs
+        // to hold active RIFP samples. Sampling the padding is unsupported.
+        let last_column = (p.origin.0 + p.crop.0 - 1) << p.shift.0;
+        let last_line = (p.origin.1 + p.crop.1 - 1) << p.shift.1;
+        if last_column >= width || last_line >= lines {
+            return Err(format!(
+                "{} samples outside the active {width}x{lines} RIFP stream",
+                p.geometry
+            ));
+        }
+        if p.out.0 > 8192 || p.out.1 > 8192 || p.output == p.out_chroma {
+            return Err("unsupported two-plane RAW movie destination geometry".into());
+        }
+        let mut row = vec![0; p.out.0];
+        for y in 0..p.out.1 {
+            for (x, pixel) in row.iter_mut().enumerate() {
+                *pixel = sample(p.column(x), p.row(y))[0] as u8;
+            }
+            cx.ram_write(p.output + (y * p.out_pitch) as u64, &row)?;
+            if y % 2 != 0 {
+                continue;
+            }
+            for (pair, chroma) in row.chunks_exact_mut(2).enumerate() {
+                let x = p.column(2 * pair) & !1;
+                let y = p.row(y) & !1;
+                let color = sample(x, y);
+                chroma.copy_from_slice(&[color[1] as u8, color[2] as u8]);
+            }
+            cx.ram_write(p.out_chroma + (y / 2 * p.out_pitch) as u64, &row)?;
         }
         Ok(p.geometry)
     }
@@ -1265,6 +1337,7 @@ pub struct Resz {
     rifp: Option<YcOutput>,
     /// The movie path ([`Resz::with_movie_path`]): the RIFP inline picture for two-plane jobs.
     movie: Option<YcOutput>,
+    raw_movie: bool,
 }
 
 impl Resz {
@@ -1284,6 +1357,7 @@ impl Resz {
             stub,
             rifp,
             movie: None,
+            raw_movie: false,
         }
     }
     /// The movie path (`XT5_MOVIE_PATH=real`): a start whose destination is two-plane 4:2:0
@@ -1295,6 +1369,11 @@ impl Resz {
         self.movie = Some(output);
         self
     }
+    pub fn with_raw_movie_path(mut self, output: YcOutput) -> Self {
+        self.raw_movie = true;
+        self.with_movie_path(output)
+    }
+
     fn job(&self) -> ReszJob {
         ReszJob {
             base: self.base,
@@ -1358,8 +1437,15 @@ impl Device for Resz {
             return;
         }
         let job = self.job();
+        if self.raw_movie
+            && job.words.get(&0x10).is_some_and(|word| word >> 4 & 3 == 3)
+            && !job.class_three_inline()
+        {
+            cx.fail("unsupported class-3 RESZ layout");
+            return;
+        }
         if let Some(movie) = &self.movie
-            && job.two_plane()
+            && (job.two_plane() || self.raw_movie && job.class_three_inline())
         {
             if job.inline_source() {
                 let mut shared = movie.0.lock().unwrap();
@@ -1980,6 +2066,92 @@ mod tests {
         });
         io.write(cx, 0xffd0104c, 4, 1);
         rifp
+    }
+
+    #[test]
+    fn first_queued_raw_movie_stripe_develops_into_class_3_resz() {
+        use super::super::preview::{Io, Preview, StillPath};
+        use fujimod_emulator_imaging::frame::ycbcr;
+        use fujimod_emulator_sensor_input::sensor::Sensor;
+
+        let colour = [204, 52, 26];
+        let lut = xtrans::Response::xt5(1.).mosaic_lut();
+        let mut host = RecordingHost {
+            ram_base: RAM,
+            ram: vec![0xee; 0x4000],
+            ..Default::default()
+        };
+        let (width, height, pitch) = (24, 16, 40);
+        let mut samples = vec![0; 2 * width];
+        for y in 0..height {
+            xtrans::mosaic_line_with(&colour.repeat(width), (y, 0), &mut samples, &lut);
+            xtrans::pack12_line(&samples, &mut host.ram[y * pitch..][..width * 3 / 2]);
+        }
+        let sensor = Sensor::new(None, (0, 0));
+        sensor.0.lock().unwrap().movie_raws.push(StillRaw {
+            address: RAM,
+            width: width as u32,
+            lines: height as u32,
+            pitch: pitch as u64,
+            packed12: true,
+            ..Default::default()
+        });
+        let output = YcOutput::default();
+        let mut io = Io::default();
+        let mut rifp = Preview::new(
+            true,
+            io.clone(),
+            &toml::from_str("completion_us=100\nsource_luma=128").unwrap(),
+        )
+        .unwrap()
+        .with_raw_movie()
+        .with_still_path(StillPath {
+            sensor,
+            output: output.clone(),
+            develop: false,
+            movie: true,
+        });
+        let mut resz = resz().with_raw_movie_path(output.clone());
+        let mut cx = Cx::new(&mut host, 0, 0, 0);
+        io.write(&mut cx, 0xffd0104c, 4, 1);
+        for (o, value) in [
+            (0x10, 0x1000_0131),
+            (0x14, 39 << 16 | 39),
+            (0x1c, 9 << 16 | 14),
+            (0x20, 5 << 16 | 7),
+            (0xe8, RAM as u32 + 0x2000),
+            (0xf0, RAM as u32 + 0x3000),
+            (0xf4, 16),
+            (0x04, 1),
+        ] {
+            resz.write(&mut cx, 0xffd0c000 + o, 4, u64::from(value));
+        }
+        for (o, value) in [
+            (0x08, 0x1012_2010),
+            (0x0c, RAM as u32 + 43),
+            (0x1c, pitch as u32),
+            (0x20, 14 << 16 | 4),
+            (0x28, 19),
+            (0x2c, 13),
+            (0x04, 1),
+        ] {
+            rifp.write(&mut cx, 0xffd02000 + o, 4, u64::from(value));
+        }
+        assert_eq!(&host.ram[0x2000..0x2008], &[0xee; 8]);
+        host.now = rifp.next_deadline(0).unwrap();
+        let mut cx = Cx::new(&mut host, 0, 0, 0);
+        rifp.advance(&mut cx);
+        assert!(cx.refusal().is_none(), "{:?}", cx.refusal());
+        let [luma, cb, cr] = ycbcr(colour).map(|v| v as u8);
+        for row in host.ram[0x2000..][..6 * 16].chunks_exact(16) {
+            assert_eq!(&row[..8], &[luma; 8]);
+            assert_eq!(&row[8..], &[0xee; 8]);
+        }
+        for row in host.ram[0x3000..][..3 * 16].chunks_exact(16) {
+            assert_eq!(&row[..8], &[cb, cr, cb, cr, cb, cr, cb, cr]);
+            assert_eq!(&row[8..], &[0xee; 8]);
+        }
+        assert!(output.take_raw_movie_job().is_none());
     }
 
     /// Movie path, YC modes (FHD): the queue starts RESZ (source 0, destination class 2)

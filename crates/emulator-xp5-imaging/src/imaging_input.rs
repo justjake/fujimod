@@ -71,6 +71,12 @@ impl Device for Phy {
     }
 }
 
+#[derive(Clone, Copy, Serialize, Deserialize)]
+enum FrameEdge {
+    Start,
+    End,
+}
+
 /// ff946000 input engine reset/ready gate (2f37170/2f3719c).
 /// Other input-engine configuration remains visible in explore reports.
 #[derive(Default, Serialize, Deserialize)]
@@ -110,8 +116,45 @@ pub struct Input {
     /// Device configuration from the manifest, not guest state.
     #[serde(skip)]
     idle_status: bool,
+    /// Functional frame period and active interval declared by the board.
+    #[serde(skip)]
+    cadence: Option<[u64; 2]>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    frame_edge: Option<(u64, FrameEdge)>,
 }
 impl Input {
+    pub fn with_cadence(mut self, period: u64, active: u64) -> Result<Self, String> {
+        if active == 0 || active >= period {
+            return Err(
+                "input engine active interval must be between zero and the frame period".into(),
+            );
+        }
+        self.cadence = Some([period, active]);
+        Ok(self)
+    }
+
+    fn advance_frame_edges(&mut self, cx: &mut Cx<'_>) {
+        let Some([period, active]) = self.cadence else {
+            return;
+        };
+        while let Some((at, edge)) = self.frame_edge {
+            if at > cx.now() {
+                break;
+            }
+            let (mask, delay, next) = match edge {
+                FrameEdge::Start => (2, active, FrameEdge::End),
+                FrameEdge::End => (4, period - active, FrameEdge::Start),
+            };
+            self.frame_edge = at.checked_add(delay).map(|at| (at, next));
+            // Preserve the one pending cause until acknowledged. The
+            // behavior of coincident edges is a functional approximation.
+            if self.pending == 0 {
+                self.pending = mask;
+                cx.set_irq(229, true);
+            }
+        }
+    }
+
     /// Let every aligned word of the window that has no modeled meaning read back its last
     /// write (0 before any write) instead of stopping as unmodeled. A bring-up option.
     pub fn with_retained_words(mut self) -> Self {
@@ -165,6 +208,7 @@ impl Device for Input {
         let offset = address.wrapping_sub(0xff946000);
         self.advance(cx);
         if size == 4 && offset == 0 {
+            self.frame_edge = None;
             self.frame_completion = false;
             self.ready = value & 1 != 0;
             self.generation = self.generation.wrapping_add(1);
@@ -174,6 +218,7 @@ impl Device for Input {
                 cx.schedule(self.deadline.unwrap(), self.generation);
             }
         } else if size == 4 && offset == 4 {
+            self.frame_edge = None;
             self.frame_completion = true;
             self.generation = self.generation.wrapping_add(1);
             self.deadline = None;
@@ -207,13 +252,22 @@ impl Device for Input {
     }
     fn next_deadline(&self, _: u64) -> Option<u64> {
         self.deadline
+            .into_iter()
+            .chain(self.frame_edge.map(|(at, _)| at))
+            .min()
     }
     fn advance(&mut self, cx: &mut Cx<'_>) {
-        if !self.deadline.is_some_and(|at| at <= cx.now()) {
+        self.advance_frame_edges(cx);
+        let Some(at) = self.deadline.filter(|&at| at <= cx.now()) else {
             return;
-        }
+        };
         self.deadline = None;
         if self.frame_completion && self.running {
+            self.frame_edge = self
+                .cadence
+                .and_then(|[period, _]| at.checked_add(period))
+                .map(|time| (time, FrameEdge::Start));
+
             self.running = false;
             self.pending |= 1;
             self.frames += 1;
@@ -224,15 +278,16 @@ impl Device for Input {
             self.ready = true;
         }
     }
-    fujimod_emulator_devices::checkpoint_fields!(ready: bool, generation: u64, running: bool, pending: u32, frames: u64, deadline: Option<u64>, frame_completion: bool, acknowledge: bool, configuration: [u32; 16], word_08: u32, word_0c: u32, #[serde(default)] retained: BTreeMap<u64, u32>);
+    fujimod_emulator_devices::checkpoint_fields!(ready: bool, generation: u64, running: bool, pending: u32, frames: u64, deadline: Option<u64>, frame_completion: bool, acknowledge: bool, configuration: [u32; 16], word_08: u32, word_0c: u32, #[serde(default)] retained: BTreeMap<u64, u32>, #[serde(default)] frame_edge: Option<(u64, FrameEdge)>);
     fn save(&self) -> Value {
         serde_json::to_value(self).unwrap()
     }
     fn restore(&mut self, value: &Value) -> Result<(), String> {
-        let (retain_words, idle_status) = (self.retain_words, self.idle_status);
+        let (retain_words, idle_status, cadence) =
+            (self.retain_words, self.idle_status, self.cadence);
         *self = serde_json::from_value(value.clone())
             .map_err(|e| format!("input engine checkpoint: {e}"))?;
-        (self.retain_words, self.idle_status) = (retain_words, idle_status);
+        (self.retain_words, self.idle_status, self.cadence) = (retain_words, idle_status, cadence);
         Ok(())
     }
 }
@@ -248,6 +303,40 @@ mod tests {
             .find(|(n, _)| *n == line)
             .is_some_and(|(_, v)| *v)
     }
+    #[test]
+    fn input_edges_follow_a_start_and_resume_from_a_checkpoint() {
+        let period = 33_333_000;
+        let active = 10_000_000;
+        let mut host = RecordingHost::default();
+        let mut input = Input::default().with_cadence(period, active).unwrap();
+        assert_eq!(input.next_deadline(0), None);
+        input.write(&mut Cx::new(&mut host, 0, 0, 0), 0xff946004, 4, 1);
+        host.now = 1_000_000;
+        input.advance(&mut Cx::new(&mut host, 0, 0, 0));
+        assert_eq!(input.pending, 1);
+        input.write(&mut Cx::new(&mut host, 0, 0, 0), 0xff94610c, 4, 0);
+        assert!(!irq(&host, 229));
+
+        let checkpoint = input.checkpoint().unwrap();
+        let mut restored = Input::default().with_cadence(period, active).unwrap();
+        restored.restore_checkpoint(&checkpoint).unwrap();
+        host.now += period - 1;
+        restored.advance(&mut Cx::new(&mut host, 0, 0, 0));
+        assert_eq!(restored.pending, 0);
+        host.now += 1;
+        restored.advance(&mut Cx::new(&mut host, 0, 0, 0));
+        assert_eq!(restored.pending, 2);
+        assert!(irq(&host, 229));
+        restored.write(&mut Cx::new(&mut host, 0, 0, 0), 0xff94610c, 4, 0);
+        host.now += active;
+        restored.advance(&mut Cx::new(&mut host, 0, 0, 0));
+        assert_eq!(restored.pending, 4);
+        restored.write(&mut Cx::new(&mut host, 0, 0, 0), 0xff94610c, 4, 0);
+        restored.write(&mut Cx::new(&mut host, 0, 0, 0), 0xff946004, 4, 0);
+        assert_eq!(restored.next_deadline(host.now), None);
+        assert!(!irq(&host, 229));
+    }
+
     #[test]
     fn input_acknowledge_register_latches_bit_zero() {
         let mut input = Input::default();

@@ -431,8 +431,14 @@ fn register_with_resources(
             if window.base != 0xffd24000 || window.size != 0x1000 {
                 return Err("invalid imaging-tnr window".into());
             }
+            let mut options = window.options.clone();
+            let strict_copy = options
+                .remove("copy_current_frame")
+                .map(|v| v.as_bool().ok_or("copy_current_frame must be a boolean"))
+                .transpose()?
+                .unwrap_or(false);
             let options: fujimod_emulator_xp5_io::completion_stub::Options =
-                toml::Value::Table(window.options.clone())
+                toml::Value::Table(options)
                     .try_into()
                     .map_err(|e| format!("imaging-tnr options: {e}"))?;
             let stub = fujimod_emulator_xp5_io::completion_stub::CompletionStub::new(
@@ -445,7 +451,9 @@ fn register_with_resources(
             bus.register(
                 window.base,
                 window.size,
-                Box::new(if fujimod_emulator_imaging::frame::movie_path_real() {
+                Box::new(if strict_copy {
+                    tnr.with_strict_movie_path()
+                } else if fujimod_emulator_imaging::frame::movie_path_real() {
                     tnr.with_movie_path()
                 } else {
                     tnr

@@ -3,7 +3,7 @@
 use fujimod_emulator_devices::checkpoint::Checkpoint;
 use fujimod_emulator_devices::{Cx, Device};
 use fujimod_emulator_imaging::exposure::{Exposure, ExposureHandle};
-use fujimod_emulator_imaging::xtrans;
+use fujimod_emulator_imaging::{frame::Scene, xtrans};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::BTreeMap;
@@ -27,6 +27,12 @@ pub struct SensorState {
     /// The last picture the still channel ([`StillChannel`]) wrote.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub still_raw: Option<StillRaw>,
+    /// Completed packed movie DMA buffers, most recent last.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub movie_raws: Vec<StillRaw>,
+    /// First DMA lane to finish an interleaved movie frame, with its completion tick.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    movie_field: Option<(usize, u64, StillRaw)>,
     /// Pictures the still channel wrote before [`SensorState::still_raw`], oldest first, at
     /// most [`EARLIER_STILL_RAWS`], none overlapping a later one. A multi-frame drive mode (the
     /// X-T5 4.31 HDR writes three exposures to three buffers) develops each of them after the
@@ -57,6 +63,8 @@ impl Default for SensorState {
             last_dma: [(0, 0, 0); 2],
             armed: [false; 2],
             still_raw: None,
+            movie_raws: Vec::new(),
+            movie_field: None,
             earlier_still_raws: Vec::new(),
             still_programmed: false,
             no_standby_gate: false,
@@ -230,6 +238,7 @@ pub struct Sensor(
     Option<StillChannel>,
     ExposureHandle,
     Option<FrameTiming>,
+    Option<fn() -> &'static Scene>,
 );
 impl Sensor {
     pub fn new(routes: Option<ImageRoutes>, read_gate: (u16, u8)) -> Self {
@@ -239,6 +248,7 @@ impl Sensor {
             read_gate,
             None,
             ExposureHandle::default(),
+            None,
             None,
         )
     }
@@ -282,6 +292,22 @@ impl Sensor {
     pub fn with_still_channel(mut self, still: StillChannel) -> Self {
         self.3 = Some(still);
         self
+    }
+    /// Feed the packed movie RAW DMA channels from the host scene.
+    pub fn with_interleaved_raw12(mut self, scene: fn() -> &'static Scene) -> Self {
+        self.6 = Some(scene);
+        self
+    }
+    /// Find the completed sensor DMA buffer that a movie develop descriptor refers to.
+    pub fn movie_raw_at(&self, address: u64, pitch: u64) -> Option<StillRaw> {
+        self.0
+            .lock()
+            .unwrap()
+            .movie_raws
+            .iter()
+            .rev()
+            .find(|r| r.contains(address, pitch))
+            .copied()
     }
     /// The last picture the still channel wrote, if any.
     pub fn still_raw(&self) -> Option<StillRaw> {
@@ -378,6 +404,49 @@ impl Sensor {
         let base = [0x40, 0xc0][channel];
         s.armed[channel] = s.image.get(&base).copied().unwrap_or(0) & 1 != 0;
     }
+    /// Two compatible RAW12 lanes with destinations one half-stride apart
+    /// describe alternate rows of the same frame.
+    fn movie_picture(
+        &self,
+        s: &SensorState,
+        channel: usize,
+        address: u64,
+        width: u32,
+        lines: u32,
+        stride: u64,
+    ) -> Option<StillRaw> {
+        let base = [0x40, 0xc0][channel];
+        let peer = [0xc0, 0x40][channel];
+        let reg = |o| s.image.get(&o).copied().unwrap_or(0);
+        let peer_address = u64::from(reg(peer + 0x10)) | (u64::from(reg(peer + 0x0c) & 7) << 32);
+        let pitch = stride / 2;
+        if self.6.is_none()
+            || stride % 2 != 0
+            || width % 2 != 0
+            || peer_address == 0
+            || address.abs_diff(peer_address) != pitch
+            || width != reg(peer + 4) & 0x7fff
+            || lines != reg(peer + 8) & 0x7fff
+            || stride != u64::from(reg(peer + 0x18))
+            || [base, peer]
+                .iter()
+                .any(|b| reg(b + 0x1c) >> 16 & 7 != 5 || reg(b + 0x14) & 7 != 0)
+            || pitch < xtrans::packed12_bytes(width as usize) as u64
+            || pitch >= u64::from(width) * 2
+        {
+            return None;
+        }
+        Some(StillRaw {
+            address: address.min(peer_address),
+            pitch,
+            width,
+            lines: lines * 2,
+            packed12: true,
+            phase: (0, 0),
+            exposure: self.relative_exposure(),
+        })
+    }
+
     pub fn frame(&self, cx: &mut Cx<'_>, channel: usize) -> Result<(), String> {
         let Some(routes) = self.1 else { return Ok(()) };
         let Some(dma) = routes.dma else { return Ok(()) };
@@ -409,10 +478,12 @@ impl Sensor {
         // Movie record readout uses the same packing with padded lines (6308 samples, pitch
         // 0x2520 = 9504 >= 9462 bytes), so any stride from 1.5 up to (not including) 2 bytes a
         // sample is a padded packed 12-bit line.
-        let packed12 = routes.line_stride
-            && width % 2 == 0
-            && stride * 2 >= u64::from(width) * 3
-            && stride < u64::from(width) * 2;
+        let movie = self.movie_picture(&s, channel, address, width, height, stride);
+        let packed12 = movie.is_some()
+            || routes.line_stride
+                && width % 2 == 0
+                && stride * 2 >= u64::from(width) * 3
+                && stride < u64::from(width) * 2;
         let line = if packed12 {
             u64::from(width) * 3 / 2
         } else {
@@ -427,11 +498,40 @@ impl Sensor {
         if size > 128 * 1024 * 1024 {
             return Err("receiver frame exceeds functional DMA limit".into());
         }
-        let frame = s.frames[channel];
-        let mut bytes = vec![0u8; line as usize];
-        for y in 0..height {
-            ramp_line(y, frame, packed12, &mut bytes);
-            cx.ram_write(address + stride * u64::from(y), &bytes)?;
+        if let Some((picture, scene)) = movie.zip(self.6) {
+            let parity = usize::from(address != picture.address);
+            let lut = xtrans::Response::xt5(picture.exposure).mosaic_lut();
+            let mut samples = vec![0u8; width as usize * 2];
+            let mut bytes = vec![0u8; line as usize];
+            fujimod_emulator_imaging::frame::render_rgb_lines(
+                scene(),
+                width as usize,
+                picture.lines as usize,
+                |y, rgb| {
+                    if y % 2 != parity {
+                        return Ok(());
+                    }
+                    xtrans::mosaic_line_with(rgb, (y, 0), &mut samples, &lut);
+                    xtrans::pack12_line(&samples, &mut bytes);
+                    cx.ram_write(address + stride * (y / 2) as u64, &bytes)
+                },
+            )?;
+            if s.movie_field.take() == Some((1 - channel, cx.now(), picture)) {
+                s.movie_raws.retain(|r| !r.overlaps(&picture));
+                if s.movie_raws.len() == EARLIER_STILL_RAWS + 1 {
+                    s.movie_raws.remove(0);
+                }
+                s.movie_raws.push(picture);
+            } else {
+                s.movie_field = Some((channel, cx.now(), picture));
+            }
+        } else {
+            let frame = s.frames[channel];
+            let mut bytes = vec![0u8; line as usize];
+            for y in 0..height {
+                ramp_line(y, frame, packed12, &mut bytes);
+                cx.ram_write(address + stride * u64::from(y), &bytes)?;
+            }
         }
         s.frames[channel] += 1;
         s.last_dma[channel] = (address, width, height);
@@ -1215,6 +1315,71 @@ mod tests {
     /// A 16-bit still frame holds optical black (1024) in its margins and the scene, at the
     /// active size, from the margin on; the exposure at the frame end scales the samples and
     /// stays with the picture.
+    #[test]
+    fn movie_raw_dma_packs_the_scene_at_the_programmed_pitch() {
+        let sensor = Sensor::new(
+            Some(ImageRoutes {
+                dma: Some([162, 163]),
+                timing: [166, 164],
+                line_stride: true,
+                frame_start_pulse: None,
+            }),
+            (0x59, 4),
+        )
+        .with_interleaved_raw12(bars);
+        let address = 0x1_0000_0010;
+        let mut host = RecordingHost {
+            ram_base: address - 16,
+            ram: vec![0xee; 0x400],
+            ..Default::default()
+        };
+        let mut cx = Cx::new(&mut host, 0, 0, 0);
+        for (base, low) in [(0xc0, 16), (0x40, 44)] {
+            for (offset, value) in [
+                (0x04, 16),
+                (0x08, 4),
+                (0x0c, 1),
+                (0x10, low),
+                (0x18, 56),
+                (0x1c, 5 << 16),
+                (0x20, 1),
+                (0x00, 1),
+            ] {
+                sensor.image_write(&mut cx, base + offset, value);
+            }
+        }
+        sensor.frame(&mut cx, 1).unwrap();
+        assert!(sensor.movie_raw_at(address, 28).is_none());
+        sensor.frame_start(0);
+        sensor.frame_start(1);
+        sensor.frame(&mut cx, 0).unwrap();
+        assert!(sensor.movie_raw_at(address, 28).is_none());
+        sensor.frame(&mut cx, 1).unwrap();
+        let lut = xtrans::Response::xt5(1.).mosaic_lut();
+        let mut samples = [0; 4];
+        let mut packed = [0; 3];
+        xtrans::mosaic_line_with(&[235; 6], (0, 0), &mut samples, &lut);
+        xtrans::pack12_line(&samples, &mut packed);
+        assert_eq!(&host.ram[16..19], &packed);
+        xtrans::mosaic_line_with(&[235; 6], (1, 0), &mut samples, &lut);
+        xtrans::pack12_line(&samples, &mut packed);
+        assert_eq!(&host.ram[44..47], &packed);
+        assert_eq!(&host.ram[40..44], &[0xee; 4]);
+        assert_eq!(&host.ram[0..16], &[0xee; 16]);
+        assert_eq!(
+            sensor.movie_raw_at(address + 28 + 3, 28),
+            Some(StillRaw {
+                address,
+                pitch: 28,
+                width: 16,
+                lines: 8,
+                packed12: true,
+                ..Default::default()
+            })
+        );
+        assert!(host.irqs.rev_find(163));
+        assert!(host.irqs.rev_find(162));
+    }
     #[test]
     fn the_still_channel_writes_optical_black_and_latches_the_exposure() {
         let sensor = Sensor::new(

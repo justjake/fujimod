@@ -106,6 +106,18 @@ pub fn register_all(
     } else {
         sensor
     };
+    let raw_movie = windows
+        .iter()
+        .find(|w| w.kind == "imaging-sensor")
+        .and_then(|w| w.options.get("interleaved_raw12"))
+        .map(|value| value.as_bool().ok_or("interleaved_raw12 must be a boolean"))
+        .transpose()?
+        .unwrap_or(false);
+    let sensor = if raw_movie {
+        sensor.with_interleaved_raw12(fujimod_emulator_imaging::frame::still_scene)
+    } else {
+        sensor
+    };
     let yc_output = fujimod_emulator_xp5_imaging::imaging::still::YcOutput::default();
     // XT5_MOVIE_PATH=real: the modelled movie data path (MOVDC -> RIFP inline -> RESZ -> TNR,
     // or sensor RAW -> RIFP -> RESZ), see fujimod_emulator_xp5_imaging::imaging::movie.
@@ -284,7 +296,12 @@ pub fn register_all(
                 .with_span(w.size)
                 .with_statistics(statistics.clone())
                 .with_frame_clock(sensor.clone());
-            Box::new(if still_path || movie_path {
+            let device = if raw_movie {
+                device.with_raw_movie()
+            } else {
+                device
+            };
+            Box::new(if still_path || movie_path || raw_movie {
                 device.with_still_path(preview::StillPath {
                     sensor: sensor.clone(),
                     output: yc_output.clone(),
@@ -354,7 +371,9 @@ pub fn register_all(
                     stub,
                     (still_path || always).then(|| yc_output.clone()),
                 );
-                if movie_path && !always {
+                if raw_movie && !always {
+                    resz.with_raw_movie_path(yc_output.clone())
+                } else if movie_path && !always {
                     resz.with_movie_path(yc_output.clone())
                 } else {
                     resz
@@ -366,7 +385,13 @@ pub fn register_all(
         if w.base != 0xff946000 || w.size != 0x1000 {
             return Err("invalid input-engine window".into());
         }
-        let device = input::Input::default();
+        let mut device = input::Input::default();
+        if w.options.contains_key("frame_period_us") || w.options.contains_key("frame_active_us") {
+            device = device.with_cadence(
+                ticks(&w.options, "frame_period_us")?,
+                ticks(&w.options, "frame_active_us")?,
+            )?;
+        }
         let device = if retain_words(&w.options)? {
             device.with_retained_words()
         } else {
