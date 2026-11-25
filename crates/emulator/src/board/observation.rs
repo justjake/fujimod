@@ -163,11 +163,14 @@ impl MemoryContext {
         if cpu.model() == Model::CortexR5F && tcm_overlap(&*cpu, address, size)? {
             return Err("Memory watch intersects a CPU-private TCM overlay".into());
         }
-        let byte_order = if scalar(&*cpu, Register::Pstate)? & (1 << 9) != 0 {
-            "big"
-        } else {
-            "little"
-        };
+        // ARMv7 CPSR bit 9 is E; AArch64 PSTATE bit 9 is the debug mask.
+        // The shared AArch64 execution graphs use the little-endian backend.
+        let byte_order =
+            if cpu.model() != Model::ArmV8A && scalar(&*cpu, Register::Pstate)? & (1 << 9) != 0 {
+                "big"
+            } else {
+                "little"
+            };
         let before = if source != "cpu-fetch" {
             if !(1..=16).contains(&size) {
                 return Err("Memory watch cannot capture this CPU access width".into());
@@ -400,6 +403,40 @@ impl Board {
         sample_offsets: Vec<u64>,
         sample_bounds: Option<Span>,
     ) -> Result<Box<MemoryWatch>, String> {
+        self.memory_watch_begin_with_reads(
+            ranges,
+            limit,
+            maps,
+            true,
+            sample_addresses,
+            sample_offsets,
+            sample_bounds,
+        )
+    }
+
+    /// Observe bounded CPU writes to physical memory, without observing reads.
+    /// This is supported on AArch64 where a read/write hook would impose
+    /// unnecessary overhead on polling loops.
+    pub fn memory_write_watch_begin(
+        &self,
+        ranges: Vec<Span>,
+        limit: usize,
+        maps: Vec<MemoryMap>,
+    ) -> Result<Box<MemoryWatch>, String> {
+        self.memory_watch_begin_with_reads(ranges, limit, maps, false, vec![], vec![], None)
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn memory_watch_begin_with_reads(
+        &self,
+        ranges: Vec<Span>,
+        limit: usize,
+        maps: Vec<MemoryMap>,
+        observe_reads: bool,
+        sample_addresses: Vec<u64>,
+        sample_offsets: Vec<u64>,
+        sample_bounds: Option<Span>,
+    ) -> Result<Box<MemoryWatch>, String> {
         if (!sample_addresses.is_empty() && sample_addresses.len() != self.cpus.len())
             || sample_offsets.len() > 4
             || (!sample_offsets.is_empty()
@@ -412,22 +449,37 @@ impl Board {
         // backend checks them after the processor's own MMU/MPU translation
         // (`cputlb.c` dispatches `UC_HOOK_MEM_*` with the translated page), so
         // one physical range covers every virtual alias, and a remap needs no
-        // re-arming. AArch64 boards leave the backend's page-hook filter off,
-        // which would send every access through the slow path, so they stay
-        // refused.
+        // re-arming. AArch64's page-hook filter is disabled, so expose only a
+        // write-only watch there to keep polling reads out of the callback.
+        let incompatible = self.cpus.iter().enumerate().any(|(core, cpu)| {
+            if matches!(cpu.model(), Model::CortexR5F | Model::CortexA7)
+                || (cpu.model() == Model::ArmV8A && !observe_reads)
+            {
+                return false;
+            }
+            if observe_reads {
+                return true;
+            }
+            let decoder_views = self.state.borrow().decoders.observation_maps(core);
+            maps.iter().chain(&decoder_views).any(|map| {
+                map.core == core
+                    && ranges.iter().any(|&(lo, hi)| {
+                        map.physical < hi && lo < map.physical.saturating_add(map.size as u64)
+                    })
+            })
+        });
         if ranges.is_empty()
             || ranges.len() > 16384
             || limit == 0
             || limit > 1 << 22
             || ranges.iter().any(|&(lo, hi)| lo >= hi || hi > 1 << 32)
-            || self
-                .cpus
-                .iter()
-                .any(|cpu| !matches!(cpu.model(), Model::CortexR5F | Model::CortexA7))
+            || incompatible
         {
-            return Err(
-                "Memory watch requires bounded physical ranges and R5F or A7 processors".into(),
-            );
+            return Err(if observe_reads {
+                "Memory watch requires bounded physical ranges and R5F or A7 processors".into()
+            } else {
+                "Memory write watch requires bounded physical ranges and R5F, A7, or AArch64 processors".into()
+            });
         }
         if self.preservation_active() {
             return Err("A preservation observation conflicts with memory watch".into());
@@ -492,7 +544,7 @@ impl Board {
                 let mut hooks = vec![Hook::Memory {
                     callback: access,
                     data,
-                    read: true,
+                    read: observe_reads,
                     write: true,
                     range: HookRange::Inclusive {
                         begin,
