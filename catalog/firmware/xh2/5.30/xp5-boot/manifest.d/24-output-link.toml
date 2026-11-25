@@ -1,0 +1,11 @@
+# Display output link, the X-T5 and X-H2S window and kind (xt5/4.31 24-output-link.toml).
+# 0x1444c38 (the X-T5's 0x143e964 apart from global offsets) reads +0x04 (0x1444cd0..
+# 0x1444cd8), writes +0x04, +0x08, +0x18, +0x0c, +0x10 and +0x14 from the tables
+# 0x1999c00..0x1999db8, then writes 0 to +0x00 and polls bit 0 (0x1444eec..0x1444f0c);
+# 0x1444fac (the X-T5's 0x143ecd8) read-modify-writes +0x04. Every access is a word in
+# +0x00..+0x18, all the model accepts; no interrupt handler names the block. The model
+# completes at once; its initial words of 0 are session assumptions.
+[[device]]
+base = 0xff9a1000
+size = 0x1c
+kind = "display-output-link"

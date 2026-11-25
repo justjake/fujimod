@@ -1,0 +1,31 @@
+# SSP instance 7 (0xff910000 + 7*0x1000) carries the two panels, as SSP5 does on the X-T5
+# (xt5/4.31 43-panel-serial.toml). The open routine 0x137e2d4 initializes the controller
+# from a client of the serial descriptor table (lookup 0x137f2a8: 0x18ea120 + 0x30*n) as
+# 0x137f3c4(instance, word 3, word 6, word 7, word 8, word 4, word 10): word 3 is the
+# pin-mux function (written to 0xff90c700), words 6 and 7 become CR0 bits 6 and 7
+# (0x137f354), word 8 is the word size and word 4 the prescaler. Clients:
+#   3 (0x18ea1b0): select GPIO 15.13 active-low, mux 1, CR0 bits 6/7 clear (mode 0),
+#     prescaler 0x10, 16-bit words:
+#     the rear LCD. The task `lcdevf` (entry 0x143d734) powers the LCD on through
+#     0x143fb80: the output link 0x1444c38, then 0x143f050, which opens the client
+#     (0x143e854) and writes the panel table 0x1997900. The driver keeps no reply.
+#   8 (0x18ea2a0): select GPIO 15.15 active-low, mux 3, mode 0, prescaler 0x14, 8-bit words:
+#     the EVF (0x1440870, 0x1441b44; string "EvfSd_NG" at 0x1999098), one register byte
+#     then data bytes. Client 7 (0x18ea270) is the same select with 16-bit words; its
+#     only user, the read 0x14422d0, is reached from the service handler 0x2d41804.
+# Neither panel part is identified, so both are FujiMod's write-only command/data
+# register endpoint: writes are retained, and a read is refused because the reply is
+# unknown. MISO during writes is discarded; miso_high = false is UNVERIFIED. source_hz
+# is the X-T5 and X100VI value, UNVERIFIED. The selects start inactive (32-gpio.toml).
+[[device]]
+base = 0xff917000
+size = 0x1000
+kind = "spi-controller"
+[device.options]
+source_hz = 48000000
+[[device.options.endpoints]]
+select = { port = 15, pin = 13, active_high = false }
+part = { kind = "serial-command-registers", bits = 16, mode = 0, miso_high = false }
+[[device.options.endpoints]]
+select = { port = 15, pin = 15, active_high = false }
+part = { kind = "serial-command-registers", bits = 8, mode = 0, miso_high = false }

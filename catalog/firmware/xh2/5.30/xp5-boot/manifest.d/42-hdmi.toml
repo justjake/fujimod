@@ -1,0 +1,17 @@
+# HDMI hot-plug status word, the X-T5, X100VI and X-H2S window and kind (xt5/4.31
+# 42-hdmi.toml). The reader 0x1445e74 (the X-T5's 0x143fb8c) returns bit 0 of 0xff90e200,
+# the only access to the block. 0x1446b4c (the X-T5's 0x1440864) drives the sink supply
+# low, waits 100 timer units (0x1496554), polls for bit 0 set (up to 101 polls, 5 units
+# apart) and then drives it high again; the boot step 0x1448284 (0x1441f9c) posts event
+# 0x17f5 when bit 0 is clear (0x144673c) or arms a 200-unit periodic poll (0x1446780)
+# that posts it once bit 0 clears. The X-T5 drives SoC GPIO 9.13 for the supply; the X-H2
+# drives bit 7 of an I2C port expander's port 1 (0x1407314(0x10000007, 0)), whose result
+# it ignores (0x1446b70), and the expander is not modeled. connected_level = 0 is the
+# X-T5's inference from that order, not measured. No cable is attached, as for the USB
+# status word.
+[[device]]
+base = 0xff90e200
+size = 4
+kind = "hdmi-hot-plug-status"
+[device.options]
+connected_level = 0
