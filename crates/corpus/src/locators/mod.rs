@@ -5,7 +5,7 @@ mod exr2_execution;
 pub use exr2_execution::exr2_execution;
 mod flash;
 mod update;
-pub use update::flash_update;
+pub use update::{flash_update, flash_update_mapped_e1};
 mod reset;
 pub use exr2::{exr2_control, exr2_flash};
 pub use flash::{flash, image_offsets};
