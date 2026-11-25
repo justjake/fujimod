@@ -202,6 +202,10 @@ struct Guard {
     cpu: Weak<dyn Cpu>,
     pause: Rc<Cell<bool>>,
     options: CheckedOptions,
+    /// Identity-mapped MMIO windows served by the board's interrupt
+    /// controller. Transfers into these windows are admitted even though
+    /// they are not declared RAM; the board serves them on the MMIO path.
+    interrupt_windows: Vec<Span>,
     observed: RefCell<Observed>,
 }
 fn contains(spans: &[Span], address: u64, size: u64) -> bool {
@@ -583,6 +587,7 @@ impl Guard {
                 };
                 if !contains(allowed, address, width)
                     && !contains(&self.options.devices, address, width)
+                    && !contains(&self.interrupt_windows, address, width)
                 {
                     return Err(format!(
                         "{} outside declared range at {address:#x} width {width} (pc {pc:#x})",
@@ -883,6 +888,7 @@ pub fn checked_call_with(
         cpu: Rc::downgrade(&board.cpus[0]),
         pause: board.host_pause.clone(),
         options,
+        interrupt_windows: board.interrupt_windows(),
         observed: RefCell::new(Observed::default()),
     });
     let data = (&*guard as *const Guard).cast_mut().cast();
@@ -1093,6 +1099,7 @@ pub fn checked_call_with(
 mod tests {
     use super::*;
     use crate::board::{
+        InterruptMap,
         bus::{Bus, Mode},
         factory,
     };
@@ -1137,6 +1144,55 @@ mod tests {
         Register::Arm64System(fujimod_emulator_cpu::arm::SystemRegister::from_encoding(
             encoding,
         ))
+    }
+    #[test]
+    fn gic_distributor_transfer_is_admitted_and_served() {
+        // MOVZ X1,#0xfa00,LSL#16; MOV W0,#1; STR W0,[X1]; LDR W2,[X1];
+        // MOV X0,X2; RET. The distributor's control register (offset 0)
+        // is outside every declared RAM span, so the routine only completes
+        // when the interrupt windows are admitted and the board serves them;
+        // GICD_CTLR reads back 0x51 after writing 1 (group enable).
+        let graph: factory::Graph = serde_json::from_value(json!({
+            "processors":[{"model":"armv8a","registers":[],"released":true,"mprofile":null,"rprofile":null}],
+            "ram":[{"base":0,"size":65536}],
+            "mappings":[{"core":0,"address":0,"physical":0,"size":65536,"permissions":7}],
+            "dma_mappings":[],"decoders":[],"peripherals":[],"instructions_per_tick":[1,1]
+        })).unwrap();
+        let interrupts = InterruptMap::gic_v3(0xfa00_0000, 0xfa08_0000, 0x20000, 1, 512).unwrap();
+        let mut b = graph
+            .build(
+                factory::Options::new(RunEngine::Unicorn)
+                    .with_translation_cache_size_bytes(1 << 20),
+                Bus::new(Mode::Strict),
+                Some(interrupts),
+            )
+            .unwrap();
+        b.write_memory(
+            0,
+            0x1000,
+            &[
+                0xd2bf4001u32,
+                0x52800020,
+                0xb9000020,
+                0xb9400022,
+                0xaa0203e0,
+                0xd65f03c0,
+            ]
+            .into_iter()
+            .flat_map(u32::to_le_bytes)
+            .collect::<Vec<_>>(),
+        )
+        .unwrap();
+        let o: CheckedOptions = serde_json::from_value(json!({
+            "entry":4096,"entry_level":"el1","arguments":[],"return_address":45056,
+            "stack_pointer":36864,"stack":[32768,40960],"max_instructions":20,"quantum":10,
+            "executable":[[4096,4120]],"readable":[[4096,4120],[16384,16400],[32768,40960]],
+            "writable":[[16384,16392],[32768,40960]],"store_limit":20,"stubs":[],"registers":[]
+        }))
+        .unwrap();
+        let r = checked_call(&mut b, o).unwrap();
+        assert!(r.returned, "{:?}", r.failure);
+        assert_eq!(r.return_value, Some(0x51));
     }
     #[test]
     fn el1_declaration_without_pstate_runs_to_completion() {
