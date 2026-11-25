@@ -11,7 +11,8 @@ If you want to help by testing FujiMod firmware on your camera,
 [head to fujimod.com](https://fujimod.com/). Due to copyright, we can’t distribute
 ready-made builds of FujiMod since it’s based on the official firmware. Use the
 search box on the site to find the download link from Fujifilm for your camera.
-Then upload it to fujimod.com so we can build the mod for your camera.
+Then open it on fujimod.com, which builds the mod for your camera in your
+browser. The firmware file stays on your computer and is never uploaded.
 
 Camera tools, emulation and firmware mods. The browser application lives in
 [apps/web](apps/web/README.md), including its body definitions, patch
