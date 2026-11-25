@@ -1954,6 +1954,7 @@ dependencies = [
  "fujimod-emulator-boot",
  "fujimod-emulator-camera",
  "fujimod-emulator-session",
+ "fujimod-recovery",
  "fujimod-remote",
  "futures-lite",
  "serde",
