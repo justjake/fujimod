@@ -8,7 +8,7 @@
 //! writes nothing to disk unless the caller asked for the boot cache.
 use crate::{
     Library, LibraryError, Stage, StateDir, flash,
-    library::{BOOT_ROM_FILE, FirmwareFiles, UPDATE_FILE},
+    library::FirmwareFiles,
 };
 use fujimod_catalog_configuration::{RunEngine, RunInputs};
 use fujimod_catalog_controls::{BootCombination, BootMode, PhysicalControls};
