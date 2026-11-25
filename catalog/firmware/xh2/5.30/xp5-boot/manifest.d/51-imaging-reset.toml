@@ -1,0 +1,12 @@
+# Input reset gate at ff950000, the X-T5 and X100VI layout: 0x136612c (X-T5 0x13630fc)
+# writes +0x0 = 0 and polls +0x0 bit 0 until set (base 0x1366148, poll 0x136615c);
+# 0x1366170 (X-T5 0x1363140, from 0x2f7c8a8 and 0x2d2dec0) reads +0x4 (0x1366194), sets or
+# clears bit 0 and writes it back. The shared model owns only +0x0 and +0x4; the later block
+# registers (+0x8 from 0x1366208, +0x14/+0x18 from 0x1366e50) stay unmodeled.
+[[device]]
+base = 0xff950000
+size = 0x1000
+kind = "imaging-reset"
+[device.options]
+# Bring-up: the later block registers read back their last write, as on the X-T5.
+retain_words = true

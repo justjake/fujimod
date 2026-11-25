@@ -1,0 +1,52 @@
+# Live-view develop blocks, the X-T5's (xt5/4.31/xp5-boot/manifest.d/57-develop-stubs-3.toml),
+# with the same offsets, poll bits and interrupt numbers. Completion delays are functional,
+# not measured.
+
+# Filter scaler. Driver 0x148e56c (X-T5 0x1488264) builds the base at 0x13c0f98; MOVDC starts
+# it from 0x2f740bc and 0x2f742f0 (0x2eafcc8, 0x2eafefc). Reset 0x148e638 (0x1488330) writes
+# +0x0 and polls bit 0; stop 0x148e988 (0x1488680) waits for +0x100 bits 24 and 8 (0x13c1940,
+# 0x13c1950); start 0x148e9e4 (0x14886dc) writes +0x04 = 1 and 0x148ea04 (0x14886fc) writes the
+# interrupt enable +0x10c = 7. The handler 0x148f6d0 (0x14893c8) reads +0x104 and acknowledges
+# 7 at +0x108. Logical interrupt 0xb is level INTID 204 (table 0x18ece30).
+[[device]]
+base = 0xff983000
+size = 0x1000
+kind = "imaging-filter-scaler"
+[device.options]
+registers = [
+  { offset = 0x000, mode = "constant", value = 0x1 },
+  { offset = 0x100, mode = "constant", value = 0x01000100 },
+]
+irq = 204
+starts = [{ offset = 0x04, mask = 0x1 }]
+delay_us = 200
+completion = [{ offset = 0x104, set = 0x1 }, { offset = 0x04, clear = 0x1 }]
+ack = { offset = 0x108, mode = "w1c", status_offset = 0x104, bits = 0x7 }
+irq_mask_offset = 0x10c
+irq_mask_bit = 0
+irq_mask_set_masks = false
+
+# MIX. Driver 0x2d07f48..0x2d0a7ec (X-T5 0x2c46c20..0x2c494c4); the MOVDC wrapper 0x2f732dc
+# (0x2eaeee8) opens, sets, starts and stops it. The setter writes +0x0c at 0x2d095d0 (base
+# 0xffd2200c from 0x2d095c8). Reset 0x2d08420 (0x2c470f8) writes +0x0 = 0 and polls bit 0;
+# start setup 0x2d08ec4 (0x2c47b9c) and stop 0x2d09088 (0x2c47d60) test +0x208 bits 16 and 0
+# (0x2d08edc); the last start write is +0x04 = 1 (0x2d09078). The handler 0x2d08474 (0x2c4714c)
+# acknowledges +0x210 = 1 without a status read. Logical interrupt 0x19 is level INTID 213.
+# A completion stub, not a model of the mixer.
+[[device]]
+base = 0xffd22000
+size = 0x1000
+kind = "completion-stub"
+[device.options]
+registers = [
+  { offset = 0x000, mode = "constant", value = 0x1 },
+  { offset = 0x208, mode = "constant", value = 0x10001 },
+]
+irq = 213
+starts = [{ offset = 0x04, mask = 0x1 }]
+delay_us = 200
+completion = [{ offset = 0x210, set = 0x1 }, { offset = 0x04, clear = 0x1 }]
+ack = { offset = 0x210, mode = "w1c" }
+irq_mask_offset = 0x20c
+irq_mask_bit = 0
+irq_mask_set_masks = false

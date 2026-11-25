@@ -1,0 +1,11 @@
+# Receiver PHY at ff944000, the X-T5 and X100VI layout: 0x136d96c (X-T5 0x136a93c) writes
+# the control word +0x0 (bits 1 and 0) and 0x2f7dc14 (X-T5 0x2eb9ca8) polls +0x0 bit 0
+# through 0x136d9dc until it reads 1 (0x2f7dc48). The global words +0x4..+0xc have one
+# setter and one getter each (0x136da14..0x136db8c). Lane words +0x100..+0x148 repeat per
+# lane at 0x100 + n * 0x100, n < 4 (0x136dbd4..0x136ee00); the lane loops 0x2f7dd90,
+# 0x2f7e828, 0x2f7e8d0 and 0x2f7e9dc read a word, change fields and write it back. The
+# shared model stores these words and refuses all others.
+[[device]]
+base = 0xff944000
+size = 0x1000
+kind = "imaging-phy"

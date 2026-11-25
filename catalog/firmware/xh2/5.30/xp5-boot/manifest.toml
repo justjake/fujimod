@@ -4,6 +4,10 @@
 version = 1
 firmware = "xh2-530"
 load_firmware = true
+# Host execution only: the companion computes (the IBIS servo's 16 kHz sample frames) far
+# more than it waits in delay loops, so it runs in block execution. The guest state is the
+# same either way.
+mprofile_block_execution = true
 
 # Device windows: manifest.d/*.toml, merged in filename order.
 
@@ -13,6 +17,22 @@ load_firmware = true
 base = 0
 size = 0x80000000
 
+# The firmware uses DRAM past the body's 0x80000000: the still subject-detection arena is
+# 0x80001000+0x13ff000 (0x2e1f63c; the AI task 0x2ea34d8 clears 0x10c1000 bytes of it,
+# 0x2ea367c). The DDR setup 0x13af5a0 maps the four regions of the table 0x18f49f8 (mask
+# 0xf at 0x18f49f4): 0+0x80000000, 0x80000000+0x70000000, 0x100000000+0x80000000 and
+# 0x180000000+0x80000000. The drain helper's 0x80000000 read (0x14d1c44) therefore reads
+# RAM, as the X-T5's slot 1 does; the body's drain peripheral moves past the last region
+# only so that it does not overlap RAM. Installed capacity is unmeasured; the two regions
+# above 4 GiB are not declared until the firmware reaches them.
+[dram]
+limit = 0xf0000000
+bus_drain = 0x200000000
+
+[[ram]]
+base = 0x80000000
+size = 0x70000000
+
 # Companion SRAM, main view (the SoC's companion-sram region): 0x13fb120 copies the
 # companion image from flash 0xf01c0000 to 0xfa200000 and the shared configuration
 # lies at 0xfa2fa000..0xfa300000. Before that, the interrupt-configuration helper
@@ -20,6 +40,16 @@ size = 0x80000000
 [[ram]]
 base = 0xfa200000
 size = 0x100000
+
+# Boot SRAM, 256 KiB. The SoC profile maps it only for ROM and SD starts, but the application
+# keeps the AE statistics banks here, as the X-T5 does: the AE setup 0x2f50bbc (X-T5 0x2e8c6b8)
+# stores the bank pointers 0xff800000 and 0xff8075a0 (0x2f50bf8, 0x2f50c00) with 0x75a0 bytes
+# each, 0x2f79de0 (0x2eb5e74) sets four planes 0x400 apart from 0xff80eb40 (0x2f79de8), and
+# 0x2eec5c4 (0x2e2943c) increments the counter 0xff82c008. The statistics model writes its
+# frames into this RAM.
+[[ram]]
+base = 0xff800000
+size = 0x40000
 
 # The SD slot (host 0xff9b0000, 25-sd.toml) is empty. The format describes the volume a
 # run that inserts a card without an image would see; it is unused while the slot is empty.

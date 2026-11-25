@@ -1,0 +1,21 @@
+# MOVDC table pages, the X-T5's bring-up stubs (xt5/4.31/xp5-boot/manifest.d/49-gap-stubs.toml).
+# The MOVDC dispatcher 0x2d2f4f8 (X-T5 0x2c6e1c4) loads both pages from the descriptor
+# 0x18deb98 (0x18dc658) through the table writer 0x1373e84 (0x1370e54); the diagnostic
+# 0x2f1d748 (0x2e5888c) reads the groups back through 0x1373f30 (0x1370f00), so reads must
+# work. 0x1376568 (0x1373538) writes and 0x1376598 (0x1373568) reads +0xb30 bit 0 of the first
+# page (0xff96cb30 from 0x1376584).
+# Not a model: each register stores its last write and reads it back. Nothing here is checked
+# against hardware.
+[[device]]
+base = 0xff96c000
+size = 0x1000
+kind = "bringup-stub"
+[device.options]
+registers = []
+
+[[device]]
+base = 0xff96e000
+size = 0x1000
+kind = "bringup-stub"
+[device.options]
+registers = []

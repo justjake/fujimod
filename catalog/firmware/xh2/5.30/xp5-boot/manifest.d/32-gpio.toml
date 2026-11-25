@@ -19,6 +19,15 @@ initial_outputs = [{ port = 15, levels = 0xa000 }]
 # select 11.4) for the external flash. The default pad level is 1, which would attach a
 # flash nobody modeled.
 initial_inputs = [{ port = 11, pin = 4, high = false }]
+# Sensor power drive is sensed back on GPIO 4.4 (body.json gpio_feedback:
+# sensor-power-enable -> sensor-power-sense), as on the X-T5. The secondary loader's port-4
+# row (0x3218, row 0xf798) makes 4.4 an output with its latch low; the imaging power-on
+# table 0x3865d80 drives it high through 0x30e36b4 (0x153b10c(1, 1)) and the power-off
+# table 0x3865c18 low through 0x30e37b0. The imaging startup 0x30a4df0 runs the receiver
+# initializer 0x30ecb64 only while the pad reads low (0x30e3ba8, signal table 0x1b02478
+# entry 1 = 0x40004); the bare pad reads high, so the initializer never ran and the REC
+# start's receiver control 0x2f7caf4 returned without arming the receivers.
+feedback = [{ port = 4, register = 0, bit = 4, input_port = 4, input_pin = 4 }]
 
 [[device]]
 base = 0xff90b000
