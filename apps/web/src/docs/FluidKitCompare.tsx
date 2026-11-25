@@ -19,44 +19,48 @@ const comparisons: readonly CompareComponent[] = [
     upstream: 'https://fluidkit.mogilnikov.dev/blur/',
     previews: ['fluid-glass'],
     ported:
-      'Glass draws the resolved material: the calibrated fill, the volume at the top and bottom rows, the light rims and the dark edge, with content in flow between them.',
-    remaining:
-      'The group that melts its children, and attaching press feedback to the glass, come next.',
+      'Glass draws the resolved material: the calibrated fill, the volume as nine slices along the top and bottom edges, the light rims and the dark hairline, with content in flow between them. All ten variants resolve from the stylesheet’s numbers.',
+    remaining: 'Attaching the press feedback to the glass, and a preview of a group melting its children.',
   },
   {
     title: 'Indicator',
     upstream: 'https://fluidkit.mogilnikov.dev/indicator/',
     previews: ['fluid-indicator'],
-    ported: 'The indicator’s props and parts are mapped in the port plan.',
-    remaining: 'The engine that follows the selected item is the next component.',
+    ported:
+      'The thumb flies to the item under a finger on five springs and keeps its speed when turned elsewhere; a tap chooses the item.',
+    remaining: 'The click, focus and active props.',
   },
   {
     title: 'Drag',
     upstream: 'https://fluidkit.mogilnikov.dev/drag/',
     previews: ['fluid-drag'],
-    ported: 'The drag’s props and parts are mapped in the port plan.',
-    remaining: 'The rubber band, snapping and handing a gesture to a scroll view are next.',
+    ported:
+      'A sheet follows the finger exactly, pulls back like rubber past its last snap, and settles on the nearest one at the release’s speed.',
+    remaining: 'Bounds, the scroll-view handoff, and following the pointer on a spring.',
   },
   {
     title: 'Morph',
     upstream: 'https://fluidkit.mogilnikov.dev/morph/',
     previews: ['fluid-morph'],
-    ported: 'The morph’s props and parts are mapped in the port plan.',
-    remaining: 'The flight between two states and its matched parts are next.',
+    ported:
+      'A button flows into a panel: four springs move the shape’s box and size, and its fill and corners follow the same flight.',
+    remaining: 'Matched parts riding between the two states.',
   },
   {
     title: 'Layout',
     upstream: 'https://fluidkit.mogilnikov.dev/layout/',
     previews: ['fluid-layout'],
-    ported: 'The layout’s props and parts are mapped in the port plan.',
-    remaining: 'Moving, entering and exiting items in place are next.',
+    ported:
+      'Keyed rows start below their slots and faded out, then spring home while their slots keep the list from moving.',
+    remaining: 'A caller-declared row, and animating rows that move rather than enter.',
   },
   {
     title: 'Lift',
     upstream: 'https://fluidkit.mogilnikov.dev/lift/',
     previews: ['fluid-lift'],
-    ported: 'The lift’s props and parts are mapped in the port plan.',
-    remaining: 'The lifted picture, its menu and its preview are next.',
+    ported:
+      'A long press shrinks the card and grows its menu above it; a tap on a row chooses it and closes the menu.',
+    remaining: 'The dim and blur behind it, dialog placement, and a lifted preview.',
   },
   {
     title: 'Motion',
@@ -64,7 +68,7 @@ const comparisons: readonly CompareComponent[] = [
     previews: ['fluid-motion'],
     ported:
       'The springs, the interruptible animator and Fluid Kit’s transitions run as Focal motion, with host checks beside them.',
-    remaining: 'A preview that animates them is next.',
+    remaining: 'Nothing: the page animates every preset and transition.',
   },
 ];
 
