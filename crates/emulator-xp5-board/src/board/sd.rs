@@ -71,6 +71,7 @@ pub(super) fn register(
     graph: &mut DeviceGraph,
     window: &DeviceWindow,
     media: &mut BTreeMap<u64, Media>,
+    pins: &fujimod_emulator_devices::xp5::pins::SharedPins,
 ) -> Result<(), String> {
     let host: Host = toml::Value::Table(window.options.clone())
         .try_into()
@@ -83,6 +84,7 @@ pub(super) fn register(
         .ok_or("SD host requires explicit card media")?;
     let card = slot.card.take().ok_or("SD card media already has an SD host")?;
     let address_high = host.controller.address_high;
+    let supply = host.controller.supply.is_some();
     let contacts = slot.contacts.clone();
     let device = if let Some(irq) = host.irq {
         SdHost::new(
@@ -95,6 +97,11 @@ pub(super) fn register(
         )?
     } else {
         SdHost::new_polled(host.controller, card, contacts)?
+    };
+    let device = if supply {
+        device.with_supply(pins.clone())?
+    } else {
+        device
     };
     // A port's DMA address-high word sits in the system control block, so the
     // host owns that word as a second window (X-T5 4.31 0x13a8ea0).
@@ -146,6 +153,7 @@ pub(super) fn register_uhs2(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use fujimod_emulator_devices::xp5::pins::Pins;
     fn input() -> MediaInputs {
         MediaInputs {
             base: 0xffd00000,
@@ -177,11 +185,11 @@ mod tests {
         );
         let mut graph = DeviceGraph::new();
         let window=DeviceWindow {base:0xffd00000,size:0x1000,kind:"sdhci".into(),options:toml::from_str("[controller]\nbase=4291821568\nprotocol='sdhc'\ntransfer_ticks=4\nclock_ticks=2\nrca=1\nram_bytes=4294967296").unwrap()};
-        register(&mut graph, &window, &mut media).unwrap();
+        register(&mut graph, &window, &mut media, &Pins::shared()).unwrap();
         assert!(require_hosts(&media).is_ok());
         assert!(graph.at(0xffd00000).is_ok());
         assert!(
-            register(&mut graph, &window, &mut media)
+            register(&mut graph, &window, &mut media, &Pins::shared())
                 .unwrap_err()
                 .contains("card media")
         );
@@ -218,7 +226,7 @@ mod tests {
         assert!(graph.at(0xffd02224).is_ok());
         assert!(require_hosts(&media).unwrap_err().contains("no SD host"));
         let host = DeviceWindow {base:0xffd00000,size:0x1e0,kind:"sdhci".into(),options:toml::from_str("[controller]\nbase=4291821568\nprotocol='sdhc'\ntransfer_ticks=4\nclock_ticks=2\nrca=1\nram_bytes=4294967296\ndram_alias=false\naddress_high=0xff90e7d8").unwrap()};
-        register(&mut graph, &host, &mut media).unwrap();
+        register(&mut graph, &host, &mut media, &Pins::shared()).unwrap();
         require_hosts(&media).unwrap();
         // The host also owns its DMA address-high word in the system control block.
         assert_eq!(graph.at(0xff90e7d8).unwrap(), graph.at(0xffd00000).unwrap());
