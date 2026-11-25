@@ -5,10 +5,28 @@
   "base": 4294606848,
   "size": 4096,
   "kind": "address-window",
+  "interrupts": [
+    {
+      "output": "interrupt",
+      "line": 144
+    }
+  ],
   "device": {
     "model": "register_block",
-    "idle_bits": [],
-    "basis": "X-T3 5.11 audio format converter at 0xfffa8000. The register block serves its words as last write until the conversion job is modeled; the converter itself is the explicit block job of `emulator-xp4-board` blocks.rs and no run enables it."
+    "idle_bits": [
+      {
+        "mask": 1,
+        "offset": 0
+      }
+    ],
+    "job": {
+      "start": {
+        "mask": 1,
+        "offset": 4
+      },
+      "ticks": 5400
+    },
+    "basis": "X-T3 5.11 audio format converter at 0xfffa8000. Its driver clears +0x00 bit 0 and waits for it to read set (0x1091110); to load a conversion table it writes the table to +0x0c/+0x10, clears +0x08 bit 0, sets +0x04 bit 0 and waits for that bit to read clear (0x1091150). The converter's job interrupt is job 0x71, GIC 144, in the job table at 0x13e6454. +0x00 bit 0 reads set; setting +0x04 bit 0 starts a job that clears the bit and pulses 144 after 5400 ticks (100 us, declared, not measured). No samples are converted: that is the audio_converter option of emulator-xp4-board, left off here."
   },
   "evidence": [
     {
