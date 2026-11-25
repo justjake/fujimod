@@ -1,0 +1,16 @@
+{
+  "$schema": "https://fujimod.com/schemas/part.schema.json",
+  "schema": 1,
+  "id": "serial-command-16-read",
+  "model": {
+    "kind": "peripheral",
+    "interface": {
+      "kind": "serial-command-registers",
+      "bits": 16,
+      "mode": 0,
+      "read_flag": 32768,
+      "data_words": 1,
+      "miso_high": false
+    }
+  }
+}

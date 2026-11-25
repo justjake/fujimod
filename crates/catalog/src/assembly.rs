@@ -207,6 +207,26 @@ pub enum PeripheralPart {
     BisConfigurationRegisters,
     /// LSM6DS configuration-register protocol.
     Lsm6dsConfigurationRegisters,
+    /// Serial register file addressed by a command word, of unknown function.
+    SerialCommandRegisters {
+        /// Word width, 8 or 16 bits.
+        bits: u8,
+        /// Motorola SPI mode 0..3.
+        mode: u8,
+        /// Command bits that mark a read, when the command word encodes one.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        read_flag: Option<u16>,
+        /// Data words one transaction carries at most, when bounded.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        data_words: Option<u16>,
+        /// MISO level while the part is written.
+        miso_high: bool,
+    },
+    /// Serial device not yet identified: it accepts every frame and answers a fixed level.
+    UnidentifiedSerialDevice {
+        /// MISO level it answers.
+        miso_high: bool,
+    },
     /// Battery fuel gauge on a control bus.
     FuelGauge,
     /// TMD2772 ambient-light and proximity sensor on a control bus.

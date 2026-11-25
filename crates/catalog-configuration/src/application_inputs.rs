@@ -312,14 +312,26 @@ pub enum ApplicationPartInput {
         part_id: String,
         seconds: u32,
         valid: bool,
+        /// Initial values of other registers, by register number.
+        #[serde(default, skip_serializing_if = "Vec::is_empty")]
+        registers: Vec<RegisterWord>,
     },
     /// Idle input level for a serial endpoint.
     IdleLevel { part_id: String, high: bool },
-    /// Explicit BIS revision-register and idle-line inputs.
+    /// Explicit BIS revision-register, sample, configuration-block and idle-line inputs.
     BisRevision {
         part_id: String,
         revision: [u8; 2],
+        samples: [u16; 2],
+        block: [u8; 6],
         idle_high: bool,
+    },
+    /// Die temperature and motion presented to an inertial sensor.
+    Motion {
+        part_id: String,
+        temperature: i16,
+        angular_rate: [i16; 3],
+        acceleration: [i16; 3],
     },
 }
 
@@ -330,7 +342,8 @@ impl ApplicationPartInput {
             Self::RegisterWords { part_id, .. }
             | Self::Clock { part_id, .. }
             | Self::IdleLevel { part_id, .. }
-            | Self::BisRevision { part_id, .. } => part_id,
+            | Self::BisRevision { part_id, .. }
+            | Self::Motion { part_id, .. } => part_id,
         }
     }
 }

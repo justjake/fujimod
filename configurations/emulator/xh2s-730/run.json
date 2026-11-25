@@ -58,6 +58,42 @@
         "part_id": "power-controller",
         "seconds": 845151906,
         "valid": true
+      },
+      {
+        "kind": "bis_revision",
+        "part_id": "bis-configuration",
+        "revision": [
+          0,
+          0
+        ],
+        "samples": [
+          0,
+          0
+        ],
+        "block": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        "idle_high": false
+      },
+      {
+        "kind": "motion",
+        "part_id": "lsm6ds",
+        "temperature": 0,
+        "angular_rate": [
+          0,
+          0,
+          0
+        ],
+        "acceleration": [
+          0,
+          0,
+          16384
+        ]
       }
     ],
     "timings": [],

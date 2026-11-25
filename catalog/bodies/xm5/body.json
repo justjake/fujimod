@@ -17,6 +17,12 @@
         "controller_id": "spi8",
         "connection_id": "power-controller-bus",
         "select_connection_id": "power-controller-select"
+      },
+      {
+        "part_id": "serial-command-8-mode3",
+        "controller_id": "serial",
+        "connection_id": "serial-command-8-mode3-serial-bus",
+        "select_connection_id": "serial-command-8-mode3-serial-select"
       }
     ],
     "gpio_feedback": [
@@ -91,13 +97,30 @@
           "channel": 0
         }
       ]
+    },
+    {
+      "id": "serial-command-8-mode3-serial-bus",
+      "kind": "control"
+    },
+    {
+      "id": "serial-command-8-mode3-serial-select",
+      "kind": "control",
+      "signals": [
+        {
+          "kind": "gpio",
+          "port": 11,
+          "pin": 3,
+          "active_level": false
+        }
+      ]
     }
   ],
   "parts": [
     "power-controller",
     "xe5-serial-nand",
     "control-bus-device-66",
-    "control-bus-device-68"
+    "control-bus-device-68",
+    "serial-command-8-mode3"
   ],
   "wiring": [
     {

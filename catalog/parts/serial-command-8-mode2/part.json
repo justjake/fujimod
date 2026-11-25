@@ -1,0 +1,14 @@
+{
+  "$schema": "https://fujimod.com/schemas/part.schema.json",
+  "schema": 1,
+  "id": "serial-command-8-mode2",
+  "model": {
+    "kind": "peripheral",
+    "interface": {
+      "kind": "serial-command-registers",
+      "bits": 8,
+      "mode": 2,
+      "miso_high": false
+    }
+  }
+}

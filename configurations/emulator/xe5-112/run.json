@@ -66,7 +66,21 @@
         "kind": "clock",
         "part_id": "power-controller",
         "seconds": 845151906,
-        "valid": true
+        "valid": true,
+        "registers": [
+          {
+            "register": 0,
+            "value": 33280
+          },
+          {
+            "register": 14,
+            "value": 17
+          },
+          {
+            "register": 16,
+            "value": 2
+          }
+        ]
       },
       {
         "kind": "idle_level",
@@ -80,7 +94,34 @@
           0,
           0
         ],
-        "idle_high": false
+        "idle_high": false,
+        "samples": [
+          0,
+          0
+        ],
+        "block": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      {
+        "kind": "motion",
+        "part_id": "lsm6ds",
+        "temperature": 0,
+        "angular_rate": [
+          0,
+          0,
+          0
+        ],
+        "acceleration": [
+          0,
+          0,
+          0
+        ]
       }
     ],
     "timings": [

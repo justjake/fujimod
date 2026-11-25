@@ -1579,6 +1579,80 @@
         },
         {
           "additionalProperties": false,
+          "description": "Serial register file addressed by a command word, of unknown function.",
+          "properties": {
+            "bits": {
+              "description": "Word width, 8 or 16 bits.",
+              "format": "uint8",
+              "maximum": 255,
+              "minimum": 0,
+              "type": "integer"
+            },
+            "data_words": {
+              "description": "Data words one transaction carries at most, when bounded.",
+              "format": "uint16",
+              "maximum": 65535,
+              "minimum": 0,
+              "type": [
+                "integer",
+                "null"
+              ]
+            },
+            "kind": {
+              "const": "serial-command-registers",
+              "type": "string"
+            },
+            "miso_high": {
+              "description": "MISO level while the part is written.",
+              "type": "boolean"
+            },
+            "mode": {
+              "description": "Motorola SPI mode 0..3.",
+              "format": "uint8",
+              "maximum": 255,
+              "minimum": 0,
+              "type": "integer"
+            },
+            "read_flag": {
+              "description": "Command bits that mark a read, when the command word encodes one.",
+              "format": "uint16",
+              "maximum": 65535,
+              "minimum": 0,
+              "type": [
+                "integer",
+                "null"
+              ]
+            }
+          },
+          "required": [
+            "kind",
+            "bits",
+            "mode",
+            "miso_high"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Serial device not yet identified: it accepts every frame and answers a fixed level.",
+          "properties": {
+            "kind": {
+              "const": "unidentified-serial-device",
+              "type": "string"
+            },
+            "miso_high": {
+              "description": "MISO level it answers.",
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "kind",
+            "miso_high"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
           "description": "Battery fuel gauge on a control bus.",
           "properties": {
             "kind": {

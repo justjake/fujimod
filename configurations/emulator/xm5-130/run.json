@@ -56,7 +56,17 @@
         "kind": "clock",
         "part_id": "power-controller",
         "seconds": 845151906,
-        "valid": true
+        "valid": true,
+        "registers": [
+          {
+            "register": 0,
+            "value": 33280
+          },
+          {
+            "register": 16,
+            "value": 2
+          }
+        ]
       }
     ],
     "timings": [

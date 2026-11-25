@@ -556,6 +556,15 @@ pub fn windows_from_blocks(
         } if block_id == "flash-aperture" => Some((part_id.as_str(), erased_tail, seeds)),
         _ => None,
     });
+    let part_inputs = resolved
+        .configuration
+        .inputs
+        .as_ref()
+        .and_then(|inputs| match inputs {
+            fujimod_catalog_configuration::RunInputs::Xp5(inputs) => Some(inputs.parts.as_slice()),
+            _ => None,
+        })
+        .unwrap_or_default();
     let presented_jedec = inputs.iter().find_map(|input| match input {
         ApplicationBlockInput::Flash { presented_jedec_id, .. } => *presented_jedec_id,
         _ => None,
@@ -604,7 +613,7 @@ pub fn windows_from_blocks(
         if let Some((kind, options)) = block_window(
             block, device, selection, flash_input, flash_image, samples.as_deref(), levels,
             &resolved.configuration.bus_byte_times, ticks_per_second, presented_jedec,
-            &resolved.configuration.polled_serial_blocks,
+            &resolved.configuration.polled_serial_blocks, part_inputs,
         )? {
             let mut options = options;
             if !options.contains_key("registers") && block.registers.iter().any(|register| register.reads.is_some()) {
@@ -727,6 +736,141 @@ fn stage_handshake(options: &mut toml::Table, handshake: Option<&fujimod_catalog
     if let Some(line) = irq { options.insert("irq".into(), toml::Value::Integer(i64::from(line))); }
 }
 
+/// The device a serial port is emulated as when its one wired part is a whole-port output.
+fn port_device(selection: &ResolvedSelection, block: &fujimod_catalog::reference::SocBlock) -> Result<Option<&'static str>, String> {
+    use fujimod_catalog::assembly::PeripheralPart;
+    let mut kinds = selection.body.wiring.iter()
+        .filter(|wire| wire.source_id == block.id && wire.signal == fujimod_catalog::reference::WireSignal::SerialData)
+        .map(|wire| {
+            let part = selection.parts.iter().find(|part| part.id == wire.target_id)
+                .ok_or_else(|| format!("wire {} -> {}: no such part", wire.source_id, wire.target_id))?;
+            Ok(match &part.model {
+                fujimod_catalog::reference::PartModel::Peripheral { interface } => match interface {
+                    PeripheralPart::FocusActuator => Some("focus-actuator"),
+                    PeripheralPart::IrisActuator => Some("iris-actuator"),
+                    PeripheralPart::AudioSerialOutput => Some("audio-spi-sink"),
+                    PeripheralPart::ImagingSerialOutput => Some("imaging-serial-sink"),
+                    _ => None,
+                },
+                _ => None,
+            })
+        })
+        .collect::<Result<Vec<_>, String>>()?;
+    match kinds.as_slice() {
+        [Some(_)] => Ok(kinds.pop().flatten()),
+        many if many.iter().any(Option::is_some) => Err(format!("block {}: a whole-port output shares its port", block.id)),
+        _ => Ok(None),
+    }
+}
+
+/// The chip-selected endpoints body wiring attaches to a serial port, with their run inputs.
+fn serial_endpoints(
+    selection: &ResolvedSelection,
+    block: &fujimod_catalog::reference::SocBlock,
+    part_inputs: &[fujimod_catalog_configuration::application_inputs::ApplicationPartInput],
+) -> Result<Vec<toml::Value>, String> {
+    use fujimod_catalog::assembly::PeripheralPart;
+    use fujimod_catalog_configuration::application_inputs::ApplicationPartInput as Input;
+    let integer = |value: i64| toml::Value::Integer(value);
+    let mut endpoints = Vec::new();
+    let attachments = selection.body.hardware.iter().flat_map(|hardware| &hardware.serial_attachments);
+    for attachment in attachments.filter(|attachment| {
+        attachment.controller_id == block.id && attachment.select_connection_id.is_some()
+    }) {
+        let Some(select_id) = &attachment.select_connection_id else {
+            return Err(format!("serial attachment {} on {} has no chip-select connection", attachment.part_id, block.id));
+        };
+        let connection = selection.body.connections.iter().find(|connection| &connection.id == select_id)
+            .ok_or_else(|| format!("serial attachment {}: no connection {select_id}", attachment.part_id))?;
+        let [ConnectionSignal::Gpio { port, pin, active_level }] = connection.signals.as_slice() else {
+            return Err(format!("connection {select_id} is not one GPIO line"));
+        };
+        let part = selection.parts.iter().find(|part| part.id == attachment.part_id)
+            .ok_or_else(|| format!("serial attachment {}: no such part", attachment.part_id))?;
+        let fujimod_catalog::reference::PartModel::Peripheral { interface } = &part.model else {
+            return Err(format!("part {} is not a serial peripheral", part.id));
+        };
+        let inputs: Vec<_> = part_inputs.iter().filter(|input| input.part_id() == part.id).collect();
+        let missing = |what: &str| format!("part {}: the run supplies no {what}", part.id);
+        let mut row = toml::Table::new();
+        let kind = |row: &mut toml::Table, kind: &str| { row.insert("kind".into(), toml::Value::String(kind.into())); };
+        match interface {
+            PeripheralPart::PowerController { .. } => {
+                kind(&mut row, "power-controller");
+                let Some(Input::Clock { seconds, valid, registers, .. }) =
+                    inputs.iter().find(|input| matches!(input, Input::Clock { .. })).copied()
+                else {
+                    return Err(missing("clock"));
+                };
+                row.insert("rtc_seconds".into(), integer(i64::from(*seconds)));
+                row.insert("rtc_valid".into(), toml::Value::Boolean(*valid));
+                if !registers.is_empty() {
+                    row.insert("registers".into(), toml::Value::Table(registers.iter().map(|word| {
+                        (format!("{:x}", word.register), integer(i64::from(word.value)))
+                    }).collect()));
+                }
+            }
+            PeripheralPart::SerialCalibrationRegisters => {
+                kind(&mut row, "serial-calibration-registers");
+                let high = inputs.iter().find_map(|input| match input {
+                    Input::IdleLevel { high, .. } => Some(*high),
+                    _ => None,
+                }).ok_or_else(|| missing("idle level"))?;
+                row.insert("miso_high".into(), toml::Value::Boolean(high));
+            }
+            PeripheralPart::BisConfigurationRegisters => {
+                kind(&mut row, "bis-configuration-registers");
+                let Some(Input::BisRevision { revision, samples, block, idle_high, .. }) =
+                    inputs.iter().find(|input| matches!(input, Input::BisRevision { .. })).copied()
+                else {
+                    return Err(missing("BIS revision"));
+                };
+                let array = |values: Vec<i64>| toml::Value::Array(values.into_iter().map(integer).collect());
+                row.insert("revision".into(), array(revision.iter().map(|v| i64::from(*v)).collect()));
+                row.insert("samples".into(), array(samples.iter().map(|v| i64::from(*v)).collect()));
+                row.insert("idle_high".into(), toml::Value::Boolean(*idle_high));
+                row.insert("block".into(), array(block.iter().map(|v| i64::from(*v)).collect()));
+            }
+            PeripheralPart::Lsm6dsConfigurationRegisters => {
+                kind(&mut row, "lsm6ds-configuration-registers");
+                let Some(Input::Motion { temperature, angular_rate, acceleration, .. }) =
+                    inputs.iter().find(|input| matches!(input, Input::Motion { .. })).copied()
+                else {
+                    return Err(missing("motion"));
+                };
+                let array = |values: &[i16; 3]| toml::Value::Array(values.iter().map(|v| integer(i64::from(*v))).collect());
+                row.insert("temperature".into(), integer(i64::from(*temperature)));
+                let mut motion = toml::Table::new();
+                motion.insert("angular_rate".into(), array(angular_rate));
+                motion.insert("acceleration".into(), array(acceleration));
+                row.insert("motion".into(), toml::Value::Table(motion));
+            }
+            PeripheralPart::SerialCommandRegisters { bits, mode, read_flag, data_words, miso_high } => {
+                kind(&mut row, "serial-command-registers");
+                row.insert("bits".into(), integer(i64::from(*bits)));
+                row.insert("mode".into(), integer(i64::from(*mode)));
+                if let Some(flag) = read_flag { row.insert("read_flag".into(), integer(i64::from(*flag))); }
+                if let Some(words) = data_words { row.insert("data_words".into(), integer(i64::from(*words))); }
+                row.insert("miso_high".into(), toml::Value::Boolean(*miso_high));
+            }
+            PeripheralPart::UnidentifiedSerialDevice { miso_high } => {
+                kind(&mut row, "generic-sink");
+                row.insert("miso_high".into(), toml::Value::Boolean(*miso_high));
+            }
+            other => return Err(format!("part {}: {other:?} is not a chip-selected serial endpoint", part.id)),
+        }
+        let mut select = toml::Table::new();
+        select.insert("port".into(), integer(i64::from(*port)));
+        select.insert("pin".into(), integer(i64::from(*pin)));
+        select.insert("active_high".into(), toml::Value::Boolean(*active_level));
+        let mut endpoint = toml::Table::new();
+        endpoint.insert("select".into(), toml::Value::Table(select));
+        endpoint.insert("part".into(), toml::Value::Table(row));
+        endpoints.push(toml::Value::Table(endpoint));
+    }
+    Ok(endpoints)
+}
+
 fn block_window(
     block: &fujimod_catalog::reference::SocBlock,
     device: &BlockDevice,
@@ -739,6 +883,7 @@ fn block_window(
     ticks_per_second: u64,
     presented_jedec: Option<u32>,
     polled: &[String],
+    part_inputs: &[fujimod_catalog_configuration::application_inputs::ApplicationPartInput],
 ) -> Result<Option<(&'static str, toml::Table)>, String> {
     let _ = levels;
     let mut options = toml::Table::new();
@@ -886,8 +1031,13 @@ fn block_window(
             options.insert("rl78".into(), toml::Value::Table(rl78));
             "pl011"
         }
+        BlockDevice::Pl022 { .. } if port_device(selection, block)?.is_some() => {
+            port_device(selection, block)?.expect("checked above")
+        }
         BlockDevice::Pl022 { source_hz, .. } if polled.contains(&block.id) => {
             options.insert("source_hz".into(), integer(*source_hz));
+            let endpoints = serial_endpoints(selection, block, part_inputs)?;
+            if !endpoints.is_empty() { options.insert("endpoints".into(), toml::Value::Array(endpoints)); }
             "spi-controller"
         }
         BlockDevice::Pl022 { source_hz, ticks_per_second, receive_request, transmit_request, companion_irq_line, .. } => {
@@ -896,7 +1046,13 @@ fn block_window(
             if let Some(value) = receive_request { options.insert("receive_request".into(), integer(u64::from(*value))); }
             if let Some(value) = transmit_request { options.insert("transmit_request".into(), integer(u64::from(*value))); }
             if let Some(value) = companion_irq_line { options.insert("companion_irq_line".into(), integer(u64::from(*value))); }
-            options.insert("wire".into(), toml::Value::Table(toml::Table::new()));
+            let endpoints = serial_endpoints(selection, block, part_inputs)?;
+            let mut wire = toml::Table::new();
+            if !endpoints.is_empty() {
+                wire.insert("kind".into(), toml::Value::String("gpio-selected".into()));
+                wire.insert("endpoints".into(), toml::Value::Array(endpoints));
+            }
+            options.insert("wire".into(), toml::Value::Table(wire));
             "pl022"
         }
         BlockDevice::Completion { fixed_words, starts, completion, ack, irq_mask, delay_ticks, .. } => {

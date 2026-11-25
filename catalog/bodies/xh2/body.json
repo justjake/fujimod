@@ -13,6 +13,32 @@
         ]
       }
     },
+    "serial_attachments": [
+      {
+        "part_id": "power-controller",
+        "controller_id": "spi2",
+        "connection_id": "power-controller-spi2-bus",
+        "select_connection_id": "power-controller-spi2-select"
+      },
+      {
+        "part_id": "bis-configuration",
+        "controller_id": "spi5",
+        "connection_id": "bis-configuration-spi5-bus",
+        "select_connection_id": "bis-configuration-spi5-select"
+      },
+      {
+        "part_id": "lsm6ds",
+        "controller_id": "spi5",
+        "connection_id": "lsm6ds-spi5-bus",
+        "select_connection_id": "lsm6ds-spi5-select"
+      },
+      {
+        "part_id": "serial-command-16-read",
+        "controller_id": "spi8",
+        "connection_id": "serial-command-16-read-spi8-bus",
+        "select_connection_id": "serial-command-16-read-spi8-select"
+      }
+    ],
     "bus_drain": [
       {
         "address": 2147483648,
@@ -26,8 +52,78 @@
       }
     ]
   },
+  "connections": [
+    {
+      "id": "power-controller-spi2-bus",
+      "kind": "power-control"
+    },
+    {
+      "id": "power-controller-spi2-select",
+      "kind": "power-control",
+      "signals": [
+        {
+          "kind": "gpio",
+          "port": 11,
+          "pin": 6,
+          "active_level": true
+        }
+      ]
+    },
+    {
+      "id": "bis-configuration-spi5-bus",
+      "kind": "control"
+    },
+    {
+      "id": "bis-configuration-spi5-select",
+      "kind": "control",
+      "signals": [
+        {
+          "kind": "gpio",
+          "port": 12,
+          "pin": 8,
+          "active_level": false
+        }
+      ]
+    },
+    {
+      "id": "lsm6ds-spi5-bus",
+      "kind": "control"
+    },
+    {
+      "id": "lsm6ds-spi5-select",
+      "kind": "control",
+      "signals": [
+        {
+          "kind": "gpio",
+          "port": 12,
+          "pin": 9,
+          "active_level": false
+        }
+      ]
+    },
+    {
+      "id": "serial-command-16-read-spi8-bus",
+      "kind": "control"
+    },
+    {
+      "id": "serial-command-16-read-spi8-select",
+      "kind": "control",
+      "signals": [
+        {
+          "kind": "gpio",
+          "port": 15,
+          "pin": 11,
+          "active_level": false
+        }
+      ]
+    }
+  ],
   "parts": [
-    "x100vi-serial-nor"
+    "x100vi-serial-nor",
+    "power-controller",
+    "bis-configuration",
+    "lsm6ds",
+    "serial-command-16-read"
   ],
   "wiring": [
     {

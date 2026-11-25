@@ -815,6 +815,13 @@
             "part_id": {
               "type": "string"
             },
+            "registers": {
+              "description": "Initial values of other registers, by register number.",
+              "items": {
+                "$ref": "#/$defs/RegisterWord"
+              },
+              "type": "array"
+            },
             "seconds": {
               "format": "uint32",
               "minimum": 0,
@@ -856,8 +863,19 @@
         },
         {
           "additionalProperties": false,
-          "description": "Explicit BIS revision-register and idle-line inputs.",
+          "description": "Explicit BIS revision-register, sample, configuration-block and idle-line inputs.",
           "properties": {
+            "block": {
+              "items": {
+                "format": "uint8",
+                "maximum": 255,
+                "minimum": 0,
+                "type": "integer"
+              },
+              "maxItems": 6,
+              "minItems": 6,
+              "type": "array"
+            },
             "idle_high": {
               "type": "boolean"
             },
@@ -878,13 +896,75 @@
               "maxItems": 2,
               "minItems": 2,
               "type": "array"
+            },
+            "samples": {
+              "items": {
+                "format": "uint16",
+                "maximum": 65535,
+                "minimum": 0,
+                "type": "integer"
+              },
+              "maxItems": 2,
+              "minItems": 2,
+              "type": "array"
             }
           },
           "required": [
             "kind",
             "part_id",
             "revision",
+            "samples",
+            "block",
             "idle_high"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Die temperature and motion presented to an inertial sensor.",
+          "properties": {
+            "acceleration": {
+              "items": {
+                "format": "int16",
+                "maximum": 32767,
+                "minimum": -32768,
+                "type": "integer"
+              },
+              "maxItems": 3,
+              "minItems": 3,
+              "type": "array"
+            },
+            "angular_rate": {
+              "items": {
+                "format": "int16",
+                "maximum": 32767,
+                "minimum": -32768,
+                "type": "integer"
+              },
+              "maxItems": 3,
+              "minItems": 3,
+              "type": "array"
+            },
+            "kind": {
+              "const": "motion",
+              "type": "string"
+            },
+            "part_id": {
+              "type": "string"
+            },
+            "temperature": {
+              "format": "int16",
+              "maximum": 32767,
+              "minimum": -32768,
+              "type": "integer"
+            }
+          },
+          "required": [
+            "kind",
+            "part_id",
+            "temperature",
+            "angular_rate",
+            "acceleration"
           ],
           "type": "object"
         }
@@ -20773,6 +20853,80 @@
           },
           "required": [
             "kind"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Serial register file addressed by a command word, of unknown function.",
+          "properties": {
+            "bits": {
+              "description": "Word width, 8 or 16 bits.",
+              "format": "uint8",
+              "maximum": 255,
+              "minimum": 0,
+              "type": "integer"
+            },
+            "data_words": {
+              "description": "Data words one transaction carries at most, when bounded.",
+              "format": "uint16",
+              "maximum": 65535,
+              "minimum": 0,
+              "type": [
+                "integer",
+                "null"
+              ]
+            },
+            "kind": {
+              "const": "serial-command-registers",
+              "type": "string"
+            },
+            "miso_high": {
+              "description": "MISO level while the part is written.",
+              "type": "boolean"
+            },
+            "mode": {
+              "description": "Motorola SPI mode 0..3.",
+              "format": "uint8",
+              "maximum": 255,
+              "minimum": 0,
+              "type": "integer"
+            },
+            "read_flag": {
+              "description": "Command bits that mark a read, when the command word encodes one.",
+              "format": "uint16",
+              "maximum": 65535,
+              "minimum": 0,
+              "type": [
+                "integer",
+                "null"
+              ]
+            }
+          },
+          "required": [
+            "kind",
+            "bits",
+            "mode",
+            "miso_high"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Serial device not yet identified: it accepts every frame and answers a fixed level.",
+          "properties": {
+            "kind": {
+              "const": "unidentified-serial-device",
+              "type": "string"
+            },
+            "miso_high": {
+              "description": "MISO level it answers.",
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "kind",
+            "miso_high"
           ],
           "type": "object"
         },
