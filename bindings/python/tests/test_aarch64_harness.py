@@ -78,6 +78,8 @@ def test_arguments_and_returns_preserve_all_64_bits() -> None:
         (words(0xD4000001), "Unsupported instruction"),
         (words(0xDAC10020), "Unsupported instruction"),
         (words(0xC8007C22), "exclusive store outside declared RAM"),
+        # STXP pair store: pairs stay refused.
+        (words(0xC8207C22), "register-pair exclusive"),
     ],
 )
 def test_strict_refusals(code: bytes, reason: str) -> None:
@@ -363,8 +365,58 @@ def test_declared_current_el_reads_the_model_and_records_the_observation() -> No
                 "encoding": 0xC212,
                 "destination": 0,
                 "value": 4,
+                "source": "model",
             }
         ]
+
+
+def test_system_value_declaration_retires_a_read_the_core_does_not_implement() -> None:
+    # MRS x1,S3_1_C15_C2_1; STR x1,[x2]; RET. The A53 CPUACTLR_EL1 encoding has
+    # no value in the CPU model, so the declaration is the model for that read.
+    with harness(words(0xD539F221, 0xF9000041, 0xD65F03C0)) as h:
+        result = h.call(
+            CODE,
+            args=(0, 0, DATA),
+            system_values=[("S3_1_C15_C2_1", 0x12345678)],
+        )
+        assert result["failure"] is None and result["returned"]
+        assert result["registers"]["x1"] == 0x12345678
+        assert h.read(DATA, 8) == (0x12345678).to_bytes(8, "little")
+        assert result["system_read_observations"] == [
+            {
+                "pc": CODE,
+                "name": "S3_1_C15_C2_1",
+                "encoding": 0xCF91,
+                "destination": 1,
+                "value": 0x12345678,
+                "source": "declared",
+            }
+        ]
+
+
+def test_declared_system_value_tracks_writes_to_the_same_register() -> None:
+    # MRS x1,S3_1_C15_C2_1; MOVZ x1,#7; MSR S3_1_C15_C2_1,x1;
+    # MRS x2,S3_1_C15_C2_1; RET. The declaration is the register state.
+    code = words(0xD539F221, 0xD28000E1, 0xD519F221, 0xD539F222, 0xD65F03C0)
+    with harness(code) as h:
+        result = h.call(CODE, system_values=[("S3_1_C15_C2_1", 0x11)])
+        assert result["failure"] is None and result["returned"]
+        assert result["registers"]["x2"] == 7
+        assert [
+            (r["value"], r["source"]) for r in result["system_read_observations"]
+        ] == [
+            (0x11, "declared"),
+            (7, "declared"),
+        ]
+        assert result["system_writes"] == [
+            {"pc": CODE + 8, "name": "S3_1_C15_C2_1", "value": 7}
+        ]
+
+
+def test_unimplemented_register_read_without_a_declaration_is_refused() -> None:
+    with harness(words(0xD539F221, 0xD65F03C0)) as h:
+        result = h.call(CODE)
+        assert "undeclared MRS" in result["failure"]
 
 
 def test_system_read_mismatch_is_rejected_before_execution() -> None:
