@@ -844,10 +844,13 @@ impl Board {
         let mut s = self.state.borrow_mut();
         let ran = s.waiting[core];
         s.released = released;
-        // A held peer's WFE that an event satisfied during the run stays awake.
+        // A held peer that an event or a raised interrupt woke during the run
+        // stays awake: its WFE was satisfied, or its WFI ends on the pin.
         for c in 0..waiting.len() {
             if c != core {
-                s.waiting[c] = waiting[c] && !(waiting_event[c] && !s.waiting_event[c]);
+                let event_woke = waiting_event[c] && !s.waiting_event[c];
+                let pin_woke = s.pins.get(c).is_some_and(|&(irq, fiq)| irq || fiq);
+                s.waiting[c] = waiting[c] && !event_woke && !pin_woke;
             }
         }
         s.waiting[core] = ran;
