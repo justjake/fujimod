@@ -163,6 +163,10 @@
     {
       "block_id": "i2c1",
       "ticks": 25000
+    },
+    {
+      "block_id": "i2c2",
+      "ticks": 25000
     }
   ],
   "overlays": [],

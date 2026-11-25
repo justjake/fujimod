@@ -24,3 +24,28 @@ size = 0x1a0000
 [[ram]]
 base = 0xfb400000
 size = 0x1a0000
+
+# Run input: no card in either SD slot. A body without a second socket reads the same empty slot.
+[[sd]]
+base = 0xff9b0000
+present = false
+protected = false
+files = []
+[sd.format]
+sectors = 0x3b9e000
+max_dirty_sectors = 65536
+partition_start = 8192
+sectors_per_cluster = 64
+label = "NO NAME"
+
+[[sd]]
+base = 0xff9b4000
+present = false
+protected = false
+files = []
+[sd.format]
+sectors = 0x3b9e000
+max_dirty_sectors = 65536
+partition_start = 8192
+sectors_per_cluster = 64
+label = "NO NAME"

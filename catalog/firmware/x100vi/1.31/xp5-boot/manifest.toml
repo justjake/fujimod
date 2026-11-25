@@ -65,3 +65,16 @@ label = "NO NAME"
 # Stock replaces SP_EL0/SP_EL1 before calling C, builds its MMU map,
 # then invokes the normal section6 entry in x20. x21 names the reset
 # hardware-info buffer, initialized above for the normal virtual-board profile.
+
+# Run input: no card in SD slot 2. The body has no second socket, which the host reads as an empty slot.
+[[sd]]
+base = 0xff9b4000
+present = false
+protected = false
+files = []
+[sd.format]
+sectors = 0x3b9e000
+max_dirty_sectors = 65536
+partition_start = 8192
+sectors_per_cluster = 64
+label = "NO NAME"
