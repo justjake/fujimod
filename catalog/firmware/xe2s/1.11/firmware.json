@@ -69,6 +69,25 @@
       }
     ]
   },
+  "generated_facts": {
+    "observation": {
+      "menu_active": 13297352,
+      "menu_node": 13292384,
+      "pending_mode": 13489128,
+      "readiness": {
+        "category_one": 13486960,
+        "category_two": 13486968,
+        "excluded_mask": 16392,
+        "input_pending": 13490200,
+        "operation_alert_timer": 13487168,
+        "override_address": 13494272
+      },
+      "rec_mode": 3,
+      "setup_mode": 5,
+      "system_mode": 13407660,
+      "ui_mode": 13489116
+    }
+  },
   "reset_release": {
     "basis": "Declared catalog input.",
     "checks": [
@@ -108,6 +127,7 @@
             }
           ]
         },
+        "camera_configuration_id": "xe2s-111-runtime",
         "execution_scope": "offline-boot-development",
         "limits": [],
         "rom_basis": "Declared catalog input.",
