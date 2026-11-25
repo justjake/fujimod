@@ -123,6 +123,9 @@
       "location": "rear",
       "manual_page": 50,
       "icon": "delete",
+      "connection_ids": [
+        "controls-gpio-8-5"
+      ],
       "assignable": false,
       "pushable": true,
       "default_function": "Delete the selected picture during playback.",
@@ -152,6 +155,9 @@
       "location": "rear",
       "manual_page": 18,
       "face": "DISP/BACK",
+      "connection_ids": [
+        "controls-gpio-9-5"
+      ],
       "assignable": false,
       "pushable": true,
       "default_function": "Change the indicators shown in the viewfinder and LCD monitor or go back.",
@@ -312,6 +318,9 @@
       "location": "top",
       "manual_page": 255,
       "face": "Fn1",
+      "connection_ids": [
+        "controls-gpio-0-14"
+      ],
       "assignable": true,
       "pushable": true,
       "default_function": "FACE DETECTION ON/OFF",
@@ -325,6 +334,9 @@
       "location": "front",
       "manual_page": 255,
       "face": "Fn2",
+      "connection_ids": [
+        "controls-gpio-6-1"
+      ],
       "assignable": true,
       "pushable": true,
       "default_function": "DRIVE SETTING",
@@ -376,6 +388,9 @@
       "location": "rear",
       "manual_page": 5,
       "short_name": "FOCUS",
+      "connection_ids": [
+        "controls-gpio-7-7"
+      ],
       "assignable": false,
       "pushable": true,
       "default_function": "Tilt or press to select the focus area; use to navigate menus.",
@@ -395,6 +410,9 @@
       "location": "front",
       "manual_page": 8,
       "short_name": "FRONT DIAL",
+      "connection_ids": [
+        "controls-gpio-9-7"
+      ],
       "assignable": true,
       "pushable": true,
       "default_function": "Rotate to select menu tabs or pages, adjust aperture, exposure compensation, or sensitivity, and view other pictures in playback; press to switch between aperture and sensitivity (and exposure compensation when its dial is at C); press and hold to choose the command dial setting.",
@@ -449,6 +467,9 @@
       "location": "rear",
       "manual_page": 22,
       "face": "MENU/OK",
+      "connection_ids": [
+        "controls-gpio-7-12"
+      ],
       "assignable": false,
       "pushable": true,
       "default_function": "Open menus and select or confirm highlighted items.",
@@ -493,6 +514,9 @@
       "location": "rear",
       "manual_page": 49,
       "icon": "playback",
+      "connection_ids": [
+        "controls-gpio-8-6"
+      ],
       "assignable": false,
       "pushable": true,
       "default_function": "View pictures in playback.",
@@ -506,6 +530,9 @@
       "location": "rear",
       "manual_page": 255,
       "face": "Q",
+      "connection_ids": [
+        "controls-gpio-7-14"
+      ],
       "assignable": true,
       "pushable": true,
       "default_function": "QUICK MENU",
@@ -519,6 +546,9 @@
       "location": "rear",
       "manual_page": 255,
       "short_name": "REAR DIAL",
+      "connection_ids": [
+        "controls-gpio-0-13"
+      ],
       "assignable": true,
       "pushable": true,
       "default_function": "Rotate to highlight menu items, select shutter-speed/aperture combinations, adjust shutter speed and quick-menu settings, choose focus-frame size, and zoom during playback; press for FOCUS CHECK or zoom in on the active focus point; press and hold to choose the manual-focus display.",
@@ -535,6 +565,9 @@
       "location": "rear",
       "manual_page": 255,
       "short_name": "DOWN",
+      "connection_ids": [
+        "controls-gpio-7-10"
+      ],
       "assignable": true,
       "pushable": true,
       "default_function": "Move or highlight down; default function-button role is PERFORMANCE.",
@@ -548,6 +581,9 @@
       "location": "rear",
       "manual_page": 255,
       "short_name": "LEFT",
+      "connection_ids": [
+        "controls-gpio-7-9"
+      ],
       "assignable": true,
       "pushable": true,
       "default_function": "Move or highlight left; default function-button role is FILM SIMULATION.",
@@ -561,6 +597,9 @@
       "location": "rear",
       "manual_page": 255,
       "short_name": "RIGHT",
+      "connection_ids": [
+        "controls-gpio-7-8"
+      ],
       "assignable": true,
       "pushable": true,
       "default_function": "Move or highlight right; default function-button role is WHITE BALANCE.",
@@ -574,6 +613,9 @@
       "location": "rear",
       "manual_page": 255,
       "short_name": "UP",
+      "connection_ids": [
+        "controls-gpio-7-11"
+      ],
       "assignable": true,
       "pushable": true,
       "default_function": "Move or highlight up; default function-button role is PHOTOMETRY.",
@@ -859,6 +901,9 @@
       "location": "top",
       "manual_page": 6,
       "short_name": "MODE",
+      "connection_ids": [
+        "controls-gpio-9-6"
+      ],
       "assignable": false,
       "pushable": false,
       "positions": [
@@ -893,6 +938,9 @@
       "location": "rear",
       "manual_page": 17,
       "face": "VIEW/MODE",
+      "connection_ids": [
+        "controls-gpio-9-3"
+      ],
       "assignable": false,
       "pushable": true,
       "default_function": "Cycle through the viewfinder and LCD display modes.",

@@ -74,6 +74,294 @@
           "channel": 10
         }
       ]
+    },
+    {
+      "id": "controls-gpio-0-13",
+      "kind": "control",
+      "signals": [
+        {
+          "kind": "gpio",
+          "port": 0,
+          "pin": 13,
+          "active_level": false
+        }
+      ],
+      "evidence": {
+        "kind": "located",
+        "firmware_ids": [
+          "xt4-212"
+        ]
+      }
+    },
+    {
+      "id": "controls-gpio-0-14",
+      "kind": "control",
+      "signals": [
+        {
+          "kind": "gpio",
+          "port": 0,
+          "pin": 14,
+          "active_level": false
+        }
+      ],
+      "evidence": {
+        "kind": "located",
+        "firmware_ids": [
+          "xt4-212"
+        ]
+      }
+    },
+    {
+      "id": "controls-gpio-6-1",
+      "kind": "control",
+      "signals": [
+        {
+          "kind": "gpio",
+          "port": 6,
+          "pin": 1,
+          "active_level": false
+        }
+      ],
+      "evidence": {
+        "kind": "located",
+        "firmware_ids": [
+          "xt4-212"
+        ]
+      }
+    },
+    {
+      "id": "controls-gpio-7-7",
+      "kind": "control",
+      "signals": [
+        {
+          "kind": "gpio",
+          "port": 7,
+          "pin": 7,
+          "active_level": false
+        }
+      ],
+      "evidence": {
+        "kind": "located",
+        "firmware_ids": [
+          "xt4-212"
+        ]
+      }
+    },
+    {
+      "id": "controls-gpio-7-8",
+      "kind": "control",
+      "signals": [
+        {
+          "kind": "gpio",
+          "port": 7,
+          "pin": 8,
+          "active_level": false
+        }
+      ],
+      "evidence": {
+        "kind": "located",
+        "firmware_ids": [
+          "xt4-212"
+        ]
+      }
+    },
+    {
+      "id": "controls-gpio-7-9",
+      "kind": "control",
+      "signals": [
+        {
+          "kind": "gpio",
+          "port": 7,
+          "pin": 9,
+          "active_level": false
+        }
+      ],
+      "evidence": {
+        "kind": "located",
+        "firmware_ids": [
+          "xt4-212"
+        ]
+      }
+    },
+    {
+      "id": "controls-gpio-7-10",
+      "kind": "control",
+      "signals": [
+        {
+          "kind": "gpio",
+          "port": 7,
+          "pin": 10,
+          "active_level": false
+        }
+      ],
+      "evidence": {
+        "kind": "located",
+        "firmware_ids": [
+          "xt4-212"
+        ]
+      }
+    },
+    {
+      "id": "controls-gpio-7-11",
+      "kind": "control",
+      "signals": [
+        {
+          "kind": "gpio",
+          "port": 7,
+          "pin": 11,
+          "active_level": false
+        }
+      ],
+      "evidence": {
+        "kind": "located",
+        "firmware_ids": [
+          "xt4-212"
+        ]
+      }
+    },
+    {
+      "id": "controls-gpio-7-12",
+      "kind": "control",
+      "signals": [
+        {
+          "kind": "gpio",
+          "port": 7,
+          "pin": 12,
+          "active_level": false
+        }
+      ],
+      "evidence": {
+        "kind": "located",
+        "firmware_ids": [
+          "xt4-212"
+        ]
+      }
+    },
+    {
+      "id": "controls-gpio-7-14",
+      "kind": "control",
+      "signals": [
+        {
+          "kind": "gpio",
+          "port": 7,
+          "pin": 14,
+          "active_level": false
+        }
+      ],
+      "evidence": {
+        "kind": "located",
+        "firmware_ids": [
+          "xt4-212"
+        ]
+      }
+    },
+    {
+      "id": "controls-gpio-8-5",
+      "kind": "control",
+      "signals": [
+        {
+          "kind": "gpio",
+          "port": 8,
+          "pin": 5,
+          "active_level": false
+        }
+      ],
+      "evidence": {
+        "kind": "located",
+        "firmware_ids": [
+          "xt4-212"
+        ]
+      }
+    },
+    {
+      "id": "controls-gpio-8-6",
+      "kind": "control",
+      "signals": [
+        {
+          "kind": "gpio",
+          "port": 8,
+          "pin": 6,
+          "active_level": false
+        }
+      ],
+      "evidence": {
+        "kind": "located",
+        "firmware_ids": [
+          "xt4-212"
+        ]
+      }
+    },
+    {
+      "id": "controls-gpio-9-3",
+      "kind": "control",
+      "signals": [
+        {
+          "kind": "gpio",
+          "port": 9,
+          "pin": 3,
+          "active_level": false
+        }
+      ],
+      "evidence": {
+        "kind": "located",
+        "firmware_ids": [
+          "xt4-212"
+        ]
+      }
+    },
+    {
+      "id": "controls-gpio-9-5",
+      "kind": "control",
+      "signals": [
+        {
+          "kind": "gpio",
+          "port": 9,
+          "pin": 5,
+          "active_level": false
+        }
+      ],
+      "evidence": {
+        "kind": "located",
+        "firmware_ids": [
+          "xt4-212"
+        ]
+      }
+    },
+    {
+      "id": "controls-gpio-9-6",
+      "kind": "control",
+      "signals": [
+        {
+          "kind": "gpio",
+          "port": 9,
+          "pin": 6,
+          "active_level": false
+        }
+      ],
+      "evidence": {
+        "kind": "located",
+        "firmware_ids": [
+          "xt4-212"
+        ]
+      }
+    },
+    {
+      "id": "controls-gpio-9-7",
+      "kind": "control",
+      "signals": [
+        {
+          "kind": "gpio",
+          "port": 9,
+          "pin": 7,
+          "active_level": false
+        }
+      ],
+      "evidence": {
+        "kind": "located",
+        "firmware_ids": [
+          "xt4-212"
+        ]
+      }
     }
   ],
   "parts": [
