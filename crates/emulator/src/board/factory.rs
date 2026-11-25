@@ -534,6 +534,7 @@ impl Graph {
                     format!("CPU{} MMIO {:#x}+{:#x}: {error}", p.core, p.address, p.size)
                 })?;
         }
+        board.map_interrupts()?;
         board.retained_engines = Some(engines);
         board
             .state
