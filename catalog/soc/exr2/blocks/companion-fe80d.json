@@ -4,5 +4,15 @@
   "id": "companion-fe80d",
   "base": 4269854720,
   "size": 4096,
-  "kind": "address-window"
+  "kind": "address-window",
+  "views": [
+    {
+      "core": "core0",
+      "address": 4269854720
+    },
+    {
+      "core": "core1",
+      "address": 4269854720
+    }
+  ]
 }
