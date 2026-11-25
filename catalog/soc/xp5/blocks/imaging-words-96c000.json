@@ -1,0 +1,24 @@
+{
+  "$schema": "https://fujimod.com/schemas/soc-block.schema.json",
+  "schema": 1,
+  "id": "imaging-words-96c000",
+  "base": 4288069632,
+  "size": 4096,
+  "kind": "imaging-controller",
+  "device": {
+    "model": "register_block",
+    "idle_bits": [],
+    "reads_back": true,
+    "basis": "imaging table page with unresolved read direction Located in catalog/firmware/x100vi/1.31/xp5-boot/manifest.d/50-imaging.toml. Words the firmware reads read back their last write (the X-T5 4.31 table reader 0x1370f00 reads 0xff960000 with the 0xff96cb00 group)."
+  },
+  "evidence": [
+    {
+      "kind": "located",
+      "firmware_ids": [
+        "x100vi-131",
+        "xe5-112",
+        "xt5-431"
+      ]
+    }
+  ]
+}

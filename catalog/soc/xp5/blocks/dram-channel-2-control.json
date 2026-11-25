@@ -1,0 +1,43 @@
+{
+  "$schema": "https://fujimod.com/schemas/soc-block.schema.json",
+  "schema": 1,
+  "id": "dram-channel-2-control",
+  "base": 4210192384,
+  "size": 4096,
+  "kind": "memory-controller",
+  "device": {
+    "model": "register_block",
+    "idle_bits": [],
+    "basis": "DRAM channel 2 memory-controller page written and polled by the X-T5 4.31 S1 path (0x13afe24 writes it; 0x13af930 waits for +0x800 bit 0 to read 1; 0x13afcec waits for +0x820 bit 0 to read 0, seen on channel 2 and given to channel 3 by symmetry). Located in catalog/firmware/xt5/4.31/xp5-boot/manifest.d/48-ddr-phy.toml."
+  },
+  "registers": [
+    {
+      "name": "ready",
+      "offset": 2048,
+      "width_bytes": 4,
+      "access": "read-write",
+      "reads": {
+        "kind": "fixed",
+        "value": 1
+      }
+    },
+    {
+      "name": "busy",
+      "offset": 2080,
+      "width_bytes": 4,
+      "access": "read-write",
+      "reads": {
+        "kind": "fixed",
+        "value": 0
+      }
+    }
+  ],
+  "evidence": [
+    {
+      "kind": "located",
+      "firmware_ids": [
+        "xt5-431"
+      ]
+    }
+  ]
+}
