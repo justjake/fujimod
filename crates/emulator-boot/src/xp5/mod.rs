@@ -42,6 +42,14 @@ pub struct Startup {
     pub camera_settings: BTreeMap<String, String>,
 }
 
+/// The device windows a default boot of `configuration_id` builds from the catalog, as JSON.
+pub fn device_windows_json(configuration_id: &str) -> Result<String, String> {
+    let resolved = ResolvedConfiguration::bundled(configuration_id)?;
+    let state = manifest::BootState::for_firmware(&resolved.configuration.firmware_id, None)?
+        .with_catalog_windows(&resolved)?;
+    serde_json::to_string(&state.device).map_err(|error| error.to_string())
+}
+
 pub(crate) struct RunFacts {
     pub firmware: firmware::Firmware,
     pub state: manifest::BootState,

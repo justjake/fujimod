@@ -29,6 +29,12 @@ pub struct BootState {
     /// manifest declares none.
     #[serde(default)]
     pub device: Vec<DeviceWindow>,
+    /// A control experiment's catalog windows to leave out, by base.
+    #[serde(default)]
+    pub remove_windows: Vec<u64>,
+    /// A control experiment's option changes to the catalog window at each base.
+    #[serde(default)]
+    pub window_options: Vec<WindowControl>,
     /// Card media of each SD slot, keyed by its UHS-I host base. Presence and
     /// write protection are run inputs; the card is formatted blank.
     #[serde(default)]
@@ -45,6 +51,16 @@ fn version() -> u32 {
 }
 fn yes() -> bool {
     true
+}
+/// Options a control experiment sets on, and removes from, the catalog window at `base`.
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct WindowControl {
+    pub base: u64,
+    #[serde(default)]
+    pub set: toml::Table,
+    #[serde(default)]
+    pub unset: Vec<String>,
 }
 /// One window of the companion core's address space onto the application cores' physical memory.
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -158,6 +174,26 @@ impl BootState {
     ) -> Result<Self, String> {
         let dram = self.dram.as_ref().map(|dram| (dram.limit, dram.bus_drain));
         self.device = fujimod_emulator_xp5_board::boot::device_windows(resolved, dram)?;
+        for base in &self.remove_windows {
+            let before = self.device.len();
+            self.device.retain(|window| window.base != *base);
+            if self.device.len() == before {
+                return Err(format!("the manifest removes absent window {base:#x}"));
+            }
+        }
+        for options in &self.window_options {
+            let window = self
+                .device
+                .iter_mut()
+                .find(|window| window.base == options.base)
+                .ok_or_else(|| format!("the manifest sets options on absent window {:#x}", options.base))?;
+            for key in &options.unset {
+                window.options.remove(key).ok_or_else(|| {
+                    format!("the manifest removes absent option {key} of window {:#x}", options.base)
+                })?;
+            }
+            window.options.extend(options.set.clone());
+        }
         Ok(self)
     }
 }

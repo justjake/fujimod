@@ -24,6 +24,7 @@ fn _native(py: Python<'_>, module: &Bound<'_, PyModule>) -> PyResult<()> {
         fujimod_python_xp4::register();
         let emulator = module.getattr("emulator")?.cast_into::<PyModule>()?;
         emulator.add_function(wrap_pyfunction!(boot::xpp_definition, &emulator)?)?;
+        emulator.add_function(wrap_pyfunction!(boot::xp5_device_windows, &emulator)?)?;
         fujimod_python_host_image::register(&emulator)?;
         fujimod_python_graphics::register(&emulator)?;
     }

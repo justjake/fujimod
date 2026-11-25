@@ -50,6 +50,8 @@ class emulator:
         sensor_image: tuple[int, int, bytes] | None = None,
         sensor_light: str | None = None,
     ) -> str: ...
+    @staticmethod
+    def xp5_device_windows(configuration_id: str) -> str: ...
 
     @final
     class Board:
