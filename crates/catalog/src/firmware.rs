@@ -94,6 +94,48 @@ pub struct Sysregs {
     #[serde(rename = "VBAR_EL1")]
     /// Declared VBAR EL1.
     pub vbar_el1: u64,
+    #[serde(default, skip_serializing_if = "Option::is_none", rename = "ELR_EL3")]
+    /// Declared ELR EL3.
+    pub elr_el3: Option<u64>,
+    #[serde(default, skip_serializing_if = "Option::is_none", rename = "SCR_EL3")]
+    /// Declared SCR EL3.
+    pub scr_el3: Option<u64>,
+    #[serde(default, skip_serializing_if = "Option::is_none", rename = "SP_EL3")]
+    /// Declared SP EL3.
+    pub sp_el3: Option<u64>,
+    #[serde(default, skip_serializing_if = "Option::is_none", rename = "SPSR_EL3")]
+    /// Declared SPSR EL3.
+    pub spsr_el3: Option<u64>,
+}
+
+/// Declared entry level.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(rename_all = "snake_case")]
+#[cfg_attr(feature = "schema", schemars(rename = "FirmwareEntryLevel"))]
+pub enum EntryLevel {
+    /// EL1 handoff entry.
+    El1h,
+    /// EL2 entry.
+    El2h,
+    /// EL3 entry.
+    El3h,
+    /// EL3 entry with the SPSel-selected stack pointer (SP_EL0).
+    El3t,
+}
+
+/// Declared entry descriptor facts.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(deny_unknown_fields)]
+#[cfg_attr(feature = "schema", schemars(rename = "FirmwareEntry"))]
+pub struct Entry {
+    /// Declared entry level.
+    pub level: EntryLevel,
+    /// Declared entry pstate.
+    pub pstate: u64,
+    /// Declared entry registers keyed by x0 through x30.
+    pub regs: BTreeMap<String, u64>,
 }
 
 /// Declared cpu facts.
@@ -102,18 +144,78 @@ pub struct Sysregs {
 #[serde(deny_unknown_fields)]
 #[cfg_attr(feature = "schema", schemars(rename = "FirmwareCpu"))]
 pub struct Cpu {
-    /// Declared cpsr.
-    pub cpsr: u64,
+    /// Declared cpsr for a legacy EL1 handoff.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub cpsr: Option<u64>,
     /// Declared id.
     pub id: u64,
     /// Declared pc.
     pub pc: u64,
-    /// Declared regs.
-    pub regs: Regs,
+    /// Declared legacy handoff registers.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub regs: Option<Regs>,
     /// Declared running.
     pub running: bool,
     /// Declared sysregs.
     pub sysregs: Sysregs,
+    /// Declared explicit entry descriptor.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub entry: Option<Entry>,
+}
+
+impl Cpu {
+    /// Validate that the cpu declares exactly one entry shape with known registers.
+    pub fn validate(&self) -> Result<(), String> {
+        let legacy = self.cpsr.is_some() || self.regs.is_some();
+        let entry = self.entry.is_some();
+        match (legacy, entry) {
+            (false, false) => {
+                Err("cpu must declare a legacy handoff or an explicit entry descriptor".into())
+            }
+            (true, true) => Err(
+                "cpu cannot declare both a legacy handoff and an explicit entry descriptor".into(),
+            ),
+            (true, false) => {
+                if self.cpsr.is_none() || self.regs.is_none() {
+                    return Err("a legacy handoff requires both cpsr and regs".into());
+                }
+                Ok(())
+            }
+            (false, true) => {
+                let entry = self.entry.as_ref().expect("entry is present");
+                let expected_mode = match &entry.level {
+                    EntryLevel::El1h => 0x5,
+                    EntryLevel::El2h => 0x9,
+                    EntryLevel::El3h => 0xd,
+                    EntryLevel::El3t => 0xc,
+                };
+                let mode = entry.pstate & 0x1f;
+                if mode != expected_mode {
+                    return Err(format!(
+                        "entry pstate mode {mode:#x} does not match declared level {:?}",
+                        entry.level
+                    ));
+                }
+                for name in entry.regs.keys() {
+                    if !is_entry_register_name(name) {
+                        return Err(format!("entry register {name:?} is not x0 through x30"));
+                    }
+                }
+                Ok(())
+            }
+        }
+    }
+}
+
+/// Report whether a name is one of the entry registers x0 through x30.
+fn is_entry_register_name(name: &str) -> bool {
+    let Some(index) = name
+        .strip_prefix('x')
+        .and_then(|suffix| suffix.parse::<u8>().ok())
+    else {
+        return false;
+    };
+    name == format!("x{index}") && index <= 30
 }
 
 /// Declared descriptor facts.
@@ -854,4 +956,121 @@ pub struct PersistentAssetLayout {
     /// Explicit small edits used to normalize the input.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub patches: Vec<fujimod_catalog_settings::persistent_inputs::PersistentPatch>,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn cpu(value: serde_json::Value) -> Cpu {
+        serde_json::from_value(value).expect("cpu parses")
+    }
+
+    fn legacy_sysregs() -> serde_json::Value {
+        serde_json::json!({
+            "CPACR_EL1": 0,
+            "ICC_IGRPEN0_EL1": 0,
+            "ICC_IGRPEN1_EL1": 0,
+            "ICC_PMR_EL1": 0,
+            "SCTLR_EL1": 0,
+            "SP_EL0": 0,
+            "SP_EL1": 0,
+            "VBAR_EL1": 0
+        })
+    }
+
+    fn legacy_cpu() -> serde_json::Value {
+        serde_json::json!({
+            "id": 0,
+            "pc": 0x991cc,
+            "cpsr": 0x1c5,
+            "running": true,
+            "regs": {"x19": 0, "x20": 0, "x21": 0},
+            "sysregs": legacy_sysregs()
+        })
+    }
+
+    fn entry_cpu(level: &str, regs: serde_json::Value) -> serde_json::Value {
+        serde_json::json!({
+            "id": 0,
+            "pc": 0x58420,
+            "running": true,
+            "sysregs": legacy_sysregs(),
+            "entry": {"level": level, "pstate": 0x3cc, "regs": regs}
+        })
+    }
+
+    #[test]
+    fn legacy_handoff_validates() {
+        cpu(legacy_cpu()).validate().unwrap();
+    }
+
+    #[test]
+    fn el3t_entry_validates() {
+        cpu(entry_cpu("el3t", serde_json::json!({"x0": 1, "x1": 2})))
+            .validate()
+            .unwrap();
+    }
+
+    #[test]
+    fn entry_wrong_mode_refuses() {
+        let mut value = entry_cpu("el3t", serde_json::json!({"x0": 1}));
+        value["entry"]["pstate"] = serde_json::json!(0x3cd);
+        let error = cpu(value).validate().unwrap_err();
+        assert!(error.contains("does not match declared level"), "{error}");
+    }
+
+    #[test]
+    fn neither_shape_refuses() {
+        let mut value = legacy_cpu();
+        value.as_object_mut().unwrap().remove("cpsr");
+        value.as_object_mut().unwrap().remove("regs");
+        let error = cpu(value).validate().unwrap_err();
+        assert!(error.contains("must declare"), "{error}");
+    }
+
+    #[test]
+    fn both_shapes_refuse() {
+        let mut value = legacy_cpu();
+        value.as_object_mut().unwrap().insert(
+            "entry".into(),
+            serde_json::json!({"level": "el3h", "pstate": 0x3cd, "regs": {"x0": 0}}),
+        );
+        let error = cpu(value).validate().unwrap_err();
+        assert!(error.contains("cannot declare both"), "{error}");
+    }
+
+    #[test]
+    fn legacy_missing_cpsr_refuses() {
+        let mut value = legacy_cpu();
+        value.as_object_mut().unwrap().remove("cpsr");
+        let error = cpu(value).validate().unwrap_err();
+        assert!(error.contains("requires both cpsr and regs"), "{error}");
+    }
+
+    #[test]
+    fn entry_x31_refuses() {
+        let error = cpu(entry_cpu("el3t", serde_json::json!({"x31": 0})))
+            .validate()
+            .unwrap_err();
+        assert!(error.contains("not x0 through x30"), "{error}");
+    }
+
+    #[test]
+    fn entry_x00_refuses() {
+        let error = cpu(entry_cpu("el3t", serde_json::json!({"x00": 0})))
+            .validate()
+            .unwrap_err();
+        assert!(error.contains("not x0 through x30"), "{error}");
+    }
+
+    #[test]
+    fn entry_register_names() {
+        assert!(is_entry_register_name("x0"));
+        assert!(is_entry_register_name("x30"));
+        assert!(!is_entry_register_name("x31"));
+        assert!(!is_entry_register_name("x00"));
+        assert!(!is_entry_register_name("x"));
+        assert!(!is_entry_register_name("w0"));
+    }
 }

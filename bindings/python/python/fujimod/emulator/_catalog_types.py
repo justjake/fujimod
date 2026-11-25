@@ -2577,10 +2577,11 @@ FirmwareControlIds = TypedDict(
 
 
 class FirmwareCpu(TypedDict, total=False):
-    cpsr: Required[int]
+    cpsr: NotRequired[int | None]
+    entry: NotRequired[FirmwareEntry | None]
     id: Required[int]
     pc: Required[int]
-    regs: Required[FirmwareRegs]
+    regs: NotRequired[FirmwareRegs | None]
     running: Required[bool]
     sysregs: Required[FirmwareSysregs]
 
@@ -2612,6 +2613,15 @@ class FirmwareDescriptors(TypedDict, total=False):
     sampling: Required[str]
     sha256: Required[str]
     size: Required[int]
+
+
+class FirmwareEntry(TypedDict, total=False):
+    level: Required[FirmwareEntryLevel]
+    pstate: Required[int]
+    regs: Required[dict[str, int]]
+
+
+type FirmwareEntryLevel = Literal["el1h", "el2h", "el3h", "el3t"]
 
 
 FirmwareExecution = TypedDict(
@@ -3009,12 +3019,16 @@ class FirmwareSyntheticSignature(TypedDict, total=False):
 
 class FirmwareSysregs(TypedDict, total=False):
     CPACR_EL1: Required[int]
+    ELR_EL3: NotRequired[int | None]
     ICC_IGRPEN0_EL1: Required[int]
     ICC_IGRPEN1_EL1: Required[int]
     ICC_PMR_EL1: Required[int]
+    SCR_EL3: NotRequired[int | None]
     SCTLR_EL1: Required[int]
+    SPSR_EL3: NotRequired[int | None]
     SP_EL0: Required[int]
     SP_EL1: Required[int]
+    SP_EL3: NotRequired[int | None]
     VBAR_EL1: Required[int]
 
 
