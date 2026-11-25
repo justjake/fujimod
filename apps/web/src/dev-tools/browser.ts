@@ -136,7 +136,7 @@ try {
       );
       await page.locator('.wb-service', { hasText: 'restores factory settings' }).waitFor();
       assert.equal(await page.locator('.wb-debug-state').innerText(), 'Debug mode: Off');
-      assert.equal(await page.getByRole('button', { name: 'Disable debug mode' }).count(), 0);
+      assert.ok(await page.getByRole('button', { name: 'Disable debug mode' }).isDisabled());
       assert.equal(await page.getByRole('button', { name: 'Enable debug mode' }).count(), 1);
       const log = page.getByRole('region', { name: 'Connection log' });
       assert.ok((await log.innerText()).includes('Device info'), 'identity exchange is logged');
