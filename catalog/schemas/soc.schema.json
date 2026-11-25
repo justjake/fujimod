@@ -2489,6 +2489,10 @@
               "description": "Declared basis.",
               "type": "string"
             },
+            "focus_statistics": {
+              "description": "Whether the +0x400 output fills statistics planes 0..3 with the four contrast filters\nover the window of words +0x7c and +0x80, rather than full-frame colour sums.",
+              "type": "boolean"
+            },
             "model": {
               "const": "imaging_preview",
               "type": "string"
@@ -2872,6 +2876,25 @@
             },
             "model": {
               "const": "video_codec",
+              "type": "string"
+            }
+          },
+          "required": [
+            "model",
+            "basis"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Imaging input buffer whose +0x40 start completes with an interrupt.",
+          "properties": {
+            "basis": {
+              "description": "Declared basis.",
+              "type": "string"
+            },
+            "model": {
+              "const": "imaging_buffer",
               "type": "string"
             }
           },

@@ -649,6 +649,7 @@ fn block_register_layouts(
             | BlockDevice::Pl022 { .. }
             | BlockDevice::Completion { .. }
             | BlockDevice::VideoCodec { .. }
+            | BlockDevice::ImagingBuffer { .. }
             | BlockDevice::ImagingDsp { .. }
             | BlockDevice::ByteI2c { .. }
             | BlockDevice::UnmodeledBusDrain { .. } => {}

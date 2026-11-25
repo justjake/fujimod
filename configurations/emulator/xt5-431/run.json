@@ -233,5 +233,8 @@
       "tone_hz": 1000,
       "tone_amplitude_thousandths": 250
     }
+  ],
+  "idle_status_blocks": [
+    "input"
   ]
 }

@@ -389,6 +389,7 @@ type BlockDevice = (
     | BlockDeviceVariant90
     | BlockDeviceVariant91
     | BlockDeviceVariant92
+    | BlockDeviceVariant93
 )
 
 
@@ -878,6 +879,7 @@ class BlockDeviceVariant77(TypedDict, total=False):
 
 class BlockDeviceVariant78(TypedDict, total=False):
     basis: Required[str]
+    focus_statistics: NotRequired[bool]
     model: Required[Literal["imaging_preview"]]
 
 
@@ -972,11 +974,16 @@ class BlockDeviceVariant90(TypedDict, total=False):
 
 class BlockDeviceVariant91(TypedDict, total=False):
     basis: Required[str]
+    model: Required[Literal["imaging_buffer"]]
+
+
+class BlockDeviceVariant92(TypedDict, total=False):
+    basis: Required[str]
     handshake: NotRequired[CompletionHandshake | None]
     model: Required[Literal["imaging_dsp"]]
 
 
-class BlockDeviceVariant92(TypedDict, total=False):
+class BlockDeviceVariant93(TypedDict, total=False):
     basis: Required[str]
     model: Required[Literal["unmodeled_bus_drain"]]
 
@@ -4439,6 +4446,7 @@ type PeripheralPart = (
     | PeripheralPartVariant15
     | PeripheralPartVariant16
     | PeripheralPartVariant17
+    | PeripheralPartVariant18
 )
 
 
@@ -4451,37 +4459,46 @@ class PeripheralPartVariant1(TypedDict, total=False):
 
 
 class PeripheralPartVariant10(TypedDict, total=False):
+    bits: Required[int]
+    data_words: NotRequired[int | None]
+    kind: Required[Literal["serial-command-registers"]]
+    miso_high: Required[bool]
+    mode: Required[int]
+    read_flag: NotRequired[int | None]
+
+
+class PeripheralPartVariant11(TypedDict, total=False):
     kind: Required[Literal["unidentified-serial-device"]]
     miso_high: Required[bool]
 
 
-class PeripheralPartVariant11(TypedDict, total=False):
+class PeripheralPartVariant12(TypedDict, total=False):
     kind: Required[Literal["fuel-gauge"]]
 
 
-class PeripheralPartVariant12(TypedDict, total=False):
+class PeripheralPartVariant13(TypedDict, total=False):
     kind: Required[Literal["tmd2772-proximity"]]
 
 
-class PeripheralPartVariant13(TypedDict, total=False):
+class PeripheralPartVariant14(TypedDict, total=False):
     kind: Required[Literal["retained-registers"]]
 
 
-class PeripheralPartVariant14(TypedDict, total=False):
+class PeripheralPartVariant15(TypedDict, total=False):
     commands: Required[list[StabilizerCommand]]
     kind: Required[Literal["stabilizer"]]
     status: Required[int]
     telemetry: Required[int]
 
 
-class PeripheralPartVariant15(TypedDict, total=False):
+class PeripheralPartVariant16(TypedDict, total=False):
     command_prefix: Required[int]
     data_prefix: Required[int]
     kind: Required[Literal["command-data-output"]]
     payload_bytes: Required[int]
 
 
-class PeripheralPartVariant16(TypedDict, total=False):
+class PeripheralPartVariant17(TypedDict, total=False):
     erase_bytes: NotRequired[int | None]
     jedec_id: NotRequired[int | None]
     kind: Required[Literal["serial-nor-flash"]]
@@ -4489,7 +4506,7 @@ class PeripheralPartVariant16(TypedDict, total=False):
     sampling: NotRequired[NorSampling | None]
 
 
-class PeripheralPartVariant17(TypedDict, total=False):
+class PeripheralPartVariant18(TypedDict, total=False):
     jedec_id: NotRequired[int | None]
     kind: Required[Literal["serial-nand-flash"]]
     page_bytes: NotRequired[int | None]
@@ -4512,31 +4529,28 @@ class PeripheralPartVariant4(TypedDict, total=False):
 
 
 class PeripheralPartVariant5(TypedDict, total=False):
+    fast_readout: Required[int]
+    kind: Required[Literal["timed-readout-sensor"]]
+    line_ns: Required[int]
+
+
+class PeripheralPartVariant6(TypedDict, total=False):
     kind: Required[Literal["power-controller"]]
     port_detection: NotRequired[PowerPortDetection | None]
     registers: NotRequired[list[PowerControllerRegister]]
     transport: NotRequired[PowerControllerTransport | None]
 
 
-class PeripheralPartVariant6(TypedDict, total=False):
+class PeripheralPartVariant7(TypedDict, total=False):
     kind: Required[Literal["serial-calibration-registers"]]
 
 
-class PeripheralPartVariant7(TypedDict, total=False):
+class PeripheralPartVariant8(TypedDict, total=False):
     kind: Required[Literal["bis-configuration-registers"]]
 
 
-class PeripheralPartVariant8(TypedDict, total=False):
-    kind: Required[Literal["lsm6ds-configuration-registers"]]
-
-
 class PeripheralPartVariant9(TypedDict, total=False):
-    bits: Required[int]
-    data_words: NotRequired[int | None]
-    kind: Required[Literal["serial-command-registers"]]
-    miso_high: Required[bool]
-    mode: Required[int]
-    read_flag: NotRequired[int | None]
+    kind: Required[Literal["lsm6ds-configuration-registers"]]
 
 
 class PersistentJournalAppend(TypedDict, total=False):
@@ -5092,6 +5106,7 @@ RunConfiguration = TypedDict(
         "execution": NotRequired["RunExecution | None"],
         "firmware_id": Required["str"],
         "id": Required["str"],
+        "idle_status_blocks": NotRequired["list[str]"],
         "inputs": NotRequired["RunInputs | None"],
         "overlays": Required["list[str]"],
         "polled_serial_blocks": NotRequired["list[str]"],

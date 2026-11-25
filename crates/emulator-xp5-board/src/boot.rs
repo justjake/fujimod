@@ -623,13 +623,19 @@ pub fn windows_from_blocks(
                     | "imaging-rzl2" | "imaging-resz" => "delay_us",
                     "imaging-rifp-io" => "queue_completion_us",
                     "imaging-buffer" => "completion_us",
+                    "xp5-codec" => "run_ticks",
                     _ => return Err(format!("block {}: {kind} takes no completion latency", block.id)),
                 };
-                let micros = u128::from(latency.ticks) * 1_000_000;
-                if micros % u128::from(ticks_per_second) != 0 {
-                    return Err(format!("block {}: latency is not a whole number of microseconds", block.id));
-                }
-                options.insert(option.into(), toml::Value::Integer((micros / u128::from(ticks_per_second)) as i64));
+                let value = if option == "run_ticks" {
+                    u128::from(latency.ticks)
+                } else {
+                    let micros = u128::from(latency.ticks) * 1_000_000;
+                    if micros % u128::from(ticks_per_second) != 0 {
+                        return Err(format!("block {}: latency is not a whole number of microseconds", block.id));
+                    }
+                    micros / u128::from(ticks_per_second)
+                };
+                options.insert(option.into(), toml::Value::Integer(i64::try_from(value).map_err(|_| format!("block {}: latency overflows", block.id))?));
             }
             if kind == "imaging-table" && block.size > 0x1000 {
                 for offset in (0..block.size).step_by(0x1000) {
@@ -1063,13 +1069,22 @@ fn block_window(
         BlockDevice::DisplayOutputLink { .. } => "display-output-link",
         BlockDevice::Renderer { .. } => "renderer",
         BlockDevice::ImagingPhy { .. } => "imaging-phy",
-        BlockDevice::ImagingInput { .. } => "imaging-input",
+        BlockDevice::ImagingInput { .. } => {
+            if run.idle_status_blocks.contains(&block.id) {
+                options.insert("idle_status".into(), toml::Value::Boolean(true));
+            }
+            "imaging-input"
+        }
         BlockDevice::ImagingResize { .. } => {
             options.insert("completion_us".into(), integer(1000));
             "imaging-resize"
         }
         BlockDevice::ImagingPaf { .. } => "imaging-paf",
-        BlockDevice::ImagingPreview { .. } => {
+        BlockDevice::ImagingPreview { focus_statistics, .. } => {
+            if *focus_statistics {
+                options.insert("focus_filters".into(), toml::Value::Boolean(true));
+                options.insert("focus_window".into(), toml::Value::Boolean(true));
+            }
             "imaging-preview"
         }
         BlockDevice::ImagingRifpIo { .. } => "imaging-rifp-io",
@@ -1154,7 +1169,11 @@ fn block_window(
             if let Some(line) = irq("irq") { options.insert("irq".into(), integer(u64::from(line))); }
             "completion-stub"
         }
-        BlockDevice::VideoCodec { .. } => "xp5-codec",
+        BlockDevice::VideoCodec { .. } => {
+            options.insert("irq".into(), integer(u64::from(irq("irq").ok_or_else(|| format!("block {} declares no interrupt", block.id))?)));
+            "xp5-codec"
+        }
+        BlockDevice::ImagingBuffer { .. } => "imaging-buffer",
         BlockDevice::ImagingDsp { handshake, .. } => {
             stage_handshake(&mut options, handshake.as_ref(), irq("irq"));
             "completion-stub"
@@ -1207,6 +1226,20 @@ fn block_window(
         }
         BlockDevice::SensorCommand { .. } => {
             options.insert("command_latency_us".into(), integer(1));
+            let sensors: Vec<_> = selection.parts.iter().filter_map(|part| match &part.model {
+                fujimod_catalog::reference::PartModel::Peripheral {
+                    interface: fujimod_catalog::assembly::PeripheralPart::TimedReadoutSensor { fast_readout, line_ns },
+                } => Some((*fast_readout, *line_ns)),
+                _ => None,
+            }).collect();
+            match sensors.as_slice() {
+                [] => {}
+                [(readout, line_ns)] => {
+                    options.insert("frame_timing_readout".into(), integer(u64::from(*readout)));
+                    options.insert("frame_timing_line_ns".into(), integer(*line_ns));
+                }
+                _ => return Err(format!("body {} installs more than one timed-readout sensor", selection.body.id)),
+            }
             "imaging-sensor"
         }
         BlockDevice::ImagingReceiver { .. } => {

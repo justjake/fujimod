@@ -5215,6 +5215,13 @@
       "description": "Stable run-configuration identity.",
       "type": "string"
     },
+    "idle_status_blocks": {
+      "description": "Imaging input blocks whose word 15 reports idle while their run bit is clear: an\ninferred stand-in a run's recording task waits for.",
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
     "inputs": {
       "anyOf": [
         {

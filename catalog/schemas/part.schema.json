@@ -1494,6 +1494,35 @@
         },
         {
           "additionalProperties": false,
+          "description": "Image sensor with a fast autofocus readout of known line length.",
+          "properties": {
+            "fast_readout": {
+              "description": "Value of sensor register 0x01 that selects the fast readout.",
+              "format": "uint8",
+              "maximum": 255,
+              "minimum": 0,
+              "type": "integer"
+            },
+            "kind": {
+              "const": "timed-readout-sensor",
+              "type": "string"
+            },
+            "line_ns": {
+              "description": "Length of one line of that readout.",
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            }
+          },
+          "required": [
+            "kind",
+            "fast_readout",
+            "line_ns"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
           "description": "Power-controller register protocol.",
           "properties": {
             "kind": {

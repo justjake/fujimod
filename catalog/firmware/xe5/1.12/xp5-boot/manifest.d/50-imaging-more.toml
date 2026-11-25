@@ -13,7 +13,6 @@ kind = "imaging-input"
 # VERIFIED for X-E5. The inherited true forces +0x17c bit 31 high when
 # +0x140 bit 0 is clear. The firmware's stop check succeeds when both are
 # clear (0x030eb548, 0x030eb9f8, 0x034f3498, 0x034f4664, 0x034f0070).
-idle_status = false
 retain_words = true
 
 # VERIFIED second reset gate base. Reset writes 0 and polls +0x0 bit 0 for

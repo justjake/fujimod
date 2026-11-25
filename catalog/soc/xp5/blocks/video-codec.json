@@ -5,6 +5,12 @@
   "base": 4291903488,
   "size": 8192,
   "kind": "imaging-controller",
+  "interrupts": [
+    {
+      "output": "irq",
+      "line": 210
+    }
+  ],
   "device": {
     "model": "video_codec",
     "basis": "video codec page Located in catalog/firmware/xt5/4.31/xp5-boot/manifest.d/61-codec.toml."

@@ -555,6 +555,7 @@ impl Soc {
                     | crate::soc::BlockDevice::Pl022 { .. }
                     | crate::soc::BlockDevice::Completion { .. }
                     | crate::soc::BlockDevice::VideoCodec { .. }
+                    | crate::soc::BlockDevice::ImagingBuffer { .. }
                     | crate::soc::BlockDevice::ImagingDsp { .. }
                     | crate::soc::BlockDevice::UnmodeledBusDrain { .. } => {}
                 }
