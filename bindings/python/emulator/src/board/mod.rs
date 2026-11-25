@@ -372,9 +372,7 @@ impl Board {
             state_limit,
         )
         .map_err(error)?;
-        let maps =
-            serde_json::from_value(self.session()?.definition["execution"]["mappings"].clone())
-                .map_err(|e| error(e.to_string()))?;
+        let maps = self.board()?.mappings().to_vec();
         self.function_watch_end()?;
         self.function_watch = Some(
             self.board()?
@@ -440,9 +438,7 @@ impl Board {
         if self.memory_watch.is_some() {
             return Err(error("Another memory watch is active".into()));
         }
-        let maps =
-            serde_json::from_value(self.session()?.definition["execution"]["mappings"].clone())
-                .map_err(|e| error(e.to_string()))?;
+        let maps = self.board()?.mappings().to_vec();
         self.memory_watch = Some(
             self.board()?
                 .memory_watch_begin_with_samples(
@@ -1217,6 +1213,11 @@ impl Board {
     fn idle_stopped(&self) -> PyResult<bool> {
         Ok(self.board()?.idle_stopped())
     }
+    /// The earliest tick a device has scheduled work for.
+    #[getter]
+    fn next_device_deadline(&self) -> PyResult<Option<u64>> {
+        Ok(self.board()?.next_device_deadline())
+    }
     #[getter]
     fn quiescent(&self) -> PyResult<bool> {
         Ok(self.board()?.quiescent())
@@ -1356,6 +1357,11 @@ impl Board {
         let cleanup = self.board_mut()?.continuation_end().map_err(error);
         self.outcome(result).and(unwatched).and(cleanup)
     }
+    /// Run at most `count` instructions on `core` alone; the other cores hold.
+    fn run_core(&mut self, core: usize, count: u64, quantum: usize) -> PyResult<()> {
+        let result = self.board_mut()?.run_core(core, count, quantum);
+        self.outcome(result)
+    }
     fn reg_read(&self, core: usize, register: &str) -> PyResult<u64> {
         self.board()?
             .read_register(core, json::<Register>(register)?)
@@ -1368,9 +1374,7 @@ impl Board {
     }
     fn coprocessor(&self, core: usize, selector: &str, value: Option<u64>) -> PyResult<u64> {
         self.board()?
-            .cpu(core)
-            .map_err(error)?
-            .coprocessor(json::<arm::Coprocessor>(selector)?, value)
+            .coprocessor(core, json::<arm::Coprocessor>(selector)?, value)
             .map_err(error)
     }
     /// Resolve a virtual address using the selected processor's current mappings.
@@ -1893,6 +1897,16 @@ impl Board {
         self.board()?
             .with_device::<Dwc3, _>(id, |usb| usb.save().to_string())
             .map_err(error)
+    }
+    /// The frame each scanning output shows now, as
+    /// (output, sequence, width, height, RGBA bytes).
+    fn display_frames<'py>(&self, py: Python<'py>) -> PyResult<Vec<Frame<'py>>> {
+        Ok(self
+            .board()?
+            .display_frames()
+            .into_iter()
+            .map(|f| (f.output, f.sequence, f.width, f.height, PyBytes::new(py, &f.rgba)))
+            .collect())
     }
     /// Latest scanout frame per output since the previous call, as
     /// (output, sequence, width, height, RGBA bytes).

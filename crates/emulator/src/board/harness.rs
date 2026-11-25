@@ -762,6 +762,34 @@ impl Board {
         self.slice_left.set(0);
         Ok(())
     }
+    /// Run at most `count` instructions on `core` alone, the other cores held
+    /// as they are: an explicit host scheduling input, as for an isolated
+    /// caller; no device sees it.
+    pub fn run_core(&mut self, core: usize, count: u64, quantum: usize) -> Result<(), String> {
+        if core >= self.cpus.len() {
+            return Err("invalid core".into());
+        }
+        let (released, waiting) = {
+            let s = self.state.borrow();
+            (s.released.clone(), s.waiting.clone())
+        };
+        {
+            let mut s = self.state.borrow_mut();
+            for c in 0..self.cpus.len() {
+                s.released[c] = c == core;
+                s.waiting[c] = c == core && waiting[c];
+            }
+        }
+        self.next_core.set(core);
+        self.slice_left.set(0);
+        let result = self.run_for_instructions(count, quantum);
+        let mut s = self.state.borrow_mut();
+        let ran = s.waiting[core];
+        s.released = released;
+        s.waiting = waiting;
+        s.waiting[core] = ran;
+        result
+    }
     pub fn harness_interrupt_delivery(&self, core: usize, allowed: bool) {
         self.state.borrow_mut().interrupt_delivery[core] = allowed;
     }

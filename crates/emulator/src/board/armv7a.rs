@@ -130,27 +130,11 @@ impl Profile {
                 return Ok(Entry::Completed);
             }
         }
-        let cp = |opc1, crn, crm, opc2| arm::Coprocessor {
-            cp: 15,
-            opc1,
-            crn,
-            crm,
-            opc2,
-            secure: 0,
-            wide: false,
-        };
-        let identity = match body & !0xf000 {
-            0x0e10_0fb0 => Some(self.config.mpidr),
-            0x0e9f_0f10 => Some(self.config.configuration_base),
-            0x0e30_0f10 => Some(match self.config.cache_ids() {
-                Some(ids) => {
-                    let selector = cpu.coprocessor(cp(2, 0, 0, 0), None)? as usize;
-                    *ids.get(selector)
-                        .ok_or("Reserved Cortex-A7 cache selector")?
-                }
-                None => cpu.coprocessor(cp(1, 0, 0, 0), None)? as u32,
-            }),
-            _ => None,
+        // MRC p15: opc1 at 23:21, CRn at 19:16, CRm at 3:0, opc2 at 7:5.
+        let identity = if body & 0x0f10_0f10 == 0x0e10_0f10 {
+            self.identity(cpu, cp((body >> 21) & 7, (body >> 16) & 15, body & 15, (body >> 5) & 7))?
+        } else {
+            None
         };
         let entry = if let Some(value) = identity {
             let rd = ((word >> 12) & 15) as usize;
@@ -171,6 +155,25 @@ impl Profile {
         cpu.stop()?;
         Ok(entry)
     }
+    /// The processor wiring's answer to an identity register read (MPIDR,
+    /// CBAR and, when declared, CCSIDR), for guest reads and host inspection.
+    fn identity(&self, cpu: &dyn Cpu, register: arm::Coprocessor) -> Result<Option<u32>, String> {
+        if register.cp != 15 || register.wide {
+            return Ok(None);
+        }
+        Ok(match (register.opc1, register.crn, register.crm, register.opc2) {
+            (0, 0, 0, 5) => Some(self.config.mpidr),
+            (4, 15, 0, 0) => Some(self.config.configuration_base),
+            (1, 0, 0, 0) => match self.config.cache_ids() {
+                Some(ids) => {
+                    let selector = cpu.coprocessor(cp(2, 0, 0, 0), None)? as usize;
+                    Some(*ids.get(selector).ok_or("Reserved Cortex-A7 cache selector")?)
+                }
+                None => None,
+            },
+            _ => None,
+        })
+    }
     pub(super) fn enter_irq(&self, cpu: &dyn Cpu) -> Result<bool, String> {
         if !fujimod_emulator_cpu::armv7a::enter_irq(cpu)? {
             return Ok(false);
@@ -179,7 +182,27 @@ impl Profile {
         Ok(true)
     }
 }
+fn cp(opc1: u32, crn: u32, crm: u32, opc2: u32) -> arm::Coprocessor {
+    arm::Coprocessor { cp: 15, opc1, crn, crm, opc2, secure: 0, wide: false }
+}
 impl Board {
+    /// Read or write a coprocessor register from the host; identity reads
+    /// return what the processor wiring answers the guest.
+    pub fn coprocessor(
+        &self,
+        core: usize,
+        register: arm::Coprocessor,
+        value: Option<u64>,
+    ) -> Result<u64, String> {
+        let cpu = self.cpu(core)?;
+        if value.is_none()
+            && let Some(profile) = self.state.borrow().armv7a.get(core).and_then(Option::as_ref)
+            && let Some(answer) = profile.identity(&*cpu, register)?
+        {
+            return Ok(answer.into());
+        }
+        cpu.coprocessor(register, value)
+    }
     /// ARMv7-A exception entries on `core` from the board and its backend.
     pub fn armv7a_exception_entries(
         &self,
