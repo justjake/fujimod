@@ -464,9 +464,40 @@ pub fn decode_load_store(
     Ok(out)
 }
 
+/// Data cache clean, or clean and invalidate, by virtual address: `DC CVAC`, `CVAU`, `CVAP`,
+/// `CVADP` and `CIVAC`. Each writes a cached line back, so on a device it has no effect when
+/// every access already reached the device as it executed. `DC IVAC`, which discards a line,
+/// and `DC ZVA`, which stores, are not cleans.
+pub fn is_data_cache_clean_by_va(word: u32) -> bool {
+    word & 0xffff_f0e0 == 0xd50b_7020 && matches!((word >> 8) & 0xf, 10..=14)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn data_cache_cleans_by_address_and_nothing_else() {
+        for word in [
+            0xd50b7a21, // dc cvac, x1
+            0xd50b7b21, // dc cvau, x1
+            0xd50b7c21, // dc cvap, x1
+            0xd50b7d21, // dc cvadp, x1
+            0xd50b7e21, // dc civac, x1
+            0xd50b7e24, // dc civac, x4
+        ] {
+            assert!(is_data_cache_clean_by_va(word), "{word:#010x}");
+        }
+        for word in [
+            0xd5087621, // dc ivac, x1
+            0xd50b7421, // dc zva, x1
+            0xd50b7e61, // dc cigvac, x1
+            0xd50b7521, // ic ivau, x1
+            0xd5033f9f, // dsb sy
+            0xf9400020, // ldr x0, [x1]
+        ] {
+            assert!(!is_data_cache_clean_by_va(word), "{word:#010x}");
+        }
+    }
     #[test]
     fn exclusive_encodings_and_refusals() {
         for (load, store, bytes, pair) in [

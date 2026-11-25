@@ -326,6 +326,26 @@ impl Core {
     ) -> Result<MmioOutcome, ExecutionError> {
         // SIMD/pair transfers spanning RAM are handled by the runtime's
         // protected-memory path. Device callbacks carry scalar widths only.
+        if access.cache_clean {
+            // Devices receive every access as it executes and nothing between the core and a
+            // device caches it, so a clean by address has nothing to write back. It still
+            // needs a mapped window, as a load from the address would.
+            if let Some(failure) = &access.failure {
+                return Err(failure.clone());
+            }
+            self.window(trap.physical_address, 1, Access::Read)
+                .map_err(|message| ExecutionError::Memory {
+                    fault: if message.starts_with("protected MMIO") {
+                        Fault::ReadProtected
+                    } else {
+                        Fault::ReadUnmapped
+                    },
+                    message,
+                })?;
+            let mut updates = MmioUpdates::new();
+            updates.push((Register::Pc, access.pc.wrapping_add(4)));
+            return Ok(MmioOutcome::Complete(updates));
+        }
         let kind = if access.load {
             Access::Read
         } else {
