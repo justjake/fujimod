@@ -141,15 +141,14 @@ struct Mcu {
 #[derive(Clone)]
 struct Observation {
     ui_mode: u64,
-    system_mode: Option<u64>,
+    system_mode: u64,
     menu_active: u64,
     pending_mode: u64,
     menu_node: u64,
     rec_mode: u32,
     setup_mode: u32,
     scanout: String,
-    scanout_required: bool,
-    readiness: Option<Readiness>,
+    readiness: Readiness,
 }
 #[derive(Clone)]
 struct Readiness {
@@ -428,6 +427,7 @@ fn prepared(resolved: ResolvedConfiguration) -> Result<Prepared, String> {
             })
             .transpose()?,
     };
+    let readiness = &observation.readiness;
     let observation = Observation {
         ui_mode: observation.ui_mode,
         system_mode: observation.system_mode,
@@ -437,15 +437,14 @@ fn prepared(resolved: ResolvedConfiguration) -> Result<Prepared, String> {
         rec_mode: observation.rec_mode,
         setup_mode: observation.setup_mode,
         scanout: "scanout".into(),
-        scanout_required: observation.scanout_required.unwrap_or(true),
-        readiness: observation.readiness.map(|readiness| Readiness {
+        readiness: Readiness {
             category_one: readiness.category_one,
             category_two: readiness.category_two,
             input_pending: Some(readiness.input_pending),
             override_address: readiness.override_address,
             excluded_mask: u64::from(readiness.excluded_mask),
             operation_alert_timer: Some(readiness.operation_alert_timer),
-        }),
+        },
     };
     let first_start = first_start(&resolved, inputs)?;
     let flash_offset = usize::try_from(installation.flash_offset)
@@ -509,6 +508,7 @@ impl Prepared {
     }
     /// Produce the stable JSON projection used by the native Python adapter.
     pub fn to_json(&self) -> Value {
+        let readiness = &self.observation.readiness;
         json!({
             "schema": 1,
             "configuration_id": self.resolved.configuration.id,
@@ -551,15 +551,14 @@ impl Prepared {
                     "rec_mode":self.observation.rec_mode,
                     "setup_mode":self.observation.setup_mode,
                     "scanout":self.observation.scanout,
-                    "scanout_required":self.observation.scanout_required,
-                    "readiness": self.observation.readiness.as_ref().map(|readiness| json!({
+                    "readiness": json!({
                         "category_one":readiness.category_one,
                         "category_two":readiness.category_two,
                         "input_pending":readiness.input_pending,
                         "override_address":readiness.override_address,
                         "excluded_mask":readiness.excluded_mask,
                         "operation_alert_timer":readiness.operation_alert_timer,
-                    })),
+                    }),
                 },
                 "first_start": self.first_start.as_ref().map(|start| json!({
                     "key_id":start.key,
@@ -1613,32 +1612,28 @@ fn observe(session: &Session, spec: &Prepared, presses: usize) -> Result<RecRepo
         session.board.read_physical(address, &mut bytes)?;
         Ok(u64::from_le_bytes(bytes))
     };
-    let pending = match &o.readiness {
-        Some(r) => {
-            let one = wide(r.category_one)?;
-            let two = wide(r.category_two)?;
-            one & (1 << 9) != 0
-                || r.input_pending
-                    .map(|a| word(session, a))
-                    .transpose()?
-                    .unwrap_or(0)
-                    != 0
-                || two & !r.excluded_mask != 0
-                || word(session, r.override_address)? != 1 && two & r.excluded_mask != 0
-                || r.operation_alert_timer
-                    .map(|a| word(session, a))
-                    .transpose()?
-                    .unwrap_or(0)
-                    != 0
-        }
-        None => false,
-    };
+    let r = &o.readiness;
+    let one = wide(r.category_one)?;
+    let two = wide(r.category_two)?;
+    let pending = one & (1 << 9) != 0
+        || r.input_pending
+            .map(|a| word(session, a))
+            .transpose()?
+            .unwrap_or(0)
+            != 0
+        || two & !r.excluded_mask != 0
+        || word(session, r.override_address)? != 1 && two & r.excluded_mask != 0
+        || r.operation_alert_timer
+            .map(|a| word(session, a))
+            .transpose()?
+            .unwrap_or(0)
+            != 0;
     Ok(RecReport {
         status: "running".into(),
         instructions: session.board.instruction_counts().iter().sum(),
         virtual_ticks: session.board.now(),
         ui_mode: word(session, o.ui_mode)?,
-        system_mode: o.system_mode.map(|a| word(session, a)).transpose()?.unwrap_or(0),
+        system_mode: word(session, o.system_mode)?,
         menu_active: word(session, o.menu_active)?,
         menu_node: word(session, o.menu_node)?,
         pending_mode: word(session, o.pending_mode)?,
@@ -1959,11 +1954,9 @@ fn to_rec_inner(
             .into();
             return Ok(report);
         }
-        let presented = report.scanout_instance.is_some() || !spec.observation.scanout_required;
-        let system_ready =
-            spec.observation.system_mode.is_none() || matches!(report.system_mode, 1 | 3);
+        let presented = report.scanout_instance.is_some();
         if report.ui_mode == spec.observation.rec_mode
-            && system_ready
+            && matches!(report.system_mode, 1 | 3)
             && report.menu_active == 0
             && report.pending_mode == 0
             && !report.pending
@@ -2075,9 +2068,9 @@ pub const EXR2_TICKS_PER_SECOND: u64 = 12_000_000;
 pub fn status(session: &Session) -> Result<RecReport, String> {
     let spec = session_prepared(session)?;
     let mut report = observe(session, &spec, 0)?;
-    let presented = report.scanout_instance.is_some() || !spec.observation.scanout_required;
+    let presented = report.scanout_instance.is_some();
     report.status = if report.ui_mode == spec.observation.rec_mode
-        && (spec.observation.system_mode.is_none() || matches!(report.system_mode, 1 | 3))
+        && matches!(report.system_mode, 1 | 3)
         && report.menu_active == 0
         && report.pending_mode == 0
         && !report.pending

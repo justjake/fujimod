@@ -513,6 +513,13 @@
     "observer": {
       "scanout": "scanout",
       "instance": 0
+    },
+    "virtual_card": {
+      "filesystem": "fat32",
+      "label": "CAMERA",
+      "sectors": 16777216,
+      "partition_start": 8192,
+      "sectors_per_cluster": 64
     }
   },
   "browser_camera": null

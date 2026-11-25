@@ -74,9 +74,17 @@
       "menu_active": 9795068,
       "menu_node": 9794000,
       "pending_mode": 9765112,
+      "readiness": {
+        "category_one": 9762952,
+        "category_two": 9762960,
+        "excluded_mask": 16392,
+        "input_pending": 9782512,
+        "operation_alert_timer": 9763112,
+        "override_address": 9770180
+      },
       "rec_mode": 3,
-      "scanout_required": false,
       "setup_mode": 5,
+      "system_mode": 9793756,
       "ui_mode": 9765100
     }
   },

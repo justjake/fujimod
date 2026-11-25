@@ -2856,11 +2856,10 @@ class FirmwareObservation(TypedDict, total=False):
     menu_active: Required[int]
     menu_node: Required[int]
     pending_mode: Required[int]
-    readiness: NotRequired[ReadinessAddresses | None]
+    readiness: Required[ReadinessAddresses]
     rec_mode: Required[int]
-    scanout_required: NotRequired[bool | None]
     setup_mode: Required[int]
-    system_mode: NotRequired[int | None]
+    system_mode: Required[int]
     ui_mode: Required[int]
 
 

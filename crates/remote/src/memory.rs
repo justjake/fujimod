@@ -152,39 +152,38 @@ impl<B: Backend> Memory<'_, B> {
                 parameter_independent |= matches;
             }
         }
-        if let Some(f) = &f.readiness {
-            let one = self.uint(f.category_one, 8).await?;
-            let two = self.uint(f.category_two, 8).await?;
-            let input = if f.input_pending == 0 {
-                0
-            } else {
-                self.word(f.input_pending).await?
-            };
-            let timer = if f.operation_alert_timer == 0 {
-                0
-            } else {
-                self.word(f.operation_alert_timer).await?
-            };
-            let override_value = self.word(f.override_address).await?;
-            // REC parameter readiness observes category-one bit 9. Other
-            // category-one operations may remain active while inputs are accepted.
-            if !parameter_independent && one & (1 << 9) != 0 {
-                pending.push(format!("UI category one={one:#x}"));
-            }
-            if !parameter_independent
-                && (two & !u64::from(f.excluded_mask) != 0
-                    || override_value != 1 && two & u64::from(f.excluded_mask) != 0)
-            {
-                pending.push(format!(
-                    "UI category two={two:#x}, override={override_value}"
-                ));
-            }
-            if !parameter_independent && input != 0 {
-                pending.push(format!("input pending={input}"));
-            }
-            if timer != 0 {
-                pending.push(format!("operation alert timer={timer}"));
-            }
+        let f = &f.readiness;
+        let one = self.uint(f.category_one, 8).await?;
+        let two = self.uint(f.category_two, 8).await?;
+        let input = if f.input_pending == 0 {
+            0
+        } else {
+            self.word(f.input_pending).await?
+        };
+        let timer = if f.operation_alert_timer == 0 {
+            0
+        } else {
+            self.word(f.operation_alert_timer).await?
+        };
+        let override_value = self.word(f.override_address).await?;
+        // REC parameter readiness observes category-one bit 9. Other
+        // category-one operations may remain active while inputs are accepted.
+        if !parameter_independent && one & (1 << 9) != 0 {
+            pending.push(format!("UI category one={one:#x}"));
+        }
+        if !parameter_independent
+            && (two & !u64::from(f.excluded_mask) != 0
+                || override_value != 1 && two & u64::from(f.excluded_mask) != 0)
+        {
+            pending.push(format!(
+                "UI category two={two:#x}, override={override_value}"
+            ));
+        }
+        if !parameter_independent && input != 0 {
+            pending.push(format!("input pending={input}"));
+        }
+        if timer != 0 {
+            pending.push(format!("operation alert timer={timer}"));
         }
         // Every observation resolves task identity again. All descriptor and
         // receive-state reads remain in the predicate's continuation read set.

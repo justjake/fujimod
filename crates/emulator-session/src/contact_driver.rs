@@ -321,10 +321,16 @@ impl Driver {
         })
     }
     fn actuator(&self, id: &str) -> Result<&Actuator, String> {
+        // A catalog hold may name a control's single action (`dial.press`) while
+        // the compiled panel exposes that action under the control's own id.
         self.spec
             .actuators
             .iter()
             .find(|a| a.id == id)
+            .or_else(|| {
+                id.rsplit_once('.')
+                    .and_then(|(control, _)| self.spec.actuators.iter().find(|a| a.id == control))
+            })
             .ok_or_else(|| format!("physical control is unavailable: {id}"))
     }
     pub fn persistent_positions(&self, session: &Session) -> BTreeMap<String, String> {
@@ -346,6 +352,11 @@ impl Driver {
             })
             .unwrap_or_default()
     }
+    /// The panel control a catalog hold id names.
+    pub fn hold_control(&self, id: &str) -> Result<String, String> {
+        Ok(self.actuator(id)?.id.clone())
+    }
+    /// The position a boot hold selects.
     pub fn boot_position(&self, id: &str, stage: Option<&str>) -> Result<String, String> {
         let actuator = self.actuator(id)?;
         if !actuator.momentary {
