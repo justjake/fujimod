@@ -17,14 +17,31 @@ pub use exr2::startup_reads::StartupReads;
 pub mod xpp;
 mod xp4;
 mod xp5;
+pub mod ram_patch;
 use image::{File, Packaging, Plan, Result, require};
 use serde::{Deserialize, Serialize};
 pub use xp4::{ColdStart, FileApi, SdCardRead, Setup, sd_card_fast_read::PackedStage};
+pub use xp5::handoff_result as xp5_handoff_result;
 pub use xp5::{
-    Board as SdBoard, CodeProof as Xp5CodeProof, Flash as Xp5Flash, Lamp as Xp5Lamp,
+    Board as SdBoard, CodeProof as Xp5CodeProof, Flash as Xp5Flash,
+    HandoffRange as Xp5HandoffRange, HostVariant as SdHostVariant, Lamp as Xp5Lamp,
     CheckedRedirect, Operation as SdOperation, RegisterWrite as Xp5RegisterWrite, Setup as Xp5Setup,
     SourceProof as Xp5SourceProof,
 };
+
+/// Where an XP5 card startup's loader stops instead of running the image. Every stop but
+/// `Continue` needs the SD image.
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+#[repr(u64)]
+pub enum StartupStop {
+    #[default]
+    Continue = 0,
+    AfterSetup = 1,
+    AfterCrc = 2,
+    AfterCardInit = 3,
+    AfterCardInitWithErrorBlink = 4,
+    AfterCrcWithErrorPackets = 5,
+}
 
 /// Optional diagnostics for XP5 startup construction. Zero preserves normal entry.
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
@@ -70,6 +87,11 @@ pub struct StartupOptions {
     /// With `copy_stub` (and none of `marker`, `os` and `exif`): put a hook and a small program into the OS's code
     /// after the stage's own load (`xp5::package_hook`).
     pub hook: bool,
+    /// XP5 card startup only: where the loader stops instead of running the image.
+    pub stop: StartupStop,
+    /// XP5 card startup only: the prelude also sets up and scans the installed flash, as stage
+    /// one does. The SD image and its CRC stay the same.
+    pub prepare_installed_flash: bool,
 }
 
 impl StartupOptions {
@@ -304,6 +326,14 @@ impl Recipe {
             "Stage one requires XP5",
         )?;
         require(
+            options.stop == StartupStop::Continue,
+            "Diagnostic stop requires an SD image",
+        )?;
+        require(
+            !options.prepare_installed_flash,
+            "Stage one already prepares installed flash",
+        )?;
+        require(
             source.len() == self.source_size,
             "Update size differs from recipe",
         )?;
@@ -319,6 +349,8 @@ impl Recipe {
             setup,
             None,
             options.hold_units()?,
+            StartupStop::Continue,
+            false,
         )
     }
     /// Boot files retain the stock updater and storage drivers. DAT is copied
@@ -407,7 +439,7 @@ impl Recipe {
         source: &[u8],
         options: StartupOptions,
     ) -> Result<Vec<File>> {
-        self.startup_inputs(source, options, None, None)
+        self.startup_inputs(source, options, None, None, None)
     }
     /// `build_startup_with_options` with `overlay` applied to the XP5 RAM image before it is
     /// packaged, so the loader's length and CRC checks cover it. With `internal_flash` the
@@ -416,7 +448,28 @@ impl Recipe {
         &self, source: &[u8], options: StartupOptions, overlay: &image::Overlay,
     ) -> Result<Vec<File>> {
         require(matches!(self.generation, Generation::Xp5), "RAM overlays require XP5")?;
-        let files = self.startup_inputs(source, options, None, Some(overlay))?;
+        let files = self.startup_inputs(source, options, None, Some(overlay), None)?;
+        if options.internal_flash {
+            boot_files_only(files, &self.update_filename)
+        } else {
+            Ok(files)
+        }
+    }
+    /// `build_startup_with_options` with checked `patches` applied to the XP5 RAM image before
+    /// it is packaged, so the loader's length and CRC checks cover them. A payload past the
+    /// image's end grows it. With `internal_flash` the result is the boot files alone, as from
+    /// `build_boot_files`.
+    pub fn build_startup_with_ram_patches(
+        &self,
+        source: &[u8],
+        options: StartupOptions,
+        patches: &ram_patch::RamPatches,
+    ) -> Result<Vec<File>> {
+        require(
+            matches!(self.generation, Generation::Xp5),
+            "RAM patches require XP5",
+        )?;
+        let files = self.startup_inputs(source, options, None, None, Some(patches))?;
         if options.internal_flash {
             boot_files_only(files, &self.update_filename)
         } else {
@@ -436,7 +489,7 @@ impl Recipe {
         &self, source: &[u8], storage: &[u8], options: StartupOptions,
     ) -> Result<Vec<File>> {
         require(matches!(self.generation, Generation::Xp5), "Card storage requires XP5")?;
-        self.startup_inputs(source, options, Some(storage), None)
+        self.startup_inputs(source, options, Some(storage), None, None)
     }
     /// Identifies the `FFSYS.BIN` that `build_ota_startup` writes, without the
     /// update: firmwares with the same value share one card's boot files.
@@ -478,7 +531,7 @@ impl Recipe {
 
     fn startup_inputs(
         &self, source: &[u8], options: StartupOptions, storage: Option<&[u8]>,
-        overlay: Option<&image::Overlay>,
+        overlay: Option<&image::Overlay>, ram_patches: Option<&ram_patch::RamPatches>,
     ) -> Result<Vec<File>> {
         require(
             overlay.is_none() || matches!(self.generation, Generation::Xp5),
@@ -489,8 +542,31 @@ impl Recipe {
             "The read-only startup never runs its RAM image and takes no RAM overlay",
         )?;
         require(
+            ram_patches.is_none_or(|patches| patches.is_empty())
+                || matches!(self.generation, Generation::Xp5),
+            "RAM patches require XP5",
+        )?;
+        require(
+            ram_patches.is_none_or(|patches| patches.is_empty())
+                || options.read_only_destination.is_none(),
+            "The read-only startup never runs its RAM image and takes no RAM patches",
+        )?;
+        require(
             options.hold_units()? == 0 || matches!(self.generation, Generation::Xp5),
             "Success hold requires XP5",
+        )?;
+        require(
+            options.stop == StartupStop::Continue || matches!(self.generation, Generation::Xp5),
+            "Diagnostic stop requires XP5",
+        )?;
+        require(
+            !options.prepare_installed_flash || matches!(self.generation, Generation::Xp5),
+            "Installed-flash preparation requires XP5",
+        )?;
+        require(
+            (options.stop == StartupStop::Continue && !options.prepare_installed_flash)
+                || (!options.internal_flash && options.read_only_destination.is_none()),
+            "Diagnostic stops and installed-flash preparation require the XP5 card startup",
         )?;
         require(
             !options.internal_flash
@@ -616,6 +692,9 @@ impl Recipe {
                     if let Some(overlay) = overlay {
                         image::overlay(&mut ram, plan, overlay)?;
                     }
+                    if let Some(patches) = ram_patches {
+                        patches.apply(&mut ram)?;
+                    }
                     if let (Some(destination), Some(mode)) =
                         (options.read_only_destination, options.checked_redirect)
                     {
@@ -703,6 +782,7 @@ impl Recipe {
                             setup,
                             ram,
                             options.hold_units()?,
+                            options.stop,
                         )?
                     } else {
                         xp5::package_with_storage(
@@ -710,6 +790,8 @@ impl Recipe {
                             setup,
                             Some(ram),
                             options.hold_units()?,
+                            options.stop,
+                            options.prepare_installed_flash,
                             storage,
                         )?
                     }
