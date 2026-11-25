@@ -1,0 +1,112 @@
+name: PR CI
+run-name: >-
+  PR CI · #${{ github.event.pull_request.number }} ·
+  ${{ github.event.action == 'labeled' && github.event.label.name ||
+      github.event.action == 'synchronize' && 'new commits' ||
+      github.event.action == 'ready_for_review' && 'marked ready' || github.event.action }}
+
+# GitHub runs main's copy of this file for every pull request into main, so a
+# branch cannot change when its commits are tested or what status they get.
+# Only the checks run the pull request's code, with a read-only token, and they
+# restore caches without saving them (.github/actions/setup). That code still
+# runs in main's cache scope, so an outside contributor's pull request runs only
+# after a maintainer has read it and added the ci:run label.
+on:
+  pull_request_target:
+    types: [opened, ready_for_review, synchronize, labeled]
+    branches: [main]
+
+permissions: {}
+
+concurrency:
+  # A request or a push replaces the pull request's run in progress; any other
+  # label gets a group of its own, so it cancels nothing.
+  group: >-
+    pr-ci-${{ github.event.pull_request.number }}-${{
+      github.event.action == 'labeled' && github.event.label.name != 'ci:run' && github.run_id || 'request' }}
+  cancel-in-progress: true
+
+jobs:
+  request:
+    name: Check the request
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      pull-requests: write
+      statuses: write
+    outputs:
+      run: ${{ steps.decide.outputs.run }}
+    steps:
+      - id: decide
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          ACTION: ${{ github.event.action }}
+          LABEL: ${{ github.event.label.name }}
+          DRAFT: ${{ github.event.pull_request.draft }}
+          ASSOCIATION: ${{ github.event.pull_request.author_association }}
+          NUMBER: ${{ github.event.pull_request.number }}
+          SHA: ${{ github.event.pull_request.head.sha }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          status() {
+            gh api -X POST "repos/$REPO/statuses/$SHA" -f context='CI required' \
+              -f state="$1" -f description="$2" -f target_url="$RUN_URL" > /dev/null
+          }
+          trusted=false
+          case "$ASSOCIATION" in OWNER|MEMBER|COLLABORATOR) trusted=true ;; esac
+          run=false
+          if [ "$ACTION" = labeled ]; then
+            if [ "$LABEL" = ci:run ]; then
+              # Only someone with triage access can add a label, so ci:run also
+              # starts runs for outside contributors.
+              gh api -X DELETE "repos/$REPO/issues/$NUMBER/labels/ci:run" > /dev/null || true
+              if [ "$DRAFT" = true ]; then status pending 'Mark the pull request ready to test it'
+              else run=true; fi
+            fi
+          elif [ "$DRAFT" != true ]; then
+            if [ "$ACTION" = synchronize ]; then
+              status pending 'Not tested yet: add the ci:run label'
+            elif [ "$trusted" = true ]; then
+              run=true
+            else
+              status pending 'A maintainer adds the ci:run label to test this'
+            fi
+          fi
+          if [ "$run" = true ]; then status pending 'Running'; fi
+          echo "run=$run" >> "$GITHUB_OUTPUT"
+
+  checks:
+    name: Checks
+    needs: request
+    if: needs.request.outputs.run == 'true'
+    permissions:
+      contents: read
+    uses: ./.github/workflows/ci.yml
+    with:
+      ref: ${{ github.event.pull_request.head.sha }}
+
+  result:
+    name: Post result
+    needs: [request, checks]
+    # A replaced or canceled run posts nothing: its replacement owns the status.
+    if: ${{ !cancelled() && needs.request.outputs.run == 'true' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      statuses: write
+    steps:
+      - env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          SHA: ${{ github.event.pull_request.head.sha }}
+          RESULT: ${{ needs.checks.result }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          case "$RESULT" in
+            success) state=success description='Passed' ;;
+            cancelled) state=error description='Canceled: add the ci:run label to test again' ;;
+            *) state=failure description='Failed: see the run' ;;
+          esac
+          gh api -X POST "repos/$REPO/statuses/$SHA" -f context='CI required' \
+            -f state="$state" -f description="$description" -f target_url="$RUN_URL" > /dev/null

@@ -1,11 +1,23 @@
 name: CI
 on:
   workflow_dispatch:
+  # Runs on main keep the caches warm: GitHub shares the default branch's
+  # caches with pull requests, and pull request runs only read them.
+  push:
+    branches: [main]
+  # PR CI calls this with the pull request's head commit.
+  workflow_call:
+    inputs:
+      ref:
+        description: Commit to check out and test
+        required: true
+        type: string
 permissions:
   contents: read
 concurrency:
-  group: ci-${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  # A call from PR CI runs in main's context, so the group names the tested commit.
+  group: ci-${{ github.workflow }}-${{ inputs.ref || github.ref }}
+  cancel-in-progress: ${{ github.event_name != 'push' }}
 defaults:
   run:
     shell: bash
@@ -21,6 +33,7 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          ref: ${{ inputs.ref || github.sha }}
           persist-credentials: false
       - uses: ./.github/actions/setup
         with:
@@ -38,6 +51,7 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          ref: ${{ inputs.ref || github.sha }}
           persist-credentials: false
       - uses: ./.github/actions/setup
       - name: Install JPEG development headers
@@ -61,6 +75,7 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          ref: ${{ inputs.ref || github.sha }}
           persist-credentials: false
       - uses: ./.github/actions/setup
         with:
@@ -85,6 +100,7 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          ref: ${{ inputs.ref || github.sha }}
           persist-credentials: false
           submodules: recursive
       - uses: ./.github/actions/setup
@@ -120,7 +136,8 @@ jobs:
         if: always()
         run: uv run --locked python scripts/ci/coverage_summary.py >> "$GITHUB_STEP_SUMMARY"
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
-        if: always()
+        # Pull request runs keep coverage in the job summary only, to bound artifact storage.
+        if: always() && github.event_name != 'pull_request_target'
         with:
           name: native-coverage
           path: target/coverage
@@ -134,6 +151,7 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          ref: ${{ inputs.ref || github.sha }}
           lfs: true
           persist-credentials: false
       - uses: ./.github/actions/setup
@@ -163,7 +181,8 @@ jobs:
         if: always()
         run: uv run --locked python scripts/ci/coverage_summary.py >> "$GITHUB_STEP_SUMMARY"
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
-        if: always()
+        # Pull request runs keep coverage in the job summary only, to bound artifact storage.
+        if: always() && github.event_name != 'pull_request_target'
         with:
           name: javascript-coverage
           path: target/coverage
