@@ -13,3 +13,9 @@ test('debug mode waits for the flash backup, as the bring-up graph gates it', ()
   const debug = CAMERA_STAGES.find((stage) => stage.id === 'camera-debug');
   expect(debug?.requires).toContain('camera-backup');
 });
+
+test('normal mode accepts a saved debug mode or a gate card', () => {
+  const normal = CAMERA_STAGES.find((stage) => stage.id === 'camera-normal');
+  expect(normal?.requires).toEqual([]);
+  expect(normal?.requires_any).toEqual(['camera-debug', 'camera-debug-card']);
+});
