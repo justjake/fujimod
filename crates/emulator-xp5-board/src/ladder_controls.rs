@@ -903,7 +903,15 @@ mod tests {
         let options = ladders(&ResolvedConfiguration::bundled("xh2s-730").unwrap())
             .unwrap()
             .unwrap();
-        assert_eq!(options.ladders.len(), 5);
+        let wires = options
+            .ladders
+            .iter()
+            .map(|ladder| ladder.wire)
+            .collect::<Vec<_>>();
+        assert_eq!(
+            wires,
+            [5, 6, 11, 12, 13, 14].map(|channel| ladders::Wire::Adc { channel }),
+        );
     }
 
     #[test]
