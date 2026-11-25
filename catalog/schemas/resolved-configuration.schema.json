@@ -551,6 +551,20 @@
                 "$ref": "#/$defs/GpioOutputWord"
               },
               "type": "array"
+            },
+            "pins": {
+              "description": "Levels of individual input pads at reset.",
+              "items": {
+                "$ref": "#/$defs/GpioPinLevel"
+              },
+              "type": "array"
+            },
+            "registers": {
+              "description": "Port register values at reset, as read from the camera.",
+              "items": {
+                "$ref": "#/$defs/GpioRegisterWord"
+              },
+              "type": "array"
             }
           },
           "required": [
@@ -3277,6 +3291,17 @@
             "model": {
               "const": "xp5_gpio",
               "type": "string"
+            },
+            "pad_model": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/GpioPadModel"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Pad model: how an input pad reads while its data latch is set."
             },
             "port": {
               "description": "The one port this view serves, when it is a single-port view of the bank.",
@@ -15121,9 +15146,22 @@
           "description": "Body connection exposing the input pad.",
           "type": "string"
         },
+        "latch_high": {
+          "description": "Whether the far end holds the input high once it has answered, whatever the output does later.",
+          "type": "boolean"
+        },
         "output_connection_id": {
           "description": "Body connection exposing the output pad.",
           "type": "string"
+        },
+        "rise_ns": {
+          "description": "Time from the output rising to the input reading high, when the far end answers late.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
         }
       },
       "required": [
@@ -15154,6 +15192,78 @@
       "required": [
         "port",
         "levels"
+      ],
+      "type": "object"
+    },
+    "GpioPadModel": {
+      "description": "How an XP5 input pad reads.",
+      "oneOf": [
+        {
+          "const": "data-latch",
+          "description": "The pad reads its data latch while the latch is set.",
+          "type": "string"
+        }
+      ]
+    },
+    "GpioPinLevel": {
+      "additionalProperties": false,
+      "description": "One input pad level at reset.",
+      "properties": {
+        "high": {
+          "description": "Whether the pad reads high.",
+          "type": "boolean"
+        },
+        "pin": {
+          "description": "Pin within the port.",
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "port": {
+          "description": "GPIO port number.",
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "port",
+        "pin",
+        "high"
+      ],
+      "type": "object"
+    },
+    "GpioRegisterWord": {
+      "additionalProperties": false,
+      "description": "One GPIO port register value at reset.",
+      "properties": {
+        "port": {
+          "description": "GPIO port number.",
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "register": {
+          "description": "Register index within the port.",
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "value": {
+          "description": "Register value.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "port",
+        "register",
+        "value"
       ],
       "type": "object"
     },

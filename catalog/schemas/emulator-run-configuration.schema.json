@@ -56,6 +56,20 @@
                 "$ref": "#/$defs/GpioOutputWord"
               },
               "type": "array"
+            },
+            "pins": {
+              "description": "Levels of individual input pads at reset.",
+              "items": {
+                "$ref": "#/$defs/GpioPinLevel"
+              },
+              "type": "array"
+            },
+            "registers": {
+              "description": "Port register values at reset, as read from the camera.",
+              "items": {
+                "$ref": "#/$defs/GpioRegisterWord"
+              },
+              "type": "array"
             }
           },
           "required": [
@@ -721,6 +735,68 @@
       "required": [
         "port",
         "levels"
+      ],
+      "type": "object"
+    },
+    "GpioPinLevel": {
+      "additionalProperties": false,
+      "description": "One input pad level at reset.",
+      "properties": {
+        "high": {
+          "description": "Whether the pad reads high.",
+          "type": "boolean"
+        },
+        "pin": {
+          "description": "Pin within the port.",
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "port": {
+          "description": "GPIO port number.",
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "port",
+        "pin",
+        "high"
+      ],
+      "type": "object"
+    },
+    "GpioRegisterWord": {
+      "additionalProperties": false,
+      "description": "One GPIO port register value at reset.",
+      "properties": {
+        "port": {
+          "description": "GPIO port number.",
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "register": {
+          "description": "Register index within the port.",
+          "format": "uint8",
+          "maximum": 255,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "value": {
+          "description": "Register value.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "port",
+        "register",
+        "value"
       ],
       "type": "object"
     },

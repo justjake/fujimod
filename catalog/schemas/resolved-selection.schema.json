@@ -2635,6 +2635,17 @@
               "const": "xp5_gpio",
               "type": "string"
             },
+            "pad_model": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/GpioPadModel"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Pad model: how an input pad reads while its data latch is set."
+            },
             "port": {
               "description": "The one port this view serves, when it is a single-port view of the bank.",
               "format": "uint8",
@@ -14422,9 +14433,22 @@
           "description": "Body connection exposing the input pad.",
           "type": "string"
         },
+        "latch_high": {
+          "description": "Whether the far end holds the input high once it has answered, whatever the output does later.",
+          "type": "boolean"
+        },
         "output_connection_id": {
           "description": "Body connection exposing the output pad.",
           "type": "string"
+        },
+        "rise_ns": {
+          "description": "Time from the output rising to the input reading high, when the far end answers late.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
         }
       },
       "required": [
@@ -14432,6 +14456,16 @@
         "input_connection_id"
       ],
       "type": "object"
+    },
+    "GpioPadModel": {
+      "description": "How an XP5 input pad reads.",
+      "oneOf": [
+        {
+          "const": "data-latch",
+          "description": "The pad reads its data latch while the latch is set.",
+          "type": "string"
+        }
+      ]
     },
     "GpioScanner": {
       "description": "Firmware scanner predicates used for digital keys.",

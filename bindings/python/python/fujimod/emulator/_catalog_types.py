@@ -127,6 +127,8 @@ class ApplicationBlockInputVariant1(TypedDict, total=False):
     kind: Required[Literal["gpio"]]
     levels: Required[list[int]]
     outputs: Required[list[GpioOutputWord]]
+    pins: NotRequired[list[GpioPinLevel]]
+    registers: NotRequired[list[GpioRegisterWord]]
 
 
 class ApplicationBlockInputVariant2(TypedDict, total=False):
@@ -782,6 +784,7 @@ class BlockDeviceVariant61(TypedDict, total=False):
 class BlockDeviceVariant62(TypedDict, total=False):
     basis: Required[str]
     model: Required[Literal["xp5_gpio"]]
+    pad_model: NotRequired[GpioPadModel | None]
     port: NotRequired[int | None]
 
 
@@ -3259,12 +3262,29 @@ class GlyphResources(TypedDict, total=False):
 
 class GpioFeedback(TypedDict, total=False):
     input_connection_id: Required[str]
+    latch_high: NotRequired[bool]
     output_connection_id: Required[str]
+    rise_ns: NotRequired[int | None]
 
 
 class GpioOutputWord(TypedDict, total=False):
     levels: Required[int]
     port: Required[int]
+
+
+type GpioPadModel = Literal["data-latch"]
+
+
+class GpioPinLevel(TypedDict, total=False):
+    high: Required[bool]
+    pin: Required[int]
+    port: Required[int]
+
+
+class GpioRegisterWord(TypedDict, total=False):
+    port: Required[int]
+    register: Required[int]
+    value: Required[int]
 
 
 type GpioScanner = GpioScannerVariant0 | GpioScannerVariant1

@@ -601,6 +601,10 @@ pub enum BlockDevice {
         /// The one port this view serves, when it is a single-port view of the bank.
         #[serde(default, skip_serializing_if = "Option::is_none")]
         port: Option<u8>,
+        /// Pad model: how an input pad reads while its data latch is set.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        pad_model: Option<GpioPadModel>,
+
         /// Declared basis.
         basis: String,
     },
@@ -1178,6 +1182,20 @@ pub struct CaptureTransmit {
     pub channel: u8,
     /// DMA request line.
     pub request: u8,
+}
+
+/// How an XP5 input pad reads.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[cfg_attr(
+    all(target_arch = "wasm32", not(target_os = "emscripten")),
+    derive(tsify::Tsify),
+    tsify(hashmap_as_object, missing_as_null)
+)]
+#[serde(rename_all = "kebab-case")]
+pub enum GpioPadModel {
+    /// The pad reads its data latch while the latch is set.
+    DataLatch,
 }
 
 /// Picture-plane pixel packing declared by a display controller.

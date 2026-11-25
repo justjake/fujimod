@@ -2139,6 +2139,17 @@
               "const": "xp5_gpio",
               "type": "string"
             },
+            "pad_model": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/GpioPadModel"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Pad model: how an input pad reads while its data latch is set."
+            },
             "port": {
               "description": "The one port this view serves, when it is a single-port view of the bank.",
               "format": "uint8",
@@ -3690,6 +3701,16 @@
         {
           "const": "data",
           "description": "A data address.",
+          "type": "string"
+        }
+      ]
+    },
+    "GpioPadModel": {
+      "description": "How an XP5 input pad reads.",
+      "oneOf": [
+        {
+          "const": "data-latch",
+          "description": "The pad reads its data latch while the latch is set.",
           "type": "string"
         }
       ]

@@ -50,7 +50,279 @@
         "kind": "gpio",
         "block_id": "gpio",
         "levels": [],
-        "outputs": []
+        "outputs": [],
+        "registers": [
+          {
+            "port": 0,
+            "register": 1,
+            "value": 16
+          },
+          {
+            "port": 0,
+            "register": 2,
+            "value": 65535
+          },
+          {
+            "port": 0,
+            "register": 3,
+            "value": 1109
+          },
+          {
+            "port": 0,
+            "register": 4,
+            "value": 321
+          },
+          {
+            "port": 1,
+            "register": 0,
+            "value": 3
+          },
+          {
+            "port": 1,
+            "register": 1,
+            "value": 65535
+          },
+          {
+            "port": 1,
+            "register": 2,
+            "value": 65535
+          },
+          {
+            "port": 1,
+            "register": 3,
+            "value": 16661
+          },
+          {
+            "port": 1,
+            "register": 4,
+            "value": 20481
+          },
+          {
+            "port": 2,
+            "register": 1,
+            "value": 63
+          },
+          {
+            "port": 2,
+            "register": 2,
+            "value": 63
+          },
+          {
+            "port": 3,
+            "register": 0,
+            "value": 2
+          },
+          {
+            "port": 3,
+            "register": 1,
+            "value": 8207
+          },
+          {
+            "port": 3,
+            "register": 2,
+            "value": 16383
+          },
+          {
+            "port": 3,
+            "register": 3,
+            "value": 21765
+          },
+          {
+            "port": 3,
+            "register": 4,
+            "value": 341
+          },
+          {
+            "port": 3,
+            "register": 5,
+            "value": 16370
+          },
+          {
+            "port": 4,
+            "register": 1,
+            "value": 1023
+          },
+          {
+            "port": 4,
+            "register": 2,
+            "value": 1023
+          },
+          {
+            "port": 4,
+            "register": 3,
+            "value": 85
+          },
+          {
+            "port": 4,
+            "register": 4,
+            "value": 5
+          },
+          {
+            "port": 5,
+            "register": 1,
+            "value": 65533
+          },
+          {
+            "port": 5,
+            "register": 2,
+            "value": 65535
+          },
+          {
+            "port": 6,
+            "register": 1,
+            "value": 15
+          },
+          {
+            "port": 6,
+            "register": 2,
+            "value": 31
+          },
+          {
+            "port": 8,
+            "register": 1,
+            "value": 54
+          },
+          {
+            "port": 8,
+            "register": 2,
+            "value": 63
+          },
+          {
+            "port": 9,
+            "register": 0,
+            "value": 16
+          },
+          {
+            "port": 9,
+            "register": 1,
+            "value": 13304
+          },
+          {
+            "port": 9,
+            "register": 2,
+            "value": 16383
+          },
+          {
+            "port": 9,
+            "register": 3,
+            "value": 21760
+          },
+          {
+            "port": 10,
+            "register": 1,
+            "value": 1752
+          },
+          {
+            "port": 10,
+            "register": 2,
+            "value": 4095
+          },
+          {
+            "port": 10,
+            "register": 3,
+            "value": 21824
+          },
+          {
+            "port": 10,
+            "register": 4,
+            "value": 65
+          },
+          {
+            "port": 11,
+            "register": 1,
+            "value": 9199
+          },
+          {
+            "port": 11,
+            "register": 2,
+            "value": 16383
+          },
+          {
+            "port": 11,
+            "register": 4,
+            "value": 341
+          },
+          {
+            "port": 12,
+            "register": 0,
+            "value": 1152
+          },
+          {
+            "port": 12,
+            "register": 1,
+            "value": 2011
+          },
+          {
+            "port": 12,
+            "register": 2,
+            "value": 2047
+          },
+          {
+            "port": 12,
+            "register": 3,
+            "value": 1365
+          },
+          {
+            "port": 13,
+            "register": 1,
+            "value": 127
+          },
+          {
+            "port": 13,
+            "register": 2,
+            "value": 127
+          },
+          {
+            "port": 13,
+            "register": 3,
+            "value": 256
+          },
+          {
+            "port": 14,
+            "register": 0,
+            "value": 252
+          },
+          {
+            "port": 14,
+            "register": 1,
+            "value": 1023
+          },
+          {
+            "port": 14,
+            "register": 2,
+            "value": 1023
+          },
+          {
+            "port": 14,
+            "register": 3,
+            "value": 21765
+          },
+          {
+            "port": 15,
+            "register": 0,
+            "value": 16384
+          },
+          {
+            "port": 15,
+            "register": 1,
+            "value": 61151
+          },
+          {
+            "port": 15,
+            "register": 2,
+            "value": 65535
+          },
+          {
+            "port": 15,
+            "register": 3,
+            "value": 21824
+          },
+          {
+            "port": 15,
+            "register": 4,
+            "value": 1
+          }
+        ]
       },
       {
         "kind": "flash",

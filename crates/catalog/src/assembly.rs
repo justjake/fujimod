@@ -97,6 +97,12 @@ pub struct GpioFeedback {
     pub output_connection_id: String,
     /// Body connection exposing the input pad.
     pub input_connection_id: String,
+    /// Time from the output rising to the input reading high, when the far end answers late.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub rise_ns: Option<u64>,
+    /// Whether the far end holds the input high once it has answered, whatever the output does later.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub latch_high: bool,
 }
 
 impl BodyHardware {
