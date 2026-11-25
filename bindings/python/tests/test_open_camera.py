@@ -274,3 +274,33 @@ def test_a_verified_image_starts_at_the_loader(tmp_path: Path) -> None:
         Board.open_camera(firmware="x70-110", start="loader")
     with pytest.raises(ValueError, match="image requires"):
         Board.open_camera(firmware="x70-110", image=path, image_sha256=digest)
+
+
+def test_a_camera_opens_from_named_files_and_card_bytes() -> None:
+    root = library()
+    with Board.open_camera(
+        firmware="x70-110",
+        boot="stock",
+        execution_policy="interactive",
+        boot_cache=False,
+        update=root / "x70-110" / "FPUPDATE.DAT",
+        boot_rom=root / "x70" / "boot-rom.bin",
+        sd_card_files={"NOTE.TXT": b"written from memory"},
+    ) as board:
+        assert board.status()["status"] == "rec"
+    with pytest.raises(ValueError, match="not both"):
+        Board.open_camera(firmware="x70-110", sd_card=root, sd_card_files={"NOTE.TXT": b"x"})
+
+
+def test_a_loader_image_opens_from_bytes() -> None:
+    library()
+    image = b"fujimod loader image"
+    with Board.open_camera(
+        firmware="x70-110",
+        execution_policy="interactive",
+        run_to_rec=False,
+        start="loader",
+        image=image,
+    ) as board:
+        assert board.status()["instructions"] == 0
+        assert board.read_physical(0, len(image)) == image

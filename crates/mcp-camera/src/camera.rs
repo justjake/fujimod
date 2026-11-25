@@ -46,6 +46,7 @@ impl OpenRequest {
         };
         Ok(CameraRequest {
             firmware: self.firmware.clone(),
+            files: fujimod_camera::FirmwareInput::Library,
             preset: match self.boot {
                 OpenBoot::Stock => Preset::Stock,
                 OpenBoot::SdCard => Preset::SdCard,

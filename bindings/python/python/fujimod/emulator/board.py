@@ -402,6 +402,7 @@ class Board:
         firmware: str,
         boot: Literal["stock", "sd-card", "autostart"] = "stock",
         sd_card: str | PathLike[str] | None = None,
+        sd_card_files: Mapping[str, bytes] | None = None,
         execution_policy: ExecutionPolicy = "exact",
         boot_cache: bool = True,
         run_to_rec: bool = True,
@@ -410,7 +411,7 @@ class Board:
         sd_card_transfer_ticks: int | None = None,
         card_layout: Mapping[str, object] | None = None,
         start: Literal["rom", "loader"] = "rom",
-        image: str | PathLike[str] | None = None,
+        image: str | PathLike[str] | bytes | None = None,
         image_sha256: str | None = None,
         update: str | PathLike[str] | None = None,
         boot_rom: str | PathLike[str] | None = None,
@@ -424,11 +425,13 @@ class Board:
         the firmware. `boot` is `stock`, `sd-card` or `autostart`. `sd_card`
         names an SD card directory, or is the current release card when it is
         omitted for the two card boots, or the extra files of an otherwise
-        empty card for a stock boot. `update` and `boot_rom` name the two
-        firmware files instead of the library, `flash` starts from a saved
-        internal-flash image, and `combination` holds a catalog power-on
-        combination (`sd`, `firmware_update` or `service`); those open the
-        emulator layer, whose SD card is the `sd_card` directory's files.
+        empty card for a stock boot. `sd_card_files` gives the same files as a
+        name-to-bytes mapping, for a caller without a directory tree.
+        `update` and `boot_rom` name the two firmware files instead of the
+        library. `flash` starts from a saved internal-flash image, and
+        `combination` holds a catalog power-on combination (`sd`,
+        `firmware_update` or `service`); those, and a RAM image, open the
+        emulator layer, whose SD card is `sd_card` or `sd_card_files`.
         `execution_policy` is `exact` or `interactive`. `boot_cache`
         restores the library's saved boot when the same inputs were opened
         before and saves this one; `False` boots from scratch and saves
@@ -443,8 +446,8 @@ class Board:
         `partition_start` and `sectors_per_cluster`; it applies only to a
         stock boot with the card present. `start="loader"` places a
         caller-verified RAM image at address zero and starts the first core at
-        the native loader before any instruction runs; `image` names the
-        image and `image_sha256` its SHA-256. The boot ROM never runs for
+        the native loader before any instruction runs; `image` is the image's
+        path, with `image_sha256`, or its bytes. The boot ROM never runs for
         such an open.
         """
         firmware = cls._identifier(firmware, "firmware")
@@ -491,14 +494,13 @@ class Board:
                 raise ValueError("card_layout needs the card present")
             layout_text = json.dumps(selected_layout)
         emulator_layer = (
-            update is not None
-            or flash is not None
+            flash is not None
             or combination is not None
             or image is not None
         )
         if emulator_layer and boot != "stock":
             raise ValueError(
-                "files, flash and a combination open the emulator layer; boot must be 'stock'"
+                "flash, a combination and a RAM image open the emulator layer; boot must be 'stock'"
             )
         if not run_to_rec and boot == "autostart":
             raise ValueError("an autostart open cannot stop before REC")
@@ -508,8 +510,8 @@ class Board:
             raise ValueError("a card boot needs the card present")
         if start not in ("rom", "loader"):
             raise ValueError("start must be 'rom' or 'loader'")
-        if start == "loader" and (image is None or image_sha256 is None):
-            raise ValueError("start='loader' requires image and image_sha256")
+        if start == "loader" and image is None:
+            raise ValueError("start='loader' requires image")
         if start == "rom" and (image is not None or image_sha256 is not None):
             raise ValueError("image requires start='loader'")
         if image_sha256 is not None and (
@@ -517,7 +519,30 @@ class Board:
         ):
             raise ValueError("image_sha256 must be 64 hexadecimal characters")
         card = None if sd_card is None else cls._input_path(sd_card, "sd_card")
-        image_path = None if image is None else cls._input_path(image, "image")
+        if card is not None and sd_card_files is not None:
+            raise ValueError(
+                "name sd_card (a directory) or sd_card_files (their bytes), not both"
+            )
+        if sd_card_files is not None and not isinstance(sd_card_files, Mapping):
+            raise TypeError("sd_card_files must map SD card file names to bytes")
+        selected_files: dict[str, bytes] = {}
+        for name, data in (sd_card_files or {}).items():
+            if type(name) is not str or not name:
+                raise TypeError("sd_card_files keys must be nonempty strings")
+            if not isinstance(data, (bytes, bytearray, memoryview)):
+                raise TypeError("sd_card_files values must be bytes")
+            selected_files[name] = bytes(data)
+        image_path = None
+        image_contents = None
+        if image is not None:
+            if isinstance(image, (bytes, bytearray, memoryview)):
+                image_contents = bytes(image)
+            else:
+                image_path = cls._input_path(image, "image")
+        if image_path is not None and image_sha256 is None:
+            raise ValueError("start='loader' requires image_sha256 for an image path")
+        if image_contents is not None and image_sha256 is not None:
+            raise ValueError("image bytes carry their own SHA-256")
         update_path = None if update is None else cls._input_path(update, "update")
         boot_rom_path = None if boot_rom is None else cls._input_path(boot_rom, "boot_rom")
         flash_path = None if flash is None else cls._input_path(flash, "flash")
@@ -525,6 +550,7 @@ class Board:
             firmware=firmware,
             boot=boot,
             sd_card=card,
+            sd_card_files=selected_files or None,
             execution_policy=execution_policy,
             boot_cache=boot_cache,
             run_to_rec=run_to_rec,
@@ -535,6 +561,7 @@ class Board:
             start=start,
             image=image_path,
             image_sha256=image_sha256,
+            image_bytes=image_contents,
             update=update_path,
             boot_rom=boot_rom_path,
             flash=flash_path,
