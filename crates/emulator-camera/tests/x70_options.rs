@@ -3,42 +3,27 @@
 //! Set `FUJIMOD_FIRMWARE_LIBRARY` to a directory holding the catalog's X70
 //! update and boot ROM, and `FUJIMOD_TEST_SD_CARD` to a directory holding the
 //! release SD card. A test whose inputs are absent returns without opening.
+mod support;
+use support::{Boot, CardSource, library, test_card as release_card};
+
 use fujimod_emulator_camera::{
-    Boot, BootCache, CardLayout, CardModel, CardSource, ExecutionPolicy, Library, LibraryError,
-    Opened, Request, Stage, open, open_unbooted, remote_facts, remote_options,
+    BootCache, CardInputs, CardLayout, Library, OpenError, Opened, Request, Stage, open_unbooted,
+    remote_facts, remote_options,
 };
 use fujimod_remote::{BoardRemote, Control, operations};
-use std::path::PathBuf;
 
-const FIRMWARE: &str = "x70-110";
 const BUTTON: &str = "menu_ok_button";
 
-fn library() -> Option<Library> {
-    match Library::from_env() {
-        Ok(library) => Some(library),
-        Err(LibraryError::Environment) => None,
-        Err(error) => panic!("firmware library: {error}"),
-    }
+fn state() -> fujimod_emulator_camera::StateDir {
+    support::state()
+}
+
+fn open(library: &Library, request: Request) -> Result<Opened, OpenError> {
+    fujimod_emulator_camera::open(library, &state(), request)
 }
 
 fn request(boot: Boot) -> Request {
-    Request {
-        firmware: FIRMWARE.into(),
-        boot,
-        policy: ExecutionPolicy::Interactive,
-        engine: None,
-        card_files: Vec::new(),
-        cache: BootCache::Bypass,
-        run_to_rec: true,
-        card: CardModel::default(),
-        kept: Default::default(),
-        card_source: None,
-        image: None,
-    }
-}
-
-fn release_card() -> Option<PathBuf> {
-    std::env::var_os("FUJIMOD_TEST_SD_CARD").map(PathBuf::from)
+    support::request(boot, None, BootCache::Bypass)
 }
 
 fn sd_node(opened: &Opened) -> serde_json::Value {
@@ -241,7 +226,7 @@ fn a_declared_card_layout_formats_the_stock_card() {
     std::fs::write(&file, b"declared layout").expect("card layout fixture file");
     let mut request = request(Boot::Stock);
     request.card.layout = Some(layout.clone());
-    request.card_files = vec![("LAYOUT.TXT".into(), file)];
+    request.card.files = vec![("LAYOUT.TXT".into(), b"declared layout".to_vec())];
     let opened = open(&library, request);
     let _ = std::fs::remove_dir_all(&directory);
     let opened = opened.expect("stock boot with a declared layout");

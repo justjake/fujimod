@@ -290,9 +290,9 @@ export default function App() {
                   <input
                     type="radio"
                     name="boot"
-                    value="automatic-boot"
-                    checked={boot() === 'automatic-boot'}
-                    onChange={() => setBoot('automatic-boot')}
+                    value="autostart"
+                    checked={boot() === 'autostart'}
+                    onChange={() => setBoot('autostart')}
                   />
                   <span>
                     <strong>Automatic boot</strong>

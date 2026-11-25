@@ -1,4 +1,4 @@
-//! The automatic boot: the card's own installer writes the boot ROM's first
+//! Autostart: the card's own installer writes the boot ROM's first
 //! stage into internal flash, and later opens start from it.
 //!
 //! The card's FUJIMOD SET-UP page exposes BOOT SETUP's CHANGE, whose
@@ -13,9 +13,9 @@
 //! hold, and gives BOOT SETUP's CHANGE page exactly two leaf rows, MANUAL and
 //! AUTOMATIC. The search reads descriptors only; presses start once the page
 //! is known.
-use crate::{OpenError, Opened, Stage};
 use fujimod_catalog::nand_boot::FirmwareNandBoot;
 use fujimod_catalog_remote::{Facts, FirmwareObservation, MenuTables};
+use fujimod_emulator_camera::{OpenError, Opened, Stage, read_flash, write_flash};
 use fujimod_emulator_session::Session;
 use fujimod_remote::{
     BoardRemote, Control, Remote, RemoteReader,
@@ -51,9 +51,7 @@ const PRESS_LIMIT: usize = 4;
 ///
 /// Only the installer run sets this: a later boot loads the card as the caller
 /// gave it, so the camera a caller receives keeps the style it asked for.
-pub(crate) fn stock_menus(
-    files: &[(String, Vec<u8>)],
-) -> Result<Vec<(String, Vec<u8>)>, OpenError> {
+pub fn stock_menus(files: &[(String, Vec<u8>)]) -> Result<Vec<(String, Vec<u8>)>, OpenError> {
     let mut files = files.to_vec();
     let existing = files
         .iter()
@@ -89,105 +87,25 @@ pub(crate) fn stock_menus(
     Ok(files)
 }
 
-/// The stage-1 blocks as the kept internal flash: each block's pages, then its
-/// spares, in the order the boot ROM loads them.
-pub(crate) fn kept_flash(session: &Session, nand: &FirmwareNandBoot) -> Result<Vec<u8>, OpenError> {
-    let medium = session
-        .nand_medium("nand")
-        .map_err(|error| OpenError::at(Stage::BootRom, error))?;
-    let page = medium.options().page_bytes as u64;
-    let pages = medium.options().pages_per_block;
-    let spare_bytes = medium.options().spare_bytes;
-    let mut bytes = Vec::new();
-    let mut spare = vec![0u8; spare_bytes];
-    for block in &nand.stage1.blocks {
-        let first = block.native_offset / page;
-        let mut data = vec![0u8; block.bytes as usize];
-        medium
-            .read(block.native_offset, &mut data)
-            .map_err(|error| OpenError::at(Stage::BootRom, error))?;
-        bytes.extend_from_slice(&data);
-        for index in 0..pages {
-            medium
-                .read_spare((first + index as u64) as u32, &mut spare)
-                .map_err(|error| OpenError::at(Stage::BootRom, error))?;
-            bytes.extend_from_slice(&spare);
-        }
-    }
-    Ok(bytes)
-}
-
-/// Program the kept internal flash into the camera's NAND.
-pub(crate) fn write_kept_flash(
-    session: &mut Session,
-    nand: &FirmwareNandBoot,
-    bytes: &[u8],
-) -> Result<(), OpenError> {
-    let mut medium = session
-        .nand_medium("nand")
-        .map_err(|error| OpenError::at(Stage::BootRom, error))?;
-    let page = medium.options().page_bytes as u64;
-    let pages = medium.options().pages_per_block as usize;
-    let spare_bytes = medium.options().spare_bytes;
-    let expected: usize = nand
-        .stage1
-        .blocks
-        .iter()
-        .map(|block| block.bytes as usize + pages * spare_bytes)
-        .sum();
-    if bytes.len() != expected {
-        return Err(OpenError::at(
-            Stage::BootRom,
-            format!(
-                "the kept internal flash is {} bytes; this firmware's stage-1 blocks need {expected}",
-                bytes.len()
-            ),
-        ));
-    }
-    let mut at = 0;
-    for block in &nand.stage1.blocks {
-        let data_bytes = block.bytes as usize;
-        let first = (block.native_offset / page) as u32;
-        medium
-            .erase(first)
-            .map_err(|error| OpenError::at(Stage::BootRom, error))?;
-        for index in 0..pages {
-            let data = &bytes[at + index * page as usize..at + (index + 1) * page as usize];
-            let spare_at = at + data_bytes + index * spare_bytes;
-            medium
-                .program(
-                    first + index as u32,
-                    data,
-                    &bytes[spare_at..spare_at + spare_bytes],
-                )
-                .map_err(|error| OpenError::at(Stage::BootRom, error))?;
-        }
-        at += data_bytes + pages * spare_bytes;
-    }
-    session
-        .retain_nand("nand", medium)
-        .map_err(|error| OpenError::at(Stage::BootRom, error))
-}
-
 /// Drive the card's installer to AUTOMATIC and return the stage-1 blocks it
 /// wrote, after powering the camera off.
 pub(crate) fn install(opened: &mut Opened, nand: &FirmwareNandBoot) -> Result<Vec<u8>, OpenError> {
-    let facts =
-        crate::remote_facts(&opened.resolved).map_err(|error| OpenError::at(Stage::Rec, error))?;
+    let facts = fujimod_emulator_camera::remote_facts(&opened.resolved)
+        .map_err(|error| OpenError::at(Stage::Rec, error))?;
     let menus = Menus::new(&facts);
     let driver = Driver {
         facts: &facts,
         ticks: opened.camera.ticks_per_second,
         quantum: opened.camera.quantum,
     };
-    let stock = kept_flash(opened.session(), nand)?;
+    let stock = read_flash(opened.session(), nand)?;
     driver.open_menus(opened.session_mut(), &menus)?;
     driver.open_setup(opened.session_mut(), &menus)?;
     let installer = menus.find_installer(opened.session())?;
     driver.choose_automatic(opened.session_mut(), &menus, &installer)?;
     driver.wait_installed(opened.session_mut(), nand, &stock)?;
     driver.power_off(opened.session_mut())?;
-    let written = kept_flash(opened.session(), nand)?;
+    let written = read_flash(opened.session(), nand)?;
     if written == stock {
         return Err(OpenError::at(
             Stage::Rec,
@@ -393,7 +311,7 @@ struct Driver<'a> {
 
 impl Driver<'_> {
     fn options(&self, session: &Session) -> Result<RemoteOptions, OpenError> {
-        crate::remote_options(session, self.quantum)
+        fujimod_emulator_camera::remote_options(session, self.quantum)
             .map_err(|error| OpenError::at(Stage::Rec, error))
     }
 
@@ -603,7 +521,7 @@ impl Driver<'_> {
         let deadline = session.board.now() + self.ticks * INSTALL_SECONDS;
         loop {
             self.advance(session, 1_000)?;
-            if kept_flash(session, nand)? != stock {
+            if read_flash(session, nand)? != stock {
                 return Ok(());
             }
             if session.board.now() >= deadline {
@@ -656,4 +574,66 @@ mod tests {
         let settings: Value = serde_json::from_slice(&added[1].1).unwrap();
         assert_eq!(settings["menu"]["style"], "stock");
     }
+}
+
+/// The internal flash an autostart open starts from, installing it once.
+pub(crate) fn flash(
+    state: &fujimod_emulator_camera::StateDir,
+    library: &fujimod_emulator_camera::Library,
+    request: &crate::Request,
+    files: &[(String, Vec<u8>)],
+) -> Result<fujimod_emulator_camera::Flash, crate::Error> {
+    let path = crate::flash_path(state, &request.firmware, files);
+    match std::fs::read(&path) {
+        Ok(bytes) => Ok(fujimod_emulator_camera::Flash::Image(bytes)),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+            let installed = install_flash(state, library, request, files)?;
+            if let Some(directory) = path.parent() {
+                std::fs::create_dir_all(directory).map_err(|error| {
+                    crate::Error::Missing(format!("{}: {error}", directory.display()))
+                })?;
+            }
+            std::fs::write(&path, &installed)
+                .map_err(|error| crate::Error::Missing(format!("{}: {error}", path.display())))?;
+            Ok(fujimod_emulator_camera::Flash::Image(installed))
+        }
+        Err(error) => Err(crate::Error::Missing(format!(
+            "{}: {error}",
+            path.display()
+        ))),
+    }
+}
+
+/// Make the autostart flash the way an owner does: boot the card, choose
+/// AUTOMATIC, and keep the stage-1 blocks the installer wrote.
+fn install_flash(
+    state: &fujimod_emulator_camera::StateDir,
+    library: &fujimod_emulator_camera::Library,
+    request: &crate::Request,
+    files: &[(String, Vec<u8>)],
+) -> Result<Vec<u8>, crate::Error> {
+    let menus = stock_menus(files)?;
+    let mut opened = fujimod_emulator_camera::open(
+        library,
+        state,
+        fujimod_emulator_camera::Request {
+            firmware: request.firmware.clone(),
+            files: fujimod_emulator_camera::FirmwareInput::Library,
+            start: fujimod_emulator_camera::Start::Held {
+                combination: "sd".into(),
+            },
+            flash: fujimod_emulator_camera::Flash::Stock,
+            card: fujimod_emulator_camera::CardInputs {
+                files: menus,
+                ..Default::default()
+            },
+            policy: request.policy,
+            engine: request.engine,
+            cache: fujimod_emulator_camera::BootCache::Bypass,
+            run_to_rec: true,
+            kept: Default::default(),
+        },
+    )?;
+    let nand = library.nand_boot(&request.firmware)?;
+    Ok(install(&mut opened, nand)?)
 }

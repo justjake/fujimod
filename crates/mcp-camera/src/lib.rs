@@ -142,9 +142,10 @@ pub enum OpenBoot {
     Stock,
     /// FujiMod loaded from the SD card by the boot ROM.
     SdCard,
-    /// FujiMod started from the SD card's automatic-boot installer in internal
-    /// flash. The first open installs it and keeps the flash in the library.
-    AutomaticBoot,
+    /// FujiMod started from the SD card's autostart installer in internal
+    /// flash. The first open installs it and keeps the flash in the state
+    /// directory.
+    Autostart,
 }
 
 #[derive(Deserialize, JsonSchema)]
@@ -157,10 +158,10 @@ pub struct OpenParams {
     pub firmware: String,
     /// `stock` boots the installed firmware; `sd-card` boots FujiMod from
     /// `sd_card`, or from the current release card when it is omitted;
-    /// `automatic-boot` starts the release card's installer from internal flash.
+    /// `autostart` starts the release card's installer from internal flash.
     pub boot: OpenBoot,
     /// Directory for the virtual SD card. An `sd-card` boot without it fetches
-    /// the release SD card for the firmware, as does an `automatic-boot`; for a
+    /// the release SD card for the firmware, as does an `autostart`; for a
     /// `stock` boot its files are added to the otherwise empty card.
     pub sd_card: Option<String>,
     /// Checkpoint file to restore instead of booting. Give the same firmware,
@@ -294,8 +295,8 @@ pub struct DiffParams {
 impl Cameras {
     #[tool(
         description = "Open an emulated camera from a catalog firmware and boot. `boot` is \
-`stock`, `sd-card` or `automatic-boot`; `sd_card` names an SD card directory, or the release \
-card is fetched for the firmware when it is omitted. `automatic-boot` installs the card's \
+`stock`, `sd-card` or `autostart`; `sd_card` names an SD card directory, or the release \
+card is fetched for the firmware when it is omitted. `autostart` installs the card's \
 loader into internal flash once and starts from it without holding a button. It boots to REC \
 (or restores `snapshot`) and stays running for later calls. Returns its name, state and screen."
     )]
@@ -851,6 +852,6 @@ mod tests {
             .iter()
             .map(|value| value["const"].as_str().unwrap())
             .collect();
-        assert_eq!(boot, ["stock", "sd-card", "automatic-boot"]);
+        assert_eq!(boot, ["stock", "sd-card", "autostart"]);
     }
 }

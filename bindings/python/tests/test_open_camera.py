@@ -17,8 +17,9 @@ def library() -> Path:
     return Path(root)
 
 
-def release_card(root: Path) -> Path:
-    cards = sorted(root.glob("sd-cards/*/x70-110"))
+def release_card() -> Path:
+    state = Path(os.environ.get("FUJIMOD_STATE_DIR", "/tmp/fujimod"))
+    cards = sorted(state.glob("sd-cards/*/x70-110"))
     if not cards:
         pytest.skip("the firmware library holds no release X70 SD card")
     return cards[-1]
@@ -39,8 +40,8 @@ def test_open_camera_refuses_unknown_options() -> None:
         Board.open_camera(firmware="x70-110", sd_card_write_protected=None)
     with pytest.raises(ValueError, match="sd_card_transfer_ticks"):
         Board.open_camera(firmware="x70-110", sd_card_transfer_ticks=0)
-    with pytest.raises(ValueError, match="automatic"):
-        Board.open_camera(firmware="x70-110", boot="automatic-boot", run_to_rec=False)
+    with pytest.raises(ValueError, match="autostart"):
+        Board.open_camera(firmware="x70-110", boot="autostart", run_to_rec=False)
     with pytest.raises(ValueError, match="present"):
         Board.open_camera(firmware="x70-110", boot="sd-card", sd_card_present=False)
 
@@ -63,7 +64,7 @@ def test_the_x70_stock_boot_opens_to_rec() -> None:
 
 
 def test_the_x70_release_card_opens_to_rec() -> None:
-    card = release_card(library())
+    card = release_card()
     with Board.open_camera(
         firmware="x70-110",
         boot="sd-card",
@@ -83,7 +84,7 @@ def held_positions(board: Board) -> dict[str, object]:
 
 
 def test_the_x70_card_boot_can_stop_before_the_first_instruction() -> None:
-    card = release_card(library())
+    card = release_card()
     with Board.open_camera(
         firmware="x70-110",
         boot="sd-card",
@@ -149,7 +150,7 @@ def test_a_write_protected_sd_card_boots_and_reports_protection() -> None:
 
 
 def test_sd_card_transfer_ticks_slow_the_card_boot() -> None:
-    card = release_card(library())
+    card = release_card()
     default = Board.open_camera(
         firmware="x70-110",
         boot="sd-card",
@@ -208,7 +209,7 @@ def test_a_declared_card_layout_formats_the_stock_card() -> None:
 
 
 def test_the_x70_powers_on_with_its_flash_and_card_kept() -> None:
-    card = release_card(library())
+    card = release_card()
     with Board.open_camera(
         firmware="x70-110",
         boot="sd-card",

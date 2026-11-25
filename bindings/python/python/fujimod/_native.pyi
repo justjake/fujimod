@@ -91,6 +91,10 @@ class emulator:
             start: str = ...,
             image: str | PathLike[str] | None = ...,
             image_sha256: str | None = ...,
+            update: str | PathLike[str] | None = ...,
+            boot_rom: str | PathLike[str] | None = ...,
+            flash: str | PathLike[str] | None = ...,
+            combination: str | None = ...,
         ) -> emulator.Board: ...
         def release_holds(self, /) -> None: ...
         def power_on(

@@ -1,5 +1,7 @@
-//! The published FujiMod SD card for a firmware, fetched once into the library.
-use crate::{Library, LibraryError};
+//! The published FujiMod SD card for a firmware, downloaded once into the
+//! state directory.
+use crate::Error;
+use fujimod_emulator_camera::{Library, StateDir};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::{
@@ -12,25 +14,19 @@ use std::{
 
 /// Where the website publishes release metadata and files.
 pub const RELEASES_URL: &str = "https://fujimod.com/releases/";
-/// The library subdirectory holding fetched release cards.
-pub const CARD_DIRECTORY: &str = "sd-cards";
-
-/// The current release's SD card tree for a firmware, fetched once.
-pub fn card(library: &Library, firmware: &str) -> Result<PathBuf, LibraryError> {
+/// The current release's SD card tree for a firmware, downloaded once into
+/// `<state>/sd-cards/<release>/<firmware>`.
+pub fn card(state: &StateDir, library: &Library, firmware: &str) -> Result<PathBuf, Error> {
     if !name_ok(firmware) {
-        return Err(LibraryError::Release(format!(
+        return Err(Error::Release(format!(
             "invalid firmware identity {firmware:?}"
         )));
     }
     let tag = current_tag()?;
-    let directory = library
-        .path()
-        .join(CARD_DIRECTORY)
-        .join(&tag)
-        .join(firmware);
+    let directory = state.sd_cards().join(&tag).join(firmware);
     let cache_manifest = directory
         .parent()
-        .ok_or_else(|| LibraryError::Release("card cache has no parent".into()))?
+        .ok_or_else(|| Error::Release("card cache has no parent".into()))?
         .join(format!("{firmware}.json"));
     if cached(&directory, &cache_manifest, &tag, firmware) {
         return Ok(directory);
@@ -51,13 +47,13 @@ struct Current {
     tag: String,
 }
 
-fn current_tag() -> Result<String, LibraryError> {
+fn current_tag() -> Result<String, Error> {
     let url = format!("{RELEASES_URL}current");
     let bytes = fetch(&url)?;
     let current: Current = serde_json::from_slice(&bytes)
-        .map_err(|error| LibraryError::Release(format!("{url}: {error}")))?;
+        .map_err(|error| Error::Release(format!("{url}: {error}")))?;
     if !tag_ok(&current.tag) {
-        return Err(LibraryError::Release(format!(
+        return Err(Error::Release(format!(
             "{url}: invalid release tag {:?}",
             current.tag
         )));
@@ -90,10 +86,10 @@ struct CardFileSpec {
     processor: Option<String>,
 }
 
-fn index(tag: &str) -> Result<Index, LibraryError> {
+fn index(tag: &str) -> Result<Index, Error> {
     let url = format!("{RELEASES_URL}{tag}/patches.json");
     let bytes = fetch(&url)?;
-    serde_json::from_slice(&bytes).map_err(|error| LibraryError::Release(format!("{url}: {error}")))
+    serde_json::from_slice(&bytes).map_err(|error| Error::Release(format!("{url}: {error}")))
 }
 
 #[derive(Deserialize)]
@@ -109,20 +105,20 @@ struct StoreFile {
     size: u64,
 }
 
-fn ota_manifest(tag: &str, firmware: &str) -> Result<OtaManifest, LibraryError> {
+fn ota_manifest(tag: &str, firmware: &str) -> Result<OtaManifest, Error> {
     let firmware = firmware.to_uppercase();
     let url = format!("{RELEASES_URL}{tag}/{firmware}-latest.json");
     let bytes = fetch(&url)?;
     let manifest: OtaManifest = serde_json::from_slice(&bytes)
-        .map_err(|error| LibraryError::Release(format!("{url}: {error}")))?;
+        .map_err(|error| Error::Release(format!("{url}: {error}")))?;
     if manifest.firmware != firmware {
-        return Err(LibraryError::Release(format!(
+        return Err(Error::Release(format!(
             "{url}: names firmware {}, not {firmware}",
             manifest.firmware
         )));
     }
     if manifest.version.is_empty() || manifest.version.len() > 127 {
-        return Err(LibraryError::Release(format!(
+        return Err(Error::Release(format!(
             "{url}: invalid version {:?}",
             manifest.version
         )));
@@ -179,9 +175,9 @@ fn plan(
     manifest: &OtaManifest,
     firmware: &str,
     soc: Option<&str>,
-) -> Result<Vec<PlannedFile>, LibraryError> {
+) -> Result<Vec<PlannedFile>, Error> {
     if index.release != tag {
-        return Err(LibraryError::Release(format!(
+        return Err(Error::Release(format!(
             "release {tag} index names release {}",
             index.release
         )));
@@ -190,20 +186,18 @@ fn plan(
         .firmwares
         .iter()
         .find(|entry| entry.id == firmware)
-        .ok_or_else(|| {
-            LibraryError::Release(format!("release {tag} does not support {firmware}"))
-        })?;
+        .ok_or_else(|| Error::Release(format!("release {tag} does not support {firmware}")))?;
     let processor = entry
         .processor
         .as_deref()
         .or_else(|| soc.and_then(processor_for_soc))
         .ok_or_else(|| {
-            LibraryError::Release(format!(
+            Error::Release(format!(
                 "release {tag} does not name {firmware}'s processor"
             ))
         })?;
     let root = root_files(processor).ok_or_else(|| {
-        LibraryError::Release(format!(
+        Error::Release(format!(
             "release {tag} has no SD boot files for {processor}"
         ))
     })?;
@@ -215,7 +209,7 @@ fn plan(
         .filter(|file| file.processor.as_deref() == Some(processor))
     {
         if !paths.insert(spec.path.clone()) {
-            return Err(LibraryError::Release(format!(
+            return Err(Error::Release(format!(
                 "release {tag} lists card file {} twice",
                 spec.path
             )));
@@ -224,7 +218,7 @@ fn plan(
     }
     for name in root {
         if !paths.contains(*name) {
-            return Err(LibraryError::Release(format!(
+            return Err(Error::Release(format!(
                 "release {tag} is missing {name} for {processor}"
             )));
         }
@@ -234,13 +228,13 @@ fn plan(
     let mut store = BTreeMap::<String, (String, u64)>::new();
     for (path, file) in &manifest.fs {
         if !layer_path_ok(path) {
-            return Err(LibraryError::Release(format!(
+            return Err(Error::Release(format!(
                 "release {tag} manifest path {path:?} is invalid"
             )));
         }
         let sha256 = file.sha256.to_lowercase();
         if !digest_ok(&sha256) || file.size > u64::from(u32::MAX) {
-            return Err(LibraryError::Release(format!(
+            return Err(Error::Release(format!(
                 "release {tag} manifest entry {path} is invalid"
             )));
         }
@@ -248,7 +242,7 @@ fn plan(
         if let Some((previous, _)) = store.get(&name)
             && previous != &sha256
         {
-            return Err(LibraryError::Release(format!(
+            return Err(Error::Release(format!(
                 "release {tag} names two files {name}"
             )));
         }
@@ -289,10 +283,10 @@ fn plan(
     Ok(files)
 }
 
-fn card_file(tag: &str, spec: &CardFileSpec) -> Result<PlannedFile, LibraryError> {
+fn card_file(tag: &str, spec: &CardFileSpec) -> Result<PlannedFile, Error> {
     let sha256 = spec.sha256.to_lowercase();
     if !card_path_ok(&spec.path) || !name_ok(&spec.asset) || !digest_ok(&sha256) {
-        return Err(LibraryError::Release(format!(
+        return Err(Error::Release(format!(
             "release {tag} card file {} is invalid",
             spec.path
         )));
@@ -314,9 +308,9 @@ fn data_file(path: String, bytes: Vec<u8>) -> PlannedFile {
     }
 }
 
-fn json_line<T: Serialize>(value: &T) -> Result<Vec<u8>, LibraryError> {
-    let mut bytes = serde_json::to_vec_pretty(value)
-        .map_err(|error| LibraryError::Release(error.to_string()))?;
+fn json_line<T: Serialize>(value: &T) -> Result<Vec<u8>, Error> {
+    let mut bytes =
+        serde_json::to_vec_pretty(value).map_err(|error| Error::Release(error.to_string()))?;
     bytes.push(b'\n');
     Ok(bytes)
 }
@@ -358,7 +352,7 @@ fn write(
     directory: &Path,
     manifest_path: &Path,
     files: &[PlannedFile],
-) -> Result<(), LibraryError> {
+) -> Result<(), Error> {
     let _ = fs::remove_file(manifest_path);
     if directory.exists() {
         fs::remove_dir_all(directory).map_err(|error| io_error(directory, error))?;
@@ -376,9 +370,7 @@ fn write(
                 let url = format!("{RELEASES_URL}{tag}/{asset}");
                 let bytes = fetch(&url)?;
                 if bytes.len() as u64 != file.bytes || digest(&bytes) != file.sha256 {
-                    return Err(LibraryError::Release(format!(
-                        "{url} failed its integrity check"
-                    )));
+                    return Err(Error::Release(format!("{url} failed its integrity check")));
                 }
                 bytes
             }
@@ -396,28 +388,28 @@ fn write(
             },
         );
     }
-    let bytes = serde_json::to_vec_pretty(&manifest)
-        .map_err(|error| LibraryError::Release(error.to_string()))?;
+    let bytes =
+        serde_json::to_vec_pretty(&manifest).map_err(|error| Error::Release(error.to_string()))?;
     fs::write(manifest_path, bytes).map_err(|error| io_error(manifest_path, error))?;
     Ok(())
 }
 
-fn fetch(url: &str) -> Result<Vec<u8>, LibraryError> {
+fn fetch(url: &str) -> Result<Vec<u8>, Error> {
     let response = ureq::get(url)
         .set("User-Agent", "fujimod-emulator")
         .timeout(Duration::from_secs(60))
         .call()
-        .map_err(|error| LibraryError::Release(format!("{url}: {error}")))?;
+        .map_err(|error| Error::Release(format!("{url}: {error}")))?;
     let mut bytes = Vec::new();
     response
         .into_reader()
         .read_to_end(&mut bytes)
-        .map_err(|error| LibraryError::Release(format!("{url}: {error}")))?;
+        .map_err(|error| Error::Release(format!("{url}: {error}")))?;
     Ok(bytes)
 }
 
-fn io_error(path: &Path, error: std::io::Error) -> LibraryError {
-    LibraryError::Release(format!("{}: {error}", path.display()))
+fn io_error(path: &Path, error: std::io::Error) -> Error {
+    Error::Release(format!("{}: {error}", path.display()))
 }
 
 fn digest(bytes: &[u8]) -> String {

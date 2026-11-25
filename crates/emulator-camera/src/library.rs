@@ -1,21 +1,33 @@
-//! Firmware files found by content hash, and the catalog resolution that names
-//! the run configuration for a firmware.
+//! Firmware files found by name, and the catalog resolution that names the run
+//! configuration for a firmware.
+//!
+//! A firmware library is a directory laid out by name:
+//!
+//! ```text
+//! <firmware-id>/FPUPDATE.DAT
+//! <body-id>/boot-rom.bin
+//! ```
+//!
+//! The library is never scanned for files and never written. Each file is
+//! found by its name and hashed once to confirm it matches the catalog's
+//! entry for the firmware.
 use fujimod_catalog::ReferenceCatalog;
 use fujimod_catalog_configuration::RunOverlay;
 use fujimod_catalog_resolution::ResolvedConfiguration;
 use sha2::{Digest, Sha256};
 use std::{
-    collections::{BTreeMap, BTreeSet},
+    collections::BTreeMap,
     fs,
     path::{Path, PathBuf},
+    sync::Mutex,
 };
 
 /// The environment variable naming the firmware library directory.
 pub const LIBRARY_ENV: &str = "FUJIMOD_FIRMWARE_LIBRARY";
-/// The library subdirectory holding automatic-boot state.
-pub const AUTOMATIC_DIRECTORY: &str = "automatic-boot";
-/// The library subdirectory holding saved boots.
-pub const CACHE_DIRECTORY: &str = "boot-cache";
+/// The stock update file name inside a `<firmware-id>` directory.
+pub const UPDATE_FILE: &str = "FPUPDATE.DAT";
+/// The boot ROM file name inside a `<body-id>` directory.
+pub const BOOT_ROM_FILE: &str = "boot-rom.bin";
 
 /// A firmware library could not be read or did not hold the catalog's files.
 #[derive(Debug, thiserror::Error)]
@@ -30,26 +42,27 @@ pub enum LibraryError {
     },
     #[error("catalog: {0}")]
     Catalog(String),
-    #[error("{path}: sha256 {sha256} is not a catalog firmware update or boot ROM")]
-    UnknownFile { path: PathBuf, sha256: String },
+    #[error("{path}: sha256 {sha256} is not the catalog's {kind} for {firmware}")]
+    Mismatch {
+        path: PathBuf,
+        sha256: String,
+        kind: &'static str,
+        firmware: String,
+    },
     #[error("firmware {0} is not in the catalog")]
     UnknownFirmware(String),
     #[error("firmware {0} declares no browser run configuration")]
     UnregisteredFirmware(String),
-    #[error("release: {0}")]
-    Release(String),
     #[error("{0}")]
     Missing(String),
 }
 
-/// A directory of firmware files, found by SHA-256 against the catalog.
+/// A directory of firmware files named by catalog identity.
 pub struct Library {
     root: PathBuf,
     catalog: ReferenceCatalog,
-    /// SHA-256 identity of every catalog update and boot ROM in the directory.
-    files: BTreeMap<String, PathBuf>,
-    /// Explicit camera section directories by camera identity.
-    cameras: BTreeMap<String, PathBuf>,
+    /// SHA-256 of each file this library already read, by path.
+    hashed: Mutex<BTreeMap<PathBuf, String>>,
 }
 
 /// A catalog firmware whose update and boot ROM this library holds.
@@ -60,6 +73,17 @@ pub struct LibraryFirmware {
     pub version: String,
 }
 
+/// The catalog-named files of one firmware.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct FirmwareFiles {
+    pub update: PathBuf,
+    /// SHA-256 of `update`.
+    pub update_sha256: String,
+    pub boot_rom: PathBuf,
+    /// SHA-256 of `boot_rom`.
+    pub boot_rom_sha256: String,
+}
+
 impl Library {
     /// Read the directory named by the library environment variable.
     pub fn from_env() -> Result<Self, LibraryError> {
@@ -67,79 +91,14 @@ impl Library {
         Self::new(PathBuf::from(path))
     }
 
-    /// Read a directory of firmware files.
-    ///
-    /// Every regular file outside a cameras directory is identified by its
-    /// SHA-256 and must be a catalog firmware update or boot ROM. A
-    /// cameras/<id> directory holds the zstd-compressed NAND sections of the
-    /// named camera.
+    /// Read a library directory. No file is read until a firmware is opened.
     pub fn new(path: impl Into<PathBuf>) -> Result<Self, LibraryError> {
         let root = path.into();
         let catalog = ReferenceCatalog::bundled().map_err(LibraryError::Catalog)?;
-        let known = known_files(&catalog);
-        let mut files = BTreeMap::new();
-        let mut cameras = BTreeMap::new();
-        let camera_root = root.join("cameras");
-        let release_root = root.join(crate::release::CARD_DIRECTORY);
-        let automatic_root = root.join(AUTOMATIC_DIRECTORY);
-        let cache_root = root.join(CACHE_DIRECTORY);
-        if camera_root.is_dir() {
-            for entry in read_dir(&camera_root)? {
-                if entry.is_dir() {
-                    let id = entry
-                        .file_name()
-                        .and_then(|name| name.to_str())
-                        .ok_or_else(|| {
-                            LibraryError::Missing(format!(
-                                "{}: camera directory is not UTF-8",
-                                entry.display()
-                            ))
-                        })?
-                        .to_owned();
-                    cameras.insert(id, entry);
-                }
-            }
-        }
-        let mut pending = vec![root.clone()];
-        while let Some(directory) = pending.pop() {
-            for entry in read_dir(&directory)? {
-                if entry.starts_with(&camera_root)
-                    || entry.starts_with(&release_root)
-                    || entry.starts_with(&automatic_root)
-                    || entry.starts_with(&cache_root)
-                {
-                    continue;
-                }
-                if entry.is_dir() {
-                    pending.push(entry);
-                    continue;
-                }
-                let metadata = fs::metadata(&entry).map_err(|source| LibraryError::Read {
-                    path: entry.clone(),
-                    source,
-                })?;
-                if !metadata.is_file() || metadata.len() > 1 << 30 {
-                    continue;
-                }
-                let bytes = fs::read(&entry).map_err(|source| LibraryError::Read {
-                    path: entry.clone(),
-                    source,
-                })?;
-                let sha256 = format!("{:x}", Sha256::digest(&bytes));
-                if !known.contains(&sha256) {
-                    return Err(LibraryError::UnknownFile {
-                        path: entry,
-                        sha256,
-                    });
-                }
-                files.insert(sha256, entry);
-            }
-        }
         Ok(Self {
             root,
             catalog,
-            files,
-            cameras,
+            hashed: Mutex::new(BTreeMap::new()),
         })
     }
 
@@ -155,20 +114,18 @@ impl Library {
             .ok_or_else(|| LibraryError::UnknownFirmware(id.into()))
     }
 
-    /// Catalog firmwares with both files and a browser run configuration in
-    /// this library, in catalog identity order.
+    /// Catalog firmwares this library holds both files for and has a browser
+    /// run configuration for, in catalog identity order.
     pub fn firmwares(&self) -> Vec<LibraryFirmware> {
         self.catalog
             .firmware_ids()
             .filter_map(|id| {
                 let firmware = self.catalog.firmware(id)?;
-                let update = firmware.update.as_ref()?;
-                let boot_rom = firmware.boot_rom.as_ref()?;
-                if !self.files.contains_key(&update.sha256)
-                    || !self.files.contains_key(&boot_rom.content.sha256)
-                {
-                    return None;
-                }
+                firmware.update.as_ref()?;
+                firmware.boot_rom.as_ref()?;
+                // Listing confirms each file against the catalog, once per
+                // library; the launcher then shows only files it can open.
+                self.files(id).ok()?;
                 self.resolved(id).ok()?;
                 Some(LibraryFirmware {
                     id: firmware.id.clone(),
@@ -179,10 +136,19 @@ impl Library {
             .collect()
     }
 
-    /// The current release's SD card tree for a firmware, fetched once into
-    /// [`CARD_DIRECTORY`](crate::release::CARD_DIRECTORY).
-    pub fn release_card(&self, firmware_id: &str) -> Result<PathBuf, LibraryError> {
-        crate::release::card(self, firmware_id)
+    /// The firmware's catalog-named update and boot ROM, each hashed once.
+    pub fn files(&self, firmware_id: &str) -> Result<FirmwareFiles, LibraryError> {
+        self.firmware(firmware_id)?;
+        let update = self.update_path(firmware_id);
+        let boot_rom = self.boot_rom_path(firmware_id);
+        let update_sha256 = self.hash(&update, firmware_id, "stock update")?;
+        let boot_rom_sha256 = self.hash(&boot_rom, firmware_id, "boot ROM")?;
+        Ok(FirmwareFiles {
+            update,
+            update_sha256,
+            boot_rom,
+            boot_rom_sha256,
+        })
     }
 
     /// The firmware's registered browser run configuration and overlay.
@@ -210,26 +176,6 @@ impl Library {
         Ok(resolved)
     }
 
-    pub(crate) fn update(&self, firmware_id: &str) -> Result<PathBuf, LibraryError> {
-        let content = self.firmware(firmware_id)?.update.as_ref().ok_or_else(|| {
-            LibraryError::Missing(format!(
-                "firmware {firmware_id} has no stock update identity"
-            ))
-        })?;
-        self.file(&content.sha256, firmware_id, "stock update")
-    }
-
-    pub(crate) fn boot_rom(&self, firmware_id: &str) -> Result<PathBuf, LibraryError> {
-        let content = self
-            .firmware(firmware_id)?
-            .boot_rom
-            .as_ref()
-            .ok_or_else(|| {
-                LibraryError::Missing(format!("firmware {firmware_id} has no boot ROM identity"))
-            })?;
-        self.file(&content.content.sha256, firmware_id, "boot ROM")
-    }
-
     /// The firmware's located NAND bootloader facts.
     pub fn nand_boot(
         &self,
@@ -240,78 +186,93 @@ impl Library {
         })
     }
 
-    fn file(&self, sha256: &str, firmware_id: &str, kind: &str) -> Result<PathBuf, LibraryError> {
-        self.files.get(sha256).cloned().ok_or_else(|| {
+    /// The zstd-compressed NAND sections of a body's camera.
+    pub(crate) fn camera(&self, body_id: &str, camera_id: &str) -> Result<PathBuf, LibraryError> {
+        embedded_camera(body_id, camera_id).ok_or_else(|| {
             LibraryError::Missing(format!(
-                "firmware {firmware_id}: no {kind} with sha256 {sha256} in {}",
-                self.root.display()
+                "{body_id} camera {camera_id} has no NAND sections in the catalog"
             ))
         })
     }
 
-    /// The zstd-compressed NAND sections of a body's camera.
-    pub(crate) fn camera(&self, body_id: &str, camera_id: &str) -> Result<PathBuf, LibraryError> {
-        if let Some(directory) = self.cameras.get(camera_id) {
-            return Ok(directory.clone());
+    /// `<root>/<firmware-id>/FPUPDATE.DAT`.
+    fn update_path(&self, firmware_id: &str) -> PathBuf {
+        self.root.join(firmware_id).join(UPDATE_FILE)
+    }
+
+    /// `<root>/<body-id>/boot-rom.bin`.
+    fn boot_rom_path(&self, firmware_id: &str) -> PathBuf {
+        let body = self
+            .catalog
+            .firmware(firmware_id)
+            .map(|firmware| firmware.body_id.as_str())
+            .unwrap_or(firmware_id);
+        self.root.join(body).join(BOOT_ROM_FILE)
+    }
+
+    /// Read a file once and confirm it is the catalog's `kind` for the firmware.
+    fn hash(
+        &self,
+        path: &Path,
+        firmware_id: &str,
+        kind: &'static str,
+    ) -> Result<String, LibraryError> {
+        let catalog = self.firmware(firmware_id)?;
+        let expected = match kind {
+            "stock update" => catalog.update.as_ref().map(|update| update.sha256.as_str()),
+            _ => catalog
+                .boot_rom
+                .as_ref()
+                .map(|rom| rom.content.sha256.as_str()),
         }
-        if let Some(directory) = embedded_camera(body_id, camera_id) {
-            return directory.map_err(|source| LibraryError::Read {
-                path: self.root.clone(),
-                source,
+        .ok_or_else(|| {
+            LibraryError::Missing(format!("firmware {firmware_id} has no {kind} identity"))
+        })?;
+        if let Some(sha256) = self
+            .hashed
+            .lock()
+            .ok()
+            .and_then(|hashed| hashed.get(path).cloned())
+        {
+            if sha256 != expected {
+                return Err(LibraryError::Mismatch {
+                    path: path.to_owned(),
+                    sha256,
+                    kind,
+                    firmware: firmware_id.into(),
+                });
+            }
+            return Ok(sha256);
+        }
+        let bytes = fs::read(path).map_err(|source| LibraryError::Read {
+            path: path.to_owned(),
+            source,
+        })?;
+        let sha256 = format!("{:x}", Sha256::digest(&bytes));
+        if let Ok(mut hashed) = self.hashed.lock() {
+            hashed.insert(path.to_owned(), sha256.clone());
+        }
+        if sha256 != expected {
+            return Err(LibraryError::Mismatch {
+                path: path.to_owned(),
+                sha256,
+                kind,
+                firmware: firmware_id.into(),
             });
         }
-        Err(LibraryError::Missing(format!(
-            "{body_id} camera {camera_id} has no NAND sections in {}",
-            self.root.display()
-        )))
+        Ok(sha256)
     }
-}
-
-fn read_dir(path: &Path) -> Result<Vec<PathBuf>, LibraryError> {
-    let mut entries = Vec::new();
-    for entry in fs::read_dir(path).map_err(|source| LibraryError::Read {
-        path: path.to_owned(),
-        source,
-    })? {
-        entries.push(
-            entry
-                .map_err(|source| LibraryError::Read {
-                    path: path.to_owned(),
-                    source,
-                })?
-                .path(),
-        );
-    }
-    entries.sort();
-    Ok(entries)
-}
-
-/// Every update and boot ROM identity the catalog declares.
-fn known_files(catalog: &ReferenceCatalog) -> BTreeSet<String> {
-    let mut known = BTreeSet::new();
-    for id in catalog.firmware_ids() {
-        let Some(firmware) = catalog.firmware(id) else {
-            continue;
-        };
-        if let Some(update) = &firmware.update {
-            known.insert(update.sha256.clone());
-        }
-        if let Some(rom) = &firmware.boot_rom {
-            known.insert(rom.content.sha256.clone());
-        }
-    }
-    known
 }
 
 /// The catalog's checked reference camera sections.
-fn embedded_camera(body_id: &str, camera_id: &str) -> Option<Result<PathBuf, std::io::Error>> {
+fn embedded_camera(body_id: &str, camera_id: &str) -> Option<PathBuf> {
     if body_id != "x70" || camera_id != "reference" {
         return None;
     }
-    Some(Ok(PathBuf::from(concat!(
+    Some(PathBuf::from(concat!(
         env!("CARGO_MANIFEST_DIR"),
         "/../../catalog/bodies/x70/cameras/reference"
-    ))))
+    )))
 }
 
 #[cfg(test)]
@@ -326,22 +287,38 @@ mod tests {
     }
 
     #[test]
-    fn a_file_the_catalog_does_not_name_is_refused() {
-        let directory = temporary("unknown");
+    fn a_firmware_is_found_by_name_and_must_match_the_catalog() {
+        let directory = temporary("byname");
+        let _ = fs::remove_dir_all(&directory);
+        fs::create_dir_all(directory.join("x70-110")).unwrap();
+        fs::create_dir_all(directory.join("x70")).unwrap();
+        fs::write(directory.join("x70-110/FPUPDATE.DAT"), b"not the update").unwrap();
+        fs::write(directory.join("x70/boot-rom.bin"), b"not the rom").unwrap();
+        let library = Library::new(&directory).unwrap();
+        let error = library.files("x70-110").unwrap_err();
+        assert!(
+            matches!(
+                error,
+                LibraryError::Mismatch {
+                    kind: "stock update",
+                    ..
+                }
+            ),
+            "{error}"
+        );
+        assert!(library.firmwares().is_empty());
+        fs::remove_dir_all(&directory).unwrap();
+    }
+
+    #[test]
+    fn a_missing_file_names_the_firmware_and_kind() {
+        let directory = temporary("missing");
         let _ = fs::remove_dir_all(&directory);
         fs::create_dir_all(&directory).unwrap();
-        fs::write(directory.join("unrelated.bin"), b"not a firmware").unwrap();
-        let error = match Library::new(&directory) {
-            Err(error) => error,
-            Ok(_) => panic!("expected the unknown file to be refused"),
-        };
-        match error {
-            LibraryError::UnknownFile { path, sha256 } => {
-                assert_eq!(path, directory.join("unrelated.bin"));
-                assert_eq!(sha256, format!("{:x}", Sha256::digest(b"not a firmware")));
-            }
-            other => panic!("expected the unknown file to be refused: {other:?}"),
-        }
+        let library = Library::new(&directory).unwrap();
+        let error = library.files("x70-110").unwrap_err();
+        assert!(matches!(error, LibraryError::Read { .. }), "{error}");
+        assert!(error.to_string().contains("x70-110/FPUPDATE.DAT"));
         fs::remove_dir_all(&directory).unwrap();
     }
 
@@ -355,39 +332,5 @@ mod tests {
         assert!(camera.is_dir(), "{} is not a directory", camera.display());
         assert!(camera.join("nand-configuration.bin.zst").is_file());
         fs::remove_dir_all(&directory).unwrap();
-    }
-
-    #[test]
-    fn firmwares_need_both_files_and_a_run_configuration() {
-        let catalog = ReferenceCatalog::bundled().unwrap();
-        let firmware = catalog.firmware("x70-110").unwrap();
-        let update = firmware.update.as_ref().unwrap().sha256.clone();
-        let boot_rom = firmware.boot_rom.as_ref().unwrap().content.sha256.clone();
-        let mut files = BTreeMap::new();
-        files.insert(update.clone(), PathBuf::from("update"));
-        files.insert(boot_rom.clone(), PathBuf::from("boot-rom"));
-        let library = Library {
-            root: PathBuf::new(),
-            catalog,
-            files,
-            cameras: BTreeMap::new(),
-        };
-        assert_eq!(
-            library.firmwares(),
-            [LibraryFirmware {
-                id: "x70-110".into(),
-                body_id: "x70".into(),
-                version: "1.10".into(),
-            }]
-        );
-        let mut partial = BTreeMap::new();
-        partial.insert(update, PathBuf::from("update"));
-        let library = Library {
-            root: PathBuf::new(),
-            catalog: ReferenceCatalog::bundled().unwrap(),
-            files: partial,
-            cameras: BTreeMap::new(),
-        };
-        assert!(library.firmwares().is_empty());
     }
 }

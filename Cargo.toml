@@ -44,6 +44,7 @@ members = [
   "crates/perf",
   "crates/emulator-boot",
   "crates/emulator-camera",
+  "crates/fujimod-camera",
   "crates/emulator-board-graph",
   "crates/emulator-session",
   "crates/emulator-cli",
@@ -185,6 +186,7 @@ fujimod-perf = { path = "crates/perf", version = "0.1.0" }
 fujimod-emulator-board-graph = { path = "crates/emulator-board-graph", version = "0.1.0" }
 fujimod-emulator-boot = { path = "crates/emulator-boot", version = "0.1.0" }
 fujimod-emulator-camera = { path = "crates/emulator-camera", version = "0.1.0" }
+fujimod-camera = { path = "crates/fujimod-camera", version = "0.1.0" }
 fujimod-emulator-session = { path = "crates/emulator-session", version = "0.1.0" }
 fujimod-emulator-gui = { path = "crates/emulator-gui", version = "0.1.0" }
 fujimod-emulator-devices = { path = "crates/emulator-devices", version = "0.1.0" }

@@ -2,37 +2,20 @@
 //!
 //! Set `FUJIMOD_FIRMWARE_LIBRARY` to a directory holding the catalog's X70
 //! update and boot ROM.
-use fujimod_emulator_camera::{
-    Boot, BootCache, CardSource, ExecutionPolicy, Library, LibraryError, LoaderImage, Request,
-    Stage, open,
-};
+mod support;
+use support::{Boot, CardSource, library, state};
 
-const FIRMWARE: &str = "x70-110";
+use fujimod_emulator_camera::{BootCache, Library, LoaderImage, OpenError, Opened, Request, Stage};
+
 const IMAGE: &[u8] = b"fujimod loader image";
 const IMAGE_SHA256: &str = "7bc8d50a5e07c084670132737321751a74a9f565ca0ee78b7b5bdcb2071b7339";
 
-fn library() -> Option<Library> {
-    match Library::from_env() {
-        Ok(library) => Some(library),
-        Err(LibraryError::Environment) => None,
-        Err(error) => panic!("firmware library: {error}"),
-    }
+fn request(boot: Boot, image: Option<LoaderImage>) -> Request {
+    support::request(boot, image, BootCache::Bypass)
 }
 
-fn request(boot: Boot, image: Option<LoaderImage>) -> Request {
-    Request {
-        firmware: FIRMWARE.into(),
-        boot,
-        policy: ExecutionPolicy::Interactive,
-        engine: None,
-        card_files: Vec::new(),
-        cache: BootCache::Bypass,
-        run_to_rec: false,
-        card: Default::default(),
-        kept: Default::default(),
-        card_source: None,
-        image,
-    }
+fn start(library: &Library, request: Request) -> Result<Opened, OpenError> {
+    fujimod_emulator_camera::open(library, &state(), request)
 }
 
 #[test]
@@ -41,7 +24,7 @@ fn a_verified_image_starts_at_the_loader_before_any_instruction() {
         eprintln!("skipped: set FUJIMOD_FIRMWARE_LIBRARY");
         return;
     };
-    let opened = open(
+    let opened = start(
         &library,
         request(
             Boot::Stock,
@@ -76,7 +59,7 @@ fn an_image_whose_hash_differs_is_refused() {
         eprintln!("skipped: set FUJIMOD_FIRMWARE_LIBRARY");
         return;
     };
-    let error = match open(
+    let error = match start(
         &library,
         request(
             Boot::Stock,
@@ -97,26 +80,25 @@ fn an_image_whose_hash_differs_is_refused() {
 }
 
 #[test]
-fn an_image_requires_a_stock_boot() {
+fn a_loader_image_needs_the_catalog_flash() {
     let Some(library) = library() else {
         eprintln!("skipped: set FUJIMOD_FIRMWARE_LIBRARY");
         return;
     };
-    let error = match open(
-        &library,
-        request(
-            Boot::SdCard(CardSource::Files(Vec::new())),
-            Some(LoaderImage {
-                bytes: IMAGE.to_vec(),
-                sha256: IMAGE_SHA256.into(),
-            }),
-        ),
-    ) {
+    let mut request = request(
+        Boot::Stock,
+        Some(LoaderImage {
+            bytes: IMAGE.to_vec(),
+            sha256: IMAGE_SHA256.into(),
+        }),
+    );
+    request.flash = fujimod_emulator_camera::Flash::Image(vec![0xff; 16]);
+    let error = match start(&library, request) {
         Err(error) => error,
-        Ok(_) => panic!("an image opened from a card boot"),
+        Ok(_) => panic!("an image opened over a saved flash image"),
     };
     assert!(
-        error.detail.contains("stock boot"),
+        error.detail.contains("catalog's flash"),
         "unexpected refusal: {}",
         error.detail
     );

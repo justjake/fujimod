@@ -45,8 +45,9 @@ fn json<T: serde::de::DeserializeOwned>(value: &str) -> PyResult<T> {
 #[allow(clippy::large_enum_variant)]
 enum Backend {
     Graph(fujimod_emulator_session::Session),
-    /// A camera the builder opened, with the request needed to power it on again.
-    Camera(Box<fujimod_emulator_camera::Opened>),
+    /// A camera one of the camera layers opened, with the request needed to
+    /// power it on again.
+    Camera(Box<camera::CameraBoard>),
     Xp5(Box<xp5::Opened>),
     Xp4(Box<dyn xp4_backend::Xp4Backend>),
 }
@@ -116,15 +117,35 @@ impl Board {
             last_continuation_stop: None,
         }
     }
-    /// The Python board that owns a camera the builder opened.
-    pub(super) fn from_camera(opened: fujimod_emulator_camera::Opened) -> Self {
+    /// The Python board that owns a camera the emulator layer opened.
+    pub(super) fn from_emulator(opened: fujimod_emulator_camera::Opened) -> Self {
         let read_limit = opened.camera.read_limit;
         Self {
             driver: None,
             memory_watch: None,
             function_watch: None,
             instruction_points: BTreeMap::new(),
-            backend: Some(Backend::Camera(Box::new(opened))),
+            backend: Some(Backend::Camera(Box::new(camera::CameraBoard::Emulator(
+                Box::new(opened),
+            )))),
+            objects: BTreeMap::new(),
+            failures: Failures::default(),
+            read_limit,
+            last_continuation_stop: None,
+        }
+    }
+
+    /// The Python board that owns a camera the FujiMod layer opened.
+    pub(super) fn from_fujimod(opened: fujimod_camera::Opened) -> Self {
+        let read_limit = opened.camera.camera.read_limit;
+        Self {
+            driver: None,
+            memory_watch: None,
+            function_watch: None,
+            instruction_points: BTreeMap::new(),
+            backend: Some(Backend::Camera(Box::new(camera::CameraBoard::FujiMod(
+                Box::new(opened),
+            )))),
             objects: BTreeMap::new(),
             failures: Failures::default(),
             read_limit,
