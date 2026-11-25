@@ -79,5 +79,9 @@
       "body_profile_id": "xh2"
     },
     "firmware_profile_id": "xh2-530"
-  }
+  },
+  "polled_serial_blocks": [
+    "spi2",
+    "spi8"
+  ]
 }

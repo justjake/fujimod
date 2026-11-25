@@ -5035,6 +5035,13 @@
       },
       "type": "array"
     },
+    "polled_serial_blocks": {
+      "description": "Serial blocks this run emulates with the polled transport in place of their full model.",
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
     "preset": {
       "anyOf": [
         {

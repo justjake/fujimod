@@ -604,6 +604,7 @@ pub fn windows_from_blocks(
         if let Some((kind, options)) = block_window(
             block, device, selection, flash_input, flash_image, samples.as_deref(), levels,
             &resolved.configuration.bus_byte_times, ticks_per_second, presented_jedec,
+            &resolved.configuration.polled_serial_blocks,
         )? {
             let mut options = options;
             if !options.contains_key("registers") && block.registers.iter().any(|register| register.reads.is_some()) {
@@ -737,6 +738,7 @@ fn block_window(
     byte_times: &[fujimod_catalog_configuration::RunBusByteTime],
     ticks_per_second: u64,
     presented_jedec: Option<u32>,
+    polled: &[String],
 ) -> Result<Option<(&'static str, toml::Table)>, String> {
     let _ = levels;
     let mut options = toml::Table::new();
@@ -883,6 +885,10 @@ fn block_window(
             rl78.insert("flash_bytes".into(), integer(49152));
             options.insert("rl78".into(), toml::Value::Table(rl78));
             "pl011"
+        }
+        BlockDevice::Pl022 { source_hz, .. } if polled.contains(&block.id) => {
+            options.insert("source_hz".into(), integer(*source_hz));
+            "spi-controller"
         }
         BlockDevice::Pl022 { source_hz, ticks_per_second, receive_request, transmit_request, companion_irq_line, .. } => {
             options.insert("source_hz".into(), integer(*source_hz));

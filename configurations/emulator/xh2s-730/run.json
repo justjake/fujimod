@@ -143,5 +143,10 @@
       "body_profile_id": "xh2s"
     },
     "firmware_profile_id": "xh2s-730"
-  }
+  },
+  "polled_serial_blocks": [
+    "spi4",
+    "spi5",
+    "spi8"
+  ]
 }

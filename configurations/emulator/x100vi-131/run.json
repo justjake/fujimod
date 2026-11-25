@@ -197,5 +197,8 @@
       "body_profile_id": "x100vi"
     },
     "firmware_profile_id": "x100vi-131"
-  }
+  },
+  "polled_serial_blocks": [
+    "spi0"
+  ]
 }

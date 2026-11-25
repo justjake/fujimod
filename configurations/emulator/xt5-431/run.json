@@ -159,5 +159,11 @@
       "body_profile_id": "xt5"
     },
     "firmware_profile_id": "xt5-431"
-  }
+  },
+  "polled_serial_blocks": [
+    "spi3",
+    "spi4",
+    "spi5",
+    "spi8"
+  ]
 }

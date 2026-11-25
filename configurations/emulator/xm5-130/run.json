@@ -163,5 +163,8 @@
       "body_profile_id": "xm5"
     },
     "firmware_profile_id": "xm5-130"
-  }
+  },
+  "polled_serial_blocks": [
+    "spi8"
+  ]
 }
