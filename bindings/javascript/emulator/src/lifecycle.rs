@@ -102,16 +102,20 @@ impl Session {
                 self.core.logic_input("usb_cable", connected)?;
                 continue;
             }
-            let position = if let Some(p) = &input.position {
-                p.clone()
+            let driver = self
+                .core
+                .contact_driver
+                .as_ref()
+                .ok_or("boot hold requires the generated contact catalog")?;
+            let (id, position) = if let Some(p) = &input.position {
+                (input.id.clone(), p.clone())
             } else {
-                self.core
-                    .contact_driver
-                    .as_ref()
-                    .ok_or("boot hold requires the generated contact catalog")?
-                    .boot_position(&input.id, input.stage.as_deref())?
+                (
+                    driver.hold_control(&input.id)?,
+                    driver.boot_position(&input.id, input.stage.as_deref())?,
+                )
             };
-            self.core.set_position(&input.id, &position)?;
+            self.core.set_position(&id, &position)?;
         }
         Ok(())
     }
@@ -127,7 +131,12 @@ impl Session {
         let poses = inputs
             .iter()
             .filter(|input| input.position.is_none())
-            .map(|input| Ok((input.id.clone(), driver.boot_release_position(&input.id)?)))
+            .map(|input| {
+                Ok((
+                    driver.hold_control(&input.id)?,
+                    driver.boot_release_position(&input.id)?,
+                ))
+            })
             .collect::<Result<Vec<_>, String>>()?;
         // Boot holds are physical setup, not queued gestures. Service mode can
         // stop scanning ordinary controls after recognizing its power-on chord.
@@ -196,16 +205,20 @@ impl Session {
                 self.core.resources.logic_level("usb_cable")?;
                 continue;
             }
-            let position = if let Some(p) = &input.position {
-                p.clone()
+            let driver = self
+                .core
+                .contact_driver
+                .as_ref()
+                .ok_or("boot hold requires the generated contact catalog")?;
+            let (id, position) = if let Some(p) = &input.position {
+                (input.id.clone(), p.clone())
             } else {
-                self.core
-                    .contact_driver
-                    .as_ref()
-                    .ok_or("boot hold requires the generated contact catalog")?
-                    .boot_position(&input.id, input.stage.as_deref())?
+                (
+                    driver.hold_control(&input.id)?,
+                    driver.boot_position(&input.id, input.stage.as_deref())?,
+                )
             };
-            poses.push((input.id.clone(), position));
+            poses.push((id, position));
         }
         for (id, p) in &poses {
             panel = Some(

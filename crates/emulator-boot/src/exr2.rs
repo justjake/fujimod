@@ -7,7 +7,7 @@
 //! stay in catalog data; no identity or device value is chosen here.
 
 use fujimod_catalog::ResolvedSelection;
-use fujimod_catalog_configuration::Exr2RunScene;
+use fujimod_catalog_configuration::{Exr2RunScene, RunVirtualCard};
 use fujimod_catalog_resolution::ResolvedConfiguration;
 use fujimod_emulator_exr2_plan::{BootEntry, Model, Plan};
 use serde_json::{Value, json};
@@ -120,6 +120,16 @@ pub(super) fn assemble(
             "model": model,
         }));
     }
+    // A run that declares a virtual card replaces any clock-only node with the
+    // card host. The host owns the SDHCI clock and reset windows.
+    if let Some(card) = &preset.virtual_card {
+        nodes.retain(|node| node.get("name").and_then(Value::as_str) != Some("sd_clocks"));
+        let high_speed = preset.factory_options.sd_card_profile
+            == Some(
+                fujimod_catalog_run_inputs::RunSdCardProfile::DeclaredBlankSdhcHighSpeedUnmeasured,
+            );
+        card_node(selection, card, high_speed, &mut nodes)?;
+    }
     let mut wires = serde_json::to_value(&construction.wires)
         .map_err(|error| {
             format!(
@@ -162,8 +172,157 @@ pub(super) fn assemble(
     plan.validate()?;
     debug_assert!(matches!(plan.boot_entry, BootEntry::Rom));
 
-    let scene_value = scene(selection, scene_input)?;
+    let mut scene_value = scene(selection, scene_input)?;
+    if preset.virtual_card.is_some() {
+        scene_value["files"] = json!({"virtual_card_files": {}});
+    }
     Ok((plan, plan_value, scene_value))
+}
+
+/// The SDHC card host with its virtual card, wired through the body's slot.
+fn card_node(
+    selection: &ResolvedSelection,
+    card: &RunVirtualCard,
+    high_speed: bool,
+    nodes: &mut Vec<Value>,
+) -> Result<(), String> {
+    let slot = selection
+        .body
+        .card_slot
+        .as_ref()
+        .ok_or_else(|| format!("body {} declares no card slot", selection.body.id))?;
+    let (detect, present_high) = card_contact(selection, &slot.detect_connection_id)?;
+    let (protect, protected_high) = card_contact(selection, &slot.write_protect_connection_id)?;
+    let present = true;
+    let protected = false;
+    let windows = ["sdhci-card-0", "sdhci-card-2", "sdhci-card-1"]
+        .iter()
+        .map(|id| {
+            let block = soc_block(selection, id)?;
+            Ok(json!({"base": block.base, "size": block.size}))
+        })
+        .collect::<Result<Vec<_>, String>>()?;
+    let host = soc_block(selection, "sdhci-card-0")?;
+    let interrupt = host
+        .interrupts
+        .iter()
+        .find(|interrupt| interrupt.output == "host")
+        .ok_or_else(|| format!("SoC {} card host has no interrupt", selection.soc.id))?;
+    let core = interrupt
+        .core
+        .as_ref()
+        .ok_or_else(|| format!("SoC {} card host interrupt names no core", selection.soc.id))?;
+    let core = selection
+        .soc
+        .processors
+        .iter()
+        .position(|processor| &processor.id == core)
+        .ok_or_else(|| format!("SoC {} has no processor core {core}", selection.soc.id))?;
+    let node = json!({
+        "name": "sd",
+        "boot_entries": ["rom", "loader"],
+        "windows": windows,
+        "dependencies": ["serial_gpio"],
+        "model": {
+            "kind": "sd-host",
+            "options": {
+                "base": host.base,
+                "protocol": "sdhc",
+                "transfer_ticks": 100,
+                "clock_ticks": 2,
+                "rca": 4660,
+                "ram_bytes": selection.body.dram_bytes,
+                "high_speed": high_speed,
+            },
+            "card": {
+                "kind": "formatted",
+                "options": {
+                    "sectors": card.sectors,
+                    "max_dirty_sectors": 1 << 20,
+                    "label": card.label,
+                    "partition_start": card.partition_start,
+                    "sectors_per_cluster": card.sectors_per_cluster,
+                },
+                "files": "virtual_card_files",
+            },
+            "pins": {
+                "gpio": "serial_gpio",
+                "detect": {"port": detect.0, "pin": detect.1},
+                "present_high": present_high,
+                "protect": {"port": protect.0, "pin": protect.1},
+                "protected_high": protected_high,
+            },
+            "present": present,
+            "protected": protected,
+            "irq": {"Core": {"core": core, "line": interrupt.line}},
+        },
+    });
+    set_contact_level(nodes, detect, present, present_high)?;
+    set_contact_level(nodes, protect, protected, protected_high)?;
+    nodes.push(node);
+    Ok(())
+}
+
+/// Set one card contact's reset pad level in the constructed GPIO model.
+fn set_contact_level(
+    nodes: &mut [Value],
+    (port, pin): (u8, u8),
+    asserted: bool,
+    active_high: bool,
+) -> Result<(), String> {
+    let node = nodes
+        .iter_mut()
+        .find(|node| node.get("name").and_then(Value::as_str) == Some("serial_gpio"))
+        .ok_or("a card slot needs the body's serial GPIO node")?;
+    let levels = node["model"]["options"]["input_levels"]
+        .as_array_mut()
+        .ok_or("the serial GPIO node declares no input levels")?;
+    let word = levels
+        .get_mut(usize::from(port))
+        .ok_or("a card contact names a port outside the GPIO input levels")?;
+    let mut value = u32::try_from(word.as_u64().unwrap_or(0))
+        .map_err(|_| "the GPIO input level exceeds one port word")?;
+    if asserted == active_high {
+        value |= 1 << pin;
+    } else {
+        value &= !(1 << pin);
+    }
+    *word = json!(value);
+    Ok(())
+}
+
+fn soc_block<'a>(
+    selection: &'a ResolvedSelection,
+    id: &str,
+) -> Result<&'a fujimod_catalog::reference::SocBlock, String> {
+    selection
+        .soc
+        .blocks
+        .iter()
+        .find(|block| block.id == id)
+        .ok_or_else(|| format!("SoC {} has no block {id}", selection.soc.id))
+}
+
+/// One GPIO contact of a card slot connection and its active level.
+fn card_contact(selection: &ResolvedSelection, id: &str) -> Result<((u8, u8), bool), String> {
+    let connection = selection
+        .body
+        .connections
+        .iter()
+        .find(|connection| connection.id == id)
+        .ok_or_else(|| format!("body {} has no connection {id}", selection.body.id))?;
+    match connection.signals.as_slice() {
+        [
+            fujimod_catalog::reference::ConnectionSignal::Gpio {
+                port,
+                pin,
+                active_level,
+            },
+        ] => Ok(((*port, *pin), *active_level)),
+        _ => Err(format!(
+            "card contact {id} must declare exactly one GPIO signal"
+        )),
+    }
 }
 
 /// The declared scene: its images, statistics spans and NAND medium.

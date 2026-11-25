@@ -465,9 +465,7 @@ fn boot_camera(opened: &mut Opened) -> Result<(), OpenError> {
     let card_before = card_revision(&opened.camera.session, &opened.start);
     let report = boot::to_rec(&mut opened.camera.session, INSTRUCTION_LIMIT)
         .map_err(|error| OpenError::at(Stage::BootRom, error))?;
-    // `to_rec` reports `rec` only after its observation's scanout requirement:
-    // X-M1's REC screen is never presented, and its firmware facts say so.
-    if report.status == "rec" && !report.pending {
+    if report.status == "rec" && !report.pending && report.scanout_instance.is_some() {
         opened.release_holds()?;
         opened.stage = Stage::Rec;
         return Ok(());
@@ -713,14 +711,18 @@ fn finish_boot(
 ) -> Result<(), OpenError> {
     if !holds.is_empty() {
         for hold in holds {
-            let position = session
+            let driver = session
                 .contact_driver
                 .as_ref()
-                .ok_or_else(|| OpenError::at(Stage::Rec, "boot holds lost the contact driver"))?
+                .ok_or_else(|| OpenError::at(Stage::Rec, "boot holds lost the contact driver"))?;
+            let control = driver
+                .hold_control(&hold.id)
+                .map_err(|error| OpenError::at(Stage::Rec, error))?;
+            let position = driver
                 .boot_release_position(&hold.id)
                 .map_err(|error| OpenError::at(Stage::Rec, error))?;
             session
-                .set_position(&hold.id, &position)
+                .set_position(&control, &position)
                 .map_err(|error| OpenError::at(Stage::Rec, error))?;
         }
         // The boot panel was compiled before the firmware's calibration existed;
@@ -807,14 +809,18 @@ fn hold_boot_inputs(
         .configure_contact_driver(controls.confirmation)
         .map_err(|error| OpenError::at(Stage::BootRom, error))?;
     for hold in holds {
-        let position = session
+        let driver = session
             .contact_driver
             .as_ref()
-            .ok_or_else(|| OpenError::at(Stage::BootRom, "boot holds need the contact driver"))?
+            .ok_or_else(|| OpenError::at(Stage::BootRom, "boot holds need the contact driver"))?;
+        let control = driver
+            .hold_control(&hold.id)
+            .map_err(|error| OpenError::at(Stage::BootRom, error))?;
+        let position = driver
             .boot_position(&hold.id, hold.stage.as_deref())
             .map_err(|error| OpenError::at(Stage::BootRom, error))?;
         session
-            .set_position(&hold.id, &position)
+            .set_position(&control, &position)
             .map_err(|error| OpenError::at(Stage::BootRom, error))?;
     }
     Ok(())

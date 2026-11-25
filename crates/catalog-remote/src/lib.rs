@@ -1426,8 +1426,7 @@ pub struct FirmwareObservation {
     /// Firmware address containing the UI mode.
     pub ui_mode: u64,
     /// Firmware address containing the system mode.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub system_mode: Option<u64>,
+    pub system_mode: u64,
     /// Firmware address containing the menu-active flag.
     pub menu_active: u64,
     /// Firmware address containing the pending UI mode.
@@ -1439,11 +1438,7 @@ pub struct FirmwareObservation {
     /// Setup mode value.
     pub setup_mode: u32,
     /// Readiness observer addresses.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub readiness: Option<ReadinessAddresses>,
-    /// Whether REC requires a presented scanout instance.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub scanout_required: Option<bool>,
+    pub readiness: ReadinessAddresses,
 }
 
 /// Addresses used to check REC readiness.
