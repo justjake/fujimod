@@ -423,6 +423,30 @@
     "lcd_tilt_lock_release": {
       "label": "Screen tilt lock",
       "text": "Screen tilt lock"
+    },
+    "fn6_button": {
+      "label": "Fn6",
+      "text": "Fn6"
+    },
+    "focus_ring": {
+      "label": "Focus ring",
+      "text": "Focus ring"
+    },
+    "focus_ring.increase": {
+      "label": "Focus ring",
+      "text": "Focus ring"
+    },
+    "focus_ring.decrease": {
+      "label": "Focus ring",
+      "text": "Focus ring"
+    },
+    "viewfinder_selector": {
+      "label": "Viewfinder",
+      "text": "Viewfinder"
+    },
+    "touch_screen": {
+      "label": "Screen",
+      "text": "Screen"
     }
   },
   "icons": {
