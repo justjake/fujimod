@@ -133,46 +133,36 @@ impl Cameras {
     }
 }
 
+/// How `camera_open` starts the firmware.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Deserialize, JsonSchema)]
+#[serde(rename_all = "kebab-case")]
+pub enum OpenBoot {
+    /// The firmware installed in internal flash.
+    Stock,
+    /// FujiMod loaded from the SD card by the boot ROM.
+    SdCard,
+}
+
 #[derive(Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
 pub struct OpenParams {
     /// Name to address this camera by in later calls. Defaults to camera-N.
     pub name: Option<String>,
-    /// Run configuration id, for example `x70-110-rec`.
-    pub configuration: String,
-    /// Run configuration overlays applied in order, for example
-    /// `x70-110-browser-camera` to add the SD card slot.
-    #[serde(default)]
-    pub overlays: Vec<String>,
-    /// Path of the firmware update file (FPUPDATE.DAT) the configuration names.
-    pub update: String,
-    /// Path of the boot ROM dump, for a camera that starts from it.
-    pub boot_rom: Option<String>,
-    /// Application startup plan, for an X-Processor Pro camera.
-    pub application_plan: Option<String>,
-    /// Directory of the camera's `nand-<section>.bin.zst` files, when the
-    /// configuration's settings name a camera.
-    pub camera_sections: Option<String>,
-    /// Committed NAND image or main-area image.
-    pub nand: Option<String>,
-    /// Sixteen-byte MCU persistent settings packet.
-    pub settings: Option<String>,
-    /// Directory whose files are placed on the virtual SD card. Needs an
-    /// overlay that declares an SD card slot.
+    /// Catalog firmware identity, for example `x70-110`. Its update, boot ROM
+    /// and reference camera are found in `FUJIMOD_FIRMWARE_LIBRARY`.
+    pub firmware: String,
+    /// `stock` boots the installed firmware; `sd-card` boots FujiMod from the
+    /// SD card directory in `sd_card`.
+    pub boot: OpenBoot,
+    /// Directory for the virtual SD card. Required for an `sd-card` boot; for a
+    /// `stock` boot its files are added to the otherwise empty card.
     pub sd_card: Option<String>,
-    /// GPIO levels set at power-on, `PORT:PIN=0|1[,PORT:PIN=0|1...]`.
-    pub gpio: Option<String>,
-    /// Key edges during boot, `t=SECONDS:KEY` to press and `t=SECONDS:-KEY` to
-    /// release, separated by `;`. To SD boot an X70, hold its two SD boot
-    /// buttons with `gpio` `0:10=0,0:11=0` and release them with
-    /// `t=0.3:-controls-gpio-0-10;t=0.3:-controls-gpio-0-11`.
-    pub keys: Option<String>,
-    /// Checkpoint file to restore instead of booting. Give the same
-    /// configuration, overlays, files and SD card as the camera that saved it.
+    /// Checkpoint file to restore instead of booting. Give the same firmware,
+    /// boot, SD card and execution policy as the camera that saved it.
     pub snapshot: Option<String>,
     /// `exact` (deterministic; use when runs will be compared) or `interactive`.
+    /// Defaults to `exact`.
     pub execution_policy: Option<String>,
-    /// Guest instruction budget for the boot. Defaults to two billion.
-    pub instruction_limit: Option<u64>,
 }
 
 #[derive(Deserialize, JsonSchema)]
@@ -278,9 +268,9 @@ pub struct DiffParams {
 #[tool_router]
 impl Cameras {
     #[tool(
-        description = "Open an emulated camera from a run configuration and its firmware files. \
-It boots to REC (or restores `snapshot`) and stays running for later calls. Returns its name, \
-state and screen."
+        description = "Open an emulated camera from a catalog firmware and boot. `boot` is \
+`stock` or `sd-card`; `sd_card` names the SD card directory. It boots to REC (or restores \
+`snapshot`) and stays running for later calls. Returns its name, state and screen."
     )]
     async fn camera_open(
         &self,
@@ -719,5 +709,69 @@ press, or stock firmware against a mod. Lists the blocks whose executed instruct
             }
         };
         reply(profile::diff(&before, &after, limit.unwrap_or(30)), None)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn camera_open_exposes_only_the_builder_parameters() {
+        let tools = module(std::env::temp_dir()).tools();
+        let tool = tools
+            .iter()
+            .find(|tool| tool.name == "camera_open")
+            .expect("camera_open is declared");
+        let schema = serde_json::to_value(&tool.input_schema).unwrap();
+        let properties = schema["properties"].as_object().unwrap();
+        let mut names: Vec<_> = properties.keys().map(String::as_str).collect();
+        names.sort_unstable();
+        assert_eq!(
+            names,
+            [
+                "boot",
+                "execution_policy",
+                "firmware",
+                "name",
+                "sd_card",
+                "snapshot",
+            ]
+        );
+        for removed in [
+            "configuration",
+            "overlays",
+            "update",
+            "boot_rom",
+            "application_plan",
+            "camera_sections",
+            "nand",
+            "settings",
+            "gpio",
+            "keys",
+            "instruction_limit",
+        ] {
+            assert!(
+                !properties.contains_key(removed),
+                "{removed} is still exposed"
+            );
+        }
+        let required: Vec<_> = schema["required"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|value| value.as_str().unwrap())
+            .collect();
+        assert!(required.contains(&"firmware"));
+        assert!(required.contains(&"boot"));
+        assert!(!required.contains(&"name"));
+        assert_eq!(schema["additionalProperties"], json!(false));
+        let boot: Vec<_> = schema["$defs"]["OpenBoot"]["oneOf"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|value| value["const"].as_str().unwrap())
+            .collect();
+        assert_eq!(boot, ["stock", "sd-card"]);
     }
 }

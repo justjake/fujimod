@@ -120,8 +120,9 @@ pub struct Opened {
     pub boot: Boot,
     pub policy: ExecutionPolicy,
     pub engine: RunEngine,
-    /// The boot stage the camera reached; always `Stage::Rec` here. An SD card
-    /// boot that reached REC has necessarily passed `Stage::FujiModApplied`.
+    /// The boot stage the camera reached: `Stage::Rec` after a boot, or
+    /// `Stage::BootRom` from `open_unbooted`. An SD card boot that reached REC
+    /// has necessarily passed `Stage::FujiModApplied`.
     pub stage: Stage,
     pub card_files: Vec<(String, PathBuf)>,
     /// The catalog resolution the camera was built from.
@@ -140,11 +141,76 @@ impl Opened {
 
 /// Open a camera and run it to REC or its first-start setup.
 pub fn open(library: &Library, request: Request) -> Result<Opened, OpenError> {
+    let mut opened = construct(library, request)?;
+    let holds = match &opened.boot {
+        Boot::Stock => Vec::new(),
+        Boot::SdCard(_) => sd_holds(&opened.resolved)?,
+    };
+    hold_boot_inputs(
+        &mut opened.camera.session,
+        &opened.resolved,
+        &holds,
+        opened.camera.ticks_per_second,
+    )?;
+    let card_before = card_revision(&opened.camera.session, &opened.boot);
+    let report = boot::to_rec(&mut opened.camera.session, INSTRUCTION_LIMIT)
+        .map_err(|error| OpenError::at(Stage::BootRom, error))?;
+    if report.status == "rec" && !report.pending && report.scanout_instance.is_some() {
+        finish_boot(
+            &mut opened.camera.session,
+            &opened.resolved,
+            &holds,
+            opened.camera.ticks_per_second,
+        )?;
+        opened.stage = Stage::Rec;
+        return Ok(opened);
+    }
+    let stage = reached_stage(
+        &opened.camera.session,
+        &opened.resolved,
+        &opened.boot,
+        card_before,
+        &report,
+    );
+    Err(OpenError::at(
+        stage,
+        format!(
+            "{} with {} instructions at tick {}: ui_mode {}, system_mode {}, pending {}, scanout {}{}",
+            report.status,
+            report.instructions,
+            report.virtual_ticks,
+            report.ui_mode,
+            report.system_mode,
+            report.pending,
+            report.scanout_instance.is_some(),
+            report
+                .failure
+                .as_ref()
+                .map(|failure| format!(": {failure}"))
+                .unwrap_or_default()
+        ),
+    ))
+}
+
+/// Build a camera's board and media without running its guest. A checkpoint
+/// restores into the session this returns, built from the same catalog facts
+/// the boot would use.
+pub fn open_unbooted(library: &Library, request: Request) -> Result<Opened, OpenError> {
+    construct(library, request)
+}
+
+fn construct(library: &Library, request: Request) -> Result<Opened, OpenError> {
+    let Request {
+        firmware,
+        boot,
+        policy,
+        engine,
+        card_files,
+    } = request;
     fujimod_emulator_exr2_board::register_board_builder();
     fujimod_emulator_models::register();
-    let firmware = request.firmware.clone();
     let mut resolved = library.resolved(&firmware)?;
-    if let Some(engine) = request.engine {
+    if let Some(engine) = engine {
         resolved
             .override_engine(engine)
             .map_err(|error| OpenError::at(Stage::BootRom, error))?;
@@ -159,7 +225,7 @@ pub fn open(library: &Library, request: Request) -> Result<Opened, OpenError> {
             )
         })?
         .engine;
-    let boot_card_files = match &request.boot {
+    let boot_card_files = match &boot {
         Boot::Stock => Vec::new(),
         Boot::SdCard(CardSource::Directory(directory)) => directory_files(directory)?,
         Boot::SdCard(CardSource::Files(_)) => Vec::new(),
@@ -184,71 +250,25 @@ pub fn open(library: &Library, request: Request) -> Result<Opened, OpenError> {
     camera
         .session
         .board
-        .set_execution_policy(request.policy)
+        .set_execution_policy(policy)
         .map_err(|error| OpenError::at(Stage::BootRom, error))?;
-    if let Boot::SdCard(CardSource::Files(files)) = &request.boot {
+    if let Boot::SdCard(CardSource::Files(files)) = &boot {
         install_files(&mut camera.session, files)?;
     }
-    if !request.card_files.is_empty() {
-        boot::media::attach(&mut camera.session, None, &request.card_files)
+    if !card_files.is_empty() {
+        boot::media::attach(&mut camera.session, None, &card_files)
             .map_err(|error| OpenError::at(Stage::BootRom, error))?;
     }
-    let holds = match &request.boot {
-        Boot::Stock => Vec::new(),
-        Boot::SdCard(_) => sd_holds(&resolved)?,
-    };
-    hold_boot_inputs(
-        &mut camera.session,
-        &resolved,
-        &holds,
-        camera.ticks_per_second,
-    )?;
-    let card_before = card_revision(&camera.session, &request.boot);
-    let report = boot::to_rec(&mut camera.session, INSTRUCTION_LIMIT)
-        .map_err(|error| OpenError::at(Stage::BootRom, error))?;
-    if report.status == "rec" && !report.pending && report.scanout_instance.is_some() {
-        finish_boot(
-            &mut camera.session,
-            &resolved,
-            &holds,
-            camera.ticks_per_second,
-        )?;
-        return Ok(Opened {
-            camera,
-            firmware,
-            boot: request.boot,
-            policy: request.policy,
-            engine,
-            stage: Stage::Rec,
-            card_files: request.card_files,
-            resolved,
-        });
-    }
-    let stage = reached_stage(
-        &camera.session,
-        &resolved,
-        &request.boot,
-        card_before,
-        &report,
-    );
-    Err(OpenError::at(
-        stage,
-        format!(
-            "{} with {} instructions at tick {}: ui_mode {}, system_mode {}, pending {}, scanout {}{}",
-            report.status,
-            report.instructions,
-            report.virtual_ticks,
-            report.ui_mode,
-            report.system_mode,
-            report.pending,
-            report.scanout_instance.is_some(),
-            report
-                .failure
-                .as_ref()
-                .map(|failure| format!(": {failure}"))
-                .unwrap_or_default()
-        ),
-    ))
+    Ok(Opened {
+        camera,
+        firmware,
+        boot,
+        policy,
+        engine,
+        stage: Stage::BootRom,
+        card_files,
+        resolved,
+    })
 }
 
 /// Release the boot holds and connect the controls the running firmware loads.

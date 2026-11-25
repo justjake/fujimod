@@ -13,6 +13,7 @@ doctest = false
 
 [dependencies]
 fujimod-mcp-core.workspace = true
+fujimod-emulator-camera.workspace = true
 fujimod-emulator-boot = { workspace = true, features = ["xp5-startup"] }
 fujimod-emulator-session.workspace = true
 fujimod-emulator-cpu.workspace = true

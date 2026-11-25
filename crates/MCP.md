@@ -37,7 +37,7 @@ The same control and observation tools work on a physical camera over USB.
 | Crate | Directory | Purpose |
 |---|---|---|
 | `fujimod-mcp-core` | `crates/mcp-core` | The module trait, the adapter for `rmcp` tool macros, tool-name rules and the hub. No camera dependencies. |
-| `fujimod-mcp-camera` | `crates/mcp-camera` | The camera module: tools over `fujimod-emulator-boot` and the emulator session. |
+| `fujimod-mcp-camera` | `crates/mcp-camera` | The camera module: tools over `fujimod-emulator-camera`, `fujimod-emulator-boot` and the emulator session. |
 | `fujimod-mcp` | `crates/mcp` | The hub binary: selects modules, serves stdio. |
 | `fujimod-mcp-ghidra` | `crates/mcp-ghidra` | Later: the GhidraMCP proxy module. |
 
@@ -177,10 +177,11 @@ the same inputs (`fujimod_emulator_boot::load_snapshot`). Import refuses
 unless the receiving session's definition, firmware images, execution,
 devices and scene all match.
 
-`camera_open` from a file hides that step. It reads the definition from the
-snapshot header, builds the unexecuted board that definition names, then
-imports and restores the snapshot. The caller supplies the firmware files
-the header identifies, or a directory to find them in by hash.
+`camera_open` from a file hides that step. It asks the builder for the
+unexecuted board from the same firmware, boot, SD card and execution
+policy (`open_unbooted`), then imports and restores the snapshot. The
+builder's firmware library and resolved configuration are what make the
+snapshot's definition, firmware images, devices and scene match.
 
 Measured on X70 1.10 with the release `fujimod-emulator` CLI, on a 4-core
 cloud machine with Mesa's software Vulkan driver:
@@ -197,8 +198,25 @@ cloud machine with Mesa's software Vulkan driver:
 
 ### Opening cameras
 
-`camera_open` opens a firmware with one of the boots in
-[CAMERAS.md](CAMERAS.md): stock, the FujiMod SD card, or automatic boot.
+`camera_open` calls the shared builder in
+[`fujimod-emulator-camera`](emulator-camera/src/lib.rs) with a catalog
+firmware identity and one of its boots:
+
+- `firmware`: the catalog release, such as `x70-110`.
+- `boot`: `stock` or `sd-card`. An `sd-card` boot holds the body's
+  `boot.sd` controls through the session contact driver from power-on and
+  releases them at REC.
+- `sd_card`: the directory for the virtual SD card. It is required for
+  `sd-card`; for `stock` its files are added to the otherwise empty card.
+- `execution_policy`: `exact` (the default) or `interactive`.
+- `name`: the camera id later calls use.
+
+The builder finds the firmware update, boot ROM and reference camera
+sections in the directory named by `FUJIMOD_FIRMWARE_LIBRARY`, resolves
+the firmware's registered run configuration, and owns the boot holds, card
+media and control connection. Callers never name a configuration,
+overlays, update files, boot ROMs, NAND images, GPIO levels or key
+scripts.
 
 ### Rules
 

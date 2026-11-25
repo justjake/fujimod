@@ -3,49 +3,72 @@ use std::{collections::BTreeMap, path::PathBuf};
 
 use fujimod_catalog_remote::{Facts, Selection};
 use fujimod_catalog_resolution::ResolvedConfiguration;
-use fujimod_emulator_boot::{self as boot, host};
+use fujimod_emulator_boot as boot;
+use fujimod_emulator_camera::{
+    Boot as BuilderBoot, CardSource, Library, Request as BuilderRequest, Stage,
+    open as open_camera, open_unbooted,
+};
 use fujimod_emulator_cpu::ExecutionPolicy;
 use fujimod_emulator_session::{Session, checkpoint::Snapshot};
 use fujimod_remote::{BoardRemote, Control, board::Options as RemoteOptions, operations};
 use serde_json::{Value, json};
 
-use crate::OpenParams;
+use crate::{OpenBoot, OpenParams};
 
 /// The `Send` part of an open request, moved to the camera's thread.
 pub struct OpenRequest {
-    configuration: String,
-    overlays: Vec<String>,
-    update: PathBuf,
-    boot_rom: Option<PathBuf>,
-    application_plan: Option<PathBuf>,
-    camera_sections: Option<PathBuf>,
-    nand: Option<PathBuf>,
-    settings: Option<PathBuf>,
+    firmware: String,
+    boot: OpenBoot,
     sd_card: Option<PathBuf>,
-    gpio: Option<String>,
-    keys: Option<String>,
     snapshot: Option<PathBuf>,
     execution_policy: Option<String>,
-    instruction_limit: u64,
 }
 
 impl From<OpenParams> for OpenRequest {
     fn from(p: OpenParams) -> Self {
         Self {
-            configuration: p.configuration,
-            overlays: p.overlays,
-            update: p.update.into(),
-            boot_rom: p.boot_rom.map(Into::into),
-            application_plan: p.application_plan.map(Into::into),
-            camera_sections: p.camera_sections.map(Into::into),
-            nand: p.nand.map(Into::into),
-            settings: p.settings.map(Into::into),
+            firmware: p.firmware,
+            boot: p.boot,
             sd_card: p.sd_card.map(Into::into),
-            gpio: p.gpio,
-            keys: p.keys,
             snapshot: p.snapshot.map(Into::into),
             execution_policy: p.execution_policy,
-            instruction_limit: p.instruction_limit.unwrap_or(2_000_000_000),
+        }
+    }
+}
+
+impl OpenRequest {
+    fn builder_request(&self) -> Result<BuilderRequest, String> {
+        let policy = match &self.execution_policy {
+            Some(policy) => ExecutionPolicy::parse(policy)?,
+            None => ExecutionPolicy::Exact,
+        };
+        let boot = match self.boot {
+            OpenBoot::Stock => BuilderBoot::Stock,
+            OpenBoot::SdCard => {
+                let directory = self
+                    .sd_card
+                    .as_ref()
+                    .ok_or("sd-card boot requires sd_card")?;
+                BuilderBoot::SdCard(CardSource::Directory(directory.clone()))
+            }
+        };
+        let card_files = match (self.boot, &self.sd_card) {
+            (OpenBoot::Stock, Some(directory)) => sd_card_files(directory)?,
+            _ => Vec::new(),
+        };
+        Ok(BuilderRequest {
+            firmware: self.firmware.clone(),
+            boot,
+            policy,
+            engine: None,
+            card_files,
+        })
+    }
+
+    fn boot_name(&self) -> &'static str {
+        match self.boot {
+            OpenBoot::Stock => "stock",
+            OpenBoot::SdCard => "sd-card",
         }
     }
 }
@@ -89,11 +112,13 @@ impl fujimod_emulator_gui::Run for Camera {
     fn step(&mut self) -> Result<(), String> {
         // About one LCD frame of guest time per slice keeps the window responsive.
         let until = self.session.board.now() + (self.ticks_per_second / 60).max(1);
-        self.session.run_window(u64::MAX, self.quantum, None, Some(until))
+        self.session
+            .run_window(u64::MAX, self.quantum, None, Some(until))
     }
     fn settle(&mut self) -> Result<(), String> {
         let until = self.session.board.now() + (self.ticks_per_second / 1000).max(1);
-        self.session.run_window(u64::MAX, self.quantum, None, Some(until))
+        self.session
+            .run_window(u64::MAX, self.quantum, None, Some(until))
     }
     fn frames(
         &mut self,
@@ -167,35 +192,30 @@ fn sd_card_files(directory: &PathBuf) -> Result<Vec<(String, PathBuf)>, String> 
 
 impl Camera {
     pub fn open(request: OpenRequest) -> Result<(Self, (Value, Option<Vec<u8>>)), String> {
-        let resolve =
-            || ResolvedConfiguration::with_overlays(&request.configuration, &request.overlays);
-        let sd_files = request.sd_card.as_ref().map(sd_card_files).transpose()?;
-        let opened = boot::open_request(
-            resolve()?,
-            boot::Request {
-                update: request.update.clone(),
-                boot_rom: request.boot_rom.clone(),
-                nand: request.nand.clone(),
-                settings: request.settings.clone(),
-                camera: request.camera_sections.clone(),
-                application_plan: request.application_plan.clone(),
-                card_files: sd_files.unwrap_or_default(),
-                discovery: false,
-            },
-        )?;
-        let quantum = opened.quantum;
-        let ticks_per_second = opened.ticks_per_second;
-        let mut session = opened.session;
-        let resolved = resolve()?;
-        if let Some(policy) = &request.execution_policy {
-            session
-                .board
-                .set_execution_policy(ExecutionPolicy::parse(policy)?)?;
-        }
-        let facts = remote_facts(&resolved);
+        let library = Library::from_env().map_err(|error| error.to_string())?;
+        let started = std::time::Instant::now();
+        let builder_request = request.builder_request()?;
+        let policy = builder_request.policy;
+        let opened = match &request.snapshot {
+            Some(snapshot) => {
+                let mut opened =
+                    open_unbooted(&library, builder_request).map_err(|error| error.to_string())?;
+                boot::load_snapshot(&mut opened.camera.session, snapshot)?;
+                opened.stage = match boot::status(&opened.camera.session) {
+                    Ok(report) if report.status == "rec" => Stage::Rec,
+                    _ => Stage::FirmwareLoaded,
+                };
+                opened
+            }
+            None => open_camera(&library, builder_request).map_err(|error| error.to_string())?,
+        };
+        let quantum = opened.camera.quantum;
+        let ticks_per_second = opened.camera.ticks_per_second;
+        let facts = remote_facts(&opened.resolved);
+        let stage = opened.stage;
         let mut camera = Self {
-            session,
-            resolved,
+            session: opened.camera.session,
+            resolved: opened.resolved,
             quantum,
             ticks_per_second,
             checkpoints: BTreeMap::new(),
@@ -204,48 +224,6 @@ impl Camera {
             shown: None,
             latest: None,
         };
-        let started = std::time::Instant::now();
-        if let Some(snapshot) = &request.snapshot {
-            if request.gpio.is_some() || request.keys.is_some() {
-                return Err("a restored camera takes no boot gpio or keys".into());
-            }
-            boot::load_snapshot(&mut camera.session, snapshot)?;
-        } else if boot::scanout_node(&camera.session).is_err() {
-            // The emulator recognizes no REC screen for this camera: it opens
-            // at power-on and camera_run advances it.
-            if request.gpio.is_some() || request.keys.is_some() {
-                return Err("boot gpio and keys need a camera whose REC screen the emulator recognizes".into());
-            }
-        } else {
-            let edges = host::parse_keys(request.keys.as_deref(), None)?;
-            let automatic_setup = edges.is_empty();
-            let mut keys = fujimod_emulator_controls::Keys::new(
-                &camera.resolved.reference,
-                edges.into_iter().map(|edge| {
-                    (
-                        host::duration_ticks(edge.delay, ticks_per_second),
-                        edge.name,
-                        edge.pressed,
-                    )
-                }),
-                ticks_per_second,
-            )?;
-            if let Some(levels) = &request.gpio {
-                for level in levels.split(',') {
-                    let (port, pin, high) = host::parse_gpio(level.trim())?;
-                    fujimod_emulator_controls::set_gpio(&mut camera.session, port, pin, high)?;
-                }
-            }
-            let start = camera.session.board.now();
-            boot::to_rec_with_actions(
-                &mut camera.session,
-                request.instruction_limit,
-                None,
-                automatic_setup,
-                |session| keys.advance(session, start),
-                |_, _| Ok(()),
-            )?;
-        }
         // Connect the controls now, so every checkpoint carries them and
         // restores into this camera. A boot that stopped before the firmware
         // loaded its configuration leaves them to connect on first use.
@@ -255,10 +233,12 @@ impl Camera {
             summary["controls_error"] = json!(error);
         }
         summary["opened"] = json!({
-            "configuration": request.configuration,
-            "overlays": request.overlays,
-            "sd_card": request.sd_card.map(|path| path.display().to_string()),
-            "snapshot": request.snapshot.map(|path| path.display().to_string()),
+            "firmware": request.firmware.clone(),
+            "boot": request.boot_name(),
+            "sd_card": request.sd_card.as_ref().map(|path| path.display().to_string()),
+            "snapshot": request.snapshot.as_ref().map(|path| path.display().to_string()),
+            "execution_policy": policy.name(),
+            "stage": stage.name(),
             "wall_seconds": started.elapsed().as_secs_f64(),
         });
         Ok((camera, (summary, png)))
@@ -296,7 +276,13 @@ impl Camera {
     /// The last published LCD image as PNG.
     fn latest_png(&self) -> Option<Vec<u8>> {
         let frame = self.latest.as_ref()?;
-        let rgb: Vec<u8> = frame.rgba.as_chunks::<4>().0.iter().flat_map(|p| [p[0], p[1], p[2]]).collect();
+        let rgb: Vec<u8> = frame
+            .rgba
+            .as_chunks::<4>()
+            .0
+            .iter()
+            .flat_map(|p| [p[0], p[1], p[2]])
+            .collect();
         fujimod_recording::Frame::rgb(frame.width, frame.height, rgb)
             .ok()?
             .png()
@@ -557,5 +543,108 @@ impl Camera {
         }
         self.profiling = false;
         Ok(self.session.board.guest_profile())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn request(boot: OpenBoot, sd_card: Option<PathBuf>) -> OpenRequest {
+        OpenRequest {
+            firmware: "x70-110".into(),
+            boot,
+            sd_card,
+            snapshot: None,
+            execution_policy: None,
+        }
+    }
+
+    #[test]
+    fn a_stock_boot_with_a_card_directory_adds_files() {
+        let directory =
+            std::env::temp_dir().join(format!("fujimod-mcp-card-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&directory);
+        std::fs::create_dir_all(&directory).unwrap();
+        std::fs::write(directory.join("A.TXT"), b"a").unwrap();
+        let built = request(OpenBoot::Stock, Some(directory.clone()))
+            .builder_request()
+            .unwrap();
+        assert!(matches!(built.boot, BuilderBoot::Stock));
+        assert_eq!(built.card_files.len(), 1);
+        assert_eq!(built.card_files[0].0, "A.TXT");
+        assert_eq!(built.policy, ExecutionPolicy::Exact);
+        std::fs::remove_dir_all(&directory).unwrap();
+    }
+
+    #[test]
+    fn an_sd_card_boot_requires_its_directory() {
+        let error = request(OpenBoot::SdCard, None)
+            .builder_request()
+            .err()
+            .unwrap();
+        assert!(error.contains("sd_card"), "{error}");
+    }
+
+    #[test]
+    fn an_sd_card_boot_uses_the_directory() {
+        let directory = PathBuf::from("/tmp/example-card");
+        let built = request(OpenBoot::SdCard, Some(directory.clone()))
+            .builder_request()
+            .unwrap();
+        assert!(matches!(
+            built.boot,
+            BuilderBoot::SdCard(CardSource::Directory(path)) if path == directory
+        ));
+        assert!(built.card_files.is_empty());
+    }
+
+    #[test]
+    fn the_execution_policy_is_parsed() {
+        let mut request = request(OpenBoot::Stock, None);
+        request.execution_policy = Some("interactive".into());
+        assert_eq!(
+            request.builder_request().unwrap().policy,
+            ExecutionPolicy::Interactive
+        );
+        request.execution_policy = Some("fast".into());
+        assert!(
+            request
+                .builder_request()
+                .err()
+                .unwrap()
+                .contains("unknown CPU execution policy")
+        );
+    }
+
+    #[test]
+    fn a_camera_opens_and_restores_through_the_builder() {
+        if std::env::var_os("FUJIMOD_FIRMWARE_LIBRARY").is_none() {
+            eprintln!("skipped: set FUJIMOD_FIRMWARE_LIBRARY");
+            return;
+        }
+        let started = std::time::Instant::now();
+        let (mut camera, (summary, _)) = Camera::open(request(OpenBoot::Stock, None)).unwrap();
+        assert_eq!(summary["opened"]["stage"], "REC");
+        assert_eq!(summary["opened"]["boot"], "stock");
+        assert_eq!(summary["opened"]["firmware"], "x70-110");
+        assert_eq!(summary["opened"]["execution_policy"], "exact");
+        let directory =
+            std::env::temp_dir().join(format!("fujimod-mcp-snapshot-{}", std::process::id()));
+        std::fs::create_dir_all(&directory).unwrap();
+        let file = directory.join("rec.snapshot");
+        camera
+            .checkpoint("rec", Some(file.to_str().unwrap()))
+            .unwrap();
+        drop(camera);
+
+        let mut restored = request(OpenBoot::Stock, None);
+        restored.snapshot = Some(file.clone());
+        let (restored, (summary, _)) = Camera::open(restored).unwrap();
+        assert_eq!(summary["opened"]["stage"], "REC");
+        assert_eq!(summary["opened"]["snapshot"], file.display().to_string());
+        assert_eq!(boot::status(&restored.session).unwrap().status, "rec");
+        std::fs::remove_dir_all(&directory).unwrap();
+        eprintln!("open and restore in {:?}", started.elapsed());
     }
 }

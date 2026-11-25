@@ -27,29 +27,25 @@ install a software Vulkan driver (Mesa's lavapipe).
 
 ## Camera module
 
-`camera_open` takes a run configuration id, its overlays and the firmware
-files the configuration names: the update file, the boot ROM and, when its
-settings name a camera, the directory of that camera's NAND sections. It
-boots to REC, or restores a checkpoint file written by a camera built from
-the same inputs.
+`camera_open` takes a catalog firmware id and a boot. The firmware update,
+boot ROM and reference camera sections come from the directory named by
+`FUJIMOD_FIRMWARE_LIBRARY`. It boots to REC, or restores a checkpoint file
+written by a camera built from the same inputs.
 
 To SD boot an X70 1.10 from a FujiMod SD card directory:
 
 ```json
 {
-  "configuration": "x70-110-rec",
-  "overlays": ["x70-110-browser-camera"],
-  "update": "FPUPDATE.DAT",
-  "boot_rom": "bootrom.bin",
-  "camera_sections": "catalog/bodies/x70/cameras/reference",
+  "firmware": "x70-110",
+  "boot": "sd-card",
   "sd_card": "path/to/sd-card",
-  "gpio": "0:10=0,0:11=0",
-  "keys": "t=0.3:-controls-gpio-0-10;t=0.3:-controls-gpio-0-11"
+  "execution_policy": "interactive"
 }
 ```
 
-`gpio` holds the two SD boot buttons from power-on and `keys` releases them
-0.3 s into the boot.
+The builder holds the body's SD boot controls from power-on and releases
+them at REC. A `stock` boot takes no `sd_card`, or uses its files as extra
+files on the otherwise empty card. `execution_policy` defaults to `exact`.
 
 | Tool | Does |
 |---|---|

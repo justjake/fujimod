@@ -3554,6 +3554,7 @@ dependencies = [
  "fujimod-catalog-remote",
  "fujimod-catalog-resolution",
  "fujimod-emulator-boot",
+ "fujimod-emulator-camera",
  "fujimod-emulator-controls",
  "fujimod-emulator-cpu",
  "fujimod-emulator-devices",
