@@ -29,3 +29,4 @@ unsafe_op_in_unsafe_fn = "deny"
 
 [dev-dependencies]
 fujimod-emulator-boot = { workspace = true, features = ["xp5-startup"] }
+fujimod-recovery.workspace = true
