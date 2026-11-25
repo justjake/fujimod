@@ -70,6 +70,9 @@ pub struct RunConfiguration {
     /// Functional per-byte times the emulator gives control buses in this run; none is measured.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub bus_byte_times: Vec<RunBusByteTime>,
+    /// Serial blocks this run emulates with the polled transport in place of their full model.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub polled_serial_blocks: Vec<String>,
     /// Named overlays to apply in declaration order.
     pub overlays: Vec<String>,
     /// Browser camera attachments declared by a selected overlay.

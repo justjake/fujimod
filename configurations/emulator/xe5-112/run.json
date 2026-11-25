@@ -190,5 +190,12 @@
       "body_profile_id": "xe5"
     },
     "firmware_profile_id": "xe5-112"
-  }
+  },
+  "polled_serial_blocks": [
+    "spi3",
+    "spi4",
+    "spi5",
+    "spi8",
+    "spi9"
+  ]
 }

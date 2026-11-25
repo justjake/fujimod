@@ -5133,6 +5133,7 @@ RunConfiguration = TypedDict(
         "id": Required["str"],
         "inputs": NotRequired["RunInputs | None"],
         "overlays": Required["list[str]"],
+        "polled_serial_blocks": NotRequired["list[str]"],
         "preset": NotRequired["RunPreset | None"],
         "purpose": Required["RunPurpose"],
         "scene": NotRequired["RunScene | None"],

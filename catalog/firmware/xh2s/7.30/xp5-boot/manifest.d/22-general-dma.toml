@@ -6,6 +6,7 @@ size = 0x8000
 kind = "general-dma"
 
 [device.options]
+a53_irq_base = 237
 companion_irq_base = 83
 
 [[device]]
