@@ -4224,7 +4224,7 @@
           "errors": [
             {
               "locator": "restart",
-              "reason": "RestartCatalogError: No console callback transport facts for this firmware"
+              "reason": "RestartCatalogError: Console callback facts need a running camera: cache-ready words; normal-mode UI cell and value"
             }
           ]
         },
