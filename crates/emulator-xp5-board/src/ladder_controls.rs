@@ -95,7 +95,7 @@ pub fn ladders(resolved: &ResolvedConfiguration) -> Result<Option<ladders::Optio
         gpio_keys: Vec::new(),
         coupled_contacts: Vec::new(),
     };
-    extension(body, &mut options)?;
+    extension(body, &mut options, inputs)?;
     options.validate()?;
     Ok(Some(options))
 }
@@ -199,16 +199,20 @@ fn positions(entries: &[(&str, &[&str], u16, u16, bool)]) -> Vec<ladders::Positi
 
 /// The board's table of decoded controls the catalog cannot yet express, by
 /// body. Bodies without an entry are unchanged.
-fn extension(body: &str, options: &mut ladders::Options) -> Result<(), String> {
+fn extension(
+    body: &str,
+    options: &mut ladders::Options,
+    inputs: &ApplicationRunInputs,
+) -> Result<(), String> {
     match body {
         "xt5" => xt5_extension(options),
         "x100vi" => x100vi_extension(options),
-        "xh2s" => xh2s_extension(options),
+        "xh2s" => xh2s_extension(options, adc_sample(inputs, 3)?),
         _ => Ok(()),
     }
 }
 
-fn xh2s_extension(options: &mut ladders::Options) -> Result<(), String> {
+fn xh2s_extension(options: &mut ladders::Options, initial_mode: u16) -> Result<(), String> {
     let stick = options
         .ladders
         .iter_mut()
@@ -231,6 +235,37 @@ fn xh2s_extension(options: &mut ladders::Options) -> Result<(), String> {
     options
         .coupled_contacts
         .extend(stick.rungs.iter().map(|rung| (rung.key, Key::StickPush)));
+
+    let mut mode = positions(&[
+        ("P", &[], 100, 462, false),
+        ("S", &[], 463, 768, false),
+        ("A", &[], 769, 1072, false),
+        ("M", &[], 1073, 1374, false),
+        ("C1", &[], 1375, 1677, false),
+        ("C2", &[], 1678, 1981, false),
+        ("C3", &[], 1982, 2289, false),
+        ("C4", &[], 2290, 2600, false),
+        ("C5", &[], 2601, 2918, false),
+        ("C6", &[], 2919, 3243, false),
+        ("C7", &[], 3244, 3576, false),
+        ("F", &["MOVIE"], 3577, 3921, false),
+        ("FILTER", &[], 3922, 4095, false),
+    ]);
+    // Installing the switch panel replays its initial pose. Keep the run's
+    // declared level for that pose, including the stock Movie sample 3774.
+    if let Some(position) = mode
+        .iter_mut()
+        .find(|position| (position.band_low..=position.band_high).contains(&initial_mode))
+    {
+        position.sample = initial_mode;
+    }
+    options.dials.push(ladders::PositionDial {
+        name: "mode".into(),
+        aliases: vec!["mode_dial".into()],
+        channel: 3,
+        positions: mode,
+        basis: "ADC3 factory thresholds, configuration offsets 0x36f8..0x372a, in physical scanner order 49..61.".into(),
+    });
 
     options.gpio_keys.push(ladders::GpioKey {
         key: Key::MovieRecord,
@@ -596,7 +631,7 @@ fn extension_ids(
                     "Focus stick down-right",
                 ),
             ],
-            &[],
+            &[("mode", "mode_dial")],
         ),
         _ => (&[], &[]),
     }

@@ -710,6 +710,40 @@ mod tests {
     }
 
     #[test]
+    fn xh2s_mode_dial_latches_all_catalog_positions() {
+        let switches = SwitchPanel::new(xh2s(3774).wiring).unwrap();
+        assert_eq!(switches.positions()["mode_dial"], "F");
+        assert!(switches.signals().unwrap().contains(&analog(3, 3774)));
+        for (position, sample) in [
+            ("P", 281),
+            ("S", 615),
+            ("A", 920),
+            ("M", 1223),
+            ("C1", 1526),
+            ("C2", 1829),
+            ("C3", 2135),
+            ("C4", 2445),
+            ("C5", 2759),
+            ("C6", 3081),
+            ("C7", 3410),
+            ("F", 3774),
+            ("FILTER", 4008),
+        ] {
+            let dial = switches.transition("mode_dial", position).unwrap();
+            assert!(
+                dial.signals().unwrap().contains(&analog(3, sample)),
+                "{position}"
+            );
+            let menu = dial.transition("menu_ok_button", "pressed").unwrap();
+            assert!(
+                menu.signals().unwrap().contains(&analog(3, sample)),
+                "{position}"
+            );
+        }
+        assert!(switches.transition("mode_dial", "C8").is_err());
+    }
+
+    #[test]
     fn xt5_controls_compile_to_one_panel() {
         let panel = xt5();
         let switches = SwitchPanel::new(panel.wiring.clone()).unwrap();
