@@ -3,6 +3,10 @@
     "name": "gfx100rf",
     "description": "Fujifilm GFX100RF"
   },
+  "gfx100s-213": {
+    "name": "gfx100s",
+    "description": "Fujifilm GFX100S (X-Processor 4)"
+  },
   "gfx50r-311": {
     "name": "gfx-50r",
     "description": "Fujifilm GFX 50R (X-Processor Pro)"
@@ -69,7 +73,7 @@
   },
   "xa3-222": {
     "name": "x-a3",
-    "description": "Fujifilm X-A3"
+    "description": "Fujifilm X-A3 (EXR Processor 2)"
   },
   "xa5-203": {
     "name": "x-a5",
