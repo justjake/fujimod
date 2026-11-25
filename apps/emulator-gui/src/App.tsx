@@ -226,19 +226,19 @@ export default function App() {
               </Show>
               <fieldset class="boot-choice">
                 <legend>Boot</legend>
-                <label class="boot-option" data-selected={boot() === 'stock'}>
+                <label class="boot-option">
                   <input type="radio" name="boot" value="stock" checked={boot() === 'stock'} onChange={() => setBoot('stock')} />
                   <span>
                     <strong>Stock</strong>
                   </span>
                 </label>
-                <label class="boot-option" data-selected={boot() === 'sd-card'}>
+                <label class="boot-option">
                   <input type="radio" name="boot" value="sd-card" checked={boot() === 'sd-card'} onChange={() => setBoot('sd-card')} />
                   <span>
                     <strong>SD card</strong>
                   </span>
                 </label>
-                <label class="boot-option wide" data-selected={boot() === 'automatic-boot'}>
+                <label class="boot-option">
                   <input type="radio" name="boot" value="automatic-boot" checked={boot() === 'automatic-boot'} onChange={() => setBoot('automatic-boot')} />
                   <span>
                     <strong>Automatic boot</strong>
@@ -253,12 +253,9 @@ export default function App() {
                   <span>{sdCard() ? sdCard().split(/[\\/]/).filter(Boolean).at(-1) : 'Release SD card'}</span>
                 </div>
               </Show>
-              <label class="boot-option">
+              <label class="launcher-check">
                 <input type="checkbox" checked={skipCache()} onChange={(event) => setSkipCache(event.currentTarget.checked)} />
-                <span>
-                  <strong>Boot from scratch</strong>
-                  <small>Ignores the library's saved boot; this boot is not cached.</small>
-                </span>
+                Boot from scratch
               </label>
               <button class="primary" type="button"
                 disabled={!firmware() || busy()}
