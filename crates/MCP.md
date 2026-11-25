@@ -145,10 +145,11 @@ used.
 | | `camera_restore` | Return to a named checkpoint or a checkpoint file | implemented | no |
 | | `camera_fork` | Open a second camera from a checkpoint | planned | no |
 | Time | `camera_run` | Advance guest seconds, or until REC | implemented | waits only |
-| Inputs | `camera_controls` | Control ids, kinds and positions `camera_press` and `camera_turn` accept | implemented | yes |
+| Inputs | `camera_controls` | Control ids, kinds and positions `camera_press`, `camera_turn` and `camera_set` accept | implemented | yes |
 | | `camera_press` | Press and release a control, confirmed by the firmware, settle, return state and screen | implemented | yes |
 | | `camera_turn` | Turn a rotary control by detents | implemented | yes |
-| | `camera_touch`, positions | Touch the screen; move a dial or switch to a position | planned | yes |
+| | `camera_set` | Move a dial, switch, ring or lever to a named position, confirmed by the firmware, settle, return state and screen | implemented | yes |
+| | `camera_touch` | Touch the screen | planned | yes |
 | | `camera_set_input` | Drive a hardware input level (GPIO, ADC, SD card) | planned | no |
 | Observe | `camera_screen` | The current screen and state | implemented | yes |
 | | `camera_state` | Boot and UI state words, guest time, instructions | implemented | yes |
@@ -211,6 +212,9 @@ firmware identity and one of its boots:
   `automatic-boot` without it fetches the current release card for the
   firmware; for `stock` its files are added to the otherwise empty card.
 - `execution_policy`: `exact` (the default) or `interactive`.
+- `boot_cache`: restore a saved boot with the same inputs instead of
+  booting, and save this boot; the default. `false` boots from scratch and
+  saves nothing.
 - `name`: the camera id later calls use.
 
 The builder finds the firmware update, boot ROM and reference camera

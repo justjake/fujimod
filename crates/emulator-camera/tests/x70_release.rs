@@ -4,7 +4,7 @@
 //! update and boot ROM. The release card is fetched into that library and
 //! then booted; the second open reuses the verified card.
 use fujimod_emulator_camera::{
-    Boot, CardSource, ExecutionPolicy, Library, LibraryError, Request, Stage, open,
+    Boot, BootCache, CardSource, ExecutionPolicy, Library, LibraryError, Request, Stage, open,
 };
 use std::time::{Duration, Instant};
 
@@ -23,6 +23,7 @@ fn request() -> Request {
         policy: ExecutionPolicy::Interactive,
         engine: None,
         card_files: Vec::new(),
+        cache: BootCache::Bypass,
     }
 }
 

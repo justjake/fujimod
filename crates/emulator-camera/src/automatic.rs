@@ -3,7 +3,7 @@
 //!
 //! The card's FUJIMOD SET-UP page exposes BOOT SETUP's CHANGE, whose
 //! AUTOMATIC choice backs the internal data up to the card and then has
-//! \`sd-boot-v2-stage1-internal-flash-install\` rewrite the stage-1 blocks the
+//! `sd-boot-v2-stage1-internal-flash-install` rewrite the stage-1 blocks the
 //! boot ROM loads. The builder drives that page with the same presses a person
 //! makes, keeps the blocks the installer wrote, and every later open programs
 //! them back into a stock boot with nothing held.

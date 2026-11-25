@@ -89,6 +89,9 @@ struct OpenCameraRequest {
     boot: LauncherBoot,
     #[serde(default)]
     sd_card: Option<PathBuf>,
+    /// Boot without the library's saved boot, and save none.
+    #[serde(default)]
+    skip_boot_cache: bool,
 }
 
 #[derive(Clone, Copy, Deserialize)]
@@ -341,6 +344,11 @@ fn open_with_builder(request: OpenCameraRequest) -> Result<(LaunchedCamera, Runn
         policy: fujimod_emulator_cpu::ExecutionPolicy::Interactive,
         engine: None,
         card_files: Vec::new(),
+        cache: if request.skip_boot_cache {
+            camera::BootCache::Bypass
+        } else {
+            camera::BootCache::Reuse
+        },
     };
     let room = fujimod_emulator_gui::Room::loopback()?;
     let endpoint = room.endpoint().url.clone();
@@ -363,7 +371,7 @@ fn open_with_builder(request: OpenCameraRequest) -> Result<(LaunchedCamera, Runn
                     return Err(error);
                 }
             };
-            log_session("session: camera opened");
+            log_session(format!("session: camera opened cached={}", opened.cached));
             fujimod_emulator_gui::serve(
                 fujimod_emulator_gui::Live::new(opened.camera, selection),
                 room,

@@ -14,7 +14,7 @@ use std::{
 };
 
 const HELP: &str = "Usage: fujimod-emulator boot --configuration ID --update UPDATE.DAT [--boot-rom ROM.BIN] [--gui] \\\n  [--overlay ID]... [--engine unicorn|hypervisor] [--screenshot LCD.PNG] [--instruction-limit COUNT] [--execution-policy interactive|exact]\n\
-  fujimod-emulator open --firmware ID --boot stock|sd-card|automatic [--sd-card DIR] [--execution-policy interactive|exact] [--gui]\n\n\
+  fujimod-emulator open --firmware ID --boot stock|sd-card|automatic [--sd-card DIR] [--execution-policy interactive|exact] [--no-boot-cache] [--gui]\n\n\
 The run configuration selects the camera, its firmware and how the run starts; the processor\n\
 generation only decides which of these options apply.\n\n\
 Boot configuration: x70-110-rec. The ROM dump is required.\n\
@@ -55,6 +55,9 @@ FujiMod from --sd-card, or from the current release SD card fetched into the lib
 flash, which the first open installs and keeps in the library. A stock boot adds the\n\
 --sd-card files to an otherwise empty card.\n\
 --execution-policy defaults to exact.\n\
+open restores a saved boot for the same firmware, boot, SD card, policy and engine when the\n\
+library holds one, and saves each new boot; --no-boot-cache boots without reading or writing\n\
+the cache.\n\
 open boots to REC, prints a JSON report of the firmware, boot, stage and engine, and exits 0.\n\
 --gui opens the desktop window on the opened session before the report.\n";
 
@@ -224,6 +227,7 @@ struct Open {
     boot: OpenBoot,
     sd_card: Option<PathBuf>,
     policy: Option<ExecutionPolicy>,
+    boot_cache: bool,
     gui: bool,
 }
 
@@ -248,6 +252,11 @@ impl Open {
             policy: self.policy.unwrap_or(ExecutionPolicy::Exact),
             engine: None,
             card_files,
+            cache: if self.boot_cache {
+                camera::BootCache::Reuse
+            } else {
+                camera::BootCache::Bypass
+            },
         })
     }
 
@@ -272,12 +281,20 @@ fn parse_open(args: impl Iterator<Item = OsString>) -> Result<Option<Open>, Stri
     }
     let mut values = BTreeMap::new();
     let mut gui = false;
+    let mut boot_cache = true;
     while let Some(key) = args.next() {
         let key = key.to_str().ok_or("option name is not UTF-8")?.to_owned();
         if key == "--gui" {
             if std::mem::replace(&mut gui, true) {
                 return Err("duplicate option: --gui".into());
             }
+            continue;
+        }
+        if key == "--no-boot-cache" {
+            if !boot_cache {
+                return Err("duplicate option: --no-boot-cache".into());
+            }
+            boot_cache = false;
             continue;
         }
         if !matches!(
@@ -318,6 +335,7 @@ fn parse_open(args: impl Iterator<Item = OsString>) -> Result<Option<Open>, Stri
         boot,
         sd_card,
         policy,
+        boot_cache,
         gui,
     }))
 }
@@ -1041,6 +1059,7 @@ fn run_open(open: Open) -> Result<Outcome, String> {
         "execution_policy": opened.policy.name(),
         "engine": opened.engine,
         "stage": opened.stage.name(),
+        "cached": opened.cached,
         "wall_seconds": started.elapsed().as_secs_f64(),
     });
     if open.gui {

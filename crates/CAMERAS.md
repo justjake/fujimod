@@ -1,6 +1,6 @@
 # Opening a camera: design (2026-11-25)
 
-Status: agreed with the owner; step 1 in progress.
+Status: agreed with the owner; steps 1-4 done, step 5 next.
 
 ## Goal
 
@@ -82,7 +82,8 @@ MCP camera module and the CLI call the builder; the Python binding reaches
 it through its existing Rust bindings.
 
 Options: execution policy (`interactive` or `exact`), engine, language,
-clock, extra SD card files, a checkpoint to restore.
+clock, extra SD card files, a checkpoint to restore, and whether to use the
+boot cache.
 
 ## Results
 
@@ -95,14 +96,28 @@ else is a failure that names how far the boot got:
 
 ## Boot cache
 
-Each opened boot is saved as a portable checkpoint keyed by the firmware,
-the boot, the SD card contents and the builder's inputs. A later open with
+Each opened boot is saved as a portable checkpoint keyed by the firmware
+update, the resolved configuration, the boot, the SD card's files, the
+execution policy, the engine and the builder's version. A later open with
 the same key restores it in about a second instead of booting.
+
+Saved boots live in `boot-cache/<firmware>/` in the firmware library, one per
+firmware, boot, policy and engine: saving a boot with another card or another
+builder replaces the slot's earlier entry. A saved boot is reused only when
+its checkpoint restores into a freshly built session and still reports REC;
+anything else boots the camera and replaces the entry. A snapshot is the whole
+machine, about 100 MB for an X70 at REC, so a library holds one per slot.
+
+Every caller can boot without it: MCP `camera_open` takes `boot_cache: false`,
+the CLI open takes `--no-boot-cache`, and the desktop launcher offers Boot
+from scratch. A bypass reads no saved boot and saves none.
 
 ## Callers
 
 - MCP `camera_open` takes `firmware`, `boot` and options. The raw `gpio`,
-  `keys` and overlay options go.
+  `keys` and overlay options go. `camera_set` moves a dial, switch, ring or
+  lever to a catalog position through the contact driver and returns once the
+  firmware's own observation of the control shows the new pose.
 - The desktop launcher lists the firmware library's cameras and opens Stock,
   SD card or automatic boots; `--endpoint` still connects to a session
   another host serves.

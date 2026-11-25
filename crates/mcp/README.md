@@ -29,8 +29,10 @@ install a software Vulkan driver (Mesa's lavapipe).
 
 `camera_open` takes a catalog firmware id and a boot. The firmware update,
 boot ROM and reference camera sections come from the directory named by
-`FUJIMOD_FIRMWARE_LIBRARY`. It boots to REC, or restores a checkpoint file
-written by a camera built from the same inputs.
+`FUJIMOD_FIRMWARE_LIBRARY`. It restores the library's saved boot for the same
+inputs when it holds one, boots to REC otherwise, or restores a checkpoint
+file written by a camera built from the same inputs. `boot_cache: false` boots
+from scratch and saves nothing.
 
 To SD boot an X70 1.10 from its current release card:
 
@@ -80,6 +82,7 @@ defaults to `exact`.
 | `camera_run` | Advance guest seconds, or until REC |
 | `camera_controls` | Control ids, kinds and positions |
 | `camera_press`, `camera_turn` | Press a control or turn a rotary control, each edge confirmed by the firmware's key scanner, then settle |
+| `camera_set` | Move a dial, switch, ring or lever to a named position through the contact driver, confirmed by the firmware's own observation of the control, then settle |
 | `camera_screen`, `camera_state` | Screen and state without advancing time |
 | `camera_read_memory` | Physical memory as a hex dump or file |
 | `camera_profile_start`, `camera_profile_collect`, `camera_profile_show`, `camera_profile_diff` | Instructions executed per basic block, and what changed between two runs |

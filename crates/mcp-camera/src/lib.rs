@@ -31,9 +31,10 @@ use camera::{Camera, OpenRequest};
 use profile::Profile;
 
 const INSTRUCTIONS: &str = "Emulated cameras that stay running between calls. Open one with \
-camera_open (it boots to REC, or restores a checkpoint file), list its controls with \
-camera_controls, then operate them with camera_press or camera_turn and read the reply's screen \
-and state. Save named checkpoints with camera_checkpoint and return to them with camera_restore \
+camera_open (it boots to REC from the library's boot cache when one matches, or restores a \
+checkpoint file), list its controls with camera_controls, then operate them with camera_press, \
+camera_turn or camera_set and read the reply's screen and state. Save named checkpoints with \
+camera_checkpoint and return to them with camera_restore \
 instead of booting again. camera_show opens a camera in the desktop emulator window, where it \
 runs live. To find what code runs, call camera_profile_start, act, then \
 camera_profile_collect; compare two collections with camera_profile_diff.";
@@ -168,6 +169,9 @@ pub struct OpenParams {
     /// `exact` (deterministic; use when runs will be compared) or `interactive`.
     /// Defaults to `exact`.
     pub execution_policy: Option<String>,
+    /// Restore a saved boot with the same inputs instead of booting, and save
+    /// this boot for later opens. Defaults to true; false boots from scratch.
+    pub boot_cache: Option<bool>,
 }
 
 #[derive(Deserialize, JsonSchema)]
@@ -233,7 +237,23 @@ pub struct TurnParams {
     pub control: String,
     /// Detents to turn; negative turns the other way.
     pub steps: i32,
-    /// Guest milliseconds to keep running afterwards. Defaults to 500.
+    /// Guest milliseconds to keep running after the firmware registers the
+    /// steps. Defaults to 500.
+    pub settle_ms: Option<u64>,
+    /// Return the screen afterwards. Defaults to true.
+    pub screen: Option<bool>,
+}
+
+#[derive(Deserialize, JsonSchema)]
+pub struct SetParams {
+    /// Camera name.
+    pub camera: String,
+    /// Dial, switch, ring or lever id from camera_controls.
+    pub control: String,
+    /// Position id from camera_controls, such as A or 1/500.
+    pub position: String,
+    /// Guest milliseconds to keep running after the firmware registers the
+    /// position. Defaults to 500.
     pub settle_ms: Option<u64>,
     /// Return the screen afterwards. Defaults to true.
     pub screen: Option<bool>,
@@ -515,6 +535,39 @@ and confirms its key scanner registered the press and the release, keeps running
     }
 
     #[tool(
+        description = "Move a dial, switch, ring or lever to a named position through the \
+contact driver. Waits until the firmware's own observation of the control shows the new pose, \
+keeps running for `settle_ms`, and returns the new state and screen. Buttons press with \
+camera_press; rotary detents turn with camera_turn."
+    )]
+    async fn camera_set(
+        &self,
+        Parameters(params): Parameters<SetParams>,
+    ) -> Result<CallToolResult, ErrorData> {
+        let SetParams {
+            camera,
+            control,
+            position,
+            settle_ms,
+            screen,
+        } = params;
+        let result = self
+            .on(&camera, move |camera| {
+                let set = camera.set(&control, &position, settle_ms.unwrap_or(500))?;
+                let (mut summary, png) = camera.observe(screen.unwrap_or(true))?;
+                if let Some(object) = summary.as_object_mut() {
+                    object.insert("set".into(), set);
+                }
+                Ok::<(Value, Option<Vec<u8>>), String>((summary, png))
+            })
+            .await;
+        match result {
+            Ok((summary, png)) => reply(summary, png),
+            Err(error) => failed(error),
+        }
+    }
+
+    #[tool(
         description = "Turn a rotary control by detents, keep running for `settle_ms`, and \
 return the new state and screen."
     )]
@@ -724,6 +777,24 @@ mod tests {
     use super::*;
 
     #[test]
+    fn camera_set_takes_a_control_and_a_position() {
+        let tools = module(std::env::temp_dir()).tools();
+        let tool = tools
+            .iter()
+            .find(|tool| tool.name == "camera_set")
+            .expect("camera_set is declared");
+        let schema = serde_json::to_value(&tool.input_schema).unwrap();
+        let mut required: Vec<&str> = schema["required"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|name| name.as_str().unwrap())
+            .collect();
+        required.sort_unstable();
+        assert_eq!(required, ["camera", "control", "position"]);
+    }
+
+    #[test]
     fn camera_open_exposes_only_the_builder_parameters() {
         let tools = module(std::env::temp_dir()).tools();
         let tool = tools
@@ -738,6 +809,7 @@ mod tests {
             names,
             [
                 "boot",
+                "boot_cache",
                 "execution_policy",
                 "firmware",
                 "name",

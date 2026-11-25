@@ -8,7 +8,8 @@ use fujimod_catalog_remote::{Facts, Selection};
 use fujimod_catalog_resolution::ResolvedConfiguration;
 use fujimod_emulator_boot as boot;
 use fujimod_emulator_camera::{
-    Boot, CardSource, ExecutionPolicy, Library, LibraryError, Opened, Request, Stage, open,
+    Boot, BootCache, CardSource, ExecutionPolicy, Library, LibraryError, Opened, Request, Stage,
+    open,
 };
 use fujimod_remote::{BoardRemote, Control, board::Options as RemoteOptions, operations};
 use std::path::PathBuf;
@@ -33,6 +34,7 @@ fn request(boot: Boot) -> Request {
         policy: ExecutionPolicy::Interactive,
         engine: None,
         card_files: Vec::new(),
+        cache: BootCache::Bypass,
     }
 }
 

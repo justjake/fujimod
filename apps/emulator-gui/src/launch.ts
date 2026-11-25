@@ -24,6 +24,7 @@ export interface OpenCameraRequest {
   firmware: string;
   boot: BootChoice;
   sdCard?: string;
+  skipBootCache?: boolean;
 }
 export interface LaunchedCamera {
   id: string;

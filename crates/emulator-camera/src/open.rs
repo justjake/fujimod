@@ -39,6 +39,7 @@ pub enum CardSource {
 }
 
 /// One camera to open.
+#[derive(Clone)]
 pub struct Request {
     /// Catalog firmware identity, for example x70-110.
     pub firmware: String,
@@ -48,6 +49,17 @@ pub struct Request {
     pub engine: Option<RunEngine>,
     /// Extra files written to the camera's SD card after the boot source's.
     pub card_files: Vec<(String, PathBuf)>,
+    /// Whether the open may restore a saved boot and keep a new one.
+    pub cache: BootCache,
+}
+
+/// Whether an open uses the boot cache.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum BootCache {
+    /// Restore a saved boot with the same key; save this boot when none matches.
+    Reuse,
+    /// Boot the camera and leave the boot cache alone.
+    Bypass,
 }
 
 /// The last boot stage a camera reached.
@@ -135,6 +147,8 @@ pub struct Opened {
     pub resolved: ResolvedConfiguration,
     /// The release tag when the boot used the release card.
     pub release: Option<String>,
+    /// Whether the camera was restored from the boot cache instead of booted.
+    pub cached: bool,
 }
 
 impl Opened {
@@ -149,14 +163,47 @@ impl Opened {
 
 /// Open a camera and run it to REC or its first-start setup.
 pub fn open(library: &Library, request: Request) -> Result<Opened, OpenError> {
-    if matches!(request.boot, Boot::AutomaticBoot(_)) {
-        return open_automatic(library, request);
+    let resolved = resolve(library, &request)?;
+    let key = match request.cache {
+        BootCache::Reuse => Some(crate::cache::Key::new(library, &request, &resolved)?),
+        BootCache::Bypass => None,
+    };
+    if let Some(key) = &key
+        && let Some(opened) = crate::cache::restore(library, &request, &resolved, key)?
+    {
+        return Ok(opened);
     }
-    open_booted(library, request)
+    let opened = if matches!(request.boot, Boot::AutomaticBoot(_)) {
+        open_automatic(library, request, resolved)?
+    } else {
+        open_booted(library, request, resolved)?
+    };
+    if let Some(key) = &key {
+        crate::cache::save(&opened, key);
+    }
+    Ok(opened)
 }
 
-fn open_booted(library: &Library, request: Request) -> Result<Opened, OpenError> {
-    let mut opened = construct(library, request)?;
+/// The catalog resolution a request runs: the firmware's registered
+/// configuration with the request's engine override applied.
+fn resolve(library: &Library, request: &Request) -> Result<ResolvedConfiguration, OpenError> {
+    fujimod_emulator_exr2_board::register_board_builder();
+    fujimod_emulator_models::register();
+    let mut resolved = library.resolved(&request.firmware)?;
+    if let Some(engine) = request.engine {
+        resolved
+            .override_engine(engine)
+            .map_err(|error| OpenError::at(Stage::BootRom, error))?;
+    }
+    Ok(resolved)
+}
+
+fn open_booted(
+    library: &Library,
+    request: Request,
+    resolved: ResolvedConfiguration,
+) -> Result<Opened, OpenError> {
+    let mut opened = construct(library, request, resolved)?;
     let holds = boot_holds(&opened)?;
     boot_camera(&mut opened, &holds)?;
     Ok(opened)
@@ -223,7 +270,11 @@ fn boot_camera(
 
 /// Open the installed automatic boot, creating its internal flash once with
 /// the card's own installer.
-fn open_automatic(library: &Library, request: Request) -> Result<Opened, OpenError> {
+fn open_automatic(
+    library: &Library,
+    request: Request,
+    resolved: ResolvedConfiguration,
+) -> Result<Opened, OpenError> {
     let Boot::AutomaticBoot(source) = &request.boot else {
         return Err(OpenError::at(Stage::BootRom, "not an automatic boot"));
     };
@@ -238,7 +289,8 @@ fn open_automatic(library: &Library, request: Request) -> Result<Opened, OpenErr
     let kept = match fs::read(&flash) {
         Ok(bytes) => bytes,
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
-            let installed = install_automatic(library, &request, &contents, facts)?;
+            let installed =
+                install_automatic(library, &request, &contents, facts, resolved.clone())?;
             fs::create_dir_all(&directory)
                 .map_err(|error| OpenError::at(Stage::Rec, error.to_string()))?;
             fs::write(&flash, &installed)
@@ -252,7 +304,7 @@ fn open_automatic(library: &Library, request: Request) -> Result<Opened, OpenErr
             ));
         }
     };
-    let mut opened = construct(library, request)?;
+    let mut opened = construct(library, request, resolved)?;
     automatic::write_kept_flash(opened.session_mut(), facts, &kept)?;
     boot_camera(&mut opened, &[])?;
     fujimod_resident(&opened, facts.load_range.address)?;
@@ -266,17 +318,12 @@ fn install_automatic(
     request: &Request,
     contents: &[(String, Vec<u8>)],
     facts: &fujimod_catalog::nand_boot::FirmwareNandBoot,
+    resolved: ResolvedConfiguration,
 ) -> Result<Vec<u8>, OpenError> {
-    let mut installer = construct(
-        library,
-        Request {
-            firmware: request.firmware.clone(),
-            boot: Boot::SdCard(CardSource::Files(automatic::stock_menus(contents)?)),
-            policy: request.policy,
-            engine: request.engine,
-            card_files: request.card_files.clone(),
-        },
-    )?;
+    let mut installer = request.clone();
+    installer.boot = Boot::SdCard(CardSource::Files(automatic::stock_menus(contents)?));
+    installer.cache = BootCache::Bypass;
+    let mut installer = construct(library, installer, resolved)?;
     let holds = sd_holds(&installer.resolved)?;
     boot_camera(&mut installer, &holds)?;
     automatic::install(&mut installer, facts)
@@ -328,7 +375,7 @@ pub fn remote_options(
 }
 
 /// Every file on a card source, sorted by its name.
-fn card_contents(
+pub(crate) fn card_contents(
     library: &Library,
     firmware: &str,
     source: &CardSource,
@@ -400,25 +447,23 @@ fn fujimod_resident(opened: &Opened, start: u64) -> Result<(), OpenError> {
 /// restores into the session this returns, built from the same catalog facts
 /// the boot would use.
 pub fn open_unbooted(library: &Library, request: Request) -> Result<Opened, OpenError> {
-    construct(library, request)
+    let resolved = resolve(library, &request)?;
+    construct(library, request, resolved)
 }
 
-fn construct(library: &Library, request: Request) -> Result<Opened, OpenError> {
+pub(crate) fn construct(
+    library: &Library,
+    request: Request,
+    resolved: ResolvedConfiguration,
+) -> Result<Opened, OpenError> {
     let Request {
         firmware,
         boot,
         policy,
-        engine,
+        cache: _,
+        engine: _,
         card_files,
     } = request;
-    fujimod_emulator_exr2_board::register_board_builder();
-    fujimod_emulator_models::register();
-    let mut resolved = library.resolved(&firmware)?;
-    if let Some(engine) = engine {
-        resolved
-            .override_engine(engine)
-            .map_err(|error| OpenError::at(Stage::BootRom, error))?;
-    }
     let engine = resolved
         .configuration
         .execution
@@ -476,6 +521,7 @@ fn construct(library: &Library, request: Request) -> Result<Opened, OpenError> {
         card_files,
         release,
         resolved,
+        cached: false,
     })
 }
 

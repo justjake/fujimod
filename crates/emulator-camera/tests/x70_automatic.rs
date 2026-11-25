@@ -6,7 +6,7 @@
 //! flash, and the second open starts from the kept flash without holding a
 //! button.
 use fujimod_emulator_camera::{
-    Boot, CardSource, ExecutionPolicy, Library, LibraryError, Request, Stage, open,
+    Boot, BootCache, CardSource, ExecutionPolicy, Library, LibraryError, Request, Stage, open,
 };
 use std::{
     fs,
@@ -28,6 +28,7 @@ fn request() -> Request {
         policy: ExecutionPolicy::Interactive,
         engine: None,
         card_files: Vec::new(),
+        cache: BootCache::Bypass,
     }
 }
 

@@ -22,6 +22,7 @@ export default function App() {
   const [firmware, setFirmware] = createSignal('');
   const [boot, setBoot] = createSignal<BootChoice>('stock');
   const [sdCard, setSdCard] = createSignal('');
+  const [skipCache, setSkipCache] = createSignal(false);
   const [launcherError, setLauncherError] = createSignal('');
   const [pageError, setPageError] = createSignal('');
   const [busy, setBusy] = createSignal(false);
@@ -130,6 +131,7 @@ export default function App() {
         firmware: firmware(),
         boot: boot(),
         sdCard: boot() === 'stock' ? undefined : sdCard() || undefined,
+        skipBootCache: skipCache() || undefined,
       }));
     } catch (error) {
       setLauncherError(shownError(error));
@@ -251,6 +253,13 @@ export default function App() {
                   <span>{sdCard() ? sdCard().split(/[\\/]/).filter(Boolean).at(-1) : 'Release SD card'}</span>
                 </div>
               </Show>
+              <label class="boot-option">
+                <input type="checkbox" checked={skipCache()} onChange={(event) => setSkipCache(event.currentTarget.checked)} />
+                <span>
+                  <strong>Boot from scratch</strong>
+                  <small>Ignores the library's saved boot; this boot is not cached.</small>
+                </span>
+              </label>
               <button class="primary" type="button"
                 disabled={!firmware() || busy()}
                 onClick={() => void launch()}>

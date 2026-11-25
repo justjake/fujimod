@@ -14,6 +14,8 @@ use std::{
 pub const LIBRARY_ENV: &str = "FUJIMOD_FIRMWARE_LIBRARY";
 /// The library subdirectory holding automatic-boot state.
 pub const AUTOMATIC_DIRECTORY: &str = "automatic-boot";
+/// The library subdirectory holding saved boots.
+pub const CACHE_DIRECTORY: &str = "boot-cache";
 
 /// A firmware library could not be read or did not hold the catalog's files.
 #[derive(Debug, thiserror::Error)]
@@ -80,6 +82,7 @@ impl Library {
         let camera_root = root.join("cameras");
         let release_root = root.join(crate::release::CARD_DIRECTORY);
         let automatic_root = root.join(AUTOMATIC_DIRECTORY);
+        let cache_root = root.join(CACHE_DIRECTORY);
         if camera_root.is_dir() {
             for entry in read_dir(&camera_root)? {
                 if entry.is_dir() {
@@ -103,6 +106,7 @@ impl Library {
                 if entry.starts_with(&camera_root)
                     || entry.starts_with(&release_root)
                     || entry.starts_with(&automatic_root)
+                    || entry.starts_with(&cache_root)
                 {
                     continue;
                 }

@@ -22,6 +22,7 @@ pub struct OpenRequest {
     sd_card: Option<PathBuf>,
     snapshot: Option<PathBuf>,
     execution_policy: Option<String>,
+    boot_cache: bool,
 }
 
 impl From<OpenParams> for OpenRequest {
@@ -32,6 +33,7 @@ impl From<OpenParams> for OpenRequest {
             sd_card: p.sd_card.map(Into::into),
             snapshot: p.snapshot.map(Into::into),
             execution_policy: p.execution_policy,
+            boot_cache: p.boot_cache.unwrap_or(true),
         }
     }
 }
@@ -65,6 +67,13 @@ impl OpenRequest {
             policy,
             engine: None,
             card_files,
+            // A named checkpoint is an explicit restore; the boot cache would
+            // otherwise replace it.
+            cache: if self.boot_cache && self.snapshot.is_none() {
+                fujimod_emulator_camera::BootCache::Reuse
+            } else {
+                fujimod_emulator_camera::BootCache::Bypass
+            },
         })
     }
 
@@ -191,6 +200,7 @@ impl Camera {
         let facts = fujimod_emulator_camera::remote_facts(&opened.resolved);
         let stage = opened.stage;
         let release = opened.release.clone();
+        let opened_cached = opened.cached;
         let mut camera = Self {
             session: opened.camera.session,
             resolved: opened.resolved,
@@ -213,6 +223,7 @@ impl Camera {
         summary["opened"] = json!({
             "firmware": request.firmware.clone(),
             "boot": request.boot_name(),
+            "cached": opened_cached,
             "sd_card": request
                 .sd_card
                 .as_ref()
@@ -451,6 +462,129 @@ impl Camera {
         self.run_for(settle_ms as f64 / 1000.0)
     }
 
+    /// Move a dial, switch, ring or lever to a named position through the
+    /// contact driver, and wait until the firmware's own observation of the
+    /// control shows the new pose.
+    pub fn set(&mut self, control: &str, position: &str, settle_ms: u64) -> Result<Value, String> {
+        if settle_ms > 600_000 {
+            return Err("settle_ms must be at most 600000".into());
+        }
+        self.connect()?;
+        let driver = self
+            .session
+            .contact_driver
+            .as_ref()
+            .ok_or("physical input automation is not configured")?;
+        let actuator = driver
+            .spec
+            .actuators
+            .iter()
+            .find(|actuator| actuator.id == control);
+        let actuator = match actuator {
+            Some(actuator) if actuator.momentary => {
+                return Err(format!(
+                    "{control} is a button; press it with camera_press or turn it with camera_turn"
+                ));
+            }
+            Some(actuator) => actuator,
+            None => {
+                let controls: Vec<&str> = driver
+                    .spec
+                    .actuators
+                    .iter()
+                    .filter(|actuator| !actuator.momentary)
+                    .map(|actuator| actuator.id.as_str())
+                    .collect();
+                return Err(format!(
+                    "no physical control {control}; persistent controls: {controls:?}"
+                ));
+            }
+        };
+        let pose = actuator
+            .states
+            .iter()
+            .find(|pose| pose.position == position)
+            .ok_or_else(|| {
+                let positions: Vec<&str> = actuator
+                    .states
+                    .iter()
+                    .map(|pose| pose.position.as_str())
+                    .collect();
+                format!("{control} has no position {position}; positions: {positions:?}")
+            })?;
+        if pose.ready.is_empty() || pose.expected.is_empty() {
+            return Err(format!(
+                "the firmware has no observation of {control} at {position}, so the move cannot be confirmed"
+            ));
+        }
+        let before = self
+            .session
+            .control_state()?
+            .positions
+            .get(control)
+            .cloned();
+        let started = self.session.board.now();
+        let deadline = started + 5 * self.ticks_per_second;
+        self.session.schedule_input(
+            started,
+            fujimod_emulator_session::contact_driver::Scheduled::Position {
+                id: control.into(),
+                position: position.into(),
+            },
+        )?;
+        if let Some(driver) = self.session.contact_driver.as_mut() {
+            driver.set_watched(true);
+        }
+        let waited = self.wait_contact_input(deadline);
+        if let Some(driver) = self.session.contact_driver.as_mut() {
+            driver.set_watched(false);
+        }
+        waited?;
+        self.run_for(settle_ms as f64 / 1000.0)?;
+        let state = self.session.control_state()?;
+        let panel = state.positions.get(control).cloned();
+        if panel.as_deref() != Some(position) {
+            return Err(format!("{control} settled at {panel:?}, not {position}"));
+        }
+        Ok(json!({
+            "control": control,
+            "position": position,
+            "from": before,
+            "confirmed": true,
+            "input_queue": state.input_queue,
+        }))
+    }
+
+    /// Run until the contact driver has acknowledged every queued move.
+    fn wait_contact_input(&mut self, deadline: u64) -> Result<(), String> {
+        loop {
+            let Some(driver) = self.session.contact_driver.as_ref() else {
+                return Ok(());
+            };
+            if !driver.busy() {
+                return Ok(());
+            }
+            let poll = driver.spec.poll_ticks.max(1);
+            if self.session.board.now() >= deadline {
+                return Err(format!(
+                    "timed out waiting for the firmware to register the position; queue: {}",
+                    serde_json::to_string(&driver.state()).unwrap_or_default()
+                ));
+            }
+            let end = (self.session.board.now() + poll).min(deadline);
+            let before = self.progress();
+            self.session
+                .run_window(u64::MAX, self.quantum, None, Some(end))?;
+            if self.progress() == before {
+                let failure = boot::status(&self.session)
+                    .ok()
+                    .and_then(|report| report.failure)
+                    .unwrap_or_else(|| "no guest progress".into());
+                return Err(format!("the camera stopped: {failure}"));
+            }
+        }
+    }
+
     pub fn turn(&mut self, control: &str, steps: i32, settle_ms: u64) -> Result<(), String> {
         if settle_ms > 600_000 || steps.unsigned_abs() > 100 {
             return Err("steps must be within 100 and settle_ms at most 600000".into());
@@ -531,6 +665,7 @@ mod tests {
             sd_card,
             snapshot: None,
             execution_policy: None,
+            boot_cache: false,
         }
     }
 
@@ -645,5 +780,46 @@ mod tests {
         assert_eq!(boot::status(&restored.session).unwrap().status, "rec");
         std::fs::remove_dir_all(&directory).unwrap();
         eprintln!("open and restore in {:?}", started.elapsed());
+    }
+
+    #[test]
+    fn the_x70_aperture_ring_confirms_the_position_it_moves_to() {
+        if std::env::var_os("FUJIMOD_FIRMWARE_LIBRARY").is_none() {
+            eprintln!("skipped: set FUJIMOD_FIRMWARE_LIBRARY");
+            return;
+        }
+        let (mut camera, _) = Camera::open(request(OpenBoot::Stock, None)).unwrap();
+        let started = std::time::Instant::now();
+        let moved = camera.set("aperture_ring", "5.6", 100).unwrap();
+        assert_eq!(moved["control"], "aperture_ring");
+        assert_eq!(moved["position"], "5.6");
+        assert_eq!(moved["confirmed"], true);
+        assert_eq!(moved["from"], "A");
+        let state = camera.session.control_state().unwrap();
+        assert_eq!(
+            state.positions.get("aperture_ring").map(String::as_str),
+            Some("5.6")
+        );
+        // The firmware ran on with the ring at its new position.
+        assert_eq!(boot::status(&camera.session).unwrap().status, "rec");
+        // The same ring returns to A, and the button and unknown positions
+        // are refused.
+        let back = camera.set("aperture_ring", "A", 100).unwrap();
+        assert_eq!(back["from"], "5.6");
+        assert!(
+            camera
+                .set("menu_ok_button", "pressed", 0)
+                .err()
+                .unwrap()
+                .contains("button")
+        );
+        assert!(
+            camera
+                .set("aperture_ring", "f/5.6", 0)
+                .err()
+                .unwrap()
+                .contains("positions")
+        );
+        eprintln!("aperture ring moves in {:?}", started.elapsed());
     }
 }
