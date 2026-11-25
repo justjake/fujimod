@@ -538,3 +538,33 @@ fn unloading_an_absent_helper_never_acquires_usb() {
         assert_eq!(client.sessions.opens.load(Ordering::SeqCst), 0);
     });
 }
+
+#[test]
+fn missing_mount_map_fails_before_opening_usb() {
+    let limits = DebugMemoryLimits {
+        read: std::num::NonZeroU32::new(256).unwrap(),
+        write: std::num::NonZeroU32::new(1).unwrap(),
+    };
+    // A firmware with a located debug identity but no state regions.
+    let catalog = ReferenceCatalog::bundled().unwrap();
+    let firmware = catalog
+        .firmware_ids()
+        .find(|id| {
+            catalog.resolve_firmware(id).is_ok_and(|selected| {
+                (selected.bulk.is_some() || selected.card_files.is_some())
+                    && selected.state.is_none()
+            })
+        })
+        .expect("the catalog has a debug identity without a memory map")
+        .to_string();
+    match UsbDevice::connect(firmware, None, limits, None, false) {
+        Err(error) => {
+            assert_eq!(
+                error.to_string(),
+                "Selected firmware has no readable memory map"
+            );
+            assert!(error.downcast_ref::<fujimod_usb::Error>().is_none());
+        }
+        Ok(_) => panic!("Firmware without a state map must not start a USB worker"),
+    }
+}
