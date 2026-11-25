@@ -1,13 +1,13 @@
 //! Declared I2C targets by seven-bit address, behind the register-pointer
 //! protocol: after a write START, the first byte selects a register (through
-//! the part's `select`, which keeps command bits out of the register number);
+//! the part's `select`, which decodes command bits and can apply side effects);
 //! later written bytes and read bytes move through consecutive registers. A
 //! read START keeps the pointer. Each target keeps its own pointer.
 //!
 //! An address without a declared target is not acknowledged. A register a part
 //! does not model refuses.
-use fujimod_emulator_devices::checkpoint::Checkpoint;
 use fujimod_emulator_devices::parts::i2c::Bus;
+use fujimod_emulator_devices::{Cx, capability::ProximityInput, checkpoint::Checkpoint};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use std::collections::BTreeMap;
@@ -15,10 +15,17 @@ use std::collections::BTreeMap;
 /// A part's registers as the pointer protocol reaches them.
 pub trait Registers: Send {
     fn name(&self) -> &'static str;
-    /// The register a pointer byte selects.
-    fn select(&self, byte: u8) -> u8 {
+    /// The register a pointer byte selects, after any device command it encodes.
+    fn select(&mut self, byte: u8) -> u8 {
         byte
     }
+    fn proximity_input(&self) -> Option<&(dyn ProximityInput + 'static)> {
+        None
+    }
+    fn proximity_input_mut(&mut self) -> Option<&mut (dyn ProximityInput + 'static)> {
+        None
+    }
+    fn update(&mut self, _cx: &mut Cx<'_>, _conversion: bool) {}
     fn write(&mut self, register: u8, value: u8) -> Result<(), String>;
     fn read(&mut self, register: u8) -> Result<u8, String>;
     fn checkpoint(&self) -> Result<Checkpoint, String> {
@@ -136,6 +143,17 @@ impl Bus for Targets {
         pointer.register = pointer.register.wrapping_add(1);
         Ok(())
     }
+    fn update_targets(&mut self, cx: &mut Cx<'_>, conversion: bool) {
+        for target in &mut self.targets {
+            target.registers.update(cx, conversion);
+        }
+    }
+    fn proximity_input(&self) -> Option<&(dyn ProximityInput + 'static)> {
+        Some(self)
+    }
+    fn proximity_input_mut(&mut self) -> Option<&mut (dyn ProximityInput + 'static)> {
+        Some(self)
+    }
     fn read(&mut self) -> Result<u8, String> {
         let (target, pointer) = self.addressed()?;
         let value = target
@@ -203,6 +221,26 @@ impl Bus for Targets {
         self.pointers = pointers;
         self.active = active;
         Ok(())
+    }
+}
+
+impl ProximityInput for Targets {
+    fn admit_sample(&self, address: u8, sample: u16) -> Result<(), String> {
+        self.targets
+            .iter()
+            .find(|target| target.address == address)
+            .and_then(|target| target.registers.proximity_input())
+            .ok_or_else(|| format!("I2C target {address:#04x} has no external proximity input"))?
+            .admit_sample(address, sample)
+    }
+
+    fn set_sample(&mut self, cx: &mut Cx<'_>, address: u8, sample: u16) -> Result<(), String> {
+        self.targets
+            .iter_mut()
+            .find(|target| target.address == address)
+            .and_then(|target| target.registers.proximity_input_mut())
+            .ok_or_else(|| format!("I2C target {address:#04x} has no external proximity input"))?
+            .set_sample(cx, address, sample)
     }
 }
 

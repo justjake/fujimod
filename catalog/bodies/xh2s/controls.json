@@ -762,6 +762,14 @@
         }
       }
     },
+    "eye_sensor": {
+      "name": "Eye sensor",
+      "location": "rear",
+      "short_name": "EYE SENSOR",
+      "assignable": false,
+      "pushable": false,
+      "mechanical": false
+    },
     "view_mode_button": {
       "name": "VIEW MODE button",
       "location": "rear",

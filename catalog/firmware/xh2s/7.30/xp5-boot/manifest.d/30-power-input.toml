@@ -36,7 +36,9 @@ pad_model = "data-latch"
 # Panel selects GPIO 12.8 (LCD, client 3) and 12.10 (EVF, clients 7 and 8) start
 # inactive (output latch 1), the xt5-431 assumption for the same clients.
 initial_outputs = [{ port = 12, levels = 0x500 }]
-# Empty hot shoe 11.4. Monitor selection uses the 9.3/11.5/11.13 pattern 1/0/0 for the LCD.
+# Empty hot shoe 11.4. The startup monitor selector reads 9.3/11.5/11.13.
+# Keep the 1/0/0 pattern for rear-screen startup. VIEW MODE is a separate ADC
+# contact, and the eye sensor presents its sample through I2C.
 initial_inputs = [
   { port = 11, pin = 4, high = false },
   { port = 9, pin = 3, high = true },

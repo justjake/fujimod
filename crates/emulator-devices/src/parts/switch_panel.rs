@@ -19,6 +19,11 @@ pub enum Signal {
         channel: usize,
         value: u16,
     },
+    Proximity {
+        node: String,
+        address: u8,
+        sample: u16,
+    },
     SerialStatus {
         node: String,
         route: usize,
@@ -158,6 +163,9 @@ impl SwitchPanel {
                                 return Err("analog input channel exceeds its bound".into());
                             }
                             vec![format!("analog:{node}:{channel}")]
+                        }
+                        Signal::Proximity { node, address, .. } => {
+                            vec![format!("proximity:{node}:{address}")]
                         }
                         Signal::SerialStatus {
                             node,

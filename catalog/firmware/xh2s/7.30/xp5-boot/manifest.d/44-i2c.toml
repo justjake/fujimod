@@ -19,7 +19,10 @@ address = 0x36
 part = { kind = "fuel-gauge" }
 [[device.options.targets]]
 address = 0x39
-part = { kind = "tmd2772-proximity" }
+# The eye-task interrupt descriptor 0xbc (0x1c0ab58) selects GIC line 122,
+# edge triggered. Model the asserted sensor signal at that input. The board's
+# physical pin and how it routes or inverts the sensor signal are unverified.
+part = { kind = "tmd2772-proximity", interrupt = 122 }
 [[device.options.targets]]
 address = 0x66
 part = { kind = "retained-registers" }

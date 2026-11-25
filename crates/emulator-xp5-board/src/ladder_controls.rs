@@ -589,6 +589,7 @@ pub fn panel_names(resolved: &ResolvedConfiguration) -> Result<crate::panel::Nam
         keys,
         positions,
         shutter,
+        eye_sensor: dial("eye_sensor")?,
         rear_dial: dial("rear_command_dial")?,
         front_dial: dial("front_command_dial")?,
     })

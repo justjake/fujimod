@@ -14,7 +14,7 @@ pub struct Panel {
     pub confirmation: super::contact_driver::Spec,
 }
 use fujimod_emulator_devices::capability::{
-    AnalogInputs, GpioInputs, GravityInput, SerialStatus, TouchPanel,
+    AnalogInputs, GpioInputs, GravityInput, ProximityInput, SerialStatus, TouchPanel,
 };
 
 /// Host-visible controls and their current positions.
@@ -98,6 +98,16 @@ impl Session {
                         return Err("control targets an absent analog channel".into());
                     }
                 }
+                Signal::Proximity {
+                    node,
+                    address,
+                    sample,
+                } => {
+                    self.board
+                        .inspect_capability::<dyn ProximityInput, _>(self.node(node)?, |input| {
+                            input.admit_sample(*address, *sample)
+                        })?;
+                }
                 Signal::SerialStatus {
                     node,
                     route,
@@ -133,6 +143,16 @@ impl Session {
                     channel,
                     value,
                 } => analog.entry(node).or_default().push((*channel, *value)),
+                Signal::Proximity {
+                    node,
+                    address,
+                    sample,
+                } => {
+                    self.board.capability_input::<dyn ProximityInput, _>(
+                        self.node(node)?,
+                        |input, cx| input.set_sample(cx, *address, *sample),
+                    )?;
+                }
                 Signal::SerialStatus {
                     node,
                     route,
