@@ -533,6 +533,7 @@ impl Soc {
                     | crate::soc::BlockDevice::AudioSerial { .. }
                     | crate::soc::BlockDevice::MemoryConfiguration { .. }
                     | crate::soc::BlockDevice::DdrPhy { .. }
+                    | crate::soc::BlockDevice::CableStatus { .. }
                     | crate::soc::BlockDevice::SdInterface { .. }
                     | crate::soc::BlockDevice::SdhciUhs2 { .. }
                     | crate::soc::BlockDevice::DisplayOutputLink { .. }

@@ -718,7 +718,17 @@ fn block_window(
             options.insert("bytes_per_tick".into(), integer(*bytes_per_tick));
             "audio-dma"
         }
-        BlockDevice::Xp5Gpio { .. } => "gpio",
+        BlockDevice::Xp5Gpio { port: None, .. } => "gpio",
+        BlockDevice::Xp5Gpio { port: Some(3), .. } => "gpio-port3",
+        BlockDevice::Xp5Gpio { port: Some(port), .. } => return Err(format!("block {}: no XP5 single-port GPIO view of port {port}", block.id)),
+        BlockDevice::CableStatus { connected_level, .. } => match block.kind {
+            SocBlockKind::UsbController if *connected_level == 1 => "usb-connection-status",
+            SocBlockKind::DisplayController => {
+                options.insert("connected_level".into(), integer(u64::from(*connected_level)));
+                "hdmi-hot-plug-status"
+            }
+            _ => return Err(format!("block {}: no XP5 cable status model", block.id)),
+        },
         BlockDevice::Xp5Adc { .. } => {
             if let Some(samples) = samples {
                 options.insert("samples".into(), toml::Value::Array(samples.iter().map(|value| integer(u64::from(*value))).collect()));

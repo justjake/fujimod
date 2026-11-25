@@ -373,6 +373,7 @@ type BlockDevice = (
     | BlockDeviceVariant89
     | BlockDeviceVariant90
     | BlockDeviceVariant91
+    | BlockDeviceVariant92
 )
 
 
@@ -766,6 +767,7 @@ class BlockDeviceVariant61(TypedDict, total=False):
 class BlockDeviceVariant62(TypedDict, total=False):
     basis: Required[str]
     model: Required[Literal["xp5_gpio"]]
+    port: NotRequired[int | None]
 
 
 class BlockDeviceVariant63(TypedDict, total=False):
@@ -796,12 +798,13 @@ class BlockDeviceVariant67(TypedDict, total=False):
 
 class BlockDeviceVariant68(TypedDict, total=False):
     basis: Required[str]
-    model: Required[Literal["ddr_phy"]]
+    connected_level: Required[int]
+    model: Required[Literal["cable_status"]]
 
 
 class BlockDeviceVariant69(TypedDict, total=False):
     basis: Required[str]
-    model: Required[Literal["sd_interface"]]
+    model: Required[Literal["ddr_phy"]]
 
 
 class BlockDeviceVariant7(TypedDict, total=False):
@@ -814,53 +817,53 @@ class BlockDeviceVariant7(TypedDict, total=False):
 
 class BlockDeviceVariant70(TypedDict, total=False):
     basis: Required[str]
-    clock_ticks: Required[int]
-    model: Required[Literal["sdhci_uhs2"]]
+    model: Required[Literal["sd_interface"]]
 
 
 class BlockDeviceVariant71(TypedDict, total=False):
     basis: Required[str]
-    model: Required[Literal["display_output_link"]]
+    clock_ticks: Required[int]
+    model: Required[Literal["sdhci_uhs2"]]
 
 
 class BlockDeviceVariant72(TypedDict, total=False):
     basis: Required[str]
-    model: Required[Literal["renderer"]]
+    model: Required[Literal["display_output_link"]]
 
 
 class BlockDeviceVariant73(TypedDict, total=False):
     basis: Required[str]
-    model: Required[Literal["imaging_phy"]]
+    model: Required[Literal["renderer"]]
 
 
 class BlockDeviceVariant74(TypedDict, total=False):
     basis: Required[str]
-    model: Required[Literal["imaging_input"]]
+    model: Required[Literal["imaging_phy"]]
 
 
 class BlockDeviceVariant75(TypedDict, total=False):
     basis: Required[str]
-    model: Required[Literal["imaging_resize"]]
+    model: Required[Literal["imaging_input"]]
 
 
 class BlockDeviceVariant76(TypedDict, total=False):
     basis: Required[str]
-    model: Required[Literal["imaging_paf"]]
+    model: Required[Literal["imaging_resize"]]
 
 
 class BlockDeviceVariant77(TypedDict, total=False):
     basis: Required[str]
-    model: Required[Literal["imaging_preview"]]
+    model: Required[Literal["imaging_paf"]]
 
 
 class BlockDeviceVariant78(TypedDict, total=False):
     basis: Required[str]
-    model: Required[Literal["imaging_rifp_io"]]
+    model: Required[Literal["imaging_preview"]]
 
 
 class BlockDeviceVariant79(TypedDict, total=False):
     basis: Required[str]
-    model: Required[Literal["imaging_rifp"]]
+    model: Required[Literal["imaging_rifp_io"]]
 
 
 class BlockDeviceVariant8(TypedDict, total=False):
@@ -872,40 +875,45 @@ class BlockDeviceVariant8(TypedDict, total=False):
 
 class BlockDeviceVariant80(TypedDict, total=False):
     basis: Required[str]
-    model: Required[Literal["imaging_tnr"]]
+    model: Required[Literal["imaging_rifp"]]
 
 
 class BlockDeviceVariant81(TypedDict, total=False):
     basis: Required[str]
-    model: Required[Literal["imaging_fcnv"]]
+    model: Required[Literal["imaging_tnr"]]
 
 
 class BlockDeviceVariant82(TypedDict, total=False):
     basis: Required[str]
-    model: Required[Literal["imaging_filter_scaler"]]
+    model: Required[Literal["imaging_fcnv"]]
 
 
 class BlockDeviceVariant83(TypedDict, total=False):
     basis: Required[str]
-    model: Required[Literal["imaging_rzl2"]]
+    model: Required[Literal["imaging_filter_scaler"]]
 
 
 class BlockDeviceVariant84(TypedDict, total=False):
     basis: Required[str]
-    model: Required[Literal["imaging_resz"]]
+    model: Required[Literal["imaging_rzl2"]]
 
 
 class BlockDeviceVariant85(TypedDict, total=False):
     basis: Required[str]
-    model: Required[Literal["input_capture"]]
+    model: Required[Literal["imaging_resz"]]
 
 
 class BlockDeviceVariant86(TypedDict, total=False):
     basis: Required[str]
-    model: Required[Literal["pl011"]]
+    model: Required[Literal["input_capture"]]
 
 
 class BlockDeviceVariant87(TypedDict, total=False):
+    basis: Required[str]
+    model: Required[Literal["pl011"]]
+
+
+class BlockDeviceVariant88(TypedDict, total=False):
     basis: Required[str]
     companion_irq_line: NotRequired[int | None]
     model: Required[Literal["pl022"]]
@@ -915,7 +923,7 @@ class BlockDeviceVariant87(TypedDict, total=False):
     transmit_request: NotRequired[int | None]
 
 
-class BlockDeviceVariant88(TypedDict, total=False):
+class BlockDeviceVariant89(TypedDict, total=False):
     ack: NotRequired[CompletionAck | None]
     basis: Required[str]
     completion: NotRequired[list[CompletionWrite]]
@@ -926,11 +934,6 @@ class BlockDeviceVariant88(TypedDict, total=False):
     starts: NotRequired[list[CompletionStart]]
 
 
-class BlockDeviceVariant89(TypedDict, total=False):
-    basis: Required[str]
-    model: Required[Literal["video_codec"]]
-
-
 class BlockDeviceVariant9(TypedDict, total=False):
     basis: Required[str]
     model: Required[Literal["imaging_receiver"]]
@@ -938,10 +941,15 @@ class BlockDeviceVariant9(TypedDict, total=False):
 
 class BlockDeviceVariant90(TypedDict, total=False):
     basis: Required[str]
-    model: Required[Literal["imaging_dsp"]]
+    model: Required[Literal["video_codec"]]
 
 
 class BlockDeviceVariant91(TypedDict, total=False):
+    basis: Required[str]
+    model: Required[Literal["imaging_dsp"]]
+
+
+class BlockDeviceVariant92(TypedDict, total=False):
     basis: Required[str]
     model: Required[Literal["unmodeled_bus_drain"]]
 

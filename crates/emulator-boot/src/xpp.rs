@@ -627,6 +627,7 @@ fn block_register_layouts(
             | BlockDevice::AudioSerial { .. }
             | BlockDevice::MemoryConfiguration { .. }
             | BlockDevice::DdrPhy { .. }
+            | BlockDevice::CableStatus { .. }
             | BlockDevice::SdInterface { .. }
             | BlockDevice::SdhciUhs2 { .. }
             | BlockDevice::DisplayOutputLink { .. }
