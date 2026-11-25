@@ -2,7 +2,7 @@
 [[device]]
 base = 0xff908000
 size = 0x1000
-kind = "timer"
+kind = "timer-focus-capture"
 
 # Extended timers (IRQs 68..73 on the other XP5 bodies), declared as on the X-T5, X-H2 and X100VI
 # boards. The companion's first access is a word write of 0x3330111 at 0xff909004 (0x29088). The
