@@ -164,22 +164,33 @@ impl Library {
         })
     }
 
-    /// The firmware's registered browser run configuration and overlay.
+    /// The firmware's registered native camera run configuration, or its
+    /// browser configuration and overlay when it declares no camera one.
     pub fn resolved(&self, firmware_id: &str) -> Result<ResolvedConfiguration, LibraryError> {
         let firmware = self.firmware(firmware_id)?;
-        let overlay_id = firmware
+        let profile = firmware
             .layouts
             .as_ref()
-            .and_then(|layouts| layouts.profiles.get(firmware_id))
-            .and_then(|profile| profile.browser_configuration_id.clone())
-            .ok_or_else(|| LibraryError::UnregisteredFirmware(firmware_id.into()))?;
-        let overlay = RunOverlay::bundled(&overlay_id).map_err(LibraryError::Catalog)?;
-        let configuration_id = overlay.configuration_id.clone();
-        let resolved = ResolvedConfiguration::with_overlays(
-            &configuration_id,
-            std::slice::from_ref(&overlay_id),
-        )
-        .map_err(LibraryError::Catalog)?;
+            .and_then(|layouts| layouts.profiles.get(firmware_id));
+        let (configuration_id, resolved) = if let Some(configuration_id) =
+            profile.and_then(|profile| profile.camera_configuration_id.clone())
+        {
+            let resolved = ResolvedConfiguration::with_overlays(&configuration_id, &[])
+                .map_err(LibraryError::Catalog)?;
+            (configuration_id, resolved)
+        } else {
+            let overlay_id = profile
+                .and_then(|profile| profile.browser_configuration_id.clone())
+                .ok_or_else(|| LibraryError::UnregisteredFirmware(firmware_id.into()))?;
+            let overlay = RunOverlay::bundled(&overlay_id).map_err(LibraryError::Catalog)?;
+            let configuration_id = overlay.configuration_id.clone();
+            let resolved = ResolvedConfiguration::with_overlays(
+                &configuration_id,
+                std::slice::from_ref(&overlay_id),
+            )
+            .map_err(LibraryError::Catalog)?;
+            (configuration_id, resolved)
+        };
         if resolved.configuration.firmware_id != firmware_id {
             return Err(LibraryError::Missing(format!(
                 "run configuration {configuration_id} names firmware {}, not {firmware_id}",
