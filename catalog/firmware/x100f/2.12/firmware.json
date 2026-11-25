@@ -1,0 +1,18 @@
+{
+  "$schema": "https://fujimod.com/schemas/firmware.schema.json",
+  "schema": 1,
+  "id": "x100f-212",
+  "body_id": "x100f",
+  "version": "2.12",
+  "update": {
+    "size": 53544672,
+    "sha256": "c0d4c31985aaf793e060924fbfdfbd7cf205a27986cda43c1806688e01523f89"
+  },
+  "boot_rom": {
+    "content": {
+      "size": 65536,
+      "sha256": "781bd91b2fd60f659016f9070bc03dec5e0325064d649d00f8016f38ead9c1e6"
+    },
+    "address": 4293918720
+  }
+}
