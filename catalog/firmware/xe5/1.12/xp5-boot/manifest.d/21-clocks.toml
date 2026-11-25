@@ -1,7 +1,0 @@
-# The factory registers the bank tables inside this envelope; holes and
-# unknown offsets still stop. PLL words and dividers start zero by session
-# assumption; no rate or lock-time claim.
-[[device]]
-base = 0xffa00000
-size = 0x20000
-kind = "clock-banks"

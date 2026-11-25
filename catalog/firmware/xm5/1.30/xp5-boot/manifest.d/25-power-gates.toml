@@ -1,9 +1,0 @@
-# Power-gate bank (the SoC's `power-gates` block, declared as on the X-T5, X100VI and X-H2).
-# Boot setup (0xff800038) stores 0 to +0x510 after the clock-gate request 0xff8006ec(0xc,
-# 0x10000, 1) and before 0xff800420(0x11, 0x1000000, 1); it touches no other power-gate
-# register. The shared model's latches start zero (session assumption); +0x510's effect is
-# not modeled (UNVERIFIED meaning).
-[[device]]
-base = 0xff90d000
-size = 0x1000
-kind = "power-gates"

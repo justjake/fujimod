@@ -25,6 +25,8 @@ pub struct BootState {
     /// companion firmware reaches DRAM the SoC windows do not cover.
     #[serde(default)]
     pub companion_window: Vec<CompanionWindow>,
+    /// The run's device windows, built from the catalog (`with_catalog_windows`); a
+    /// manifest declares none.
     #[serde(default)]
     pub device: Vec<DeviceWindow>,
     /// Card media of each SD slot, keyed by its UHS-I host base. Presence and
@@ -100,16 +102,10 @@ pub struct RamRegion {
 }
 pub use fujimod_catalog::firmware::Preload;
 
-#[derive(Deserialize)]
-#[serde(deny_unknown_fields)]
-struct DeviceFragment {
-    device: Vec<DeviceWindow>,
-}
 /// A firmware's boot manifest and stream layout, compiled into the crate.
 pub(crate) struct Bundled {
     pub firmware: &'static str,
     pub manifest: &'static str,
-    pub fragments: &'static [&'static str],
     pub streams: &'static str,
 }
 
@@ -123,13 +119,12 @@ pub(crate) fn bundled(firmware: &str) -> Result<&'static Bundled, String> {
 }
 
 impl BootState {
-    /// Load the bundled manifest or a caller-selected manifest and its sibling device fragments.
+    /// Load the bundled manifest or a caller-selected manifest.
     pub fn for_firmware(firmware: &str, manifest: Option<&Path>) -> Result<Self, String> {
         let state = match manifest {
             Some(path) => Self::load(path)?,
             None => {
-                let bundled = bundled(firmware)?;
-                Self::parse(bundled.manifest, bundled.fragments)?
+                Self::parse(bundled(firmware)?.manifest)?
             }
         };
         if state.firmware != firmware {
@@ -140,37 +135,30 @@ impl BootState {
 
     fn load(path: &Path) -> Result<Self, String> {
         let text = std::fs::read_to_string(path).map_err(|e| format!("{}: {e}", path.display()))?;
-        let directory = path.with_extension("d");
-        let mut names = match std::fs::read_dir(&directory) {
-            Ok(entries) => entries
-                .flatten()
-                .map(|entry| entry.path())
-                .filter(|fragment| fragment.extension().is_some_and(|extension| extension == "toml"))
-                .collect::<Vec<_>>(),
-            Err(e) if e.kind() == std::io::ErrorKind::NotFound => Vec::new(),
-            Err(e) => return Err(format!("{}: {e}", directory.display())),
-        };
-        names.sort();
-        let fragments = names
-            .iter()
-            .map(|fragment| {
-                std::fs::read_to_string(fragment).map_err(|e| format!("{}: {e}", fragment.display()))
-            })
-            .collect::<Result<Vec<_>, _>>()?;
-        Self::parse(&text, &fragments.iter().map(String::as_str).collect::<Vec<_>>())
-            .map_err(|error| format!("{}: {error}", path.display()))
+        Self::parse(&text).map_err(|error| format!("{}: {error}", path.display()))
     }
 
-    fn parse(text: &str, fragments: &[&str]) -> Result<Self, String> {
-        let mut s: Self = toml::from_str(text).map_err(|e| e.to_string())?;
-        for fragment in fragments {
-            let parsed: DeviceFragment = toml::from_str(fragment).map_err(|e| e.to_string())?;
-            s.device.extend(parsed.device);
+    fn parse(text: &str) -> Result<Self, String> {
+        let s: Self = toml::from_str(text).map_err(|e| e.to_string())?;
+        if !s.device.is_empty() {
+            return Err("device windows come from the catalog, not the boot manifest".into());
         }
         if s.version != 1 {
             return Err(format!("unsupported boot state version {}", s.version));
         }
         Ok(s)
+    }
+}
+
+impl BootState {
+    /// Build the run's device windows from the catalog, honoring the manifest's DRAM override.
+    pub fn with_catalog_windows(
+        mut self,
+        resolved: &fujimod_catalog_resolution::ResolvedConfiguration,
+    ) -> Result<Self, String> {
+        let dram = self.dram.as_ref().map(|dram| (dram.limit, dram.bus_drain));
+        self.device = fujimod_emulator_xp5_board::boot::device_windows(resolved, dram)?;
+        Ok(self)
     }
 }
 

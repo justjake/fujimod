@@ -1,6 +1,0 @@
-# Display output link: the same SoC window and kind as xt5-431.d/24-output-link.toml
-# (X-H2S references 0xff9a1000 at 0x1763788..). Immediate functional completion.
-[[device]]
-base = 0xff9a1000
-size = 0x1c
-kind = "display-output-link"

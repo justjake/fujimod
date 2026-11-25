@@ -472,24 +472,16 @@ mod tests {
         assert!(fifo.read(SERIAL + 4, 4).is_err());
     }
 
-    /// The X-T5 4.31 audio fragment opens both serial instances and the PL330 on this board.
+    /// The X-T5 4.31 audio windows open both serial instances and the PL330 on this board.
     #[test]
     fn the_xt5_audio_windows_open() {
-        #[derive(serde::Deserialize)]
-        struct Fragment {
-            device: Vec<DeviceWindow>,
-        }
-        let path = concat!(
-            env!("CARGO_MANIFEST_DIR"),
-            "/../../catalog/firmware/xt5/4.31/xp5-boot/manifest.d/62-audio.toml"
-        );
-        let fragment: Fragment = toml::from_str(&std::fs::read_to_string(path).unwrap()).unwrap();
+        let windows = crate::boot::xt5_windows(&["audio-serial", "audio-dma"]);
         let mut graph = DeviceGraph::new();
-        register_all(&mut graph, &fragment.device).unwrap();
+        register_all(&mut graph, &windows).unwrap();
         assert!(graph.at(SERIAL).is_ok());
         assert!(graph.at(0xff991000).is_ok());
         assert!(graph.at(DMA_BASE).is_ok());
-        let mut moved = fragment.device.clone();
+        let mut moved = windows.clone();
         moved.retain(|w| w.kind == "audio-serial");
         moved[0].base = 0xff920000;
         assert!(register_all(&mut DeviceGraph::new(), &moved).is_err());

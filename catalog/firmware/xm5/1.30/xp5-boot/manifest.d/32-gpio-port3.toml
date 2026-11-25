@@ -1,4 +1,0 @@
-[[device]]
-base = 0xff90b000
-size = 0x1000
-kind = "gpio-port3"

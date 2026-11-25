@@ -491,18 +491,10 @@ fn a53_irq_base_outside_the_gic_spi_range_refuses() {
 }
 
 #[test]
-fn the_xt5_lens_fragment_registers_the_lens_bus_connector() {
-    let fragment: toml::Table = toml::from_str(include_str!(
-        "../../../../../catalog/firmware/xt5/4.31/xp5-boot/manifest.d/45-lens.toml"
-    ))
-    .unwrap();
-    let device = fragment["device"].as_array().unwrap()[0].as_table().unwrap();
-    let lens = DeviceWindow {
-        base: device["base"].as_integer().unwrap() as u64,
-        size: device["size"].as_integer().unwrap() as u64,
-        kind: device["kind"].as_str().unwrap().into(),
-        options: device["options"].as_table().unwrap().clone(),
-    };
+fn the_xt5_lens_window_registers_the_lens_bus_connector() {
+    let mut lens = crate::boot::xt5_windows(&["pl022"]);
+    lens.retain(|window| window.base == 0xff910000);
+    let lens = lens.remove(0);
     let pins = Pins::shared();
     let mut graph = DeviceGraph::new();
     graph

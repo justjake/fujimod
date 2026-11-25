@@ -525,6 +525,34 @@ pub fn windows(
     Ok(devices)
 }
 
+/// The run's XP5 device windows. `dram` is a firmware's own DRAM extent and the
+/// address its body's one bus drain moves to so that it lies past that extent;
+/// absent, the catalog's DRAM address space bounds the drains.
+pub fn device_windows(
+    resolved: &fujimod_catalog_resolution::ResolvedConfiguration,
+    dram: Option<(u64, u64)>,
+) -> Result<Vec<DeviceWindow>, String> {
+    let Some((limit, bus_drain)) = dram else {
+        return windows_from_blocks(resolved, resolved.dram_address_space_limit_bytes()?);
+    };
+    let mut moved = resolved.clone();
+    let drains = moved.reference.body.hardware.as_mut().map(|hardware| &mut hardware.bus_drain);
+    let Some([drain]) = drains.map(|drains| drains.as_mut_slice()) else {
+        return Err("a DRAM override moves a bus drain the body does not declare once".into());
+    };
+    drain.address = bus_drain;
+    windows_from_blocks(&moved, limit)
+}
+
+/// The X-T5 4.31 windows of `kinds`, for device tests.
+#[cfg(test)]
+pub(crate) fn xt5_windows(kinds: &[&str]) -> Vec<DeviceWindow> {
+    let resolved = fujimod_catalog_resolution::ResolvedConfiguration::bundled("xt5-431").unwrap();
+    let mut windows = device_windows(&resolved, None).unwrap();
+    windows.retain(|window| kinds.contains(&window.kind.as_str()));
+    windows
+}
+
 /// The XP5 device graph built from the catalog's block records.
 ///
 /// Firmware, body and run facts are joined by block identity: a block keeps the
@@ -535,7 +563,6 @@ pub fn windows_from_blocks(
     dram_limit: u64,
 ) -> Result<Vec<DeviceWindow>, String> {
     use fujimod_catalog_configuration::application_inputs::ApplicationBlockInput;
-    use fujimod_catalog::reference::SocBlock;
 
     let selection = &resolved.reference;
     let inputs = resolved

@@ -1,6 +1,0 @@
-# Virtual audio endpoint; idle status3, one dummy RX0 word per transfer.
-# Lets the stock audio task initialize without holding up the first screen.
-[[device]]
-base = 0xff918000
-size = 0x1000
-kind = "audio-spi-sink"

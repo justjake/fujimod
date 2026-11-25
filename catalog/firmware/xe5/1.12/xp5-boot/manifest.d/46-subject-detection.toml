@@ -1,8 +1,0 @@
-# Taken from the X-T5 4.31 board fragment of the same name, keeping only the windows the X-E5 manifest does
-# not declare yet. Every value is INHERITED and UNVERIFIED for the X-E5: its use of these blocks has not been
-# read from its firmware. The first stop here was a 4-byte write of 0 to 0xff90e720 from the application.
-
-[[device]]
-base = 0xff90e720
-size = 0x18
-kind = "write-only-registers"

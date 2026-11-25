@@ -1,9 +1,0 @@
-# Clock banks (the SoC's `clock-banks` block). The divider setter 0x13ad6e8 takes rows
-# of the 0x29-entry table 0x18f43a8 (16 bytes: bank, register, ..., mask 0x1ff) and
-# writes banks 0xffa01000..0xffa05000 and 0xffa10000..0xffa1b000. The factory registers
-# the known banks only; holes and unknown offsets still stop. Words start zero by
-# session assumption; no rate or lock-time claim.
-[[device]]
-base = 0xffa00000
-size = 0x20000
-kind = "clock-banks"

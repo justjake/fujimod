@@ -1,5 +1,0 @@
-# Companion mailbox: raises A53 INTID 142; same window as the other XP5 bodies.
-[[device]]
-base = 0xff90e100
-size = 0x24
-kind = "interprocessor-mailbox"

@@ -71,17 +71,8 @@ mod tests {
     #[test]
     fn the_xt5_decoder_window_opens() {
         use fujimod_emulator_devices::graph::{DeviceGraph, DeviceWindow};
-        #[derive(serde::Deserialize)]
-        struct Fragment {
-            device: Vec<DeviceWindow>,
-        }
-        let path = concat!(
-            env!("CARGO_MANIFEST_DIR"),
-            "/../../catalog/firmware/xt5/4.31/xp5-boot/manifest.d/58-playback.toml"
-        );
-        let fragment: Fragment = toml::from_str(&std::fs::read_to_string(path).unwrap()).unwrap();
-        let window = fragment
-            .device
+        let windows = crate::boot::xt5_windows(&["jpeg-decoder"]);
+        let window = windows
             .iter()
             .find(|window| window.kind == "jpeg-decoder")
             .expect("a jpeg-decoder window");

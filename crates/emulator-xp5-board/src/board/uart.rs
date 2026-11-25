@@ -39,17 +39,10 @@ mod tests {
     const MIS: u64 = 0x40;
     const ICR: u64 = 0x44;
 
-    /// The X-T5 4.31 catalog fragment that declares port 0.
+    /// The X-T5 4.31 window of port 0.
     fn xt5_window() -> DeviceWindow {
-        #[derive(Deserialize)]
-        struct Fragment {
-            device: Vec<DeviceWindow>,
-        }
-        let text = include_str!(concat!(
-            env!("CARGO_MANIFEST_DIR"),
-            "/../../catalog/firmware/xt5/4.31/xp5-boot/manifest.d/65-uart.toml"
-        ));
-        let mut windows = toml::from_str::<Fragment>(text).unwrap().device;
+        let mut windows = crate::boot::xt5_windows(&["pl011"]);
+        windows.retain(|window| window.base == BASE);
         assert_eq!(windows.len(), 1);
         windows.remove(0)
     }

@@ -1730,16 +1730,8 @@ mod tests {
 
     #[test]
     fn the_xt5_codec_window_opens() {
-        #[derive(serde::Deserialize)]
-        struct Fragment {
-            device: Vec<DeviceWindow>,
-        }
-        let path = concat!(
-            env!("CARGO_MANIFEST_DIR"),
-            "/../../catalog/firmware/xt5/4.31/xp5-boot/manifest.d/61-codec.toml"
-        );
-        let fragment: Fragment = toml::from_str(&std::fs::read_to_string(path).unwrap()).unwrap();
-        let window = fragment.device.iter().find(|w| w.kind == "xp5-codec").unwrap();
+        let windows = crate::boot::xt5_windows(&["xp5-codec"]);
+        let window = windows.iter().find(|w| w.kind == "xp5-codec").unwrap();
         let mut graph = DeviceGraph::new();
         register(&mut graph, window).unwrap();
         assert!(graph.at(0xffd1_5100).is_ok() && graph.at(0xff90_e71c).is_ok());

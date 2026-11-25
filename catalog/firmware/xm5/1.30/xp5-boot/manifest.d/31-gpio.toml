@@ -1,9 +1,0 @@
-# GPIO block. Pad defaults are not declared: the X-M5 panel selects and accessory input are
-# not established, so every output latch and input starts at the model default.
-[[device]]
-base = 0xff907000
-size = 0x1000
-kind = "gpio"
-[device.options]
-feedback = [{ port = 4, register = 0, bit = 4, input_port = 4, input_pin = 4 }]
-pad_model = "data-latch"

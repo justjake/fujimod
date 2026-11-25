@@ -1,9 +1,0 @@
-# SoC temperature sensor (the SoC's temperature block, the shared model), as on the X-T5, X-H2
-# and X-E5. The application driver 0x14d0028..0x14d0590 and its low-segment copy
-# 0x910e88..0x9113e4 access +0x00c, +0x028, +0x810, +0x814, +0x818, +0x824, +0x828, +0x830,
-# +0x834 and +0x840..+0x850, the X-E5 driver's register set; the first access writes the enable
-# bit to +0x00c (0x14d0028). The model's 25 C reading is HARDWARE-ONLY / UNVERIFIED.
-[[device]]
-base = 0xff905000
-size = 0x1000
-kind = "soc-temperature"

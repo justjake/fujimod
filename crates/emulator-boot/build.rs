@@ -32,19 +32,9 @@ fn main() {
             let id = manifest_text.lines()
                 .find_map(|line| line.strip_prefix("firmware = \"").and_then(|id| id.strip_suffix('"')))
                 .expect("XP5 manifest must declare its firmware ID");
-            let mut fragments: Vec<_> = fs::read_dir(directory.join("manifest.d"))
-                .map(|entries| entries.map(|entry| entry.unwrap().path())
-                    .filter(|path| path.extension().is_some_and(|extension| extension == "toml"))
-                    .collect())
-                .unwrap_or_default();
-            fragments.sort();
-            let mut list = String::new();
-            for fragment in fragments {
-                write!(list, "include_str!({:?}), ", fragment.display().to_string()).unwrap();
-            }
             writeln!(
                 source,
-                "    Bundled {{ firmware: {id:?}, manifest: include_str!({:?}), fragments: &[{list}], streams: include_str!({:?}) }},",
+                "    Bundled {{ firmware: {id:?}, manifest: include_str!({:?}), streams: include_str!({:?}) }},",
                 manifest.display().to_string(),
                 directory.join("streams.toml").display().to_string(),
             )
