@@ -35,6 +35,8 @@ pub struct Config {
     pub period_ns: Option<u64>,
     /// Diagnostic transport overrides; converter transport is the default.
     pub raw_formats: [Option<PixelOrder>; 4],
+    /// Decode the bank 0 two-plane groups as 8-bit Cb/Cr-interleaved 4:2:0.
+    pub hdmi_nv12: bool,
 }
 pub struct Display {
     bank: usize,
@@ -42,6 +44,7 @@ pub struct Display {
     period_ns: Option<u64>,
     clocks: Clocks,
     formats: [Option<PixelOrder>; 4],
+    hdmi_nv12: bool,
     needs_publication: bool,
     blank: Option<(u32, u32)>,
     input: Option<(u32, u32, Vec<raster::Snapshot>)>,
@@ -59,6 +62,9 @@ impl Display {
         {
             return Err("display period must be 1ms..1s".into());
         }
+        if config.hdmi_nv12 && bank != 0 {
+            return Err("HDMI NV12 is only available on display bank 0".into());
+        }
         Ok(Self {
             bank,
             state: State {
@@ -72,6 +78,7 @@ impl Display {
             },
             period_ns: config.period_ns,
             formats: config.raw_formats,
+            hdmi_nv12: config.hdmi_nv12,
             clocks,
             needs_publication: true,
             blank: None,
@@ -150,6 +157,7 @@ impl Display {
         let decoder = fujimod_framebuffer_xp5::Decoder {
             bank: self.bank,
             regs: &self.state.regs,
+            hdmi_nv12: self.hdmi_nv12,
             formats: self.formats.map(|p| {
                 p.map_or(
                     fujimod_framebuffer_xp5::Encoding::EmulatorConverted,
@@ -578,6 +586,7 @@ mod tests {
             Config {
                 period_ns: Some(30_000_000),
                 raw_formats: [Some(PixelOrder::Bgra), None, None, None],
+                ..Default::default()
             },
         )
         .unwrap();

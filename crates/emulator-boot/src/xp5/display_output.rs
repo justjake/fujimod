@@ -12,6 +12,7 @@ pub(crate) fn configure(
     let valid = [
         "frame_dir",
         "frame_period_ns",
+        "hdmi_nv12",
         "raw_format0",
         "raw_format1",
         "raw_format2",
@@ -37,6 +38,11 @@ pub(crate) fn configure(
     };
     let mut config = Config {
         period_ns: number("frame_period_ns")?,
+        hdmi_nv12: options
+            .get("hdmi_nv12")
+            .map(|value| value.as_bool().ok_or("hdmi_nv12 must be a boolean"))
+            .transpose()?
+            .unwrap_or(false),
         ..Default::default()
     };
     for (n, format) in config.raw_formats.iter_mut().enumerate() {

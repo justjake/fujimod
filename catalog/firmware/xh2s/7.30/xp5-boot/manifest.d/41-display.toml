@@ -33,6 +33,9 @@ kind = "panel-pll"
 base = 0xff990000
 size = 0x1000
 kind = "display"
+[device.options]
+# Observed two-plane geometry. Interleaved Cb/Cr byte order is assumed.
+hdmi_nv12 = true
 [[device]]
 base = 0xff9a0000
 size = 0x1000
