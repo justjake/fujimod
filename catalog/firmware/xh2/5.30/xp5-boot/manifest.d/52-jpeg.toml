@@ -1,0 +1,10 @@
+# JPEG encoder (the SoC's jpeg block), declared as on the X-T5 (xt5/4.31 52-jpeg.toml).
+# The X-H2 playback path writes this block's neighbour 0xffd11000 when it opens a
+# picture; the interrupt line and run time are the X-T5's, UNVERIFIED on the X-H2.
+[[device]]
+base = 0xffd10000
+size = 0x1000
+kind = "jpeg-encoder"
+[device.options]
+irq = 207
+run_ticks = 1000
