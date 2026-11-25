@@ -141,6 +141,9 @@ pub enum OpenBoot {
     Stock,
     /// FujiMod loaded from the SD card by the boot ROM.
     SdCard,
+    /// FujiMod started from the SD card's automatic-boot installer in internal
+    /// flash. The first open installs it and keeps the flash in the library.
+    AutomaticBoot,
 }
 
 #[derive(Deserialize, JsonSchema)]
@@ -152,11 +155,12 @@ pub struct OpenParams {
     /// and reference camera are found in `FUJIMOD_FIRMWARE_LIBRARY`.
     pub firmware: String,
     /// `stock` boots the installed firmware; `sd-card` boots FujiMod from
-    /// `sd_card`, or from the current release card when it is omitted.
+    /// `sd_card`, or from the current release card when it is omitted;
+    /// `automatic-boot` starts the release card's installer from internal flash.
     pub boot: OpenBoot,
     /// Directory for the virtual SD card. An `sd-card` boot without it fetches
-    /// the release SD card for the firmware; for a `stock` boot its files are
-    /// added to the otherwise empty card.
+    /// the release SD card for the firmware, as does an `automatic-boot`; for a
+    /// `stock` boot its files are added to the otherwise empty card.
     pub sd_card: Option<String>,
     /// Checkpoint file to restore instead of booting. Give the same firmware,
     /// boot, SD card and execution policy as the camera that saved it.
@@ -270,9 +274,10 @@ pub struct DiffParams {
 impl Cameras {
     #[tool(
         description = "Open an emulated camera from a catalog firmware and boot. `boot` is \
-`stock` or `sd-card`; `sd_card` names an SD card directory, or the release card is fetched \
-for the firmware when it is omitted. It boots to REC (or restores \
-`snapshot`) and stays running for later calls. Returns its name, state and screen."
+`stock`, `sd-card` or `automatic-boot`; `sd_card` names an SD card directory, or the release \
+card is fetched for the firmware when it is omitted. `automatic-boot` installs the card's \
+loader into internal flash once and starts from it without holding a button. It boots to REC \
+(or restores `snapshot`) and stays running for later calls. Returns its name, state and screen."
     )]
     async fn camera_open(
         &self,
@@ -774,6 +779,6 @@ mod tests {
             .iter()
             .map(|value| value["const"].as_str().unwrap())
             .collect();
-        assert_eq!(boot, ["stock", "sd-card"]);
+        assert_eq!(boot, ["stock", "sd-card", "automatic-boot"]);
     }
 }

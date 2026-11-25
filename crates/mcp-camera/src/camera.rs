@@ -48,6 +48,12 @@ impl OpenRequest {
                 Some(directory) => BuilderBoot::SdCard(CardSource::Directory(directory.clone())),
                 None => BuilderBoot::SdCard(CardSource::Release),
             },
+            OpenBoot::AutomaticBoot => match &self.sd_card {
+                Some(directory) => {
+                    BuilderBoot::AutomaticBoot(CardSource::Directory(directory.clone()))
+                }
+                None => BuilderBoot::AutomaticBoot(CardSource::Release),
+            },
         };
         let card_files = match (self.boot, &self.sd_card) {
             (OpenBoot::Stock, Some(directory)) => sd_card_files(directory)?,
@@ -66,6 +72,7 @@ impl OpenRequest {
         match self.boot {
             OpenBoot::Stock => "stock",
             OpenBoot::SdCard => "sd-card",
+            OpenBoot::AutomaticBoot => "automatic-boot",
         }
     }
 }
@@ -210,6 +217,7 @@ impl Camera {
         let ticks_per_second = opened.camera.ticks_per_second;
         let facts = remote_facts(&opened.resolved);
         let stage = opened.stage;
+        let release = opened.release.clone();
         let mut camera = Self {
             session: opened.camera.session,
             resolved: opened.resolved,
@@ -232,7 +240,11 @@ impl Camera {
         summary["opened"] = json!({
             "firmware": request.firmware.clone(),
             "boot": request.boot_name(),
-            "sd_card": request.sd_card.as_ref().map(|path| path.display().to_string()),
+            "sd_card": request
+                .sd_card
+                .as_ref()
+                .map(|path| path.display().to_string())
+                .or(release),
             "snapshot": request.snapshot.as_ref().map(|path| path.display().to_string()),
             "execution_policy": policy.name(),
             "stage": stage.name(),
@@ -592,6 +604,31 @@ mod tests {
         assert!(matches!(
             built.boot,
             BuilderBoot::SdCard(CardSource::Directory(path)) if path == directory
+        ));
+        assert!(built.card_files.is_empty());
+    }
+
+    #[test]
+    fn an_automatic_boot_without_a_directory_uses_the_release() {
+        let built = request(OpenBoot::AutomaticBoot, None)
+            .builder_request()
+            .unwrap();
+        assert!(matches!(
+            built.boot,
+            BuilderBoot::AutomaticBoot(CardSource::Release)
+        ));
+        assert!(built.card_files.is_empty());
+    }
+
+    #[test]
+    fn an_automatic_boot_uses_the_directory() {
+        let directory = PathBuf::from("/tmp/example-card");
+        let built = request(OpenBoot::AutomaticBoot, Some(directory.clone()))
+            .builder_request()
+            .unwrap();
+        assert!(matches!(
+            built.boot,
+            BuilderBoot::AutomaticBoot(CardSource::Directory(path)) if path == directory
         ));
         assert!(built.card_files.is_empty());
     }

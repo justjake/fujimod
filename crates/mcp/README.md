@@ -53,11 +53,22 @@ Give `sd_card` to boot a FujiMod tree from a directory instead:
 }
 ```
 
+For automatic boot, install the card's loader into internal flash once:
+
+```json
+{
+  "firmware": "x70-110",
+  "boot": "automatic-boot",
+  "execution_policy": "interactive"
+}
+```
+
 The builder holds the body's SD boot controls from power-on and releases
-them at REC. It fetches a release card once into the firmware library and
-checks every file's SHA-256 before booting. A `stock` boot takes no
-`sd_card`, or uses its files as extra files on the otherwise empty card.
-`execution_policy` defaults to `exact`.
+them at REC; an automatic boot holds nothing and starts from the kept flash.
+It fetches a release card once into the firmware library and checks every
+file's SHA-256 before booting. A `stock` boot takes no `sd_card`, or uses
+its files as extra files on the otherwise empty card. `execution_policy`
+defaults to `exact`.
 
 | Tool | Does |
 |---|---|

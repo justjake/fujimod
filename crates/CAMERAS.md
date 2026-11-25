@@ -30,9 +30,11 @@ builder holds them through the session's contact driver from power-on and
 releases them when the catalog says the boot ROM has sampled them. Callers
 never name pins.
 
-`AutomaticBoot` internal flash is made once per firmware and SD card: an
-`SdCard` boot runs the installer the SD card carries and the builder keeps
-the resulting flash. Later opens start from it with no buttons held.
+`AutomaticBoot` internal flash is made once per firmware and SD card: the
+builder writes the stage-1 loader the card carries into the body's NAND code
+space, points the boot block's reset literal at it, and keeps the resulting
+flash in the firmware library. Later opens restore that flash and start from
+it with no buttons held.
 
 ### SD card sources
 
@@ -94,11 +96,11 @@ the same key restores it in about a second instead of booting.
 
 - MCP `camera_open` takes `firmware`, `boot` and options. The raw `gpio`,
   `keys` and overlay options go.
-- The desktop launcher lists the firmware library's cameras and opens Stock
-  or SD card boots; `--endpoint` still connects to a session another host
-  serves.
-- The CLI `open` takes `--firmware ID --boot stock|sd-card [--sd-card DIR]
-  [--execution-policy interactive|exact] [--gui]`.
+- The desktop launcher lists the firmware library's cameras and opens Stock,
+  SD card or automatic boots; `--endpoint` still connects to a session
+  another host serves.
+- The CLI `open` takes `--firmware ID --boot stock|sd-card|automatic
+  [--sd-card DIR] [--execution-policy interactive|exact] [--gui]`.
 - The website keeps its interface and calls the builder inside its Wasm
   module.
 

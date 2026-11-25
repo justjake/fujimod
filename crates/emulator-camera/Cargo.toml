@@ -18,6 +18,7 @@ fujimod-emulator-models.workspace = true
 fujimod-emulator-session.workspace = true
 fujimod-emulator-controls.workspace = true
 fujimod-emulator-cpu.workspace = true
+fujimod-recovery.workspace = true
 fujimod-catalog.workspace = true
 fujimod-catalog-configuration.workspace = true
 fujimod-catalog-controls.workspace = true

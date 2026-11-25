@@ -26,6 +26,24 @@ pub use xp5::{
     SourceProof as Xp5SourceProof,
 };
 
+/// The EXR II NAND stage-1 loader, as the card's installer builds it before it
+/// fills in the firmware's identity, ROM routines and stage-2 range.
+pub const NAND_STAGE1_TEMPLATE: &[u8] =
+    include_bytes!("../assets/sd-boot-v2-stage1-internal-flash.generated.bin");
+
+/// Leading template bytes every body's configured loader shares; the image's
+/// `firmware_id` begins here.
+pub const NAND_STAGE1_COMMON_BYTES: usize = 628;
+
+/// The configured NAND stage-1 loader a card's firmware patch carries.
+pub fn nand_stage1_loader(card: &[u8]) -> Option<&[u8]> {
+    let common = &NAND_STAGE1_TEMPLATE[..NAND_STAGE1_COMMON_BYTES];
+    let start = card
+        .windows(common.len())
+        .position(|window| window == common)?;
+    card.get(start..start + NAND_STAGE1_TEMPLATE.len())
+}
+
 /// Optional diagnostics for XP5 startup construction. Zero preserves normal entry.
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub struct StartupOptions {

@@ -12,6 +12,8 @@ use std::{
 
 /// The environment variable naming the firmware library directory.
 pub const LIBRARY_ENV: &str = "FUJIMOD_FIRMWARE_LIBRARY";
+/// The library subdirectory holding automatic-boot state.
+pub const AUTOMATIC_DIRECTORY: &str = "automatic-boot";
 
 /// A firmware library could not be read or did not hold the catalog's files.
 #[derive(Debug, thiserror::Error)]
@@ -77,6 +79,7 @@ impl Library {
         let mut cameras = BTreeMap::new();
         let camera_root = root.join("cameras");
         let release_root = root.join(crate::release::CARD_DIRECTORY);
+        let automatic_root = root.join(AUTOMATIC_DIRECTORY);
         if camera_root.is_dir() {
             for entry in read_dir(&camera_root)? {
                 if entry.is_dir() {
@@ -97,7 +100,10 @@ impl Library {
         let mut pending = vec![root.clone()];
         while let Some(directory) = pending.pop() {
             for entry in read_dir(&directory)? {
-                if entry.starts_with(&camera_root) || entry.starts_with(&release_root) {
+                if entry.starts_with(&camera_root)
+                    || entry.starts_with(&release_root)
+                    || entry.starts_with(&automatic_root)
+                {
                     continue;
                 }
                 if entry.is_dir() {
@@ -218,6 +224,16 @@ impl Library {
                 LibraryError::Missing(format!("firmware {firmware_id} has no boot ROM identity"))
             })?;
         self.file(&content.content.sha256, firmware_id, "boot ROM")
+    }
+
+    /// The firmware's located NAND bootloader facts.
+    pub(crate) fn nand_boot(
+        &self,
+        firmware_id: &str,
+    ) -> Result<&fujimod_catalog::nand_boot::FirmwareNandBoot, LibraryError> {
+        self.catalog.nand_boot(firmware_id).ok_or_else(|| {
+            LibraryError::Missing(format!("firmware {firmware_id} has no NAND boot facts"))
+        })
     }
 
     fn file(&self, sha256: &str, firmware_id: &str, kind: &str) -> Result<PathBuf, LibraryError> {

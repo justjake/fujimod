@@ -14,7 +14,7 @@ use std::{
 };
 
 const HELP: &str = "Usage: fujimod-emulator boot --configuration ID --update UPDATE.DAT [--boot-rom ROM.BIN] [--gui] \\\n  [--overlay ID]... [--engine unicorn|hypervisor] [--screenshot LCD.PNG] [--instruction-limit COUNT] [--execution-policy interactive|exact]\n\
-  fujimod-emulator open --firmware ID --boot stock|sd-card [--sd-card DIR] [--execution-policy interactive|exact] [--gui]\n\n\
+  fujimod-emulator open --firmware ID --boot stock|sd-card|automatic [--sd-card DIR] [--execution-policy interactive|exact] [--gui]\n\n\
 The run configuration selects the camera, its firmware and how the run starts; the processor\n\
 generation only decides which of these options apply.\n\n\
 Boot configuration: x70-110-rec. The ROM dump is required.\n\
@@ -51,7 +51,9 @@ Prints a JSON boot report; exits 0 at REC (EXR II) or at the end of the run (XP5
 open names a catalog firmware whose update and boot ROM are found by SHA-256 in\n\
 FUJIMOD_FIRMWARE_LIBRARY. --boot stock starts the installed firmware; --boot sd-card starts\n\
 FujiMod from --sd-card, or from the current release SD card fetched into the library when\n\
---sd-card is omitted. A stock boot adds the --sd-card files to an otherwise empty card.\n\
+--sd-card is omitted; --boot automatic starts the loader that card carries from internal\n\
+flash, which the first open installs and keeps in the library. A stock boot adds the\n\
+--sd-card files to an otherwise empty card.\n\
 --execution-policy defaults to exact.\n\
 open boots to REC, prints a JSON report of the firmware, boot, stage and engine, and exits 0.\n\
 --gui opens the desktop window on the opened session before the report.\n";
@@ -193,6 +195,7 @@ fn parse(args: impl Iterator<Item = OsString>) -> Result<Option<Boot>, String> {
 enum OpenBoot {
     Stock,
     SdCard,
+    Automatic,
 }
 
 impl OpenBoot {
@@ -200,6 +203,7 @@ impl OpenBoot {
         match value {
             "stock" => Ok(Self::Stock),
             "sd-card" => Ok(Self::SdCard),
+            "automatic" | "automatic-boot" => Ok(Self::Automatic),
             _ => Err(format!("unknown boot: {value}")),
         }
     }
@@ -208,6 +212,7 @@ impl OpenBoot {
         match self {
             Self::Stock => "stock",
             Self::SdCard => "sd-card",
+            Self::Automatic => "automatic",
         }
     }
 }
@@ -234,13 +239,8 @@ impl Open {
                     .transpose()?
                     .unwrap_or_default(),
             ),
-            OpenBoot::SdCard => (
-                camera::Boot::SdCard(match &self.sd_card {
-                    Some(directory) => camera::CardSource::Directory(directory.clone()),
-                    None => camera::CardSource::Release,
-                }),
-                Vec::new(),
-            ),
+            OpenBoot::SdCard => (camera::Boot::SdCard(self.card_source()), Vec::new()),
+            OpenBoot::Automatic => (camera::Boot::AutomaticBoot(self.card_source()), Vec::new()),
         };
         Ok(camera::Request {
             firmware: self.firmware.clone(),
@@ -249,6 +249,13 @@ impl Open {
             engine: None,
             card_files,
         })
+    }
+
+    fn card_source(&self) -> camera::CardSource {
+        match &self.sd_card {
+            Some(directory) => camera::CardSource::Directory(directory.clone()),
+            None => camera::CardSource::Release,
+        }
     }
 }
 
@@ -1029,7 +1036,8 @@ fn run_open(open: Open) -> Result<Outcome, String> {
         "sd_card": open
             .sd_card
             .as_ref()
-            .map(|path| path.display().to_string()),
+            .map(|path| path.display().to_string())
+            .or_else(|| opened.release.clone()),
         "execution_policy": opened.policy.name(),
         "engine": opened.engine,
         "stage": opened.stage.name(),
@@ -1203,16 +1211,12 @@ mod tests {
         .unwrap();
         assert_eq!(open.boot, OpenBoot::SdCard);
         assert!(open.sd_card.is_none());
-        assert!(
-            parse_open(args(&[
-                "open",
-                "--firmware",
-                "x70-110",
-                "--boot",
-                "automatic-boot"
-            ]))
-            .is_err()
-        );
+        for name in ["automatic", "automatic-boot"] {
+            let open = parse_open(args(&["open", "--firmware", "x70-110", "--boot", name]))
+                .unwrap()
+                .unwrap();
+            assert_eq!(open.boot, OpenBoot::Automatic);
+        }
         assert!(
             parse_open(args(&[
                 "open",
@@ -1306,6 +1310,40 @@ mod tests {
         assert!(matches!(
             request.boot,
             camera::Boot::SdCard(camera::CardSource::Release)
+        ));
+        let request = parse_open(args(&[
+            "open",
+            "--firmware",
+            "x70-110",
+            "--boot",
+            "automatic",
+            "--sd-card",
+            "card",
+        ]))
+        .unwrap()
+        .unwrap()
+        .request()
+        .unwrap();
+        assert!(matches!(
+            request.boot,
+            camera::Boot::AutomaticBoot(camera::CardSource::Directory(ref path))
+                if path == Path::new("card")
+        ));
+        assert!(request.card_files.is_empty());
+        let request = parse_open(args(&[
+            "open",
+            "--firmware",
+            "x70-110",
+            "--boot",
+            "automatic",
+        ]))
+        .unwrap()
+        .unwrap()
+        .request()
+        .unwrap();
+        assert!(matches!(
+            request.boot,
+            camera::Boot::AutomaticBoot(camera::CardSource::Release)
         ));
         assert!(
             parse_open(args(&[

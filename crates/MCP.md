@@ -203,12 +203,13 @@ cloud machine with Mesa's software Vulkan driver:
 firmware identity and one of its boots:
 
 - `firmware`: the catalog release, such as `x70-110`.
-- `boot`: `stock` or `sd-card`. An `sd-card` boot holds the body's
-  `boot.sd` controls through the session contact driver from power-on and
-  releases them at REC.
-- `sd_card`: the directory for the virtual SD card. An `sd-card` boot without
-  it fetches the current release card for the firmware; for `stock` its files
-  are added to the otherwise empty card.
+- `boot`: `stock`, `sd-card` or `automatic-boot`. An `sd-card` boot holds
+  the body's `boot.sd` controls through the session contact driver from
+  power-on and releases them at REC; an `automatic-boot` holds nothing and
+  installs the card's loader into internal flash once.
+- `sd_card`: the directory for the virtual SD card. An `sd-card` or
+  `automatic-boot` without it fetches the current release card for the
+  firmware; for `stock` its files are added to the otherwise empty card.
 - `execution_policy`: `exact` (the default) or `interactive`.
 - `name`: the camera id later calls use.
 

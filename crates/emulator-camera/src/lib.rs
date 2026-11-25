@@ -1,8 +1,10 @@
 //! Open an emulated camera from a firmware library and a boot choice.
 //!
-//! A caller names a catalog firmware and a boot: the installed firmware, or
-//! FujiMod from an SD card. Everything else, the run configuration, overlays,
-//! boot controls, card geometry and execution policy, comes from the catalog.
+//! A caller names a catalog firmware and a boot: the installed firmware,
+//! FujiMod from an SD card held at power-on, or the card's automatic boot
+//! installed into internal flash. Everything else, the run configuration,
+//! overlays, boot controls, card geometry and execution policy, comes from the
+//! catalog.
 //!
 //! Opening returns only when the camera reaches REC (or its first-start
 //! setup). Every other outcome is an OpenError that names the boot stage it

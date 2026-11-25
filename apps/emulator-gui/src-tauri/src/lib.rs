@@ -96,6 +96,7 @@ struct OpenCameraRequest {
 enum LauncherBoot {
     Stock,
     SdCard,
+    AutomaticBoot,
 }
 
 struct Running {
@@ -317,6 +318,10 @@ fn open_with_builder(request: OpenCameraRequest) -> Result<(LaunchedCamera, Runn
     let boot = match request.boot {
         LauncherBoot::Stock => camera::Boot::Stock,
         LauncherBoot::SdCard => camera::Boot::SdCard(match request.sd_card {
+            Some(directory) => camera::CardSource::Directory(directory),
+            None => camera::CardSource::Release,
+        }),
+        LauncherBoot::AutomaticBoot => camera::Boot::AutomaticBoot(match request.sd_card {
             Some(directory) => camera::CardSource::Directory(directory),
             None => camera::CardSource::Release,
         }),

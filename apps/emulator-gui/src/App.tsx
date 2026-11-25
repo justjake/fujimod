@@ -129,7 +129,7 @@ export default function App() {
       await startCamera(await bridge.openCamera({
         firmware: firmware(),
         boot: boot(),
-        sdCard: boot() === 'sd-card' ? sdCard() || undefined : undefined,
+        sdCard: boot() === 'stock' ? undefined : sdCard() || undefined,
       }));
     } catch (error) {
       setLauncherError(shownError(error));
@@ -236,8 +236,14 @@ export default function App() {
                     <strong>SD card</strong>
                   </span>
                 </label>
+                <label class="boot-option wide" data-selected={boot() === 'automatic-boot'}>
+                  <input type="radio" name="boot" value="automatic-boot" checked={boot() === 'automatic-boot'} onChange={() => setBoot('automatic-boot')} />
+                  <span>
+                    <strong>Automatic boot</strong>
+                  </span>
+                </label>
               </fieldset>
-              <Show when={boot() === 'sd-card'}>
+              <Show when={boot() !== 'stock'}>
                 <div class="file-row">
                   <button type="button" onClick={() => void bridge!.chooseSdCard().then((path) => path && setSdCard(path))}>
                     Choose SD card folder
