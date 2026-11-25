@@ -32,6 +32,7 @@ struct Line {
     enabled: bool,
     group1: bool,
     /// GICD_IGRPMODR/GICR_IGRPMODR0; always clear with one Security state.
+    #[serde(default)]
     modifier: bool,
     priority: u8,
     edge: bool,
@@ -60,6 +61,7 @@ struct Active {
     dropped: bool,
 }
 #[derive(Clone, Serialize, Deserialize)]
+#[serde(try_from = "InterfaceRecord")]
 struct Interface {
     system_register_enable: bool,
     /// ICC_SRE_EL2.Enable: lets EL1 access ICC_SRE_EL1. Retained, not gating.
@@ -76,6 +78,53 @@ struct Interface {
     active: Vec<Active>,
     /// The processor's delivered Security state; used with two states only.
     security: ProcessorSecurity,
+}
+/// A checkpointed CPU interface. Checkpoints from before two Security states
+/// carry two group enables and the Secure Group 1 enable as
+/// `el3_group1_secure`, and no delivered Security state.
+#[derive(Deserialize)]
+struct InterfaceRecord {
+    system_register_enable: bool,
+    #[serde(default)]
+    hypervisor_enable: bool,
+    #[serde(default)]
+    el3_group1_secure: bool,
+    enabled: Vec<bool>,
+    pmr: u8,
+    bpr: [u8; 2],
+    split_eoi: bool,
+    asleep: bool,
+    active: Vec<Active>,
+    #[serde(default = "reset_security")]
+    security: ProcessorSecurity,
+}
+fn reset_security() -> ProcessorSecurity {
+    ProcessorSecurity::RESET
+}
+impl TryFrom<InterfaceRecord> for Interface {
+    type Error = String;
+    fn try_from(record: InterfaceRecord) -> Result<Self, String> {
+        let enabled = match record.enabled[..] {
+            [group0, group1] => [group0, group1, record.el3_group1_secure],
+            [group0, group1, group1_secure] => [group0, group1, group1_secure],
+            _ => {
+                return Err(
+                    "GICv3 checkpoint: an interface has neither two nor three group enables".into(),
+                );
+            }
+        };
+        Ok(Self {
+            system_register_enable: record.system_register_enable,
+            hypervisor_enable: record.hypervisor_enable,
+            enabled,
+            pmr: record.pmr,
+            bpr: record.bpr,
+            split_eoi: record.split_eoi,
+            asleep: record.asleep,
+            active: record.active,
+            security: record.security,
+        })
+    }
 }
 impl Default for Interface {
     fn default() -> Self {
@@ -94,6 +143,8 @@ impl Default for Interface {
 }
 #[derive(Clone, Serialize, Deserialize)]
 struct State {
+    /// Absent from checkpoints taken before two Security states: one state.
+    #[serde(default)]
     security_states: SecurityStates,
     affinities: Vec<u32>,
     distributor: u32,
@@ -896,6 +947,39 @@ impl fujimod_emulator_devices::gic::InterruptController for Gic {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn a_checkpoint_from_before_two_security_states_restores() {
+        let mut g = super::Gic::new(vec![0, 1], 128, super::SecurityStates::One).unwrap();
+        let mut saved = g.save();
+        saved["interfaces"][0]["enabled"] = serde_json::json!([true, true, true]);
+        let current = saved.clone();
+        // The earlier layout: no Security-state fields, two group enables and the
+        // Secure Group 1 enable on its own.
+        let mut old = saved;
+        old.as_object_mut().unwrap().remove("security_states");
+        for line in old["shared"].as_array_mut().unwrap() {
+            line.as_object_mut().unwrap().remove("modifier");
+        }
+        for core in old["private"].as_array_mut().unwrap() {
+            for line in core.as_array_mut().unwrap() {
+                line.as_object_mut().unwrap().remove("modifier");
+            }
+        }
+        for interface in old["interfaces"].as_array_mut().unwrap() {
+            let enabled = interface["enabled"].as_array().unwrap().clone();
+            let object = interface.as_object_mut().unwrap();
+            object.remove("security");
+            object.insert(
+                "enabled".into(),
+                serde_json::json!([enabled[0], enabled[1]]),
+            );
+            object.insert("el3_group1_secure".into(), enabled[2].clone());
+        }
+        g.restore(&old).unwrap();
+        assert_eq!(g.save(), current);
+        old["interfaces"][0]["enabled"] = serde_json::json!([true]);
+        assert!(g.restore(&old).is_err());
+    }
     #[test]
     fn el3_system_interface_enable_is_per_core_and_survives_checkpoint() {
         let mut g = super::Gic::new(vec![0, 1], 128, super::SecurityStates::One).unwrap();
