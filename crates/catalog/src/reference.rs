@@ -2227,6 +2227,9 @@ pub struct BodyWiring {
     pub target_id: String,
     /// Named signal carried by the wire.
     pub signal: WireSignal,
+    /// Seven-bit address of the target on a control bus, for a wire from a bus controller.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub address: Option<u8>,
 }
 
 /// Named physical wire types.
@@ -5478,6 +5481,7 @@ mod layout_tests {
                     source_id: "gpio".into(),
                     target_id: "gpio".into(),
                     signal: WireSignal::Gpio,
+                    address: None,
                 }],
             ),
         );

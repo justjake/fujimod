@@ -1,0 +1,11 @@
+{
+  "$schema": "https://fujimod.com/schemas/part.schema.json",
+  "schema": 1,
+  "id": "control-bus-device-68",
+  "model": {
+    "kind": "peripheral",
+    "interface": {
+      "kind": "retained-registers"
+    }
+  }
+}

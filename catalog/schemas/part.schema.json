@@ -1579,6 +1579,48 @@
         },
         {
           "additionalProperties": false,
+          "description": "Battery fuel gauge on a control bus.",
+          "properties": {
+            "kind": {
+              "const": "fuel-gauge",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "TMD2772 ambient-light and proximity sensor on a control bus.",
+          "properties": {
+            "kind": {
+              "const": "tmd2772-proximity",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Control-bus device of unknown function whose registers read back their last write.",
+          "properties": {
+            "kind": {
+              "const": "retained-registers",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
           "description": "Lens image-stabilizer command and status protocol.",
           "properties": {
             "commands": {

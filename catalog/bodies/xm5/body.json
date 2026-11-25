@@ -95,7 +95,9 @@
   ],
   "parts": [
     "power-controller",
-    "winbond-w35n01jw"
+    "winbond-w35n01jw",
+    "control-bus-device-66",
+    "control-bus-device-68"
   ],
   "wiring": [
     {
@@ -107,6 +109,18 @@
       "source_id": "flash",
       "target_id": "winbond-w35n01jw",
       "signal": "storage"
+    },
+    {
+      "source_id": "i2c1",
+      "target_id": "control-bus-device-66",
+      "signal": "serial_data",
+      "address": 102
+    },
+    {
+      "source_id": "i2c1",
+      "target_id": "control-bus-device-68",
+      "signal": "serial_data",
+      "address": 104
     }
   ]
 }

@@ -1,5 +1,26 @@
 {
   "$defs": {
+    "BlockLatency": {
+      "additionalProperties": false,
+      "description": "A functional completion latency for one block.",
+      "properties": {
+        "block_id": {
+          "description": "Processor block the latency applies to.",
+          "type": "string"
+        },
+        "ticks": {
+          "description": "Board ticks from a start to its completion.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "block_id",
+        "ticks"
+      ],
+      "type": "object"
+    },
     "DiscoveryAperture": {
       "additionalProperties": false,
       "description": "One discovery probe aperture, reserved below the high vectors.",
@@ -66,6 +87,13 @@
         "null"
       ]
     },
+    "completion_latencies": {
+      "description": "Functional completion latencies the emulator gives blocks; none is measured.",
+      "items": {
+        "$ref": "#/$defs/BlockLatency"
+      },
+      "type": "array"
+    },
     "cpu_model": {
       "description": "CPU model the emulator executes, standing in for an unavailable one.",
       "type": "string"
@@ -124,6 +152,13 @@
     },
     "private_mmio": {
       "description": "Processor blocks the emulator backs privately for each CPU.",
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "retained_word_blocks": {
+      "description": "Blocks whose unmodeled aligned words read back their last write instead of stopping.",
       "items": {
         "type": "string"
       },

@@ -4,6 +4,7 @@ base = 0xff948000
 size = 0x1000
 kind = "imaging-sensor"
 [device.options]
+retain_words = true
 command_latency_us = 1
 
 [[device]]
@@ -20,30 +21,41 @@ kind = "imaging-receiver"
 base = 0xff970000
 size = 0x1000
 kind = "movdc"
+[device.options]
+retain_words = true
 
 [[device]]
 base = 0xff971000
 size = 0x1000
 kind = "movdc"
+[device.options]
+retain_words = true
 
 [[device]]
 base = 0xff972000
 size = 0x1000
 kind = "movdc"
+[device.options]
+retain_words = true
 
 [[device]]
 base = 0xff974000
 size = 0x1000
 kind = "imaging-preview"
+[device.options]
+retain_words = true
 
 [[device]]
 base = 0xffd01000
 size = 0x1000
 kind = "imaging-rifp-io"
+[device.options]
+queue_completion_us = 5
 
 [[device]]
 base = 0xffd02000
 size = 0x1000
 kind = "imaging-rifp"
 [device.options]
+retain_words = true
 completion_us = 1000

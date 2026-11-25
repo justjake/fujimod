@@ -207,6 +207,12 @@ pub enum PeripheralPart {
     BisConfigurationRegisters,
     /// LSM6DS configuration-register protocol.
     Lsm6dsConfigurationRegisters,
+    /// Battery fuel gauge on a control bus.
+    FuelGauge,
+    /// TMD2772 ambient-light and proximity sensor on a control bus.
+    Tmd2772Proximity,
+    /// Control-bus device of unknown function whose registers read back their last write.
+    RetainedRegisters,
     /// Lens image-stabilizer command and status protocol.
     Stabilizer {
         /// Supported command encodings.
