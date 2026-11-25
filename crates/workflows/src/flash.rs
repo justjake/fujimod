@@ -1,6 +1,7 @@
 //! Whole-flash backup through processor-specific stock readers and owned RAM.
 pub mod exr2;
 mod mapped;
+mod xp4;
 mod xp5;
 mod xpp;
 pub use crate::callback::{CodeCheck, Range, Transport, WordCheck};
@@ -35,6 +36,7 @@ pub struct Callbacks<'a> {
 pub enum Payload {
     MappedE1(MappedPayload),
     XppCommand(xpp::Payload),
+    Xp4Command(xp4::Payload),
     Xp5Command(xp5::Payload),
     Exr2Query(exr2::Payload),
 }
@@ -50,6 +52,7 @@ impl Payload {
         match self {
             Self::MappedE1(p) => &p.firmware_id,
             Self::XppCommand(p) => &p.firmware_id,
+            Self::Xp4Command(p) => &p.firmware_id,
             Self::Xp5Command(p) => &p.firmware_id,
             Self::Exr2Query(p) => &p.firmware_id,
         }
@@ -58,6 +61,7 @@ impl Payload {
         match self {
             Self::MappedE1(_) => 0,
             Self::XppCommand(p) => p.buffer_capacity,
+            Self::Xp4Command(p) => p.buffer_capacity,
             Self::Xp5Command(p) => p.buffer_capacity,
             Self::Exr2Query(_) => CAPTURE_CHUNK_BYTES,
         }
@@ -66,6 +70,7 @@ impl Payload {
         match self {
             Self::MappedE1(p) => &p.firmware_sha256,
             Self::XppCommand(p) => &p.firmware_sha256,
+            Self::Xp4Command(p) => &p.firmware_sha256,
             Self::Xp5Command(p) => &p.firmware_sha256,
             Self::Exr2Query(p) => &p.firmware_sha256,
         }
@@ -79,6 +84,7 @@ impl Payload {
         match self {
             Self::MappedE1(p) => p.validate(flash, bulk, image),
             Self::XppCommand(p) => p.validate(flash, bulk, image),
+            Self::Xp4Command(p) => p.validate(flash, bulk, image),
             Self::Xp5Command(p) => p.validate(flash, bulk, image),
             Self::Exr2Query(p) => p.validate(flash, bulk, image),
         }
@@ -307,6 +313,19 @@ pub async fn backup(
             )
             .await
         }
+        Payload::Xp4Command(p) => {
+            xp4::read(
+                session,
+                bulk,
+                flash,
+                p,
+                image,
+                limits,
+                Selection::Whole,
+                callbacks,
+            )
+            .await
+        }
         Payload::Xp5Command(p) => {
             xp5::read(
                 session,
@@ -360,6 +379,7 @@ pub async fn read_range(
 ) -> bulk::Result<Vec<u8>> {
     let target = match payload {
         Payload::XppCommand(_) => enclosing_alignment(flash, offset, size, xpp::READ_ALIGNMENT)?,
+        Payload::Xp4Command(_) => enclosing_alignment(flash, offset, size, xp4::READ_ALIGNMENT)?,
         _ => enclosing(flash, offset, size)?,
     };
     payload.validate(flash, bulk, image)?;
@@ -399,6 +419,19 @@ pub async fn read_range(
         }
         Payload::XppCommand(p) => {
             xpp::read(
+                session,
+                bulk,
+                flash,
+                p,
+                image,
+                limits,
+                Selection::Range(target),
+                &mut callbacks,
+            )
+            .await?
+        }
+        Payload::Xp4Command(p) => {
+            xp4::read(
                 session,
                 bulk,
                 flash,
