@@ -262,7 +262,7 @@ fn a_declared_card_layout_is_refused_outside_a_stock_boot() {
     };
     assert_eq!(error.stage, Stage::BootRom);
     assert!(
-        error.detail.contains("stock SD card boot"),
+        error.detail.contains("nothing held"),
         "unexpected refusal: {}",
         error.detail
     );
