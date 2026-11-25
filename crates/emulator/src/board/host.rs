@@ -55,6 +55,15 @@ impl Board {
             .unwrap_or(serde_json::Value::Null))
     }
 
+    /// The interrupt each core's GIC CPU interface would signal now; empty without a GIC.
+    pub fn gic_eligible(&self, cores: usize) -> Result<Vec<Option<usize>>, String> {
+        let state = self.state.try_borrow().map_err(|_| "board is executing")?;
+        match state.interrupts.as_ref() {
+            Some(i) => (0..cores).map(|core| i.gic.eligible(core)).collect(),
+            None => Ok(Vec::new()),
+        }
+    }
+
     pub fn device_state_values(&self, kind: &str) -> Result<serde_json::Value, String> {
         let state = self.state.try_borrow().map_err(|_| "board is executing")?;
         self.track_device_kind(kind, &state.bus);

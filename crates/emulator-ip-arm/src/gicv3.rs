@@ -894,6 +894,10 @@ impl fujimod_emulator_devices::gic::InterruptController for Gic {
     fn pins(&self, core: usize) -> Result<(bool, bool), String> {
         Gic::pins(self, core)
     }
+    fn eligible(&self, core: usize) -> Result<Option<usize>, String> {
+        let groups = self.eligible.get(core).ok_or("GICv3 output targets absent processor")?;
+        Ok(groups.iter().flatten().next().copied())
+    }
     fn sgi_pending(&self, core: usize) -> Result<bool, String> {
         Gic::sgi_pending(self, core)
     }

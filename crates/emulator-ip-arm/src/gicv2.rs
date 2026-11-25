@@ -398,6 +398,12 @@ impl fujimod_emulator_devices::gic::InterruptController for Gic {
         }
         Ok((self.next_irq(core).is_some(), false))
     }
+    fn eligible(&self, core: usize) -> Result<Option<usize>, String> {
+        if core >= self.cores {
+            return Err("GICv2 output targets absent processor".into());
+        }
+        Ok(self.next_irq(core))
+    }
     fn set_spi(&mut self, id: usize, high: bool) -> Result<(), String> {
         if !(32..self.lines).contains(&id) {
             return Err("GICv2 SPI outside configured lines".into());

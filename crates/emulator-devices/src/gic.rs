@@ -40,6 +40,8 @@ pub trait InterruptController: Send {
     fn sgi_pending(&self, _core: usize) -> Result<bool, String> {
         Ok(false)
     }
+    /// The interrupt `core`'s CPU interface would signal now, or None.
+    fn eligible(&self, core: usize) -> Result<Option<usize>, String>;
     fn set_spi(&mut self, id: usize, high: bool) -> Result<(), String>;
     /// Latch an edge on shared interrupt `id`: it pends whatever the line's
     /// configuration, and stays pending until acknowledged. Default: the

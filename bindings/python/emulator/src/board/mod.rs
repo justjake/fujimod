@@ -1725,6 +1725,11 @@ impl Board {
         serde_json::to_string(&self.board()?.gic_state().map_err(error)?)
             .map_err(|e| error(e.to_string()))
     }
+    /// The interrupt each of `cores` cores' GIC CPU interface would signal now;
+    /// empty without a GIC.
+    fn gic_eligible(&self, cores: usize) -> PyResult<Vec<Option<usize>>> {
+        self.board()?.gic_eligible(cores).map_err(error)
+    }
     fn failure(&self) -> PyResult<String> {
         serde_json::to_string(&self.board()?.failure().map_err(error)?)
             .map_err(|e| error(e.to_string()))
