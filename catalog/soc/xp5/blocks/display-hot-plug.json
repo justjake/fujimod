@@ -6,8 +6,8 @@
   "size": 4,
   "kind": "display-controller",
   "device": {
-    "model": "register_block",
-    "idle_bits": [],
+    "model": "cable_status",
+    "connected_level": 0,
     "basis": "HDMI hot-plug status word Located in catalog/firmware/x100vi/1.31/xp5-boot/manifest.d/42-hdmi.toml."
   },
   "evidence": [

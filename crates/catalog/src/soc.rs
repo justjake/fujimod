@@ -589,6 +589,9 @@ pub enum BlockDevice {
     },
     /// GPIO controller with interrupt inputs and pad behavior.
     Xp5Gpio {
+        /// The one port this view serves, when it is a single-port view of the bank.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        port: Option<u8>,
         /// Declared basis.
         basis: String,
     },
@@ -616,6 +619,13 @@ pub enum BlockDevice {
     MemoryConfiguration {
         /// Ticks the channel takes to commit a configuration.
         commit_ticks: u64,
+        /// Declared basis.
+        basis: String,
+    },
+    /// Cable status word: bit 0 reads `connected_level` while a cable is attached.
+    CableStatus {
+        /// Bit 0 level while a cable is attached.
+        connected_level: u8,
         /// Declared basis.
         basis: String,
     },
@@ -1055,6 +1065,7 @@ impl BlockDevice {
                         | BlockDevice::XppUsb { .. }
                         | BlockDevice::Completion { .. }
                         | BlockDevice::RegisterBlock { .. }
+                        | BlockDevice::CableStatus { .. }
                 )
                 | (
                     SocBlockKind::ClockController,
@@ -1082,6 +1093,7 @@ impl BlockDevice {
                         | BlockDevice::DisplayOutputLink { .. }
                         | BlockDevice::Renderer { .. }
                         | BlockDevice::RegisterBlock { .. }
+                        | BlockDevice::CableStatus { .. }
                 )
                 | (
                     SocBlockKind::ResetController,
@@ -1102,6 +1114,7 @@ impl BlockDevice {
                         | BlockDevice::DramController { .. }
                         | BlockDevice::MemoryConfiguration { .. }
                         | BlockDevice::DdrPhy { .. }
+                        | BlockDevice::CableStatus { .. }
                 )
                 | (
                     SocBlockKind::SdCardController,

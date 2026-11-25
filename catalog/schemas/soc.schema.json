@@ -2111,6 +2111,16 @@
             "model": {
               "const": "xp5_gpio",
               "type": "string"
+            },
+            "port": {
+              "description": "The one port this view serves, when it is a single-port view of the bank.",
+              "format": "uint8",
+              "maximum": 255,
+              "minimum": 0,
+              "type": [
+                "integer",
+                "null"
+              ]
             }
           },
           "required": [
@@ -2217,6 +2227,33 @@
           "required": [
             "model",
             "commit_ticks",
+            "basis"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "description": "Cable status word: bit 0 reads `connected_level` while a cable is attached.",
+          "properties": {
+            "basis": {
+              "description": "Declared basis.",
+              "type": "string"
+            },
+            "connected_level": {
+              "description": "Bit 0 level while a cable is attached.",
+              "format": "uint8",
+              "maximum": 255,
+              "minimum": 0,
+              "type": "integer"
+            },
+            "model": {
+              "const": "cable_status",
+              "type": "string"
+            }
+          },
+          "required": [
+            "model",
+            "connected_level",
             "basis"
           ],
           "type": "object"
