@@ -133,7 +133,7 @@ pub fn capture(
                 // The compositor consumes a packed 4:2:2 row. Every pair in
                 // this row uses the chroma pair from its 2x2 source block.
                 let mut packed = Vec::with_capacity(columns * 2);
-                for (y, c) in row.chunks_exact(2).zip(chroma.chunks_exact(2)) {
+                for (y, c) in row.as_chunks::<2>().0.iter().zip(chroma.as_chunks::<2>().0) {
                     packed.extend_from_slice(&[y[0], y[1], c[0], c[1]]);
                 }
                 rows.push(packed);
