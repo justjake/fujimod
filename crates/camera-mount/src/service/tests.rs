@@ -311,8 +311,8 @@ fn install_and_release_batch_their_camera_commands() {
         let install = std::mem::take(&mut state.lock().unwrap().commands);
         service.release(&mut session, limits).await.unwrap();
         let release = state.lock().unwrap().commands;
-        assert_eq!(install, [106, 72, 20], "install [reads, writes, queries]");
-        assert_eq!(release, [57, 30, 11], "release [reads, writes, queries]");
+        assert_eq!(install, [105, 71, 20], "install [reads, writes, queries]");
+        assert_eq!(release, [56, 30, 11], "release [reads, writes, queries]");
         restored(&state.lock().unwrap());
     });
 }
