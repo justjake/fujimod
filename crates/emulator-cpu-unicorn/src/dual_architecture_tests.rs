@@ -27,8 +27,13 @@ fn reg64(cpu: &Core, register: Register) -> u64 {
     u64::from_le_bytes(out)
 }
 fn step(cpu: &Core, begin: u64) {
-    cpu.run(Run { begin, until: None, instructions: Some(1), watchdog_us: 0 })
-        .unwrap();
+    cpu.run(Run {
+        begin,
+        until: None,
+        instructions: Some(1),
+        watchdog_us: 0,
+    })
+    .unwrap();
 }
 fn engine(library: &crate::Library, model: Model, code: &[u32]) -> Core {
     let cpu = library.open(model, 1 << 20).unwrap();
@@ -52,7 +57,10 @@ fn arm_and_aarch64_engines_run_side_by_side() {
     assert_eq!(reg32(&arm, arm::PC), 0x1000 + 4 * ARM_CODE.len() as u32);
     assert_eq!(reg64(&aarch64, Register::X(0)), 7);
     assert_eq!(reg64(&aarch64, Register::X(1)), 9);
-    assert_eq!(reg64(&aarch64, Register::Pc), 0x1000 + 4 * AARCH64_CODE.len() as u64);
+    assert_eq!(
+        reg64(&aarch64, Register::Pc),
+        0x1000 + 4 * AARCH64_CODE.len() as u64
+    );
 }
 
 #[test]

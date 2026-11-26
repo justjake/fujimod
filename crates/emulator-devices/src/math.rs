@@ -13,7 +13,10 @@ struct DoubleLength {
 
 fn dl_mul(x: f64, y: f64) -> DoubleLength {
     let z = x * y;
-    DoubleLength { hi: z, lo: x.mul_add(y, -z) }
+    DoubleLength {
+        hi: z,
+        lo: x.mul_add(y, -z),
+    }
 }
 
 fn dl_fast_sum(a: f64, b: f64) -> DoubleLength {

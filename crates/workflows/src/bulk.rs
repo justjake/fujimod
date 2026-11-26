@@ -31,11 +31,89 @@ pub enum BulkError {
     Check(String),
     #[error("{operation}; restoring the bulk source failed: {cleanup}")]
     Cleanup {
-        operation: String,
+        operation: Box<BulkError>,
         cleanup: Box<BulkError>,
     },
+    #[error("{0}")]
+    Mapped(#[from] MappedFailure),
 }
 pub type Result<T> = std::result::Result<T, BulkError>;
+
+/// Ordered stage of a direct mapped flash read, recorded on failure.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum MappedPhase {
+    Window,
+    Bounds,
+    Prepare,
+    ControlRead,
+    ControlHash,
+    Capacity,
+    Piece,
+    Delivery,
+    Progress,
+    Restore,
+}
+
+/// The address space a mapped failure's `address` is in.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum MappedAddressSpace {
+    /// An offset into the flash device, as callers request ranges.
+    FlashOffset,
+    /// A CPU address in the camera's mapped window.
+    Cpu,
+}
+impl MappedAddressSpace {
+    /// Stable name for bindings.
+    pub fn name(self) -> &'static str {
+        match self {
+            Self::FlashOffset => "flash-offset",
+            Self::Cpu => "cpu",
+        }
+    }
+}
+
+/// Failure receipt naming the phase and exact mapped range that failed.
+///
+/// Pre-I/O refusals keep `address` and `length` in flash-offset order. Once a
+/// command is issued, the same fields name the mapped CPU range of the failed
+/// command, so a timeout can be distinguished from a bounds or hash refusal.
+/// The primary cause stays typed in `source`; a failed restore is kept typed in
+/// `cleanup` instead of being flattened into the primary message.
+#[derive(Debug)]
+pub struct MappedFailure {
+    pub phase: MappedPhase,
+    /// Which address space `address` is in.
+    pub space: MappedAddressSpace,
+    pub address: u64,
+    pub length: u64,
+    pub source: Box<BulkError>,
+    pub cleanup: Option<Box<BulkError>>,
+}
+impl std::fmt::Display for MappedFailure {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "mapped E1 {:?} failed at {} {:#x} length {:#x}: {}",
+            self.phase,
+            match self.space {
+                MappedAddressSpace::FlashOffset => "flash offset",
+                MappedAddressSpace::Cpu => "CPU address",
+            },
+            self.address,
+            self.length,
+            self.source
+        )?;
+        if let Some(cleanup) = &self.cleanup {
+            write!(f, "; cleanup failed: {cleanup}")?;
+        }
+        Ok(())
+    }
+}
+impl std::error::Error for MappedFailure {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        Some(self.source.as_ref())
+    }
+}
 
 fn address(value: u64) -> Result<u32> {
     u32::try_from(value)
@@ -223,7 +301,7 @@ pub(crate) fn finish<T>(outcome: Result<T>, restored: Result<()>) -> Result<T> {
         (Err(error), Ok(())) => Err(error),
         (Ok(_), Err(cleanup)) => Err(cleanup),
         (Err(error), Err(cleanup)) => Err(BulkError::Cleanup {
-            operation: error.to_string(),
+            operation: Box::new(error),
             cleanup: Box::new(cleanup),
         }),
     }
@@ -283,6 +361,13 @@ impl<'a> Qualified<'a> {
     }
     pub(crate) fn capacity(&self) -> u32 {
         self.source.window.capacity().get()
+    }
+    /// CPU address and byte count of the saved publication words, if any.
+    pub(crate) fn saved(&self) -> Option<(u64, u64)> {
+        self.source
+            .saved
+            .as_ref()
+            .map(|(address, original, _)| (*address, original.len() as u64))
     }
     pub(crate) async fn read_progress(
         &mut self,
@@ -723,7 +808,7 @@ impl Source {
                     return Err(match cleanup {
                         Ok(()) => error,
                         Err(cleanup) => BulkError::Cleanup {
-                            operation: error.to_string(),
+                            operation: Box::new(error),
                             cleanup: Box::new(cleanup),
                         },
                     });

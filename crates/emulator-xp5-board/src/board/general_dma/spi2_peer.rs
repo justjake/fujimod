@@ -165,7 +165,11 @@ mod tests {
     #[test]
     fn checkpoint_mid_word_and_invalid_frames() {
         let mut peer = Peer::default();
-        let frame = Frame { bits: 8, mode: 3, word: 0xa5 };
+        let frame = Frame {
+            bits: 8,
+            mode: 3,
+            word: 0xa5,
+        };
         let token = peer.begin(frame).unwrap();
         peer.finish(token, frame, 0).unwrap();
         let checkpoint = peer.checkpoint().unwrap();
@@ -175,8 +179,24 @@ mod tests {
         let saved = peer.save();
         restored.restore(&saved).unwrap();
         assert_eq!(restored.save(), saved);
-        assert!(restored.begin(Frame { bits: 16, mode: 3, word: 0 }).is_err());
-        assert!(restored.begin(Frame { bits: 8, mode: 4, word: 0 }).is_err());
+        assert!(
+            restored
+                .begin(Frame {
+                    bits: 16,
+                    mode: 3,
+                    word: 0
+                })
+                .is_err()
+        );
+        assert!(
+            restored
+                .begin(Frame {
+                    bits: 8,
+                    mode: 4,
+                    word: 0
+                })
+                .is_err()
+        );
         assert!(restored.validate_pending(&checkpoint, 1, frame).is_err());
     }
 }

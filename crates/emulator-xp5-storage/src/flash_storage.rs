@@ -176,15 +176,23 @@ pub fn erase_installed(image: &mut [u8], spec: &str) -> Result<(), String> {
             None => text.parse().ok(),
         }
     }
-    for item in spec.split(',').map(str::trim).filter(|item| !item.is_empty()) {
+    for item in spec
+        .split(',')
+        .map(str::trim)
+        .filter(|item| !item.is_empty())
+    {
         let (offset, size) = item
             .split_once('+')
             .and_then(|(offset, size)| Some((number(offset)?, number(size)?)))
             .ok_or_else(|| format!("XT5_FLASH_ERASED needs OFFSET+SIZE[,...], not {item}"))?;
         let end = offset
             .checked_add(size)
-            .filter(|end| size != 0 && offset % PAGE == 0 && size % PAGE == 0 && *end <= image.len())
-            .ok_or_else(|| format!("XT5_FLASH_ERASED: {item} is not whole pages of the installed image"))?;
+            .filter(|end| {
+                size != 0 && offset % PAGE == 0 && size % PAGE == 0 && *end <= image.len()
+            })
+            .ok_or_else(|| {
+                format!("XT5_FLASH_ERASED: {item} is not whole pages of the installed image")
+            })?;
         image[offset..end].fill(0xff);
     }
     Ok(())
@@ -335,13 +343,13 @@ impl Device for Aperture {
     fn fingerprint(&self) -> Result<Value, String> {
         Ok(match &self.0 {
             Medium::Nor(s) => {
-                let session = serde_json::to_value(&s.lock().unwrap().session)
-                    .map_err(|e| e.to_string())?;
+                let session =
+                    serde_json::to_value(&s.lock().unwrap().session).map_err(|e| e.to_string())?;
                 serde_json::json!({"medium": "nor", "session": session})
             }
             Medium::Nand(s) => {
-                let session = serde_json::to_value(&s.lock().unwrap().session)
-                    .map_err(|e| e.to_string())?;
+                let session =
+                    serde_json::to_value(&s.lock().unwrap().session).map_err(|e| e.to_string())?;
                 serde_json::json!({"medium": "nand", "session": session})
             }
         })
@@ -427,7 +435,14 @@ mod tests {
         assert!(image[2 * PAGE..3 * PAGE].iter().all(|byte| *byte == 0x5a));
         assert!(image[3 * PAGE..].iter().all(|byte| *byte == 0xff));
         erase_installed(&mut image, "").unwrap();
-        for bad in ["0x1000", "0x800+0x1000", "0+0x800", "0+0", "0x3000+0x2000", "x+0x1000"] {
+        for bad in [
+            "0x1000",
+            "0x800+0x1000",
+            "0+0x800",
+            "0+0",
+            "0x3000+0x2000",
+            "x+0x1000",
+        ] {
             let mut copy = vec![0x5a; 4 * PAGE];
             assert!(erase_installed(&mut copy, bad).is_err(), "{bad}");
             assert!(copy.iter().all(|byte| *byte == 0x5a), "{bad}");

@@ -1946,6 +1946,25 @@ dependencies = [
 ]
 
 [[package]]
+name = "fujimod-camera"
+version = "0.1.0"
+dependencies = [
+ "fujimod-catalog",
+ "fujimod-catalog-remote",
+ "fujimod-emulator-boot",
+ "fujimod-emulator-camera",
+ "fujimod-emulator-session",
+ "fujimod-recovery",
+ "fujimod-remote",
+ "futures-lite",
+ "serde",
+ "serde_json",
+ "sha2 0.10.9",
+ "thiserror 2.0.21",
+ "ureq",
+]
+
+[[package]]
 name = "fujimod-camera-mount"
 version = "0.1.0"
 dependencies = [
@@ -2404,6 +2423,7 @@ dependencies = [
  "fujimod-catalog-controls",
  "fujimod-catalog-remote",
  "fujimod-catalog-resolution",
+ "fujimod-catalog-run-inputs",
  "fujimod-catalog-wiring",
  "fujimod-emulator-boot",
  "fujimod-emulator-controls",
@@ -2419,18 +2439,18 @@ dependencies = [
  "serde_json",
  "sha2 0.10.9",
  "thiserror 2.0.21",
- "ureq",
+ "zstd",
 ]
 
 [[package]]
 name = "fujimod-emulator-cli"
 version = "0.1.0"
 dependencies = [
+ "fujimod-camera",
  "fujimod-catalog-configuration",
  "fujimod-catalog-resolution",
  "fujimod-catalog-wiring",
  "fujimod-emulator-boot",
- "fujimod-emulator-camera",
  "fujimod-emulator-controls",
  "fujimod-emulator-cpu",
  "fujimod-emulator-exr2-board",
@@ -2877,10 +2897,10 @@ dependencies = [
 name = "fujimod-emulator-gui-app"
 version = "0.1.0"
 dependencies = [
+ "fujimod-camera",
  "fujimod-catalog-configuration",
  "fujimod-catalog-resolution",
  "fujimod-emulator-boot",
- "fujimod-emulator-camera",
  "fujimod-emulator-cpu",
  "fujimod-emulator-exr2-board",
  "fujimod-emulator-gui",
@@ -3556,6 +3576,7 @@ name = "fujimod-mcp-camera"
 version = "0.1.0"
 dependencies = [
  "base64 0.23.1",
+ "fujimod-camera",
  "fujimod-catalog-remote",
  "fujimod-catalog-resolution",
  "fujimod-emulator-boot",
@@ -3664,6 +3685,7 @@ dependencies = [
 name = "fujimod-python-emulator"
 version = "0.1.0"
 dependencies = [
+ "fujimod-camera",
  "fujimod-catalog-assets",
  "fujimod-catalog-configuration",
  "fujimod-catalog-settings",

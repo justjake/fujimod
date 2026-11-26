@@ -99,9 +99,16 @@ impl Default for ScanCache {
             pc: u64::MAX,
             len: 0,
             code: [0; Self::BYTES],
-            scan: Scan { entries: 0, unit: 0, last: 0, returns_through_lr: false },
+            scan: Scan {
+                entries: 0,
+                unit: 0,
+                last: 0,
+                returns_through_lr: false,
+            },
         };
-        Self { entries: vec![empty; Self::SLOTS].into_boxed_slice() }
+        Self {
+            entries: vec![empty; Self::SLOTS].into_boxed_slice(),
+        }
     }
 }
 impl ScanCache {
@@ -131,7 +138,12 @@ impl ScanCache {
     }
     #[inline]
     pub fn put(&mut self, pc: u64, (len, code): (u8, [u8; Self::BYTES]), scan: Scan) {
-        self.entries[Self::slot(pc, usize::from(len))] = ScanEntry { pc, len, code, scan };
+        self.entries[Self::slot(pc, usize::from(len))] = ScanEntry {
+            pc,
+            len,
+            code,
+            scan,
+        };
     }
 }
 
@@ -209,9 +221,8 @@ pub(super) fn poll_period(code: &[u8]) -> Option<u64> {
             }
             let rd = (second >> 8) & 15;
             // TST, TEQ, CMN, CMP: flags only.
-            let compares = rd == 15
-                && word & 0x0210 == 0x0010
-                && matches!((word >> 5) & 15, 0 | 4 | 8 | 13);
+            let compares =
+                rd == 15 && word & 0x0210 == 0x0010 && matches!((word >> 5) & 15, 0 | 4 | 8 | 13);
             if word & 0xf800 != 0xf000 || second & 0x8000 != 0 || !(rd <= 12 || compares) {
                 return None;
             }
@@ -474,9 +485,7 @@ pub(super) fn can_run_inline(word: u32) -> bool {
     }
     // Byte/halfword extension with an optional rotation. Rn=15 is
     // the extend-only alias. Also admit the fixed-register REV family.
-    if matches!(first & 0xfff0, 0xfa00 | 0xfa10 | 0xfa40 | 0xfa50)
-        && second & 0xf0c0 == 0xf080
-    {
+    if matches!(first & 0xfff0, 0xfa00 | 0xfa10 | 0xfa40 | 0xfa50) && second & 0xf0c0 == 0xf080 {
         let rn = first & 15;
         return (rn <= 12 || rn == 15) && rd <= 12 && second & 15 <= 12;
     }
@@ -486,8 +495,12 @@ pub(super) fn can_run_inline(word: u32) -> bool {
     // SMULL/UMULL write two distinct ordinary registers.
     if matches!(first & 0xfff0, 0xfb80 | 0xfba0) {
         let rd_lo = second >> 12;
-        return second & 0xf0 == 0 && first & 15 <= 12 && second & 15 <= 12
-            && rd_lo <= 12 && rd <= 12 && rd_lo != rd;
+        return second & 0xf0 == 0
+            && first & 15 <= 12
+            && second & 15 <= 12
+            && rd_lo <= 12
+            && rd <= 12
+            && rd_lo != rd;
     }
     // Register-specified LSL, LSR, ASR and ROR. The shift count
     // and destination are ordinary registers.
@@ -575,7 +588,9 @@ pub(super) fn count_entries(mut code: &[u8]) -> Result<u64, String> {
             return Err("M-profile block ends inside an instruction".into());
         };
         let size = thumb_size(u16::from_le_bytes([first, second]));
-        code = code.get(size..).ok_or("M-profile block ends inside an instruction")?;
+        code = code
+            .get(size..)
+            .ok_or("M-profile block ends inside an instruction")?;
         entries += 1;
     }
     Ok(entries)
@@ -636,14 +651,13 @@ mod tests {
     fn inline_classifier_accepts_only_register_alu_and_immediate_branches() {
         for instruction in [
             0x0001, 0x180a, 0x4008, 0x42a1, 0xb2ad, 0x4400, 0x4481, 0x45b0, 0x4605, 0x46b1, 0xd001,
-            0xddff, 0xe7ff, 0xb000, 0xb080, 0xa800, 0xafff, 0x46bd, 0x466f, 0xb170, 0xb169,
-            0xb300, 0xb37f, 0xb970, 0xb969, 0xbb00, 0xbb7f,
+            0xddff, 0xe7ff, 0xb000, 0xb080, 0xa800, 0xafff, 0x46bd, 0x466f, 0xb170, 0xb169, 0xb300,
+            0xb37f, 0xb970, 0xb969, 0xbb00, 0xbb7f,
         ] {
             assert!(can_run_inline(instruction), "{instruction:#06x}");
         }
         for instruction in [
-            0x4485, 0x4478, 0x4501, 0x4700, 0x4770, 0xb400, 0xbe00, 0xbf00, 0xde00, 0xdf00,
-            0xe800,
+            0x4485, 0x4478, 0x4501, 0x4700, 0x4770, 0xb400, 0xbe00, 0xbf00, 0xde00, 0xdf00, 0xe800,
         ] {
             assert!(!can_run_inline(instruction), "{instruction:#06x}");
         }
@@ -745,10 +759,10 @@ mod tests {
             0xf3ef_8005, // emulated xPSR selector
             0xf3ef_8007, // emulated xPSR selector
             0xf3ef_8000, // APSR selector outside the emulated xPSR subset
-            0x46bf, // MOV SP,PC
-            0x4677, // MOV R7,LR
-            0xb500, // PUSH including LR, not CBZ
-            0xbd00, // POP including PC, not CBNZ
+            0x46bf,      // MOV SP,PC
+            0x4677,      // MOV R7,LR
+            0xb500,      // PUSH including LR, not CBZ
+            0xbd00,      // POP including PC, not CBNZ
             0xf000_1100, // replicated-zero submode 01 is reserved
             0xf000_2100, // replicated-zero submode 10 is reserved
             0xf000_3100, // replicated-zero submode 11 is reserved
@@ -767,8 +781,20 @@ mod tests {
         for word in [0xbf0c, 0xbfb8, 0x2001, 0xf240_0301, 0xfba5_2302] {
             assert!(can_run_in_it(word), "{word:#x}");
         }
-        for word in [0xbf00, 0xbff8, 0xb672, 0xbf30, 0x6008, 0xb430, 0x4770,
-                     0xb170, 0xd001, 0xf006_fcf7, 0xf3ef_8110, 0xf8d0_0004] {
+        for word in [
+            0xbf00,
+            0xbff8,
+            0xb672,
+            0xbf30,
+            0x6008,
+            0xb430,
+            0x4770,
+            0xb170,
+            0xd001,
+            0xf006_fcf7,
+            0xf3ef_8110,
+            0xf8d0_0004,
+        ] {
             assert!(!can_run_in_it(word), "{word:#x}");
         }
     }
@@ -778,15 +804,13 @@ mod tests {
         // Register-offset transfers, covering word/byte/halfword and signed
         // byte/halfword loads.
         for instruction in [
-            0x5000, 0x5200, 0x5400, 0x5600, 0x5800, 0x5a00, 0x5c00, 0x5e00,
-            0x5fff,
+            0x5000, 0x5200, 0x5400, 0x5600, 0x5800, 0x5a00, 0x5c00, 0x5e00, 0x5fff,
         ] {
             assert!(is_single_transfer(instruction), "{instruction:#06x}");
         }
         // Immediate word/byte/halfword forms and SP-relative STR/LDR.
         for instruction in [
-            0x6000, 0x6800, 0x7000, 0x7800, 0x8000, 0x8800, 0x9000, 0x9800,
-            0x9fff, 0x4800, 0x4fff,
+            0x6000, 0x6800, 0x7000, 0x7800, 0x8000, 0x8800, 0x9000, 0x9800, 0x9fff, 0x4800, 0x4fff,
         ] {
             assert!(is_single_transfer(instruction), "{instruction:#06x}");
         }
@@ -838,7 +862,13 @@ mod tests {
         // PUSH/POP, LDM/STM, undefined and special encodings, and unsupported
         // 32-bit memory or exclusive operations have different effects.
         for instruction in [
-            0xb400, 0xbc00, 0xc000, 0xc800, 0xde00, 0xdf00, 0xf3bf_8f4f,
+            0xb400,
+            0xbc00,
+            0xc000,
+            0xc800,
+            0xde00,
+            0xdf00,
+            0xf3bf_8f4f,
             0xe850_1f00, // LDREX
             0xf8e1_0004, // translation variant
             0xf8c1_f004, // STR from PC
@@ -872,7 +902,10 @@ mod tests {
     fn restart_count_uses_the_same_thumb_widths_as_admission() {
         let mixed = code(&[0x3001, 0xf240, 0x4770, 0x4770]);
         for end in [2, 6, 8] {
-            assert_eq!(count_entries(&mixed[..end]).unwrap(), scan(&mixed[..end]).unwrap().entries);
+            assert_eq!(
+                count_entries(&mixed[..end]).unwrap(),
+                scan(&mixed[..end]).unwrap().entries
+            );
         }
         for end in [1, 3, 4, 5, 7] {
             assert!(count_entries(&mixed[..end]).is_err());
@@ -881,11 +914,17 @@ mod tests {
     #[test]
     fn poll_period_accepts_only_register_computation_between_a_load_and_its_branch() {
         // ldrh r5,[r2]; and r5,r5,#4; uxth r5,r5; cmp r5,#0; beq .-10
-        assert_eq!(poll_period(&code(&[0x8815, 0xf005, 0x0504, 0xb2ad, 0x2d00, 0xd0f9])), Some(5));
+        assert_eq!(
+            poll_period(&code(&[0x8815, 0xf005, 0x0504, 0xb2ad, 0x2d00, 0xd0f9])),
+            Some(5)
+        );
         // ldr r2,[r0]; cmp r2,r3; beq .-4
         assert_eq!(poll_period(&code(&[0x6802, 0x429a, 0xd0fc])), Some(3));
         // ldrb r1,[r0]; tst r1,#0x80; bne .-6 (TST writes no register).
-        assert_eq!(poll_period(&code(&[0x7801, 0xf011, 0x0f80, 0xd1fb])), Some(3));
+        assert_eq!(
+            poll_period(&code(&[0x7801, 0xf011, 0x0f80, 0xd1fb])),
+            Some(3)
+        );
         // The branch goes elsewhere, or forward.
         assert_eq!(poll_period(&code(&[0x6802, 0x429a, 0xd0fb])), None);
         assert_eq!(poll_period(&code(&[0x6802, 0x429a, 0xd000])), None);
@@ -895,8 +934,14 @@ mod tests {
         assert_eq!(poll_period(&code(&[0x4a02, 0x429a, 0xd0fc])), None);
         // A store, a second load, a push, a call, a high-register move, an IT
         // instruction, SVC, or CPS in the body.
-        for body in [0x6001u16, 0x6801, 0xb401, 0x4780, 0x4686, 0xbf08, 0xdf00, 0xb672, 0x4770] {
-            assert_eq!(poll_period(&code(&[0x6802, body, 0xd0fc])), None, "{body:#x}");
+        for body in [
+            0x6001u16, 0x6801, 0xb401, 0x4780, 0x4686, 0xbf08, 0xdf00, 0xb672, 0x4770,
+        ] {
+            assert_eq!(
+                poll_period(&code(&[0x6802, body, 0xd0fc])),
+                None,
+                "{body:#x}"
+            );
         }
         // 32-bit instructions that are not data processing with an immediate:
         // str.w r1,[r0]; ldr.w r1,[r0]; and.w r1,r1,r2; bl; msr basepri,r0.
@@ -907,7 +952,11 @@ mod tests {
             (0xf000, 0xf800),
             (0xf380, 0x8811),
         ] {
-            assert_eq!(poll_period(&code(&[0x6802, first, second, 0xd0fb])), None, "{first:#x}");
+            assert_eq!(
+                poll_period(&code(&[0x6802, first, second, 0xd0fb])),
+                None,
+                "{first:#x}"
+            );
         }
         // movw sp,#0 and add.w pc,r1,#4 write SP and PC; ands.w with Rd 15
         // and no S is not a comparison.
@@ -915,8 +964,18 @@ mod tests {
         assert_eq!(poll_period(&code(&[0x6802, 0xf101, 0x0f04, 0xd0fb])), None);
         assert_eq!(poll_period(&code(&[0x6802, 0xf001, 0x0f04, 0xd0fb])), None);
         // Too long, or cut off.
-        assert_eq!(poll_period(&code(&[0x6802, 0x3001, 0x3001, 0x3001, 0x3001, 0x3001, 0x3001, 0xd0f7])), Some(8));
-        assert_eq!(poll_period(&code(&[0x6802, 0x3001, 0x3001, 0x3001, 0x3001, 0x3001, 0x3001, 0x3001, 0xd0f6])), None);
+        assert_eq!(
+            poll_period(&code(&[
+                0x6802, 0x3001, 0x3001, 0x3001, 0x3001, 0x3001, 0x3001, 0xd0f7
+            ])),
+            Some(8)
+        );
+        assert_eq!(
+            poll_period(&code(&[
+                0x6802, 0x3001, 0x3001, 0x3001, 0x3001, 0x3001, 0x3001, 0x3001, 0xd0f6
+            ])),
+            None
+        );
         assert_eq!(poll_period(&code(&[0x6802, 0x429a])), None);
         assert_eq!(poll_period(&[]), None);
     }
@@ -1024,7 +1083,10 @@ mod tests {
         assert_eq!(parts(&[0xe8bd, 0x4010, 0x4770]), (2, 1, 4, false));
         assert_eq!(parts(&[0xe9dd, 0x0e00, 0x4770]), (2, 1, 4, false));
         // ldr.w r4,[sp,#4]; pop.w {r4,r5}; bx lr: LR is kept.
-        assert_eq!(parts(&[0xf8dd, 0x4004, 0xe8bd, 0x0030, 0x4770]), (3, 2, 8, true));
+        assert_eq!(
+            parts(&[0xf8dd, 0x4004, 0xe8bd, 0x0030, 0x4770]),
+            (3, 2, 8, true)
+        );
         // umull r0,lr,r1,r2 (RdHi) and ldr r0,[lr],#4 (writeback).
         assert_eq!(parts(&[0xfba1, 0x0e02, 0x4770]), (2, 1, 4, false));
         assert_eq!(parts(&[0xf85e, 0x0b04, 0x4770]), (2, 1, 4, false));

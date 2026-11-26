@@ -231,11 +231,17 @@ impl Overlay {
                 "RAM overlay region file must be a basename",
             )?;
             let bytes = std::fs::read(directory.join(&region.file)).map_err(|error| {
-                Error::Invalid(format!("Cannot read RAM overlay region {}: {error}", region.name))
+                Error::Invalid(format!(
+                    "Cannot read RAM overlay region {}: {error}",
+                    region.name
+                ))
             })?;
             require(
                 bytes.len() == region.size && fujimod_firmware::sha256(&bytes) == region.sha256,
-                &format!("RAM overlay region {} differs from its description", region.name),
+                &format!(
+                    "RAM overlay region {} differs from its description",
+                    region.name
+                ),
             )?;
             regions.push(OverlayRegion {
                 name: region.name,
@@ -255,7 +261,10 @@ impl Overlay {
 /// replace an expected word of initialized bytes outside the overlay regions. Nothing changes
 /// unless every check passes.
 pub fn overlay(image: &mut [u8], plan: &Plan, overlay: &Overlay) -> Result<()> {
-    require(image.len() == plan.size, "RAM overlay image length differs from its plan")?;
+    require(
+        image.len() == plan.size,
+        "RAM overlay image length differs from its plan",
+    )?;
     let initialized = plan
         .regions
         .iter()
@@ -280,9 +289,13 @@ pub fn overlay(image: &mut [u8], plan: &Plan, overlay: &Overlay) -> Result<()> {
             &format!("RAM overlay region {} is empty", region.name),
         )?;
         let range = span(region.address, region.bytes.len(), plan.size).map_err(|_| {
-            Error::Invalid(format!("RAM overlay region {} exceeds the image", region.name))
+            Error::Invalid(format!(
+                "RAM overlay region {} exceeds the image",
+                region.name
+            ))
         })?;
-        let overlaps = |other: &std::ops::Range<usize>| other.start < range.end && range.start < other.end;
+        let overlaps =
+            |other: &std::ops::Range<usize>| other.start < range.end && range.start < other.end;
         if let Some((name, _)) = initialized.iter().find(|(_, other)| overlaps(other)) {
             return Err(Error::Invalid(format!(
                 "RAM overlay region {} overlaps initialized {name}",
@@ -297,7 +310,10 @@ pub fn overlay(image: &mut [u8], plan: &Plan, overlay: &Overlay) -> Result<()> {
         }
         require(
             !placed.iter().any(overlaps),
-            &format!("RAM overlay region {} overlaps another overlay region", region.name),
+            &format!(
+                "RAM overlay region {} overlaps another overlay region",
+                region.name
+            ),
         )?;
         require(
             image[range.clone()].iter().all(|byte| *byte == 0),
@@ -431,8 +447,16 @@ mod overlay_tests {
         Plan {
             size: 0x400,
             entry: 0,
-            regions: vec![Region { name: "code".into(), address: 0, source: source(0x100) }],
-            bss: vec![Bss { name: "data".into(), address: 0x100, size: 0x100 }],
+            regions: vec![Region {
+                name: "code".into(),
+                address: 0,
+                source: source(0x100),
+            }],
+            bss: vec![Bss {
+                name: "data".into(),
+                address: 0x100,
+                size: 0x100,
+            }],
             edits: Vec::new(),
         }
     }
@@ -442,15 +466,27 @@ mod overlay_tests {
         image
     }
     fn region(address: usize, bytes: &[u8]) -> OverlayRegion {
-        OverlayRegion { name: "mods".into(), address, bytes: bytes.to_vec() }
+        OverlayRegion {
+            name: "mods".into(),
+            address,
+            bytes: bytes.to_vec(),
+        }
     }
     fn edit(address: usize, old: u32) -> Edit {
-        Edit { address, old, new: 0x9400_0000, what: "hook".into() }
+        Edit {
+            address,
+            old,
+            new: 0x9400_0000,
+            what: "hook".into(),
+        }
     }
     #[test]
     fn places_regions_in_unused_zero_bytes_and_applies_checked_edits() {
         let mut ram = image();
-        let overlay = Overlay { regions: vec![region(0x200, &[1, 2, 3, 4])], edits: vec![edit(0x10, 0x1111_1111)] };
+        let overlay = Overlay {
+            regions: vec![region(0x200, &[1, 2, 3, 4])],
+            edits: vec![edit(0x10, 0x1111_1111)],
+        };
         super::overlay(&mut ram, &plan(), &overlay).unwrap();
         assert_eq!(&ram[0x200..0x204], &[1, 2, 3, 4]);
         assert_eq!(word(&ram, 0x10).unwrap(), 0x9400_0000);
@@ -464,32 +500,98 @@ mod overlay_tests {
         let mut nonzero = image();
         nonzero[0x300] = 1;
         let cases: Vec<(Vec<u8>, Overlay, &str)> = vec![
-            (image(), Overlay { regions: vec![region(0x180, &[1])], edits: vec![] }, "lies in data BSS"),
-            (image(), Overlay { regions: vec![region(0xfc, &[1; 8])], edits: vec![] }, "overlaps initialized code"),
-            (image(), Overlay { regions: vec![region(0x3fe, &[1; 4])], edits: vec![] }, "exceeds the image"),
-            (nonzero, Overlay { regions: vec![region(0x300, &[1])], edits: vec![] }, "replaces nonzero bytes"),
-            (image(), Overlay { regions: vec![region(0x200, &[1; 8]), region(0x204, &[1])], edits: vec![] },
-             "overlaps another overlay region"),
-            (image(), Overlay { regions: vec![], edits: vec![edit(0x10, 0)] }, "expected old word differs"),
-            (image(), Overlay { regions: vec![], edits: vec![edit(0x200, 0)] }, "outside initialized stock bytes"),
-            (image(), Overlay { regions: vec![], edits: vec![edit(0x10, 0x1111_1111), edit(0x10, 0x1111_1111)] },
-             "duplicate word edit"),
+            (
+                image(),
+                Overlay {
+                    regions: vec![region(0x180, &[1])],
+                    edits: vec![],
+                },
+                "lies in data BSS",
+            ),
+            (
+                image(),
+                Overlay {
+                    regions: vec![region(0xfc, &[1; 8])],
+                    edits: vec![],
+                },
+                "overlaps initialized code",
+            ),
+            (
+                image(),
+                Overlay {
+                    regions: vec![region(0x3fe, &[1; 4])],
+                    edits: vec![],
+                },
+                "exceeds the image",
+            ),
+            (
+                nonzero,
+                Overlay {
+                    regions: vec![region(0x300, &[1])],
+                    edits: vec![],
+                },
+                "replaces nonzero bytes",
+            ),
+            (
+                image(),
+                Overlay {
+                    regions: vec![region(0x200, &[1; 8]), region(0x204, &[1])],
+                    edits: vec![],
+                },
+                "overlaps another overlay region",
+            ),
+            (
+                image(),
+                Overlay {
+                    regions: vec![],
+                    edits: vec![edit(0x10, 0)],
+                },
+                "expected old word differs",
+            ),
+            (
+                image(),
+                Overlay {
+                    regions: vec![],
+                    edits: vec![edit(0x200, 0)],
+                },
+                "outside initialized stock bytes",
+            ),
+            (
+                image(),
+                Overlay {
+                    regions: vec![],
+                    edits: vec![edit(0x10, 0x1111_1111), edit(0x10, 0x1111_1111)],
+                },
+                "duplicate word edit",
+            ),
         ];
         for (mut ram, overlay, message) in cases {
             let before = ram.clone();
-            let error = super::overlay(&mut ram, &plan(), &overlay).unwrap_err().to_string();
-            assert!(error.contains(message), "{error} does not contain {message}");
-            assert_eq!(ram, before, "a refused overlay changed the image: {message}");
+            let error = super::overlay(&mut ram, &plan(), &overlay)
+                .unwrap_err()
+                .to_string();
+            assert!(
+                error.contains(message),
+                "{error} does not contain {message}"
+            );
+            assert_eq!(
+                ram, before,
+                "a refused overlay changed the image: {message}"
+            );
         }
         // A refused edit after valid regions leaves the regions unwritten as well.
         let mut ram = image();
-        let overlay = Overlay { regions: vec![region(0x200, &[1])], edits: vec![edit(0x10, 0)] };
+        let overlay = Overlay {
+            regions: vec![region(0x200, &[1])],
+            edits: vec![edit(0x10, 0)],
+        };
         assert!(super::overlay(&mut ram, &plan(), &overlay).is_err());
         assert_eq!(ram, image());
     }
     #[test]
     fn reads_region_files_beside_the_description_and_checks_their_hashes() {
-        let directory = std::env::temp_dir().join(format!("fujimod-overlay-{}", std::process::id()));
+        let directory =
+            std::env::temp_dir().join(format!("fujimod-overlay-{}", std::process::id()));
         std::fs::create_dir_all(&directory).unwrap();
         std::fs::write(directory.join("region.bin"), [1, 2, 3, 4]).unwrap();
         let describe = |sha256: &str, file: &str| {
@@ -500,16 +602,42 @@ mod overlay_tests {
             .to_string()
         };
         let path = directory.join("overlay.json");
-        std::fs::write(&path, describe(&fujimod_firmware::sha256(&[1, 2, 3, 4]), "region.bin")).unwrap();
+        std::fs::write(
+            &path,
+            describe(&fujimod_firmware::sha256(&[1, 2, 3, 4]), "region.bin"),
+        )
+        .unwrap();
         let read = Overlay::read(&path).unwrap();
-        let regions: Vec<_> = read.regions.iter().map(|r| (r.name.as_str(), r.address, r.bytes.as_slice())).collect();
+        let regions: Vec<_> = read
+            .regions
+            .iter()
+            .map(|r| (r.name.as_str(), r.address, r.bytes.as_slice()))
+            .collect();
         assert_eq!(regions, vec![("mods", 0x200, &[1u8, 2, 3, 4][..])]);
-        let edits: Vec<_> = read.edits.iter().map(|e| (e.address, e.old, e.new, e.what.as_str())).collect();
+        let edits: Vec<_> = read
+            .edits
+            .iter()
+            .map(|e| (e.address, e.old, e.new, e.what.as_str()))
+            .collect();
         assert_eq!(edits, vec![(0x10, 0x1111_1111, 0x9400_0000, "hook")]);
         std::fs::write(&path, describe(&"0".repeat(64), "region.bin")).unwrap();
-        assert!(Overlay::read(&path).unwrap_err().to_string().contains("differs from its description"));
-        std::fs::write(&path, describe(&fujimod_firmware::sha256(&[1, 2, 3, 4]), "../region.bin")).unwrap();
-        assert!(Overlay::read(&path).unwrap_err().to_string().contains("must be a basename"));
+        assert!(
+            Overlay::read(&path)
+                .unwrap_err()
+                .to_string()
+                .contains("differs from its description")
+        );
+        std::fs::write(
+            &path,
+            describe(&fujimod_firmware::sha256(&[1, 2, 3, 4]), "../region.bin"),
+        )
+        .unwrap();
+        assert!(
+            Overlay::read(&path)
+                .unwrap_err()
+                .to_string()
+                .contains("must be a basename")
+        );
         std::fs::remove_dir_all(&directory).unwrap();
     }
 }

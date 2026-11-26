@@ -872,7 +872,7 @@ pub enum RunAudioInputProfile {
 
 #[cfg(test)]
 mod tests {
-    use super::{RunFactoryOptions, RunFaceResultProfile};
+    use super::{RunFaceResultProfile, RunFactoryOptions};
 
     #[test]
     fn face_result_profile_accepts_known_profiles_and_rejects_unknown() {
@@ -888,9 +888,11 @@ mod tests {
             assert_eq!(options.face_result_profile, Some(expected));
         }
 
-        assert!(serde_json::from_value::<RunFactoryOptions>(serde_json::json!({
-            "face_result_profile": "not-a-profile"
-        }))
-        .is_err());
+        assert!(
+            serde_json::from_value::<RunFactoryOptions>(serde_json::json!({
+                "face_result_profile": "not-a-profile"
+            }))
+            .is_err()
+        );
     }
 }

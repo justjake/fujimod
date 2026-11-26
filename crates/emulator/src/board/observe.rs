@@ -37,15 +37,27 @@ pub(super) fn range_digest(memory: &super::memory::Memory, address: u64, length:
                 pages += 1;
                 open.get_or_insert(start);
             } else if let Some(first) = open.take() {
-                if runs.len() < LISTED { runs.push((first, start)); } else { runs_dropped += 1; }
+                if runs.len() < LISTED {
+                    runs.push((first, start));
+                } else {
+                    runs_dropped += 1;
+                }
             }
         }
         at += n as u64;
     }
     if let Some(first) = open {
-        if runs.len() < LISTED { runs.push((first, end)); } else { runs_dropped += 1; }
+        if runs.len() < LISTED {
+            runs.push((first, end));
+        } else {
+            runs_dropped += 1;
+        }
     }
-    let digest: String = hasher.finalize().iter().map(|byte| format!("{byte:02x}")).collect();
+    let digest: String = hasher
+        .finalize()
+        .iter()
+        .map(|byte| format!("{byte:02x}"))
+        .collect();
     json!({"address":address,"length":length,"sha256":digest,"nonzero_pages_4k":pages,
         "nonzero_runs":runs,"nonzero_runs_not_listed":runs_dropped})
 }
@@ -53,7 +65,9 @@ pub(super) fn range_digest(memory: &super::memory::Memory, address: u64, length:
 /// `FUJIMOD_WATCH_HASH=ADDR:LEN[;ADDR:LEN...]` (decimal or `0x`): the digests of these ranges are
 /// added to a watched PC's first-entry record on core 0, taken at the moment it first reaches it.
 fn watch_hash_ranges() -> Vec<(u64, u64)> {
-    let Ok(spec) = std::env::var("FUJIMOD_WATCH_HASH") else { return vec![] };
+    let Ok(spec) = std::env::var("FUJIMOD_WATCH_HASH") else {
+        return vec![];
+    };
     let number = |text: &str| match text.trim().strip_prefix("0x") {
         Some(hex) => u64::from_str_radix(hex, 16).ok(),
         None => text.trim().parse().ok(),
@@ -167,7 +181,11 @@ unsafe fn entered(pc: u64, _: u32, data: *mut c_void) {
     }
     let sp = super::scalar(cpu, Register::Sp).unwrap_or(0);
     // Digests are taken on core 0's first entry only: they read all of the requested ranges.
-    let ranges = if watch.core == 0 { watch_hash_ranges() } else { vec![] };
+    let ranges = if watch.core == 0 {
+        watch_hash_ranges()
+    } else {
+        vec![]
+    };
     let mut record = json!({"core":watch.core,"pc":pc,
         "instructions":counts,"tick":state.timeline.now().saturating_add(elapsed),
         "arguments":arguments,"argument_bus_memory":argument_memory,"backtrace":backtrace,"sp":sp});

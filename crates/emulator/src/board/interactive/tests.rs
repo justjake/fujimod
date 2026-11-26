@@ -587,10 +587,16 @@ fn flag_rendezvous_continues_with_short_turns_and_livelocks_when_one_core_runs_a
     // that round; every core then waits in its flag loop.
     let (stalled, pcs) = rendezvous_rounds(1000, 100_000);
     let (still, _) = rendezvous_rounds(1000, 200_000);
-    assert_eq!(stalled, still, "rounds continued with a 1000-instruction quantum");
+    assert_eq!(
+        stalled, still,
+        "rounds continued with a 1000-instruction quantum"
+    );
     assert_eq!(stalled[0], 0, "{stalled:?}");
     assert!((0x1034..=0x1054).contains(&pcs[0]), "{:#x}", pcs[0]);
-    assert!(pcs[1..].iter().all(|pc| (0x202c..=0x204c).contains(pc)), "{pcs:x?}");
+    assert!(
+        pcs[1..].iter().all(|pc| (0x202c..=0x204c).contains(pc)),
+        "{pcs:x?}"
+    );
 }
 
 #[test]
@@ -600,12 +606,7 @@ fn cohort_ends_when_its_first_core_reaches_the_limit() {
         phase: 0,
         ratio: Ratio::new(1, 1).unwrap(),
     };
-    let mut epoch = super::Epoch::new(
-        3,
-        clock,
-        100,
-        fujimod_perf::EngineEndReason::OtherExit,
-    );
+    let mut epoch = super::Epoch::new(3, clock, 100, fujimod_perf::EngineEndReason::OtherExit);
     let cohort = [0, 1, 2];
     assert!(epoch.open(&cohort));
     // Owner callbacks split the epoch into segments; each core keeps its

@@ -97,7 +97,10 @@ test('missing notes produces no text, and omitted download switches default to f
   delete raw.notes;
   delete raw.firmwares[0].downloads;
   const validated = validateIndex(raw);
-  expect(validated.firmwares[0].downloads).toEqual({ sd_boot_v1: false, sd_boot_v1_installable: false });
+  expect(validated.firmwares[0].downloads).toEqual({
+    sd_boot_v1: false,
+    sd_boot_v1_installable: false,
+  });
   expect(raw.firmwares[0].downloads).toBeUndefined();
   f.files.set('/releases/v2/patches.json', Response.json(raw));
   expect((await loadRelease('https://fujimod.com/', f.fetcher))?.notesText).toBeUndefined();
@@ -129,7 +132,8 @@ test('displaying a release never downloads firmware patches; patch use verifies 
     verifyPatch(validateIndex(bad.index), bad.index.firmwares[0], bad.patch),
   ).rejects.toThrow(/index/);
   expect(
-    (await loadRelease('https://fujimod.com/', bad.fetcher))?.firmwares[0].downloads.sd_boot_v1_installable,
+    (await loadRelease('https://fujimod.com/', bad.fetcher))?.firmwares[0].downloads
+      .sd_boot_v1_installable,
   ).toBe(true);
   expect(bad.fetcher.mock.calls).toHaveLength(3);
   expect(

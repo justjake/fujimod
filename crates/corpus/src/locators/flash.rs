@@ -224,15 +224,33 @@ fn loads(routine: &Routine) -> Vec<(usize, u64)> {
     found
 }
 
-/// Locate a stock flash reader for one processor family. `jedec_id` is the
-/// installed hardware identity, verified against the driver's supported-device
-/// table. It is not selected arbitrarily from the list of supported NOR chips.
+/// The installed serial flash as its catalog part record declares it: the
+/// JEDEC identity and the technology (`serial-nor-flash` or
+/// `serial-nand-flash`, the part's interface kind).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Deserialize)]
+pub struct InstalledFlash {
+    pub jedec_id: u32,
+    pub technology: FlashTechnology,
+}
+
+/// Serial flash technology, named as the part records' interface kinds.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum FlashTechnology {
+    SerialNorFlash,
+    SerialNandFlash,
+}
+
+/// Locate a stock flash reader for one processor family. `installed` is the
+/// installed hardware from its part record; its identity is verified against
+/// the driver's supported-device table. It is not selected arbitrarily from the
+/// list of supported NOR chips.
 /// `image_origin` and `control_offset` come from the decoded update packaging.
 pub fn flash<L: Lookup>(
     index: &L,
     firmware: &str,
     processor: &str,
-    jedec_id: Option<u32>,
+    installed: Option<InstalledFlash>,
     image_origin: u64,
     control_offset: u64,
 ) -> Result<Value> {
@@ -240,7 +258,7 @@ pub fn flash<L: Lookup>(
         index,
         firmware,
         processor,
-        jedec_id,
+        installed,
         image_origin,
         control_offset,
         false,
@@ -268,11 +286,12 @@ fn flash_with_route<L: Lookup>(
     index: &L,
     firmware: &str,
     processor: &str,
-    jedec_id: Option<u32>,
+    installed: Option<InstalledFlash>,
     image_origin: u64,
     control_offset: u64,
     mapped_only: bool,
 ) -> Result<Value> {
+    let jedec_id = installed.map(|flash| flash.jedec_id);
     if processor == "xp4" {
         return xp4_flash(index, firmware, image_origin);
     }
@@ -351,12 +370,17 @@ fn flash_with_route<L: Lookup>(
             .collect(),
         "destination cache maintenance",
     )?;
-    let nand = dispatcher.has("tst", "x0, #0x3f");
+    let mixed = dispatcher.has("tst", "x0, #0x3f");
+    let nand = selected_nand(mixed, installed)?;
     let mut ranges = vec![
         reader.span("flash_read"),
         request.span("flash read request"),
         dispatcher.span("flash read dispatcher"),
-        dma.span(dma_shape.range_name()),
+        dma.span(if mixed {
+            "mixed NOR/NAND DMA reader"
+        } else {
+            dma_shape.range_name()
+        }),
     ];
     if mapped_only {
         if nand {
@@ -376,7 +400,7 @@ fn flash_with_route<L: Lookup>(
         }));
     }
     let mut checks = vec![];
-    let device = if nand {
+    if mixed {
         let mode = one(
             loads(&dispatcher)
                 .into_iter()
@@ -390,6 +414,7 @@ fn flash_with_route<L: Lookup>(
                 .collect(),
             "NAND mode",
         )?;
+        checks.push(json!({"name":"serial flash driver mode","address":mode,"size":4,"value":u32::from(nand)}));
         let poll = one(
             locator
                 .calls(&dma)?
@@ -404,6 +429,8 @@ fn flash_with_route<L: Lookup>(
             "DMA completion poll",
         )?;
         ranges.push(poll.span("flash DMA completion poll"));
+    }
+    let device = if nand {
         ranges.push(cache.span("destination cache maintenance"));
         // The NAND initializer requires all three ID bytes before publishing
         // this exact ID to its descriptor. Verify the complete constructor.
@@ -452,7 +479,6 @@ fn flash_with_route<L: Lookup>(
         if jedec_id.is_some_and(|id| id != 0xefdc21) {
             return Err("installed NAND differs from driver".into());
         }
-        checks.push(json!({"name":"serial NAND driver mode","address":mode,"size":4,"value":1}));
         json!({"kind":"serial-nand","jedec_id":"efdc21","part":"Winbond W35N01JW"})
     } else {
         let id = jedec_id.ok_or("NOR installed JEDEC identity is not established")?;
@@ -507,7 +533,44 @@ fn flash_with_route<L: Lookup>(
             }
         }
         ranges.push(cache.span("destination cache maintenance"));
-        let calls = locator.calls(&request)?;
+        if mixed {
+            let identity = locator.named("flash_read_jedec_signature", |r| {
+                r.code.len() == 7
+                    && r.code[0].mnemonic == "adrp"
+                    && r.code[1].mnemonic == "add"
+                    && r.code[2].mnemonic == "ldrh"
+                    && r.has("strb", "w3, [x0]")
+                    && r.has("strb", "w0, [x1]")
+                    && r.code[4].mnemonic == "ldr"
+                    && r.code[4].operands.starts_with("w0,")
+                    && r.code[6].mnemonic == "ret"
+            })?;
+            let address = one(
+                loads(&identity).into_iter().map(|(_, a)| a).collect(),
+                "installed flash identity",
+            )?;
+            checks.push(json!({"name":"installed NOR JEDEC identity","address":address,"size":4,"value":id}));
+            ranges.push(identity.span("installed flash identity reader"));
+            let aligned = one(
+                locator
+                    .calls(&dispatcher)?
+                    .into_iter()
+                    .filter(|r| {
+                        r.code
+                            .iter()
+                            .any(|i| i.mnemonic == "ands" && i.operands.ends_with(", #0x3f"))
+                            && locator.calls(r).is_ok_and(|calls| {
+                                calls
+                                    .iter()
+                                    .any(|c| c.header.key.address == dma.header.key.address)
+                            })
+                    })
+                    .collect(),
+                "aligned NOR dispatcher",
+            )?;
+            ranges.push(aligned.span("aligned NOR dispatcher"));
+        }
+        let calls = locator.calls(if mixed { &dispatcher } else { &request })?;
         let bank = one(
             calls
                 .iter()
@@ -534,8 +597,10 @@ fn flash_with_route<L: Lookup>(
     checks.push(
         json!({"name":"flash driver initialized","address":marker,"size":4,"value":0x77666555u32}),
     );
+    // No `e1_window`: a direct E1 read of the window hung the X-S20, as it did
+    // the X-T3, although the loader maps it. The stock reader is the proven path.
     Ok(
-        json!({"device":device,"window":{"address":0xf0000000u64,"size":0x8000000},"e1_window":{"address":0xf0000000u64,"size":0x8000000},"update_image":{"dat_offset":image_origin,"xor":255},"reader":{"symbol":"flash_read","alignment":64},"transport":"xp5-cmd-callback","code_ranges":ranges,"state_checks":checks,"control":{"offset":control_offset,"size":32768}}),
+        json!({"device":device,"window":{"address":0xf0000000u64,"size":0x8000000},"update_image":{"dat_offset":image_origin,"xor":255},"reader":{"symbol":"flash_read","alignment":64},"transport":"xp5-cmd-callback","code_ranges":ranges,"state_checks":checks,"control":{"offset":control_offset,"size":32768}}),
     )
 }
 
@@ -581,6 +646,20 @@ impl DmaShape {
             Self::DirectPoll => "flash DMA read",
             Self::QueuedCommand => "flash queued DMA read (not live-verified)",
         }
+    }
+}
+
+/// A driver may contain both technologies; reachable NAND instructions do not
+/// identify the installed chip. The installed part record's technology selects
+/// the path, and a NAND part needs a driver with a NAND path.
+fn selected_nand(has_nand_path: bool, installed: Option<InstalledFlash>) -> Result<bool> {
+    match installed.map(|flash| flash.technology) {
+        Some(FlashTechnology::SerialNandFlash) if has_nand_path => Ok(true),
+        Some(FlashTechnology::SerialNandFlash) => {
+            Err("installed serial NAND but the driver has no NAND path".into())
+        }
+        Some(FlashTechnology::SerialNorFlash) => Ok(false),
+        None => Err("installed flash identity is not established".into()),
     }
 }
 
@@ -881,7 +960,10 @@ fn xpp_register_table_read_mode(routine: &Routine) -> bool {
         routine.code.windows(2).any(|instructions| {
             let immediate = |instruction: &Instruction| {
                 let (register, value) = instruction.operands.split_once(", ")?;
-                Some((register.to_string(), number(value.trim_start_matches('#')).ok()?))
+                Some((
+                    register.to_string(),
+                    number(value.trim_start_matches('#')).ok()?,
+                ))
             };
             let Some((low_register, low_value)) = immediate(&instructions[0]) else {
                 return false;
@@ -1366,7 +1448,10 @@ fn verify_xp4_packet_reader(
         || arm_mov_pair_for(words[26], words[27], 3)? != state_address
         || arm_mov_pair_for(words[28], words[29], 2)? != 0x7766_6555
         || arm_branch_target(reader_address + 0x170, words[92])? != transfer_address
-        || arm_branch_target(reader_address + (prepare_word * 4) as u64, words[prepare_word])? != prepare_address
+        || arm_branch_target(
+            reader_address + (prepare_word * 4) as u64,
+            words[prepare_word],
+        )? != prepare_address
     {
         return Err("XP4 flash packet, state or transfer path changed".into());
     }
@@ -1521,9 +1606,13 @@ fn unnamed_reader<L: Lookup>(
 ) -> Result<Routine> {
     let readers = locator.small_routines(0x40, |routine| {
         is_reader(routine)
-            && locator.calls(routine).unwrap_or_default().iter().any(|request| {
-                request.has("mov", "w0, #0x6555") && request.has("movk", "w0, #0x7766, lsl #16")
-            })
+            && locator
+                .calls(routine)
+                .unwrap_or_default()
+                .iter()
+                .any(|request| {
+                    request.has("mov", "w0, #0x6555") && request.has("movk", "w0, #0x7766, lsl #16")
+                })
     });
     one(readers, "flash_read")
 }
@@ -1579,6 +1668,29 @@ pub fn image_offsets<L: Lookup>(
 mod tests {
     use super::*;
     use crate::{Boundary, Index, Region, UnitInput, UnitLayout};
+
+    #[test]
+    fn mixed_driver_technology_follows_checked_identity() {
+        let nor = |jedec_id| {
+            Some(InstalledFlash {
+                jedec_id,
+                technology: FlashTechnology::SerialNorFlash,
+            })
+        };
+        let nand = |jedec_id| {
+            Some(InstalledFlash {
+                jedec_id,
+                technology: FlashTechnology::SerialNandFlash,
+            })
+        };
+        assert_eq!(selected_nand(true, nor(0x2c5b1b)).unwrap(), false);
+        assert_eq!(selected_nand(true, nand(0xefdc21)).unwrap(), true);
+        assert_eq!(selected_nand(false, nor(0x20bb20)).unwrap(), false);
+        // The part record, not the identity value, decides the technology.
+        assert_eq!(selected_nand(true, nand(0x123456)).unwrap(), true);
+        assert!(selected_nand(false, nand(0xefdc21)).is_err());
+        assert!(selected_nand(true, None).is_err());
+    }
 
     #[test]
     fn packet_reader_rejects_changed_roles_state_and_calls() {
@@ -1690,10 +1802,7 @@ mod tests {
             ("str", "w0, [sp, #0x70]"),
             ("mov", "w0, #0x400"),
         ];
-        assert_eq!(
-            DmaShape::of(&code(&queued)),
-            Some(DmaShape::QueuedCommand)
-        );
+        assert_eq!(DmaShape::of(&code(&queued)), Some(DmaShape::QueuedCommand));
         assert_eq!(DmaShape::DirectPoll.range_name(), "flash DMA read");
         assert!(
             DmaShape::QueuedCommand
@@ -1707,10 +1816,7 @@ mod tests {
             let expected = matches!(skip, 4).then_some(DmaShape::QueuedCommand);
             assert_eq!(DmaShape::of(&code(&partial)), expected, "without {skip}");
         }
-        assert_eq!(
-            DmaShape::of(&code(&[("str", "x19, [sp, #0x78]")])),
-            None
-        );
+        assert_eq!(DmaShape::of(&code(&[("str", "x19, [sp, #0x78]")])), None);
     }
 
     #[test]
@@ -1727,7 +1833,12 @@ mod tests {
         assert!(!nor_geometry_matches(&record, 0x20000, 0x1000, 0x100));
         assert!(!nor_geometry_matches(&record, 0x10000, 0x2000, 0x100));
         assert!(!nor_geometry_matches(&record, 0x10000, 0x1000, 0x200));
-        assert!(!nor_geometry_matches(&record[..0x28], 0x10000, 0x1000, 0x100));
+        assert!(!nor_geometry_matches(
+            &record[..0x28],
+            0x10000,
+            0x1000,
+            0x100
+        ));
     }
 
     #[test]

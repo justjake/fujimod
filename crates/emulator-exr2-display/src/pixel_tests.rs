@@ -1,10 +1,11 @@
 //! Pixel tests cover byte layout, alpha composition, window stacking and
 //! unsupported source formats.
-use fujimod_framebuffer_exr2::{self as scanout, Observation};
-use super::{
-    device::{Options, Scanout},
+use super::device::{Options, Scanout};
+use fujimod_emulator_devices::{
+    Device,
+    test_host::{TestHost, write},
 };
-use fujimod_emulator_devices::{Device, test_host::{TestHost, write}};
+use fujimod_framebuffer_exr2::{self as scanout, Observation};
 
 fn model() -> Scanout {
     Scanout::new(Options {
@@ -40,7 +41,12 @@ fn window(
         write(d, h, scanout::BASES[pipe] + o, v);
     }
 }
-fn observe(d: &Scanout, h: &TestHost, pipe: usize, pixels: bool) -> fujimod_framebuffer::frame::Frame {
+fn observe(
+    d: &Scanout,
+    h: &TestHost,
+    pipe: usize,
+    pixels: bool,
+) -> fujimod_framebuffer::frame::Frame {
     let mut read = |a: u64, n: usize| {
         Ok(h.ram[(a & 0x3fffffff) as usize..(a & 0x3fffffff) as usize + n].to_vec())
     };

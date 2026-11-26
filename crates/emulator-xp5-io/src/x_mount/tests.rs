@@ -35,7 +35,10 @@ fn connector(pins: SharedPins, choice: &str) -> Connector {
     };
     let controller = Controller::new(
         BASE,
-        Clock { source_hz: 48_000_000, ticks_per_second: 1_000_000_000 },
+        Clock {
+            source_hz: 48_000_000,
+            ticks_per_second: 1_000_000_000,
+        },
         vec![InterruptLine::Shared(36)],
         wire,
     )
@@ -67,10 +70,20 @@ fn detect_sense_power_and_ready_interrupt_sequence() {
     let mut host = RecordingHost::default();
     // Attached and unpowered: detect low, pattern A, ready high.
     assert!(!level(&pins, 0, 11));
-    assert_eq!([level(&pins, 10, 0), level(&pins, 10, 1), level(&pins, 10, 2)], [true, false, true]);
+    assert_eq!(
+        [
+            level(&pins, 10, 0),
+            level(&pins, 10, 1),
+            level(&pins, 10, 2)
+        ],
+        [true, false, true]
+    );
     assert!(level(&pins, 14, 1));
     advance(&mut device, &mut host, 1000);
-    assert!(host.irqs.is_empty(), "ready is not routed before its pad function is selected");
+    assert!(
+        host.irqs.is_empty(),
+        "ready is not routed before its pad function is selected"
+    );
     // The body enables the first supply: still unpowered, pattern unchanged.
     latch(&pins, 15, 9, true);
     assert_eq!(device.next_deadline(2000), None);
@@ -158,17 +171,29 @@ fn the_serial_controller_carries_lens_frames_and_checkpoints() {
     let encode = |payload: u16, fam: u16, ack: bool| {
         // Same framing as x_mount_link::Packet (5-bit additive check).
         let mut word = ((payload as u32) << 16) | ((fam as u32) << 6) | (u32::from(ack) << 15);
-        let check = ([27, 22, 17, 12, 7].iter().map(|s| (word >> s) & 31).sum::<u32>()
+        let check = ([27, 22, 17, 12, 7]
+            .iter()
+            .map(|s| (word >> s) & 31)
+            .sum::<u32>()
             + ((word >> 6) & 1))
             & 31;
         word |= check << 1;
         word.to_be_bytes()
     };
-    spi(&mut device, &mut host, &mut now, &encode(0, family::FEEDBACK, false));
+    spi(
+        &mut device,
+        &mut host,
+        &mut now,
+        &encode(0, family::FEEDBACK, false),
+    );
     spi(&mut device, &mut host, &mut now, &encode(0x0800, 0, true));
     let saved = device.checkpoint().unwrap();
     let reply = spi(&mut device, &mut host, &mut now, &[0, 0, 0, 0]);
-    assert_eq!(reply, encode(2000, family::FEEDBACK, false), "focus position 2000");
+    assert_eq!(
+        reply,
+        encode(2000, family::FEEDBACK, false),
+        "focus position 2000"
+    );
     // Restore and replay: the same reply comes back.
     device.validate_checkpoint(&saved).unwrap();
     device.restore_checkpoint(&saved).unwrap();

@@ -18,10 +18,19 @@ const ISB: u32 = 0xf57f_f06f;
 const NOP: u32 = 0xe1a0_0000;
 
 fn cp(crn: u32, crm: u32, opc1: u32, opc2: u32) -> arm::Coprocessor {
-    arm::Coprocessor { cp: 15, crn, crm, opc1, opc2, secure: 1, wide: false }
+    arm::Coprocessor {
+        cp: 15,
+        crn,
+        crm,
+        opc1,
+        opc2,
+        secure: 1,
+        wide: false,
+    }
 }
 fn reg(s: &Session, core: usize, index: usize, value: u32) {
-    s.write_register(core, arm::CORE[index], value.into()).unwrap();
+    s.write_register(core, arm::CORE[index], value.into())
+        .unwrap();
 }
 fn words(s: &Session, address: u32, code: &[u32]) {
     let bytes: Vec<_> = code.iter().flat_map(|word| word.to_le_bytes()).collect();
@@ -32,7 +41,8 @@ fn session(cores: usize) -> Session {
         "ram_size": 0x40_0000, "cores": cores, "discovery": false,
         "cbar": 0x2000_0000u32,
         "initial_registers": (0..cores).map(|_| json!([["Pc", LOAD]])).collect::<Vec<_>>(),
-    })).unwrap();
+    }))
+    .unwrap();
     let s = Session::new(definition, None, vec![]).unwrap();
     words(&s, TABLE, &[ATTR, OLD | ATTR]);
     words(&s, OLD, &[0x11]);
@@ -42,10 +52,13 @@ fn session(cores: usize) -> Session {
         s.coprocessor(core, cp(1, 1, 0, 0), Some(0)).unwrap(); // SCR: Secure.
         s.write_register(core, arm::CPSR, 0xd3).unwrap();
         s.coprocessor(core, cp(1, 0, 0, 1), Some(0x6040)).unwrap(); // ACTLR.SMP.
-        s.coprocessor(core, cp(2, 0, 0, 0), Some(TABLE.into())).unwrap();
-        s.coprocessor(core, cp(3, 0, 0, 0), Some(0x5555_5555)).unwrap();
+        s.coprocessor(core, cp(2, 0, 0, 0), Some(TABLE.into()))
+            .unwrap();
+        s.coprocessor(core, cp(3, 0, 0, 0), Some(0x5555_5555))
+            .unwrap();
         let control = s.coprocessor(core, cp(1, 0, 0, 0), None).unwrap();
-        s.coprocessor(core, cp(1, 0, 0, 0), Some(control | 1)).unwrap();
+        s.coprocessor(core, cp(1, 0, 0, 0), Some(control | 1))
+            .unwrap();
         reg(&s, core, 0, VA);
     }
     s
@@ -56,12 +69,18 @@ fn load(s: &Session, core: usize) -> u64 {
     s.read_register(core, arm::CORE[2]).unwrap()
 }
 fn warm(s: &Session, cores: usize) {
-    for core in 0..cores { assert_eq!(load(s, core), 0x11); }
+    for core in 0..cores {
+        assert_eq!(load(s, core), 0x11);
+    }
 }
 fn updater(s: &Session, operation: u32) {
     // Break before make: invalidate descriptor, publish, invalidate TLBs,
     // complete maintenance, install replacement, then publish replacement.
-    words(s, UPDATE, &[0xe584_3000, DSB, operation, DSB, ISB, 0xe584_5000, DSB, ISB]);
+    words(
+        s,
+        UPDATE,
+        &[0xe584_3000, DSB, operation, DSB, ISB, 0xe584_5000, DSB, ISB],
+    );
     reg(s, 0, 3, 0);
     reg(s, 0, 4, TABLE + 4);
     reg(s, 0, 5, NEW | ATTR);
@@ -81,10 +100,18 @@ fn update(s: &Session, quantum: usize) {
 
 fn regime(s: &Session, core: usize, ns: bool, mode: u32) {
     s.write_register(core, arm::CPSR, 0xd6).unwrap(); // Monitor selects the next bank.
-    s.coprocessor(core, cp(1, 1, 0, 0), Some(u64::from(ns))).unwrap();
-    s.write_register(core, arm::CPSR, u64::from(0xc0 | mode)).unwrap();
-    assert_eq!(s.read_register(core, arm::CPSR).unwrap(), u64::from(0xc0 | mode));
-    assert_eq!(s.coprocessor(core, cp(1, 1, 0, 0), None).unwrap(), u64::from(ns));
+    s.coprocessor(core, cp(1, 1, 0, 0), Some(u64::from(ns)))
+        .unwrap();
+    s.write_register(core, arm::CPSR, u64::from(0xc0 | mode))
+        .unwrap();
+    assert_eq!(
+        s.read_register(core, arm::CPSR).unwrap(),
+        u64::from(0xc0 | mode)
+    );
+    assert_eq!(
+        s.coprocessor(core, cp(1, 1, 0, 0), None).unwrap(),
+        u64::from(ns)
+    );
 }
 
 #[test]
@@ -98,7 +125,10 @@ fn accepted_nonsecure_and_monitor_sources_deliver_without_peer_regime_filtering(
         let state = s.translation_maintenance_state().unwrap();
         assert_eq!(state.completed, 1);
         let event = &state.records[0].event;
-        assert_eq!((event.secure, event.exception_level, event.cpsr & 31), (secure, el, mode));
+        assert_eq!(
+            (event.secure, event.exception_level, event.cpsr & 31),
+            (secure, el, mode)
+        );
         assert_eq!(load(&s, 1), 0x22);
     }
 }
@@ -130,13 +160,23 @@ fn shared_break_before_make_reaches_every_peer_for_short_and_long_quanta() {
             assert_eq!(&s.instructions()[1..], &before[1..]);
             assert_eq!(s.now() - tick, 8);
             let state = s.translation_maintenance_state().unwrap();
-            assert_eq!((state.completed, state.delivered_peers), (1, (cores - 1) as u64));
+            assert_eq!(
+                (state.completed, state.delivered_peers),
+                (1, (cores - 1) as u64)
+            );
             let record = &state.records[0];
             assert_eq!(record.recipients, ((1u8 << cores) - 1) & !1);
             assert_eq!(record.applied, record.recipients);
             assert!(record.acknowledged);
-            assert!(state.native.iter().all(|native| native.pending == 0 && native.poison == 0));
-            for core in 0..cores { assert_eq!(load(&s, core), 0x22); }
+            assert!(
+                state
+                    .native
+                    .iter()
+                    .all(|native| native.pending == 0 && native.poison == 0)
+            );
+            for core in 0..cores {
+                assert_eq!(load(&s, core), 0x22);
+            }
         }
     }
 }
@@ -150,7 +190,9 @@ fn local_missing_and_failed_condition_operations_leave_peer_translation_cached()
         update(&s, 8);
         assert_eq!(s.translation_maintenance_state().unwrap().completed, 0);
         assert_eq!(load(&s, 1), 0x11);
-        if operation == ALL_LOCAL { assert_eq!(load(&s, 0), 0x22); }
+        if operation == ALL_LOCAL {
+            assert_eq!(load(&s, 0), 0x22);
+        }
     }
 }
 
@@ -218,11 +260,16 @@ fn source_outside_coherency_invalidates_only_itself() {
     updater(&s, ALL_IS);
     update(&s, 8);
     let state = s.translation_maintenance_state().unwrap();
-    assert_eq!((state.records[0].recipients, state.records[0].excluded), (0, 0b1110));
+    assert_eq!(
+        (state.records[0].recipients, state.records[0].excluded),
+        (0, 0b1110)
+    );
     assert!(state.records[0].acknowledged);
     assert_eq!(state.delivered_peers, 0);
     assert_eq!(load(&s, 0), 0x22);
-    for core in 1..4 { assert_eq!(load(&s, core), 0x11); }
+    for core in 1..4 {
+        assert_eq!(load(&s, core), 0x11);
+    }
 }
 
 #[test]
@@ -239,7 +286,11 @@ fn unsupported_participation_fails_before_any_peer_delivery_and_stays_failed() {
         assert_eq!(state.native[0].pending, 1);
         assert_eq!(state.pending.as_ref().unwrap().applied, 0);
         assert_eq!(s.run(1, 1).unwrap_err(), error);
-        assert_eq!(s.coprocessor(core, cp(1, 0, 0, 1), Some(0x6040)).unwrap_err(), error);
+        assert_eq!(
+            s.coprocessor(core, cp(1, 0, 0, 1), Some(0x6040))
+                .unwrap_err(),
+            error
+        );
         assert_eq!(s.set_instruction_observer(None).unwrap_err(), error);
         assert_eq!(s.function_watch_end().unwrap_err(), error);
     }
@@ -253,7 +304,10 @@ fn capacity_yield_delivers_all_events_without_executing_the_next_instruction() {
     words(&s, UPDATE, &code);
     s.write_register(0, arm::PC, UPDATE.into()).unwrap();
     s.run(0, 66).unwrap();
-    assert_eq!(s.read_register(0, arm::PC).unwrap(), u64::from(UPDATE + 64 * 4));
+    assert_eq!(
+        s.read_register(0, arm::PC).unwrap(),
+        u64::from(UPDATE + 64 * 4)
+    );
     assert_eq!(s.read_register(0, arm::CORE[1]).unwrap(), 0);
     assert_eq!(s.instructions(), [64, 0]);
     assert_eq!(s.translation_maintenance_state().unwrap().completed, 64);
@@ -261,7 +315,10 @@ fn capacity_yield_delivers_all_events_without_executing_the_next_instruction() {
     assert_eq!(s.instructions(), [66, 0]);
     assert_eq!(s.read_register(0, arm::CORE[1]).unwrap(), 1);
     let state = s.translation_maintenance_state().unwrap();
-    assert_eq!((state.completed, state.delivered_peers, state.dropped), (65, 65, 1));
+    assert_eq!(
+        (state.completed, state.delivered_peers, state.dropped),
+        (65, 65, 1)
+    );
     assert_eq!(state.records.len(), 64);
     assert_eq!(state.records.first().unwrap().event.sequence, 2);
     assert_eq!(state.records.last().unwrap().event.sequence, 65);
@@ -274,7 +331,8 @@ fn earlier_accepted_event_is_settled_even_when_later_guest_access_fails() {
     // MMU off makes this an absent physical region, not a handled guest
     // translation fault. The failure must remain fatal after maintenance.
     let control = s.coprocessor(0, cp(1, 0, 0, 0), None).unwrap();
-    s.coprocessor(0, cp(1, 0, 0, 0), Some(control & !1)).unwrap();
+    s.coprocessor(0, cp(1, 0, 0, 0), Some(control & !1))
+        .unwrap();
     words(&s, UPDATE, &[ALL_IS, 0xe593_4000]);
     reg(&s, 0, 3, 0x40_0000);
     s.write_register(0, arm::PC, UPDATE.into()).unwrap();
@@ -334,7 +392,8 @@ fn live_observer_cannot_change_peer_participation_or_replace_instrumentation() {
         s.write_register(core, arm::CORE[7], 99)?;
         seen.set(seen.get() + 1);
         Ok(())
-    }))).unwrap();
+    })))
+    .unwrap();
     s.run(0, 1).unwrap();
     assert_eq!(count.get(), 1);
     assert_eq!(s.read_register(0, arm::CORE[7]).unwrap(), 99);

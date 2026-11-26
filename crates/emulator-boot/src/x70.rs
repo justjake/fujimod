@@ -9,12 +9,12 @@ use fujimod_catalog::reference::{
     SensorRadiometry, SocBlock, SocBlockKind,
 };
 use fujimod_catalog::soc::BlockDevice;
+use fujimod_catalog_configuration::DEFAULT_CLOCK_SECONDS_2000;
 use fujimod_catalog_configuration::{
     Exr2RunInputs, Exr2RunScene, RunBrowserCamera, RunConfiguration, RunPurpose, RunStart,
 };
-use fujimod_emulator_exr2_plan::{BootEntry, Model, Node, Plan, WireKind};
 use fujimod_emulator_devices::{graph::Mapping as DeviceMapping, parts::pins::Pin};
-use fujimod_catalog_configuration::DEFAULT_CLOCK_SECONDS_2000;
+use fujimod_emulator_exr2_plan::{BootEntry, Model, Node, Plan, WireKind};
 use serde_json::{Value, json};
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -395,7 +395,10 @@ const CARD_NODE_RULE: NodeRule = NodeRule {
 };
 
 /// The one GPIO signal of a card contact, with its active level.
-fn card_contact(selection: &ResolvedSelection, connection_id: &str) -> Result<(Pin, bool), String> {
+fn card_contact(
+    selection: &ResolvedSelection,
+    connection_id: &str,
+) -> Result<(Pin, bool), String> {
     match gpio_signals(selection, connection_id)?.as_slice() {
         [(pin, active)] => Ok((*pin, *active)),
         _ => Err(format!(
@@ -523,7 +526,10 @@ fn apply_soc_blocks(
     Ok(())
 }
 
-fn block<'a>(selection: &'a ResolvedSelection, id: &str) -> Result<&'a SocBlock, String> {
+fn block<'a>(
+    selection: &'a ResolvedSelection,
+    id: &str,
+) -> Result<&'a SocBlock, String> {
     selection
         .soc
         .blocks
@@ -1897,9 +1903,10 @@ fn apply_connected_usb(
 /// The SoC's USB core interrupt lines: the endpoint engine's `device` output
 /// and the DMA controller's `host` output.
 fn usb_interrupt_lines(soc: &fujimod_catalog::reference::Soc) -> Option<(u32, u32)> {
-    let block = soc.blocks.iter().find(|block| {
-        matches!(block.device, Some(BlockDevice::Usb { .. }))
-    })?;
+    let block = soc
+        .blocks
+        .iter()
+        .find(|block| matches!(block.device, Some(BlockDevice::Usb { .. })))?;
     let line = |output: &str| {
         block
             .interrupts
@@ -2127,38 +2134,6 @@ fn apply_run_inputs(
     Ok(())
 }
 
-fn scene(selection: &ResolvedSelection, scene: &Exr2RunScene) -> Result<Value, String> {
-    let nand = selection.body.nand.ok_or("X70 body has no NAND geometry")?;
-    let image = &scene.images.live_image;
-    let statistics = scene
-        .statistics
-        .live_statistics
-        .iter()
-        .map(|span| json!({"destination":span.destination,"offset":span.offset,"asset":span.asset}))
-        .collect::<Vec<_>>();
-    Ok(json!({
-        "images": { "live_image": {
-            "width": image.width,
-            "height": image.height,
-            "stride": image.stride,
-            "asset": image.asset,
-        }},
-        "statistics": { "live_statistics": statistics },
-        "nands": { "nand": {
-            "kind": "raw",
-            "options": {
-                "bytes": nand.bytes,
-                "page_bytes": nand.page_bytes,
-                "pages_per_block": nand.pages_per_block,
-                "spare_bytes": nand.spare_bytes,
-            },
-            "base": "nand_base",
-            "overlays": [],
-            "spare": [],
-        }},
-    }))
-}
-
 /// Build the closed EXR II plan from a resolved X70 identity and its run inputs.
 pub(super) fn assemble(
     selection: &ResolvedSelection,
@@ -2232,6 +2207,20 @@ pub(super) fn assemble(
                     .unwrap_or(VideoEncoderBackend::Software)
             };
             recipe["options"]["backend"] = json!(selected);
+        }
+        // An external face result profile replaces the passive detector bank
+        // with explicitly supplied results, as the host factory's scene does.
+        if rule.name == "face_detector"
+            && let Some(profile) = configuration
+                .preset
+                .as_ref()
+                .and_then(|p| p.factory_options.face_result_profile.as_ref())
+        {
+            recipe = json!({
+                "kind": "face-results",
+                "profile": profile,
+                "routes": "imaging_routes",
+            });
         }
         apply_soc_blocks(&mut recipe, rule, selection)?;
         apply_body_facts(
@@ -2350,7 +2339,7 @@ pub(super) fn assemble(
         plan_value["wires"]["sensor_frame_period"] = json!("frame-period");
         plan_value["wires"]["sensor_statistics_grid"] = json!("image-grid");
     }
-    let mut scene_value = scene(selection, scene_input)?;
+    let mut scene_value = super::exr2::scene(selection, scene_input)?;
     if let Some(browser) = browser {
         scene_value["files"] = json!({"virtual_card_files": {}});
         let frames = &browser.sensor.frames;

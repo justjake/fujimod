@@ -1,7 +1,7 @@
 use crate::combination;
 use fujimod_emulator_devices::Device;
-use fujimod_emulator_imaging::exr2_isp::dma;
 use fujimod_emulator_devices::exr2::irq_routes::Irq;
+use fujimod_emulator_imaging::exr2_isp::dma;
 
 #[test]
 fn combination_fingerprint_keeps_reset_timing_before_any_writes() {
@@ -10,7 +10,8 @@ fn combination_fingerprint_keeps_reset_timing_before_any_writes() {
             fujimod_emulator_imaging::exr2_isp::options::combination::Options {
                 reset_ticks: delay,
                 clock: dma::Clock::Fixed { ticks: 10 },
-                arithmetic: fujimod_emulator_imaging::exr2_isp::options::combination::Arithmetic::Unmodeled,
+                arithmetic:
+                    fujimod_emulator_imaging::exr2_isp::options::combination::Arithmetic::Unmodeled,
             },
             Irq { core: 0, line: 68 },
         )

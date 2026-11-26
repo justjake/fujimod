@@ -1,23 +1,23 @@
 //! SD card construction from explicit source identities and located recipes.
 #![forbid(unsafe_code)]
-pub mod image;
-pub mod green_led;
 pub mod early_led;
 mod exr;
-mod exr_loader;
 mod exr_firmware;
 mod exr_load_maps;
+mod exr_loader;
+pub mod green_led;
+pub mod image;
 pub mod rom_sd;
 pub use exr::Exr;
 mod exr2;
-pub use exr2::lamp::StartupLamp;
-pub use exr2::footer::LoaderFooter;
 pub use exr2::defaults::ConfigurationDefaults;
+pub use exr2::footer::LoaderFooter;
+pub use exr2::lamp::StartupLamp;
 pub use exr2::startup_reads::StartupReads;
-pub mod xpp;
+pub mod ram_patch;
 mod xp4;
 mod xp5;
-pub mod ram_patch;
+pub mod xpp;
 use image::{File, Packaging, Plan, Result, require};
 use serde::{Deserialize, Serialize};
 pub use xp4::{ColdStart, FileApi, SdCardRead, Setup, sd_card_fast_read::PackedStage};
@@ -25,7 +25,7 @@ pub use xp5::handoff_result as xp5_handoff_result;
 pub use xp5::{
     Board as SdBoard, CodeProof as Xp5CodeProof, Flash as Xp5Flash,
     HandoffRange as Xp5HandoffRange, HostVariant as SdHostVariant, Lamp as Xp5Lamp,
-    CheckedRedirect, Operation as SdOperation, RegisterWrite as Xp5RegisterWrite, Setup as Xp5Setup,
+    Operation as SdOperation, RegisterWrite as Xp5RegisterWrite, Setup as Xp5Setup,
     SourceProof as Xp5SourceProof,
 };
 
@@ -59,34 +59,6 @@ pub struct StartupOptions {
     /// mismatch, a read error), wait this many seconds and continue the stock boot from the
     /// installed flash. `None` keeps the loader's halt on any failure.
     pub fallback_wait_seconds: Option<u32>,
-    /// XP5 only: a read-only startup. The loader streams `ffboot.bin` into DRAM at this address
-    /// and checks its length and CRC-32, writes nothing else outside SRAM, the SD host and the
-    /// lamp, and returns to the stock bootstrap, which starts from the installed flash as on a
-    /// normal boot (the file is read and never run). It excludes `internal_flash` and the
-    /// fallback.
-    pub read_only_destination: Option<u64>,
-    /// With `read_only_destination`: a checked redirect. The loader also proves, against the
-    /// installed flash, that the first raw section of the DRAM copy equals the flash's, and with
-    /// `CheckedRedirect::Apply` changes one word of the stock reset image in RAM 0 so that the
-    /// stock stage loads that section from the DRAM copy. `ffboot.bin` is then the unedited image
-    /// cut after that section. See `xp5::CheckedRedirect`.
-    pub checked_redirect: Option<CheckedRedirect>,
-    /// With `checked_redirect`: replace the stage's copy call by a stub that the loader writes into
-    /// dead padding of the stock reset image, and that checks the DRAM copy and the destination at
-    /// the moment of use and falls back to the flash copy (`xp5::package_copy_stub`).
-    pub copy_stub: bool,
-    /// With `copy_stub`: also change a few named words of the first section (a hook at its entry point and a
-    /// short program in its zero padding) through the same checked path (`xp5::package_marker`).
-    pub marker: bool,
-    /// With `copy_stub` (and not `marker`): check the OS section's compressed load instead of the first
-    /// section's copy (`xp5::package_os`).
-    pub os: bool,
-    /// With `copy_stub` (and neither `marker` nor `os`): name a few words of the OS section's decode and write them
-    /// after the stage's own load (`xp5::package_exif`).
-    pub exif: bool,
-    /// With `copy_stub` (and none of `marker`, `os` and `exif`): put a hook and a small program into the OS's code
-    /// after the stage's own load (`xp5::package_hook`).
-    pub hook: bool,
     /// XP5 card startup only: where the loader stops instead of running the image.
     pub stop: StartupStop,
     /// XP5 card startup only: the prelude also sets up and scans the installed flash, as stage
@@ -302,7 +274,14 @@ impl Recipe {
             Some(workspace),
             read,
         )?;
-        early_led::stage(self, source, &mut bytes, base, xp4::indicator_entry()?, ((api.workspace - setup.linked_sram_base) & !0xfff) as usize - 0x1000)?;
+        early_led::stage(
+            self,
+            source,
+            &mut bytes,
+            base,
+            xp4::indicator_entry()?,
+            ((api.workspace - setup.linked_sram_base) & !0xfff) as usize - 0x1000,
+        )?;
         let mut layout = xp4::layout(setup, api, base, read)?;
         layout["workspace"] = workspace.into();
         layout["file_api"] = serde_json::json!(api);
@@ -445,9 +424,15 @@ impl Recipe {
     /// packaged, so the loader's length and CRC checks cover it. With `internal_flash` the
     /// result is the boot files alone, as from `build_boot_files`.
     pub fn build_startup_with_overlay(
-        &self, source: &[u8], options: StartupOptions, overlay: &image::Overlay,
+        &self,
+        source: &[u8],
+        options: StartupOptions,
+        overlay: &image::Overlay,
     ) -> Result<Vec<File>> {
-        require(matches!(self.generation, Generation::Xp5), "RAM overlays require XP5")?;
+        require(
+            matches!(self.generation, Generation::Xp5),
+            "RAM overlays require XP5",
+        )?;
         let files = self.startup_inputs(source, options, None, Some(overlay), None)?;
         if options.internal_flash {
             boot_files_only(files, &self.update_filename)
@@ -486,9 +471,15 @@ impl Recipe {
     }
     /// Include the unit's retained storage data in a checked card startup.
     pub fn build_startup_with_storage(
-        &self, source: &[u8], storage: &[u8], options: StartupOptions,
+        &self,
+        source: &[u8],
+        storage: &[u8],
+        options: StartupOptions,
     ) -> Result<Vec<File>> {
-        require(matches!(self.generation, Generation::Xp5), "Card storage requires XP5")?;
+        require(
+            matches!(self.generation, Generation::Xp5),
+            "Card storage requires XP5",
+        )?;
         self.startup_inputs(source, options, Some(storage), None, None)
     }
     /// Identifies the `FFSYS.BIN` that `build_ota_startup` writes, without the
@@ -530,26 +521,21 @@ impl Recipe {
     }
 
     fn startup_inputs(
-        &self, source: &[u8], options: StartupOptions, storage: Option<&[u8]>,
-        overlay: Option<&image::Overlay>, ram_patches: Option<&ram_patch::RamPatches>,
+        &self,
+        source: &[u8],
+        options: StartupOptions,
+        storage: Option<&[u8]>,
+        overlay: Option<&image::Overlay>,
+        ram_patches: Option<&ram_patch::RamPatches>,
     ) -> Result<Vec<File>> {
         require(
             overlay.is_none() || matches!(self.generation, Generation::Xp5),
             "RAM overlays require XP5",
         )?;
         require(
-            overlay.is_none() || options.read_only_destination.is_none(),
-            "The read-only startup never runs its RAM image and takes no RAM overlay",
-        )?;
-        require(
             ram_patches.is_none_or(|patches| patches.is_empty())
                 || matches!(self.generation, Generation::Xp5),
             "RAM patches require XP5",
-        )?;
-        require(
-            ram_patches.is_none_or(|patches| patches.is_empty())
-                || options.read_only_destination.is_none(),
-            "The read-only startup never runs its RAM image and takes no RAM patches",
         )?;
         require(
             options.hold_units()? == 0 || matches!(self.generation, Generation::Xp5),
@@ -565,7 +551,7 @@ impl Recipe {
         )?;
         require(
             (options.stop == StartupStop::Continue && !options.prepare_installed_flash)
-                || (!options.internal_flash && options.read_only_destination.is_none()),
+                || !options.internal_flash,
             "Diagnostic stops and installed-flash preparation require the XP5 card startup",
         )?;
         require(
@@ -576,32 +562,6 @@ impl Recipe {
         require(
             options.fallback_wait_seconds.is_none() || options.internal_flash,
             "The load-failure fallback requires an internal-flash startup",
-        )?;
-        require(
-            options.read_only_destination.is_none()
-                || (matches!(self.generation, Generation::Xp5)
-                    && storage.is_none()
-                    && !options.internal_flash
-                    && options.fallback_wait_seconds.is_none()),
-            "The read-only startup requires XP5 and takes no storage image, internal-flash build or fallback",
-        )?;
-        require(
-            options.checked_redirect.is_none() || options.read_only_destination.is_some(),
-            "The checked redirect requires the read-only startup",
-        )?;
-        require(
-            !options.copy_stub || options.checked_redirect.is_some(),
-            "The copy stub requires the checked redirect",
-        )?;
-        require(!options.marker || options.copy_stub, "The marker requires the copy stub")?;
-        require(!options.os || (options.copy_stub && !options.marker), "The OS stub requires the copy stub and excludes the marker")?;
-        require(
-            !options.exif || (options.copy_stub && !options.marker && !options.os),
-            "The Exif stub requires the copy stub and excludes the marker and the OS stub",
-        )?;
-        require(
-            !options.hook || (options.copy_stub && !options.marker && !options.os && !options.exif),
-            "The hook stub requires the copy stub and excludes the marker, the OS stub and the Exif stub",
         )?;
         require(
             source.len() == self.source_size,
@@ -615,7 +575,6 @@ impl Recipe {
                 self.missing.join(", ")
             ))
         })?;
-        let mut redirect_checked = false;
         let mut files =
             match self.generation {
                 Generation::Exr | Generation::ExrPro => {
@@ -628,13 +587,7 @@ impl Recipe {
                     })?;
                     let mut ram = image::transform(&inverted, plan)?;
                     green_led::preserve_loader_green(self, source, &mut ram)?;
-                    let mut files = exr::package(
-                        api,
-                        header,
-                        &inverted,
-                        plan,
-                        ram,
-                    )?;
+                    let mut files = exr::package(api, header, &inverted, plan, ram)?;
                     early_led::stage(self, source, &mut files[1].bytes, 0, 0, 0xffff)?;
                     files
                 }
@@ -678,8 +631,14 @@ impl Recipe {
                         image::Error::Invalid("Missing Topaz filesystem ABI".into())
                     })?;
                     let mut files = xp4::package(self, source, &inverted, plan, cold, setup, api)?;
-                    early_led::stage(self, source, &mut files[0].bytes, api.load_address, xp4::indicator_entry()?,
-                        ((api.workspace - setup.linked_sram_base) & !0xfff) as usize - 0x1000)?;
+                    early_led::stage(
+                        self,
+                        source,
+                        &mut files[0].bytes,
+                        api.load_address,
+                        xp4::indicator_entry()?,
+                        ((api.workspace - setup.linked_sram_base) & !0xfff) as usize - 0x1000,
+                    )?;
                     files
                 }
                 Generation::Xp5 => {
@@ -695,79 +654,7 @@ impl Recipe {
                     if let Some(patches) = ram_patches {
                         patches.apply(&mut ram)?;
                     }
-                    if let (Some(destination), Some(mode)) =
-                        (options.read_only_destination, options.checked_redirect)
-                    {
-                        // The updater's proofs name code high in the RAM image, which the cut
-                        // file does not carry: check them on the whole image first.
-                        if let Some(contract) = &self.updater {
-                            contract.verify(&ram)?;
-                        }
-                        redirect_checked = true;
-                        if options.hook {
-                            xp5::package_hook(
-                                &inverted,
-                                setup,
-                                ram,
-                                options.hold_units()?,
-                                destination,
-                                mode,
-                            )?
-                        } else if options.exif {
-                            xp5::package_exif(
-                                &inverted,
-                                setup,
-                                ram,
-                                options.hold_units()?,
-                                destination,
-                                mode,
-                            )?
-                        } else if options.os {
-                            xp5::package_os(
-                                &inverted,
-                                setup,
-                                ram,
-                                options.hold_units()?,
-                                destination,
-                                mode,
-                            )?
-                        } else if options.marker {
-                            xp5::package_marker(
-                                &inverted,
-                                setup,
-                                ram,
-                                options.hold_units()?,
-                                destination,
-                                mode,
-                            )?
-                        } else if options.copy_stub {
-                            xp5::package_copy_stub(
-                                &inverted,
-                                setup,
-                                ram,
-                                options.hold_units()?,
-                                destination,
-                                mode,
-                            )?
-                        } else {
-                            xp5::package_checked_redirect(
-                                &inverted,
-                                setup,
-                                ram,
-                                options.hold_units()?,
-                                destination,
-                                mode,
-                            )?
-                        }
-                    } else if let Some(destination) = options.read_only_destination {
-                        xp5::package_read_only(
-                            &inverted,
-                            setup,
-                            ram,
-                            options.hold_units()?,
-                            destination,
-                        )?
-                    } else if options.internal_flash {
+                    if options.internal_flash {
                         xp5::package_internal_flash(
                             &inverted,
                             setup,
@@ -803,7 +690,7 @@ impl Recipe {
                 .any(|f| f.name.eq_ignore_ascii_case(&self.update_filename)),
             "DAT filename collides with boot files",
         )?;
-        if let Some(contract) = self.updater.as_ref().filter(|_| !redirect_checked) {
+        if let Some(contract) = &self.updater {
             let ram_filename = if matches!(self.generation, Generation::Exr | Generation::ExrPro) {
                 "ffuser.bin"
             } else {
@@ -881,9 +768,7 @@ pub fn availability(firmware_id: &str) -> Result<Availability> {
                     output_filenames.push("ffuser.bin".into());
                 }
             }
-            Generation::Xp4 => {
-                output_filenames.extend(["ffinit.bin".into(), "ffboot.bin".into()])
-            }
+            Generation::Xp4 => output_filenames.extend(["ffinit.bin".into(), "ffboot.bin".into()]),
             Generation::Xp5 => {
                 output_filenames.extend(["marble_init.bin".into(), "ffboot.bin".into()])
             }

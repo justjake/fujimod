@@ -1,8 +1,8 @@
-use fujimod_emulator_ip_dmp::gles::{
-    Engine, Snapshots, decode_webgpu_request, encode_webgpu_result,
-};
 use fujimod_emulator_exr2_gpu::{
     Inputs, WebGpuUiRequest, WebGpuUiResult, render_ui_host_gpu_async,
+};
+use fujimod_emulator_ip_dmp::gles::{
+    Engine, Snapshots, decode_webgpu_request, encode_webgpu_result,
 };
 use serde::Serialize;
 use std::io::Cursor;

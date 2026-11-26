@@ -63,16 +63,26 @@ impl Fcnv {
         let (a, b) = ((mode >> 4) & 7, mode & 3);
         let (width, lines) = (u64::from(word(0x50) & 0xffff), u64::from(word(0x50) >> 16));
         let (source, output) = (address(0x20), address(0x30));
-        let (in_pitch, out_pitch) = (u64::from(word(0x44) & 0x7ffff), u64::from(word(0x4c) & 0x7ffff));
+        let (in_pitch, out_pitch) = (
+            u64::from(word(0x44) & 0x7ffff),
+            u64::from(word(0x4c) & 0x7ffff),
+        );
         let geometry = format!(
             "FCNV: mode {mode:#x} {width}x{lines} {source:#x} (pitch {in_pitch:#x}) -> {output:#x} (pitch {out_pitch:#x})"
         );
         if b != 0 || a > 1 {
-            return Err(format!("{geometry}: only YCbCr 4:2:2 (B 0) to RGB888 / four bytes (A 0 / 1) is modelled"));
+            return Err(format!(
+                "{geometry}: only YCbCr 4:2:2 (B 0) to RGB888 / four bytes (A 0 / 1) is modelled"
+            ));
         }
         let out_bytes = if a == 0 { 3 } else { 4 };
-        if source == 0 || output == 0 || width == 0 || width % 2 != 0 || lines == 0
-            || in_pitch < width * 2 || out_pitch < width * out_bytes
+        if source == 0
+            || output == 0
+            || width == 0
+            || width % 2 != 0
+            || lines == 0
+            || in_pitch < width * 2
+            || out_pitch < width * out_bytes
         {
             return Err(format!("{geometry} is outside the modelled layout"));
         }
@@ -91,7 +101,9 @@ impl Fcnv {
                         out.push(alpha);
                     }
                     for row in (0..3).rev() {
-                        out.push(clip(m[3 * row] * luma + m[3 * row + 1] * cb + m[3 * row + 2] * cr));
+                        out.push(clip(
+                            m[3 * row] * luma + m[3 * row + 1] * cb + m[3 * row + 2] * cr,
+                        ));
                     }
                 }
             }
@@ -110,7 +122,10 @@ impl Device for Fcnv {
     }
     fn write(&mut self, cx: &mut Cx<'_>, address: u64, size: u8, value: u64) {
         // A start while a completion is due is ignored by the stub, and here.
-        let start = address & 0xfff == 4 && size == 4 && value & 1 != 0 && self.stub.next_deadline(cx.now()).is_none();
+        let start = address & 0xfff == 4
+            && size == 4
+            && value & 1 != 0
+            && self.stub.next_deadline(cx.now()).is_none();
         self.stub.write(cx, address, size, value);
         if start && self.stub.next_deadline(cx.now()).is_some() {
             match self.convert(cx) {
@@ -178,7 +193,11 @@ mod tests {
         let mut ram = vec![0u8; 0x1000];
         // Y0 Y1 Cb Cr: white, white; then red (Y 76, Cb 85, Cr 255) twice; grey.
         ram[..12].copy_from_slice(&[255, 255, 128, 128, 76, 76, 85, 255, 128, 128, 128, 128]);
-        let mut host = RecordingHost { ram_base: RAM, ram, ..Default::default() };
+        let mut host = RecordingHost {
+            ram_base: RAM,
+            ram,
+            ..Default::default()
+        };
         let mut fcnv = Fcnv::new(stub());
         let q10 = |v: f64| ((v * 1024.0).round() as i64 as u64) & 0x1fff;
         let mut cx = Cx::new(&mut host, 0, 0, 0);
@@ -206,7 +225,11 @@ mod tests {
         let out = &host.ram[0x400..0x400 + 24];
         assert_eq!(&out[..8], &[255, 255, 255, 255, 255, 255, 255, 255]);
         // Alpha, B, G, R: red.
-        assert!(out[8] == 255 && out[9] < 16 && out[10] < 16 && out[11] > 240, "{:?}", &out[8..12]);
+        assert!(
+            out[8] == 255 && out[9] < 16 && out[10] < 16 && out[11] > 240,
+            "{:?}",
+            &out[8..12]
+        );
         assert_eq!(&out[16..24], &[255, 128, 128, 128, 255, 128, 128, 128]);
         // A mode that is not modelled writes nothing.
         let mut fcnv = Fcnv::new(stub());

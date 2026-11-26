@@ -4,9 +4,7 @@
   "id": "xp4",
   "cpu_model": "Cortex-A7",
   "runtime_abi": "armv7a-unicorn-v1",
-  "engines": [
-    "rust-unicorn-armv7a"
-  ],
+  "engines": ["rust-unicorn-armv7a"],
   "instructions_per_tick": {
     "numerator": 1,
     "denominator": 1

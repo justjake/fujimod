@@ -23,12 +23,7 @@ const CAPTURE_CHANNEL_STATUS: u64 = 0xfe80c804;
 const CHANNEL_COUNT: u8 = 4;
 const CHANNEL_CONTROL_STRIDE: u64 = 0x40;
 const CHANNEL_GATE_STRIDE: u64 = 0x30;
-const RESET_PERIOD_WORDS: [u32; 4] = [
-    0x000a_0000,
-    0x000b_0000,
-    0x000c_0000,
-    0x000f_0000,
-];
+const RESET_PERIOD_WORDS: [u32; 4] = [0x000a_0000, 0x000b_0000, 0x000c_0000, 0x000f_0000];
 const ROUTE_SEQUENCE: [(u64, u32); 5] = [
     (0xfe318040, 1),
     (0xfe318040, 0),
@@ -507,8 +502,7 @@ impl ProgramUpload {
                 ));
             }
         } else if address == 0xfe80d848 {
-            if self.state.phase != Phase::ResetAcknowledged
-                || !RESET_PERIOD_WORDS.contains(&value)
+            if self.state.phase != Phase::ResetAcknowledged || !RESET_PERIOD_WORDS.contains(&value)
             {
                 return Err("FE80 period/order is outside the recovered stock values".into());
             }
@@ -608,10 +602,7 @@ impl ProgramUpload {
                 return Err("unknown FE80 output-channel control/order".into());
             }
         } else if let Some(channel) = Self::output_channel_pointer(address) {
-            if self.state.output_channel_selected != Some(channel)
-                || value == 0
-                || value & 3 != 0
-            {
+            if self.state.output_channel_selected != Some(channel) || value == 0 || value & 3 != 0 {
                 return Err(
                     "FE80 output-channel address requires its selected channel and alignment"
                         .into(),
@@ -643,9 +634,7 @@ impl ProgramUpload {
                 return Err("unknown FE80 capture-channel control/order".into());
             }
         } else if let Some(channel) = Self::capture_channel_pointer(address) {
-            if self.state.capture_channel_selected != Some(channel)
-                || value == 0
-                || value & 3 != 0
+            if self.state.capture_channel_selected != Some(channel) || value == 0 || value & 3 != 0
             {
                 return Err(
                     "FE80 capture-channel address requires its selected channel and alignment"
@@ -1028,7 +1017,10 @@ mod tests {
         let descriptor = (RAM_BASE + 0x300) as u32;
 
         assert!(write(&mut model, &mut host, CONTROL_STATUS, 1).is_some());
-        assert_eq!(write(&mut model, &mut host, OUTPUT_CHANNEL_CONTROL, 0x40001), None);
+        assert_eq!(
+            write(&mut model, &mut host, OUTPUT_CHANNEL_CONTROL, 0x40001),
+            None
+        );
         assert_eq!(write(&mut model, &mut host, CONTROL_STATUS, 1), None);
         assert_eq!(
             write(
@@ -1046,7 +1038,10 @@ mod tests {
             assert_eq!(write(&mut model, &mut host, control, 0x40101), None);
             assert_eq!(write(&mut model, &mut host, config, 0), None);
         }
-        assert_eq!(read(&mut model, &mut host, OUTPUT_CHANNEL_STATUS), (0, None));
+        assert_eq!(
+            read(&mut model, &mut host, OUTPUT_CHANNEL_STATUS),
+            (0, None)
+        );
         assert_eq!(write(&mut model, &mut host, OUTPUT_CHANNEL_STATUS, 0), None);
 
         for channel in [0u8, 2, 3] {
@@ -1055,15 +1050,24 @@ mod tests {
             assert_eq!(write(&mut model, &mut host, control, 0x40101), None);
             assert_eq!(write(&mut model, &mut host, config, 0), None);
         }
-        assert_eq!(read(&mut model, &mut host, CAPTURE_CHANNEL_STATUS), (0, None));
-        assert_eq!(write(&mut model, &mut host, CAPTURE_CHANNEL_STATUS, 0), None);
+        assert_eq!(
+            read(&mut model, &mut host, CAPTURE_CHANNEL_STATUS),
+            (0, None)
+        );
+        assert_eq!(
+            write(&mut model, &mut host, CAPTURE_CHANNEL_STATUS, 0),
+            None
+        );
         assert_eq!(write(&mut model, &mut host, OUTPUT_CHANNEL_GATE, 1), None);
 
         assert_eq!(model.state.output_channel_programmed, 1);
         assert_eq!(model.state.output_channel_disabled, 0b1110);
         assert_eq!(model.state.output_channel_open, 1);
         assert_eq!(model.state.capture_channel_disabled, 0b1101);
-        assert_eq!(model.state.registers.get(&OUTPUT_CHANNEL_POINTER), Some(&descriptor));
+        assert_eq!(
+            model.state.registers.get(&OUTPUT_CHANNEL_POINTER),
+            Some(&descriptor)
+        );
         assert_eq!(model.state.registers.get(&OUTPUT_CHANNEL_GATE), Some(&1));
 
         let mut restored = ProgramUpload::default();

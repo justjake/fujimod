@@ -212,7 +212,9 @@ def test_board_from_inputs_validates_configuration_and_paths_first() -> None:
         )
 
 
-def test_board_from_inputs_forwards_ordered_overlay_ids(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_board_from_inputs_forwards_ordered_overlay_ids(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     calls: list[dict[str, object]] = []
 
     class NativeBoard:
@@ -227,9 +229,7 @@ def test_board_from_inputs_forwards_ordered_overlay_ids(monkeypatch: pytest.Monk
         def close(self) -> None:
             pass
 
-    monkeypatch.setattr(
-        board_module, "_native", SimpleNamespace(Board=NativeBoard)
-    )
+    monkeypatch.setattr(board_module, "_native", SimpleNamespace(Board=NativeBoard))
     board = Board.from_inputs(
         configuration_id="x70-110-rec",
         overlays=("x70-110-rec-usb",),

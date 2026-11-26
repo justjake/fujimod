@@ -252,8 +252,18 @@ impl Core {
     }
     fn install_mpidr(&self, mpidr: u32) -> Result<u64, String> {
         self.owner_option(|e| &e.owner_mpidr, false)?;
-        let selector = arm::Coprocessor { cp: 15, wide: false, secure: 0, opc1: 0, crn: 0, crm: 0, opc2: 5 };
-        self.execution.cpu.coprocessor(selector, Some(u64::from(mpidr)))?;
+        let selector = arm::Coprocessor {
+            cp: 15,
+            wide: false,
+            secure: 0,
+            opc1: 0,
+            crn: 0,
+            crm: 0,
+            opc2: 5,
+        };
+        self.execution
+            .cpu
+            .coprocessor(selector, Some(u64::from(mpidr)))?;
         let actual = self.execution.cpu.coprocessor(selector, None)?;
         // Cortex-A7 hardwires some bits. Retain board emulation for a
         // configured value the engine cannot represent.
@@ -432,8 +442,7 @@ impl Execution {
         self.memory.apply_watches()?;
         let framework = self.framework(word);
         let boundary = if self.a32 {
-            armv7a::block_boundary(word)
-                && !(self.owner_mpidr.get() && armv7a::mpidr_read(word))
+            armv7a::block_boundary(word) && !(self.owner_mpidr.get() && armv7a::mpidr_read(word))
         } else {
             word & 0xfff00000 == 0xd5100000
                 || word & 0xfffff0df == 0xd50340df
@@ -776,9 +785,14 @@ pub mod store_histogram {
                 let pages = counts.len();
                 let mut rows: Vec<_> = counts.drain().collect();
                 rows.sort_by_key(|&(key, n)| (std::cmp::Reverse(n), key));
-                eprintln!("FUJIMOD store histogram: {total} hooked A-profile stores on {pages} pages");
+                eprintln!(
+                    "FUJIMOD store histogram: {total} hooked A-profile stores on {pages} pages"
+                );
                 for ((core, page), n) in rows.into_iter().take(16) {
-                    eprintln!("FUJIMOD store histogram: CPU{core} page {:#x} count={n}", page << 12);
+                    eprintln!(
+                        "FUJIMOD store histogram: CPU{core} page {:#x} count={n}",
+                        page << 12
+                    );
                 }
             }
         });

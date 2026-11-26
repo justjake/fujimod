@@ -45,7 +45,9 @@ impl RequestAcknowledgment {
 
     fn valid_request(&self, request: Request) -> bool {
         request.token == self.generation
-            && request.token.checked_sub(1)
+            && request
+                .token
+                .checked_sub(1)
                 .and_then(|prior| prior.checked_mul(self.completion_ticks))
                 .is_some_and(|earliest_start| earliest_start <= request.started_at)
             && request.started_at.checked_add(self.completion_ticks) == Some(request.deadline)
@@ -94,7 +96,11 @@ impl Device for RequestAcknowledgment {
             return;
         };
         self.state = State::Pending {
-            request: Request { started_at, deadline, token },
+            request: Request {
+                started_at,
+                deadline,
+                token,
+            },
         };
         self.generation = token;
         cx.record(Record::new(
@@ -110,12 +116,17 @@ impl Device for RequestAcknowledgment {
     }
 
     fn event(&mut self, cx: &mut Cx<'_>, token: u64) {
-        let State::Pending { request } = self.state else { return; };
+        let State::Pending { request } = self.state else {
+            return;
+        };
         let completed_at = cx.now();
         if request.token != token || completed_at < request.deadline {
             return;
         }
-        self.state = State::Completed { request, completed_at };
+        self.state = State::Completed {
+            request,
+            completed_at,
+        };
         cx.record(Record::new(
             "XP4 experimental request acknowledgment completed",
             [
@@ -142,13 +153,15 @@ impl Device for RequestAcknowledgment {
     }
 
     fn restore(&mut self, value: &Value) -> Result<(), String> {
-        let state: Self = serde_json::from_value(value.clone()).map_err(|error| error.to_string())?;
+        let state: Self =
+            serde_json::from_value(value.clone()).map_err(|error| error.to_string())?;
         let valid_history = match state.state {
             State::Unwritten {} => state.generation == 0,
             State::Pending { request } => state.valid_request(request),
-            State::Completed { request, completed_at } => {
-                state.valid_request(request) && completed_at >= request.deadline
-            }
+            State::Completed {
+                request,
+                completed_at,
+            } => state.valid_request(request) && completed_at >= request.deadline,
         };
         // The host owns event delivery. This validates only the device state.
         if state.completion_ticks != self.completion_ticks || !valid_history {
@@ -164,14 +177,23 @@ mod tests {
     use super::*;
     use fujimod_emulator_devices::test_host::recording::RecordingHost;
 
-    fn read(model: &mut RequestAcknowledgment, host: &mut RecordingHost, address: u64, width: u8) -> Result<u64, String> {
+    fn read(
+        model: &mut RequestAcknowledgment,
+        host: &mut RecordingHost,
+        address: u64,
+        width: u8,
+    ) -> Result<u64, String> {
         let mut cx = Cx::new(host, 0, 0, 4);
         let value = model.read(&mut cx, address, width);
         cx.take_refusal().map_or(Ok(value), Err)
     }
 
     fn write(
-        model: &mut RequestAcknowledgment, host: &mut RecordingHost, address: u64, width: u8, value: u64,
+        model: &mut RequestAcknowledgment,
+        host: &mut RecordingHost,
+        address: u64,
+        width: u8,
+        value: u64,
     ) -> Result<(), String> {
         let mut cx = Cx::new(host, 3, 0x1000, 4);
         model.write(&mut cx, address, width, value);
@@ -185,7 +207,10 @@ mod tests {
     #[test]
     fn only_the_scheduled_token_at_or_after_its_deadline_acknowledges() {
         let mut model = RequestAcknowledgment::new(8).unwrap();
-        let mut host = RecordingHost { now: 100, ..Default::default() };
+        let mut host = RecordingHost {
+            now: 100,
+            ..Default::default()
+        };
         let unwritten = model.save();
         event(&mut model, &mut host, 1);
         assert!(read(&mut model, &mut host, ADDRESS, WIDTH).is_err());
@@ -233,8 +258,12 @@ mod tests {
             let before = model.save();
             let events = host.events.clone();
             for (address, width) in [
-                (ADDRESS - 4, 4), (ADDRESS + 4, 4), (ADDRESS + 1, 4),
-                (ADDRESS, 1), (ADDRESS, 2), (ADDRESS, 8),
+                (ADDRESS - 4, 4),
+                (ADDRESS + 4, 4),
+                (ADDRESS + 1, 4),
+                (ADDRESS, 1),
+                (ADDRESS, 2),
+                (ADDRESS, 8),
             ] {
                 assert!(read(&mut model, &mut host, address, width).is_err());
                 assert!(write(&mut model, &mut host, address, width, 1).is_err());
@@ -258,7 +287,10 @@ mod tests {
         }
         assert!(RequestAcknowledgment::new(1_000_000).is_ok());
         let mut model = RequestAcknowledgment::new(1).unwrap();
-        let mut host = RecordingHost { now: u64::MAX, ..Default::default() };
+        let mut host = RecordingHost {
+            now: u64::MAX,
+            ..Default::default()
+        };
         let before = model.save();
         assert!(write(&mut model, &mut host, ADDRESS, WIDTH, 1).is_err());
         assert_eq!(model.save(), before);
@@ -295,14 +327,27 @@ mod tests {
         resumed.restore(&pending).unwrap();
         assert_eq!(resumed.next_deadline(0), Some(8));
         assert_eq!(host.events, [(4, 8, 1)]);
-        assert!(RequestAcknowledgment::new(9).unwrap().restore(&pending).is_err());
-        for (field, value) in [("started_at", json!(1)), ("deadline", json!(7)), ("token", json!(0))] {
+        assert!(
+            RequestAcknowledgment::new(9)
+                .unwrap()
+                .restore(&pending)
+                .is_err()
+        );
+        for (field, value) in [
+            ("started_at", json!(1)),
+            ("deadline", json!(7)),
+            ("token", json!(0)),
+        ] {
             let mut corrupt = pending.clone();
             corrupt["state"]["request"][field] = value;
             assert!(resumed.restore(&corrupt).is_err(), "{field}");
             assert_eq!(resumed.save(), pending);
         }
-        for (field, value) in [("phase", json!("unknown")), ("completed_at", json!(8)), ("unexpected", json!(0))] {
+        for (field, value) in [
+            ("phase", json!("unknown")),
+            ("completed_at", json!(8)),
+            ("unexpected", json!(0)),
+        ] {
             let mut corrupt = pending.clone();
             corrupt["state"][field] = value;
             assert!(resumed.restore(&corrupt).is_err(), "{field}");

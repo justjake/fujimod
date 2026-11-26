@@ -1,6 +1,8 @@
 //! Checked board wiring for serial controllers and their attached parts.
-use fujimod_emulator_parts_io::{power_controller::PowerController, serial::Endpoint, serial_calibration::CalibrationRegisters};
 use fujimod_emulator_devices::xp5::pins::SharedPins;
+use fujimod_emulator_parts_io::{
+    power_controller::PowerController, serial::Endpoint, serial_calibration::CalibrationRegisters,
+};
 use fujimod_emulator_xp5_io::spi::{Attachment, Select, Spi};
 use serde::Deserialize;
 
@@ -27,7 +29,9 @@ pub(super) enum Part {
         #[serde(default)]
         registers: std::collections::BTreeMap<String, u16>,
     },
-    SerialCalibrationRegisters { miso_high: bool },
+    SerialCalibrationRegisters {
+        miso_high: bool,
+    },
     SerialCommandRegisters(fujimod_emulator_parts_io::serial_command_registers::Wiring),
     BisConfigurationRegisters {
         revision: [u8; 2],
@@ -41,10 +45,14 @@ pub(super) enum Part {
         #[serde(default)]
         motion: Option<fujimod_emulator_parts_io::lsm6ds::Motion>,
     },
-    FramedCommandPeer { initial_frame: u32 },
+    FramedCommandPeer {
+        initial_frame: u32,
+    },
     /// Bring-up: an unidentified chip. Accepts every frame, records the
     /// last words written and answers with a fixed MISO level.
-    GenericSink { miso_high: bool },
+    GenericSink {
+        miso_high: bool,
+    },
 }
 /// Bring-up: endpoint for bring-up of bodies whose serial parts are not yet identified.
 struct GenericSink {
@@ -74,7 +82,14 @@ impl Endpoint for GenericSink {
     }
     fn restore(&mut self, state: &serde_json::Value) -> Result<(), String> {
         self.transfers = state["transfers"].as_u64().unwrap_or(0);
-        self.last = state["last"].as_array().map(|a| a.iter().filter_map(|v| v.as_u64().map(|v| v as u16)).collect()).unwrap_or_default();
+        self.last = state["last"]
+            .as_array()
+            .map(|a| {
+                a.iter()
+                    .filter_map(|v| v.as_u64().map(|v| v as u16))
+                    .collect()
+            })
+            .unwrap_or_default();
         Ok(())
     }
 }
@@ -102,7 +117,10 @@ impl Endpoint for CountingDial {
     }
     fn transfer(&mut self, frame: fujimod_emulator_parts_io::serial::Frame, now_ns: u64) -> u16 {
         let command = frame.word as u8;
-        if self.inner.transfer_position() == 0 && command & 0x80 == 0 && command & 0x7f == self.register {
+        if self.inner.transfer_position() == 0
+            && command & 0x80 == 0
+            && command & 0x7f == self.register
+        {
             let steps = self.count.clamp(-8, 7);
             self.count -= steps;
             self.inner.set_register(self.register, (steps as u16) & 0xf);
@@ -115,10 +133,16 @@ impl Endpoint for CountingDial {
         }
         self.inner.checkpoint()
     }
-    fn validate_checkpoint(&self, saved: &fujimod_emulator_devices::checkpoint::Checkpoint) -> Result<(), String> {
+    fn validate_checkpoint(
+        &self,
+        saved: &fujimod_emulator_devices::checkpoint::Checkpoint,
+    ) -> Result<(), String> {
         self.inner.validate_checkpoint(saved)
     }
-    fn restore_checkpoint(&mut self, saved: &fujimod_emulator_devices::checkpoint::Checkpoint) -> Result<(), String> {
+    fn restore_checkpoint(
+        &mut self,
+        saved: &fujimod_emulator_devices::checkpoint::Checkpoint,
+    ) -> Result<(), String> {
         self.count = 0;
         self.inner.restore_checkpoint(saved)
     }
@@ -181,8 +205,9 @@ fn parse_power_registers(spec: &str) -> Result<Vec<(u8, u16)>, String> {
         .map(str::trim)
         .filter(|item| !item.is_empty())
         .map(|item| {
-            let (register, value) =
-                item.split_once('=').ok_or("XT5_POWER_REGISTERS needs REGISTER=VALUE[,...]")?;
+            let (register, value) = item
+                .split_once('=')
+                .ok_or("XT5_POWER_REGISTERS needs REGISTER=VALUE[,...]")?;
             let register = number(register)
                 .filter(|register| *register < 0x80)
                 .ok_or_else(|| format!("XT5_POWER_REGISTERS: invalid register in {item}"))?;
@@ -193,10 +218,7 @@ fn parse_power_registers(spec: &str) -> Result<Vec<(u8, u16)>, String> {
         })
         .collect()
 }
-fn endpoint(
-    part: Part,
-    counting_dial: Option<u8>,
-) -> Result<Box<dyn Endpoint>, String> {
+fn endpoint(part: Part, counting_dial: Option<u8>) -> Result<Box<dyn Endpoint>, String> {
     Ok(match part {
         Part::PowerController {
             rtc_seconds,
@@ -248,16 +270,26 @@ fn endpoint(
             samples,
             idle_high,
             block,
-        } => Box::new(fujimod_emulator_parts_io::bis_configuration::Registers::with_block(
-            revision, samples, idle_high, block,
-        )?),
-        Part::Lsm6dsConfigurationRegisters { temperature, motion } => {
-            Box::new(fujimod_emulator_parts_io::lsm6ds::Registers::new(temperature, motion))
-        }
-        Part::FramedCommandPeer { initial_frame } => {
-            Box::new(fujimod_emulator_parts_io::framed_command_peer::Peer::new(initial_frame)?)
-        }
-        Part::GenericSink { miso_high } => Box::new(GenericSink { miso_high, transfers: 0, last: vec![] }),
+        } => Box::new(
+            fujimod_emulator_parts_io::bis_configuration::Registers::with_block(
+                revision, samples, idle_high, block,
+            )?,
+        ),
+        Part::Lsm6dsConfigurationRegisters {
+            temperature,
+            motion,
+        } => Box::new(fujimod_emulator_parts_io::lsm6ds::Registers::new(
+            temperature,
+            motion,
+        )),
+        Part::FramedCommandPeer { initial_frame } => Box::new(
+            fujimod_emulator_parts_io::framed_command_peer::Peer::new(initial_frame)?,
+        ),
+        Part::GenericSink { miso_high } => Box::new(GenericSink {
+            miso_high,
+            transfers: 0,
+            last: vec![],
+        }),
     })
 }
 fn attachments(
@@ -277,7 +309,9 @@ fn attachments(
 pub(super) fn dedicated_wire(
     part: Part,
 ) -> Result<Box<dyn fujimod_emulator_parts_io::serial::Wire>, String> {
-    Ok(Box::new(fujimod_emulator_parts_io::serial::Dedicated(endpoint(part, None)?)))
+    Ok(Box::new(fujimod_emulator_parts_io::serial::Dedicated(
+        endpoint(part, None)?,
+    )))
 }
 pub(super) fn gpio_wire(
     pins: SharedPins,
@@ -295,11 +329,26 @@ mod tests {
 
     #[test]
     fn power_register_inputs_parse_decimal_and_hexadecimal() {
-        assert_eq!(parse_power_registers("0x32=2982, 3=600").unwrap(), [(0x32, 2982), (3, 600)]);
+        assert_eq!(
+            parse_power_registers("0x32=2982, 3=600").unwrap(),
+            [(0x32, 2982), (3, 600)]
+        );
         assert_eq!(parse_power_registers("").unwrap(), []);
-        assert!(parse_power_registers("0x32").unwrap_err().contains("REGISTER=VALUE"));
-        assert!(parse_power_registers("0x80=1").unwrap_err().contains("invalid register"));
-        assert!(parse_power_registers("3=0x10000").unwrap_err().contains("invalid value"));
+        assert!(
+            parse_power_registers("0x32")
+                .unwrap_err()
+                .contains("REGISTER=VALUE")
+        );
+        assert!(
+            parse_power_registers("0x80=1")
+                .unwrap_err()
+                .contains("invalid register")
+        );
+        assert!(
+            parse_power_registers("3=0x10000")
+                .unwrap_err()
+                .contains("invalid value")
+        );
     }
     use fujimod_emulator_parts_io::serial::Frame;
 
@@ -352,12 +401,22 @@ mod tests {
         .unwrap();
         let mut part = endpoint(burst.part, None).unwrap();
         for word in [0x0a, 0x11, 0x22] {
-            let frame = Frame { bits: 8, mode: 0, word };
+            let frame = Frame {
+                bits: 8,
+                mode: 0,
+                word,
+            };
             part.validate(frame).unwrap();
             part.transfer(frame, 0);
         }
-        assert_eq!(part.save()["registers"]["registers"]["10"], serde_json::json!([0x11, 0x22]));
-        assert!(connection("{ kind = 'serial-command-registers', mode = 0, miso_high = false }").is_err());
+        assert_eq!(
+            part.save()["registers"]["registers"]["10"],
+            serde_json::json!([0x11, 0x22])
+        );
+        assert!(
+            connection("{ kind = 'serial-command-registers', mode = 0, miso_high = false }")
+                .is_err()
+        );
         assert!(
             connection(
                 "{ kind = 'serial-command-registers', bits = 8, mode = 0, read_flag = 1, miso_high = false, idle = 1 }"

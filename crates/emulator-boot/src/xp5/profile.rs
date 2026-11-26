@@ -15,10 +15,13 @@
 //! No firmware bytes are stored: the records start from the update's own
 //! defaults and the catalog only names addresses, sizes and hashes.
 
-use super::{firmware::Firmware, manifest::{BootState, Preload}};
+use super::{
+    firmware::Firmware,
+    manifest::{BootState, Preload},
+};
+use fujimod_catalog_resolution::ResolvedConfiguration;
 use fujimod_emulator_devices::graph::DeviceWindow;
 use fujimod_emulator_xp5_storage::nand_storage;
-use fujimod_catalog_resolution::ResolvedConfiguration;
 use std::collections::BTreeMap;
 
 /// One serial NOR flash unit of a profile record's `block` number.
@@ -60,7 +63,9 @@ pub(crate) fn place(
         other => return Err(format!("unknown flash storage medium {other}")),
     };
     let built = fujimod_settings::build(layout, &flash, requested, None)?;
-    let profile = built.profile.ok_or("the settings layout built no user profile")?;
+    let profile = built
+        .profile
+        .ok_or("the settings layout built no user profile")?;
     let header: [u8; 8] = profile
         .header
         .as_slice()
@@ -92,13 +97,20 @@ pub(crate) fn place(
         .into_iter()
         .map(|record| (u64::from(record.block) * unit, record.bytes))
         .collect();
-    Ok(Placed { requested: requested.clone(), records })
+    Ok(Placed {
+        requested: requested.clone(),
+        records,
+    })
 }
 
 /// The medium of the manifest's flash storage window, `nor` unless it names another.
 fn medium(state: &BootState) -> Result<&str, String> {
     let window = flash_window(state)?;
-    Ok(window.options.get("medium").and_then(toml::Value::as_str).unwrap_or("nor"))
+    Ok(window
+        .options
+        .get("medium")
+        .and_then(toml::Value::as_str)
+        .unwrap_or("nor"))
 }
 
 fn flash_window(state: &BootState) -> Result<&DeviceWindow, String> {
@@ -159,7 +171,11 @@ fn power_words(first: u8, header: &[u8; 8]) -> Vec<(u8, u16)> {
 /// Set initial registers on every power-controller endpoint of the manifest.
 fn set_power_registers(state: &mut BootState, words: &[(u8, u16)]) -> Result<(), String> {
     let mut found = false;
-    for window in state.device.iter_mut().filter(|window| window.kind == "spi-controller") {
+    for window in state
+        .device
+        .iter_mut()
+        .filter(|window| window.kind == "spi-controller")
+    {
         let Some(toml::Value::Array(endpoints)) = window.options.get_mut("endpoints") else {
             continue;
         };
@@ -176,7 +192,10 @@ fn set_power_registers(state: &mut BootState, words: &[(u8, u16)]) -> Result<(),
                 .as_table_mut()
                 .ok_or("power-controller registers must be a table")?;
             for (register, value) in words {
-                registers.insert(format!("{register:#x}"), toml::Value::Integer(i64::from(*value)));
+                registers.insert(
+                    format!("{register:#x}"),
+                    toml::Value::Integer(i64::from(*value)),
+                );
             }
             found = true;
         }
@@ -243,7 +262,8 @@ mod tests {
             return;
         };
         let resolved = ResolvedConfiguration::with_overlays("xt5-431", &[]).unwrap();
-        let firmware = Firmware::from_update("xt5-431", std::fs::read(path).unwrap(), true).unwrap();
+        let firmware =
+            Firmware::from_update("xt5-431", std::fs::read(path).unwrap(), true).unwrap();
         let mut state = BootState::for_firmware("xt5-431", None).unwrap();
         let before = state.preload.len();
         let requested = BTreeMap::from([
@@ -274,7 +294,10 @@ mod tests {
         for (index, word) in record[..0x7bfc].chunks_exact(4).enumerate() {
             let word = u32::from_le_bytes(word.try_into().unwrap());
             checksum ^= word;
-            assert_eq!((record[0x7bfc + index / 8] >> (index % 8)) & 1, (word.count_ones() & 1) as u8);
+            assert_eq!(
+                (record[0x7bfc + index / 8] >> (index % 8)) & 1,
+                (word.count_ones() & 1) as u8
+            );
         }
         assert_eq!(&record[0x7ffc..], &checksum.to_le_bytes());
     }

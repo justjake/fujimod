@@ -573,7 +573,8 @@ pub struct Timers {
 }
 impl Timers {
     pub fn new(options: Options, wiring: Wiring) -> std::result::Result<Self, String> {
-        let mut controllers: [Option<fujimod_emulator_devices::exr2::irq::Inputs>; 2] = Default::default();
+        let mut controllers: [Option<fujimod_emulator_devices::exr2::irq::Inputs>; 2] =
+            Default::default();
         for (core, inputs) in wiring.controllers {
             if core >= 2 || controllers[core].is_some() {
                 return Err("invalid timer interrupt wiring".into());
@@ -673,7 +674,9 @@ impl Timers {
     }
 }
 impl fujimod_emulator_devices::Device for Timers {
-    fn checkpoint(&self) -> std::result::Result<fujimod_emulator_devices::checkpoint::Checkpoint, String> {
+    fn checkpoint(
+        &self,
+    ) -> std::result::Result<fujimod_emulator_devices::checkpoint::Checkpoint, String> {
         fujimod_emulator_devices::checkpoint::Checkpoint::encode(self.name(), &self.state)
     }
 
@@ -717,7 +720,13 @@ impl fujimod_emulator_devices::Device for Timers {
             }
         }
     }
-    fn write(&mut self, cx: &mut fujimod_emulator_devices::Cx<'_>, address: u64, size: u8, value: u64) {
+    fn write(
+        &mut self,
+        cx: &mut fujimod_emulator_devices::Cx<'_>,
+        address: u64,
+        size: u8,
+        value: u64,
+    ) {
         if !Self::address(address, size, true) {
             cx.unmodeled();
             return;
@@ -764,7 +773,11 @@ impl fujimod_emulator_devices::Device for Timers {
     fn pollable(&self, address: u64, size: u8) -> bool {
         Self::address(address, size, false)
     }
-    fn fast_reads(&self, window_base: u64, window_size: u64) -> Vec<fujimod_emulator_devices::bus::FastReadWord> {
+    fn fast_reads(
+        &self,
+        window_base: u64,
+        window_size: u64,
+    ) -> Vec<fujimod_emulator_devices::bus::FastReadWord> {
         let Some(window_end) = window_base.checked_add(window_size) else {
             return Vec::new();
         };
@@ -1011,7 +1024,9 @@ mod tests {
     }
     #[test]
     fn application_channels_use_controller_mask_outputs() {
-        use fujimod_emulator_devices::exr2::irq::{Arbitration, Inputs, InterruptController, Options as IrqOptions, Wiring as IrqWiring};
+        use fujimod_emulator_devices::exr2::irq::{
+            Arbitration, Inputs, InterruptController, Options as IrqOptions, Wiring as IrqWiring,
+        };
         let mut host = Clock::default();
         let inputs = [Inputs::default(), Inputs::default()];
         for (core, input) in inputs.iter().enumerate() {

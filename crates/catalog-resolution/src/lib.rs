@@ -64,16 +64,28 @@ impl ResolvedConfiguration {
 
     /// Apply an explicit engine choice after catalog overlays have resolved.
     pub fn override_engine(&mut self, engine: RunEngine) -> Result<(), String> {
-        if self.configuration.execution.is_none() && matches!(self.reference.soc.id.as_str(), "xp4" | "xpp") {
+        if self.configuration.execution.is_none()
+            && matches!(self.reference.soc.id.as_str(), "xp4" | "xpp")
+        {
             self.configuration.execution = Some(RunExecution {
                 mode: RunExecutionMode::Strict,
                 engine,
                 quantum: 1000,
-                instructions_per_tick: RunInstructionRate { numerator: 1, denominator: 1 },
+                instructions_per_tick: RunInstructionRate {
+                    numerator: 1,
+                    denominator: 1,
+                },
             });
         }
-        self.configuration.execution.as_mut()
-            .ok_or_else(|| format!("configuration {} declares no execution policy", self.configuration.id))?
+        self.configuration
+            .execution
+            .as_mut()
+            .ok_or_else(|| {
+                format!(
+                    "configuration {} declares no execution policy",
+                    self.configuration.id
+                )
+            })?
             .engine = engine;
         Ok(())
     }
@@ -203,7 +215,10 @@ impl ResolvedConfiguration {
                     }
                     configuration.preset = Some(preset);
                 }
-                RunOverlayChange::UsbConnection { connected } => {
+                RunOverlayChange::UsbConnection {
+                    connected,
+                    hardware_selection,
+                } => {
                     if !changed.insert("usb") {
                         return Err("run overlays change USB connection more than once".into());
                     }
@@ -213,6 +228,15 @@ impl ResolvedConfiguration {
                         ));
                     };
                     inputs.usb.connected = connected;
+                    if let Some(selection) = hardware_selection {
+                        let preset = configuration.preset.as_mut().ok_or_else(|| {
+                            format!(
+                                "run overlay {overlay_id} selects hardware for a run without a preset"
+                            )
+                        })?;
+                        preset.hardware_selection = Some(selection);
+                        selected_hardware = true;
+                    }
                 }
                 RunOverlayChange::Settings { requested } => {
                     let Some(RunInputs::Exr2(inputs)) = &mut configuration.inputs else {
@@ -224,7 +248,11 @@ impl ResolvedConfiguration {
                         format!("run overlay {overlay_id} requires declared power-on settings")
                     })?;
                     for (name, value) in requested {
-                        if settings.requested.insert(name.clone(), value.clone()).is_some() {
+                        if settings
+                            .requested
+                            .insert(name.clone(), value.clone())
+                            .is_some()
+                        {
                             return Err(format!(
                                 "run overlay {overlay_id} requests setting {name} twice"
                             ));
@@ -663,9 +691,7 @@ fn hardware_profiles<'a>(
             .hardware
             .as_ref()
             .and_then(|hardware| hardware.profiles.get(id))
-            .ok_or_else(|| {
-                format!("SoC {} has no hardware profile {id}", selection.soc.id)
-            })?;
+            .ok_or_else(|| format!("SoC {} has no hardware profile {id}", selection.soc.id))?;
     }
     let body = selection
         .body
@@ -781,7 +807,9 @@ fn ladder_inputs_selection(
             .ladders
             .iter()
             .find(|ladder| ladder.wire == wire)
-            .ok_or_else(|| format!("application ladder input {wire:?}: body {body} declares no such ladder"))?;
+            .ok_or_else(|| {
+                format!("application ladder input {wire:?}: body {body} declares no such ladder")
+            })?;
         if ladder.released.is_some() {
             return Err(format!(
                 "application ladder input {wire:?}: body {body} already declares its released value"
@@ -793,7 +821,11 @@ fn ladder_inputs_selection(
                 input.released, ladder.levels
             ));
         }
-        if let Some(rung) = ladder.rungs.iter().find(|rung| rung.contains(input.released)) {
+        if let Some(rung) = ladder
+            .rungs
+            .iter()
+            .find(|rung| rung.contains(input.released))
+        {
             return Err(format!(
                 "application ladder input {wire:?}: released value {} lies in the band of {}",
                 input.released, rung.control_id
@@ -890,6 +922,31 @@ mod tests {
     }
 
     #[test]
+    fn usb_overlay_selects_the_hardware_that_models_the_attached_port() {
+        let base = ResolvedConfiguration::bundled("x70-110-rec").unwrap();
+        assert_eq!(
+            base.configuration
+                .preset
+                .as_ref()
+                .and_then(|preset| preset.hardware_selection.as_ref())
+                .map(|hardware| hardware.body_profile_id.as_str()),
+            Some("x70")
+        );
+        let resolved =
+            ResolvedConfiguration::with_overlays("x70-110-rec", &["x70-110-rec-usb".into()])
+                .unwrap();
+        assert_eq!(
+            resolved
+                .configuration
+                .preset
+                .as_ref()
+                .and_then(|preset| preset.hardware_selection.as_ref())
+                .map(|hardware| hardware.body_profile_id.as_str()),
+            Some("x70-110-browser-usb")
+        );
+    }
+
+    #[test]
     fn browser_camera_overlay_declares_card_still_capture_and_preview() {
         let resolved =
             ResolvedConfiguration::with_overlays("x70-110-rec", &["x70-110-browser-camera".into()])
@@ -973,19 +1030,17 @@ mod tests {
         let config = RunConfiguration::bundled("xt20-211").unwrap();
         let catalog = ReferenceCatalog::bundled().unwrap();
         let mut selection = catalog.resolve("xt20", "xt20-211").unwrap();
-        let overrides = selection
-            .body
-            .hardware
-            .as_ref()
-            .unwrap()
-            .profiles["xt20-discovery"]
+        let overrides = selection.body.hardware.as_ref().unwrap().profiles["xt20-discovery"]
             .block_overrides
             .clone();
         assert!(!overrides.is_empty());
         let error = check_overlay_hardware(&config, &selection).unwrap_err();
         assert!(error.contains("not a stand-in"), "{error}");
         for block in &mut selection.soc.blocks {
-            if overrides.iter().any(|override_| override_.block_id == block.id) {
+            if overrides
+                .iter()
+                .any(|override_| override_.block_id == block.id)
+            {
                 block.evidence = vec![fujimod_catalog::provenance::Evidence {
                     kind: fujimod_catalog::provenance::EvidenceKind::StandIn,
                     firmware_ids: vec![],
@@ -1011,23 +1066,37 @@ mod tests {
             let error = validate_selection(&invalid, &selection).unwrap_err();
             assert!(error.contains(needle), "{error}");
         };
-        let register = |register| fujimod_catalog_controls::LadderWire::PowerControllerRegister {
-            register,
-        };
-        refused(&|ladders| ladders[0].released = 554, "lies in the band of menu_ok_button");
-        refused(&|ladders| ladders[0].released = 1024, "exceeds its 1024 levels");
-        refused(&|ladders| ladders[0].wire = register(0x36), "declares no such ladder");
+        let register =
+            |register| fujimod_catalog_controls::LadderWire::PowerControllerRegister { register };
+        refused(
+            &|ladders| ladders[0].released = 554,
+            "lies in the band of menu_ok_button",
+        );
+        refused(
+            &|ladders| ladders[0].released = 1024,
+            "exceeds its 1024 levels",
+        );
+        refused(
+            &|ladders| ladders[0].wire = register(0x36),
+            "declares no such ladder",
+        );
         refused(
             &|ladders| ladders[0].wire = fujimod_catalog_controls::LadderWire::Adc { channel: 1 },
             "ADC block input's sample",
         );
-        refused(&|ladders| ladders[1].wire = register(0x34), "repeats ladder");
+        refused(
+            &|ladders| ladders[1].wire = register(0x34),
+            "repeats ladder",
+        );
         refused(&|ladders| ladders[0].basis = " ".into(), "needs a basis");
 
         let mut declared = selection.clone();
         declared.physical_controls.as_mut().unwrap()["ladders"][3]["released"] = 1000.into();
         let error = validate_selection(&config, &declared).unwrap_err();
-        assert!(error.contains("already declares its released value"), "{error}");
+        assert!(
+            error.contains("already declares its released value"),
+            "{error}"
+        );
 
         let mut bare = config.clone();
         let Some(RunInputs::Xp5(inputs)) = bare.inputs.as_mut() else {

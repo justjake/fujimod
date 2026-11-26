@@ -66,7 +66,9 @@ impl Spec {
             sensors: self.sensors,
         };
         if !images.is_empty() {
-            resources.images = Some(fujimod_emulator_exr2_resources::prepare_images(images, assets)?);
+            resources.images = Some(fujimod_emulator_exr2_resources::prepare_images(
+                images, assets,
+            )?);
         }
         Ok(resources)
     }

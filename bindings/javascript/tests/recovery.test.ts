@@ -62,7 +62,10 @@ await test('missing generation facts and incorrect DAT bytes are refused', () =>
     () => sdCardTools.build('xs10-311', new Uint8Array(4)),
     /Update size differs from recipe/,
   );
-  assert.throws(() => sdCardTools.build('gfx100rf-113', new Uint8Array(4)), /Missing recovery facts/);
+  assert.throws(
+    () => sdCardTools.build('gfx100rf-113', new Uint8Array(4)),
+    /Missing recovery facts/,
+  );
 });
 
 await test('green LED cards cover every processor generation without an updater DAT', () => {
@@ -113,5 +116,8 @@ await test('EXR II bodies that share a memory setup header share one card root',
     () => sdCardTools.buildSdBootV2SdCard('x70-110', new Uint8Array(4)),
     /Update size differs from recipe/,
   );
-  assert.throws(() => sdCardTools.buildSdBootV2SdCard('x100v-301', new Uint8Array(4)), /requires EXR II/);
+  assert.throws(
+    () => sdCardTools.buildSdBootV2SdCard('x100v-301', new Uint8Array(4)),
+    /requires EXR II/,
+  );
 });

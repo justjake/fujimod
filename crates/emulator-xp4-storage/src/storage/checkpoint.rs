@@ -1,8 +1,8 @@
 //! Restore physical flash/controller state into the already connected graph.
 //! Immutable flash bytes, geometry and interrupt routes belong to the factory.
 use super::*;
-use serde::{Deserialize, Serialize};
 use fujimod_emulator_devices::checkpoint::Checkpoint;
+use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize)]
 #[serde(untagged, deny_unknown_fields)]
@@ -55,7 +55,9 @@ impl Nor {
     // form one span even though no single write may cross their boundary.
     fn coverage_is_admitted(&self, start: usize, end: usize) -> bool {
         if self.write_ranges.is_empty() {
-            return self.check_mutation(FLASH + start as u64, end - start).is_ok();
+            return self
+                .check_mutation(FLASH + start as u64, end - start)
+                .is_ok();
         }
         let mut cursor = start as u64;
         for range in &self.write_ranges {
@@ -64,7 +66,10 @@ impl Nor {
             }
             let limit = (range.offset + range.length).min(end as u64);
             if limit > cursor {
-                if self.check_mutation(FLASH + cursor, (limit - cursor) as usize).is_err() {
+                if self
+                    .check_mutation(FLASH + cursor, (limit - cursor) as usize)
+                    .is_err()
+                {
                     return false;
                 }
                 cursor = limit;
@@ -80,21 +85,30 @@ impl Nor {
         NorState {
             immutable_prefix: self.prefix.map(|prefix| prefix.bytes()),
             executable_range: self.executable.as_ref().map(|view| ExecutableRange {
-                offset: view.offset(), bytes: view.len(),
+                offset: view.offset(),
+                bytes: view.len(),
             }),
-            write_protect: self.write_protect, write_ranges: self.write_ranges.clone(),
+            write_protect: self.write_protect,
+            write_ranges: self.write_ranges.clone(),
             read_backing: self.read_backing.clone(),
-            jedec: self.jedec, write_enable: self.write_enable,
+            jedec: self.jedec,
+            write_enable: self.write_enable,
             pending: self.pending.as_ref().map(|(at, mutation)| match mutation {
                 Mutation::Erase { address, size } => Pending::Erase {
-                    at: *at, erase_address: *address, size: *size,
+                    at: *at,
+                    erase_address: *address,
+                    size: *size,
                 },
                 Mutation::Program { address, bytes } => Pending::Program {
-                    at: *at, program_address: *address, bytes: bytes.clone(),
+                    at: *at,
+                    program_address: *address,
+                    bytes: bytes.clone(),
                 },
             }),
-            erase_bytes: self.geometry.erase_bytes, page_bytes: self.geometry.page_bytes,
-            erase_ticks: self.geometry.erase_ticks, page_ticks: self.geometry.page_ticks,
+            erase_bytes: self.geometry.erase_bytes,
+            page_bytes: self.geometry.page_bytes,
+            erase_ticks: self.geometry.erase_ticks,
+            page_ticks: self.geometry.page_ticks,
             overlay: self.overlay.clone(),
             program_count: self.program_coverage.count,
             programmed_ranges: self.program_coverage.ranges(),
@@ -107,7 +121,11 @@ impl Nor {
     ) -> Result<(Option<(u64, Mutation)>, ProgramCoverage), String> {
         let g = self.geometry;
         if state.immutable_prefix != self.prefix.map(|p| p.bytes())
-            || state.executable_range != self.executable.as_ref().map(|v| ExecutableRange { offset: v.offset(), bytes: v.len() })
+            || state.executable_range
+                != self.executable.as_ref().map(|v| ExecutableRange {
+                    offset: v.offset(),
+                    bytes: v.len(),
+                })
             || state.write_protect != self.write_protect
             || state.write_ranges != self.write_ranges
             || state.read_backing != self.read_backing
@@ -118,7 +136,10 @@ impl Nor {
             || state.page_ticks != g.page_ticks
             || state.overlay.iter().any(|(page, bytes)| {
                 *page >= FLASH_SIZE as usize / g.page_bytes
-                    || self.check_mutation(FLASH + (*page * g.page_bytes) as u64, bytes.len()).is_err() || bytes.len() != g.page_bytes
+                    || self
+                        .check_mutation(FLASH + (*page * g.page_bytes) as u64, bytes.len())
+                        .is_err()
+                    || bytes.len() != g.page_bytes
             })
             || state.pending.is_some() && state.write_enable
         {
@@ -137,7 +158,13 @@ impl Nor {
                 {
                     return Err("Invalid pending XP4 NOR erase".into());
                 }
-                Some((*at, Mutation::Erase { address: *address, size: *size }))
+                Some((
+                    *at,
+                    Mutation::Erase {
+                        address: *address,
+                        size: *size,
+                    },
+                ))
             }
             Some(Pending::Program {
                 at,
@@ -152,7 +179,13 @@ impl Nor {
                 {
                     return Err("Invalid pending XP4 NOR program".into());
                 }
-                Some((*at, Mutation::Program { address: *address, bytes: bytes.clone() }))
+                Some((
+                    *at,
+                    Mutation::Program {
+                        address: *address,
+                        bytes: bytes.clone(),
+                    },
+                ))
             }
             None => None,
         };
@@ -184,7 +217,9 @@ impl Nor {
         self.overlay = state.overlay;
         self.program_coverage = coverage;
         self.pending = pending;
-        if let Some(view) = &self.executable { self.sync_executable(FLASH + view.offset() as u64, view.len()); }
+        if let Some(view) = &self.executable {
+            self.sync_executable(FLASH + view.offset() as u64, view.len());
+        }
         Ok(())
     }
 }
@@ -218,32 +253,59 @@ impl SerialFlashController {
     pub(super) fn capture_portable(&self) -> Result<Checkpoint, String> {
         let port = self.port.lock().map_err(|_| "XP4 NOR lock poisoned")?;
         let mut state = FlashState {
-            registers: self.regs.to_vec(), next: self.due, operations: self.operations,
-            jedec: port.nor.jedec, nor: port.nor.capture_state(), stream: port.request.clone(),
-            program_fifo: port.program_data.clone(), irq: self.irq, irq_level: self.irq_level,
-            mapped_read_gate: self.gate.clone(), pad: self.pad, mapped_misses: self.mapped_misses,
+            registers: self.regs.to_vec(),
+            next: self.due,
+            operations: self.operations,
+            jedec: port.nor.jedec,
+            nor: port.nor.capture_state(),
+            stream: port.request.clone(),
+            program_fifo: port.program_data.clone(),
+            irq: self.irq,
+            irq_level: self.irq_level,
+            mapped_read_gate: self.gate.clone(),
+            pad: self.pad,
+            mapped_misses: self.mapped_misses,
         };
-        let (pages, blobs): (Vec<_>, Vec<_>) = std::mem::take(&mut state.nor.overlay).into_iter()
-            .map(|(page, data)| (page, Arc::from(data))).unzip();
-        let archive = FlashArchive { state, pages, epoch: self.epoch.load(Ordering::Relaxed) };
+        let (pages, blobs): (Vec<_>, Vec<_>) = std::mem::take(&mut state.nor.overlay)
+            .into_iter()
+            .map(|(page, data)| (page, Arc::from(data)))
+            .unzip();
+        let archive = FlashArchive {
+            state,
+            pages,
+            epoch: self.epoch.load(Ordering::Relaxed),
+        };
         Ok(Checkpoint::encode(self.name(), &archive)?.with_blobs(blobs))
     }
 
     fn decode_portable(&self, data: &Checkpoint) -> Result<FlashArchive, String> {
         let mut archive: FlashArchive = data.decode(self.name())?;
-        let page_bytes = self.port.lock().map_err(|_| "XP4 NOR lock poisoned")?.nor.geometry.page_bytes;
-        if !archive.state.nor.overlay.is_empty() || archive.pages.len() != data.blobs().len()
+        let page_bytes = self
+            .port
+            .lock()
+            .map_err(|_| "XP4 NOR lock poisoned")?
+            .nor
+            .geometry
+            .page_bytes;
+        if !archive.state.nor.overlay.is_empty()
+            || archive.pages.len() != data.blobs().len()
             || archive.pages.windows(2).any(|pair| pair[0] >= pair[1])
             || data.blobs().iter().any(|page| page.len() != page_bytes)
         {
             return Err("XP4 flash checkpoint page directory differs".into());
         }
-        archive.state.nor.overlay = archive.pages.iter().copied().zip(data.blobs().iter().map(|bytes| bytes.to_vec())).collect();
+        archive.state.nor.overlay = archive
+            .pages
+            .iter()
+            .copied()
+            .zip(data.blobs().iter().map(|bytes| bytes.to_vec()))
+            .collect();
         Ok(archive)
     }
 
     pub(super) fn validate_portable(&self, data: &Checkpoint) -> Result<(), String> {
-        self.validate_state(&self.decode_portable(data)?.state).map(|_| ())
+        self.validate_state(&self.decode_portable(data)?.state)
+            .map(|_| ())
     }
 
     pub(super) fn restore_portable(&mut self, data: &Checkpoint) -> Result<(), String> {
@@ -254,13 +316,15 @@ impl SerialFlashController {
     }
 
     pub(super) fn restore_state(&mut self, value: &Value) -> Result<(), String> {
-        let state: FlashState = serde_json::from_value(value.clone()).map_err(|error| error.to_string())?;
+        let state: FlashState =
+            serde_json::from_value(value.clone()).map_err(|error| error.to_string())?;
         self.apply_state(state)
     }
 
     fn validate_state(&self, state: &FlashState) -> Result<[u32; 64], String> {
         let registers: [u32; 64] = state
-            .registers.as_slice()
+            .registers
+            .as_slice()
             .try_into()
             .map_err(|_| "Invalid XP4 flash register count")?;
         let geometry = self.port.lock().unwrap().nor.geometry;
@@ -275,28 +339,24 @@ impl SerialFlashController {
                 .stream
                 .as_ref()
                 .is_some_and(|r| !extent(r.address, r.size) || !r.accepted && r.accepted_at != 0)
-            || state
-                .program_fifo
-                .as_ref()
-                .is_some_and(|(arrived, bytes)| {
-                    // The FIFO retains its DMA arrival tick, not an address.
-                    // Its destination belongs to the accepted write stream.
-                    bytes.is_empty()
-                        || arrived.checked_add(geometry.page_ticks).is_none()
-                        || state.nor.pending.is_some()
-                        || !state.nor.write_enable
-                        || !state.stream.as_ref().is_some_and(|request| {
-                            request.write
-                                && request.accepted
-                                && request.accepted_at <= *arrived
-                                && request.size == bytes.len()
-                                && extent(request.address, bytes.len())
-                                && request.address.wrapping_sub(FLASH) as usize
-                                    % geometry.page_bytes
-                                    + bytes.len()
-                                    <= geometry.page_bytes
-                        })
-                })
+            || state.program_fifo.as_ref().is_some_and(|(arrived, bytes)| {
+                // The FIFO retains its DMA arrival tick, not an address.
+                // Its destination belongs to the accepted write stream.
+                bytes.is_empty()
+                    || arrived.checked_add(geometry.page_ticks).is_none()
+                    || state.nor.pending.is_some()
+                    || !state.nor.write_enable
+                    || !state.stream.as_ref().is_some_and(|request| {
+                        request.write
+                            && request.accepted
+                            && request.accepted_at <= *arrived
+                            && request.size == bytes.len()
+                            && extent(request.address, bytes.len())
+                            && request.address.wrapping_sub(FLASH) as usize % geometry.page_bytes
+                                + bytes.len()
+                                <= geometry.page_bytes
+                    })
+            })
         {
             return Err("Invalid XP4 serial-flash checkpoint or route".into());
         }
@@ -369,9 +429,12 @@ impl DmaController {
             reset_profile: standalone.then(|| Self::STANDALONE_RESET.to_owned()),
             timing_profile: standalone.then(|| Self::STANDALONE_TIMING.to_owned()),
             assumptions_recorded: standalone.then_some(self.standalone_admitted),
-            channels: self.channels.to_vec(), irq_routes: self.routes,
-            request_mux: self.mux.clone(), request_mux_changed: self.mux_changed,
-            request: self.request.clone(), audio: self.audio.clone(),
+            channels: self.channels.to_vec(),
+            irq_routes: self.routes,
+            request_mux: self.mux.clone(),
+            request_mux_changed: self.mux_changed,
+            request: self.request.clone(),
+            audio: self.audio.clone(),
             microphone_frames: self.microphone().map(|_| self.microphone_frames),
             spi_exchanges: self.spi.clone(),
         };
@@ -404,10 +467,13 @@ impl DmaController {
                 && state.timing_profile.as_deref() == Some(Self::STANDALONE_TIMING)
                 && state.assumptions_recorded.is_some()
         } else {
-            state.serial_flash_peer.unwrap_or(true) && state.reset_profile.is_none()
-                && state.timing_profile.is_none() && state.assumptions_recorded.is_none()
+            state.serial_flash_peer.unwrap_or(true)
+                && state.reset_profile.is_none()
+                && state.timing_profile.is_none()
+                && state.assumptions_recorded.is_none()
         };
-        if !mode_matches || state.irq_routes != self.routes
+        if !mode_matches
+            || state.irq_routes != self.routes
             || state.audio != self.audio
             || state.microphone_frames.is_some() != self.microphone().is_some()
             || state.channels.len() != 16
@@ -438,7 +504,12 @@ impl DmaController {
         if let Some(port) = &self.port {
             let port = port.lock().unwrap();
             for channel in &state.channels {
-                if channel.submitted { port.nor.check_mutation(u64::from(channel.regs[0x18 / 4]), channel.regs[0x10 / 4] as usize + 1)?; }
+                if channel.submitted {
+                    port.nor.check_mutation(
+                        u64::from(channel.regs[0x18 / 4]),
+                        channel.regs[0x10 / 4] as usize + 1,
+                    )?;
+                }
             }
         }
         Ok(())

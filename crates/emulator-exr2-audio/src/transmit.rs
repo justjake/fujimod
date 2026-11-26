@@ -7,8 +7,8 @@
 //! Disabled transmitters have no polling timer. The owning audio register
 //! block and DMA channel share a device, so a guest format write wakes it.
 use super::SerialAudio;
-use fujimod_emulator_devices::{Cx, Device};
 use fujimod_emulator_devices::exr2::irq_routes::{Irq, IrqRoutes};
+use fujimod_emulator_devices::{Cx, Device};
 use fujimod_emulator_parts_io::audio_sink::AudioSink;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
@@ -176,7 +176,9 @@ impl Transmitter {
             // Bit 28 hands off one staged alternate descriptor. Consuming
             // it prevents a repeat channel from replaying an unstaged buffer.
             if self.state.alternate {
-                self.state.registers.insert(0x2c, self.word(0x2c) & !0x10000000);
+                self.state
+                    .registers
+                    .insert(0x2c, self.word(0x2c) & !0x10000000);
             }
             let mut bytes = vec![0; count];
             cx.ram_read(source, &mut bytes)?;
@@ -295,8 +297,11 @@ impl Device for Transmitter {
         self.state.registers.insert(o, value);
         // A late handoff resumes a drained repeat channel. An abort clears
         // alternate/completed and requires a new START instead.
-        if o == 0x2c && value & 0x50000000 == 0x50000000
-            && self.state.alternate && self.state.completed != 0 && self.state.pending.is_none()
+        if o == 0x2c
+            && value & 0x50000000 == 0x50000000
+            && self.state.alternate
+            && self.state.completed != 0
+            && self.state.pending.is_none()
         {
             self.state.active = true;
         }
@@ -326,16 +331,25 @@ impl Device for Transmitter {
         Ok(json!({"options":self.options,"base":self.base,"state":self.save()}))
     }
     fn checkpoint(&self) -> Result<fujimod_emulator_devices::checkpoint::Checkpoint, String> {
-        fujimod_emulator_devices::checkpoint::Checkpoint::encode(self.name(), &(self.options, self.base, self.save()))
+        fujimod_emulator_devices::checkpoint::Checkpoint::encode(
+            self.name(),
+            &(self.options, self.base, self.save()),
+        )
     }
-    fn validate_checkpoint(&self, saved: &fujimod_emulator_devices::checkpoint::Checkpoint) -> Result<(), String> {
+    fn validate_checkpoint(
+        &self,
+        saved: &fujimod_emulator_devices::checkpoint::Checkpoint,
+    ) -> Result<(), String> {
         let (options, base, value): (Options, u64, Value) = saved.decode(self.name())?;
         if options != self.options || base != self.base {
             return Err("audio DMA snapshot configuration differs".into());
         }
         self.decode(&value).map(|_| ())
     }
-    fn restore_checkpoint(&mut self, saved: &fujimod_emulator_devices::checkpoint::Checkpoint) -> Result<(), String> {
+    fn restore_checkpoint(
+        &mut self,
+        saved: &fujimod_emulator_devices::checkpoint::Checkpoint,
+    ) -> Result<(), String> {
         self.validate_checkpoint(saved)?;
         let (_, _, value): (Options, u64, Value) = saved.decode(self.name())?;
         self.restore(&value)
@@ -477,7 +491,13 @@ mod tests {
         let mut d = Transmitter::new(options, PRO, sinks(), routes.clone()).unwrap();
         let mut h = TestHost::new();
         h.ram[0x1000..0x1004].copy_from_slice(&[1, 2, 3, 4]);
-        for (o, v) in [(0, 0x1000), (4, 0xfffa0010), (8, 4), (0x2c, 0x40221017), (0x28, 1)] {
+        for (o, v) in [
+            (0, 0x1000),
+            (4, 0xfffa0010),
+            (8, 4),
+            (0x2c, 0x40221017),
+            (0x28, 1),
+        ] {
             write(&mut d, &mut h, PRO + o, v);
         }
         assert_eq!(read(&mut d, &mut h, PRO + 0x24), 5);
@@ -496,7 +516,18 @@ mod tests {
         let mut cx = h.cx();
         d.write(&mut cx, PRO + 0x28, 4, 1);
         assert!(cx.refusal().is_some());
-        assert!(Transmitter::new(Options { requests: [8, 6], ..options }, PRO, sinks(), IrqRoutes::default()).is_err());
+        assert!(
+            Transmitter::new(
+                Options {
+                    requests: [8, 6],
+                    ..options
+                },
+                PRO,
+                sinks(),
+                IrqRoutes::default()
+            )
+            .is_err()
+        );
         assert!(Transmitter::new(options, PRO + 4, sinks(), IrqRoutes::default()).is_err());
     }
 }

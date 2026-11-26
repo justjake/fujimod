@@ -1,9 +1,9 @@
 //! General-DMA address-high and request-selection registers. Section5
 //! 227d0/227f8 address paired words; 22820 writes two masked 6-bit lanes.
 //! Views share routing/address state with the XDMAC channel pairs.
-use fujimod_emulator_ip::socionext::xdmac::{Routing, SharedRouting};
 use fujimod_emulator_devices::checkpoint::Checkpoint;
 use fujimod_emulator_devices::{Cx, Device};
+use fujimod_emulator_ip::socionext::xdmac::{Routing, SharedRouting};
 use serde_json::Value;
 use std::sync::{Arc, Mutex};
 pub type Banks = [SharedRouting; 8];
@@ -17,10 +17,16 @@ pub struct AddressHigh {
 }
 impl AddressHigh {
     pub fn new(banks: Banks) -> Self {
-        Self { banks, standalone: false }
+        Self {
+            banks,
+            standalone: false,
+        }
     }
     pub fn standalone(banks: Banks) -> Self {
-        Self { banks, standalone: true }
+        Self {
+            banks,
+            standalone: true,
+        }
     }
     fn words(&self) -> [u32; 16] {
         std::array::from_fn(|i| self.banks[i / 2].lock().unwrap().high(i % 2))
@@ -118,10 +124,16 @@ pub struct RequestRouting {
 }
 impl RequestRouting {
     pub fn new(banks: Banks) -> Self {
-        Self { banks, standalone: false }
+        Self {
+            banks,
+            standalone: false,
+        }
     }
     pub fn standalone(banks: Banks) -> Self {
-        Self { banks, standalone: true }
+        Self {
+            banks,
+            standalone: true,
+        }
     }
     fn words(&self) -> [u32; 8] {
         std::array::from_fn(|i| {

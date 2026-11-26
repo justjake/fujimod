@@ -810,9 +810,8 @@ pub fn frame(scene: &RafScene) -> Result<Frame, String> {
     {
         return Err("RAF crop lies outside its radiance raster".into());
     }
-    let cfa = std::array::from_fn(|y| {
-        std::array::from_fn(|x| scene.cfa[(y + top) % 6][(x + left) % 6])
-    });
+    let cfa =
+        std::array::from_fn(|y| std::array::from_fn(|x| scene.cfa[(y + top) % 6][(x + left) % 6]));
     let mut bytes = Vec::with_capacity(width * height * 2);
     for y in top..top + height {
         let row = y * full_width + left;

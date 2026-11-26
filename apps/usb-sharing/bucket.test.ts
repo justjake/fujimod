@@ -8,6 +8,10 @@ await test('only bucket.ts writes the private bucket, so every object gets an in
   );
   for (const name of sources) {
     const source = readFileSync(new URL(name, import.meta.url), 'utf8');
-    assert.doesNotMatch(source, /ISSUE_REPORTS\.put\(|createMultipartUpload\(|\.complete\(/, `${name} writes R2 directly`);
+    assert.doesNotMatch(
+      source,
+      /ISSUE_REPORTS\.put\(|createMultipartUpload\(|\.complete\(/,
+      `${name} writes R2 directly`,
+    );
   }
 });

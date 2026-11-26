@@ -7,8 +7,8 @@
 //! retained per command word, in the order it was sent; no register
 //! auto-increment is assumed. A read is refused because the part's reply is not
 //! known. MISO during writes is an explicit pin input, not a reply.
-use fujimod_emulator_devices::checkpoint::Checkpoint;
 use super::serial::{Endpoint, Frame};
+use fujimod_emulator_devices::checkpoint::Checkpoint;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use std::collections::BTreeMap;
@@ -63,7 +63,9 @@ impl CommandRegisters {
         })
     }
     fn reads(&self, command: u16) -> bool {
-        self.wiring.read_flag.is_some_and(|flag| command & flag != 0)
+        self.wiring
+            .read_flag
+            .is_some_and(|flag| command & flag != 0)
     }
     /// The data words last written after this command word.
     pub fn register(&self, command: u16) -> Option<&[u16]> {
@@ -241,7 +243,11 @@ mod tests {
         .unwrap();
         send(&mut part, &[0x81, 0x05]);
         assert_eq!(part.register(0x81), Some(&[0x05][..]));
-        let read = Frame { bits: 16, mode: 2, word: 0x0081 };
+        let read = Frame {
+            bits: 16,
+            mode: 2,
+            word: 0x0081,
+        };
         assert!(part.validate(read).unwrap_err().contains("8-bit mode 2"));
     }
 
@@ -264,9 +270,27 @@ mod tests {
         );
         assert!(CommandRegisters::new(Wiring { mode: 4, ..WORD }).is_err());
         assert!(CommandRegisters::new(Wiring { bits: 12, ..WORD }).is_err());
-        assert!(CommandRegisters::new(Wiring { read_flag: Some(0), ..WORD }).is_err());
-        assert!(CommandRegisters::new(Wiring { read_flag: Some(0x100), ..BURST }).is_err());
-        assert!(CommandRegisters::new(Wiring { data_words: Some(0), ..WORD }).is_err());
+        assert!(
+            CommandRegisters::new(Wiring {
+                read_flag: Some(0),
+                ..WORD
+            })
+            .is_err()
+        );
+        assert!(
+            CommandRegisters::new(Wiring {
+                read_flag: Some(0x100),
+                ..BURST
+            })
+            .is_err()
+        );
+        assert!(
+            CommandRegisters::new(Wiring {
+                data_words: Some(0),
+                ..WORD
+            })
+            .is_err()
+        );
     }
 
     #[test]

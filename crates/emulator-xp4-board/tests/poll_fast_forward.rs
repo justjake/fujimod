@@ -65,7 +65,7 @@ fn program() -> Vec<(u32, Vec<u32>)> {
                 str_r5(1, 0x21c),
                 0xe3a0_1008, // mov r1, #8
                 str_r5(1, 0x218),
-                0xe3a0_1001, // mov r1, #1
+                0xe3a0_1001,      // mov r1, #1
                 str_r5(1, 0x204), // start
                 branch(14, spin, POLL, true),
                 0xe350_0001, // cmp r0, #1
@@ -129,7 +129,9 @@ fn session_of(counted: bool, definition: Definition, program: Vec<(u32, Vec<u32>
         let bytes: Vec<u8> = words.iter().flat_map(|w| w.to_le_bytes()).collect();
         session.write(address as usize, &bytes).unwrap();
     }
-    session.write(PACKETS, &[0x81, 0x00, 0x10, 0x01, 0, 0, 0, 0]).unwrap();
+    session
+        .write(PACKETS, &[0x81, 0x00, 0x10, 0x01, 0, 0, 0, 0])
+        .unwrap();
     session
 }
 
@@ -162,7 +164,11 @@ fn polling_a_busy_status_word_matches_the_per_instruction_hook() {
             }
             let (exact, counted) = (&outcomes[0], &outcomes[1]);
             let word = |at: usize| u32::from_le_bytes(exact.1[at..at + 4].try_into().unwrap());
-            assert_eq!(word(DONE), 1, "quantum {quantum}: the command never completed");
+            assert_eq!(
+                word(DONE),
+                1,
+                "quantum {quantum}: the command never completed"
+            );
             assert_eq!(word(COUNT), COUNTS, "quantum {quantum}");
             assert_eq!(exact.0, counted.0, "state at quantum {quantum}");
             assert!(exact.1 == counted.1, "RAM at quantum {quantum}");
@@ -207,13 +213,21 @@ fn assert_spin_matches_the_hook(definition: Value, program: Vec<(u32, Vec<u32>)>
                 session.run_board(7000, quantum).unwrap();
             }
             let state = session.state(false);
-            assert!(state.failure.is_none(), "quantum {quantum}, counted {counted}: {:?}", state.failure);
+            assert!(
+                state.failure.is_none(),
+                "quantum {quantum}, counted {counted}: {:?}",
+                state.failure
+            );
             polled.push(session.polled_instructions());
             outcomes.push(outcome(&session));
         }
         let (exact, counted) = (&outcomes[0], &outcomes[1]);
         let word = |at: usize| u32::from_le_bytes(exact.1[at..at + 4].try_into().unwrap());
-        assert_eq!(word(DONE), 1, "quantum {quantum}: the operation never completed");
+        assert_eq!(
+            word(DONE),
+            1,
+            "quantum {quantum}: the operation never completed"
+        );
         assert_eq!(word(COUNT), COUNTS, "quantum {quantum}");
         assert_eq!(exact.0, counted.0, "state at quantum {quantum}");
         assert!(exact.1 == counted.1, "RAM at quantum {quantum}");
@@ -263,7 +277,7 @@ fn polling_a_shifting_spi_status_word_matches_the_per_instruction_hook() {
             str_r5(1, 0x10),
             0xe3a0_1002, // mov r1, #2 (enable)
             str_r5(1, 4),
-            0xe3a0_1041, // mov r1, #0x41
+            0xe3a0_1041,  // mov r1, #0x41
             str_r5(1, 8), // transmit
         ];
         // ldr r0, [r5, #0xc]; tst r0, #0x10
@@ -291,13 +305,27 @@ fn assert_plain_counted_matches_the_hook(definition: Value, program: Vec<(u32, V
                     session.run_board(budget, quantum).unwrap();
                 }
                 let state = session.state(false);
-                assert!(state.failure.is_none(), "quantum {quantum}, counted {counted}: {:?}", state.failure);
-                assert_eq!(session.polled_instructions(), 0, "plain counted never skips");
+                assert!(
+                    state.failure.is_none(),
+                    "quantum {quantum}, counted {counted}: {:?}",
+                    state.failure
+                );
+                assert_eq!(
+                    session.polled_instructions(),
+                    0,
+                    "plain counted never skips"
+                );
                 outcomes.push(outcome(&session));
             }
             let (exact, counted) = (&outcomes[0], &outcomes[1]);
-            assert_eq!(exact.0, counted.0, "state at quantum {quantum}, calls {calls:?}");
-            assert!(exact.1 == counted.1, "RAM at quantum {quantum}, calls {calls:?}");
+            assert_eq!(
+                exact.0, counted.0,
+                "state at quantum {quantum}, calls {calls:?}"
+            );
+            assert!(
+                exact.1 == counted.1,
+                "RAM at quantum {quantum}, calls {calls:?}"
+            );
         }
     }
 }
@@ -337,7 +365,7 @@ fn plain_counted_runs_cut_at_spi_deadlines_match_the_hook() {
             str_r5(1, 0x10),
             0xe3a0_1002, // mov r1, #2 (enable)
             str_r5(1, 4),
-            0xe3a0_1041, // mov r1, #0x41
+            0xe3a0_1041,  // mov r1, #0x41
             str_r5(1, 8), // transmit
         ];
         assert_plain_counted_matches_the_hook(
@@ -401,12 +429,23 @@ fn board_instructions_that_leave_the_slice_running_match_the_hook() {
                 session.run_board(3000, quantum).unwrap();
             }
             let state = session.state(false);
-            assert!(state.failure.is_none(), "quantum {quantum}, counted {counted}: {:?}", state.failure);
+            assert!(
+                state.failure.is_none(),
+                "quantum {quantum}, counted {counted}: {:?}",
+                state.failure
+            );
             outcomes.push(outcome(&session));
         }
         let word = |at: usize| u32::from_le_bytes(outcomes[0].1[at..at + 4].try_into().unwrap());
-        assert!(word(0x3420) > 100, "quantum {quantum}: shared counter {}", word(0x3420));
-        assert!(word(0x3400) > 10 && word(0x3404) > 10, "quantum {quantum}: each core ran");
+        assert!(
+            word(0x3420) > 100,
+            "quantum {quantum}: shared counter {}",
+            word(0x3420)
+        );
+        assert!(
+            word(0x3400) > 10 && word(0x3404) > 10,
+            "quantum {quantum}: each core ran"
+        );
         assert_eq!(outcomes[0].0, outcomes[1].0, "state at quantum {quantum}");
         assert!(outcomes[0].1 == outcomes[1].1, "RAM at quantum {quantum}");
     }
@@ -437,11 +476,21 @@ fn polling_alone_across_slice_ends_matches_the_hook_at_odd_call_sizes() {
                     outcomes.push(outcome(&session));
                 }
                 let (exact, counted) = (&outcomes[0], &outcomes[1]);
-                assert_eq!(exact.0, counted.0, "state at quantum {quantum}, calls {calls:?}");
-                assert!(exact.1 == counted.1, "RAM at quantum {quantum}, calls {calls:?}");
+                assert_eq!(
+                    exact.0, counted.0,
+                    "state at quantum {quantum}, calls {calls:?}"
+                );
+                assert!(
+                    exact.1 == counted.1,
+                    "RAM at quantum {quantum}, calls {calls:?}"
+                );
                 assert_eq!(polled[0], 0, "the hook never skips");
                 if quantum >= 64 && calls.iter().sum::<u64>() > 60_000 {
-                    assert!(polled[1] > 5000, "quantum {quantum}, calls {calls:?}: skipped {}", polled[1]);
+                    assert!(
+                        polled[1] > 5000,
+                        "quantum {quantum}, calls {calls:?}: skipped {}",
+                        polled[1]
+                    );
                 }
             }
         }

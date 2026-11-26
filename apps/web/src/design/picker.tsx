@@ -41,62 +41,82 @@ export function PickerList(props: {
   );
   const ink = (_i: number) => '#fff';
   return (
-      <div
-        ref={(element) => (list = element)}
-        class={`relative grow overflow-y-auto overscroll-contain ${props.columns ? 'grid content-start gap-[4px]' : ''}`}
-        style={{ 'scrollbar-width': 'none', ...(props.columns ? { 'grid-template-columns': `repeat(${props.columns}, 1fr)` } : {}) }}
-      >
-        <For each={props.options}>
-          {(option, i) => (
-            <button
-              type="button"
-              ref={(element) => (rows[i()] = element)}
-              class={
-                props.columns
-                  ? 'relative flex aspect-square items-center justify-center rounded-[10px]'
-                  : `flex w-full items-center gap-[10px] pr-[16px] pl-[12px] text-left text-[35px] leading-none font-normal whitespace-nowrap`
-              }
-              style={
-                props.columns
-                  ? { color: '#fff', ...(props.at === i() ? { background: 'var(--m-cursor)', 'box-shadow': 'var(--m-cursor-edge)' } : {}) }
-                  : {
-                      color: '#fff',
-                      height: `${FLY_ROW}px`,
-                      'box-shadow': [props.at === i() ? 'var(--m-cursor-edge)' : '', i() > 0 ? 'inset 0 1px 0 var(--m-separator)' : ''].filter(Boolean).join(', ') || 'none',
-                      ...(props.at === i() ? { background: 'var(--m-cursor)' } : {}),
-                    }
-              }
-              onClick={() => props.choose(i())}
-            >
-              <Show when={!props.columns}>
-                <span class="-mr-[10px] w-[36px] shrink-0 text-[25px]" style={{ color: 'var(--m-check)' }}>
-                  {props.current === i() ? '✓' : ''}
+    <div
+      ref={(element) => (list = element)}
+      class={`relative grow overflow-y-auto overscroll-contain ${props.columns ? 'grid content-start gap-[4px]' : ''}`}
+      style={{
+        'scrollbar-width': 'none',
+        ...(props.columns ? { 'grid-template-columns': `repeat(${props.columns}, 1fr)` } : {}),
+      }}
+    >
+      <For each={props.options}>
+        {(option, i) => (
+          <button
+            type="button"
+            ref={(element) => (rows[i()] = element)}
+            class={
+              props.columns
+                ? 'relative flex aspect-square items-center justify-center rounded-[10px]'
+                : `flex w-full items-center gap-[10px] pr-[16px] pl-[12px] text-left text-[35px] leading-none font-normal whitespace-nowrap`
+            }
+            style={
+              props.columns
+                ? {
+                    color: '#fff',
+                    ...(props.at === i()
+                      ? { background: 'var(--m-cursor)', 'box-shadow': 'var(--m-cursor-edge)' }
+                      : {}),
+                  }
+                : {
+                    color: '#fff',
+                    height: `${FLY_ROW}px`,
+                    'box-shadow':
+                      [
+                        props.at === i() ? 'var(--m-cursor-edge)' : '',
+                        i() > 0 ? 'inset 0 1px 0 var(--m-separator)' : '',
+                      ]
+                        .filter(Boolean)
+                        .join(', ') || 'none',
+                    ...(props.at === i() ? { background: 'var(--m-cursor)' } : {}),
+                  }
+            }
+            onClick={() => props.choose(i())}
+          >
+            <Show when={!props.columns}>
+              <span
+                class="-mr-[10px] w-[36px] shrink-0 text-[25px]"
+                style={{ color: 'var(--m-check)' }}
+              >
+                {props.current === i() ? '✓' : ''}
+              </span>
+            </Show>
+            {option.art?.(ink(i()))}
+            <Show when={!props.columns}>
+              <span class="grow">{option.label}</span>
+            </Show>
+            <Show when={props.columns && props.current === i()}>
+              <span
+                class="absolute top-[3px] right-[3px] size-[8px] rounded-full"
+                style={{ background: ACCENT }}
+              />
+            </Show>
+            <Show when={option.more}>
+              {(more) => (
+                <span
+                  class="-mr-[10px] flex h-full items-center px-[10px]"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    more()();
+                  }}
+                >
+                  <Chevron dir="right" size={16} />
                 </span>
-              </Show>
-              {option.art?.(ink(i()))}
-              <Show when={!props.columns}>
-                <span class="grow">{option.label}</span>
-              </Show>
-              <Show when={props.columns && props.current === i()}>
-                <span class="absolute top-[3px] right-[3px] size-[8px] rounded-full" style={{ background: ACCENT }} />
-              </Show>
-              <Show when={option.more}>
-                {(more) => (
-                  <span
-                    class="-mr-[10px] flex h-full items-center px-[10px]"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      more()();
-                    }}
-                  >
-                    <Chevron dir="right" size={16} />
-                  </span>
-                )}
-              </Show>
-            </button>
-          )}
-        </For>
-      </div>
+              )}
+            </Show>
+          </button>
+        )}
+      </For>
+    </div>
   );
 }
 
@@ -104,7 +124,13 @@ export function PickerList(props: {
  * content, its top level with the top of the row it comes from (raised only
  * as far as it must be to stay on screen), in the look's fly-out material.
  * `height` is the content's height; content taller than the screen scrolls. */
-export function FlyOut(props: { left: number; rowTop: number; height: number; children: JSX.Element; screenHeight?: number }) {
+export function FlyOut(props: {
+  left: number;
+  rowTop: number;
+  height: number;
+  children: JSX.Element;
+  screenHeight?: number;
+}) {
   const MARGIN = 8;
   const screen = () => props.screenHeight ?? 480;
   const height = () => Math.min(props.height, screen() - 2 * MARGIN);
@@ -135,7 +161,12 @@ export function FlyOut(props: { left: number; rowTop: number; height: number; ch
 
 /** A fly-out from the element marked `data-anchor={anchor}` on the same
  * screen: its top level with that element's top. */
-export function AnchoredFlyOut(props: { anchor: string; left: number; height: number; children: JSX.Element }) {
+export function AnchoredFlyOut(props: {
+  anchor: string;
+  left: number;
+  height: number;
+  children: JSX.Element;
+}) {
   const [top, setTop] = createSignal<number>();
   const measure = (probe: HTMLElement) =>
     requestAnimationFrame(() => {
@@ -163,7 +194,12 @@ export function AnchoredFlyOut(props: { anchor: string; left: number; height: nu
 export const flyOutListHeight = (count: number) => count * FLY_ROW + 2;
 
 /** The cursor after a key in a picker of `count` options; undefined for keys a picker does not take. */
-export function pickerStep(at: number, count: number, key: string, columns = 1): number | undefined {
+export function pickerStep(
+  at: number,
+  count: number,
+  key: string,
+  columns = 1,
+): number | undefined {
   const step = (
     {
       up: -columns,

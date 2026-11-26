@@ -1,8 +1,8 @@
 use super::*;
+use fujimod_emulator_devices::test_host::{TestHost, advance, write};
 use fujimod_emulator_image_formation::radiometric::Renderer;
 use fujimod_emulator_imaging::exposure::Calibration;
 use fujimod_emulator_imaging::scene::{Frame, FrameEdge, FramePixels, SensorFrames};
-use fujimod_emulator_devices::test_host::{TestHost, advance, write};
 use std::sync::{Arc, Mutex};
 
 fn pair() -> ([OutputChannel; 2], ImageFrames, OutputChannels) {
@@ -73,12 +73,10 @@ fn frozen_scene_jobs_keep_latched_bytes_pair_order_and_pending_restore() {
             color_sample_weights: [1; 3],
         },
         sensor,
-        Arc::new(Mutex::new(
-            fujimod_emulator_imaging::exposure::Exposure {
-                seconds: 0.0001,
-                analog_gain: 1.,
-            },
-        )),
+        Arc::new(Mutex::new(fujimod_emulator_imaging::exposure::Exposure {
+            seconds: 0.0001,
+            analog_gain: 1.,
+        })),
         Arc::new(Mutex::new(8.)),
         Arc::new(Mutex::new(
             fujimod_emulator_imaging::exr2_isp::parameters::Parameters {
@@ -198,8 +196,8 @@ fn failed_worker_result_survives_checkpoint_and_prevents_either_bank_dma() {
 
 #[test]
 fn stop_drains_latched_raw_dma_before_acknowledging_and_withdraws_the_next_destination() {
-    use fujimod_emulator_imaging::exr2_isp::memory_outputs::MemoryOutputs;
     use fujimod_emulator_devices::test_host::read;
+    use fujimod_emulator_imaging::exr2_isp::memory_outputs::MemoryOutputs;
     for latch_routes_first in [false, true] {
         let (mut outputs, _, channels) = pair();
         let wire = Arc::new(Mutex::new(MemoryOutputs::default()));
@@ -265,20 +263,38 @@ fn empty_memory_readback_does_not_starve_inflight_sensor_dma() {
     }
     let mut host = TestHost::new();
     arm(&mut outputs, &mut host);
-    frames.publish(FrameEdge { index: 1, tick: 0 }, &[7; 32]).unwrap();
-    for output in &mut outputs { advance(output, &mut host, 0); }
+    frames
+        .publish(FrameEdge { index: 1, tick: 0 }, &[7; 32])
+        .unwrap();
+    for output in &mut outputs {
+        advance(output, &mut host, 0);
+    }
     // Both banks have withdrawn their next destinations while this frame
     // drains. A memory input without output targets still has its own EOF.
     assert_eq!(wire.lock().unwrap().destinations, [None; 2]);
     wire.lock().unwrap().active = true;
     assert!(wire.lock().unwrap().completed());
-    for output in &mut outputs { advance(output, &mut host, 5); }
-    assert_eq!(host.irqs, [(0,44),(0,45)]);
+    for output in &mut outputs {
+        advance(output, &mut host, 5);
+    }
+    assert_eq!(host.irqs, [(0, 44), (0, 45)]);
     assert_eq!(&host.ram[0x4000..0x4020], &[7; 32]);
     assert_eq!(&host.ram[0x8000..0x8020], &[7; 32]);
-    assert!(outputs.iter().all(|output| output.next_deadline(5).is_none()));
-    frames.publish(FrameEdge { index: 2, tick: 6 }, &[8; 32]).unwrap();
-    for output in &mut outputs { advance(output, &mut host, 6); }
-    assert!(outputs.iter().all(|output| output.next_deadline(6).is_none()));
+    assert!(
+        outputs
+            .iter()
+            .all(|output| output.next_deadline(5).is_none())
+    );
+    frames
+        .publish(FrameEdge { index: 2, tick: 6 }, &[8; 32])
+        .unwrap();
+    for output in &mut outputs {
+        advance(output, &mut host, 6);
+    }
+    assert!(
+        outputs
+            .iter()
+            .all(|output| output.next_deadline(6).is_none())
+    );
     assert_eq!(host.irqs.len(), 2);
 }

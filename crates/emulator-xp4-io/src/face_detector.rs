@@ -78,12 +78,19 @@ pub struct FaceDetector {
 }
 
 fn configuration(offset: u64) -> bool {
-    offset & 3 == 0 && CONFIGURATION.iter().any(|&(lo, hi)| (lo..hi).contains(&offset))
+    offset & 3 == 0
+        && CONFIGURATION
+            .iter()
+            .any(|&(lo, hi)| (lo..hi).contains(&offset))
 }
 
 impl FaceDetector {
     pub fn new(base: u64, irq: u32, ticks: u64) -> Result<Self, String> {
-        if base & 0xfff != 0 || base > u64::from(u32::MAX) || !(32..512).contains(&irq) || ticks == 0 {
+        if base & 0xfff != 0
+            || base > u64::from(u32::MAX)
+            || !(32..512).contains(&irq)
+            || ticks == 0
+        {
             return Err("Invalid XP4 face detector".into());
         }
         Ok(Self {
@@ -98,7 +105,10 @@ impl FaceDetector {
         vec![(self.base, self.base + WINDOW)]
     }
     fn check(&self, state: &State) -> Result<(), String> {
-        if state.words.iter().any(|(o, v)| !configuration(*o) || *v == 0)
+        if state
+            .words
+            .iter()
+            .any(|(o, v)| !configuration(*o) || *v == 0)
             || state.mode & !MODE_BITS != 0
             || state.channels & !CHANNELS != 0
             || state.due.is_some() && (state.finished || state.mode & 7 != 0)
@@ -160,7 +170,8 @@ impl Device for FaceDetector {
                         ));
                     }
                     if self.state.due.is_some() || self.state.finished {
-                        return cx.fail("XP4 face detector started before its last run was cleared");
+                        return cx
+                            .fail("XP4 face detector started before its last run was cleared");
                     }
                     self.state.due = cx.now().checked_add(self.ticks);
                     if self.state.due.is_none() {
@@ -244,7 +255,10 @@ mod tests {
         write(&mut d, &mut h, BASE + 0x330, 0x1234);
         assert_eq!(read(&mut d, &mut h, BASE + 0x330), 0x1234);
         write(&mut d, &mut h, BASE + ARM, 1);
-        assert_eq!(read(&mut d, &mut h, BASE + CHANNEL_FLAGS), u64::from(CHANNELS));
+        assert_eq!(
+            read(&mut d, &mut h, BASE + CHANNEL_FLAGS),
+            u64::from(CHANNELS)
+        );
         write(&mut d, &mut h, BASE + CHANNEL_CLEAR, CHANNELS);
         assert_eq!(read(&mut d, &mut h, BASE + CHANNEL_FLAGS), 0);
         write(&mut d, &mut h, BASE + START, 1);
@@ -292,7 +306,12 @@ mod tests {
         assert!(refused(&mut d, &mut h, MODE, Some(5)));
         write(&mut d, &mut h, BASE + MODE, 4);
         assert!(refused(&mut d, &mut h, START, Some(1)));
-        assert!(d.restore(&serde_json::json!({"words": {"2048": 1}, "mode": 0, "start": false,
-            "armed": false, "channels": 0, "finished": false, "runs": 0})).is_err());
+        assert!(
+            d.restore(
+                &serde_json::json!({"words": {"2048": 1}, "mode": 0, "start": false,
+            "armed": false, "channels": 0, "finished": false, "runs": 0})
+            )
+            .is_err()
+        );
     }
 }

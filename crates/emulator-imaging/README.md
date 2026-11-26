@@ -11,14 +11,14 @@ The XP5 board does not model the sensor readout or the develop blocks. The
 It is a host input: it is not part of the run definition, checkpoints or the
 wiring hash, and a snapshot loads with or without it.
 
-| Value | Scene |
-| --- | --- |
-| `bars` | Colour bars with a moving marker |
-| `PATH.bmp` | An uncompressed 24- or 32-bit BMP |
-| `video:avf:N[@WxH[@FPS]]` | AVFoundation video device `N`: webcam, OBS Virtual Camera, iPhone Continuity Camera, or `Capture screen N` |
-| `video:PATH_OR_URL[@WxH[@FPS]]` | A video file (looped, paced in real time) or a stream URL |
-| `video:lavfi:GRAPH[@WxH[@FPS]]` | An ffmpeg lavfi source, for example `testsrc2=size=640x480:rate=30` |
-| `fifo:PATH@WxH` | Raw `rgb24` frames (`W*H*3` bytes each, top row first) from any producer |
+| Value                           | Scene                                                                                                      |
+| ------------------------------- | ---------------------------------------------------------------------------------------------------------- |
+| `bars`                          | Colour bars with a moving marker                                                                           |
+| `PATH.bmp`                      | An uncompressed 24- or 32-bit BMP                                                                          |
+| `video:avf:N[@WxH[@FPS]]`       | AVFoundation video device `N`: webcam, OBS Virtual Camera, iPhone Continuity Camera, or `Capture screen N` |
+| `video:PATH_OR_URL[@WxH[@FPS]]` | A video file (looped, paced in real time) or a stream URL                                                  |
+| `video:lavfi:GRAPH[@WxH[@FPS]]` | An ffmpeg lavfi source, for example `testsrc2=size=640x480:rate=30`                                        |
+| `fifo:PATH@WxH`                 | Raw `rgb24` frames (`W*H*3` bytes each, top row first) from any producer                                   |
 
 List the AVFoundation devices with:
 

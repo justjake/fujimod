@@ -38,16 +38,10 @@
       ]
     },
     "product": {
-      "type": [
-        "string",
-        "null"
-      ]
+      "type": ["string", "null"]
     },
     "internal_version": {
-      "type": [
-        "string",
-        "null"
-      ]
+      "type": ["string", "null"]
     },
     "entry": {
       "anyOf": [
@@ -70,18 +64,12 @@
       ]
     },
     "slow_read_bytes": {
-      "type": [
-        "integer",
-        "null"
-      ],
+      "type": ["integer", "null"],
       "minimum": 1,
       "maximum": 4294967295
     },
     "read_mode": {
-      "enum": [
-        "bulk",
-        "slow"
-      ]
+      "enum": ["bulk", "slow"]
     },
     "ram": {
       "description": "Explicit finite read range. A slow probe may test unknown readability; this is not a claim about physical RAM size.",
@@ -142,10 +130,7 @@
           "maximum": 65535
         }
       },
-      "required": [
-        "vendor_id",
-        "product_id"
-      ]
+      "required": ["vendor_id", "product_id"]
     },
     "region": {
       "type": "object",
@@ -162,10 +147,7 @@
           "maximum": 4294967295
         }
       },
-      "required": [
-        "address",
-        "size"
-      ]
+      "required": ["address", "size"]
     },
     "code_check": {
       "type": "object",
@@ -185,10 +167,7 @@
           }
         }
       },
-      "required": [
-        "region",
-        "sha256"
-      ]
+      "required": ["region", "sha256"]
     },
     "entry": {
       "type": "object",
@@ -207,10 +186,7 @@
           "minLength": 1
         }
       },
-      "required": [
-        "physical_keys",
-        "usb_condition"
-      ]
+      "required": ["physical_keys", "usb_condition"]
     },
     "gate": {
       "type": "object",
@@ -230,11 +206,7 @@
           "const": true
         }
       },
-      "required": [
-        "offset",
-        "enabled_value",
-        "ram_only"
-      ]
+      "required": ["offset", "enabled_value", "ram_only"]
     },
     "bulk": {
       "type": "object",

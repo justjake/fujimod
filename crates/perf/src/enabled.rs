@@ -148,13 +148,11 @@ static START_RAW: AtomicU64 = AtomicU64::new(0);
 static START_PROCESS: Mutex<Option<f64>> = Mutex::new(None);
 static START_THREAD: Mutex<Option<f64>> = Mutex::new(None);
 static START_THREAD_OWNER: Mutex<Option<ThreadId>> = Mutex::new(None);
-static SPANS: [SpanCounts; SpanKind::COUNT] =
-    [const { SpanCounts::new() }; SpanKind::COUNT];
+static SPANS: [SpanCounts; SpanKind::COUNT] = [const { SpanCounts::new() }; SpanKind::COUNT];
 static DEVICES: [[CellCounts; PHASE_COUNT]; MAX_DEVICES] =
     [const { [const { CellCounts::new() }; PHASE_COUNT] }; MAX_DEVICES];
 static ENGINES: [CellCounts; MAX_CORES] = [const { CellCounts::new() }; MAX_CORES];
-static ENGINE_RUNS: [EngineRunCounts; MAX_CORES] =
-    [const { EngineRunCounts::new() }; MAX_CORES];
+static ENGINE_RUNS: [EngineRunCounts; MAX_CORES] = [const { EngineRunCounts::new() }; MAX_CORES];
 static BYTES: [AtomicU64; BYTE_COUNT] = [const { AtomicU64::new(0) }; BYTE_COUNT];
 static DEVICE_WORK: [AtomicU64; DeviceWorkCounter::COUNT] =
     [const { AtomicU64::new(0) }; DeviceWorkCounter::COUNT];
@@ -167,7 +165,10 @@ struct WaitLedger {
 
 impl WaitLedger {
     const fn new() -> Self {
-        Self { descriptions: BTreeMap::new(), waits: Vec::new() }
+        Self {
+            descriptions: BTreeMap::new(),
+            waits: Vec::new(),
+        }
     }
 }
 
@@ -283,7 +284,9 @@ pub fn capture_context() -> Option<DeviceContext> {
 pub fn run_on_worker<R>(context: Option<DeviceContext>, job: impl FnOnce() -> R) -> R {
     worker_thread();
     let previous = DEVICE_CONTEXT.with(|slot| slot.replace(context));
-    let started = context.filter(|_| ACTIVE.load(Ordering::Relaxed)).map(|_| raw_now());
+    let started = context
+        .filter(|_| ACTIVE.load(Ordering::Relaxed))
+        .map(|_| raw_now());
     let result = job();
     if let (Some(context), Some(started)) = (context, started) {
         let elapsed = elapsed_raw(started);
@@ -299,7 +302,12 @@ pub fn run_on_worker<R>(context: Option<DeviceContext>, job: impl FnOnce() -> R)
 pub fn register_devices(names: &[&'static str]) {
     let mut registered = DEVICE_NAMES.lock().unwrap_or_else(|e| e.into_inner());
     registered.clear();
-    registered.extend(names.iter().take(MAX_DEVICES).map(|name| (*name).to_owned()));
+    registered.extend(
+        names
+            .iter()
+            .take(MAX_DEVICES)
+            .map(|name| (*name).to_owned()),
+    );
 }
 
 #[cfg(not(target_arch = "wasm32"))]
@@ -347,10 +355,7 @@ fn reset_ledger() {
     SAMPLED_PEAK_FOOTPRINT.store(0, Ordering::Relaxed);
     LIFETIME_FOOTPRINT.store(0, Ordering::Relaxed);
     *COUNTER_BASELINE.lock().unwrap_or_else(|e| e.into_inner()) = None;
-    COUNTERS
-        .lock()
-        .unwrap_or_else(|e| e.into_inner())
-        .clear();
+    COUNTERS.lock().unwrap_or_else(|e| e.into_inner()).clear();
     *START_THREAD_OWNER.lock().unwrap_or_else(|e| e.into_inner()) = None;
 }
 
@@ -426,8 +431,8 @@ impl Drop for GuideScope {
             return;
         };
         let _lifecycle = GUIDE_LIFECYCLE.lock().unwrap_or_else(|e| e.into_inner());
-        let still_owner =
-            ACTIVE.load(Ordering::Acquire) && GUIDE_GENERATION.load(Ordering::Acquire) == generation;
+        let still_owner = ACTIVE.load(Ordering::Acquire)
+            && GUIDE_GENERATION.load(Ordering::Acquire) == generation;
         if still_owner {
             let _ = end_guide_locked();
         }
@@ -453,7 +458,9 @@ pub fn begin_wait(description: &str) -> usize {
 }
 
 pub fn record_wait_evaluation(index: usize) {
-    if !ACTIVE.load(Ordering::Relaxed) || index == usize::MAX { return; }
+    if !ACTIVE.load(Ordering::Relaxed) || index == usize::MAX {
+        return;
+    }
     let mut ledger = WAITS.lock().unwrap_or_else(|e| e.into_inner());
     if let Some(wait) = ledger.waits.get_mut(index) {
         wait.predicate_evaluations += 1;
@@ -461,9 +468,13 @@ pub fn record_wait_evaluation(index: usize) {
 }
 
 pub fn record_wait_stop(index: usize, cause: &str, device: Option<&str>) {
-    if !ACTIVE.load(Ordering::Relaxed) || index == usize::MAX { return; }
+    if !ACTIVE.load(Ordering::Relaxed) || index == usize::MAX {
+        return;
+    }
     let mut ledger = WAITS.lock().unwrap_or_else(|e| e.into_inner());
-    let Some(wait) = ledger.waits.get_mut(index) else { return; };
+    let Some(wait) = ledger.waits.get_mut(index) else {
+        return;
+    };
     wait.continuations += 1;
     if let Some(device) = device {
         if let Some(count) = wait.device_stops.get_mut(device) {
@@ -643,7 +654,11 @@ fn end_guide_locked() -> GuideSummary {
             })
         })
         .collect();
-    let waits = WAITS.lock().unwrap_or_else(|e| e.into_inner()).waits.iter()
+    let waits = WAITS
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .waits
+        .iter()
         .map(|counts| {
             let mut stops = counts.stops.clone();
             for (device, count) in &counts.device_stops {
@@ -658,18 +673,14 @@ fn end_guide_locked() -> GuideSummary {
                 thread_cpu_ns: counts.thread_cpu_ns,
                 stops,
             }
-        }).collect();
+        })
+        .collect();
     let devices = device_summaries();
     let engines = engine_summaries();
     let bytes = ByteCounter::ALL
         .iter()
         .zip(BYTES.iter())
-        .map(|(counter, value)| {
-            (
-                counter.name().to_owned(),
-                value.load(Ordering::Relaxed),
-            )
-        })
+        .map(|(counter, value)| (counter.name().to_owned(), value.load(Ordering::Relaxed)))
         .collect();
     let device_work = DeviceWorkCounter::ALL
         .iter()
@@ -973,11 +984,15 @@ impl EngineRunGuard {
 
             let counts = &ENGINE_RUNS[self.core];
             counts.runs.fetch_add(1, Ordering::Relaxed);
-            counts.instructions.fetch_add(self.instructions, Ordering::Relaxed);
+            counts
+                .instructions
+                .fetch_add(self.instructions, Ordering::Relaxed);
             counts.end_reasons[reason.index()].fetch_add(1, Ordering::Relaxed);
             let bucket = &counts.instruction_histogram[histogram_index(self.instructions)];
             bucket.runs.fetch_add(1, Ordering::Relaxed);
-            bucket.instructions.fetch_add(self.instructions, Ordering::Relaxed);
+            bucket
+                .instructions
+                .fetch_add(self.instructions, Ordering::Relaxed);
         }
         self.finished = true;
     }
@@ -1039,10 +1054,7 @@ pub fn device(index: u16, _kind: &'static str, phase: DevicePhase) -> Accumulato
         };
     }
     let context = DeviceContext { index, phase };
-    accumulator(
-        &DEVICES[index as usize][phase as usize],
-        Some(context),
-    )
+    accumulator(&DEVICES[index as usize][phase as usize], Some(context))
 }
 
 pub fn engine_run(core: u8, worker: bool) -> EngineRunGuard {
@@ -1115,10 +1127,7 @@ pub fn write_chrome_trace(path: &Path) -> io::Result<()> {
                 };
                 args.insert(key, value);
             }
-            args.insert(
-                "span_id".into(),
-                format!("{:x}", record.span_id.0).into(),
-            );
+            args.insert("span_id".into(), format!("{:x}", record.span_id.0).into());
             args.insert(
                 "parent_id".into(),
                 format!("{:x}", record.parent_id.0).into(),
@@ -1139,7 +1148,10 @@ pub fn write_chrome_trace(path: &Path) -> io::Result<()> {
         "displayTimeUnit": "ns",
         "traceEvents": events,
     });
-    if let Some(parent) = path.parent().filter(|parent| !parent.as_os_str().is_empty()) {
+    if let Some(parent) = path
+        .parent()
+        .filter(|parent| !parent.as_os_str().is_empty())
+    {
         std::fs::create_dir_all(parent)?;
     }
     let temporary = path.with_extension("json.tmp");
@@ -1152,13 +1164,13 @@ pub fn write_chrome_trace(path: &Path) -> io::Result<()> {
 
 #[cfg(target_arch = "wasm32")]
 pub fn write_chrome_trace(path: &Path) -> io::Result<()> {
-    if let Some(parent) = path.parent().filter(|parent| !parent.as_os_str().is_empty()) {
+    if let Some(parent) = path
+        .parent()
+        .filter(|parent| !parent.as_os_str().is_empty())
+    {
         std::fs::create_dir_all(parent)?;
     }
-    std::fs::write(
-        path,
-        b"{\"displayTimeUnit\":\"ns\",\"traceEvents\":[]}",
-    )
+    std::fs::write(path, b"{\"displayTimeUnit\":\"ns\",\"traceEvents\":[]}")
 }
 
 fn memory_summary() -> MemorySummary {
@@ -1415,7 +1427,11 @@ mod tests {
         let menu = begin_wait("menu ready");
         record_wait_evaluation(menu);
         let summary = end_guide();
-        let wait = summary.waits.iter().find(|wait| wait.description == "display frame").unwrap();
+        let wait = summary
+            .waits
+            .iter()
+            .find(|wait| wait.description == "display frame")
+            .unwrap();
         assert_eq!(wait.predicate_evaluations, 2);
         assert_eq!(wait.continuations, 2);
         assert_eq!(wait.stops.get("device:display-timing"), Some(&1));
@@ -1431,7 +1447,15 @@ mod tests {
             (wait_span.instructions, wait_span.ticks)
         );
         assert_eq!(wait.thread_cpu_ns, wait_span.thread_cpu_ns);
-        assert_eq!(summary.waits.iter().find(|wait| wait.description == "menu ready").unwrap().predicate_evaluations, 1);
+        assert_eq!(
+            summary
+                .waits
+                .iter()
+                .find(|wait| wait.description == "menu ready")
+                .unwrap()
+                .predicate_evaluations,
+            1
+        );
     }
 
     #[test]
@@ -1667,14 +1691,14 @@ mod tests {
     fn counters_report_guide_deltas_from_existing_snapshots() {
         let _lock = TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         begin_guide("counters");
-    set_cpu_counters(vec![Ok(BTreeMap::from([
-        ("translations".to_owned(), 40),
-        ("loop_instructions".to_owned(), 900),
-    ]))]);
-    set_cpu_counters(vec![Ok(BTreeMap::from([
-        ("translations".to_owned(), 47),
-        ("loop_instructions".to_owned(), 950),
-    ]))]);
+        set_cpu_counters(vec![Ok(BTreeMap::from([
+            ("translations".to_owned(), 40),
+            ("loop_instructions".to_owned(), 900),
+        ]))]);
+        set_cpu_counters(vec![Ok(BTreeMap::from([
+            ("translations".to_owned(), 47),
+            ("loop_instructions".to_owned(), 950),
+        ]))]);
         let summary = end_guide();
         assert_eq!(summary.counters[0].delta["translations"], Some(7));
         assert_eq!(summary.counters[0].delta["loop_instructions"], Some(50));

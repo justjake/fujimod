@@ -266,7 +266,10 @@ mod tests {
 
     #[test]
     fn fences_count_up_and_wrap() {
-        assert_eq!(sequences(&[0xfffe, 0xffff, 1]).unwrap(), [0xfffe, 0xffff, 1]);
+        assert_eq!(
+            sequences(&[0xfffe, 0xffff, 1]).unwrap(),
+            [0xfffe, 0xffff, 1]
+        );
     }
 
     #[test]

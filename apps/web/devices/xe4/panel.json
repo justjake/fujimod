@@ -39,9 +39,7 @@
           "kind": "control",
           "id": "fn_button",
           "variant": "key",
-          "face": [
-            "Fn"
-          ]
+          "face": ["Fn"]
         },
         {
           "kind": "control",
@@ -62,10 +60,7 @@
           "kind": "control",
           "id": "drive_delete_button",
           "variant": "key",
-          "face": [
-            "DRIVE",
-            "DELETE"
-          ]
+          "face": ["DRIVE", "DELETE"]
         },
         {
           "kind": "control",
@@ -77,18 +72,13 @@
           "kind": "control",
           "id": "ael_afl_button",
           "variant": "key",
-          "face": [
-            "AEL",
-            "AFL"
-          ]
+          "face": ["AEL", "AFL"]
         },
         {
           "kind": "control",
           "id": "q_button",
           "variant": "key",
-          "face": [
-            "Q"
-          ]
+          "face": ["Q"]
         },
         {
           "kind": "dpad",
@@ -105,19 +95,13 @@
           "kind": "control",
           "id": "menu_ok_button",
           "variant": "key",
-          "face": [
-            "MENU",
-            "OK"
-          ]
+          "face": ["MENU", "OK"]
         },
         {
           "kind": "control",
           "id": "disp_back_button",
           "variant": "key",
-          "face": [
-            "DISP",
-            "BACK"
-          ]
+          "face": ["DISP", "BACK"]
         }
       ]
     }

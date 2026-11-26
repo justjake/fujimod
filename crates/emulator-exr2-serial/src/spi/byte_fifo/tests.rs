@@ -1,6 +1,6 @@
 use super::*;
-use fujimod_emulator_devices::bus::InterruptLine;
 use crate::dma::{peripheral, routing};
+use fujimod_emulator_devices::bus::InterruptLine;
 use fujimod_emulator_devices::{Host, Record};
 use std::collections::BTreeMap;
 
@@ -158,15 +158,15 @@ fn transfer(
     let mut irqs: [Vec<InterruptLine>; 8] = std::array::from_fn(|_| vec![]);
     irqs[2] = vec![InterruptLine::Core { core: 0, line: 93 }];
     irqs[3] = vec![InterruptLine::Core { core: 0, line: 94 }];
-    let mut d =
-        peripheral::PeripheralChannels::new(
-            0x4000,
-            shared_routing,
-            peripheral::RequestSelect::Routing,
-            peripheral::CompletionLevel::High,
-            connections,
-            irqs,
-        ).unwrap();
+    let mut d = peripheral::PeripheralChannels::new(
+        0x4000,
+        shared_routing,
+        peripheral::RequestSelect::Routing,
+        peripheral::CompletionLevel::High,
+        connections,
+        irqs,
+    )
+    .unwrap();
     store(&mut routes, &mut h, pc, 0x8000, 0x08090000).unwrap();
     for (channel, source, destination, mode) in [
         (2, 0x1000, 0x501c, 0x03200168),

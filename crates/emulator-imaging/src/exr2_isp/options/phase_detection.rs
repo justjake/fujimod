@@ -1,5 +1,5 @@
 //! Plan options of the EXR II phase detection model in `fujimod-emulator-exr2-isp`.
-use serde::{Deserialize};
+use serde::Deserialize;
 
 #[derive(Clone, Copy, Debug, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]

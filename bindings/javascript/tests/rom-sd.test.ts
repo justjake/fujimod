@@ -21,12 +21,20 @@ await test('Agate recovery is available without a complete emulator board', () =
 });
 
 await test('EXR exposes its third file and the unresolved updater contract', () => {
-  for (const [id, generation] of [['xf1-101', 'exr'], ['xpro1-382', 'exrpro']] as const) {
+  for (const [id, generation] of [
+    ['xf1-101', 'exr'],
+    ['xpro1-382', 'exrpro'],
+  ] as const) {
     const status = sdCardTools.availability(id);
     try {
       assert.equal(status.generation, generation);
       assert.equal(status.canBuild, false);
-      assert.deepEqual(status.outputFilenames, ['ffsys.bin', 'ffboot.bin', 'ffimage.bin', 'FPUPDATE.DAT']);
+      assert.deepEqual(status.outputFilenames, [
+        'ffsys.bin',
+        'ffboot.bin',
+        'ffimage.bin',
+        'FPUPDATE.DAT',
+      ]);
       assert.deepEqual(status.missing, ['version-independent stock updater acceptance']);
     } finally {
       status.free();

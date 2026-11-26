@@ -1,16 +1,16 @@
 //! FFF18000 statistics DMA and FFF28000 parameter/LUT bank. External banks or
 //! selected gradient arithmetic consume the connected packed-luma raster; DMA
 //! uses an explicit transfer clock. No configuration hashes or finite lifetimes.
-use fujimod_emulator_imaging::exr2_isp::{dma, due};
-use fujimod_emulator_devices::exr2::irq_routes::{IrqRoutes, Irq};
-use fujimod_emulator_imaging::scene::{ImageFrames, StatisticsFrames, StatisticsSpan};
-use fujimod_emulator_image_formation::radiometric::FrozenReadout;
-use fujimod_emulator_imaging::analysis::ImageLayout;
+use fujimod_emulator_devices::exr2::irq_routes::{Irq, IrqRoutes};
 use fujimod_emulator_devices::work::Job;
 use fujimod_emulator_devices::{Cx, Device};
+use fujimod_emulator_image_formation::radiometric::FrozenReadout;
+use fujimod_emulator_imaging::analysis::ImageLayout;
+use fujimod_emulator_imaging::exr2_isp::options::producer::Options;
+use fujimod_emulator_imaging::exr2_isp::{dma, due};
+use fujimod_emulator_imaging::scene::{ImageFrames, StatisticsFrames, StatisticsSpan};
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
-use fujimod_emulator_imaging::exr2_isp::options::producer::Options;
 
 pub struct Wiring {
     pub grid: Option<fujimod_emulator_imaging::analysis::GridHandle>,
@@ -165,7 +165,8 @@ impl Block18000 {
         if let Some(arithmetic) = &options.contrast {
             arithmetic.validate()?;
         }
-        if options.mode_layout == fujimod_emulator_imaging::exr2_isp::options::producer::ModeLayout::ExrPro
+        if options.mode_layout
+            == fujimod_emulator_imaging::exr2_isp::options::producer::ModeLayout::ExrPro
             && (options.contrast.is_some() || options.metering.is_some())
         {
             return Err("EXR Pro statistics do not interpret the parameter bank; contrast and metering are refused".into());
@@ -493,11 +494,7 @@ impl Block18000 {
         let selected = || {
             computed.iter().copied().filter(
                 |(destination, _)| {
-                    if *destination < 2 {
-                        contrast
-                    } else {
-                        metering
-                    }
+                    if *destination < 2 { contrast } else { metering }
                 },
             )
         };

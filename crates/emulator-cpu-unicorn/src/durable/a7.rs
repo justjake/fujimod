@@ -104,14 +104,20 @@ impl State {
         let get32 = |register| {
             let mut bytes = [0; 4];
             if cpu.read_register(register, &mut bytes)? != bytes.len() {
-                return Err(format!("Cortex-A7 checkpoint register {register:?} has unexpected width"));
+                return Err(format!(
+                    "Cortex-A7 checkpoint register {register:?} has unexpected width"
+                ));
             }
             Ok(u32::from_le_bytes(bytes))
         };
         let vector = |index| {
             let mut bytes = [0; 16];
-            if cpu.read_register(Register::Arm32(arm::Register::Q(index)), &mut bytes)? != bytes.len() {
-                return Err(format!("Cortex-A7 checkpoint vector Q{index} has unexpected width"));
+            if cpu.read_register(Register::Arm32(arm::Register::Q(index)), &mut bytes)?
+                != bytes.len()
+            {
+                return Err(format!(
+                    "Cortex-A7 checkpoint vector Q{index} has unexpected width"
+                ));
             }
             Ok(bytes)
         };
@@ -119,8 +125,10 @@ impl State {
     }
 
     fn capture_registers(
-        cpu: &Core, get32: impl Fn(Register) -> Result<u32, String>,
-        vector: impl Fn(u8) -> Result<[u8; 16], String>, set_mode: impl Fn(u32) -> Result<(), String>,
+        cpu: &Core,
+        get32: impl Fn(Register) -> Result<u32, String>,
+        vector: impl Fn(u8) -> Result<[u8; 16], String>,
+        set_mode: impl Fn(u32) -> Result<(), String>,
     ) -> Result<Self, String> {
         let cpsr = get32(arm::CPSR)?;
         let registers = array(arm::CORE.map(&get32))?;
@@ -130,13 +138,21 @@ impl State {
             set_mode(cpsr & !31 | mode)?;
             Ok(Bank {
                 registers: array((8..15).map(|i| get32(arm::CORE[i])))?,
-                spsr: if matches!(mode, 0x10 | 0x1f) { None } else { Some(get32(arm::SPSR)?) },
+                spsr: if matches!(mode, 0x10 | 0x1f) {
+                    None
+                } else {
+                    Some(get32(arm::SPSR)?)
+                },
             })
         }));
         set_mode(cpsr)?;
         Ok(Self {
             identity: identity(cpu)?,
-            cpsr, registers, scalar, vectors, banks: banks?,
+            cpsr,
+            registers,
+            scalar,
+            vectors,
+            banks: banks?,
             cp15: array(CP15.map(|selector| both(cpu, selector)))?,
             late: array(LATE.map(|selector| both(cpu, selector)))?,
             thread: both(cpu, THREAD_PRIVILEGED)?,

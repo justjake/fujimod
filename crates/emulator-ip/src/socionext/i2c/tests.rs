@@ -136,7 +136,13 @@ fn a_write_then_read_moves_bytes_and_reports_each_byte_status() {
     assert_eq!(get(&mut c, &mut h, BCR), 0x42);
     assert_eq!(
         c.bus().log,
-        ["start 0x1c false", "stop", "start 0x1c false", "start 0x1c true", "stop"]
+        [
+            "start 0x1c false",
+            "stop",
+            "start 0x1c false",
+            "start 0x1c true",
+            "stop"
+        ]
     );
 }
 
@@ -145,7 +151,10 @@ fn an_absent_address_is_not_acknowledged_and_the_error_stop_is_accepted() {
     let mut h = TestHost::new();
     let mut c = controller();
     start(&mut c, &mut h, 0x6a << 1);
-    assert_eq!(get(&mut c, &mut h, BSR), BSR_BB | BSR_TRX | BSR_FBT | BSR_LRB);
+    assert_eq!(
+        get(&mut c, &mut h, BSR),
+        BSR_BB | BSR_TRX | BSR_FBT | BSR_LRB
+    );
     // Data after a NACK is refused; the driver's STOP, unchanged clock rewrite
     // and second STOP are accepted.
     put(&mut c, &mut h, DAR, 0x12);

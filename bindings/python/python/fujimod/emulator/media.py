@@ -62,7 +62,9 @@ def load_card_image(
     )
 
 
-def write_card_image(medium: _native.CardMedium, path: str | Path) -> dict[str, int | str]:
+def write_card_image(
+    medium: _native.CardMedium, path: str | Path
+) -> dict[str, int | str]:
     """Write a medium as a raw image of its full capacity, leaving unwritten sectors as holes.
 
     The file is created exclusively, so an existing image is never replaced.

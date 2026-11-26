@@ -57,7 +57,13 @@ pub fn translate_vertex_to_wgsl(
     entry_point: u32,
     semantics: &[u32; VERTEX_OUTPUT_SEMANTICS],
 ) -> Result<String, String> {
-    translate_vertex_to_wgsl_for_draw(program_words, descriptor_words, entry_point, semantics, false)
+    translate_vertex_to_wgsl_for_draw(
+        program_words,
+        descriptor_words,
+        entry_point,
+        semantics,
+        false,
+    )
 }
 
 /// Translates uploaded PICA instructions for the DMP render pipeline.

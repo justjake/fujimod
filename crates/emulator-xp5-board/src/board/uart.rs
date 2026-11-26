@@ -3,8 +3,8 @@
 //! A declared `pl011` window takes two options: `irq`, the port's level interrupt line, and
 //! `rl78`, a virtual RL78 programming target with its code-flash size. Without a peer the
 //! receiver stays empty. See `fujimod_emulator_ip_arm::pl011`.
-use fujimod_emulator_ip_arm::pl011::{Pl011, Rl78Config, WINDOW};
 use fujimod_emulator_devices::graph::DeviceWindow;
+use fujimod_emulator_ip_arm::pl011::{Pl011, Rl78Config, WINDOW};
 use serde::Deserialize;
 
 #[derive(Deserialize)]
@@ -94,7 +94,9 @@ mod tests {
         window.size = 0x2000;
         assert!(port(&window).is_err());
         let mut window = xt5_window();
-        window.options.insert("baud".into(), toml::Value::Integer(115200));
+        window
+            .options
+            .insert("baud".into(), toml::Value::Integer(115200));
         assert!(port(&window).is_err());
     }
 }

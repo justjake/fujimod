@@ -1,14 +1,24 @@
-//! Turn a firmware, a boot choice and a request into a camera at REC.
-use crate::{Library, LibraryError, automatic};
+//! Turn firmware files, media and a start choice into a camera at REC.
+//!
+//! This is the emulator layer: it knows cameras, not FujiMod. A request names
+//! the firmware (by library id, or by its two files), the internal flash, the
+//! SD card's files and options, and how the camera starts: from the boot ROM
+//! with nothing held, from the boot ROM with a catalog power-on combination
+//! held, or at the native loader with a caller-verified RAM image. Opening
+//! writes nothing to disk unless the caller asked for the boot cache.
+use crate::{
+    Library, LibraryError, Stage, StateDir, flash,
+    library::FirmwareFiles,
+};
 use fujimod_catalog_configuration::{RunEngine, RunInputs};
 use fujimod_catalog_controls::{BootCombination, BootMode, PhysicalControls};
 use fujimod_catalog_remote::{Facts, Selection};
 use fujimod_catalog_resolution::ResolvedConfiguration;
+use fujimod_catalog_run_inputs::RunFaceResultProfile;
 use fujimod_emulator_boot::{self as boot, Camera, CardLayout};
 use fujimod_emulator_cpu::ExecutionPolicy;
 use fujimod_emulator_devices::parts::{nand::Nand, sd_card::Card};
 use fujimod_emulator_session::Session;
-use serde_json::Value;
 use sha2::{Digest, Sha256};
 use std::{
     fmt, fs,
@@ -18,72 +28,35 @@ use std::{
 /// Largest instruction budget an open run may execute.
 const INSTRUCTION_LIMIT: u64 = 2_000_000_000;
 
-/// Guest instructions a FujiMod release may take to confirm after REC.
-const CONFIRM_INSTRUCTION_LIMIT: u64 = 1_000_000_000;
-
-/// Instructions per observation while waiting for a release confirmation.
-const CONFIRM_WINDOW: u64 = 50_000_000;
+/// Where a request's firmware files come from.
+#[derive(Clone, Debug)]
+pub enum FirmwareInput {
+    /// `<firmware-id>/FPUPDATE.DAT` and `<body-id>/boot-rom.bin` in the library.
+    Library,
+    /// The two files, which must match the catalog's entry for the firmware.
+    Files { update: PathBuf, boot_rom: PathBuf },
+}
 
 /// How a camera starts.
 #[derive(Clone, Debug)]
-pub enum Boot {
-    /// The firmware installed in internal flash.
-    Stock,
-    /// FujiMod loaded from the SD card by the boot ROM.
-    SdCard(CardSource),
-    /// FujiMod from the SD card, started by the automatic-boot installer.
-    AutomaticBoot(CardSource),
+pub enum Start {
+    /// The boot ROM with nothing held.
+    Rom,
+    /// The boot ROM with a catalog power-on combination held: a name from the
+    /// body's controls document such as `sd`, `firmware_update` or `service`.
+    Held { combination: String },
+    /// A verified image at address zero, starting at the native loader.
+    Loader(LoaderImage),
 }
 
-impl Boot {
-    /// The SD card source a boot loads, when it loads one.
-    pub fn card_source(&self) -> Option<&CardSource> {
+impl Start {
+    /// The combination this start holds, when it holds one.
+    pub fn combination(&self) -> Option<&str> {
         match self {
-            Self::Stock => None,
-            Self::SdCard(source) | Self::AutomaticBoot(source) => Some(source),
+            Self::Held { combination } => Some(combination),
+            Self::Rom | Self::Loader(_) => None,
         }
     }
-}
-
-/// Where an SD card's files come from.
-#[derive(Clone, Debug)]
-pub enum CardSource {
-    /// The current release's SD card, fetched once into the firmware library.
-    Release,
-    /// A folder holding an SD card tree.
-    Directory(PathBuf),
-    /// Name and bytes pairs, for callers without a host filesystem.
-    Files(Vec<(String, Vec<u8>)>),
-}
-
-/// One camera to open.
-#[derive(Clone)]
-pub struct Request {
-    /// Catalog firmware identity, for example x70-110.
-    pub firmware: String,
-    pub boot: Boot,
-    pub policy: ExecutionPolicy,
-    /// Scheduler engine override; the run configuration's engine otherwise.
-    pub engine: Option<RunEngine>,
-    /// Extra files written to the camera's SD card after the boot source's.
-    pub card_files: Vec<(String, PathBuf)>,
-    /// Whether the open may restore a saved boot and keep a new one.
-    pub cache: BootCache,
-    /// Run the camera to REC before returning. When false, the open applies
-    /// the boot holds and returns before the first instruction; the caller
-    /// runs the session and calls [`Opened::release_holds`]. The boot cache is
-    /// not used either way.
-    pub run_to_rec: bool,
-    /// The SD card in the slot at power-on.
-    pub card: CardModel,
-    /// Internal flash and SD card kept from an earlier open.
-    pub kept: KeptMedia,
-    /// The SD card source a held power-on loads when `boot` is not itself a
-    /// card boot. Kept across power-ons that start from internal flash.
-    pub card_source: Option<CardSource>,
-    /// A verified image placed at address zero before execution, starting at
-    /// the native loader instead of the boot ROM.
-    pub image: Option<LoaderImage>,
 }
 
 /// A caller-verified RAM image and its SHA-256.
@@ -94,44 +67,38 @@ pub struct LoaderImage {
     pub sha256: String,
 }
 
-/// Media a power-on keeps from the camera's last use. Each part replaces what
-/// the open would otherwise build: the catalog's reference internal flash and
-/// the boot source's SD card files.
-#[derive(Clone, Default)]
-pub struct KeptMedia {
-    /// The medium the internal-flash controller last held.
-    pub nand: Option<Nand>,
-    /// The SD card's medium, including every file the camera wrote.
-    pub card: Option<Card>,
-}
-
-/// A power-on that keeps a camera's internal flash and SD card.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct PowerOn {
-    /// Hold the catalog's SD-boot controls from power-on. Otherwise the
-    /// firmware starts from internal flash with nothing held.
-    pub hold_controls: bool,
-    /// Put the boot source's files on a fresh card instead of the one the
-    /// camera had.
-    pub fresh_card: bool,
-    /// Run to REC before returning; otherwise stop before the first
-    /// instruction with the boot holds applied.
-    pub run_to_rec: bool,
-}
-
-impl Default for PowerOn {
-    fn default() -> Self {
-        Self {
-            hold_controls: false,
-            fresh_card: false,
-            run_to_rec: true,
-        }
+impl fmt::Debug for LoaderImage {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("LoaderImage")
+            .field("bytes", &self.bytes.len())
+            .field("sha256", &self.sha256)
+            .finish()
     }
 }
 
-/// How the modeled SD card starts a run.
+impl LoaderImage {
+    /// A RAM image and its SHA-256, computed here.
+    pub fn new(bytes: Vec<u8>) -> Self {
+        let sha256 = format!("{:x}", Sha256::digest(&bytes));
+        Self { bytes, sha256 }
+    }
+}
+
+/// The camera's internal flash at power-on.
+#[derive(Clone)]
+pub enum Flash {
+    /// The catalog's reference internal flash.
+    Stock,
+    /// A saved image of the catalog's stage-1 blocks.
+    Image(Vec<u8>),
+}
+
+/// The SD card's contents and options.
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct CardModel {
+pub struct CardInputs {
+    /// The card's name and bytes pairs, or none.
+    pub files: Vec<(String, Vec<u8>)>,
     /// Whether the card is inserted at power-on.
     pub present: bool,
     /// Whether the card's write-protect contact is asserted.
@@ -141,15 +108,88 @@ pub struct CardModel {
     pub transfer_ticks: Option<u64>,
     /// FAT geometry for a stock card, in place of the run's catalog layout.
     pub layout: Option<CardLayout>,
+    /// The modeled SD host's initialization fault, as the device model names
+    /// it; none otherwise.
+    pub initialization_fault: Option<serde_json::Value>,
 }
 
-impl Default for CardModel {
+impl Default for CardInputs {
     fn default() -> Self {
         Self {
+            files: Vec::new(),
             present: true,
             protected: false,
             transfer_ticks: None,
             layout: None,
+            initialization_fault: None,
+        }
+    }
+}
+
+/// One camera to open.
+#[derive(Clone)]
+pub struct Request {
+    /// Catalog firmware identity, for example x70-110.
+    pub firmware: String,
+    /// Where the firmware's update and boot ROM come from.
+    pub files: FirmwareInput,
+    /// Catalog overlays to resolve the camera's run with, in place of the
+    /// library profile's default overlay.
+    pub overlays: Vec<String>,
+    /// How the camera starts.
+    pub start: Start,
+    /// The internal flash it starts with.
+    pub flash: Flash,
+    /// Its SD card.
+    pub card: CardInputs,
+    pub policy: ExecutionPolicy,
+    /// Scheduler engine override; the run configuration's engine otherwise.
+    pub engine: Option<RunEngine>,
+    /// Whether the open may restore a saved boot and keep a new one.
+    pub cache: BootCache,
+    /// Run the camera to REC before returning. When false, the open applies
+    /// the boot holds and returns before the first instruction; the caller
+    /// runs the session and calls [`Opened::release_holds`]. The boot cache is
+    /// not used either way.
+    pub run_to_rec: bool,
+    /// A saved internal-flash image, restored before the first instruction.
+    pub nand_image: Option<Vec<u8>>,
+    /// External face detector results, in place of the run's passive face
+    /// bank: a declared result the guest's own detector start consumes.
+    pub face_result_profile: Option<RunFaceResultProfile>,
+    /// Internal flash and SD card kept from an earlier open, for a power-on.
+    pub kept: KeptMedia,
+}
+
+/// Media a request keeps from a camera's last use. Each part replaces what the
+/// open would otherwise build.
+#[derive(Clone, Default)]
+pub struct KeptMedia {
+    /// The medium the internal-flash controller last held.
+    pub nand: Option<Nand>,
+    /// The SD card's medium, including every file the camera wrote.
+    pub card: Option<Card>,
+}
+
+/// A power-on that keeps a camera's internal flash and SD card.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct PowerOn {
+    /// Hold this catalog power-on combination from power-on.
+    pub hold: Option<String>,
+    /// Put the open's card files on a fresh card instead of the one the camera
+    /// had.
+    pub fresh_card: bool,
+    /// Run to REC before returning; otherwise stop before the first
+    /// instruction with the boot holds applied.
+    pub run_to_rec: bool,
+}
+
+impl Default for PowerOn {
+    fn default() -> Self {
+        Self {
+            hold: None,
+            fresh_card: false,
+            run_to_rec: true,
         }
     }
 }
@@ -163,40 +203,6 @@ pub enum BootCache {
     Bypass,
 }
 
-/// The last boot stage a camera reached.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum Stage {
-    /// The boot ROM ran, or the camera could not start it.
-    BootRom,
-    /// The stock firmware started but did not present REC.
-    FirmwareLoaded,
-    /// The boot ROM handed off to the SD card's loader.
-    SdLoader,
-    /// The card's stage 3 applied the firmware patch and the stock firmware
-    /// started from RAM.
-    FujiModApplied,
-    /// The firmware loaded and presented its REC user interface.
-    Rec,
-}
-
-impl Stage {
-    pub fn name(self) -> &'static str {
-        match self {
-            Self::BootRom => "boot ROM",
-            Self::FirmwareLoaded => "firmware loaded",
-            Self::SdLoader => "SD loader",
-            Self::FujiModApplied => "FujiMod applied",
-            Self::Rec => "REC",
-        }
-    }
-}
-
-impl fmt::Display for Stage {
-    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        formatter.write_str(self.name())
-    }
-}
-
 /// Opening stopped before REC.
 #[derive(Debug)]
 pub struct OpenError {
@@ -206,7 +212,7 @@ pub struct OpenError {
 }
 
 impl OpenError {
-    pub(crate) fn at(stage: Stage, detail: impl Into<String>) -> Self {
+    pub fn at(stage: Stage, detail: impl Into<String>) -> Self {
         Self {
             stage,
             detail: detail.into(),
@@ -237,28 +243,24 @@ impl From<LibraryError> for OpenError {
 pub struct Opened {
     pub camera: Camera,
     pub firmware: String,
-    pub boot: Boot,
+    pub start: Start,
     pub policy: ExecutionPolicy,
     pub engine: RunEngine,
     /// The boot stage the camera reached: `Stage::Rec` after a boot, or
-    /// `Stage::BootRom` from `open_unbooted`. An SD card boot that reached REC
-    /// has necessarily passed `Stage::FujiModApplied`.
+    /// `Stage::BootRom` from `open_unbooted`.
     pub stage: Stage,
-    pub card_files: Vec<(String, PathBuf)>,
+    /// Every file on the card.
+    pub card_files: Vec<(String, Vec<u8>)>,
     /// The catalog resolution the camera was built from.
     pub resolved: ResolvedConfiguration,
-    /// The release tag when the boot used the release card.
-    pub release: Option<String>,
     /// Whether the camera was restored from the boot cache instead of booted.
     pub cached: bool,
-    /// The controls the boot holds from power-on.
+    /// The controls the start holds from power-on.
     pub holds: BootHolds,
     /// Whether the holds are applied and not yet released.
     holds_applied: bool,
     /// The request that opened the camera, for a later power-on.
     request: Request,
-    /// The SD card source this camera boots from when its controls are held.
-    card_source: Option<CardSource>,
 }
 
 impl Opened {
@@ -303,8 +305,13 @@ impl Opened {
 
     /// Power the camera off and on again, keeping its internal flash and the
     /// SD card it last had. The new session starts from those media instead of
-    /// the catalog's reference flash and the boot source's fresh card.
-    pub fn power_on(&self, library: &Library, options: PowerOn) -> Result<Opened, OpenError> {
+    /// the catalog's reference flash and the request's card files.
+    pub fn power_on(
+        &self,
+        library: &Library,
+        state: &StateDir,
+        options: PowerOn,
+    ) -> Result<Opened, OpenError> {
         let nand = self.camera.session.nand_medium("nand").map_err(|error| {
             OpenError::at(
                 Stage::BootRom,
@@ -316,28 +323,21 @@ impl Opened {
         } else {
             Some(self.card_medium()?)
         };
-        let boot = if options.hold_controls {
-            let source = self.card_source.as_ref().ok_or_else(|| {
-                OpenError::at(
-                    Stage::BootRom,
-                    "this boot has no SD card source to hold the card's boot controls",
-                )
-            })?;
-            Boot::SdCard(source.clone())
-        } else {
-            Boot::Stock
+        let start = match &options.hold {
+            Some(combination) => Start::Held {
+                combination: combination.clone(),
+            },
+            None => Start::Rom,
         };
         let mut request = self.request.clone();
-        request.boot = boot;
+        request.start = start;
         request.run_to_rec = options.run_to_rec;
         request.cache = BootCache::Bypass;
-        request.card_source = self.card_source.clone();
-        request.image = None;
         request.kept = KeptMedia {
             nand: Some(nand),
             card,
         };
-        open(library, request)
+        open(library, state, request)
     }
 
     /// The SD card medium the camera currently holds.
@@ -359,7 +359,7 @@ impl Opened {
     }
 }
 
-/// The controls a boot holds from power-on, and what releasing them needs.
+/// The controls a start holds from power-on, and what releasing them needs.
 #[derive(Clone)]
 pub struct BootHolds {
     resolved: ResolvedConfiguration,
@@ -368,7 +368,7 @@ pub struct BootHolds {
 }
 
 impl BootHolds {
-    /// The catalog ids of the controls the boot holds.
+    /// The catalog ids of the controls the start holds.
     pub fn controls(&self) -> impl Iterator<Item = &str> {
         self.holds.iter().map(|hold| hold.id.as_str())
     }
@@ -381,24 +381,18 @@ impl BootHolds {
 
 /// Open a camera and run it to REC or its first-start setup. A request with
 /// `run_to_rec` false builds it and applies its boot holds instead.
-pub fn open(library: &Library, request: Request) -> Result<Opened, OpenError> {
+pub fn open(library: &Library, state: &StateDir, request: Request) -> Result<Opened, OpenError> {
     let resolved = resolve(library, &request)?;
-    if !request.card.present && matches!(request.boot, Boot::SdCard(_) | Boot::AutomaticBoot(_)) {
+    if !request.card.present && matches!(request.start, Start::Held { .. }) {
         return Err(OpenError::at(
             Stage::BootRom,
-            "an SD card boot needs the card present",
+            "a held power-on needs the card present",
         ));
     }
-    if request.image.is_some() && !matches!(request.boot, Boot::Stock) {
+    if matches!(request.start, Start::Loader(_)) && !matches!(request.flash, Flash::Stock) {
         return Err(OpenError::at(
             Stage::BootRom,
-            "a RAM image starts at the loader; use a stock boot",
-        ));
-    }
-    if request.card.layout.is_some() && !matches!(request.boot, Boot::Stock) {
-        return Err(OpenError::at(
-            Stage::BootRom,
-            "a card layout applies only to a stock SD card boot",
+            "a RAM image starts at the loader from the catalog's flash",
         ));
     }
     if request.card.layout.is_some() && !request.card.present {
@@ -411,7 +405,7 @@ pub fn open(library: &Library, request: Request) -> Result<Opened, OpenError> {
         return open_held(library, request, resolved);
     }
     let key = match request.cache {
-        BootCache::Reuse => Some(crate::cache::Key::new(library, &request, &resolved)?),
+        BootCache::Reuse => Some(crate::cache::Key::new(state, &request, &resolved)?),
         BootCache::Bypass => None,
     };
     if let Some(key) = &key
@@ -419,11 +413,7 @@ pub fn open(library: &Library, request: Request) -> Result<Opened, OpenError> {
     {
         return Ok(opened);
     }
-    let opened = if matches!(request.boot, Boot::AutomaticBoot(_)) {
-        open_automatic(library, request, resolved)?
-    } else {
-        open_booted(library, request, resolved)?
-    };
+    let opened = open_booted(library, request, resolved)?;
     if let Some(key) = &key {
         crate::cache::save(&opened, key);
     }
@@ -436,12 +426,6 @@ fn open_held(
     request: Request,
     resolved: ResolvedConfiguration,
 ) -> Result<Opened, OpenError> {
-    if matches!(request.boot, Boot::AutomaticBoot(_)) {
-        return Err(OpenError::at(
-            Stage::BootRom,
-            "an automatic boot runs the card's installer and cannot stop before REC",
-        ));
-    }
     let mut opened = construct(library, request, resolved)?;
     opened.apply_holds()?;
     Ok(opened)
@@ -452,11 +436,28 @@ fn open_held(
 fn resolve(library: &Library, request: &Request) -> Result<ResolvedConfiguration, OpenError> {
     fujimod_emulator_exr2_board::register_board_builder();
     fujimod_emulator_models::register();
-    let mut resolved = library.resolved(&request.firmware)?;
+    let mut resolved = if request.overlays.is_empty() {
+        library.resolved(&request.firmware)?
+    } else {
+        let configuration_id = library.camera_configuration_id(&request.firmware)?;
+        let mut overlays = library.camera_overlays(&request.firmware)?;
+        overlays.extend(request.overlays.iter().cloned());
+        ResolvedConfiguration::with_overlays(&configuration_id, &overlays)
+            .map_err(|error| OpenError::at(Stage::BootRom, error))?
+    };
     if let Some(engine) = request.engine {
         resolved
             .override_engine(engine)
             .map_err(|error| OpenError::at(Stage::BootRom, error))?;
+    }
+    if let Some(profile) = request.face_result_profile.clone() {
+        let preset = resolved.configuration.preset.as_mut().ok_or_else(|| {
+            OpenError::at(
+                Stage::BootRom,
+                "a face result profile needs a run configuration with a preset",
+            )
+        })?;
+        preset.factory_options.face_result_profile = Some(profile);
     }
     Ok(resolved)
 }
@@ -471,34 +472,32 @@ fn open_booted(
     Ok(opened)
 }
 
-/// The controls a boot holds from power-on, from the catalog's boot entry.
+/// The controls a start holds from power-on, from the catalog's boot entry.
 fn boot_holds(
-    boot: &Boot,
+    start: &Start,
     resolved: &ResolvedConfiguration,
 ) -> Result<Vec<fujimod_catalog_controls::BootHold>, OpenError> {
-    match boot {
-        Boot::Stock | Boot::AutomaticBoot(_) => Ok(Vec::new()),
-        Boot::SdCard(_) => sd_holds(resolved),
+    match start {
+        Start::Rom | Start::Loader(_) => Ok(Vec::new()),
+        Start::Held { combination } => combination_holds(combination, resolved),
     }
 }
 
 /// Run a constructed camera to REC, holding and releasing its controls around it.
 fn boot_camera(opened: &mut Opened) -> Result<(), OpenError> {
-    let before = release_attempt(&opened.camera.session, &opened.firmware);
     opened.apply_holds()?;
-    let card_before = card_revision(&opened.camera.session, &opened.boot);
+    let card_before = card_revision(&opened.camera.session, &opened.start);
     let report = boot::to_rec(&mut opened.camera.session, INSTRUCTION_LIMIT)
         .map_err(|error| OpenError::at(Stage::BootRom, error))?;
     if report.status == "rec" && !report.pending && report.scanout_instance.is_some() {
         opened.release_holds()?;
         opened.stage = Stage::Rec;
-        confirm_release(opened, before)?;
         return Ok(());
     }
     let stage = reached_stage(
         &opened.camera.session,
         &opened.resolved,
-        &opened.boot,
+        &opened.start,
         card_before,
         &report,
     );
@@ -522,258 +521,6 @@ fn boot_camera(opened: &mut Opened) -> Result<(), OpenError> {
     ))
 }
 
-/// Wait for FujiMod's runtime to confirm the release this boot applied. A
-/// card without a FujiMod release, or one already confirmed, needs nothing.
-fn confirm_release(opened: &mut Opened, before: Option<u64>) -> Result<(), OpenError> {
-    let Some(state) = release_state(&opened.camera.session, &opened.firmware) else {
-        return Ok(());
-    };
-    let last = state.get("last_boot");
-    let attempt = last
-        .and_then(|last| last.get("attempt"))
-        .and_then(Value::as_u64);
-    let result = last
-        .and_then(|last| last.get("result"))
-        .and_then(Value::as_str);
-    // A card the boot never touched keeps the previous boot's confirmation.
-    if result != Some("running") && attempt == before {
-        return Ok(());
-    }
-    let quantum = opened.camera.quantum;
-    let mut spent = 0u64;
-    while spent < CONFIRM_INSTRUCTION_LIMIT {
-        let state = release_state(&opened.camera.session, &opened.firmware);
-        let last = state.as_ref().and_then(|state| state.get("last_boot"));
-        if let Some(result) = last
-            .and_then(|last| last.get("result"))
-            .and_then(Value::as_str)
-        {
-            if result == "confirmed" {
-                return Ok(());
-            }
-            if result != "running" {
-                return Err(OpenError::at(
-                    Stage::Rec,
-                    format!("the release ended as {result}"),
-                ));
-            }
-        }
-        let window = CONFIRM_WINDOW.min(CONFIRM_INSTRUCTION_LIMIT - spent);
-        opened
-            .camera
-            .session
-            .run_with_limits(window, quantum, None, None)
-            .map_err(|error| OpenError::at(Stage::Rec, error))?;
-        spent += window;
-    }
-    Err(OpenError::at(
-        Stage::Rec,
-        format!("the release did not confirm within {CONFIRM_INSTRUCTION_LIMIT} instructions"),
-    ))
-}
-
-/// The attempt number the card's release state names, if any.
-fn release_attempt(session: &Session, firmware: &str) -> Option<u64> {
-    release_state(session, firmware)?
-        .get("last_boot")?
-        .get("attempt")?
-        .as_u64()
-}
-
-/// The release's persisted state, when the card has one.
-fn release_state(session: &Session, firmware: &str) -> Option<Value> {
-    let name = session.contacts.keys().next()?.clone();
-    let folder = release_folder(firmware);
-    let path = format!("FUJIMOD/SYSTEM/{folder}/STATE.JSN");
-    let bytes = session.card_read(&name, &path, None, 1 << 20).ok()?;
-    serde_json::from_slice(&bytes).ok()
-}
-
-/// The release's 8.3 directory under FUJIMOD/SYSTEM: the upper-case identity,
-/// or its hyphens removed when it is longer than eight characters.
-fn release_folder(firmware: &str) -> String {
-    let identity = firmware.to_ascii_uppercase();
-    if identity.len() <= 8 {
-        identity
-    } else {
-        identity.replace('-', "")
-    }
-}
-
-/// Open the installed automatic boot, creating its internal flash once with
-/// the card's own installer.
-fn open_automatic(
-    library: &Library,
-    request: Request,
-    resolved: ResolvedConfiguration,
-) -> Result<Opened, OpenError> {
-    let Boot::AutomaticBoot(source) = &request.boot else {
-        return Err(OpenError::at(Stage::BootRom, "not an automatic boot"));
-    };
-    let facts = library.nand_boot(&request.firmware)?;
-    let contents = card_contents(library, &request.firmware, source)?;
-    let key = automatic_key(&request.firmware, &contents);
-    let directory = library
-        .path()
-        .join(crate::library::AUTOMATIC_DIRECTORY)
-        .join(&request.firmware);
-    let flash = directory.join(format!("{key}.flash"));
-    let kept = match fs::read(&flash) {
-        Ok(bytes) => bytes,
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
-            let installed =
-                install_automatic(library, &request, &contents, facts, resolved.clone())?;
-            fs::create_dir_all(&directory)
-                .map_err(|error| OpenError::at(Stage::Rec, error.to_string()))?;
-            fs::write(&flash, &installed)
-                .map_err(|error| OpenError::at(Stage::Rec, error.to_string()))?;
-            installed
-        }
-        Err(error) => {
-            return Err(OpenError::at(
-                Stage::BootRom,
-                format!("{}: {error}", flash.display()),
-            ));
-        }
-    };
-    let mut opened = construct(library, request, resolved)?;
-    automatic::write_kept_flash(opened.session_mut(), facts, &kept)?;
-    boot_camera(&mut opened)?;
-    fujimod_resident(&opened, facts.load_range.address)?;
-    Ok(opened)
-}
-
-/// Boot the card through the body's SD holds and let its installer write the
-/// stage-1 blocks, returning the blocks it kept.
-fn install_automatic(
-    library: &Library,
-    request: &Request,
-    contents: &[(String, Vec<u8>)],
-    facts: &fujimod_catalog::nand_boot::FirmwareNandBoot,
-    resolved: ResolvedConfiguration,
-) -> Result<Vec<u8>, OpenError> {
-    let mut installer = request.clone();
-    installer.boot = Boot::SdCard(CardSource::Files(automatic::stock_menus(contents)?));
-    installer.cache = BootCache::Bypass;
-    let mut installer = construct(library, installer, resolved)?;
-    boot_camera(&mut installer)?;
-    automatic::install(&mut installer, facts)
-}
-
-/// The `fujimod-remote` facts for a resolved camera: the menu, control and
-/// readiness tables a remote reads.
-pub fn remote_facts(resolved: &ResolvedConfiguration) -> Result<Facts, String> {
-    let selection = &resolved.reference;
-    let input = Selection {
-        firmware_id: &selection.firmware.id,
-        body_id: &selection.body.id,
-        firmware_sha256: selection
-            .firmware
-            .update
-            .as_ref()
-            .map(|content| content.sha256.as_str()),
-        remote_facts: selection
-            .firmware
-            .generated_facts
-            .as_ref()
-            .and_then(|facts| facts.remote.as_ref()),
-        physical_controls: selection.physical_controls.as_ref(),
-        control_ids: selection.control_ids.as_ref(),
-        connections: selection
-            .body
-            .connections
-            .iter()
-            .map(|connection| connection.id.as_str())
-            .collect(),
-    };
-    Facts::from_selection(&input, None)
-}
-
-/// How `fujimod-remote` reads this session's screen and completed frames.
-pub fn remote_options(
-    session: &Session,
-    quantum: usize,
-) -> Result<fujimod_remote::board::Options, String> {
-    Ok(fujimod_remote::board::Options {
-        quantum,
-        window_instructions: 100_000,
-        scanout_node: boot::scanout_node(session)?,
-        output: "lcd".into(),
-        // The EXR II display-timing model counts completed LCD frames here.
-        frame_counter_kind: "display-timing".into(),
-        frame_counter_pointer: "/0/banks/1/frames".into(),
-    })
-}
-
-/// Every file on a card source, sorted by its name.
-pub(crate) fn card_contents(
-    library: &Library,
-    firmware: &str,
-    source: &CardSource,
-) -> Result<Vec<(String, Vec<u8>)>, OpenError> {
-    let mut files = match source {
-        CardSource::Release => {
-            let directory = library.release_card(firmware)?;
-            read_files(&directory_files(&directory)?)?
-        }
-        CardSource::Directory(directory) => read_files(&directory_files(directory)?)?,
-        CardSource::Files(files) => files.clone(),
-    };
-    files.sort_by(|left, right| left.0.cmp(&right.0));
-    Ok(files)
-}
-
-/// Hash the firmware and the card's names and bytes, so a changed card gets
-/// its own installed flash.
-fn automatic_key(firmware: &str, contents: &[(String, Vec<u8>)]) -> String {
-    let mut hash = Sha256::new();
-    hash.update(firmware.as_bytes());
-    for (name, bytes) in contents {
-        hash.update([0]);
-        hash.update(name.as_bytes());
-        hash.update([0]);
-        hash.update(bytes);
-    }
-    format!("{:x}", hash.finalize())
-}
-
-fn read_files(files: &[(String, PathBuf)]) -> Result<Vec<(String, Vec<u8>)>, OpenError> {
-    files
-        .iter()
-        .map(|(name, path)| {
-            fs::read(path)
-                .map(|bytes| (name.clone(), bytes))
-                .map_err(|error| {
-                    OpenError::at(Stage::BootRom, format!("{}: {error}", path.display()))
-                })
-        })
-        .collect()
-}
-
-/// The FujiMod stage-2 loader carries its own UI strings; finding one proves
-/// FujiMod is resident rather than the stock firmware.
-fn fujimod_resident(opened: &Opened, start: u64) -> Result<(), OpenError> {
-    const MARKER: &[u8] = b"FUJIMOD SET-UP";
-    const BYTES: u64 = 1 << 24;
-    const CHUNK: u64 = 1 << 20;
-    let mut chunk = vec![0u8; CHUNK as usize];
-    for base in (start..start + BYTES).step_by(CHUNK as usize) {
-        if opened
-            .session()
-            .board
-            .read_physical(base, &mut chunk)
-            .is_ok()
-            && chunk.windows(MARKER.len()).any(|window| window == MARKER)
-        {
-            return Ok(());
-        }
-    }
-    Err(OpenError::at(
-        Stage::Rec,
-        "FujiMod is not resident after the automatic boot",
-    ))
-}
-
 /// Build a camera's board and media without running its guest. A checkpoint
 /// restores into the session this returns, built from the same catalog facts
 /// the boot would use.
@@ -790,18 +537,19 @@ pub(crate) fn construct(
     let opened_request = request.clone();
     let Request {
         firmware,
-        boot,
-        policy,
-        cache: _,
-        engine: _,
-        card_files,
-        run_to_rec: _,
+        files,
+        overlays: _,
+        start,
+        flash,
         card,
+        policy,
+        engine: _,
+        cache: _,
+        run_to_rec: _,
+        nand_image,
+        face_result_profile: _,
         kept,
-        card_source,
-        image,
     } = request;
-    let card_source = boot.card_source().cloned().or(card_source);
     let engine = resolved
         .configuration
         .execution
@@ -812,28 +560,22 @@ pub(crate) fn construct(
             )
         })?
         .engine;
-    let (boot_card_files, release) = match &boot {
-        Boot::Stock => (Vec::new(), None),
-        Boot::SdCard(source) | Boot::AutomaticBoot(source) => {
-            source_card_files(library, &firmware, source)?
-        }
-    };
-    let update = library.update(&firmware)?;
-    let boot_rom = library.boot_rom(&firmware)?;
+    let files = firmware_files(library, &firmware, &files)?;
     let camera_directory = camera_directory(library, &resolved)?;
     let mut camera = boot::open_request(
         resolved.clone(),
         boot::Request {
-            update,
-            boot_rom: Some(boot_rom),
+            update: files.update,
+            boot_rom: Some(files.boot_rom),
             nand: None,
             settings: None,
             camera: camera_directory,
             application_plan: None,
-            card_files: boot_card_files,
+            card_files: Vec::new(),
             discovery: false,
             sd_card_transfer_ticks: card.transfer_ticks,
             card_layout: card.layout.clone(),
+            card_initialization_fault: card.initialization_fault.clone(),
         },
     )
     .map_err(|error| OpenError::at(Stage::BootRom, error))?;
@@ -842,41 +584,104 @@ pub(crate) fn construct(
         .board
         .set_execution_policy(policy)
         .map_err(|error| OpenError::at(Stage::BootRom, error))?;
-    if let Boot::SdCard(CardSource::Files(files)) | Boot::AutomaticBoot(CardSource::Files(files)) =
-        &boot
-    {
-        install_files(&mut camera.session, files)?;
-    }
-    if !card_files.is_empty() {
-        boot::media::attach(&mut camera.session, None, &card_files)
+    install_files(&mut camera.session, &card.files)?;
+    if let Some(bytes) = nand_image.as_ref() {
+        let medium = camera
+            .session
+            .nand_medium("nand")
             .map_err(|error| OpenError::at(Stage::BootRom, error))?;
+        let restored = medium.restore_committed(bytes).map_err(|error| {
+            OpenError::at(Stage::BootRom, format!("saved internal flash: {error}"))
+        })?;
+        camera.session.retain_nand("nand", restored).map_err(|error| {
+            OpenError::at(Stage::BootRom, format!("saved internal flash: {error}"))
+        })?;
     }
+    // A power-on's kept medium replaces the flash this request would build.
     apply_kept_media(&mut camera.session, kept)?;
-    apply_card_contacts(&mut camera.session, card)?;
-    if let Some(image) = image {
+    if let Flash::Image(bytes) = &flash {
+        flash::write(&mut camera.session, library.nand_boot(&firmware)?, bytes)?;
+    }
+    apply_card_contacts(&mut camera.session, &card)?;
+    if let Start::Loader(image) = start.clone() {
         place_loader_image(&mut camera.session, image)?;
     }
     let holds = BootHolds {
         resolved: resolved.clone(),
-        holds: boot_holds(&boot, &resolved)?,
+        holds: boot_holds(&start, &resolved)?,
         ticks_per_second: camera.ticks_per_second,
     };
     Ok(Opened {
         camera,
         firmware,
-        boot,
+        start,
         policy,
         engine,
         stage: Stage::BootRom,
-        card_files,
-        release,
+        card_files: card.files,
         resolved,
         cached: false,
         holds,
         holds_applied: false,
         request: opened_request,
-        card_source,
     })
+}
+
+/// The catalog-named files a request's firmware resolves to, hashed once.
+fn firmware_files(
+    library: &Library,
+    firmware: &str,
+    input: &FirmwareInput,
+) -> Result<FirmwareFiles, OpenError> {
+    match input {
+        FirmwareInput::Library => Ok(library.files(firmware)?),
+        FirmwareInput::Files { update, boot_rom } => {
+            let catalog = library.firmware(firmware)?;
+            let update_sha256 = confirm(update, firmware, "stock update", catalog)?;
+            let boot_rom_sha256 = confirm(boot_rom, firmware, "boot ROM", catalog)?;
+            Ok(FirmwareFiles {
+                update: update.clone(),
+                update_sha256,
+                boot_rom: boot_rom.clone(),
+                boot_rom_sha256,
+            })
+        }
+    }
+}
+
+/// Read one explicit file and confirm it is the catalog's entry.
+fn confirm(
+    path: &Path,
+    firmware: &str,
+    kind: &'static str,
+    catalog: &fujimod_catalog::Firmware,
+) -> Result<String, OpenError> {
+    let expected = match kind {
+        "stock update" => catalog.update.as_ref().map(|update| update.sha256.as_str()),
+        _ => catalog
+            .boot_rom
+            .as_ref()
+            .map(|rom| rom.content.sha256.as_str()),
+    }
+    .ok_or_else(|| {
+        OpenError::at(
+            Stage::BootRom,
+            format!("firmware {firmware} has no {kind} identity"),
+        )
+    })?;
+    let bytes = fs::read(path)
+        .map_err(|error| OpenError::at(Stage::BootRom, format!("{}: {error}", path.display())))?;
+    let sha256 = format!("{:x}", Sha256::digest(&bytes));
+    if sha256 != expected {
+        return Err(OpenError::at(
+            Stage::BootRom,
+            format!(
+                "{}: sha256 {sha256} is not the catalog's {kind} for {firmware}",
+                path.display()
+            ),
+        ));
+    }
+    Ok(sha256)
 }
 
 /// Restore the media a power-on keeps: internal flash and the SD card medium.
@@ -921,7 +726,7 @@ fn place_loader_image(session: &mut Session, image: LoaderImage) -> Result<(), O
 
 /// Put the caller's card into the modeled slot: its presence and write
 /// protection, after every source has installed its files.
-fn apply_card_contacts(session: &mut Session, card: CardModel) -> Result<(), OpenError> {
+fn apply_card_contacts(session: &mut Session, card: &CardInputs) -> Result<(), OpenError> {
     if card.present && !card.protected {
         return Ok(());
     }
@@ -938,27 +743,6 @@ fn apply_card_contacts(session: &mut Session, card: CardModel) -> Result<(), Ope
         .map_err(|error| OpenError::at(Stage::BootRom, error))
 }
 
-/// The card files a source contributes and the release tag when it is published.
-fn source_card_files(
-    library: &Library,
-    firmware: &str,
-    source: &CardSource,
-) -> Result<(Vec<(String, PathBuf)>, Option<String>), OpenError> {
-    match source {
-        CardSource::Release => {
-            let directory = library.release_card(firmware)?;
-            let tag = directory
-                .parent()
-                .and_then(Path::file_name)
-                .and_then(|name| name.to_str())
-                .map(str::to_owned);
-            Ok((directory_files(&directory)?, tag))
-        }
-        CardSource::Directory(directory) => Ok((directory_files(directory)?, None)),
-        CardSource::Files(_) => Ok((Vec::new(), None)),
-    }
-}
-
 /// Release the boot holds and connect the controls the running firmware loads.
 fn finish_boot(
     session: &mut Session,
@@ -968,14 +752,18 @@ fn finish_boot(
 ) -> Result<(), OpenError> {
     if !holds.is_empty() {
         for hold in holds {
-            let position = session
+            let driver = session
                 .contact_driver
                 .as_ref()
-                .ok_or_else(|| OpenError::at(Stage::Rec, "boot holds lost the contact driver"))?
+                .ok_or_else(|| OpenError::at(Stage::Rec, "boot holds lost the contact driver"))?;
+            let control = driver
+                .hold_control(&hold.id)
+                .map_err(|error| OpenError::at(Stage::Rec, error))?;
+            let position = driver
                 .boot_release_position(&hold.id)
                 .map_err(|error| OpenError::at(Stage::Rec, error))?;
             session
-                .set_position(&hold.id, &position)
+                .set_position(&control, &position)
                 .map_err(|error| OpenError::at(Stage::Rec, error))?;
         }
         // The boot panel was compiled before the firmware's calibration existed;
@@ -988,10 +776,24 @@ fn finish_boot(
         .map_err(|error| OpenError::at(Stage::Rec, error))
 }
 
-/// The body controls document's boot.sd.hold list.
-fn sd_holds(
+/// The boot combination a name selects from the body's controls document.
+fn boot_mode(combination: &str) -> Result<BootMode, OpenError> {
+    serde_json::from_value(serde_json::Value::String(combination.to_owned())).map_err(|_| {
+        OpenError::at(
+            Stage::BootRom,
+            format!(
+                "unknown power-on combination {combination:?}; use sd, firmware_update or service"
+            ),
+        )
+    })
+}
+
+/// The body controls document's hold list for a named combination.
+fn combination_holds(
+    combination: &str,
     resolved: &ResolvedConfiguration,
 ) -> Result<Vec<fujimod_catalog_controls::BootHold>, OpenError> {
+    let mode = boot_mode(combination)?;
     let value = resolved
         .reference
         .physical_controls
@@ -1014,12 +816,12 @@ fn sd_holds(
             ),
         )
     })?;
-    let combination: &BootCombination = controls.boot.get(&BootMode::Sd).ok_or_else(|| {
+    let combination: &BootCombination = controls.boot.get(&mode).ok_or_else(|| {
         OpenError::at(
             Stage::BootRom,
             format!(
-                "body {} declares no boot.sd controls",
-                resolved.reference.body.id
+                "body {} declares no {} power-on controls",
+                resolved.reference.body.id, combination
             ),
         )
     })?;
@@ -1048,21 +850,25 @@ fn hold_boot_inputs(
         .configure_contact_driver(controls.confirmation)
         .map_err(|error| OpenError::at(Stage::BootRom, error))?;
     for hold in holds {
-        let position = session
+        let driver = session
             .contact_driver
             .as_ref()
-            .ok_or_else(|| OpenError::at(Stage::BootRom, "boot holds need the contact driver"))?
+            .ok_or_else(|| OpenError::at(Stage::BootRom, "boot holds need the contact driver"))?;
+        let control = driver
+            .hold_control(&hold.id)
+            .map_err(|error| OpenError::at(Stage::BootRom, error))?;
+        let position = driver
             .boot_position(&hold.id, hold.stage.as_deref())
             .map_err(|error| OpenError::at(Stage::BootRom, error))?;
         session
-            .set_position(&hold.id, &position)
+            .set_position(&control, &position)
             .map_err(|error| OpenError::at(Stage::BootRom, error))?;
     }
     Ok(())
 }
 
-fn card_revision(session: &Session, boot: &Boot) -> Option<u64> {
-    if matches!(boot, Boot::Stock) {
+fn card_revision(session: &Session, start: &Start) -> Option<u64> {
+    if !matches!(start, Start::Held { .. }) {
         return None;
     }
     let name = session.contacts.keys().next()?;
@@ -1075,22 +881,22 @@ fn card_revision(session: &Session, boot: &Boot) -> Option<u64> {
 fn reached_stage(
     session: &Session,
     resolved: &ResolvedConfiguration,
-    boot: &Boot,
+    start: &Start,
     card_before: Option<u64>,
     report: &boot::RecReport,
 ) -> Stage {
     if report.instructions == 0 {
         return Stage::BootRom;
     }
-    let sd = matches!(boot, Boot::SdCard(_) | Boot::AutomaticBoot(_));
-    if sd
+    let held = matches!(start, Start::Held { .. });
+    if held
         && let Some(before) = card_before
-        && card_revision(session, boot).is_some_and(|after| after != before)
+        && card_revision(session, start).is_some_and(|after| after != before)
     {
         return Stage::FujiModApplied;
     }
     let loaded = configuration_loaded(session, resolved);
-    if sd {
+    if held {
         return if loaded || report.ui_mode != u32::MAX {
             Stage::FujiModApplied
         } else {
@@ -1136,9 +942,8 @@ fn install_files(session: &mut Session, files: &[(String, Vec<u8>)]) -> Result<(
         .map_err(|error| OpenError::at(Stage::BootRom, error))
 }
 
-/// Every file under a directory, named by its path relative to it, as the
-/// files a boot adds to a card.
-pub fn directory_files(directory: &Path) -> Result<Vec<(String, PathBuf)>, OpenError> {
+/// Read every file under a directory, named by its path relative to it.
+pub fn directory_files(directory: &Path) -> Result<Vec<(String, Vec<u8>)>, OpenError> {
     let mut files = Vec::new();
     let mut pending = vec![directory.to_owned()];
     while let Some(next) = pending.pop() {
@@ -1151,18 +956,21 @@ pub fn directory_files(directory: &Path) -> Result<Vec<(String, PathBuf)>, OpenE
                 .path();
             if path.is_dir() {
                 pending.push(path);
-            } else {
-                let name = path
-                    .strip_prefix(directory)
-                    .map_err(|error| OpenError::at(Stage::BootRom, error.to_string()))?
-                    .to_str()
-                    .ok_or_else(|| OpenError::at(Stage::BootRom, "SD card file name is not UTF-8"))?
-                    .replace('\\', "/");
-                files.push((name, path));
+                continue;
             }
+            let name = path
+                .strip_prefix(directory)
+                .map_err(|error| OpenError::at(Stage::BootRom, error.to_string()))?
+                .to_str()
+                .ok_or_else(|| OpenError::at(Stage::BootRom, "SD card file name is not UTF-8"))?
+                .replace('\\', "/");
+            let bytes = fs::read(&path).map_err(|error| {
+                OpenError::at(Stage::BootRom, format!("{}: {error}", path.display()))
+            })?;
+            files.push((name, bytes));
         }
     }
-    files.sort();
+    files.sort_by(|left, right| left.0.cmp(&right.0));
     if files.is_empty() {
         return Err(OpenError::at(
             Stage::BootRom,
@@ -1191,4 +999,49 @@ fn camera_directory(
         .camera(&resolved.reference.body.id, &camera)
         .map(Some)
         .map_err(OpenError::from)
+}
+
+/// The `fujimod-remote` facts for a resolved camera: the menu, control and
+/// readiness tables a remote reads.
+pub fn remote_facts(resolved: &ResolvedConfiguration) -> Result<Facts, String> {
+    let selection = &resolved.reference;
+    let input = Selection {
+        firmware_id: &selection.firmware.id,
+        body_id: &selection.body.id,
+        firmware_sha256: selection
+            .firmware
+            .update
+            .as_ref()
+            .map(|content| content.sha256.as_str()),
+        remote_facts: selection
+            .firmware
+            .generated_facts
+            .as_ref()
+            .and_then(|facts| facts.remote.as_ref()),
+        physical_controls: selection.physical_controls.as_ref(),
+        control_ids: selection.control_ids.as_ref(),
+        connections: selection
+            .body
+            .connections
+            .iter()
+            .map(|connection| connection.id.as_str())
+            .collect(),
+    };
+    Facts::from_selection(&input, None)
+}
+
+/// How `fujimod-remote` reads this session's screen and completed frames.
+pub fn remote_options(
+    session: &Session,
+    quantum: usize,
+) -> Result<fujimod_remote::board::Options, String> {
+    Ok(fujimod_remote::board::Options {
+        quantum,
+        window_instructions: 100_000,
+        scanout_node: boot::scanout_node(session)?,
+        output: "lcd".into(),
+        // The EXR II display-timing model counts completed LCD frames here.
+        frame_counter_kind: "display-timing".into(),
+        frame_counter_pointer: "/0/banks/1/frames".into(),
+    })
 }

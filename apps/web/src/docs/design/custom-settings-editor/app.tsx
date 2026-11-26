@@ -56,12 +56,23 @@ const SETTINGS_KEYS: Partial<Record<CameraKey, string>> = {
  * camera's keys. `connect` receives the app's key input for another page's
  * keys; `film` starts with the film editor open; `keys: false` leaves the
  * on-screen keys to that page. */
-export function CustomSettingsApp(props: { connect?: (send: (key: CameraKey) => void) => void; film?: boolean; keys?: boolean }) {
+export function CustomSettingsApp(props: {
+  connect?: (send: (key: CameraKey) => void) => void;
+  film?: boolean;
+  keys?: boolean;
+}) {
   /* The film editor as Fn opens it over a custom setting's film. */
   const opened = (recipe: EditorState) => {
     const name = FILMS[recipe.recipe.film].name;
     const base = baseFilm(FILM_BASE[name] ?? 0);
-    return initial({ film: base, opened: base, from: name, name: 'NEW FILM', area: 'rail', railOn: 'film' });
+    return initial({
+      film: base,
+      opened: base,
+      from: name,
+      name: 'NEW FILM',
+      area: 'rail',
+      railOn: 'film',
+    });
   };
   const [settings, setSettings] = createSignal<EditorState>(INITIAL);
   const [film, setFilm] = createSignal<FilmState>(props.film ? opened(INITIAL) : initial({}));
@@ -104,21 +115,40 @@ export function CustomSettingsApp(props: { connect?: (send: (key: CameraKey) => 
                 settings().focus === FILM_ROW ? (
                   <KeyHint glyph="Fn" label="EDIT FILM" tap={openFilm} />
                 ) : settings().focus === WB_ROW ? (
-                  <KeyHint glyph="Fn" label="WB SHIFT" tap={() => setSettings(onKey(settings(), 'Fn'))} />
+                  <KeyHint
+                    glyph="Fn"
+                    label="WB SHIFT"
+                    tap={() => setSettings(onKey(settings(), 'Fn'))}
+                  />
                 ) : undefined
               }
             />
           </div>
-          <div class="absolute inset-0" style={{ visibility: open() ? 'visible' : 'hidden', transition: `visibility 0s linear ${open() ? '0ms' : '460ms'}` }}>
-            <div class="absolute inset-0" style={{ opacity: open() ? 1 : 0, transition: 'opacity 300ms' }}>
+          <div
+            class="absolute inset-0"
+            style={{
+              visibility: open() ? 'visible' : 'hidden',
+              transition: `visibility 0s linear ${open() ? '0ms' : '460ms'}`,
+            }}
+          >
+            <div
+              class="absolute inset-0"
+              style={{ opacity: open() ? 1 : 0, transition: 'opacity 300ms' }}
+            >
               <Picture film={film().film} custom={film().custom} crop={film().crop} />
             </div>
             <FilmEditor
               s={film()}
               set={setFilm}
               histogram={histogram()}
-              column={{ transform: open() ? 'none' : `translateX(-${RAIL + SCROLLER}px)`, transition: `transform ${SPRING}` }}
-              chrome={{ opacity: open() ? 1 : 0, transition: `opacity 200ms ${open() ? '200ms' : '0ms'}` }}
+              column={{
+                transform: open() ? 'none' : `translateX(-${RAIL + SCROLLER}px)`,
+                transition: `transform ${SPRING}`,
+              }}
+              chrome={{
+                opacity: open() ? 1 : 0,
+                transition: `opacity 200ms ${open() ? '200ms' : '0ms'}`,
+              }}
             />
           </div>
         </CameraScreen>

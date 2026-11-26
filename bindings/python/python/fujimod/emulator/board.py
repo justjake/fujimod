@@ -62,7 +62,9 @@ def _json_object(value: object) -> dict[str, object]:
 class BoardState(dict[str, object]):
     """Diagnostic board state with direct complete-state equality."""
 
-    def __init__(self, diagnostic: dict[str, object], native: _native.emulator.BoardState) -> None:
+    def __init__(
+        self, diagnostic: dict[str, object], native: _native.emulator.BoardState
+    ) -> None:
         super().__init__(diagnostic)
         self._native = native
         self._complete: dict[str, object] | None = None
@@ -305,7 +307,9 @@ class Board:
             raise ValueError("overlays must contain unique catalog identities")
         update = cls._input_path(update, "update")
         boot_rom = None if boot_rom is None else cls._input_path(boot_rom, "boot_rom")
-        card_image = None if card_image is None else cls._input_path(card_image, "card_image")
+        card_image = (
+            None if card_image is None else cls._input_path(card_image, "card_image")
+        )
         scene = None if scene is None else cls._input_path(scene, "scene")
         if card_files is not None and not isinstance(card_files, Mapping):
             raise TypeError("card_files must map SD card file names to paths")
@@ -343,7 +347,9 @@ class Board:
             capability = bytes(capability_reply)
             if len(capability) != 20:
                 raise ValueError("capability_reply must contain 20 bytes")
-        if isinstance(preferred_languages, (str, bytes)) or not isinstance(preferred_languages, Sequence):
+        if isinstance(preferred_languages, (str, bytes)) or not isinstance(
+            preferred_languages, Sequence
+        ):
             raise TypeError("preferred_languages must be a sequence of BCP 47 tags")
         if any(not isinstance(tag, str) for tag in preferred_languages):
             raise TypeError("preferred_languages must contain strings")
@@ -355,12 +361,16 @@ class Board:
         if camera_settings is not None and not isinstance(camera_settings, Mapping):
             raise TypeError("camera_settings must map setting names to value names")
         selected_settings = dict(camera_settings or {})
-        if any(type(key) is not str or type(value) is not str or not key or not value
-               for key, value in selected_settings.items()):
-            raise TypeError("camera_settings must map nonempty strings to nonempty strings")
+        if any(
+            type(key) is not str or type(value) is not str or not key or not value
+            for key, value in selected_settings.items()
+        ):
+            raise TypeError(
+                "camera_settings must map nonempty strings to nonempty strings"
+            )
         native = _native.Board.from_inputs(
             configuration_id=configuration_id,
-            overlays=selected_overlays,
+            overlays=overlays,
             update=update,
             boot_rom=boot_rom,
             card_image=card_image,
@@ -400,8 +410,9 @@ class Board:
         cls,
         *,
         firmware: str,
-        boot: Literal["stock", "sd-card", "automatic-boot"] = "stock",
+        boot: Literal["stock", "sd-card", "autostart"] = "stock",
         sd_card: str | PathLike[str] | None = None,
+        sd_card_files: Mapping[str, bytes] | None = None,
         execution_policy: ExecutionPolicy = "exact",
         boot_cache: bool = True,
         run_to_rec: bool = True,
@@ -410,17 +421,31 @@ class Board:
         sd_card_transfer_ticks: int | None = None,
         card_layout: Mapping[str, object] | None = None,
         start: Literal["rom", "loader"] = "rom",
-        image: str | PathLike[str] | None = None,
+        image: str | PathLike[str] | bytes | None = None,
         image_sha256: str | None = None,
+        nand: bytes | None = None,
+        face_result_profile: str | None = None,
+        update: str | PathLike[str] | None = None,
+        boot_rom: str | PathLike[str] | None = None,
+        flash: str | PathLike[str] | None = None,
+        combination: str | None = None,
+        overlays: Sequence[str] = (),
+        sd_card_initialization_fault: Mapping[str, object] | str | None = None,
     ) -> Self:
         """Open a camera through the shared builder and return it at REC.
 
         The firmware's update, boot ROM and reference camera come from the
         directory named by FUJIMOD_FIRMWARE_LIBRARY, so the caller names only
-        the firmware. `boot` is `stock`, `sd-card` or
-        `automatic-boot`. `sd_card` names an SD card directory, or is the
-        current release card when it is omitted for the two card boots, or the
-        extra files of an otherwise empty card for a stock boot.
+        the firmware. `boot` is `stock`, `sd-card` or `autostart`. `sd_card`
+        names an SD card directory, or is the current release card when it is
+        omitted for the two card boots, or the extra files of an otherwise
+        empty card for a stock boot. `sd_card_files` gives the same files as a
+        name-to-bytes mapping, for a caller without a directory tree.
+        `update` and `boot_rom` name the two firmware files instead of the
+        library. `flash` starts from a saved internal-flash image, and
+        `combination` holds a catalog power-on combination (`sd`,
+        `firmware_update` or `service`); those, and a RAM image, open the
+        emulator layer, whose SD card is `sd_card` or `sd_card_files`.
         `execution_policy` is `exact` or `interactive`. `boot_cache`
         restores the library's saved boot when the same inputs were opened
         before and saves this one; `False` boots from scratch and saves
@@ -430,18 +455,30 @@ class Board:
         `sd_card_present` false models an empty slot, and
         `sd_card_write_protected` asserts the card's write-protect contact.
         `sd_card_transfer_ticks` replaces the catalog's guest ticks per SD
-        data transfer. `card_layout` declares the FAT geometry of a stock
-        SD card in place of the catalog's layout: `sectors`, `label`,
-        `partition_start` and `sectors_per_cluster`; it applies only to a
-        stock boot with the card present. `start="loader"` places a
+        data transfer. `card_layout` declares the FAT geometry of the SD
+        card in place of the catalog's layout: `sectors`, `label`,
+        `partition_start` and `sectors_per_cluster`; it needs the card
+        present. `start="loader"` places a
         caller-verified RAM image at address zero and starts the first core at
-        the native loader before any instruction runs; `image` names the
-        image and `image_sha256` its SHA-256. The boot ROM never runs for
-        such an open.
+        the native loader before any instruction runs; `image` is the image's
+        path, with `image_sha256`, or its bytes. The boot ROM never runs for
+        such an open. `nand` is a saved internal-flash image, laid over the
+        board's own medium before the first instruction (the bytes
+        `nand_medium(name).to_bytes()` returns). `face_result_profile` is
+        one of `empty`, `box64x20` or `box172x120`: external detector
+        results the guest's own start consumes in place of the passive face
+        bank.
+        `overlays` resolves the camera's run with those catalog overlays after
+        the library profile's own. `sd_card_initialization_fault`
+        models an SD host initialization fault as the device model names it,
+        such as `"reject_cmd8"` or
+        `{"reject_standby_cmd3_and_cmd8_once_after": 2}`.
         """
         firmware = cls._identifier(firmware, "firmware")
-        if boot not in ("stock", "sd-card", "automatic-boot"):
-            raise ValueError("boot must be 'stock', 'sd-card' or 'automatic-boot'")
+        if boot not in ("stock", "sd-card", "autostart"):
+            raise ValueError("boot must be 'stock', 'sd-card' or 'autostart'")
+        if (update is None) != (boot_rom is None):
+            raise ValueError("update and boot_rom are named together, or not at all")
         if execution_policy not in ("exact", "interactive"):
             raise ValueError("execution_policy must be 'exact' or 'interactive'")
         if type(boot_cache) is not bool:
@@ -475,31 +512,82 @@ class Board:
                     raise TypeError(f"card_layout {key} must be an integer")
             if type(selected_layout["label"]) is not str:
                 raise TypeError("card_layout label must be a string")
-            if boot != "stock":
-                raise ValueError("card_layout applies only to a stock SD card boot")
             if not sd_card_present:
                 raise ValueError("card_layout needs the card present")
             layout_text = json.dumps(selected_layout)
-        if not run_to_rec and boot == "automatic-boot":
-            raise ValueError("an automatic boot cannot stop before REC")
+        emulator_layer = (
+            flash is not None
+            or combination is not None
+            or image is not None
+        )
+        if emulator_layer and boot != "stock":
+            raise ValueError(
+                "flash, a combination and a RAM image open the emulator layer; boot must be 'stock'"
+            )
+        if not run_to_rec and boot == "autostart":
+            raise ValueError("an autostart open cannot stop before REC")
+        if emulator_layer and image is not None and combination is not None:
+            raise ValueError("a RAM image and a power-on combination are exclusive")
         if not sd_card_present and boot != "stock":
             raise ValueError("a card boot needs the card present")
         if start not in ("rom", "loader"):
             raise ValueError("start must be 'rom' or 'loader'")
-        if start == "loader" and (image is None or image_sha256 is None):
-            raise ValueError("start='loader' requires image and image_sha256")
+        if start == "loader" and image is None:
+            raise ValueError("start='loader' requires image")
         if start == "rom" and (image is not None or image_sha256 is not None):
             raise ValueError("image requires start='loader'")
         if image_sha256 is not None and (
             type(image_sha256) is not str or len(image_sha256) != 64
         ):
             raise ValueError("image_sha256 must be 64 hexadecimal characters")
+        if isinstance(overlays, (str, bytes)) or not isinstance(overlays, Sequence):
+            raise TypeError("overlays must be a sequence of catalog overlay IDs")
+        selected_overlays = list(overlays)
+        if any(type(overlay) is not str or not overlay for overlay in selected_overlays):
+            raise TypeError("overlays must be nonempty strings")
+        fault_text = None
+        if sd_card_initialization_fault is not None:
+            if isinstance(sd_card_initialization_fault, str):
+                fault_text = sd_card_initialization_fault
+            elif isinstance(sd_card_initialization_fault, Mapping):
+                fault_text = json.dumps(dict(sd_card_initialization_fault))
+            else:
+                raise TypeError(
+                    "sd_card_initialization_fault must be a mapping or JSON text"
+                )
         card = None if sd_card is None else cls._input_path(sd_card, "sd_card")
-        image_path = None if image is None else cls._input_path(image, "image")
+        if card is not None and sd_card_files is not None:
+            raise ValueError(
+                "name sd_card (a directory) or sd_card_files (their bytes), not both"
+            )
+        if sd_card_files is not None and not isinstance(sd_card_files, Mapping):
+            raise TypeError("sd_card_files must map SD card file names to bytes")
+        selected_files: dict[str, bytes] = {}
+        for name, data in (sd_card_files or {}).items():
+            if type(name) is not str or not name:
+                raise TypeError("sd_card_files keys must be nonempty strings")
+            if not isinstance(data, (bytes, bytearray, memoryview)):
+                raise TypeError("sd_card_files values must be bytes")
+            selected_files[name] = bytes(data)
+        image_path = None
+        image_contents = None
+        if image is not None:
+            if isinstance(image, (bytes, bytearray, memoryview)):
+                image_contents = bytes(image)
+            else:
+                image_path = cls._input_path(image, "image")
+        if image_path is not None and image_sha256 is None:
+            raise ValueError("start='loader' requires image_sha256 for an image path")
+        if image_contents is not None and image_sha256 is not None:
+            raise ValueError("image bytes carry their own SHA-256")
+        update_path = None if update is None else cls._input_path(update, "update")
+        boot_rom_path = None if boot_rom is None else cls._input_path(boot_rom, "boot_rom")
+        flash_path = None if flash is None else cls._input_path(flash, "flash")
         native = _native.Board.open_camera(
             firmware=firmware,
             boot=boot,
             sd_card=card,
+            sd_card_files=selected_files or None,
             execution_policy=execution_policy,
             boot_cache=boot_cache,
             run_to_rec=run_to_rec,
@@ -510,6 +598,15 @@ class Board:
             start=start,
             image=image_path,
             image_sha256=image_sha256,
+            image_bytes=image_contents,
+            nand=nand,
+            face_result_profile=face_result_profile,
+            update=update_path,
+            boot_rom=boot_rom_path,
+            flash=flash_path,
+            combination=combination,
+            overlays=selected_overlays,
+            sd_card_initialization_fault=fault_text,
         )
         quantum = native.boot_quantum
         if type(quantum) is not int or quantum < 1:
@@ -784,10 +881,14 @@ class Board:
             raise ValueError("at most 4096 physical memory ranges are supported")
         checked: list[tuple[int, int]] = []
         for row in ranges:
-            if not isinstance(row, Sequence) or isinstance(
-                row, (str, bytes, bytearray)
-            ) or len(row) != 2:
-                raise TypeError("each physical memory range must be an (address, size) pair")
+            if (
+                not isinstance(row, Sequence)
+                or isinstance(row, (str, bytes, bytearray))
+                or len(row) != 2
+            ):
+                raise TypeError(
+                    "each physical memory range must be an (address, size) pair"
+                )
             address, size = row
             self._validate_range(address, size)
             checked.append((address, size))
@@ -804,7 +905,8 @@ class Board:
         """Return the current diagnostic and complete modeled state."""
         self._ensure_open()
         return BoardState(
-            _json_object(json.loads(self._native.state())), self._native.complete_state()
+            _json_object(json.loads(self._native.state())),
+            self._native.complete_state(),
         )
 
     def complete_state_json(self) -> dict[str, object]:
@@ -892,7 +994,9 @@ class Session:
     def xp5_gpio_input(self, port: int, pin: int, high: bool) -> None:
         """Drive a physical input pad on an XP5 board."""
         if type(port) is not int or type(pin) is not int or type(high) is not bool:
-            raise TypeError("XP5 GPIO input needs an integer port/pin and boolean level")
+            raise TypeError(
+                "XP5 GPIO input needs an integer port/pin and boolean level"
+            )
         self._native_board().xp5_gpio_input(port, pin, high)
 
     def xp5_gpio_level(self, port: int, pin: int) -> bool:
@@ -903,8 +1007,14 @@ class Session:
 
     def xp5_key(self, at_ns: int, key: str, pressed: bool) -> None:
         """Queue a declared key-model edge at an absolute guest nanosecond."""
-        if type(at_ns) is not int or not 0 <= at_ns < 1 << 64 or type(pressed) is not bool:
-            raise TypeError("XP5 key edge needs an unsigned time and boolean pressed state")
+        if (
+            type(at_ns) is not int
+            or not 0 <= at_ns < 1 << 64
+            or type(pressed) is not bool
+        ):
+            raise TypeError(
+                "XP5 key edge needs an unsigned time and boolean pressed state"
+            )
         if not isinstance(key, str) or not key:
             raise TypeError("XP5 key must have a name")
         self._native_board().xp5_key(at_ns, key, pressed)
@@ -913,7 +1023,12 @@ class Session:
         """Queue a latched dial or switch position at an absolute guest nanosecond."""
         if type(at_ns) is not int or not 0 <= at_ns < 1 << 64:
             raise TypeError("XP5 position change needs an unsigned time")
-        if not isinstance(dial, str) or not dial or not isinstance(position, str) or not position:
+        if (
+            not isinstance(dial, str)
+            or not dial
+            or not isinstance(position, str)
+            or not position
+        ):
             raise TypeError("XP5 position change needs a dial name and a position name")
         self._native_board().xp5_set_position(at_ns, dial, position)
 
@@ -943,12 +1058,15 @@ class Session:
         if len(values) != 3:
             raise ValueError("gravity must contain three components")
         if any(
-            isinstance(value, bool) or not isinstance(value, (int, float))
+            isinstance(value, bool)
+            or not isinstance(value, (int, float))
             or not math.isfinite(value)
             for value in values
         ):
             raise ValueError("gravity components must be finite numbers")
-        self._native_board().set_gravity_g(self._node(node), [float(value) for value in values])
+        self._native_board().set_gravity_g(
+            self._node(node), [float(value) for value in values]
+        )
 
     def input_graph(self) -> dict[str, object]:
         """Return input-capable nodes and their checked graph mappings."""
@@ -1000,7 +1118,9 @@ class Session:
 
     def card_state(self, node: str) -> dict[str, object]:
         """Return the modeled SD card's contacts, capacity and faults."""
-        return _json_object(json.loads(self._native_board().card_state(self._node(node))))
+        return _json_object(
+            json.loads(self._native_board().card_state(self._node(node)))
+        )
 
     def set_position(self, control_id: str, position: str) -> None:
         """Set a named physical control to one of its declared positions."""
@@ -1070,9 +1190,7 @@ class Session:
         """Return a PNG screenshot for a catalog runtime after it has a frame."""
         return self._native_board().screenshot()
 
-    def set_image_rgb(
-        self, name: str, width: int, height: int, rgb: Buffer
-    ) -> None:
+    def set_image_rgb(self, name: str, width: int, height: int, rgb: Buffer) -> None:
         """Replace a named external RGB image without advancing guest time."""
         if type(width) is not int or not 1 <= width <= sys.maxsize:
             raise ValueError("width must be a positive host-sized integer")
@@ -1093,7 +1211,9 @@ class Session:
             raise ValueError("height must be a positive host-sized integer")
         payload = bytes(raw16)
         if len(payload) != width * height * 2:
-            raise ValueError("RAW input must contain exactly width * height U16 samples")
+            raise ValueError(
+                "RAW input must contain exactly width * height U16 samples"
+            )
         self._native_board().sensor_raw16(self._node(name), width, height, payload)
 
     def frame_state(self, node: str) -> dict[str, object]:

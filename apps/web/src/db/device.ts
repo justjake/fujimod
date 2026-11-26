@@ -10,7 +10,9 @@ export const device = sqliteTable(
       .references(() => user.id, { onDelete: 'cascade' }),
     name: text('name').notNull(),
     kind: text('kind', { enum: ['camera', 'sync_server'] }).notNull(),
-    status: text('status', { enum: ['active', 'revoked'] }).default('active').notNull(),
+    status: text('status', { enum: ['active', 'revoked'] })
+      .default('active')
+      .notNull(),
     createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
     lastSeenAt: integer('last_seen_at', { mode: 'timestamp_ms' }),
     revokedAt: integer('revoked_at', { mode: 'timestamp_ms' }),

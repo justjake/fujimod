@@ -4,10 +4,7 @@
   "id": "xp5",
   "cpu_model": "Cortex-A53",
   "runtime_abi": "armv8a-shared-v1",
-  "engines": [
-    "unicorn",
-    "hypervisor"
-  ],
+  "engines": ["unicorn", "hypervisor"],
   "instructions_per_tick": {
     "denominator": 1,
     "numerator": 1

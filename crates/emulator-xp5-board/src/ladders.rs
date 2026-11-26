@@ -253,12 +253,17 @@ impl Options {
                         return Err(format!("ladder register {register:#x} does not exist"));
                     }
                     if released > REGISTER_MAX {
-                        return Err(format!("register {register:#x} released value exceeds 10 bits"));
+                        return Err(format!(
+                            "register {register:#x} released value exceeds 10 bits"
+                        ));
                     }
                 }
                 _ => {}
             }
-            if self.ladders[..index].iter().any(|other| other.wire.same_line(ladder.wire)) {
+            if self.ladders[..index]
+                .iter()
+                .any(|other| other.wire.same_line(ladder.wire))
+            {
                 return Err(format!("{:?} is declared as two ladders", ladder.wire));
             }
             if ladder.rungs.is_empty() {
@@ -301,12 +306,18 @@ impl Options {
                         rung.key
                     ));
                 }
-                if bands.iter().any(|other| overlaps(*other, (rung.band_low, rung.band_high))) {
+                if bands
+                    .iter()
+                    .any(|other| overlaps(*other, (rung.band_low, rung.band_high)))
+                {
                     return Err(format!("{:?} band overlaps another rung", rung.key));
                 }
                 bands.push((rung.band_low, rung.band_high));
             }
-            let dial = ladder.wire.channel().and_then(|channel| self.dial_on(channel));
+            let dial = ladder
+                .wire
+                .channel()
+                .and_then(|channel| self.dial_on(channel));
             let mut decoded = BTreeSet::new();
             for set in &ladder.sets {
                 let name = format!("{:?} set {:?}+{:?}", ladder.wire, set.keys, set.position);
@@ -319,7 +330,9 @@ impl Options {
                     .iter()
                     .find(|key| !ladder.rungs.iter().any(|rung| rung.key == **key))
                 {
-                    return Err(format!("{name} names {key:?}, which has no rung on this ladder"));
+                    return Err(format!(
+                        "{name} names {key:?}, which has no rung on this ladder"
+                    ));
                 }
                 match &set.position {
                     None if members.len() < 2 => {
@@ -348,17 +361,25 @@ impl Options {
                 {
                     return Err(format!("{name} band holds the released value"));
                 }
-                if bands.iter().any(|other| overlaps(*other, (set.band_low, set.band_high))) {
+                if bands
+                    .iter()
+                    .any(|other| overlaps(*other, (set.band_low, set.band_high)))
+                {
                     return Err(format!("{name} band overlaps another band"));
                 }
                 bands.push((set.band_low, set.band_high));
-                if !decoded.insert((set.keys.iter().copied().collect::<BTreeSet<_>>(), set.position.clone())) {
+                if !decoded.insert((
+                    set.keys.iter().copied().collect::<BTreeSet<_>>(),
+                    set.position.clone(),
+                )) {
                     return Err(format!("{name} is declared twice"));
                 }
             }
             if let Some(dial) = dial
                 && let Some(position) = dial.positions.iter().find(|position| {
-                    bands.iter().any(|other| overlaps(*other, (position.band_low, position.band_high)))
+                    bands
+                        .iter()
+                        .any(|other| overlaps(*other, (position.band_low, position.band_high)))
                 })
             {
                 return Err(format!(
@@ -376,7 +397,10 @@ impl Options {
                 }
             }
             if dial.channel >= ADC_CHANNELS {
-                return Err(format!("{} dial channel {} does not exist", dial.name, dial.channel));
+                return Err(format!(
+                    "{} dial channel {} does not exist",
+                    dial.name, dial.channel
+                ));
             }
             if !channels.insert(dial.channel) {
                 return Err(format!("ADC channel {} carries two dials", dial.channel));
@@ -389,7 +413,12 @@ impl Options {
                 .iter()
                 .any(|ladder| ladder.wire.channel() == Some(dial.channel));
             for (index, position) in dial.positions.iter().enumerate() {
-                if !band(position.band_low, position.band_high, position.sample, ADC_MAX) {
+                if !band(
+                    position.band_low,
+                    position.band_high,
+                    position.sample,
+                    ADC_MAX,
+                ) {
                     return Err(format!(
                         "{} position {} needs low <= sample <= high <= {ADC_MAX}",
                         dial.name, position.label
@@ -421,21 +450,35 @@ impl Options {
                 return Err(format!("switch name {:?} is empty or repeats", switch.name));
             }
             if switch.register >= REGISTERS || switch.bit >= 16 {
-                return Err(format!("{} switch register or bit does not exist", switch.name));
+                return Err(format!(
+                    "{} switch register or bit does not exist",
+                    switch.name
+                ));
             }
-            if ladder_registers.contains(&switch.register) || !registers.insert((switch.register, switch.bit)) {
+            if ladder_registers.contains(&switch.register)
+                || !registers.insert((switch.register, switch.bit))
+            {
                 return Err(format!("{} switch bit is driven twice", switch.name));
             }
             if switch.set.eq_ignore_ascii_case(&switch.clear) || switch.basis.trim().is_empty() {
-                return Err(format!("{} switch needs two positions and a basis", switch.name));
+                return Err(format!(
+                    "{} switch needs two positions and a basis",
+                    switch.name
+                ));
             }
         }
         if let Some(CommandDial::Counting(dial)) = &self.rear_dial {
             if dial.register >= REGISTERS
                 || ladder_registers.contains(&dial.register)
-                || self.switches.iter().any(|switch| switch.register == dial.register)
+                || self
+                    .switches
+                    .iter()
+                    .any(|switch| switch.register == dial.register)
             {
-                return Err(format!("counting dial register {:#x} is unusable", dial.register));
+                return Err(format!(
+                    "counting dial register {:#x} is unusable",
+                    dial.register
+                ));
             }
             if dial.basis.trim().is_empty() {
                 return Err("counting dial has no basis".into());
@@ -466,7 +509,10 @@ impl Options {
                 return Err(format!("{:?} reuses a GPIO pad", gpio.key));
             }
             if gpio.key.dial() || !keys.insert(gpio.key) {
-                return Err(format!("{:?} is declared twice or is a dial detent", gpio.key));
+                return Err(format!(
+                    "{:?} is declared twice or is a dial detent",
+                    gpio.key
+                ));
             }
             if gpio.basis.trim().is_empty() {
                 return Err(format!("{:?} GPIO key has no basis", gpio.key));
@@ -475,13 +521,9 @@ impl Options {
         Ok(())
     }
 
-
-
     fn dial_on(&self, channel: u8) -> Option<&PositionDial> {
         self.dials.iter().find(|dial| dial.channel == channel)
     }
-
-
 
     fn register_ladders(&self) -> Vec<u8> {
         let mut registers: Vec<u8> = self
@@ -495,6 +537,4 @@ impl Options {
         registers.sort_unstable();
         registers
     }
-
-
 }

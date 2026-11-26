@@ -81,7 +81,11 @@ impl Response {
     pub fn xt5(exposure: f64) -> Self {
         Self {
             colour_gain: XT5_COLOUR_GAIN,
-            exposure: if exposure.is_finite() && exposure > 0. { exposure } else { 1. },
+            exposure: if exposure.is_finite() && exposure > 0. {
+                exposure
+            } else {
+                1.
+            },
             white: XT5_SCENE_WHITE,
         }
     }
@@ -94,7 +98,10 @@ impl Response {
     }
     /// Sample of linear scene level `linear` of colour `c` (clipped to [`WHITE`]).
     pub fn sample(&self, c: usize, linear: f64) -> u16 {
-        BLACK + (linear * self.scale(c)).round().clamp(0., f64::from(WHITE - BLACK)) as u16
+        BLACK
+            + (linear * self.scale(c))
+                .round()
+                .clamp(0., f64::from(WHITE - BLACK)) as u16
     }
     /// Linear scene level of sample `sample` of colour `c` (not clamped).
     pub fn linear(&self, c: usize, sample: u16) -> f64 {
@@ -106,7 +113,9 @@ impl Response {
             return MosaicLut([*response(); 3]);
         }
         let linear = linear_lut();
-        MosaicLut(std::array::from_fn(|c| std::array::from_fn(|v| self.sample(c, linear[v]))))
+        MosaicLut(std::array::from_fn(|c| {
+            std::array::from_fn(|v| self.sample(c, linear[v]))
+        }))
     }
     /// The sRGB byte of each sample for each colour ([`Raw::with_response`]).
     fn inverse_lut(&self) -> Box<[Vec<u8>; 3]> {
@@ -254,7 +263,11 @@ pub fn pack12_line(samples: &[u8], out: &mut [u8]) {
     let twelve = |pair: &[u8]| u16::from_le_bytes([pair[0], pair[1]]) >> 2;
     for (pair, packed) in samples.chunks(4).zip(out.chunks_exact_mut(3)) {
         let a = twelve(pair);
-        let b = if pair.len() == 4 { twelve(&pair[2..]) } else { 0 };
+        let b = if pair.len() == 4 {
+            twelve(&pair[2..])
+        } else {
+            0
+        };
         packed[0] = a as u8;
         packed[1] = (a >> 8) as u8 | (b << 4) as u8;
         packed[2] = (b >> 4) as u8;
@@ -320,7 +333,15 @@ impl<'a> Raw<'a> {
                 bytes.len()
             ));
         }
-        Ok(Self { bytes, pitch, width, lines, phase, packed12: false, inverse: None })
+        Ok(Self {
+            bytes,
+            pitch,
+            width,
+            lines,
+            phase,
+            packed12: false,
+            inverse: None,
+        })
     }
     /// A window of packed 12-bit samples ([`pack12_line`]); otherwise as [`Raw::new`].
     pub fn packed12(
@@ -337,7 +358,15 @@ impl<'a> Raw<'a> {
                 bytes.len()
             ));
         }
-        Ok(Self { bytes, pitch, width, lines, phase, packed12: true, inverse: None })
+        Ok(Self {
+            bytes,
+            pitch,
+            width,
+            lines,
+            phase,
+            packed12: true,
+            inverse: None,
+        })
     }
     /// Develop with `response` (divide by its colour gains and exposure) instead of the
     /// declared law.
@@ -432,7 +461,10 @@ mod tests {
         // Site (0, 0) is red, (0, 1) blue, (1, 0) green.
         assert_eq!(u16::from_le_bytes([bytes[0], bytes[1]]), response()[200]);
         assert_eq!(u16::from_le_bytes([bytes[2], bytes[3]]), response()[30]);
-        assert_eq!(u16::from_le_bytes([bytes[pitch], bytes[pitch + 1]]), response()[100]);
+        assert_eq!(
+            u16::from_le_bytes([bytes[pitch], bytes[pitch + 1]]),
+            response()[100]
+        );
         let raw = Raw::new(&bytes, pitch, width, lines, (0, 0)).unwrap();
         for y in 0..lines {
             for x in 0..width {
@@ -461,7 +493,10 @@ mod tests {
         let (mut samples, mut bytes) = (vec![0u8; 2 * width], vec![0u8; pitch * lines]);
         for y in 0..lines {
             mosaic_line(&rgb, y, &mut samples);
-            pack12_line(&samples, &mut bytes[y * pitch..y * pitch + packed12_bytes(width)]);
+            pack12_line(
+                &samples,
+                &mut bytes[y * pitch..y * pitch + packed12_bytes(width)],
+            );
         }
         let raw = Raw::packed12(&bytes, pitch, width, lines, (0, 0)).unwrap();
         for y in 0..lines {
@@ -477,7 +512,10 @@ mod tests {
         assert_eq!(response()[0], BLACK);
         assert_eq!(response()[255], WHITE);
         for v in [0u8, 1, 17, 128, 254, 255] {
-            assert_eq!(inverse_response()[usize::from(response()[usize::from(v)])], v);
+            assert_eq!(
+                inverse_response()[usize::from(response()[usize::from(v)])],
+                v
+            );
         }
     }
 
@@ -507,13 +545,22 @@ mod tests {
         let lut = Response::xt5(1.).mosaic_lut();
         assert_eq!(lut.0.map(|c| c[0]), [BLACK; 3]);
         assert_eq!(lut.0[1][255], BLACK + 7680);
-        assert_eq!(lut.0[0][255], BLACK + (XT5_SCENE_WHITE * 302. / 647.).round() as u16);
-        assert_eq!(lut.0[2][255], BLACK + (XT5_SCENE_WHITE * 302. / 460.).round() as u16);
+        assert_eq!(
+            lut.0[0][255],
+            BLACK + (XT5_SCENE_WHITE * 302. / 647.).round() as u16
+        );
+        assert_eq!(
+            lut.0[2][255],
+            BLACK + (XT5_SCENE_WHITE * 302. / 460.).round() as u16
+        );
         let doubled = Response::xt5(2.).mosaic_lut();
         for c in 0..3 {
             for v in [64usize, 128, 200] {
                 let (one, two) = (lut.0[c][v] - BLACK, doubled.0[c][v] - BLACK);
-                assert!(two.abs_diff(2 * one) <= 1, "colour {c} byte {v}: {one} -> {two}");
+                assert!(
+                    two.abs_diff(2 * one) <= 1,
+                    "colour {c} byte {v}: {one} -> {two}"
+                );
             }
         }
         assert_eq!(Response::xt5(4.).mosaic_lut().0[1][255], WHITE);
@@ -531,15 +578,24 @@ mod tests {
         let lut = response.mosaic_lut();
         let mut bytes = vec![0u8; pitch * lines];
         for y in 0..lines {
-            mosaic_line_with(&rgb, (y + 2, 3), &mut bytes[y * pitch..y * pitch + 2 * width], &lut);
+            mosaic_line_with(
+                &rgb,
+                (y + 2, 3),
+                &mut bytes[y * pitch..y * pitch + 2 * width],
+                &lut,
+            );
         }
         // Site (2, 3) is green, (2, 5) red, (3, 3) red, (2, 2) blue.
-        let at = |y: usize, x: usize| u16::from_le_bytes([bytes[y * pitch + 2 * x], bytes[y * pitch + 2 * x + 1]]);
+        let at = |y: usize, x: usize| {
+            u16::from_le_bytes([bytes[y * pitch + 2 * x], bytes[y * pitch + 2 * x + 1]])
+        };
         assert_eq!(at(0, 0), lut.0[1][100]);
         assert_eq!(at(0, 2), lut.0[0][200]);
         assert_eq!(at(1, 0), lut.0[0][200]);
         assert!(at(0, 0) < 7680 + BLACK);
-        let raw = Raw::new(&bytes, pitch, width, lines, (2, 3)).unwrap().with_response(response);
+        let raw = Raw::new(&bytes, pitch, width, lines, (2, 3))
+            .unwrap()
+            .with_response(response);
         for y in 0..lines {
             for x in 0..width {
                 assert_eq!(raw.rgb(x, y), colour, "pixel ({x}, {y})");

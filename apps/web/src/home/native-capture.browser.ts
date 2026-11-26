@@ -53,6 +53,8 @@ try {
 } finally {
   for (const context of browser.contexts())
     for (const page of context.pages())
-      await page.locator('#workspace').screenshot({ path: new URL('browser.png', output).pathname });
+      await page
+        .locator('#workspace')
+        .screenshot({ path: new URL('browser.png', output).pathname });
   await browser.close();
 }

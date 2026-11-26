@@ -1,13 +1,13 @@
 //! One emulated camera, owned by its thread.
 use std::{collections::BTreeMap, path::PathBuf};
 
+use fujimod_camera::{
+    CardSource, Library, Preset, Request as CameraRequest, Stage, StateDir, open as open_camera,
+    open_unbooted,
+};
 use fujimod_catalog_remote::Facts;
 use fujimod_catalog_resolution::ResolvedConfiguration;
 use fujimod_emulator_boot as boot;
-use fujimod_emulator_camera::{
-    Boot as BuilderBoot, CardSource, Library, Request as BuilderRequest, Stage,
-    open as open_camera, open_unbooted,
-};
 use fujimod_emulator_cpu::ExecutionPolicy;
 use fujimod_emulator_session::{Session, checkpoint::Snapshot};
 use fujimod_remote::{BoardRemote, Control, operations};
@@ -39,46 +39,37 @@ impl From<OpenParams> for OpenRequest {
 }
 
 impl OpenRequest {
-    fn builder_request(&self) -> Result<BuilderRequest, String> {
+    fn camera_request(&self) -> Result<CameraRequest, String> {
         let policy = match &self.execution_policy {
             Some(policy) => ExecutionPolicy::parse(policy)?,
             None => ExecutionPolicy::Exact,
         };
-        let boot = match self.boot {
-            OpenBoot::Stock => BuilderBoot::Stock,
-            OpenBoot::SdCard => match &self.sd_card {
-                Some(directory) => BuilderBoot::SdCard(CardSource::Directory(directory.clone())),
-                None => BuilderBoot::SdCard(CardSource::Release),
-            },
-            OpenBoot::AutomaticBoot => match &self.sd_card {
-                Some(directory) => {
-                    BuilderBoot::AutomaticBoot(CardSource::Directory(directory.clone()))
-                }
-                None => BuilderBoot::AutomaticBoot(CardSource::Release),
-            },
-        };
-        let card_files = match (self.boot, &self.sd_card) {
-            (OpenBoot::Stock, Some(directory)) => sd_card_files(directory)?,
-            _ => Vec::new(),
-        };
-        Ok(BuilderRequest {
+        Ok(CameraRequest {
             firmware: self.firmware.clone(),
-            boot,
+            files: fujimod_camera::FirmwareInput::Library,
+            overlays: Vec::new(),
+            preset: match self.boot {
+                OpenBoot::Stock => Preset::Stock,
+                OpenBoot::SdCard => Preset::SdCard,
+                OpenBoot::Autostart => Preset::Autostart,
+            },
+            sd_card: self
+                .sd_card
+                .as_ref()
+                .map(|directory| CardSource::Directory(directory.clone())),
             policy,
             engine: None,
-            card_files,
             // A named checkpoint is an explicit restore; the boot cache would
             // otherwise replace it.
             cache: if self.boot_cache && self.snapshot.is_none() {
-                fujimod_emulator_camera::BootCache::Reuse
+                fujimod_camera::BootCache::Reuse
             } else {
-                fujimod_emulator_camera::BootCache::Bypass
+                fujimod_camera::BootCache::Bypass
             },
             run_to_rec: true,
             card: Default::default(),
-            kept: Default::default(),
-            card_source: None,
-            image: None,
+            nand_image: None,
+            face_result_profile: None,
         })
     }
 
@@ -86,7 +77,7 @@ impl OpenRequest {
         match self.boot {
             OpenBoot::Stock => "stock",
             OpenBoot::SdCard => "sd-card",
-            OpenBoot::AutomaticBoot => "automatic-boot",
+            OpenBoot::Autostart => "autostart",
         }
     }
 }
@@ -152,66 +143,38 @@ impl fujimod_emulator_gui::Run for Camera {
 }
 
 /// The catalog facts `fujimod-remote` needs for a resolved selection.
-/// Every file under `directory`, named by its path relative to it.
-fn sd_card_files(directory: &PathBuf) -> Result<Vec<(String, PathBuf)>, String> {
-    let mut files = Vec::new();
-    let mut pending = vec![directory.clone()];
-    while let Some(next) = pending.pop() {
-        let entries =
-            std::fs::read_dir(&next).map_err(|error| format!("{}: {error}", next.display()))?;
-        for entry in entries {
-            let path = entry.map_err(|error| error.to_string())?.path();
-            if path.is_dir() {
-                pending.push(path);
-            } else {
-                let name = path
-                    .strip_prefix(directory)
-                    .map_err(|error| error.to_string())?
-                    .to_str()
-                    .ok_or("SD card file name is not UTF-8")?
-                    .replace('\\', "/");
-                files.push((name, path));
-            }
-        }
-    }
-    files.sort();
-    if files.is_empty() {
-        return Err(format!(
-            "SD card directory {} is empty",
-            directory.display()
-        ));
-    }
-    Ok(files)
-}
-
 impl Camera {
     pub fn open(request: OpenRequest) -> Result<(Self, (Value, Option<Vec<u8>>)), String> {
         let library = Library::from_env().map_err(|error| error.to_string())?;
+        let state = StateDir::from_env();
         let started = std::time::Instant::now();
-        let builder_request = request.builder_request()?;
-        let policy = builder_request.policy;
+        let camera_request = request.camera_request()?;
+        let policy = camera_request.policy;
         let opened = match &request.snapshot {
             Some(snapshot) => {
-                let mut opened =
-                    open_unbooted(&library, builder_request).map_err(|error| error.to_string())?;
-                boot::load_snapshot(&mut opened.camera.session, snapshot)?;
-                opened.stage = match boot::status(&opened.camera.session) {
+                let mut opened = open_unbooted(&library, &state, camera_request)
+                    .map_err(|error| error.to_string())?;
+                boot::load_snapshot(&mut opened.camera.camera.session, snapshot)?;
+                opened.camera.stage = match boot::status(&opened.camera.camera.session) {
                     Ok(report) if report.status == "rec" => Stage::Rec,
                     _ => Stage::FirmwareLoaded,
                 };
                 opened
             }
-            None => open_camera(&library, builder_request).map_err(|error| error.to_string())?,
+            None => {
+                open_camera(&library, &state, camera_request).map_err(|error| error.to_string())?
+            }
         };
-        let quantum = opened.camera.quantum;
-        let ticks_per_second = opened.camera.ticks_per_second;
+        let quantum = opened.camera.camera.quantum;
+        let ticks_per_second = opened.camera.camera.ticks_per_second;
         let facts = fujimod_emulator_camera::remote_facts(&opened.resolved);
         let stage = opened.stage;
         let release = opened.release.clone();
         let opened_cached = opened.cached;
+        let emulator_opened = opened.camera;
         let mut camera = Self {
-            session: opened.camera.session,
-            resolved: opened.resolved,
+            session: emulator_opened.camera.session,
+            resolved: emulator_opened.resolved,
             quantum,
             ticks_per_second,
             checkpoints: BTreeMap::new(),
@@ -665,6 +628,7 @@ impl Camera {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::path::Path;
 
     fn request(boot: OpenBoot, sd_card: Option<PathBuf>) -> OpenRequest {
         OpenRequest {
@@ -679,66 +643,55 @@ mod tests {
 
     #[test]
     fn a_stock_boot_with_a_card_directory_adds_files() {
-        let directory =
-            std::env::temp_dir().join(format!("fujimod-mcp-card-{}", std::process::id()));
-        let _ = std::fs::remove_dir_all(&directory);
-        std::fs::create_dir_all(&directory).unwrap();
-        std::fs::write(directory.join("A.TXT"), b"a").unwrap();
-        let built = request(OpenBoot::Stock, Some(directory.clone()))
-            .builder_request()
+        let built = request(OpenBoot::Stock, Some(PathBuf::from("/tmp/example-card")))
+            .camera_request()
             .unwrap();
-        assert!(matches!(built.boot, BuilderBoot::Stock));
-        assert_eq!(built.card_files.len(), 1);
-        assert_eq!(built.card_files[0].0, "A.TXT");
+        assert_eq!(built.preset, Preset::Stock);
+        assert!(matches!(
+            built.sd_card,
+            Some(CardSource::Directory(ref path)) if path == Path::new("/tmp/example-card")
+        ));
         assert_eq!(built.policy, ExecutionPolicy::Exact);
-        std::fs::remove_dir_all(&directory).unwrap();
     }
 
     #[test]
     fn an_sd_card_boot_without_a_directory_uses_the_release() {
-        let built = request(OpenBoot::SdCard, None).builder_request().unwrap();
-        assert!(matches!(
-            built.boot,
-            BuilderBoot::SdCard(CardSource::Release)
-        ));
+        let built = request(OpenBoot::SdCard, None).camera_request().unwrap();
+        assert_eq!(built.preset, Preset::SdCard);
+        assert!(built.sd_card.is_none());
     }
 
     #[test]
     fn an_sd_card_boot_uses_the_directory() {
         let directory = PathBuf::from("/tmp/example-card");
         let built = request(OpenBoot::SdCard, Some(directory.clone()))
-            .builder_request()
+            .camera_request()
             .unwrap();
+        assert_eq!(built.preset, Preset::SdCard);
         assert!(matches!(
-            built.boot,
-            BuilderBoot::SdCard(CardSource::Directory(path)) if path == directory
+            built.sd_card,
+            Some(CardSource::Directory(path)) if path == directory
         ));
-        assert!(built.card_files.is_empty());
     }
 
     #[test]
-    fn an_automatic_boot_without_a_directory_uses_the_release() {
-        let built = request(OpenBoot::AutomaticBoot, None)
-            .builder_request()
-            .unwrap();
-        assert!(matches!(
-            built.boot,
-            BuilderBoot::AutomaticBoot(CardSource::Release)
-        ));
-        assert!(built.card_files.is_empty());
+    fn an_autostart_without_a_directory_uses_the_release() {
+        let built = request(OpenBoot::Autostart, None).camera_request().unwrap();
+        assert_eq!(built.preset, Preset::Autostart);
+        assert!(built.sd_card.is_none());
     }
 
     #[test]
-    fn an_automatic_boot_uses_the_directory() {
+    fn an_autostart_uses_the_directory() {
         let directory = PathBuf::from("/tmp/example-card");
-        let built = request(OpenBoot::AutomaticBoot, Some(directory.clone()))
-            .builder_request()
+        let built = request(OpenBoot::Autostart, Some(directory.clone()))
+            .camera_request()
             .unwrap();
+        assert_eq!(built.preset, Preset::Autostart);
         assert!(matches!(
-            built.boot,
-            BuilderBoot::AutomaticBoot(CardSource::Directory(path)) if path == directory
+            built.sd_card,
+            Some(CardSource::Directory(path)) if path == directory
         ));
-        assert!(built.card_files.is_empty());
     }
 
     #[test]
@@ -746,13 +699,13 @@ mod tests {
         let mut request = request(OpenBoot::Stock, None);
         request.execution_policy = Some("interactive".into());
         assert_eq!(
-            request.builder_request().unwrap().policy,
+            request.camera_request().unwrap().policy,
             ExecutionPolicy::Interactive
         );
         request.execution_policy = Some("fast".into());
         assert!(
             request
-                .builder_request()
+                .camera_request()
                 .err()
                 .unwrap()
                 .contains("unknown CPU execution policy")

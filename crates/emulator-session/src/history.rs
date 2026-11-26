@@ -2,8 +2,8 @@
 //! Instruction counts disambiguate inputs within one guest tick at high ratios.
 use super::{Session, checkpoint::Snapshot};
 use fujimod_emulator_cpu::ExecutionPolicy;
-use fujimod_emulator_devices::parts::touch_input::ContactInput;
 use fujimod_emulator_devices::capability::StatisticsCadence;
+use fujimod_emulator_devices::parts::touch_input::ContactInput;
 use fujimod_emulator_exr2_resources::SensorFrame;
 use std::{collections::VecDeque, rc::Rc};
 

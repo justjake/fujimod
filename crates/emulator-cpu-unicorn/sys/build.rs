@@ -50,19 +50,29 @@ fn main() {
         .find(|path| path.is_file())
         .unwrap_or(compiler);
     let mut config;
-    if [&source, &out, &compiler].into_iter().any(|path| breaks_configure(path)) {
+    if [&source, &out, &compiler]
+        .into_iter()
+        .any(|path| breaks_configure(path))
+    {
         let mut hasher = DefaultHasher::new();
         out.hash(&mut hasher);
-        let alias = std::env::temp_dir()
-            .join(format!("fujimod-unicorn-{:016x}", hasher.finish()));
-        assert!(!breaks_configure(&alias), "no space-free directory for the Unicorn build");
+        let alias = std::env::temp_dir().join(format!("fujimod-unicorn-{:016x}", hasher.finish()));
+        assert!(
+            !breaks_configure(&alias),
+            "no space-free directory for the Unicorn build"
+        );
         std::fs::create_dir_all(&alias).expect("create Unicorn build alias");
         link(&source, &alias.join("source"));
         link(&compiler, &alias.join("cc"));
         config = cmake::Config::new(alias.join("source"));
-        config.out_dir(&alias).define("CMAKE_C_COMPILER", alias.join("cc"));
+        config
+            .out_dir(&alias)
+            .define("CMAKE_C_COMPILER", alias.join("cc"));
         // The system may clear the temporary directory between builds.
-        println!("cargo:rerun-if-changed={}", alias.join("build/libunicorn.a").display());
+        println!(
+            "cargo:rerun-if-changed={}",
+            alias.join("build/libunicorn.a").display()
+        );
     } else {
         config = cmake::Config::new(&source);
     }

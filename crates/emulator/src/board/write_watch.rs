@@ -50,9 +50,17 @@ fn hex_value(bytes: &[u8], size: u64) -> String {
     if matches!(size, 1 | 2 | 4 | 8) && bytes.len() as u64 == size {
         let mut word = [0u8; 8];
         word[..bytes.len()].copy_from_slice(bytes);
-        return format!("{:#0width$x}", u64::from_le_bytes(word), width = 2 + 2 * bytes.len());
+        return format!(
+            "{:#0width$x}",
+            u64::from_le_bytes(word),
+            width = 2 + 2 * bytes.len()
+        );
     }
-    let mut text = bytes.iter().map(|byte| format!("{byte:02x}")).collect::<Vec<_>>().join(" ");
+    let mut text = bytes
+        .iter()
+        .map(|byte| format!("{byte:02x}"))
+        .collect::<Vec<_>>()
+        .join(" ");
     if (bytes.len() as u64) < size {
         text += " ...";
     }
@@ -78,7 +86,11 @@ impl WriteNote {
         if let Some((address, size)) = self.span {
             line += &format!(" (of write {address:#x} size {size})");
         }
-        line += &format!(" value {} old {}", hex_value(&self.value, self.size), hex_value(&self.old, self.size));
+        line += &format!(
+            " value {} old {}",
+            hex_value(&self.value, self.size),
+            hex_value(&self.old, self.size)
+        );
         let seconds = self.tick as f64 / ticks_per_second.max(1) as f64;
         line += &format!(" at {seconds:.6} s (tick {})", self.tick);
         line
@@ -100,7 +112,9 @@ impl Watch {
             .iter()
             .map(|&(address, length)| match address.checked_add(length) {
                 Some(end) if length > 0 => Ok((address, end)),
-                _ => Err(format!("write watch range {address:#x}:{length:#x} is empty or overflows")),
+                _ => Err(format!(
+                    "write watch range {address:#x}:{length:#x} is empty or overflows"
+                )),
             })
             .collect::<Result<Vec<_>, String>>()?;
         spans.sort_unstable();
@@ -111,14 +125,19 @@ impl Watch {
                 _ => merged.push((begin, end)),
             }
         }
-        Ok(Self { ranges: merged, ..Self::default() })
+        Ok(Self {
+            ranges: merged,
+            ..Self::default()
+        })
     }
     /// The part of `[address, address + size)` that the watched ranges cover, from the first
     /// covered byte to the last.
     pub(super) fn overlap(&self, address: u64, size: u64) -> Option<(u64, u64)> {
         let end = address.saturating_add(size);
         let first = self.ranges.partition_point(|range| range.1 <= address);
-        let covered = self.ranges[first..].iter().take_while(|range| range.0 < end);
+        let covered = self.ranges[first..]
+            .iter()
+            .take_while(|range| range.0 < end);
         let (mut low, mut high) = (u64::MAX, 0);
         for &(begin, finish) in covered {
             low = low.min(begin.max(address));
@@ -134,14 +153,23 @@ impl Watch {
         }
     }
     fn take(&mut self) -> (Vec<WriteNote>, u64) {
-        (std::mem::take(&mut self.notes), std::mem::take(&mut self.dropped))
+        (
+            std::mem::take(&mut self.notes),
+            std::mem::take(&mut self.dropped),
+        )
     }
 }
 
 impl super::memory::Memory {
     /// Record the part of a host or DMA write at bus address `address` that overlaps a watched
     /// range. Call before the write, so the prior bytes are still in place.
-    pub(super) fn watch_transfer(&self, source: WriteSource, address: u64, bytes: &[u8], tick: u64) {
+    pub(super) fn watch_transfer(
+        &self,
+        source: WriteSource,
+        address: u64,
+        bytes: &[u8],
+        tick: u64,
+    ) {
         let mut slot = self.write_watch.borrow_mut();
         let Some(watch) = slot.as_mut() else { return };
         let mut offset = 0usize;
@@ -160,7 +188,8 @@ impl super::memory::Memory {
                     lr: None,
                     address: low,
                     size: high - low,
-                    span: ((low, high) != (physical, physical + len as u64)).then_some((physical, len as u64)),
+                    span: ((low, high) != (physical, physical + len as u64))
+                        .then_some((physical, len as u64)),
                     value: bytes[start..start + kept].to_vec(),
                     old,
                     tick,
@@ -217,7 +246,11 @@ pub(super) fn observe_store(
         return false;
     }
     let kept = size.min(VALUE_BYTES);
-    let value = if size <= 8 { value.to_le_bytes()[..size].to_vec() } else { vec![] };
+    let value = if size <= 8 {
+        value.to_le_bytes()[..size].to_vec()
+    } else {
+        vec![]
+    };
     let mut old = vec![0; kept];
     let old = match state.memory.read_backing(physical, &mut old) {
         Ok(()) => old,
@@ -251,11 +284,19 @@ unsafe fn watched_store(
     data: *mut c_void,
 ) {
     let binding = unsafe { &*data.cast::<super::Binding>() };
-    let Some(cpus) = binding.cpus.upgrade() else { return };
-    let Ok(size) = usize::try_from(size) else { return };
+    let Some(cpus) = binding.cpus.upgrade() else {
+        return;
+    };
+    let Ok(size) = usize::try_from(size) else {
+        return;
+    };
     let cpu = &*cpus[binding.core];
-    let Ok(physical) = cpu.translate(address, fujimod_emulator_cpu::Access::Write) else { return };
-    let Ok(state) = binding.state.try_borrow() else { return };
+    let Ok(physical) = cpu.translate(address, fujimod_emulator_cpu::Access::Write) else {
+        return;
+    };
+    let Ok(state) = binding.state.try_borrow() else {
+        return;
+    };
     observe_store(&state, cpu, binding.core, physical, size, value);
 }
 
@@ -269,10 +310,16 @@ impl Board {
             return Ok(());
         }
         let watch = Watch::new(ranges)?;
-        if self.cpus.iter().any(|cpu| cpu.features().shared_physical_maps) {
-            return Err("write watches need processor store hooks, which the hypervisor engine lacks; \
+        if self
+            .cpus
+            .iter()
+            .any(|cpu| cpu.features().shared_physical_maps)
+        {
+            return Err(
+                "write watches need processor store hooks, which the hypervisor engine lacks; \
                         run with --engine unicorn"
-                .into());
+                    .into(),
+            );
         }
         if !self.physical_memory.watching_writes() {
             // The board store hook (`written`) serves every core when an M-profile core is
@@ -284,7 +331,9 @@ impl Board {
                 .any(|cpu| cpu.model() == fujimod_emulator_cpu::Model::CortexM4);
             if !board_hooked {
                 for core in 0..self.cpus.len() {
-                    let data = (&*self.bindings[core] as *const super::Binding).cast_mut().cast();
+                    let data = (&*self.bindings[core] as *const super::Binding)
+                        .cast_mut()
+                        .cast();
                     // The binding box stays at this address until Board drops its CPU hooks.
                     let hook = unsafe {
                         self.cpus[core].install_hook(Hook::Memory {

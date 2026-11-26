@@ -3,8 +3,8 @@
 //! Status, telemetry, and command widths are declared part data. Opaque
 //! transmit-only uploads have no effect on status or command completion.
 //! No optical or uploaded-program execution model is supplied.
-use fujimod_emulator_parts_io::spi::{Endpoint, Shift};
 use fujimod_emulator_devices::Cx;
+use fujimod_emulator_parts_io::spi::{Endpoint, Shift};
 use serde::{Deserialize, Serialize};
 
 const RAM_WORDS: usize = 65536;

@@ -1,5 +1,8 @@
 use super::*;
-use fujimod_emulator_imaging::{exposure::{Calibration, Exposure}, scene::{Frame, FramePixels}};
+use fujimod_emulator_imaging::{
+    exposure::{Calibration, Exposure},
+    scene::{Frame, FramePixels},
+};
 use std::sync::Arc;
 
 fn exposed(frame: Arc<Frame>, seconds: f64) -> ExposedFrame {
@@ -50,8 +53,8 @@ fn assert_matches_scalar(frame: &ExposedFrame, grid: [usize; 2], rect: [usize; 4
             }
             for (c, distance) in [3, 1].into_iter().enumerate() {
                 if xx + distance < end {
-                    let d = i64::from(frame.sample(xx + distance, yy, grid)[1])
-                        - i64::from(sample[1]);
+                    let d =
+                        i64::from(frame.sample(xx + distance, yy, grid)[1]) - i64::from(sample[1]);
                     row[c] += (d * d) as u64;
                 }
             }
@@ -126,10 +129,10 @@ fn repeated_source_runs_match_scalar_sampling_with_clips_and_per_row_rounding() 
 /// precomputed sample offsets; they equal the scalar sums too.
 #[test]
 fn prepared_readouts_match_scalar_sampling() {
-    use fujimod_emulator_imaging::exr2_isp::parameters::Parameters;
     use fujimod_emulator_image_formation::optics::Projection;
-    use fujimod_emulator_imaging::optics::{Illumination, Spec};
     use fujimod_emulator_image_formation::radiometric::Renderer;
+    use fujimod_emulator_imaging::exr2_isp::parameters::Parameters;
+    use fujimod_emulator_imaging::optics::{Illumination, Spec};
     use fujimod_emulator_imaging::scene::SensorFrames;
     use std::sync::Mutex;
     for [width, height] in [[7, 5], [23, 17], [40, 29]] {
@@ -178,11 +181,15 @@ fn prepared_readouts_match_scalar_sampling() {
             let image = renderer.capture().unwrap().unwrap();
             for grid in [[3, 4], [17, 13], [64, 41]] {
                 for rect in rects(grid) {
-                    let frame = image.measurement_windows(grid, &[rect_in(grid, rect)]).unwrap();
+                    let frame = image
+                        .measurement_windows(grid, &[rect_in(grid, rect)])
+                        .unwrap();
                     assert!(frame.sample_offsets(grid, rect_in(grid, rect), 1).is_some());
                     assert_matches_scalar(&frame, grid, rect);
                 }
-                let whole = image.measurement_windows(grid, &[[0, 0, grid[0], grid[1]]]).unwrap();
+                let whole = image
+                    .measurement_windows(grid, &[[0, 0, grid[0], grid[1]]])
+                    .unwrap();
                 for rect in rects(grid) {
                     assert_matches_scalar(&whole, grid, rect);
                 }
@@ -193,7 +200,12 @@ fn prepared_readouts_match_scalar_sampling() {
 
 fn rect_in(grid: [usize; 2], [x, y, w, h]: [usize; 4]) -> [usize; 4] {
     let [left, top] = [x.min(grid[0]), y.min(grid[1])];
-    [left, top, (x + w).min(grid[0]) - left, (y + h).min(grid[1]) - top]
+    [
+        left,
+        top,
+        (x + w).min(grid[0]) - left,
+        (y + h).min(grid[1]) - top,
+    ]
 }
 
 fn bytes(spans: &[fujimod_emulator_imaging::scene::StatisticsSpan]) -> Vec<(usize, u32, Vec<u8>)> {

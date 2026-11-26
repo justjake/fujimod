@@ -26,9 +26,10 @@ impl Board {
                 "X-Processor Pro does not continue modeled refusals",
             ));
         }
-        let session = fujimod_emulator_xpp::board::build(graph, json(devices)?, &loaded, mode, engine)
-            .and_then(|board| board.into_session(definition))
-            .map_err(error)?;
+        let session =
+            fujimod_emulator_xpp::board::build(graph, json(devices)?, &loaded, mode, engine)
+                .and_then(|board| board.into_session(definition))
+                .map_err(error)?;
         Ok(Self {
             driver: None,
             memory_watch: None,

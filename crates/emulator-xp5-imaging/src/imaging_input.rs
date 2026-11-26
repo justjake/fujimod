@@ -253,9 +253,15 @@ mod tests {
         let mut input = Input::default();
         let mut host = RecordingHost::default();
         input.write(&mut Cx::new(&mut host, 0, 0, 0), 0xff946048, 4, 3);
-        assert_eq!(input.read(&mut Cx::new(&mut host, 0, 0, 0), 0xff946048, 4), 1);
+        assert_eq!(
+            input.read(&mut Cx::new(&mut host, 0, 0, 0), 0xff946048, 4),
+            1
+        );
         input.write(&mut Cx::new(&mut host, 0, 0, 0), 0xff946048, 4, 0);
-        assert_eq!(input.read(&mut Cx::new(&mut host, 0, 0, 0), 0xff946048, 4), 0);
+        assert_eq!(
+            input.read(&mut Cx::new(&mut host, 0, 0, 0), 0xff946048, 4),
+            0
+        );
         assert!(!irq(&host, 229));
     }
     #[test]
@@ -359,31 +365,55 @@ mod tests {
         let mut restored = Input::default().with_retained_words();
         restored.restore_checkpoint(&checkpoint).unwrap();
         assert_eq!(restored.checkpoint().unwrap(), checkpoint);
-        assert_eq!(restored.read(&mut Cx::new(&mut host, 0, 0, 0), 0xff946054, 4), 0x22f8);
+        assert_eq!(
+            restored.read(&mut Cx::new(&mut host, 0, 0, 0), 0xff946054, 4),
+            0x22f8
+        );
         // The legacy JSON restore keeps the manifest option.
         restored.restore(&input.save()).unwrap();
-        assert_eq!(restored.read(&mut Cx::new(&mut host, 0, 0, 0), 0xff946058, 4), 0x36f9b50);
+        assert_eq!(
+            restored.read(&mut Cx::new(&mut host, 0, 0, 0), 0xff946058, 4),
+            0x36f9b50
+        );
     }
     #[test]
     fn input_idle_status_option_reports_idle_in_word_15() {
         let mut input = Input::default().with_idle_status();
         let mut host = RecordingHost::default();
         // Run bit clear: the status word reports idle (bit 31).
-        assert_eq!(input.read(&mut Cx::new(&mut host, 0, 0, 0), 0xff94617c, 4), 1 << 31);
+        assert_eq!(
+            input.read(&mut Cx::new(&mut host, 0, 0, 0), 0xff94617c, 4),
+            1 << 31
+        );
         input.write(&mut Cx::new(&mut host, 0, 0, 0), 0xff946140, 4, 0x8000_0001);
         input.write(&mut Cx::new(&mut host, 0, 0, 0), 0xff946178, 4, 0x1234_5678);
-        assert_eq!(input.read(&mut Cx::new(&mut host, 0, 0, 0), 0xff946140, 4), 0x8000_0001);
-        assert_eq!(input.read(&mut Cx::new(&mut host, 0, 0, 0), 0xff946178, 4), 0x1234_5678);
-        assert_eq!(input.read(&mut Cx::new(&mut host, 0, 0, 0), 0xff94617c, 4), 0);
+        assert_eq!(
+            input.read(&mut Cx::new(&mut host, 0, 0, 0), 0xff946140, 4),
+            0x8000_0001
+        );
+        assert_eq!(
+            input.read(&mut Cx::new(&mut host, 0, 0, 0), 0xff946178, 4),
+            0x1234_5678
+        );
+        assert_eq!(
+            input.read(&mut Cx::new(&mut host, 0, 0, 0), 0xff94617c, 4),
+            0
+        );
         let checkpoint = input.checkpoint().unwrap();
         let mut restored = Input::default().with_idle_status();
         restored.restore_checkpoint(&checkpoint).unwrap();
-        assert_eq!(restored.read(&mut Cx::new(&mut host, 0, 0, 0), 0xff946178, 4), 0x1234_5678);
+        assert_eq!(
+            restored.read(&mut Cx::new(&mut host, 0, 0, 0), 0xff946178, 4),
+            0x1234_5678
+        );
         // A checkpoint saved before the words existed still restores.
         let mut old = input.save();
         old.as_object_mut().unwrap().remove("configuration");
         restored.restore(&old).unwrap();
-        assert_eq!(restored.read(&mut Cx::new(&mut host, 0, 0, 0), 0xff946140, 4), 0);
+        assert_eq!(
+            restored.read(&mut Cx::new(&mut host, 0, 0, 0), 0xff946140, 4),
+            0
+        );
     }
     #[test]
     fn phy_and_input_reset_wait_for_their_guest_deadlines() {

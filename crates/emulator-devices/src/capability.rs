@@ -1,9 +1,9 @@
 //! What sessions and bindings do with devices, without naming their models. A model implements
 //! a capability trait and returns itself from the matching `Device` accessor.
-use fujimod_framebuffer::frame::Frame;
 use crate::parts::sd_card::faults::{DataFault, DataFaultEvent};
 use crate::parts::{nand::Nand, sd_card::Card, touch_input::ContactInput};
 use crate::{Cx, Device};
+use fujimod_framebuffer::frame::Frame;
 
 /// Finds a capability on a device.
 pub trait Capability: 'static {
@@ -45,7 +45,8 @@ pub trait GpioInputs {
     /// Refuse changes the controller cannot accept, without applying any.
     fn admit_inputs(&self, changes: &[(crate::parts::pins::Pin, bool)]) -> Result<(), String>;
     /// Apply changes; the board wakes the controller afterwards.
-    fn request_inputs(&mut self, changes: &[(crate::parts::pins::Pin, bool)]) -> Result<(), String>;
+    fn request_inputs(&mut self, changes: &[(crate::parts::pins::Pin, bool)])
+    -> Result<(), String>;
 }
 impl Capability for dyn GpioInputs {
     fn of(device: &dyn Device) -> Option<&Self> {
@@ -223,7 +224,12 @@ impl Capability for dyn ScanoutSource {
 
 /// A clocked frame source: its frame period and the cadence of its statistics frames.
 pub trait FrameSource {
-    fn configure(&mut self, period: u64, cadence: StatisticsCadence, now: u64) -> Result<(), String>;
+    fn configure(
+        &mut self,
+        period: u64,
+        cadence: StatisticsCadence,
+        now: u64,
+    ) -> Result<(), String>;
     /// The source's clock, cadence and latched exposure, for diagnostics.
     fn frame_state(&self) -> serde_json::Value;
     /// Frame index and latched sensor exposure in seconds and analog gain.

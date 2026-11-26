@@ -1,5 +1,8 @@
 //! EXR II board constructors for this crate's models.
-use fujimod_emulator_exr2_plan::{Model, construction::{Builder, Built, Constructors, decode}};
+use fujimod_emulator_exr2_plan::{
+    Model,
+    construction::{Builder, Built, Constructors, decode},
+};
 use fujimod_emulator_exr2_resources::wire;
 
 /// Add this crate's EXR II constructors.
@@ -26,14 +29,20 @@ fn statistics(builder: Builder<'_>, model: Model) -> Result<Built, String> {
         options,
         crate::producer::Wiring {
             grid: grid
-                .map(|name| Ok(fujimod_emulator_exr2_images::image_wire!(resources, id, name, ImageGrid)))
+                .map(|name| {
+                    Ok(fujimod_emulator_exr2_images::image_wire!(
+                        resources, id, name, ImageGrid
+                    ))
+                })
                 .transpose()?,
             routes: wire!(resources, id, routes, IrqRoutes),
-            images: fujimod_emulator_exr2_images::images(resources)?.images
+            images: fujimod_emulator_exr2_images::images(resources)?
+                .images
                 .get(&images)
                 .cloned()
                 .ok_or_else(|| format!("missing histogram image frames {images}"))?,
-            frames: fujimod_emulator_exr2_images::images(resources)?.statistics
+            frames: fujimod_emulator_exr2_images::images(resources)?
+                .statistics
                 .get(&frames)
                 .cloned()
                 .ok_or_else(|| format!("missing statistics frames {frames}"))?,

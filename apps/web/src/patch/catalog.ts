@@ -148,7 +148,8 @@ export function validateIndex(value: unknown): PatchIndex {
         typeof downloads !== 'object' ||
         Array.isArray(downloads) ||
         (downloads.sd_boot_v1 !== undefined && typeof downloads.sd_boot_v1 !== 'boolean') ||
-        (downloads.sd_boot_v1_installable !== undefined && typeof downloads.sd_boot_v1_installable !== 'boolean'))
+        (downloads.sd_boot_v1_installable !== undefined &&
+          typeof downloads.sd_boot_v1_installable !== 'boolean'))
     )
       throw new Error('The release download switches are invalid.');
     if (
@@ -175,7 +176,9 @@ export function validateIndex(value: unknown): PatchIndex {
   return {
     ...index,
     firmwares,
-    ...(index.sd_card_files === undefined ? {} : { sd_card_files: validateCard(index.sd_card_files) }),
+    ...(index.sd_card_files === undefined
+      ? {}
+      : { sd_card_files: validateCard(index.sd_card_files) }),
   };
 }
 

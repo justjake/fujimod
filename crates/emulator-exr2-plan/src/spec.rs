@@ -630,6 +630,22 @@ impl Model {
             Model::Adapter { .. } => "adapter",
         }
     }
+
+    /// Whether a plan node of `kind` carries an options object.
+    ///
+    /// Every model variant reads `options` except these structural ones, whose
+    /// fields are entirely declared by the construction topology.
+    pub fn carries_options(kind: &str) -> bool {
+        !matches!(
+            kind,
+            "adapter"
+                | "face-results"
+                | "image-transfer"
+                | "sdhci-clocks"
+                | "spi-controller"
+                | "x-mount-lens"
+        )
+    }
 }
 
 impl Model {
@@ -638,9 +654,7 @@ impl Model {
         match self {
             Self::Power { gpio, .. }
             | Self::ContactActuator { gpio, .. }
-            | Self::ContactCam { gpio, .. } => {
-                refs.push(gpio.as_str())
-            }
+            | Self::ContactCam { gpio, .. } => refs.push(gpio.as_str()),
             Self::SdHost {
                 pins, clock_gate, ..
             } => {

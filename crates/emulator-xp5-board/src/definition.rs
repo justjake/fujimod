@@ -1,6 +1,6 @@
 //! Caller-described XP5 graphs shared by language bindings.
-use fujimod_catalog_configuration::RunEngine;
 use crate::{board, boot, session::Inputs};
+use fujimod_catalog_configuration::RunEngine;
 use fujimod_emulator::board::{InterruptMap, InterruptRegisters, aprofile, bus::Mode, factory};
 use fujimod_emulator_cpu::{Model, arm64};
 use fujimod_emulator_devices::graph::DeviceWindow;
@@ -314,8 +314,13 @@ mod tests {
             .collect();
         session.board.write_physical(0x10000, &code).unwrap();
         inputs.gpio(&mut session, 0, 7, true).unwrap();
-        assert!(inputs.gpio_level(0, 2).unwrap(), "released button idles high");
-        session.contact_input("menu_ok_button", None, false).unwrap();
+        assert!(
+            inputs.gpio_level(0, 2).unwrap(),
+            "released button idles high"
+        );
+        session
+            .contact_input("menu_ok_button", None, false)
+            .unwrap();
         assert_eq!(
             session
                 .board
@@ -332,9 +337,18 @@ mod tests {
         assert!(!inputs.gpio_level(0, 7).unwrap());
     }
 
-    fn open(value: serde_json::Value) -> Result<(fujimod_emulator_session::Session, Inputs), String> {
-        let definition: Definition = serde_json::from_value(value.clone()).map_err(|e| e.to_string())?;
-        definition.open(graph(), &BTreeMap::new(), RunEngine::Unicorn, Mode::Strict, value)
+    fn open(
+        value: serde_json::Value,
+    ) -> Result<(fujimod_emulator_session::Session, Inputs), String> {
+        let definition: Definition =
+            serde_json::from_value(value.clone()).map_err(|e| e.to_string())?;
+        definition.open(
+            graph(),
+            &BTreeMap::new(),
+            RunEngine::Unicorn,
+            Mode::Strict,
+            value,
+        )
     }
 
     #[test]
@@ -342,9 +356,15 @@ mod tests {
         let mut none = specification();
         none.as_object_mut().unwrap().remove("controls");
         let (mut session, inputs) = open(none).unwrap();
-        let error = inputs.key(&mut session, 0, crate::session::Key::Menu, true).unwrap_err();
+        let error = inputs
+            .key(&mut session, 0, crate::session::Key::Menu, true)
+            .unwrap_err();
         assert!(error.contains("no physical controls"), "{error}");
-        assert!(session.contact_input("menu_ok_button", None, false).is_err());
+        assert!(
+            session
+                .contact_input("menu_ok_button", None, false)
+                .is_err()
+        );
     }
 
     #[test]

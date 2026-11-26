@@ -122,7 +122,10 @@ impl Memory {
             if a_base != b_base || a.len() != b.len() {
                 return Some(format!("regions[{index}]: base or length differs"));
             }
-            for page in 0..a.len().div_ceil(fujimod_emulator_cpu::memory::pages::PAGE_BYTES) {
+            for page in 0..a
+                .len()
+                .div_ceil(fujimod_emulator_cpu::memory::pages::PAGE_BYTES)
+            {
                 let (Some(x), Some(y)) = (a.page(page), b.page(page)) else {
                     return Some(format!("regions[{index}]: page {page} is missing"));
                 };
@@ -571,7 +574,10 @@ impl Memory {
     /// The physical (address, bytes) pieces of a bus range; an unmapped piece ends the list.
     pub(super) fn physical_spans(&self, address: u64, bytes: usize) -> Vec<(u64, usize)> {
         match self.chunks(address, bytes, Access::Host) {
-            Ok(chunks) => chunks.map_while(Result::ok).map(|(physical, _, len)| (physical, len)).collect(),
+            Ok(chunks) => chunks
+                .map_while(Result::ok)
+                .map(|(physical, _, len)| (physical, len))
+                .collect(),
             Err(_) => vec![],
         }
     }
@@ -647,14 +653,7 @@ impl Memory {
             address,
             bytes.len(),
         );
-        self.write_with_ranges(
-            cpus,
-            domain,
-            address,
-            bytes,
-            Access::Write,
-            on_range,
-        )?;
+        self.write_with_ranges(cpus, domain, address, bytes, Access::Write, on_range)?;
         self.observe_transfer("model-bus-write", address, bytes.len());
         if let Some(stops) = self
             .continuation

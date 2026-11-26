@@ -89,9 +89,9 @@ try {
     const adapter = await gpuNavigator.gpu?.requestAdapter({ powerPreference: 'high-performance' });
     const canvas = document.createElement('canvas');
     const gl = canvas.getContext('webgl2');
-    const debug = gl?.getExtension('WEBGL_debug_renderer_info') as
-      | { UNMASKED_RENDERER_WEBGL: number }
-      | null;
+    const debug = gl?.getExtension('WEBGL_debug_renderer_info') as {
+      UNMASKED_RENDERER_WEBGL: number;
+    } | null;
     return {
       available: adapter !== undefined && adapter !== null,
       info: adapter?.info,

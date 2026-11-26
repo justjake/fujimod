@@ -152,9 +152,16 @@ fn xt5_431_startup_is_the_stock_selector_startup() {
     let recipe = Recipe::bundled("xt5-431").unwrap().unwrap();
     let setup = recipe.xp5.as_ref().unwrap();
     assert!(setup.card_boot.is_none());
-    let stock = setup.stock_selector.as_ref().expect("X-T5 4.31 names a stock-selector startup");
+    let stock = setup
+        .stock_selector
+        .as_ref()
+        .expect("X-T5 4.31 names a stock-selector startup");
     // One edit, in the reset stage: `ldr x0, [x0, #8]` becomes `mov x0, #0x20000000`.
-    let edits: Vec<_> = stock.ram_edits.iter().map(|e| (e.address, e.old, e.new)).collect();
+    let edits: Vec<_> = stock
+        .ram_edits
+        .iter()
+        .map(|e| (e.address, e.old, e.new))
+        .collect();
     assert_eq!(edits, [(0x2ec4, 0xf940_0400, 0xd2a4_0000)]);
     assert!(0x2ec4 < setup.reset_copy_size && setup.selector == 0x11a00);
     // The cleared extents: the controller payload cache and the overlays, which are whole
@@ -170,7 +177,10 @@ fn xt5_431_startup_is_the_stock_selector_startup() {
     assert_eq!(reset, (0, 0x20000));
     assert_eq!(cleared[0], (0x18000, 0x8000));
     assert!(cleared[0].0 >= setup.reset_copy_size && cleared[0].0 + cleared[0].1 == reset.1);
-    assert_eq!(cleared[1..], [region("controller payload cache"), region("overlays")]);
+    assert_eq!(
+        cleared[1..],
+        [region("controller payload cache"), region("overlays")]
+    );
     assert_eq!(cleared[2].0 + cleared[2].1, plan.size);
     // The loader reads the card at the stock driver's default-speed clock divider.
     assert_eq!(stock.transfer_clock_divider, Some(4));
@@ -184,7 +194,10 @@ fn xt5_431_startup_is_the_stock_selector_startup() {
         .filter(|id| !matches!(*id, "xt5-431" | "xh2-530"))
     {
         if let Some(other) = Recipe::bundled(id).unwrap() {
-            assert!(other.xp5.is_none_or(|setup| setup.stock_selector.is_none()), "{id}");
+            assert!(
+                other.xp5.is_none_or(|setup| setup.stock_selector.is_none()),
+                "{id}"
+            );
         }
     }
 }
@@ -256,7 +269,13 @@ fn cold_worker_requires_the_checked_condition_call_and_barrier_join() {
 fn boot_files_are_an_allowlist_and_never_the_update() {
     let file = |name: &str| File::new(name, vec![1]).unwrap();
     let names = |files: &[File]| files.iter().map(|f| f.name.clone()).collect::<Vec<_>>();
-    let all = || vec![file("marble_init.bin"), file("ffboot.bin"), file("FPUPDATE.DAT")];
+    let all = || {
+        vec![
+            file("marble_init.bin"),
+            file("ffboot.bin"),
+            file("FPUPDATE.DAT"),
+        ]
+    };
     assert_eq!(
         names(&boot_files_only(all(), "FPUPDATE.DAT").unwrap()),
         ["marble_init.bin", "ffboot.bin"]
@@ -268,14 +287,21 @@ fn boot_files_are_an_allowlist_and_never_the_update() {
     );
     // Anything else, a missing file, a repeat or another order is refused.
     for bad in [
-        vec![file("marble_init.bin"), file("ffboot.bin"), file("extra.bin")],
+        vec![
+            file("marble_init.bin"),
+            file("ffboot.bin"),
+            file("extra.bin"),
+        ],
         vec![file("marble_init.bin"), file("FFBOOT.BIN")],
         vec![file("marble_init.bin")],
         vec![file("ffboot.bin"), file("marble_init.bin")],
-        vec![file("marble_init.bin"), file("ffboot.bin"), file("ffboot.bin")],
+        vec![
+            file("marble_init.bin"),
+            file("ffboot.bin"),
+            file("ffboot.bin"),
+        ],
         vec![file("FPUPDATE.DAT")],
     ] {
         assert!(boot_files_only(bad, "FPUPDATE.DAT").is_err());
     }
 }
-

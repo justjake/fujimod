@@ -12,10 +12,6 @@
     "address": 4026531840,
     "size": 134217728
   },
-  "e1_window": {
-    "address": 4026531840,
-    "size": 134217728
-  },
   "update_image": {
     "dat_offset": 700,
     "xor": 255

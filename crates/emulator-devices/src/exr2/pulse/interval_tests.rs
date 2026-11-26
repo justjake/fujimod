@@ -150,18 +150,31 @@ fn mirrored_irq_raises_the_second_core_with_the_primary_output() {
         initial_phase: 0,
         capture_channel: None,
     };
-    let mirror = MirroredIrq { channel: 11, core: 1, line: 31 };
+    let mirror = MirroredIrq {
+        channel: 11,
+        core: 1,
+        line: 31,
+    };
     let mut device = PulseUnit::new(options(vec![mirror]), Wiring { irqs }).unwrap();
     let mut host = TestHost::new();
     host.now = 100;
     for (offset, value) in [(0, 0xc000), (4, 0), (8, 6000), (12, 5999), (16, 0)] {
-        write(&mut device, &mut host, CHANNEL_BASE + 11 * 0x100 + offset, value);
+        write(
+            &mut device,
+            &mut host,
+            CHANNEL_BASE + 11 * 0x100 + offset,
+            value,
+        );
     }
     write(&mut device, &mut host, BASE, 0x08000800);
     advance(&mut device, &mut host, 6100);
     assert_eq!(host.irqs, [(0, 31), (1, 31)]);
     // A mirror needs a declared interval-timer channel.
-    let stray = MirroredIrq { channel: 3, core: 1, line: 23 };
+    let stray = MirroredIrq {
+        channel: 3,
+        core: 1,
+        line: 23,
+    };
     assert!(PulseUnit::new(options(vec![stray]), Wiring { irqs }).is_err());
     // Existing configurations without the field still deserialize.
     let o: Options = serde_json::from_str(

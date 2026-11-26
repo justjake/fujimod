@@ -287,7 +287,9 @@ impl Contract {
                 .chain(&self.readable)
                 .all(|o| o & 3 == 0 && *o < WINDOW)
             && self.ready.iter().chain(&self.idle).all(bit)
-            && self.mask(self.start.0).is_some_and(|m| m & self.start.1 != 0)
+            && self
+                .mask(self.start.0)
+                .is_some_and(|m| m & self.start.1 != 0)
             && self.start.1.count_ones() == 1
             && self.status(self.start.0) & self.start.1 == 0
             && self.acknowledge.is_none_or(|(o, bit)| {
@@ -295,9 +297,7 @@ impl Contract {
             })
             && self.flags.is_none_or(|f| {
                 self.acknowledge.is_none()
-                    && [f.raw, f.pending]
-                        .iter()
-                        .all(|o| self.readable.contains(o))
+                    && [f.raw, f.pending].iter().all(|o| self.readable.contains(o))
                     && self.mask(f.pending).is_some_and(|m| m & f.done != 0)
                     && self.mask(f.enable).is_some_and(|m| m & f.done != 0)
                     && self.mask(f.raw).is_none()
@@ -1007,7 +1007,8 @@ impl Engine {
     fn check(&self, state: &State) -> Result<(), String> {
         let declared = |o: &u64, v: &u32| {
             self.contract.mask(*o).is_some_and(|m| {
-                v & !m == 0 && v & self.contract.status(*o) == 0
+                v & !m == 0
+                    && v & self.contract.status(*o) == 0
                     && !(*o == self.contract.start.0 && v & self.contract.start.1 != 0)
             })
         };
@@ -1248,7 +1249,10 @@ mod tests {
         let saved = e.save();
         let mut other = engine();
         other.restore(&saved).unwrap();
-        assert_eq!(read(&mut other, &mut h, 0x00), 0x8000_0000 | 2 << 4 | 1 << 16);
+        assert_eq!(
+            read(&mut other, &mut h, 0x00),
+            0x8000_0000 | 2 << 4 | 1 << 16
+        );
     }
 
     #[test]

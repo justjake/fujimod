@@ -138,7 +138,11 @@ impl SataHost {
             0x244 => {
                 let mut word = self.retained(offset);
                 word &= !CONTROLLER_READY;
-                word | if self.state.ready { CONTROLLER_READY } else { 0 }
+                word | if self.state.ready {
+                    CONTROLLER_READY
+                } else {
+                    0
+                }
             }
             _ => self.retained(offset),
         }
@@ -187,7 +191,9 @@ impl Device for SataHost {
             }
             0x200 => {
                 // PIO data with no medium: retain the byte lanes for observation.
-                self.state.words.insert(offset, self.retained(offset) | written);
+                self.state
+                    .words
+                    .insert(offset, self.retained(offset) | written);
             }
             0x21c => {
                 // Command is write-only; the status read reports no medium.

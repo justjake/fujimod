@@ -31,7 +31,9 @@ impl Run for RunHost {
     fn settle(&mut self) -> Result<(), String> {
         RunHost::step(self).map(drop)
     }
-    fn frames(&mut self) -> Result<Vec<fujimod_emulator_devices::graphics::scanout::Frame>, String> {
+    fn frames(
+        &mut self,
+    ) -> Result<Vec<fujimod_emulator_devices::graphics::scanout::Frame>, String> {
         Ok(self.take_frames())
     }
     fn finish(self) -> Result<serde_json::Value, String> {
@@ -83,7 +85,9 @@ impl Run for Live {
         let until = session.board.now() + (self.camera.ticks_per_second / 1000).max(1);
         session.run_window(u64::MAX, self.camera.quantum, None, Some(until))
     }
-    fn frames(&mut self) -> Result<Vec<fujimod_emulator_devices::graphics::scanout::Frame>, String> {
+    fn frames(
+        &mut self,
+    ) -> Result<Vec<fujimod_emulator_devices::graphics::scanout::Frame>, String> {
         if self.read_at.elapsed() < FRAME_INTERVAL {
             return Ok(Vec::new());
         }

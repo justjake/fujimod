@@ -25,7 +25,8 @@ async function fetchChecked(
   const data = new Uint8Array(bytes);
   let length = 0;
   for await (const chunk of response.body) {
-    if (length + chunk.byteLength > bytes) throw Error(`${url.pathname} failed its integrity check.`);
+    if (length + chunk.byteLength > bytes)
+      throw Error(`${url.pathname} failed its integrity check.`);
     data.set(chunk, length);
     length += chunk.byteLength;
     received(chunk.byteLength);

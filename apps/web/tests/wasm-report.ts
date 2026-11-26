@@ -2,8 +2,7 @@
 export async function engineReport(blob: Blob): Promise<Record<string, unknown>> {
   const buffer = await blob.arrayBuffer(),
     view = new DataView(buffer);
-  if (view.getUint32(0, true) !== 0x04034b50)
-    throw Error('Unexpected report ZIP format.');
+  if (view.getUint32(0, true) !== 0x04034b50) throw Error('Unexpected report ZIP format.');
   const method = view.getUint16(8, true),
     compressedLength = view.getUint32(18, true),
     length = view.getUint32(22, true),
@@ -23,7 +22,5 @@ export async function engineReport(blob: Blob): Promise<Record<string, unknown>>
           )
         : undefined;
   if (!bytes || bytes.byteLength !== length) throw Error('Unsupported report ZIP compression.');
-  return JSON.parse(
-    new TextDecoder().decode(bytes),
-  ) as Record<string, unknown>;
+  return JSON.parse(new TextDecoder().decode(bytes)) as Record<string, unknown>;
 }

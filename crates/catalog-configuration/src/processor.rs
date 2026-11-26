@@ -127,7 +127,10 @@ impl ProcessorEmulation {
                 || aperture.size % 0x1000 != 0
                 || aperture.address + aperture.size > 0xffff_0000
             {
-                return Err("processor emulation discovery aperture is not a bounded peripheral page range".into());
+                return Err(
+                    "processor emulation discovery aperture is not a bounded peripheral page range"
+                        .into(),
+                );
             }
         }
         for id in &self.private_mmio {

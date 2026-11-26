@@ -2,8 +2,8 @@
   "name": "fujimod",
   "version": "0.1.0",
   "private": true,
-  "license": "GPL-2.0-only",
   "description": "FujiMod asynchronous camera tools for JavaScript and WebUSB",
+  "license": "GPL-2.0-only",
   "files": [
     "dist",
     "pkg",

@@ -1,9 +1,11 @@
 use super::*;
 use fujimod_emulator_devices::bus::InterruptLine;
-use fujimod_emulator_devices::exr2::pulse::{Options as PulseOptions, PulseUnit, Wiring as PulseWiring};
+use fujimod_emulator_devices::exr2::pulse::{
+    Options as PulseOptions, PulseUnit, Wiring as PulseWiring,
+};
 use fujimod_emulator_devices::parts::pins::{Pin, Pins};
-use fujimod_emulator_parts_io::spi::{Endpoint, Shift};
 use fujimod_emulator_devices::test_host::TestHost;
+use fujimod_emulator_parts_io::spi::{Endpoint, Shift};
 
 struct TestPins;
 
@@ -93,14 +95,20 @@ fn repeated_iris_homing_does_not_shift_later_apertures() {
     unit.mechanics.motors[1].options.travel_limits = [0, 78];
     unit.mechanics.motors[1].options.boundary = TravelBoundary::EndStop;
     let aperture = std::sync::Arc::new(std::sync::Mutex::new(0.));
-    unit.attach_aperture(aperture.clone(), vec![(6, 16.), (78, 2.8)]).unwrap();
+    unit.attach_aperture(aperture.clone(), vec![(6, 16.), (78, 2.8)])
+        .unwrap();
     let mut host = TestHost::new();
     let mut drive = |steps: u16, opening: bool| {
         let at = host.now;
         let quantity = steps * 32;
         transmit(&mut unit, &mut host, 0x4400 | quantity & 0x3ff, at);
         transmit(&mut unit, &mut host, 0x4800 | quantity >> 10, at);
-        transmit(&mut unit, &mut host, if opening { 0x7e40 } else { 0x7e00 }, at);
+        transmit(
+            &mut unit,
+            &mut host,
+            if opening { 0x7e40 } else { 0x7e00 },
+            at,
+        );
         while let Some(due) = unit.next_deadline(host.now) {
             host.now = due;
             unit.advance(&mut host.cx(), due).unwrap();
@@ -143,13 +151,17 @@ fn nd_filter_coil_pulses_scale_aperture_and_transmission() {
         remove_mask: 0x100,
         factor: 8.0,
     };
-    assert!(lens
-        .attach_nd(
-            NdOptions { remove_mask: 0x80, ..options },
+    assert!(
+        lens.attach_nd(
+            NdOptions {
+                remove_mask: 0x80,
+                ..options
+            },
             aperture.clone(),
             transmission.clone()
         )
-        .is_err());
+        .is_err()
+    );
     lens.attach_nd(options, aperture.clone(), transmission.clone())
         .unwrap();
     let state = || (*aperture.lock().unwrap(), *transmission.lock().unwrap());

@@ -24,7 +24,8 @@ fn run_watching(quantum: usize, watched: &[u64]) -> (u64, u32, u64, Vec<(u64, u6
             Processor {
                 model: Model::CortexM4,
                 registers: vec![(arm32(0), 0x11000), (arm32(3), 0xaabbccdd)],
-                released: true, parked_until_sgi: false,
+                released: true,
+                parked_until_sgi: false,
                 rprofile: None,
                 mprofile: Some(super::mprofile::Config {
                     clock_hz: 1_000_000_000,
@@ -40,7 +41,8 @@ fn run_watching(quantum: usize, watched: &[u64]) -> (u64, u32, u64, Vec<(u64, u6
                     (Register::X(1), 0x11000),
                     (Register::X(2), 99),
                 ],
-                released: true, parked_until_sgi: false,
+                released: true,
+                parked_until_sgi: false,
                 rprofile: None,
                 mprofile: None,
             },
@@ -69,20 +71,37 @@ fn run_watching(quantum: usize, watched: &[u64]) -> (u64, u32, u64, Vec<(u64, u6
             None,
         )
         .unwrap();
-    let words = |words: &[u32]| words.iter().flat_map(|w| w.to_le_bytes()).collect::<Vec<_>>();
-    let halfwords =
-        |words: &[u16]| words.iter().flat_map(|w| w.to_le_bytes()).collect::<Vec<_>>();
-    board.write_physical(0x10000, &words(&[0x13000, 0x10101])).unwrap();
+    let words = |words: &[u32]| {
+        words
+            .iter()
+            .flat_map(|w| w.to_le_bytes())
+            .collect::<Vec<_>>()
+    };
+    let halfwords = |words: &[u16]| {
+        words
+            .iter()
+            .flat_map(|w| w.to_le_bytes())
+            .collect::<Vec<_>>()
+    };
+    board
+        .write_physical(0x10000, &words(&[0x13000, 0x10101]))
+        .unwrap();
     // ldrex r1,[r0]; nop; nop; nop; strex r2,r3,[r0]; wfi
     board
         .write_physical(
             0x10100,
-            &halfwords(&[0xe850, 0x1f00, 0xbf00, 0xbf00, 0xbf00, 0xe840, 0x3200, 0xbf30]),
+            &halfwords(&[
+                0xe850, 0x1f00, 0xbf00, 0xbf00, 0xbf00, 0xe840, 0x3200, 0xbf30,
+            ]),
         )
         .unwrap();
     // str w2,[x1]; b .
-    board.write_physical(0x14000, &words(&[0xb9000022, 0x14000000])).unwrap();
-    board.write_physical(0x11000, &words(&[0x11223344])).unwrap();
+    board
+        .write_physical(0x14000, &words(&[0xb9000022, 0x14000000]))
+        .unwrap();
+    board
+        .write_physical(0x11000, &words(&[0x11223344]))
+        .unwrap();
     board.watch_pcs(watched).unwrap();
     board.run_until(40, quantum).unwrap();
     let status = scalar(board.cpu(0).unwrap(), arm32(2)).unwrap();
@@ -91,7 +110,12 @@ fn run_watching(quantum: usize, watched: &[u64]) -> (u64, u32, u64, Vec<(u64, u6
     let mut witnessed: Vec<_> = board
         .pc_entries()
         .iter()
-        .map(|entry| (entry["core"].as_u64().unwrap(), entry["pc"].as_u64().unwrap()))
+        .map(|entry| {
+            (
+                entry["core"].as_u64().unwrap(),
+                entry["pc"].as_u64().unwrap(),
+            )
+        })
         .collect();
     witnessed.sort_unstable();
     (

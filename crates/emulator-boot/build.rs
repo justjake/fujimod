@@ -29,13 +29,23 @@ fn main() {
             let directory = directory.canonicalize().unwrap();
             let manifest = directory.join("manifest.toml");
             let manifest_text = fs::read_to_string(&manifest).unwrap();
-            let id = manifest_text.lines()
-                .find_map(|line| line.strip_prefix("firmware = \"").and_then(|id| id.strip_suffix('"')))
+            let id = manifest_text
+                .lines()
+                .find_map(|line| {
+                    line.strip_prefix("firmware = \"")
+                        .and_then(|id| id.strip_suffix('"'))
+                })
                 .expect("XP5 manifest must declare its firmware ID");
             let mut fragments: Vec<_> = fs::read_dir(directory.join("manifest.d"))
-                .map(|entries| entries.map(|entry| entry.unwrap().path())
-                    .filter(|path| path.extension().is_some_and(|extension| extension == "toml"))
-                    .collect())
+                .map(|entries| {
+                    entries
+                        .map(|entry| entry.unwrap().path())
+                        .filter(|path| {
+                            path.extension()
+                                .is_some_and(|extension| extension == "toml")
+                        })
+                        .collect()
+                })
                 .unwrap_or_default();
             fragments.sort();
             let mut list = String::new();
@@ -52,6 +62,10 @@ fn main() {
         }
     }
     source.push_str("];\n");
-    fs::write(Path::new(&env::var("OUT_DIR").unwrap()).join("bundled.rs"), source).unwrap();
+    fs::write(
+        Path::new(&env::var("OUT_DIR").unwrap()).join("bundled.rs"),
+        source,
+    )
+    .unwrap();
     println!("cargo:rerun-if-changed=build.rs");
 }

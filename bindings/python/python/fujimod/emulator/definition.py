@@ -33,6 +33,7 @@ class Asset:
             raise ValueError("Asset id must be a bounded identifier")
         if type(self.size) is not int or not 0 <= self.size < 1 << 64:
             raise ValueError("Asset size must be an unsigned 64-bit integer")
+
     def manifest(self) -> dict[str, object]:
         return dict(id=self.id, content=dict(size=self.size))
 

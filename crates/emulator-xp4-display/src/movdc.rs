@@ -1,7 +1,7 @@
 //! XP4 MOVDC output DMA. The packed422 source and clock are explicit scenario
 //! inputs, not an ISP implementation or measured silicon timing.
-use fujimod_emulator_imaging::frame;
 use fujimod_emulator_devices::{Cx, Device};
+use fujimod_emulator_imaging::frame;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
@@ -121,14 +121,31 @@ impl Movdc {
 }
 #[derive(Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
-struct SavedMovdc { base: u64, irq: u32, reset_ticks: u64, period_ticks: u64, luma: u8, state: State }
+struct SavedMovdc {
+    base: u64,
+    irq: u32,
+    reset_ticks: u64,
+    period_ticks: u64,
+    luma: u8,
+    state: State,
+}
 
 impl Movdc {
     fn validate_savedmovdc(&self, saved: &SavedMovdc) -> Result<(), String> {
         let s = &saved.state;
-        if (saved.base, saved.irq, saved.reset_ticks, saved.period_ticks, saved.luma)
-                != (self.base, self.irq, self.reset_ticks, self.period_ticks, self.luma)
-            || s.regs.len() != 0x10c / 4
+        if (
+            saved.base,
+            saved.irq,
+            saved.reset_ticks,
+            saved.period_ticks,
+            saved.luma,
+        ) != (
+            self.base,
+            self.irq,
+            self.reset_ticks,
+            self.period_ticks,
+            self.luma,
+        ) || s.regs.len() != 0x10c / 4
             || s.regs[1] > 1
             || s.frame_deadline.is_some()
                 != (s.regs[1] == 1
@@ -241,12 +258,28 @@ impl Device for Movdc {
         serde_json::to_value(&self.state).unwrap()
     }
     fn checkpoint(&self) -> Result<fujimod_emulator_devices::checkpoint::Checkpoint, String> {
-        fujimod_emulator_devices::checkpoint::Checkpoint::encode(self.name(), &SavedMovdc { base: self.base, irq: self.irq, reset_ticks: self.reset_ticks, period_ticks: self.period_ticks, luma: self.luma, state: self.state.clone() })
+        fujimod_emulator_devices::checkpoint::Checkpoint::encode(
+            self.name(),
+            &SavedMovdc {
+                base: self.base,
+                irq: self.irq,
+                reset_ticks: self.reset_ticks,
+                period_ticks: self.period_ticks,
+                luma: self.luma,
+                state: self.state.clone(),
+            },
+        )
     }
-    fn validate_checkpoint(&self, data: &fujimod_emulator_devices::checkpoint::Checkpoint) -> Result<(), String> {
+    fn validate_checkpoint(
+        &self,
+        data: &fujimod_emulator_devices::checkpoint::Checkpoint,
+    ) -> Result<(), String> {
         self.validate_savedmovdc(&data.decode(self.name())?)
     }
-    fn restore_checkpoint(&mut self, data: &fujimod_emulator_devices::checkpoint::Checkpoint) -> Result<(), String> {
+    fn restore_checkpoint(
+        &mut self,
+        data: &fujimod_emulator_devices::checkpoint::Checkpoint,
+    ) -> Result<(), String> {
         let saved: SavedMovdc = data.decode(self.name())?;
         self.validate_savedmovdc(&saved)?;
         self.state = saved.state;
@@ -254,7 +287,14 @@ impl Device for Movdc {
     }
     fn restore(&mut self, value: &Value) -> Result<(), String> {
         let s: State = serde_json::from_value(value.clone()).map_err(|e| e.to_string())?;
-        self.validate_savedmovdc(&SavedMovdc { base: self.base, irq: self.irq, reset_ticks: self.reset_ticks, period_ticks: self.period_ticks, luma: self.luma, state: s.clone() })?;
+        self.validate_savedmovdc(&SavedMovdc {
+            base: self.base,
+            irq: self.irq,
+            reset_ticks: self.reset_ticks,
+            period_ticks: self.period_ticks,
+            luma: self.luma,
+            state: s.clone(),
+        })?;
         self.state = s;
         Ok(())
     }
@@ -397,9 +437,11 @@ mod tests {
                 &h.ram[64 + stride as usize..64 + stride as usize + row.len()],
                 row
             );
-            assert!(h.ram[64 + row.len()..64 + stride as usize]
-                .iter()
-                .all(|v| *v == 0xaa));
+            assert!(
+                h.ram[64 + row.len()..64 + stride as usize]
+                    .iter()
+                    .all(|v| *v == 0xaa)
+            );
             assert_eq!(d.state.frames, 1);
         }
         for (offset, value) in [(0xd4, 0x10060000), (0xd4, 0x10040000), (0xd8, 0x10010002)] {

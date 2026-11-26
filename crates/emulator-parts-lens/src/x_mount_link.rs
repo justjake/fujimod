@@ -538,7 +538,10 @@ impl Wire for Link {
             &(&self.configuration, &self.state),
         )
     }
-    fn validate_checkpoint(&self, saved: &fujimod_emulator_devices::checkpoint::Checkpoint) -> Result<(), String> {
+    fn validate_checkpoint(
+        &self,
+        saved: &fujimod_emulator_devices::checkpoint::Checkpoint,
+    ) -> Result<(), String> {
         let (configuration, state): (Configuration, State) =
             saved.decode("x-mount-startup-link")?;
         if configuration != self.configuration
@@ -549,7 +552,10 @@ impl Wire for Link {
         }
         self.validate_state(&state)
     }
-    fn restore_checkpoint(&mut self, saved: &fujimod_emulator_devices::checkpoint::Checkpoint) -> Result<(), String> {
+    fn restore_checkpoint(
+        &mut self,
+        saved: &fujimod_emulator_devices::checkpoint::Checkpoint,
+    ) -> Result<(), String> {
         self.validate_checkpoint(saved)?;
         let (_, state): (Configuration, State) = saved.decode("x-mount-startup-link")?;
         self.state = state;

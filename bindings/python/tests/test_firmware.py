@@ -33,9 +33,7 @@ class Firmware(unittest.TestCase):
     def test_headers_and_raw(self) -> None:
         data = struct.pack("<8I", 0, 0x1000, 32, 0x1010, 0, 0, 0, 0xAAAAFFFF)
         self.assertEqual(firmware.inner_header(data), (32, 0x1000, 32))
-        self.assertEqual(
-            firmware.raw(data, 0, 32, 0x1000, 32, 32, 0x1010), data
-        )
+        self.assertEqual(firmware.raw(data, 0, 32, 0x1000, 32, 32, 0x1010), data)
         with self.assertRaises(ValueError):
             firmware.raw(data, 0, 32, 0x1000, 64, 32, 0x1010)
         outer = bytearray(0x2BC)
@@ -47,7 +45,6 @@ class Firmware(unittest.TestCase):
             (header["kind"], header["signed_size"], header["signature_der"]),
             (8, len(outer), signature),
         )
-
 
     def test_update_sums(self) -> None:
         data = bytearray(0x274 + 0x80)
@@ -73,6 +70,7 @@ class Firmware(unittest.TestCase):
         )
         with self.assertRaises(ValueError):
             firmware.update_sums(bytes(data[:0x274]))
+
 
 if __name__ == "__main__":
     unittest.main()

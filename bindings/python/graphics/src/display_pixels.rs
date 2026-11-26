@@ -14,9 +14,7 @@ pub fn decode_display_rgb<'py>(
 ) -> PyResult<Bound<'py, PyBytes>> {
     let bytes = py
         .detach(|| {
-            fujimod_framebuffer::packed_color::decode(
-                data, width, height, stride, packing, matrix,
-            )
+            fujimod_framebuffer::packed_color::decode(data, width, height, stride, packing, matrix)
         })
         .map_err(PyValueError::new_err)?;
     Ok(PyBytes::new(py, &bytes))

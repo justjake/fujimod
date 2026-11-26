@@ -2,9 +2,9 @@
 use crate::warp::Warp;
 use fujimod_emulator_devices::Device;
 use fujimod_emulator_devices::exr2::irq_routes::Irq;
-use fujimod_emulator_imaging::exr2_isp::stream::{State, StreamHandle};
-use fujimod_emulator_exr2_codecs::jpeg::{Encoder, encoder};
 use fujimod_emulator_devices::test_host::{TestHost, advance, read, write};
+use fujimod_emulator_exr2_codecs::jpeg::{Encoder, encoder};
+use fujimod_emulator_imaging::exr2_isp::stream::{State, StreamHandle};
 
 fn encoder(stream: StreamHandle) -> Encoder {
     Encoder::new(

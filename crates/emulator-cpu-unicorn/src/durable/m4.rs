@@ -4,7 +4,13 @@ use super::*;
 use arm::Register as Arm;
 
 const SPECIAL: [Arm; 7] = [
-    Arm::Msp, Arm::Psp, Arm::Primask, Arm::Basepri, Arm::Faultmask, Arm::Cpacr, Arm::Fpscr,
+    Arm::Msp,
+    Arm::Psp,
+    Arm::Primask,
+    Arm::Basepri,
+    Arm::Faultmask,
+    Arm::Cpacr,
+    Arm::Fpscr,
 ];
 const THUMB: u32 = 1 << 24;
 const XPSR_EXCEPTION_OR_IT: u32 = 0x0600_fdff;
@@ -22,7 +28,11 @@ pub(crate) struct State {
 impl State {
     pub(super) fn capture(context: &Context) -> Result<Self, String> {
         let state = Self {
-            registers: array(arm::CORE.into_iter().map(|register| context.get32(register)))?,
+            registers: array(
+                arm::CORE
+                    .into_iter()
+                    .map(|register| context.get32(register)),
+            )?,
             xpsr: context.get32(Register::Arm32(Arm::Xpsr))?,
             control: context.get32(Register::Arm32(Arm::Control))?,
             special: array(SPECIAL.map(|register| context.get32(Register::Arm32(register))))?,
@@ -36,8 +46,13 @@ impl State {
         // The portable path currently supports privileged thread checkpoints.
         // Handler stack switching and in-progress IT blocks require native state
         // beyond the writable xPSR surface.
-        if self.xpsr & XPSR_EXCEPTION_OR_IT != 0 || self.control & !6 != 0 || self.registers[15] & 1 != 0 {
-            return Err("Cortex-M4 checkpoint requires privileged thread mode outside an IT block".into());
+        if self.xpsr & XPSR_EXCEPTION_OR_IT != 0
+            || self.control & !6 != 0
+            || self.registers[15] & 1 != 0
+        {
+            return Err(
+                "Cortex-M4 checkpoint requires privileged thread mode outside an IT block".into(),
+            );
         }
         let active = usize::from(self.control & 2 != 0);
         if self.registers[13] != self.special[active] {
@@ -68,7 +83,10 @@ impl State {
         for (index, value) in self.floating.into_iter().enumerate() {
             put(Register::Arm32(Arm::S(index as u8)), value)?;
         }
-        put(Register::Pc, self.registers[15] | u32::from(self.xpsr & THUMB != 0))?;
+        put(
+            Register::Pc,
+            self.registers[15] | u32::from(self.xpsr & THUMB != 0),
+        )?;
         cpu.invalidate_code(None)
     }
 }

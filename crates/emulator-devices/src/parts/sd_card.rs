@@ -146,9 +146,7 @@ impl Card {
         Ok(())
     }
     pub fn nonzero_sectors(&self) -> impl Iterator<Item = (u32, &[u8])> {
-        self.data
-            .iter()
-            .map(|(&lba, bytes)| (lba, bytes.as_ref()))
+        self.data.iter().map(|(&lba, bytes)| (lba, bytes.as_ref()))
     }
     pub fn dirty_sectors(&self) -> usize {
         self.data.len()
@@ -169,7 +167,10 @@ impl Card {
             return Err("SD sector beyond card capacity".into());
         }
         static ZERO: [u8; SECTOR] = [0; SECTOR];
-        Ok(self.data.get(&lba).map_or(&ZERO[..], |bytes| bytes.as_ref()))
+        Ok(self
+            .data
+            .get(&lba)
+            .map_or(&ZERO[..], |bytes| bytes.as_ref()))
     }
     pub fn read_bytes(&self, offset: u64, out: &mut [u8]) -> Result<(), String> {
         self.byte_range(offset, out.len())?;

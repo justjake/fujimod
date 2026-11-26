@@ -101,11 +101,23 @@ export function pageMetadata(path: string) {
       canonical: siteOrigin + normalized,
     };
   if (normalized === '/docs/design/')
-    return { title: 'Design · FujiMod', description: 'Prototypes of Fujimod camera screens.', canonical: siteOrigin + normalized };
+    return {
+      title: 'Design · FujiMod',
+      description: 'Prototypes of Fujimod camera screens.',
+      canonical: siteOrigin + normalized,
+    };
   if (normalized === '/docs/design/custom-settings-editor/')
-    return { title: 'Custom settings editor · Design · FujiMod', description: 'The custom settings editor and film editor prototype.', canonical: siteOrigin + normalized };
+    return {
+      title: 'Custom settings editor · Design · FujiMod',
+      description: 'The custom settings editor and film editor prototype.',
+      canonical: siteOrigin + normalized,
+    };
   if (normalized === '/features/custom-settings-editor/')
-    return { title: 'Custom Settings Editor · FujiMod', description: 'The on-camera film editor, running live.', canonical: siteOrigin + normalized };
+    return {
+      title: 'Custom Settings Editor · FujiMod',
+      description: 'The on-camera film editor, running live.',
+      canonical: siteOrigin + normalized,
+    };
   if (normalized === '/docs/sdk/focal/')
     return {
       title: 'FocalUI SDK · Fujimod',

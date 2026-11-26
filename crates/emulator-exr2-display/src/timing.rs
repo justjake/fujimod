@@ -411,7 +411,10 @@ impl Timing {
         }
         // A status read between events is pure, including checkpoint state.
         // Due work and clock-peer transitions remain explicit boundaries.
-        if self.deadline_with_clock(now, host.clock_ready()?).is_some_and(|at| at <= now) {
+        if self
+            .deadline_with_clock(now, host.clock_ready()?)
+            .is_some_and(|at| at <= now)
+        {
             self.tick(now, held, host)?;
         }
         Ok(if o == 0x30 {
@@ -617,7 +620,8 @@ impl DisplayTiming {
         if wiring.start_tick > ceiling {
             return Err("display initial clock exceeds its time range".into());
         }
-        let mut controllers: [Option<fujimod_emulator_devices::exr2::irq::Inputs>; 2] = Default::default();
+        let mut controllers: [Option<fujimod_emulator_devices::exr2::irq::Inputs>; 2] =
+            Default::default();
         for (core, pins) in wiring.controllers {
             if core >= 2 || controllers[core].is_some() {
                 return Err("invalid display IRQ connections".into());

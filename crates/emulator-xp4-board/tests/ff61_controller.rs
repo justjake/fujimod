@@ -39,8 +39,12 @@ fn session(value: Value) -> Result<Session, String> {
     Session::new(definition, None, vec![])
 }
 
-fn run(board: &Session, code: usize, program: &[u32],
-       registers: &[(usize, u32)]) -> Result<(), String> {
+fn run(
+    board: &Session,
+    code: usize,
+    program: &[u32],
+    registers: &[(usize, u32)],
+) -> Result<(), String> {
     // Each program gets its own address: the board caches translations, so
     // overwriting one entry point would re-run the previous body.
     let bytes: Vec<u8> = program.iter().flat_map(|w| w.to_le_bytes()).collect();
@@ -63,7 +67,13 @@ fn word(board: &Session, address: usize) -> u32 {
 }
 
 // str r1,[r0]; ldr r2,[r0]; str r2,[r3]; mov r0,#0; b .
-const COPY: [u32; 5] = [0xe580_1000, 0xe590_2000, 0xe583_2000, 0xe3a0_0000, 0xeaff_fffe];
+const COPY: [u32; 5] = [
+    0xe580_1000,
+    0xe590_2000,
+    0xe583_2000,
+    0xe3a0_0000,
+    0xeaff_fffe,
+];
 // str r1,[r0]; ldr r2,[r0,#0x110]; str r2,[r3]; mov r0,#0; b .
 const STATUS: [u32; 7] = [
     0xe580_1000, // str r1,[r0]
@@ -80,14 +90,30 @@ const LOAD: [u32; 4] = [0xe590_2000, 0xe583_2000, 0xe3a0_0000, 0xeaff_fffe];
 #[test]
 fn retained_configuration_does_not_satisfy_status_polls() {
     let board = session(input(json!([]))).unwrap();
-    run(&board, CODE, &COPY, &[(0, LOCK), (1, 0x924), (3, RESULT as u32)]).unwrap();
-    assert_eq!(word(&board, RESULT), 0x924, "configuration must be retained");
+    run(
+        &board,
+        CODE,
+        &COPY,
+        &[(0, LOCK), (1, 0x924), (3, RESULT as u32)],
+    )
+    .unwrap();
+    assert_eq!(
+        word(&board, RESULT),
+        0x924,
+        "configuration must be retained"
+    );
     assert_eq!(
         word(&board, RESULT) & 0x30000,
         0,
         "retention must not satisfy the 0x30000 lock poll"
     );
-    run(&board, CODE + 0x40, &STATUS, &[(0, REQUEST), (1, 0xB00), (3, RESULT as u32)]).unwrap();
+    run(
+        &board,
+        CODE + 0x40,
+        &STATUS,
+        &[(0, REQUEST), (1, 0xB00), (3, RESULT as u32)],
+    )
+    .unwrap();
     assert_eq!(word(&board, RESULT), 0, "the status program actually ran");
     assert_eq!(
         word(&board, RESULT) & 1,
@@ -99,17 +125,39 @@ fn retained_configuration_does_not_satisfy_status_polls() {
 #[test]
 fn catalog_command_sets_the_status_bit_but_is_not_training() {
     let board = session(input(json!([]))).unwrap();
-    run(&board, CODE, &STATUS, &[(0, REQUEST), (1, 0xB01), (3, RESULT as u32)]).unwrap();
-    assert_eq!(word(&board, RESULT) & 1, 1, "the declared command law sets bit 0");
+    run(
+        &board,
+        CODE,
+        &STATUS,
+        &[(0, REQUEST), (1, 0xB01), (3, RESULT as u32)],
+    )
+    .unwrap();
+    assert_eq!(
+        word(&board, RESULT) & 1,
+        1,
+        "the declared command law sets bit 0"
+    );
     let other = session(input(json!([]))).unwrap();
-    run(&other, CODE, &STATUS, &[(0, REQUEST), (1, 0xB02), (3, RESULT as u32)]).unwrap();
+    run(
+        &other,
+        CODE,
+        &STATUS,
+        &[(0, REQUEST), (1, 0xB02), (3, RESULT as u32)],
+    )
+    .unwrap();
     assert_eq!(word(&other, RESULT) & 1, 0);
 }
 
 #[test]
 fn config_readback_is_distinguished_from_a_status_transition() {
     let board = session(input(json!([]))).unwrap();
-    run(&board, CODE, &COPY, &[(0, APPLY), (1, 0x4000_0000), (3, RESULT as u32)]).unwrap();
+    run(
+        &board,
+        CODE,
+        &COPY,
+        &[(0, APPLY), (1, 0x4000_0000), (3, RESULT as u32)],
+    )
+    .unwrap();
     assert_eq!(word(&board, RESULT), 0x4000_0000);
     assert_ne!(
         word(&board, RESULT) & 0x4000_0001,
@@ -144,21 +192,61 @@ fn catalog_declared_idle_and_fixed_words_satisfy_the_polls_from_reset() {
     // command at all: FF614670 returns 0x30003 from reset and 0x924 | 0x30003
     // after the table write. This is the declared synthetic readiness and a
     // false-success hazard; it is not a completion law.
-    let mut value = input(json!([[0x670, 0x30003], [0x674, 0x30003],
-                                 [0x678, 0x30003], [0xDC, 0x300], [0x2DC, 0x300]]));
+    let mut value = input(json!([
+        [0x670, 0x30003],
+        [0x674, 0x30003],
+        [0x678, 0x30003],
+        [0xDC, 0x300],
+        [0x2DC, 0x300]
+    ]));
     value["xpp_register_blocks"][2]["fixed"] = json!([[0xC18, 1]]);
     let board = session(value).unwrap();
     run(&board, CODE, &LOAD, &[(0, LOCK), (3, RESULT as u32)]).unwrap();
-    assert_eq!(word(&board, RESULT) & 0x30000, 0x30000,
-               "catalog idle bits satisfy the lock poll from reset");
-    run(&board, CODE + 0x40, &COPY, &[(0, LOCK), (1, 0x924), (3, RESULT as u32)]).unwrap();
+    assert_eq!(
+        word(&board, RESULT) & 0x30000,
+        0x30000,
+        "catalog idle bits satisfy the lock poll from reset"
+    );
+    run(
+        &board,
+        CODE + 0x40,
+        &COPY,
+        &[(0, LOCK), (1, 0x924), (3, RESULT as u32)],
+    )
+    .unwrap();
     assert_eq!(word(&board, RESULT), 0x924 | 0x30003);
-    run(&board, CODE + 0x80, &LOAD, &[(0, APPLY), (3, RESULT as u32)]).unwrap();
-    assert_eq!(word(&board, RESULT), 1, "catalog fixed word is ready from reset");
-    run(&board, CODE + 0xC0, &LOAD, &[(0, CLEAR), (3, RESULT as u32)]).unwrap();
-    assert_eq!(word(&board, RESULT), 0, "catalog apply-clear fixed word reads zero");
+    run(
+        &board,
+        CODE + 0x80,
+        &LOAD,
+        &[(0, APPLY), (3, RESULT as u32)],
+    )
+    .unwrap();
+    assert_eq!(
+        word(&board, RESULT),
+        1,
+        "catalog fixed word is ready from reset"
+    );
+    run(
+        &board,
+        CODE + 0xC0,
+        &LOAD,
+        &[(0, CLEAR), (3, RESULT as u32)],
+    )
+    .unwrap();
+    assert_eq!(
+        word(&board, RESULT),
+        0,
+        "catalog apply-clear fixed word reads zero"
+    );
     // The stock firmware writes 0x40000000 to FF517C18; a fixed word must win.
-    run(&board, CODE + 0x100, &COPY, &[(0, APPLY), (1, 0x4000_0000), (3, RESULT as u32)]).unwrap();
+    run(
+        &board,
+        CODE + 0x100,
+        &COPY,
+        &[(0, APPLY), (1, 0x4000_0000), (3, RESULT as u32)],
+    )
+    .unwrap();
     assert_eq!(word(&board, RESULT), 1, "fixed wins over the stock write");
 }
 
@@ -174,6 +262,11 @@ fn an_unmodeled_block_is_refused_rather_than_ready() {
     let mut value = input(json!([]));
     value["xpp_register_blocks"] = json!([]);
     let board = session(value).unwrap();
-    let result = run(&board, CODE, &COPY, &[(0, LOCK), (1, 0x30000), (3, RESULT as u32)]);
+    let result = run(
+        &board,
+        CODE,
+        &COPY,
+        &[(0, LOCK), (1, 0x30000), (3, RESULT as u32)],
+    );
     assert!(result.is_err() || board.state(false).failure.is_some());
 }

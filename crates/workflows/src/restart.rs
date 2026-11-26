@@ -514,7 +514,10 @@ mod tests {
         .unwrap();
         restart.validate().unwrap();
         assert!(restart.mechanism.transport.is_none());
-        assert_eq!(restart.mechanism.power_off.as_ref().unwrap().entry, 0x692944);
+        assert_eq!(
+            restart.mechanism.power_off.as_ref().unwrap().entry,
+            0x692944
+        );
         assert_eq!(
             restart
                 .mechanism

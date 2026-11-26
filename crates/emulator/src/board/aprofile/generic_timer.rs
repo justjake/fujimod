@@ -17,20 +17,11 @@ impl Clock {
     }
     pub fn count(self, now: u64) -> Result<u64, String> {
         self.validate()?;
-        // The common product fits 64 bits; the wide form is the same value.
-        if let Some(product) = now.checked_mul(self.counter_hz) {
-            return Ok(product / self.ticks_per_second);
-        }
-        // floor((a * t + b) * h / t) = a * h + floor(b * h / t) for b < t.
-        let (whole, rest) = (now / self.ticks_per_second, now % self.ticks_per_second);
-        if let Some(count) = rest
-            .checked_mul(self.counter_hz)
-            .and_then(|part| whole.checked_mul(self.counter_hz)?.checked_add(part / self.ticks_per_second))
-        {
-            return Ok(count);
-        }
-        u64::try_from(now as u128 * self.counter_hz as u128 / self.ticks_per_second as u128)
-            .map_err(|_| "architectural counter overflow".into())
+        fujimod_emulator_cpu::architectural_counter_count(
+            now,
+            self.counter_hz,
+            self.ticks_per_second,
+        )
     }
     fn at_count(self, count: u64) -> Result<u64, String> {
         self.validate()?;
@@ -40,7 +31,9 @@ impl Clock {
         // ceil((a * h + b) * t / h) = a * t + ceil(b * t / h) for b < h.
         let (whole, rest) = (count / self.counter_hz, count % self.counter_hz);
         if let Some(tick) = rest.checked_mul(self.ticks_per_second).and_then(|part| {
-            whole.checked_mul(self.ticks_per_second)?.checked_add(part.div_ceil(self.counter_hz))
+            whole
+                .checked_mul(self.ticks_per_second)?
+                .checked_add(part.div_ceil(self.counter_hz))
         }) {
             return Ok(tick);
         }
@@ -134,13 +127,20 @@ mod tests {
             (3, 10),
             (62_500_000, u64::MAX / 3),
         ] {
-            let clock = Clock { counter_hz: hz, ticks_per_second: tps };
+            let clock = Clock {
+                counter_hz: hz,
+                ticks_per_second: tps,
+            };
             for round in 0..4000 {
                 let value = next() >> (round % 40);
                 let wide = u64::try_from(value as u128 * hz as u128 / tps as u128).ok();
                 assert_eq!(clock.count(value).ok(), wide, "count {value} {hz} {tps}");
                 let wide = u64::try_from((value as u128 * tps as u128).div_ceil(hz as u128)).ok();
-                assert_eq!(clock.at_count(value).ok(), wide, "at_count {value} {hz} {tps}");
+                assert_eq!(
+                    clock.at_count(value).ok(),
+                    wide,
+                    "at_count {value} {hz} {tps}"
+                );
             }
         }
     }
@@ -224,10 +224,9 @@ mod tests {
                 ticks_per_second,
             };
             for &value in &values {
-                let count = u64::try_from(
-                    value as u128 * counter_hz as u128 / ticks_per_second as u128,
-                )
-                .ok();
+                let count =
+                    u64::try_from(value as u128 * counter_hz as u128 / ticks_per_second as u128)
+                        .ok();
                 assert_eq!(clock.count(value).ok(), count);
                 let at = u64::try_from(
                     (value as u128 * ticks_per_second as u128).div_ceil(counter_hz as u128),

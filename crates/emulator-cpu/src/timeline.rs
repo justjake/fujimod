@@ -334,7 +334,9 @@ impl Timeline {
     /// Advance an unpowered machine without executing its old device events.
     /// The old powered epoch cannot be resumed after this operation.
     pub fn advance_unpowered(&mut self, at: u64) -> Result<(), String> {
-        if at < self.now { return Err("unpowered time moved backward".into()); }
+        if at < self.now {
+            return Err("unpowered time moved backward".into());
+        }
         self.queue.clear();
         self.lags.fill(0);
         self.now = at;
@@ -611,11 +613,18 @@ mod tests {
             u64::MAX - 1,
             u64::MAX,
         ];
-        for (numerator, denominator) in [(1u64, 1u64), (7, 2), (5, 5), (1 << 32, 3), (1 << 32, 1 << 32)] {
+        for (numerator, denominator) in [
+            (1u64, 1u64),
+            (7, 2),
+            (5, 5),
+            (1 << 32, 3),
+            (1 << 32, 1 << 32),
+        ] {
             let ratio = Ratio::new(numerator, denominator).unwrap();
             for phase in [0, numerator / 2, numerator - 1] {
                 for &entries in &values {
-                    let fraction = u128::from(phase) + u128::from(entries) * u128::from(denominator);
+                    let fraction =
+                        u128::from(phase) + u128::from(entries) * u128::from(denominator);
                     assert_eq!(
                         ratio.advance_phase(phase, entries).unwrap(),
                         (

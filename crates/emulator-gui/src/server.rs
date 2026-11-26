@@ -1,8 +1,8 @@
 use crate::protocol::{Event, Request, command_args};
 use crate::usb::UsbShare;
-use fujimod_usb::share_owner::DeviceShare;
 use fujimod_emulator_devices::graphics::scanout::Frame;
 use fujimod_emulator_session::Session;
+use fujimod_usb::share_owner::DeviceShare;
 use fujimod_webrtc::{HostEvent, LoopbackRoom, PeerSocket, VideoFrame, VideoSender};
 use openh264::encoder::{
     BitRate, Encoder, EncoderConfig, FrameRate, IntraFramePeriod, Profile, RateControlMode,
@@ -68,9 +68,7 @@ impl Room {
         std::thread::Builder::new()
             .name("fujimod-viewer-room".into())
             .spawn(move || {
-                while let Ok(event) =
-                    futures_lite::future::block_on(watched.room().next_event())
-                {
+                while let Ok(event) = futures_lite::future::block_on(watched.room().next_event()) {
                     if send.send(event).is_err() {
                         break;
                     }
@@ -124,7 +122,11 @@ impl Room {
 
 /// Serve `run` in its room while its host is `open` (for a desktop window,
 /// [`crate::launch::Window::open`]); controllers joining and leaving do not end the run.
-pub fn serve<R: Run>(mut run: R, room: Room, open: &mut dyn FnMut() -> bool) -> Result<Value, String> {
+pub fn serve<R: Run>(
+    mut run: R,
+    room: Room,
+    open: &mut dyn FnMut() -> bool,
+) -> Result<Value, String> {
     let mut viewer = room.join(&mut || !open())?;
     while open() {
         viewer.service(&mut run)?;
@@ -138,7 +140,10 @@ pub fn serve<R: Run>(mut run: R, room: Room, open: &mut dyn FnMut() -> bool) -> 
 }
 
 fn identity(session: &Session, key: &str) -> String {
-    session.definition[key].as_str().unwrap_or_default().to_owned()
+    session.definition[key]
+        .as_str()
+        .unwrap_or_default()
+        .to_owned()
 }
 
 /// One controller's video: its track and its own encoder, so a controller
@@ -202,7 +207,13 @@ impl Viewer {
 
     /// Admit a controller whose first message was `first`: the USB share
     /// protocol goes to the camera's USB port, anything else is the viewer's.
-    fn admit(&mut self, run: &mut dyn Run, id: String, socket: PeerSocket, first: Vec<u8>) -> Result<(), String> {
+    fn admit(
+        &mut self,
+        run: &mut dyn Run,
+        id: String,
+        socket: PeerSocket,
+        first: Vec<u8>,
+    ) -> Result<(), String> {
         if DeviceShare::opens(&first) {
             if self.usb.is_none() {
                 match UsbShare::connect(run, &self.room.endpoint.url) {
@@ -221,27 +232,27 @@ impl Viewer {
             return Ok(());
         }
         let video = socket.video().map(|sender| {
-                    Ok::<_, String>(Video {
-                        sender,
-                        encoder: encoder()?,
-                        sent: 0,
-                        sent_at: Instant::now(),
-                        keyframe_at: None,
-                    })
-                });
-                let video = video.transpose()?;
-                self.controllers.push(Controller {
-                    id,
-                    socket,
-                    video,
-                    catalog_sent: false,
-                    last_state: None,
-                });
-                let index = self.controllers.len() - 1;
-                if let Some(event) = self.receive(run, index, &first) {
-                    self.send(index, event);
-                }
-                Ok(())
+            Ok::<_, String>(Video {
+                sender,
+                encoder: encoder()?,
+                sent: 0,
+                sent_at: Instant::now(),
+                keyframe_at: None,
+            })
+        });
+        let video = video.transpose()?;
+        self.controllers.push(Controller {
+            id,
+            socket,
+            video,
+            catalog_sent: false,
+            last_state: None,
+        });
+        let index = self.controllers.len() - 1;
+        if let Some(event) = self.receive(run, index, &first) {
+            self.send(index, event);
+        }
+        Ok(())
     }
 
     /// A controller has gone: drop it and let go of every button it held.
@@ -265,9 +276,9 @@ impl Viewer {
             let firmware = identity(session, "firmware_id");
             let selection = fujimod_catalog::reference::ReferenceCatalog::bundled()?
                 .resolve_firmware(&firmware)?;
-            let controls = selection.physical_controls.ok_or_else(|| {
-                format!("{} has no physical controls catalog", selection.body.id)
-            })?;
+            let controls = selection
+                .physical_controls
+                .ok_or_else(|| format!("{} has no physical controls catalog", selection.body.id))?;
             self.catalog = Some(
                 Event::Catalog {
                     configuration: identity(session, "configuration_id"),
@@ -477,9 +488,8 @@ impl Viewer {
 
     fn send_text(&mut self, index: usize, text: String) {
         // A controller that has gone is dropped by the next service.
-        let _ = futures_lite::future::block_on(
-            self.controllers[index].socket.send(text.into_bytes()),
-        );
+        let _ =
+            futures_lite::future::block_on(self.controllers[index].socket.send(text.into_bytes()));
     }
 
     /// One controller's command. A button is pressed while any controller

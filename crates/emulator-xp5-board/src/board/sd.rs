@@ -55,7 +55,16 @@ pub fn resolve(
             .collect::<Result<Vec<_>, _>>()?;
         let card = fat::format(&input.format, &files)?;
         let contacts = Contacts::new(input.present, input.protected);
-        if media.insert(input.base, Media { card: Some(card), contacts }).is_some() {
+        if media
+            .insert(
+                input.base,
+                Media {
+                    card: Some(card),
+                    contacts,
+                },
+            )
+            .is_some()
+        {
             return Err("Repeated SD media base".into());
         }
     }
@@ -82,7 +91,10 @@ pub(super) fn register(
     let slot = media
         .get_mut(&window.base)
         .ok_or("SD host requires explicit card media")?;
-    let card = slot.card.take().ok_or("SD card media already has an SD host")?;
+    let card = slot
+        .card
+        .take()
+        .ok_or("SD card media already has an SD host")?;
     let address_high = host.controller.address_high;
     let supply = host.controller.supply.is_some();
     let contacts = slot.contacts.clone();
@@ -105,7 +117,10 @@ pub(super) fn register(
     };
     // A port's DMA address-high word sits in the system control block, so the
     // host owns that word as a second window (X-T5 4.31 0x13a8ea0).
-    let mut windows = vec![Mapping { base: window.base, size: window.size }];
+    let mut windows = vec![Mapping {
+        base: window.base,
+        size: window.size,
+    }];
     if let Some(base) = address_high {
         windows.push(Mapping { base, size: 4 });
     }
@@ -220,7 +235,8 @@ mod tests {
             base: 0xffd02000,
             size: 0x300,
             kind: "sdhci-uhs2".into(),
-            options: toml::from_str("slot=4291821568\ncapabilities=34359738368\nclock_ticks=10").unwrap(),
+            options: toml::from_str("slot=4291821568\ncapabilities=34359738368\nclock_ticks=10")
+                .unwrap(),
         };
         register_uhs2(&mut graph, &port, &media).unwrap();
         assert!(graph.at(0xffd02224).is_ok());
@@ -235,7 +251,9 @@ mod tests {
         wrong.size = 0x200;
         assert!(register_uhs2(&mut DeviceGraph::new(), &wrong, &media).is_err());
         let mut unknown = port.clone();
-        unknown.options.insert("slot".into(), toml::Value::Integer(0xffd04000));
+        unknown
+            .options
+            .insert("slot".into(), toml::Value::Integer(0xffd04000));
         assert!(
             register_uhs2(&mut DeviceGraph::new(), &unknown, &media)
                 .unwrap_err()

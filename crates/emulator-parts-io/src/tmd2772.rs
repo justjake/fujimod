@@ -7,8 +7,8 @@
 //! ambient-light and proximity samples with no interrupt pending; the channel
 //! and proximity data registers read zero: dark, nothing in front of the
 //! finder.
-use fujimod_emulator_devices::checkpoint::Checkpoint;
 use crate::i2c::Registers;
+use fujimod_emulator_devices::checkpoint::Checkpoint;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
@@ -89,8 +89,15 @@ mod tests {
         // Command bytes are 0xA0 | register (auto-increment type).
         assert_eq!(sensor.select(0xa0 | 0x12), 0x12);
         assert_eq!(sensor.read(0x12).unwrap(), 0x39);
-        assert_eq!(sensor.read(0x13).unwrap() & 0x22, 0x02, "PVALID set, PINT clear");
-        assert_eq!([sensor.read(0x18).unwrap(), sensor.read(0x19).unwrap()], [0, 0]);
+        assert_eq!(
+            sensor.read(0x13).unwrap() & 0x22,
+            0x02,
+            "PVALID set, PINT clear"
+        );
+        assert_eq!(
+            [sensor.read(0x18).unwrap(), sensor.read(0x19).unwrap()],
+            [0, 0]
+        );
         // Configuration writes are retained and read back.
         sensor.write(0x0e, 0x0c).unwrap();
         assert_eq!(sensor.read(0x0e).unwrap(), 0x0c);

@@ -542,15 +542,18 @@ fn readback_and_jpeg_peers_share_real_constructor_handles() {
     ]);
     doc["wires"] = json!({"parameters":"parameters","readback":"memory-outputs","edges":"phase-edges","outputs":"output-channels","routes":"irq-routes","jpeg":"stream"});
     let mut resources = Resources::default();
-    fujimod_emulator_exr2_images::images_mut(&mut resources).unwrap().images.insert(
-        "image".into(),
-        ImageFrames::new(ImageLayout {
-            width: 2,
-            height: 2,
-            stride: 4,
-        })
-        .unwrap(),
-    );
+    fujimod_emulator_exr2_images::images_mut(&mut resources)
+        .unwrap()
+        .images
+        .insert(
+            "image".into(),
+            ImageFrames::new(ImageLayout {
+                width: 2,
+                height: 2,
+                stride: 4,
+            })
+            .unwrap(),
+        );
     let built =
         build_with_models(parse(doc).unwrap(), resources, 123, &mut RefuseAdapters).unwrap();
     assert_eq!(
@@ -612,25 +615,31 @@ fn external_image_inputs_record_the_frame_owners_that_must_be_woken() {
     })]);
     let mut resources = Resources::default();
     for name in ["image", "unconnected"] {
-        fujimod_emulator_exr2_images::images_mut(&mut resources).unwrap().images.insert(
-            name.into(),
-            ImageFrames::new(ImageLayout {
-                width: 2,
-                height: 2,
-                stride: 4,
-            })
+        fujimod_emulator_exr2_images::images_mut(&mut resources)
+            .unwrap()
+            .images
+            .insert(
+                name.into(),
+                ImageFrames::new(ImageLayout {
+                    width: 2,
+                    height: 2,
+                    stride: 4,
+                })
+                .unwrap(),
+            );
+    }
+    fujimod_emulator_exr2_images::images_mut(&mut resources)
+        .unwrap()
+        .statistics
+        .insert(
+            "statistics".into(),
+            StatisticsFrames::new(vec![StatisticsSpan {
+                destination: 2,
+                offset: 0,
+                bytes: vec![0; 4],
+            }])
             .unwrap(),
         );
-    }
-    fujimod_emulator_exr2_images::images_mut(&mut resources).unwrap().statistics.insert(
-        "statistics".into(),
-        StatisticsFrames::new(vec![StatisticsSpan {
-            destination: 2,
-            offset: 0,
-            bytes: vec![0; 4],
-        }])
-        .unwrap(),
-    );
     let built = build_with_models(
         parse(plan.clone()).unwrap(),
         resources,
@@ -879,26 +888,42 @@ fn build_with_models(
 
 #[test]
 fn declared_power_endpoint_and_clock_share_register_driven_alarm() {
-    let clocks = node("clocks", 0xfff88000, 0x100,
-        json!({"kind":"clocks","options":{"output_settle_ticks":2,"reset_ready":true}}));
-    let gpio = node("pads", 0xfff89000, 0x480,
+    let clocks = node(
+        "clocks",
+        0xfff88000,
+        0x100,
+        json!({"kind":"clocks","options":{"output_settle_ticks":2,"reset_ready":true}}),
+    );
+    let gpio = node(
+        "pads",
+        0xfff89000,
+        0x480,
         json!({"kind":"gpio","options":{"input_levels":vec![0u32;16],
-            "output_levels":[{"pin":{"port":12,"pin":3},"high":false}]},"irqs":[]}));
-    let serial = node("power", 0xfff84040, 0x20,
+            "output_levels":[{"pin":{"port":12,"pin":3},"high":false}]},"irqs":[]}),
+    );
+    let serial = node(
+        "power",
+        0xfff84040,
+        0x20,
         json!({"kind":"serial-channel","options":{"base":0xfff84040u64,
             "transports":[{"control":0xe0,"configuration":6,"bits":16,"receive":true}],
             "selection":[{"pin":{"port":12,"pin":3},"high":false}],
             "transfer_ticks":4,"queue":"single"},"gpio":"pads",
             "endpoint":{"kind":"wake-registers","clock":"clocks","ticks_per_second":1_000_000,
                 "options":{"registers":[[104,0],[105,0],[106,0]],"readable":true,
-                    "status_registers":[],"clock":null}}}));
+                    "status_registers":[],"clock":null}}}),
+    );
     assert!(parse(document(vec![serial.clone(), clocks.clone(), gpio.clone()])).is_err());
     let mut built = build(document(vec![clocks, gpio, serial])).unwrap();
     let mut host = Ram::new(0);
     put(&mut built, &mut host, 0xfff84040, 4, 0xe0);
     put(&mut built, &mut host, 0xfff84044, 4, 6);
     let id = built.node_ids["power"];
-    assert!(built.graph.nodes[id].native_dependencies.contains(&built.node_ids["clocks"]));
+    assert!(
+        built.graph.nodes[id]
+            .native_dependencies
+            .contains(&built.node_ids["clocks"])
+    );
     for word in [0xe901, 0xea00, 0xe801] {
         put(&mut built, &mut host, 0xfff8405c, 4, word);
         host.now += 4;

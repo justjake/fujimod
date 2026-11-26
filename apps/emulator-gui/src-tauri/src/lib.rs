@@ -1,7 +1,7 @@
 use fujimod_catalog_configuration::{RunInputs, RunStart};
 use fujimod_catalog_resolution::ResolvedConfiguration;
 use fujimod_emulator_boot::xp5::RunHost;
-use fujimod_emulator_camera::{self as camera, Library, LibraryFirmware};
+use fujimod_camera::{self as camera, Library, LibraryFirmware, StateDir};
 use serde::{Deserialize, Serialize};
 use std::{
     path::PathBuf,
@@ -99,7 +99,7 @@ struct OpenCameraRequest {
 enum LauncherBoot {
     Stock,
     SdCard,
-    AutomaticBoot,
+    Autostart,
 }
 
 struct Running {
@@ -236,6 +236,7 @@ fn launch_camera(request: LaunchRequest) -> Result<(LaunchedCamera, Running), St
                     discovery: false,
                     sd_card_transfer_ticks: None,
                     card_layout: None,
+                    card_initialization_fault: None,
                 };
                 let mut camera = fujimod_emulator_boot::open_request(resolved, boot_request)
                     .inspect_err(|error| log_session(format!("session: {error}")))?;
@@ -320,17 +321,14 @@ fn open_with_builder(request: OpenCameraRequest) -> Result<(LaunchedCamera, Runn
     let resolved = library
         .resolved(&request.firmware)
         .map_err(|error| error.to_string())?;
-    let boot = match request.boot {
-        LauncherBoot::Stock => camera::Boot::Stock,
-        LauncherBoot::SdCard => camera::Boot::SdCard(match request.sd_card {
-            Some(directory) => camera::CardSource::Directory(directory),
-            None => camera::CardSource::Release,
-        }),
-        LauncherBoot::AutomaticBoot => camera::Boot::AutomaticBoot(match request.sd_card {
-            Some(directory) => camera::CardSource::Directory(directory),
-            None => camera::CardSource::Release,
-        }),
+    let preset = match request.boot {
+        LauncherBoot::Stock => camera::Preset::Stock,
+        LauncherBoot::SdCard => camera::Preset::SdCard,
+        LauncherBoot::Autostart => camera::Preset::Autostart,
     };
+    let sd_card = request
+        .sd_card
+        .map(camera::CardSource::Directory);
     let body = resolved.reference.body.id.clone();
     let model = body.to_uppercase();
     let configuration = resolved.configuration.id.clone();
@@ -340,12 +338,14 @@ fn open_with_builder(request: OpenCameraRequest) -> Result<(LaunchedCamera, Runn
         .execution
         .map(|execution| execution.engine);
     let selection = resolved.reference.clone();
-    let builder_request = camera::Request {
+    let camera_request = camera::Request {
         firmware: request.firmware,
-        boot,
+        files: camera::FirmwareInput::Library,
+        overlays: Vec::new(),
+        preset,
+        sd_card,
         policy: fujimod_emulator_cpu::ExecutionPolicy::Interactive,
         engine: None,
-        card_files: Vec::new(),
         cache: if request.skip_boot_cache {
             camera::BootCache::Bypass
         } else {
@@ -353,10 +353,10 @@ fn open_with_builder(request: OpenCameraRequest) -> Result<(LaunchedCamera, Runn
         },
         run_to_rec: true,
         card: Default::default(),
-        kept: Default::default(),
-        card_source: None,
-        image: None,
+        nand_image: None,
+        face_result_profile: None,
     };
+    let state = StateDir::from_env();
     let room = fujimod_emulator_gui::Room::loopback()?;
     let endpoint = room.endpoint().url.clone();
     let stop = Arc::new(AtomicBool::new(false));
@@ -366,7 +366,7 @@ fn open_with_builder(request: OpenCameraRequest) -> Result<(LaunchedCamera, Runn
         .name("fujimod-emulator-session".into())
         .spawn(move || {
             log_session(format!("session: opening camera engine={:?}", engine));
-            let opened = match camera::open(&library, builder_request) {
+            let opened = match camera::open(&library, &state, camera_request) {
                 Ok(opened) => {
                     let _ = report.send(Ok(()));
                     opened
@@ -380,7 +380,7 @@ fn open_with_builder(request: OpenCameraRequest) -> Result<(LaunchedCamera, Runn
             };
             log_session(format!("session: camera opened cached={}", opened.cached));
             fujimod_emulator_gui::serve(
-                fujimod_emulator_gui::Live::new(opened.camera, selection),
+                fujimod_emulator_gui::Live::new(opened.into_camera(), selection),
                 room,
                 &mut || !thread_stop.load(Ordering::Acquire),
             )
@@ -464,7 +464,7 @@ mod tests {
     fn the_launcher_lists_firmwares_the_library_holds() {
         let library = match Library::from_env() {
             Ok(library) => library,
-            Err(fujimod_emulator_camera::LibraryError::Environment) => {
+            Err(fujimod_camera::LibraryError::Environment) => {
                 eprintln!("skipped: set FUJIMOD_FIRMWARE_LIBRARY");
                 return;
             }

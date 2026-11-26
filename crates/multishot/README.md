@@ -130,11 +130,11 @@ CFA with shot and read noise. The truth is what a full-color sensor at the
 reference position would record, on the output grid. Twelve frames, scale
 1.5, default parameters:
 
-| Measure | Merge | Single frame, same merge | Demosaic + bicubic | Markesteijn-3 + bicubic | Truth |
-| --- | --- | --- | --- | --- | --- |
-| Slanted-edge MTF50 (cycles per site) | **0.314** | 0.271 | 0.276 | 0.301 | 0.329 |
-| Fine-detail RMSE against truth | **0.0152** | | 0.0352 | 0.0267 | 0 |
-| Flat-patch luma noise (relative std) | **0.0017** | | 0.0073 | | |
+| Measure                              | Merge      | Single frame, same merge | Demosaic + bicubic | Markesteijn-3 + bicubic | Truth |
+| ------------------------------------ | ---------- | ------------------------ | ------------------ | ----------------------- | ----- |
+| Slanted-edge MTF50 (cycles per site) | **0.314**  | 0.271                    | 0.276              | 0.301                   | 0.329 |
+| Fine-detail RMSE against truth       | **0.0152** |                          | 0.0352             | 0.0267                  | 0     |
+| Flat-patch luma noise (relative std) | **0.0017** |                          | 0.0073             |                         |       |
 
 The merge resolves a neutral edge 14% better than demosaicing and upscaling
 the best single frame (16% better than the single frame through the same
@@ -211,11 +211,11 @@ the whole-frame coverage gate, so alignment is fitted on the blade
 (-4.6°, scale ticks reaching within a few sites of it), each frame
 demosaiced and upscaled measures MTF50 0.14 to 0.18 cycles per site:
 
-| | Merge (13 frames) | Single frame, same merge | Demosaic + bicubic | Markesteijn-3 + bicubic |
-| --- | --- | --- | --- | --- |
-| Edge MTF50, luma (cycles per site) | 0.152 | 0.149 | 0.165 | 0.158 |
-| Edge MTF50, green | 0.153 | 0.149 | 0.144 | 0.163 |
-| Shirt std, R G B (plane removed) | 0.00050 0.00091 0.00075 | 0.00090 0.00117 0.00112 | 0.00098 0.00118 0.00113 | 0.00068 0.00125 0.00090 |
+|                                    | Merge (13 frames)       | Single frame, same merge | Demosaic + bicubic      | Markesteijn-3 + bicubic |
+| ---------------------------------- | ----------------------- | ------------------------ | ----------------------- | ----------------------- |
+| Edge MTF50, luma (cycles per site) | 0.152                   | 0.149                    | 0.165                   | 0.158                   |
+| Edge MTF50, green                  | 0.153                   | 0.149                    | 0.144                   | 0.163                   |
+| Shirt std, R G B (plane removed)   | 0.00050 0.00091 0.00075 | 0.00090 0.00117 0.00112  | 0.00098 0.00118 0.00113 | 0.00068 0.00125 0.00090 |
 
 At the blade's other two edges (1500,2380 and 4700,2150) the merge measures
 0.140 and 0.119 against Markesteijn's 0.152 and 0.130. On this real burst
@@ -287,11 +287,11 @@ shortest exposure, matching the true third-stop shutter series (1/40 s:
 in reference coordinates and identical for every variant; each frame merged
 alone is in its own units (white 1.0):
 
-| Bracket | Frames | Merge | Best single frame | Gain |
-| --- | --- | --- | --- | --- |
-| DSCF0591-0599, f/1.8, ISO 800, 1/250-1/40 s | 9 of 9 | 12.18 stops | 10.61 (1/250 s) | +1.57 stops |
-| DSCF0648-0656, f/5.6, ISO 800, 1/80-1/13 s | 8 of 9 | 12.25 stops | 10.87 (1/80 s) | +1.38 stops |
-| DSCF0667-0675, f/5.6, ISO 12800, 1/640-1/100 s | 9 of 9 | 10.28 stops | 8.34 (1/640 s) | +1.94 stops |
+| Bracket                                        | Frames | Merge       | Best single frame | Gain        |
+| ---------------------------------------------- | ------ | ----------- | ----------------- | ----------- |
+| DSCF0591-0599, f/1.8, ISO 800, 1/250-1/40 s    | 9 of 9 | 12.18 stops | 10.61 (1/250 s)   | +1.57 stops |
+| DSCF0648-0656, f/5.6, ISO 800, 1/80-1/13 s     | 8 of 9 | 12.25 stops | 10.87 (1/80 s)    | +1.38 stops |
+| DSCF0667-0675, f/5.6, ISO 12800, 1/640-1/100 s | 9 of 9 | 10.28 stops | 8.34 (1/640 s)    | +1.94 stops |
 
 The single frames' variances in the first bracket fit
 `2.9e-8 + 3.8e-7 g`: a floor of 0.00017 common to all frames (patch texture
@@ -341,19 +341,19 @@ X-H2S sweep (11 frames on a tripod, tape blade on a dark shirt, uncompressed;
 commanded Z, X+14, X+28, X+56, X+112, Z, Y+14, Y+28, Y+56, Y+112, Z counts;
 aligned on the blade with `--align-region 1500,0,2300,4160`, all 11 register):
 
-| Frame | Commanded (sites) | Measured | Measured - commanded |
-| --- | --- | --- | --- |
-| Z | 0, 0 | 0, 0 | reference |
-| X+14 | -0.25, 0 | +0.14, -0.16 | +0.39, -0.16 |
-| X+28 | -0.50, 0 | -0.09, +0.02 | +0.42, +0.02 |
-| X+56 | -1.00, 0 | -0.97, +0.05 | +0.03, +0.05 |
-| X+112 | -2.00, 0 | -1.81, -0.45 | +0.19, -0.45 |
-| Z | 0, 0 | +0.45, -0.36 | +0.45, -0.36 |
-| Y+14 | 0, +0.25 | +0.13, +0.12 | +0.13, -0.13 |
-| Y+28 | 0, +0.50 | +0.57, +0.56 | +0.57, +0.06 |
-| Y+56 | 0, +1.00 | -0.28, +0.84 | -0.28, -0.17 |
-| Y+112 | 0, +2.00 | +0.19, +2.19 | +0.19, +0.19 |
-| Z | 0, 0 | +0.15, +0.46 | +0.15, +0.46 |
+| Frame | Commanded (sites) | Measured     | Measured - commanded |
+| ----- | ----------------- | ------------ | -------------------- |
+| Z     | 0, 0              | 0, 0         | reference            |
+| X+14  | -0.25, 0          | +0.14, -0.16 | +0.39, -0.16         |
+| X+28  | -0.50, 0          | -0.09, +0.02 | +0.42, +0.02         |
+| X+56  | -1.00, 0          | -0.97, +0.05 | +0.03, +0.05         |
+| X+112 | -2.00, 0          | -1.81, -0.45 | +0.19, -0.45         |
+| Z     | 0, 0              | +0.45, -0.36 | +0.45, -0.36         |
+| Y+14  | 0, +0.25          | +0.13, +0.12 | +0.13, -0.13         |
+| Y+28  | 0, +0.50          | +0.57, +0.56 | +0.57, +0.06         |
+| Y+56  | 0, +1.00          | -0.28, +0.84 | -0.28, -0.17         |
+| Y+112 | 0, +2.00          | +0.19, +2.19 | +0.19, +0.19         |
+| Z     | 0, 0              | +0.15, +0.46 | +0.15, +0.46         |
 
 The three frames commanded to zero spread over 0.45 x 0.82 sites, and
 commanded and measured positions differ by up to 0.57 sites. Fitted to the
@@ -365,14 +365,14 @@ smaller than X+56, so the commands alone cannot place the samples.
 At two blade edges (2120,1950 and 2500,1950; 200x100 sites, 17° slant), merge
 scale 1.5, MTF50 in cycles per site and edge raggedness in sites:
 
-| Frames | Edge 2120 MTF50 | Edge 2500 MTF50 | Raggedness 2120 | Raggedness 2500 |
-| --- | --- | --- | --- | --- |
-| Z alone, same merge | 0.203 | 0.199 | 0.266 | 0.480 |
-| Z + X+56 (-0.97, +0.05) | 0.211 | 0.203 | 0.205 | 0.313 |
-| Z + Z, measured positions (+0.45, -0.36) | 0.215 | 0.201 | 0.227 | 0.277 |
-| Z + Z, commanded positions | 0.192 | 0.190 | 0.261 | 0.366 |
-| Z, X+56, Z, Y+28 (measured) | 0.215 | 0.205 | 0.188 | 0.234 |
-| Markesteijn-3 of Z | 0.216 | 0.211 | 0.239 | 0.307 |
+| Frames                                   | Edge 2120 MTF50 | Edge 2500 MTF50 | Raggedness 2120 | Raggedness 2500 |
+| ---------------------------------------- | --------------- | --------------- | --------------- | --------------- |
+| Z alone, same merge                      | 0.203           | 0.199           | 0.266           | 0.480           |
+| Z + X+56 (-0.97, +0.05)                  | 0.211           | 0.203           | 0.205           | 0.313           |
+| Z + Z, measured positions (+0.45, -0.36) | 0.215           | 0.201           | 0.227           | 0.277           |
+| Z + Z, commanded positions               | 0.192           | 0.190           | 0.261           | 0.366           |
+| Z, X+56, Z, Y+28 (measured)              | 0.215           | 0.205           | 0.188           | 0.234           |
+| Markesteijn-3 of Z                       | 0.216           | 0.211           | 0.239           | 0.307           |
 
 At sensor resolution (scale 1) the Z + X+56 pair measures 0.219 and 0.212
 (Markesteijn 0.223 and 0.213) with raggedness 0.220 and 0.227 against

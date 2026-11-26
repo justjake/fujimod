@@ -89,7 +89,7 @@ rows styled like the camera list rows (icon, title, subtitle, chevron):
 | Row                            | Subtitle with a chosen DAT              | Unavailable                         |
 | ------------------------------ | --------------------------------------- | ----------------------------------- |
 | Download FujiMod installable   | `X70 • 1.10 • Includes SD boot version` | _Not available for this camera yet_ |
-| Download FujiMod SD boot v1       | `X70 • 1.10 base firmware`              | _Not available for this camera yet_ |
+| Download FujiMod SD boot v1    | `X70 • 1.10 base firmware`              | _Not available for this camera yet_ |
 | Run FujiMod in your browser    | `X70 • 1.10 with FujiMod 0.0.1`         |                                     |
 | Run unmodified in your browser | `X70 • 1.10 official firmware`          |                                     |
 

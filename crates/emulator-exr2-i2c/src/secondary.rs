@@ -2,8 +2,8 @@
 //! The native binding supplies the current cable input and IRQ routes at
 //! each start/read. Completion checks still sample them at completion time.
 use super::{
-    Operation as Op, Phase, Profile, ReceiveCommand, Registers, Routes,
-    SecondaryFinish as Finish, SecondaryRequest,
+    Operation as Op, Phase, Profile, ReceiveCommand, Registers, Routes, SecondaryFinish as Finish,
+    SecondaryRequest,
 };
 use fujimod_emulator_devices::record::Result;
 use fujimod_emulator_devices::{Action, WordMap};
@@ -157,30 +157,27 @@ impl Registers {
             return super::fail("Secondary bus receive has no admitted target");
         }
         if p.target == self.secondary.pwic_address {
-            let register = p
-                .pwic_prefix
-                .ok_or_else(|| fujimod_emulator_devices::Unsupported("Missing PWIC prefix".into()))?;
+            let register = p.pwic_prefix.ok_or_else(|| {
+                fujimod_emulator_devices::Unsupported("Missing PWIC prefix".into())
+            })?;
             let mut bytes = self
                 .secondary
                 .pwic_read_prefixes
                 .iter()
                 .find(|(r, _)| *r == register)
                 .map_or_else(Vec::new, |(_, bytes)| bytes.clone());
-            let byte = p
-                .pwic_registers
-                .get(register)
-                .ok_or_else(|| fujimod_emulator_devices::Unsupported("Missing PWIC input register".into()))?;
+            let byte = p.pwic_registers.get(register).ok_or_else(|| {
+                fujimod_emulator_devices::Unsupported("Missing PWIC input register".into())
+            })?;
             bytes.push(byte as u8);
             Ok(bytes)
         } else {
-            let register = *p
-                .payload
-                .first()
-                .ok_or_else(|| fujimod_emulator_devices::Unsupported("Missing bus1 prefix".into()))?;
-            let byte = p
-                .target_registers
-                .get(register.into())
-                .ok_or_else(|| fujimod_emulator_devices::Unsupported("Missing bus1 input register".into()))?;
+            let register = *p.payload.first().ok_or_else(|| {
+                fujimod_emulator_devices::Unsupported("Missing bus1 prefix".into())
+            })?;
+            let byte = p.target_registers.get(register.into()).ok_or_else(|| {
+                fujimod_emulator_devices::Unsupported("Missing bus1 input register".into())
+            })?;
             Ok(vec![byte as u8])
         }
     }
@@ -322,7 +319,9 @@ impl Registers {
                     ReceiveCommand::Configure | ReceiveCommand::Nack => return Ok(()),
                     ReceiveCommand::Byte(index) => {
                         let byte = self.rx_bytes.get(index).copied().ok_or_else(|| {
-                            fujimod_emulator_devices::Unsupported("Missing bus1 receive byte".into())
+                            fujimod_emulator_devices::Unsupported(
+                                "Missing bus1 receive byte".into(),
+                            )
                         })?;
                         self.rx_consumed = false;
                         self.secondary_begin(
@@ -339,16 +338,15 @@ impl Registers {
                         self.regs.insert(8, if value == 0x2a { 0xa } else { 0xe });
                     }
                     ReceiveCommand::Stop => {
-                        let register =
-                            if self.parts.target == self.secondary.pwic_address {
-                                self.parts.pwic_prefix.ok_or_else(|| {
-                                    fujimod_emulator_devices::Unsupported("Missing PWIC prefix".into())
-                                })?
-                            } else {
-                                u32::from(*self.parts.payload.first().ok_or_else(|| {
-                                    fujimod_emulator_devices::Unsupported("Missing bus1 prefix".into())
-                                })?)
-                            };
+                        let register = if self.parts.target == self.secondary.pwic_address {
+                            self.parts.pwic_prefix.ok_or_else(|| {
+                                fujimod_emulator_devices::Unsupported("Missing PWIC prefix".into())
+                            })?
+                        } else {
+                            u32::from(*self.parts.payload.first().ok_or_else(|| {
+                                fujimod_emulator_devices::Unsupported("Missing bus1 prefix".into())
+                            })?)
+                        };
                         self.secondary_begin(
                             (Op::StopRead, 2, Phase::Idle, Finish::Read(register)),
                             connected,

@@ -57,9 +57,15 @@ impl Xp4Session {
                 Ok(())
             })
         });
-        inner.set_instruction_observer(Some(observer.clone()))
+        inner
+            .set_instruction_observer(Some(observer.clone()))
             .map_err(fujimod_python_base::error)?;
-        Ok(Self { inner, catalog_quantum, handler, observer })
+        Ok(Self {
+            inner,
+            catalog_quantum,
+            handler,
+            observer,
+        })
     }
     pub fn __traverse__(&self, visit: PyVisit<'_>) -> Result<(), PyTraverseError> {
         if let Ok(handler) = self.handler.try_borrow()
@@ -73,7 +79,8 @@ impl Xp4Session {
         self.handler.borrow_mut().take();
     }
     pub fn set_pc_handler(&self, callback: Option<Py<PyAny>>) -> PyResult<()> {
-        self.inner.set_instruction_observer(Some(self.observer.clone()))
+        self.inner
+            .set_instruction_observer(Some(self.observer.clone()))
             .map_err(fujimod_python_base::error)?;
         *self.handler.borrow_mut() = callback;
         Ok(())
@@ -219,8 +226,13 @@ impl Xp4Session {
     pub fn device_records<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyList>> {
         observation::records(py, self.inner.device_records())
     }
-    pub fn translation_maintenance_state<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyDict>> {
-        let saved = self.inner.translation_maintenance_state()
+    pub fn translation_maintenance_state<'py>(
+        &self,
+        py: Python<'py>,
+    ) -> PyResult<Bound<'py, PyDict>> {
+        let saved = self
+            .inner
+            .translation_maintenance_state()
             .map_err(fujimod_python_base::error)?;
         maintenance_observation::state(py, saved)
     }
@@ -316,7 +328,12 @@ impl fujimod_python_base::xp4_backend::Xp4Backend for Xp4Session {
             quota_per_edge,
         )
     }
-    fn memory_watch_begin(&self, ranges: Vec<(u64, u64)>, limit: usize, writes_only: bool) -> PyResult<()> {
+    fn memory_watch_begin(
+        &self,
+        ranges: Vec<(u64, u64)>,
+        limit: usize,
+        writes_only: bool,
+    ) -> PyResult<()> {
         Xp4Session::memory_watch_begin(self, ranges, limit, writes_only)
     }
     fn memory_watch_end(&self) -> PyResult<()> {
@@ -469,7 +486,9 @@ impl fujimod_python_base::xp4_backend::Xp4Backend for Xp4Session {
         Xp4Session::interventions(self)
     }
     fn card_medium(&self, host: usize) -> PyResult<fujimod_emulator_devices::parts::sd_card::Card> {
-        self.inner.card_medium(host).map_err(fujimod_python_base::error)
+        self.inner
+            .card_medium(host)
+            .map_err(fujimod_python_base::error)
     }
     fn reset_nor_program_coverage(&self) -> PyResult<()> {
         self.inner

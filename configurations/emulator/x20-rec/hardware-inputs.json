@@ -18,48 +18,11 @@
       },
       "power": {
         "profile_name": "Explicit X20 MCU status0x43: ring enabled and PLAY released; ADC7=0 satisfies the stock ring-ON comparator. Register60 is an external input, never command loopback. Other ADC inputs and packet remain borrowed and unmeasured. Selector ADC8=0 releases the stock flag10 ladder; ADC9 remains1023 for the separate MENU/OK ladder.",
-        "adc_samples": [
-          0,
-          0,
-          1023,
-          63,
-          534,
-          640,
-          0,
-          0,
-          0,
-          1023,
-          0,
-          0
-        ],
+        "adc_samples": [0, 0, 1023, 63, 534, 640, 0, 0, 0, 1023, 0, 0],
         "boot_reply": 67,
         "spi0_input_profile": "absent-hot-shoe-flash-fixed-low-miso",
-        "spi_status_registers": [
-          [
-            9,
-            96
-          ]
-        ],
-        "panel_contract": [
-          [
-            224,
-            6
-          ],
-          [
-            11,
-            3,
-            0,
-            12,
-            3,
-            1
-          ],
-          [
-            16,
-            null,
-            null
-          ],
-          1
-        ]
+        "spi_status_registers": [[9, 96]],
+        "panel_contract": [[224, 6], [11, 3, 0, 12, 3, 1], [16, null, null], 1]
       },
       "mcu_packet_hex": "00000000d00700ff008000040000aafc",
       "usb_connected": false
@@ -94,10 +57,7 @@
           "ui": 9541536,
           "system": 9567828,
           "rec_ui": 2,
-          "sample_slots": [
-            24972792,
-            24972840
-          ],
+          "sample_slots": [24972792, 24972840],
           "code_witnesses": [
             {
               "address": 19053940,

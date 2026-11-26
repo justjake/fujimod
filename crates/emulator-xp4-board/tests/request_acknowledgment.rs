@@ -31,15 +31,25 @@ fn program(session: &Session, address: u64, words: &[u32]) {
 
 #[test]
 fn strict_defaults_and_adjacent_words_remain_unmapped() {
-    for (ticks, address) in [(None, ADDRESS), (Some(8), ADDRESS - 4), (Some(8), ADDRESS + 4)] {
+    for (ticks, address) in [
+        (None, ADDRESS),
+        (Some(8), ADDRESS - 4),
+        (Some(8), ADDRESS + 4),
+    ] {
         let mut definition = input();
         if let Some(ticks) = ticks {
             definition["request_acknowledgment_ticks"] = json!(ticks);
         }
         let session = board(definition).unwrap();
-        assert_eq!(session.device_state_json().contains_key(NAME), ticks.is_some());
+        assert_eq!(
+            session.device_state_json().contains_key(NAME),
+            ticks.is_some()
+        );
         program(&session, address, &[0xe590_2000]); // LDR r2,[r0]
-        assert!(session.run(0, 1).is_err(), "unexpected access at {address:#x}");
+        assert!(
+            session.run(0, 1).is_err(),
+            "unexpected access at {address:#x}"
+        );
         assert!(session.device_records().is_empty());
     }
 }
@@ -72,14 +82,18 @@ fn guest_writes_one_and_polls_until_the_declared_acknowledgment() {
         let mut definition = input();
         definition["request_acknowledgment_ticks"] = json!(ticks);
         let session = board(definition).unwrap();
-        program(&session, ADDRESS, &[
-            0xe580_1000, // STR r1,[r0]
-            0xe590_2000, // LDR r2,[r0] (first observation)
-            0xe590_3000, // LDR r3,[r0] (poll)
-            0xe353_0000, // CMP r3,#0
-            0x1aff_fffc, // BNE poll
-            0xe1a0_0000, // MOV r0,r0 (stop before this instruction)
-        ]);
+        program(
+            &session,
+            ADDRESS,
+            &[
+                0xe580_1000, // STR r1,[r0]
+                0xe590_2000, // LDR r2,[r0] (first observation)
+                0xe590_3000, // LDR r3,[r0] (poll)
+                0xe353_0000, // CMP r3,#0
+                0x1aff_fffc, // BNE poll
+                0xe1a0_0000, // MOV r0,r0 (stop before this instruction)
+            ],
+        );
         let stop = ENTRY + 5 * 4;
         session.run_to(0, 128, stop).unwrap();
         assert_eq!(session.read_register(0, arm::PC).unwrap(), stop);
@@ -93,6 +107,15 @@ fn guest_writes_one_and_polls_until_the_declared_acknowledgment() {
         assert_eq!(state["phase"], json!("completed"));
         assert_eq!(state["request"]["deadline"], json!(deadline));
         assert_eq!(state["completed_at"], json!(deadline));
-        assert_eq!(session.device_records().iter().filter(|record| record.name.starts_with("XP4 experimental request acknowledgment")).count(), 2);
+        assert_eq!(
+            session
+                .device_records()
+                .iter()
+                .filter(|record| record
+                    .name
+                    .starts_with("XP4 experimental request acknowledgment"))
+                .count(),
+            2
+        );
     }
 }

@@ -5,6 +5,9 @@
   "configuration_id": "x70-110-rec",
   "change": {
     "kind": "usb_connection",
-    "connected": true
+    "connected": true,
+    "hardware_selection": {
+      "body_profile_id": "x70-110-browser-usb"
+    }
   }
 }

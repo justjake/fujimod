@@ -37,15 +37,16 @@ fn a_body_records_only_its_own_different_measurement() {
         "evidence": {"kind": "measured", "firmware_ids": ["x70-110"]},
     });
     let body: Body = serde_json::from_value(value).expect("body with a measured fill");
-    body.validate(&body.id).expect("measured body fill validates");
+    body.validate(&body.id)
+        .expect("measured body fill validates");
     assert_eq!(body.power_on_ram_fill.as_ref().unwrap().byte, 0);
 }
 
 #[test]
 fn a_fill_outside_dram_is_refused() {
     let catalog = ReferenceCatalog::bundled().expect("bundled catalog loads");
-    let mut value = serde_json::to_value(catalog.soc("exr2").expect("exr2 record"))
-        .expect("serialize exr2");
+    let mut value =
+        serde_json::to_value(catalog.soc("exr2").expect("exr2 record")).expect("serialize exr2");
     let fill = value["memory_regions"]
         .as_array_mut()
         .unwrap()

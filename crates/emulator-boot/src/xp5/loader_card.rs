@@ -62,7 +62,11 @@ pub(crate) struct WriteBack {
 
 impl LoaderCard {
     /// `None` when the run names no card for `slot`: it stays as the manifest declares it.
-    pub fn load(slot: u64, image: Option<&Path>, files: &[(String, PathBuf)]) -> Result<Option<Self>, String> {
+    pub fn load(
+        slot: u64,
+        image: Option<&Path>,
+        files: &[(String, PathBuf)],
+    ) -> Result<Option<Self>, String> {
         if image.is_none() && files.is_empty() {
             return Ok(None);
         }
@@ -70,10 +74,25 @@ impl LoaderCard {
         let Some(path) = image else {
             // Slot 1 keeps the bare names it always had; the other slot's assets carry its base
             // so that both cards can hold a file of the same name.
-            let assets = files.into_iter()
-                .map(|(name, bytes)| (if slot == SLOT { name } else { format!("{slot:#x}/{name}") }, bytes))
+            let assets = files
+                .into_iter()
+                .map(|(name, bytes)| {
+                    (
+                        if slot == SLOT {
+                            name
+                        } else {
+                            format!("{slot:#x}/{name}")
+                        },
+                        bytes,
+                    )
+                })
                 .collect();
-            return Ok(Some(Self { slot, card: None, assets, write_back: None }));
+            return Ok(Some(Self {
+                slot,
+                card: None,
+                assets,
+                write_back: None,
+            }));
         };
         let loaded = CardImage::load(path)?;
         for line in &loaded.layout {
@@ -86,7 +105,11 @@ impl LoaderCard {
             slot,
             card: Some(card),
             assets: BTreeMap::new(),
-            write_back: Some(WriteBack { slot, path: path.to_owned(), original }),
+            write_back: Some(WriteBack {
+                slot,
+                path: path.to_owned(),
+                original,
+            }),
         }))
     }
 
@@ -101,11 +124,23 @@ impl LoaderCard {
         slot.present = true;
         slot.protected = false;
         if self.card.is_none() {
-            let prefix = if base == SLOT { String::new() } else { format!("{base:#x}/") };
-            slot.files = self.assets.keys()
-                .map(|id| (id.strip_prefix(&prefix).unwrap_or(id).to_owned(), id.clone()))
+            let prefix = if base == SLOT {
+                String::new()
+            } else {
+                format!("{base:#x}/")
+            };
+            slot.files = self
+                .assets
+                .keys()
+                .map(|id| {
+                    (
+                        id.strip_prefix(&prefix).unwrap_or(id).to_owned(),
+                        id.clone(),
+                    )
+                })
                 .collect();
-            slot.format.max_dirty_sectors = slot.format.max_dirty_sectors.max(FILE_CARD_DIRTY_SECTORS);
+            slot.format.max_dirty_sectors =
+                slot.format.max_dirty_sectors.max(FILE_CARD_DIRTY_SECTORS);
         }
         let host = state
             .device
@@ -120,7 +155,9 @@ impl LoaderCard {
                 .ok_or("rom-start.toml declares no interrupt line for the SD host at 0xff9b0000")?
                 .set
         } else {
-            [("irq".to_owned(), toml::Value::Integer(SLOT_2_IRQ))].into_iter().collect()
+            [("irq".to_owned(), toml::Value::Integer(SLOT_2_IRQ))]
+                .into_iter()
+                .collect()
         };
         for (key, value) in set {
             // A manifest that already wires the host keeps its own line.
@@ -135,7 +172,10 @@ impl WriteBack {
     pub fn write(&self, session: &fujimod_emulator_session::Session) -> Result<(), String> {
         let current = session.card_medium(&format!("{:#x}", self.slot))?;
         let written = crate::media::write_back(&self.path, &self.original, &current)?;
-        eprintln!("FUJIMOD card image {}: {written} changed sectors written back", self.path.display());
+        eprintln!(
+            "FUJIMOD card image {}: {written} changed sectors written back",
+            self.path.display()
+        );
         Ok(())
     }
 }
@@ -209,20 +249,31 @@ label = "NO NAME"
         std::fs::create_dir_all(&directory).unwrap();
         let file = directory.join("note.txt");
         std::fs::write(&file, b"hello").unwrap();
-        let card = LoaderCard::load(SLOT, None, &[("NOTE.TXT".into(), file.clone())]).unwrap().unwrap();
+        let card = LoaderCard::load(SLOT, None, &[("NOTE.TXT".into(), file.clone())])
+            .unwrap()
+            .unwrap();
         assert!(card.write_back.is_none());
         let mut state = state();
         let before = serde_json::to_vec(&state).unwrap();
         card.apply(&mut state).unwrap();
-        assert_ne!(serde_json::to_vec(&state).unwrap(), before, "the wiring hash must change");
+        assert_ne!(
+            serde_json::to_vec(&state).unwrap(),
+            before,
+            "the wiring hash must change"
+        );
         let slot = &state.sd[0];
         assert!(slot.present);
-        assert_eq!(slot.files, [("NOTE.TXT".to_string(), "NOTE.TXT".to_string())]);
+        assert_eq!(
+            slot.files,
+            [("NOTE.TXT".to_string(), "NOTE.TXT".to_string())]
+        );
         assert_eq!(slot.format.max_dirty_sectors, FILE_CARD_DIRTY_SECTORS);
         assert_eq!(state.device[0].options["irq"].as_integer(), Some(262));
         // An irq already in the manifest wins.
         let mut wired = self::state();
-        wired.device[0].options.insert("irq".into(), toml::Value::Integer(7));
+        wired.device[0]
+            .options
+            .insert("irq".into(), toml::Value::Integer(7));
         card.apply(&mut wired).unwrap();
         assert_eq!(wired.device[0].options["irq"].as_integer(), Some(7));
         // Slot 1 alone leaves slot 2 as the manifest declares it.
@@ -241,24 +292,41 @@ label = "NO NAME"
         let second = LoaderCard::load(SLOT_2, None, &files).unwrap().unwrap();
         // Both cards may hold a file of the same name: the assets do not collide.
         assert_eq!(first.assets.keys().collect::<Vec<_>>(), ["NOTE.TXT"]);
-        assert_eq!(second.assets.keys().collect::<Vec<_>>(), ["0xff9b4000/NOTE.TXT"]);
+        assert_eq!(
+            second.assets.keys().collect::<Vec<_>>(),
+            ["0xff9b4000/NOTE.TXT"]
+        );
         let mut alone = state();
         first.apply(&mut alone).unwrap();
         let mut both = state();
         first.apply(&mut both).unwrap();
         second.apply(&mut both).unwrap();
-        assert_eq!(serde_json::to_vec(&both.sd[0]).unwrap(), serde_json::to_vec(&alone.sd[0]).unwrap());
-        assert_eq!(serde_json::to_vec(&both.device[0]).unwrap(), serde_json::to_vec(&alone.device[0]).unwrap());
+        assert_eq!(
+            serde_json::to_vec(&both.sd[0]).unwrap(),
+            serde_json::to_vec(&alone.sd[0]).unwrap()
+        );
+        assert_eq!(
+            serde_json::to_vec(&both.device[0]).unwrap(),
+            serde_json::to_vec(&alone.device[0]).unwrap()
+        );
         let slot = &both.sd[1];
         assert!(slot.present && !slot.protected);
-        assert_eq!(slot.files, [("NOTE.TXT".to_string(), "0xff9b4000/NOTE.TXT".to_string())]);
+        assert_eq!(
+            slot.files,
+            [("NOTE.TXT".to_string(), "0xff9b4000/NOTE.TXT".to_string())]
+        );
         assert_eq!(both.device[1].options["irq"].as_integer(), Some(SLOT_2_IRQ));
         std::fs::remove_dir_all(&directory).unwrap();
     }
 
     #[test]
     fn a_manifest_without_slot_one_is_refused() {
-        let card = LoaderCard { slot: SLOT, card: None, assets: BTreeMap::new(), write_back: None };
+        let card = LoaderCard {
+            slot: SLOT,
+            card: None,
+            assets: BTreeMap::new(),
+            write_back: None,
+        };
         let mut state = state();
         state.sd.clear();
         assert!(card.apply(&mut state).unwrap_err().contains("no SD slot"));

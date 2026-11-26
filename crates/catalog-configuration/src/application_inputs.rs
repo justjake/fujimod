@@ -106,7 +106,10 @@ impl ApplicationRunInputs {
         let mut wires = BTreeSet::new();
         for ladder in &self.ladders {
             if !wires.insert(ladder.wire) {
-                return Err(format!("application input repeats ladder {:?}", ladder.wire));
+                return Err(format!(
+                    "application input repeats ladder {:?}",
+                    ladder.wire
+                ));
             }
             if ladder.basis.trim().is_empty() {
                 return Err(format!(

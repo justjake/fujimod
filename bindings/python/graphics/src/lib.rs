@@ -11,7 +11,10 @@ pub fn register(module: &Bound<'_, PyModule>) -> PyResult<()> {
     module.add_class::<python_graphics::UiBatch>()?;
     module.add_function(wrap_pyfunction!(python_graphics::prepare_host_gpu, module)?)?;
     module.add_function(wrap_pyfunction!(python_graphics::clear_parse, module)?)?;
-    module.add_function(wrap_pyfunction!(python_graphics::clear_path_descriptor, module)?)?;
+    module.add_function(wrap_pyfunction!(
+        python_graphics::clear_path_descriptor,
+        module
+    )?)?;
     module.add_function(wrap_pyfunction!(python_graphics::clear_render, module)?)?;
     module.add_function(wrap_pyfunction!(python_graphics::copy_untile, module)?)?;
     module.add_function(wrap_pyfunction!(python_graphics::gpu_ui_render, module)?)?;
@@ -20,8 +23,17 @@ pub fn register(module: &Bound<'_, PyModule>) -> PyResult<()> {
     module.add_function(wrap_pyfunction!(python_graphics::ui_initialize, module)?)?;
     module.add_function(wrap_pyfunction!(python_graphics::ui_stream_draws, module)?)?;
     module.add_function(wrap_pyfunction!(python_graphics::ui_stream_parse, module)?)?;
-    module.add_function(wrap_pyfunction!(scanout_observation::render_scanout_snapshot, module)?)?;
-    module.add_function(wrap_pyfunction!(scanout_observation::scanout_snapshot_state, module)?)?;
-    module.add_function(wrap_pyfunction!(display_pixels::decode_display_rgb, module)?)?;
+    module.add_function(wrap_pyfunction!(
+        scanout_observation::render_scanout_snapshot,
+        module
+    )?)?;
+    module.add_function(wrap_pyfunction!(
+        scanout_observation::scanout_snapshot_state,
+        module
+    )?)?;
+    module.add_function(wrap_pyfunction!(
+        display_pixels::decode_display_rgb,
+        module
+    )?)?;
     Ok(())
 }

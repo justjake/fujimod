@@ -23,18 +23,26 @@ await test('builder reads the pinned public toolchains from the package root con
 });
 
 await test('generated UTF-8 encoding preserves shared-memory slices and code point boundaries', () => {
-  const encoder = new class extends TextEncoder {
+  const encoder = new (class extends TextEncoder {
     override encodeInto(text: string, target: Uint8Array<ArrayBuffer>) {
       assert(target.buffer instanceof ArrayBuffer, 'Browser encoders refuse shared destinations');
       return super.encodeInto(text, target);
     }
-  }();
-  for (const [text, capacity] of [['MENU', 8], ['Aé🎞Z', 7], ['🎞', 3], ['é', 0]] as const) {
+  })();
+  for (const [text, capacity] of [
+    ['MENU', 8],
+    ['Aé🎞Z', 7],
+    ['🎞', 3],
+    ['é', 0],
+  ] as const) {
     const expected = new Uint8Array(capacity);
     const result = encoder.encodeInto(text, expected);
     const shared = new Uint8Array(new SharedArrayBuffer(capacity + 4));
     shared.fill(0xcc);
-    assert.deepEqual(encodeIntoSharedMemory(encoder, text, shared.subarray(2, 2 + capacity)), result);
+    assert.deepEqual(
+      encodeIntoSharedMemory(encoder, text, shared.subarray(2, 2 + capacity)),
+      result,
+    );
     assert.deepEqual(shared.subarray(2, 2 + result.written), expected.subarray(0, result.written));
     assert(shared.subarray(0, 2).every((byte) => byte === 0xcc));
     assert(shared.subarray(2 + result.written).every((byte) => byte === 0xcc));
@@ -136,7 +144,9 @@ await test('Unicorn cache reuse requires the configured source and toolchain set
   const cachePath = join(directory, 'CMakeCache.txt');
   writeFileSync(
     cachePath,
-    Object.entries(entries).map(([name, value]) => `${name}:INTERNAL=${value}`).join('\n'),
+    Object.entries(entries)
+      .map(([name, value]) => `${name}:INTERNAL=${value}`)
+      .join('\n'),
   );
   try {
     assert(unicornCacheMatches(cachePath, plan));

@@ -212,10 +212,14 @@ enum Kind {
 }
 
 impl Device for Transmitter {
-    fn hdmi_output(&self) -> Option<&(dyn fujimod_emulator_devices::capability::HdmiOutput + 'static)> {
+    fn hdmi_output(
+        &self,
+    ) -> Option<&(dyn fujimod_emulator_devices::capability::HdmiOutput + 'static)> {
         Some(self)
     }
-    fn hdmi_output_mut(&mut self) -> Option<&mut (dyn fujimod_emulator_devices::capability::HdmiOutput + 'static)> {
+    fn hdmi_output_mut(
+        &mut self,
+    ) -> Option<&mut (dyn fujimod_emulator_devices::capability::HdmiOutput + 'static)> {
         Some(self)
     }
     fujimod_emulator_devices::checkpoint_fields!(state: State, sink: HdmiSink);

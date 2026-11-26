@@ -150,7 +150,9 @@ def ladder_scenario() -> tuple[Definition, dict[str, bytes]]:
                                 *(
                                     dict(
                                         positions=[
-                                            "pressed" if other == control else "released"
+                                            "pressed"
+                                            if other == control
+                                            else "released"
                                             for other, _ in buttons
                                         ],
                                         signals=[level(sample)],
@@ -173,7 +175,12 @@ def ladder_scenario() -> tuple[Definition, dict[str, bytes]]:
                             id=control,
                             momentary=True,
                             states=[
-                                dict(position=position, ready=[], expected=[], hold_ticks=1)
+                                dict(
+                                    position=position,
+                                    ready=[],
+                                    expected=[],
+                                    hold_ticks=1,
+                                )
                                 for position in ("released", "pressed")
                             ],
                         )

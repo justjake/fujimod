@@ -473,8 +473,38 @@ impl FlashBackup {
 fn capture_error(source: bulk::BulkError) -> JsValue {
     match source {
         bulk::BulkError::Usb(source) => error(source),
+        bulk::BulkError::Mapped(failure) => mapped_error(failure),
+        bulk::BulkError::Cleanup { operation, cleanup } => {
+            let value = capture_error(*operation);
+            property(&value, "cleanup", cleanup.to_string());
+            value
+        }
         other => workflow_error(other),
     }
+}
+fn mapped_error(failure: bulk::MappedFailure) -> JsValue {
+    let context = failure.to_string();
+    let bulk::MappedFailure {
+        phase,
+        space,
+        address,
+        length,
+        source,
+        cleanup,
+    } = failure;
+    let value = match *source {
+        bulk::BulkError::Usb(source) => error(source),
+        _ => workflow_error(&context),
+    };
+    property(&value, "mappedContext", context);
+    property(&value, "mappedPhase", format!("{phase:?}"));
+    property(&value, "mappedAddress", address as f64);
+    property(&value, "mappedAddressSpace", space.name().to_string());
+    property(&value, "mappedLength", length as f64);
+    if let Some(cleanup) = cleanup {
+        property(&value, "mappedCleanup", cleanup.to_string());
+    }
+    value
 }
 #[wasm_bindgen(typescript_custom_section)]
 const CAPTURE_TYPES: &str = r#"

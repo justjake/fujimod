@@ -3,14 +3,14 @@
 //! uses programmed black, WB/exposure, radial shading and the measured film
 //! law, with the approximate hue stage of FFF44500 bit 12. Spatial filtering
 //! remains unmodeled.
-use fujimod_emulator_imaging::exr2_isp::dma::{Raster, Transfer, physical};
-use fujimod_emulator_imaging::exr2_isp::word;
 use fujimod_emulator_devices::exr2::irq_routes::Irq;
-use fujimod_emulator_imaging::film::{Film, HueStage, still_offset};
-use fujimod_emulator_image_processing::raw::{Cfa, Packing, RawView};
 use fujimod_emulator_devices::{Cx, Device};
-use std::sync::Arc;
+use fujimod_emulator_image_processing::raw::{Cfa, Packing, RawView};
+use fujimod_emulator_imaging::exr2_isp::dma::{Raster, Transfer, physical};
 use fujimod_emulator_imaging::exr2_isp::options::still::Options;
+use fujimod_emulator_imaging::exr2_isp::word;
+use fujimod_emulator_imaging::film::{Film, HueStage, still_offset};
+use std::sync::Arc;
 
 pub struct StillProcessor {
     r: Vec<u32>,
@@ -164,8 +164,12 @@ impl StillProcessor {
         self.dma
             .prepare_deferred(cx.now(), self.delay, dst, dst.width * 2)?;
         if let Some(raster) = raw_output {
-            self.raw_dma
-                .prepare_deferred(cx.now(), self.delay, raster, packing.row_bytes(raster.width))?;
+            self.raw_dma.prepare_deferred(
+                cx.now(),
+                self.delay,
+                raster,
+                packing.row_bytes(raster.width),
+            )?;
         }
         let raw = RawView {
             bytes: &self.source,

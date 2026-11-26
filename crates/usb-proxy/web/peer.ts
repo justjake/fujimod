@@ -706,7 +706,13 @@ export class ShareHost {
     if (this.closed) return;
     if (this.ownerKey && !this.live) {
       this.stop(); // Ends the rejoin loop first, so only this connection joins.
-      const signal = signaling(this.ticket, 'host', () => {}, () => {}, this.ownerKey);
+      const signal = signaling(
+        this.ticket,
+        'host',
+        () => {},
+        () => {},
+        this.ownerKey,
+      );
       try {
         await signal.ready;
         signal.send({ type: 'end' });

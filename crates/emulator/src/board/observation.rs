@@ -1,12 +1,11 @@
 //! Explicit, bounded CPU/bus observation. No device consumes these records.
 pub mod calls;
-pub mod ranges;
 mod execution_metrics;
-pub use execution_metrics::{
-    PublishedFastReadMappingKey, RegisterAccessKey, RegisterAccessSnapshot,
-    RegisterAccessTotals,
-};
+pub mod ranges;
 use super::{Board, State, factory::MemoryMap, scalar};
+pub use execution_metrics::{
+    PublishedFastReadMappingKey, RegisterAccessKey, RegisterAccessSnapshot, RegisterAccessTotals,
+};
 use fujimod_emulator_cpu::{Access, Cpu, Hook, HookId, HookRange, Model, Register, arm};
 use serde_json::{Value, json};
 use std::{
@@ -615,7 +614,13 @@ impl PcRecorder {
         if limit == 0 || limit > 10_000_000 {
             return Err("PC trace needs a bound between 1 and 10000000 entries".into());
         }
-        Ok(Self { limit, records: PcEntries { entries: Vec::new(), omitted: 0 } })
+        Ok(Self {
+            limit,
+            records: PcEntries {
+                entries: Vec::new(),
+                omitted: 0,
+            },
+        })
     }
 
     pub fn record(&mut self, core: usize, pc: u64, size: u32) {
@@ -627,7 +632,13 @@ impl PcRecorder {
     }
 
     pub fn take(&mut self) -> PcEntries {
-        std::mem::replace(&mut self.records, PcEntries { entries: Vec::new(), omitted: 0 })
+        std::mem::replace(
+            &mut self.records,
+            PcEntries {
+                entries: Vec::new(),
+                omitted: 0,
+            },
+        )
     }
 }
 
@@ -661,7 +672,10 @@ impl PcTrace {
 
     fn detach(&mut self) {
         for TraceHook { cpu, hook, context } in self.hooks.drain(..) {
-            if cpu.upgrade().is_some_and(|cpu| cpu.remove_hook(hook).is_err()) {
+            if cpu
+                .upgrade()
+                .is_some_and(|cpu| cpu.remove_hook(hook).is_err())
+            {
                 // The CPU still owns a callback pointing at this context.
                 Box::leak(context);
             }
@@ -681,15 +695,27 @@ impl Board {
             return Err("PC tracing requires exact execution policy".into());
         }
         let records = Rc::new(RefCell::new(PcRecorder::new(limit)?));
-        let mut trace = PcTrace { records, hooks: Vec::new() };
+        let mut trace = PcTrace {
+            records,
+            hooks: Vec::new(),
+        };
         for (core, cpu) in self.cpus.iter().enumerate() {
-            let mut context = Box::new(TraceContext { core, records: trace.records.clone() });
-            let hook = unsafe { cpu.install_hook(Hook::Instruction {
-                callback: trace_pc,
-                data: (&mut *context as *mut TraceContext).cast(),
-                range: HookRange::All,
-            }) }?;
-            trace.hooks.push(TraceHook { cpu: Rc::downgrade(cpu), hook, context });
+            let mut context = Box::new(TraceContext {
+                core,
+                records: trace.records.clone(),
+            });
+            let hook = unsafe {
+                cpu.install_hook(Hook::Instruction {
+                    callback: trace_pc,
+                    data: (&mut *context as *mut TraceContext).cast(),
+                    range: HookRange::All,
+                })
+            }?;
+            trace.hooks.push(TraceHook {
+                cpu: Rc::downgrade(cpu),
+                hook,
+                context,
+            });
         }
         Ok(trace)
     }

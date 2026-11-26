@@ -184,7 +184,12 @@ impl YcOutput {
     }
     /// RIFP: whether the waiting RESZ job, if any, writes two-plane 4:2:0 (the movie path).
     pub fn waits_two_plane(&self) -> bool {
-        self.0.lock().unwrap().deferred.as_ref().is_some_and(ReszJob::two_plane)
+        self.0
+            .lock()
+            .unwrap()
+            .deferred
+            .as_ref()
+            .is_some_and(ReszJob::two_plane)
     }
     /// RIFP: the RESZ job waiting for the run that just ended, if any.
     pub fn take_deferred(&self) -> Option<ReszJob> {
@@ -240,7 +245,11 @@ impl Layout {
     fn words(&self) -> impl Iterator<Item = u64> + '_ {
         [0x10, 0x14, 0x18, 0x1c, 0x20, 0x24, 0x28]
             .into_iter()
-            .chain([self.source, self.output].into_iter().flat_map(|o| (0..5).map(move |i| o + 4 * i)))
+            .chain(
+                [self.source, self.output]
+                    .into_iter()
+                    .flat_map(|o| (0..5).map(move |i| o + 4 * i)),
+            )
     }
 }
 
@@ -360,9 +369,15 @@ impl ReszJob {
         let p = self.plan(Inline::Picture(inline))?;
         let bytes = cx.ram_bytes(p.source, p.pitch * (p.lines - 1) + 2 * p.used)?;
         cx.log(&p.geometry);
-        scale_422(&bytes, p.pitch, p.shift, p.origin, p.crop, p.out, |y, line| {
-            cx.ram_write(p.output + (y * p.out_pitch) as u64, line)
-        })
+        scale_422(
+            &bytes,
+            p.pitch,
+            p.shift,
+            p.origin,
+            p.crop,
+            p.out,
+            |y, line| cx.ram_write(p.output + (y * p.out_pitch) as u64, line),
+        )
     }
 
     /// This inline job (source address 0) fed by a RIFP run whose packed 4:2:2 output of
@@ -371,7 +386,11 @@ impl ReszJob {
         let plan = self.plan(Inline::Stream(stream.0, stream.1))?;
         cx.log(&plan.geometry);
         let line = vec![0; 2 * plan.out.0];
-        Ok(ReszStream { plan, next: 0, line })
+        Ok(ReszStream {
+            plan,
+            next: 0,
+            line,
+        })
     }
 
     fn plan(&self, inline: Inline) -> Result<ReszPlan, String> {
@@ -478,7 +497,9 @@ impl ReszJob {
         // 4420-pixel crop. So a crop wider than the pitch reads on into the next line's bytes,
         // as the fetch addresses them; the read below covers the last line's whole crop. A RIFP
         // stream has no lines in memory: its crop must fit the stream line.
-        let used = ((origin.0 + crop.0) << shift.0).min(width).next_multiple_of(2);
+        let used = ((origin.0 + crop.0) << shift.0)
+            .min(width)
+            .next_multiple_of(2);
         if output == 0
             || crop.0 == 0
             || crop.1 == 0
@@ -526,7 +547,11 @@ impl ReszJob {
     /// Scale a two-plane 4:2:0 picture to the two-plane destination, nearest neighbour; the
     /// chroma plane takes the Cb, Cr pair at the chroma site of each output pixel pair.
     /// `inline` replaces a zero source address (the RIFP inline stream). Returns the log line.
-    pub fn scale_two_plane(&self, cx: &mut Cx<'_>, inline: Option<YcPicture>) -> Result<String, String> {
+    pub fn scale_two_plane(
+        &self,
+        cx: &mut Cx<'_>,
+        inline: Option<YcPicture>,
+    ) -> Result<String, String> {
         let p = self.two_plane_plan(TwoPlaneSource::Picture(inline))?;
         let luma = cx.ram_bytes(p.luma, p.pitch * (p.lines - 1) + p.used)?;
         let chroma = cx.ram_bytes(p.chroma, p.pitch * (p.lines.div_ceil(2) - 1) + p.used)?;
@@ -557,7 +582,8 @@ impl ReszJob {
         let size = |w: u32| ((w & 0xffff) as usize + 1, (w >> 16) as usize + 1);
         let (src, dst) = (self.layout.source, self.layout.output);
         let name = self.layout.block;
-        let (mut luma, mut chroma, mut pitch) = (address(src), address(src + 8), word(src + 0x10) as usize);
+        let (mut luma, mut chroma, mut pitch) =
+            (address(src), address(src + 8), word(src + 0x10) as usize);
         let from_rifp = luma == 0;
         let (width, lines) = size(word(0x14));
         let mut stream = None;
@@ -599,7 +625,10 @@ impl ReszJob {
                 (luma, chroma, pitch) = (picture.address, c, picture.pitch as usize);
             }
         }
-        let shift = (((word(0x24) >> 16) & 3) as usize, ((word(0x28) >> 16) & 3) as usize);
+        let shift = (
+            ((word(0x24) >> 16) & 3) as usize,
+            ((word(0x28) >> 16) & 3) as usize,
+        );
         let decimated = (width.div_ceil(1 << shift.0), lines.div_ceil(1 << shift.1));
         let origin = ((word(0x18) & 0xffff) as usize, (word(0x18) >> 16) as usize);
         let crop = match word(0x1c) {
@@ -610,13 +639,15 @@ impl ReszJob {
             w => size(w),
         };
         let out = size(word(0x20));
-        let (output, out_chroma, out_pitch) = (address(dst), address(dst + 8), word(dst + 0x10) as usize);
+        let (output, out_chroma, out_pitch) =
+            (address(dst), address(dst + 8), word(dst + 0x10) as usize);
         let geometry = format!(
             "{name} {:#x}: two-plane 4:2:0 source {} size {width}x{lines}, crop {crop:?} at {origin:?}{}, \
              output {out:?} at {output:#x} / {out_chroma:#x} pitch {out_pitch:#x} (+0x10 {:#x})",
             self.base,
             match stream {
-                Some((pixels, stream_lines)) => format!("RIFP inline stream {pixels}x{stream_lines}"),
+                Some((pixels, stream_lines)) =>
+                    format!("RIFP inline stream {pixels}x{stream_lines}"),
                 None => format!(
                     "{luma:#x} / {chroma:#x}{} pitch {pitch:#x}",
                     if from_rifp { " (RIFP inline)" } else { "" }
@@ -630,7 +661,9 @@ impl ReszJob {
             word(0x10)
         );
         let steps = [word(0x24), word(0x28)];
-        let used = ((origin.0 + crop.0) << shift.0).min(width).next_multiple_of(2);
+        let used = ((origin.0 + crop.0) << shift.0)
+            .min(width)
+            .next_multiple_of(2);
         if steps.iter().any(|w| w >> 18 != 0 || (w >> 16) & 3 == 3)
             || (stream.is_none() && (luma == 0 || chroma == 0 || pitch < used))
             || output == 0
@@ -683,7 +716,10 @@ impl ReszJob {
         let name = self.layout.block;
         let (luma, chroma, pitch) = (address(src), address(src + 8), word(src + 0x10) as usize);
         let (width, lines) = size(word(0x14));
-        let shift = (((word(0x24) >> 16) & 3) as usize, ((word(0x28) >> 16) & 3) as usize);
+        let shift = (
+            ((word(0x24) >> 16) & 3) as usize,
+            ((word(0x28) >> 16) & 3) as usize,
+        );
         let decimated = (width.div_ceil(1 << shift.0), lines.div_ceil(1 << shift.1));
         let origin = ((word(0x18) & 0xffff) as usize, (word(0x18) >> 16) as usize);
         let crop = match word(0x1c) {
@@ -714,7 +750,9 @@ impl ReszJob {
             }
         );
         let steps = [word(0x24), word(0x28)];
-        let used = ((origin.0 + crop.0) << shift.0).min(width).next_multiple_of(2);
+        let used = ((origin.0 + crop.0) << shift.0)
+            .min(width)
+            .next_multiple_of(2);
         if steps.iter().any(|w| w >> 18 != 0 || (w >> 16) & 3 == 3)
             || luma == 0
             || chroma == 0
@@ -838,10 +876,16 @@ fn capture_run(
             .map_err(|e| format!("XT5_RIFP_CAPTURE {name}: {e}"))
     };
     if lines != 0 && pitch != 0 {
-        write(format!("rifp-{run}-input.bin"), &cx.ram_bytes(input, pitch * lines)?)?;
+        write(
+            format!("rifp-{run}-input.bin"),
+            &cx.ram_bytes(input, pitch * lines)?,
+        )?;
     }
     if out.1 != 0 && out_pitch != 0 {
-        write(format!("rifp-{run}-output.bin"), &cx.ram_bytes(output, out_pitch * out.1)?)?;
+        write(
+            format!("rifp-{run}-output.bin"),
+            &cx.ram_bytes(output, out_pitch * out.1)?,
+        )?;
     }
     let colour: Vec<String> = (0x4000u64..0xa000)
         .step_by(4)
@@ -898,7 +942,11 @@ pub fn rifp_raw_copy(
          at {origin:?}, output {out:?} at {output:#x} pitch {out_pitch:#x} (+0x08 mode {:#x})",
         word(0x08)
     );
-    let line = if r.packed12 { xtrans::packed12_bytes(width) } else { 2 * width };
+    let line = if r.packed12 {
+        xtrans::packed12_bytes(width)
+    } else {
+        2 * width
+    };
     if width == 0
         || lines == 0
         || crop.0 == 0
@@ -909,14 +957,22 @@ pub fn rifp_raw_copy(
         || out_pitch < 2 * out.0
         || pitch < line
     {
-        return Err(format!("{geometry} is outside the modelled layout (a RAW copy does not scale)"));
+        return Err(format!(
+            "{geometry} is outside the modelled layout (a RAW copy does not scale)"
+        ));
     }
     let offset = input - r.address;
     let column = offset % r.pitch;
     if r.packed12 && column % 3 != 0 {
-        return Err(format!("{geometry}: packed 12-bit input starts inside a sample pair"));
+        return Err(format!(
+            "{geometry}: packed 12-bit input starts inside a sample pair"
+        ));
     }
-    let sample = if r.packed12 { column / 3 * 2 } else { column / 2 };
+    let sample = if r.packed12 {
+        column / 3 * 2
+    } else {
+        column / 2
+    };
     let phase = (
         (usize::from(r.phase.0) + (offset / r.pitch) as usize) % 6,
         (usize::from(r.phase.1) + sample as usize) % 6,
@@ -941,7 +997,10 @@ pub fn rifp_raw_copy(
         width: out.0 as u32,
         lines: out.1 as u32,
         packed12: false,
-        phase: (((phase.0 + origin.1) % 6) as u8, ((phase.1 + origin.0) % 6) as u8),
+        phase: (
+            ((phase.0 + origin.1) % 6) as u8,
+            ((phase.1 + origin.0) % 6) as u8,
+        ),
         exposure: r.exposure,
     };
     cx.log(&format!(
@@ -992,7 +1051,9 @@ pub fn rifp_into_resz(
     }
     let (_, _, _, out) = rifp_window(&word);
     let mut stream = job.stream(cx, out)?;
-    rifp_lines(cx, &word, raw, None, None, |cx, y, line| stream.feed(cx, y, line))?;
+    rifp_lines(cx, &word, raw, None, None, |cx, y, line| {
+        stream.feed(cx, y, line)
+    })?;
     stream.finish()
 }
 
@@ -1009,11 +1070,19 @@ struct Sampling {
 #[allow(clippy::type_complexity)]
 fn rifp_window(
     word: &impl Fn(u64) -> u32,
-) -> ((usize, usize), (usize, usize), (usize, usize), (usize, usize)) {
+) -> (
+    (usize, usize),
+    (usize, usize),
+    (usize, usize),
+    (usize, usize),
+) {
     let (width, lines) = pixels_lines(word(0x20));
     let origin = pixels_lines(word(0x24));
     let crop = match pixels_lines(word(0x28)) {
-        (0, _) | (_, 0) => (width.saturating_sub(origin.0), lines.saturating_sub(origin.1)),
+        (0, _) | (_, 0) => (
+            width.saturating_sub(origin.0),
+            lines.saturating_sub(origin.1),
+        ),
         crop => crop,
     };
     let out = match pixels_lines(word(0x2c)) {
@@ -1055,21 +1124,23 @@ fn rifp_lines(
         // A RAW the still channel did not write (in-camera RAW conversion: the RAF payload,
         // read from the card and copied by CopyCropRaw): the mode word says RAW input.
         .or_else(|| {
-            (word(0x08) >> 16 & 7 == RIFP_MODE_INPUT_RAW && pitch >= 2 * width && width != 0).then(|| {
-                StillRaw {
-                    address: input,
-                    pitch: pitch as u64,
-                    width: width as u32,
-                    lines: lines as u32,
-                    packed12: false,
-                    // The RAF payload starts where the RAW-to-RAW copy of the sensor frame
-                    // started; taken as the first sample of this input.
-                    phase: xtrans::XT5_RAF_SITE,
-                    // The exposure of the session's last still picture, if any (a RAF this
-                    // run recorded); the file's own exposure is not read.
-                    exposure: raw.map_or(1., |r| r.exposure),
-                }
-            })
+            (word(0x08) >> 16 & 7 == RIFP_MODE_INPUT_RAW && pitch >= 2 * width && width != 0).then(
+                || {
+                    StillRaw {
+                        address: input,
+                        pitch: pitch as u64,
+                        width: width as u32,
+                        lines: lines as u32,
+                        packed12: false,
+                        // The RAF payload starts where the RAW-to-RAW copy of the sensor frame
+                        // started; taken as the first sample of this input.
+                        phase: xtrans::XT5_RAF_SITE,
+                        // The exposure of the session's last still picture, if any (a RAF this
+                        // run recorded); the file's own exposure is not read.
+                        exposure: raw.map_or(1., |r| r.exposure),
+                    }
+                },
+            )
         });
     // An input in the still RAW takes its layout; any other input with a pitch of 1.5 up to
     // (not including) 2 bytes a sample would be packed 12-bit RAW (see the module notes).
@@ -1105,7 +1176,11 @@ fn rifp_lines(
     {
         return Err(format!("{} is outside the modelled layout", geometry()));
     }
-    let line = if packed12 { xtrans::packed12_bytes(width) } else { 2 * width };
+    let line = if packed12 {
+        xtrans::packed12_bytes(width)
+    } else {
+        2 * width
+    };
     if packed12 && pitch < line {
         return Err(format!("{} is outside the modelled layout", geometry()));
     }
@@ -1120,7 +1195,10 @@ fn rifp_lines(
         let offset = input - r.address;
         let column = offset % r.pitch;
         if packed12 && column % 3 != 0 {
-            return Err(format!("{}: packed 12-bit input starts inside a sample pair", geometry()));
+            return Err(format!(
+                "{}: packed 12-bit input starts inside a sample pair",
+                geometry()
+            ));
         }
         let sample = if packed12 { column / 3 * 2 } else { column / 2 };
         let phase = (
@@ -1143,13 +1221,18 @@ fn rifp_lines(
             if packed12 { "packed 12-bit" } else { "16-bit" },
             r.exposure,
             path.describe(),
-            if path.is_declared() { " (declared law)" } else { "" }
+            if path.is_declared() {
+                " (declared law)"
+            } else {
+                ""
+            }
         ));
         let levels = (!path.is_declared())
             .then(|| super::colour::linear_levels(&xtrans::Response::xt5(r.exposure)));
         for y in 0..out.1 {
             let line_y = sampling.map_or(origin.1 + y * crop.1 / out.1, |s| s.rows[y]);
-            let column = |x: usize| sampling.map_or(origin.0 + x * crop.0 / out.0, |s| s.columns[x]);
+            let column =
+                |x: usize| sampling.map_or(origin.0 + x * crop.0 / out.0, |s| s.columns[x]);
             let line = match &levels {
                 Some(levels) => {
                     super::colour::develop_422_line(&raw, &path, levels, line_y, out.0, column)
@@ -1165,7 +1248,9 @@ fn rifp_lines(
         ));
     } else {
         cx.log(&format!("{} copies packed 4:2:2", geometry()));
-        scale_422(&bytes, pitch, (0, 0), origin, crop, out, |y, line| emit(cx, y, line))?;
+        scale_422(&bytes, pitch, (0, 0), origin, crop, out, |y, line| {
+            emit(cx, y, line)
+        })?;
     }
     Ok(out)
 }
@@ -1214,7 +1299,11 @@ impl Resz {
         ReszJob {
             base: self.base,
             layout: self.layout,
-            words: self.layout.words().map(|o| (o, self.stub.word(o))).collect(),
+            words: self
+                .layout
+                .words()
+                .map(|o| (o, self.stub.word(o)))
+                .collect(),
         }
     }
     /// A start: scale now, or, with an inline layout and source address 0 while a RIFP run is
@@ -1384,7 +1473,12 @@ mod tests {
         let colour = [40u8, 180, 90];
         let mut ram = vec![0u8; 0x4000];
         for y in 0..12 {
-            xtrans::mosaic_line_with(&colour.repeat(24), (y, 0), &mut ram[y * 64..y * 64 + 48], &xtrans::Response::xt5(1.).mosaic_lut());
+            xtrans::mosaic_line_with(
+                &colour.repeat(24),
+                (y, 0),
+                &mut ram[y * 64..y * 64 + 48],
+                &xtrans::Response::xt5(1.).mosaic_lut(),
+            );
         }
         let mut host = RecordingHost {
             ram_base: RAM,
@@ -1421,7 +1515,10 @@ mod tests {
         let words = rifp_words(RAM + 0x1000, RAM + 0x2000);
         let copy = |o| if o == 0x1c { 48 } else { words(o) };
         rifp_run(&mut cx, copy, Some(raw)).unwrap();
-        assert_eq!(host.ram[0x2000..0x2000 + 48 * 12], host.ram[0x1000..0x1000 + 48 * 12]);
+        assert_eq!(
+            host.ram[0x2000..0x2000 + 48 * 12],
+            host.ram[0x1000..0x1000 + 48 * 12]
+        );
         // A pitch too short for the input refuses.
         let mut cx = Cx::new(&mut host, 0, 0, 0);
         let short = |o| if o == 0x1c { 32 } else { words(o) };
@@ -1437,15 +1534,27 @@ mod tests {
         let mut ram = vec![0u8; 0x4000];
         let lut = xtrans::Response::xt5(1.).mosaic_lut();
         for y in 0..12 {
-            xtrans::mosaic_line_with(&colour.repeat(24), (y, 0), &mut ram[y * 64..y * 64 + 48], &lut);
+            xtrans::mosaic_line_with(
+                &colour.repeat(24),
+                (y, 0),
+                &mut ram[y * 64..y * 64 + 48],
+                &lut,
+            );
         }
-        let mut host = RecordingHost { ram_base: RAM, ram, ..Default::default() };
+        let mut host = RecordingHost {
+            ram_base: RAM,
+            ram,
+            ..Default::default()
+        };
         let words = rifp_words(RAM, RAM + 0x1000);
         // Mode 0x11220000 (bits 18..16 = 2): RAW input. No still picture at all.
         let raw_mode = |o| if o == 0x08 { 0x1122_0000 } else { words(o) };
         rifp_run(&mut Cx::new(&mut host, 0, 0, 0), raw_mode, None).unwrap();
         let [y, cb, cr] = xtrans::ycbcr_jfif(colour).map(|v| v as u8);
-        assert_eq!(&host.ram[0x1000..0x1000 + 48], [y, y, cb, cr].repeat(12).as_slice());
+        assert_eq!(
+            &host.ram[0x1000..0x1000 + 48],
+            [y, y, cb, cr].repeat(12).as_slice()
+        );
         // The same input without the RAW mode is a packed 4:2:2 copy.
         let copy = |o| if o == 0x1c { 48 } else { words(o) };
         rifp_run(&mut Cx::new(&mut host, 0, 0, 0), copy, None).unwrap();
@@ -1460,7 +1569,12 @@ mod tests {
                 0x4224..0x42e4 if (o - 0x4224) % 0x40 < 0x3d => {
                     let point = ((o - 0x4224) % 0x40 / 2) as u32;
                     let level = |point: u32| (point * 0x3fff / 30).min(0x3fff) * scale / 4;
-                    level(point) | if point < 30 { level(point + 1) << 16 } else { 0 }
+                    level(point)
+                        | if point < 30 {
+                            level(point + 1) << 16
+                        } else {
+                            0
+                        }
                 }
                 _ => words(o),
             }
@@ -1470,7 +1584,10 @@ mod tests {
         assert!(straight < y, "linear {straight} is darker than sRGB {y}");
         rifp_run(&mut Cx::new(&mut host, 0, 0, 0), curve(2), None).unwrap();
         let half = host.ram[0x1000];
-        assert!((i32::from(half) - i32::from(straight) / 2).abs() <= 1, "{half} {straight}");
+        assert!(
+            (i32::from(half) - i32::from(straight) / 2).abs() <= 1,
+            "{half} {straight}"
+        );
     }
 
     /// Host check of the RAW conversion develop on a real file (not run by default; the file
@@ -1491,18 +1608,25 @@ mod tests {
         ) else {
             return;
         };
-        let (pitch, strip_lines, top, width, lines) = (2 * 7872usize, 5196usize, 5usize, 7752usize, 5184usize);
+        let (pitch, strip_lines, top, width, lines) =
+            (2 * 7872usize, 5196usize, 5usize, 7752usize, 5184usize);
         let file = std::fs::read(path).unwrap();
         let strip: usize = strip.parse().unwrap();
         let mut ram = file[strip..strip + pitch * strip_lines].to_vec();
         let output = ram.len();
         ram.resize(output + pitch * lines, 0);
-        let mut host = RecordingHost { ram_base: RAM, ram, ..Default::default() };
+        let mut host = RecordingHost {
+            ram_base: RAM,
+            ram,
+            ..Default::default()
+        };
         let (input, output_address) = (RAM + (top * pitch) as u64, RAM + output as u64);
         let mut programmed = std::collections::BTreeMap::new();
         if let Ok(path) = std::env::var("XT5_TEST_RAF_WORDS") {
             for line in std::fs::read_to_string(path).unwrap().lines() {
-                let mut pair = line.split_whitespace().map(|v| u64::from_str_radix(v.trim_start_matches("0x"), 16).unwrap());
+                let mut pair = line
+                    .split_whitespace()
+                    .map(|v| u64::from_str_radix(v.trim_start_matches("0x"), 16).unwrap());
                 if let (Some(address), Some(value)) = (pair.next(), pair.next()) {
                     programmed.insert(address - 0xffd0_2000, value as u32);
                 }
@@ -1544,7 +1668,11 @@ mod tests {
                     f64::from(host.ram[at + 2]) - 128.,
                     f64::from(host.ram[at + 3]) - 128.,
                 );
-                for v in [luma + 1.402 * cr, luma - 0.344136 * cb - 0.714136 * cr, luma + 1.772 * cb] {
+                for v in [
+                    luma + 1.402 * cr,
+                    luma - 0.344136 * cb - 0.714136 * cr,
+                    luma + 1.772 * cb,
+                ] {
                     ppm.push(v.round().clamp(0., 255.) as u8);
                 }
             }
@@ -1561,12 +1689,28 @@ mod tests {
         let response = xtrans::Response::xt5(1.5);
         let mut ram = vec![0u8; 0x4000];
         for y in 0..12 {
-            xtrans::mosaic_line_with(&colour.repeat(24), (y, 0), &mut ram[y * 64..y * 64 + 48], &response.mosaic_lut());
+            xtrans::mosaic_line_with(
+                &colour.repeat(24),
+                (y, 0),
+                &mut ram[y * 64..y * 64 + 48],
+                &response.mosaic_lut(),
+            );
         }
         // Saturated and above-range samples stay as they are (at most 14 bits from the sensor).
         ram[2 * 64 + 14..2 * 64 + 16].copy_from_slice(&xtrans::WHITE.to_le_bytes());
-        let mut host = RecordingHost { ram_base: RAM, ram, ..Default::default() };
-        let raw = StillRaw { address: RAM, pitch: 64, width: 24, lines: 12, exposure: 1.5, ..Default::default() };
+        let mut host = RecordingHost {
+            ram_base: RAM,
+            ram,
+            ..Default::default()
+        };
+        let raw = StillRaw {
+            address: RAM,
+            pitch: 64,
+            width: 24,
+            lines: 12,
+            exposure: 1.5,
+            ..Default::default()
+        };
         // Input from sample 1 of line 2 (site (2, 1)); crop 12x6 at (6, 0); output pitch 32.
         let words = rifp_words(RAM + 2 * 64 + 2, RAM + 0x1000);
         let word = |o| match o {
@@ -1578,25 +1722,52 @@ mod tests {
             0x50 => 32,
             o => words(o),
         };
-        assert_eq!(rifp_raw_copy(&mut Cx::new(&mut host, 0, 0, 0), |o| if o == 8 { 0x1122_0000 } else { word(o) }, Some(raw)).unwrap(), None);
-        let derived = rifp_raw_copy(&mut Cx::new(&mut host, 0, 0, 0), word, Some(raw)).unwrap().unwrap();
+        assert_eq!(
+            rifp_raw_copy(
+                &mut Cx::new(&mut host, 0, 0, 0),
+                |o| if o == 8 { 0x1122_0000 } else { word(o) },
+                Some(raw)
+            )
+            .unwrap(),
+            None
+        );
+        let derived = rifp_raw_copy(&mut Cx::new(&mut host, 0, 0, 0), word, Some(raw))
+            .unwrap()
+            .unwrap();
         assert_eq!(
             derived,
-            StillRaw { address: RAM + 0x1000, pitch: 32, width: 12, lines: 6, phase: (2, 1), exposure: 1.5, ..Default::default() }
+            StillRaw {
+                address: RAM + 0x1000,
+                pitch: 32,
+                width: 12,
+                lines: 6,
+                phase: (2, 1),
+                exposure: 1.5,
+                ..Default::default()
+            }
         );
         for y in 0..6 {
             for x in 0..12 {
                 let at = 0x1000 + y * 32 + 2 * x;
                 let from = (2 + y) * 64 + 2 * (1 + 6 + x);
                 let sample = u16::from_le_bytes([host.ram[at], host.ram[at + 1]]);
-                assert_eq!(&host.ram[at..at + 2], &host.ram[from..from + 2], "({x}, {y})");
+                assert_eq!(
+                    &host.ram[at..at + 2],
+                    &host.ram[from..from + 2],
+                    "({x}, {y})"
+                );
                 assert!(sample <= xtrans::WHITE && sample >= xtrans::BLACK);
             }
         }
-        assert_eq!(u16::from_le_bytes([host.ram[0x1000], host.ram[0x1001]]), xtrans::WHITE);
+        assert_eq!(
+            u16::from_le_bytes([host.ram[0x1000], host.ram[0x1001]]),
+            xtrans::WHITE
+        );
         // The derived RAW develops like a still channel picture at its own site.
         host.ram.copy_within(2 * 64 + 2..2 * 64 + 4, 2 * 64 + 14);
-        let derived = rifp_raw_copy(&mut Cx::new(&mut host, 0, 0, 0), word, Some(raw)).unwrap().unwrap();
+        let derived = rifp_raw_copy(&mut Cx::new(&mut host, 0, 0, 0), word, Some(raw))
+            .unwrap()
+            .unwrap();
         let develop_words = rifp_words(RAM + 0x1000, RAM + 0x2000);
         let develop = |o| match o {
             0x1c => 32,
@@ -1608,14 +1779,21 @@ mod tests {
         let [y, cb, cr] = xtrans::ycbcr_jfif(colour).map(|v| v as u8);
         for line in 0..6 {
             let at = 0x2000 + line * 24;
-            assert_eq!(&host.ram[at..at + 24], [y, y, cb, cr].repeat(6).as_slice(), "line {line}");
+            assert_eq!(
+                &host.ram[at..at + 24],
+                [y, y, cb, cr].repeat(6).as_slice(),
+                "line {line}"
+            );
         }
         // A scaling RAW copy refuses; an input outside the RAW is not a RAW copy.
         let scaled = |o| if o == 0x2c { 3 << 16 | 6 } else { word(o) };
         assert!(rifp_raw_copy(&mut Cx::new(&mut host, 0, 0, 0), scaled, Some(raw)).is_err());
         let outside = rifp_words(RAM + 0x3000, RAM + 0x1000);
         let outside = |o| if o == 8 { 4 } else { outside(o) };
-        assert_eq!(rifp_raw_copy(&mut Cx::new(&mut host, 0, 0, 0), outside, Some(raw)).unwrap(), None);
+        assert_eq!(
+            rifp_raw_copy(&mut Cx::new(&mut host, 0, 0, 0), outside, Some(raw)).unwrap(),
+            None
+        );
     }
 
     /// Packed 12-bit RAW (pitch 40 for 24 samples, 1.5 bytes a sample plus padding): a flat
@@ -1628,7 +1806,12 @@ mod tests {
         let mut ram = vec![0u8; 0x4000];
         let mut samples = vec![0u8; 2 * width];
         for y in 0..12 {
-            xtrans::mosaic_line_with(&colour.repeat(width), (y, 0), &mut samples, &xtrans::Response::xt5(1.).mosaic_lut());
+            xtrans::mosaic_line_with(
+                &colour.repeat(width),
+                (y, 0),
+                &mut samples,
+                &xtrans::Response::xt5(1.).mosaic_lut(),
+            );
             xtrans::pack12_line(&samples, &mut ram[y * pitch..y * pitch + 36]);
         }
         let mut host = RecordingHost {
@@ -1660,7 +1843,10 @@ mod tests {
             o => words(o),
         };
         rifp_run(&mut Cx::new(&mut host, 0, 0, 0), stripe, Some(raw)).unwrap();
-        assert_eq!(&host.ram[0x2000..0x2000 + 24], [y, y, cb, cr].repeat(6).as_slice());
+        assert_eq!(
+            &host.ram[0x2000..0x2000 + 24],
+            [y, y, cb, cr].repeat(6).as_slice()
+        );
         let words = rifp_words(RAM + 10, RAM + 0x2000);
         let inside = |o| match o {
             0x1c => pitch as u32,
@@ -1712,11 +1898,20 @@ mod tests {
             resz.write(&mut cx, 0xffd0c000 + o, 4, u64::from(v));
         }
         assert!(cx.refusal().is_none());
-        assert_eq!(&host.ram[0x1000..0x1008], [0, 2, 0x80, 0x40, 4, 6, 0x82, 0x40]);
-        assert_eq!(&host.ram[0x1010..0x1018], [32, 34, 0x80, 0x42, 36, 38, 0x82, 0x42]);
+        assert_eq!(
+            &host.ram[0x1000..0x1008],
+            [0, 2, 0x80, 0x40, 4, 6, 0x82, 0x40]
+        );
+        assert_eq!(
+            &host.ram[0x1010..0x1018],
+            [32, 34, 0x80, 0x42, 36, 38, 0x82, 0x42]
+        );
         host.now = resz.next_deadline(0).unwrap();
         resz.advance(&mut Cx::new(&mut host, 0, 0, 0));
-        assert_eq!(resz.read(&mut Cx::new(&mut host, 0, 0, 0), 0xffd0c10c, 4) & 1, 1);
+        assert_eq!(
+            resz.read(&mut Cx::new(&mut host, 0, 0, 0), 0xffd0c10c, 4) & 1,
+            1
+        );
         assert!(host.irqs.contains(&(203, true)));
     }
 
@@ -1771,14 +1966,18 @@ mod tests {
     ) -> super::super::preview::Preview {
         use super::super::preview::{Io, Preview, StillPath};
         let mut io = Io::default();
-        let rifp = Preview::new(true, io.clone(), &toml::from_str("completion_us=100\nsource_luma=128").unwrap())
-            .unwrap()
-            .with_still_path(StillPath {
-                sensor,
-                output: shared.clone(),
-                develop,
-                movie: true,
-            });
+        let rifp = Preview::new(
+            true,
+            io.clone(),
+            &toml::from_str("completion_us=100\nsource_luma=128").unwrap(),
+        )
+        .unwrap()
+        .with_still_path(StillPath {
+            sensor,
+            output: shared.clone(),
+            develop,
+            movie: true,
+        });
         io.write(cx, 0xffd0104c, 4, 1);
         rifp
     }
@@ -1866,8 +2065,16 @@ mod tests {
         // The still-path start waits for the next RIFP run (RCIZ order); scaling the
         // two-plane inline picture then refuses.
         assert!(cx.refusal().is_none());
-        let job = still.rifp.as_ref().unwrap().take_deferred().expect("a waiting job");
-        assert!(job.scale(&mut Cx::new(&mut host, 0, 0, 0), Some(inline)).is_err());
+        let job = still
+            .rifp
+            .as_ref()
+            .unwrap()
+            .take_deferred()
+            .expect("a waiting job");
+        assert!(
+            job.scale(&mut Cx::new(&mut host, 0, 0, 0), Some(inline))
+                .is_err()
+        );
     }
 
     /// An inline start (source 0) with RIFP idle waits for the next RIFP run, even when an
@@ -1890,12 +2097,23 @@ mod tests {
         };
         for mut resz in [resz(), resz_with(picture)] {
             let mut cx = Cx::new(&mut host, 0, 0, 0);
-            for (o, v) in [(0x14, 3 << 16 | 7), (0x20, 3 << 16 | 7), (0xe8, RAM as u32 + 0x1000), (0xf4, 16), (0x04, 1)] {
+            for (o, v) in [
+                (0x14, 3 << 16 | 7),
+                (0x20, 3 << 16 | 7),
+                (0xe8, RAM as u32 + 0x1000),
+                (0xf4, 16),
+                (0x04, 1),
+            ] {
                 resz.write(&mut cx, 0xffd0c000 + o, 4, u64::from(v));
             }
             assert!(cx.refusal().is_none());
             assert!(host.ram[0x1000..0x1040].iter().all(|b| *b == 0));
-            let job = resz.rifp.as_ref().unwrap().take_deferred().expect("a waiting job");
+            let job = resz
+                .rifp
+                .as_ref()
+                .unwrap()
+                .take_deferred()
+                .expect("a waiting job");
             let mut cx = Cx::new(&mut host, 0, 0, 0);
             job.scale(&mut cx, Some(picture)).unwrap();
             for y in 0..4 {
@@ -1914,7 +2132,12 @@ mod tests {
         let colour = [30u8, 140, 220];
         let mut ram = vec![0u8; 0x4000];
         for y in 0..12 {
-            xtrans::mosaic_line_with(&colour.repeat(24), (y, 0), &mut ram[y * 64..y * 64 + 48], &xtrans::Response::xt5(1.).mosaic_lut());
+            xtrans::mosaic_line_with(
+                &colour.repeat(24),
+                (y, 0),
+                &mut ram[y * 64..y * 64 + 48],
+                &xtrans::Response::xt5(1.).mosaic_lut(),
+            );
         }
         let mut host = RecordingHost {
             ram_base: RAM,
@@ -1949,7 +2172,13 @@ mod tests {
         let mut cx = Cx::new(&mut host, 0, 0, 0);
         io.write(&mut cx, 0xffd0104c, 4, 1);
         // RESZ first: source 24x12 (RESZ counts minus one), output 12x6, destination pitch 32.
-        for (o, v) in [(0x14, 11 << 16 | 23), (0x20, 5 << 16 | 11), (0xe8, RAM as u32 + 0x2000), (0xf4, 32), (0x04, 1)] {
+        for (o, v) in [
+            (0x14, 11 << 16 | 23),
+            (0x20, 5 << 16 | 11),
+            (0xe8, RAM as u32 + 0x2000),
+            (0xf4, 32),
+            (0x04, 1),
+        ] {
             resz.write(&mut cx, 0xffd0c000 + o, 4, u64::from(v));
         }
         // Then RIFP, with no output address.
@@ -1990,11 +2219,18 @@ mod tests {
 
     /// A host whose RAM holds a packed 12-bit RAW of `colour`, 24x12 at pitch 40, and the
     /// sensor that recorded it as its still channel picture; the rest of the RAM is 0xee.
-    fn packed_raw_host(colour: [u8; 3]) -> (RecordingHost, fujimod_emulator_sensor_input::sensor::Sensor) {
+    fn packed_raw_host(
+        colour: [u8; 3],
+    ) -> (RecordingHost, fujimod_emulator_sensor_input::sensor::Sensor) {
         let mut ram = vec![0xeeu8; 0x4000];
         let mut samples = vec![0u8; 48];
         for y in 0..12 {
-            xtrans::mosaic_line_with(&colour.repeat(24), (y, 0), &mut samples, &xtrans::Response::xt5(1.).mosaic_lut());
+            xtrans::mosaic_line_with(
+                &colour.repeat(24),
+                (y, 0),
+                &mut samples,
+                &xtrans::Response::xt5(1.).mosaic_lut(),
+            );
             xtrans::pack12_line(&samples, &mut ram[y * 40..y * 40 + 36]);
         }
         let sensor = fujimod_emulator_sensor_input::sensor::Sensor::new(None, (0, 0));
@@ -2099,14 +2335,33 @@ mod tests {
         let job = |source: u32| ReszJob {
             base: 0xffd0c000,
             layout: &RESZ,
-            words: TWO_PLANE_FROM_RAW.into_iter().chain([(0xd4, source)]).collect(),
+            words: TWO_PLANE_FROM_RAW
+                .into_iter()
+                .chain([(0xd4, source)])
+                .collect(),
         };
         assert!(job(0).two_plane() && job(0).inline_source());
-        assert!(job(0).two_plane_plan(TwoPlaneSource::Stream(24, 12)).is_ok());
-        assert!(job(0).two_plane_plan(TwoPlaneSource::Stream(24, 9)).is_err());
-        assert!(job(0).two_plane_plan(TwoPlaneSource::Stream(22, 12)).is_err());
+        assert!(
+            job(0)
+                .two_plane_plan(TwoPlaneSource::Stream(24, 12))
+                .is_ok()
+        );
+        assert!(
+            job(0)
+                .two_plane_plan(TwoPlaneSource::Stream(24, 9))
+                .is_err()
+        );
+        assert!(
+            job(0)
+                .two_plane_plan(TwoPlaneSource::Stream(22, 12))
+                .is_err()
+        );
         assert!(!job(RAM as u32).inline_source());
-        assert!(job(RAM as u32).two_plane_plan(TwoPlaneSource::Stream(24, 12)).is_err());
+        assert!(
+            job(RAM as u32)
+                .two_plane_plan(TwoPlaneSource::Stream(24, 12))
+                .is_err()
+        );
     }
 
     /// The stream ends before the RESZ crop does: the job refuses up front.
@@ -2115,9 +2370,14 @@ mod tests {
         let job = ReszJob {
             base: 0xffd0c000,
             layout: &RESZ,
-            words: [(0x14, 11 << 16 | 23), (0x20, 5 << 16 | 11), (0xe8, RAM as u32), (0xf4, 32)]
-                .into_iter()
-                .collect(),
+            words: [
+                (0x14, 11 << 16 | 23),
+                (0x20, 5 << 16 | 11),
+                (0xe8, RAM as u32),
+                (0xf4, 32),
+            ]
+            .into_iter()
+            .collect(),
         };
         let mut host = RecordingHost {
             ram_base: RAM,
@@ -2139,7 +2399,12 @@ mod tests {
         let colour = [200u8, 60, 120];
         let mut ram = vec![0u8; 0x4000];
         for y in 0..12 {
-            xtrans::mosaic_line_with(&colour.repeat(24), (y, 0), &mut ram[y * 64..y * 64 + 48], &xtrans::Response::xt5(1.).mosaic_lut());
+            xtrans::mosaic_line_with(
+                &colour.repeat(24),
+                (y, 0),
+                &mut ram[y * 64..y * 64 + 48],
+                &xtrans::Response::xt5(1.).mosaic_lut(),
+            );
         }
         let mut host = RecordingHost {
             ram_base: RAM,
@@ -2178,7 +2443,13 @@ mod tests {
             rifp.write(&mut cx, 0xffd02000 + o, 4, u64::from(words(o)));
         }
         rifp.write(&mut cx, 0xffd02004, 4, 1);
-        for (o, v) in [(0x14, 11 << 16 | 23), (0x20, 5 << 16 | 11), (0xe8, RAM as u32 + 0x2000), (0xf4, 32), (0x04, 1)] {
+        for (o, v) in [
+            (0x14, 11 << 16 | 23),
+            (0x20, 5 << 16 | 11),
+            (0xe8, RAM as u32 + 0x2000),
+            (0xf4, 32),
+            (0x04, 1),
+        ] {
             resz.write(&mut cx, 0xffd0c000 + o, 4, u64::from(v));
         }
         assert!(cx.refusal().is_none());
@@ -2238,11 +2509,20 @@ mod tests {
             rzl2.write(&mut cx, base + o, 4, u64::from(v));
         }
         assert!(cx.refusal().is_none());
-        assert_eq!(&host.ram[0x1000..0x1008], [0, 2, 0x80, 0x40, 4, 6, 0x82, 0x40]);
-        assert_eq!(&host.ram[0x1010..0x1018], [32, 34, 0x80, 0x42, 36, 38, 0x82, 0x42]);
+        assert_eq!(
+            &host.ram[0x1000..0x1008],
+            [0, 2, 0x80, 0x40, 4, 6, 0x82, 0x40]
+        );
+        assert_eq!(
+            &host.ram[0x1010..0x1018],
+            [32, 34, 0x80, 0x42, 36, 38, 0x82, 0x42]
+        );
         host.now = rzl2.next_deadline(0).unwrap();
         rzl2.advance(&mut Cx::new(&mut host, 0, 0, 0));
-        assert_eq!(rzl2.read(&mut Cx::new(&mut host, 0, 0, 0), base + 0x104, 4) & 1, 1);
+        assert_eq!(
+            rzl2.read(&mut Cx::new(&mut host, 0, 0, 0), base + 0x104, 4) & 1,
+            1
+        );
         assert!(host.irqs.contains(&(205, true)));
         rzl2.write(&mut Cx::new(&mut host, 0, 0, 0), base + 0x108, 4, 7);
         // Pass 2: the 4x2 preview to 2x1.
@@ -2265,7 +2545,13 @@ mod tests {
         let mut rzl2 = Resz::with_layout(
             &RZL2,
             base,
-            CompletionStub::new(base, 0x1000, toml::from_str("starts = [{ offset = 0x04, mask = 0x1 }]\ndelay_us = 200").unwrap(), 1000).unwrap(),
+            CompletionStub::new(
+                base,
+                0x1000,
+                toml::from_str("starts = [{ offset = 0x04, mask = 0x1 }]\ndelay_us = 200").unwrap(),
+                1000,
+            )
+            .unwrap(),
             Some(YcOutput::default()),
         );
         rzl2.rifp.as_ref().unwrap().set(Some(YcPicture {
@@ -2276,7 +2562,13 @@ mod tests {
             chroma: None,
         }));
         let mut cx = Cx::new(&mut host, 0, 0, 0);
-        for (o, v) in [(0x14, 3 << 16 | 7), (0x20, 3 << 16 | 7), (0xe4, RAM as u32 + 0x1000), (0xf0, 16), (0x04, 1)] {
+        for (o, v) in [
+            (0x14, 3 << 16 | 7),
+            (0x20, 3 << 16 | 7),
+            (0xe4, RAM as u32 + 0x1000),
+            (0xf0, 16),
+            (0x04, 1),
+        ] {
             rzl2.write(&mut cx, base + o, 4, u64::from(v));
         }
         assert!(cx.refusal().is_some());
@@ -2337,8 +2629,14 @@ mod tests {
         }
         assert!(cx.refusal().is_none());
         // Output line 0 reads source line 0, pixels 0, 2, 4, 6; line 1 reads source line 2.
-        assert_eq!(&host.ram[0x1000..0x1009], [0, 2, 100, 200, 4, 6, 102, 202, 0xee]);
-        assert_eq!(&host.ram[0x1010..0x1018], [20, 22, 110, 210, 24, 26, 112, 212]);
+        assert_eq!(
+            &host.ram[0x1000..0x1009],
+            [0, 2, 100, 200, 4, 6, 102, 202, 0xee]
+        );
+        assert_eq!(
+            &host.ram[0x1010..0x1018],
+            [20, 22, 110, 210, 24, 26, 112, 212]
+        );
         // Without the second source plane the job is the packed one, as before.
         let mut packed = Resz::with_layout(&RZL2, base, stub(), Some(YcOutput::default()));
         let mut cx = Cx::new(&mut host, 0, 0, 0);
@@ -2354,7 +2652,12 @@ mod tests {
         let mut cx = Cx::new(&mut host, 0, 0, 0);
         for (o, v) in words {
             if o != 0x04 {
-                both.write(&mut cx, base + o, 4, u64::from(if o == 0x10 { 0x122 } else { v }));
+                both.write(
+                    &mut cx,
+                    base + o,
+                    4,
+                    u64::from(if o == 0x10 { 0x122 } else { v }),
+                );
             }
         }
         both.write(&mut cx, base + 0xec, 4, RAM + 0x1800);
@@ -2414,16 +2717,28 @@ mod tests {
         }
         assert!(cx.refusal().is_none());
         for line in 0..4 {
-            assert_eq!(host.ram[0x1000 + line * 32..][..16], host.ram[line * 20..][..16]);
+            assert_eq!(
+                host.ram[0x1000 + line * 32..][..16],
+                host.ram[line * 20..][..16]
+            );
         }
         assert!(!host.irqs.contains(&(204, true)));
         host.now = filter.next_deadline(0).unwrap();
         filter.advance(&mut Cx::new(&mut host, 0, 0, 0));
-        assert_eq!(filter.read(&mut Cx::new(&mut host, 0, 0, 0), base + 0x104, 4), 1);
-        assert_eq!(filter.read(&mut Cx::new(&mut host, 0, 0, 0), base + 0x04, 4), 0);
+        assert_eq!(
+            filter.read(&mut Cx::new(&mut host, 0, 0, 0), base + 0x104, 4),
+            1
+        );
+        assert_eq!(
+            filter.read(&mut Cx::new(&mut host, 0, 0, 0), base + 0x04, 4),
+            0
+        );
         assert_eq!(host.irqs.last(), Some(&(204, true)));
         filter.write(&mut Cx::new(&mut host, 0, 0, 0), base + 0x108, 4, 7);
-        assert_eq!(filter.read(&mut Cx::new(&mut host, 0, 0, 0), base + 0x104, 4), 0);
+        assert_eq!(
+            filter.read(&mut Cx::new(&mut host, 0, 0, 0), base + 0x104, 4),
+            0
+        );
         assert_eq!(host.irqs.last(), Some(&(204, false)));
     }
 
@@ -2509,7 +2824,10 @@ mod tests {
             assert_eq!(pixel(b * 120 + 60, 500), bar(b), "bar {b} low");
         }
         let ramp = pixel(480, 600)[0];
-        assert!(usize::from(ramp) >= 1440 / 8 && pixel(480, 639)[0] > ramp, "ramp {ramp}");
+        assert!(
+            usize::from(ramp) >= 1440 / 8 && pixel(480, 639)[0] > ramp,
+            "ramp {ramp}"
+        );
         // An undecoded shift (3) refuses.
         let mut rzl2 = Resz::with_layout(&RZL2, base, stub(205)(base), Some(YcOutput::default()));
         let mut cx = Cx::new(&mut host, 0, 0, 0);

@@ -113,7 +113,9 @@ impl CommandGpu {
             || options.base.checked_add(WINDOW).is_none()
             || options.ticks_per_word == 0
         {
-            return Err("EXR GPU command front end needs an aligned window and positive timing".into());
+            return Err(
+                "EXR GPU command front end needs an aligned window and positive timing".into(),
+            );
         }
         Ok(Self {
             options,
@@ -148,7 +150,11 @@ impl CommandGpu {
 
     /// FIFO level of one channel: lists submitted and not yet consumed.
     fn level(&self, channel: usize) -> u32 {
-        self.state.lists.iter().filter(|l| l.channel == channel).count() as u32
+        self.state
+            .lists
+            .iter()
+            .filter(|l| l.channel == channel)
+            .count() as u32
     }
 
     fn submit(&mut self, cx: &mut Cx<'_>, descriptor: u32) -> Result<(), String> {
@@ -222,7 +228,11 @@ impl CommandGpu {
                     descriptor_words: list.words,
                     words,
                 });
-                let excess = self.state.recorded.len().saturating_sub(self.options.record_lists);
+                let excess = self
+                    .state
+                    .recorded
+                    .len()
+                    .saturating_sub(self.options.record_lists);
                 self.state.recorded.drain(..excess);
             }
             // The first word is the fence the submitter polls.

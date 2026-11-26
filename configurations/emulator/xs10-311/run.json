@@ -16,42 +16,12 @@
       {
         "kind": "adc",
         "block_id": "adc",
-        "samples": [
-          2048,
-          0,
-          0,
-          4095,
-          0,
-          0,
-          0,
-          0,
-          2048,
-          0,
-          2048,
-          0
-        ]
+        "samples": [2048, 0, 0, 4095, 0, 0, 0, 0, 2048, 0, 2048, 0]
       },
       {
         "kind": "gpio",
         "block_id": "gpio",
-        "levels": [
-          3,
-          0,
-          0,
-          0,
-          0,
-          0,
-          0,
-          0,
-          0,
-          0,
-          0,
-          0,
-          0,
-          0,
-          0,
-          0
-        ],
+        "levels": [3, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
         "outputs": []
       },
       {
@@ -111,52 +81,37 @@
     "timings": [
       {
         "kind": "delay",
-        "block_ids": [
-          "adc"
-        ],
+        "block_ids": ["adc"],
         "operation": "sample",
         "ticks": 16
       },
       {
         "kind": "delay",
-        "block_ids": [
-          "temperature"
-        ],
+        "block_ids": ["temperature"],
         "operation": "sample",
         "ticks": 5000
       },
       {
         "kind": "delay",
-        "block_ids": [
-          "sd-host-0",
-          "sd-host-clock-1",
-          "sd-host-1",
-          "sd-host-clock-3"
-        ],
+        "block_ids": ["sd-host-0", "sd-host-clock-1", "sd-host-1", "sd-host-clock-3"],
         "operation": "settle",
         "ticks": 8
       },
       {
         "kind": "delay",
-        "block_ids": [
-          "sensor-command"
-        ],
+        "block_ids": ["sensor-command"],
         "operation": "command",
         "ticks": 5400
       },
       {
         "kind": "delay",
-        "block_ids": [
-          "imaging-receiver"
-        ],
+        "block_ids": ["imaging-receiver"],
         "operation": "reset",
         "ticks": 8
       },
       {
         "kind": "delay",
-        "block_ids": [
-          "input-buffer"
-        ],
+        "block_ids": ["input-buffer"],
         "operation": "reset",
         "ticks": 8
       },
@@ -182,62 +137,46 @@
       },
       {
         "kind": "delay",
-        "block_ids": [
-          "lcdc0"
-        ],
+        "block_ids": ["lcdc0"],
         "operation": "pixel",
         "ticks": 2
       },
       {
         "kind": "delay",
-        "block_ids": [
-          "lcdc1"
-        ],
+        "block_ids": ["lcdc1"],
         "operation": "pixel",
         "ticks": 2
       },
       {
         "kind": "delay",
-        "block_ids": [
-          "movdc0"
-        ],
+        "block_ids": ["movdc0"],
         "operation": "reset",
         "ticks": 8
       },
       {
         "kind": "delay",
-        "block_ids": [
-          "movdc1"
-        ],
+        "block_ids": ["movdc1"],
         "operation": "reset",
         "ticks": 8
       },
       {
         "kind": "parent_clock",
-        "block_ids": [
-          "spi1"
-        ],
+        "block_ids": ["spi1"],
         "ticks_per_parent": 1
       },
       {
         "kind": "parent_clock",
-        "block_ids": [
-          "spi4"
-        ],
+        "block_ids": ["spi4"],
         "ticks_per_parent": 1
       },
       {
         "kind": "parent_clock",
-        "block_ids": [
-          "spi5"
-        ],
+        "block_ids": ["spi5"],
         "ticks_per_parent": 1
       },
       {
         "kind": "delay",
-        "block_ids": [
-          "serial-flash"
-        ],
+        "block_ids": ["serial-flash"],
         "operation": "command",
         "ticks": 8
       },
@@ -259,18 +198,13 @@
     "kind": "xp4",
     "frames": [
       {
-        "block_ids": [
-          "movdc0",
-          "movdc1"
-        ],
+        "block_ids": ["movdc0", "movdc1"],
         "period_ticks": 900900,
         "active_ticks": null,
         "luma": 128
       },
       {
-        "block_ids": [
-          "imaging-receiver"
-        ],
+        "block_ids": ["imaging-receiver"],
         "period_ticks": 900900,
         "active_ticks": 450450,
         "luma": null

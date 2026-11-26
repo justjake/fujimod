@@ -8,8 +8,8 @@
 //! starts pulls a released ready output low for that long. A frame in flight
 //! when power or reset drops receives the undriven line, declared high. Motion
 //! and additional connector signals are unmodeled.
-use fujimod_emulator_parts_io::serial::{Frame, Wire};
 use super::x_mount_link::{Configuration, Link};
+use fujimod_emulator_parts_io::serial::{Frame, Wire};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use std::sync::{Arc, Mutex};
@@ -47,11 +47,15 @@ pub struct Timing {
 #[serde(tag = "kind", rename_all = "kebab-case", deny_unknown_fields)]
 enum Phase {
     Off,
-    Starting { at: u64 },
+    Starting {
+        at: u64,
+    },
     /// Serving frames with the ready output low.
     Ready,
     /// Serving frames with the ready output low until `until` (startup busy or an operation).
-    Busy { until: u64 },
+    Busy {
+        until: u64,
+    },
     /// Serving frames with the ready output released high.
     Released,
 }
@@ -226,7 +230,10 @@ impl Unit {
 pub struct Port(Arc<Mutex<Unit>>);
 impl Port {
     pub fn new(configuration: Configuration, timing: Timing) -> Result<Self, String> {
-        Ok(Self(Arc::new(Mutex::new(Unit::new(configuration, timing)?))))
+        Ok(Self(Arc::new(Mutex::new(Unit::new(
+            configuration,
+            timing,
+        )?))))
     }
     pub fn next_event_tick(&self, now: u64, pins: Pins) -> Option<u64> {
         self.0.lock().unwrap().next(now, pins)
@@ -262,7 +269,10 @@ impl Wire for Port {
         )?
         .with_children(vec![unit.link.checkpoint()?]))
     }
-    fn validate_checkpoint(&self, saved: &fujimod_emulator_devices::checkpoint::Checkpoint) -> Result<(), String> {
+    fn validate_checkpoint(
+        &self,
+        saved: &fujimod_emulator_devices::checkpoint::Checkpoint,
+    ) -> Result<(), String> {
         let candidate: SavedPower = saved.decode("powered-x-mount-lens")?;
         let unit = self.0.lock().unwrap();
         if candidate.configuration != unit.configuration
@@ -281,7 +291,10 @@ impl Wire for Port {
         }
         Ok(())
     }
-    fn restore_checkpoint(&mut self, saved: &fujimod_emulator_devices::checkpoint::Checkpoint) -> Result<(), String> {
+    fn restore_checkpoint(
+        &mut self,
+        saved: &fujimod_emulator_devices::checkpoint::Checkpoint,
+    ) -> Result<(), String> {
         self.validate_checkpoint(saved)?;
         let candidate: SavedPower = saved.decode("powered-x-mount-lens")?;
         let mut unit = self.0.lock().unwrap();

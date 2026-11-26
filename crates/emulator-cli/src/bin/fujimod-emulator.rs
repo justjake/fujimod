@@ -1,9 +1,9 @@
 //! Native boot command; every binary input is selected by path, for every processor generation.
 use boot::host::Memory;
+use fujimod_camera::{self as camera, Library, StateDir};
 use fujimod_catalog_configuration::{RunEngine, RunInputs};
 use fujimod_catalog_resolution::ResolvedConfiguration;
 use fujimod_emulator_boot::{self as boot, Options, xp5};
-use fujimod_emulator_camera::{self as camera, Library};
 use fujimod_emulator_cpu::ExecutionPolicy;
 use std::{
     collections::BTreeMap,
@@ -14,7 +14,7 @@ use std::{
 };
 
 const HELP: &str = "Usage: fujimod-emulator boot --configuration ID --update UPDATE.DAT [--boot-rom ROM.BIN] [--gui] \\\n  [--overlay ID]... [--engine unicorn|hypervisor] [--screenshot LCD.PNG] [--instruction-limit COUNT] [--execution-policy interactive|exact]\n\
-  fujimod-emulator open --firmware ID --boot stock|sd-card|automatic [--sd-card DIR] [--execution-policy interactive|exact] [--no-boot-cache] [--gui]\n\n\
+  fujimod-emulator open --firmware ID --boot stock|sd-card|autostart [--sd-card DIR] [--execution-policy interactive|exact] [--no-boot-cache] [--gui]\n\n\
 The run configuration selects the camera, its firmware and how the run starts; the processor\n\
 generation only decides which of these options apply.\n\n\
 Boot configuration: x70-110-rec. The ROM dump is required.\n\
@@ -48,15 +48,16 @@ Session observations: --load-snapshot FILE, --save-snapshot FILE, --pc-trace FIL
 Native GUI: --gui opens the desktop window connected to this session.\n\
 Prints a JSON boot report; exits 0 at REC (EXR II) or at the end of the run (XP5), 2 at a stopped frontier.\n\
 \n\
-open names a catalog firmware whose update and boot ROM are found by SHA-256 in\n\
-FUJIMOD_FIRMWARE_LIBRARY. --boot stock starts the installed firmware; --boot sd-card starts\n\
-FujiMod from --sd-card, or from the current release SD card fetched into the library when\n\
---sd-card is omitted; --boot automatic starts the loader that card carries from internal\n\
-flash, which the first open installs and keeps in the library. A stock boot adds the\n\
---sd-card files to an otherwise empty card.\n\
+open names a catalog firmware whose update and boot ROM are found by name in\n\
+FUJIMOD_FIRMWARE_LIBRARY (<firmware-id>/FPUPDATE.DAT and <body-id>/boot-rom.bin), each\n\
+checked once against the catalog. --boot stock starts the installed firmware; --boot\n\
+sd-card starts FujiMod from --sd-card, or from the current release SD card downloaded\n\
+into FUJIMOD_STATE_DIR when --sd-card is omitted; --boot autostart starts the loader\n\
+that card carries from internal flash, which the first open installs and keeps in the\n\
+state directory. A stock boot adds the --sd-card files to an otherwise empty card.\n\
 --execution-policy defaults to exact.\n\
 open restores a saved boot for the same firmware, boot, SD card, policy and engine when the\n\
-library holds one, and saves each new boot; --no-boot-cache boots without reading or writing\n\
+state directory holds one, and saves each new boot; --no-boot-cache boots without reading or writing\n\
 the cache.\n\
 open boots to REC, prints a JSON report of the firmware, boot, stage and engine, and exits 0.\n\
 --gui opens the desktop window on the opened session before the report.\n";
@@ -198,7 +199,7 @@ fn parse(args: impl Iterator<Item = OsString>) -> Result<Option<Boot>, String> {
 enum OpenBoot {
     Stock,
     SdCard,
-    Automatic,
+    Autostart,
 }
 
 impl OpenBoot {
@@ -206,7 +207,7 @@ impl OpenBoot {
         match value {
             "stock" => Ok(Self::Stock),
             "sd-card" => Ok(Self::SdCard),
-            "automatic" | "automatic-boot" => Ok(Self::Automatic),
+            "autostart" => Ok(Self::Autostart),
             _ => Err(format!("unknown boot: {value}")),
         }
     }
@@ -215,7 +216,7 @@ impl OpenBoot {
         match self {
             Self::Stock => "stock",
             Self::SdCard => "sd-card",
-            Self::Automatic => "automatic",
+            Self::Autostart => "autostart",
         }
     }
 }
@@ -234,24 +235,21 @@ struct Open {
 impl Open {
     /// The camera builder request these options describe.
     fn request(&self) -> Result<camera::Request, String> {
-        let (boot, card_files) = match self.boot {
-            OpenBoot::Stock => (
-                camera::Boot::Stock,
-                self.sd_card
-                    .as_deref()
-                    .map(card_directory_files)
-                    .transpose()?
-                    .unwrap_or_default(),
-            ),
-            OpenBoot::SdCard => (camera::Boot::SdCard(self.card_source()), Vec::new()),
-            OpenBoot::Automatic => (camera::Boot::AutomaticBoot(self.card_source()), Vec::new()),
-        };
         Ok(camera::Request {
             firmware: self.firmware.clone(),
-            boot,
+            files: camera::FirmwareInput::Library,
+            overlays: Vec::new(),
+            preset: match self.boot {
+                OpenBoot::Stock => camera::Preset::Stock,
+                OpenBoot::SdCard => camera::Preset::SdCard,
+                OpenBoot::Autostart => camera::Preset::Autostart,
+            },
+            sd_card: self
+                .sd_card
+                .as_ref()
+                .map(|directory| camera::CardSource::Directory(directory.clone())),
             policy: self.policy.unwrap_or(ExecutionPolicy::Exact),
             engine: None,
-            card_files,
             cache: if self.boot_cache {
                 camera::BootCache::Reuse
             } else {
@@ -259,17 +257,9 @@ impl Open {
             },
             run_to_rec: true,
             card: Default::default(),
-            kept: Default::default(),
-            card_source: None,
-            image: None,
+            nand_image: None,
+            face_result_profile: None,
         })
-    }
-
-    fn card_source(&self) -> camera::CardSource {
-        match &self.sd_card {
-            Some(directory) => camera::CardSource::Directory(directory.clone()),
-            None => camera::CardSource::Release,
-        }
     }
 }
 
@@ -345,7 +335,6 @@ fn parse_open(args: impl Iterator<Item = OsString>) -> Result<Option<Open>, Stri
     }))
 }
 
-/// Every file under a directory, named by its path relative to it.
 fn card_directory_files(directory: &Path) -> Result<Vec<(String, PathBuf)>, String> {
     let mut files = Vec::new();
     let mut pending = vec![directory.to_owned()];
@@ -619,6 +608,7 @@ fn run_exr2(
         capability_reply: None,
         sd_card_transfer_ticks: None,
         card_layout: None,
+        card_initialization_fault: None,
     };
     let screenshot = boot_options.path("--screenshot");
     let limit = boot_options.instruction_limit()?.unwrap_or(2_000_000_000);
@@ -1033,6 +1023,7 @@ fn run_window(mut options: Boot, resolved: ResolvedConfiguration) -> Result<Outc
         discovery: options.discovery,
         sd_card_transfer_ticks: None,
         card_layout: None,
+        card_initialization_fault: None,
     };
     let selection = resolved.reference.clone();
     let camera = boot::open_request(resolved, request)?;
@@ -1056,7 +1047,8 @@ fn run_open(open: Open) -> Result<Outcome, String> {
     let started = Instant::now();
     let library = Library::from_env().map_err(|error| error.to_string())?;
     let request = open.request()?;
-    let opened = camera::open(&library, request).map_err(|error| error.to_string())?;
+    let state = StateDir::from_env();
+    let opened = camera::open(&library, &state, request).map_err(|error| error.to_string())?;
     let mut report = serde_json::json!({
         "firmware": opened.firmware,
         "boot": open.boot.name(),
@@ -1076,7 +1068,7 @@ fn run_open(open: Open) -> Result<Outcome, String> {
         let room = fujimod_emulator_gui::Room::loopback()?;
         let mut window = fujimod_emulator_gui::launch::connect(&room.endpoint().url)?;
         let served = fujimod_emulator_gui::serve(
-            fujimod_emulator_gui::Live::new(opened.camera, selection),
+            fujimod_emulator_gui::Live::new(opened.into_camera(), selection),
             room,
             &mut || window.open(),
         )?;
@@ -1239,12 +1231,16 @@ mod tests {
         .unwrap();
         assert_eq!(open.boot, OpenBoot::SdCard);
         assert!(open.sd_card.is_none());
-        for name in ["automatic", "automatic-boot"] {
-            let open = parse_open(args(&["open", "--firmware", "x70-110", "--boot", name]))
-                .unwrap()
-                .unwrap();
-            assert_eq!(open.boot, OpenBoot::Automatic);
-        }
+        let open = parse_open(args(&[
+            "open",
+            "--firmware",
+            "x70-110",
+            "--boot",
+            "autostart",
+        ]))
+        .unwrap()
+        .unwrap();
+        assert_eq!(open.boot, OpenBoot::Autostart);
         assert!(
             parse_open(args(&[
                 "open",
@@ -1284,7 +1280,7 @@ mod tests {
     }
 
     #[test]
-    fn open_requests_default_to_exact_and_select_the_boot() {
+    fn open_requests_default_to_exact_and_select_the_preset() {
         let request = parse_open(args(&[
             "open",
             "--firmware",
@@ -1298,10 +1294,10 @@ mod tests {
         .request()
         .unwrap();
         assert_eq!(request.firmware, "x70-110");
-        assert!(matches!(request.boot, camera::Boot::Stock));
+        assert_eq!(request.preset, camera::Preset::Stock);
+        assert!(request.sd_card.is_none());
         assert_eq!(request.policy, ExecutionPolicy::Exact);
         assert!(request.engine.is_none());
-        assert!(request.card_files.is_empty());
         let request = parse_open(args(&[
             "open",
             "--firmware",
@@ -1317,13 +1313,12 @@ mod tests {
         .unwrap()
         .request()
         .unwrap();
+        assert_eq!(request.preset, camera::Preset::SdCard);
         assert!(matches!(
-            request.boot,
-            camera::Boot::SdCard(camera::CardSource::Directory(ref path))
-                if path == Path::new("card")
+            request.sd_card,
+            Some(camera::CardSource::Directory(ref path)) if path == Path::new("card")
         ));
         assert_eq!(request.policy, ExecutionPolicy::Interactive);
-        assert!(request.card_files.is_empty());
         let request = parse_open(args(&[
             "open",
             "--firmware",
@@ -1335,16 +1330,14 @@ mod tests {
         .unwrap()
         .request()
         .unwrap();
-        assert!(matches!(
-            request.boot,
-            camera::Boot::SdCard(camera::CardSource::Release)
-        ));
+        assert_eq!(request.preset, camera::Preset::SdCard);
+        assert!(request.sd_card.is_none());
         let request = parse_open(args(&[
             "open",
             "--firmware",
             "x70-110",
             "--boot",
-            "automatic",
+            "autostart",
             "--sd-card",
             "card",
         ]))
@@ -1352,27 +1345,24 @@ mod tests {
         .unwrap()
         .request()
         .unwrap();
+        assert_eq!(request.preset, camera::Preset::Autostart);
         assert!(matches!(
-            request.boot,
-            camera::Boot::AutomaticBoot(camera::CardSource::Directory(ref path))
-                if path == Path::new("card")
+            request.sd_card,
+            Some(camera::CardSource::Directory(ref path)) if path == Path::new("card")
         ));
-        assert!(request.card_files.is_empty());
         let request = parse_open(args(&[
             "open",
             "--firmware",
             "x70-110",
             "--boot",
-            "automatic",
+            "autostart",
         ]))
         .unwrap()
         .unwrap()
         .request()
         .unwrap();
-        assert!(matches!(
-            request.boot,
-            camera::Boot::AutomaticBoot(camera::CardSource::Release)
-        ));
+        assert_eq!(request.preset, camera::Preset::Autostart);
+        assert!(request.sd_card.is_none());
         assert!(
             parse_open(args(&[
                 "open",
@@ -1385,36 +1375,6 @@ mod tests {
             ]))
             .is_err()
         );
-    }
-
-    #[test]
-    fn stock_open_adds_the_card_directory_files() {
-        let root = std::env::temp_dir().join(format!("fujimod-open-{}", std::process::id()));
-        let nested = root.join("DCIM");
-        std::fs::create_dir_all(&nested).unwrap();
-        std::fs::write(root.join("A.TXT"), b"a").unwrap();
-        std::fs::write(nested.join("B.JPG"), b"b").unwrap();
-        let request = parse_open(args(&[
-            "open",
-            "--firmware",
-            "x70-110",
-            "--boot",
-            "stock",
-            "--sd-card",
-            root.to_str().unwrap(),
-        ]))
-        .unwrap()
-        .unwrap()
-        .request()
-        .unwrap();
-        assert_eq!(
-            request.card_files,
-            [
-                ("A.TXT".to_owned(), root.join("A.TXT")),
-                ("DCIM/B.JPG".to_owned(), nested.join("B.JPG")),
-            ]
-        );
-        std::fs::remove_dir_all(&root).unwrap();
     }
 
     #[test]

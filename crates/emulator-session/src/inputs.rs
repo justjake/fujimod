@@ -32,7 +32,9 @@ pub struct ControlState {
 impl Session {
     pub fn adc_samples(&self, node: &str) -> Result<Vec<u16>, String> {
         self.board
-            .inspect_capability::<dyn AnalogInputs, _>(self.node(node)?, |adc| Ok(adc.samples().to_vec()))
+            .inspect_capability::<dyn AnalogInputs, _>(self.node(node)?, |adc| {
+                Ok(adc.samples().to_vec())
+            })
     }
     pub fn set_adc_samples(&mut self, node: &str, samples: &[u16]) -> Result<(), String> {
         if samples.len() != self.adc_samples(node)?.len() {
@@ -103,10 +105,9 @@ impl Session {
                     ..
                 } => {
                     self.board
-                        .inspect_capability::<dyn SerialStatus, _>(
-                            self.node(node)?,
-                            |serial| serial.status_value(*route, *register).map(|_| ()),
-                        )?;
+                        .inspect_capability::<dyn SerialStatus, _>(self.node(node)?, |serial| {
+                            serial.status_value(*route, *register).map(|_| ())
+                        })?;
                 }
             }
         }
@@ -139,14 +140,13 @@ impl Session {
                     mask,
                     value,
                 } => {
-                    self.board
-                        .edit_capability::<dyn SerialStatus, _>(
-                            self.node(node)?,
-                            |serial| {
-                                let old = serial.status_value(*route, *register)?;
-                                serial.status_input(*route, *register, (old & !mask) | value)
-                            },
-                        )?;
+                    self.board.edit_capability::<dyn SerialStatus, _>(
+                        self.node(node)?,
+                        |serial| {
+                            let old = serial.status_value(*route, *register)?;
+                            serial.status_input(*route, *register, (old & !mask) | value)
+                        },
+                    )?;
                 }
             }
         }
@@ -247,10 +247,9 @@ impl Session {
         script: &[fujimod_emulator_devices::parts::touch_input::ContactInput],
     ) -> Result<(), String> {
         self.board
-            .inspect_capability::<dyn TouchPanel, _>(
-                self.node(node)?,
-                |bus| bus.admit_touch(self.board.now(), script),
-            )
+            .inspect_capability::<dyn TouchPanel, _>(self.node(node)?, |bus| {
+                bus.admit_touch(self.board.now(), script)
+            })
     }
     pub fn touch(
         &mut self,
@@ -259,9 +258,7 @@ impl Session {
     ) -> Result<(), String> {
         let now = self.board.now();
         self.board
-            .edit_capability::<dyn TouchPanel, _>(self.node(node)?, |bus| {
-                bus.touch(now, script)
-            })
+            .edit_capability::<dyn TouchPanel, _>(self.node(node)?, |bus| bus.touch(now, script))
     }
     pub fn rotation(&self, id: &str, steps: i32) -> Result<(String, i32), String> {
         use super::contact_driver::Interface;
@@ -279,7 +276,9 @@ impl Session {
                 })
             })
             .ok_or("physical rotary control is unavailable")?;
-        let edges = steps.checked_mul(edges_per_step).ok_or("rotary step overflow")?;
+        let edges = steps
+            .checked_mul(edges_per_step)
+            .ok_or("rotary step overflow")?;
         self.board
             .inspect_capability::<dyn fujimod_emulator_devices::capability::RotaryInput, _>(
                 self.node(node)?,
@@ -338,10 +337,9 @@ impl Session {
         if phase == "tap" {
             let period = self
                 .board
-                .inspect_capability::<dyn TouchPanel, _>(
-                    self.node(node)?,
-                    |bus| bus.touch_period(),
-                )?;
+                .inspect_capability::<dyn TouchPanel, _>(self.node(node)?, |bus| {
+                    bus.touch_period()
+                })?;
             event.tick = now.checked_add(period).ok_or("touch deadline overflow")?;
             event.phase = Phase::Up;
             script.push(event);

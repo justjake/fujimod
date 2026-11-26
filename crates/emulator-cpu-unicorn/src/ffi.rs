@@ -96,8 +96,7 @@ pub struct Extensions {
     pub set_entry_exits: Option<unsafe extern "C" fn(Engine, bool) -> Error>,
     pub set_instruction_counter: Option<unsafe extern "C" fn(Engine, bool) -> Error>,
     pub set_guard_diagnostics: Option<unsafe extern "C" fn(Engine, bool) -> Error>,
-    pub add_restart_boundary:
-        Option<unsafe extern "C" fn(Engine, *mut usize, u64, u64) -> Error>,
+    pub add_restart_boundary: Option<unsafe extern "C" fn(Engine, *mut usize, u64, u64) -> Error>,
     pub reset_instruction_counter: Option<unsafe extern "C" fn(Engine) -> Error>,
     pub instruction_counter: Option<unsafe extern "C" fn(Engine) -> u64>,
     // uc_embedder_features bits (0 without the export): 1 = block hook size bit 31
@@ -109,8 +108,7 @@ pub struct Extensions {
     // uc_embedder_accounting (features bit 2): the engine's accounting record.
     pub accounting: Option<unsafe extern "C" fn(Engine) -> *mut Accounting>,
     pub exit_counters: Option<unsafe extern "C" fn(Engine) -> *const u64>,
-    pub translation_repeat_counters:
-        Option<unsafe extern "C" fn(Engine, *mut usize) -> *const u64>,
+    pub translation_repeat_counters: Option<unsafe extern "C" fn(Engine, *mut usize) -> *const u64>,
 }
 
 impl Extensions {
@@ -348,10 +346,8 @@ mod linked {
         fn uc_embedder_instruction_counter(engine: Engine) -> u64;
         fn uc_embedder_accounting(engine: Engine) -> *mut Accounting;
         fn uc_embedder_exit_counters(engine: Engine) -> *const u64;
-        fn uc_embedder_translation_repeat_counters(
-            engine: Engine,
-            count: *mut usize,
-        ) -> *const u64;
+        fn uc_embedder_translation_repeat_counters(engine: Engine, count: *mut usize)
+        -> *const u64;
         fn uc_embedder_features() -> u32;
     }
     pub fn extensions() -> Extensions {

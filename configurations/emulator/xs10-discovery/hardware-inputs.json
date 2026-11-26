@@ -45,12 +45,7 @@
               "value": 0
             }
           ],
-          "retained_registers": [
-            42,
-            43,
-            44,
-            45
-          ],
+          "retained_registers": [42, 43, 44, 45],
           "rtc": {
             "control": 36,
             "read_low": 34,
@@ -102,47 +97,13 @@
       "basis": "64 MiB NOR with manufacturer 0x20, as in the loader handoff of a running X-S10 3.11, whose flash aperture repeats after 64 MiB. The memory-type and capacity bytes (0xbb, 0x20) are unmeasured; the manufacturer is also declared in the loader handoff."
     },
     "adc_input": {
-      "samples": [
-        2048,
-        0,
-        0,
-        4095,
-        0,
-        0,
-        0,
-        0,
-        2048,
-        0,
-        2048,
-        0
-      ],
+      "samples": [2048, 0, 0, 4095, 0, 0, 0, 0, 2048, 0, 2048, 0],
       "ambient_celsius": 25,
-      "thermal_channels": [
-        0,
-        8,
-        10
-      ],
+      "thermal_channels": [0, 8, 10],
       "basis": "Declared catalog input."
     },
     "gpio_input": {
-      "levels": [
-        3,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0
-      ],
+      "levels": [3, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
       "basis": "Declared catalog input."
     },
     "temperature_input": {

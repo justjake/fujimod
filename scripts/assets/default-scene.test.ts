@@ -3,11 +3,7 @@ import assert from 'node:assert/strict';
 import { readFile, stat } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
 import { gunzipSync } from 'node:zlib';
-import {
-  defaultSceneRafGzip,
-  prepareDefaultScene,
-  originalSha256,
-} from './default-scene.ts';
+import { defaultSceneRafGzip, prepareDefaultScene, originalSha256 } from './default-scene.ts';
 
 await test('the shared RAF is the recorded original and repeated preparation preserves it', async () => {
   const path = await prepareDefaultScene();

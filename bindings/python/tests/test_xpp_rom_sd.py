@@ -75,7 +75,9 @@ def options(terminal: int) -> dict[str, object]:
 )
 def test_rom_loads_card_image_and_reaches_its_terminal_loop() -> None:
     assert ROM and CARD
-    files = [(name, (Path(CARD) / name).read_bytes()) for name in ("ffsys.bin", "ffboot.bin")]
+    files = [
+        (name, (Path(CARD) / name).read_bytes()) for name in ("ffsys.bin", "ffboot.bin")
+    ]
     board = native.Board.from_xp4(json.dumps(options(TERMINAL)), card_files=files)
     xp4 = board.xp4
     xp4.write(0xFFF00000, Path(ROM).read_bytes()[:0x8000])

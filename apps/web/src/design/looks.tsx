@@ -13,7 +13,8 @@ import type { JSX } from '@solidjs/web';
 /* Materials: each look names how every role is drawn (the column, the rail,
    rows and their focus, chips, panels, the keyboard), not just two colors. */
 /** The camera menus' option panel: the fly-outs in Glass and the Fujimod menu look. */
-const POPUP = '--m-popup: #1e1e20; --m-popup-edge: inset 0 0 0 1px #3e3e42; --m-cursor: #3a3a3c; --m-cursor-edge: inset 0 0 0 0 transparent; --m-separator: #323235; --m-check: #2a7fff;';
+const POPUP =
+  '--m-popup: #1e1e20; --m-popup-edge: inset 0 0 0 1px #3e3e42; --m-cursor: #3a3a3c; --m-cursor-edge: inset 0 0 0 0 transparent; --m-separator: #323235; --m-check: #2a7fff;';
 
 const LOOKS = {
   /* Drawn from its two dials: glassVars. */
@@ -50,7 +51,11 @@ const LOOKS = {
     --m-key-focus: inset 0 1px 0 rgb(255 255 255 / 0.4), 0 0 0 2px #fff;`,
 };
 type Look = keyof typeof LOOKS;
-const LOOK_NAMES: [Look, string][] = [['glass', 'Glass'], ['contrast', 'High contrast'], ['fujimod', 'Fujimod menu']];
+const LOOK_NAMES: [Look, string][] = [
+  ['glass', 'Glass'],
+  ['contrast', 'High contrast'],
+  ['fujimod', 'Fujimod menu'],
+];
 
 /* Glass has three dials: OPACITY (how much of the photo shows through),
    CONTRAST (how bright edges, focus and dividers are) and LIGHTNESS (how light
@@ -91,7 +96,10 @@ const GLASS_DEFAULT = { opacity: 0.35, contrast: 0.6, lightness: 0 };
 
 const STYLE_OPTIONS = `
 .fm-mark-chosen .fm-screen { --m-chosen: var(--m-mark-plate); --m-chosen-ink: var(--m-mark-ink); }
-${(Object.keys(LOOKS) as Look[]).filter((k) => k !== 'glass').map((k) => `.fm-look-${k} .fm-screen {${LOOKS[k]} }`).join('\n')}
+${(Object.keys(LOOKS) as Look[])
+  .filter((k) => k !== 'glass')
+  .map((k) => `.fm-look-${k} .fm-screen {${LOOKS[k]} }`)
+  .join('\n')}
 .fm-look-fujimod .fm-screen *:not(.rounded-full):not(.fm-round) { border-radius: 0 !important; }
 .fm-look-fujimod .fm-screen rect { rx: 0; ry: 0; }
 .fm-square .fm-screen *:not(.rounded-full):not(.fm-round) { border-radius: 0 !important; }
@@ -106,8 +114,14 @@ function Toggle(props: { label: string; on: boolean; set: (on: boolean) => void 
       class="flex h-[44px] items-center gap-[10px] rounded-[12px] bg-[#2c2c2e] pr-[14px] pl-[8px] text-[16px] font-semibold text-white"
       onClick={() => props.set(!props.on)}
     >
-      <span class="relative h-[28px] w-[46px] rounded-full transition-colors" style={{ background: props.on ? '#34c759' : '#48484a' }}>
-        <span class="absolute top-[2px] size-[24px] rounded-full bg-white transition-[left]" style={{ left: props.on ? '20px' : '2px' }} />
+      <span
+        class="relative h-[28px] w-[46px] rounded-full transition-colors"
+        style={{ background: props.on ? '#34c759' : '#48484a' }}
+      >
+        <span
+          class="absolute top-[2px] size-[24px] rounded-full bg-white transition-[left]"
+          style={{ left: props.on ? '20px' : '2px' }}
+        />
       </span>
       {props.label}
     </button>
@@ -126,7 +140,15 @@ const [lightness, setLightness] = createSignal(GLASS_DEFAULT.lightness);
 
 /** The look the page's switches chose, for screens drawn outside CSS. */
 export function designLook() {
-  return { look: look(), opacity: opacity(), contrast: contrast(), lightness: lightness(), rounded: rounded(), uppercase: upper(), mark: markChosen() };
+  return {
+    look: look(),
+    opacity: opacity(),
+    contrast: contrast(),
+    lightness: lightness(),
+    rounded: rounded(),
+    uppercase: upper(),
+    mark: markChosen(),
+  };
 }
 
 export function DesignFrame(props: { title: string; children: JSX.Element }) {
@@ -147,7 +169,11 @@ export function DesignFrame(props: { title: string; children: JSX.Element }) {
             <button
               type="button"
               class="h-[44px] rounded-[12px] px-[14px] text-[16px] font-semibold"
-              style={look() === value ? { background: '#fff', color: '#000' } : { background: '#2c2c2e', color: '#fff' }}
+              style={
+                look() === value
+                  ? { background: '#fff', color: '#000' }
+                  : { background: '#2c2c2e', color: '#fff' }
+              }
               onClick={() => {
                 setLook(value);
                 if (value === 'fujimod') setUpper(true);
@@ -175,7 +201,10 @@ export function DesignFrame(props: { title: string; children: JSX.Element }) {
           {/* A credit card, upright: 54.0 by 85.6 mm. Hold one against this outline. */}
           <div
             class="flex items-center justify-center rounded-[8px] border-2 border-dashed border-white/60 text-[14px] text-white/70"
-            style={{ width: `${(53.98 / 25.4) * pxPerInch()}px`, height: `${(85.6 / 25.4) * pxPerInch()}px` }}
+            style={{
+              width: `${(53.98 / 25.4) * pxPerInch()}px`,
+              height: `${(85.6 / 25.4) * pxPerInch()}px`,
+            }}
           >
             Credit card
           </div>
@@ -183,11 +212,26 @@ export function DesignFrame(props: { title: string; children: JSX.Element }) {
       </div>
       <Show when={look() === 'glass'}>
         <div class="mb-[14px] flex max-w-[720px] flex-col gap-[6px]">
-          <For each={[['Opacity', opacity, setOpacity], ['Contrast', contrast, setContrast], ['Lightness', lightness, setLightness]] as [string, () => number, (v: number) => void][]}>
+          <For
+            each={
+              [
+                ['Opacity', opacity, setOpacity],
+                ['Contrast', contrast, setContrast],
+                ['Lightness', lightness, setLightness],
+              ] as [string, () => number, (v: number) => void][]
+            }
+          >
             {([label, get, set]) => (
               <label class="flex h-[44px] items-center gap-[12px] text-[16px] font-semibold text-white">
                 <span class="w-[84px]">{label}</span>
-                <input type="range" min="0" max="100" value={Math.round(get() * 100)} class="h-[44px] grow accent-white" onInput={(e) => set(Number(e.currentTarget.value) / 100)} />
+                <input
+                  type="range"
+                  min="0"
+                  max="100"
+                  value={Math.round(get() * 100)}
+                  class="h-[44px] grow accent-white"
+                  onInput={(e) => set(Number(e.currentTarget.value) / 100)}
+                />
                 <span class="w-[40px] text-right tabular-nums">{Math.round(get() * 100)}</span>
               </label>
             )}

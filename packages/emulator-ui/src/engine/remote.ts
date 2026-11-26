@@ -46,8 +46,8 @@ type Reply = { type: 'reply'; serial: number; result: unknown };
 type Failure = { type: 'error'; serial?: number; error: string; fault?: EngineFault };
 type NativeState = { type: 'native-state'; display: NativeDisplayState };
 type NativeCatalogMessage = { type: 'catalog' } & Omit<NativeCatalog, 'controls'> & {
-  controls: NativeCatalog['controls'];
-};
+    controls: NativeCatalog['controls'];
+  };
 type NativeSessionMessage = { type: 'state' } & NativeSessionState;
 type FrameListeners = Set<(frame: Frame) => void>;
 
@@ -157,9 +157,9 @@ export class RemoteEngine implements Engine {
       });
     };
     next();
-    void video.play().catch((error: unknown) =>
-      this.fail(error instanceof Error ? error : Error(String(error))),
-    );
+    void video
+      .play()
+      .catch((error: unknown) => this.fail(error instanceof Error ? error : Error(String(error))));
   }
 
   private fail(error: Error) {

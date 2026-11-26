@@ -16,8 +16,8 @@
 //! at rest declares zeros). Every other register than the revision nibbles
 //! reads zero: a body at rest with zero sensor output, which is a scenario
 //! input, not a measurement.
-use fujimod_emulator_devices::checkpoint::Checkpoint;
 use super::serial::{Endpoint, Frame};
+use fujimod_emulator_devices::checkpoint::Checkpoint;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 
@@ -27,7 +27,10 @@ enum Phase {
     Command,
     Write(u8),
     Read(u8),
-    Sample { channel: u8, byte: u8 },
+    Sample {
+        channel: u8,
+        byte: u8,
+    },
     Block(u8),
     Finished,
 }
@@ -108,8 +111,14 @@ impl Endpoint for Registers {
                 self.state.command = Some(command);
                 self.state.phase = match command {
                     9 => Phase::Finished,
-                    0xa8 => Phase::Sample { channel: 0, byte: 0 },
-                    0xc8 => Phase::Sample { channel: 1, byte: 0 },
+                    0xa8 => Phase::Sample {
+                        channel: 0,
+                        byte: 0,
+                    },
+                    0xc8 => Phase::Sample {
+                        channel: 1,
+                        byte: 0,
+                    },
                     0x8a => Phase::Block(0),
                     0x80..=0xff => Phase::Read(command & 127),
                     _ => Phase::Write(command),
@@ -138,8 +147,14 @@ impl Endpoint for Registers {
                 if byte == 0 { word >> 8 } else { word & 255 }
             }
             Phase::Block(index) => {
-                let block = self.block.expect("command 8a is accepted only with a block");
-                self.state.phase = if index == 5 { Phase::Finished } else { Phase::Block(index + 1) };
+                let block = self
+                    .block
+                    .expect("command 8a is accepted only with a block");
+                self.state.phase = if index == 5 {
+                    Phase::Finished
+                } else {
+                    Phase::Block(index + 1)
+                };
                 block[index as usize] as u16
             }
             Phase::Finished => unreachable!("wire validates before accepting a frame"),
@@ -155,7 +170,8 @@ impl Endpoint for Registers {
         if matches!(state.phase, Phase::Write(a) if Self::slot(a).is_none())
             || matches!(state.phase, Phase::Read(a) if a > 127)
             || matches!(state.phase, Phase::Sample { channel, byte } if channel > 1 || byte > 1)
-            || matches!(state.phase, Phase::Block(index) if index > 5 || self.block.is_none()) {
+            || matches!(state.phase, Phase::Block(index) if index > 5 || self.block.is_none())
+        {
             return Err("invalid BIS configuration checkpoint".into());
         }
         Ok(())
@@ -202,7 +218,11 @@ mod tests {
     use super::*;
 
     fn frame(word: u16) -> Frame {
-        Frame { bits: 8, mode: 3, word }
+        Frame {
+            bits: 8,
+            mode: 3,
+            word,
+        }
     }
     fn exchange(part: &mut Registers, words: &[u16]) -> Result<Vec<u16>, String> {
         part.reset_transaction();
@@ -248,7 +268,10 @@ mod tests {
     fn command_8a_reads_the_declared_block_and_refuses_without_it() {
         let block = [1, 2, 3, 4, 5, 6];
         let mut part = Registers::with_block([0, 0], [0, 0], false, Some(block)).unwrap();
-        assert_eq!(exchange(&mut part, &[0x8a, 0, 0, 0, 0, 0, 0]).unwrap(), [0, 1, 2, 3, 4, 5, 6]);
+        assert_eq!(
+            exchange(&mut part, &[0x8a, 0, 0, 0, 0, 0, 0]).unwrap(),
+            [0, 1, 2, 3, 4, 5, 6]
+        );
         let error = exchange(&mut part, &[0x8a, 0, 0, 0, 0, 0, 0, 0]).unwrap_err();
         assert!(error.contains("past its last byte"), "{error}");
         let mut bare = Registers::new([0, 0], [0, 0], false).unwrap();
@@ -263,9 +286,15 @@ mod tests {
         assert_eq!(exchange(&mut part, &[0xa1, 0]).unwrap(), vec![0, 3]);
         assert_eq!(exchange(&mut part, &[0xa2, 0]).unwrap(), vec![0, 5]);
         // Burst read across the revision nibbles auto-increments.
-        assert_eq!(exchange(&mut part, &[0xa0, 0, 0, 0]).unwrap(), vec![0, 0, 3, 5]);
+        assert_eq!(
+            exchange(&mut part, &[0xa0, 0, 0, 0]).unwrap(),
+            vec![0, 0, 3, 5]
+        );
         // The servo's polling commands read zero data.
-        assert_eq!(exchange(&mut part, &[0x8a, 0, 0, 0, 0, 0, 0]).unwrap(), vec![0; 7]);
+        assert_eq!(
+            exchange(&mut part, &[0x8a, 0, 0, 0, 0, 0, 0]).unwrap(),
+            vec![0; 7]
+        );
         assert_eq!(exchange(&mut part, &[0xa8, 0, 0]).unwrap(), vec![0; 3]);
         assert_eq!(exchange(&mut part, &[0xc8, 0, 0]).unwrap(), vec![0; 3]);
         // Writes stay single-register; unknown write commands refuse.

@@ -171,7 +171,9 @@ impl Device for FilterEngine {
         }
         if address == self.memory_types || address == self.memory_types + 4 {
             if value != 0 {
-                cx.fail(format!("XP4 filter engine memory type {value} is not modeled"));
+                cx.fail(format!(
+                    "XP4 filter engine memory type {value} is not modeled"
+                ));
             }
             return;
         }
@@ -181,7 +183,8 @@ impl Device for FilterEngine {
             START if value <= 1 => {
                 if value == 1 {
                     if self.state.due.is_some() || self.state.finished {
-                        return cx.fail("XP4 filter engine started before its last run was cleared");
+                        return cx
+                            .fail("XP4 filter engine started before its last run was cleared");
                     }
                     self.state.due = cx.now().checked_add(self.ticks);
                     if self.state.due.is_none() {
@@ -281,6 +284,9 @@ mod tests {
         assert!(refused(&mut d, &mut h, BASE + 0x0c, 1));
         assert!(refused(&mut d, &mut h, BASE + CONTROL, 1));
         assert!(refused(&mut d, &mut h, TYPES, 1));
-        assert!(d.restore(&serde_json::json!({"words": {"12": 1}, "finished": false, "runs": 0})).is_err());
+        assert!(
+            d.restore(&serde_json::json!({"words": {"12": 1}, "finished": false, "runs": 0}))
+                .is_err()
+        );
     }
 }

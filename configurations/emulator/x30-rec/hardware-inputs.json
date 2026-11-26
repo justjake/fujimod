@@ -18,48 +18,11 @@
       },
       "power": {
         "profile_name": "X30 discovery: normal boot class0x40, ring contact enabled in MCU60 bit0, ADC9=0 selects RING_ON and ADC3=640 selects PROGRAM; analog control ring ADC6/7=750 starts high/high, with synthetic 250/750 phase levels around calibrated 494/506 Schmitt thresholds and unmeasured 120000-tick spacing; remaining inputs borrowed.",
-        "adc_samples": [
-          0,
-          0,
-          1023,
-          640,
-          534,
-          640,
-          750,
-          750,
-          1023,
-          0,
-          0,
-          0
-        ],
+        "adc_samples": [0, 0, 1023, 640, 534, 640, 750, 750, 1023, 0, 0, 0],
         "boot_reply": 65,
         "spi0_input_profile": "absent-hot-shoe-flash-fixed-low-miso",
-        "spi_status_registers": [
-          [
-            9,
-            96
-          ]
-        ],
-        "panel_contract": [
-          [
-            224,
-            6
-          ],
-          [
-            11,
-            3,
-            0,
-            12,
-            3,
-            1
-          ],
-          [
-            16,
-            null,
-            null
-          ],
-          1
-        ]
+        "spi_status_registers": [[9, 96]],
+        "panel_contract": [[224, 6], [11, 3, 0, 12, 3, 1], [16, null, null], 1]
       },
       "mcu_packet_hex": "00000000d00700ff008000040000aafc",
       "usb_connected": false
@@ -68,11 +31,7 @@
       "first_boot_instructions": 100000000,
       "restart_instructions": 120000000,
       "scan_instructions": 80000000,
-      "setup_keys": [
-        "EXE_M",
-        "EXE_M",
-        "EXE_M"
-      ],
+      "setup_keys": ["EXE_M", "EXE_M", "EXE_M"],
       "key_hold_ticks": 2400000,
       "key_release_ticks": 6000000,
       "scene_settle_ticks": 1200000,
@@ -107,10 +66,7 @@
               "bytes": 96
             }
           ],
-          "sample_slots": [
-            23445892,
-            23445940
-          ]
+          "sample_slots": [23445892, 23445940]
         }
       },
       "control_overrides": {

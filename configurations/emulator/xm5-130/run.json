@@ -25,27 +25,13 @@
         "kind": "adc",
         "block_id": "adc",
         "samples": [
-          2712,
-          4095,
-          4095,
-          4095,
-          4095,
-          4095,
-          4095,
-          2241,
-          4095,
-          4095,
-          2712,
-          4095,
-          4095,
-          4095,
-          4095
+          2712, 4095, 4095, 4095, 4095, 4095, 4095, 2241, 4095, 4095, 2712, 4095, 4095, 4095, 4095
         ]
       },
       {
         "kind": "flash",
         "block_id": "flash-aperture",
-        "part_id": "xe5-serial-nand",
+        "part_id": "winbond-w35n01jw",
         "source": "firmware_update",
         "erased_tail": 255,
         "seeds": []
@@ -62,25 +48,19 @@
     "timings": [
       {
         "kind": "delay",
-        "block_ids": [
-          "resize"
-        ],
+        "block_ids": ["resize"],
         "operation": "complete",
         "ticks": 1000000
       },
       {
         "kind": "delay",
-        "block_ids": [
-          "rifp"
-        ],
+        "block_ids": ["rifp"],
         "operation": "complete",
         "ticks": 1000000
       },
       {
         "kind": "delay",
-        "block_ids": [
-          "sensor"
-        ],
+        "block_ids": ["sensor"],
         "operation": "command",
         "ticks": 1000
       }
@@ -91,49 +71,37 @@
     "kind": "xp5",
     "frames": [
       {
-        "block_ids": [
-          "receiver0"
-        ],
+        "block_ids": ["receiver0"],
         "period_ticks": 1000000000,
         "active_ticks": 10000000,
         "luma": null
       },
       {
-        "block_ids": [
-          "receiver1"
-        ],
+        "block_ids": ["receiver1"],
         "period_ticks": 1000000000,
         "active_ticks": null,
         "luma": null
       },
       {
-        "block_ids": [
-          "movdc0"
-        ],
+        "block_ids": ["movdc0"],
         "period_ticks": 1000000000,
         "active_ticks": null,
         "luma": 128
       },
       {
-        "block_ids": [
-          "movdc1"
-        ],
+        "block_ids": ["movdc1"],
         "period_ticks": 1000000000,
         "active_ticks": null,
         "luma": 128
       },
       {
-        "block_ids": [
-          "movdc2"
-        ],
+        "block_ids": ["movdc2"],
         "period_ticks": 1000000000,
         "active_ticks": null,
         "luma": 128
       },
       {
-        "block_ids": [
-          "preview"
-        ],
+        "block_ids": ["preview"],
         "period_ticks": 1000000000,
         "active_ticks": null,
         "luma": 128
@@ -142,9 +110,7 @@
     "statistics": [],
     "command_images": [
       {
-        "block_ids": [
-          "rifp"
-        ],
+        "block_ids": ["rifp"],
         "luma": 128
       }
     ]

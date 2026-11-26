@@ -14,6 +14,7 @@
 //! body whose decode establishes them, [`extension`] adds them from the
 //! board's own table below.
 
+use crate::{keys::Key, ladders};
 use fujimod_catalog_configuration::{
     RunInputs,
     application_inputs::{ApplicationBlockInput, ApplicationRunInputs},
@@ -21,7 +22,6 @@ use fujimod_catalog_configuration::{
 use fujimod_catalog_controls::{ControlLadder, LadderWire, PhysicalControls};
 use fujimod_catalog_resolution::ResolvedConfiguration;
 use fujimod_emulator_devices::parts::pins::Pin;
-use crate::{keys::Key, ladders};
 
 /// Catalog control identities, including pad directions, and the emulator key
 /// that presses each. A ladder rung on any other identity is refused.
@@ -62,9 +62,7 @@ pub fn key_for_control(control_id: &str) -> Option<Key> {
 
 /// The resolved body's ladder wiring, or `None` when the body declares no
 /// ladder.
-pub fn ladders(
-    resolved: &ResolvedConfiguration,
-) -> Result<Option<ladders::Options>, String> {
+pub fn ladders(resolved: &ResolvedConfiguration) -> Result<Option<ladders::Options>, String> {
     let body = &resolved.reference.body.id;
     let Some(document) = resolved.reference.physical_controls.as_ref() else {
         return Ok(None);
@@ -76,7 +74,11 @@ pub fn ladders(
     }
     let inputs = match resolved.configuration.inputs.as_ref() {
         Some(RunInputs::Xp5(inputs)) => inputs,
-        _ => return Err(format!("body {body} declares ladders but the run has no XP5 inputs")),
+        _ => {
+            return Err(format!(
+                "body {body} declares ladders but the run has no XP5 inputs"
+            ));
+        }
     };
     let ladders = controls
         .ladders
@@ -242,11 +244,7 @@ direction. Both pads idle low.",
 
 fn xt5_extension(options: &mut ladders::Options) -> Result<(), String> {
     let adc = |channel| move |wire: ladders::Wire| wire == ladders::Wire::Adc { channel };
-    let register = |number| {
-        move |wire: ladders::Wire| {
-            matches!(wire, ladders::Wire::PowerControllerRegister { register, .. } if register == number)
-        }
-    };
+    let register = |number| move |wire: ladders::Wire| matches!(wire, ladders::Wire::PowerControllerRegister { register, .. } if register == number);
     fn ladder<'a>(
         options: &'a mut ladders::Options,
         is: &dyn Fn(ladders::Wire) -> bool,
@@ -309,102 +307,133 @@ fn xt5_extension(options: &mut ladders::Options) -> Result<(), String> {
         set(&[Key::Left, Key::Up], None, 316, 348),
         set(&[Key::Right, Key::Up], None, 283, 315),
     ]);
-    let dial = |name: &str, aliases: &[&str], channel, entries: &[(&str, &[&str], u16, u16, bool)]| {
-        ladders::PositionDial {
-            name: name.into(),
-            aliases: aliases.iter().map(|alias| (*alias).to_owned()).collect(),
-            channel,
-            positions: positions(entries),
-            basis: XT5_BANDS.into(),
-        }
-    };
+    let dial =
+        |name: &str, aliases: &[&str], channel, entries: &[(&str, &[&str], u16, u16, bool)]| {
+            ladders::PositionDial {
+                name: name.into(),
+                aliases: aliases.iter().map(|alias| (*alias).to_owned()).collect(),
+                channel,
+                positions: positions(entries),
+                basis: XT5_BANDS.into(),
+            }
+        };
     options.dials = vec![
-        dial("drive", &[], 3, &[
-            ("PANO", &["PANORAMA"], 100, 842, false),
-            ("ADV", &[], 843, 1424, false),
-            ("BKT", &[], 1425, 2006, false),
-            ("CH", &[], 2007, 2594, false),
-            ("CL", &[], 2595, 3194, false),
-            ("S", &[], 3195, 3812, false),
-            ("HDR", &[], 3813, 4095, false),
-        ]),
-        dial("ev", &["exposure"], 7, &[
-            ("-3", &[], 3992, 4095, false),
-            ("-2.7", &["-2 2/3"], 3783, 3991, false),
-            ("-2.3", &["-2 1/3"], 3576, 3782, false),
-            ("-2", &[], 3369, 3575, false),
-            ("-1.7", &["-1 2/3"], 3163, 3368, false),
-            ("-1.3", &["-1 1/3"], 2957, 3162, false),
-            ("-1", &[], 2751, 2956, false),
-            ("-0.7", &["-2/3"], 2547, 2750, false),
-            ("-0.3", &["-1/3"], 2342, 2546, false),
-            ("0", &[], 2138, 2341, false),
-            ("+0.3", &["+1/3"], 1934, 2137, false),
-            ("+0.7", &["+2/3"], 1730, 1933, false),
-            ("+1", &[], 1526, 1729, false),
-            ("+1.3", &["+1 1/3"], 1323, 1525, false),
-            ("+1.7", &["+1 2/3"], 1119, 1322, false),
-            ("+2", &[], 915, 1118, false),
-            ("+2.3", &["+2 1/3"], 712, 914, false),
-            ("+2.7", &["+2 2/3"], 507, 711, false),
-            ("+3", &[], 303, 506, false),
-            ("C", &[], 100, 302, false),
-        ]),
-        dial("mode", &["lever"], 2, &[
-            ("MOVIE", &[], 3067, 3750, true),
-            ("STILL", &[], 3751, 4095, false),
-        ]),
-        dial("focus", &["af"], 11, &[
-            ("M", &["MF"], 2618, 3066, true),
-            ("S", &["AF-S"], 3067, 3750, true),
-            ("C", &["AF-C"], 3751, 4095, false),
-        ]),
+        dial(
+            "drive",
+            &[],
+            3,
+            &[
+                ("PANO", &["PANORAMA"], 100, 842, false),
+                ("ADV", &[], 843, 1424, false),
+                ("BKT", &[], 1425, 2006, false),
+                ("CH", &[], 2007, 2594, false),
+                ("CL", &[], 2595, 3194, false),
+                ("S", &[], 3195, 3812, false),
+                ("HDR", &[], 3813, 4095, false),
+            ],
+        ),
+        dial(
+            "ev",
+            &["exposure"],
+            7,
+            &[
+                ("-3", &[], 3992, 4095, false),
+                ("-2.7", &["-2 2/3"], 3783, 3991, false),
+                ("-2.3", &["-2 1/3"], 3576, 3782, false),
+                ("-2", &[], 3369, 3575, false),
+                ("-1.7", &["-1 2/3"], 3163, 3368, false),
+                ("-1.3", &["-1 1/3"], 2957, 3162, false),
+                ("-1", &[], 2751, 2956, false),
+                ("-0.7", &["-2/3"], 2547, 2750, false),
+                ("-0.3", &["-1/3"], 2342, 2546, false),
+                ("0", &[], 2138, 2341, false),
+                ("+0.3", &["+1/3"], 1934, 2137, false),
+                ("+0.7", &["+2/3"], 1730, 1933, false),
+                ("+1", &[], 1526, 1729, false),
+                ("+1.3", &["+1 1/3"], 1323, 1525, false),
+                ("+1.7", &["+1 2/3"], 1119, 1322, false),
+                ("+2", &[], 915, 1118, false),
+                ("+2.3", &["+2 1/3"], 712, 914, false),
+                ("+2.7", &["+2 2/3"], 507, 711, false),
+                ("+3", &[], 303, 506, false),
+                ("C", &[], 100, 302, false),
+            ],
+        ),
+        dial(
+            "mode",
+            &["lever"],
+            2,
+            &[
+                ("MOVIE", &[], 3067, 3750, true),
+                ("STILL", &[], 3751, 4095, false),
+            ],
+        ),
+        dial(
+            "focus",
+            &["af"],
+            11,
+            &[
+                ("M", &["MF"], 2618, 3066, true),
+                ("S", &["AF-S"], 3067, 3750, true),
+                ("C", &["AF-C"], 3751, 4095, false),
+            ],
+        ),
         // Labels 125..160 and C are marked as guesses in the decode.
-        dial("iso", &[], 12, &[
-            ("A", &["AUTO"], 4005, 4095, false),
-            ("C", &["CMD", "COMMAND"], 3823, 4004, false),
-            ("12800", &[], 3642, 3822, false),
-            ("10000", &[], 3462, 3641, false),
-            ("8000", &[], 3282, 3461, false),
-            ("6400", &[], 3102, 3281, false),
-            ("5000", &[], 2924, 3101, false),
-            ("4000", &[], 2745, 2923, false),
-            ("3200", &[], 2567, 2744, false),
-            ("2500", &[], 2389, 2566, false),
-            ("2000", &[], 2212, 2388, false),
-            ("1600", &[], 2034, 2211, false),
-            ("1250", &[], 1857, 2033, false),
-            ("1000", &[], 1680, 1856, false),
-            ("800", &[], 1503, 1679, false),
-            ("640", &[], 1326, 1502, false),
-            ("500", &[], 1149, 1325, false),
-            ("400", &[], 972, 1148, false),
-            ("320", &[], 795, 971, false),
-            ("250", &[], 618, 794, false),
-            ("200", &[], 441, 617, false),
-            ("160", &[], 263, 440, false),
-            ("125", &[], 100, 262, false),
-        ]),
+        dial(
+            "iso",
+            &[],
+            12,
+            &[
+                ("A", &["AUTO"], 4005, 4095, false),
+                ("C", &["CMD", "COMMAND"], 3823, 4004, false),
+                ("12800", &[], 3642, 3822, false),
+                ("10000", &[], 3462, 3641, false),
+                ("8000", &[], 3282, 3461, false),
+                ("6400", &[], 3102, 3281, false),
+                ("5000", &[], 2924, 3101, false),
+                ("4000", &[], 2745, 2923, false),
+                ("3200", &[], 2567, 2744, false),
+                ("2500", &[], 2389, 2566, false),
+                ("2000", &[], 2212, 2388, false),
+                ("1600", &[], 2034, 2211, false),
+                ("1250", &[], 1857, 2033, false),
+                ("1000", &[], 1680, 1856, false),
+                ("800", &[], 1503, 1679, false),
+                ("640", &[], 1326, 1502, false),
+                ("500", &[], 1149, 1325, false),
+                ("400", &[], 972, 1148, false),
+                ("320", &[], 795, 971, false),
+                ("250", &[], 618, 794, false),
+                ("200", &[], 441, 617, false),
+                ("160", &[], 263, 440, false),
+                ("125", &[], 100, 262, false),
+            ],
+        ),
         // Shutter speeds: a number N below 1 s is 1/N; "1" is one second.
-        dial("ss", &["shutter"], 13, &[
-            ("A", &["AUTO"], 3957, 4095, false),
-            ("8000", &["1/8000"], 3683, 3956, false),
-            ("4000", &["1/4000"], 3418, 3682, false),
-            ("2000", &["1/2000"], 3160, 3417, false),
-            ("1000", &["1/1000"], 2909, 3159, false),
-            ("500", &["1/500"], 2664, 2908, false),
-            ("250", &["1/250"], 2423, 2663, false),
-            ("125", &["1/125"], 2187, 2422, false),
-            ("60", &["1/60"], 1953, 2186, false),
-            ("30", &["1/30"], 1721, 1952, false),
-            ("15", &["1/15"], 1492, 1720, false),
-            ("8", &["1/8"], 1262, 1491, false),
-            ("4", &["1/4"], 1033, 1261, false),
-            ("2", &["1/2"], 803, 1032, false),
-            ("1", &["1S"], 571, 802, false),
-            ("T", &[], 336, 570, false),
-            ("B", &[], 100, 335, false),
-        ]),
+        dial(
+            "ss",
+            &["shutter"],
+            13,
+            &[
+                ("A", &["AUTO"], 3957, 4095, false),
+                ("8000", &["1/8000"], 3683, 3956, false),
+                ("4000", &["1/4000"], 3418, 3682, false),
+                ("2000", &["1/2000"], 3160, 3417, false),
+                ("1000", &["1/1000"], 2909, 3159, false),
+                ("500", &["1/500"], 2664, 2908, false),
+                ("250", &["1/250"], 2423, 2663, false),
+                ("125", &["1/125"], 2187, 2422, false),
+                ("60", &["1/60"], 1953, 2186, false),
+                ("30", &["1/30"], 1721, 1952, false),
+                ("15", &["1/15"], 1492, 1720, false),
+                ("8", &["1/8"], 1262, 1491, false),
+                ("4", &["1/4"], 1033, 1261, false),
+                ("2", &["1/2"], 803, 1032, false),
+                ("1", &["1S"], 571, 802, false),
+                ("T", &[], 336, 570, false),
+                ("B", &[], 100, 335, false),
+            ],
+        ),
     ];
     // Row 0 reads POWER held while register 0x00 bit 10 is clear; that set
     // means OFF is a guess of the decode.
@@ -414,22 +443,25 @@ fn xt5_extension(options: &mut ladders::Options) -> Result<(), String> {
         bit: 10,
         set: "OFF".into(),
         clear: "ON".into(),
-        basis: "Scanner row 0 (physical 0x0c, UI POWER) reads ((byte [0x1c09c99] ^ 4) >> 2) & 1, the \
+        basis:
+            "Scanner row 0 (physical 0x0c, UI POWER) reads ((byte [0x1c09c99] ^ 4) >> 2) & 1, the \
 copy of power-controller register 0x00 that 0x1407d2c refreshes each scan."
-            .into(),
+                .into(),
     }];
     options.rear_dial = Some(ladders::CommandDial::Counting(ladders::CountingDial {
         register: 0x36,
-        basis: "0x1407d2c reads power-controller register 0x36 each scan through 0x13d5834: bits 2..0 \
+        basis:
+            "0x1407d2c reads power-controller register 0x36 each scan through 0x13d5834: bits 2..0 \
 count, bit 3 sign. The firmware never writes it, so the controller clears the count on read."
-            .into(),
+                .into(),
     }));
     options.front_dial = Some(ladders::QuadratureDial {
         pins: [Pin { port: 0, pin: 9 }, Pin { port: 0, pin: 10 }],
         rest_phase: 3,
-        basis: "Sampler 0x140a5bc: phase = level(0.9) << 1 | level(0.10), idle 3; transition table \
+        basis:
+            "Sampler 0x140a5bc: phase = level(0.9) << 1 | level(0.10), idle 3; transition table \
 0x1c0af58 steps 3, 2, 0, 1, 3 for CMD2_R (physical 0x8e) and 3, 1, 0, 2, 3 for CMD2_L (0x8f)."
-            .into(),
+                .into(),
     });
     options.gpio_keys = vec![
         ladders::GpioKey {
@@ -450,16 +482,45 @@ count, bit 3 sign. The firmware never writes it, so the controller clears the co
 
 /// Catalog identities of the board table's controls that are not a catalog
 /// rung: pad diagonals, dial pushes, latched dials and switches, by body.
-fn extension_ids(body: &str) -> (&'static [(Key, &'static str, &'static str)], &'static [(&'static str, &'static str)]) {
+fn extension_ids(
+    body: &str,
+) -> (
+    &'static [(Key, &'static str, &'static str)],
+    &'static [(&'static str, &'static str)],
+) {
     match body {
         "xt5" => (
             &[
-                (Key::StickUpLeft, "focus_stick.up_left", "Focus stick up-left"),
-                (Key::StickUpRight, "focus_stick.up_right", "Focus stick up-right"),
-                (Key::StickDownLeft, "focus_stick.down_left", "Focus stick down-left"),
-                (Key::StickDownRight, "focus_stick.down_right", "Focus stick down-right"),
-                (Key::RearPush, "rear_command_dial.push", "Rear command dial press"),
-                (Key::FrontPush, "front_command_dial.push", "Front command dial press"),
+                (
+                    Key::StickUpLeft,
+                    "focus_stick.up_left",
+                    "Focus stick up-left",
+                ),
+                (
+                    Key::StickUpRight,
+                    "focus_stick.up_right",
+                    "Focus stick up-right",
+                ),
+                (
+                    Key::StickDownLeft,
+                    "focus_stick.down_left",
+                    "Focus stick down-left",
+                ),
+                (
+                    Key::StickDownRight,
+                    "focus_stick.down_right",
+                    "Focus stick down-right",
+                ),
+                (
+                    Key::RearPush,
+                    "rear_command_dial.push",
+                    "Rear command dial press",
+                ),
+                (
+                    Key::FrontPush,
+                    "front_command_dial.push",
+                    "Front command dial press",
+                ),
             ],
             &[
                 ("drive", "drive_dial"),
@@ -577,13 +638,26 @@ mod tests {
                 ladders::Wire::Adc { channel: 1 },
                 ladders::Wire::Adc { channel: 2 },
                 ladders::Wire::Adc { channel: 14 },
-                ladders::Wire::PowerControllerRegister { register: 0x34, released: 1023 },
-                ladders::Wire::PowerControllerRegister { register: 0x35, released: 1023 },
+                ladders::Wire::PowerControllerRegister {
+                    register: 0x34,
+                    released: 1023
+                },
+                ladders::Wire::PowerControllerRegister {
+                    register: 0x35,
+                    released: 1023
+                },
                 ladders::Wire::Adc { channel: 11 },
             ]
         );
         // 19 catalog rungs plus the four focus-lever diagonals of the board table.
-        assert_eq!(options.ladders.iter().map(|ladder| ladder.rungs.len()).sum::<usize>(), 23);
+        assert_eq!(
+            options
+                .ladders
+                .iter()
+                .map(|ladder| ladder.rungs.len())
+                .sum::<usize>(),
+            23
+        );
         let rung = |key: Key| {
             options
                 .ladders
@@ -599,7 +673,6 @@ mod tests {
         assert_eq!(rung(Key::Back), (768, 933, 850));
         assert_eq!(rung(Key::Up), (377, 420, 398));
         assert_eq!(rung(Key::Play), (2102, 2325, 2213));
-
     }
 
     #[test]
@@ -620,13 +693,22 @@ mod tests {
         assert_eq!(rung(Key::Back), (2112, 2342));
         assert_eq!(rung(Key::StickUp), (1438, 1679));
         assert_eq!(rung(Key::StickDown), (3053, 3765));
-        assert!(matches!(options.rear_dial, Some(ladders::CommandDial::Quadrature(_))));
+        assert!(matches!(
+            options.rear_dial,
+            Some(ladders::CommandDial::Quadrature(_))
+        ));
         assert!(options.front_dial.is_some());
     }
 
     #[test]
     fn every_mapped_identity_is_a_catalog_control() {
-        let bodies = [("xt5-431", "xt5"), ("xh2-530", "xh2"), ("xh2s-730", "xh2s"), ("xe5-112", "xe5")].map(|(configuration, body)| {
+        let bodies = [
+            ("xt5-431", "xt5"),
+            ("xh2-530", "xh2"),
+            ("xh2s-730", "xh2s"),
+            ("xe5-112", "xe5"),
+        ]
+        .map(|(configuration, body)| {
             let document = ResolvedConfiguration::bundled(configuration)
                 .unwrap()
                 .reference
@@ -700,11 +782,14 @@ mod tests {
     #[test]
     fn a_register_ladder_needs_one_released_value() {
         let mut resolved = xt5();
-        inputs(&mut resolved).ladders.retain(|input| {
-            input.wire != LadderWire::PowerControllerRegister { register: 0x35 }
-        });
+        inputs(&mut resolved)
+            .ladders
+            .retain(|input| input.wire != LadderWire::PowerControllerRegister { register: 0x35 });
         let error = ladders(&resolved).unwrap_err();
-        assert!(error.contains("register 0x35 ladder has no released value"), "{error}");
+        assert!(
+            error.contains("register 0x35 ladder has no released value"),
+            "{error}"
+        );
 
         let mut resolved = xt5();
         let mut document = resolved.reference.physical_controls.take().unwrap();
@@ -721,7 +806,10 @@ mod tests {
         document["ladders"][0]["rungs"][0]["control_id"] = serde_json::json!("rear_command_dial");
         resolved.reference.physical_controls = Some(document.clone());
         let error = ladders(&resolved).unwrap_err();
-        assert!(error.contains("rear_command_dial have no emulator key"), "{error}");
+        assert!(
+            error.contains("rear_command_dial have no emulator key"),
+            "{error}"
+        );
 
         // A 10-bit register ladder declared with 12-bit resolution is not the model's wire.
         let mut document = xt5().reference.physical_controls.unwrap();
@@ -740,7 +828,10 @@ mod tests {
             }
         }
         let error = ladders(&resolved).unwrap_err();
-        assert!(error.contains("channel 14 sample 1604 holds focus_stick.up"), "{error}");
+        assert!(
+            error.contains("channel 14 sample 1604 holds focus_stick.up"),
+            "{error}"
+        );
     }
 
     #[test]

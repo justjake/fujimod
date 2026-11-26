@@ -86,9 +86,7 @@ mod tests {
     #[test]
     fn rejects_duplicate_ids_missing_zero_and_mismatched_identity() {
         let mut document = names();
-        document
-            .ui_setting_names
-            .insert("UI_SETP_OTHER".into(), 41);
+        document.ui_setting_names.insert("UI_SETP_OTHER".into(), 41);
         assert!(document.validate().is_err());
         let mut document = names();
         document.ui_setting_names.remove("UI_SETP_NONE");

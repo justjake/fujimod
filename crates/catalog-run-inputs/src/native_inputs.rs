@@ -29,6 +29,8 @@ pub enum RunNativeDeviceInputs {
     Reset(NativeResetInputs),
     #[serde(rename = "clocks")]
     Clocks(NativeClocksInputs),
+    #[serde(rename = "companion")]
+    Companion(NativeCompanionInputs),
     #[serde(rename = "block-98000")]
     Block98000(NativeBlock98000Inputs),
     #[serde(rename = "sdhci-clocks")]
@@ -61,6 +63,8 @@ pub enum RunNativeDeviceInputs {
     Power(NativePowerInputs),
     #[serde(rename = "serial-audio")]
     SerialAudio(NativeSerialAudioInputs),
+    #[serde(rename = "serial-audio-transmitter")]
+    SerialAudioTransmitter(NativeSerialAudioTransmitterInputs),
     #[serde(rename = "exr2-pulse")]
     Exr2Pulse(NativeExr2PulseInputs),
     #[serde(rename = "fe80-processing")]
@@ -89,6 +93,8 @@ pub enum RunNativeDeviceInputs {
     ImageCombination(NativeImageCombinationInputs),
     #[serde(rename = "encoder")]
     Encoder(NativeEncoderInputs),
+    #[serde(rename = "contact-actuator")]
+    ContactActuator(NativeContactActuatorInputs),
     #[serde(rename = "i2c")]
     I2c(NativeControlBusInputs),
 }
@@ -326,6 +332,8 @@ pub struct NativeStatisticsInputs {
     pub stop_ticks: u64,
     pub histogram: bool,
     pub external_statistics: bool,
+    #[serde(default)]
+    pub diagnostic_reads: bool,
 }
 
 /// Closed NativeOutputChannelInputsClockKind selection.
@@ -381,6 +389,8 @@ pub struct NativeOutputChannelInputs {
     pub stop_ticks: u64,
     pub clock: NativeOutputChannelInputsClock,
     pub geometry: NativeOutputChannelInputsGeometry,
+    #[serde(default)]
+    pub diagnostic_reads: bool,
 }
 
 /// Closed NativeFaceDetectorInputsMode selection.
@@ -392,6 +402,8 @@ pub struct NativeOutputChannelInputs {
     tsify(hashmap_as_object, missing_as_null)
 )]
 pub enum NativeFaceDetectorInputsMode {
+    #[serde(rename = "configuration")]
+    Configuration,
     #[serde(rename = "retained_words")]
     RetainedWords,
 }
@@ -641,6 +653,33 @@ pub struct NativePowerInputs {
 )]
 pub struct NativeSerialAudioInputs {}
 
+/// Declared companion startup inputs.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(deny_unknown_fields)]
+#[cfg_attr(
+    all(target_arch = "wasm32", not(target_os = "emscripten")),
+    derive(tsify::Tsify),
+    tsify(hashmap_as_object, missing_as_null)
+)]
+pub struct NativeCompanionInputs {}
+
+/// Declared serial-audio-transmitter startup inputs.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(deny_unknown_fields)]
+#[cfg_attr(
+    all(target_arch = "wasm32", not(target_os = "emscripten")),
+    derive(tsify::Tsify),
+    tsify(hashmap_as_object, missing_as_null)
+)]
+pub struct NativeSerialAudioTransmitterInputs {
+    pub ram_bytes: u64,
+    pub max_transfer_bytes: u64,
+    pub ticks_per_byte: u64,
+    pub minimum_ticks: u64,
+}
+
 /// Declared NativeExr2PulseInputs startup inputs and execution limits.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
@@ -683,6 +722,8 @@ pub struct NativeFe80ProcessingInputs {
 pub enum NativeImageInputInputsCommand {
     #[serde(rename = "packed_writes")]
     PackedWrites,
+    #[serde(rename = "packed_words")]
+    PackedWords,
 }
 
 /// Closed NativeImageInputInputsPhaseAck selection.
@@ -694,8 +735,14 @@ pub enum NativeImageInputInputsCommand {
     tsify(hashmap_as_object, missing_as_null)
 )]
 pub enum NativeImageInputInputsPhaseAck {
+    #[serde(rename = "disabled")]
+    Disabled,
     #[serde(rename = "inactive")]
     Inactive,
+    #[serde(rename = "enabled")]
+    Enabled,
+    #[serde(rename = "preserve_fields")]
+    PreserveFields,
 }
 
 /// Closed NativeImageInputInputsClockMode selection.
@@ -709,6 +756,10 @@ pub enum NativeImageInputInputsPhaseAck {
 pub enum NativeImageInputInputsClockMode {
     #[serde(rename = "input_enable")]
     InputEnable,
+    #[serde(rename = "register_periods")]
+    RegisterPeriods,
+    #[serde(rename = "source_mask")]
+    SourceMask,
 }
 
 /// Closed NativeImageInputInputsClockSourceKind selection.
@@ -775,7 +826,7 @@ pub struct NativeImageInputInputs {
     pub sensor_period_ticks: Option<u64>,
     pub raw_dma_ticks: u64,
     pub readback_ticks: u64,
-    pub cfa: Vec<u64>,
+    pub cfa: Option<Vec<u64>>,
 }
 
 /// Declared NativeBlock11000InputsControlModeClearbit0ack startup inputs and execution limits.
@@ -981,6 +1032,8 @@ pub enum NativeScanoutInputsBackdropProfile {
 pub enum NativeScanoutInputsRectangleProfile {
     #[serde(rename = "exr2-signed-ycbcr-rectangle-overlay-unmeasured")]
     Exr2SignedYcbcrRectangleOverlayUnmeasured,
+    #[serde(rename = "xm1-150-declared-luma-rectangle-overlay-unmeasured")]
+    Xm1150DeclaredLumaRectangleOverlayUnmeasured,
 }
 
 /// Declared NativeScanoutInputs startup inputs and execution limits.
@@ -1012,6 +1065,8 @@ pub struct NativeScanoutInputs {
     tsify(hashmap_as_object, missing_as_null)
 )]
 pub enum NativeDisplayTimingInputsMode {
+    #[serde(rename = "external")]
+    External,
     #[serde(rename = "configured_clocked")]
     ConfiguredClocked,
 }
@@ -1029,6 +1084,8 @@ pub struct NativeDisplayTimingInputs {
     pub mode: NativeDisplayTimingInputsMode,
     pub frame_ticks: u64,
     pub stop_ticks: u64,
+    #[serde(default)]
+    pub output_hold: bool,
 }
 
 /// Declared NativeFormatterInputs startup inputs and execution limits.
@@ -1128,6 +1185,51 @@ pub struct NativeEncoderInputs {
     pub rest_phase: u64,
 }
 
+/// One contact or drive pin of a mechanical actuator.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(deny_unknown_fields)]
+#[cfg_attr(
+    all(target_arch = "wasm32", not(target_os = "emscripten")),
+    derive(tsify::Tsify),
+    tsify(hashmap_as_object, missing_as_null)
+)]
+pub struct NativeContactActuatorInputsPin {
+    pub port: u64,
+    pub pin: u64,
+}
+
+/// One detent of a mechanical actuator's travel.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(deny_unknown_fields)]
+#[cfg_attr(
+    all(target_arch = "wasm32", not(target_os = "emscripten")),
+    derive(tsify::Tsify),
+    tsify(hashmap_as_object, missing_as_null)
+)]
+pub struct NativeContactActuatorInputsPosition {
+    pub contacts: Vec<bool>,
+    pub drive: u64,
+}
+
+/// Declared contact-actuator startup inputs.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(deny_unknown_fields)]
+#[cfg_attr(
+    all(target_arch = "wasm32", not(target_os = "emscripten")),
+    derive(tsify::Tsify),
+    tsify(hashmap_as_object, missing_as_null)
+)]
+pub struct NativeContactActuatorInputs {
+    pub contacts: Vec<NativeContactActuatorInputsPin>,
+    pub drive: Vec<NativeContactActuatorInputsPin>,
+    pub initial_position: u64,
+    pub positions: Vec<NativeContactActuatorInputsPosition>,
+    pub settle_ticks: u64,
+}
+
 /// Control-bus startup model selection.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
@@ -1140,7 +1242,7 @@ pub struct NativeEncoderInputs {
 pub struct NativeControlBusInputs {
     pub modes: Vec<u8>,
     pub transfer_ticks: u64,
-    pub profile: NativeControlBusProfile,
+    pub profile: Option<NativeControlBusProfile>,
 }
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
@@ -1150,8 +1252,12 @@ pub struct NativeControlBusInputs {
     tsify(hashmap_as_object, missing_as_null)
 )]
 pub enum NativeControlBusProfile {
+    #[serde(rename = "endpoint7-and9-virtual-write-ack")]
+    SensorWrite,
     #[serde(rename = "endpoint7-stationary-and9-heartbeat-latched-irq-unmeasured")]
     Primary,
+    #[serde(rename = "declared-register-status-pair-latched-irq-unmeasured")]
+    RegisterStatus,
     #[serde(rename = "usbcharge-disconnected-pwic-startup-tagged")]
     Secondary,
 }
@@ -1268,8 +1374,10 @@ impl RunNativeDeviceInputs {
                 }
             }
             Self::ImageInput(input) => {
-                if input.cfa.len() != 36
-                    || input.cfa.iter().any(|color| *color > 2)
+                if input
+                    .cfa
+                    .as_ref()
+                    .is_some_and(|cfa| cfa.len() != 36 || cfa.iter().any(|color| *color > 2))
                     || input.raw_dma_ticks == 0
                     || input.readback_ticks == 0
                 {

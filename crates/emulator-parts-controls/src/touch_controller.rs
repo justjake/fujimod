@@ -6,16 +6,14 @@
 //! slop reports Long Press 130 ms after touch-down, and a held contact that
 //! stays within the slop reports Press, not Drag, when it moves.
 //! Only timed external contacts and completed bus reads drive this part.
+use fujimod_emulator_devices::parts::touch_input::{ContactInput, Phase};
 use serde::{Deserialize, Serialize};
 use std::collections::VecDeque;
-use fujimod_emulator_devices::parts::touch_input::{ContactInput, Phase};
 
 pub const REPORT_HZ: u64 = 100;
 const TAP_MS: u64 = 110;
 const LONG_PRESS_MS: u64 = 130;
 const QUEUE_LIMIT: usize = 4096;
-
-
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Deserialize, Serialize)]
 struct Contact {
@@ -138,7 +136,10 @@ impl TouchController {
     /// acknowledged report or newly enabled route due now, without polling.
     pub fn next_event_tick(&self, now: u64, reads: u64, route_enabled: bool) -> Option<u64> {
         let mut deadline = self.inputs.front().map(|e| e.tick);
-        for tick in [self.sample_tick, self.long_press_tick].into_iter().flatten() {
+        for tick in [self.sample_tick, self.long_press_tick]
+            .into_iter()
+            .flatten()
+        {
             deadline = Some(deadline.map_or(tick, |old| old.min(tick)));
         }
         if self.current.is_some_and(|before| reads > before) {
@@ -259,7 +260,8 @@ impl TouchController {
                     }
                     let c = self.contacts[i];
                     if !c.paired {
-                        if !c.moved && e.tick - c.down_tick <= self.ticks_per_second * TAP_MS / 1000 {
+                        if !c.moved && e.tick - c.down_tick <= self.ticks_per_second * TAP_MS / 1000
+                        {
                             self.report(1)?;
                         } else if c.moved {
                             let distance =

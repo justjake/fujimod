@@ -14,7 +14,10 @@ const miniflare = new Miniflare({
         manifest: {
           mainModule: 'worker.mjs',
           modules: {
-            'worker.mjs': { type: 'esm', contents: 'export default { fetch: () => new Response("ok") }' },
+            'worker.mjs': {
+              type: 'esm',
+              contents: 'export default { fetch: () => new Response("ok") }',
+            },
           },
         },
         env: { AUTH_DB: { type: 'd1', id: 'fujimod-auth' } },
@@ -28,16 +31,21 @@ let migrated: Promise<D1Database> | undefined;
 function database(): Promise<D1Database> {
   migrated ??= (async () => {
     const db = (await miniflare.getD1Database('AUTH_DB')) as unknown as D1Database;
-    const sql = readFileSync(new URL('../drizzle/0000_married_scourge.sql', import.meta.url), 'utf8');
+    const sql = readFileSync(
+      new URL('../drizzle/0000_married_scourge.sql', import.meta.url),
+      'utf8',
+    );
     for (const statement of sql.split('--> statement-breakpoint'))
       if (statement.trim()) await db.prepare(statement).run();
     await db.batch([
       db.prepare(
         "insert into user (id, name, email, email_verified, created_at, updated_at) values ('u1', 'Test', 'test@example.com', 0, 1, 1)",
       ),
-      db.prepare(
-        "insert into account (id, account_id, provider_id, user_id, access_token, access_token_expires_at, created_at, updated_at) values ('a1', 'google-sub', 'google', 'u1', 'google-token', ?, 1, 1)",
-      ).bind(Date.now() + 600_000),
+      db
+        .prepare(
+          "insert into account (id, account_id, provider_id, user_id, access_token, access_token_expires_at, created_at, updated_at) values ('a1', 'google-sub', 'google', 'u1', 'google-token', ?, 1, 1)",
+        )
+        .bind(Date.now() + 600_000),
     ]);
     return db;
   })();
@@ -84,60 +92,48 @@ const tokens = {
 
 afterAll(() => miniflare.dispose());
 
-test(
-  'a redeemed device code becomes a permitted camera with a usable credential',
-  async () => {
-    const db = await database();
-    await approvedCode('code-one');
-    const token = await redeem('code-one');
+test('a redeemed device code becomes a permitted camera with a usable credential', async () => {
+  const db = await database();
+  await approvedCode('code-one');
+  const token = await redeem('code-one');
 
-    const device = await db
-      .prepare('select id, name, kind, user_id as userId from device')
-      .first<{ id: string; name: string; kind: string; userId: string }>();
-    expect(device).toMatchObject({ name: 'Fujifilm camera', kind: 'camera', userId: 'u1' });
-    const permissions = await db
-      .prepare('select permission from device_permission where device_id = ?')
-      .bind(device!.id)
-      .all<{ permission: string }>();
-    expect(permissions.results.map((row) => row.permission)).toEqual(['google.photos.append']);
+  const device = await db
+    .prepare('select id, name, kind, user_id as userId from device')
+    .first<{ id: string; name: string; kind: string; userId: string }>();
+  expect(device).toMatchObject({ name: 'Fujifilm camera', kind: 'camera', userId: 'u1' });
+  const permissions = await db
+    .prepare('select permission from device_permission where device_id = ?')
+    .bind(device!.id)
+    .all<{ permission: string }>();
+  expect(permissions.results.map((row) => row.permission)).toEqual(['google.photos.append']);
 
-    const response = await serveGoogleToken(broker(token), db, tokens);
-    expect(response.status).toBe(200);
-    expect(await response.json()).toMatchObject({ accessToken: 'google-access-token' });
+  const response = await serveGoogleToken(broker(token), db, tokens);
+  expect(response.status).toBe(200);
+  expect(await response.json()).toMatchObject({ accessToken: 'google-access-token' });
 
-    const used = await db
-      .prepare('select last_used_at as usedAt from device_credential where token_hash is not null')
-      .first<{ usedAt: number | null }>();
-    expect(used?.usedAt).toBeGreaterThan(0);
-  },
-  30_000,
-);
+  const used = await db
+    .prepare('select last_used_at as usedAt from device_credential where token_hash is not null')
+    .first<{ usedAt: number | null }>();
+  expect(used?.usedAt).toBeGreaterThan(0);
+}, 30_000);
 
-test(
-  'a credential without the photos permission is refused',
-  async () => {
-    const db = await database();
-    await approvedCode('code-two');
-    const token = await redeem('code-two');
-    await db.prepare("delete from device_permission where permission = 'google.photos.append'").run();
+test('a credential without the photos permission is refused', async () => {
+  const db = await database();
+  await approvedCode('code-two');
+  const token = await redeem('code-two');
+  await db.prepare("delete from device_permission where permission = 'google.photos.append'").run();
 
-    expect((await serveGoogleToken(broker(token), db, tokens)).status).toBe(403);
-  },
-  30_000,
-);
+  expect((await serveGoogleToken(broker(token), db, tokens)).status).toBe(403);
+}, 30_000);
 
-test(
-  'a revoked device loses access to the Google token',
-  async () => {
-    const db = await database();
-    await approvedCode('code-three');
-    const token = await redeem('code-three');
-    await db.prepare("update device set status = 'revoked', revoked_at = 1").run();
+test('a revoked device loses access to the Google token', async () => {
+  const db = await database();
+  await approvedCode('code-three');
+  const token = await redeem('code-three');
+  await db.prepare("update device set status = 'revoked', revoked_at = 1").run();
 
-    expect((await serveGoogleToken(broker(token), db, tokens)).status).toBe(401);
-  },
-  30_000,
-);
+  expect((await serveGoogleToken(broker(token), db, tokens)).status).toBe(401);
+}, 30_000);
 
 test('an unknown token is refused', async () => {
   const db = await database();

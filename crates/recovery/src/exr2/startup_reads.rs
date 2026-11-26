@@ -48,7 +48,10 @@ pub struct StartupReads {
 
 impl StartupReads {
     pub(crate) fn install(&self, inverted: &[u8], plan: &Plan, ram: &mut [u8]) -> Result<()> {
-        image::hash(extent(ram, self.check.address, self.check.size)?, &self.check.sha256)?;
+        image::hash(
+            extent(ram, self.check.address, self.check.size)?,
+            &self.check.sha256,
+        )?;
         let checked = |at: usize, target: usize| -> Result<()> {
             require(
                 at >= self.check.address
@@ -82,7 +85,11 @@ impl StartupReads {
             checked(read.call, read.target)?;
             let bytes = read.source.read(inverted)?;
             let end = read.destination + bytes.len();
-            let row = [word(ram, read.row)?, word(ram, read.row + 4)?, word(ram, read.row + 8)?];
+            let row = [
+                word(ram, read.row)?,
+                word(ram, read.row + 4)?,
+                word(ram, read.row + 8)?,
+            ];
             let blocks = (bytes.len() / BLOCK) as u32;
             require(
                 !bytes.is_empty()
@@ -92,10 +99,16 @@ impl StartupReads {
             )?;
             let clear = |at: usize, size: usize| end <= at || at + size <= read.destination;
             require(
-                plan.regions.iter().all(|r| clear(r.address, r.source.decoded_size))
+                plan.regions
+                    .iter()
+                    .all(|r| clear(r.address, r.source.decoded_size))
                     && plan.bss.iter().all(|b| clear(b.address, b.size))
-                    && sources.iter().all(|(at, data): &(usize, Vec<u8>)| clear(*at, data.len()))
-                    && extent(ram, read.destination, bytes.len())?.iter().all(|b| *b == 0),
+                    && sources
+                        .iter()
+                        .all(|(at, data): &(usize, Vec<u8>)| clear(*at, data.len()))
+                    && extent(ram, read.destination, bytes.len())?
+                        .iter()
+                        .all(|b| *b == 0),
                 "Startup read destination is occupied",
             )?;
             sources.push((read.destination, bytes));
@@ -169,7 +182,10 @@ mod tests {
         let region = |name: &str, address, decoded_size| Region {
             name: name.into(),
             address,
-            source: Source { decoded_size, ..source(0) },
+            source: Source {
+                decoded_size,
+                ..source(0)
+            },
         };
         let plan = Plan {
             size: ram.len(),

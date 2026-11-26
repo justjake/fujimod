@@ -69,6 +69,25 @@
       }
     ]
   },
+  "generated_facts": {
+    "observation": {
+      "menu_active": 13295492,
+      "menu_node": 13290528,
+      "pending_mode": 13488904,
+      "readiness": {
+        "category_one": 13486736,
+        "category_two": 13486744,
+        "excluded_mask": 16392,
+        "input_pending": 13489976,
+        "operation_alert_timer": 13486944,
+        "override_address": 13494048
+      },
+      "rec_mode": 3,
+      "setup_mode": 5,
+      "system_mode": 13407436,
+      "ui_mode": 13488892
+    }
+  },
   "reset_release": {
     "checks": [
       {
@@ -84,5 +103,15 @@
     "register": 4294656204,
     "source": 120,
     "target": 1073676288
+  },
+  "layouts": {
+    "profiles": {
+      "xt10-131": {
+        "camera_configuration_id": "xt10-131-runtime",
+        "execution_scope": "offline-boot-development",
+        "limits": [],
+        "rom_basis": "Declared catalog input."
+      }
+    }
   }
 }

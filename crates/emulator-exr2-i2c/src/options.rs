@@ -1,8 +1,8 @@
 //! Immutable controller and attached-part construction data.
 use super::{Channel, Profile, Registers, secondary};
 use fujimod_emulator_devices::WordMap;
-use fujimod_emulator_parts_controls::register_status;
 use fujimod_emulator_parts_controls::i2c::{self, command_registers, touch_panel};
+use fujimod_emulator_parts_controls::register_status;
 use serde::Deserialize;
 use std::collections::BTreeSet;
 

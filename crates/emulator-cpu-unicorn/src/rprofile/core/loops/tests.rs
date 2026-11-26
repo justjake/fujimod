@@ -321,7 +321,10 @@ fn thumb(code: &[u16], mode: LoopMode, budget: usize, counter: u32, flag: u32) -
     cpu.map_zeroed(0, 0x4000, 7).unwrap();
     cpu.write_memory(
         0x1000,
-        &code.iter().flat_map(|h| h.to_le_bytes()).collect::<Vec<_>>(),
+        &code
+            .iter()
+            .flat_map(|h| h.to_le_bytes())
+            .collect::<Vec<_>>(),
     )
     .unwrap();
     words(&cpu, 0x2000, &[flag]);
@@ -352,13 +355,20 @@ fn compare_thumb(code: &[u16], budget: usize, counter: u32, flag: u32) -> bool {
     let measured = thumb(code, LoopMode::Measure, budget, counter, flag);
     let on = thumb(code, LoopMode::Accelerate, budget, counter, flag);
     let context = format!("code={code:04x?} budget={budget} counter={counter} flag={flag}");
-    assert_eq!((&off.state, off.progress), (&on.state, on.progress), "{context}");
+    assert_eq!(
+        (&off.state, off.progress),
+        (&on.state, on.progress),
+        "{context}"
+    );
     assert_eq!(
         (&off.state, off.progress),
         (&measured.state, measured.progress),
         "{context}"
     );
-    assert_eq!(measured.counters["loop_accelerated_instructions"], 0, "{context}");
+    assert_eq!(
+        measured.counters["loop_accelerated_instructions"], 0,
+        "{context}"
+    );
     on.counters["loop_accelerated_instructions"] > 0
 }
 
@@ -414,6 +424,9 @@ fn thumb_stores_and_unsupported_instructions_never_accelerate() {
             assert!(!compare_thumb(&code, budget, 1, 0), "{code:04x?}");
         }
         let on = thumb(&code, LoopMode::Accelerate, 200, 1, 0);
-        assert!(on.counters["loop_proofs_failed_structural"] > 0, "{code:04x?}");
+        assert!(
+            on.counters["loop_proofs_failed_structural"] > 0,
+            "{code:04x?}"
+        );
     }
 }

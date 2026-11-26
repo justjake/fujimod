@@ -3,41 +3,41 @@
 //! Preparation runs before execution. Host readiness checks only observe RAM;
 //! first-start acceptance drives the ordinary ADC input on the guest timeline.
 #[cfg(all(feature = "xp5-startup", not(target_arch = "wasm32")))]
-#[cfg(all(feature = "xp5-startup", not(target_arch = "wasm32")))]
-mod png_writer;
-#[cfg(all(feature = "xp5-startup", not(target_arch = "wasm32")))]
-pub mod output;
-#[cfg(all(feature = "xp5-startup", not(target_arch = "wasm32")))]
-pub mod media;
-#[cfg(all(feature = "xp5-startup", not(target_arch = "wasm32")))]
-pub mod patch;
-#[cfg(all(feature = "xp5-startup", not(target_arch = "wasm32")))]
-pub mod mod_loader;
-#[cfg(all(feature = "xp5-startup", not(target_arch = "wasm32")))]
 pub mod application;
 mod first_start;
 pub mod host;
+#[cfg(all(feature = "xp5-startup", not(target_arch = "wasm32")))]
+pub mod media;
+#[cfg(all(feature = "xp5-startup", not(target_arch = "wasm32")))]
+pub mod mod_loader;
+#[cfg(all(feature = "xp5-startup", not(target_arch = "wasm32")))]
+pub mod output;
+#[cfg(all(feature = "xp5-startup", not(target_arch = "wasm32")))]
+pub mod patch;
+#[cfg(all(feature = "xp5-startup", not(target_arch = "wasm32")))]
+#[cfg(all(feature = "xp5-startup", not(target_arch = "wasm32")))]
+mod png_writer;
 use fujimod_emulator_board_graph as graph;
 mod x70;
-pub mod xpp;
+mod exr2;
 #[cfg(all(feature = "xp5-startup", not(target_arch = "wasm32")))]
 pub mod xp5;
+pub mod xpp;
 
-use fujimod_emulator::board::{
-        bus::{Bus, Mode},
-        factory,
-    };
-use fujimod_emulator_session::Session;
-use fujimod_emulator_preparation as preparation;
 use fujimod_catalog::reference::PartModel;
+use fujimod_catalog_assets::Content;
 use fujimod_catalog_configuration::{
-    Exr2RunInputs, RunExecution, RunInputs, RunPurpose, RunScene,
-    RunStart,
+    Exr2RunInputs, RunExecution, RunInputs, RunPurpose, RunScene, RunStart,
 };
 use fujimod_catalog_resolution::ResolvedConfiguration;
-use fujimod_catalog_assets::Content;
+use fujimod_emulator::board::{
+    bus::{Bus, Mode},
+    factory,
+};
 use fujimod_emulator_cpu::arm::Coprocessor;
 use fujimod_emulator_exr2_plan::{MemoryChoices, Plan, RefuseAdapters};
+use fujimod_emulator_preparation as preparation;
+use fujimod_emulator_session::Session;
 use serde::Serialize;
 use serde_json::{Value, json};
 use std::{
@@ -77,6 +77,9 @@ pub struct Options {
     pub sd_card_transfer_ticks: Option<u64>,
     /// FAT geometry for the SD card, in place of the run's catalog layout.
     pub card_layout: Option<CardLayout>,
+    /// The modeled SD host's initialization fault, as the catalog device
+    /// model names it, in place of none.
+    pub card_initialization_fault: Option<serde_json::Value>,
 }
 
 /// A declared FAT card geometry for a stock SD card.
@@ -105,10 +108,7 @@ impl CardLayout {
         if self.partition_start == 0 || self.partition_start >= self.sectors {
             return Err("card layout partition start must lie inside the card".into());
         }
-        if !matches!(
-            self.sectors_per_cluster,
-            1 | 2 | 4 | 8 | 16 | 32 | 64 | 128
-        ) {
+        if !matches!(self.sectors_per_cluster, 1 | 2 | 4 | 8 | 16 | 32 | 64 | 128) {
             return Err("card layout cluster size must be 1, 2, 4, 8, 16, 32, 64 or 128".into());
         }
         Ok(())
@@ -186,7 +186,7 @@ pub struct Prepared {
     boot_rom: Rom,
     generated_assets: Vec<Generated>,
     reset_coprocessors: Vec<Reset>,
-    mcu: Mcu,
+    mcu: Option<Mcu>,
     observation: Observation,
     first_start: Option<FirstStart>,
 }
@@ -200,22 +200,15 @@ fn content(size: u64, sha256: &str) -> Content {
 
 fn first_start(
     resolved: &ResolvedConfiguration,
-    inputs: &Exr2RunInputs,
+    inputs: Option<&Exr2RunInputs>,
 ) -> Result<Option<FirstStart>, String> {
+    let Some(inputs) = inputs else {
+        return Ok(None);
+    };
     let Some(policy) = &inputs.first_start else {
         return Ok(None);
     };
-    first_start_key(resolved, inputs, &policy.key_id)
-}
-
-fn first_start_key(
-    resolved: &ResolvedConfiguration,
-    inputs: &Exr2RunInputs,
-    key_id: &str,
-) -> Result<Option<FirstStart>, String> {
-    let Some(policy) = &inputs.first_start else {
-        return Ok(None);
-    };
+    let key_id = &policy.key_id;
     let located = fujimod_catalog_wiring::locate(&resolved.reference)?;
     fujimod_emulator_controls::check_key(&located, &resolved.reference, key_id)
         .map_err(|error| format!("first-start key {key_id}: {error}"))?;
@@ -260,15 +253,21 @@ fn prepared(resolved: ResolvedConfiguration) -> Result<Prepared, String> {
         }
     }
     let inputs = match configuration.inputs.as_ref() {
-        Some(RunInputs::Exr2(inputs)) => inputs,
+        Some(RunInputs::Exr2(inputs)) => Some(inputs),
         Some(RunInputs::Xp4(_)) => {
             return Err("native X70 boot does not support XP4 startup inputs".into());
         }
         Some(RunInputs::Xp5(_)) => {
             return Err("native X70 boot does not support XP5 startup inputs".into());
         }
-        None => return Err("native X70 boot requires declared startup inputs".into()),
+        None => None,
     };
+    // A body profile that exports its native construction carries the reset
+    // values as catalog data, so the run may omit startup inputs.
+    let construction = exr2::available(&resolved);
+    if inputs.is_none() && !construction {
+        return Err("native EXR II boot requires declared startup inputs".into());
+    }
     let scene_input = match configuration.scene.as_ref() {
         Some(RunScene::Exr2(scene)) => scene,
         Some(RunScene::Xp4(_)) => {
@@ -297,11 +296,11 @@ fn prepared(resolved: ResolvedConfiguration) -> Result<Prepared, String> {
         .ok_or("selected firmware has no installation layout")?;
     let observation: fujimod_catalog_remote::FirmwareObservation = serde_json::from_value(
         firmware
-        .generated_facts
-        .as_ref()
-        .and_then(|facts| facts.observation.as_ref())
-        .cloned()
-        .ok_or("selected firmware has no observation facts")?,
+            .generated_facts
+            .as_ref()
+            .and_then(|facts| facts.observation.as_ref())
+            .cloned()
+            .ok_or("selected firmware has no observation facts")?,
     )
     .map_err(|error| format!("firmware observation facts: {error}"))?;
     let quantum = execution_policy.quantum;
@@ -324,13 +323,17 @@ fn prepared(resolved: ResolvedConfiguration) -> Result<Prepared, String> {
         &execution,
         execution_policy.instructions_per_tick,
     );
-    let (plan, devices_value, scene) = x70::assemble(
-        &resolved.reference,
-        configuration,
-        dram_address_space_limit_bytes,
-        inputs,
-        scene_input,
-    )?;
+    let (plan, devices_value, scene) = if construction {
+        exr2::assemble(&resolved, scene_input)?
+    } else {
+        x70::assemble(
+            &resolved.reference,
+            configuration,
+            dram_address_space_limit_bytes,
+            inputs.ok_or("native X70 boot requires declared startup inputs")?,
+            scene_input,
+        )?
+    };
     plan.validate_reset_outputs(
         &execution
             .processors
@@ -387,30 +390,45 @@ fn prepared(resolved: ResolvedConfiguration) -> Result<Prepared, String> {
             })
         })
         .collect::<Result<Vec<_>, String>>()?;
-    let mcu_attachment = resolved
-        .reference
-        .body
-        .microcontroller
-        .as_ref()
-        .ok_or("X70 run has no attached MCU")?;
-    let mcu_part = resolved
-        .reference
-        .parts
-        .iter()
-        .find(|part| part.id == mcu_attachment.part_id)
-        .ok_or("X70 MCU part is unresolved")?;
-    let PartModel::Microcontroller {
-        packet_registers, ..
-    } = &mcu_part.model
-    else {
-        return Err("X70 MCU attachment is not a microcontroller part".into());
-    };
-    let node = x70::node_for_block(&mcu_attachment.controller_id)?;
-    let mcu = Mcu {
-        node,
-        route: usize::from(mcu_attachment.channel),
-        first_register: u8::try_from(packet_registers.first)
-            .map_err(|_| "X70 MCU packet register exceeds one byte")?,
+    let mcu = match resolved.reference.body.microcontroller.as_ref() {
+        Some(mcu_attachment) => {
+            let mcu_part = resolved
+                .reference
+                .parts
+                .iter()
+                .find(|part| part.id == mcu_attachment.part_id)
+                .ok_or("MCU part is unresolved")?;
+            let PartModel::Microcontroller {
+                packet_registers, ..
+            } = &mcu_part.model
+            else {
+                return Err("MCU attachment is not a microcontroller part".into());
+            };
+            if construction {
+                return Err("a body construction does not yet map an attached MCU".into());
+            }
+            Some(Mcu {
+                node: x70::node_for_block(&mcu_attachment.controller_id)?,
+                route: usize::from(mcu_attachment.channel),
+                first_register: u8::try_from(packet_registers.first)
+                    .map_err(|_| "MCU packet register exceeds one byte")?,
+            })
+        }
+        None => resolved
+            .configuration
+            .preset
+            .as_ref()
+            .and_then(|preset| preset.mcu.as_ref())
+            .map(|mcu| {
+                Ok::<Mcu, String>(Mcu {
+                    node: mcu.node.clone(),
+                    route: usize::try_from(mcu.route)
+                        .map_err(|_| "MCU packet route exceeds host address space")?,
+                    first_register: u8::try_from(mcu.first_register)
+                        .map_err(|_| "MCU packet register exceeds one byte")?,
+                })
+            })
+            .transpose()?,
     };
     let readiness = &observation.readiness;
     let observation = Observation {
@@ -493,6 +511,7 @@ impl Prepared {
     }
     /// Produce the stable JSON projection used by the native Python adapter.
     pub fn to_json(&self) -> Value {
+        let readiness = &self.observation.readiness;
         json!({
             "schema": 1,
             "configuration_id": self.resolved.configuration.id,
@@ -508,7 +527,11 @@ impl Prepared {
                 "update": self.update,
                 "boot_rom": {"content":self.boot_rom.content,"address":self.boot_rom.address},
                 "flash_offset": self.flash_offset,
-                "mcu": {"node":self.mcu.node,"route":self.mcu.route,"first_register":self.mcu.first_register},
+                "mcu": self.mcu.as_ref().map(|mcu| json!({
+                    "node":mcu.node,
+                    "route":mcu.route,
+                    "first_register":mcu.first_register,
+                })),
                 "reset_coprocessors": self.reset_coprocessors.iter().map(|reset| json!({
                     "core":reset.core,
                     "register": {
@@ -531,14 +554,14 @@ impl Prepared {
                     "rec_mode":self.observation.rec_mode,
                     "setup_mode":self.observation.setup_mode,
                     "scanout":self.observation.scanout,
-                    "readiness": {
-                        "category_one":self.observation.readiness.category_one,
-                        "category_two":self.observation.readiness.category_two,
-                        "input_pending":self.observation.readiness.input_pending,
-                        "override_address":self.observation.readiness.override_address,
-                        "excluded_mask":self.observation.readiness.excluded_mask,
-                        "operation_alert_timer":self.observation.readiness.operation_alert_timer,
-                    }
+                    "readiness": json!({
+                        "category_one":readiness.category_one,
+                        "category_two":readiness.category_two,
+                        "input_pending":readiness.input_pending,
+                        "override_address":readiness.override_address,
+                        "excluded_mask":readiness.excluded_mask,
+                        "operation_alert_timer":readiness.operation_alert_timer,
+                    }),
                 },
                 "first_start": self.first_start.as_ref().map(|start| json!({
                     "key_id":start.key,
@@ -673,8 +696,9 @@ fn split_managed_spares(
     Ok((&bytes[..main_bytes], spares))
 }
 
-fn settings_packet(plan: &mut Value, mcu: &Mcu, bytes: &[u8]) -> Result<(), String> {
+fn settings_packet(plan: &mut Value, mcu: Option<&Mcu>, bytes: &[u8]) -> Result<(), String> {
     packet(bytes)?;
+    let mcu = mcu.ok_or("this body has no MCU packet input")?;
     let nodes = plan["nodes"]
         .as_array_mut()
         .ok_or("runtime nodes are absent")?;
@@ -788,12 +812,19 @@ impl Prepared {
 
 /// Select whether undeclared accesses stop or are recorded for model discovery.
 pub fn discovery_mode(discovery: bool) -> Mode {
-    if discovery { Mode::Discovery } else { Mode::Strict }
+    if discovery {
+        Mode::Discovery
+    } else {
+        Mode::Strict
+    }
 }
 
 /// Files and startup settings for the selected processor generation.
 pub enum StartupInputs {
-    Exr2 { options: Options, mode: Mode },
+    Exr2 {
+        options: Options,
+        mode: Mode,
+    },
     #[cfg(all(feature = "xp5-startup", not(target_arch = "wasm32")))]
     Xp5(xp5::Startup),
     #[cfg(all(feature = "xp5-startup", not(target_arch = "wasm32")))]
@@ -827,10 +858,8 @@ impl Camera {
 }
 
 fn graph_read_limit(session: &Session) -> Result<usize, String> {
-    let execution: factory::Graph = serde_json::from_value(
-        session.definition["execution"].clone(),
-    )
-    .map_err(|error| format!("session execution graph: {error}"))?;
+    let execution: factory::Graph = serde_json::from_value(session.definition["execution"].clone())
+        .map_err(|error| format!("session execution graph: {error}"))?;
     execution
         .ram
         .iter()
@@ -843,7 +872,8 @@ fn graph_read_limit(session: &Session) -> Result<usize, String> {
                 .flat_map(|profile| [profile.tcm.atcm.bytes, profile.tcm.btcm.bytes]),
         )
         .try_fold(0usize, |sum, bytes| {
-            sum.checked_add(bytes).ok_or_else(|| "declared RAM extent overflows".to_owned())
+            sum.checked_add(bytes)
+                .ok_or_else(|| "declared RAM extent overflows".to_owned())
         })
 }
 
@@ -876,6 +906,8 @@ pub struct Request {
     pub sd_card_transfer_ticks: Option<u64>,
     /// FAT geometry for the SD card, in place of the run's catalog layout.
     pub card_layout: Option<CardLayout>,
+    /// The modeled SD host's initialization fault, in place of none.
+    pub card_initialization_fault: Option<serde_json::Value>,
 }
 
 /// Open any configuration `open` supports from a host's files.
@@ -884,16 +916,15 @@ pub fn open_request(resolved: ResolvedConfiguration, request: Request) -> Result
     // EXR II cards are formatted after the board opens; other starts build
     // their loader card from the files.
     if (request.sd_card_transfer_ticks.is_some() || request.card_layout.is_some())
-        && !matches!(
-            resolved.configuration.inputs.as_ref(),
-            Some(RunInputs::Exr2(_))
-        )
+        && !is_exr2_run(&resolved)
     {
         return Err("SD card options apply only to EXR II runs".into());
     }
     let mut card_after_open = Vec::new();
-    let inputs = match resolved.configuration.inputs.as_ref() {
-        Some(RunInputs::Exr2(_)) => StartupInputs::Exr2 {
+    // A run whose body profile exports its native construction carries the
+    // reset values as catalog data, so it may declare no startup inputs.
+    let inputs = if is_exr2_run(&resolved) {
+        StartupInputs::Exr2 {
             options: Options {
                 update: request.update,
                 boot_rom: request.boot_rom.ok_or("this camera needs its boot ROM")?,
@@ -906,37 +937,48 @@ pub fn open_request(resolved: ResolvedConfiguration, request: Request) -> Result
                 capability_reply: None,
                 sd_card_transfer_ticks: request.sd_card_transfer_ticks,
                 card_layout: request.card_layout.clone(),
+                card_initialization_fault: request.card_initialization_fault.clone(),
             },
             mode: {
                 card_after_open = request.card_files;
                 discovery_mode(request.discovery)
             },
-        },
-        Some(RunInputs::Xp5(_)) => StartupInputs::Xp5(xp5::Startup {
-            update: request.update,
-            manifest: None,
-            boot_rom: request.boot_rom,
-            card_image: None,
-            card_files: request.card_files,
-            second_card_image: None,
-            second_card_files: Vec::new(),
-            scene: None,
-            output: None,
-            mode: discovery_mode(request.discovery),
-            quantum: None,
-            camera_settings: Default::default(),
-        }),
-        _ if resolved.reference.soc.id == "xpp" => StartupInputs::Application(application::Startup {
-            update: request.update,
-            plan: request
-                .application_plan
-                .ok_or("this camera needs its application startup plan")?,
-            discovery: request.discovery,
-            quantum: None,
-            card_image: None,
-            card_files: request.card_files,
-        }),
-        _ => return Err(format!("{} cannot be opened as a camera", resolved.configuration.id)),
+        }
+    } else {
+        match resolved.configuration.inputs.as_ref() {
+            Some(RunInputs::Xp5(_)) => StartupInputs::Xp5(xp5::Startup {
+                update: request.update,
+                manifest: None,
+                boot_rom: request.boot_rom,
+                card_image: None,
+                card_files: request.card_files,
+                second_card_image: None,
+                second_card_files: Vec::new(),
+                scene: None,
+                output: None,
+                mode: discovery_mode(request.discovery),
+                quantum: None,
+                camera_settings: Default::default(),
+            }),
+            _ if resolved.reference.soc.id == "xpp" => {
+                StartupInputs::Application(application::Startup {
+                    update: request.update,
+                    plan: request
+                        .application_plan
+                        .ok_or("this camera needs its application startup plan")?,
+                    discovery: request.discovery,
+                    quantum: None,
+                    card_image: None,
+                    card_files: request.card_files,
+                })
+            }
+            _ => {
+                return Err(format!(
+                    "{} cannot be opened as a camera",
+                    resolved.configuration.id
+                ));
+            }
+        }
     };
     let mut camera = open(resolved, inputs)?;
     media::attach(&mut camera.session, None, &card_after_open)?;
@@ -949,19 +991,28 @@ pub fn open(resolved: ResolvedConfiguration, inputs: StartupInputs) -> Result<Ca
     if resolved.reference.soc.id == "xp4" {
         return Err("XP4 uses the application CLI path and cannot be opened as a Camera".into());
     }
+    let exr2_run = is_exr2_run(&resolved);
+    let exr2_ticks = match resolved.configuration.inputs.as_ref() {
+        Some(RunInputs::Exr2(inputs)) => Some(inputs.mcu.rtc.ticks_per_second),
+        None if exr2_run => Some(
+            resolved
+                .configuration
+                .preset
+                .as_ref()
+                .and_then(|preset| preset.ticks_per_second)
+                .ok_or("EXR II run without startup inputs declares no board timer rate")?,
+        ),
+        _ => None,
+    };
     match (resolved.configuration.inputs.as_ref(), inputs) {
-        (Some(RunInputs::Exr2(_)), StartupInputs::Exr2 { options, mode }) => {
-            let ticks_per_second = match resolved.configuration.inputs.as_ref() {
-                Some(RunInputs::Exr2(inputs)) => inputs.mcu.rtc.ticks_per_second,
-                _ => return Err("EXR II startup inputs are absent".into()),
-            };
+        (_, StartupInputs::Exr2 { options, mode }) if exr2_run => {
             let session = open_exr2(resolved, options, mode)?;
             let quantum = session_quantum(&session)?;
             let read_limit = graph_read_limit(&session)?;
             Ok(Camera {
                 session,
                 read_limit,
-                ticks_per_second,
+                ticks_per_second: exr2_ticks.ok_or("EXR II run declares no board timer rate")?,
                 quantum,
                 #[cfg(all(feature = "xp5-startup", not(target_arch = "wasm32")))]
                 xp5: None,
@@ -997,6 +1048,15 @@ pub fn open(resolved: ResolvedConfiguration, inputs: StartupInputs) -> Result<Ca
     }
 }
 
+/// Whether a configuration runs on EXR II, either from declared startup inputs
+/// or from a body construction that carries its reset values.
+fn is_exr2_run(resolved: &ResolvedConfiguration) -> bool {
+    matches!(
+        resolved.configuration.inputs.as_ref(),
+        Some(RunInputs::Exr2(_))
+    ) || (resolved.configuration.inputs.is_none() && exr2::available(resolved))
+}
+
 /// Optional instruction-entry trace shared by native boot workflows.
 pub struct TraceOutput {
     pub path: PathBuf,
@@ -1005,21 +1065,25 @@ pub struct TraceOutput {
 
 impl TraceOutput {
     pub fn begin(
-        &self, session: &Session,
+        &self,
+        session: &Session,
     ) -> Result<fujimod_emulator::board::observation::PcTrace, String> {
         session.board.trace_pcs(self.limit)
     }
 
     pub fn write(
-        &self, trace: fujimod_emulator::board::observation::PcTrace,
+        &self,
+        trace: fujimod_emulator::board::observation::PcTrace,
     ) -> Result<(), String> {
         self.write_entries(trace.take())
     }
 
     pub fn write_entries(
-        &self, entries: fujimod_emulator::board::observation::PcEntries,
+        &self,
+        entries: fujimod_emulator::board::observation::PcEntries,
     ) -> Result<(), String> {
-        let file = File::create(&self.path).map_err(|error| format!("{}: {error}", self.path.display()))?;
+        let file = File::create(&self.path)
+            .map_err(|error| format!("{}: {error}", self.path.display()))?;
         let mut writer = std::io::BufWriter::new(file);
         serde_json::to_writer(&mut writer, &entries).map_err(|error| error.to_string())?;
         std::io::Write::flush(&mut writer).map_err(|error| error.to_string())
@@ -1047,7 +1111,11 @@ pub fn save_snapshot(session: &Session, path: &Path) -> Result<(), String> {
 
 /// Construct an unexecuted strict board from explicitly selected files.
 /// No directory search, downloaded image, captured default or firmware patch is used.
-fn open_exr2(resolved: ResolvedConfiguration, options: Options, mode: Mode) -> Result<Session, String> {
+fn open_exr2(
+    resolved: ResolvedConfiguration,
+    options: Options,
+    mode: Mode,
+) -> Result<Session, String> {
     let mut prepared = prepared(resolved)?;
     if options.access_point.is_some() || options.capability_reply.is_some() {
         prepared.set_mt5931(options.access_point, options.capability_reply)?;
@@ -1057,6 +1125,9 @@ fn open_exr2(resolved: ResolvedConfiguration, options: Options, mode: Mode) -> R
     }
     if let Some(layout) = &options.card_layout {
         prepared.set_card_layout(layout)?;
+    }
+    if let Some(fault) = &options.card_initialization_fault {
+        prepared.set_card_initialization_fault(fault)?;
     }
     let update = checked(&options.update, &prepared.update)?;
     let boot_rom = checked(&options.boot_rom, &prepared.boot_rom.content)?;
@@ -1137,11 +1208,29 @@ impl Prepared {
             .and_then(Value::as_object_mut)
             .ok_or("run SD card host has no options")?;
         if options.contains_key("latency") {
-            return Err(
-                "run SD card host has a measured timing model, not transfer ticks".into(),
-            );
+            return Err("run SD card host has a measured timing model, not transfer ticks".into());
         }
         options.insert("transfer_ticks".into(), json!(ticks));
+        Ok(())
+    }
+    /// Model the SD host's initialization fault, as the catalog device model
+    /// names it: an object such as
+    /// {"reject_standby_cmd3_and_cmd8_once_after": 2}, or "reject_cmd8".
+    fn set_card_initialization_fault(&mut self, fault: &Value) -> Result<(), String> {
+        let nodes = self
+            .devices_value
+            .get_mut("nodes")
+            .and_then(Value::as_array_mut)
+            .ok_or("prepared devices have no node list")?;
+        let sd = nodes
+            .iter_mut()
+            .find(|node| node.get("name").and_then(Value::as_str) == Some("sd"))
+            .ok_or("run has no modeled SD card host")?;
+        let options = sd
+            .pointer_mut("/model/options")
+            .and_then(Value::as_object_mut)
+            .ok_or("run SD card host has no options")?;
+        options.insert("initialization_fault".into(), fault.clone());
         Ok(())
     }
     fn set_mt5931(
@@ -1215,7 +1304,10 @@ struct RestartBuilder {
 impl fujimod_emulator_session::power_cycle::ColdBoot for RestartBuilder {
     fn build(&mut self, tick: u64, counts: Vec<u64>, packet: [u8; 16]) -> Result<Session, String> {
         open_prepared_epoch(
-            self.prepared.duplicate()?, self.inputs.clone(), self.mode, Some((tick, counts, packet)),
+            self.prepared.duplicate()?,
+            self.inputs.clone(),
+            self.mode,
+            Some((tick, counts, packet)),
         )
     }
 }
@@ -1226,9 +1318,17 @@ pub fn open_prepared(prepared: Prepared, inputs: InputBytes) -> Result<Session, 
     open_prepared_mode(prepared, inputs, Mode::Strict)
 }
 
-fn open_prepared_mode(prepared: Prepared, inputs: InputBytes, mode: Mode) -> Result<Session, String> {
+fn open_prepared_mode(
+    prepared: Prepared,
+    inputs: InputBytes,
+    mode: Mode,
+) -> Result<Session, String> {
     let cycle = if prepared.resolved.reference.firmware.id == "x70-110" {
-        Some(RestartBuilder { prepared: prepared.duplicate()?, inputs: inputs.clone(), mode })
+        Some(RestartBuilder {
+            prepared: prepared.duplicate()?,
+            inputs: inputs.clone(),
+            mode,
+        })
     } else {
         None
     };
@@ -1329,11 +1429,16 @@ fn open_prepared_epoch(
     }
 
     if let Some(packet_bytes) = &settings {
-        settings_packet(&mut devices, &prepared.mcu, packet_bytes)?;
+        settings_packet(&mut devices, prepared.mcu.as_ref(), packet_bytes)?;
     }
     let declared = match prepared.resolved.configuration.inputs.as_ref() {
         Some(RunInputs::Exr2(inputs)) => inputs.settings.clone(),
-        _ => None,
+        _ => prepared
+            .resolved
+            .configuration
+            .preset
+            .as_ref()
+            .and_then(|preset| preset.settings.clone()),
     };
     let mut header_applied = false;
     match &declared {
@@ -1368,8 +1473,12 @@ fn open_prepared_epoch(
             let built =
                 fujimod_settings::build(layout, &assets["nand_base"], &declared.requested, None)?;
             if let Some(profile) = built.profile {
-                settings_packet(&mut devices, &prepared.mcu, &profile.header)?;
-                header_applied = true;
+                // The header is delivered through an MCU register endpoint; a
+                // body without one keeps only the settings bank.
+                if prepared.mcu.is_some() {
+                    settings_packet(&mut devices, prepared.mcu.as_ref(), &profile.header)?;
+                    header_applied = true;
+                }
             }
             let mut names = BTreeMap::new();
             for (section, bytes) in camera {
@@ -1380,8 +1489,17 @@ fn open_prepared_epoch(
                 names.insert(section, name);
             }
             let nand = &mut scene["nands"]["nand"];
-            *nand = json!({"kind": "settings", "options": nand["options"], "base": "nand_base",
-                "layout": layout, "requested": declared.requested, "camera": names});
+            // Without a camera's bank sections the bank can only be fabricated
+            // from the update's defaults table over zero bytes, which stock
+            // firmware reads as a valid bank. Leave the bank erased so the
+            // firmware copies the defaults image the update installed instead.
+            *nand = if names.is_empty() {
+                json!({"kind": "profile", "options": nand["options"], "base": "nand_base",
+                    "layout": layout, "requested": declared.requested})
+            } else {
+                json!({"kind": "settings", "options": nand["options"], "base": "nand_base",
+                    "layout": layout, "requested": declared.requested, "camera": names})
+            };
         }
         None if !camera.is_empty() => {
             return Err("this run declares no settings, but camera sections were supplied".into());
@@ -1416,11 +1534,13 @@ fn open_prepared_epoch(
         }
     }
     if let Some((_, _, packet)) = &epoch {
-        settings_packet(&mut devices, &prepared.mcu, packet)?;
+        settings_packet(&mut devices, prepared.mcu.as_ref(), packet)?;
     }
     let graph = prepared.execution;
     graph.validate()?;
-    let plan = if settings.is_some() || header_applied || clock_seconds_2000.is_some()
+    let plan = if settings.is_some()
+        || header_applied
+        || clock_seconds_2000.is_some()
         || epoch.is_some()
     {
         Plan::parse(&serde_json::to_vec(&devices).map_err(|e| e.to_string())?)?
@@ -1452,7 +1572,11 @@ fn open_prepared_epoch(
     let resources = serde_json::from_value::<preparation::Spec>(scene.clone())
         .map_err(|e| e.to_string())?
         .build(&assets)?;
-    let built = plan.build(resources, epoch.as_ref().map_or(0, |e| e.0), &mut RefuseAdapters)?;
+    let built = plan.build(
+        resources,
+        epoch.as_ref().map_or(0, |e| e.0),
+        &mut RefuseAdapters,
+    )?;
     let bus = Bus::from_graph(mode, built.graph)?;
     let mut options = factory::Options::new(prepared.execution_policy.engine);
     if epoch.is_none()
@@ -1463,11 +1587,7 @@ fn open_prepared_epoch(
     if let Some((tick, counts, _)) = epoch {
         options = options.with_epoch(tick, counts);
     }
-    let mut board = graph.build(
-        options,
-        bus,
-        None,
-    )?;
+    let mut board = graph.build(options, bus, None)?;
     for controller in built.core_interrupts {
         board.configure_core_interrupts(
             controller.core,
@@ -1497,8 +1617,7 @@ fn open_prepared_epoch(
 
 /// A stopped, passive boot observation. `rec` also identifies the first-start
 /// recording role (`system_mode == 3`) after its menus close.
-#[derive(Clone, Debug, Serialize)]
-#[derive(tsify::Tsify)]
+#[derive(Clone, Debug, Serialize, tsify::Tsify)]
 #[tsify(hashmap_as_object, missing_as_null)]
 pub struct RecReport {
     pub status: String,
@@ -1526,12 +1645,12 @@ fn word(session: &Session, address: u64) -> Result<u32, String> {
 }
 fn observe(session: &Session, spec: &Prepared, presses: usize) -> Result<RecReport, String> {
     let o = &spec.observation;
-    let r = &o.readiness;
     let wide = |address| -> Result<u64, String> {
         let mut bytes = [0; 8];
         session.board.read_physical(address, &mut bytes)?;
         Ok(u64::from_le_bytes(bytes))
     };
+    let r = &o.readiness;
     let one = wide(r.category_one)?;
     let two = wide(r.category_two)?;
     let pending = one & (1 << 9) != 0
@@ -1609,7 +1728,10 @@ impl Driver<'_> {
         let now: u64 = session.board.instruction_counts().iter().sum();
         let pause = now.saturating_add(1_000_000).min(self.limits.instructions);
         let until = until.into_iter().chain((self.action)(session)?).min();
-        if !self.limits.step(session, spec.quantum, Some(pause), until)? {
+        if !self
+            .limits
+            .step(session, spec.quantum, Some(pause), until)?
+        {
             return Err("board is quiescent without an input or device deadline".into());
         }
         Ok(())
@@ -1664,7 +1786,14 @@ fn press_setup_key(
 ) -> Result<(), String> {
     let selection = &spec.resolved.reference;
     let key = |session: &mut Session, pressed| {
-        fujimod_emulator_controls::set_key(session, selection, &s.located, name, pressed, EXR2_TICKS_PER_SECOND)
+        fujimod_emulator_controls::set_key(
+            session,
+            selection,
+            &s.located,
+            name,
+            pressed,
+            EXR2_TICKS_PER_SECOND,
+        )
     };
     key(session, true)?;
     let held = driver.advance_ticks(session, spec, s.hold_ticks);
@@ -1681,7 +1810,10 @@ fn setup_key(
     driver: &mut Driver<'_>,
     presses: &mut usize,
 ) -> Result<(), String> {
-    let start = spec.first_start.as_ref().ok_or("first-start policy is absent")?;
+    let start = spec
+        .first_start
+        .as_ref()
+        .ok_or("first-start policy is absent")?;
     *presses += 1;
     press_setup_key(session, spec, start, key, driver)
 }
@@ -1795,7 +1927,14 @@ pub fn to_rec_with(
     duration: Option<std::time::Duration>,
     observe_window: impl FnMut(&mut Session, &RecReport) -> Result<(), String>,
 ) -> Result<RecReport, String> {
-    to_rec_with_actions(session, instruction_limit, duration, true, |_| Ok(None), observe_window)
+    to_rec_with_actions(
+        session,
+        instruction_limit,
+        duration,
+        true,
+        |_| Ok(None),
+        observe_window,
+    )
 }
 
 /// Run with explicit scheduled host actions before each scheduler window.
@@ -1809,8 +1948,17 @@ pub fn to_rec_with_actions(
 ) -> Result<RecReport, String> {
     let mut span = fujimod_perf::span(fujimod_perf::SpanKind::Boot);
     let start = boot_progress(session);
-    let limits = host::Limits::new(session, Some(instruction_limit), duration, EXR2_TICKS_PER_SECOND)?;
-    let mut driver = Driver { limits, action: &mut action, automatic_setup };
+    let limits = host::Limits::new(
+        session,
+        Some(instruction_limit),
+        duration,
+        EXR2_TICKS_PER_SECOND,
+    )?;
+    let mut driver = Driver {
+        limits,
+        action: &mut action,
+        automatic_setup,
+    };
     let result = to_rec_inner(session, &mut driver, &mut observe_window);
     span.guest(start, boot_progress(session));
     result
@@ -1840,7 +1988,8 @@ fn to_rec_inner(
                 "instruction-limit"
             } else {
                 "time-limit"
-            }.into();
+            }
+            .into();
             return Ok(report);
         }
         let presented = report.scanout_instance.is_some();
@@ -1854,7 +2003,8 @@ fn to_rec_inner(
             report.status = "rec".into();
             return Ok(report);
         }
-        let result = if driver.automatic_setup && report.ui_mode == spec.observation.setup_mode
+        let result = if driver.automatic_setup
+            && report.ui_mode == spec.observation.setup_mode
             && report.system_mode == 3
             && report.menu_active != 0
             && report.pending_mode == 0
@@ -2052,8 +2202,14 @@ pub fn lcd_frames(
     Ok(vec![fujimod_emulator_devices::graphics::scanout::Frame {
         output: instance,
         sequence: 0,
-        width: frame.width.try_into().map_err(|_| "frame width exceeds u32")?,
-        height: frame.height.try_into().map_err(|_| "frame height exceeds u32")?,
+        width: frame
+            .width
+            .try_into()
+            .map_err(|_| "frame width exceeds u32")?,
+        height: frame
+            .height
+            .try_into()
+            .map_err(|_| "frame height exceeds u32")?,
         rgba,
     }])
 }

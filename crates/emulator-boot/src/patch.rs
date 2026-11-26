@@ -50,11 +50,16 @@ fn bytes(text: &str) -> Result<Vec<u8>, String> {
 
 fn check_range(ranges: &[Range<u64>], address: u64, length: u64) -> Result<(), String> {
     if let Some(end) = address.checked_add(length)
-        && (ranges.is_empty() || ranges.iter().any(|range| range.contains(&address) && end <= range.end))
+        && (ranges.is_empty()
+            || ranges
+                .iter()
+                .any(|range| range.contains(&address) && end <= range.end))
     {
         return Ok(());
     }
-    Err(format!("patch at {address:#x}+{length:#x} is outside configured RAM windows"))
+    Err(format!(
+        "patch at {address:#x}+{length:#x} is outside configured RAM windows"
+    ))
 }
 
 /// Ordered checked byte replacements relative to the current run.
@@ -66,13 +71,21 @@ pub struct Schedule {
 impl Schedule {
     pub fn from_path(path: Option<&Path>, allowed: &[Range<u64>]) -> Result<Self, String> {
         match path {
-            Some(path) => Ok(Self { patches: load(path, allowed)?.into() }),
+            Some(path) => Ok(Self {
+                patches: load(path, allowed)?.into(),
+            }),
             None => Ok(Self::default()),
         }
     }
 
     /// Apply at the stopped boundary and return the next guest deadline.
-    pub fn advance(&mut self, memory: &dyn Memory, now: u64, start: u64, ticks_per_second: u64) -> Result<Option<u64>, String> {
+    pub fn advance(
+        &mut self,
+        memory: &dyn Memory,
+        now: u64,
+        start: u64,
+        ticks_per_second: u64,
+    ) -> Result<Option<u64>, String> {
         let deadline = |patch: &Patch| start.saturating_add(patch.at_ticks(ticks_per_second));
         while let Some(patch) = self.patches.front() {
             let at = deadline(patch);
@@ -96,8 +109,14 @@ fn load(path: &Path, allowed: &[Range<u64>]) -> Result<Vec<Patch>, String> {
         .map(|entry| {
             let original = bytes(&entry.original_hex)?;
             let patched = bytes(&entry.patched_hex)?;
-            if original.is_empty() || original.len() != patched.len() || entry.reason.trim().is_empty() {
-                return Err(format!("patch at {:#x} needs equal nonempty byte strings and a reason", entry.address));
+            if original.is_empty()
+                || original.len() != patched.len()
+                || entry.reason.trim().is_empty()
+            {
+                return Err(format!(
+                    "patch at {:#x} needs equal nonempty byte strings and a reason",
+                    entry.address
+                ));
             }
             check_range(allowed, entry.address, original.len() as u64)?;
             Ok(Patch {
@@ -168,7 +187,8 @@ mod tests {
     }
 
     fn sample(name: &str) -> std::path::PathBuf {
-        let path = std::env::temp_dir().join(format!("patch-sample-{name}-{}.toml", std::process::id()));
+        let path =
+            std::env::temp_dir().join(format!("patch-sample-{name}-{}.toml", std::process::id()));
         std::fs::write(
             &path,
             "[[patch]]\naddress = 0xfa2057f6\noriginal_hex = \"0000\"\npatched_hex = \"00bf\"\nat_ms = 5\nreason = \"x\"\n\

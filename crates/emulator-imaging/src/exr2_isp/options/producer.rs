@@ -1,6 +1,6 @@
 //! Plan options of the EXR II statistics producer model in `fujimod-emulator-exr2-isp`.
-use serde::{Deserialize, Serialize};
 use crate::exr2_isp::dma;
+use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]

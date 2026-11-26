@@ -35,7 +35,9 @@ for (const type of types) {
       session: { scenes: number[]; profile: { ticks: number }; refusals: Record<string, string> };
     };
     assert(result.passed);
-    assert(await page.evaluate(() => crossOriginIsolated && typeof SharedArrayBuffer === 'function'));
+    assert(
+      await page.evaluate(() => crossOriginIsolated && typeof SharedArrayBuffer === 'function'),
+    );
     assert.ok(result.frames.length >= 2);
     assert.ok(
       result.frames.some(

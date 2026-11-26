@@ -2,8 +2,8 @@
 //! Six 10-bit fields occupy registers2..7 (wire bits11..2); register B
 //! retains an opaque 12-bit control value. MISO is an explicit pin input.
 //! No actuator, calibration completion, or companion reply is synthesized.
-use fujimod_emulator_devices::checkpoint::Checkpoint;
 use super::serial::{Endpoint, Frame};
+use fujimod_emulator_devices::checkpoint::Checkpoint;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 
@@ -59,7 +59,10 @@ impl Endpoint for CalibrationRegisters {
     }
     fn validate_checkpoint(&self, saved: &Checkpoint) -> Result<(), String> {
         let (miso_high, state): (bool, State) = saved.decode(self.name())?;
-        if miso_high != self.miso_high || (state.channels.iter().flatten().any(|&n| n > 0x3ff) || state.control.is_some_and(|n| n > 0xfff)) {
+        if miso_high != self.miso_high
+            || (state.channels.iter().flatten().any(|&n| n > 0x3ff)
+                || state.control.is_some_and(|n| n > 0xfff))
+        {
             return Err("invalid calibration register checkpoint".into());
         }
         Ok(())

@@ -4,9 +4,10 @@ use std::{collections::BTreeMap, sync::LazyLock};
 
 const IMAGE: &[u8] = include_bytes!("../../assets/sd-boot-v1-exr-loader.generated.bin");
 pub(crate) static LAYOUT: LazyLock<Layout> = LazyLock::new(|| {
-    let layout: Layout =
-        serde_json::from_str(include_str!("../../assets/sd-boot-v1-exr-loader.generated.json"))
-            .expect("checked EXR SD loader layout");
+    let layout: Layout = serde_json::from_str(include_str!(
+        "../../assets/sd-boot-v1-exr-loader.generated.json"
+    ))
+    .expect("checked EXR SD loader layout");
     assert_eq!(layout.schema, 1, "EXR SD loader layout schema");
     assert_eq!(layout.image_bytes, IMAGE.len(), "EXR SD loader image size");
     assert_eq!(layout.stage.offset, 0);

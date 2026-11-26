@@ -50,7 +50,10 @@ pub fn sha256_hex(bytes: &[u8]) -> String {
 }
 
 fn decode(update: &[u8], section: &Section) -> Result<Region, String> {
-    let size = section.size.or(section.decoded_size).ok_or("section without a size")?;
+    let size = section
+        .size
+        .or(section.decoded_size)
+        .ok_or("section without a size")?;
     let encoding = match section.encoding.as_str() {
         "raw" => Encoding::Raw,
         "method4" => Encoding::Method4,
@@ -66,7 +69,11 @@ fn decode(update: &[u8], section: &Section) -> Result<Region, String> {
     };
     let image = fujimod_firmware::decode(update, std::slice::from_ref(&mapping))
         .map_err(|error| format!("{}: {error}", section.name))?;
-    let unit = image.units.into_iter().next().ok_or("decoder returned no unit")?;
+    let unit = image
+        .units
+        .into_iter()
+        .next()
+        .ok_or("decoder returned no unit")?;
     let sha256 = sha256_hex(&unit.bytes);
     if sha256 != section.sha256 {
         return Err(format!(
@@ -74,7 +81,12 @@ fn decode(update: &[u8], section: &Section) -> Result<Region, String> {
             section.name
         ));
     }
-    Ok(Region { name: section.name.clone(), address: section.address, bytes: unit.bytes, sha256 })
+    Ok(Region {
+        name: section.name.clone(),
+        address: section.address,
+        bytes: unit.bytes,
+        sha256,
+    })
 }
 
 impl Firmware {
@@ -108,7 +120,11 @@ impl Firmware {
     }
 
     /// Decode `firmware`'s bundled stream layout from `update`.
-    pub fn from_update(firmware: &str, update: Vec<u8>, load_sections: bool) -> Result<Self, String> {
+    pub fn from_update(
+        firmware: &str,
+        update: Vec<u8>,
+        load_sections: bool,
+    ) -> Result<Self, String> {
         let layout: Layout = toml::from_str(super::manifest::bundled(firmware)?.streams)
             .map_err(|error| format!("{firmware} stream layout: {error}"))?;
         let source_sha256 = sha256_hex(&update);
@@ -128,7 +144,13 @@ impl Firmware {
                 verification_regions.push(decode(&update, section)?);
             }
         }
-        Ok(Firmware { id: firmware.to_string(), source_sha256, regions, update, verification_regions })
+        Ok(Firmware {
+            id: firmware.to_string(),
+            source_sha256,
+            regions,
+            update,
+            verification_regions,
+        })
     }
 
     pub fn bytes(&self, address: u64, len: usize) -> Option<&[u8]> {

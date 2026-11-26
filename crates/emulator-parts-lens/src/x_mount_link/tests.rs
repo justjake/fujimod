@@ -574,7 +574,11 @@ fn declared_fixed_replies_answer_their_family_for_any_payload_and_nothing_else()
     {
         let counter = sequence as u16;
         assert_eq!(
-            word(&mut link, Packet::encode(request, family, false).0, &mut time),
+            word(
+                &mut link,
+                Packet::encode(request, family, false).0,
+                &mut time
+            ),
             0
         );
         assert_eq!(

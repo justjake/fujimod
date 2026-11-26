@@ -15,8 +15,7 @@ fn begin_guide(guide_id: &str) {
 
 #[pyfunction]
 fn end_guide() -> PyResult<String> {
-    serde_json::to_string(&fujimod_perf::end_guide())
-        .map_err(|cause| error(cause.to_string()))
+    serde_json::to_string(&fujimod_perf::end_guide()).map_err(|cause| error(cause.to_string()))
 }
 
 #[pyfunction]
@@ -98,9 +97,8 @@ fn write_chrome_trace(path: PathBuf) -> PyResult<()> {
 mod binding {
     #[pymodule_export]
     use super::{
-        add_bytes, begin_guide, begin_span, begin_wait, end_guide, end_span, record_wait_evaluation,
-        record_wait_stop, set_cpu_counters,
-        write_chrome_trace,
+        add_bytes, begin_guide, begin_span, begin_wait, end_guide, end_span,
+        record_wait_evaluation, record_wait_stop, set_cpu_counters, write_chrome_trace,
     };
 }
 

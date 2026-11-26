@@ -42,7 +42,12 @@ pub fn register_decoder(bus: &mut DeviceGraph, window: &DeviceWindow) -> Result<
     bus.register(
         window.base,
         window.size,
-        Box::new(Decoder::wide("xp5-jpeg-decoder", window.base, irq, run_ticks)?),
+        Box::new(Decoder::wide(
+            "xp5-jpeg-decoder",
+            window.base,
+            irq,
+            run_ticks,
+        )?),
     )?;
     Ok(())
 }
@@ -52,14 +57,16 @@ pub fn register(bus: &mut DeviceGraph, window: &DeviceWindow) -> Result<(), Stri
     bus.register(
         window.base,
         window.size,
-        Box::new(Encoder::new(
-            "xp5-jpeg-encoder",
-            window.base,
-            irq,
-            run_ticks,
-            Registers::Wide,
-        )?
-        .with_scene(fujimod_emulator_imaging::frame::host_still_422)),
+        Box::new(
+            Encoder::new(
+                "xp5-jpeg-encoder",
+                window.base,
+                irq,
+                run_ticks,
+                Registers::Wide,
+            )?
+            .with_scene(fujimod_emulator_imaging::frame::host_still_422),
+        ),
     )?;
     Ok(())
 }
@@ -91,7 +98,9 @@ mod tests {
         assert!(graph.at(0xffd1_1000).is_ok());
         let mut extra = window.clone();
         extra.base = 0xffd1_2000;
-        extra.options.insert("format".into(), toml::Value::Integer(1));
+        extra
+            .options
+            .insert("format".into(), toml::Value::Integer(1));
         assert!(super::register_decoder(&mut DeviceGraph::new(), &extra).is_err());
     }
 
@@ -174,7 +183,9 @@ mod tests {
         assert!(left[0] + 100 < right[0], "{left:?} {right:?}");
         assert!(left[1].abs_diff(128) <= 6 && right[2].abs_diff(128) <= 6);
         // The scene sits in the programmed window of the source buffer.
-        let line = h.bytes(SOURCE_AT + ((8 * PITCH_PIXELS + 16) * 2) as u64, width * 2).unwrap();
+        let line = h
+            .bytes(SOURCE_AT + ((8 * PITCH_PIXELS + 16) * 2) as u64, width * 2)
+            .unwrap();
         assert_eq!(line, bars(width, height).unwrap()[..width * 2]);
         assert!(h.bytes(SOURCE_AT, 32).unwrap().iter().all(|&b| b == 0));
     }

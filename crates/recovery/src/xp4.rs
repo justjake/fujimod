@@ -63,7 +63,9 @@ pub(crate) fn indicator_entry() -> Result<usize> {
     let code = asset.text.bytes();
     let mut calls = Vec::new();
     for site in (asset.symbols["ffinit_entry"]..asset.symbols["ffinit_dram_ready"]).step_by(4) {
-        if word(code, site)? >> 24 == 0xea && branch(code, site, 0xea)? == asset.symbols["ffinit_prepare"] {
+        if word(code, site)? >> 24 == 0xea
+            && branch(code, site, 0xea)? == asset.symbols["ffinit_prepare"]
+        {
             calls.push(site);
         }
     }
@@ -88,7 +90,15 @@ pub fn package(
         .ok_or_else(|| image::Error::Invalid("Missing XP4 preloaded data map".into()))?;
     let data = preload.install(inverted, &plan, setup.dat_offset, &mut ram)?;
     crate::green_led::preserve_loader_green(recipe, source, &mut ram)?;
-    let init = ffinit(inverted, setup, api, &ram, api.load_address, None, SdCardRead::Rom)?;
+    let init = ffinit(
+        inverted,
+        setup,
+        api,
+        &ram,
+        api.load_address,
+        None,
+        SdCardRead::Rom,
+    )?;
     Ok(vec![
         image::File::new("ffinit.bin", init)?,
         image::File::new("ffboot.bin", ram)?,
@@ -130,7 +140,15 @@ pub(super) fn rescue_baseline(
 ) -> Result<Vec<image::File>> {
     let plan = cold_plan(inverted, plan, cold)?;
     let ram = image::transform(inverted, &plan)?;
-    let init = ffinit(inverted, setup, api, &ram, api.load_address, None, SdCardRead::Rom)?;
+    let init = ffinit(
+        inverted,
+        setup,
+        api,
+        &ram,
+        api.load_address,
+        None,
+        SdCardRead::Rom,
+    )?;
     Ok(vec![
         image::File::new("ffinit.bin", init)?,
         image::File::new("ffboot.bin", ram)?,
@@ -562,7 +580,12 @@ pub fn ffinit(
 #[cfg(test)]
 mod tests;
 
-pub fn layout(setup: &Setup, api: &FileApi, base: u32, read: SdCardRead) -> Result<serde_json::Value> {
+pub fn layout(
+    setup: &Setup,
+    api: &FileApi,
+    base: u32,
+    read: SdCardRead,
+) -> Result<serde_json::Value> {
     let asset = &sd_loader::LAYOUT.ffinit;
     let symbols = &asset.symbols;
     let text = asset.text.bytes();

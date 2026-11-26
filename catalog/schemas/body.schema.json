@@ -3661,6 +3661,20 @@
       "oneOf": [
         {
           "additionalProperties": false,
+          "description": "fixed hardware.",
+          "properties": {
+            "kind": {
+              "const": "fixed",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
           "description": "encoder_stages hardware.",
           "properties": {
             "kind": {
@@ -3702,6 +3716,91 @@
           "type": "object"
         }
       ]
+    },
+    "ConstructionCommandRegisters": {
+      "additionalProperties": false,
+      "description": "One command-register endpoint with its declared prefix and register frames.",
+      "properties": {
+        "address": {
+          "description": "Seven-bit endpoint address.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "commands": {
+          "description": "Commands that open a register transaction.",
+          "items": {
+            "format": "uint64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "type": "array"
+        },
+        "prefix_mask": {
+          "description": "Bits of the prefix byte that select this endpoint's command bank.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "prefix_value": {
+          "description": "Value the prefix bits must carry.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "read_frames": {
+          "description": "Read frames keyed by the register that selects them.",
+          "items": {
+            "maxItems": 2,
+            "minItems": 2,
+            "prefixItems": [
+              {
+                "format": "uint64",
+                "minimum": 0,
+                "type": "integer"
+              },
+              {
+                "items": {
+                  "format": "uint64",
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                "type": "array"
+              }
+            ],
+            "type": "array"
+          },
+          "type": "array"
+        },
+        "register_mask": {
+          "description": "Register address bits carried by each data byte.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "write_masks": {
+          "description": "Registers that accept writes and the mask each write keeps.",
+          "items": {
+            "items": {
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "type": "array"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "address",
+        "commands",
+        "prefix_mask",
+        "prefix_value",
+        "register_mask",
+        "write_masks",
+        "read_frames"
+      ],
+      "type": "object"
     },
     "ConstructionCore": {
       "additionalProperties": false,
@@ -3769,7 +3868,14 @@
               "type": "array"
             },
             "focus": {
-              "$ref": "#/$defs/ConstructionFocus",
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/ConstructionFocus"
+                },
+                {
+                  "type": "null"
+                }
+              ],
               "description": "focus."
             },
             "gpio": {
@@ -3780,8 +3886,26 @@
               "const": "lens-unit",
               "type": "string"
             },
+            "nd": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/ConstructionNdFilter"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "ND filter."
+            },
             "optics": {
-              "$ref": "#/$defs/ConstructionOptics",
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/ConstructionOptics"
+                },
+                {
+                  "type": "null"
+                }
+              ],
               "description": "optics."
             },
             "options": {
@@ -3796,9 +3920,7 @@
           "required": [
             "kind",
             "completion",
-            "focus",
             "gpio",
-            "optics",
             "options",
             "pulses"
           ],
@@ -4081,6 +4203,20 @@
         },
         {
           "additionalProperties": false,
+          "description": "companion hardware.",
+          "properties": {
+            "kind": {
+              "const": "companion",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
           "description": "core-release hardware.",
           "properties": {
             "core": {
@@ -4197,6 +4333,25 @@
         },
         {
           "additionalProperties": false,
+          "description": "contact-actuator hardware.",
+          "properties": {
+            "gpio": {
+              "description": "GPIO output connection.",
+              "type": "string"
+            },
+            "kind": {
+              "const": "contact-actuator",
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "gpio"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
           "description": "exr2-interrupt-controller hardware.",
           "properties": {
             "base": {
@@ -4285,7 +4440,14 @@
           "description": "external-frames hardware.",
           "properties": {
             "activity": {
-              "$ref": "#/$defs/ConstructionActivity",
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/ConstructionActivity"
+                },
+                {
+                  "type": "null"
+                }
+              ],
               "description": "activity."
             },
             "images": {
@@ -4303,7 +4465,6 @@
           },
           "required": [
             "kind",
-            "activity",
             "images",
             "statistics"
           ],
@@ -4507,11 +4668,17 @@
             },
             "memory_outputs": {
               "description": "memory outputs.",
-              "type": "string"
+              "type": [
+                "string",
+                "null"
+              ]
             },
             "parameters": {
               "description": "parameters.",
-              "type": "string"
+              "type": [
+                "string",
+                "null"
+              ]
             },
             "phase_irqs": {
               "description": "phase irqs.",
@@ -4553,8 +4720,6 @@
           "required": [
             "kind",
             "edges",
-            "memory_outputs",
-            "parameters",
             "phase_irqs",
             "raw_irq",
             "readback_irq"
@@ -4671,7 +4836,10 @@
             },
             "memory_outputs": {
               "description": "memory outputs.",
-              "type": "string"
+              "type": [
+                "string",
+                "null"
+              ]
             },
             "routes": {
               "description": "routes.",
@@ -4685,7 +4853,6 @@
             "channels",
             "frames",
             "irq",
-            "memory_outputs",
             "routes"
           ],
           "type": "object"
@@ -4893,6 +5060,33 @@
         },
         {
           "additionalProperties": false,
+          "description": "serial-audio-transmitter hardware.",
+          "properties": {
+            "kind": {
+              "const": "serial-audio-transmitter",
+              "type": "string"
+            },
+            "routes": {
+              "description": "routes.",
+              "type": "string"
+            },
+            "sinks": {
+              "description": "sinks.",
+              "items": {
+                "$ref": "#/$defs/ConstructionSerialAudioSink"
+              },
+              "type": "array"
+            }
+          },
+          "required": [
+            "kind",
+            "routes",
+            "sinks"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
           "description": "serial-dma hardware.",
           "properties": {
             "kind": {
@@ -4962,7 +5156,10 @@
           "properties": {
             "cable": {
               "description": "cable.",
-              "type": "string"
+              "type": [
+                "string",
+                "null"
+              ]
             },
             "endpoints": {
               "description": "endpoints.",
@@ -4977,8 +5174,7 @@
             }
           },
           "required": [
-            "kind",
-            "cable"
+            "kind"
           ],
           "type": "object"
         },
@@ -5085,6 +5281,55 @@
       ],
       "type": "object"
     },
+    "ConstructionNdFilter": {
+      "additionalProperties": false,
+      "description": "Declared built-in ND filter facts.",
+      "properties": {
+        "aperture": {
+          "description": "Aperture wire the filter scales.",
+          "type": "string"
+        },
+        "factor": {
+          "description": "Transmission factor while inserted.",
+          "format": "double",
+          "type": "number"
+        },
+        "insert_mask": {
+          "description": "Insert coil mask.",
+          "format": "uint16",
+          "maximum": 65535,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "register": {
+          "description": "Register the filter reports through.",
+          "format": "uint16",
+          "maximum": 65535,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "remove_mask": {
+          "description": "Remove coil mask.",
+          "format": "uint16",
+          "maximum": 65535,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "transmission": {
+          "description": "Transmission wire the filter drives.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "aperture",
+        "factor",
+        "insert_mask",
+        "register",
+        "remove_mask",
+        "transmission"
+      ],
+      "type": "object"
+    },
     "ConstructionNodes": {
       "additionalProperties": false,
       "description": "Declared nodes facts.",
@@ -5158,6 +5403,15 @@
       "additionalProperties": false,
       "description": "Declared options clock facts.",
       "properties": {
+        "initial_seconds": {
+          "description": "Declared initial wall-clock seconds since 2000-01-01.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
         "maximum_seconds": {
           "description": "Declared maximum seconds.",
           "format": "uint64",
@@ -5220,7 +5474,7 @@
             "commands": {
               "description": "commands.",
               "items": {
-                "type": "string"
+                "$ref": "#/$defs/ConstructionCommandRegisters"
               },
               "type": "array"
             },
@@ -5238,7 +5492,10 @@
               "description": "prefix address.",
               "format": "uint64",
               "minimum": 0,
-              "type": "integer"
+              "type": [
+                "integer",
+                "null"
+              ]
             },
             "prefix_high": {
               "description": "prefix high.",
@@ -5268,7 +5525,7 @@
             "status": {
               "description": "status.",
               "items": {
-                "type": "string"
+                "$ref": "#/$defs/ConstructionStatusRegisters"
               },
               "type": "array"
             },
@@ -5282,7 +5539,14 @@
               "type": "array"
             },
             "touch": {
-              "$ref": "#/$defs/ConstructionTouch",
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/ConstructionTouch"
+                },
+                {
+                  "type": "null"
+                }
+              ],
               "description": "touch."
             }
           },
@@ -5290,14 +5554,12 @@
             "kind",
             "commands",
             "heartbeat_register",
-            "prefix_address",
             "prefix_high",
             "sensor_address",
             "sensor_fields",
             "stationary",
             "status",
-            "topology",
-            "touch"
+            "topology"
           ],
           "type": "object"
         },
@@ -5307,7 +5569,10 @@
           "properties": {
             "connected": {
               "description": "connected.",
-              "type": "boolean"
+              "type": [
+                "boolean",
+                "null"
+              ]
             },
             "kind": {
               "const": "secondary",
@@ -5427,7 +5692,6 @@
           },
           "required": [
             "kind",
-            "connected",
             "pwic_address",
             "pwic_masks",
             "pwic_modes",
@@ -5693,6 +5957,20 @@
       ],
       "type": "object"
     },
+    "ConstructionSerialAudioSink": {
+      "additionalProperties": false,
+      "description": "One serial audio transmitter sink's declared connection.",
+      "properties": {
+        "connected": {
+          "description": "Declared connection state.",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "connected"
+      ],
+      "type": "object"
+    },
     "ConstructionSoftware": {
       "additionalProperties": false,
       "description": "Declared software facts.",
@@ -5711,6 +5989,87 @@
       "required": [
         "line",
         "pulse"
+      ],
+      "type": "object"
+    },
+    "ConstructionStatusRegisters": {
+      "additionalProperties": false,
+      "description": "One register-byte endpoint with declared status replies.",
+      "properties": {
+        "address": {
+          "description": "Seven-bit endpoint address.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "status": {
+          "description": "Status frame before any transition selects another.",
+          "items": {
+            "format": "uint64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "maxItems": 2,
+          "minItems": 2,
+          "type": "array"
+        },
+        "transitions": {
+          "description": "Writes that select a different status frame.",
+          "items": {
+            "$ref": "#/$defs/ConstructionStatusTransition"
+          },
+          "type": "array"
+        },
+        "writable_registers": {
+          "description": "Registers the endpoint accepts writes to.",
+          "items": {
+            "format": "uint64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "address",
+        "writable_registers",
+        "status",
+        "transitions"
+      ],
+      "type": "object"
+    },
+    "ConstructionStatusTransition": {
+      "additionalProperties": false,
+      "description": "One status frame a register write selects.",
+      "properties": {
+        "data": {
+          "description": "Data byte the write carries.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "frame": {
+          "description": "Status frame the write selects.",
+          "items": {
+            "format": "uint64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "maxItems": 2,
+          "minItems": 2,
+          "type": "array"
+        },
+        "register": {
+          "description": "Register whose write selects the frame.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "register",
+        "data",
+        "frame"
       ],
       "type": "object"
     },

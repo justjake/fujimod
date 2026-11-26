@@ -87,11 +87,12 @@ with Board.open_camera(firmware="x70-110", boot="sd-card") as board:
     assert board.status()["status"] == "rec"
 ```
 
-`boot` is `"stock"`, `"sd-card"` or `"automatic-boot"`. `sd_card` names an SD
+`boot` is `"stock"`, `"sd-card"` or `"autostart"`. `sd_card` names an SD
 card directory: the card to run for the two card boots, or files added to an
-otherwise empty card for a stock boot. Omit it to use the release card for the
-two card boots, or add no files for a stock boot. `execution_policy` is
-`"exact"` or `"interactive"`. `boot_cache` restores the library's saved boot
+otherwise empty card for a stock boot. Omit it to download the release card into
+the state directory for the two card boots, or add no files for a stock boot.
+`execution_policy` is
+`"exact"` or `"interactive"`. `boot_cache` restores the state directory's saved boot
 when the same inputs were opened before and saves this one; `False` boots from
 scratch and saves nothing. `sd_card_present=False` models an empty slot and
 `sd_card_write_protected=True` asserts the card's write-protect contact;
@@ -115,11 +116,19 @@ session starts from internal flash with nothing held; `hold_controls=True`
 holds the catalog's SD-boot controls and starts from the card, and
 `fresh_card=True` puts the boot source's files on a new card instead.
 
+`Board.open_camera(update=..., boot_rom=..., flash=..., combination=...)` opens
+the emulator layer instead of a FujiMod preset: `update` and `boot_rom` name
+the firmware's two files in place of the library, `flash` starts from a saved
+internal-flash image, and `combination` holds a catalog power-on combination
+(`sd`, `firmware_update` or `service`). Its SD card is the `sd_card`
+directory's files.
+
 `Board.open_camera(start="loader", image=..., image_sha256=...)` places a
 caller-verified RAM image at address zero and starts the first core at the
-native loader, so the boot ROM never runs. The image must be given with a
-stock boot; `run_to_rec=False` then returns the board with the image in RAM
-before its first instruction.
+native loader, so the boot ROM never runs; the firmware files come from the
+library unless `update` and `boot_rom` name them.
+`run_to_rec=False` then returns the board with the image in RAM before its
+first instruction.
 
 The checked identity catalog is available through
 `fujimod.emulator.catalog`. `resolve_reference(body_id, firmware_id)` returns a

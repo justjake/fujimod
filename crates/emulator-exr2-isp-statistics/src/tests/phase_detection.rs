@@ -1,9 +1,11 @@
-use fujimod_emulator_devices::exr2::irq_routes::IrqRoutes;
 use crate::*;
-use fujimod_emulator_exr2_isp_testing::*;
 use fujimod_emulator_devices::Cx;
 use fujimod_emulator_devices::Device;
-fn phase(arithmetic: fujimod_emulator_imaging::exr2_isp::options::phase_detection::Arithmetic) -> (PhaseDetection, Memory, IrqRoutes) {
+use fujimod_emulator_devices::exr2::irq_routes::IrqRoutes;
+use fujimod_emulator_exr2_isp_testing::*;
+fn phase(
+    arithmetic: fujimod_emulator_imaging::exr2_isp::options::phase_detection::Arithmetic,
+) -> (PhaseDetection, Memory, IrqRoutes) {
     let routes = routes(0x33);
     let d = PhaseDetection::new(
         fujimod_emulator_imaging::exr2_isp::options::phase_detection::Options {
@@ -35,7 +37,9 @@ fn phase_config(d: &mut PhaseDetection, m: &mut Memory, packed: bool) {
 }
 #[test]
 fn paired_phase_sad_result_widths_deadline_and_cleanup() {
-    let (mut d, mut m, _) = phase(fujimod_emulator_imaging::exr2_isp::options::phase_detection::Arithmetic::PairedU16Sad);
+    let (mut d, mut m, _) = phase(
+        fujimod_emulator_imaging::exr2_isp::options::phase_detection::Arithmetic::PairedU16Sad,
+    );
     phase_config(&mut d, &mut m, false);
     for y in 0..8 {
         for x in 0usize..96 {
@@ -76,7 +80,9 @@ fn paired_phase_sad_result_widths_deadline_and_cleanup() {
 }
 #[test]
 fn packed12_aperture_and_unselected_arithmetic_refusal() {
-    let (mut d, mut m, _) = phase(fujimod_emulator_imaging::exr2_isp::options::phase_detection::Arithmetic::ApertureSad);
+    let (mut d, mut m, _) = phase(
+        fujimod_emulator_imaging::exr2_isp::options::phase_detection::Arithmetic::ApertureSad,
+    );
     phase_config(&mut d, &mut m, true);
     for y in 0..8 {
         for x in 0usize..96 {
@@ -107,14 +113,17 @@ fn packed12_aperture_and_unselected_arithmetic_refusal() {
     decoded.validate().unwrap();
     assert_eq!(decoded.phase_sample(0, 0), 0x2af0);
     assert_eq!(decoded.phase_sample(1, 0), 0x48c);
-    let (mut d, mut m, _) = phase(fujimod_emulator_imaging::exr2_isp::options::phase_detection::Arithmetic::Disabled);
+    let (mut d, mut m, _) =
+        phase(fujimod_emulator_imaging::exr2_isp::options::phase_detection::Arithmetic::Disabled);
     phase_config(&mut d, &mut m, true);
     reject(&mut d, &mut m, 0xfff24004, 0x81);
     assert_eq!(d.next_deadline(0), None);
 }
 #[test]
 fn phase_refuses_invalid_samples_and_route_changes_without_completion() {
-    let (mut d, mut m, routes) = phase(fujimod_emulator_imaging::exr2_isp::options::phase_detection::Arithmetic::PairedU16Sad);
+    let (mut d, mut m, routes) = phase(
+        fujimod_emulator_imaging::exr2_isp::options::phase_detection::Arithmetic::PairedU16Sad,
+    );
     phase_config(&mut d, &mut m, false);
     m.bytes[0x4000..0x4002].copy_from_slice(&0x4000u16.to_le_bytes());
     reject(&mut d, &mut m, 0xfff24004, 0x81);

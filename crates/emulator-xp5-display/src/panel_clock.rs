@@ -1,8 +1,8 @@
 //! Panel pixel-clock registers and frequency selection.
 //! Only the four display PLL banks are owned here. Request/lock latency
 //! is an explicit50us scheduling assumption; frequencies use guest N/D.
-use fujimod_emulator_devices::xp5::panel_clocks::Clocks;
 use fujimod_emulator_devices::checkpoint::Checkpoint;
+use fujimod_emulator_devices::xp5::panel_clocks::Clocks;
 use fujimod_emulator_devices::{Cx, Device};
 use fujimod_emulator_xp5_io::clocks::BANKS;
 use serde_json::Value;

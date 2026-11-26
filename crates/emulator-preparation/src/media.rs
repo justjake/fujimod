@@ -123,7 +123,9 @@ impl NandInput {
                         .keys()
                         .find(|name| layout.settings.get(*name).is_none_or(|s| s.store != "bank"))
                 {
-                    return Err(format!("A factory-fresh profile cannot hold setting {name}"));
+                    return Err(format!(
+                        "A factory-fresh profile cannot hold setting {name}"
+                    ));
                 }
                 let sections = camera
                     .into_iter()
@@ -131,7 +133,15 @@ impl NandInput {
                     .collect::<Result<BTreeMap<_, _>, String>>()?;
                 let camera = (!sections.is_empty()).then_some(&sections);
                 let profile = !factory_fresh;
-                settings_medium(options, asset(&base)?, &layout, &requested, camera, true, profile)
+                settings_medium(
+                    options,
+                    asset(&base)?,
+                    &layout,
+                    &requested,
+                    camera,
+                    true,
+                    profile,
+                )
             }
             Self::Profile {
                 options,
@@ -139,16 +149,29 @@ impl NandInput {
                 layout,
                 requested,
             } => {
-                if let Some(name) = requested
-                    .keys()
-                    .find(|name| layout.settings.get(*name).is_some_and(|s| s.store == "bank"))
-                {
+                if let Some(name) = requested.keys().find(|name| {
+                    layout
+                        .settings
+                        .get(*name)
+                        .is_some_and(|s| s.store == "bank")
+                }) {
                     return Err(format!("Profile input cannot hold bank setting {name}"));
                 }
                 if layout.profile.is_none() {
-                    return Err(format!("{} has no located user profile", layout.firmware_id));
+                    return Err(format!(
+                        "{} has no located user profile",
+                        layout.firmware_id
+                    ));
                 }
-                settings_medium(options, asset(&base)?, &layout, &requested, None, false, true)
+                settings_medium(
+                    options,
+                    asset(&base)?,
+                    &layout,
+                    &requested,
+                    None,
+                    false,
+                    true,
+                )
             }
         }
     }
@@ -364,10 +387,12 @@ mod card_tests {
     use super::*;
     #[test]
     fn committed_card_input_preserves_revision_and_sparse_allocation_bound() {
-        let mut card = fujimod_emulator_devices::parts::sd_card::Card::new(fujimod_emulator_devices::parts::sd_card::Options {
-            sectors: 0x800000,
-            max_dirty_sectors: 2,
-        })
+        let mut card = fujimod_emulator_devices::parts::sd_card::Card::new(
+            fujimod_emulator_devices::parts::sd_card::Options {
+                sectors: 0x800000,
+                max_dirty_sectors: 2,
+            },
+        )
         .unwrap();
         card.write_bytes(512, &[0x85; 512]).unwrap();
         card.write_bytes(512, &[0x42; 512]).unwrap();

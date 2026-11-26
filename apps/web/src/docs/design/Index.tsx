@@ -2,7 +2,11 @@ import { SiteFrame } from '../../ui/SiteFrame';
 
 /** Prototypes of camera screens, drawn with the design library in src/design. */
 const PROTOTYPES = [
-  { path: '/docs/design/custom-settings-editor/', name: 'Custom settings editor', summary: 'Edit a custom setting over live view, with the film editor over it.' },
+  {
+    path: '/docs/design/custom-settings-editor/',
+    name: 'Custom settings editor',
+    summary: 'Edit a custom setting over live view, with the film editor over it.',
+  },
 ];
 
 /** /docs/design/: the screen prototypes. */

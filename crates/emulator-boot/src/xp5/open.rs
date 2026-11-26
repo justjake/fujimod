@@ -5,18 +5,18 @@
 //! delegated to FujiMod's catalog-resolved XP5 session.
 
 use super::{
-    manifest::BootState,
     firmware::Firmware,
+    manifest::BootState,
     rom_start::{self, Entry, RomStart},
 };
 use fujimod_catalog::reference::{ProcessorModel, RegionSize, Soc};
 use fujimod_catalog_configuration::{RunInputs, RunScene};
 use fujimod_catalog_resolution::ResolvedConfiguration;
 use fujimod_emulator::board::{self, bus::Mode};
-use fujimod_emulator_cpu::{Register, arm64};
-use fujimod_emulator_session::Session;
 use fujimod_emulator_board_graph as graph;
+use fujimod_emulator_cpu::{Register, arm64};
 use fujimod_emulator_devices::{graph::DeviceWindow, xp5::panel_clocks};
+use fujimod_emulator_session::Session;
 use fujimod_emulator_xp5_board::{
     board as xp5_board,
     boot::{self as xp5_boot, MemoryImage},
@@ -43,10 +43,7 @@ pub(crate) struct Opened {
     pub read_limit: usize,
 }
 
-fn merge_image(
-    images: &mut Vec<MemoryImage>,
-    mut incoming: MemoryImage,
-) -> Result<(), String> {
+fn merge_image(images: &mut Vec<MemoryImage>, mut incoming: MemoryImage) -> Result<(), String> {
     let mut index = 0;
     while index < images.len() {
         let old = &images[index];
@@ -82,10 +79,7 @@ fn merge_image(
     Ok(())
 }
 
-fn initial_images(
-    firmware: &Firmware,
-    state: &BootState,
-) -> Result<Vec<MemoryImage>, String> {
+fn initial_images(firmware: &Firmware, state: &BootState) -> Result<Vec<MemoryImage>, String> {
     let mut images = Vec::new();
     if state.load_firmware {
         for region in &firmware.regions {
@@ -253,8 +247,12 @@ fn devices_and_resources(
                 let mut options = window.options.clone();
                 if let Some(directory) = run_directory {
                     options.entry("frame_dir").or_insert_with(|| {
-                        toml::Value::String(directory.join(format!("display-{:x}", window.base))
-                            .to_string_lossy().into_owned())
+                        toml::Value::String(
+                            directory
+                                .join(format!("display-{:x}", window.base))
+                                .to_string_lossy()
+                                .into_owned(),
+                        )
                     });
                 } else {
                     options.remove("frame_dir");
@@ -334,7 +332,9 @@ fn plan_caller_ram(
     dram_base: u64,
     dram_limit: u64,
 ) -> Result<RamPlan, String> {
-    let end = base.checked_add(size).ok_or("caller RAM region overflows")?;
+    let end = base
+        .checked_add(size)
+        .ok_or("caller RAM region overflows")?;
     if size == 0 {
         return Err(format!("caller RAM region {base:#x}+{size:#x} is empty"));
     }
@@ -397,7 +397,10 @@ fn plan_aperture(
         .checked_add(APERTURE_GRANULE - 1)
         .ok_or("window page range overflows")?
         & !(APERTURE_GRANULE - 1);
-    if let Some(&(start, stop)) = ranges.iter().find(|&&(start, stop)| start < last && first < stop) {
+    if let Some(&(start, stop)) = ranges
+        .iter()
+        .find(|&&(start, stop)| start < last && first < stop)
+    {
         return Err(format!(
             "window partly overlaps existing aperture or RAM {start:#x}..{stop:#x} \
              (its pages are {first:#x}..{last:#x})"
@@ -442,7 +445,8 @@ fn carve_out(
 
 /// Whether the boot manifest declares exactly `base..base+bytes` as RAM.
 fn caller_ram_declares(ram: &[super::manifest::RamRegion], base: u64, bytes: u64) -> bool {
-    ram.iter().any(|region| region.base == base && region.size == bytes)
+    ram.iter()
+        .any(|region| region.base == base && region.size == bytes)
 }
 
 /// Set `registers` (hex address -> value) on a power-controller part, keeping every register it
@@ -452,7 +456,9 @@ fn merge_power_registers(part: &mut toml::Table, registers: &toml::Value) -> Res
         u8::from_str_radix(key.trim_start_matches("0x"), 16)
             .map_err(|error| format!("power-controller register {key}: {error}"))
     };
-    let added = registers.as_table().ok_or("power-controller registers must be a table")?;
+    let added = registers
+        .as_table()
+        .ok_or("power-controller registers must be a table")?;
     let held = part
         .entry("registers")
         .or_insert_with(|| toml::Value::Table(toml::Table::new()))
@@ -481,7 +487,10 @@ fn rom_boot_state(state: &BootState, rom: &RomStart) -> Result<BootState, String
     state.load_firmware = false;
     state.preload.clear();
     let mut options = toml::Table::new();
-    options.insert("source_straps".into(), toml::Value::Integer(rom.source_straps.into()));
+    options.insert(
+        "source_straps".into(),
+        toml::Value::Integer(rom.source_straps.into()),
+    );
     options.insert("initial_control".into(), toml::Value::Integer(0));
     options.insert("initial_primary_control".into(), toml::Value::Integer(0));
     // A manifest may declare boot control for its loader start; the ROM start's straps replace it.
@@ -504,7 +513,9 @@ fn rom_boot_state(state: &BootState, rom: &RomStart) -> Result<BootState, String
             Some(0xff9b_0000)
         }
         Entry::CardHandoff(handoff) => {
-            fragment.power_controller_registers.clone_from(&handoff.power_controller_registers);
+            fragment
+                .power_controller_registers
+                .clone_from(&handoff.power_controller_registers);
             Some(handoff.slot)
         }
         Entry::SetupHandoff(_) => {
@@ -531,8 +542,14 @@ fn rom_boot_state(state: &BootState, rom: &RomStart) -> Result<BootState, String
             state.device.push(window);
             continue;
         };
-        let offset = |register: &toml::Value| register.get("offset").and_then(toml::Value::as_integer);
-        let added = window.options.get("registers").and_then(toml::Value::as_array).cloned().unwrap_or_default();
+        let offset =
+            |register: &toml::Value| register.get("offset").and_then(toml::Value::as_integer);
+        let added = window
+            .options
+            .get("registers")
+            .and_then(toml::Value::as_array)
+            .cloned()
+            .unwrap_or_default();
         let registers = existing
             .options
             .entry("registers")
@@ -540,17 +557,29 @@ fn rom_boot_state(state: &BootState, rom: &RomStart) -> Result<BootState, String
             .as_array_mut()
             .ok_or("bring-up stub registers must be an array")?;
         for register in added {
-            if !registers.iter().any(|listed| offset(listed) == offset(&register)) {
+            if !registers
+                .iter()
+                .any(|listed| offset(listed) == offset(&register))
+            {
                 registers.push(register);
             }
         }
     }
-    for options in fragment.window_options.into_iter().chain(rom.setup_window_options.iter().cloned()) {
+    for options in fragment
+        .window_options
+        .into_iter()
+        .chain(rom.setup_window_options.iter().cloned())
+    {
         let window = state
             .device
             .iter_mut()
             .find(|window| window.base == options.base)
-            .ok_or_else(|| format!("ROM start sets options on absent window {:#x}", options.base))?;
+            .ok_or_else(|| {
+                format!(
+                    "ROM start sets options on absent window {:#x}",
+                    options.base
+                )
+            })?;
         window.options.extend(options.set);
     }
     if !fragment.power_controller_registers.is_empty() {
@@ -563,13 +592,19 @@ fn rom_boot_state(state: &BootState, rom: &RomStart) -> Result<BootState, String
                 .collect(),
         );
         let mut found = false;
-        for window in state.device.iter_mut().filter(|window| window.kind == "spi-controller") {
+        for window in state
+            .device
+            .iter_mut()
+            .filter(|window| window.kind == "spi-controller")
+        {
             let Some(toml::Value::Array(endpoints)) = window.options.get_mut("endpoints") else {
                 continue;
             };
             for endpoint in endpoints {
                 let part = endpoint.get_mut("part").and_then(toml::Value::as_table_mut);
-                if let Some(part) = part.filter(|part| part.get("kind").and_then(toml::Value::as_str) == Some("power-controller")) {
+                if let Some(part) = part.filter(|part| {
+                    part.get("kind").and_then(toml::Value::as_str) == Some("power-controller")
+                }) {
                     // Registers the endpoint already holds (a user profile header) stay; the
                     // reset registers of this start replace only their own addresses.
                     merge_power_registers(part, &registers)?;
@@ -590,12 +625,23 @@ fn rom_boot_state(state: &BootState, rom: &RomStart) -> Result<BootState, String
         .find(|slot| slot.base == slot_base)
         .ok_or("early startup needs the SD card slot declared by its board facts")?;
     slot.present = rom.card_present;
-    slot.files = rom.card_files.iter().map(|(name, _)| (name.clone(), name.clone())).collect();
+    slot.files = rom
+        .card_files
+        .iter()
+        .map(|(name, _)| (name.clone(), name.clone()))
+        .collect();
     // The card model keeps only nonzero sectors and bounds them (the manifest's default holds a
     // stage file). A startup card also carries the RAM image (about 105 MiB), so the bound grows
     // with the files plus room for the FAT and directory sectors, up to the model's 1 GiB limit.
-    let file_sectors: usize = rom.card_files.iter().map(|(_, bytes)| bytes.len().div_ceil(512)).sum();
-    slot.format.max_dirty_sectors = slot.format.max_dirty_sectors.max((file_sectors + 8192).min(1 << 21));
+    let file_sectors: usize = rom
+        .card_files
+        .iter()
+        .map(|(_, bytes)| bytes.len().div_ceil(512))
+        .sum();
+    slot.format.max_dirty_sectors = slot
+        .format
+        .max_dirty_sectors
+        .max((file_sectors + 8192).min(1 << 21));
     Ok(state)
 }
 
@@ -710,7 +756,11 @@ pub(crate) fn open_from(
             if !is_a53 {
                 continue;
             }
-            let affinity = start.registers.iter().find(|(r, _)| *r == mpidr).map(|(_, v)| *v);
+            let affinity = start
+                .registers
+                .iter()
+                .find(|(r, _)| *r == mpidr)
+                .map(|(_, v)| *v);
             match &rom.entry {
                 Entry::MaskRom(_) => {
                     start.registers = vec![
@@ -759,7 +809,9 @@ pub(crate) fn open_from(
                 .filter(|drains| !drains.is_empty())
                 .ok_or("manifest moves the bus drain, which the body does not declare")?;
             let [drain] = drains.as_mut_slice() else {
-                return Err("manifest moves the bus drain, which the body declares more than once".into());
+                return Err(
+                    "manifest moves the bus drain, which the body declares more than once".into(),
+                );
             };
             drain.address = dram.bus_drain;
             dram.limit
@@ -797,13 +849,19 @@ pub(crate) fn open_from(
             .collect();
         match plan_caller_ram(region.base, region.size, &catalog, dram_base, dram_limit)? {
             RamPlan::Covered => {}
-            RamPlan::Promote => execution.ram.push(board::factory::Ram { base: region.base, size }),
+            RamPlan::Promote => execution.ram.push(board::factory::Ram {
+                base: region.base,
+                size,
+            }),
         }
         // Caller RAM wins over a SoC register aperture page under it (the X-T5 maps DRAM channel 2
         // from 0x80000000, where the SoC profile declares a 4-byte peripheral window). Device windows
         // are separate and still refuse an overlap.
-        execution.peripherals =
-            carve_out(std::mem::take(&mut execution.peripherals), region.base, region.size);
+        execution.peripherals = carve_out(
+            std::mem::take(&mut execution.peripherals),
+            region.base,
+            region.size,
+        );
     }
     for (core, processor) in resolved.reference.soc.processors.iter().enumerate() {
         if processor.model != ProcessorModel::CortexA53 {
@@ -850,7 +908,10 @@ pub(crate) fn open_from(
         let entry_memory = if mask_rom {
             (rom_start::ROM_BASE, rom_start::ROM_SIZE as u64, 5)
         } else {
-            let boot_sram = reference.soc.memory_regions.iter()
+            let boot_sram = reference
+                .soc
+                .memory_regions
+                .iter()
                 .find(|region| region.id == "boot-sram")
                 .ok_or("SD card handoff requires the SoC boot SRAM")?;
             let RegionSize::Bytes { bytes } = boot_sram.size else {
@@ -862,9 +923,14 @@ pub(crate) fn open_from(
             entry_memory,
             (FLASH_APERTURE_BASE, FLASH_APERTURE_SIZE as u64, 5),
         ] {
-            execution.peripherals = carve_out(std::mem::take(&mut execution.peripherals), base, bytes);
+            execution.peripherals =
+                carve_out(std::mem::take(&mut execution.peripherals), base, bytes);
             let size = usize::try_from(bytes).map_err(|_| "region exceeds host address space")?;
-            if !execution.ram.iter().any(|ram| ram.base == base && ram.size == size) {
+            if !execution
+                .ram
+                .iter()
+                .any(|ram| ram.base == base && ram.size == size)
+            {
                 execution.ram.push(board::factory::Ram { base, size });
             }
             // A manifest that declares this extent as RAM (the X-T5's boot SRAM) already mapped
@@ -909,18 +975,30 @@ pub(crate) fn open_from(
         }
         for window in &state.device {
             let mut occupied: Vec<(u64, u64)> = Vec::new();
-            for existing in execution.peripherals.iter().filter(|existing| existing.core == core) {
+            for existing in execution
+                .peripherals
+                .iter()
+                .filter(|existing| existing.core == core)
+            {
                 occupied.push((existing.address, existing.size as u64));
             }
             for ram in &execution.ram {
                 occupied.push((ram.base, ram.size as u64));
             }
-            for mapping in execution.mappings.iter().filter(|mapping| mapping.core == core) {
+            for mapping in execution
+                .mappings
+                .iter()
+                .filter(|mapping| mapping.core == core)
+            {
                 occupied.push((mapping.address, mapping.size as u64));
             }
-            let planned = plan_aperture(window.base, window.size as u64, &occupied).map_err(
-                |error| format!("device window {} at {:#x}: {error}", window.kind, window.base),
-            )?;
+            let planned =
+                plan_aperture(window.base, window.size as u64, &occupied).map_err(|error| {
+                    format!(
+                        "device window {} at {:#x}: {error}",
+                        window.kind, window.base
+                    )
+                })?;
             if let Some((start, size)) = planned {
                 execution.peripherals.push(board::factory::Peripheral {
                     core,
@@ -933,19 +1011,31 @@ pub(crate) fn open_from(
         }
     }
     // Boot control also owns a secondary window outside its manifest entry.
-    if state.device.iter().any(|window| window.kind == "boot-control") {
+    if state
+        .device
+        .iter()
+        .any(|window| window.kind == "boot-control")
+    {
         for (core, processor) in resolved.reference.soc.processors.iter().enumerate() {
             if processor.model != ProcessorModel::CortexA53 {
                 continue;
             }
             let mut occupied: Vec<(u64, u64)> = Vec::new();
-            for existing in execution.peripherals.iter().filter(|existing| existing.core == core) {
+            for existing in execution
+                .peripherals
+                .iter()
+                .filter(|existing| existing.core == core)
+            {
                 occupied.push((existing.address, existing.size as u64));
             }
             for ram in &execution.ram {
                 occupied.push((ram.base, ram.size as u64));
             }
-            for mapping in execution.mappings.iter().filter(|mapping| mapping.core == core) {
+            for mapping in execution
+                .mappings
+                .iter()
+                .filter(|mapping| mapping.core == core)
+            {
                 occupied.push((mapping.address, mapping.size as u64));
             }
             if let Some((start, size)) = plan_aperture(0xfa14_0000, 4, &occupied)
@@ -980,7 +1070,9 @@ pub(crate) fn open_from(
                     .iter()
                     .any(|r| page < r.base + r.size as u64 && r.base < page + GRANULE)
                     || execution.peripherals.iter().any(|p| {
-                        p.core == core && page < p.address + p.size as u64 && p.address < page + GRANULE
+                        p.core == core
+                            && page < p.address + p.size as u64
+                            && p.address < page + GRANULE
                     });
                 if covered {
                     if let Some(start) = run.take() {
@@ -1008,15 +1100,20 @@ pub(crate) fn open_from(
     let aprofile = startup.aprofile;
     // A body whose catalog record declares ladders drives them through the
     // session's switch panel; a manifest copy of ladder wiring is refused.
-    if state.device.iter().any(|window| {
-        window.kind == "adc" && window.options.keys().any(|key| key != "samples")
-    }) {
+    if state
+        .device
+        .iter()
+        .any(|window| window.kind == "adc" && window.options.keys().any(|key| key != "samples"))
+    {
         return Err("controls come from the body's catalog ladders, not the boot manifest".into());
     }
     let ladders = fujimod_emulator_xp5_board::ladder_controls::ladders(&resolved)?;
     let panel = ladders
         .map(|options| -> Result<_, String> {
-            Ok((options, fujimod_emulator_xp5_board::ladder_controls::panel_names(&resolved)?))
+            Ok((
+                options,
+                fujimod_emulator_xp5_board::ladder_controls::panel_names(&resolved)?,
+            ))
         })
         .transpose()?;
     let run_scene = match resolved.configuration.scene.as_ref() {
@@ -1033,14 +1130,30 @@ pub(crate) fn open_from(
         &outputs,
         windows,
         &rom.map(RomStart::assets).unwrap_or_else(|| {
-            loader_cards.iter().flat_map(|card| card.assets.clone()).collect()
+            loader_cards
+                .iter()
+                .flat_map(|card| card.assets.clone())
+                .collect()
         }),
         &rom.map_or_else(
-            || loader_cards.iter().filter_map(|card| Some((card.slot, card.card.as_ref()?))).collect(),
-            |rom| rom.card_image.iter().map(|image| (super::loader_card::SLOT, &image.card)).collect::<Vec<_>>(),
+            || {
+                loader_cards
+                    .iter()
+                    .filter_map(|card| Some((card.slot, card.card.as_ref()?)))
+                    .collect()
+            },
+            |rom| {
+                rom.card_image
+                    .iter()
+                    .map(|image| (super::loader_card::SLOT, &image.card))
+                    .collect::<Vec<_>>()
+            },
         ),
         &reference.soc,
-        reference.soc.processors.iter()
+        reference
+            .soc
+            .processors
+            .iter()
             .position(|processor| processor.model == ProcessorModel::CortexM4),
     )?;
     if windows.is_empty() {
@@ -1049,7 +1162,10 @@ pub(crate) fn open_from(
     if let Some(profile) = profile {
         // The user profile's journal records, as declared seeds of the flash storage (a NOR
         // session overlay or initial NAND main-area input), so snapshots carry them.
-        let storage = resources.storage.as_ref().ok_or("a user profile needs flash storage")?;
+        let storage = resources
+            .storage
+            .as_ref()
+            .ok_or("a user profile needs flash storage")?;
         for (offset, bytes) in &profile.records {
             storage.seed_bytes(*offset, bytes)?;
         }
@@ -1096,7 +1212,9 @@ pub(crate) fn open_from(
     let dma_flash_shadow = rom.is_none()
         && matches!(resources.storage, Some(flash_storage::Medium::Nor(_)))
         && state.device.iter().any(|w| {
-            w.kind == "flash-storage" && w.base == FLASH_APERTURE_BASE && w.size as usize == FLASH_APERTURE_SIZE
+            w.kind == "flash-storage"
+                && w.base == FLASH_APERTURE_BASE
+                && w.size as usize == FLASH_APERTURE_SIZE
         });
     if dma_flash_shadow {
         let size = FLASH_APERTURE_SIZE;
@@ -1118,8 +1236,15 @@ pub(crate) fn open_from(
                 });
             }
         }
-        if !execution.ram.iter().any(|ram| ram.base == FLASH_APERTURE_BASE && ram.size == size) {
-            execution.ram.push(board::factory::Ram { base: FLASH_APERTURE_BASE, size });
+        if !execution
+            .ram
+            .iter()
+            .any(|ram| ram.base == FLASH_APERTURE_BASE && ram.size == size)
+        {
+            execution.ram.push(board::factory::Ram {
+                base: FLASH_APERTURE_BASE,
+                size,
+            });
         }
         execution.dma_mappings.push(board::memory::BusMapping {
             permissions: 1,
@@ -1128,7 +1253,9 @@ pub(crate) fn open_from(
     }
     let storage = resources.storage.clone();
     let read_limit = execution.ram.iter().try_fold(0usize, |bytes, region| {
-        bytes.checked_add(region.size).ok_or("XP5 RAM extent overflows")
+        bytes
+            .checked_add(region.size)
+            .ok_or("XP5 RAM extent overflows")
     })?;
     let gpio_node = windows
         .iter()
@@ -1155,7 +1282,9 @@ pub(crate) fn open_from(
             Some(CommandDial::Quadrature(dial)) => Some(encoder(dial)),
             _ => None,
         },
-        front: options.and_then(|options| options.front_dial.as_ref()).map(encoder),
+        front: options
+            .and_then(|options| options.front_dial.as_ref())
+            .map(encoder),
     };
     let (mut session, mut inputs) = xp5_boot::open(xp5_boot::OpenOptions {
         definition,
@@ -1185,8 +1314,12 @@ pub(crate) fn open_from(
             && std::env::var_os("FUJIMOD_MPROFILE_INSTRUCTIONS").is_none(),
     );
     if let Some(Entry::CardHandoff(handoff)) = rom.map(|rom| &rom.entry) {
-        let stage = session.card_read(&format!("{:#x}", handoff.slot), rom_start::CARD_FILE_NAME,
-            None, handoff.stage_max_bytes)?;
+        let stage = session.card_read(
+            &format!("{:#x}", handoff.slot),
+            rom_start::CARD_FILE_NAME,
+            None,
+            handoff.stage_max_bytes,
+        )?;
         if stage.is_empty() || stage.len() % 4 != 0 {
             return Err("SD card stage must contain whole AArch64 instructions".into());
         }
@@ -1198,8 +1331,8 @@ pub(crate) fn open_from(
     }
     // The setup start has no flash backing until the board declares the serial-NAND medium;
     // every other early start needs it.
-    let setup_without_flash = storage.is_none()
-        && rom.is_some_and(|rom| matches!(rom.entry, Entry::SetupHandoff(_)));
+    let setup_without_flash =
+        storage.is_none() && rom.is_some_and(|rom| matches!(rom.entry, Entry::SetupHandoff(_)));
     if dma_flash_shadow {
         shadow_flash_aperture(storage.as_ref(), &mut session)?;
         let storage = storage.clone().ok_or("flash backing is absent")?;
@@ -1239,7 +1372,8 @@ mod tests {
     #[test]
     fn an_entry_extent_the_manifest_declares_as_ram_is_not_mapped_twice() {
         let ram: Vec<super::super::manifest::RamRegion> =
-            toml::from_str::<toml::Table>("[[ram]]\nbase = 0xff800000\nsize = 0x40000\n").unwrap()["ram"]
+            toml::from_str::<toml::Table>("[[ram]]\nbase = 0xff800000\nsize = 0x40000\n").unwrap()
+                ["ram"]
                 .clone()
                 .try_into()
                 .unwrap();
@@ -1289,8 +1423,10 @@ mod tests {
 
     #[test]
     fn start_registers_keep_a_profile_header_and_replace_their_own_addresses() {
-        let mut part: toml::Table =
-            toml::from_str("kind = \"power-controller\"\n[registers]\n\"0x1f\" = 7\n\"0x10\" = 9\n").unwrap();
+        let mut part: toml::Table = toml::from_str(
+            "kind = \"power-controller\"\n[registers]\n\"0x1f\" = 7\n\"0x10\" = 9\n",
+        )
+        .unwrap();
         let start: toml::Value = toml::from_str("\"0\" = 0x8202\n\"10\" = 2\n").unwrap();
         merge_power_registers(&mut part, &start).unwrap();
         let held = part["registers"].as_table().unwrap();
@@ -1302,7 +1438,11 @@ mod tests {
         merge_power_registers(&mut bare, &start).unwrap();
         assert_eq!(bare["registers"].as_table().unwrap().len(), 2);
         let bad: toml::Value = toml::from_str("\"zz\" = 1\n").unwrap();
-        assert!(merge_power_registers(&mut bare, &bad).unwrap_err().contains("zz"));
+        assert!(
+            merge_power_registers(&mut bare, &bad)
+                .unwrap_err()
+                .contains("zz")
+        );
     }
 
     #[test]
@@ -1340,7 +1480,10 @@ mod tests {
 
     #[test]
     fn aperture_is_skipped_when_fully_inside_existing_ranges() {
-        assert_eq!(plan_aperture(0xfa00_1000, 0x100, &[(0xfa00_0000, 0x4000)]), Ok(None));
+        assert_eq!(
+            plan_aperture(0xfa00_1000, 0x100, &[(0xfa00_0000, 0x4000)]),
+            Ok(None)
+        );
         // Spanning two adjacent apertures is still fully inside.
         let two = [(0xfa00_0000, 0x4000), (0xfa00_4000, 0x4000)];
         assert_eq!(plan_aperture(0xfa00_3f00, 0x200, &two), Ok(None));

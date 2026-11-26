@@ -3,8 +3,8 @@
 //! The records contain device facts and named references. They never contain
 //! another record's filename or an input asset's location.
 
-use fujimod_catalog_identity::{validate_id, validate_sha256};
 use crate::provenance::Evidence;
+use fujimod_catalog_identity::{validate_id, validate_sha256};
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
@@ -185,7 +185,11 @@ impl Soc {
         // carry no evidence and stay exempt until each processor's migration
         // replaces them, but two located blocks may never share a base.
         let mut located_bases = BTreeMap::new();
-        for block in self.blocks.iter().filter(|block| !block.evidence.is_empty()) {
+        for block in self
+            .blocks
+            .iter()
+            .filter(|block| !block.evidence.is_empty())
+        {
             if let Some(other) = located_bases.insert(block.base, block.id.as_str()) {
                 return Err(format!(
                     "SoC {} blocks {other} and {} share base {:#x}",
@@ -349,7 +353,9 @@ impl Soc {
                             ));
                         }
                     }
-                    crate::soc::BlockDevice::SerialFlash { aperture_block_id, .. } => {
+                    crate::soc::BlockDevice::SerialFlash {
+                        aperture_block_id, ..
+                    } => {
                         if !blocks.contains(aperture_block_id.as_str()) {
                             return Err(format!(
                                 "SoC {} serial flash block {} refers to missing aperture {}",
@@ -2413,9 +2419,7 @@ impl Part {
                 } => {
                     let mut taken = [false; 128];
                     for row in registers {
-                        if row.count == 0
-                            || u16::from(row.first) + u16::from(row.count) > 128
-                        {
+                        if row.count == 0 || u16::from(row.first) + u16::from(row.count) > 128 {
                             return Err(format!(
                                 "power controller {} has an invalid register range",
                                 self.id
@@ -2463,8 +2467,7 @@ impl Part {
                 }
                 crate::assembly::PeripheralPart::SerialNorFlash { sampling, .. } => {
                     if let Some(sampling) = sampling {
-                        if sampling.sample_first > sampling.sample_last
-                            || sampling.sample_last > 15
+                        if sampling.sample_first > sampling.sample_last || sampling.sample_last > 15
                         {
                             return Err(format!(
                                 "serial NOR part {} has an invalid sample window",
@@ -3360,7 +3363,8 @@ pub struct ReferenceCatalog {
     boot_roms: BTreeMap<String, crate::boot_rom::BootRom>,
     nand_boot_roms: BTreeMap<String, crate::nand_boot_rom::NandBootRom>,
     restart: BTreeMap<String, fujimod_catalog_restart::FirmwareRestart>,
-    memory_reservations: BTreeMap<String, fujimod_catalog_memory_reservations::FirmwareMemoryReservations>,
+    memory_reservations:
+        BTreeMap<String, fujimod_catalog_memory_reservations::FirmwareMemoryReservations>,
     card_files: BTreeMap<String, fujimod_catalog_card::FirmwareCard>,
     settings: BTreeMap<String, fujimod_catalog_settings::FirmwareSettings>,
     flash: BTreeMap<String, crate::capture::FirmwareFlash>,
@@ -3428,8 +3432,9 @@ impl ReferenceCatalog {
             let bytes = {
                 use std::io::Read;
                 document.resize(source, 0);
-                packed.read_exact(&mut document)
-                    .map_err(|error| format!("cannot decompress bundled catalog record {path}: {error}"))?;
+                packed.read_exact(&mut document).map_err(|error| {
+                    format!("cannot decompress bundled catalog record {path}: {error}")
+                })?;
                 document.as_slice()
             };
             #[cfg(not(target_os = "emscripten"))]
@@ -3455,10 +3460,7 @@ impl ReferenceCatalog {
                     let (soc_id, file_id) = block_path_ids(block_path)?;
                     let record: SocBlockRecord = decode(bytes, block_path)?;
                     record.validate(&file_id)?;
-                    block_rows
-                        .entry(soc_id)
-                        .or_default()
-                        .push(record.block);
+                    block_rows.entry(soc_id).or_default().push(record.block);
                 }
                 ReferenceKind::Part => {
                     let value: Part = decode(bytes, Path::new(path))?;
@@ -3582,17 +3584,26 @@ impl ReferenceCatalog {
     }
 
     /// Named stock event category codes, when located for this firmware.
-    pub fn ui_event_codes(&self, firmware_id: &str) -> Option<&crate::ui_event_codes::UiEventCodes> {
+    pub fn ui_event_codes(
+        &self,
+        firmware_id: &str,
+    ) -> Option<&crate::ui_event_codes::UiEventCodes> {
         self.ui_event_codes.get(firmware_id)
     }
 
     /// Exact stock scene names for a firmware, when its routine was located.
-    pub fn ui_scene_names(&self, firmware_id: &str) -> Option<&crate::ui_scene_names::UiSceneNames> {
+    pub fn ui_scene_names(
+        &self,
+        firmware_id: &str,
+    ) -> Option<&crate::ui_scene_names::UiSceneNames> {
         self.ui_scene_names.get(firmware_id)
     }
 
     /// Exact stock setting names for a firmware, when its routine was located.
-    pub fn ui_setting_names(&self, firmware_id: &str) -> Option<&crate::ui_setting_names::UiSettingNames> {
+    pub fn ui_setting_names(
+        &self,
+        firmware_id: &str,
+    ) -> Option<&crate::ui_setting_names::UiSettingNames> {
         self.ui_setting_names.get(firmware_id)
     }
 
@@ -3689,9 +3700,10 @@ impl ReferenceCatalog {
         path: &Path,
     ) -> Result<(), String> {
         match kind {
-            ReferenceKind::SocBlock => {
-                Err(format!("{} is a block record beside its processor", path.display()))
-            }
+            ReferenceKind::SocBlock => Err(format!(
+                "{} is a block record beside its processor",
+                path.display()
+            )),
             ReferenceKind::Ip => {
                 let value: crate::ip::Ip = decode(bytes, path)?;
                 value.validate(&value.id)?;
@@ -3700,17 +3712,32 @@ impl ReferenceCatalog {
             ReferenceKind::UiEventCodes => {
                 let value: crate::ui_event_codes::UiEventCodes = decode(bytes, path)?;
                 value.validate()?;
-                insert_unique(&mut self.ui_event_codes, value.firmware_id.clone(), value, path)
+                insert_unique(
+                    &mut self.ui_event_codes,
+                    value.firmware_id.clone(),
+                    value,
+                    path,
+                )
             }
             ReferenceKind::UiSceneNames => {
                 let value: crate::ui_scene_names::UiSceneNames = decode(bytes, path)?;
                 value.validate()?;
-                insert_unique(&mut self.ui_scene_names, value.firmware_id.clone(), value, path)
+                insert_unique(
+                    &mut self.ui_scene_names,
+                    value.firmware_id.clone(),
+                    value,
+                    path,
+                )
             }
             ReferenceKind::UiSettingNames => {
                 let value: crate::ui_setting_names::UiSettingNames = decode(bytes, path)?;
                 value.validate()?;
-                insert_unique(&mut self.ui_setting_names, value.firmware_id.clone(), value, path)
+                insert_unique(
+                    &mut self.ui_setting_names,
+                    value.firmware_id.clone(),
+                    value,
+                    path,
+                )
             }
             ReferenceKind::FirstStart => {
                 let value: crate::first_start::FirstStartMenu = decode(bytes, path)?;
@@ -3770,7 +3797,12 @@ impl ReferenceCatalog {
             ReferenceKind::NandBootRom => {
                 let value: crate::nand_boot_rom::NandBootRom = decode(bytes, path)?;
                 value.validate()?;
-                insert_unique(&mut self.nand_boot_roms, value.rom_sha256.clone(), value, path)
+                insert_unique(
+                    &mut self.nand_boot_roms,
+                    value.rom_sha256.clone(),
+                    value,
+                    path,
+                )
             }
             ReferenceKind::Restart => {
                 let value: fujimod_catalog_restart::FirmwareRestart = decode(bytes, path)?;
@@ -3830,33 +3862,69 @@ impl ReferenceCatalog {
 
     fn validate_controls(&self) -> Result<(), String> {
         for (firmware_id, events) in &self.ui_event_codes {
-            let update = self.firmwares.get(firmware_id)
-                .and_then(|firmware| firmware.update.as_ref().map(|update| update.sha256.as_str()))
-                .or_else(|| self.firmware_versions.iter()
-                    .find(|release| &release.firmware_id == firmware_id)
-                    .map(|release| release.update_sha256.as_str()));
+            let update = self
+                .firmwares
+                .get(firmware_id)
+                .and_then(|firmware| {
+                    firmware
+                        .update
+                        .as_ref()
+                        .map(|update| update.sha256.as_str())
+                })
+                .or_else(|| {
+                    self.firmware_versions
+                        .iter()
+                        .find(|release| &release.firmware_id == firmware_id)
+                        .map(|release| release.update_sha256.as_str())
+                });
             if update != Some(events.firmware_sha256.as_str()) {
-                return Err(format!("event codes differ from update identity {firmware_id}"));
+                return Err(format!(
+                    "event codes differ from update identity {firmware_id}"
+                ));
             }
         }
         for (firmware_id, scenes) in &self.ui_scene_names {
-            let update = self.firmwares.get(firmware_id)
-                .and_then(|firmware| firmware.update.as_ref().map(|update| update.sha256.as_str()))
-                .or_else(|| self.firmware_versions.iter()
-                    .find(|release| &release.firmware_id == firmware_id)
-                    .map(|release| release.update_sha256.as_str()));
+            let update = self
+                .firmwares
+                .get(firmware_id)
+                .and_then(|firmware| {
+                    firmware
+                        .update
+                        .as_ref()
+                        .map(|update| update.sha256.as_str())
+                })
+                .or_else(|| {
+                    self.firmware_versions
+                        .iter()
+                        .find(|release| &release.firmware_id == firmware_id)
+                        .map(|release| release.update_sha256.as_str())
+                });
             if update != Some(scenes.firmware_sha256.as_str()) {
-                return Err(format!("scene names differ from update identity {firmware_id}"));
+                return Err(format!(
+                    "scene names differ from update identity {firmware_id}"
+                ));
             }
         }
         for (firmware_id, settings) in &self.ui_setting_names {
-            let update = self.firmwares.get(firmware_id)
-                .and_then(|firmware| firmware.update.as_ref().map(|update| update.sha256.as_str()))
-                .or_else(|| self.firmware_versions.iter()
-                    .find(|release| &release.firmware_id == firmware_id)
-                    .map(|release| release.update_sha256.as_str()));
+            let update = self
+                .firmwares
+                .get(firmware_id)
+                .and_then(|firmware| {
+                    firmware
+                        .update
+                        .as_ref()
+                        .map(|update| update.sha256.as_str())
+                })
+                .or_else(|| {
+                    self.firmware_versions
+                        .iter()
+                        .find(|release| &release.firmware_id == firmware_id)
+                        .map(|release| release.update_sha256.as_str())
+                });
             if update != Some(settings.firmware_sha256.as_str()) {
-                return Err(format!("setting names differ from update identity {firmware_id}"));
+                return Err(format!(
+                    "setting names differ from update identity {firmware_id}"
+                ));
             }
         }
         for firmware_id in self.first_start.keys() {
@@ -4605,11 +4673,17 @@ fn read_socs(root: &Path) -> Result<Vec<(PathBuf, Soc)>, String> {
             .path();
         if path.is_dir() {
             let Some(soc_id) = path.file_name().and_then(|name| name.to_str()) else {
-                return Err(format!("{}: processor directory has no identity", path.display()));
+                return Err(format!(
+                    "{}: processor directory has no identity",
+                    path.display()
+                ));
             };
             let soc_path = path.join("soc.json");
             if !soc_path.is_file() {
-                return Err(format!("{}: block file outside its processor", path.display()));
+                return Err(format!(
+                    "{}: block file outside its processor",
+                    path.display()
+                ));
             }
             let mut value: Soc = decode(
                 &fs::read(&soc_path)
@@ -4640,7 +4714,10 @@ fn read_socs(root: &Path) -> Result<Vec<(PathBuf, Soc)>, String> {
             .extension()
             .is_some_and(|extension| extension == "json")
         {
-            return Err(format!("{}: block file outside its processor", path.display()));
+            return Err(format!(
+                "{}: block file outside its processor",
+                path.display()
+            ));
         }
     }
     result.sort_by(|left, right| left.0.cmp(&right.0));
@@ -4657,7 +4734,10 @@ fn read_block_files(directory: &Path, soc_id: &str) -> Result<Vec<SocBlock>, Str
             .map_err(|error| format!("could not read {}: {error}", directory.display()))?
             .path();
         if path.is_dir() {
-            return Err(format!("{}: block file outside its processor", path.display()));
+            return Err(format!(
+                "{}: block file outside its processor",
+                path.display()
+            ));
         }
         if !path
             .extension()
@@ -4681,7 +4761,11 @@ fn read_block_files(directory: &Path, soc_id: &str) -> Result<Vec<SocBlock>, Str
 
 /// Order blocks by base address then identity, refusing repeated identities.
 fn ordered_blocks(soc_id: &str, mut blocks: Vec<SocBlock>) -> Result<Vec<SocBlock>, String> {
-    blocks.sort_by(|left, right| left.base.cmp(&right.base).then_with(|| left.id.cmp(&right.id)));
+    blocks.sort_by(|left, right| {
+        left.base
+            .cmp(&right.base)
+            .then_with(|| left.id.cmp(&right.id))
+    });
     let mut ids = BTreeSet::new();
     for block in &blocks {
         if !ids.insert(block.id.clone()) {
@@ -4698,17 +4782,26 @@ fn ordered_blocks(soc_id: &str, mut blocks: Vec<SocBlock>) -> Result<Vec<SocBloc
 fn block_path_ids(path: &Path) -> Result<(String, String), String> {
     let parts: Vec<&str> = path.iter().filter_map(|part| part.to_str()).collect();
     let Some(index) = parts.iter().rposition(|part| *part == "soc") else {
-        return Err(format!("{}: block file outside its processor", path.display()));
+        return Err(format!(
+            "{}: block file outside its processor",
+            path.display()
+        ));
     };
     let (Some(soc_id), Some(&"blocks"), Some(file)) = (
         parts.get(index + 1),
         parts.get(index + 2),
         parts.get(index + 3),
     ) else {
-        return Err(format!("{}: block file outside its processor", path.display()));
+        return Err(format!(
+            "{}: block file outside its processor",
+            path.display()
+        ));
     };
     if parts.len() != index + 4 {
-        return Err(format!("{}: block file outside its processor", path.display()));
+        return Err(format!(
+            "{}: block file outside its processor",
+            path.display()
+        ));
     }
     let file_id = Path::new(file)
         .file_stem()
@@ -4822,7 +4915,6 @@ include!(concat!(env!("OUT_DIR"), "/bundled_catalog.rs"));
 #[cfg(test)]
 mod tests;
 
-
 #[cfg(test)]
 mod ui_scene_names_tests {
     use super::*;
@@ -4840,14 +4932,28 @@ mod ui_scene_names_tests {
         });
         let bytes = serde_json::to_vec(&value).unwrap();
         let path = Path::new("ui-scene-names.generated.json");
-        catalog.insert_document(ReferenceKind::of_firmware_file(path).unwrap(), &bytes, path).unwrap();
-        assert_eq!(catalog.ui_scene_names("example-100").unwrap().ui_scene_names["UILIB_SUB_SCR_EXAMPLE"], 7);
+        catalog
+            .insert_document(ReferenceKind::of_firmware_file(path).unwrap(), &bytes, path)
+            .unwrap();
+        assert_eq!(
+            catalog
+                .ui_scene_names("example-100")
+                .unwrap()
+                .ui_scene_names["UILIB_SUB_SCR_EXAMPLE"],
+            7
+        );
         assert!(catalog.validate_controls().is_err());
-        catalog.firmware_versions.push(crate::firmware_versions::FirmwareVersion {
-            firmware_id: "example-100".into(), product: "EXAMPLE".into(), version: "1.00".into(),
-            internal_version: "1.00".into(), update_sha256: "a".repeat(64),
-            download_url: "https://example.com/firmware".into(), boot_rom: None,
-        });
+        catalog
+            .firmware_versions
+            .push(crate::firmware_versions::FirmwareVersion {
+                firmware_id: "example-100".into(),
+                product: "EXAMPLE".into(),
+                version: "1.00".into(),
+                internal_version: "1.00".into(),
+                update_sha256: "a".repeat(64),
+                download_url: "https://example.com/firmware".into(),
+                boot_rom: None,
+            });
         catalog.validate_controls().unwrap();
         catalog.firmware_versions[0].update_sha256 = "b".repeat(64);
         assert!(catalog.validate_controls().is_err());
@@ -4861,7 +4967,10 @@ mod ui_setting_names_tests {
     #[test]
     fn bundles_named_setting_ids() {
         let catalog = ReferenceCatalog::bundled().unwrap();
-        let names = &catalog.ui_setting_names("x70-110").unwrap().ui_setting_names;
+        let names = &catalog
+            .ui_setting_names("x70-110")
+            .unwrap()
+            .ui_setting_names;
         assert_eq!(names["UI_SETP_NONE"], 0);
         assert_eq!(names["UI_SETP_COLOR_SPACE"], 41);
         assert_eq!(names["UI_SETP_PLAY_ERASE"], 820);
@@ -4881,14 +4990,28 @@ mod ui_setting_names_tests {
         });
         let bytes = serde_json::to_vec(&value).unwrap();
         let path = Path::new("ui-setting-names.generated.json");
-        catalog.insert_document(ReferenceKind::of_firmware_file(path).unwrap(), &bytes, path).unwrap();
-        assert_eq!(catalog.ui_setting_names("example-100").unwrap().ui_setting_names["UI_SETP_COLOR_SPACE"], 41);
+        catalog
+            .insert_document(ReferenceKind::of_firmware_file(path).unwrap(), &bytes, path)
+            .unwrap();
+        assert_eq!(
+            catalog
+                .ui_setting_names("example-100")
+                .unwrap()
+                .ui_setting_names["UI_SETP_COLOR_SPACE"],
+            41
+        );
         assert!(catalog.validate_controls().is_err());
-        catalog.firmware_versions.push(crate::firmware_versions::FirmwareVersion {
-            firmware_id: "example-100".into(), product: "EXAMPLE".into(), version: "1.00".into(),
-            internal_version: "1.00".into(), update_sha256: "a".repeat(64),
-            download_url: "https://example.com/firmware".into(), boot_rom: None,
-        });
+        catalog
+            .firmware_versions
+            .push(crate::firmware_versions::FirmwareVersion {
+                firmware_id: "example-100".into(),
+                product: "EXAMPLE".into(),
+                version: "1.00".into(),
+                internal_version: "1.00".into(),
+                update_sha256: "a".repeat(64),
+                download_url: "https://example.com/firmware".into(),
+                boot_rom: None,
+            });
         catalog.validate_controls().unwrap();
         catalog.firmware_versions[0].update_sha256 = "b".repeat(64);
         assert!(catalog.validate_controls().is_err());
@@ -4923,14 +5046,28 @@ mod ui_event_codes_tests {
         });
         let bytes = serde_json::to_vec(&value).unwrap();
         let path = Path::new("ui-event-codes.generated.json");
-        catalog.insert_document(ReferenceKind::of_firmware_file(path).unwrap(), &bytes, path).unwrap();
-        assert_eq!(catalog.ui_event_codes("example-100").unwrap().ui_event_codes["UI_EVTID_EXAMPLE"], 34406400);
+        catalog
+            .insert_document(ReferenceKind::of_firmware_file(path).unwrap(), &bytes, path)
+            .unwrap();
+        assert_eq!(
+            catalog
+                .ui_event_codes("example-100")
+                .unwrap()
+                .ui_event_codes["UI_EVTID_EXAMPLE"],
+            34406400
+        );
         assert!(catalog.validate_controls().is_err());
-        catalog.firmware_versions.push(crate::firmware_versions::FirmwareVersion {
-            firmware_id: "example-100".into(), product: "EXAMPLE".into(), version: "1.00".into(),
-            internal_version: "1.00".into(), update_sha256: "a".repeat(64),
-            download_url: "https://example.com/firmware".into(), boot_rom: None,
-        });
+        catalog
+            .firmware_versions
+            .push(crate::firmware_versions::FirmwareVersion {
+                firmware_id: "example-100".into(),
+                product: "EXAMPLE".into(),
+                version: "1.00".into(),
+                internal_version: "1.00".into(),
+                update_sha256: "a".repeat(64),
+                download_url: "https://example.com/firmware".into(),
+                boot_rom: None,
+            });
         catalog.validate_controls().unwrap();
         catalog.firmware_versions[0].update_sha256 = "b".repeat(64);
         assert!(catalog.validate_controls().is_err());
@@ -5020,7 +5157,9 @@ mod layout_tests {
         first.evidence = vec![stand_in()];
         let mut second = block("second", 0x1000, 0x100);
         second.evidence = vec![stand_in()];
-        let error = soc(vec![first, second], vec![]).validate("test-soc").unwrap_err();
+        let error = soc(vec![first, second], vec![])
+            .validate("test-soc")
+            .unwrap_err();
         assert!(error.contains("share base 0x1000"), "{error}");
 
         // A legacy fallback without evidence may sit at a located block's base.
@@ -5100,23 +5239,39 @@ mod layout_tests {
 
         let mut child = block("channel", 0x3000, 0x10);
         child.parent_block_id = Some("controller".into());
-        assert!(soc(vec![parent.clone(), child], vec![]).validate("test-soc").is_err());
+        assert!(
+            soc(vec![parent.clone(), child], vec![])
+                .validate("test-soc")
+                .is_err()
+        );
 
         let mut child = block("channel", 0x1100, 0x10);
         child.parent_block_id = Some("missing".into());
-        assert!(soc(vec![parent.clone(), child], vec![]).validate("test-soc").is_err());
+        assert!(
+            soc(vec![parent.clone(), child], vec![])
+                .validate("test-soc")
+                .is_err()
+        );
 
         parent.parent_block_id = Some("channel".into());
         let mut child = block("channel", 0x1100, 0x10);
         child.parent_block_id = Some("controller".into());
-        assert!(soc(vec![parent, child], vec![]).validate("test-soc").is_err());
+        assert!(
+            soc(vec![parent, child], vec![])
+                .validate("test-soc")
+                .is_err()
+        );
 
         let parent = block("controller", 0x1000, 0x1000);
         let mut first = block("first", 0x1100, 0x20);
         first.parent_block_id = Some("controller".into());
         let mut second = block("second", 0x1110, 0x20);
         second.parent_block_id = Some("controller".into());
-        assert!(soc(vec![parent, first, second], vec![]).validate("test-soc").is_err());
+        assert!(
+            soc(vec![parent, first, second], vec![])
+                .validate("test-soc")
+                .is_err()
+        );
     }
 
     #[test]
@@ -5131,13 +5286,15 @@ mod layout_tests {
             }],
         };
         evidence.validate().unwrap();
-        assert!(Evidence {
-            kind: EvidenceKind::Located,
-            firmware_ids: vec![],
-            addresses: vec![],
-        }
-        .validate()
-        .is_err());
+        assert!(
+            Evidence {
+                kind: EvidenceKind::Located,
+                firmware_ids: vec![],
+                addresses: vec![],
+            }
+            .validate()
+            .is_err()
+        );
 
         let mut candidate = block("control", 0x1000, 0x100);
         assert!(candidate.require_stand_in_override("device").is_err());
@@ -5181,9 +5338,10 @@ mod layout_tests {
             power_on_ram_fill: None,
             consumers: vec!["shared".into()],
         };
-        catalog
-            .socs
-            .insert("test-soc".into(), soc(vec![candidate], vec![region.clone()]));
+        catalog.socs.insert(
+            "test-soc".into(),
+            soc(vec![candidate], vec![region.clone()]),
+        );
         catalog.validate_references().unwrap();
 
         let mut missing = region;
@@ -5197,9 +5355,10 @@ mod layout_tests {
     #[test]
     fn absent_blocks_must_exist_and_stay_unconnected() {
         let mut catalog = ReferenceCatalog::default();
-        catalog
-            .socs
-            .insert("test-soc".into(), soc(vec![block("gpio", 0x1000, 0x100)], vec![]));
+        catalog.socs.insert(
+            "test-soc".into(),
+            soc(vec![block("gpio", 0x1000, 0x100)], vec![]),
+        );
         let body = |absent_blocks: Vec<&str>, wiring: Vec<BodyWiring>| Body {
             schema_uri: BODY_SCHEMA_URI.into(),
             schema: 1,

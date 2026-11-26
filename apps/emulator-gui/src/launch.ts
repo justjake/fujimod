@@ -13,7 +13,7 @@ export interface LaunchRequest {
   engine?: RunEngine;
   endpoint?: string;
 }
-export type BootChoice = 'stock' | 'sd-card' | 'automatic-boot';
+export type BootChoice = 'stock' | 'sd-card' | 'autostart';
 export interface LauncherCamera {
   firmware: string;
   body: string;

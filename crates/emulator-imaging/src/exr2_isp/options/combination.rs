@@ -1,6 +1,6 @@
 //! Plan options of the EXR II combination block model in `fujimod-emulator-exr2-isp`.
-use serde::{Deserialize, Serialize};
 use crate::exr2_isp::dma::Clock;
+use serde::{Deserialize, Serialize};
 
 pub const BASE: u64 = 0xfff48000;
 

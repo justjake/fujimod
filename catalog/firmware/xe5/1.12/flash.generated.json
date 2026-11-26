@@ -3,77 +3,99 @@
   "schema": 1,
   "id": "xe5-112-flash",
   "firmware_id": "xe5-112",
-  "code_ranges": [
-    {
-      "address": 21622776,
-      "name": "flash_read",
-      "size": 48
-    },
-    {
-      "address": 21622456,
-      "name": "flash read request",
-      "size": 248
-    },
-    {
-      "address": 21617964,
-      "name": "flash read dispatcher",
-      "size": 620
-    },
-    {
-      "address": 21614016,
-      "name": "flash DMA read",
-      "size": 528
-    },
-    {
-      "address": 21613896,
-      "name": "flash DMA completion poll",
-      "size": 120
-    },
-    {
-      "address": 22983056,
-      "name": "destination cache maintenance",
-      "size": 64
-    }
-  ],
-  "control": {
-    "offset": 524288,
-    "sha256": "fbb93cef1860b2b744f118381b4330c89d940f2d1e6bc789f47ff010f8c551d9",
-    "size": 32768
-  },
   "device": {
-    "jedec_id": "efdc21",
-    "kind": "serial-nand",
-    "part": "Winbond W35N01JW"
-  },
-  "reader": {
-    "alignment": 64,
-    "symbol": "flash_read"
-  },
-  "state_checks": [
-    {
-      "address": 980416,
-      "name": "serial NAND driver mode",
-      "size": 4,
-      "value": 1
-    },
-    {
-      "address": 35879944,
-      "name": "flash driver initialized",
-      "size": 4,
-      "value": 2003199317
-    }
-  ],
-  "e1_window": {
-    "address": 4026531840,
-    "size": 134217728
-  },
-  "transport": "xp5-cmd-callback",
-  "update_image": {
-    "dat_offset": 700,
-    "xor": 255
+    "kind": "serial-nor",
+    "jedec_id": "2c5b1b",
+    "part": "Micron MT35XU01GBBA"
   },
   "window": {
     "address": 4026531840,
     "size": 134217728
+  },
+  "update_image": {
+    "dat_offset": 700,
+    "xor": 255
+  },
+  "reader": {
+    "symbol": "flash_read",
+    "alignment": 64
+  },
+  "transport": "xp5-cmd-callback",
+  "code_ranges": [
+    {
+      "name": "flash_read",
+      "address": 21622776,
+      "size": 48
+    },
+    {
+      "name": "flash read request",
+      "address": 21622456,
+      "size": 320
+    },
+    {
+      "name": "flash read dispatcher",
+      "address": 21617964,
+      "size": 704
+    },
+    {
+      "name": "mixed NOR/NAND DMA reader",
+      "address": 21614016,
+      "size": 1292
+    },
+    {
+      "name": "flash DMA completion poll",
+      "address": 21613896,
+      "size": 120
+    },
+    {
+      "name": "destination cache maintenance",
+      "address": 22983056,
+      "size": 64
+    },
+    {
+      "name": "installed flash identity reader",
+      "address": 21623744,
+      "size": 28
+    },
+    {
+      "name": "aligned NOR dispatcher",
+      "address": 21617652,
+      "size": 312
+    },
+    {
+      "name": "flash bank selection",
+      "address": 21625188,
+      "size": 60
+    },
+    {
+      "name": "flash CPU tail copy",
+      "address": 21615436,
+      "size": 168
+    }
+  ],
+  "state_checks": [
+    {
+      "name": "serial flash driver mode",
+      "address": 980416,
+      "size": 4,
+      "value": 0
+    },
+    {
+      "name": "installed NOR JEDEC identity",
+      "address": 980112,
+      "size": 4,
+      "value": 2906907
+    },
+    {
+      "name": "flash driver initialized",
+      "address": 35879944,
+      "size": 4,
+      "value": 2003199317
+    }
+  ],
+  "control": {
+    "offset": 262144,
+    "size": 32768,
+    "sha256": "e1121f5239684685ed053b585f13346cde3b7233ab801e6883b209091ea52055"
   }
 }

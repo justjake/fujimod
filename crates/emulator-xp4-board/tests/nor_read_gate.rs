@@ -2,14 +2,24 @@
 //! owns is carved out of the GPIO bank, and a read outside every declared
 //! state fails the run.
 use fujimod_emulator_xp4_board::{Definition, Session};
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 const FLASH: u64 = 0xf0000000;
 const CONTROLLER: u64 = 0xfffd8000;
 const PAD: u64 = 0xfff4108c;
 fn definition(pad: u32, sample: u32) -> Value {
     let registers = [
-        (1, CONTROLLER), (2, PAD), (3, FLASH + 0x100), (4, 0x80041), (5, pad as u64), (6, 0x13),
-        (7, 0x101003), (8, sample as u64), (9, 0xfff41088), (10, 0x00010001), (11, 0x8000), (15, 0),
+        (1, CONTROLLER),
+        (2, PAD),
+        (3, FLASH + 0x100),
+        (4, 0x80041),
+        (5, pad as u64),
+        (6, 0x13),
+        (7, 0x101003),
+        (8, sample as u64),
+        (9, 0xfff41088),
+        (10, 0x00010001),
+        (11, 0x8000),
+        (15, 0),
     ];
     json!({"ram_size":65536,"cores":1,"discovery":false,"cbar":0xffff0000u32,
         "storage_jedec":0x202018,"storage_dma_routes":(32..48).collect::<Vec<_>>(),
@@ -37,13 +47,24 @@ const PROGRAM: [u32; 11] = [
 fn run(pad: u32, sample: u32) -> (Session, [u32; 2]) {
     let mut nor = vec![0xff; 8192];
     nor[0x100..0x104].copy_from_slice(&0x12345678u32.to_le_bytes());
-    let s = Session::new(serde_json::from_value::<Definition>(definition(pad, sample)).unwrap(), Some(nor), vec![]).unwrap();
+    let s = Session::new(
+        serde_json::from_value::<Definition>(definition(pad, sample)).unwrap(),
+        Some(nor),
+        vec![],
+    )
+    .unwrap();
     let program: Vec<u8> = PROGRAM.iter().flat_map(|w| w.to_le_bytes()).collect();
     s.write(0, &program).unwrap();
     let _ = s.run(0, PROGRAM.len());
     let mut out = [0; 8];
     s.read(0x8000, &mut out).unwrap();
-    (s, [u32::from_le_bytes(out[..4].try_into().unwrap()), u32::from_le_bytes(out[4..].try_into().unwrap())])
+    (
+        s,
+        [
+            u32::from_le_bytes(out[..4].try_into().unwrap()),
+            u32::from_le_bytes(out[4..].try_into().unwrap()),
+        ],
+    )
 }
 #[test]
 fn initialized_controller_reads_array_data_through_the_carved_pad_word() {
@@ -66,10 +87,29 @@ fn a_missing_pad_function_fails_the_run() {
 fn a_gate_with_an_immutable_prefix_or_without_a_nor_is_refused() {
     let mut d = definition(0, 9);
     d["storage_immutable_prefix"] = json!({"bytes":4096});
-    assert!(Session::new(serde_json::from_value::<Definition>(d).unwrap(), Some(vec![0xff; 8192]), vec![]).is_err());
+    assert!(
+        Session::new(
+            serde_json::from_value::<Definition>(d).unwrap(),
+            Some(vec![0xff; 8192]),
+            vec![]
+        )
+        .is_err()
+    );
     let mut d = definition(0, 9);
-    for key in ["storage_jedec", "storage_dma_routes", "storage_geometry", "storage_irq"] {
+    for key in [
+        "storage_jedec",
+        "storage_dma_routes",
+        "storage_geometry",
+        "storage_irq",
+    ] {
         d.as_object_mut().unwrap().remove(key);
     }
-    assert!(Session::new(serde_json::from_value::<Definition>(d).unwrap(), None, vec![]).is_err());
+    assert!(
+        Session::new(
+            serde_json::from_value::<Definition>(d).unwrap(),
+            None,
+            vec![]
+        )
+        .is_err()
+    );
 }

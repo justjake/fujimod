@@ -5,7 +5,9 @@ use fujimod_catalog_configuration::{
 };
 use fujimod_catalog_resolution::{ResolvedConfiguration, validate_selection};
 
-fn xp5_inputs(configuration: &mut RunConfiguration) -> &mut fujimod_catalog_configuration::application_inputs::ApplicationRunInputs {
+fn xp5_inputs(
+    configuration: &mut RunConfiguration,
+) -> &mut fujimod_catalog_configuration::application_inputs::ApplicationRunInputs {
     match configuration.inputs.as_mut() {
         Some(RunInputs::Xp5(inputs)) => inputs,
         _ => panic!("{} has no XP5 run inputs", configuration.id),

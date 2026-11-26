@@ -64,7 +64,10 @@ impl ConfigurationDefaults {
         let end = self.staging + defaults.len();
         require(
             self.staging >= ram.len()
-                && plan.bss.iter().all(|b| end <= b.address || b.address + b.size <= self.staging)
+                && plan
+                    .bss
+                    .iter()
+                    .all(|b| end <= b.address || b.address + b.size <= self.staging)
                 && end < 0x40000000,
             "Configuration defaults staging overlaps the image",
         )?;
@@ -121,7 +124,13 @@ mod tests {
                 initialized_prefix: None,
             },
         };
-        let plan = Plan { size: ram.len(), entry: 0, regions: vec![], bss: vec![], edits: vec![] };
+        let plan = Plan {
+            size: ram.len(),
+            entry: 0,
+            regions: vec![],
+            bss: vec![],
+            edits: vec![],
+        };
         (value, plan, defaults, ram)
     }
 

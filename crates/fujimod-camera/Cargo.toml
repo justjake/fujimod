@@ -1,0 +1,32 @@
+[package]
+name = "fujimod-camera"
+description = "Open an emulated camera with FujiMod: stock, SD card boot or autostart"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+repository.workspace = true
+publish.workspace = true
+license.workspace = true
+
+[lib]
+doctest = false
+
+[dependencies]
+fujimod-emulator-camera.workspace = true
+fujimod-emulator-session.workspace = true
+fujimod-catalog.workspace = true
+fujimod-catalog-remote.workspace = true
+futures-lite.workspace = true
+fujimod-remote = { path = "../remote", default-features = false, features = ["board"] }
+serde.workspace = true
+serde_json.workspace = true
+sha2.workspace = true
+thiserror.workspace = true
+ureq.workspace = true
+
+[lints.rust]
+unsafe_op_in_unsafe_fn = "deny"
+
+[dev-dependencies]
+fujimod-emulator-boot = { workspace = true, features = ["xp5-startup"] }
+fujimod-recovery.workspace = true

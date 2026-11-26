@@ -1,4 +1,3 @@
-use fujimod_catalog_configuration::RunEngine;
 use super::bus::{Bus, Mode};
 use super::factory::{Graph, MemoryMap, Options, Processor, Ram};
 use super::memory::BusMapping;
@@ -7,6 +6,7 @@ use super::preservation::{
     PreservationViolation, ProtectedRanges,
 };
 use super::*;
+use fujimod_catalog_configuration::RunEngine;
 use fujimod_emulator_cpu::{Model, Register, arm, timeline::Ratio};
 
 fn board(alias: bool) -> Board {
@@ -34,7 +34,8 @@ fn mapped_board(mappings: Vec<MemoryMap>, decoders: Vec<decoder::Decoder>) -> Bo
         processors: vec![Processor {
             model: Model::CortexR5F,
             registers: vec![(Register::Pc, 0x10000)],
-            released: true, parked_until_sgi: false,
+            released: true,
+            parked_until_sgi: false,
             mprofile: None,
             rprofile: Some(Default::default()),
         }],
@@ -62,14 +63,16 @@ pub(super) fn two_core_board() -> Board {
             Processor {
                 model: Model::CortexR5F,
                 registers: vec![(Register::Pc, 0x10000)],
-                released: true, parked_until_sgi: false,
+                released: true,
+                parked_until_sgi: false,
                 mprofile: None,
                 rprofile: Some(Default::default()),
             },
             Processor {
                 model: Model::CortexR5F,
                 registers: vec![(Register::Pc, 0x10000)],
-                released: true, parked_until_sgi: false,
+                released: true,
+                parked_until_sgi: false,
                 mprofile: None,
                 rprofile: Some(Default::default()),
             },

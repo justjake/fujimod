@@ -70,8 +70,13 @@ pub struct Peer {
 }
 impl Peer {
     pub fn new(initial_frame: u32) -> Result<Self, String> {
-        if !checked(initial_frame) || initial_frame & 1 << 27 != 0 || RESYNC.contains(&initial_frame) {
-            return Err(format!("framed command peer initial frame {initial_frame:#010x} is not a valid frame"));
+        if !checked(initial_frame)
+            || initial_frame & 1 << 27 != 0
+            || RESYNC.contains(&initial_frame)
+        {
+            return Err(format!(
+                "framed command peer initial frame {initial_frame:#010x} is not a valid frame"
+            ));
         }
         Ok(Self {
             initial_frame,
@@ -84,12 +89,14 @@ impl Peer {
     }
     fn refusal(&self, word: u32) -> Option<String> {
         if RESYNC.contains(&word) {
-            return Some(format!("framed command link resynchronization {word:#010x} is unmodeled"));
+            return Some(format!(
+                "framed command link resynchronization {word:#010x} is unmodeled"
+            ));
         }
         match self.state.half {
-            Half::Frame if word & 1 << 27 != 0 || !checked(word) => {
-                Some(format!("framed command link word {word:#010x} is not a frame"))
-            }
+            Half::Frame if word & 1 << 27 != 0 || !checked(word) => Some(format!(
+                "framed command link word {word:#010x} is not a frame"
+            )),
             Half::Acknowledgment if !is_acknowledgment(word) => Some(format!(
                 "framed command link word {word:#010x} is not an acknowledgment"
             )),
@@ -172,7 +179,11 @@ mod tests {
     fn word(part: &mut Peer, value: u32) -> Result<u32, String> {
         let mut reply = 0;
         for byte in value.to_be_bytes() {
-            let frame = Frame { bits: 8, mode: 3, word: byte.into() };
+            let frame = Frame {
+                bits: 8,
+                mode: 3,
+                word: byte.into(),
+            };
             part.validate(frame)?;
             reply = reply << 8 | u32::from(part.transfer(frame, 0));
         }
@@ -192,7 +203,10 @@ mod tests {
         let ours = acknowledgment(IDLE, 0);
         for sequence in 0..9u8 {
             assert_eq!(word(&mut part, 0).unwrap(), IDLE);
-            assert_eq!(word(&mut part, ours).unwrap(), acknowledgment(0, sequence & 7));
+            assert_eq!(
+                word(&mut part, ours).unwrap(),
+                acknowledgment(0, sequence & 7)
+            );
         }
     }
 
@@ -208,7 +222,10 @@ mod tests {
         let command = 0x500 | check(0x500) << 1;
         assert_eq!(command, 0x0000_0514);
         assert_eq!(word(&mut part, command).unwrap(), IDLE);
-        assert_eq!(word(&mut part, ours(IDLE)).unwrap(), acknowledgment(command, 0));
+        assert_eq!(
+            word(&mut part, ours(IDLE)).unwrap(),
+            acknowledgment(command, 0)
+        );
         let reply = word(&mut part, 0).unwrap();
         assert_eq!(reply >> 6 & 0x1ff, 0x14);
         assert_eq!(reply, command);
@@ -229,13 +246,25 @@ mod tests {
         let error = word(&mut part, 0xc33c_5aa5).unwrap_err();
         assert!(error.contains("resynchronization"), "{error}");
         let mut part = Peer::new(IDLE).unwrap();
-        assert!(word(&mut part, IDLE ^ 2).unwrap_err().contains("not a frame"));
+        assert!(
+            word(&mut part, IDLE ^ 2)
+                .unwrap_err()
+                .contains("not a frame")
+        );
         let mut part = Peer::new(IDLE).unwrap();
         word(&mut part, 0).unwrap();
-        assert!(word(&mut part, 0).unwrap_err().contains("not an acknowledgment"));
+        assert!(
+            word(&mut part, 0)
+                .unwrap_err()
+                .contains("not an acknowledgment")
+        );
         let error = Peer::new(IDLE ^ 2).err().unwrap();
         assert!(error.contains("not a valid frame"), "{error}");
-        let frame = Frame { bits: 16, mode: 3, word: 0 };
+        let frame = Frame {
+            bits: 16,
+            mode: 3,
+            word: 0,
+        };
         assert!(Peer::new(IDLE).unwrap().validate(frame).is_err());
     }
 
@@ -243,7 +272,14 @@ mod tests {
     fn checkpoint_keeps_a_word_in_flight() {
         let mut part = Peer::new(IDLE).unwrap();
         word(&mut part, 0).unwrap();
-        part.transfer(Frame { bits: 8, mode: 3, word: 0x08 }, 0);
+        part.transfer(
+            Frame {
+                bits: 8,
+                mode: 3,
+                word: 0x08,
+            },
+            0,
+        );
         let mut copy = Peer::new(IDLE).unwrap();
         copy.restore(&part.save()).unwrap();
         assert_eq!(copy.save(), part.save());

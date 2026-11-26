@@ -11,7 +11,9 @@ include!(concat!(env!("OUT_DIR"), "/fujimod.sync.v1.rs"));
 pub fn encode(frame: &Frame, payload: &[u8]) -> Result<Vec<u8>, &'static str> {
     check_payload(frame, payload)?;
     let mut message = Vec::with_capacity(frame.encoded_len() + payload.len() + 10);
-    frame.encode_length_delimited(&mut message).map_err(|_| "encode failed")?;
+    frame
+        .encode_length_delimited(&mut message)
+        .map_err(|_| "encode failed")?;
     message.extend_from_slice(payload);
     Ok(message)
 }

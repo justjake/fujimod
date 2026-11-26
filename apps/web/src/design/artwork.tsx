@@ -69,7 +69,10 @@ function measureInk(url: string): Promise<Ink> {
       if (context === null) throw new Error('no 2d canvas');
       context.drawImage(image, 0, 0, w, h);
       const alpha = context.getImageData(0, 0, w, h).data;
-      let x0 = w, y0 = h, x1 = -1, y1 = -1;
+      let x0 = w,
+        y0 = h,
+        x1 = -1,
+        y1 = -1;
       for (let y = 0; y < h; y++)
         for (let x = 0; x < w; x++)
           if (alpha[(y * w + x) * 4 + 3] > 40) {
@@ -79,7 +82,13 @@ function measureInk(url: string): Promise<Ink> {
             y1 = Math.max(y1, y);
           }
       if (x1 < 0) return { aspect: w / h, width: 1, height: 1, centerX: 0.5, centerY: 0.5 };
-      return { aspect: w / h, width: (x1 - x0 + 1) / w, height: (y1 - y0 + 1) / h, centerX: (x0 + x1 + 1) / 2 / w, centerY: (y0 + y1 + 1) / 2 / h };
+      return {
+        aspect: w / h,
+        width: (x1 - x0 + 1) / w,
+        height: (y1 - y0 + 1) / h,
+        centerX: (x0 + x1 + 1) / 2 / w,
+        centerY: (y0 + y1 + 1) / 2 / h,
+      };
     })();
     inks.set(url, ink);
   }
@@ -102,7 +111,14 @@ async function fitInk(element: HTMLElement, url: string) {
  * through to the surface beneath. Without a URL it draws `fallback`. With
  * `fillInk`, the ink is scaled to fill the box, for artwork whose canvas has
  * wide empty margins. */
-export function Artwork(props: { src: string | undefined; class?: string; size?: number; color: string; fallback?: JSX.Element; fillInk?: boolean }) {
+export function Artwork(props: {
+  src: string | undefined;
+  class?: string;
+  size?: number;
+  color: string;
+  fallback?: JSX.Element;
+  fillInk?: boolean;
+}) {
   return (
     <Show when={props.src} fallback={props.fallback}>
       {(src) => (
@@ -127,7 +143,10 @@ export function Artwork(props: { src: string | undefined; class?: string; size?:
  * Sharp icons are; a badge letter on its lower right corner. */
 export function Wordmark(props: { word: string; badge?: string; color: string }) {
   return (
-    <span class="relative flex h-[30px] w-[39px] items-center justify-center overflow-visible rounded-[3px]" style={{ background: props.color }}>
+    <span
+      class="relative flex h-[30px] w-[39px] items-center justify-center overflow-visible rounded-[3px]"
+      style={{ background: props.color }}
+    >
       <span
         class="inline-block text-[22px] leading-none font-bold tracking-[-0.03em] whitespace-nowrap"
         style={{ color: 'rgb(0 0 0 / 0.88)', transform: 'scaleX(0.46)' }}

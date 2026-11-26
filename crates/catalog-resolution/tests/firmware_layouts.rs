@@ -94,7 +94,12 @@ fn xt3_boot_wires_the_touch_bus_to_a_declared_byte_i2c_controller() {
         .iter()
         .find(|block| block.id == "byte-i2c-2")
         .expect("declared byte I2C controller 2");
-    let line = bus.interrupts.iter().find(|row| row.output == "interrupt").unwrap().line;
+    let line = bus
+        .interrupts
+        .iter()
+        .find(|row| row.output == "interrupt")
+        .unwrap()
+        .line;
     assert_eq!((bus.base, line), (0xfff3_f000, 0x43));
     assert!(matches!(
         bus.device,

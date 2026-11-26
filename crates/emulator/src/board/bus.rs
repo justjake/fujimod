@@ -337,7 +337,9 @@ impl Bus {
         if let Some(before) = before {
             let device = &self.windows[id].device;
             let changed = match before {
-                Publication::Generation(generation) => device.publication_generation() != Some(generation),
+                Publication::Generation(generation) => {
+                    device.publication_generation() != Some(generation)
+                }
                 Publication::State(state) => device.save() != state,
             };
             if changed && let Some(stops) = &self.continuation {
@@ -753,9 +755,14 @@ impl Bus {
     /// The register supplied the value at the settled bus tick. Its ordinary
     /// access would still wake dependent devices and refresh their deadlines.
     pub(super) fn finish_published_read(
-        &mut self, host: &mut dyn Host, address: u64, size: u8,
+        &mut self,
+        host: &mut dyn Host,
+        address: u64,
+        size: u8,
     ) -> Result<(), String> {
-        let source = self.window_at(address, size).ok_or("published MMIO mapping disappeared")?;
+        let source = self
+            .window_at(address, size)
+            .ok_or("published MMIO mapping disappeared")?;
         self.touch(source);
         self.wake_dependents(host, source)
     }
@@ -773,12 +780,15 @@ impl Bus {
     fn window_at(&self, address: u64, size: u8) -> Option<usize> {
         let end = address.checked_add(size as u64)?;
         self.pages.get(&(address >> 20)).and_then(|pages| {
-            pages[((address >> 12) & 255) as usize].iter().copied().find(|&id| {
-                self.windows[id]
-                    .mappings
-                    .iter()
-                    .any(|m| address >= m.base && end <= m.base + m.size)
-            })
+            pages[((address >> 12) & 255) as usize]
+                .iter()
+                .copied()
+                .find(|&id| {
+                    self.windows[id]
+                        .mappings
+                        .iter()
+                        .any(|m| address >= m.base && end <= m.base + m.size)
+                })
         })
     }
     /// A poll loop fast-forward left `count` reads of a `poll_stable`
@@ -844,7 +854,9 @@ impl Bus {
             if self.mode == Mode::Strict
                 && value.is_none()
                 && let Some(result) =
-                    self.windows[id].device.read_without_advance(address, size, host.now())
+                    self.windows[id]
+                        .device
+                        .read_without_advance(address, size, host.now())
             {
                 let started = fujimod_perf::device(
                     u16::try_from(id).unwrap_or(u16::MAX),
@@ -1044,15 +1056,13 @@ impl Bus {
                     value: token,
                     message: String::new(),
                 },
-                outcome
-                    .err()
-                    .unwrap_or_else(|| {
-                        format!(
-                            "device event is unmodeled in {} (token {token:?}): {}",
-                            self.windows[device].device.name(),
-                            detail.as_deref().unwrap_or("no reason given")
-                        )
-                    }),
+                outcome.err().unwrap_or_else(|| {
+                    format!(
+                        "device event is unmodeled in {} (token {token:?}): {}",
+                        self.windows[device].device.name(),
+                        detail.as_deref().unwrap_or("no reason given")
+                    )
+                }),
             )?;
             return Ok(());
         }
@@ -1318,7 +1328,9 @@ mod tests {
             fn save(&self) -> Value {
                 panic!("discarded diagnostic allocation")
             }
-            fn checkpoint(&self) -> Result<fujimod_emulator_devices::checkpoint::Checkpoint, String> {
+            fn checkpoint(
+                &self,
+            ) -> Result<fujimod_emulator_devices::checkpoint::Checkpoint, String> {
                 fujimod_emulator_devices::checkpoint::Checkpoint::encode(
                     "complete",
                     &json!({"payload":[1,2,3],"pending":7}),
@@ -1399,14 +1411,19 @@ mod tests {
         bus.register(0x1000, 4, Box::new(Master)).unwrap();
         let target = bus.register(0x2000, 4, Box::new(Register(0))).unwrap();
         bus.observe_transactions(Some(8));
-        bus.access(&mut Services, 0, 0x40, 0x1000, 4, Some(5)).unwrap();
+        bus.access(&mut Services, 0, 0x40, 0x1000, 4, Some(5))
+            .unwrap();
         assert_eq!(bus.device::<Register>(target).unwrap().0, 6);
         let (rows, _) = bus.transactions();
         let order: Vec<_> = rows.iter().map(|t| (t.cpu, t.address, t.value)).collect();
         // The nested writes complete before the causing access is logged.
         assert_eq!(
             order,
-            [(usize::MAX, 0x2000, 5), (usize::MAX, 0x2000, 6), (0, 0x1000, 5)]
+            [
+                (usize::MAX, 0x2000, 5),
+                (usize::MAX, 0x2000, 6),
+                (0, 0x1000, 5)
+            ]
         );
     }
 

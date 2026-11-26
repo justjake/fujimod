@@ -1,7 +1,7 @@
 use super::*;
+use fujimod_emulator_devices::test_host::recording::RecordingHost;
 use fujimod_emulator_ip_arm::pl022::{Clock, Controller};
 use fujimod_emulator_parts_io::serial::Unconnected;
-use fujimod_emulator_devices::test_host::recording::RecordingHost;
 
 const BASE: u64 = 0x100000;
 const SERIAL: u64 = 0x200000;
@@ -458,7 +458,9 @@ fn ram_keeps_precedence_over_a_read_window_and_window_writes_refuse() {
     start_software(&mut d, &mut h, 0, WINDOW + 0x20);
     let mut cx = Cx::new(&mut h, 0, 0, 0);
     d.advance(&mut cx);
-    let refusal = cx.refusal().expect("a DMA write into a read-only window refuses");
+    let refusal = cx
+        .refusal()
+        .expect("a DMA write into a read-only window refuses");
     assert!(refusal.contains("read-only device memory"), "{refusal}");
     assert_eq!(read(&mut d, &mut h, BASE + 0x30) & 8, 0);
 }
@@ -473,22 +475,38 @@ fn global_enable_at_reset_runs_a_software_copy_without_a_global_write() {
         ..Default::default()
     };
     configure(&mut d, &mut h, 0, 8, 72, [0x30f00; 2], 32);
-    write(&mut d, &mut h, BASE + 0x28, (ENABLE | SOFTWARE | 0x100000) as u64);
+    write(
+        &mut d,
+        &mut h,
+        BASE + 0x28,
+        (ENABLE | SOFTWARE | 0x100000) as u64,
+    );
     for _ in 0..4 {
         advance(&mut d, &mut h);
     }
     assert_eq!(&h.ram[72..104], &(8..40).collect::<Vec<u8>>());
     assert_eq!(read(&mut d, &mut h, BASE + 0x30), 8);
-    assert!(h.irqs.is_empty(), "control bit 0 clear raises no completion IRQ");
+    assert!(
+        h.irqs.is_empty(),
+        "control bit 0 clear raises no completion IRQ"
+    );
 }
 #[test]
 fn without_the_reset_enable_a_software_copy_never_starts() {
     let routing = Arc::new(Mutex::new(Routing::default()));
     routing.lock().unwrap().set_request(0, 63).unwrap();
     let mut d = pair(routing, BTreeMap::new());
-    let mut h = RecordingHost { ram: (0..128).collect(), ..Default::default() };
+    let mut h = RecordingHost {
+        ram: (0..128).collect(),
+        ..Default::default()
+    };
     configure(&mut d, &mut h, 0, 8, 72, [0x30f00; 2], 32);
-    write(&mut d, &mut h, BASE + 0x28, (ENABLE | SOFTWARE | 0x100000) as u64);
+    write(
+        &mut d,
+        &mut h,
+        BASE + 0x28,
+        (ENABLE | SOFTWARE | 0x100000) as u64,
+    );
     advance(&mut d, &mut h);
     assert_eq!(&h.ram[72..104], &(72..104).collect::<Vec<u8>>());
 }

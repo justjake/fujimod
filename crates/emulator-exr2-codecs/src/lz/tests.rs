@@ -558,7 +558,11 @@ fn soft_focus_x30_preview_crops_admit_transfer_blocks_with_the_same_pixels() {
         for y in 0..480 {
             for x in 0..640 {
                 let at = 0x10000 + y * 1280 + x * 2;
-                let sample = if input == 0 { (x + 3 * y) as u16 % 200 } else { input };
+                let sample = if input == 0 {
+                    (x + 3 * y) as u16 % 200
+                } else {
+                    input
+                };
                 h.bytes[at..at + 2].copy_from_slice(&sample.to_le_bytes());
             }
         }
@@ -610,8 +614,18 @@ fn soft_focus_x30_preview_crops_admit_transfer_blocks_with_the_same_pixels() {
     ] {
         let mut regs = vec![0; 36];
         let values = [
-            control, 0x10000, 0x500, source, 0x100000, 0x500, destination, limit, 0x00191a1a,
-            0x24242526, 0x00400080, transfer,
+            control,
+            0x10000,
+            0x500,
+            source,
+            0x100000,
+            0x500,
+            destination,
+            limit,
+            0x00191a1a,
+            0x24242526,
+            0x00400080,
+            transfer,
         ];
         for (register, word) in ORDER.into_iter().zip(values) {
             regs[register / 4] = word;
@@ -772,8 +786,18 @@ fn scalar_half_fir_transfer_blocks_change_no_pixels_and_refuse_partial_rows() {
     ] {
         let mut regs = vec![0; 36];
         let values = [
-            0x1000, 0x10000, 0x500, 0x007800a0, 0x100000, 0x500, 0x003c0000 | width, 0x40,
-            0x082030, 0x081e3844, 0x00400080, transfer,
+            0x1000,
+            0x10000,
+            0x500,
+            0x007800a0,
+            0x100000,
+            0x500,
+            0x003c0000 | width,
+            0x40,
+            0x082030,
+            0x081e3844,
+            0x00400080,
+            transfer,
         ];
         for (register, word) in ORDER.into_iter().zip(values) {
             regs[register / 4] = word;
@@ -1033,8 +1057,12 @@ fn packed_luma_half_admits_builder_rounded_destination_widths() {
         for y in 0..480 {
             for x in (0..640).step_by(2) {
                 let at = 0x10000 + y * 2048 + x * 2;
-                h.bytes[at..at + 4]
-                    .copy_from_slice(&[(x / 8 + y / 4) as u8, (x / 8 + y / 4) as u8, 128, 128]);
+                h.bytes[at..at + 4].copy_from_slice(&[
+                    (x / 8 + y / 4) as u8,
+                    (x / 8 + y / 4) as u8,
+                    128,
+                    128,
+                ]);
             }
         }
         let mut words = luma_conversion_words();

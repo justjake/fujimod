@@ -41,13 +41,22 @@ def harness(
     return result
 
 
-@pytest.mark.parametrize('changes', [
-    {'name': ''}, {'name': '../code'}, {'name': 'x' * 129},
-    {'address': -1}, {'address': (1 << 64) - 1}, {'address': True},
-    {'data': b''}, {'data': bytearray(4)}, {'executable': 1},
-])
+@pytest.mark.parametrize(
+    "changes",
+    [
+        {"name": ""},
+        {"name": "../code"},
+        {"name": "x" * 129},
+        {"address": -1},
+        {"address": (1 << 64) - 1},
+        {"address": True},
+        {"data": b""},
+        {"data": bytearray(4)},
+        {"executable": 1},
+    ],
+)
 def test_image_retains_name_byte_address_and_execution_checks(changes) -> None:
-    values = dict(name='code', address=CODE, data=words(0xD65F03C0))
+    values = dict(name="code", address=CODE, data=words(0xD65F03C0))
     with pytest.raises(ValueError):
         Aarch64Image(**(values | changes))
 
@@ -61,7 +70,9 @@ def test_arguments_and_returns_preserve_all_64_bits() -> None:
         assert result["returned"] and result["return_value"] == sum(args)
         assert result["registers"]["sp"] == SP
         assert result["instructions"] == 8
-        assert result["images"] == [{"name": "code", "address": CODE, "size": len(code)}]
+        assert result["images"] == [
+            {"name": "code", "address": CODE, "size": len(code)}
+        ]
         assert result["ram_fixture"] == [{"address": DATA, "size": 32}]
         assert result["allowed_code"] == [[CODE, CODE + len(code)]]
 

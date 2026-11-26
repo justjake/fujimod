@@ -83,7 +83,8 @@ impl Device for Clocks {
         // not restart the internal oscillator (SDHCI 4.20, 2.2.15 and 3.2.3).
         // The output must be stopped before changing its frequency.
         if clock.control & value & 4 != 0 && (clock.control ^ value) & 0xffc0 != 0 {
-            cx.unmodeled(); return;
+            cx.unmodeled();
+            return;
         }
         let relock = (clock.control ^ value) & ENABLE != 0;
         if value & ENABLE == 0 {
@@ -194,21 +195,27 @@ mod tests {
     }
     #[test]
     fn divided_clock_keeps_its_oscillator_ready_across_output_frequency_changes() {
-        let mut clock=Clocks::new(&[(0xff9b002c,100)]).unwrap();
-        let mut host=TestHost::default();
-        write(&mut clock,&mut host,0xff9b002c,0x3e01,0);
-        host.now=100;
-        assert_eq!(clock.read(&mut Cx::new(&mut host,0,0,0),0xff9b002c,2),0x3e03);
-        write(&mut clock,&mut host,0xff9b002c,0x3e07,0);
-        write(&mut clock,&mut host,0xff9b002c,0x103,0);
-        write(&mut clock,&mut host,0xff9b002c,0x107,0);
-        assert_eq!(clock.read(&mut Cx::new(&mut host,0,0,0),0xff9b002c,2),0x107);
-        assert_eq!(clock.next_deadline(host.now),None);
-        let saved=clock.save();
-        let mut cx=Cx::new(&mut host,0,0,0);
-        clock.write(&mut cx,0xff9b002c,2,0x207);
+        let mut clock = Clocks::new(&[(0xff9b002c, 100)]).unwrap();
+        let mut host = TestHost::default();
+        write(&mut clock, &mut host, 0xff9b002c, 0x3e01, 0);
+        host.now = 100;
+        assert_eq!(
+            clock.read(&mut Cx::new(&mut host, 0, 0, 0), 0xff9b002c, 2),
+            0x3e03
+        );
+        write(&mut clock, &mut host, 0xff9b002c, 0x3e07, 0);
+        write(&mut clock, &mut host, 0xff9b002c, 0x103, 0);
+        write(&mut clock, &mut host, 0xff9b002c, 0x107, 0);
+        assert_eq!(
+            clock.read(&mut Cx::new(&mut host, 0, 0, 0), 0xff9b002c, 2),
+            0x107
+        );
+        assert_eq!(clock.next_deadline(host.now), None);
+        let saved = clock.save();
+        let mut cx = Cx::new(&mut host, 0, 0, 0);
+        clock.write(&mut cx, 0xff9b002c, 2, 0x207);
         assert!(cx.refusal().is_some());
-        assert_eq!(clock.save(),saved);
+        assert_eq!(clock.save(), saved);
     }
     fn sequence(pc: u64) -> (Value, Vec<Record>) {
         let words = [(0xfffc622c, 8), (0xfffca22c, 20)];

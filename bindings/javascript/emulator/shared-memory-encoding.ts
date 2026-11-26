@@ -17,6 +17,8 @@ export function sharedStringEncoding(source: string): string {
     throw Error('Expected one generated wasm-bindgen UTF-8 encoder.');
   return (
     source.replace(call, 'encodeIntoSharedMemory(cachedTextEncoder,arg,view)') +
-    '\n' + encodeIntoSharedMemory.toString() + '\n'
+    '\n' +
+    encodeIntoSharedMemory.toString() +
+    '\n'
   );
 }

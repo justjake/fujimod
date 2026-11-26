@@ -194,7 +194,9 @@ fn build<'py>(
         .ok_or_else(|| error("Missing SD card recipe"))?;
     let read = self::sd_card_read(sd_card_read)?;
     if startup && read != core::SdCardRead::Rom {
-        return Err(error("The fast SD card read applies to the recovery card build"));
+        return Err(error(
+            "The fast SD card read applies to the recovery card build",
+        ));
     }
     let files = if startup {
         recipe.build_startup(source)
@@ -283,7 +285,14 @@ fn compile_ffinit<'py>(
         .extract()?;
     let api: core::FileApi = serde_json::from_str(&text).map_err(error)?;
     let (bytes, layout) = recipe
-        .compile_ffinit(source, payload, base, &api, workspace, self::sd_card_read(sd_card_read)?)
+        .compile_ffinit(
+            source,
+            payload,
+            base,
+            &api,
+            workspace,
+            self::sd_card_read(sd_card_read)?,
+        )
         .map_err(error)?;
     Ok((PyBytes::new(py, &bytes), value(py, &layout)?.unbind()))
 }

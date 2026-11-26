@@ -121,7 +121,10 @@ impl Device for BringupStub {
     }
 
     fn read(&mut self, cx: &mut Cx<'_>, address: u64, size: u8) -> u64 {
-        let Some(offset) = address.checked_sub(self.state.base).filter(|o| *o < self.state.size) else {
+        let Some(offset) = address
+            .checked_sub(self.state.base)
+            .filter(|o| *o < self.state.size)
+        else {
             cx.unmodeled();
             return 0;
         };
@@ -139,7 +142,10 @@ impl Device for BringupStub {
     }
 
     fn write(&mut self, cx: &mut Cx<'_>, address: u64, size: u8, value: u64) {
-        let Some(offset) = address.checked_sub(self.state.base).filter(|o| *o < self.state.size) else {
+        let Some(offset) = address
+            .checked_sub(self.state.base)
+            .filter(|o| *o < self.state.size)
+        else {
             cx.unmodeled();
             return;
         };

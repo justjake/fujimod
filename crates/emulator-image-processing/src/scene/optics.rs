@@ -1,8 +1,8 @@
 //! A declared optical input law, driven by the physical focus-axis output.
 //! The external raster is sharp at target_position. Defocus applies a bounded
 //! horizontal box PSF; pulse/depth scale and the PSF are not calibrated optics.
-use fujimod_emulator_imaging::scene::frames::{ImageFrame, Pixels};
 use fujimod_emulator_devices::parts::optics::Position;
+use fujimod_emulator_imaging::scene::frames::{ImageFrame, Pixels};
 use fujimod_emulator_imaging::scene::optics::Options;
 use std::sync::Arc;
 
@@ -27,11 +27,14 @@ impl Optics {
             last: None,
         })
     }
-    pub(super) fn checkpoint(&self) -> Result<fujimod_emulator_devices::checkpoint::Checkpoint, String> {
-        Ok(
-            fujimod_emulator_devices::checkpoint::Checkpoint::encode("optical-input", &(&self.options, self.last))?
-                .with_blobs(vec![self.source.clone()]),
-        )
+    pub(super) fn checkpoint(
+        &self,
+    ) -> Result<fujimod_emulator_devices::checkpoint::Checkpoint, String> {
+        Ok(fujimod_emulator_devices::checkpoint::Checkpoint::encode(
+            "optical-input",
+            &(&self.options, self.last),
+        )?
+        .with_blobs(vec![self.source.clone()]))
     }
     pub(super) fn validate_checkpoint(
         &self,
@@ -59,11 +62,7 @@ impl Optics {
         self.last = last;
         Ok(())
     }
-    pub(super) fn render(
-        &mut self,
-        image: &mut ImageFrame,
-        changed: bool,
-    ) -> Result<(), String> {
+    pub(super) fn render(&mut self, image: &mut ImageFrame, changed: bool) -> Result<(), String> {
         let position = self.position.value();
         if changed || self.source.is_empty() {
             self.source = image.pixels.render(image.layout, 0)?;
@@ -111,7 +110,9 @@ impl Optics {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use fujimod_emulator_imaging::{exr2_isp::contrast::energies, analysis::ImageLayout, scene::ImageFrames};
+    use fujimod_emulator_imaging::{
+        analysis::ImageLayout, exr2_isp::contrast::energies, scene::ImageFrames,
+    };
     #[test]
     fn physical_position_changes_pixels_and_sharp_input_is_recoverable() {
         let l = ImageLayout {

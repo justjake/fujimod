@@ -30,7 +30,9 @@ class RoutineBoard:
             value is not None and (type(value) is not int or not 0 <= value < 1 << 32)
             for value in cpu_identity
         ):
-            raise ValueError("Declare one R-profile identity word or None per processor")
+            raise ValueError(
+                "Declare one R-profile identity word or None per processor"
+            )
         self._board = board
         self.identity = list(cpu_identity)
         self.cpus = board.cpus

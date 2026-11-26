@@ -86,8 +86,96 @@ impl MmioTransfer {
         value
     }
 }
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct IsvMmio {
+    physical: u64,
+    size: u8,
+    register: u8,
+    load: bool,
+    signed: bool,
+    wide: bool,
+}
+
+impl IsvMmio {
+    fn transfer(self) -> MmioTransfer {
+        MmioTransfer {
+            physical: self.physical,
+            size: self.size,
+            register: self.register,
+            signed: self.signed,
+            wide: self.wide,
+            ram: false,
+            store: 0,
+        }
+    }
+}
+
+/// Use the ISS only when the stage-2 data abort describes a scalar transfer
+/// and HVF supplied the faulting IPA. The instruction decoder handles the
+/// remaining cases, including writeback, pair, SIMD, and cache maintenance.
+fn decode_mmio_from_esr(trap: &Trap) -> Option<IsvMmio> {
+    let syndrome = trap.syndrome;
+    const ISV: u64 = 1 << 24;
+    const FNV_EA_CM_S1PTW: u64 = 0xf << 7;
+    if syndrome >> 26 != 0x24
+        || syndrome & ISV == 0
+        || syndrome & FNV_EA_CM_S1PTW != 0
+        || !(0x04..=0x0f).contains(&(syndrome & 0x3f))
+    {
+        return None;
+    }
+    let size = 1u8 << ((syndrome >> 22) & 3);
+    let load = syndrome & (1 << 6) == 0;
+    let signed = syndrome & (1 << 21) != 0;
+    let wide = syndrome & (1 << 15) != 0;
+    if (trap.physical_address & 0xfff) + u64::from(size) > 0x1000
+        || (size == 8 && (!wide || signed))
+        || (size < 8 && !signed && wide)
+        || (signed && (!load || (size == 4 && !wide)))
+    {
+        return None;
+    }
+    Some(IsvMmio {
+        physical: trap.physical_address,
+        size,
+        register: ((syndrome >> 16) & 0x1f) as u8,
+        load,
+        signed,
+        wide,
+    })
+}
+
+fn fast_counter_read(
+    syndrome: u64,
+    clock: Clock,
+    progress: u64,
+    counters: FastCounters,
+) -> Option<(u32, u64)> {
+    if syndrome >> 26 != 0x18 || syndrome & 1 == 0 {
+        return None;
+    }
+    let register = arm::SystemRegister::from_trap_syndrome(syndrome)
+        .encoding()
+        .ok()?;
+    let now = || clock.after(progress).ok().map(|clock| clock.now);
+    let value = match register {
+        0xdf00 => counters.counter_hz,
+        0xdf01 => {
+            architectural_counter_count(now()?, counters.counter_hz, counters.ticks_per_second)
+                .ok()?
+        }
+        0xdce8 => counters.pmu_raw(now()?).ok()? as u64,
+        _ => return None,
+    };
+    Some((((syndrome >> 5) & 31) as u32, value))
+}
+
 pub fn base_register(r: u8) -> Register {
-    if r == 31 { Register::Sp } else { Register::X(r) }
+    if r == 31 {
+        Register::Sp
+    } else {
+        Register::X(r)
+    }
 }
 pub enum Value {
     Empty,
@@ -124,6 +212,7 @@ pub struct Shared {
     pub native_active: AtomicBool,
     pub deadline: AtomicBool,
     pub progress: AtomicU64,
+    pub interactive_time_scale: AtomicU64,
     pub limit: AtomicU64,
     /// Wall time the timer thread waits before it interrupts the vCPU again. The
     /// worker shrinks it to the execution budget still left after a preemption.
@@ -138,6 +227,7 @@ pub struct Shared {
     /// The owner's guest-clock anchor for the next run. Interactive runs
     /// evaluate clocked device reads at anchor + executed time.
     pub guest_clock: Mutex<Option<Clock>>,
+    pub fast_counters: Mutex<Option<FastCounters>>,
     /// PC and PSTATE as the worker hands control to its owner: before each
     /// event, run completion and command reply. They stay exact until the
     /// owner lets the vCPU execute again, so the owner reads them without a
@@ -205,6 +295,13 @@ impl Default for Shared {
             native_active: AtomicBool::new(false),
             deadline: AtomicBool::new(false),
             progress: AtomicU64::new(0),
+            interactive_time_scale: AtomicU64::new(
+                std::env::var("FUJIMOD_HVF_TIME_SCALE")
+                    .ok()
+                    .and_then(|value| value.parse::<u64>().ok())
+                    .unwrap_or(1)
+                    .clamp(1, 16),
+            ),
             limit: AtomicU64::new(u64::MAX),
             wake_limit_ns: AtomicU64::new(u64::MAX),
             measured: AtomicBool::new(false),
@@ -215,6 +312,7 @@ impl Default for Shared {
             budget_timer_kqueue: AtomicI32::new(-1),
             budget_lock: Mutex::new(()),
             guest_clock: Mutex::new(None),
+            fast_counters: Mutex::new(None),
             parked_pc: AtomicU64::new(0),
             parked_pstate: AtomicU64::new(0),
             parked_valid: AtomicBool::new(false),
@@ -306,7 +404,7 @@ impl Drop for BudgetTimer {
 pub struct BudgetRun(Arc<Shared>);
 
 impl BudgetRun {
-    pub fn start(shared: Arc<Shared>) -> Result<Self, String> {
+    pub fn start(shared: Arc<Shared>, scale: u64) -> Result<Self, String> {
         {
             let _guard = shared
                 .budget_lock
@@ -320,9 +418,10 @@ impl BudgetRun {
             shared
                 .budget_start_ticks
                 .store(unsafe { ffi::mach_absolute_time() }, Ordering::Release);
-            shared
-                .wake_limit_ns
-                .store(shared.limit.load(Ordering::Acquire), Ordering::Release);
+            shared.wake_limit_ns.store(
+                guest_to_host_wait_ns(shared.limit.load(Ordering::Acquire), scale),
+                Ordering::Release,
+            );
             shared.budget_active.store(true, Ordering::Release);
             shared.budget_generation.fetch_add(1, Ordering::AcqRel);
         }
@@ -565,6 +664,18 @@ fn mach_deadline(start: u64, limit_ns: u64, timebase: ffi::MachTimebaseInfo) -> 
     let ticks = numerator.div_ceil(u128::from(timebase.numer));
     start.saturating_add(ticks.min(u128::from(u64::MAX)) as u64)
 }
+fn host_to_guest_ns(host_ns: u64, scale: u64) -> u64 {
+    host_ns.saturating_mul(scale.max(1))
+}
+
+fn guest_to_host_wait_ns(guest_ns: u64, scale: u64) -> u64 {
+    if guest_ns == u64::MAX {
+        u64::MAX
+    } else {
+        guest_ns.div_ceil(scale.max(1)).max(1)
+    }
+}
+
 struct Processor {
     cpu: u64,
     monitor: fujimod_emulator_cpu::exclusive::Owner,
@@ -574,6 +685,8 @@ struct Processor {
     interrupts: [bool; 2],
     fast_windows: Vec<FastWindow>,
     timebase: ffi::MachTimebaseInfo,
+    /// Upper bound on the count a guest could have read in a previous run.
+    virtual_counter_floor: u64,
     reply: mpsc::SyncSender<Result<Value, String>>,
 }
 impl Processor {
@@ -618,6 +731,7 @@ impl Processor {
             interrupts: [false; 2],
             fast_windows: Vec::new(),
             timebase,
+            virtual_counter_floor: 0,
             reply,
         };
         unsafe {
@@ -977,6 +1091,7 @@ impl Processor {
             self.set_sys(r, v)?;
         }
         self.interrupts = state.interrupts;
+        self.virtual_counter_floor = 0;
         self.vm.restore_exclusive(self.monitor, state.exclusive);
         Ok(())
     }
@@ -1136,6 +1251,42 @@ impl Processor {
         access.failure = result.err();
         access
     }
+    fn prepare_mmio_from_isv(&self, isv: IsvMmio) -> Result<MmioAccess, ExecutionError> {
+        let pc = self.reg(ffi::PC)?;
+        let mut transfer = isv.transfer();
+        transfer.ram = self.vm.overlaps(
+            isv.physical,
+            isv.physical.saturating_add(u64::from(isv.size)),
+        )?;
+        if !isv.load && !transfer.ram && isv.register != 31 {
+            transfer.store = self.reg(u32::from(isv.register))?;
+        }
+        let mut transfers = arrayvec::ArrayVec::new();
+        transfers.push(transfer);
+        Ok(MmioAccess {
+            pc,
+            load: isv.load,
+            simd: false,
+            transfers,
+            writeback: None,
+            failure: None,
+            cache_clean: false,
+        })
+    }
+
+    fn fast_mmio_isv(&self, isv: IsvMmio, tick: Option<u64>) -> Result<bool, ExecutionError> {
+        if !isv.load {
+            return Ok(false);
+        }
+        let transfer = isv.transfer();
+        let Some(raw) = self.fast_mmio_value(&transfer, tick)? else {
+            return Ok(false);
+        };
+        self.write_mmio_load(&transfer, raw)?;
+        self.set_reg(ffi::PC, self.reg(ffi::PC)?.wrapping_add(4))?;
+        Ok(true)
+    }
+
     /// Serve a single scalar device load from a published read in an
     /// interactive run, at this core's guest clock. Anything else, including
     /// a declined read, stays an owner callback.
@@ -1157,34 +1308,70 @@ impl Processor {
         {
             return Ok(false);
         }
-        let Some(end) = t.physical.checked_add(u64::from(t.size)) else {
+        let Some(raw) = self.fast_mmio_value(t, tick)? else {
             return Ok(false);
         };
-        let at = self.fast_windows.partition_point(|w| w.base <= t.physical);
-        let Some(window) = at
-            .checked_sub(1)
-            .map(|i| &self.fast_windows[i])
-            .filter(|w| end <= w.end)
-        else {
-            return Ok(false);
-        };
-        let offset = window.offset + t.physical - window.base;
-        let Some(raw) = window
-            .reads
-            .iter()
-            .find_map(|read| read.read_at(offset, u32::from(t.size), tick))
-        else {
-            return Ok(false);
-        };
-        if t.register != 31 {
-            self.set_reg(u32::from(t.register), t.loaded(raw))?;
-        }
+        self.write_mmio_load(t, raw)?;
         if let Some((r, v)) = access.writeback {
             self.write(base_register(r), &v.to_le_bytes())?;
         }
         self.set_reg(ffi::PC, access.pc.wrapping_add(4))?;
         Ok(true)
     }
+
+    fn fast_mmio_value(
+        &self,
+        transfer: &MmioTransfer,
+        tick: Option<u64>,
+    ) -> Result<Option<u64>, ExecutionError> {
+        let address = transfer.physical;
+        let Some(end) = address.checked_add(u64::from(transfer.size)) else {
+            return Ok(None);
+        };
+        let at = self
+            .fast_windows
+            .partition_point(|window| window.base <= address);
+        let Some(window) = at
+            .checked_sub(1)
+            .map(|index| &self.fast_windows[index])
+            .filter(|window| end <= window.end)
+        else {
+            return Ok(None);
+        };
+        if self.vm.overlaps(address, end)? {
+            return Ok(None);
+        }
+        let offset = window.offset + (address - window.base);
+        Ok(window
+            .reads
+            .iter()
+            .find_map(|read| read.read_at(offset, u32::from(transfer.size), tick)))
+    }
+
+    fn write_mmio_load(&self, transfer: &MmioTransfer, raw: u64) -> Result<(), String> {
+        if transfer.register != 31 {
+            self.set_reg(u32::from(transfer.register), transfer.loaded(raw))?;
+        }
+        Ok(())
+    }
+
+    fn fast_sysreg_read(
+        &self,
+        syndrome: u64,
+        clock: Clock,
+        progress: u64,
+        counters: FastCounters,
+    ) -> Result<bool, ExecutionError> {
+        let Some((rt, value)) = fast_counter_read(syndrome, clock, progress, counters) else {
+            return Ok(false);
+        };
+        if rt != 31 {
+            self.set_reg(rt, value)?;
+        }
+        self.set_reg(ffi::PC, self.reg(ffi::PC)?.wrapping_add(4))?;
+        Ok(true)
+    }
+
     /// Report an architectural trap; data aborts carry their decoded access.
     fn trap_event(&self, trap: Trap) -> Event {
         if matches!(trap.syndrome >> 26, 0x24 | 0x25) {
@@ -1386,15 +1573,15 @@ impl Processor {
         }
         Ok(mach_nanoseconds(time, self.timebase))
     }
-    fn update_interactive_progress(&self, started: u64) -> Result<u64, ExecutionError> {
-        let progress = self.exec_time()?.saturating_sub(started);
+    fn update_interactive_progress(&self, started: u64, scale: u64) -> Result<u64, ExecutionError> {
+        let progress = host_to_guest_ns(self.exec_time()?.saturating_sub(started), scale);
         self.shared.progress.fetch_max(progress, Ordering::Relaxed);
         Ok(progress)
     }
     /// Stop at the execution budget. A wall timer that fired while the thread
     /// was not running only interrupts the vCPU; the worker re-arms it for the
     /// budget that execution has not consumed yet.
-    fn interactive_budget_spent(&self, progress: u64) -> Result<bool, ExecutionError> {
+    fn interactive_budget_spent(&self, progress: u64, scale: u64) -> Result<bool, ExecutionError> {
         let limit = self.shared.limit.load(Ordering::Acquire);
         if progress >= limit {
             return Ok(true);
@@ -1410,9 +1597,10 @@ impl Processor {
                 self.shared
                     .budget_start_ticks
                     .store(unsafe { ffi::mach_absolute_time() }, Ordering::Release);
-                self.shared
-                    .wake_limit_ns
-                    .store(limit.saturating_sub(progress).max(1), Ordering::Release);
+                self.shared.wake_limit_ns.store(
+                    guest_to_host_wait_ns(limit.saturating_sub(progress), scale),
+                    Ordering::Release,
+                );
                 self.shared.budget_generation.fetch_add(1, Ordering::AcqRel);
             }
             self.shared
@@ -1421,6 +1609,24 @@ impl Processor {
         }
         Ok(false)
     }
+    /// Native CNTVCT and CNTFRQ run at the Mach counter frequency. Set
+    /// their origin to guest time here; HVF still advances CNTVCT at the
+    /// native rate until the next anchor, even with a scaled run budget.
+    fn anchor_virtual_counter(&self, clock: Clock, counters: FastCounters) -> Result<u64, String> {
+        let native_hz =
+            1_000_000_000 * u64::from(self.timebase.denom) / u64::from(self.timebase.numer);
+        let count = architectural_counter_count(clock.now, native_hz, counters.ticks_per_second)?
+            .max(self.virtual_counter_floor);
+        let offset = unsafe { ffi::mach_absolute_time() }.wrapping_sub(count);
+        unsafe {
+            ffi::check(
+                ffi::hv_vcpu_set_vtimer_offset(self.cpu, offset),
+                "anchor native virtual counter",
+            )?;
+        }
+        Ok(offset)
+    }
+
     fn disable_single_step(&self) -> Result<(), String> {
         let mdscr = self.sys(ffi::MDSCR)?;
         if mdscr & 1 != 0 {
@@ -1466,18 +1672,28 @@ impl Processor {
             .guest_clock
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
-        let _budget = BudgetRun::start(self.shared.clone()).map_err(ExecutionError::Backend)?;
+        let counters = *self
+            .shared
+            .fast_counters
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let scale = self.shared.interactive_time_scale.load(Ordering::Relaxed);
+        let virtual_counter_offset = match (clock, counters) {
+            (Some(clock), Some(counters)) => Some(self.anchor_virtual_counter(clock, counters)?),
+            _ => None,
+        };
+        let _budget =
+            BudgetRun::start(self.shared.clone(), scale).map_err(ExecutionError::Backend)?;
         self.disable_single_step()?;
         loop {
             if self.shared.stop.load(Ordering::Acquire) {
                 return Ok(Exit::Stopped);
             }
-            if self.interactive_budget_spent(progress)? {
+            if self.interactive_budget_spent(progress, scale)? {
                 return Ok(Exit::Stopped);
             }
 
             self.deliver_interrupt()?;
-            self.disable_single_step()?;
             self.shared.native_active.store(true, Ordering::Release);
             if self.shared.stop.load(Ordering::Acquire) {
                 self.shared.native_active.store(false, Ordering::Release);
@@ -1486,12 +1702,18 @@ impl Processor {
             let run_result = self.run_vcpu("run");
             self.shared.native_active.store(false, Ordering::Release);
             run_result?;
-            progress = self.update_interactive_progress(started)?;
+            if let Some(offset) = virtual_counter_offset {
+                // Sample before owner callbacks. Time parked after an exit
+                // could not have been observed by this vCPU.
+                self.virtual_counter_floor =
+                    unsafe { ffi::mach_absolute_time() }.wrapping_sub(offset);
+            }
+            progress = self.update_interactive_progress(started, scale)?;
             let exit = unsafe { *self.exit };
             if self.shared.stop.load(Ordering::Acquire) {
                 return Ok(Exit::Stopped);
             }
-            if self.interactive_budget_spent(progress)? {
+            if self.interactive_budget_spent(progress, scale)? {
                 return Ok(Exit::Stopped);
             }
             match exit.reason {
@@ -1514,15 +1736,32 @@ impl Processor {
                         virtual_address: exit.exception.virtual_address,
                         physical_address: exit.exception.physical_address,
                     };
-                    let event = self.trap_event(trap);
-                    if let Event::Mmio(_, access) = &event {
+                    if ec == 0x18
+                        && let (Some(clock), Some(counters)) = (clock, counters)
+                        && self.fast_sysreg_read(trap.syndrome, clock, progress, counters)?
+                    {
+                        continue;
+                    }
+                    let event = if matches!(ec, 0x24 | 0x25) {
                         let tick = clock
                             .and_then(|clock| clock.after(progress).ok())
                             .map(|clock| clock.now);
-                        if self.fast_mmio(&trap, access, tick)? {
-                            continue;
-                        }
-                    }
+                        let access = if let Some(isv) = decode_mmio_from_esr(&trap) {
+                            if self.fast_mmio_isv(isv, tick)? {
+                                continue;
+                            }
+                            self.prepare_mmio_from_isv(isv)?
+                        } else {
+                            let access = self.prepare_mmio();
+                            if self.fast_mmio(&trap, &access, tick)? {
+                                continue;
+                            }
+                            access
+                        };
+                        Event::Mmio(trap, access)
+                    } else {
+                        Event::Trap
+                    };
                     self.send_event(events, event, "HVF trap owner disconnected")?;
                     let handled = self.paused(commands)?;
                     if !handled {
@@ -1628,5 +1867,123 @@ pub fn serve(
                 let _ = p.reply.send(result);
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn scaled_progress_and_wait_preserve_deadlines_and_unbounded_runs() {
+        assert_eq!(host_to_guest_ns(40_000_000, 1), 40_000_000);
+        assert_eq!(guest_to_host_wait_ns(40_000_000, 1), 40_000_000);
+        assert_eq!(host_to_guest_ns(10_000_000, 4), 40_000_000);
+        assert_eq!(guest_to_host_wait_ns(40_000_000, 4), 10_000_000);
+        assert_eq!(guest_to_host_wait_ns(40_000_001, 4), 10_000_001);
+        assert_eq!(guest_to_host_wait_ns(0, 4), 1);
+        assert_eq!(host_to_guest_ns(u64::MAX, 16), u64::MAX);
+        assert_eq!(guest_to_host_wait_ns(u64::MAX, 16), u64::MAX);
+        assert_eq!(guest_to_host_wait_ns(u64::MAX - 1, 16), 1 << 60);
+    }
+
+    #[test]
+    fn counter_reads_use_the_guest_clock_and_decline_writes() {
+        fn syndrome(encoding: u16, rt: u64) -> u64 {
+            let r = arm::SystemRegister::from_encoding(encoding);
+            (0x18 << 26)
+                | (1 << 25)
+                | (u64::from(r.op0) << 20)
+                | (u64::from(r.op2) << 17)
+                | (u64::from(r.op1) << 14)
+                | (u64::from(r.crn) << 10)
+                | (rt << 5)
+                | (u64::from(r.crm) << 1)
+                | 1
+        }
+        let clock = Clock {
+            now: 48,
+            phase: 0,
+            ratio: timeline::Ratio::new(2, 1).unwrap(),
+        };
+        let counters = FastCounters {
+            counter_hz: 8,
+            ticks_per_second: 4,
+            pmu_hz: 32,
+            pmu_control: 9,
+            pmu_enabled: true,
+            pmu_offset: 10,
+            pmu_anchor: 40,
+        };
+        for (register, value) in [(0xdf00, 8), (0xdf01, 120), (0xdce8, 12)] {
+            for rt in [0, 31] {
+                let read = syndrome(register, rt);
+                assert_eq!(
+                    fast_counter_read(read, clock, 24, counters),
+                    Some((rt as u32, value))
+                );
+                assert_eq!(fast_counter_read(read & !1, clock, 24, counters), None);
+            }
+        }
+        assert_eq!(
+            fast_counter_read(syndrome(0xdf11, 0), clock, 0, counters),
+            None
+        );
+        assert_eq!(
+            fast_counter_read(syndrome(0xdce8, 0), Clock { now: 10, ..clock }, 0, counters),
+            None
+        );
+    }
+
+    #[test]
+    fn isv_accepts_scalar_transfers_and_declines_incomplete_syndromes() {
+        let syndrome = (0x24 << 26)
+            | (1 << 25)
+            | (1 << 24)
+            | (1 << 22)
+            | (1 << 21)
+            | (31 << 16)
+            | (1 << 15)
+            | 0x07;
+        let trap = Trap {
+            syndrome,
+            virtual_address: 0x456,
+            physical_address: 0x8456,
+        };
+        assert_eq!(
+            decode_mmio_from_esr(&trap),
+            Some(IsvMmio {
+                physical: 0x8456,
+                size: 2,
+                register: 31,
+                load: true,
+                signed: true,
+                wide: true,
+            })
+        );
+        for bit in [26, 24, 10, 9, 8, 7, 6, 5] {
+            assert_eq!(
+                decode_mmio_from_esr(&Trap {
+                    syndrome: syndrome ^ (1 << bit),
+                    ..trap
+                }),
+                None,
+                "syndrome bit {bit}",
+            );
+        }
+        assert_eq!(
+            decode_mmio_from_esr(&Trap {
+                physical_address: 0x8fff,
+                ..trap
+            }),
+            None,
+        );
+        assert_eq!(
+            decode_mmio_from_esr(&Trap {
+                syndrome: syndrome ^ (1 << 21),
+                ..trap
+            }),
+            None,
+        );
     }
 }

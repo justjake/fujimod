@@ -14,14 +14,6 @@ use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
 use bytes::BytesMut;
 use futures_util::StreamExt;
 use rand::RngExt;
-use serde_json::{Value, json};
-use std::{
-    future::Future,
-    net::{SocketAddr, ToSocketAddrs},
-    sync::Arc,
-    thread,
-    time::{Duration, Instant},
-};
 use rtc::{
     media::Sample,
     media_stream::MediaStreamTrack,
@@ -30,6 +22,14 @@ use rtc::{
         RTCRtpCodec, RTCRtpCodecParameters, RTCRtpCodingParameters, RTCRtpEncodingParameters,
         RtpCodecKind,
     },
+};
+use serde_json::{Value, json};
+use std::{
+    future::Future,
+    net::{SocketAddr, ToSocketAddrs},
+    sync::Arc,
+    thread,
+    time::{Duration, Instant},
 };
 use webrtc::media_stream::Track;
 use webrtc::media_stream::track_local::{TrackLocal, static_sample::TrackLocalStaticSample};

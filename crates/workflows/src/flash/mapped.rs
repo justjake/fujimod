@@ -2,12 +2,59 @@
 use super::{Backup, Callbacks};
 use crate::{
     Limits,
-    bulk::{self, BulkError, Qualified},
+    bulk::{self, BulkError, MappedAddressSpace, MappedFailure, MappedPhase, Qualified},
 };
 use fujimod_catalog::capture::FirmwareFlash;
 use fujimod_catalog_bulk::{BulkRange, FirmwareBulk};
 use fujimod_usb::ff80::Session;
 use sha2::{Digest, Sha256};
+
+fn fail(
+    phase: MappedPhase,
+    space: MappedAddressSpace,
+    address: u64,
+    length: u64,
+    message: &str,
+) -> BulkError {
+    receipt(
+        phase,
+        space,
+        address,
+        length,
+        BulkError::Check(message.into()),
+    )
+}
+
+pub(super) fn receipt(
+    phase: MappedPhase,
+    space: MappedAddressSpace,
+    address: u64,
+    length: u64,
+    source: BulkError,
+) -> BulkError {
+    let (source, cleanup) = match source {
+        BulkError::Cleanup { operation, cleanup } => (operation, Some(cleanup)),
+        other => (Box::new(other), None),
+    };
+    BulkError::Mapped(MappedFailure {
+        phase,
+        space,
+        address,
+        length,
+        source,
+        cleanup,
+    })
+}
+
+fn context<T>(
+    phase: MappedPhase,
+    space: MappedAddressSpace,
+    address: u64,
+    length: u64,
+    result: bulk::Result<T>,
+) -> bulk::Result<T> {
+    result.map_err(|source| receipt(phase, space, address, length, source))
+}
 
 pub(super) async fn read(
     session: &mut Session,
@@ -17,31 +64,70 @@ pub(super) async fn read(
     target: BulkRange,
     callbacks: &mut Callbacks<'_>,
 ) -> bulk::Result<Backup> {
-    flash.validate().map_err(BulkError::Check)?;
-    let aperture = flash
-        .e1_window
-        .as_ref()
-        .ok_or_else(|| BulkError::Check("Direct E1 flash window is absent".into()))?;
-    let target_end = target
-        .address
-        .checked_add(target.size)
-        .ok_or_else(|| BulkError::Check("Flash range overflow".into()))?;
+    context(
+        MappedPhase::Window,
+        MappedAddressSpace::FlashOffset,
+        target.address,
+        target.size,
+        flash.validate().map_err(BulkError::Check),
+    )?;
+    let aperture = flash.e1_window.as_ref().ok_or_else(|| {
+        fail(
+            MappedPhase::Window,
+            MappedAddressSpace::FlashOffset,
+            target.address,
+            target.size,
+            "Direct E1 flash window is absent",
+        )
+    })?;
+    let target_end = target.address.checked_add(target.size).ok_or_else(|| {
+        fail(
+            MappedPhase::Bounds,
+            MappedAddressSpace::FlashOffset,
+            target.address,
+            target.size,
+            "Flash range overflow",
+        )
+    })?;
     if target.size == 0 || target_end > flash.window.size {
-        return Err(BulkError::Check(
-            "Flash range is outside the mapped device".into(),
+        return Err(fail(
+            MappedPhase::Bounds,
+            MappedAddressSpace::FlashOffset,
+            target.address,
+            target.size,
+            "Flash range is outside the mapped device",
         ));
     }
-    (callbacks.progress)(0, target.size).map_err(BulkError::Check)?;
+    context(
+        MappedPhase::Progress,
+        MappedAddressSpace::Cpu,
+        flash.window.address.saturating_add(target.address),
+        target.size,
+        (callbacks.progress)(0, target.size).map_err(BulkError::Check),
+    )?;
 
-    let aperture_end = aperture
-        .address
-        .checked_add(aperture.size)
-        .ok_or_else(|| BulkError::Check("Direct E1 aperture overflow".into()))?;
+    let aperture_end = aperture.address.checked_add(aperture.size).ok_or_else(|| {
+        fail(
+            MappedPhase::Window,
+            MappedAddressSpace::Cpu,
+            aperture.address,
+            aperture.size,
+            "Direct E1 aperture overflow",
+        )
+    })?;
     let bulk_end = bulk
         .window
         .address
         .checked_add(bulk.window.size)
-        .ok_or_else(|| BulkError::Check("Bulk window overflow".into()))?;
+        .ok_or_else(|| {
+            fail(
+                MappedPhase::Window,
+                MappedAddressSpace::Cpu,
+                bulk.window.address,
+                bulk.window.size,
+                "Bulk window overflow",
+            )
+        })?;
     let start = bulk.window.address.min(aperture.address);
     let end = bulk_end.max(aperture_end);
     let mut extended = bulk.clone();
@@ -49,15 +135,48 @@ pub(super) async fn read(
         address: start,
         size: end - start,
     };
-    bulk::memory_range(extended.window)?;
-    bulk::check_identity(session, &extended).await?;
-    let mut reader = Qualified::prepare_preserving(session, &extended, limits).await?;
+    context(
+        MappedPhase::Prepare,
+        MappedAddressSpace::Cpu,
+        start,
+        end - start,
+        bulk::memory_range(extended.window),
+    )?;
+    context(
+        MappedPhase::Prepare,
+        MappedAddressSpace::Cpu,
+        start,
+        end - start,
+        bulk::check_identity(session, &extended).await,
+    )?;
+    let mut reader = context(
+        MappedPhase::Prepare,
+        MappedAddressSpace::Cpu,
+        start,
+        end - start,
+        Qualified::prepare_preserving(session, &extended, limits).await,
+    )?;
     let outcome = async {
-        let control_range = mapped_range(flash, flash.control.offset, flash.control.size)?;
-        let control = reader.read(control_range).await?;
+        let control_range = mapped_range(
+            flash,
+            flash.control.offset,
+            flash.control.size,
+            MappedPhase::ControlRead,
+        )?;
+        let control = context(
+            MappedPhase::ControlRead,
+            MappedAddressSpace::Cpu,
+            control_range.address,
+            control_range.size,
+            reader.read(control_range).await,
+        )?;
         if sha256(&control) != flash.control.sha256 {
-            return Err(BulkError::Check(
-                "Mapped E1 control bytes differ from the update".into(),
+            return Err(fail(
+                MappedPhase::ControlHash,
+                MappedAddressSpace::Cpu,
+                control_range.address,
+                control_range.size,
+                "Mapped E1 control bytes differ from the update",
             ));
         }
 
@@ -67,8 +186,12 @@ pub(super) async fn read(
             .min(reader.access.session.max_reply_bytes().get());
         let piece = u64::from(capacity) / alignment * alignment;
         if piece == 0 {
-            return Err(BulkError::Check(
-                "Direct E1 capacity is below the flash alignment".into(),
+            return Err(fail(
+                MappedPhase::Capacity,
+                MappedAddressSpace::Cpu,
+                flash.window.address.saturating_add(target.address),
+                target.size,
+                "Direct E1 capacity is below the flash alignment",
             ));
         }
 
@@ -77,17 +200,39 @@ pub(super) async fn read(
         let mut offset = target.address;
         while offset < target_end {
             let size = piece.min(target_end - offset);
-            let range = mapped_range(flash, offset, size)?;
-            let bytes = reader.read(range).await?;
+            let range = mapped_range(flash, offset, size, MappedPhase::Piece)?;
+            let bytes = context(
+                MappedPhase::Piece,
+                MappedAddressSpace::Cpu,
+                range.address,
+                range.size,
+                reader.read(range).await,
+            )?;
             if bytes.len() as u64 != size {
-                return Err(BulkError::Check(
-                    "Direct E1 flash read returned another length".into(),
+                return Err(fail(
+                    MappedPhase::Piece,
+                    MappedAddressSpace::Cpu,
+                    range.address,
+                    range.size,
+                    "Direct E1 flash read returned another length",
                 ));
             }
             digest.update(&bytes);
-            (callbacks.chunk)(offset, bytes).map_err(BulkError::Check)?;
+            context(
+                MappedPhase::Delivery,
+                MappedAddressSpace::Cpu,
+                range.address,
+                range.size,
+                (callbacks.chunk)(offset, bytes).map_err(BulkError::Check),
+            )?;
             delivered += size;
-            (callbacks.progress)(delivered, target.size).map_err(BulkError::Check)?;
+            context(
+                MappedPhase::Progress,
+                MappedAddressSpace::Cpu,
+                range.address,
+                range.size,
+                (callbacks.progress)(delivered, target.size).map_err(BulkError::Check),
+            )?;
             offset += size;
         }
         Ok(Backup {
@@ -100,34 +245,92 @@ pub(super) async fn read(
         })
     }
     .await;
+    let saved = reader.saved();
     let restored = reader.restore().await;
-    bulk::finish(outcome, restored)
+    match (outcome, restored) {
+        (Err(BulkError::Mapped(mut failure)), Err(cleanup)) => {
+            failure.cleanup = Some(Box::new(cleanup));
+            Err(BulkError::Mapped(failure))
+        }
+        (outcome, restored) => {
+            let restored = restored.map_err(|source| {
+                let (space, address, length) = match saved {
+                    Some((address, length)) => (MappedAddressSpace::Cpu, address, length),
+                    None => (MappedAddressSpace::FlashOffset, target.address, target.size),
+                };
+                BulkError::Mapped(MappedFailure {
+                    phase: MappedPhase::Restore,
+                    space,
+                    address,
+                    length,
+                    source: Box::new(source),
+                    cleanup: None,
+                })
+            });
+            bulk::finish(outcome, restored)
+        }
+    }
 }
 
-fn mapped_range(flash: &FirmwareFlash, offset: u64, size: u64) -> bulk::Result<BulkRange> {
-    let aperture = flash
-        .e1_window
-        .as_ref()
-        .ok_or_else(|| BulkError::Check("Direct E1 flash window is absent".into()))?;
-    let address = flash
-        .window
-        .address
-        .checked_add(offset)
-        .ok_or_else(|| BulkError::Check("Direct E1 flash address overflow".into()))?;
-    let end = address
-        .checked_add(size)
-        .ok_or_else(|| BulkError::Check("Direct E1 flash range overflow".into()))?;
-    let aperture_end = aperture
-        .address
-        .checked_add(aperture.size)
-        .ok_or_else(|| BulkError::Check("Direct E1 aperture overflow".into()))?;
+fn mapped_range(
+    flash: &FirmwareFlash,
+    offset: u64,
+    size: u64,
+    phase: MappedPhase,
+) -> bulk::Result<BulkRange> {
+    let aperture = flash.e1_window.as_ref().ok_or_else(|| {
+        fail(
+            phase,
+            MappedAddressSpace::FlashOffset,
+            offset,
+            size,
+            "Direct E1 flash window is absent",
+        )
+    })?;
+    let address = flash.window.address.checked_add(offset).ok_or_else(|| {
+        fail(
+            phase,
+            MappedAddressSpace::FlashOffset,
+            offset,
+            size,
+            "Direct E1 flash address overflow",
+        )
+    })?;
+    let end = address.checked_add(size).ok_or_else(|| {
+        fail(
+            phase,
+            MappedAddressSpace::Cpu,
+            address,
+            size,
+            "Direct E1 flash range overflow",
+        )
+    })?;
+    let aperture_end = aperture.address.checked_add(aperture.size).ok_or_else(|| {
+        fail(
+            phase,
+            MappedAddressSpace::Cpu,
+            aperture.address,
+            aperture.size,
+            "Direct E1 aperture overflow",
+        )
+    })?;
     if size == 0 || address < aperture.address || end > aperture_end {
-        return Err(BulkError::Check(
-            "Flash range is outside the direct E1 window".into(),
+        return Err(fail(
+            phase,
+            MappedAddressSpace::Cpu,
+            address,
+            size,
+            "Flash range is outside the direct E1 window",
         ));
     }
     let range = BulkRange { address, size };
-    bulk::memory_range(range)?;
+    context(
+        phase,
+        MappedAddressSpace::Cpu,
+        address,
+        size,
+        bulk::memory_range(range),
+    )?;
     Ok(range)
 }
 
@@ -141,3 +344,7 @@ fn hex(bytes: &[u8]) -> String {
 
 #[cfg(test)]
 mod tests;
+
+#[cfg(test)]
+#[path = "mapped_tests.rs"]
+mod receipt_tests;

@@ -1,5 +1,9 @@
 export type FirmwareDownloadKind = 'recovery' | 'green-led' | 'modified';
-export type FirmwareDownloadFormat = 'sd-boot-v1' | 'sd-card-recovery' | 'green-led' | 'installable';
+export type FirmwareDownloadFormat =
+  | 'sd-boot-v1'
+  | 'sd-card-recovery'
+  | 'green-led'
+  | 'installable';
 export interface FirmwareDownloadIdentity {
   model: string;
   version: string;

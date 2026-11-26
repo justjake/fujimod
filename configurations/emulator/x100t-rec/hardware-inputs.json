@@ -19,62 +19,16 @@
       },
       "power": {
         "profile_name": "Synthetic boot reason0; ADC8=1023 releases rear keys; ADC9=1023 aperture AUTO; remaining ADC levels borrowed.",
-        "adc_samples": [
-          0,
-          0,
-          1023,
-          63,
-          534,
-          640,
-          512,
-          825,
-          1023,
-          1023,
-          0,
-          0
-        ],
+        "adc_samples": [0, 0, 1023, 63, 534, 640, 512, 825, 1023, 1023, 0, 0],
         "boot_reply": 0,
         "spi0_input_profile": "absent-hot-shoe-flash-fixed-low-miso",
-        "panel_contract": [
-          [
-            131296,
-            32
-          ],
-          [
-            11,
-            3,
-            0,
-            12,
-            3,
-            1
-          ],
-          [
-            16,
-            null,
-            null
-          ],
-          1
-        ],
-        "spi_status_registers": [
-          [
-            9,
-            96
-          ]
-        ],
+        "panel_contract": [[131296, 32], [11, 3, 0, 12, 3, 1], [16, null, null], 1],
+        "spi_status_registers": [[9, 96]],
         "additional_panels": [
           {
             "basis": "Hybrid viewfinder EVF panel: when VIEW MODE or the eye sensor selects the viewfinder, X100T 1.11 programs SPI1 control 0xe0 / configuration 0x30 with GPIO 11.1 low, as FujiMod's X100S session declares; its scanout is output 0 (1024x768). The second select line, if any, is not established.",
-            "selection": [
-              [
-                11,
-                1,
-                0
-              ]
-            ],
-            "transport": [
-              224,
-              48
-            ]
+            "selection": [[11, 1, 0]],
+            "transport": [224, 48]
           }
         ]
       },
@@ -85,10 +39,7 @@
       "first_boot_instructions": 100000000,
       "restart_instructions": 120000000,
       "scan_instructions": 80000000,
-      "setup_keys": [
-        "EXE_M",
-        "EXE_M"
-      ],
+      "setup_keys": ["EXE_M", "EXE_M"],
       "key_hold_ticks": 2400000,
       "key_release_ticks": 6000000,
       "scene_settle_ticks": 1200000,
@@ -123,10 +74,7 @@
               "bytes": 96
             }
           ],
-          "sample_slots": [
-            23242404,
-            23242452
-          ],
+          "sample_slots": [23242404, 23242452],
           "diagnostics": [
             {
               "name": "target_position",

@@ -8,7 +8,10 @@ use std::sync::{Arc, Mutex};
 #[test]
 fn durable_media_can_be_installed_before_a_continuing_epoch_runs() {
     let source = card_session();
-    let spec = crate::durable::Spec { cards: vec!["sd".into()], nands: vec![] };
+    let spec = crate::durable::Spec {
+        cards: vec!["sd".into()],
+        nands: vec![],
+    };
     let saved = crate::durable::Media::capture(&source, &spec).unwrap();
     let mut cold = card_session_with_epoch(Some((9000, vec![321])));
     assert_eq!(cold.board.instruction_counts(), [321]);
@@ -129,12 +132,15 @@ fn session() -> Session {
             interfaces: vec![],
         })
         .unwrap();
-    fujimod_emulator_exr2_images::images_mut(&mut session.resources).unwrap().sensors.insert(
-        "scene".into(),
-        Arc::new(Mutex::new(SensorFrames::new(
-            Frame::new(1, 1, FramePixels::Rgb24(vec![1, 2, 3].into())).unwrap(),
-        ))),
-    );
+    fujimod_emulator_exr2_images::images_mut(&mut session.resources)
+        .unwrap()
+        .sensors
+        .insert(
+            "scene".into(),
+            Arc::new(Mutex::new(SensorFrames::new(
+                Frame::new(1, 1, FramePixels::Rgb24(vec![1, 2, 3].into())).unwrap(),
+            ))),
+        );
     session
 }
 fn continue_session(session: &mut Session) {
@@ -177,7 +183,9 @@ fn durable_session_restores_media_sensor_inputs_contacts_and_queued_actions_then
         card.write_bytes(100000 * 512, b"captured card sector")
             .unwrap();
         source.retain_card("sd", card, false, true).unwrap();
-        fujimod_emulator_exr2_images::images_mut(&mut source.resources).unwrap().sensors["scene"]
+        fujimod_emulator_exr2_images::images_mut(&mut source.resources)
+            .unwrap()
+            .sensors["scene"]
             .lock()
             .unwrap()
             .latch(0)
@@ -298,13 +306,23 @@ fn power_cycle_retains_card_and_packet_and_runs_no_instructions_while_off() {
     use fujimod_emulator_devices::exr2::{clock, wake_alarm::WakeAlarm};
     struct Builder;
     impl ColdBoot for Builder {
-        fn build(&mut self, tick: u64, counts: Vec<u64>, packet: [u8; 16]) -> Result<Session, String> {
-            let power = Arc::new(Mutex::new(WakeAlarm::new(1_000_000, clock::POWER_HOLD_RELEASE_LIMIT_TICKS)?));
+        fn build(
+            &mut self,
+            tick: u64,
+            counts: Vec<u64>,
+            packet: [u8; 16],
+        ) -> Result<Session, String> {
+            let power = Arc::new(Mutex::new(WakeAlarm::new(
+                1_000_000,
+                clock::POWER_HOLD_RELEASE_LIMIT_TICKS,
+            )?));
             power.lock().unwrap().initialize_packet(packet)?;
             Ok(card_session_with_power(Some((tick, counts)), Some(power)))
         }
     }
-    let power = Arc::new(Mutex::new(WakeAlarm::new(1_000_000, clock::POWER_HOLD_RELEASE_LIMIT_TICKS).unwrap()));
+    let power = Arc::new(Mutex::new(
+        WakeAlarm::new(1_000_000, clock::POWER_HOLD_RELEASE_LIMIT_TICKS).unwrap(),
+    ));
     {
         let mut p = power.lock().unwrap();
         p.initialize_packet([0x5a; 16]).unwrap();
@@ -314,28 +332,68 @@ fn power_cycle_retains_card_and_packet_and_runs_no_instructions_while_off() {
     }
     let mut session = card_session_with_power(None, Some(power));
     session.logic_input("usb_cable", true).unwrap();
-    session.configure_power_cycle(PowerCycle::new("clocks".into(),
-        crate::durable::Spec { cards: vec!["sd".into()], nands: vec![] }, Box::new(Builder))
-        .with_logic_inputs(vec!["usb_cable".into()])).unwrap();
+    session
+        .configure_power_cycle(
+            PowerCycle::new(
+                "clocks".into(),
+                crate::durable::Spec {
+                    cards: vec!["sd".into()],
+                    nands: vec![],
+                },
+                Box::new(Builder),
+            )
+            .with_logic_inputs(vec!["usb_cable".into()]),
+        )
+        .unwrap();
     // Guest store releases power hold, followed by a self-loop.
-    session.board.write_physical(0, &0xe5801000u32.to_le_bytes()).unwrap();
-    session.board.write_physical(4, &0xeafffffeu32.to_le_bytes()).unwrap();
-    session.board.write_register(0, arm::CORE[0], 0xfff88084).unwrap();
+    session
+        .board
+        .write_physical(0, &0xe5801000u32.to_le_bytes())
+        .unwrap();
+    session
+        .board
+        .write_physical(4, &0xeafffffeu32.to_le_bytes())
+        .unwrap();
+    session
+        .board
+        .write_register(0, arm::CORE[0], 0xfff88084)
+        .unwrap();
     session.board.write_register(0, arm::CORE[1], 0).unwrap();
-    session.run_with_limits(10_000_000, 128, None, Some(200_000)).unwrap();
+    session
+        .run_with_limits(10_000_000, 128, None, Some(200_000))
+        .unwrap();
     assert!(session.board.is_powered_off());
     assert_eq!(session.board.now(), 200_000);
     let counts = session.board.instruction_counts();
     assert!(session.checkpoint(None).is_err());
-    session.run_with_limits(10_000_000, 128, None, Some(1_000_000)).unwrap();
+    session
+        .run_with_limits(10_000_000, 128, None, Some(1_000_000))
+        .unwrap();
     assert!(!session.board.is_powered_off());
     assert_eq!(session.board.now(), 1_000_000);
     assert_eq!(session.board.instruction_counts(), counts);
     assert!(session.board.epoch_is_unexecuted());
     assert!(session.resources.logic_level("usb_cable").unwrap().high());
-    assert_eq!(session.resources.clock("clocks").unwrap().power_alarm().unwrap().unwrap().lock().unwrap().packet(), Some([0x5a; 16]));
+    assert_eq!(
+        session
+            .resources
+            .clock("clocks")
+            .unwrap()
+            .power_alarm()
+            .unwrap()
+            .unwrap()
+            .lock()
+            .unwrap()
+            .packet(),
+        Some([0x5a; 16])
+    );
     let revision = session.card_state("sd").unwrap().revision;
-    assert_eq!(session.card_read("sd", "/DCIM/100_FUJI/A.JPG", revision, 100).unwrap(), b"card bytes");
+    assert_eq!(
+        session
+            .card_read("sd", "/DCIM/100_FUJI/A.JPG", revision, 100)
+            .unwrap(),
+        b"card bytes"
+    );
 }
 
 #[test]
@@ -343,12 +401,15 @@ fn a_session_without_connected_controls_adopts_the_snapshots_contacts() {
     let source = session();
     let bytes = source.checkpoint(None).unwrap().export().unwrap();
     let mut target = card_session();
-    fujimod_emulator_exr2_images::images_mut(&mut target.resources).unwrap().sensors.insert(
-        "scene".into(),
-        Arc::new(Mutex::new(SensorFrames::new(
-            Frame::new(1, 1, FramePixels::Rgb24(vec![1, 2, 3].into())).unwrap(),
-        ))),
-    );
+    fujimod_emulator_exr2_images::images_mut(&mut target.resources)
+        .unwrap()
+        .sensors
+        .insert(
+            "scene".into(),
+            Arc::new(Mutex::new(SensorFrames::new(
+                Frame::new(1, 1, FramePixels::Rgb24(vec![1, 2, 3].into())).unwrap(),
+            ))),
+        );
     assert!(target.controls.is_none() && target.contact_driver.is_none());
     let saved = target.import_snapshot(&bytes).unwrap();
     target.restore(&saved).unwrap();

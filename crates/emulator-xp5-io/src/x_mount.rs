@@ -95,7 +95,11 @@ pub fn lens_choice(options: &Options) -> String {
 }
 
 /// Build the selected lens, or `None` when no lens is attached.
-pub fn build_lens(options: &Options, choice: &str, ticks_per_second: u64) -> Result<Option<Port>, String> {
+pub fn build_lens(
+    options: &Options,
+    choice: &str,
+    ticks_per_second: u64,
+) -> Result<Option<Port>, String> {
     options.validate()?;
     if choice == "none" {
         return Ok(None);
@@ -109,7 +113,11 @@ pub fn build_lens(options: &Options, choice: &str, ticks_per_second: u64) -> Res
     }
     let (startup_us, busy_us) = match std::env::var(READY_ENV) {
         Ok(value) => {
-            let parse = |s: &str| s.trim().parse::<u64>().map_err(|_| format!("{READY_ENV} needs STARTUP_US,BUSY_US"));
+            let parse = |s: &str| {
+                s.trim()
+                    .parse::<u64>()
+                    .map_err(|_| format!("{READY_ENV} needs STARTUP_US,BUSY_US"))
+            };
             let (a, b) = value
                 .split_once(',')
                 .ok_or_else(|| format!("{READY_ENV} needs STARTUP_US,BUSY_US"))?;
@@ -169,7 +177,14 @@ impl Connector {
         transport: Box<dyn Device>,
     ) -> Result<Self, String> {
         options.validate()?;
-        let connector = Self { options, choice, lens, pins, transport, asserted: [false; 2] };
+        let connector = Self {
+            options,
+            choice,
+            lens,
+            pins,
+            transport,
+            asserted: [false; 2],
+        };
         // Attached pads hold their levels from construction on, before any guest read.
         if let Some(outputs) = connector.outputs() {
             connector.apply_pads(&outputs);
@@ -187,7 +202,9 @@ impl Connector {
             .all(|pad| pins.output_level(pad.port.into(), pad.pin.into()) == 1)
     }
     fn ready_routed(&self) -> bool {
-        let Some(function) = self.options.ready_mux else { return true };
+        let Some(function) = self.options.ready_mux else {
+            return true;
+        };
         let pins = self.pins.lock().unwrap();
         let pad = self.options.ready;
         let register = pins.ports[usize::from(pad.port)].registers[3 + usize::from(pad.pin / 8)];
@@ -210,7 +227,11 @@ impl Connector {
         input(self.options.detect) != outputs.detect
             || input(self.options.ready) != outputs.ready
             || outputs.sense.is_some_and(|levels| {
-                self.options.sense.iter().zip(levels).any(|(pad, level)| input(*pad) != level)
+                self.options
+                    .sense
+                    .iter()
+                    .zip(levels)
+                    .any(|(pad, level)| input(*pad) != level)
             })
     }
     fn apply_pads(&self, outputs: &Outputs) {
@@ -233,9 +254,13 @@ impl Connector {
         lens.next_event_tick(now, self.supplies_on())
     }
     fn update(&mut self, cx: &mut Cx<'_>) {
-        let Some(lens) = self.lens.clone() else { return };
+        let Some(lens) = self.lens.clone() else {
+            return;
+        };
         lens.tick(cx.now(), self.supplies_on());
-        let Some(outputs) = self.outputs() else { return };
+        let Some(outputs) = self.outputs() else {
+            return;
+        };
         if self.pads_differ(&outputs) {
             self.apply_pads(&outputs);
         }
@@ -256,7 +281,11 @@ impl Connector {
         }
     }
     fn saved(&self) -> Saved {
-        Saved { options: self.options.clone(), choice: self.choice.clone(), asserted: self.asserted }
+        Saved {
+            options: self.options.clone(),
+            choice: self.choice.clone(),
+            asserted: self.asserted,
+        }
     }
 }
 impl Device for Connector {
@@ -278,10 +307,13 @@ impl Device for Connector {
         self.transport.pollable(address, size)
     }
     fn next_deadline(&self, now: u64) -> Option<u64> {
-        [self.connector_deadline(now), self.transport.next_deadline(now)]
-            .into_iter()
-            .flatten()
-            .min()
+        [
+            self.connector_deadline(now),
+            self.transport.next_deadline(now),
+        ]
+        .into_iter()
+        .flatten()
+        .min()
     }
     fn advance(&mut self, cx: &mut Cx<'_>) {
         let now = cx.now();

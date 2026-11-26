@@ -34,12 +34,12 @@ The same control and observation tools work on a physical camera over USB.
 
 ## Crates
 
-| Crate | Directory | Purpose |
-|---|---|---|
-| `fujimod-mcp-core` | `crates/mcp-core` | The module trait, the adapter for `rmcp` tool macros, tool-name rules and the hub. No camera dependencies. |
+| Crate                | Directory           | Purpose                                                                                                    |
+| -------------------- | ------------------- | ---------------------------------------------------------------------------------------------------------- |
+| `fujimod-mcp-core`   | `crates/mcp-core`   | The module trait, the adapter for `rmcp` tool macros, tool-name rules and the hub. No camera dependencies. |
 | `fujimod-mcp-camera` | `crates/mcp-camera` | The camera module: tools over `fujimod-emulator-camera`, `fujimod-emulator-boot` and the emulator session. |
-| `fujimod-mcp` | `crates/mcp` | The hub binary: selects modules, serves stdio. |
-| `fujimod-mcp-ghidra` | `crates/mcp-ghidra` | Later: the GhidraMCP proxy module. |
+| `fujimod-mcp`        | `crates/mcp`        | The hub binary: selects modules, serves stdio.                                                             |
+| `fujimod-mcp-ghidra` | `crates/mcp-ghidra` | Later: the GhidraMCP proxy module.                                                                         |
 
 One crate per module follows [the emulator crate layout](emulator/CRATES.md):
 an edit to one module rebuilds that module and the binary.
@@ -136,31 +136,31 @@ used.
 
 "USB" says whether the primitive can work on a physical camera.
 
-| Group | Tool | Does | Status | USB |
-|---|---|---|---|---|
-| Cameras | `camera_open` | Open a firmware with a boot from [CAMERAS.md](CAMERAS.md), or restore a checkpoint file | implemented | planned |
-| | `camera_list` | Open cameras and how each was opened | implemented | yes |
-| | `camera_close` | Release the camera | implemented | yes |
-| | `camera_checkpoint` | Save the whole machine under a name, optionally to a file | implemented | no |
-| | `camera_restore` | Return to a named checkpoint or a checkpoint file | implemented | no |
-| | `camera_fork` | Open a second camera from a checkpoint | planned | no |
-| Time | `camera_run` | Advance guest seconds, or until REC | implemented | waits only |
-| Inputs | `camera_controls` | Control ids, kinds and positions `camera_press`, `camera_turn` and `camera_set` accept | implemented | yes |
-| | `camera_press` | Press and release a control, confirmed by the firmware, settle, return state and screen | implemented | yes |
-| | `camera_turn` | Turn a rotary control by detents | implemented | yes |
-| | `camera_set` | Move a dial, switch, ring or lever to a named position, confirmed by the firmware, settle, return state and screen | implemented | yes |
-| | `camera_touch` | Touch the screen | planned | yes |
-| | `camera_set_input` | Drive a hardware input level (GPIO, ADC, SD card) | planned | no |
-| Observe | `camera_screen` | The current screen and state | implemented | yes |
-| | `camera_state` | Boot and UI state words, guest time, instructions | implemented | yes |
-| | `camera_read_memory` | Physical memory as a hex dump or file | implemented | yes |
-| | `camera_read_registers` | CPU registers of a stopped core | planned | no |
-| | `camera_devices` | Device state: GPIO, serial, HDMI, SD card, scanout | planned | no |
-| Probes | `camera_profile_start`, `camera_profile_collect`, `camera_profile_show` | Instructions executed per basic block | implemented | no |
-| | `camera_profile_diff` | Blocks whose instructions changed most between two profiles | implemented | no |
-| | memory access, calls, PC trace, bus traffic | The board's other bounded observations | planned | no |
-| Mutate | `camera_write_memory`, `camera_write_registers` | Write bytes (including code) or registers | planned | to be decided |
-| Helpers | symbol names | Resolve addresses in results to names | planned | n/a |
+| Group   | Tool                                                                    | Does                                                                                                               | Status      | USB           |
+| ------- | ----------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------ | ----------- | ------------- |
+| Cameras | `camera_open`                                                           | Open a firmware with a boot from [CAMERAS.md](CAMERAS.md), or restore a checkpoint file                            | implemented | planned       |
+|         | `camera_list`                                                           | Open cameras and how each was opened                                                                               | implemented | yes           |
+|         | `camera_close`                                                          | Release the camera                                                                                                 | implemented | yes           |
+|         | `camera_checkpoint`                                                     | Save the whole machine under a name, optionally to a file                                                          | implemented | no            |
+|         | `camera_restore`                                                        | Return to a named checkpoint or a checkpoint file                                                                  | implemented | no            |
+|         | `camera_fork`                                                           | Open a second camera from a checkpoint                                                                             | planned     | no            |
+| Time    | `camera_run`                                                            | Advance guest seconds, or until REC                                                                                | implemented | waits only    |
+| Inputs  | `camera_controls`                                                       | Control ids, kinds and positions `camera_press`, `camera_turn` and `camera_set` accept                             | implemented | yes           |
+|         | `camera_press`                                                          | Press and release a control, confirmed by the firmware, settle, return state and screen                            | implemented | yes           |
+|         | `camera_turn`                                                           | Turn a rotary control by detents                                                                                   | implemented | yes           |
+|         | `camera_set`                                                            | Move a dial, switch, ring or lever to a named position, confirmed by the firmware, settle, return state and screen | implemented | yes           |
+|         | `camera_touch`                                                          | Touch the screen                                                                                                   | planned     | yes           |
+|         | `camera_set_input`                                                      | Drive a hardware input level (GPIO, ADC, SD card)                                                                  | planned     | no            |
+| Observe | `camera_screen`                                                         | The current screen and state                                                                                       | implemented | yes           |
+|         | `camera_state`                                                          | Boot and UI state words, guest time, instructions                                                                  | implemented | yes           |
+|         | `camera_read_memory`                                                    | Physical memory as a hex dump or file                                                                              | implemented | yes           |
+|         | `camera_read_registers`                                                 | CPU registers of a stopped core                                                                                    | planned     | no            |
+|         | `camera_devices`                                                        | Device state: GPIO, serial, HDMI, SD card, scanout                                                                 | planned     | no            |
+| Probes  | `camera_profile_start`, `camera_profile_collect`, `camera_profile_show` | Instructions executed per basic block                                                                              | implemented | no            |
+|         | `camera_profile_diff`                                                   | Blocks whose instructions changed most between two profiles                                                        | implemented | no            |
+|         | memory access, calls, PC trace, bus traffic                             | The board's other bounded observations                                                                             | planned     | no            |
+| Mutate  | `camera_write_memory`, `camera_write_registers`                         | Write bytes (including code) or registers                                                                          | planned     | to be decided |
+| Helpers | symbol names                                                            | Resolve addresses in results to names                                                                              | planned     | n/a           |
 
 Planned `camera_run` conditions beyond time and REC: frame completed, memory
 range changed, address reached, input accepted, UI ready.
@@ -204,12 +204,13 @@ cloud machine with Mesa's software Vulkan driver:
 firmware identity and one of its boots:
 
 - `firmware`: the catalog release, such as `x70-110`.
-- `boot`: `stock`, `sd-card` or `automatic-boot`. An `sd-card` boot holds
+- `boot`: `stock`, `sd-card` or `autostart`. An `sd-card` boot holds
   the body's `boot.sd` controls through the session contact driver from
-  power-on and releases them at REC; an `automatic-boot` holds nothing and
+  power-on and releases them at REC; an `autostart` holds nothing and
   drives the card's AUTOMATIC boot installer into internal flash once.
 - `sd_card`: the directory for the virtual SD card. An `sd-card` or
-  `automatic-boot` without it fetches the current release card for the
+  `autostart` without it downloads the current release card into the state
+  directory for the
   firmware; for `stock` its files are added to the otherwise empty card.
 - `execution_policy`: `exact` (the default) or `interactive`.
 - `boot_cache`: restore a saved boot with the same inputs instead of
@@ -217,8 +218,10 @@ firmware identity and one of its boots:
   saves nothing.
 - `name`: the camera id later calls use.
 
-The builder finds the firmware update, boot ROM and reference camera
-sections in the directory named by `FUJIMOD_FIRMWARE_LIBRARY`, resolves
+The FujiMod layer finds the firmware update and boot ROM by name in the
+directory named by `FUJIMOD_FIRMWARE_LIBRARY` (`<firmware-id>/FPUPDATE.DAT`
+and `<body-id>/boot-rom.bin`), keeps downloads, autostart flash and the boot
+cache under `FUJIMOD_STATE_DIR` (default `/tmp/fujimod`), and resolves
 the firmware's registered run configuration, and owns the boot holds, card
 media and control connection. Callers never name a configuration,
 overlays, update files, boot ROMs, NAND images, GPIO levels or key

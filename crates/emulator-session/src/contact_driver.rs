@@ -67,8 +67,7 @@ pub struct ControlChoice {
     pub label: String,
 }
 /// Host input queue progress.
-#[derive(Clone, Debug, serde::Serialize)]
-#[derive(tsify::Tsify)]
+#[derive(Clone, Debug, serde::Serialize, tsify::Tsify)]
 #[tsify(hashmap_as_object, missing_as_null)]
 pub struct QueueState {
     pub pending: usize,
@@ -77,8 +76,7 @@ pub struct QueueState {
     pub requested: BTreeMap<String, String>,
     pub completed: u64,
 }
-#[derive(Clone, Debug, serde::Serialize)]
-#[derive(tsify::Tsify)]
+#[derive(Clone, Debug, serde::Serialize, tsify::Tsify)]
 #[tsify(hashmap_as_object, missing_as_null)]
 pub struct ActiveTransition {
     pub id: String,
@@ -323,10 +321,16 @@ impl Driver {
         })
     }
     fn actuator(&self, id: &str) -> Result<&Actuator, String> {
+        // A catalog hold may name a control's single action (`dial.press`) while
+        // the compiled panel exposes that action under the control's own id.
         self.spec
             .actuators
             .iter()
             .find(|a| a.id == id)
+            .or_else(|| {
+                id.rsplit_once('.')
+                    .and_then(|(control, _)| self.spec.actuators.iter().find(|a| a.id == control))
+            })
             .ok_or_else(|| format!("physical control is unavailable: {id}"))
     }
     pub fn persistent_positions(&self, session: &Session) -> BTreeMap<String, String> {
@@ -348,6 +352,11 @@ impl Driver {
             })
             .unwrap_or_default()
     }
+    /// The panel control a catalog hold id names.
+    pub fn hold_control(&self, id: &str) -> Result<String, String> {
+        Ok(self.actuator(id)?.id.clone())
+    }
+    /// The position a boot hold selects.
     pub fn boot_position(&self, id: &str, stage: Option<&str>) -> Result<String, String> {
         let actuator = self.actuator(id)?;
         if !actuator.momentary {
@@ -402,7 +411,12 @@ impl Driver {
                 }
             }
             Scheduled::Position { id, position } => {
-                if !self.actuator(id)?.states.iter().any(|s| &s.position == position) {
+                if !self
+                    .actuator(id)?
+                    .states
+                    .iter()
+                    .any(|s| &s.position == position)
+                {
                     return Err(format!("{id} has no position {position}"));
                 }
             }
@@ -422,7 +436,9 @@ impl Driver {
         while self.scheduled.front().is_some_and(|due| due.at <= now) {
             let due = self.scheduled.pop_front().unwrap();
             match due.input {
-                Scheduled::Press { id, stage } => self.enqueue(session, &id, stage.as_deref(), false)?,
+                Scheduled::Press { id, stage } => {
+                    self.enqueue(session, &id, stage.as_deref(), false)?
+                }
                 Scheduled::Release { id } => self.enqueue(session, &id, None, true)?,
                 Scheduled::Position { id, position } => {
                     let mut projected = session
@@ -732,13 +748,19 @@ impl Session {
             self.pump_contacts()?;
         }
         if end <= self.total_instructions()? {
-            if self.board.is_powered_off() { return Ok(()); }
+            if self.board.is_powered_off() {
+                return Ok(());
+            }
             return self.board.run_window(end, quantum, pause_after, until);
         }
         loop {
             if self.board.is_powered_off() {
-                if until.is_some_and(|t| self.board.now() >= t) { return Ok(()); }
-                if !self.advance_power_cycle(until)? { return Ok(()); }
+                if until.is_some_and(|t| self.board.now() >= t) {
+                    return Ok(());
+                }
+                if !self.advance_power_cycle(until)? {
+                    return Ok(());
+                }
                 self.pump_contacts()?;
             }
             let current = self.total_instructions()?;
@@ -750,26 +772,37 @@ impl Session {
             // Transitions in flight are sampled every poll; scheduled inputs
             // wake the window at their own time.
             let horizon = match self.contact_driver.as_ref() {
-                Some(driver) if driver.active.is_some() || !driver.pending.is_empty() || driver.watched => Some(
-                    self.board
-                        .now()
-                        .saturating_add(driver.spec.poll_ticks)
-                        .min(until.unwrap_or(u64::MAX)),
-                ),
+                Some(driver)
+                    if driver.active.is_some() || !driver.pending.is_empty() || driver.watched =>
+                {
+                    Some(
+                        self.board
+                            .now()
+                            .saturating_add(driver.spec.poll_ticks)
+                            .min(until.unwrap_or(u64::MAX)),
+                    )
+                }
                 Some(driver) => driver
                     .next_scheduled()
                     .map(|at| at.min(until.unwrap_or(u64::MAX)))
                     .or(until),
                 None => until,
             };
-            let horizon = horizon.into_iter().chain(self.window_action.as_ref().map(|action|
-                self.board.now().saturating_add(action.interval.get())
-            )).min();
+            let horizon = horizon
+                .into_iter()
+                .chain(
+                    self.window_action
+                        .as_ref()
+                        .map(|action| self.board.now().saturating_add(action.interval.get())),
+                )
+                .min();
             let before = (self.board.now(), current);
             let execution = self.board.run_window(end, quantum, pause_after, horizon);
             self.synchronize_window()?;
             execution?;
-            if self.board.is_powered_off() { continue; }
+            if self.board.is_powered_off() {
+                continue;
+            }
             self.pump_contacts()?;
             if watched.is_some() && watched != self.contact_driver.as_ref().map(Driver::progress) {
                 return Ok(());
