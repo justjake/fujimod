@@ -77,11 +77,18 @@ impl Movdc {
         // by (8 << exponent) for this format. 01f31664/01f31aa8 select
         // +d8[17:16] with table 0140a944 = [3,3,3,2,1,0]. These are
         // horizontal transfer controls, not alternate pixel formats.
+        // +d8[3:0] is 2 in live view and 3 in X-T3 5.11's magnified view,
+        // whose source window (+0c) shrinks to 544x368 for the same 640x426
+        // output. As on XP5 (51d955d01), the nibble follows the source scale
+        // and does not change the output pixel layout, so 2 and 3 write the
+        // same rows; other nibbles are still refused.
         let exponent = (self.r(0xd4) >> 16) & 7;
         let selector = [3, 3, 3, 2, 1, 0].get(exponent as usize);
         let width = (self.r(0x18) & 0x7ff) + 1;
+        let d8 = self.r(0xd8);
         if self.r(8) != 0x100
-            || selector.is_none_or(|selector| self.r(0xd8) != 0x10000002 | selector << 16)
+            || selector.is_none_or(|selector| d8 & !0xf != 0x10000000 | selector << 16)
+            || !matches!(d8 & 0xf, 2 | 3)
             || self.r(0xd4) & !0x10070000 != 0
             || !width.is_multiple_of(8 << exponent)
             || self.r(0x18) & !0x07ff07ff != 0
@@ -453,6 +460,29 @@ mod tests {
             assert!(cx.refusal().is_some());
             assert!(!d.state.pending);
             assert!(h.ram.iter().all(|v| *v == 0xaa));
+        }
+    }
+    /// The magnified view's `+d8` nibble 3 writes the same rows, interrupt and
+    /// frame count as live view's nibble 2; other nibbles are still refused.
+    #[test]
+    fn d8_scale_nibbles_two_and_three_write_the_same_rows_and_others_are_refused() {
+        let run = |mode: u64| {
+            let (mut d, mut h) = setup(0, mode);
+            h.now = 33;
+            let mut cx = Cx::new(&mut h, 0, 0, 0);
+            d.advance(&mut cx);
+            let refused = cx.refusal().is_some();
+            (refused, d.state.frames, d.state.pending, h.ram, h.irqs)
+        };
+        let live = run(0x10030002);
+        assert_eq!((live.0, live.1, live.2), (false, 1, true));
+        assert!(live.4.contains(&(33, 108, true)));
+        assert_eq!(run(0x10030003), live);
+        for mode in [0x10030000, 0x10030001, 0x10030004, 0x1003000b, 0x10020003] {
+            let (refused, frames, pending, ram, _) = run(mode);
+            assert!(refused, "{mode:#x}");
+            assert_eq!((frames, pending), (0, false), "{mode:#x}");
+            assert!(ram.iter().all(|v| *v == 0xaa), "{mode:#x}");
         }
     }
     #[test]
