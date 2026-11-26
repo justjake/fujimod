@@ -521,7 +521,13 @@ impl RunHost {
                 .saturating_add(crate::host::duration_ticks(status_every, ticks_per_second)),
             status_every,
             next_wall_status: Instant::now() + WALL_STATUS_EVERY,
-            slice: ((ticks_per_second / 1_000).max(1)).min(100_000_000),
+            slice: (ticks_per_second
+                / if policy == ExecutionPolicy::Interactive {
+                    100
+                } else {
+                    1_000
+                })
+            .clamp(1, 100_000_000),
             patches,
             fujimod,
             interrupted,
@@ -614,6 +620,10 @@ impl RunHost {
             timed_gpio.front().map(|item| item.0),
             timed_pokes.front().map(|item| item.0),
             watch_after.map(|item| item.0),
+            (*policy == ExecutionPolicy::Interactive
+                && *status_every != Duration::ZERO
+                && *next_status > now)
+                .then_some(*next_status),
         ]
         .into_iter()
         .flatten()

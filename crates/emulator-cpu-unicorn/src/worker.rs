@@ -57,6 +57,8 @@ pub struct CpuWorker {
     next_callback: Cell<usize>,
     next_run: Cell<u64>,
     running: Cell<bool>,
+    ordered_run: Cell<bool>,
+    retried_block: Cell<bool>,
     active_run: Cell<Option<RunToken>>,
     stopped_progress: Cell<Option<u64>>,
     stopped_pc: Cell<Option<u64>>,
@@ -277,6 +279,8 @@ fn spawn_engine(
                 next_callback: Cell::new(1),
                 next_run: Cell::new(1),
                 running: Cell::new(false),
+                ordered_run: Cell::new(false),
+                retried_block: Cell::new(false),
                 active_run: Cell::new(None),
                 stopped_progress: Cell::new(None),
                 stopped_pc: Cell::new(None),
@@ -2018,7 +2022,24 @@ impl Cpu for CpuWorker {
         self.stopped_pc.set(pc);
         self.stopped_pstate.set(pstate);
         self.deferred_instruction_limit.set(None);
+        self.retried_block.set(false);
+        let yields_after_entry = self.owner_accounting
+            && !self.ordered_run.get()
+            && matches!(
+                call,
+                CallbackCall::Block(_)
+                    | CallbackCall::Instruction { .. }
+                    | CallbackCall::MmioRead { .. }
+                    | CallbackCall::MmioWrite { .. }
+            );
         let result = self.service_callback(callback, call);
+        // A concurrent M-profile run can park during translation or while
+        // its owner shortens a block. It must be able to reach the next
+        // admitted entry. After that entry, return the processor to the
+        // cohort before it runs ahead of a peer waiting at a callback.
+        if yields_after_entry && !self.retried_block.get() {
+            self.pause_requested.store(1, Ordering::Release);
+        }
         let deferred = self.deferred_instruction_limit.take();
         let tighten = (!matches!(result, CallbackResult::Error))
             .then_some(deferred)
@@ -2106,14 +2127,19 @@ impl Cpu for CpuWorker {
     }
 
     fn run(&self, request: Run) -> Result<Exit, ExecutionError> {
-        let run = self.start_run(request)?;
-        loop {
-            match self.receive_run_event(run, true)? {
-                RunStatus::Running => continue,
-                RunStatus::CallbackPending => self.service_pending_callback(run)?,
-                RunStatus::Complete(result) => return result,
+        let previous = self.ordered_run.replace(true);
+        let result = (|| {
+            let run = self.start_run(request)?;
+            loop {
+                match self.receive_run_event(run, true)? {
+                    RunStatus::Running => continue,
+                    RunStatus::CallbackPending => self.service_pending_callback(run)?,
+                    RunStatus::Complete(result) => return result,
+                }
             }
-        }
+        })();
+        self.ordered_run.set(previous);
+        result
     }
     fn tighten_instruction_limit(&self, total: u64) -> Result<(), String> {
         if self.callback_depth.get() != 0 {
@@ -2315,7 +2341,9 @@ impl Cpu for CpuWorker {
         Ok(())
     }
     fn retry_block(&self, instructions: u32) -> Result<(), String> {
-        self.unit(Operation::RetryBlock(instructions))
+        self.unit(Operation::RetryBlock(instructions))?;
+        self.retried_block.set(true);
+        Ok(())
     }
     fn request_restart(&self) -> Result<(), String> {
         self.unit(Operation::Restart)

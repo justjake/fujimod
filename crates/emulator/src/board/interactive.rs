@@ -1,6 +1,6 @@
 //! Concurrent CPU windows with owner-only device and memory barriers.
 use super::*;
-use fujimod_emulator_cpu::{Clock, RunStatus, RunToken};
+use fujimod_emulator_cpu::{Clock, ExecutionError, Fault, Model, RunStatus, RunToken};
 use std::time::Instant;
 
 #[cfg(test)]
@@ -107,7 +107,26 @@ struct Entry {
     watch_or_observer_stop: bool,
     interrupted_by_scheduler: bool,
     failed: bool,
+    data_fault: bool,
+    thumb_settled: bool,
     exit: Option<Exit>,
+}
+
+impl State {
+    pub(super) fn account_interactive(&mut self, core: usize, delta: u64) -> Result<(), String> {
+        let epoch = self
+            .parallel
+            .as_mut()
+            .ok_or("no concurrent execution epoch")?;
+        let elapsed = epoch.advance(core, delta)?;
+        let boundary = self.timeline.ratio().budget(
+            self.timeline.now(),
+            self.timeline.phase(),
+            self.clock_limit.unwrap_or(u64::MAX),
+        )?;
+        let elapsed = self.timeline.budget(elapsed.min(boundary))?;
+        self.timeline.advance_instructions(elapsed)
+    }
 }
 
 impl Board {
@@ -141,6 +160,8 @@ impl Board {
         let mut state = self.state.borrow_mut();
         state.active_slice = None;
         state.parallel = None;
+        state.code_run = RunCode::Unknown;
+        state.settled.clear();
         self.next_core.set((cores[0] + 1) % self.cpus.len());
         self.slice_left.set(0);
         drop(state);
@@ -155,6 +176,10 @@ impl Board {
     }
 
     fn interactive_cohort(&mut self, cores: &[usize], quantum: usize) -> Result<(), String> {
+        let mprofile = cores
+            .iter()
+            .copied()
+            .find(|&core| self.cpus[core].model() == Model::CortexM4);
         loop {
             let mut prepared = Vec::with_capacity(cores.len());
             {
@@ -177,6 +202,15 @@ impl Board {
                 if !state.parallel.as_ref().unwrap().open(cores) {
                     return Ok(());
                 }
+            }
+            let (blocks, _thumb_slice) = if let Some(core) = mprofile {
+                let room = self.state.borrow().parallel.as_ref().unwrap().room(core);
+                self.prepare_mprofile_segment(core, room)?
+            } else {
+                (false, None)
+            };
+            {
+                let mut state = self.state.borrow_mut();
                 for &core in cores {
                     let epoch = state.parallel.as_ref().unwrap();
                     let room = epoch.room(core);
@@ -186,10 +220,14 @@ impl Board {
                     }
                     cpu.set_loop_window(false)?;
                     let pc = scalar(&**cpu, Register::Pc)?;
-                    let begin = if scalar(&**cpu, Register::Pstate)? & 0x20 != 0 {
-                        pc | 1
-                    } else {
-                        pc
+                    let begin = match cpu.model() {
+                        Model::CortexM4 => pc | 1,
+                        Model::CortexR5F | Model::CortexA7
+                            if scalar(&**cpu, Register::Pstate)? & 0x20 != 0 =>
+                        {
+                            pc | 1
+                        }
+                        _ => pc,
                     };
                     let boundary = epoch.boundary;
                     state.accounted[core] = 0;
@@ -204,16 +242,99 @@ impl Board {
                             begin,
                             until: None,
                             watchdog_us: 0,
-                            instructions: Some(room.min(usize::MAX as u64) as usize),
+                            instructions: (!(mprofile == Some(core) && blocks))
+                                .then_some(room.min(usize::MAX as u64) as usize),
                         },
                     ));
                 }
             }
-            if prepared.is_empty() {
-                return Ok(());
+            let result = self.interactive_segment(prepared, quantum, mprofile);
+            if let Some(core) = mprofile {
+                let mut state = self.state.borrow_mut();
+                state.end_code_slice(&*self.cpus[core], core);
+                state.code_run = RunCode::Unknown;
+                state.settled.clear();
             }
-            self.interactive_segment(prepared, quantum)?;
+            result?;
         }
+    }
+
+    fn prepare_mprofile_segment(
+        &mut self,
+        core: usize,
+        room: u64,
+    ) -> Result<(bool, Option<thumb_accounting::Slice>), String> {
+        self.sync_store_hook(core)?;
+        {
+            let mut state = self.state.borrow_mut();
+            let profile = state.mprofile[core]
+                .as_ref()
+                .ok_or("M-profile processor requires its architectural controller")?;
+            if profile.needs_reset {
+                let reset = state.reset_contexts[core]
+                    .as_deref()
+                    .ok_or("M-profile reset context is missing")?;
+                self.cpus[core].restore(reset)?;
+                state.mprofile[core]
+                    .as_mut()
+                    .unwrap()
+                    .reset(&*self.cpus[core])?;
+                if let Some(shadow) = state.code_shadow[core].as_mut() {
+                    shadow.invalidate();
+                }
+            }
+        }
+        self.code_resync(core)?;
+        {
+            let mut state = self.state.borrow_mut();
+            let shadow = &mut state.code_shadow[core];
+            if shadow
+                .as_ref()
+                .is_none_or(|shadow| shadow.changed() || shadow.unproven())
+            {
+                self.cpus[core].invalidate_code(None)?;
+                if let Some(shadow) = shadow {
+                    shadow.discarded();
+                }
+            }
+            if let Some(shadow) = shadow {
+                shadow.peer_ran();
+                shadow.begin_slice();
+            }
+            // Guest writes and effects that can change these pages rendezvous
+            // at the owner. The shadow is checked again after every segment.
+            state.code_run = RunCode::Running(core);
+            state.code_write_deferred = false;
+            state.run_entries[core] = 0;
+        }
+        let (blocks, thumb_slice) = self.sync_block_mode(core, room)?;
+        self.state.borrow_mut().blocks[core]
+            .as_mut()
+            .unwrap()
+            .poll_enabled = false;
+        let Some(thumb_slice) = thumb_slice else {
+            return Ok((blocks, None));
+        };
+        let mut state = self.state.borrow_mut();
+        let cpu = &*self.cpus[core];
+        // The owner's deadline and pin push ran before this preparation.
+        // All device/DMA and guest MMIO callbacks pause the cohort.
+        state.settled.pass = true;
+        state.arm_settled()?;
+        let interrupt_ready = state.mprofile[core].as_mut().unwrap().pending();
+        if !interrupt_ready {
+            state.settled.idle = Some(core);
+            let pc = scalar(cpu, Register::Pc)? & !1;
+            if !state.enter_code(cpu, core, pc)?
+                && state.code_shadow[core]
+                    .as_ref()
+                    .and_then(|shadow| shadow.fetch(pc))
+                    .is_some()
+            {
+                state.blocks[core].as_mut().unwrap().inline.arm(pc, room);
+            }
+        }
+        Ok((blocks, Some(thumb_slice)))
     }
 
     // Every segment joins all its workers before returning, including errors.
@@ -221,6 +342,7 @@ impl Board {
         &mut self,
         prepared: Vec<(usize, u64, u64, u64, fujimod_perf::EngineEndReason, Run)>,
         quantum: usize,
+        mprofile: Option<usize>,
     ) -> Result<(), String> {
         let mut entries = Vec::with_capacity(prepared.len());
         let mut error = None;
@@ -241,6 +363,8 @@ impl Board {
                     watch_or_observer_stop: false,
                     interrupted_by_scheduler: false,
                     failed: false,
+                    data_fault: false,
+                    thumb_settled: false,
                     exit: None,
                 }),
                 Err(e) => {
@@ -274,6 +398,16 @@ impl Board {
                             Ok(exit) => entry.exit = Some(exit),
                             Err(e) => {
                                 entry.failed = true;
+                                entry.data_fault = matches!(
+                                    e,
+                                    ExecutionError::Memory {
+                                        fault: Fault::ReadUnmapped
+                                            | Fault::WriteUnmapped
+                                            | Fault::ReadProtected
+                                            | Fault::WriteProtected,
+                                        ..
+                                    }
+                                );
                                 error.get_or_insert_with(|| e.to_string());
                             }
                         }
@@ -294,7 +428,21 @@ impl Board {
             }
             if !barrier && (error.is_some() || entries.iter().any(|e| e.done || e.pending)) {
                 barrier = true;
+                // The M-profile owner must finish admitting a shortened
+                // block when its own observer opened the barrier. Its
+                // budget and subsequent owner callbacks remain bounded by
+                // this epoch. A peer callback still preempts it.
+                let mprofile_admitting = error.is_none()
+                    && entries
+                        .iter()
+                        .any(|entry| mprofile == Some(entry.core) && entry.pending)
+                    && !entries
+                        .iter()
+                        .any(|entry| mprofile != Some(entry.core) && (entry.pending || entry.done));
                 for entry in entries.iter_mut().filter(|e| !e.done) {
+                    if mprofile_admitting && mprofile == Some(entry.core) {
+                        continue;
+                    }
                     entry.interrupted_by_scheduler = true;
                     if let Err(e) = self.cpus[entry.core].request_pause(entry.token) {
                         entry.failed = true;
@@ -309,12 +457,16 @@ impl Board {
                 // All assembly execution is stopped. Account the whole cluster
                 // before a callback can settle timers or publish DMA.
                 let mut state = self.state.borrow_mut();
-                for entry in &entries {
-                    if let Err(e) = state.sync(&*self.cpus[entry.core], entry.core) {
+                for entry in &mut entries {
+                    if let Err(e) = self.settle_interactive_entry(&mut state, entry, mprofile) {
                         error.get_or_insert(e);
                     }
                 }
-                if let Some(entry) = entries.iter().find(|e| e.pending) {
+                if let Some(entry) = entries
+                    .iter()
+                    .filter(|e| e.pending)
+                    .min_by_key(|entry| mprofile != Some(entry.core))
+                {
                     match schedule::Slice::new(
                         entry.core,
                         state.instructions[entry.core],
@@ -343,8 +495,8 @@ impl Board {
             self.run_wakeup.wait_for_change(generation);
         }
         let mut state = self.state.borrow_mut();
-        for entry in &entries {
-            if let Err(e) = state.sync(&*self.cpus[entry.core], entry.core) {
+        for entry in &mut entries {
+            if let Err(e) = self.settle_interactive_entry(&mut state, entry, mprofile) {
                 error.get_or_insert(e);
             }
         }
@@ -378,5 +530,24 @@ impl Board {
             error.get_or_insert(e);
         }
         error.map_or(Ok(()), Err)
+    }
+
+    fn settle_interactive_entry(
+        &self,
+        state: &mut State,
+        entry: &mut Entry,
+        mprofile: Option<usize>,
+    ) -> Result<(), String> {
+        let core = entry.core;
+        let cpu = &*self.cpus[core];
+        if mprofile == Some(core) && entry.done && !entry.thumb_settled {
+            entry.thumb_settled = true;
+            if entry.data_fault {
+                state.settle_interrupted_block(cpu, core, scalar(cpu, Register::Pc)? & !1, true)?;
+            } else {
+                state.settle_block(core, None)?;
+            }
+        }
+        state.sync(cpu, core)
     }
 }
