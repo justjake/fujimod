@@ -2106,9 +2106,18 @@ impl Session {
                 .movdc(movdc)?;
         }
         if let Some((base, irq)) = dmp {
+            use fujimod_emulator_ip_dmp::smaph::PixmapReadback;
+
+            // The XPP scanout consumes B,G,R,A pixmaps, as in the XPP graph
+            // board. XP4 keeps the renderer's A,B,G,R words.
+            let readback = if has_xpp_storage || boot_wiring.is_some() {
+                PixmapReadback::RotatesChannels
+            } else {
+                PixmapReadback::PreservesWords
+            };
             devices
                 .get_or_insert_with(devices::Devices::empty)
-                .dmp(base, irq)?;
+                .dmp(base, irq, readback)?;
         }
         for (base, pixel_ticks, first, second, layout, video) in lcdc {
             devices.get_or_insert_with(devices::Devices::empty).lcdc(

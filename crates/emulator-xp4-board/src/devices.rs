@@ -683,7 +683,12 @@ impl Devices {
         self.usb_model()?.consume_reply(id)
     }
 
-    pub fn dmp(&mut self, base: u64, irq: u32) -> Result<(), String> {
+    pub fn dmp(
+        &mut self,
+        base: u64,
+        irq: u32,
+        readback: fujimod_emulator_ip_dmp::smaph::PixmapReadback,
+    ) -> Result<(), String> {
         if irq >= 512
             || self
                 .windows
@@ -692,13 +697,7 @@ impl Devices {
         {
             return Err("Invalid or overlapping XP4 DMP wiring".into());
         }
-        // The X-T3 LCD pixmap holds the renderer's RGBA8 words unchanged
-        // (memory bytes A,B,G,R): see PixmapReadback::PreservesWords.
-        let model = fujimod_emulator_ip_dmp::smaph::Renderer::new(
-            base,
-            irq,
-            fujimod_emulator_ip_dmp::smaph::PixmapReadback::PreservesWords,
-        )?;
+        let model = fujimod_emulator_ip_dmp::smaph::Renderer::new(base, irq, readback)?;
         let id = self.models.len();
         self.models.push(Some(Box::new(model)));
         self.windows.push((base, base + 0x3000, id));
