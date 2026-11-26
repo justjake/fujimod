@@ -24,11 +24,7 @@ arrayvec = { version = "0.7" }
 bitflags = { version = "2", default-features = false, features = ["std"] }
 bytemuck = { version = "1", default-features = false, features = ["aarch64_simd"] }
 concurrent-queue = { version = "2" }
-digest-a6292c17cd707f01 = { package = "digest", version = "0.11", features = [
-  "alloc",
-  "mac",
-  "oid",
-] }
+digest-a6292c17cd707f01 = { package = "digest", version = "0.11", features = ["alloc", "mac", "oid"] }
 fastrand = { version = "2" }
 futures-core = { version = "0.3" }
 futures-util = { version = "0.3", features = ["sink"] }
@@ -43,34 +39,14 @@ proc-macro2 = { version = "1" }
 prost = { version = "0.14" }
 quote = { version = "1" }
 regex = { version = "1" }
-regex-automata = { version = "0.4", default-features = false, features = [
-  "dfa-onepass",
-  "dfa-search",
-  "hybrid",
-  "meta",
-  "nfa",
-  "perf",
-  "std",
-  "unicode",
-] }
+regex-automata = { version = "0.4", default-features = false, features = ["dfa-onepass", "dfa-search", "hybrid", "meta", "nfa", "perf", "std", "unicode"] }
 regex-syntax = { version = "0.8" }
 serde = { version = "1", features = ["alloc", "derive", "rc"] }
-serde_core = { version = "1", default-features = false, features = [
-  "alloc",
-  "rc",
-  "result",
-  "std",
-] }
+serde_core = { version = "1", default-features = false, features = ["alloc", "rc", "result", "std"] }
 serde_json = { version = "1", features = ["alloc", "float_roundtrip"] }
 slab = { version = "0.4" }
 smallvec = { version = "1", default-features = false, features = ["const_generics"] }
-syn-7b89eefb6aaa9bf3 = { package = "syn", version = "3", features = [
-  "extra-traits",
-  "fold",
-  "full",
-  "visit",
-  "visit-mut",
-] }
+syn-7b89eefb6aaa9bf3 = { package = "syn", version = "3", features = ["extra-traits", "fold", "full", "visit", "visit-mut"] }
 thiserror = { version = "2" }
 typenum = { version = "1", default-features = false, features = ["const-generics"] }
 zerocopy = { version = "0.8", default-features = false, features = ["derive", "simd"] }
@@ -81,11 +57,7 @@ bitflags = { version = "2", default-features = false, features = ["std"] }
 bytemuck = { version = "1", default-features = false, features = ["aarch64_simd"] }
 cc = { version = "1", default-features = false, features = ["parallel"] }
 concurrent-queue = { version = "2" }
-digest-a6292c17cd707f01 = { package = "digest", version = "0.11", features = [
-  "alloc",
-  "mac",
-  "oid",
-] }
+digest-a6292c17cd707f01 = { package = "digest", version = "0.11", features = ["alloc", "mac", "oid"] }
 fastrand = { version = "2" }
 futures-core = { version = "0.3" }
 futures-util = { version = "0.3", features = ["sink"] }
@@ -100,56 +72,27 @@ proc-macro2 = { version = "1" }
 prost = { version = "0.14" }
 quote = { version = "1" }
 regex = { version = "1" }
-regex-automata = { version = "0.4", default-features = false, features = [
-  "dfa-onepass",
-  "dfa-search",
-  "hybrid",
-  "meta",
-  "nfa",
-  "perf",
-  "std",
-  "unicode",
-] }
+regex-automata = { version = "0.4", default-features = false, features = ["dfa-onepass", "dfa-search", "hybrid", "meta", "nfa", "perf", "std", "unicode"] }
 regex-syntax = { version = "0.8" }
 serde = { version = "1", features = ["alloc", "derive", "rc"] }
-serde_core = { version = "1", default-features = false, features = [
-  "alloc",
-  "rc",
-  "result",
-  "std",
-] }
+serde_core = { version = "1", default-features = false, features = ["alloc", "rc", "result", "std"] }
 serde_json = { version = "1", features = ["alloc", "float_roundtrip"] }
 slab = { version = "0.4" }
 smallvec = { version = "1", default-features = false, features = ["const_generics"] }
-syn-7b89eefb6aaa9bf3 = { package = "syn", version = "3", features = [
-  "extra-traits",
-  "fold",
-  "full",
-  "visit",
-  "visit-mut",
-] }
+syn-7b89eefb6aaa9bf3 = { package = "syn", version = "3", features = ["extra-traits", "fold", "full", "visit", "visit-mut"] }
 syn-f595c2ba2a3f28df = { package = "syn", version = "2", features = ["extra-traits", "full"] }
 thiserror = { version = "2" }
 typenum = { version = "1", default-features = false, features = ["const-generics"] }
 zerocopy = { version = "0.8", default-features = false, features = ["derive", "simd"] }
 
 [target.aarch64-apple-darwin.dependencies]
-bytemuck = { version = "1", default-features = false, features = [
-  "derive",
-  "extern_crate_alloc",
-  "min_const_generics",
-] }
+bytemuck = { version = "1", default-features = false, features = ["derive", "extern_crate_alloc", "min_const_generics"] }
 byteorder = { version = "1" }
 bytes = { version = "1" }
 cipher = { version = "0.5", default-features = false, features = ["stream-wrapper"] }
 crossbeam-utils = { version = "0.8" }
-crypto-common-6f8ce4dd05d13bba = { package = "crypto-common", version = "0.2", default-features = false, features = [
-  "getrandom",
-] }
-crypto-common-c65f7effa3be6d31 = { package = "crypto-common", version = "0.1", default-features = false, features = [
-  "getrandom",
-  "std",
-] }
+crypto-common-6f8ce4dd05d13bba = { package = "crypto-common", version = "0.2", default-features = false, features = ["getrandom"] }
+crypto-common-c65f7effa3be6d31 = { package = "crypto-common", version = "0.1", default-features = false, features = ["getrandom", "std"] }
 digest-93f6ce9d446188ac = { package = "digest", version = "0.10", features = ["mac", "std"] }
 errno = { version = "0.3" }
 form_urlencoded = { version = "1" }
@@ -157,13 +100,8 @@ futures-channel = { version = "0.3", features = ["sink"] }
 futures-io = { version = "0.3" }
 futures-sink = { version = "0.3" }
 futures-util = { version = "0.3", default-features = false, features = ["channel", "io"] }
-getrandom-468e82937335b1c9 = { package = "getrandom", version = "0.3", default-features = false, features = [
-  "std",
-] }
-getrandom-9fbad63c4bcf4a8f = { package = "getrandom", version = "0.4", default-features = false, features = [
-  "std",
-  "sys_rng",
-] }
+getrandom-468e82937335b1c9 = { package = "getrandom", version = "0.3", default-features = false, features = ["std"] }
+getrandom-9fbad63c4bcf4a8f = { package = "getrandom", version = "0.4", default-features = false, features = ["std", "sys_rng"] }
 indexmap = { version = "2", features = ["serde"] }
 libc = { version = "0.2", features = ["extra_traits"] }
 naga = { version = "30", features = ["glsl-in", "msl-out", "wgsl-in", "wgsl-out"] }
@@ -186,22 +124,13 @@ tokio = { version = "1", features = ["full"] }
 tracing = { version = "0.1", features = ["log"] }
 
 [target.aarch64-apple-darwin.build-dependencies]
-bytemuck = { version = "1", default-features = false, features = [
-  "derive",
-  "extern_crate_alloc",
-  "min_const_generics",
-] }
+bytemuck = { version = "1", default-features = false, features = ["derive", "extern_crate_alloc", "min_const_generics"] }
 byteorder = { version = "1" }
 bytes = { version = "1" }
 cipher = { version = "0.5", default-features = false, features = ["stream-wrapper"] }
 crossbeam-utils = { version = "0.8" }
-crypto-common-6f8ce4dd05d13bba = { package = "crypto-common", version = "0.2", default-features = false, features = [
-  "getrandom",
-] }
-crypto-common-c65f7effa3be6d31 = { package = "crypto-common", version = "0.1", default-features = false, features = [
-  "getrandom",
-  "std",
-] }
+crypto-common-6f8ce4dd05d13bba = { package = "crypto-common", version = "0.2", default-features = false, features = ["getrandom"] }
+crypto-common-c65f7effa3be6d31 = { package = "crypto-common", version = "0.1", default-features = false, features = ["getrandom", "std"] }
 digest-93f6ce9d446188ac = { package = "digest", version = "0.10", features = ["mac", "std"] }
 displaydoc = { version = "0.2" }
 errno = { version = "0.3" }
@@ -210,13 +139,8 @@ futures-channel = { version = "0.3", features = ["sink"] }
 futures-io = { version = "0.3" }
 futures-sink = { version = "0.3" }
 futures-util = { version = "0.3", default-features = false, features = ["channel", "io"] }
-getrandom-468e82937335b1c9 = { package = "getrandom", version = "0.3", default-features = false, features = [
-  "std",
-] }
-getrandom-9fbad63c4bcf4a8f = { package = "getrandom", version = "0.4", default-features = false, features = [
-  "std",
-  "sys_rng",
-] }
+getrandom-468e82937335b1c9 = { package = "getrandom", version = "0.3", default-features = false, features = ["std"] }
+getrandom-9fbad63c4bcf4a8f = { package = "getrandom", version = "0.4", default-features = false, features = ["std", "sys_rng"] }
 indexmap = { version = "2", features = ["serde"] }
 libc = { version = "0.2", features = ["extra_traits"] }
 naga = { version = "30", features = ["glsl-in", "msl-out", "wgsl-in", "wgsl-out"] }
@@ -234,57 +158,30 @@ serde_json = { version = "1", default-features = false, features = ["raw_value"]
 sha2 = { version = "0.10", features = ["asm-aarch64"] }
 smallvec = { version = "1", default-features = false, features = ["const_new", "union"] }
 subtle = { version = "2" }
-syn-f595c2ba2a3f28df = { package = "syn", version = "2", default-features = false, features = [
-  "visit",
-  "visit-mut",
-] }
+syn-f595c2ba2a3f28df = { package = "syn", version = "2", default-features = false, features = ["visit", "visit-mut"] }
 tempfile = { version = "3" }
 tokio = { version = "1", features = ["full"] }
 tracing = { version = "0.1", features = ["log"] }
 
 [target.x86_64-unknown-linux-gnu.dependencies]
-bytemuck = { version = "1", default-features = false, features = [
-  "derive",
-  "extern_crate_alloc",
-  "min_const_generics",
-] }
+bytemuck = { version = "1", default-features = false, features = ["derive", "extern_crate_alloc", "min_const_generics"] }
 byteorder = { version = "1" }
 bytes = { version = "1" }
 cipher = { version = "0.5", default-features = false, features = ["stream-wrapper"] }
 crossbeam-utils = { version = "0.8" }
-crypto-common-6f8ce4dd05d13bba = { package = "crypto-common", version = "0.2", default-features = false, features = [
-  "getrandom",
-] }
-crypto-common-c65f7effa3be6d31 = { package = "crypto-common", version = "0.1", default-features = false, features = [
-  "getrandom",
-  "std",
-] }
+crypto-common-6f8ce4dd05d13bba = { package = "crypto-common", version = "0.2", default-features = false, features = ["getrandom"] }
+crypto-common-c65f7effa3be6d31 = { package = "crypto-common", version = "0.1", default-features = false, features = ["getrandom", "std"] }
 digest-93f6ce9d446188ac = { package = "digest", version = "0.10", features = ["mac", "std"] }
 form_urlencoded = { version = "1" }
 futures-channel = { version = "0.3", features = ["sink"] }
 futures-io = { version = "0.3" }
 futures-sink = { version = "0.3" }
 futures-util = { version = "0.3", default-features = false, features = ["channel", "io"] }
-getrandom-468e82937335b1c9 = { package = "getrandom", version = "0.3", default-features = false, features = [
-  "std",
-] }
-getrandom-9fbad63c4bcf4a8f = { package = "getrandom", version = "0.4", default-features = false, features = [
-  "std",
-  "sys_rng",
-] }
+getrandom-468e82937335b1c9 = { package = "getrandom", version = "0.3", default-features = false, features = ["std"] }
+getrandom-9fbad63c4bcf4a8f = { package = "getrandom", version = "0.4", default-features = false, features = ["std", "sys_rng"] }
 indexmap = { version = "2", features = ["serde"] }
 libc = { version = "0.2", features = ["extra_traits"] }
-linux-raw-sys = { version = "0.12", features = [
-  "auxvec",
-  "elf",
-  "if_ether",
-  "ioctl",
-  "net",
-  "netlink",
-  "no_std",
-  "prctl",
-  "xdp",
-] }
+linux-raw-sys = { version = "0.12", features = ["auxvec", "elf", "if_ether", "ioctl", "net", "netlink", "no_std", "prctl", "xdp"] }
 naga = { version = "30", features = ["glsl-in", "hlsl-out", "spv-out", "wgsl-in", "wgsl-out"] }
 naga-types = { version = "30", default-features = false, features = ["std"] }
 nix = { version = "0.31", features = ["fs", "net", "signal"] }
@@ -298,35 +195,17 @@ serde_core = { version = "1" }
 serde_json = { version = "1", default-features = false, features = ["raw_value"] }
 smallvec = { version = "1", default-features = false, features = ["const_new", "union"] }
 subtle = { version = "2" }
-tokio = { version = "1", features = [
-  "io-std",
-  "io-util",
-  "macros",
-  "net",
-  "rt-multi-thread",
-  "signal",
-  "sync",
-  "time",
-] }
+tokio = { version = "1", features = ["io-std", "io-util", "macros", "net", "rt-multi-thread", "signal", "sync", "time"] }
 tracing = { version = "0.1", features = ["log"] }
 
 [target.x86_64-unknown-linux-gnu.build-dependencies]
-bytemuck = { version = "1", default-features = false, features = [
-  "derive",
-  "extern_crate_alloc",
-  "min_const_generics",
-] }
+bytemuck = { version = "1", default-features = false, features = ["derive", "extern_crate_alloc", "min_const_generics"] }
 byteorder = { version = "1" }
 bytes = { version = "1" }
 cipher = { version = "0.5", default-features = false, features = ["stream-wrapper"] }
 crossbeam-utils = { version = "0.8" }
-crypto-common-6f8ce4dd05d13bba = { package = "crypto-common", version = "0.2", default-features = false, features = [
-  "getrandom",
-] }
-crypto-common-c65f7effa3be6d31 = { package = "crypto-common", version = "0.1", default-features = false, features = [
-  "getrandom",
-  "std",
-] }
+crypto-common-6f8ce4dd05d13bba = { package = "crypto-common", version = "0.2", default-features = false, features = ["getrandom"] }
+crypto-common-c65f7effa3be6d31 = { package = "crypto-common", version = "0.1", default-features = false, features = ["getrandom", "std"] }
 digest-93f6ce9d446188ac = { package = "digest", version = "0.10", features = ["mac", "std"] }
 displaydoc = { version = "0.2" }
 form_urlencoded = { version = "1" }
@@ -334,26 +213,11 @@ futures-channel = { version = "0.3", features = ["sink"] }
 futures-io = { version = "0.3" }
 futures-sink = { version = "0.3" }
 futures-util = { version = "0.3", default-features = false, features = ["channel", "io"] }
-getrandom-468e82937335b1c9 = { package = "getrandom", version = "0.3", default-features = false, features = [
-  "std",
-] }
-getrandom-9fbad63c4bcf4a8f = { package = "getrandom", version = "0.4", default-features = false, features = [
-  "std",
-  "sys_rng",
-] }
+getrandom-468e82937335b1c9 = { package = "getrandom", version = "0.3", default-features = false, features = ["std"] }
+getrandom-9fbad63c4bcf4a8f = { package = "getrandom", version = "0.4", default-features = false, features = ["std", "sys_rng"] }
 indexmap = { version = "2", features = ["serde"] }
 libc = { version = "0.2", features = ["extra_traits"] }
-linux-raw-sys = { version = "0.12", features = [
-  "auxvec",
-  "elf",
-  "if_ether",
-  "ioctl",
-  "net",
-  "netlink",
-  "no_std",
-  "prctl",
-  "xdp",
-] }
+linux-raw-sys = { version = "0.12", features = ["auxvec", "elf", "if_ether", "ioctl", "net", "netlink", "no_std", "prctl", "xdp"] }
 naga = { version = "30", features = ["glsl-in", "hlsl-out", "spv-out", "wgsl-in", "wgsl-out"] }
 naga-types = { version = "30", default-features = false, features = ["std"] }
 nix = { version = "0.31", features = ["fs", "net", "signal"] }
@@ -367,138 +231,30 @@ serde_core = { version = "1" }
 serde_json = { version = "1", default-features = false, features = ["raw_value"] }
 smallvec = { version = "1", default-features = false, features = ["const_new", "union"] }
 subtle = { version = "2" }
-syn-f595c2ba2a3f28df = { package = "syn", version = "2", default-features = false, features = [
-  "visit",
-  "visit-mut",
-] }
-tokio = { version = "1", features = [
-  "io-std",
-  "io-util",
-  "macros",
-  "net",
-  "rt-multi-thread",
-  "signal",
-  "sync",
-  "time",
-] }
+syn-f595c2ba2a3f28df = { package = "syn", version = "2", default-features = false, features = ["visit", "visit-mut"] }
+tokio = { version = "1", features = ["io-std", "io-util", "macros", "net", "rt-multi-thread", "signal", "sync", "time"] }
 tracing = { version = "0.1", features = ["log"] }
 
 [target.wasm32-unknown-unknown.dependencies]
-bytemuck = { version = "1", default-features = false, features = [
-  "derive",
-  "extern_crate_alloc",
-  "min_const_generics",
-] }
+bytemuck = { version = "1", default-features = false, features = ["derive", "extern_crate_alloc", "min_const_generics"] }
 bytes = { version = "1" }
 futures-sink = { version = "0.3" }
 js-sys = { version = "0.3" }
 libc = { version = "0.2" }
 wasm-bindgen = { version = "0.2" }
 wasm-bindgen-futures = { version = "0.4" }
-web-sys = { version = "0.3", features = [
-  "AddEventListenerOptions",
-  "BinaryType",
-  "Blob",
-  "CloseEvent",
-  "CloseEventInit",
-  "Document",
-  "ErrorEvent",
-  "FileReader",
-  "History",
-  "HtmlCanvasElement",
-  "HtmlHeadElement",
-  "HtmlImageElement",
-  "HtmlVideoElement",
-  "ImageBitmap",
-  "ImageData",
-  "Location",
-  "MediaQueryList",
-  "MessageEvent",
-  "Navigator",
-  "NodeList",
-  "OffscreenCanvas",
-  "ProgressEvent",
-  "Usb",
-  "UsbAlternateInterface",
-  "UsbConfiguration",
-  "UsbConnectionEvent",
-  "UsbControlTransferParameters",
-  "UsbDevice",
-  "UsbDeviceFilter",
-  "UsbDeviceRequestOptions",
-  "UsbDirection",
-  "UsbInTransferResult",
-  "UsbInterface",
-  "UsbOutTransferResult",
-  "UsbRecipient",
-  "UsbRequestType",
-  "UsbTransferStatus",
-  "VideoFrame",
-  "WebSocket",
-  "Window",
-  "WorkerGlobalScope",
-  "WorkerNavigator",
-] }
+web-sys = { version = "0.3", features = ["AddEventListenerOptions", "BinaryType", "Blob", "CloseEvent", "CloseEventInit", "Document", "ErrorEvent", "FileReader", "History", "HtmlCanvasElement", "HtmlHeadElement", "HtmlImageElement", "HtmlVideoElement", "ImageBitmap", "ImageData", "Location", "MediaQueryList", "MessageEvent", "Navigator", "NodeList", "OffscreenCanvas", "ProgressEvent", "Usb", "UsbAlternateInterface", "UsbConfiguration", "UsbConnectionEvent", "UsbControlTransferParameters", "UsbDevice", "UsbDeviceFilter", "UsbDeviceRequestOptions", "UsbDirection", "UsbInTransferResult", "UsbInterface", "UsbOutTransferResult", "UsbRecipient", "UsbRequestType", "UsbTransferStatus", "VideoFrame", "WebSocket", "Window", "WorkerGlobalScope", "WorkerNavigator"] }
 
 [target.wasm32-unknown-unknown.build-dependencies]
-bytemuck = { version = "1", default-features = false, features = [
-  "derive",
-  "extern_crate_alloc",
-  "min_const_generics",
-] }
+bytemuck = { version = "1", default-features = false, features = ["derive", "extern_crate_alloc", "min_const_generics"] }
 bytes = { version = "1" }
 futures-sink = { version = "0.3" }
 js-sys = { version = "0.3" }
 libc = { version = "0.2" }
-syn-f595c2ba2a3f28df = { package = "syn", version = "2", default-features = false, features = [
-  "visit-mut",
-] }
+syn-f595c2ba2a3f28df = { package = "syn", version = "2", default-features = false, features = ["visit-mut"] }
 wasm-bindgen = { version = "0.2" }
 wasm-bindgen-futures = { version = "0.4" }
-web-sys = { version = "0.3", features = [
-  "AddEventListenerOptions",
-  "BinaryType",
-  "Blob",
-  "CloseEvent",
-  "CloseEventInit",
-  "Document",
-  "ErrorEvent",
-  "FileReader",
-  "History",
-  "HtmlCanvasElement",
-  "HtmlHeadElement",
-  "HtmlImageElement",
-  "HtmlVideoElement",
-  "ImageBitmap",
-  "ImageData",
-  "Location",
-  "MediaQueryList",
-  "MessageEvent",
-  "Navigator",
-  "NodeList",
-  "OffscreenCanvas",
-  "ProgressEvent",
-  "Usb",
-  "UsbAlternateInterface",
-  "UsbConfiguration",
-  "UsbConnectionEvent",
-  "UsbControlTransferParameters",
-  "UsbDevice",
-  "UsbDeviceFilter",
-  "UsbDeviceRequestOptions",
-  "UsbDirection",
-  "UsbInTransferResult",
-  "UsbInterface",
-  "UsbOutTransferResult",
-  "UsbRecipient",
-  "UsbRequestType",
-  "UsbTransferStatus",
-  "VideoFrame",
-  "WebSocket",
-  "Window",
-  "WorkerGlobalScope",
-  "WorkerNavigator",
-] }
+web-sys = { version = "0.3", features = ["AddEventListenerOptions", "BinaryType", "Blob", "CloseEvent", "CloseEventInit", "Document", "ErrorEvent", "FileReader", "History", "HtmlCanvasElement", "HtmlHeadElement", "HtmlImageElement", "HtmlVideoElement", "ImageBitmap", "ImageData", "Location", "MediaQueryList", "MessageEvent", "Navigator", "NodeList", "OffscreenCanvas", "ProgressEvent", "Usb", "UsbAlternateInterface", "UsbConfiguration", "UsbConnectionEvent", "UsbControlTransferParameters", "UsbDevice", "UsbDeviceFilter", "UsbDeviceRequestOptions", "UsbDirection", "UsbInTransferResult", "UsbInterface", "UsbOutTransferResult", "UsbRecipient", "UsbRequestType", "UsbTransferStatus", "VideoFrame", "WebSocket", "Window", "WorkerGlobalScope", "WorkerNavigator"] }
 
 [target.wasm32-unknown-emscripten.dependencies]
 bytes = { version = "1" }
@@ -509,41 +265,7 @@ rustix = { version = "1", features = ["event", "fs", "net", "pipe", "process", "
 rusty_h264-common = { version = "0.17", default-features = false, features = ["asm", "libm"] }
 rusty_h264-encoder = { version = "0.17", default-features = false, features = ["asm", "libm"] }
 wasm-bindgen = { version = "0.2" }
-web-sys = { version = "0.3", features = [
-  "AddEventListenerOptions",
-  "BinaryType",
-  "Blob",
-  "CloseEvent",
-  "CloseEventInit",
-  "Document",
-  "ErrorEvent",
-  "FileReader",
-  "History",
-  "HtmlHeadElement",
-  "Location",
-  "MessageEvent",
-  "Navigator",
-  "ProgressEvent",
-  "Usb",
-  "UsbAlternateInterface",
-  "UsbConfiguration",
-  "UsbConnectionEvent",
-  "UsbControlTransferParameters",
-  "UsbDevice",
-  "UsbDeviceFilter",
-  "UsbDeviceRequestOptions",
-  "UsbDirection",
-  "UsbInTransferResult",
-  "UsbInterface",
-  "UsbOutTransferResult",
-  "UsbRecipient",
-  "UsbRequestType",
-  "UsbTransferStatus",
-  "WebSocket",
-  "Window",
-  "WorkerGlobalScope",
-  "WorkerNavigator",
-] }
+web-sys = { version = "0.3", features = ["AddEventListenerOptions", "BinaryType", "Blob", "CloseEvent", "CloseEventInit", "Document", "ErrorEvent", "FileReader", "History", "HtmlHeadElement", "Location", "MessageEvent", "Navigator", "ProgressEvent", "Usb", "UsbAlternateInterface", "UsbConfiguration", "UsbConnectionEvent", "UsbControlTransferParameters", "UsbDevice", "UsbDeviceFilter", "UsbDeviceRequestOptions", "UsbDirection", "UsbInTransferResult", "UsbInterface", "UsbOutTransferResult", "UsbRecipient", "UsbRequestType", "UsbTransferStatus", "WebSocket", "Window", "WorkerGlobalScope", "WorkerNavigator"] }
 
 [target.wasm32-unknown-emscripten.build-dependencies]
 bytes = { version = "1" }
@@ -555,40 +277,6 @@ rusty_h264-common = { version = "0.17", default-features = false, features = ["a
 rusty_h264-encoder = { version = "0.17", default-features = false, features = ["asm", "libm"] }
 syn-f595c2ba2a3f28df = { package = "syn", version = "2", default-features = false, features = ["visit-mut"] }
 wasm-bindgen = { version = "0.2" }
-web-sys = { version = "0.3", features = [
-  "AddEventListenerOptions",
-  "BinaryType",
-  "Blob",
-  "CloseEvent",
-  "CloseEventInit",
-  "Document",
-  "ErrorEvent",
-  "FileReader",
-  "History",
-  "HtmlHeadElement",
-  "Location",
-  "MessageEvent",
-  "Navigator",
-  "ProgressEvent",
-  "Usb",
-  "UsbAlternateInterface",
-  "UsbConfiguration",
-  "UsbConnectionEvent",
-  "UsbControlTransferParameters",
-  "UsbDevice",
-  "UsbDeviceFilter",
-  "UsbDeviceRequestOptions",
-  "UsbDirection",
-  "UsbInTransferResult",
-  "UsbInterface",
-  "UsbOutTransferResult",
-  "UsbRecipient",
-  "UsbRequestType",
-  "UsbTransferStatus",
-  "WebSocket",
-  "Window",
-  "WorkerGlobalScope",
-  "WorkerNavigator",
-] }
+web-sys = { version = "0.3", features = ["AddEventListenerOptions", "BinaryType", "Blob", "CloseEvent", "CloseEventInit", "Document", "ErrorEvent", "FileReader", "History", "HtmlHeadElement", "Location", "MessageEvent", "Navigator", "ProgressEvent", "Usb", "UsbAlternateInterface", "UsbConfiguration", "UsbConnectionEvent", "UsbControlTransferParameters", "UsbDevice", "UsbDeviceFilter", "UsbDeviceRequestOptions", "UsbDirection", "UsbInTransferResult", "UsbInterface", "UsbOutTransferResult", "UsbRecipient", "UsbRequestType", "UsbTransferStatus", "WebSocket", "Window", "WorkerGlobalScope", "WorkerNavigator"] }
 
 ### END HAKARI SECTION
