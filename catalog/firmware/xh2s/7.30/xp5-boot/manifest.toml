@@ -20,15 +20,17 @@ size = 0x80000000
 base = 0x80004000
 size = 0x6fffc000
 
-# Movie buffers use DRAM behind the two high bus-drain ports. Extents use the
-# X-T5 channel layout as the functional model.
+# Movie buffers use DRAM behind the high bus-drain ports.
 [[ram]]
 base = 0x100004000
 size = 0x3fffc000
 
+# The firmware remaps the last DRAM region using the base and size at
+# 0x1c11b90 (caller 0x16cd050): [0x180000000, 0x200000000). The first
+# granule holds the discarded-read port declared in 20-storage.toml.
 [[ram]]
 base = 0x180004000
-size = 0x3fffc000
+size = 0x7fffc000
 
 # Two DDR PHY register ranges used as read/write backing during warm training.
 # The mailbox pages immediately above them are declared in 48-ddr-phy.toml.

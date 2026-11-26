@@ -4,7 +4,8 @@
 # 0xff9b0000, 0xff9b2000 and 0xff9b4000 from 83, 73 and 1 sites (0x16c3d80.., 0x16c3c24..,
 # 0x16c718c), the X-T5 driver's counts exactly. Card presence is the [[sd]] run input in
 # xh2s-730.toml. transfer_ticks, clock_ticks, rca and capabilities (bit 35, UHS-II) are
-# the X-T5 session assumptions; ram_bytes is this run's DRAM limit.
+# the X-T5 session assumptions. DMA uses the modeled DRAM ranges. Driver
+# 0x16c86c0 writes address bits 34..32 at 0xff90e7d8 + instance * 0xc for UHS-I.
 
 [[device]]
 base = 0xff9b0000
@@ -17,6 +18,9 @@ transfer_ticks = 1000
 clock_ticks = 1000
 rca = 1
 ram_bytes = 0x80000000
+ram_banks = [[0x100004000, 0x3fffc000], [0x180004000, 0x7fffc000]]
+dram_alias = false
+address_high = 0xff90e7d8
 
 [[device]]
 base = 0xff9b01e0
@@ -43,6 +47,9 @@ transfer_ticks = 1000
 clock_ticks = 1000
 rca = 1
 ram_bytes = 0x80000000
+ram_banks = [[0x100004000, 0x3fffc000], [0x180004000, 0x7fffc000]]
+dram_alias = false
+address_high = 0xff90e7e4
 
 [[device]]
 base = 0xff9b41e0

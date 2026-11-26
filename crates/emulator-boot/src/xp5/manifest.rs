@@ -344,4 +344,29 @@ mod tests {
                 .contains("dram_address_space")
         );
     }
+
+    #[test]
+    fn xh2s_sd_dma_can_reach_the_recorder_dram_window() {
+        let state = BootState::for_firmware("xh2s-730", None).unwrap();
+        assert!(
+            state.ram.iter().any(
+                |region| region.base == 0x180004000 && region.base + region.size == 0x200000000
+            )
+        );
+        for (base, address_high) in [(0xff9b0000, 0xff90e7d8), (0xff9b4000, 0xff90e7e4)] {
+            let host = state
+                .device
+                .iter()
+                .find(|window| window.base == base)
+                .unwrap();
+            let controller = &host.options["controller"];
+            assert_eq!(controller["address_high"].as_integer(), Some(address_high));
+            let banks = controller["ram_banks"].as_array().unwrap();
+            assert!(banks.iter().any(|bank| {
+                let bank = bank.as_array().unwrap();
+                bank[0].as_integer() == Some(0x180004000)
+                    && bank[1].as_integer() == Some(0x7fffc000)
+            }));
+        }
+    }
 }
