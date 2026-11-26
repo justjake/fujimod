@@ -28,7 +28,7 @@ are written by this probe.
 `add-shutter-contacts.py INPUT_GRAPH OUTPUT_GRAPH` adds active-low shutter
 contacts to an X-Pro2 5.11 lab graph with an XPP GPIO block and a contact
 driver. The graph must run with XPP support for the shared `GpioInputs`
-capability. The historical engine patch predates that change. Review
+capability. The historical engine branch predates that change. Review
 [shared GPIO inputs](https://github.com/justjake/fujimod/commit/da01636b)
 and [XPP panel support](https://github.com/justjake/fujimod/commit/0e13f7da).
 

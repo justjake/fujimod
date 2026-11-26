@@ -31,10 +31,10 @@ For example, let `KIT` point to a copy of this directory and `LAB_REPO` point
 to the scratch FujiMod checkout. Shell variables below are ordinary local paths.
 
 ```sh
-git -C "$LAB_REPO" checkout --detach 62e47c090eb8a65f4ffce48d93702673498a6419
+git -C "$LAB_REPO" fetch https://github.com/trogadero/fujimod.git refs/heads/contrib/xpro2-engine-reference
+python3 "$KIT/verify-engine-reference.py" --repo "$LAB_REPO"
+git -C "$LAB_REPO" checkout --detach 136ae193fa3f2366d3a28dba334db427e97f1f62
 git -C "$LAB_REPO" submodule update --init --recursive
-git -C "$LAB_REPO" apply --check "$KIT/legacy/engine-reference.generated.patch"
-git -C "$LAB_REPO" apply "$KIT/legacy/engine-reference.generated.patch"
 cd "$LAB_REPO"
 mise install
 ```

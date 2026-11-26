@@ -10,7 +10,7 @@ The [storage and shutter update](storage/README.md) documents the latest X-Pro2
 
 ## What is included
 
-- A source patch for the **validated historical engine revision**, including
+- A [Git branch with the historical engine commits](https://github.com/trogadero/fujimod/tree/contrib/xpro2-engine-reference), including
   XPP display, input, SD, clock/reset, DDR and reference-ROM boot support.
 - Declarative NOR/SD laboratory profiles and a deterministic input builder.
 - A sparse, readable patch recipe that reproduces the exact FujiMods SD image.
@@ -48,12 +48,12 @@ on a physical camera. Touch-only Menu Tap is out of scope for the X-Pro2.
 
 ## Relationship to current upstream
 
-The contribution branch starts from the current public upstream commit recorded
-in `data/provenance.generated.json`. It adds this handoff; it does **not** overwrite the
-current engine with old files. The reference engine patch applies to
-`62e47c090eb8a65f4ffce48d93702673498a6419` only. Replaying it against a later
-revision without adapting the APIs is unsupported. The path-by-path inventory
-in `data/upstream-port-inventory.generated.json` identifies remaining integration work.
+The contribution branch carries this handoff on top of upstream. The three
+[engine commits](https://github.com/trogadero/fujimod/compare/62e47c090eb8a65f4ffce48d93702673498a6419...contrib/xpro2-engine-reference)
+start at the validated historical revision `62e47c090eb8`. The path-by-path
+inventory in `data/upstream-port-inventory.generated.json` identifies remaining
+integration work. Current upstream has changed the device and browser APIs
+used by the historical checkout.
 
 The sparse firmware recipe is the canonical byte-exact replay path. Files in
 `reference-generators/` preserve readable feature algorithms; their original

@@ -7,9 +7,12 @@ selected reproducible facts and hashes.
 ## Checks run for this handoff
 
 - Fifteen synthetic preparation/privacy tests passed without firmware or USB.
-- The historical engine patch applied to all 52 declared source paths, produced
-  the exact expected text, and reversed to the original base including removal
-  of added files. This is not a fresh compiler run of the filtered patch.
+- The three historical engine commits reproduce all 52 declared source paths.
+  The verifier checks the base, exact changed path set and resulting hashes.
+  On the reference branch, all 116 XPP and framebuffer tests and the
+  TypeScript source policy passed.
+  A merge trial against `main` at `6d53c6ae` found 27 paths with conflicts,
+  including shared engine APIs and framebuffer crates.
 - From the three local public inputs, `prepare.py` reconstructed the exact stock
   resident and FujiMods SD images. It also reconstructed the combined laboratory
   input with SHA-256
@@ -55,7 +58,7 @@ failed; conversely, an error-free emulator is not a proof of physical safety.
 
 ## Review points
 
-Inspect the sparse recipe and input hashes, the source patch attribution, model
+Inspect the sparse recipe and input hashes, the engine commits, model
 assumptions, current-upstream inventory and omitted materials before publishing.
 The automated public audit checks file types, UTF-8 text, size limits, common
 credential formats, personal paths and oversized binary JSON fields. It cannot

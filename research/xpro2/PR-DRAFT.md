@@ -13,8 +13,9 @@ button mapping, ROM identity or recovery on a physical X-Pro2, and does not
 claim AF speed or power improvements.
 
 The branch intentionally adds research material rather than replacing current
-engine APIs with historical versions. The engine reference patch is pinned to
-its validated base. Firmware, ROM, reference-module bytes, personal images,
+engine APIs with historical versions. The engine reference is available as
+[three commits](https://github.com/trogadero/fujimod/compare/62e47c090eb8a65f4ffce48d93702673498a6419...contrib/xpro2-engine-reference)
+on its validated base. Firmware, ROM, reference-module bytes, personal images,
 serials, raw captures and private Git history are excluded. Readers supply the
 three hash-bound public inputs locally.
 
