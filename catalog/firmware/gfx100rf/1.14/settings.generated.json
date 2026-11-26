@@ -17,7 +17,99 @@
   },
   "defaults": null,
   "fields": [],
-  "profile": null,
-  "settings": {},
+  "profile": {
+    "header": {
+      "address": 28745592,
+      "size": 8,
+      "sha256": "09fa8b71aedaf8255b7bf1ad64a1183c8de81661c27036e5e5af32e4fa391e36"
+    },
+    "marker": 54,
+    "loader_offset": 344,
+    "power_register": 31,
+    "records": {
+      "settings": {
+        "block": 2028,
+        "bytes": 65536,
+        "defaults": {
+          "address": 30287416,
+          "size": 63188,
+          "sha256": "ae93f2387647d7c55306596a2adbfe66f8c018c6587186702df17ff5bfb1336a"
+        },
+        "defaults_offset": 260,
+        "parity_offset": 63484,
+        "fields": [
+          {
+            "offset": 1412,
+            "bytes": [
+              4
+            ],
+            "basis": "Stock UI migration 0x13bd87c updates versions 0 through 3 and stores version 4."
+          },
+          {
+            "offset": 2742,
+            "bytes": [
+              1
+            ],
+            "basis": "UI_SETP_APP_INTRODUCTION_SET uses 1 for the completed state."
+          },
+          {
+            "offset": 2743,
+            "bytes": [
+              1
+            ],
+            "basis": "UI_SETP_POWER_OFF_TEMPERATURE_SET uses 1 for the completed state."
+          },
+          {
+            "offset": 2744,
+            "bytes": [
+              1
+            ],
+            "basis": "UI_SETP_PAIRING_SET uses 1 for the completed state."
+          },
+          {
+            "offset": 63480,
+            "bytes": [
+              1,
+              20
+            ],
+            "basis": "The stock writer at 0x1581848 stamps the version bytes that the validator at 0x1581d90 checks."
+          }
+        ]
+      },
+      "system": {
+        "block": 2004,
+        "bytes": 8192,
+        "defaults": {
+          "address": 28745600,
+          "size": 7168,
+          "sha256": "9690cd3a7abe9dffdbcb7b3c7445c7a6ac38cefdcbb777d67fab35dc19b6429b"
+        },
+        "defaults_offset": 260,
+        "parity_offset": 7932,
+        "fields": []
+      }
+    },
+    "derived_fields": []
+  },
+  "settings": {
+    "setup": {
+      "store": "header",
+      "offset": 4,
+      "values": {
+        "done": [
+          14
+        ]
+      }
+    },
+    "language": {
+      "store": "settings",
+      "offset": 1577,
+      "values": {
+        "en": [
+          1
+        ]
+      }
+    }
+  },
   "sections": []
 }
