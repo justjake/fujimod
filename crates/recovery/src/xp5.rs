@@ -342,6 +342,9 @@ pub struct Setup {
     pub banks: Banks,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub card_boot: Option<CardBoot>,
+    /// Checked reset-stage edits for the preloaded SD card startup.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub preloaded_ram_edits: Vec<image::Edit>,
     /// Word edits of the RAM image for a startup that keeps the installed flash attached
     /// (`StartupOptions::internal_flash`). The image selects the reset stage's preloaded mode,
     /// whose other differences from the update's own selector have to be undone here.
@@ -1290,6 +1293,13 @@ fn package_inner(
             reset == ram[..setup.reset_copy_size],
             "XP5 reset copy differs beyond preloaded selector",
         )?;
+        if internal_flash.is_none() && stock_selector.is_none() && setup.card_boot.is_none() {
+            edit_ram(
+                &mut ram[..setup.reset_copy_size],
+                &setup.preloaded_ram_edits,
+                setup.selector,
+            )?;
+        }
         if let Some(flash) = &internal_flash {
             edit_ram(&mut ram, &flash.ram_edits, setup.selector)?;
         }
@@ -1661,6 +1671,7 @@ mod tests {
                 edits: vec![],
             },
             card_boot: None,
+            preloaded_ram_edits: vec![],
             internal_flash_ram_edits: vec![],
             stock_selector: None,
         };
@@ -1718,6 +1729,77 @@ mod tests {
         assert!(runs.contains(&((30 * block) as u64, 3 * block as u64)));
         assert!(runs.is_sorted());
     }
+    #[test]
+    fn preloaded_reset_edits_are_covered_by_the_request() {
+        let (data, mut setup, ram) = fixture();
+        setup
+            .preloaded_ram_edits
+            .push(preloaded_edit(0x100, 0xffff_ffff));
+        let files = package(
+            &data,
+            &setup,
+            Some(ram.clone()),
+            0,
+            StartupStop::Continue,
+            false,
+        )
+        .unwrap();
+        let mut expected = ram;
+        put(&mut expected, 0x100, 0x1400_0068).unwrap();
+        assert_eq!(files[1].bytes, expected);
+        let request = 0xc000 + template::SETUP_SD_REQUEST;
+        assert_eq!(
+            u64::from_le_bytes(
+                files[0].bytes[request + 8..request + 16]
+                    .try_into()
+                    .unwrap()
+            ),
+            expected.len() as u64
+        );
+        assert_eq!(
+            word(&files[0].bytes, request + 16).unwrap(),
+            crate::xp4::crc32(&expected)
+        );
+    }
+
+    fn preloaded_edit(address: usize, old: u32) -> image::Edit {
+        image::Edit {
+            address,
+            old,
+            new: 0x1400_0068,
+            what: "Use the preloaded reset path".into(),
+        }
+    }
+
+    #[test]
+    fn preloaded_reset_edits_refuse_invalid_words_and_addresses() {
+        let (data, mut setup, mut ram) = fixture();
+        ram.resize(ram.len() + 4, 0);
+        for edits in [
+            vec![preloaded_edit(0x100, 0)],
+            vec![preloaded_edit(0x101, 0xffff_ffff)],
+            vec![preloaded_edit(setup.selector + 4, 0)],
+            vec![preloaded_edit(setup.reset_copy_size, 0)],
+            vec![
+                preloaded_edit(0x100, 0xffff_ffff),
+                preloaded_edit(0x100, 0xffff_ffff),
+            ],
+        ] {
+            setup.preloaded_ram_edits = edits;
+            assert!(
+                package(
+                    &data,
+                    &setup,
+                    Some(ram.clone()),
+                    0,
+                    StartupStop::Continue,
+                    false
+                )
+                .is_err()
+            );
+        }
+    }
+
     #[test]
     fn the_request_lists_the_ram_prefix_zero_runs() {
         let (data, s, mut ram) = fixture();
