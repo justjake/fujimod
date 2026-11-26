@@ -5,6 +5,7 @@ use fujimod_catalog_controls::facts::ConfigurationLocation;
 use fujimod_catalog_resolution::ResolvedConfiguration;
 use fujimod_emulator::board::bus::Mode;
 use fujimod_emulator_cpu::Register;
+use fujimod_emulator_devices::capability::AnalogInputs;
 use fujimod_emulator_devices::graphics::scanout::Frame;
 use fujimod_emulator_controls::Calibration;
 use fujimod_emulator_session::Session;
@@ -197,7 +198,14 @@ impl Board {
     pub fn adc_input(&mut self, channel: u8, sample: u16) -> Result<(), String> {
         match self {
             Self::Xp4(board) => board.set_adc_input(usize::from(channel), sample),
-            Self::Xpp(_) => Err("X-Processor Pro ADC key presses are not wired".into()),
+            Self::Xpp(session) => {
+                let node = session.node("adc")?;
+                session
+                    .board
+                    .edit_capability::<dyn AnalogInputs, _>(node, |adc| {
+                        adc.set_sample(usize::from(channel), sample)
+                    })
+            }
         }
     }
 

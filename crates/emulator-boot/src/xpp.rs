@@ -2063,6 +2063,38 @@ mod tests {
         }
     }
 
+    #[cfg(feature = "xp5-startup")]
+    #[test]
+    fn xpp_application_drives_the_adc_ladder() {
+        use crate::application::Board;
+
+        let assembly = xt20(&assets()).unwrap();
+        let definition = assembly.devices;
+        let spec: Spec = serde_json::from_value(definition.clone()).unwrap();
+        let flash = BTreeMap::from([(assembly.flash_asset.to_string(), vec![0xff; 0x1000])]);
+        let session = build(
+            assembly.execution,
+            spec,
+            &flash,
+            Mode::Strict,
+            fujimod_catalog_configuration::RunEngine::Unicorn,
+        )
+        .unwrap()
+        .into_session(definition)
+        .unwrap();
+        let before = session.adc_samples("adc").unwrap();
+        let mut board = Board::Xpp(Box::new(session));
+        board.adc_input(3, 389).unwrap();
+        assert!(board.adc_input(3, 1024).is_err());
+        assert!(board.adc_input(12, 0).is_err());
+        let Board::Xpp(session) = board else {
+            unreachable!()
+        };
+        let mut expected = before;
+        expected[3] = 389;
+        assert_eq!(session.adc_samples("adc").unwrap(), expected);
+    }
+
     #[test]
     fn a_live_view_film_reaches_its_unit_and_needs_the_still_color_unit() {
         let resolved = ResolvedConfiguration::bundled("xt20-211").unwrap();
