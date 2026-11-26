@@ -12,6 +12,8 @@ fn json_files(directory: &Path) -> Vec<PathBuf> {
         } else if path
             .extension()
             .is_some_and(|extension| extension == "json")
+            // Block location reports are evidence summaries, not catalog documents.
+            && path.file_name().is_none_or(|name| name != "blocks.generated.json")
         {
             files.push(path);
         }

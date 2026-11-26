@@ -148,11 +148,11 @@ def test_undeclared_device_window_refuses_before_execution() -> None:
 
 
 def test_unmodeled_register_inside_a_declared_window_refuses() -> None:
-    code = words(0xB9400C03, 0xD65F03C0)  # ldr w3, [x0, #0xc]; ret
+    code = words(0xB94FFC03, 0xD65F03C0)  # ldr w3, [x0, #0xffc]; ret
     with harness(code, ((NOR, NOR + 0x1000),)) as h:
         result = h.call(CODE, args=(NOR,), max_instructions=10)
         assert not result["returned"]
-        assert "unmodeled MMIO read4 at 0xff90a00c" in failure(result)
+        assert "unmodeled MMIO read4 at 0xff90affc" in failure(result)
 
 
 def test_exclusive_access_to_a_device_window_refuses() -> None:
