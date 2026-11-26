@@ -58,6 +58,8 @@ struct Execution {
     manual: Cell<Option<Span>>,
     active: Cell<bool>,
     at_block: Cell<bool>,
+    #[cfg(test)]
+    block_callbacks: Cell<u64>,
     at_instruction: Cell<bool>,
     stopped: Cell<bool>,
     irq: Cell<bool>,
@@ -76,10 +78,8 @@ struct Execution {
     index: RefCell<observers::Index>,
     next: Cell<usize>,
     devices: RefCell<BTreeMap<u64, (usize, HookId)>>,
-    write_hook: Cell<Option<HookId>>,
     coherence: RefCell<Option<coherent_cpu::Coherent>>,
     coherent: Cell<bool>,
-    wide_code_watch: Cell<bool>,
     stores: RefCell<Vec<(Access, u64, i32, i64)>>,
     // ARMv7-A owner options (see `Core::set_owner_exclusives` and the
     // following setters).
@@ -175,6 +175,8 @@ impl Core {
             manual: Cell::new(None),
             active: Cell::new(false),
             at_block: Cell::new(false),
+            #[cfg(test)]
+            block_callbacks: Cell::new(0),
             at_instruction: Cell::new(false),
             stopped: Cell::new(false),
             irq: Cell::new(false),
@@ -190,10 +192,8 @@ impl Core {
             index: RefCell::new(observers::Index::default()),
             next: Cell::new(1),
             devices: RefCell::new(BTreeMap::new()),
-            write_hook: Cell::new(None),
             coherence: RefCell::new(None),
             coherent: Cell::new(false),
-            wide_code_watch: Cell::new(false),
             stores: RefCell::new(vec![]),
             exclusive_exits: Cell::new(false),
             owner_mpidr: Cell::new(false),
@@ -243,7 +243,6 @@ impl Core {
                 data,
             })?;
             e.cpu.hook_watched(hook, true)?;
-            e.write_hook.set(Some(hook));
             // The translation filter above watches every page this
             // processor translates, and the shared memory watches it in
             // every alias and peer. Stores to other pages can then keep the
@@ -501,30 +500,81 @@ impl Execution {
         }
         let _ = self.cpu.stop();
     }
-    // B #0 takes one instruction and leaves every architectural register,
-    // memory location and pin alone. Other loops do not qualify here.
     const SELF_BRANCH: u32 = 0x1400_0000;
+    const COUNTED_BRANCH: u32 = 0x54ff_ffe1; // b.ne to the preceding instruction
+    const NZCV: u64 = 0xf000_0000;
+    const Z: u64 = 1 << 30;
 
     fn can_prove_loops(&self) -> bool {
         self.coarse() && self.loop_mode.get() == loops::LoopMode::Accelerate
     }
 
-    fn skip_self_branch(&self, word: u32) -> bool {
-        if word != Self::SELF_BRANCH || !self.prove_loops.get() || self.irq.get() || self.fiq.get()
+    fn advance_proven_loop(&self, address: u64, word: u32) -> Result<bool, String> {
+        if !self.prove_loops.get()
+            || self.irq.get()
+            || self.fiq.get()
+            || !matches!(word, Self::SELF_BRANCH | Self::COUNTED_BRANCH)
         {
-            return false;
+            return Ok(false);
         }
         let observers = self.index.borrow();
         if !observers.blocks.is_empty()
             || !observers.instructions.is_empty()
             || !observers.stores.is_empty()
         {
-            return false;
+            return Ok(false);
         }
-        // At this exact instruction boundary each entry is identical. The
-        // owner has bounded the whole run by the next change to its inputs.
-        self.count.set(self.cap.get());
-        true
+        if word == Self::SELF_BRANCH {
+            // Each taken B #0 leaves the same architectural state at the
+            // same instruction boundary. Retire the whole budget here.
+            self.count.set(self.cap.get());
+            return Ok(true);
+        }
+        let Some(head) = address.checked_sub(4) else {
+            return Ok(false);
+        };
+        let mut bytes = [0; 4];
+        if self
+            .cpu
+            .read_virtual(head, Access::Fetch, &mut bytes)
+            .is_err()
+        {
+            return Ok(false);
+        }
+        let subtract = u32::from_le_bytes(bytes);
+        let reg = (subtract & 31) as u8;
+        if subtract & 0x7f80_0000 != 0x7100_0000
+            || reg == 31
+            || u32::from(reg) != (subtract >> 5) & 31
+        {
+            return Ok(false);
+        }
+        let step = u64::from((subtract >> 10) & 0xfff) << (12 * ((subtract >> 22) & 1));
+        let pstate = self.scalar(Register::Pstate)?;
+        if step == 0 || pstate & Self::Z != 0 {
+            return Ok(false);
+        }
+        let wide = subtract & (1 << 31) != 0;
+        let sign = if wide { 1 << 63 } else { 1 << 31 };
+        let register = Register::X(reg);
+        let value = self.scalar(register)? & if wide { u64::MAX } else { u64::from(u32::MAX) };
+        let room = self.cap.get().saturating_sub(self.count.get());
+        // Each round starts with the taken branch, then subtracts. Exclude
+        // the zero/borrow boundary so the original branch can still execute.
+        let rounds = (room / 2).min(value.saturating_sub(1) / step);
+        if rounds == 0 {
+            return Ok(false);
+        }
+        let after = value - rounds * step;
+        let before = after + step;
+        let overflow = ((before ^ step) & (before ^ after) & sign) != 0;
+        let nzcv = (u64::from(after & sign != 0) << 31) | (1 << 29) | (u64::from(overflow) << 28);
+        self.cpu.write_register(register, &after.to_le_bytes())?;
+        let next = ((pstate & !Self::NZCV) | nzcv) as u32;
+        self.cpu
+            .write_register(Register::Pstate, &next.to_le_bytes())?;
+        self.count.set(self.count.get() + rounds * 2);
+        Ok(false)
     }
 
     fn classify(&self, address: u64, word: u32) -> Result<Translation, String> {
@@ -552,7 +602,7 @@ impl Execution {
             InstructionDisposition::Replace
         } else if wide_exact
             || worker_memory_boundary
-            || self.can_prove_loops() && word == Self::SELF_BRANCH
+            || self.can_prove_loops() && matches!(word, Self::SELF_BRANCH | Self::COUNTED_BRANCH)
             || boundary
             || (self.is_coherent()
                 && (coherent_cpu::maintenance(word).is_some()
@@ -596,6 +646,8 @@ impl Execution {
         Ok(())
     }
     fn block(&self, b: Block) -> Result<(), String> {
+        #[cfg(test)]
+        self.block_callbacks.set(self.block_callbacks.get() + 1);
         self.settle(0, true)?;
         self.update_guest_tick()?;
         self.publish()?;
@@ -708,7 +760,7 @@ impl Execution {
                 self.count.set(self.count.get() - 1);
                 self.exit.set(Some(word));
                 self.cpu.stop()?;
-            } else if self.skip_self_branch(word) {
+            } else if self.advance_proven_loop(address, word)? {
                 self.cpu.stop()?;
             }
         }
@@ -783,28 +835,7 @@ impl Execution {
 }
 impl CodeOwner for Execution {
     fn watch_code(&self, address: u64, bytes: u64) -> Result<(), String> {
-        if self.wide_code_watch.get() {
-            return Ok(());
-        }
-        if address.checked_add(bytes).is_none_or(|end| end > 1 << 32) {
-            // The optimized native watch bitmap covers 32-bit physical pages.
-            // Keep full-width code coherent by observing every write once a
-            // high page is translated; do not truncate or omit that dependency.
-            self.cpu.hook_watched(
-                self.write_hook.get().ok_or("missing code-write hook")?,
-                false,
-            )?;
-            self.wide_code_watch.set(true);
-            if std::env::var_os("FUJIMOD_EXECUTION_COUNTERS").is_some() {
-                eprintln!(
-                    "FUJIMOD execution counters: CPU{} observes every store from now on: code at {address:#x} is beyond the store watch bitmap",
-                    self.id.get()
-                );
-            }
-            Ok(())
-        } else {
-            self.cpu.watch_stores(address, bytes)
-        }
+        self.cpu.watch_stores(address, bytes)
     }
     fn invalidate_backing_page(&self, backing_page: usize) -> Result<(), String> {
         self.cpu.invalidate_backing(backing_page, 4096)
@@ -988,7 +1019,9 @@ mod interactive_tests {
                 .unwrap();
             for budget in [1, 2, 3, 4, 196, 197, 198] {
                 set(&cpu, Register::X(0), 0);
+                cpu.execution.block_callbacks.set(0);
                 run(&cpu, address, budget);
+                assert!(cpu.execution.block_callbacks.get() <= 5);
                 assert_eq!(cpu.instruction_progress(), Some(budget as u64));
                 assert_eq!(value(&cpu, Register::Pc), address + (budget % 3) as u64 * 4);
                 assert_eq!(value(&cpu, Register::X(0)), (budget - budget / 3) as u64);
@@ -1027,6 +1060,89 @@ mod interactive_tests {
             execute(loops::LoopMode::Disabled),
             execute(loops::LoopMode::Accelerate)
         );
+    }
+
+    #[test]
+    fn countdown_proof_matches_native_entries_and_flags() {
+        let cpu = core();
+        let address = 0x1_0000_0000;
+        cpu.map_zeroed(address, 0x4000, 7).unwrap();
+        cpu.set_execution_policy(ExecutionPolicy::Interactive)
+            .unwrap();
+        for (subtract, counter) in [
+            (0x7100_0400u32, (1u64 << 31) + 1),
+            (0xf100_0400, (1u64 << 63) + 1),
+            (0xf100_0c00, 9),
+        ] {
+            let words = [subtract, Execution::COUNTED_BRANCH, Execution::SELF_BRANCH];
+            let bytes: Vec<_> = words.into_iter().flat_map(u32::to_le_bytes).collect();
+            cpu.write_memory(address, &bytes).unwrap();
+            for budget in [4, 5, 6, 7, 99] {
+                let execute = |mode| {
+                    cpu.set_loop_mode(mode).unwrap();
+                    set(&cpu, Register::Pstate, 0x3c5);
+                    set(&cpu, Register::X(0), counter);
+                    cpu.set_loop_window(true).unwrap();
+                    run(&cpu, address, budget);
+                    (
+                        value(&cpu, Register::X(0)),
+                        value(&cpu, Register::Pc),
+                        value(&cpu, Register::Pstate),
+                        cpu.instruction_progress(),
+                    )
+                };
+                assert_eq!(
+                    execute(loops::LoopMode::Disabled),
+                    execute(loops::LoopMode::Accelerate)
+                );
+            }
+        }
+    }
+
+    unsafe fn observe_store(_: Access, _: u64, _: i32, _: i64, data: *mut c_void) {
+        let stores = unsafe { &*data.cast::<Cell<u64>>() };
+        stores.set(stores.get() + 1);
+    }
+
+    #[test]
+    fn wide_code_does_not_watch_unrelated_store_pages() {
+        let cpu = core();
+        let data = [0x5000, 0x1_0000_4000];
+        let high_code = 0x1_0000_0000;
+        for address in [0x1000, high_code].into_iter().chain(data) {
+            cpu.map_zeroed(address, 0x4000, 7).unwrap();
+        }
+        cpu.write_memory(high_code, &0xd503_201fu32.to_le_bytes())
+            .unwrap(); // nop
+        run(&cpu, high_code, 1);
+        let words = [0xb900_0020u32, 0x17ff_ffff]; // str w0,[x1]; b to the store
+        let bytes: Vec<_> = words.into_iter().flat_map(u32::to_le_bytes).collect();
+        cpu.write_memory(0x1000, &bytes).unwrap();
+        let stores = Cell::new(0u64);
+        let hook = unsafe {
+            cpu.raw().install_hook(Hook::Memory {
+                range: HookRange::All,
+                callback: observe_store,
+                data: (&raw const stores).cast_mut().cast(),
+                read: false,
+                write: true,
+            })
+        }
+        .unwrap();
+        cpu.raw().hook_watched(hook, true).unwrap();
+        cpu.raw().set_page_hooks(true).unwrap();
+        set(&cpu, Register::X(0), u64::from(0xd503_201fu32));
+        for address in data {
+            set(&cpu, Register::X(1), address);
+            run(&cpu, 0x1000, 200);
+            // An incidental slow-path store may reach the observation hook.
+            assert!(stores.replace(0) < 10);
+        }
+        set(&cpu, Register::X(1), high_code);
+        run(&cpu, 0x1000, 20);
+        // Native code invalidation can retry a watched store.
+        assert!(stores.get() >= 10);
+        cpu.raw().remove_hook(hook).unwrap();
     }
 
     unsafe fn read(_: u64, _: u32, data: *mut c_void) -> u64 {
