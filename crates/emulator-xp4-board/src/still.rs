@@ -101,6 +101,21 @@
 //!   writes the packed 4:2:2 picture at +0x70 (+0x74), pitch +0x80, from
 //!   line +0x54 >> 16. The two passes are the halves of one picture (lines
 //!   0 and 2088), written 64 lines and 128 pixels into the picture buffer.
+//! - mode +0x08 = 0x620001: output select 1 (bits 2..0, 0x1dc2f74), which
+//!   a still with a RAW file programs. The select comes from the step code
+//!   (0x1e8ffa0: codes 0 and 1); one such step is the defect correction,
+//!   whose output may sit just before the RAW (in place). The driver
+//!   (0x1dc2980) clears the enable (bit 24) of +0x8c, keeps +0x88 and
+//!   +0x90, and moves +0x70 (+0x74) back by +0x80 x (+0x1c >> 16) +
+//!   2 x (+0x1c bits 15..0), the source window's start. The model writes
+//!   the band's 16-bit RAW samples unchanged (no defect is corrected), each
+//!   at its source line, so line `j` of the band lands at +0x70 +
+//!   (+0x1c >> 16 + j) x +0x80. A later band that reads that output takes
+//!   the X-Trans site of the samples' source line and column, until the
+//!   copy pass. Declared: the samples' identity and that placement. An
+//!   output start (+0x54) other than 0, or an output pitch (+0x80) other
+//!   than the source pitch (+0x14), refuses.
+//!   Selects 2 and 3 on a band refuse.
 //! - mode +0x08 = 2: channel 2 reads +0x3c (+0x40), pitch +0x4c, size +0x50
 //!   (lines << 16 | pixels, 4176 x 6256), and channel 4 writes it at the
 //!   start of the buffer.
@@ -702,6 +717,11 @@ struct State {
     raw: u32,
     #[serde(default)]
     pending: u32,
+    /// The RAW written in place by output select 1 passes since the last
+    /// copy: `[start, end, shift]`, where the sample at `address` in
+    /// `start..end` is the RAW sample at `address + shift`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    corrected: Option<[u64; 3]>,
 }
 
 pub struct Engine {
@@ -798,9 +818,21 @@ impl Engine {
             .map(|(&o, &v)| (o - page, v))
             .collect()
     }
+    /// Where the RAW sample read at `address` came from: in the RAW an
+    /// output select 1 pass wrote in place, its source; elsewhere, itself.
+    fn origin(&self, address: u64) -> u64 {
+        match self.state.corrected {
+            Some([start, end, shift]) if (start..end).contains(&address) => {
+                address.wrapping_add(shift)
+            }
+            _ => address,
+        }
+    }
     /// The X-Trans site of a pass's first RAW sample.
-    fn site(name: &str, raw: Raw, source: u64, pitch: u64) -> Result<(usize, usize), String> {
-        let offset = source
+    fn site(&self, raw: Raw, source: u64, pitch: u64) -> Result<(usize, usize), String> {
+        let name = self.contract.name;
+        let offset = self
+            .origin(source)
             .checked_sub(raw.address)
             .filter(|_| pitch == raw.pitch)
             .ok_or_else(|| format!("{name} source {source:#x} is not in the declared RAW"))?;
@@ -843,7 +875,7 @@ impl Engine {
             ));
         }
         let source = address(0x10, 0x0c) + (word(0x1c) >> 16) * spitch;
-        let phase = Self::site(name, raw, source, spitch)?;
+        let phase = self.site(raw, source, spitch)?;
         // RAW line of band line j: the same step down as across.
         let raw_line = |j: u64| (j * window / width) as usize;
         let count = raw_line(lines - 1) as u64 + 1;
@@ -869,19 +901,21 @@ impl Engine {
         Ok(())
     }
     /// One RECC pass: a band developed from the RAW, or the copy into place.
-    fn pass(&self, cx: &mut Cx<'_>, raw: Raw) -> Result<(), String> {
+    fn pass(&mut self, cx: &mut Cx<'_>, raw: Raw) -> Result<(), String> {
         let name = self.contract.name;
         let word = |o| u64::from(self.word(o));
         let address = |high, low| (word(high) & 3) << 32 | word(low);
         if word(0x1c) & 0xffff != 0 || word(0x54) & 0xffff != 0 {
             return Err(format!("{name} pass starts at a column"));
         }
+        // The RAW region a select 1 pass rewrites, and what the copy clears.
+        let mut corrected = self.state.corrected;
         let (first, rows) = match self.word(0x008) {
             0x0062_0000 => {
                 let (pitch, band) = (word(0x14), word(0x18));
                 let (lines, width) = (band >> 16, band & 0xffff);
                 let source = address(0x10, 0x0c) + (word(0x1c) >> 16) * pitch;
-                let phase = Self::site(name, raw, source, pitch)?;
+                let phase = self.site(raw, source, pitch)?;
                 let length = pitch * lines.saturating_sub(1) + 2 * width;
                 let bytes = cx.ram_bytes(source, length as usize)?;
                 let (pitch, lines, width) = (pitch as usize, lines as usize, width as usize);
@@ -900,7 +934,47 @@ impl Engine {
                 };
                 (word(0x54) >> 16, rows)
             }
+            // Output select 1, the defect pass (see the module notes): the
+            // band's RAW samples, unchanged, at the source window's lines.
+            0x0062_0001 => {
+                let (pitch, band) = (word(0x14), word(0x18));
+                let (lines, width) = (band >> 16, band & 0xffff);
+                if word(0x54) != 0
+                    || lines == 0
+                    || width == 0
+                    || pitch < 2 * width
+                    || word(0x80) != pitch
+                {
+                    return Err(format!(
+                        "{name} select 1 band {width}x{lines} pitch {pitch} -> {}, output line {}",
+                        word(0x80),
+                        word(0x54) >> 16
+                    ));
+                }
+                let start = word(0x1c) >> 16;
+                let source = address(0x10, 0x0c) + start * pitch;
+                self.site(raw, source, pitch)?;
+                let output = address(0x74, 0x70) + start * pitch;
+                let (end, shift) = (
+                    output + lines * pitch,
+                    self.origin(source).wrapping_sub(output),
+                );
+                corrected = Some(match corrected {
+                    // The next band of the same step: one region.
+                    Some([a, b, s]) if s == shift && a <= end && output <= b => {
+                        [a.min(output), b.max(end), shift]
+                    }
+                    _ => [output, end, shift],
+                });
+                let bytes = cx.ram_bytes(source, (pitch * (lines - 1) + 2 * width) as usize)?;
+                let rows = bytes
+                    .chunks(pitch as usize)
+                    .map(|row| row[..2 * width as usize].to_vec())
+                    .collect();
+                (start, rows)
+            }
             2 => {
+                corrected = None;
                 let (pitch, picture) = (word(0x4c), word(0x50));
                 let (lines, width) = (picture >> 16, picture & 0xffff);
                 if lines == 0 || width == 0 || pitch < 2 * width {
@@ -927,6 +1001,7 @@ impl Engine {
             }
             cx.ram_write(output + y as u64 * pitch, row)?;
         }
+        self.state.corrected = corrected;
         Ok(())
     }
     /// Scales the programmed picture (nearest neighbour), packed 4:2:2 lines
@@ -1721,6 +1796,115 @@ mod tests {
         }
     }
 
+    /// Output select 1 (mode 0x620001): two bands. As the driver does, each
+    /// pass's buffer (0x1000 advanced by the lines before it) is moved back
+    /// by the band's source start, so both program +0x70 = 0x1000. Each
+    /// band's RAW samples land unchanged at their source lines, and nothing
+    /// else is written. An output start line refuses.
+    #[test]
+    fn output_select_1_writes_the_band_raw_samples_at_their_lines() {
+        let mut h = RecordingHost {
+            ram: vec![0x55; 0x2000],
+            ..Default::default()
+        };
+        h.ram[..16 * 64].copy_from_slice(&raw_samples());
+        let mut e = developing_recc();
+        let select = |line: u32| {
+            vec![
+                (0x08, 0x0062_0001),
+                (0x0c, 64 + 4),
+                (0x14, 64),
+                (0x18, 6 << 16 | 12),
+                (0x1c, line << 16),
+                (0x54, 0),
+                (0x70, 0x1000),
+                (0x80, 64),
+            ]
+        };
+        for line in [0, 6] {
+            assert_eq!(
+                recc_pass(&mut e, &mut h, &select(line)),
+                None,
+                "line {line}"
+            );
+        }
+        let raw = raw_samples();
+        for y in 0..12 {
+            let at = 0x1000 + y * 64;
+            assert_eq!(h.ram[at..at + 24], raw[64 + 4 + y * 64..][..24], "line {y}");
+            assert!(h.ram[at + 24..at + 64].iter().all(|&b| b == 0x55));
+        }
+        assert!(h.ram[0x1000 + 12 * 64..].iter().all(|&b| b == 0x55));
+        for (word, value, message) in [
+            (0x54, 2 << 16, "output line 2"),
+            (0x80, 48, "pitch 64 -> 48"),
+        ] {
+            let mut words = select(0);
+            words.push((word, value));
+            let refusal = recc_pass(&mut e, &mut h, &words);
+            assert!(
+                refusal.as_deref().is_some_and(|r| r.contains(message)),
+                "{refusal:?}"
+            );
+        }
+    }
+
+    /// A band read from the RAW a select 1 pass wrote elsewhere takes the
+    /// X-Trans site of the samples' source, not of the address it reads;
+    /// after the copy, the address is the RAW again.
+    #[test]
+    fn a_band_from_the_select_1_output_takes_its_source_site() {
+        let mut h = RecordingHost {
+            ram: vec![0x55; 0x2000],
+            ..Default::default()
+        };
+        h.ram[..16 * 64].copy_from_slice(&raw_samples());
+        let mut e = developing_recc();
+        let select = [
+            (0x08, 0x0062_0001),
+            (0x0c, 4),
+            (0x14, 64),
+            (0x18, 7 << 16 | 12),
+            (0x1c, 0),
+            (0x54, 0),
+            (0x70, 0x1000),
+            (0x80, 64),
+        ];
+        assert_eq!(recc_pass(&mut e, &mut h, &select), None);
+        // Line 1 of the select 1 output: RAW line 1, sample 2.
+        let band = [
+            (0x08, 0x0062_0000),
+            (0x0c, 0x1000 + 64),
+            (0x14, 64),
+            (0x18, 6 << 16 | 12),
+            (0x1c, 0),
+            (0x54, 0),
+            (0x70, 0x1800),
+            (0x80, 48),
+        ];
+        let developed = |site| develop(&h.ram[0x1040..], 64, 6, 12, site, None).unwrap();
+        // Source site (5 + 1, 1 + 2); the address alone, 0x1040 into the
+        // RAW, would give (5 + 65, 1 + 0).
+        let (source, address) = (developed((0, 3)), developed((4, 1)));
+        assert_ne!(source, address);
+        assert_eq!(recc_pass(&mut e, &mut h, &band), None);
+        for (y, row) in source.iter().enumerate() {
+            assert_eq!(h.ram[0x1800 + y * 48..][..24], row[..], "line {y}");
+        }
+        let copy = [
+            (0x08, 2),
+            (0x3c, 0x1800),
+            (0x4c, 48),
+            (0x50, 1 << 16 | 12),
+            (0x70, 0x1f00),
+        ];
+        assert_eq!(recc_pass(&mut e, &mut h, &copy), None);
+        assert_eq!(recc_pass(&mut e, &mut h, &band), None);
+        for (y, row) in address.iter().enumerate() {
+            assert_eq!(h.ram[0x1800 + y * 48..][..24], row[..], "line {y}");
+        }
+    }
+
     #[test]
     fn only_a_developing_recc_writes_and_only_from_the_declared_raw() {
         let mut h = RecordingHost {
@@ -1776,6 +1960,8 @@ mod tests {
         };
         for (words, expected) in [
             (with(0x08, 0x0040_2000), "mode 0x402000"),
+            (with(0x08, 0x0062_0002), "mode 0x620002"),
+            (with(0x08, 0x0062_0003), "mode 0x620003"),
             (with(0x1c, 4), "column"),
             (with(0x14, 66), "not in the declared RAW"),
             (with(0x18, 4 << 16 | 12), "Unsupported"),
