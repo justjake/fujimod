@@ -302,6 +302,23 @@ def test_a_camera_opens_from_named_files_and_card_bytes() -> None:
         Board.open_camera(firmware="x70-110", sd_card=root, sd_card_files={"NOTE.TXT": b"x"})
 
 
+def test_a_camera_opened_from_named_files_powers_on_from_them(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    root = library()
+    with Board.open_camera(
+        firmware="x70-110",
+        boot="stock",
+        execution_policy="interactive",
+        boot_cache=False,
+        update=root / "x70-110" / "FPUPDATE.DAT",
+        boot_rom=root / "x70" / "boot-rom.bin",
+    ) as board:
+        monkeypatch.delenv("FUJIMOD_FIRMWARE_LIBRARY")
+        board.power_on()
+        assert board.status()["status"] == "rec"
+
+
 def test_a_loader_image_opens_from_bytes() -> None:
     library()
     image = b"fujimod loader image"

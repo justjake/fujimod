@@ -66,6 +66,7 @@ impl Boot for CatalogBoot {
                 quantum: inputs.quantum,
                 card_image: inputs.card_image,
                 card_files: inputs.card_files,
+                camera_settings: Default::default(),
             };
             if resolved.reference.soc.id == "xp4" {
                 let mut started = boot::application::open(&resolved, startup)?;

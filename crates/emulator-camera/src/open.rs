@@ -272,6 +272,11 @@ impl Opened {
         &mut self.camera.session
     }
 
+    /// Where the firmware files came from, so a power-on reads the same ones.
+    pub fn firmware_input(&self) -> &FirmwareInput {
+        &self.request.files
+    }
+
     /// Hold the boot controls without running the guest.
     pub fn apply_holds(&mut self) -> Result<(), OpenError> {
         if self.holds_applied {

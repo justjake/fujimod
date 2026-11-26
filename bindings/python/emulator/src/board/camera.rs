@@ -297,7 +297,6 @@ impl Board {
         fresh_card: bool,
         run_to_rec: bool,
     ) -> PyResult<()> {
-        let library = Library::from_env().map_err(|failure| error(failure.to_string()))?;
         let state = StateDir::from_env();
         let Some(backend) = self.backend.take() else {
             return Err(error("runtime is closed".into()));
@@ -307,6 +306,21 @@ impl Board {
             return Err(PyValueError::new_err(
                 "power_on requires a board created by open_camera",
             ));
+        };
+        let input = match camera.as_ref() {
+            CameraBoard::FujiMod(opened) => opened.camera.firmware_input(),
+            CameraBoard::Emulator(opened) => opened.firmware_input(),
+        };
+        let library = match input {
+            emulator::FirmwareInput::Files { .. } => Library::without_directory(),
+            emulator::FirmwareInput::Library => Library::from_env(),
+        };
+        let library = match library {
+            Ok(library) => library,
+            Err(failure) => {
+                self.backend = Some(Backend::Camera(camera));
+                return Err(error(failure.to_string()));
+            }
         };
         let next = match camera.as_ref() {
             CameraBoard::FujiMod(opened) => opened
