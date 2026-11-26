@@ -325,7 +325,7 @@ impl Board {
         if !interrupt_ready {
             state.settled.idle = Some(core);
             let pc = scalar(cpu, Register::Pc)? & !1;
-            if !state.enter_code(cpu, core, pc)?
+            if !state.enter_code(cpu, core, pc, 4)?
                 && state.code_shadow[core]
                     .as_ref()
                     .and_then(|shadow| shadow.fetch(pc))

@@ -402,6 +402,16 @@ impl GuestClockTickScope {
         }
     }
 
+    #[cfg(test)]
+    pub(crate) fn enter(tick: Option<u64>) -> Self {
+        let previous_tick = approximate_guest_tick();
+        Self::publish(tick);
+        Self {
+            previous_tick,
+            previous_fast_reads: FAST_MMIO_READS.get(),
+        }
+    }
+
     pub(crate) fn publish(tick: Option<u64>) {
         GUEST_CLOCK_TICK.set(tick);
     }
@@ -424,42 +434,6 @@ fn protection(access: Access) -> u32 {
         Access::Read => 1,
         Access::Write => 2,
         Access::Fetch => 4,
-    }
-}
-thread_local! {
-    static GUEST_CLOCK_TICK: Cell<Option<u64>> = const { Cell::new(None) };
-}
-
-/// Publish an approximate guest tick on the current CPU thread for clocked
-/// fast MMIO reads across all Unicorn processor profiles.
-pub fn set_guest_clock_tick(tick: Option<u64>) {
-    GUEST_CLOCK_TICK.with(|current| current.set(tick));
-}
-
-/// Return the approximate guest tick published on the current CPU thread.
-/// Reads the shared backend thread-local first and falls back to the R-profile
-/// thread-local until `rprofile` delegates directly to `set_guest_clock_tick`.
-pub fn approximate_guest_tick() -> Option<u64> {
-    GUEST_CLOCK_TICK
-        .with(Cell::get)
-        .or_else(rprofile::approximate_guest_tick)
-}
-
-/// Scoped guard that publishes a guest tick and restores the prior value on drop.
-pub struct GuestClockTickScope {
-    previous: Option<u64>,
-}
-
-impl GuestClockTickScope {
-    pub fn enter(tick: Option<u64>) -> Self {
-        let previous = GUEST_CLOCK_TICK.with(|current| current.replace(tick));
-        Self { previous }
-    }
-}
-
-impl Drop for GuestClockTickScope {
-    fn drop(&mut self) {
-        set_guest_clock_tick(self.previous);
     }
 }
 
