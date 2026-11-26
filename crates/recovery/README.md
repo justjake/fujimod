@@ -359,6 +359,13 @@ For a type-5 X-Processor Pro update with more than one device payload, pass
 payload's offset and size in the original DAT. The startup plan and header
 source offsets are relative to that payload.
 
+`fujimod-sd-card sd-boot-v1-startup FIRMWARE UPDATE.DAT NEW_DIRECTORY --device-selector N`
+builds SD startup files from a selected type-5 XPP payload. The command
+checks the full official update against the catalog, then constructs the SD
+startup from that payload alone. It writes only `ffsys.bin` and
+`ffboot.bin`. Payload selection does not establish on-camera or updater
+compatibility.
+
 ## Green LED card
 
 The recovery page offers separate full system and green LED downloads. The LED

@@ -387,6 +387,13 @@ fn locate_ram(inverted: &[u8], plan: &Plan, ram: &[u8]) -> Result<Reads> {
 pub fn locate(inverted: &[u8], plan: &Plan) -> Result<Reads> {
     locate_ram(inverted, plan, &image::transform(inverted, plan)?)
 }
+
+pub(super) fn startup_image(inverted: &[u8], plan: &Plan) -> Result<Vec<u8>> {
+    let mut ram = image::transform(inverted, plan)?;
+    install(inverted, plan, &mut ram)?;
+    Ok(ram)
+}
+
 pub(super) fn install(inverted: &[u8], plan: &Plan, ram: &mut [u8]) -> Result<()> {
     let reads = locate_ram(inverted, plan, ram)?;
     let storage = &reads.preloads[1].caller;

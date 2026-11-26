@@ -420,6 +420,28 @@ impl Recipe {
     ) -> Result<Vec<File>> {
         self.startup_inputs(source, options, None, None, None)
     }
+
+    /// Build XPP SD startup files for an explicitly selected type-5 device.
+    /// Validate the complete update first and restrict all startup reads to the
+    /// selected payload. The returned files do not include a camera update.
+    pub fn build_xpp_device_startup(&self, source: &[u8], selector: u8) -> Result<Vec<File>> {
+        require(
+            matches!(self.generation, Generation::Xpp),
+            "A device-selected startup requires X-Processor Pro",
+        )?;
+        require(
+            source.len() == self.source_size,
+            "Update size differs from recipe",
+        )?;
+        image::hash(source, &self.source_sha256)?;
+        let span = rom_sd::select_xpp_device(source, selector)?;
+        let inverted = fujimod_firmware::invert(&source[span]);
+        let located = rom_sd::locate(rom_sd::Processor::Xpp, &inverted)?;
+        let ram = xpp::startup_image(&inverted, &located.plan)?;
+        located
+            .packaging
+            .package_bytes(&inverted, located.plan.entry, ram)
+    }
     /// `build_startup_with_options` with `overlay` applied to the XP5 RAM image before it is
     /// packaged, so the loader's length and CRC checks cover it. With `internal_flash` the
     /// result is the boot files alone, as from `build_boot_files`.
@@ -595,8 +617,8 @@ impl Recipe {
                     let packaging = self.packaging.as_ref().ok_or_else(|| {
                         image::Error::Invalid("Missing SD header packaging".into())
                     })?;
-                    let mut ram = image::transform(&inverted, plan)?;
-                    if matches!(self.generation, Generation::Exr2) {
+                    let mut ram = if matches!(self.generation, Generation::Exr2) {
+                        let mut ram = image::transform(&inverted, plan)?;
                         exr2::install(plan, &mut ram)?;
                         if let Some(footer) = &self.loader_footer {
                             footer.install(&inverted, plan, &mut ram)?;
@@ -610,9 +632,10 @@ impl Recipe {
                         if let Some(defaults) = &self.configuration_defaults {
                             defaults.install(&inverted, plan, &mut ram)?;
                         }
+                        ram
                     } else {
-                        xpp::install(&inverted, plan, &mut ram)?;
-                    }
+                        xpp::startup_image(&inverted, plan)?
+                    };
                     if self.startup_lamp.is_none() {
                         early_led::image(self, source, &mut ram)?;
                     }
