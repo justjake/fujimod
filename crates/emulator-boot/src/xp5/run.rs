@@ -20,6 +20,9 @@ use std::{
     time::{Duration, Instant},
 };
 
+/// The port and pin `--gpio usb=0|1` uses for the USB cable in the timed input list.
+const USB_CABLE: u8 = u8::MAX;
+
 /// Write one little-endian word for --poke: a physical address first, else CPU0's virtual view.
 fn poke_word(
     board: &fujimod_emulator::board::Board,
@@ -331,14 +334,26 @@ impl RunHost {
             .split(',')
             .filter(|item| !item.trim().is_empty())
         {
-            match item.trim().split_once('@') {
-                Some((level, at)) => {
+            // `usb=1` / `usb=0` plugs or unplugs a data host's USB cable (connection status, supply
+            // and data lines together, `Inputs::usb_cable`); it is kept in the same timed list
+            // under port and pin USB_CABLE.
+            let (level, at) = match item.trim().split_once('@') {
+                Some((level, at)) => (level, Some(at)),
+                None => (item.trim(), None),
+            };
+            let parsed = match level.trim() {
+                "usb=1" => (USB_CABLE, USB_CABLE, true),
+                "usb=0" => (USB_CABLE, USB_CABLE, false),
+                other => parse_gpio(other)?,
+            };
+            match at {
+                Some(at) => {
                     let at_ms: u64 = at.trim().parse().map_err(|_| {
                         format!("--gpio {item}: the time after @ is whole milliseconds")
                     })?;
-                    timed_gpio.push((at_ms, parse_gpio(level)?));
+                    timed_gpio.push((at_ms, parsed));
                 }
-                None => gpio.push(parse_gpio(item.trim())?),
+                None => gpio.push(parsed),
             }
         }
         timed_gpio.sort_by_key(|(at_ms, _)| *at_ms);
@@ -439,7 +454,11 @@ impl RunHost {
             Some(loaded)
         };
         for (port, pin, high) in gpio {
-            inputs.gpio(&mut session, usize::from(port), usize::from(pin), high)?;
+            if (port, pin) == (USB_CABLE, USB_CABLE) {
+                inputs.usb_cable(&mut session, high)?;
+            } else {
+                inputs.gpio(&mut session, usize::from(port), usize::from(pin), high)?;
+            }
         }
         for (address, value) in untimed_pokes {
             poke_word(&session.board, address, value)?;
@@ -586,6 +605,14 @@ impl RunHost {
                 break;
             }
             timed_gpio.pop_front();
+            if (port, pin) == (USB_CABLE, USB_CABLE) {
+                inputs.usb_cable(session, high)?;
+                eprintln!(
+                    "FUJIMOD XP5 usb cable: {} at {at_ms} ms (tick {now})",
+                    u8::from(high)
+                );
+                continue;
+            }
             inputs.gpio(session, usize::from(port), usize::from(pin), high)?;
             eprintln!(
                 "FUJIMOD XP5 gpio: {port}:{pin}={} at {at_ms} ms (tick {now})",

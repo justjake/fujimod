@@ -1,0 +1,177 @@
+# Options of this file follow the X-T5 4.31 and X-E5 1.12 imaging files (33.333 ms frame periods,
+# retained words, preview focus options, RIFP queue completion): the two bodies whose runs drew a
+# shooting screen. Before, they were the X100VI 1.31 values (1 s periods). Not measured on a camera.
+# idle_status of imaging-input differs between those two (true / false) and is left at its default.
+# Sensor command DMA; stock program/readback/retry code remains intact.
+[[device]]
+base = 0xff948000
+size = 0x1000
+kind = "imaging-sensor"
+[device.options]
+retain_words = true
+# Functional scheduled latency, not measured camera timing.
+command_latency_us = 1
+# The model's read gate (register 0x59 bit 2) is the X100VI sensor's. This body's still sequence
+# reads sensor registers with 0x59 unwritten (seen in a run: a full shutter press with a card
+# stopped on it), as the X-H2S does. This sensor's register map is not decoded.
+read_gate = false
+
+# Sensor stream and receiver enables gate RAW14-LE16 ramp production.
+# Guest-programmed raw input DMA receives pixels; causes1/0 drive stock IRQs.
+[[device]]
+base = 0xff940000
+size = 0x1000
+kind = "imaging-receiver"
+[device.options]
+# Functional1Hz cadence keeps stock IRQ164 from starving SACLAC on the VM.
+# No measured sensor cadence claim.
+frame_period_us = 33333
+frame_active_us = 10000 # Functional phase interval; DMA completes after frame-end.
+[[device]]
+base = 0xff941000
+size = 0x1000
+kind = "imaging-receiver"
+[device.options]
+frame_period_us = 33333
+[[device]]
+base = 0xff944000
+size = 0x1000
+kind = "imaging-phy"
+
+# Input-engine reset/ready gate used by native imgdc startup.
+[[device]]
+base = 0xff946000
+size = 0x1000
+kind = "imaging-input"
+[device.options]
+retain_words = true
+
+[[device]]
+base = 0xff950000
+size = 0x1000
+kind = "imaging-reset"
+[device.options]
+retain_words = true
+
+# MOVDC bank0 shares the reset-bit0 handshake (144b838).
+[[device]]
+base = 0xff970000
+size = 0x1000
+kind = "movdc"
+[device.options]
+retain_words = true
+frame_period_us = 33333
+source_luma = 128
+[[device]]
+base = 0xff971000
+size = 0x1000
+kind = "movdc"
+[device.options]
+retain_words = true
+frame_period_us = 33333
+source_luma = 128
+[[device]]
+base = 0xff972000
+size = 0x1000
+kind = "movdc"
+[device.options]
+retain_words = true
+frame_period_us = 33333
+source_luma = 128
+[[device]]
+base = 0xff973000
+size = 0x1000
+kind = "imaging-reset"
+[device.options]
+retain_words = true
+
+# MOVRSZ2f0aebc requires reset+0[0] and idle+54[0,16].
+[[device]]
+base = 0xff982000
+size = 0x1000
+kind = "imaging-resize"
+[device.options]
+retain_words = true
+completion_us = 1000
+
+# No imaging-statistics window on this body (the X-T5 4.31 arrangement). 0xff800000 is plain SRAM
+# (manifest.toml): the boot stage runs its DRAM set-up code from it, and afterwards the input
+# buffer (0xff974000) is given addresses in it for its statistics outputs, which the firmware reads
+# back as memory (0x3311f74 copies a 0x75a0-byte bank out of 0xff800000 or 0xff8075a0). With a
+# device window here the modelled statistics stayed inside the device and the firmware read the
+# boot stage's left-over code instead (run still-18: the SRAM at +0x2aa0 equals the image at
+# 0x14a0680). Destinations traced on this firmware (FUJIMOD_INPUT_BUFFER_TRACE, bank 0):
+# +0x400 -> +0, +0x408 -> +0x1000, +0x410 -> +0x41a0, +0x418 -> +0x21a0, +0x420 -> +0x25a0,
+# +0x428 -> +0x1060, +0x430 -> +0x2060, +0x438 -> +0x3ba0, +0x440 -> +0x3ea0,
+# +0x448..+0x460 -> +0x29a0, +0x29e0, +0x2a20, +0x2a60, +0x468..+0x480 -> +0x2aa0, +0x2ea0,
+# +0x32a0, +0x36a0, +0x488 -> +0x3aa0, +0x490..+0x4a8 -> +0x61a0, +0x69a0, +0x6da0, +0x71a0.
+# Modelled: +0x400, +0x410, +0x418, +0x420, +0x428 and, with still_black, the optical-black sums
+# +0x448..+0x480 (read by 0x318a060 / 0x318a5b0 / 0x318a860). The others keep boot left-overs.
+
+[[device]]
+base = 0xff976000
+size = 0x1000
+kind = "imaging-paf"
+[device.options]
+retain_words = true
+# A started run ends with interrupt 195 (driver 0x2f2f3b0: logical source 0x83, handler 0x2f2f270).
+# TSK_PHASE_AF (0x89) waits for it on every AF-C cycle (request 0x1835 -> 0x31b4430); without it
+# the AF unit of SACLAC never reports back and a later setting change (MENU) never completes.
+# The run produces no phase data here.
+completion_irq = 195
+
+[[device]]
+base = 0xff974000
+size = 0x1000
+kind = "imaging-preview"
+[device.options]
+retain_words = true
+focus_filters = true
+focus_window = true
+# The optical-black sums of a still frame (+0x448..+0x480 into the SRAM at 0xff800000).
+still_black = true
+frame_period_us = 33333
+source_luma = 128
+
+[[device]]
+base = 0xffd01000
+size = 0x1000
+kind = "imaging-rifp-io"
+[device.options]
+queue_completion_us = 5
+
+# The window also holds the register pages of the RIFP sub-blocks 0xffd03000..0xffd0bfff (the
+# recf develop blocks between RIFP and RESZ), as in the X-T5 4.31 file: the still develop writes
+# them through the register table writer 0x1460c34 (seen: 0xffd07100). Their words are retained.
+[[device]]
+base = 0xffd02000
+size = 0xa000
+kind = "imaging-rifp"
+[device.options]
+retain_words = true
+completion_us = 1000
+source_luma = 128
+
+# SSP3 (serial client 0x11: 8-bit, prescaler 0xc0, GPIO 11.4). Not a lens link. The users
+# 0x14f5518 / 0x14f59c8 / 0x14f276c run only after the gate 0x14fbd34 has read GPIO 11.4 high 17
+# times in a row; 11.4 is declared low, so the firmware never uses this bus here. What the
+# device is has not been decoded.
+[[device]]
+base = 0xff913000
+size = 0x1000
+kind = "imaging-serial-sink"
+[[device]]
+base = 0xff914000
+size = 0x1000
+kind = "focus-actuator"
+[device.options]
+# The focus home sensor is GPIO table index 0x34. This body's runtime table 0x1baf540 holds
+# GPIO 0.3 there (dumped from a run); the lens module reads it through 0x1658068, and its
+# interrupt registrations use selectors 0xb7, 0xb8 and 0xb9 (table 0x1baf9b8, logical inputs
+# 0xe, 0xf, 0x10), the same selectors the X100VI model serves. Before, the pad was the
+# X100VI's 0.8 and the shooting screen showed a focus error.
+home_input = { port = 0, pin = 3 }
+# Serial client1/descriptor5 uses SPI4. Finite focus batches -> IRQ127.
+
+# SPI5 (0xff915000) is not an A53 actuator link on this body: no A53 function in the 1.13
+# image references 0xff915xxx, and the M-core drives it (63-ff915-motion.toml).

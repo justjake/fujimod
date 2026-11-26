@@ -27,13 +27,13 @@ fn located_bulk_profiles_validate_with_only_xe4_resolved() {
     assert!(catalog.execution("xe4-201").is_none());
 
     assert!(catalog.body("xt30ii").is_none());
-    // The GFX100RF body is registered with firmware 1.12; 1.13 has only its bulk profile.
+    assert!(catalog.firmware("xt30ii-204").is_none());
+    assert!(catalog.execution("xt30ii-204").is_none());
+    assert!(catalog.resolve_firmware("xt30ii-204").is_err());
+    // The GFX100RF body is registered with firmware 1.12 and 1.13.
     assert!(catalog.body("gfx100rf").is_some());
-    assert!(catalog.firmware("gfx100rf-112").is_some());
-    for id in ["xt30ii-204", "gfx100rf-113"] {
-        assert!(catalog.firmware(id).is_none());
-        assert!(catalog.execution(id).is_none());
-        assert!(catalog.resolve_firmware(id).is_err());
+    for id in ["gfx100rf-112", "gfx100rf-113"] {
+        assert_eq!(catalog.resolve_firmware(id).unwrap().body.id, "gfx100rf");
     }
 
     assert!(catalog.bulk("unreported-100").is_none());

@@ -90,8 +90,8 @@ impl Endpoint for CommandRegisters {
     fn validate(&self, frame: Frame) -> Result<(), String> {
         if frame.bits != self.wiring.bits || frame.mode != self.wiring.mode {
             return Err(format!(
-                "serial command registers require {}-bit mode {} frames",
-                self.wiring.bits, self.wiring.mode
+                "serial command registers require {}-bit mode {} frames, got {}-bit mode {} word {:#x}",
+                self.wiring.bits, self.wiring.mode, frame.bits, frame.mode, frame.word
             ));
         }
         match self.state.command {

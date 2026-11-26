@@ -1,0 +1,27 @@
+# I2C instance 2 at ff926000 (controllers at ff924000 + n*0x1000; the transfer routine 0x14779cc
+# writes FSR, 0xff924018 + (n << 12), through 0x14771a8). Its interrupt is selector 5 of the
+# driver's table 0x19d8608, descriptor 0x19d9d98 + 5*0x10 = INTID 290 (ISR 0x14778f8).
+# The client table is 0x19d8618 (lookup 0x14781a0, 27 entries of 0x10 bytes: address at +0, bus at
+# +8). Its bus-2 clients are 0x55 (index 0xb), 0x1d (0xc), 0x0e (0xe), 0x6a (0x15), 0x68 (0x16),
+# 0x24 (0x17), 0x20 (0x19) and 0x3e (0x1a). 0x55 is driven by 0x14fce54 (write) and 0x14fd484
+# (read): task 0x14fd51c writes an init table (0x14fcec0, values from factory tags 0x40f22..),
+# then reads register 0x10 (2 bytes, status) and register 0x11 twice (7 bytes each, two points).
+# That shape is a touch panel controller; the part itself is not identified. 0x14de500, 0x14de1c0
+# and 0x14de6fc open 0x6a, 0x1d and 0x68. No part on this bus is declared, so every address is
+# not acknowledged. byte_ns is the functional latency of instance 1, not a bus rate.
+[[device]]
+kind = "i2c-controller"
+base = 0xff926000
+size = 0x1000
+[device.options]
+interrupt = 290
+# byte_ns: 90 us is nine bit times of a 100 kHz standard-mode bus, the mode the driver selects
+# for every client of this bus but 0x0e (0x14779cc). The real SCL frequency is not derivable
+# from the firmware; this is a functional latency.
+byte_ns = 90000
+# Client 11 (address 0x55) is the touch panel controller: the touch task 0x14fd51c (TSK_TOUCHPANEL,
+# 0x80) configures it (0x14fcec0) and reads finger records from it. The model answers only what
+# that task reads; the finger comes from the live input (research aid).
+[[device.options.targets]]
+address = 0x55
+part = { kind = "touch-panel" }

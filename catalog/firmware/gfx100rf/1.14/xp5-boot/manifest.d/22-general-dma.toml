@@ -1,0 +1,23 @@
+# Stock1479fc4 initializes eight banks and global words atff90e564..578 (147b724 adds564/568).
+# Direct DMA uses addressed RAM and FIFO requests; unsupported modes refuse.
+[[device]]
+base = 0xff930000
+size = 0x8000
+kind = "general-dma"
+
+[device.options]
+companion_irq_base = 83
+# The A53 driver takes channel completions on the GIC as well: channel n registers the logical
+# source in the byte table 0x19d8a60 (0x54 + n, used at 0x147c67c), and the interrupt table
+# 0x19d9d98 gives sources 0x54..0x63 the INTIDs 237..252, as on the X-T5. Without these lines
+# a copy that ends in a sleeping wait never woke its task: the half press of a still capture
+# copies the DRAM PHY image with channel 1 (0x149df0c, software request) and slept for ever.
+a53_irq_base = 237
+# Memory fills end in no guest time in this model. The boot clears a region with four fills at
+# once (0x157ca70) and each completion callback ORs its bit into [0x212b288] without a lock
+# (0x157c5f4..0x157c64c); with all four interrupts at one instant on different cores a bit was
+# lost and the boot waited for 0xf without end. Each channel's interrupt is held back by a
+# different few tens of microseconds. The value is functional, not a measured copy time.
+completion_skew_us = 20
+# Request lines 10 (receive) and 11 (transmit) belong to SPI5's PL022 (63-ff915-motion.toml):
+# the M-core writes 0x1000a3f and 0x13f0b to the bank-5 routing word 0xff90e514.

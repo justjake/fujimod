@@ -252,7 +252,12 @@ impl Work {
                 Some(latched) if latched[0] != 0 || latched[1] != 0 => latched,
                 _ => current,
             };
-            if self.state.r(0xf0) != 0xb
+            // +f0 is a four-bit parameter the live-view setup copies from its mode table: the
+            // GFX100RF 1.13 setter 0x1451930 writes `value & 0xf` to 0xff9700f0 + 0x1000 * n and
+            // refuses only values above 0xf (caller 0x2f4afd8, table field +0x1d8). The X-T5 and
+            // X100VI live views program 0xb, the GFX100RF 0xa. What it selects is not decoded; the
+            // output layout comes from +08, +18 and +d8, which are checked below.
+            if self.state.r(0xf0) > 0xf
                 || d8 & !0xf != 0x10030000
                 || !matches!(d8 & 0xf, 1..=3)
                 || self.state.r(0x18) & !0x07ff07ff != 0
@@ -1013,7 +1018,7 @@ mod tests {
             ram: vec![0x55; 160],
             ..Default::default()
         };
-        setup(&mut work, &mut host, 0);
+        setup(&mut work, &mut host, 0x10);
         host.now = 1_000_000;
         let mut cx = Cx::new(&mut host, 0, 0, 0);
         work.advance(&mut cx);

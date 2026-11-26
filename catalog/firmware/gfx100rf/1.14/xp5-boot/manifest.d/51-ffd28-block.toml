@@ -1,0 +1,22 @@
+# Imaging block at 0xffd28000, one of the 0xffd2x000 processing blocks. Its driver is 0x14b679c
+# (open), 0x14b684c (parameters), 0x14b68f4 (run), 0x14b6968 (stop), 0x14b69c8 (close); the
+# subject-detection side opens it from 0x316ec70. What it computes is not decoded: the stub only
+# completes. Reached from the shooting screen by the Fn button (seen in a run: read of +0x0 from
+# 0x14b6a44 was unmapped).
+#  +0x00  0x14b6a44 clears bit 0 and polls until bit 0 reads 1 (open, run, stop)   -> constant 1
+#  +0x04  0x14b6a84 (open) and 0x14b7030 (run) write 1 last = START
+#  +0x08, +0x0c, +0x10 and up: parameters, stored.
+# The interrupt is logical source 0x9f = INTID 220 (table 0x19d9d98). Its handlers 0x14b675c
+# (open) and 0x14b6724 (run) write no acknowledge word, so the line is pulsed.
+# delay_us is functional, not measured.
+[[device]]
+base = 0xffd28000
+size = 0x1000
+kind = "completion-stub"
+[device.options]
+registers = [{ offset = 0x00, mode = "constant", value = 0x1 }]
+irq = 220
+irq_pulse = true
+starts = [{ offset = 0x04, mask = 0x1 }]
+delay_us = 200
+completion = [{ offset = 0x04, clear = 0x1 }]

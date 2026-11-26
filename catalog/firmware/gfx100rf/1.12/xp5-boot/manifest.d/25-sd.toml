@@ -1,0 +1,81 @@
+# SD slots 0 and 1 (the GFX100RF has two UHS-II slots). The stock driver addresses
+# instance n at 0xff9b0000 + (n << 14): 0x149607c(n) sets up the slot's pins
+# (slot 0: GPIO 13.6 and 9.8, slot 1: GPIO 9.0 and 11.7), then ORs 0xf00 into
+# 0xff9b2080 + (n << 14), a word of the UHS-II PHY control block at +0x2000.
+# The layout is the X-T5 4.31 one (its 25-sd.toml):
+#   +0x0000  port 0, the UHS-I SDH30 host, with its register-selection words at
+#            +0x1e0/+0x1e4;
+#   +0x2000  the UHS-II PHY control block;
+#   +0x2200  port 1, an SDHCI 4 UHS-II register file.
+# Card presence is the [[sd]] run input in manifest.toml.
+#
+# Session assumptions, not camera measurements: transfer_ticks, clock_ticks and
+# rca; ram_bytes is the DMA limit, the DRAM top (0xa8000000, the manifest's
+# [dram] limit); capabilities sets only bit 35 (UHS-II support), as for the X-T5.
+# No interrupt line is declared: the boot polls, and an asserted interrupt refuses.
+
+[[device]]
+base = 0xff9b0000
+size = 0x1e0
+kind = "sdhci"
+[device.options.controller]
+base = 0xff9b0000
+protocol = "sdhc"
+transfer_ticks = 1000
+clock_ticks = 1000
+rca = 1
+# DMA may target the DRAM below 0xf0000000 and the channels at 0x100000000 and 0x180000000
+# (manifest.toml).
+ram_bytes = 0xf0000000
+ram_banks = [[0x100000000, 0x80000000], [0x180000000, 0x80000000]]
+dram_alias = false
+# DMA address bits 32 and up of this slot's port 0: 0x1498ba8(slot, port, value) writes
+# 0xff90e7d0 + 12 * slot + {0, 4, 8}; port 0 is the +8 word, as on the X-T5.
+address_high = 0xff90e7d8
+
+[[device]]
+base = 0xff9b01e0
+size = 8
+kind = "sd-interface"
+
+[[device]]
+base = 0xff9b2000
+size = 0x300
+kind = "sdhci-uhs2"
+[device.options]
+slot = 0xff9b0000
+capabilities = 0x800000000
+clock_ticks = 1000
+
+[[device]]
+base = 0xff9b4000
+size = 0x1e0
+kind = "sdhci"
+[device.options.controller]
+base = 0xff9b4000
+protocol = "sdhc"
+transfer_ticks = 1000
+clock_ticks = 1000
+rca = 1
+# DMA may target the DRAM below 0xf0000000 and the channels at 0x100000000 and 0x180000000
+# (manifest.toml).
+ram_bytes = 0xf0000000
+ram_banks = [[0x100000000, 0x80000000], [0x180000000, 0x80000000]]
+dram_alias = false
+# DMA address bits 32 and up of this slot's port 0: 0x1498ba8(slot, port, value) writes
+# 0xff90e7d0 + 12 * slot + {0, 4, 8}; port 0 is the +8 word, as on the X-T5.
+address_high = 0xff90e7e4
+
+[[device]]
+base = 0xff9b41e0
+size = 8
+kind = "sd-interface"
+
+[[device]]
+base = 0xff9b6000
+size = 0x300
+kind = "sdhci-uhs2"
+[device.options]
+slot = 0xff9b4000
+capabilities = 0x800000000
+clock_ticks = 1000

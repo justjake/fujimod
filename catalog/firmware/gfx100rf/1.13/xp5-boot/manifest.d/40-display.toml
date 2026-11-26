@@ -1,0 +1,66 @@
+# Shared lazy-code/font method-4 streaming DMA and conversion block.
+# Factory also owns the high address words at ff90e708/e70c.
+[[device]]
+base = 0xff980000
+size = 0x1000
+kind = "lz"
+
+# Guest-programmed pixel clocks (14f3220/14f32ec/14f3520).
+[[device]]
+base = 0xffa11000
+size = 0x1000
+kind = "panel-pll"
+[[device]]
+base = 0xffa12000
+size = 0x1000
+kind = "panel-pll"
+[[device]]
+base = 0xffa13000
+size = 0x1000
+kind = "panel-pll"
+[[device]]
+base = 0xffa14000
+size = 0x1000
+kind = "panel-pll"
+
+[[device]]
+base = 0xff990000
+size = 0x1000
+kind = "display"
+[device.options]
+[[device]]
+base = 0xff9a0000
+size = 0x1000
+kind = "display"
+
+# LCD/EVF serial programming descriptor3: SPI9.
+# SSP instance 7 (0xff917000) carries the two panels on this body. Clients of the serial
+# descriptor table 0x19d6f70 (stride 0x30) that name instance 7:
+#   3  [7, 0xf000d, 0, 1, 0x10, 0, 1, 1, 0x10]: select GPIO 15.13, 16-bit words;
+#   4  [7, 0xf000d, 0, 1, 0x10, 0, 0, 0, 8]:    the same select, 8-bit words;
+#   0xb [7, 0xf000f, 0, 3, 0x14, 0, 0, 0, 0x10]: select GPIO 15.15, 16-bit words;
+#   0xc [7, 0xf000f, 0, 3, 0x14, 0, 0, 0, 8]:    the same select, 8-bit words.
+# Clients 3 and 4 share one select as the X-T5's LCD clients 3 and 4 do, and the second
+# pair has the shape of its EVF clients 8 and 9, so the endpoints are the X-T5's
+# (xt5 4.31 43-panel-serial.toml): write-only command registers. Seen in a run: the first
+# transfer on select 15.13 is a 16-bit mode 3 word 0x1b40 (client 3).
+# The X100VI's SPI9 panel window this file started from is gone: no descriptor names
+# instance 9. UNVERIFIED: the mode numbers, which panel sits on which select, miso_high and
+# source_hz (the X100VI value). The first access is the A53 driver's at 0.969 s (0x146c158).
+[[device]]
+base = 0xff917000
+size = 0x1000
+kind = "spi-controller"
+[device.options]
+source_hz = 48000000
+[[device.options.endpoints]]
+select = { port = 15, pin = 13, active_high = false }
+part = { kind = "serial-command-registers", bits = 16, mode = 3, miso_high = false }
+[[device.options.endpoints]]
+select = { port = 15, pin = 15, active_high = false }
+part = { kind = "serial-command-registers", bits = 8, mode = 2, miso_high = false }
+
+[[device]]
+base = 0xff93c000
+size = 0x3000
+kind = "renderer"

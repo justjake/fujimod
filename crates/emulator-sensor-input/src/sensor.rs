@@ -424,7 +424,9 @@ impl Sensor {
             ));
         }
         let size = stride * u64::from(height - 1) + line;
-        if size > 128 * 1024 * 1024 {
+        // A guard against a mis-decoded geometry, not a hardware limit. The largest stock frame
+        // is the GFX100RF's full 102 MP readout, about 204 MB at 16 bits a sample.
+        if size > 512 * 1024 * 1024 {
             return Err("receiver frame exceeds functional DMA limit".into());
         }
         let frame = s.frames[channel];
@@ -495,7 +497,7 @@ impl Sensor {
                 reg(0x08)
             ));
         }
-        if pitch * u64::from(lines - 1) + line > 128 * 1024 * 1024 {
+        if pitch * u64::from(lines - 1) + line > 512 * 1024 * 1024 {
             return Err("still RAW frame exceeds functional DMA limit".into());
         }
         let exposure = self.relative_exposure();
@@ -820,7 +822,10 @@ impl Command {
             return Err("sensor command submitted while busy".into());
         }
         let format = self.reg(0x208);
-        if format & 0x7fffff00 != 0x10400
+        // Bits 17:16 are the transfer kind. The GFX100RF 1.13 writer 0x31b5a9c submits register
+        // writes (opcode 0x81) with 1 and its reader 0x31b5b98 submits a read (opcode 0x82) with
+        // 3; both are one packet list of the same shape.
+        if !matches!(format & 0x7fffff00, 0x10400 | 0x30400)
             || self.reg(0x21c) != 0
             || self.reg(0x214) != 0
             || self.reg(0x218) != 8

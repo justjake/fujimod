@@ -7,5 +7,250 @@
   "update": {
     "size": 106613548,
     "sha256": "414a5ddec3c858c24e0193f0a1c0e7720b95dc6f7d47422b60030c06a165db84"
+  },
+  "layouts": {
+    "profiles": {
+      "gfx100rf-114": {
+        "cpu": [
+          {
+            "cpsr": 964,
+            "id": 0,
+            "pc": 627180,
+            "regs": {
+              "x19": 0,
+              "x20": 22811072,
+              "x21": 102352
+            },
+            "running": true,
+            "sysregs": {
+              "CPACR_EL1": 3145728,
+              "ICC_IGRPEN0_EL1": 1,
+              "ICC_IGRPEN1_EL1": 1,
+              "ICC_PMR_EL1": 255,
+              "SCTLR_EL1": 818939904,
+              "SP_EL0": 132544,
+              "SP_EL1": 132544,
+              "VBAR_EL1": 632832
+            }
+          },
+          {
+            "cpsr": 964,
+            "id": 1,
+            "pc": 627180,
+            "regs": {
+              "x19": 1,
+              "x20": 22811072,
+              "x21": 102352
+            },
+            "running": true,
+            "sysregs": {
+              "CPACR_EL1": 3145728,
+              "ICC_IGRPEN0_EL1": 1,
+              "ICC_IGRPEN1_EL1": 1,
+              "ICC_PMR_EL1": 255,
+              "SCTLR_EL1": 818939904,
+              "SP_EL0": 161216,
+              "SP_EL1": 161216,
+              "VBAR_EL1": 632832
+            }
+          },
+          {
+            "cpsr": 964,
+            "id": 2,
+            "pc": 627180,
+            "regs": {
+              "x19": 2,
+              "x20": 22811072,
+              "x21": 102352
+            },
+            "running": true,
+            "sysregs": {
+              "CPACR_EL1": 3145728,
+              "ICC_IGRPEN0_EL1": 1,
+              "ICC_IGRPEN1_EL1": 1,
+              "ICC_PMR_EL1": 255,
+              "SCTLR_EL1": 818939904,
+              "SP_EL0": 189888,
+              "SP_EL1": 189888,
+              "VBAR_EL1": 632832
+            }
+          },
+          {
+            "cpsr": 964,
+            "id": 3,
+            "pc": 627180,
+            "regs": {
+              "x19": 3,
+              "x20": 22811072,
+              "x21": 102352
+            },
+            "running": true,
+            "sysregs": {
+              "CPACR_EL1": 3145728,
+              "ICC_IGRPEN0_EL1": 1,
+              "ICC_IGRPEN1_EL1": 1,
+              "ICC_PMR_EL1": 255,
+              "SCTLR_EL1": 818939904,
+              "SP_EL0": 218560,
+              "SP_EL1": 218560,
+              "VBAR_EL1": 632832
+            }
+          }
+        ],
+        "flash_image": {
+          "dat_origin": 700,
+          "xor": 255
+        },
+        "gic_initial": {
+          "0x0": 7
+        },
+        "gic_redistributor_initial": [
+          {
+            "core": 0,
+            "offset": 20,
+            "size": 4,
+            "value": 0
+          },
+          {
+            "core": 1,
+            "offset": 20,
+            "size": 4,
+            "value": 0
+          },
+          {
+            "core": 2,
+            "offset": 20,
+            "size": 4,
+            "value": 0
+          },
+          {
+            "core": 3,
+            "offset": 20,
+            "size": 4,
+            "value": 0
+          }
+        ],
+        "limits": [],
+        "preload": [
+          {
+            "address": 262144,
+            "dat_offset": 4981436,
+            "length": 2048,
+            "sha256": "649bcde79ade0905a80b47b44b057f3c91bb58b17353e6847a21b7fdc67a617f"
+          },
+          {
+            "address": 264192,
+            "dat_offset": 1180348,
+            "length": 2048,
+            "sha256": "51339756ab27ec6a14b83b50de4e909a5baab0721b6563d9076b642a8e54d979"
+          },
+          {
+            "address": 102352,
+            "word_size": 4,
+            "words": [
+              65534,
+              65535,
+              65535,
+              65535,
+              65535,
+              65535,
+              65535,
+              65535,
+              65535,
+              65535,
+              65535,
+              65535,
+              65535,
+              65535,
+              65535,
+              65535,
+              65535,
+              65535,
+              65535,
+              65535
+            ]
+          },
+          {
+            "address": 102432,
+            "size": 4,
+            "value": 1398031684
+          },
+          {
+            "address": 102560,
+            "size": 4,
+            "value": 1398031684
+          },
+          {
+            "address": 102688,
+            "size": 4,
+            "value": 4
+          },
+          {
+            "address": 102692,
+            "size": 4,
+            "value": 0
+          },
+          {
+            "address": 102696,
+            "word_size": 4,
+            "words": [
+              0,
+              3392536576
+            ]
+          },
+          {
+            "address": 102804,
+            "size": 4,
+            "value": 0
+          },
+          {
+            "address": 102808,
+            "word_size": 4,
+            "words": [
+              0,
+              0,
+              0,
+              98304,
+              0
+            ]
+          },
+          {
+            "address": 103836,
+            "size": 4,
+            "value": 0
+          },
+          {
+            "address": 103840,
+            "size": 4,
+            "value": 0
+          },
+          {
+            "address": 103844,
+            "size": 4,
+            "value": 0
+          },
+          {
+            "address": 103848,
+            "size": 4,
+            "value": 267
+          },
+          {
+            "address": 103852,
+            "size": 4,
+            "value": 2145056
+          },
+          {
+            "address": 103856,
+            "size": 4,
+            "value": 255
+          },
+          {
+            "address": 978944,
+            "size": 4,
+            "value": 4
+          }
+        ]
+      }
+    }
   }
 }

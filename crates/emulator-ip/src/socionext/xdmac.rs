@@ -109,6 +109,13 @@ pub struct Pair {
     interrupts: [Vec<InterruptLine>; 2],
     /// Device-backed memory the channels may read where the bus has no RAM (board wiring).
     read_windows: Vec<ReadWindow>,
+    /// Board option: a channel's interrupt rises this long after its transfer ends. Memory
+    /// copies end in no guest time here, so several channels started together would otherwise
+    /// raise their interrupts at one instant on different cores, which no hardware does.
+    irq_skew_ns: [u64; 2],
+    /// The rise of a lane's interrupt that is still held back (run state, not checkpointed:
+    /// a restored pair publishes at once).
+    irq_due: [Option<u64>; 2],
 }
 impl Pair {
     fn validate_state(&self, state: &State, routing: &Routing) -> Result<(), String> {
@@ -155,7 +162,14 @@ impl Pair {
             connections,
             interrupts,
             read_windows: Vec::new(),
+            irq_skew_ns: [0; 2],
+            irq_due: [None; 2],
         })
+    }
+    /// See `irq_skew_ns`.
+    pub fn with_irq_skew(mut self, skew_ns: [u64; 2]) -> Self {
+        self.irq_skew_ns = skew_ns;
+        self
     }
     /// Let the channels read these device-backed windows, such as the serial-flash aperture.
     /// Writes into them still refuse.
@@ -188,8 +202,13 @@ impl Pair {
             .map(Some)
             .ok_or_else(|| {
                 format!(
-                    "XDMAC request has no connected peripheral; request={}",
-                    routing.requests[lane]
+                    "XDMAC request has no connected peripheral; request={} control={:#x} source={:#x} destination={:#x} source_shape={:#x} destination_shape={:#x}",
+                    routing.requests[lane],
+                    c.control,
+                    c.source,
+                    c.destination,
+                    c.source_shape,
+                    c.destination_shape,
                 )
             })
     }
@@ -277,8 +296,16 @@ impl Pair {
         let c = &mut self.state.channels[lane];
         let high = c.irq();
         if high == c.irq_published {
+            self.irq_due[lane] = None;
             return;
         }
+        if high && self.irq_skew_ns[lane] != 0 {
+            let due = *self.irq_due[lane].get_or_insert(cx.now() + self.irq_skew_ns[lane]);
+            if cx.now() < due {
+                return;
+            }
+        }
+        self.irq_due[lane] = None;
         c.irq_published = high;
         if self.interrupts[lane].is_empty() && high {
             cx.unmodeled();
@@ -525,8 +552,22 @@ impl Device for Pair {
             .channels
             .iter()
             .enumerate()
-            .any(|(lane, c)| c.irq() != c.irq_published || self.ready(lane, c).unwrap_or(true))
-            .then_some(now)
+            .filter_map(|(lane, c)| {
+                if self.ready(lane, c).unwrap_or(true) {
+                    Some(now)
+                } else if c.irq() != c.irq_published {
+                    // A held-back rise waits for its time; anything else is published now.
+                    Some(
+                        self.irq_due[lane]
+                            .filter(|_| c.irq())
+                            .unwrap_or(now)
+                            .max(now),
+                    )
+                } else {
+                    None
+                }
+            })
+            .min()
     }
     fn pollable(&self, address: u64, size: u8) -> bool {
         self.offset(address, size).is_some()

@@ -53,6 +53,9 @@ enum WireInput {
     GpioSelected {
         endpoints: Vec<super::serial::Connection>,
     },
+    Direct {
+        part: super::serial::Part,
+    },
     /// The X-mount lens connector; the registered device wraps the controller.
     XMountLens(fujimod_emulator_xp5_io::x_mount::Options),
     Dedicated {
@@ -63,6 +66,15 @@ enum WireInput {
 #[serde(deny_unknown_fields)]
 struct DmaWiring {
     companion_irq_base: u32,
+    /// Bring-up: request lines whose peripheral is not modelled but which the
+    /// guest programs for a receive transfer; each drains from an always-ready
+    /// idle source at the given fixed peripheral address.
+    #[serde(default)]
+    receive_sinks: Vec<SinkWiring>,
+    /// Bring-up: the transmit counterpart; each accepts and discards beats to
+    /// the given fixed peripheral address.
+    #[serde(default)]
+    transmit_sinks: Vec<SinkWiring>,
     /// Main-processor GIC INTID of channel 0 (bank 0, lane 0). Channel
     /// `bank * 2 + lane` raises `a53_irq_base + channel` in addition to its
     /// companion NVIC line. Absent leaves the banks wired to the companion only.
@@ -71,6 +83,16 @@ struct DmaWiring {
     /// Reset value of each bank's global control enable bit; a session assumption, default off.
     #[serde(default)]
     global_enable_at_reset: bool,
+    /// Channel n raises its completion interrupt `(n + 1) * completion_skew_us` after its
+    /// transfer ends (default 0: at once). See `Pair::with_irq_skew`.
+    #[serde(default)]
+    completion_skew_us: u64,
+}
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct SinkWiring {
+    request: u8,
+    address: u64,
 }
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -141,6 +163,7 @@ pub fn register_all(
             WireInput::GpioSelected { endpoints } => {
                 super::serial::gpio_wire(pins.clone(), endpoints)?
             }
+            WireInput::Direct { part } => super::serial::direct_wire(part)?,
             WireInput::XMountLens(options) => {
                 use fujimod_emulator_xp5_io::x_mount;
                 let choice = x_mount::lens_choice(&options);
@@ -271,6 +294,37 @@ pub fn register_all(
         if wiring.companion_irq_base.checked_add(15).is_none() {
             return Err("DMA IRQ range overflow".into());
         }
+        for (sinks, direction) in [
+            (&wiring.receive_sinks, Direction::Receive),
+            (&wiring.transmit_sinks, Direction::Transmit),
+        ] {
+            for sink in sinks {
+                if sink.request >= 63 {
+                    return Err("invalid XP5 DMA sink request".into());
+                }
+                let port: fujimod_emulator_devices::dma::SharedPort = match direction {
+                    Direction::Receive => std::sync::Arc::new(std::sync::Mutex::new(
+                        fujimod_emulator_xp5_io::input_capture::ReceiveSink,
+                    )),
+                    Direction::Transmit => std::sync::Arc::new(std::sync::Mutex::new(
+                        fujimod_emulator_xp5_io::input_capture::TransmitSink,
+                    )),
+                };
+                if connections
+                    .insert(
+                        sink.request,
+                        Connection {
+                            address: sink.address,
+                            direction,
+                            port,
+                        },
+                    )
+                    .is_some()
+                {
+                    return Err("duplicate DMA request wire".into());
+                }
+            }
+        }
         // GIC SPIs start at INTID 32 and the architecture ends them at 1019.
         if wiring
             .a53_irq_base
@@ -298,7 +352,10 @@ pub fn register_all(
                 0x1000,
                 Box::new({
                     // Memory-to-memory copies read the serial-flash CPU aperture from its backing.
+                    let skew =
+                        |lane: u64| (bank as u64 * 2 + lane + 1) * wiring.completion_skew_us * 1000;
                     let pair = Pair::new(base, route.clone(), connections.clone(), interrupts)?
+                        .with_irq_skew([skew(0), skew(1)])
                         .with_read_windows(
                             flash
                                 .map(flash_storage::Medium::read_window)

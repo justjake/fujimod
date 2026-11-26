@@ -583,21 +583,124 @@ fn register_with_resources(
             if window.base != 0xff909000 || window.size != 0x1000 {
                 return Err("invalid extended timer window".into());
             }
-            bus.register(
-                window.base,
-                window.size,
-                Box::new(
-                    timer::Timer::extended(window.base).with_pwm_outputs(resources.pwm.clone()),
-                ),
-            )?;
+            let mut timer =
+                timer::Timer::extended(window.base).with_pwm_outputs(resources.pwm.clone());
+            // `focus_drive = { channel, gain, home_above, home_port, home_pin }`: the PWM pair of
+            // a focus motor that a companion-core servo drives (pins::FocusServo).
+            if let Some(drive) = window.options.get("focus_drive") {
+                let number = |key: &str| {
+                    drive
+                        .get(key)
+                        .and_then(toml::Value::as_integer)
+                        .ok_or_else(|| format!("extended timer focus_drive needs {key}"))
+                };
+                let channel = usize::try_from(number("channel")?)
+                    .ok()
+                    .filter(|n| *n < 6)
+                    .ok_or("focus_drive channel is 0..5")?;
+                let pad = |key: &str| {
+                    number(key).and_then(|n| {
+                        usize::try_from(n)
+                            .ok()
+                            .filter(|n| *n < 16)
+                            .ok_or_else(|| format!("focus_drive {key} is 0..15"))
+                    })
+                };
+                // `pwm_pins = [[port, pin], ...]`: the pads the PWM leaves on (optional).
+                let mut pwm_pins = Vec::new();
+                if let Some(list) = drive.get("pwm_pins") {
+                    for item in list
+                        .as_array()
+                        .ok_or("focus_drive pwm_pins is a list of [port, pin]")?
+                    {
+                        let pair: Vec<usize> = item
+                            .as_array()
+                            .into_iter()
+                            .flatten()
+                            .filter_map(|n| n.as_integer().and_then(|n| usize::try_from(n).ok()))
+                            .collect();
+                        match pair[..] {
+                            [port, pin] if port < 20 && pin < 16 => pwm_pins.push((port, pin)),
+                            _ => return Err("focus_drive pwm_pins is a list of [port, pin]".into()),
+                        }
+                    }
+                }
+                resources.pins.lock().unwrap().focus_servo =
+                    Some(fujimod_emulator_devices::xp5::pins::FocusServo {
+                        drive: 0,
+                        at_ns: 0,
+                        remainder: 0,
+                        gain: number("gain")?,
+                        home_above: number("home_above")?,
+                        home: (pad("home_port")?, pad("home_pin")?),
+                        started: false,
+                        enable: 0,
+                        pwm_pins,
+                    });
+                timer = timer.with_focus_drive(resources.pins.clone(), channel);
+            } else if !window.options.is_empty() {
+                return Err("extended timer takes no options but focus_drive".into());
+            }
+            bus.register(window.base, window.size, Box::new(timer))?;
         }
         "timer" | "timer-focus-capture" => {
-            if window.base != 0xff908000 || window.size != 0x1000 || !window.options.is_empty() {
-                return Err("invalid general timer window or options".into());
+            if window.base != 0xff908000 || window.size != 0x1000 {
+                return Err("invalid general timer window".into());
             }
-            let mut timer = timer::Timer::new(window.base).with_companion(companion);
+            // `external_count_channels`: general channels clocked by an external input
+            // (a command dial) that this board leaves idle.
+            let mut external = 0u16;
+            let mut focus_position = None;
+            let mut focus_inverted = false;
+            let mut idle_divide = 1u32;
+            for (key, value) in &window.options {
+                if key == "companion_idle_divide" {
+                    idle_divide = value
+                        .as_integer()
+                        .filter(|n| (1..=64).contains(n))
+                        .ok_or("companion_idle_divide takes 1..64")?
+                        as u32;
+                    continue;
+                }
+                if key == "focus_position_inverted" {
+                    focus_inverted = value
+                        .as_bool()
+                        .ok_or("focus_position_inverted takes a boolean")?;
+                    continue;
+                }
+                if key == "focus_position_channel" {
+                    focus_position = Some(
+                        value
+                            .as_integer()
+                            .filter(|n| (0..16).contains(n))
+                            .ok_or("focus_position_channel takes a channel 0..15")?
+                            as usize,
+                    );
+                    continue;
+                }
+                let channels = (key == "external_count_channels")
+                    .then(|| value.as_array())
+                    .flatten()
+                    .ok_or("invalid general timer options")?;
+                for channel in channels {
+                    let n = channel
+                        .as_integer()
+                        .filter(|n| (0..16).contains(n))
+                        .ok_or("external_count_channels takes channels 0..15")?;
+                    external |= 1 << n;
+                }
+            }
+            let mut timer = timer::Timer::new(window.base)
+                .with_companion(companion)
+                .with_companion_idle_divide(idle_divide)
+                .with_external_count(external);
             if window.kind == "timer-focus-capture" {
                 timer = timer.with_focus_capture(resources.pins.clone());
+            }
+            if let Some(channel) = focus_position {
+                timer = timer
+                    .with_focus_position(channel)
+                    .with_focus_position_inverted(focus_inverted);
             }
             bus.register(window.base, window.size, Box::new(timer))?;
         }

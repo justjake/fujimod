@@ -53,6 +53,11 @@ pub(super) enum Part {
     GenericSink {
         miso_high: bool,
     },
+    /// Bring-up: a checksummed serial config ROM (gfx100rf device 0x16). The
+    /// firmware clocks [idx,0,0,~idx] and reads a 4-byte reply whose last byte
+    /// must equal ~(idx + byte1 + byte2); this answers every setting with value
+    /// 0 and the matching checksum, satisfying the boot-mode config read.
+    ChecksumConfig,
 }
 /// Bring-up: endpoint for bring-up of bodies whose serial parts are not yet identified.
 struct GenericSink {
@@ -90,6 +95,46 @@ impl Endpoint for GenericSink {
                     .collect()
             })
             .unwrap_or_default();
+        Ok(())
+    }
+}
+/// Bring-up: a checksummed serial config ROM. See Part::ChecksumConfig.
+struct ConfigRom {
+    index: u8,
+    count: u8,
+}
+impl Endpoint for ConfigRom {
+    fn name(&self) -> &'static str {
+        "checksum-config-rom"
+    }
+    fn validate(&self, _: fujimod_emulator_parts_io::serial::Frame) -> Result<(), String> {
+        Ok(())
+    }
+    fn reset_transaction(&mut self) {
+        self.count = 0;
+        self.index = 0;
+    }
+    fn transfer(&mut self, frame: fujimod_emulator_parts_io::serial::Frame, _: u64) -> u16 {
+        // The firmware clocks each setting as a self-delimiting 4-frame command
+        // (index, 0, 0, ~index) with no chip-select edge between commands on
+        // the hardwired bus, so the step wraps every four frames.
+        let miso = match self.count % 4 {
+            0 => {
+                self.index = frame.word as u8;
+                0
+            }
+            1 | 2 => 0,
+            _ => u16::from((!self.index) & 0xff),
+        };
+        self.count = (self.count + 1) % 4;
+        miso
+    }
+    fn save(&self) -> serde_json::Value {
+        serde_json::json!({"index": self.index, "count": self.count})
+    }
+    fn restore(&mut self, state: &serde_json::Value) -> Result<(), String> {
+        self.index = state["index"].as_u64().unwrap_or(0) as u8;
+        self.count = state["count"].as_u64().unwrap_or(0) as u8;
         Ok(())
     }
 }
@@ -290,6 +335,7 @@ fn endpoint(part: Part, counting_dial: Option<u8>) -> Result<Box<dyn Endpoint>, 
             transfers: 0,
             last: vec![],
         }),
+        Part::ChecksumConfig => Box::new(ConfigRom { index: 0, count: 0 }),
     })
 }
 fn attachments(
@@ -321,6 +367,14 @@ pub(super) fn gpio_wire(
         pins,
         attachments(connections, None)?,
     )?))
+}
+/// A hardwired single-slave serial bus: one endpoint, no GPIO chip select.
+pub(super) fn direct_wire(
+    part: Part,
+) -> Result<Box<dyn fujimod_emulator_parts_io::serial::Wire>, String> {
+    Ok(Box::new(fujimod_emulator_parts_io::serial::Direct::new(
+        endpoint(part, None)?,
+    )))
 }
 
 #[cfg(test)]

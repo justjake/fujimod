@@ -65,6 +65,23 @@ impl dma::Port for TransmitSink {
     }
 }
 
+/// Bring-up: a general-DMA receive source that is always ready and delivers an
+/// idle (zero) word. Used where the companion DMAs in from a peripheral whose
+/// payload is not needed for the first screen (e.g. the gfx100rf M-core's SPI5
+/// iris-position stream), so the transfer completes without modelling the part.
+pub struct ReceiveSink;
+impl dma::Port for ReceiveSink {
+    fn request(&self, direction: Direction, _burst: bool) -> Option<u64> {
+        (direction == Direction::Receive).then_some(0)
+    }
+    fn receive(&mut self, _now: u64, _bytes: u8) -> Result<u64, String> {
+        Ok(0)
+    }
+    fn transmit(&mut self, _now: u64, _bytes: u8, _value: u64) -> Result<(), String> {
+        Err("bring-up receive sink cannot transmit".into())
+    }
+}
+
 /// Wiring of a position-sensor sequencer channel.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]

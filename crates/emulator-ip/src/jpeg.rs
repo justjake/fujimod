@@ -640,7 +640,8 @@ const D_OUTPUT_HIGH: u64 = 0x140;
 const D_LIMIT_HIGH: u64 = 0x144;
 const D_END_HIGH: u64 = 0x148;
 const D_STREAM_HIGH: u64 = 0x14c;
-const MAX_SIDE: usize = 8192;
+/// The largest side the decoder accepts. A GFX100RF picture is 11648 pixels wide at 4:3.
+const MAX_SIDE: usize = 16384;
 
 #[derive(Default, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]

@@ -1,0 +1,75 @@
+# Completion stubs for the blocks of the still develop chain (full shutter press with a card).
+# Each is the X-T5 4.31 stub of the same block (its 55..59-*-stubs.toml). An entry says whether
+# its registers and interrupt were checked against this firmware's driver or only taken over.
+# delay_us is functional, not measured.
+
+# IIFP. Checked: run 0x2f24720 registers logical source 9 = INTID 206 (table 0x19d9d98) with
+# handler 0x2f23da0; one accessor per register at 0x2f24c78.. (+0x00 0x2f24c78/0x2f24cb0,
+# +0x04 0x2f24ce0, +0x98 0x2f257f0, +0x100 0x2f258e4, +0x104 0x2f2591c, +0x108 0x2f2594c,
+# +0x10c 0x2f25984): the same layout as the X-T5 driver 0x2c45adc.
+[[device]]
+base = 0xff975000
+size = 0x1000
+kind = "completion-stub"
+[device.options]
+registers = [
+  { offset = 0x00, mode = "constant", value = 0x1 },
+  { offset = 0x98, mode = "constant", value = 0x1 },
+  { offset = 0x100, mode = "constant", value = 0x1 },
+]
+irq = 206
+starts = [{ offset = 0x04, mask = 0x1 }]
+delay_us = 200
+completion = [{ offset = 0x104, set = 0x1 }, { offset = 0x04, clear = 0x1 }]
+ack = { offset = 0x108, mode = "w1c", status_offset = 0x104, bits = 0x1 }
+irq_mask_offset = 0x10c
+irq_mask_bit = 0
+irq_mask_set_masks = false
+
+# RESZ. Checked: one accessor per register at the X-T5 offsets (+0x00 0x14b7054/0x14b708c,
+# +0x04 0x14b70bc/0x14b711c, +0x108 0x14b84d4, +0x10c 0x14b851c, +0x110 0x14b8554/0x14b85a8,
+# +0x114 0x14b85e0/0x14b8634, +0x118 0x14b866c), and logical source 0xa is INTID 203 in table
+# 0x19d9d98, as on the X-T5 (its 55-develop-stubs.toml gives the register meanings). The stop
+# writes 3 to +0x110 (seen in a run, from 0x14b858c).
+[[device]]
+base = 0xffd0c000
+size = 0x1000
+kind = "imaging-resz"
+[device.options]
+registers = [
+  { offset = 0x00, mode = "constant", value = 0x1 },
+  { offset = 0x108, mode = "constant", value = 0x01000100 },
+]
+irq = 203
+starts = [{ offset = 0x04, mask = 0x1 }]
+delay_us = 200
+completion = [{ offset = 0x10c, set = 0x1 }, { offset = 0x04, clear = 0x1 }]
+ack = { offset = 0x110, mode = "w1c", status_offset = 0x10c, bits = 0x3 }
+irq_mask_offset = 0x114
+irq_mask_bit = 0
+irq_mask_set_masks = false
+
+# RZL2. Checked: one accessor per register at the X-T5 / X-E5 offsets (+0x00 0x14b9ed4/0x14b9f04,
+# +0x04 0x14b9f6c, +0x100 0x14ba640 reading bits 8, 12..13, 24, 28..29, +0x104 0x14ba688 bits 0..2,
+# +0x108 0x14ba6c8/0x14ba708 bits 0..2, +0x10c 0x14ba774/0x14ba7b4 bits 0..2, +0x110 0x14ba820), and
+# the driver start 0x1570424 writes +0x10c and registers logical source 0xc = INTID 205 (table
+# 0x19d9d98) with handler 0x15708ac. Register meanings as in the X-E5 55-develop-stubs.toml.
+[[device]]
+base = 0xff984000
+size = 0x1000
+kind = "imaging-rzl2"
+[device.options]
+registers = [
+  { offset = 0x00, mode = "constant", value = 0x1 },
+  { offset = 0x100, mode = "constant", value = 0x01000100 },
+]
+irq = 205
+starts = [{ offset = 0x04, mask = 0x1 }]
+delay_us = 200
+completion = [{ offset = 0x104, set = 0x1 }, { offset = 0x04, clear = 0x1 }]
+ack = { offset = 0x108, mode = "w1c", status_offset = 0x104, bits = 0x7 }
+irq_mask_offset = 0x10c
+irq_mask_bit = 0
+# A set bit of +0x10c lets the interrupt through: the start 0x1570424 writes 1, 1, 1 (constant
+# 0x16dd8b0) before registering the handler and the stop 0x1570530 writes 0, 0, 0.
+irq_mask_set_masks = false

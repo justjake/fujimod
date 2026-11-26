@@ -197,3 +197,81 @@ impl Wire for InputLevel {
         }
     }
 }
+
+/// A single hardwired serial slave with no chip-select line: the controller's
+/// native frame select is always asserted, so every frame reaches the one
+/// endpoint. For a bus carrying exactly one device addressed in-band by the
+/// clocked command (gfx100rf SPI instance 2's config ROM), where the driver
+/// toggles no GPIO select, unlike a multiplexed GPIO-selected bus.
+pub struct Direct {
+    endpoint: Box<dyn Endpoint>,
+    generation: u64,
+    active: Option<(u64, Frame)>,
+}
+impl Direct {
+    pub fn new(endpoint: Box<dyn Endpoint>) -> Self {
+        Self {
+            endpoint,
+            generation: 0,
+            active: None,
+        }
+    }
+}
+impl Wire for Direct {
+    fn begin(&mut self, frame: Frame) -> Result<u64, String> {
+        if self.active.is_some() {
+            return Err("serial wire already shifting".into());
+        }
+        self.endpoint.validate(frame)?;
+        self.generation = self
+            .generation
+            .checked_add(1)
+            .ok_or("serial token overflow")?;
+        self.active = Some((self.generation, frame));
+        Ok(self.generation)
+    }
+    fn finish(&mut self, token: u64, frame: Frame, now: u64) -> Result<u16, String> {
+        let Some((generation, active)) = self.active else {
+            return Err("serial wire has no active frame".into());
+        };
+        if token != generation || frame != active {
+            return Err("serial frame token differs".into());
+        }
+        self.active = None;
+        Ok(self.endpoint.transfer(frame, now))
+    }
+    fn save(&self) -> Value {
+        serde_json::json!({
+            "kind": "direct",
+            "generation": self.generation,
+            "active": self.active.map(|(t, f)| serde_json::json!({"token": t, "frame": f})),
+            "endpoint": {"kind": self.endpoint.name(), "state": self.endpoint.save()},
+        })
+    }
+    fn restore(&mut self, state: &Value) -> Result<(), String> {
+        if state["kind"] != "direct" || state["endpoint"]["kind"] != self.endpoint.name() {
+            return Err("direct serial wire layout differs".into());
+        }
+        let generation = state["generation"]
+            .as_u64()
+            .ok_or("direct serial wire generation missing")?;
+        let active = if state["active"].is_null() {
+            None
+        } else {
+            let token = state["active"]["token"]
+                .as_u64()
+                .ok_or("direct serial wire active token missing")?;
+            let frame: Frame = serde_json::from_value(state["active"]["frame"].clone())
+                .map_err(|e| e.to_string())?;
+            if generation == 0 || token != generation {
+                return Err("invalid direct serial wire active frame".into());
+            }
+            self.endpoint.validate(frame)?;
+            Some((token, frame))
+        };
+        self.endpoint.restore(&state["endpoint"]["state"])?;
+        self.generation = generation;
+        self.active = active;
+        Ok(())
+    }
+}

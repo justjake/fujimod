@@ -1228,6 +1228,7 @@ impl Devices {
                         rows: 16,
                         planes: Planes::Rgb,
                         window: None,
+                        black: None,
                     }],
                     reset_ticks: reset,
                     period_ticks: None,

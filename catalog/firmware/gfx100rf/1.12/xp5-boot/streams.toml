@@ -1,0 +1,49 @@
+update_sha256 = "8d4d9a14fc53eebacac79246adabd7e8f70c5bf3c2c24a754608c56ec08ab1d3"
+
+[[sections]]
+name = "stream-001402bc"
+address = 8916992
+size = 2141152
+dat_offset = 1311420
+encoding = "method4"
+sha256 = "00ec9c86715c5da52412817dd6e1254c4e386f127c442dc0acf2f223fba3fdfa"
+
+[[sections]]
+name = "stream-008602bc"
+address = 18616320
+size = 11735040
+dat_offset = 8782524
+encoding = "method4"
+sha256 = "2eee5c0796ff847c641b310dba8aff1c59737d48743d1fe7faec5fc859043e40"
+
+[[sections]]
+name = "stream-00fa02bc"
+address = 46018560
+size = 22974464
+dat_offset = 16384700
+encoding = "method4"
+sha256 = "7c674c3f2b91b8afe4d3a0f3e083357e110fd6c55cb6f022057b9be5aeb3dca8"
+
+[[sections]]
+name = "loader-000c02bc"
+address = 528384
+size = 123584
+dat_offset = 787132
+encoding = "raw"
+sha256 = "5575d75c31a2cb99d9d5d2a004c8469041948732bbac129939f10e836c7bde37"
+
+[[sections]]
+name = "boot-setup"
+address = 4286578688
+size = 73728
+dat_offset = 2748
+encoding = "raw"
+sha256 = "0ea3101c62dbe75e11e789bea4fd700ccd8768d4ca1ed150083d55d46d089ef0"
+
+[[verification]]
+name = "stream-019002bc"
+address = 99233792
+dat_offset = 26215100
+decoded_size = 16719872
+encoding = "method4"
+sha256 = "30fc6ae85e5dfb69e8ceb29935c1e38168ab8159be70f0f6ceb0e772875ff8de"

@@ -15,7 +15,10 @@ use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use std::sync::{Arc, Mutex};
 
-const CAUSES: u32 = 0x79;
+// Cause bit 4 is the companion's notify word (+0x08): the GFX100RF 1.13 companion writes
+// 4 to the cause register and then (kind << 16 | argument) to +0x08 (local 0x1e65c); the A53
+// handler 0x14fbdcc acknowledges cause 4 and dispatches on the word's high half.
+const CAUSES: u32 = 0x7d;
 const MASK: usize = 7;
 #[derive(Clone, Default, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -39,6 +42,9 @@ pub struct Pins {
     pub request: u32,
     pub control: u32,
     pub reply: u32,
+    /// A53 interrupt of the companion's notify word (+0x08, cause 4); `None` keeps the
+    /// word unmodeled for a board that has not named the line.
+    pub notify: Option<u32>,
     pub status: u32,
     pub fault: u32,
 }
@@ -84,6 +90,7 @@ impl Device for Mailbox {
         let companion = cx.cpu == self.pins.companion;
         let bit = match (o, companion) {
             (0, false) => 1,
+            (8, true) if self.pins.notify.is_some() => 4,
             (0xc, false) => 8,
             (0x10, true) => 0x10,
             (0x14, true) => 0x20,
@@ -124,6 +131,11 @@ impl Device for Mailbox {
             {
                 cx.fail(e);
             }
+        }
+        if let Some(line) = self.pins.notify
+            && (old ^ causes) & 4 != 0
+        {
+            cx.set_irq(line, causes & 4 != 0);
         }
         for (mask, line) in [
             (0x10, self.pins.reply),
@@ -210,6 +222,7 @@ mod tests {
                 request: 55,
                 control: 58,
                 reply: 141,
+                notify: Some(139),
                 status: 142,
                 fault: 143,
             },
@@ -342,6 +355,22 @@ mod tests {
             m.write(&mut cx, 0xff90e11c, 4, value);
             assert!(cx.is_unmodeled());
         }
+    }
+    #[test]
+    fn companion_notify_word_raises_and_acknowledges_its_own_line() {
+        let mut m = device();
+        let mut h = TestHost::default();
+        // The companion clears cause 4, then writes the notify word.
+        write(&mut m, &mut h, 4, 0x20, 4);
+        write(&mut m, &mut h, 4, 8, 0x20000);
+        assert_eq!(h.irqs, vec![(139, true)]);
+        assert!(h.core.is_empty());
+        let mut cx = Cx::new(&mut h, 0, 0, 0);
+        assert_eq!(m.read(&mut cx, 0xff90e108, 4), 0x20000);
+        assert_eq!(m.read(&mut cx, 0xff90e120, 4), 4);
+        write(&mut m, &mut h, 0, 0x20, 4);
+        assert_eq!(h.irqs, vec![(139, true), (139, false)]);
+        assert_eq!(m.save()["causes"], 0);
     }
     #[test]
     fn invalid_accesses_and_execution_metadata_are_refused_without_mutation() {

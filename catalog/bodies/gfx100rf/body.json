@@ -45,9 +45,27 @@
     ]
   },
   "parts": [
-    "gfx100rf-serial-nor"
+    "gfx100rf-serial-nor",
+    "power-controller",
+    "bis-configuration",
+    "lsm6ds"
   ],
   "wiring": [
+    {
+      "source_id": "spi2",
+      "target_id": "power-controller",
+      "signal": "serial_data"
+    },
+    {
+      "source_id": "serial",
+      "target_id": "bis-configuration",
+      "signal": "serial_data"
+    },
+    {
+      "source_id": "serial",
+      "target_id": "lsm6ds",
+      "signal": "serial_data"
+    },
     {
       "source_id": "flash",
       "target_id": "gfx100rf-serial-nor",

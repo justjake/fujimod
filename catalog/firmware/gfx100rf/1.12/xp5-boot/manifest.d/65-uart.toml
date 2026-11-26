@@ -1,0 +1,9 @@
+# UART port 1: an Arm PL011 at 0xff921000. The serial driver addresses port n at
+# 0xff920000 + (n << 12); in 1.12 the open routine at 0x1473864 writes +0x30 CR = 0 first.
+# A boot from the update-derived flash never opens it. A boot from a body's own flash image
+# opens port 1 at 1.13 s, so what selects it is in the per-camera configuration.
+# Its interrupt lines are not located on this body, so none is wired; nothing is attached.
+[[device]]
+base = 0xff921000
+size = 0x1000
+kind = "pl011"

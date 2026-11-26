@@ -1,0 +1,46 @@
+# SPI5 at 0xff915000 is the M-core's motion-sensor bus on this body.
+#
+# Read from the M-core image (section 5, local = physical - 0xfa200000):
+# - descriptor at local 0x27204 holds 0x5f915008/0x5f91500c (DR and SR of this instance);
+# - local 0x7908 sends one command: busy flag at 0xa93a8 = 1, GPIO 12.9 low (0x1d04c with
+#   0xc0009), a DMA transfer of the command bytes and the reply, then it spins at 0x7952 until
+#   the completion callback 0x70e8 clears the flag, and raises GPIO 12.9 again;
+# - local 0x798c is the start-up sequence: 0x12 <- 0x05, read 0x12 until bit 0 clears,
+#   0x12 <- 0x40, 0x01 <- 0, 0x0d <- 0, then 0x10..0x17 and 0x73..0x75, last 0x12 <- 0x44.
+#   That register set (CTRL3_C software reset, FUNC_CFG_ACCESS, INT1_CTRL, CTRL1..CTRL8,
+#   X/Y/Z_OFS_USR) is the LSM6DSO family's, the same part model the X100VI companion uses.
+# Seen in a run: CR0 0xc7 (8 bit, mode 3), CPSR 6, CR1 0xa, DMACR 3; general-DMA bank 5
+# channel 0 transmits (control 0x209011, request 11) and channel 1 receives (0x309011,
+# request 10).
+#
+# Why a clocked controller and not a drain: the driver starts the receive channel first and
+# stores its completion callback only afterwards (local 0x1be86, 0x1be9a), then starts the
+# transmit channel. A receive source that is ready before any frame was clocked completes the
+# receive channel at once, IRQ 94 runs with no callback stored, and the M-core spins at 0x7952
+# for ever. A PL022 delivers a received word only after the transmitted one.
+#
+# Assumptions, not measurements: the part's exact identity (WHO_AM_I is not read by this
+# sequence) and source_hz (the X100VI value). The interrupt output is declared unconnected:
+# the M-core never enables an NVIC line for it (its handler table holds lines 12, 13, 55, 58
+# and the DMA lines only). A still body: zero temperature, angular rate and acceleration.
+[[device]]
+base = 0xff915000
+size = 0x1000
+kind = "pl022"
+[device.options]
+source_hz = 48000000
+ticks_per_second = 1000000000
+receive_request = 10
+transmit_request = 11
+companion_irq_unconnected = true
+[device.options.wire]
+kind = "gpio-selected"
+[[device.options.wire.endpoints]]
+[device.options.wire.endpoints.select]
+port = 12
+pin = 9
+active_high = false
+[device.options.wire.endpoints.part]
+kind = "lsm6ds-configuration-registers"
+temperature = 0
+motion = { angular_rate = [0, 0, 0], acceleration = [0, 0, 0] }

@@ -1,0 +1,10 @@
+# 0xff90e400: a control register in the 0xff90e000 system-control cluster (near the M-core
+# mailbox 0xff90e100, HDMI 0xff90e200, USB-status 0xff90e300). The firmware writes it from
+# 0x146fa28 during init; x100vi's modelled windows do not own it. Bring-up stub (writes
+# retained, reads default 0) until its exact role is identified.
+[[device]]
+base = 0xff90e400
+size = 0x100
+kind = "bringup-stub"
+[device.options]
+registers = []

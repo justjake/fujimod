@@ -1,0 +1,153 @@
+# Register pages the still capture touches (full shutter press with a card), added one by one
+# from runs that stopped on them. Each is a plain store: a word reads back what was written.
+# Nothing here is decoded; the comment of each entry gives the first access seen.
+
+# First access: write4 at 0xff960000 from 0x1460c34 (X-T5 4.31 models this page as bringup-stub).
+[[device]]
+base = 0xff960000
+size = 0x1000
+kind = "bringup-stub"
+[device.options]
+registers = []
+
+# First access: write4 at 0xff961000 from 0x1460c34 (X-T5 4.31 models this page as bringup-stub).
+[[device]]
+base = 0xff961000
+size = 0x1000
+kind = "bringup-stub"
+[device.options]
+registers = []
+
+# First access: write4 at 0xff962000 from 0x1460c34 (X-T5 4.31 models this page as nothing).
+[[device]]
+base = 0xff962000
+size = 0x1000
+kind = "bringup-stub"
+[device.options]
+registers = []
+
+# First access: write4 at 0xff963000 from 0x1460c34 (X-T5 4.31 models this page as nothing).
+[[device]]
+base = 0xff963000
+size = 0x1000
+kind = "bringup-stub"
+[device.options]
+registers = []
+
+# Next page of the run the table writer 0x1460c34 goes through from 0xff960000 (added ahead
+# of a run reaching it).
+[[device]]
+base = 0xff965000
+size = 0x1000
+kind = "bringup-stub"
+[device.options]
+registers = []
+
+# Next page of the run the table writer 0x1460c34 goes through from 0xff960000 (added ahead
+# of a run reaching it).
+[[device]]
+base = 0xff966000
+size = 0x1000
+kind = "bringup-stub"
+[device.options]
+registers = []
+
+# Next page of the run the table writer 0x1460c34 goes through from 0xff960000 (added ahead
+# of a run reaching it).
+[[device]]
+base = 0xff967000
+size = 0x1000
+kind = "bringup-stub"
+[device.options]
+registers = []
+
+# Next page of the run the table writer 0x1460c34 goes through from 0xff960000 (added ahead
+# of a run reaching it).
+[[device]]
+base = 0xff968000
+size = 0x1000
+kind = "bringup-stub"
+[device.options]
+registers = []
+
+# Next page of the run the table writer 0x1460c34 goes through from 0xff960000 (added ahead
+# of a run reaching it).
+[[device]]
+base = 0xff969000
+size = 0x1000
+kind = "bringup-stub"
+[device.options]
+registers = []
+
+# Next page of the run the table writer 0x1460c34 goes through from 0xff960000 (added ahead
+# of a run reaching it).
+[[device]]
+base = 0xff96a000
+size = 0x1000
+kind = "bringup-stub"
+[device.options]
+registers = []
+
+# Next page of the run the table writer 0x1460c34 goes through from 0xff960000 (added ahead
+# of a run reaching it).
+[[device]]
+base = 0xff96b000
+size = 0x1000
+kind = "bringup-stub"
+[device.options]
+registers = []
+
+# First access: write4 at 0xff964000 from 0x1460c34 (X-T5 4.31 models this page as nothing).
+[[device]]
+base = 0xff964000
+size = 0x1000
+kind = "bringup-stub"
+[device.options]
+registers = []
+
+# DRAM controller page +0x7000 of channel 2 (base table 0x19eca60: 0xfaf00000 + channel *
+# 0x10000). The training of channels 2 and 3 waits here with no timeout: 0x149fb54 polls +0x800
+# until bit 0 reads 1, and 0x149f820 polls +0x820 until bit 0 reads 0 (both through 0x14b56a8).
+# The same answers as the X-T5 4.31 file gives these pages. A register file, not a model.
+[[device]]
+base = 0xfaf27000
+size = 0x1000
+kind = "bringup-stub"
+[device.options]
+registers = [{ offset = 0x800, mode = "constant", value = 1 }, { offset = 0x820, mode = "constant", value = 0 }]
+
+# DRAM controller page +0x7000 of channel 3 (base table 0x19eca60: 0xfaf00000 + channel *
+# 0x10000). The training of channels 2 and 3 waits here with no timeout: 0x149fb54 polls +0x800
+# until bit 0 reads 1, and 0x149f820 polls +0x820 until bit 0 reads 0 (both through 0x14b56a8).
+# The same answers as the X-T5 4.31 file gives these pages. A register file, not a model.
+[[device]]
+base = 0xfaf37000
+size = 0x1000
+kind = "bringup-stub"
+[device.options]
+registers = [{ offset = 0x800, mode = "constant", value = 1 }, { offset = 0x820, mode = "constant", value = 0 }]
+
+
+# First access: write at 0xfaf29008 from 0x14b56a0 (X-T5 4.31 models this page as write-only-registers).
+[[device]]
+base = 0xfaf29000
+size = 0x1000
+kind = "bringup-stub"
+[device.options]
+registers = []
+
+# First access: write at 0xfaf39008 from 0x14b56a0 (X-T5 4.31 models this page as write-only-registers).
+[[device]]
+base = 0xfaf39000
+size = 0x1000
+kind = "bringup-stub"
+[device.options]
+registers = []
+
+# First access: write4 at 0xfae62050 from 0x14b567c (X-T5 4.31 models this page as write-only-registers).
+[[device]]
+base = 0xfae62000
+size = 0x1000
+kind = "bringup-stub"
+[device.options]
+registers = []

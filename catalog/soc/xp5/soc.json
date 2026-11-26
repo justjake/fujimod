@@ -797,7 +797,7 @@
       "physical": 138883072,
       "size": {
         "kind": "bytes",
-        "bytes": 5754880
+        "bytes": 134217728
       },
       "permissions": 7
     },

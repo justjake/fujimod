@@ -1,0 +1,13 @@
+# Playback: the JPEG decoder at 0xffd11000, the block the X-T5 record models
+# (catalog/firmware/xt5/4.31/xp5-boot/manifest.d/58-playback.toml has the register account).
+# On this body playback of a recorded picture first writes +0x118 = 1, the decoder's
+# initialisation. The interrupt line is the X-T5's (INTID 208); this body's interrupt table
+# has not been read for it. run_ticks is functional, not measured.
+[[device]]
+base = 0xffd11000
+size = 0x1000
+kind = "jpeg-decoder"
+
+[device.options]
+irq = 208
+run_ticks = 1000

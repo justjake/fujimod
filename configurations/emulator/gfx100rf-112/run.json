@@ -1,0 +1,94 @@
+{
+  "$schema": "https://fujimod.com/schemas/emulator-run-configuration.schema.json",
+  "schema": 1,
+  "id": "gfx100rf-112",
+  "purpose": "rom_boot",
+  "body_id": "gfx100rf",
+  "firmware_id": "gfx100rf-112",
+  "start": {
+    "kind": "loader"
+  },
+  "execution": {
+    "mode": "strict",
+    "engine": "hypervisor",
+    "quantum": 1000,
+    "instructions_per_tick": {
+      "numerator": 1,
+      "denominator": 1
+    }
+  },
+  "inputs": {
+    "kind": "xp5",
+    "ticks_per_second": 1000000000,
+    "blocks": [
+      {
+        "kind": "adc",
+        "block_id": "adc",
+        "samples": [
+          2713,
+          4095,
+          4095,
+          4095,
+          4095,
+          4095,
+          4095,
+          4095,
+          4095,
+          4095,
+          4095,
+          4095,
+          4095,
+          4095,
+          4095
+        ]
+      },
+      {
+        "kind": "gpio",
+        "block_id": "gpio",
+        "levels": [],
+        "outputs": [
+          {
+            "port": 12,
+            "levels": 256
+          },
+          {
+            "port": 15,
+            "levels": 40960
+          }
+        ]
+      },
+      {
+        "kind": "flash",
+        "block_id": "flash-aperture",
+        "part_id": "gfx100rf-serial-nor",
+        "source": "firmware_update",
+        "erased_tail": 255,
+        "seeds": []
+      }
+    ],
+    "parts": [
+      {
+        "kind": "clock",
+        "part_id": "power-controller",
+        "seconds": 845151906,
+        "valid": true
+      }
+    ],
+    "timings": []
+  },
+  "scene": {
+    "kind": "xp5",
+    "frames": [],
+    "statistics": [],
+    "command_images": []
+  },
+  "overlays": [],
+  "preset": {
+    "factory_options": {},
+    "hardware_selection": {
+      "soc_profile_id": "xp5",
+      "body_profile_id": "gfx100rf"
+    },
+    "firmware_profile_id": "gfx100rf-112"
+  }
+}
