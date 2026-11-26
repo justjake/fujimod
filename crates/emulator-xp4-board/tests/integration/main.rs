@@ -17,6 +17,7 @@ mod power_accessory_status;
 mod power_battery_sample;
 mod power_command_output;
 mod power_eye_sensor;
+mod power_input;
 mod register_blocks;
 mod request_acknowledgment;
 mod spi3_controller;

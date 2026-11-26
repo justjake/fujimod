@@ -246,6 +246,22 @@ impl Board {
             Self::Shared(session) => session.board.set_scene(scene),
         }
     }
+
+    /// Move a declared input word of an XP4 serial part, as a user moves a switch.
+    pub fn power_input(&mut self, register: u8, value: u16) -> Result<(), String> {
+        match self {
+            Self::Shared(session) => {
+                fujimod_emulator_xp4_board::shared::set_power_input(session, register, value)
+            }
+        }
+    }
+
+    /// The XP4 NOR medium as the run has left it.
+    pub fn nor_medium(&self) -> Result<Vec<u8>, String> {
+        match self {
+            Self::Shared(session) => fujimod_emulator_xp4_board::shared::nor_medium(session),
+        }
+    }
 }
 
 pub struct Started {
