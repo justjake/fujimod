@@ -40,6 +40,7 @@ impl Cpu for Core {
         Features {
             architectural_exits: true,
             instruction_limit: true,
+            guest_clock: !self.execution.a32,
             instruction_progress: true,
             tighten_instruction_limit: true,
             backing_observation: true,
@@ -49,7 +50,48 @@ impl Cpu for Core {
         }
     }
     fn set_execution_policy(&self, policy: ExecutionPolicy) -> Result<(), String> {
-        self.execution.cpu.set_execution_policy(policy)
+        let e = &self.execution;
+        e.memory.require_stopped()?;
+        if e.policy.get() != policy {
+            e.cpu.set_execution_policy(policy)?;
+            if !e.a32 {
+                if e.pause_requested.is_some() {
+                    e.cpu
+                        .set_parallel_cpus(policy == ExecutionPolicy::Interactive)?;
+                }
+                e.cpu
+                    .set_entry_exits(policy == ExecutionPolicy::Interactive)?;
+            }
+            e.cpu.invalidate_code(None)?;
+            e.policy.set(policy);
+        }
+        Ok(())
+    }
+    fn set_loop_mode(&self, mode: loops::LoopMode) -> Result<(), String> {
+        let e = &self.execution;
+        e.memory.require_stopped()?;
+        if e.loop_mode.get() != mode {
+            e.cpu.invalidate_code(None)?;
+            e.loop_mode.set(mode);
+        }
+        Ok(())
+    }
+    fn set_loop_window(&self, stable: bool) -> Result<(), String> {
+        let e = &self.execution;
+        if e.active.get() {
+            return Err("loop window requires a stopped processor".into());
+        }
+        e.loop_window.set(stable);
+        Ok(())
+    }
+    fn set_guest_clock(&self, clock: Clock) -> Result<(), String> {
+        let e = &self.execution;
+        if e.active.get() {
+            return Err("guest clock anchor requires a stopped processor".into());
+        }
+        clock.after(0)?;
+        e.clock.set(Some(clock));
+        Ok(())
     }
     fn exception_entries(&self) -> Option<armv7a::Entries> {
         self.execution.a32.then(|| self.execution.entries.get())
@@ -183,10 +225,18 @@ impl Cpu for Core {
         address: u64,
         bytes: usize,
         callbacks: Mmio,
-        _reads: Vec<FastMmioRead>,
+        reads: Vec<FastMmioRead>,
     ) -> Result<(), String> {
-        // Exact runs dispatch through the owner at every device access.
-        unsafe { self.map_mmio(address, bytes, callbacks) }
+        let e = &self.execution;
+        if e.a32 {
+            return unsafe { self.map_mmio(address, bytes, callbacks) };
+        }
+        unsafe { e.cpu.map_mmio_fast(address, bytes, callbacks, reads)? };
+        if let Err(error) = e.device(address, bytes) {
+            e.cpu.unmap(address, bytes)?;
+            return Err(error);
+        }
+        Ok(())
     }
     fn unmap(&self, address: u64, bytes: usize) -> Result<(), String> {
         let e = &self.execution;
@@ -221,8 +271,17 @@ impl Cpu for Core {
         if e.active.get() {
             return Err("nested A-profile execution is refused".into());
         }
+        let _guest_tick = crate::GuestClockTickScope::new(e.policy.get());
+        e.prove_loops.set(
+            e.loop_window.replace(false)
+                && e.can_prove_loops()
+                && request.until.is_none()
+                && request.instructions.is_some(),
+        );
         e.count.set(0);
+        unsafe { (*e.record.as_ptr()).enabled = if e.coarse() { 2 } else { 1 } };
         e.reset();
+        e.update_guest_tick()?;
         e.cap.set(
             request
                 .instructions
@@ -239,9 +298,9 @@ impl Cpu for Core {
         if request.watchdog_us != 0 {
             return Err("counted A-profile runs require exact limits or explicit owner stops, without a host watchdog".into());
         }
-        let _reservation = e
-            .memory
-            .reserve_run(e.id.get(), ExecutionPolicy::Exact, false)?;
+        let _reservation =
+            e.memory
+                .reserve_run(e.id.get(), e.policy.get(), e.pause_requested.is_some())?;
         if e.memory.flush_pending() {
             e.memory.flush()?;
         }
@@ -444,6 +503,7 @@ impl Cpu for Core {
             }
             // Owner aborts: the abort settles first, then its observers run.
             Hook::Exception { .. } if e.owner_aborts.get() => None,
+            Hook::Synchronization { .. } if e.pause_requested.is_some() => None,
             _ => Some(unsafe { e.cpu.install_hook(hook)? }),
         };
         e.index.borrow_mut().insert(key, hook);

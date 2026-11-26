@@ -14,6 +14,10 @@ use std::{
     ffi::c_void,
     ptr::NonNull,
     rc::Rc,
+    sync::{
+        Arc,
+        atomic::{AtomicU32, Ordering},
+    },
 };
 mod backend;
 pub mod coherence;
@@ -39,6 +43,12 @@ struct Execution {
     a32: bool,
     id: Cell<usize>,
     record: NonNull<BlockAccounting>,
+    policy: Cell<ExecutionPolicy>,
+    pause_requested: Option<Arc<AtomicU32>>,
+    clock: Cell<Option<Clock>>,
+    loop_mode: Cell<loops::LoopMode>,
+    loop_window: Cell<bool>,
+    prove_loops: Cell<bool>,
     ring: UnsafeCell<Box<[u64; 64]>>,
     owned: RefCell<Vec<fujimod_emulator_cpu::memory::Backing>>,
     count: Cell<u64>,
@@ -48,6 +58,8 @@ struct Execution {
     manual: Cell<Option<Span>>,
     active: Cell<bool>,
     at_block: Cell<bool>,
+    #[cfg(test)]
+    block_callbacks: Cell<u64>,
     at_instruction: Cell<bool>,
     stopped: Cell<bool>,
     irq: Cell<bool>,
@@ -66,10 +78,8 @@ struct Execution {
     index: RefCell<observers::Index>,
     next: Cell<usize>,
     devices: RefCell<BTreeMap<u64, (usize, HookId)>>,
-    write_hook: Cell<Option<HookId>>,
     coherence: RefCell<Option<coherent_cpu::Coherent>>,
     coherent: Cell<bool>,
-    wide_code_watch: Cell<bool>,
     stores: RefCell<Vec<(Access, u64, i32, i64)>>,
     // ARMv7-A owner options (see `Core::set_owner_exclusives` and the
     // following setters).
@@ -101,6 +111,32 @@ pub struct Core {
 }
 impl Core {
     pub fn new(cpu: RawCore, memory: Memory) -> Result<Self, String> {
+        Self::with_pause(cpu, memory, None)
+    }
+
+    #[cfg(not(target_os = "emscripten"))]
+    pub(crate) fn new_parallel_worker(
+        cpu: RawCore,
+        memory: Memory,
+        pause_requested: Arc<AtomicU32>,
+    ) -> Result<Self, String> {
+        Self::with_pause(cpu, memory, Some(pause_requested))
+    }
+
+    #[cfg(not(target_os = "emscripten"))]
+    pub(crate) fn owner_callback_parked(&self, parked: bool) -> Result<(), String> {
+        let execution = &self.execution;
+        if execution.active.get() {
+            execution.memory.set_parked(execution.id.get(), parked)?;
+        }
+        Ok(())
+    }
+
+    fn with_pause(
+        cpu: RawCore,
+        memory: Memory,
+        pause_requested: Option<Arc<AtomicU32>>,
+    ) -> Result<Self, String> {
         let a32 = cpu.model() == Model::CortexA7;
         if !(a32 || cpu.model() == Model::ArmV8A) || !cpu.features().translation_filter {
             return Err("counted A-profile requires an A-profile translation frontend".into());
@@ -124,6 +160,12 @@ impl Core {
             a32,
             id: Cell::new(usize::MAX),
             record,
+            policy: Cell::new(ExecutionPolicy::Exact),
+            pause_requested,
+            clock: Cell::new(None),
+            loop_mode: Cell::default(),
+            loop_window: Cell::new(false),
+            prove_loops: Cell::new(false),
             ring: UnsafeCell::new(Box::new([0; 64])),
             owned: RefCell::new(vec![]),
             count: Cell::new(0),
@@ -133,6 +175,8 @@ impl Core {
             manual: Cell::new(None),
             active: Cell::new(false),
             at_block: Cell::new(false),
+            #[cfg(test)]
+            block_callbacks: Cell::new(0),
             at_instruction: Cell::new(false),
             stopped: Cell::new(false),
             irq: Cell::new(false),
@@ -148,10 +192,8 @@ impl Core {
             index: RefCell::new(observers::Index::default()),
             next: Cell::new(1),
             devices: RefCell::new(BTreeMap::new()),
-            write_hook: Cell::new(None),
             coherence: RefCell::new(None),
             coherent: Cell::new(false),
-            wide_code_watch: Cell::new(false),
             stores: RefCell::new(vec![]),
             exclusive_exits: Cell::new(false),
             owner_mpidr: Cell::new(false),
@@ -168,6 +210,10 @@ impl Core {
             r.ring = (*e.ring.get()).as_mut_ptr();
             r.mask = 63;
             r.enabled = 1;
+            r.pause_requested = e
+                .pause_requested
+                .as_ref()
+                .map_or(std::ptr::null(), Arc::as_ptr);
             if a32 {
                 // A device access ends its block and every other stop raised
                 // from a callback takes effect at the next block entry, so
@@ -197,7 +243,6 @@ impl Core {
                 data,
             })?;
             e.cpu.hook_watched(hook, true)?;
-            e.write_hook.set(Some(hook));
             // The translation filter above watches every page this
             // processor translates, and the shared memory watches it in
             // every alias and peer. Stores to other pages can then keep the
@@ -297,6 +342,11 @@ impl Core {
         if capacity > 32 {
             return Err("entry trace keeps at most 32 entries".into());
         }
+        if e.policy.get() == ExecutionPolicy::Interactive
+            && e.trace.borrow().is_some() != (capacity != 0)
+        {
+            e.cpu.invalidate_code(None)?;
+        }
         *e.trace.borrow_mut() = (capacity != 0).then(|| EntryTrace {
             capacity,
             entries: VecDeque::new(),
@@ -332,6 +382,20 @@ impl Execution {
     }
     fn accounting(&self) -> Accounting {
         unsafe { Accounting::from_raw(self.record) }
+    }
+    fn coarse(&self) -> bool {
+        !self.a32
+            && self.policy.get() == ExecutionPolicy::Interactive
+            && self.trace.borrow().is_none()
+    }
+    fn update_guest_tick(&self) -> Result<(), String> {
+        crate::GuestClockTickScope::publish(
+            self.clock
+                .get()
+                .map(|clock| clock.after(self.count.get()).map(|clock| clock.now))
+                .transpose()?,
+        );
+        Ok(())
     }
     fn reset(&self) {
         self.accounting().reset();
@@ -436,10 +500,88 @@ impl Execution {
         }
         let _ = self.cpu.stop();
     }
+    const SELF_BRANCH: u32 = 0x1400_0000;
+    const COUNTED_BRANCH: u32 = 0x54ff_ffe1; // b.ne to the preceding instruction
+    const NZCV: u64 = 0xf000_0000;
+    const Z: u64 = 1 << 30;
+
+    fn can_prove_loops(&self) -> bool {
+        self.coarse() && self.loop_mode.get() == loops::LoopMode::Accelerate
+    }
+
+    fn advance_proven_loop(&self, address: u64, word: u32) -> Result<bool, String> {
+        if !self.prove_loops.get()
+            || self.irq.get()
+            || self.fiq.get()
+            || !matches!(word, Self::SELF_BRANCH | Self::COUNTED_BRANCH)
+        {
+            return Ok(false);
+        }
+        let observers = self.index.borrow();
+        if !observers.blocks.is_empty()
+            || !observers.instructions.is_empty()
+            || !observers.stores.is_empty()
+        {
+            return Ok(false);
+        }
+        if word == Self::SELF_BRANCH {
+            // Each taken B #0 leaves the same architectural state at the
+            // same instruction boundary. Retire the whole budget here.
+            self.count.set(self.cap.get());
+            return Ok(true);
+        }
+        let Some(head) = address.checked_sub(4) else {
+            return Ok(false);
+        };
+        let mut bytes = [0; 4];
+        if self
+            .cpu
+            .read_virtual(head, Access::Fetch, &mut bytes)
+            .is_err()
+        {
+            return Ok(false);
+        }
+        let subtract = u32::from_le_bytes(bytes);
+        let reg = (subtract & 31) as u8;
+        if subtract & 0x7f80_0000 != 0x7100_0000
+            || reg == 31
+            || u32::from(reg) != (subtract >> 5) & 31
+        {
+            return Ok(false);
+        }
+        let step = u64::from((subtract >> 10) & 0xfff) << (12 * ((subtract >> 22) & 1));
+        let pstate = self.scalar(Register::Pstate)?;
+        if step == 0 || pstate & Self::Z != 0 {
+            return Ok(false);
+        }
+        let wide = subtract & (1 << 31) != 0;
+        let sign = if wide { 1 << 63 } else { 1 << 31 };
+        let register = Register::X(reg);
+        let value = self.scalar(register)? & if wide { u64::MAX } else { u64::from(u32::MAX) };
+        let room = self.cap.get().saturating_sub(self.count.get());
+        // Each round starts with the taken branch, then subtracts. Exclude
+        // the zero/borrow boundary so the original branch can still execute.
+        let rounds = (room / 2).min(value.saturating_sub(1) / step);
+        if rounds == 0 {
+            return Ok(false);
+        }
+        let after = value - rounds * step;
+        let before = after + step;
+        let overflow = ((before ^ step) & (before ^ after) & sign) != 0;
+        let nzcv = (u64::from(after & sign != 0) << 31) | (1 << 29) | (u64::from(overflow) << 28);
+        self.cpu.write_register(register, &after.to_le_bytes())?;
+        let next = ((pstate & !Self::NZCV) | nzcv) as u32;
+        self.cpu
+            .write_register(Register::Pstate, &next.to_le_bytes())?;
+        self.count.set(self.count.get() + rounds * 2);
+        Ok(false)
+    }
+
     fn classify(&self, address: u64, word: u32) -> Result<Translation, String> {
         let physical = self.cpu.translate(address, Access::Fetch)?;
-        self.memory.note_code(self.id.get(), physical, 4)?;
-        self.memory.apply_watches()?;
+        if self.memory.note_code(self.id.get(), physical, 4)? {
+            self.memory.apply_watches()?;
+        }
         let framework = self.framework(word);
         let boundary = if self.a32 {
             armv7a::block_boundary(word) && !(self.owner_mpidr.get() && armv7a::mpidr_read(word))
@@ -449,22 +591,38 @@ impl Execution {
                 || word & 0xfffffc1f == 0xd69f0000
                 || word & 0xff000000 == 0xd4000000
         };
+        let coarse = self.coarse();
+        let may_access_memory = word & 0x0a00_0000 == 0x0800_0000;
+        let wide_exact = address > u32::MAX as u64 && !coarse;
+        // A worker's hooked memory access may park while a peer requests
+        // a pause. End its block before the native engine has to restart
+        // the access dynamically under parallel TCG.
+        let worker_memory_boundary = coarse && may_access_memory && self.pause_requested.is_some();
+        let instruction = if framework {
+            InstructionDisposition::Replace
+        } else if wide_exact
+            || worker_memory_boundary
+            || self.can_prove_loops() && matches!(word, Self::SELF_BRANCH | Self::COUNTED_BRANCH)
+            || boundary
+            || (self.is_coherent()
+                && (coherent_cpu::maintenance(word).is_some()
+                    || coherent_cpu::translation_change(word)))
+            || !self.index.borrow().stores.is_empty()
+            || !self.index.borrow().instructions.at(address).is_empty()
+        {
+            InstructionDisposition::ObserveAndEndBlock
+        } else {
+            InstructionDisposition::Execute
+        };
+        // Loads and stores can fault, restart or enter an MMIO callback before
+        // the end of the block. In coarse mode keep the full-width span for
+        // those blocks so each such exit can settle only its entered prefix.
         Ok(Translation {
-            instruction: if framework {
-                InstructionDisposition::Replace
-            } else if address > u32::MAX as u64
-                || boundary
-                || (self.is_coherent()
-                    && (coherent_cpu::maintenance(word).is_some()
-                        || coherent_cpu::translation_change(word)))
-                || !self.index.borrow().stores.is_empty()
-                || !self.index.borrow().instructions.at(address).is_empty()
-            {
-                InstructionDisposition::ObserveAndEndBlock
-            } else {
-                InstructionDisposition::Execute
-            },
-            observe_block: address > u32::MAX as u64
+            instruction,
+            observe_block: wide_exact
+                || coarse
+                    && (may_access_memory
+                        || !matches!(instruction, InstructionDisposition::Execute))
                 || !self.index.borrow().blocks.at(address).is_empty(),
         })
     }
@@ -488,7 +646,10 @@ impl Execution {
         Ok(())
     }
     fn block(&self, b: Block) -> Result<(), String> {
+        #[cfg(test)]
+        self.block_callbacks.set(self.block_callbacks.get() + 1);
         self.settle(0, true)?;
+        self.update_guest_tick()?;
         self.publish()?;
         self.at_block.set(true);
         let result = self.enter(b);
@@ -498,6 +659,15 @@ impl Execution {
     fn enter(&self, b: Block) -> Result<(), String> {
         if self.stopped.get() {
             return Ok(());
+        }
+        if self
+            .pause_requested
+            .as_ref()
+            .is_some_and(|pause| pause.load(Ordering::Acquire) != 0)
+        {
+            self.stopped.set(true);
+            self.reset();
+            return self.cpu.stop();
         }
         if self.memory.flush_pending() && self.restart.get() != Some(b.address) {
             self.reset();
@@ -547,17 +717,19 @@ impl Execution {
             address: b.address,
             instructions: n,
         };
-        if b.address
-            .checked_add(n * 4)
-            .is_some_and(|end| end <= 1 << 32)
+        let coarse = self.coarse();
+        if !coarse
+            && b.address
+                .checked_add(n * 4)
+                .is_some_and(|end| end <= 1 << 32)
         {
             unsafe { (*self.record.as_ptr()).enabled = 1 };
             self.synced.set(self.accounting().admit(span, room)?);
         } else {
-            // High virtual addresses retain exact entries through single-
-            // instruction observations; the packed span ring stays 32-bit.
+            // The packed ring only holds 32-bit addresses. A manually
+            // admitted block can retain its entire address and skip the ring.
             unsafe {
-                (*self.record.as_ptr()).enabled = 0;
+                (*self.record.as_ptr()).enabled = if coarse { 2 } else { 0 };
                 (*self.record.as_ptr()).budget = (room - n) as i64
             };
             self.synced.set(room as i64);
@@ -587,6 +759,8 @@ impl Execution {
             if self.framework(word) {
                 self.count.set(self.count.get() - 1);
                 self.exit.set(Some(word));
+                self.cpu.stop()?;
+            } else if self.advance_proven_loop(address, word)? {
                 self.cpu.stop()?;
             }
         }
@@ -661,28 +835,7 @@ impl Execution {
 }
 impl CodeOwner for Execution {
     fn watch_code(&self, address: u64, bytes: u64) -> Result<(), String> {
-        if self.wide_code_watch.get() {
-            return Ok(());
-        }
-        if address.checked_add(bytes).is_none_or(|end| end > 1 << 32) {
-            // The optimized native watch bitmap covers 32-bit physical pages.
-            // Keep full-width code coherent by observing every write once a
-            // high page is translated; do not truncate or omit that dependency.
-            self.cpu.hook_watched(
-                self.write_hook.get().ok_or("missing code-write hook")?,
-                false,
-            )?;
-            self.wide_code_watch.set(true);
-            if std::env::var_os("FUJIMOD_EXECUTION_COUNTERS").is_some() {
-                eprintln!(
-                    "FUJIMOD execution counters: CPU{} observes every store from now on: code at {address:#x} is beyond the store watch bitmap",
-                    self.id.get()
-                );
-            }
-            Ok(())
-        } else {
-            self.cpu.watch_stores(address, bytes)
-        }
+        self.cpu.watch_stores(address, bytes)
     }
     fn invalidate_backing_page(&self, backing_page: usize) -> Result<(), String> {
         self.cpu.invalidate_backing(backing_page, 4096)
@@ -802,6 +955,14 @@ unsafe fn written(access: Access, address: u64, size: i32, value: i64, data: *mu
     let e = unsafe { &*data.cast::<Execution>() };
     e.guarded(|| {
         store_histogram::count(e.id.get(), address);
+        if e.pause_requested.is_some() && e.policy.get() == ExecutionPolicy::Interactive {
+            let observers = e.index.borrow().synchronization.clone();
+            for (_, hook) in observers {
+                if let Hook::Synchronization { callback, data } = hook {
+                    unsafe { callback(data) };
+                }
+            }
+        }
         if e.memory.guest_store(e.id.get(), address, size as usize)? {
             e.cpu.request_restart()?;
         }
@@ -810,4 +971,232 @@ unsafe fn written(access: Access, address: u64, size: i32, value: i64, data: *mu
         }
         Ok(())
     })
+}
+
+#[cfg(test)]
+mod interactive_tests {
+    use super::*;
+    use std::sync::{Arc, atomic::AtomicU32};
+
+    fn core() -> Core {
+        let raw = crate::test_support::library()
+            .open(Model::ArmV8A, 1 << 20)
+            .unwrap();
+        let cpu = Core::new(raw, Memory::default()).unwrap();
+        set(&cpu, Register::Pstate, 0x3cd);
+        cpu
+    }
+
+    fn set(cpu: &Core, register: Register, value: u64) {
+        cpu.write_register(register, &value.to_le_bytes()).unwrap();
+    }
+
+    fn value(cpu: &Core, register: Register) -> u64 {
+        cpu.execution.scalar(register).unwrap()
+    }
+
+    fn run(cpu: &Core, begin: u64, instructions: usize) {
+        assert!(matches!(
+            cpu.run(Run {
+                begin,
+                until: None,
+                watchdog_us: 0,
+                instructions: Some(instructions),
+            }),
+            Ok(Exit::Stopped)
+        ));
+    }
+
+    #[test]
+    fn coarse_blocks_keep_exact_budgets_without_ring_writes() {
+        for address in [0x1000, 0x1_0000_0000] {
+            let cpu = core();
+            cpu.map_zeroed(address, 0x4000, 7).unwrap();
+            let code = [0x9100_0400u32, 0x9100_0400, 0x17ff_fffe];
+            let bytes: Vec<_> = code.into_iter().flat_map(u32::to_le_bytes).collect();
+            cpu.write_memory(address, &bytes).unwrap();
+            cpu.set_execution_policy(ExecutionPolicy::Interactive)
+                .unwrap();
+            for budget in [1, 2, 3, 4, 196, 197, 198] {
+                set(&cpu, Register::X(0), 0);
+                cpu.execution.block_callbacks.set(0);
+                run(&cpu, address, budget);
+                assert!(cpu.execution.block_callbacks.get() <= 5);
+                assert_eq!(cpu.instruction_progress(), Some(budget as u64));
+                assert_eq!(value(&cpu, Register::Pc), address + (budget % 3) as u64 * 4);
+                assert_eq!(value(&cpu, Register::X(0)), (budget - budget / 3) as u64);
+                assert_eq!(cpu.execution.accounting().counters().1, 0);
+                assert_eq!(unsafe { cpu.execution.record.as_ref() }.enabled, 2);
+            }
+            assert!(matches!(
+                cpu.execution
+                    .classify(address, code[0])
+                    .unwrap()
+                    .instruction,
+                InstructionDisposition::Execute
+            ));
+        }
+    }
+
+    #[test]
+    fn self_branch_proof_matches_interpreter_state_and_progress() {
+        let cpu = core();
+        set(&cpu, Register::Pstate, 0x3c5);
+        cpu.map_zeroed(0x1000, 0x4000, 7).unwrap();
+        cpu.write_memory(0x1000, &Execution::SELF_BRANCH.to_le_bytes())
+            .unwrap();
+        cpu.set_execution_policy(ExecutionPolicy::Interactive)
+            .unwrap();
+        let initial = cpu.snapshot(None).unwrap();
+        let execute = |mode| {
+            cpu.restore(&*initial).unwrap();
+            cpu.set_loop_mode(mode).unwrap();
+            cpu.set_loop_window(true).unwrap();
+            run(&cpu, 0x1000, 513);
+            assert_eq!(cpu.instruction_progress(), Some(513));
+            cpu.state().unwrap()
+        };
+        assert_eq!(
+            execute(loops::LoopMode::Disabled),
+            execute(loops::LoopMode::Accelerate)
+        );
+    }
+
+    #[test]
+    fn countdown_proof_matches_native_entries_and_flags() {
+        let cpu = core();
+        let address = 0x1_0000_0000;
+        cpu.map_zeroed(address, 0x4000, 7).unwrap();
+        cpu.set_execution_policy(ExecutionPolicy::Interactive)
+            .unwrap();
+        for (subtract, counter) in [
+            (0x7100_0400u32, (1u64 << 31) + 1),
+            (0xf100_0400, (1u64 << 63) + 1),
+            (0xf100_0c00, 9),
+        ] {
+            let words = [subtract, Execution::COUNTED_BRANCH, Execution::SELF_BRANCH];
+            let bytes: Vec<_> = words.into_iter().flat_map(u32::to_le_bytes).collect();
+            cpu.write_memory(address, &bytes).unwrap();
+            for budget in [4, 5, 6, 7, 99] {
+                let execute = |mode| {
+                    cpu.set_loop_mode(mode).unwrap();
+                    set(&cpu, Register::Pstate, 0x3c5);
+                    set(&cpu, Register::X(0), counter);
+                    cpu.set_loop_window(true).unwrap();
+                    run(&cpu, address, budget);
+                    (
+                        value(&cpu, Register::X(0)),
+                        value(&cpu, Register::Pc),
+                        value(&cpu, Register::Pstate),
+                        cpu.instruction_progress(),
+                    )
+                };
+                assert_eq!(
+                    execute(loops::LoopMode::Disabled),
+                    execute(loops::LoopMode::Accelerate)
+                );
+            }
+        }
+    }
+
+    unsafe fn observe_store(_: Access, _: u64, _: i32, _: i64, data: *mut c_void) {
+        let stores = unsafe { &*data.cast::<Cell<u64>>() };
+        stores.set(stores.get() + 1);
+    }
+
+    #[test]
+    fn wide_code_does_not_watch_unrelated_store_pages() {
+        let cpu = core();
+        let data = [0x5000, 0x1_0000_4000];
+        let high_code = 0x1_0000_0000;
+        for address in [0x1000, high_code].into_iter().chain(data) {
+            cpu.map_zeroed(address, 0x4000, 7).unwrap();
+        }
+        cpu.write_memory(high_code, &0xd503_201fu32.to_le_bytes())
+            .unwrap(); // nop
+        run(&cpu, high_code, 1);
+        let words = [0xb900_0020u32, 0x17ff_ffff]; // str w0,[x1]; b to the store
+        let bytes: Vec<_> = words.into_iter().flat_map(u32::to_le_bytes).collect();
+        cpu.write_memory(0x1000, &bytes).unwrap();
+        let stores = Cell::new(0u64);
+        let hook = unsafe {
+            cpu.raw().install_hook(Hook::Memory {
+                range: HookRange::All,
+                callback: observe_store,
+                data: (&raw const stores).cast_mut().cast(),
+                read: false,
+                write: true,
+            })
+        }
+        .unwrap();
+        cpu.raw().hook_watched(hook, true).unwrap();
+        cpu.raw().set_page_hooks(true).unwrap();
+        set(&cpu, Register::X(0), u64::from(0xd503_201fu32));
+        for address in data {
+            set(&cpu, Register::X(1), address);
+            run(&cpu, 0x1000, 200);
+            // An incidental slow-path store may reach the observation hook.
+            assert!(stores.replace(0) < 10);
+        }
+        set(&cpu, Register::X(1), high_code);
+        run(&cpu, 0x1000, 20);
+        // Native code invalidation can retry a watched store.
+        assert!(stores.get() >= 10);
+        cpu.raw().remove_hook(hook).unwrap();
+    }
+
+    unsafe fn read(_: u64, _: u32, data: *mut c_void) -> u64 {
+        let reads = unsafe { &*data.cast::<Cell<u32>>() };
+        reads.set(reads.get() + 1);
+        42
+    }
+
+    unsafe fn write(_: u64, _: u32, _: u64, _: *mut c_void) {}
+
+    #[test]
+    fn fast_reads_use_interactive_clock_and_exact_reads_use_device() {
+        let cpu = core();
+        cpu.map_zeroed(0x1000, 0x4000, 7).unwrap();
+        let code = [0xb940_0020u32, 0xb940_0422]; // ldr w0,[x1]; ldr w2,[x1,#4]
+        let bytes: Vec<_> = code.into_iter().flat_map(u32::to_le_bytes).collect();
+        cpu.write_memory(0x1000, &bytes).unwrap();
+        set(&cpu, Register::X(1), 0x8000);
+        let reads = Cell::new(0u32);
+        unsafe {
+            cpu.map_mmio_fast(
+                0x8000,
+                0x1000,
+                Mmio {
+                    read,
+                    write,
+                    data: (&raw const reads).cast_mut().cast(),
+                },
+                vec![
+                    FastMmioRead::atomic_u32(0, Arc::new(AtomicU32::new(123))),
+                    FastMmioRead::clocked_u32(4, Arc::new(|tick| u32::try_from(tick).ok())),
+                ],
+            )
+        }
+        .unwrap();
+        cpu.set_guest_clock(Clock {
+            now: 100,
+            phase: 0,
+            ratio: timeline::Ratio::new(1, 1).unwrap(),
+        })
+        .unwrap();
+
+        cpu.set_execution_policy(ExecutionPolicy::Interactive)
+            .unwrap();
+        run(&cpu, 0x1000, 2);
+        assert_eq!(reads.get(), 0);
+        assert_eq!(value(&cpu, Register::X(0)), 123);
+        assert_eq!(value(&cpu, Register::X(2)), 101);
+        assert_eq!(crate::approximate_guest_tick(), None);
+
+        cpu.set_execution_policy(ExecutionPolicy::Exact).unwrap();
+        run(&cpu, 0x1000, 2);
+        assert_eq!(reads.get(), 2);
+        assert_eq!(value(&cpu, Register::X(0)), 42);
+        assert_eq!(value(&cpu, Register::X(2)), 42);
+    }
 }

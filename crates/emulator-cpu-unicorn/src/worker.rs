@@ -1,13 +1,13 @@
-//! Native owner-thread proxy for one R-profile processor.
+//! Native owner-thread proxy for one Unicorn processor.
 //!
-//! Unicorn, the R-profile adapter and their `Rc` callback graph are created
+//! Unicorn and its `Rc` callback graph are created
 //! and destroyed on the dedicated processor thread. The proxy stays on its
 //! board thread and services guest callbacks there through synchronous RPC.
 #![cfg(not(target_os = "emscripten"))]
 
-use super::core;
 use crate::Library;
 use crate::memory::SharedMemory;
+use crate::{aprofile, rprofile::core};
 use fujimod_emulator_cpu::*;
 use std::any::Any;
 use std::cell::{Cell, RefCell};
@@ -19,6 +19,7 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::mpsc::{self, Receiver, Sender};
 use std::thread::{self, JoinHandle};
+#[path = "rprofile/worker/durable.rs"]
 mod durable;
 
 /// Inputs needed to construct one native R-profile processor on its owner
@@ -42,7 +43,13 @@ pub struct CpuWorker {
     events: RefCell<Receiver<Event>>,
     worker: RefCell<Option<JoinHandle<()>>>,
     identity: Identity,
+    model: Model,
+    owner_accounting: bool,
+    execution_policy: Cell<ExecutionPolicy>,
     features: Features,
+    thumb_accounting: Option<NonNull<ThumbBlockAccounting>>,
+    thumb_recovery: Option<NonNull<ThumbBlockRecoveryAccounting>>,
+    translation_callback: Cell<Option<usize>>,
     memory: SharedMemory,
     pause_requested: Arc<AtomicU32>,
     callbacks: RefCell<BTreeMap<usize, CallbackEntry>>,
@@ -50,10 +57,12 @@ pub struct CpuWorker {
     next_callback: Cell<usize>,
     next_run: Cell<u64>,
     running: Cell<bool>,
+    ordered_run: Cell<bool>,
+    retried_block: Cell<bool>,
     active_run: Cell<Option<RunToken>>,
     stopped_progress: Cell<Option<u64>>,
-    stopped_pc: Cell<Option<u32>>,
-    stopped_pstate: Cell<Option<u32>>,
+    stopped_pc: Cell<Option<u64>>,
+    stopped_pstate: Cell<Option<u64>>,
     loop_window: Cell<Option<bool>>,
     pending_callback: RefCell<
         Option<(
@@ -61,8 +70,8 @@ pub struct CpuWorker {
             usize,
             CallbackCall,
             Option<u64>,
-            Option<u32>,
-            Option<u32>,
+            Option<u64>,
+            Option<u64>,
         )>,
     >,
     run_result: RefCell<Option<Result<Exit, ExecutionError>>>,
@@ -79,6 +88,7 @@ struct RemoteHook {
 enum CallbackEntry {
     Mmio(Mmio),
     Hook(Hook),
+    Translation(TranslationHooks),
 }
 
 struct RemoteSnapshot {
@@ -105,24 +115,144 @@ impl Drop for RemoteSnapshot {
 
 /// Start a dedicated owner thread and construct the Unicorn-backed Core there.
 pub fn spawn(config: Config) -> Result<CpuWorker, String> {
-    let memory = config.memory.clone();
+    spawn_engine(
+        EngineConfig::Rprofile(config.options),
+        config.translation_cache_size_bytes,
+        config.memory,
+    )
+}
+
+pub fn spawn_aprofile(
+    translation_cache_size_bytes: u32,
+    memory: SharedMemory,
+) -> Result<CpuWorker, String> {
+    spawn_engine(EngineConfig::Aprofile, translation_cache_size_bytes, memory)
+}
+
+/// A board that provides its own mixed-width instruction accounting can
+/// retain that accounting while moving the native M-profile CPU to a worker.
+pub fn spawn_mprofile(
+    translation_cache_size_bytes: u32,
+    owner_accounting: bool,
+) -> Result<CpuWorker, String> {
+    spawn_engine(
+        EngineConfig::Mprofile { owner_accounting },
+        translation_cache_size_bytes,
+        SharedMemory::default(),
+    )
+}
+
+enum EngineConfig {
+    Rprofile(core::Options),
+    Aprofile,
+    Mprofile { owner_accounting: bool },
+}
+
+enum Engine {
+    Rprofile(core::Core),
+    Aprofile(aprofile::Core),
+    Mprofile {
+        raw: crate::Core,
+        owner_accounting: bool,
+    },
+}
+
+impl Engine {
+    fn cpu(&self) -> &dyn Cpu {
+        match self {
+            Self::Rprofile(cpu) => cpu,
+            Self::Aprofile(cpu) => cpu,
+            Self::Mprofile { raw, .. } => raw,
+        }
+    }
+
+    fn callback_parked(&self, parked: bool) -> Result<(), String> {
+        match self {
+            Self::Rprofile(cpu) => cpu.owner_callback_parked(parked),
+            Self::Aprofile(cpu) => cpu.owner_callback_parked(parked),
+            Self::Mprofile { .. } => Ok(()),
+        }
+    }
+
+    fn progress(&self) -> Option<u64> {
+        match self {
+            Self::Mprofile {
+                raw,
+                owner_accounting: false,
+            } => raw.instruction_counter().ok(),
+            Self::Mprofile { .. } => None,
+            _ => self.cpu().instruction_progress(),
+        }
+    }
+
+    fn run(&self, request: Run) -> Result<Exit, ExecutionError> {
+        if let Self::Mprofile {
+            raw,
+            owner_accounting: false,
+        } = self
+        {
+            raw.reset_instruction_counter()?;
+        }
+        self.cpu().run(request)
+    }
+}
+
+struct Ready {
+    identity: Identity,
+    features: Features,
+    pause_requested: Arc<AtomicU32>,
+    thumb_accounting: Option<usize>,
+    thumb_recovery: Option<usize>,
+}
+
+fn spawn_engine(
+    config: EngineConfig,
+    cache_bytes: u32,
+    memory: SharedMemory,
+) -> Result<CpuWorker, String> {
+    let model = match &config {
+        EngineConfig::Rprofile(_) => Model::CortexR5F,
+        EngineConfig::Aprofile => Model::ArmV8A,
+        EngineConfig::Mprofile { .. } => Model::CortexM4,
+    };
+    let owner_accounting = matches!(
+        config,
+        EngineConfig::Mprofile {
+            owner_accounting: true
+        }
+    );
+    let worker_memory = memory.clone();
     let (commands, command_rx) = mpsc::channel();
     let (event_tx, events) = mpsc::channel();
     let (ready_tx, ready_rx) = mpsc::channel();
     let worker = thread::Builder::new()
-        .name("camera-rprofile-cpu".into())
-        .spawn(move || serve(config, command_rx, event_tx, ready_tx))
-        .map_err(|error| format!("start R-profile CPU worker: {error}"))?;
+        .name(format!("unicorn-{model:?}"))
+        .spawn(move || {
+            serve(
+                config,
+                model,
+                cache_bytes,
+                worker_memory,
+                command_rx,
+                event_tx,
+                ready_tx,
+            )
+        })
+        .map_err(|error| format!("start Unicorn CPU worker: {error}"))?;
     let ready = match ready_rx.recv() {
         Ok(ready) => ready,
         Err(_) => {
             let _ = worker.join();
-            return Err("R-profile CPU worker disconnected during construction".into());
+            return Err("Unicorn CPU worker disconnected during construction".into());
         }
     };
     match ready {
-        Ok((identity, mut features, pause_requested)) => {
+        Ok(ready) => {
+            let mut features = ready.features;
             features.asynchronous_runs = true;
+            if model == Model::CortexM4 {
+                features.instruction_progress = !owner_accounting;
+            }
             Ok(CpuWorker {
                 #[cfg(test)]
                 rpc_calls: Cell::new(0),
@@ -132,15 +262,25 @@ pub fn spawn(config: Config) -> Result<CpuWorker, String> {
                 commands,
                 events: RefCell::new(events),
                 worker: RefCell::new(Some(worker)),
-                identity,
+                identity: ready.identity,
+                model,
+                owner_accounting,
+                execution_policy: Cell::new(ExecutionPolicy::Exact),
                 features,
                 memory,
-                pause_requested,
+                pause_requested: ready.pause_requested,
+                thumb_accounting: ready
+                    .thumb_accounting
+                    .and_then(|p| NonNull::new(p as *mut _)),
+                thumb_recovery: ready.thumb_recovery.and_then(|p| NonNull::new(p as *mut _)),
+                translation_callback: Cell::new(None),
                 callbacks: RefCell::new(BTreeMap::new()),
                 hooks: RefCell::new(BTreeMap::new()),
                 next_callback: Cell::new(1),
                 next_run: Cell::new(1),
                 running: Cell::new(false),
+                ordered_run: Cell::new(false),
+                retried_block: Cell::new(false),
                 active_run: Cell::new(None),
                 stopped_progress: Cell::new(None),
                 stopped_pc: Cell::new(None),
@@ -186,15 +326,15 @@ enum Event {
         callback: usize,
         call: CallbackCall,
         progress: Option<u64>,
-        pc: Option<u32>,
-        pstate: Option<u32>,
+        pc: Option<u64>,
+        pstate: Option<u64>,
     },
     RunComplete {
         id: u64,
         result: Result<Exit, ExecutionError>,
         progress: Option<u64>,
-        pc: Option<u32>,
-        pstate: Option<u32>,
+        pc: Option<u64>,
+        pstate: Option<u64>,
     },
 }
 
@@ -215,6 +355,11 @@ enum CallbackCall {
     Block(Block),
     Exception(arm::Exception),
     Synchronization,
+    Classify {
+        address: u64,
+        word: u32,
+    },
+    Restart(u64),
     Memory {
         access: Access,
         address: u64,
@@ -240,10 +385,12 @@ enum WorkerCallbackCounter {
     Synchronization,
     Memory,
     Fault,
+    Classify,
+    Restart,
 }
 
 impl WorkerCallbackCounter {
-    const COUNT: usize = Self::Fault as usize + 1;
+    const COUNT: usize = Self::Restart as usize + 1;
     const ALL: [Self; Self::COUNT] = [
         Self::MmioRead,
         Self::MmioWrite,
@@ -253,6 +400,8 @@ impl WorkerCallbackCounter {
         Self::Synchronization,
         Self::Memory,
         Self::Fault,
+        Self::Classify,
+        Self::Restart,
     ];
 
     fn for_call(call: &CallbackCall) -> Self {
@@ -263,6 +412,8 @@ impl WorkerCallbackCounter {
             CallbackCall::Block(_) => Self::Block,
             CallbackCall::Exception(_) => Self::Exception,
             CallbackCall::Synchronization => Self::Synchronization,
+            CallbackCall::Classify { .. } => Self::Classify,
+            CallbackCall::Restart(_) => Self::Restart,
             CallbackCall::Memory { .. } => Self::Memory,
             CallbackCall::Fault { .. } => Self::Fault,
         }
@@ -278,6 +429,8 @@ impl WorkerCallbackCounter {
             Self::Synchronization => "worker_callback_synchronization",
             Self::Memory => "worker_callback_memory",
             Self::Fault => "worker_callback_fault",
+            Self::Classify => "worker_callback_classify",
+            Self::Restart => "worker_callback_restart",
         }
     }
 }
@@ -287,6 +440,7 @@ enum CallbackResult {
     Unit,
     U64(u64),
     Bool(bool),
+    Translation(Translation),
     Error,
 }
 
@@ -330,6 +484,12 @@ enum Operation {
     WatchStores(u64, u64),
     HookWatched(HookId, bool),
     PreciseStorePc(bool),
+    BackingPointer(u64, usize),
+    MemoryRestartBoundary(HookRange),
+    TranslationHooks(Option<usize>),
+    RetryBlock(u32),
+    Restart,
+    StopOnEl3Transitions,
     ExitCounters,
     #[cfg(test)]
     CallbackContexts,
@@ -503,7 +663,13 @@ impl Operation {
             Self::WatchStores(_, _) => WorkerRpcCounter::WatchStores,
             Self::HookWatched(_, _) => WorkerRpcCounter::HookWatched,
             Self::PreciseStorePc(_) => WorkerRpcCounter::PreciseStorePc,
-            Self::ExitCounters => return None,
+            Self::BackingPointer(_, _)
+            | Self::MemoryRestartBoundary(_)
+            | Self::TranslationHooks(_)
+            | Self::RetryBlock(_)
+            | Self::Restart
+            | Self::StopOnEl3Transitions
+            | Self::ExitCounters => return None,
             #[cfg(test)]
             Self::CallbackContexts => return None,
         })
@@ -531,6 +697,7 @@ struct BackingRange {
     bytes: usize,
     bitmap: usize,
     page_shift: u32,
+    summary: Option<usize>,
 }
 
 enum Value {
@@ -553,7 +720,10 @@ struct CallbackContext {
 struct WorkerLoop {
     commands: RefCell<Receiver<Message>>,
     events: Sender<Event>,
-    core: Cell<*const core::Core>,
+    core: Cell<*const Engine>,
+    pause_requested: Arc<AtomicU32>,
+    translation_callback: Cell<Option<usize>>,
+    virtual_hooks: RefCell<std::collections::BTreeSet<usize>>,
     snapshots: RefCell<HashMap<u64, Box<dyn Snapshot>>>,
     callback_contexts: RefCell<BTreeMap<usize, Box<CallbackContext>>>,
     next_snapshot: Cell<u64>,
@@ -562,19 +732,12 @@ struct WorkerLoop {
     wakeup: RefCell<Option<RunWakeup>>,
     shutdown: Cell<bool>,
 }
-fn read_stopped_pc(cpu: &core::Core) -> Option<u32> {
-    let mut bytes = [0; 4];
-    if cpu.read_register(Register::Pc, &mut bytes).ok()? != bytes.len() {
-        return None;
+fn read_scalar(cpu: &dyn Cpu, register: Register) -> Option<u64> {
+    let mut bytes = [0; 8];
+    match cpu.read_register(register, &mut bytes).ok()? {
+        4 | 8 => Some(u64::from_le_bytes(bytes)),
+        _ => None,
     }
-    Some(u32::from_le_bytes(bytes))
-}
-fn read_stopped_pstate(cpu: &core::Core) -> Option<u32> {
-    let mut bytes = [0; 4];
-    if cpu.read_register(Register::Pstate, &mut bytes).ok()? != bytes.len() {
-        return None;
-    }
-    Some(u32::from_le_bytes(bytes))
 }
 impl WorkerLoop {
     fn notify_wakeup(&self) {
@@ -595,23 +758,27 @@ impl WorkerLoop {
             .as_mut() as *mut CallbackContext as *mut std::ffi::c_void
     }
     fn wait_callback(&self, callback: usize, call: CallbackCall) -> CallbackResult {
-        let Some(cpu) = (unsafe { self.core.get().as_ref() }) else {
+        let Some(engine) = (unsafe { self.core.get().as_ref() }) else {
             return CallbackResult::Error;
         };
-        if let Err(error) = cpu.owner_callback_parked(true) {
+        let cpu = engine.cpu();
+        if let Err(error) = engine.callback_parked(true) {
             *self.callback_error.borrow_mut() = Some(error);
             cpu.stop().ok();
             return CallbackResult::Error;
         }
-        let progress = cpu.instruction_progress();
-        let pc = read_stopped_pc(cpu);
-        let pstate = read_stopped_pstate(cpu);
+        let progress = engine.progress();
+        let pc = read_scalar(cpu, Register::Pc);
+        let pstate = read_scalar(cpu, Register::Pstate);
         let is_synchronization = matches!(call, CallbackCall::Synchronization);
-        let result = self.wait_callback_parked(cpu, callback, call, progress, pc, pstate);
-        if is_synchronization && !matches!(result, CallbackResult::Error) {
+        let result = self.wait_callback_parked(engine, callback, call, progress, pc, pstate);
+        if is_synchronization
+            && !matches!(result, CallbackResult::Error)
+            && let Engine::Rprofile(cpu) = engine
+        {
             cpu.acknowledge_owner_barrier();
         }
-        if let Err(error) = cpu.owner_callback_parked(false) {
+        if let Err(error) = engine.callback_parked(false) {
             *self.callback_error.borrow_mut() = Some(error);
             cpu.stop().ok();
             return CallbackResult::Error;
@@ -621,13 +788,14 @@ impl WorkerLoop {
 
     fn wait_callback_parked(
         &self,
-        cpu: &core::Core,
+        engine: &Engine,
         callback: usize,
         call: CallbackCall,
         progress: Option<u64>,
-        pc: Option<u32>,
-        pstate: Option<u32>,
+        pc: Option<u64>,
+        pstate: Option<u64>,
     ) -> CallbackResult {
+        let cpu = engine.cpu();
         let id = self.next_event.get();
         self.next_event.set(id.wrapping_add(1).max(1));
         if self
@@ -672,16 +840,13 @@ impl WorkerLoop {
                     }
                     if matches!(result, CallbackResult::Error) {
                         *self.callback_error.borrow_mut() =
-                            Some("owner callback failed while servicing R-profile CPU".into());
-                        unsafe { &*self.core.get() }.stop().ok();
+                            Some("owner callback failed while servicing Unicorn CPU".into());
+                        cpu.stop().ok();
                     }
                     return result;
                 }
                 Message::Request { operation, reply } => {
-                    let result = match unsafe { self.core.get().as_ref() } {
-                        Some(cpu) => dispatch(self, cpu, operation),
-                        None => Err("R-profile CPU worker is not initialized".into()),
-                    };
+                    let result = dispatch(self, engine, operation);
                     let _ = reply.send(result);
                 }
                 Message::ReleaseSnapshot(token) => {
@@ -694,20 +859,17 @@ impl WorkerLoop {
                     let _ = self.events.send(Event::RunComplete {
                         id,
                         result: Err(ExecutionError::Backend(
-                            "nested R-profile worker execution is refused".into(),
+                            "nested Unicorn worker execution is refused".into(),
                         )),
-                        progress: unsafe { self.core.get().as_ref() }
-                            .and_then(|cpu| cpu.instruction_progress()),
-                        pc: unsafe { self.core.get().as_ref() }.and_then(read_stopped_pc),
-                        pstate: unsafe { self.core.get().as_ref() }.and_then(read_stopped_pstate),
+                        progress: engine.progress(),
+                        pc: read_scalar(cpu, Register::Pc),
+                        pstate: read_scalar(cpu, Register::Pstate),
                     });
                     self.notify_wakeup();
                 }
                 Message::Shutdown => {
                     self.shutdown.set(true);
-                    if let Some(cpu) = unsafe { self.core.get().as_ref() } {
-                        cpu.stop().ok();
-                    }
+                    cpu.stop().ok();
                     return CallbackResult::Error;
                 }
                 Message::CallbackResponse { .. } => {
@@ -811,16 +973,52 @@ unsafe fn fault(
     }
 }
 
+unsafe fn classify(data: *mut std::ffi::c_void, address: u64, word: u32) -> Translation {
+    let context = unsafe { callback_context(data) };
+    match unsafe {
+        callback_loop(data)
+            .wait_callback(context.callback, CallbackCall::Classify { address, word })
+    } {
+        CallbackResult::Translation(translation) => translation,
+        _ => Translation {
+            instruction: InstructionDisposition::ObserveAndEndBlock,
+            observe_block: true,
+        },
+    }
+}
+
+unsafe fn restart(data: *mut std::ffi::c_void, pc: u64) {
+    let context = unsafe { callback_context(data) };
+    unsafe {
+        callback_loop(data).wait_callback(context.callback, CallbackCall::Restart(pc));
+    }
+}
+
+unsafe fn pause_at_block(_: Block, data: *mut std::ffi::c_void) {
+    let context = unsafe { &*data.cast::<WorkerLoop>() };
+    if context.pause_requested.load(Ordering::Acquire) != 0
+        && let Some(engine) = unsafe { context.core.get().as_ref() }
+    {
+        engine.cpu().stop().ok();
+    }
+}
+
 fn serve(
-    config: Config,
+    config: EngineConfig,
+    model: Model,
+    cache_bytes: u32,
+    memory: SharedMemory,
     commands: Receiver<Message>,
     events: Sender<Event>,
-    ready: Sender<Result<(Identity, Features, Arc<AtomicU32>), String>>,
+    ready: Sender<Result<Ready, String>>,
 ) {
-    let context = Box::new(WorkerLoop {
+    let mut context = Box::new(WorkerLoop {
         commands: RefCell::new(commands),
         events: events.clone(),
         core: Cell::new(std::ptr::null()),
+        pause_requested: Arc::new(AtomicU32::new(0)),
+        translation_callback: Cell::new(None),
+        virtual_hooks: RefCell::default(),
         snapshots: RefCell::new(HashMap::new()),
         callback_contexts: RefCell::new(BTreeMap::new()),
         next_snapshot: Cell::new(1),
@@ -829,37 +1027,63 @@ fn serve(
         wakeup: RefCell::new(None),
         shutdown: Cell::new(false),
     });
-    let library = match Library::linked() {
-        Ok(library) => library,
-        Err(error) => {
-            let _ = ready.send(Err(error));
-            return;
-        }
-    };
-    let engine = match library.open(Model::CortexR5F, config.translation_cache_size_bytes) {
+    let engine = (|| -> Result<Engine, String> {
+        let raw = Library::linked()?.open(model, cache_bytes)?;
+        Ok(match config {
+            EngineConfig::Rprofile(options) => Engine::Rprofile(core::Core::new_parallel_worker(
+                raw,
+                options,
+                core::Wiring {
+                    memory: memory.processor(),
+                },
+            )?),
+            EngineConfig::Aprofile => Engine::Aprofile(aprofile::Core::new_parallel_worker(
+                raw,
+                memory.processor(),
+                context.pause_requested.clone(),
+            )?),
+            EngineConfig::Mprofile { owner_accounting } => {
+                let mut record = raw
+                    .accounting()
+                    .ok_or("M-profile worker requires native block accounting")?;
+                unsafe {
+                    record.as_mut().pause_requested = Arc::as_ptr(&context.pause_requested);
+                    raw.install_hook(Hook::Block {
+                        range: HookRange::All,
+                        callback: pause_at_block,
+                        data: (&raw const *context).cast_mut().cast(),
+                    })?;
+                }
+                if !owner_accounting {
+                    raw.set_instruction_counter(true)?;
+                }
+                Engine::Mprofile {
+                    raw,
+                    owner_accounting,
+                }
+            }
+        })
+    })();
+    let engine = match engine {
         Ok(engine) => engine,
         Err(error) => {
             let _ = ready.send(Err(error));
             return;
         }
     };
-    let cpu = match core::Core::new_parallel_worker(
-        engine,
-        config.options,
-        core::Wiring {
-            memory: config.memory.processor(),
-        },
-    ) {
-        Ok(cpu) => Box::new(cpu),
-        Err(error) => {
-            let _ = ready.send(Err(error));
-            return;
-        }
-    };
-    context.core.set(&*cpu);
-    let pause_requested = cpu.pause_handle();
+    if let Engine::Rprofile(cpu) = &engine {
+        context.pause_requested = cpu.pause_handle();
+    }
+    context.core.set(&engine);
+    let cpu = engine.cpu();
     if ready
-        .send(Ok((cpu.identity(), cpu.features(), pause_requested)))
+        .send(Ok(Ready {
+            identity: cpu.identity(),
+            features: cpu.features(),
+            pause_requested: context.pause_requested.clone(),
+            thumb_accounting: cpu.thumb_accounting().map(|p| p.as_ptr() as usize),
+            thumb_recovery: cpu.thumb_recovery_accounting().map(|p| p.as_ptr() as usize),
+        }))
         .is_err()
     {
         return;
@@ -871,17 +1095,17 @@ fn serve(
         };
         match message {
             Message::Request { operation, reply } => {
-                let _ = reply.send(dispatch(&context, &cpu, operation));
+                let _ = reply.send(dispatch(&context, &engine, operation));
             }
             Message::Run { id, request } => {
                 context.callback_error.borrow_mut().take();
-                let mut result = cpu.run(request);
+                let mut result = engine.run(request);
                 if let Some(error) = context.callback_error.borrow_mut().take() {
                     result = Err(ExecutionError::Backend(error));
                 }
-                let progress = cpu.instruction_progress();
-                let pc = read_stopped_pc(&cpu);
-                let pstate = read_stopped_pstate(&cpu);
+                let progress = engine.progress();
+                let pc = read_scalar(cpu, Register::Pc);
+                let pstate = read_scalar(cpu, Register::Pstate);
                 let _ = events.send(Event::RunComplete {
                     id,
                     result,
@@ -907,7 +1131,8 @@ fn serve(
     context.core.set(std::ptr::null());
 }
 
-fn dispatch(context: &WorkerLoop, cpu: &core::Core, operation: Operation) -> Result<Value, String> {
+fn dispatch(context: &WorkerLoop, engine: &Engine, operation: Operation) -> Result<Value, String> {
+    let cpu = engine.cpu();
     let result = match operation {
         #[cfg(test)]
         Operation::CallbackContexts => Value::U64(context.callback_contexts.borrow().len() as u64),
@@ -920,6 +1145,9 @@ fn dispatch(context: &WorkerLoop, cpu: &core::Core, operation: Operation) -> Res
             Value::Unit
         }
         Operation::SetExecutionPolicy(policy) => {
+            if let Engine::Mprofile { raw, .. } = engine {
+                raw.set_parallel_cpus(policy == ExecutionPolicy::Interactive)?;
+            }
             cpu.set_execution_policy(policy)?;
             Value::Unit
         }
@@ -1045,7 +1273,7 @@ fn dispatch(context: &WorkerLoop, cpu: &core::Core, operation: Operation) -> Res
             cpu.tighten_instruction_limit(total)?;
             Value::Unit
         }
-        Operation::Progress => Value::OptionalU64(cpu.instruction_progress()),
+        Operation::Progress => Value::OptionalU64(engine.progress()),
         Operation::Stop => {
             cpu.stop()?;
             Value::Unit
@@ -1088,6 +1316,20 @@ fn dispatch(context: &WorkerLoop, cpu: &core::Core, operation: Operation) -> Res
         Operation::InstallHooks(hooks) => {
             let mut installed = Vec::with_capacity(hooks.len());
             for (callback, kind) in hooks {
+                if matches!(kind, HookKind::Synchronization) && cpu.model() == Model::CortexM4 {
+                    // Raw M-profile has no separate barrier event. The proxy
+                    // serves these observers with its owner-serviced writes.
+                    let key = usize::MAX - callback;
+                    context.virtual_hooks.borrow_mut().insert(key);
+                    installed.push((
+                        HookId {
+                            owner: cpu.identity(),
+                            key,
+                        },
+                        callback,
+                    ));
+                    continue;
+                }
                 let data = context.callback_context(callback);
                 let hook = match kind {
                     HookKind::Instruction(range) => Hook::Instruction {
@@ -1130,7 +1372,9 @@ fn dispatch(context: &WorkerLoop, cpu: &core::Core, operation: Operation) -> Res
                     Err(error) => {
                         context.callback_contexts.borrow_mut().remove(&callback);
                         for (hook, callback) in installed {
-                            cpu.remove_hook(hook)?;
+                            if !context.virtual_hooks.borrow_mut().remove(&hook.key) {
+                                cpu.remove_hook(hook)?;
+                            }
                             context.callback_contexts.borrow_mut().remove(&callback);
                         }
                         return Err(error);
@@ -1141,7 +1385,9 @@ fn dispatch(context: &WorkerLoop, cpu: &core::Core, operation: Operation) -> Res
         }
         Operation::RemoveHooks(hooks) => {
             for (hook, callback) in hooks {
-                cpu.remove_hook(hook)?;
+                if !context.virtual_hooks.borrow_mut().remove(&hook.key) {
+                    cpu.remove_hook(hook)?;
+                }
                 context.callback_contexts.borrow_mut().remove(&callback);
             }
             Value::Unit
@@ -1155,7 +1401,9 @@ fn dispatch(context: &WorkerLoop, cpu: &core::Core, operation: Operation) -> Res
                     bitmap: NonNull::new(range.bitmap as *mut std::sync::atomic::AtomicU64)
                         .expect("checked bitmap"),
                     page_shift: range.page_shift,
-                    summary: None,
+                    summary: range
+                        .summary
+                        .and_then(|address| NonNull::new(address as *mut _)),
                 })
                 .collect::<Vec<_>>();
             unsafe { cpu.observe_backings(&ranges)? };
@@ -1173,12 +1421,53 @@ fn dispatch(context: &WorkerLoop, cpu: &core::Core, operation: Operation) -> Res
             cpu.precise_store_pc(on)?;
             Value::Unit
         }
+        Operation::BackingPointer(address, bytes) => Value::OptionalU64(
+            cpu.backing_pointer(address, bytes)
+                .map(|p| p.as_ptr() as usize as u64),
+        ),
+        Operation::MemoryRestartBoundary(range) => {
+            Value::Hooks(vec![cpu.install_memory_restart_boundary(range)?])
+        }
+        Operation::TranslationHooks(callback) => {
+            let hooks = callback.map(|id| TranslationHooks {
+                classify,
+                restart,
+                data: context.callback_context(id),
+            });
+            if let Err(error) = unsafe { cpu.translation_hooks(hooks) } {
+                if let Some(id) = callback {
+                    context.callback_contexts.borrow_mut().remove(&id);
+                }
+                return Err(error);
+            }
+            if let Some(old) = context.translation_callback.replace(callback) {
+                context.callback_contexts.borrow_mut().remove(&old);
+            }
+            Value::Unit
+        }
+        Operation::RetryBlock(instructions) => {
+            cpu.retry_block(instructions)?;
+            Value::Unit
+        }
+        Operation::Restart => {
+            cpu.request_restart()?;
+            Value::Unit
+        }
+        Operation::StopOnEl3Transitions => {
+            cpu.stop_on_el3_transitions()?;
+            Value::Unit
+        }
         Operation::ExitCounters => Value::Counters(cpu.exit_counters()?.into_iter().collect()),
     };
     Ok(result)
 }
 
 impl CpuWorker {
+    fn accounting_accessible(&self) -> bool {
+        !self.running.get()
+            || self.callback_depth.get() != 0
+            || self.pending_callback.borrow().is_some()
+    }
     fn rpc(&self, operation: Operation) -> Result<Value, String> {
         #[cfg(test)]
         self.rpc_calls.set(self.rpc_calls.get() + 1);
@@ -1186,19 +1475,19 @@ impl CpuWorker {
         let (reply, response) = mpsc::channel();
         self.commands
             .send(Message::Request { operation, reply })
-            .map_err(|_| "R-profile CPU worker disconnected")?;
+            .map_err(|_| "Unicorn CPU worker disconnected")?;
         if let Some(counter) = counter {
             let count = &self.rpc_counts[counter as usize];
             count.set(count.get().saturating_add(1));
         }
         response
             .recv()
-            .map_err(|_| "R-profile CPU worker reply disconnected")?
+            .map_err(|_| "Unicorn CPU worker reply disconnected")?
     }
     fn unit(&self, operation: Operation) -> Result<(), String> {
         match self.rpc(operation)? {
             Value::Unit => Ok(()),
-            _ => Err("R-profile CPU worker returned an unexpected reply".into()),
+            _ => Err("Unicorn CPU worker returned an unexpected reply".into()),
         }
     }
     fn next_callback(&self) -> Result<usize, String> {
@@ -1215,6 +1504,7 @@ impl CpuWorker {
             .map(|entry| match entry {
                 CallbackEntry::Mmio(mmio) => CallbackEntry::Mmio(*mmio),
                 CallbackEntry::Hook(hook) => CallbackEntry::Hook(*hook),
+                CallbackEntry::Translation(hooks) => CallbackEntry::Translation(*hooks),
             });
         let Some(entry) = entry else {
             return CallbackResult::Error;
@@ -1222,6 +1512,31 @@ impl CpuWorker {
         self.callback_depth
             .set(self.callback_depth.get().saturating_add(1));
         let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| unsafe {
+            if self.model == Model::CortexM4
+                && self.execution_policy.get() == ExecutionPolicy::Interactive
+                && matches!(
+                    call,
+                    CallbackCall::Memory {
+                        access: Access::Write,
+                        ..
+                    } | CallbackCall::MmioWrite { .. }
+                )
+            {
+                let barriers: Vec<_> = self
+                    .callbacks
+                    .borrow()
+                    .values()
+                    .filter_map(|entry| match entry {
+                        CallbackEntry::Hook(Hook::Synchronization { callback, data }) => {
+                            Some((*callback, *data))
+                        }
+                        _ => None,
+                    })
+                    .collect();
+                for (barrier, data) in barriers {
+                    barrier(data);
+                }
+            }
             match (entry, call) {
                 (CallbackEntry::Mmio(mmio), CallbackCall::MmioRead { offset, size }) => {
                     CallbackResult::U64((mmio.read)(offset, size, mmio.data))
@@ -1289,6 +1604,13 @@ impl CpuWorker {
                         value,
                     },
                 ) => CallbackResult::Bool(callback(fault, address, size, value, data)),
+                (CallbackEntry::Translation(hooks), CallbackCall::Classify { address, word }) => {
+                    CallbackResult::Translation((hooks.classify)(hooks.data, address, word))
+                }
+                (CallbackEntry::Translation(hooks), CallbackCall::Restart(pc)) => {
+                    (hooks.restart)(hooks.data, pc);
+                    CallbackResult::Unit
+                }
                 _ => CallbackResult::Error,
             }
         }));
@@ -1300,7 +1622,7 @@ impl CpuWorker {
     fn validate_run(&self, run: RunToken) -> Result<(), ExecutionError> {
         if run.owner() != self.identity || self.active_run.get() != Some(run) {
             return Err(ExecutionError::Backend(
-                "run token belongs to a different or inactive R-profile run".into(),
+                "run token belongs to a different or inactive Unicorn run".into(),
             ));
         }
         Ok(())
@@ -1318,7 +1640,7 @@ impl CpuWorker {
             } => {
                 if self.pending_callback.borrow().is_some() {
                     return Err(ExecutionError::Backend(
-                        "R-profile worker sent a second callback before the first was serviced"
+                        "Unicorn worker sent a second callback before the first was serviced"
                             .into(),
                     ));
                 }
@@ -1363,13 +1685,13 @@ impl CpuWorker {
         }
         if !self.running.get() {
             return Err(ExecutionError::Backend(
-                "R-profile worker lost an active run without a completion event".into(),
+                "Unicorn worker lost an active run without a completion event".into(),
             ));
         }
         loop {
             let event = if wait {
                 self.events.borrow_mut().recv().map_err(|_| {
-                    ExecutionError::Backend("R-profile CPU worker disconnected".into())
+                    ExecutionError::Backend("Unicorn CPU worker disconnected".into())
                 })?
             } else {
                 match self.events.borrow_mut().try_recv() {
@@ -1377,7 +1699,7 @@ impl CpuWorker {
                     Err(mpsc::TryRecvError::Empty) => return Ok(RunStatus::Running),
                     Err(mpsc::TryRecvError::Disconnected) => {
                         let error =
-                            ExecutionError::Backend("R-profile CPU worker disconnected".into());
+                            ExecutionError::Backend("Unicorn CPU worker disconnected".into());
                         self.running.set(false);
                         *self.run_result.borrow_mut() = Some(Err(error.clone()));
                         return Ok(RunStatus::Complete(Err(error)));
@@ -1404,6 +1726,29 @@ impl Cpu for CpuWorker {
         self.loop_window.set(Some(stable));
         Ok(())
     }
+    fn hook_count(&self) -> Option<usize> {
+        (self.model == Model::CortexM4).then(|| {
+            self.hooks
+                .borrow()
+                .values()
+                .filter(|hook| {
+                    !matches!(
+                        self.callbacks.borrow().get(&hook.callback),
+                        Some(CallbackEntry::Hook(Hook::Synchronization { .. }))
+                    )
+                })
+                .count()
+        })
+    }
+    fn backing_pointer(&self, address: u64, bytes: usize) -> Option<NonNull<u8>> {
+        match self.rpc(Operation::BackingPointer(address, bytes)).ok()? {
+            Value::OptionalU64(address) => NonNull::new(address? as usize as *mut u8),
+            _ => None,
+        }
+    }
+    fn stop_on_el3_transitions(&self) -> Result<(), String> {
+        self.unit(Operation::StopOnEl3Transitions)
+    }
     fn identity(&self) -> Identity {
         self.identity
     }
@@ -1411,7 +1756,9 @@ impl Cpu for CpuWorker {
         if self.running.get() {
             return Err("execution policy requires a stopped processor".into());
         }
-        self.unit(Operation::SetExecutionPolicy(policy))
+        self.unit(Operation::SetExecutionPolicy(policy))?;
+        self.execution_policy.set(policy);
+        Ok(())
     }
     fn checkpoint_backings(&self) -> Result<Vec<(NonNull<u8>, usize)>, String> {
         match self.rpc(Operation::CheckpointBackings)? {
@@ -1424,14 +1771,14 @@ impl Cpu for CpuWorker {
                     ))
                 })
                 .collect(),
-            _ => Err("R-profile CPU worker returned an unexpected backing list".into()),
+            _ => Err("Unicorn CPU worker returned an unexpected backing list".into()),
         }
     }
     fn exclusive_domain(&self) -> Option<exclusive::Shared> {
-        Some(self.memory.exclusive_domain())
+        (self.model == Model::CortexR5F).then(|| self.memory.exclusive_domain())
     }
     fn model(&self) -> Model {
-        Model::CortexR5F
+        self.model
     }
     fn features(&self) -> Features {
         self.features
@@ -1440,15 +1787,16 @@ impl Cpu for CpuWorker {
         self.unit(Operation::SetGuestClock(clock))
     }
     fn read_register(&self, register: Register, out: &mut [u8]) -> Result<usize, String> {
+        let pc_width = if self.model == Model::ArmV8A { 8 } else { 4 };
         if matches!(register, Register::Pc | arm::PC)
-            && out.len() >= 4
+            && out.len() >= pc_width
             && (self.callback_depth.get() != 0
                 || self.pending_callback.borrow().is_some()
                 || self.run_result.borrow().is_some())
             && let Some(pc) = self.stopped_pc.get()
         {
-            out[..4].copy_from_slice(&pc.to_le_bytes());
-            return Ok(4);
+            out[..pc_width].copy_from_slice(&pc.to_le_bytes()[..pc_width]);
+            return Ok(pc_width);
         }
         if matches!(register, Register::Pstate | arm::CPSR)
             && out.len() >= 4
@@ -1457,7 +1805,7 @@ impl Cpu for CpuWorker {
                 || self.run_result.borrow().is_some())
             && let Some(pstate) = self.stopped_pstate.get()
         {
-            out[..4].copy_from_slice(&pstate.to_le_bytes());
+            out[..4].copy_from_slice(&pstate.to_le_bytes()[..4]);
             return Ok(4);
         }
         match self.rpc(Operation::ReadRegister(register, out.len()))? {
@@ -1468,7 +1816,7 @@ impl Cpu for CpuWorker {
                 out[..bytes.len()].copy_from_slice(&bytes);
                 Ok(bytes.len())
             }
-            _ => Err("R-profile CPU worker returned unexpected register bytes".into()),
+            _ => Err("Unicorn CPU worker returned unexpected register bytes".into()),
         }
     }
     fn write_register(&self, register: Register, bytes: &[u8]) -> Result<(), String> {
@@ -1484,7 +1832,7 @@ impl Cpu for CpuWorker {
     fn coprocessor(&self, register: arm::Coprocessor, value: Option<u64>) -> Result<u64, String> {
         match self.rpc(Operation::Coprocessor(register, value))? {
             Value::U64(value) => Ok(value),
-            _ => Err("R-profile CPU worker returned an unexpected coprocessor value".into()),
+            _ => Err("Unicorn CPU worker returned an unexpected coprocessor value".into()),
         }
     }
     fn read_memory(&self, address: u64, out: &mut [u8]) -> Result<(), String> {
@@ -1494,13 +1842,13 @@ impl Cpu for CpuWorker {
                 Ok(())
             }
             Value::Bytes(_) => Err("worker memory read returned an unexpected length".into()),
-            _ => Err("R-profile CPU worker returned unexpected memory bytes".into()),
+            _ => Err("Unicorn CPU worker returned unexpected memory bytes".into()),
         }
     }
     fn translate(&self, address: u64, access: Access) -> Result<u64, String> {
         match self.rpc(Operation::Translate(address, access))? {
             Value::U64(address) => Ok(address),
-            _ => Err("R-profile CPU worker returned an unexpected translation".into()),
+            _ => Err("Unicorn CPU worker returned an unexpected translation".into()),
         }
     }
     fn read_virtual(&self, address: u64, access: Access, out: &mut [u8]) -> Result<(), String> {
@@ -1510,7 +1858,7 @@ impl Cpu for CpuWorker {
                 Ok(())
             }
             Value::Bytes(_) => Err("worker virtual read returned an unexpected length".into()),
-            _ => Err("R-profile CPU worker returned unexpected virtual bytes".into()),
+            _ => Err("Unicorn CPU worker returned unexpected virtual bytes".into()),
         }
     }
     fn write_memory(&self, address: u64, bytes: &[u8]) -> Result<(), String> {
@@ -1534,7 +1882,7 @@ impl Cpu for CpuWorker {
     fn memory_regions(&self) -> Result<Vec<MemoryRegion>, String> {
         match self.rpc(Operation::MemoryRegions)? {
             Value::MemoryRegions(regions) => Ok(regions),
-            _ => Err("R-profile CPU worker returned unexpected memory regions".into()),
+            _ => Err("Unicorn CPU worker returned unexpected memory regions".into()),
         }
     }
     unsafe fn map_backing(
@@ -1626,7 +1974,7 @@ impl Cpu for CpuWorker {
     fn start_run(&self, request: Run) -> Result<RunToken, ExecutionError> {
         if self.running.get() {
             return Err(ExecutionError::Backend(
-                "nested R-profile worker execution is refused".into(),
+                "nested Unicorn worker execution is refused".into(),
             ));
         }
         let id = self.next_run.get();
@@ -1641,7 +1989,7 @@ impl Cpu for CpuWorker {
         self.run_result.borrow_mut().take();
         if self.commands.send(Message::Run { id, request }).is_err() {
             return Err(ExecutionError::Backend(
-                "R-profile CPU worker disconnected".into(),
+                "Unicorn CPU worker disconnected".into(),
             ));
         }
         self.active_run.set(Some(run));
@@ -1667,14 +2015,31 @@ impl Cpu for CpuWorker {
             self.pending_callback.borrow_mut().take()
         else {
             return Err(ExecutionError::Backend(
-                "R-profile worker has no parked callback to service".into(),
+                "Unicorn worker has no parked callback to service".into(),
             ));
         };
         self.stopped_progress.set(progress);
         self.stopped_pc.set(pc);
         self.stopped_pstate.set(pstate);
         self.deferred_instruction_limit.set(None);
+        self.retried_block.set(false);
+        let yields_after_entry = self.owner_accounting
+            && !self.ordered_run.get()
+            && matches!(
+                call,
+                CallbackCall::Block(_)
+                    | CallbackCall::Instruction { .. }
+                    | CallbackCall::MmioRead { .. }
+                    | CallbackCall::MmioWrite { .. }
+            );
         let result = self.service_callback(callback, call);
+        // A concurrent M-profile run can park during translation or while
+        // its owner shortens a block. It must be able to reach the next
+        // admitted entry. After that entry, return the processor to the
+        // cohort before it runs ahead of a peer waiting at a callback.
+        if yields_after_entry && !self.retried_block.get() {
+            self.pause_requested.store(1, Ordering::Release);
+        }
         let deferred = self.deferred_instruction_limit.take();
         let tighten = (!matches!(result, CallbackResult::Error))
             .then_some(deferred)
@@ -1696,7 +2061,7 @@ impl Cpu for CpuWorker {
             .is_err()
         {
             let error =
-                ExecutionError::Backend("R-profile CPU worker disconnected during callback".into());
+                ExecutionError::Backend("Unicorn CPU worker disconnected during callback".into());
             self.stopped_progress.set(None);
             self.stopped_pc.set(None);
             self.stopped_pstate.set(None);
@@ -1708,7 +2073,7 @@ impl Cpu for CpuWorker {
             match applied.recv() {
                 Ok(result) => result.map_err(ExecutionError::Backend),
                 Err(_) => Err(ExecutionError::Backend(
-                    "R-profile CPU worker disconnected while applying callback limit".into(),
+                    "Unicorn CPU worker disconnected while applying callback limit".into(),
                 )),
             }
         } else {
@@ -1737,7 +2102,7 @@ impl Cpu for CpuWorker {
             .is_err()
         {
             let error = ExecutionError::Backend(
-                "R-profile CPU worker disconnected while canceling callback".into(),
+                "Unicorn CPU worker disconnected while canceling callback".into(),
             );
             self.stopped_progress.set(None);
             self.stopped_pc.set(None);
@@ -1754,22 +2119,27 @@ impl Cpu for CpuWorker {
 
     fn set_run_wakeup(&self, wakeup: RunWakeup) -> Result<(), String> {
         if self.running.get() {
-            return Err("cannot replace R-profile run wakeup during an active run".into());
+            return Err("cannot replace Unicorn run wakeup during an active run".into());
         }
         self.commands
             .send(Message::SetRunWakeup(wakeup))
-            .map_err(|_| "R-profile CPU worker disconnected".into())
+            .map_err(|_| "Unicorn CPU worker disconnected".into())
     }
 
     fn run(&self, request: Run) -> Result<Exit, ExecutionError> {
-        let run = self.start_run(request)?;
-        loop {
-            match self.receive_run_event(run, true)? {
-                RunStatus::Running => continue,
-                RunStatus::CallbackPending => self.service_pending_callback(run)?,
-                RunStatus::Complete(result) => return result,
+        let previous = self.ordered_run.replace(true);
+        let result = (|| {
+            let run = self.start_run(request)?;
+            loop {
+                match self.receive_run_event(run, true)? {
+                    RunStatus::Running => continue,
+                    RunStatus::CallbackPending => self.service_pending_callback(run)?,
+                    RunStatus::Complete(result) => return result,
+                }
             }
-        }
+        })();
+        self.ordered_run.set(previous);
+        result
     }
     fn tighten_instruction_limit(&self, total: u64) -> Result<(), String> {
         if self.callback_depth.get() != 0 {
@@ -1783,6 +2153,9 @@ impl Cpu for CpuWorker {
         self.unit(Operation::TightenInstructionLimit(total))
     }
     fn instruction_progress(&self) -> Option<u64> {
+        if self.owner_accounting {
+            return None;
+        }
         if (self.callback_depth.get() != 0
             || self.pending_callback.borrow().is_some()
             || self.run_result.borrow().is_some())
@@ -1804,7 +2177,7 @@ impl Cpu for CpuWorker {
     fn rprofile_identity(&self, value: Option<u32>) -> Result<u32, String> {
         match self.rpc(Operation::RprofileIdentity(value))? {
             Value::Identity(value) => Ok(value),
-            _ => Err("R-profile CPU worker returned unexpected identity".into()),
+            _ => Err("Unicorn CPU worker returned unexpected identity".into()),
         }
     }
     fn set_interrupt(&self, line: Interrupt, asserted: bool) -> Result<(), String> {
@@ -1825,7 +2198,7 @@ impl Cpu for CpuWorker {
             .transpose()?;
         let token = match self.rpc(Operation::Snapshot(previous))? {
             Value::Snapshot(token) => token,
-            _ => return Err("R-profile CPU worker returned unexpected snapshot".into()),
+            _ => return Err("Unicorn CPU worker returned unexpected snapshot".into()),
         };
         Ok(Box::new(RemoteSnapshot {
             owner: self.identity,
@@ -1893,7 +2266,7 @@ impl Cpu for CpuWorker {
                 .collect(),
         ))? {
             Value::Hooks(hooks) if hooks.len() == pending.len() => hooks,
-            _ => return Err("R-profile CPU worker returned unexpected hooks".into()),
+            _ => return Err("Unicorn CPU worker returned unexpected hooks".into()),
         };
         for (&remote, (callback, _, hook)) in remote.iter().zip(pending) {
             self.callbacks
@@ -1932,14 +2305,58 @@ impl Cpu for CpuWorker {
         }
         Ok(())
     }
-    unsafe fn translation_hooks(&self, _: Option<TranslationHooks>) -> Result<(), String> {
-        Err("R-profile translation hooks are owned by the backend".into())
+    fn install_memory_restart_boundary(&self, range: HookRange) -> Result<HookId, String> {
+        let callback = self.next_callback()?;
+        let Value::Hooks(mut hooks) = self.rpc(Operation::MemoryRestartBoundary(range))? else {
+            return Err("worker did not return a restart boundary".into());
+        };
+        let remote = hooks
+            .pop()
+            .ok_or("worker did not install a restart boundary")?;
+        self.hooks
+            .borrow_mut()
+            .insert(remote.key, RemoteHook { remote, callback });
+        Ok(remote)
     }
-    fn retry_block(&self, _: u32) -> Result<(), String> {
-        Err("R-profile block retries are owned by the backend".into())
+    unsafe fn translation_hooks(&self, hooks: Option<TranslationHooks>) -> Result<(), String> {
+        let callback = hooks
+            .map(|hooks| {
+                self.next_callback().map(|id| {
+                    self.callbacks
+                        .borrow_mut()
+                        .insert(id, CallbackEntry::Translation(hooks));
+                    id
+                })
+            })
+            .transpose()?;
+        if let Err(error) = self.unit(Operation::TranslationHooks(callback)) {
+            if let Some(id) = callback {
+                self.callbacks.borrow_mut().remove(&id);
+            }
+            return Err(error);
+        }
+        if let Some(old) = self.translation_callback.replace(callback) {
+            self.callbacks.borrow_mut().remove(&old);
+        }
+        Ok(())
+    }
+    fn retry_block(&self, instructions: u32) -> Result<(), String> {
+        self.unit(Operation::RetryBlock(instructions))?;
+        self.retried_block.set(true);
+        Ok(())
     }
     fn request_restart(&self) -> Result<(), String> {
-        Err("R-profile restarts are owned by the backend".into())
+        self.unit(Operation::Restart)
+    }
+    fn thumb_accounting(&self) -> Option<NonNull<ThumbBlockAccounting>> {
+        self.accounting_accessible()
+            .then_some(self.thumb_accounting)
+            .flatten()
+    }
+    fn thumb_recovery_accounting(&self) -> Option<NonNull<ThumbBlockRecoveryAccounting>> {
+        self.accounting_accessible()
+            .then_some(self.thumb_recovery)
+            .flatten()
     }
     fn accounting(&self) -> Option<NonNull<BlockAccounting>> {
         None
@@ -1952,6 +2369,7 @@ impl Cpu for CpuWorker {
                 bytes: range.bytes,
                 bitmap: range.bitmap.as_ptr() as usize,
                 page_shift: range.page_shift,
+                summary: range.summary.map(|ptr| ptr.as_ptr() as usize),
             })
             .collect();
         self.unit(Operation::ObserveBackings(ranges))
@@ -1981,7 +2399,7 @@ impl Cpu for CpuWorker {
                 }
                 Ok(counters)
             }
-            _ => Err("R-profile CPU worker returned unexpected exit counters".into()),
+            _ => Err("Unicorn CPU worker returned unexpected exit counters".into()),
         }
     }
 }
@@ -1997,6 +2415,131 @@ impl Drop for CpuWorker {
 }
 
 #[cfg(test)]
+mod architecture_tests {
+    use super::*;
+    use std::time::{Duration, Instant};
+
+    unsafe fn unexpected_read(_: u64, _: u32, _: *mut std::ffi::c_void) -> u64 {
+        0xdead
+    }
+
+    unsafe fn write(_: u64, _: u32, _: u64, _: *mut std::ffi::c_void) {}
+
+    // Wait for the native guest read to publish its value before pausing.
+    // The read bypasses callbacks, so the request interrupts guest execution.
+    fn pause_after_read(cpu: &CpuWorker, begin: u64, seen: &AtomicU32) {
+        let run = cpu
+            .start_run(Run {
+                begin,
+                until: None,
+                watchdog_us: 0,
+                instructions: Some(100_000_000),
+            })
+            .unwrap();
+        let deadline = Instant::now() + Duration::from_secs(5);
+        while seen.load(Ordering::Acquire) == 0 {
+            assert!(
+                Instant::now() < deadline,
+                "worker did not enter its guest read"
+            );
+            assert!(matches!(cpu.poll_run(run).unwrap(), RunStatus::Running));
+            std::thread::yield_now();
+        }
+        cpu.request_pause(run).unwrap();
+        assert!(matches!(
+            cpu.receive_run_event(run, true).unwrap(),
+            RunStatus::Complete(Ok(Exit::Stopped))
+        ));
+        assert!((1..100_000_000).contains(&cpu.instruction_progress().unwrap()));
+    }
+
+    #[test]
+    fn mprofile_worker_pauses_at_a_thumb_block() {
+        let cpu = spawn_mprofile(1 << 20, false).unwrap();
+        assert_eq!(cpu.model(), Model::CortexM4);
+        assert!(cpu.features().asynchronous_runs);
+        cpu.map_zeroed(0x1000, 0x1000, 7).unwrap();
+        cpu.write_memory(0x1000, &[0x08, 0x68, 0xfe, 0xe7]).unwrap(); // ldr r0,[r1]; b .
+        cpu.write_register(arm::CORE[1], &0x8000u32.to_le_bytes())
+            .unwrap();
+        let seen = Arc::new(AtomicU32::new(0));
+        let read_seen = seen.clone();
+        let read = FastMmioRead::consuming_u32(
+            0,
+            Arc::new(move || {
+                read_seen.store(1, Ordering::Release);
+                Some(77)
+            }),
+        );
+        read.set_enabled(true);
+        unsafe {
+            cpu.map_mmio_fast(
+                0x8000,
+                0x1000,
+                Mmio {
+                    read: unexpected_read,
+                    write,
+                    data: std::ptr::null_mut(),
+                },
+                vec![read],
+            )
+            .unwrap();
+        }
+        pause_after_read(&cpu, 0x1001, &seen);
+        assert_eq!(read_scalar(&cpu, Register::Pc), Some(0x1002));
+        assert_eq!(read_scalar(&cpu, arm::CORE[0]), Some(77));
+    }
+
+    #[test]
+    fn aprofile_worker_uses_the_clock_and_keeps_the_full_pc_at_pause() {
+        let cpu = spawn_aprofile(1 << 20, SharedMemory::default()).unwrap();
+        assert_eq!(cpu.model(), Model::ArmV8A);
+        assert!(cpu.features().asynchronous_runs);
+        cpu.set_execution_policy(ExecutionPolicy::Interactive)
+            .unwrap();
+        let address = 0x1_0000_0000;
+        cpu.map_zeroed(address, 0x4000, 7).unwrap();
+        let code = [0xb940_0020_u32, 0x1400_0000]; // ldr w0,[x1]; b .
+        let bytes: Vec<_> = code.into_iter().flat_map(u32::to_le_bytes).collect();
+        cpu.write_memory(address, &bytes).unwrap();
+        cpu.write_register(Register::X(1), &0x8000u64.to_le_bytes())
+            .unwrap();
+        let tick = Arc::new(AtomicU32::new(0));
+        let observed_tick = tick.clone();
+        unsafe {
+            cpu.map_mmio_fast(
+                0x8000,
+                0x1000,
+                Mmio {
+                    read: unexpected_read,
+                    write,
+                    data: std::ptr::null_mut(),
+                },
+                vec![FastMmioRead::clocked_u32(
+                    0,
+                    Arc::new(move |now| {
+                        let now = u32::try_from(now).ok()?;
+                        observed_tick.store(now, Ordering::Release);
+                        Some(now)
+                    }),
+                )],
+            )
+            .unwrap();
+        }
+        cpu.set_guest_clock(Clock {
+            now: 555,
+            phase: 0,
+            ratio: timeline::Ratio::new(1, 1).unwrap(),
+        })
+        .unwrap();
+        pause_after_read(&cpu, address, &tick);
+        assert_eq!(read_scalar(&cpu, Register::Pc), Some(address + 4));
+        assert_eq!(read_scalar(&cpu, Register::X(0)), Some(555));
+        assert_eq!(tick.load(Ordering::Acquire), 555);
+    }
+}
+
+#[cfg(test)]
 mod tests {
     use super::*;
     use fujimod_emulator_cpu::memory::Backing;
@@ -2007,7 +2550,7 @@ mod tests {
             options: core::Options::default(),
             memory,
         })
-        .expect("start R-profile worker")
+        .expect("start Unicorn worker")
     }
 
     fn read_u32(cpu: &CpuWorker, register: Register) -> u32 {
@@ -2203,7 +2746,7 @@ mod tests {
             cpu: *const CpuWorker,
             calls: u32,
             progress: Option<u64>,
-            pc: Option<u32>,
+            pc: Option<u64>,
         }
         unsafe fn read(_: u64, size: u32, data: *mut std::ffi::c_void) -> u64 {
             assert_eq!(size, 4);
@@ -2213,7 +2756,7 @@ mod tests {
             probe.progress = Some(cpu.instruction_progress().unwrap());
             let mut pc = [0; 4];
             assert_eq!(cpu.read_register(arm::PC, &mut pc).unwrap(), 4);
-            probe.pc = Some(u32::from_le_bytes(pc));
+            probe.pc = Some(u64::from(u32::from_le_bytes(pc)));
             0x1234_5678
         }
         unsafe fn write(_: u64, _: u32, _: u64, _: *mut std::ffi::c_void) {}
@@ -2418,9 +2961,9 @@ mod tests {
     fn stopped_pc_snapshots_match_mmio_state_and_invalidate_for_writes_and_restore() {
         struct Probe {
             cpu: *const CpuWorker,
-            cached_pc: Cell<Option<u32>>,
+            cached_pc: Cell<Option<u64>>,
             cached_read_rpcs: Cell<Option<usize>>,
-            cached_pstate: Cell<Option<u32>>,
+            cached_pstate: Cell<Option<u64>>,
             cached_pstate_rpcs: Cell<Option<usize>>,
         }
         unsafe fn read(_: u64, size: u32, data: *mut std::ffi::c_void) -> u64 {
@@ -2431,14 +2974,18 @@ mod tests {
             let mut cached = [0; 4];
             assert_eq!(cpu.read_register(Register::Pc, &mut cached).unwrap(), 4);
             let after_cached = cpu.rpc_calls.get();
-            probe.cached_pc.set(Some(u32::from_le_bytes(cached)));
+            probe
+                .cached_pc
+                .set(Some(u64::from(u32::from_le_bytes(cached))));
             probe.cached_read_rpcs.set(Some(after_cached - before));
             let mut pstate = [0; 4];
             let mut cpsr = [0; 4];
             assert_eq!(cpu.read_register(Register::Pstate, &mut pstate).unwrap(), 4);
             assert_eq!(cpu.read_register(arm::CPSR, &mut cpsr).unwrap(), 4);
             assert_eq!(pstate, cpsr);
-            probe.cached_pstate.set(Some(u32::from_le_bytes(pstate)));
+            probe
+                .cached_pstate
+                .set(Some(u64::from(u32::from_le_bytes(pstate))));
             probe
                 .cached_pstate_rpcs
                 .set(Some(cpu.rpc_calls.get() - after_cached));
@@ -3187,7 +3734,7 @@ mod tests {
 
         let mut child = std::process::Command::new(std::env::current_exe().unwrap())
             .arg("--exact")
-            .arg("rprofile::worker::tests::dropping_worker_with_pending_mmio_callback_exits")
+            .arg("worker::tests::dropping_worker_with_pending_mmio_callback_exits")
             .arg("--nocapture")
             .env(CHILD, "1")
             .spawn()

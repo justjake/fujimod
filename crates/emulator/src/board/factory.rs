@@ -168,6 +168,8 @@ pub fn validate_engine(
 
 pub(super) struct Engines {
     unicorn: Option<Library>,
+    #[cfg(not(target_os = "emscripten"))]
+    unicorn_workers: bool,
     #[cfg(all(target_os = "macos", target_arch = "aarch64"))]
     hypervisor: Option<fujimod_emulator_cpu_hvf::Vm>,
 }
@@ -202,6 +204,14 @@ impl Engines {
         }
         Ok(Self {
             unicorn,
+            #[cfg(not(target_os = "emscripten"))]
+            unicorn_workers: graph
+                .processors
+                .iter()
+                .filter(|p| p.model == Model::CortexM4)
+                .count()
+                == 1
+                && graph.processors.iter().any(|p| p.model == Model::ArmV8A),
             #[cfg(all(target_os = "macos", target_arch = "aarch64"))]
             hypervisor,
         })
@@ -224,6 +234,25 @@ impl Engines {
             ));
             #[cfg(not(all(target_os = "macos", target_arch = "aarch64")))]
             return Err("Hypervisor engine requires macOS ARM64".into());
+        }
+        #[cfg(not(target_os = "emscripten"))]
+        if self.unicorn_workers {
+            use fujimod_emulator_cpu_unicorn::worker;
+            match model {
+                Model::CortexM4 => {
+                    return Ok(Box::new(worker::spawn_mprofile(
+                        translation_cache_size_bytes,
+                        true,
+                    )?));
+                }
+                Model::ArmV8A => {
+                    return Ok(Box::new(worker::spawn_aprofile(
+                        translation_cache_size_bytes,
+                        memory.shared(),
+                    )?));
+                }
+                _ => {}
+            }
         }
         let raw = self
             .unicorn

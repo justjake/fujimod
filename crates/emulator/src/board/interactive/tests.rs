@@ -7,7 +7,7 @@ use crate::board::{
     set,
 };
 use fujimod_emulator_cpu::{Cpu, ExecutionPolicy, Register, memory::Backing, timeline::Ratio};
-use fujimod_emulator_cpu_unicorn::{memory as cpu_memory, rprofile::worker};
+use fujimod_emulator_cpu_unicorn::{memory as cpu_memory, worker};
 use fujimod_emulator_devices::{Cx, Device, checkpoint::Checkpoint};
 use serde::{Deserialize, Serialize};
 
@@ -624,4 +624,248 @@ fn cohort_ends_when_its_first_core_reaches_the_limit() {
     assert_eq!(epoch.clock(2).unwrap().now, 1100);
     // A core outside the cohort (waiting or not released) does not end it.
     assert!(epoch.open(&[0, 1]));
+}
+
+const M4: usize = 4;
+const MMIO: u64 = 0x0800_0000;
+
+fn mixed_board(policy: ExecutionPolicy, bus: Bus, m4_registers: &[(Register, u64)]) -> Board {
+    use crate::board::{factory, mprofile};
+    use fujimod_catalog_configuration::RunEngine;
+    use fujimod_emulator_cpu::{Model, arm};
+
+    let processors = (0..5)
+        .map(|core| {
+            let (model, registers, mprofile) = if core == M4 {
+                (
+                    Model::CortexM4,
+                    vec![
+                        (Register::Pc, 0x1000),
+                        (arm::CORE[13], 0x3f00),
+                        (Register::Arm32(arm::Register::Xpsr), 1 << 24),
+                    ],
+                    Some(mprofile::Config {
+                        clock_hz: 1_000_000,
+                        board_ticks_per_second: 1_000_000,
+                        vector_base: 0,
+                    }),
+                )
+            } else {
+                (
+                    Model::ArmV8A,
+                    vec![
+                        (Register::Pc, 0x100 + core as u64 * 0x100),
+                        (Register::Pstate, 0x3c5),
+                    ],
+                    None,
+                )
+            };
+            let mut registers = registers;
+            if core == M4 {
+                registers.extend_from_slice(m4_registers);
+            }
+            factory::Processor {
+                model,
+                registers,
+                released: true,
+                parked_until_sgi: false,
+                mprofile,
+                rprofile: None,
+            }
+        })
+        .collect();
+    let mut board = factory::Graph {
+        processors,
+        ram: vec![factory::Ram {
+            base: 0,
+            size: 0x4000,
+        }],
+        dma_mappings: vec![BusMapping::ram(0, 0x4000)],
+        decoders: vec![],
+        mappings: (0..5)
+            .map(|core| factory::MemoryMap {
+                core,
+                address: 0,
+                physical: 0,
+                size: 0x4000,
+                permissions: 7,
+            })
+            .collect(),
+        peripherals: (0..5)
+            .map(|core| factory::Peripheral {
+                core,
+                address: MMIO,
+                physical: MMIO,
+                size: 0x1000,
+            })
+            .collect(),
+        instructions_per_tick: Ratio::new(1, 1).unwrap(),
+    }
+    .build(
+        factory::Options::new(RunEngine::Unicorn).with_translation_cache_size_bytes(1 << 20),
+        bus,
+        None,
+    )
+    .unwrap();
+    board.write_physical(0, &0x3f00u32.to_le_bytes()).unwrap();
+    board.write_physical(4, &0x1001u32.to_le_bytes()).unwrap();
+    board.set_block_execution(true);
+    board.set_execution_policy(policy).unwrap();
+    assert!(
+        board
+            .cpus
+            .iter()
+            .all(|cpu| cpu.features().asynchronous_runs)
+    );
+    board
+}
+
+fn a64_code(board: &Board, core: usize, words: &[u32]) {
+    let bytes: Vec<_> = words.iter().flat_map(|word| word.to_le_bytes()).collect();
+    board
+        .write_physical(0x100 + core as u64 * 0x100, &bytes)
+        .unwrap();
+}
+
+fn thumb_code(board: &Board, address: u64, words: &[u16]) {
+    let bytes: Vec<_> = words.iter().flat_map(|word| word.to_le_bytes()).collect();
+    board.write_physical(address, &bytes).unwrap();
+}
+
+#[test]
+fn five_unicorn_cores_share_ram_and_service_the_same_deadline_as_exact() {
+    use fujimod_emulator_cpu::arm;
+
+    let run = |policy| {
+        let mut bus = Bus::new(bus::Mode::Strict);
+        let device = bus
+            .register(
+                MMIO,
+                0x1000,
+                Box::new(DeadlineSample {
+                    due: Some(200),
+                    armed_at: None,
+                    samples: vec![],
+                }),
+            )
+            .unwrap();
+        let mut board = mixed_board(policy, bus, &[(arm::CORE[1], 0x3010)]);
+        for core in 0..M4 {
+            board
+                .write_register(core, Register::X(1), 0x3000 + core as u64 * 4)
+                .unwrap();
+            board.write_register(core, Register::X(2), MMIO).unwrap();
+            a64_code(
+                &board,
+                core,
+                &[
+                    0xd280_0000 | (((core + 1) as u32) << 5), // mov x0,#core+1
+                    0xb900_0020,                              // str w0,[x1]
+                    0xb940_0042,                              // ldr w2,[x2]
+                    0xd503_207f,                              // wfi
+                ],
+            );
+        }
+        thumb_code(&board, 0x1000, &[0x2005, 0x6008, 0xbf30]); // movs; str; wfi
+
+        board.run_until(220, 64).unwrap();
+        assert_eq!(board.now(), 220);
+        assert!(board.quiescent());
+        assert_eq!(
+            board.interactive_windows.get() != 0,
+            policy == ExecutionPolicy::Interactive
+        );
+
+        let mut bytes = [0; 20];
+        board.read_physical(0x3000, &mut bytes).unwrap();
+        let words: Vec<_> = bytes
+            .chunks_exact(4)
+            .map(|word| u32::from_le_bytes(word.try_into().unwrap()))
+            .collect();
+        assert_eq!(words, [1, 2, 3, 4, 5]);
+        let state = board.state.borrow();
+        assert_eq!(state.instructions, vec![4, 4, 4, 4, 3]);
+        let sample = samples(&board, device);
+        assert_eq!(sample, [(200, 1)]);
+        let pcs: Vec<_> = (0..5)
+            .map(|core| board.read_register(core, Register::Pc).unwrap())
+            .collect();
+        (state.instructions.clone(), words, sample, pcs)
+    };
+
+    assert_eq!(
+        run(ExecutionPolicy::Exact),
+        run(ExecutionPolicy::Interactive)
+    );
+}
+
+struct MprofileDoorbell;
+impl Device for MprofileDoorbell {
+    fn name(&self) -> &'static str {
+        "mprofile-doorbell"
+    }
+
+    fn read(&mut self, _: &mut Cx<'_>, _: u64, _: u8) -> u64 {
+        0
+    }
+
+    fn write(&mut self, cx: &mut Cx<'_>, address: u64, _: u8, _: u64) {
+        if let Err(error) = cx.set_core_irq(M4, 0, address == MMIO) {
+            cx.fail(error);
+        }
+    }
+}
+
+#[test]
+fn a53_mmio_interrupts_the_running_m4_without_losing_thumb_entries() {
+    use fujimod_emulator_cpu::arm;
+
+    let mut bus = Bus::new(bus::Mode::Strict);
+    bus.register(MMIO, 0x1000, Box::new(MprofileDoorbell))
+        .unwrap();
+    let mut board = mixed_board(
+        ExecutionPolicy::Interactive,
+        bus,
+        &[(arm::CORE[1], 0xe000_e100), (arm::CORE[2], MMIO)],
+    );
+    board.write_register(0, Register::X(1), MMIO).unwrap();
+    a64_code(&board, 0, &[0xd503_201f, 0xb900_0020, 0xd503_207f]);
+    for core in 1..M4 {
+        a64_code(&board, core, &[0xd503_207f]);
+    }
+
+    board
+        .write_physical(0x40, &0x1201u32.to_le_bytes())
+        .unwrap();
+    thumb_code(
+        &board,
+        0x1000,
+        &[
+            0x2001, // movs r0,#1
+            0x6008, // str r0,[r1] (enable line 0)
+            0x3301, // add r3,#1
+            0x2c00, // cmp r4,#0
+            0xd0fc, // beq to the add
+            0xbf30, // wfi
+        ],
+    );
+    thumb_code(
+        &board,
+        0x1200,
+        &[
+            0x3401, // add r4,#1
+            0x6050, // str r0,[r2,#4] (deassert the line)
+            0x4770, // bx lr
+        ],
+    );
+    board.run_until(200, 64).unwrap();
+    assert!(board.quiescent());
+    assert!(board.interactive_windows.get() > 0);
+    assert_eq!(board.read_register(M4, arm::CORE[4]).unwrap(), 1);
+    let rounds = board.read_register(M4, arm::CORE[3]).unwrap();
+    assert!(rounds > 0);
+    assert_eq!(
+        board.state.borrow().instructions[M4],
+        2 + rounds * 3 + 1 + 3
+    );
 }
