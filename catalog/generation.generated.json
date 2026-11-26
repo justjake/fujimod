@@ -215,8 +215,13 @@
       "internal_version": "1.59",
       "tables": {
         "bulk": {
-          "status": "available",
-          "errors": []
+          "status": "unavailable",
+          "errors": [
+            {
+              "locator": "bulk",
+              "reason": "BulkCatalogError: ranges outside window 0x81000+0x1e2c0: 0x2ed44a0+0x80, 0x2ed4ed4+0x80, 0x2ed4000+0x1000, 0x81000+0x477f000"
+            }
+          ]
         },
         "card-files": {
           "status": "unavailable",
