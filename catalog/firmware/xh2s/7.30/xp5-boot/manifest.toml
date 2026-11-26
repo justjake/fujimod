@@ -4,6 +4,11 @@
 version = 1
 firmware = "xh2s-730"
 load_firmware = true
+# Host execution only, as in xt5-431, xe5-112 and xh2-530: the companion M4 executes most of the run's
+# instructions (5,239 M of 6,904 M, about 76%, in a 30 s guest-time run of this manifest), so it runs
+# in block execution. Measured on this manifest over 10 guest seconds: 5.2 times less host time, equal
+# guest time and final frame; per-core instruction counts differ by at most 0.03%.
+mprofile_block_execution = true
 
 # The stock bus-drain helper 0x17f1794 splits memory at 0x80000000, the body's
 # dram_bytes (catalog/bodies/xh2s/body.json). Installed capacity is unmeasured.
