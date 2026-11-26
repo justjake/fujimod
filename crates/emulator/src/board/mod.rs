@@ -517,6 +517,9 @@ pub struct Board {
     progress_observer: Option<Box<dyn FnMut(u64)>>,
     guest_profile_active: Cell<bool>,
     isolated_core: Cell<Option<usize>>,
+    /// An isolated caller session is open: its store hook must see every
+    /// guest store, so exclusives stay in the engine.
+    isolated_caller: Cell<bool>,
     // Host run control and its outcome; excluded from modeled state.
     idle_stop: Cell<bool>,
     idle_stopped: Cell<bool>,
@@ -779,6 +782,7 @@ impl Board {
             progress_observer: None,
             guest_profile_active: Cell::new(false),
             isolated_core: Cell::new(None),
+            isolated_caller: Cell::new(false),
             idle_stop: Cell::new(false),
             idle_stopped: Cell::new(false),
             continuation: None,
@@ -1588,9 +1592,12 @@ impl Board {
                 if profile.is_some() {
                     cpu.select_armv7a_affinity_policy(state.execution_policy)?;
                     // Exact runs perform exclusives against the board monitor;
-                    // concurrent windows keep the engine's atomic exclusives.
+                    // concurrent windows keep the engine's atomic exclusives,
+                    // and so does an isolated caller, whose store hook must
+                    // see (and guard) every guest store, STREX included.
                     cpu.set_armv7a_owner_exclusives(
-                        state.execution_policy == ExecutionPolicy::Exact,
+                        state.execution_policy == ExecutionPolicy::Exact
+                            && !self.isolated_caller.get(),
                     )?;
                 }
             }

@@ -796,6 +796,7 @@ impl Board {
             }
         }
         self.isolated_core.set(Some(session.options.core));
+        self.isolated_caller.set(true);
         self.state.borrow_mut().interrupt_delivery[session.options.core] =
             session.options.inject_interrupts;
         Ok(session)
@@ -807,6 +808,7 @@ impl Board {
             cpu.remove_hook(hook)?;
         }
         self.isolated_core.set(None);
+        self.isolated_caller.set(false);
         let mut state = self.state.borrow_mut();
         state.interrupt_delivery.fill(true);
         session.devices = state.device_guard.take().map(|guard| guard.state());
