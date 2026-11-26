@@ -53,6 +53,8 @@ jobs:
         with:
           ref: ${{ inputs.ref || github.sha }}
           persist-credentials: false
+          submodules: recursive
+          lfs: true
       - uses: ./.github/actions/setup
         with:
           desktop: 'true'
@@ -102,6 +104,7 @@ jobs:
           ref: ${{ inputs.ref || github.sha }}
           persist-credentials: false
           submodules: recursive
+          lfs: true
       - uses: ./.github/actions/setup
         with:
           desktop: 'true'
