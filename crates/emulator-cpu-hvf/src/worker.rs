@@ -1481,7 +1481,6 @@ impl Processor {
             }
 
             self.deliver_interrupt()?;
-            self.disable_single_step()?;
             self.shared.native_active.store(true, Ordering::Release);
             if self.shared.stop.load(Ordering::Acquire) {
                 self.shared.native_active.store(false, Ordering::Release);
