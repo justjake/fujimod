@@ -1634,11 +1634,7 @@ impl Board {
                     .map(|offset| (self.next_core.get() + offset) % n)
                     .filter(|&core| s.released[core] && !s.waiting[core])
                     .collect();
-                if cores.len() > 1
-                    && cores
-                        .iter()
-                        .all(|&core| self.cpus[core].features().asynchronous_runs)
-                {
+                if self.use_concurrent_window(&s, &cores) {
                     let entered = s.total_instructions()?;
                     let pause_room =
                         pause_after.map_or(u64::MAX, |pause| pause.saturating_sub(entered).max(1));
@@ -1966,9 +1962,9 @@ impl Board {
     /// Install or remove a processor's on-demand board store hook before it
     /// runs. The hook has work while a logical exclusive reservation is live
     /// (the processor's stores must reach the shared monitor), while a write
-    /// watch is armed, and outside exact execution, where peers run without
-    /// this check between their slices. Reservations change only while their
-    /// owner runs, so the state found here holds for the processor's slice.
+    /// watch is armed, or when interactive scheduling needs a peer store
+    /// barrier. Ordered mixed Unicorn runs use the same write observation
+    /// rules as exact runs. Reservations change only while their owner runs.
     /// Without the hook the monitor's write epoch does not count the
     /// processor's stores; no reservation is live to observe them.
     fn sync_store_hook(&mut self, core: usize) -> Result<(), String> {
@@ -1977,7 +1973,8 @@ impl Board {
         };
         let wanted = {
             let s = self.state.borrow();
-            s.execution_policy != ExecutionPolicy::Exact
+            (s.execution_policy != ExecutionPolicy::Exact
+                && (s.parallel.is_some() || !self.ordered_without_mprofile()))
                 || s.memory.watching_writes()
                 || s.exclusive
                     .lock()
@@ -2933,16 +2930,7 @@ impl State {
                     self.accounted[core], self.execution_policy.name(), self.parallel.is_some())
             })?;
             match self.parallel.as_mut() {
-                Some(epoch) => {
-                    let elapsed = epoch.advance(core, delta)?;
-                    let boundary = self.timeline.ratio().budget(
-                        self.timeline.now(),
-                        self.timeline.phase(),
-                        self.clock_limit.unwrap_or(u64::MAX),
-                    )?;
-                    let elapsed = self.timeline.budget(elapsed.min(boundary))?;
-                    self.timeline.advance_instructions(elapsed)?;
-                }
+                Some(_) => self.account_interactive(core, delta)?,
                 None if self.execution_policy == ExecutionPolicy::Interactive => {
                     // Interactive runs may overshoot by a block; the frontier
                     // stops at the next deadline or run boundary.
@@ -2965,6 +2953,9 @@ impl State {
     /// Account one processor's entries on its own position; runnable peers
     /// fall behind the frontier it advances.
     fn account(&mut self, core: usize, entries: u64) -> Result<(), String> {
+        if self.parallel.is_some() {
+            return self.account_interactive(core, entries);
+        }
         let (released, waiting) = (&self.released, &self.waiting);
         self.timeline
             .advance_processor(core, entries, |c| released[c] && !waiting[c])

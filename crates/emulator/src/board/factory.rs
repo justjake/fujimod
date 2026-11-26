@@ -168,6 +168,9 @@ pub fn validate_engine(
 
 pub(super) struct Engines {
     unicorn: Option<Library>,
+    #[cfg(not(target_os = "emscripten"))]
+    unicorn_workers: bool,
+    ordered_without_mprofile: bool,
     #[cfg(all(target_os = "macos", target_arch = "aarch64"))]
     hypervisor: Option<fujimod_emulator_cpu_hvf::Vm>,
 }
@@ -200,12 +203,26 @@ impl Engines {
         if need_hvf {
             return Err("Hypervisor engine requires macOS ARM64".into());
         }
+        let mixed_profiles = graph
+            .processors
+            .iter()
+            .filter(|p| p.model == Model::CortexM4)
+            .count()
+            == 1
+            && graph.processors.iter().any(|p| p.model == Model::ArmV8A);
         Ok(Self {
             unicorn,
+            #[cfg(not(target_os = "emscripten"))]
+            unicorn_workers: mixed_profiles,
+            ordered_without_mprofile: mixed_profiles && options.engine == RunEngine::Unicorn,
             #[cfg(all(target_os = "macos", target_arch = "aarch64"))]
             hypervisor,
         })
     }
+    pub(super) fn ordered_without_mprofile(&self) -> bool {
+        self.ordered_without_mprofile
+    }
+
     fn cpu(
         &self,
         processor: &Processor,
@@ -224,6 +241,25 @@ impl Engines {
             ));
             #[cfg(not(all(target_os = "macos", target_arch = "aarch64")))]
             return Err("Hypervisor engine requires macOS ARM64".into());
+        }
+        #[cfg(not(target_os = "emscripten"))]
+        if self.unicorn_workers {
+            use fujimod_emulator_cpu_unicorn::worker;
+            match model {
+                Model::CortexM4 => {
+                    return Ok(Box::new(worker::spawn_mprofile(
+                        translation_cache_size_bytes,
+                        true,
+                    )?));
+                }
+                Model::ArmV8A => {
+                    return Ok(Box::new(worker::spawn_aprofile(
+                        translation_cache_size_bytes,
+                        memory.shared(),
+                    )?));
+                }
+                _ => {}
+            }
         }
         let raw = self
             .unicorn

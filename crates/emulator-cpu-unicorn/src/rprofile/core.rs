@@ -208,7 +208,7 @@ impl Core {
     }
     /// Construct an engine used by the native worker backend, where multiple
     /// processors may execute concurrently over shared guest memory.
-    pub(super) fn new_parallel_worker(
+    pub(crate) fn new_parallel_worker(
         cpu: UnicornCore,
         options: Options,
         wiring: Wiring,
@@ -389,15 +389,15 @@ impl Core {
         }
         Ok(Self { execution: e })
     }
-    pub(super) fn pause_handle(&self) -> Arc<AtomicU32> {
+    pub(crate) fn pause_handle(&self) -> Arc<AtomicU32> {
         self.execution.pause_requested.clone()
     }
-    pub(super) fn owner_callback_parked(&self, parked: bool) -> Result<(), String> {
+    pub(crate) fn owner_callback_parked(&self, parked: bool) -> Result<(), String> {
         self.execution
             .memory
             .set_parked(self.execution.id.get(), parked)
     }
-    pub(super) fn acknowledge_owner_barrier(&self) {
+    pub(crate) fn acknowledge_owner_barrier(&self) {
         let execution = &self.execution;
         if execution.policy.get() == ExecutionPolicy::Interactive
             && execution.pause_requested.load(Ordering::Acquire) != 0
@@ -670,7 +670,7 @@ impl Execution {
             .get()
             .map(|clock| clock.after(self.count.get()).map(|current| current.now))
             .transpose()?;
-        crate::rprofile::publish_guest_tick(tick);
+        crate::GuestClockTickScope::publish(tick);
         self.guest_profile_block(block.address);
         if self.thumb_common_block_path(block) {
             #[cfg(test)]
