@@ -2056,6 +2056,14 @@ impl Session {
             }
             use fujimod_emulator_xpp::serial::Peer;
             let peer = match (&sub_cpu, &battery_gauge) {
+                (Some((sub_port, _)), Some((gauge_port, _)))
+                    if *sub_port == base && *gauge_port == base =>
+                {
+                    Peer::RegistersAndFrames {
+                        registers: sub_cpu.take().map(|(_, r)| r).unwrap_or_default(),
+                        frames: battery_gauge.take().map(|(_, r)| r).unwrap_or_default(),
+                    }
+                }
                 (Some((port, _)), _) if *port == base => {
                     Peer::Registers(sub_cpu.take().map(|(_, r)| r).unwrap_or_default())
                 }
@@ -2066,7 +2074,7 @@ impl Session {
                 _ => Peer::None,
             };
             let clock = match peer {
-                Peer::Registers(_) => sub_cpu_clock.take(),
+                Peer::Registers(_) | Peer::RegistersAndFrames { .. } => sub_cpu_clock.take(),
                 _ => None,
             };
             let mut replies = BTreeMap::new();

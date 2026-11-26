@@ -1000,7 +1000,12 @@ fn serial_nodes(
     if let Some(sub_cpu) = &reset.sub_cpu {
         claim(sub_cpu.port, "sub-CPU")?;
     }
-    if let Some(gauge) = &reset.battery_gauge {
+    if let Some(gauge) = &reset.battery_gauge
+        && !reset
+            .sub_cpu
+            .as_ref()
+            .is_some_and(|sub_cpu| sub_cpu.port == gauge.port)
+    {
         claim(gauge.port, "battery gauge")?;
     }
     for idle in &reset.idle_serial_ports {
@@ -1014,6 +1019,17 @@ fn serial_nodes(
         if reset.lens.as_ref().is_some_and(|lens| lens.port == base) {
             continue;
         }
+        let gauge_registers = reset
+            .battery_gauge
+            .as_ref()
+            .filter(|gauge| gauge.port == base)
+            .map(|gauge| {
+                gauge
+                    .registers
+                    .iter()
+                    .map(|r| (r.register, r.value))
+                    .collect::<Vec<_>>()
+            });
         let peer = if let Some(sub_cpu) = reset.sub_cpu.as_ref().filter(|s| s.port == base) {
             let mut registers: Vec<Value> = sub_cpu
                 .registers
@@ -1021,19 +1037,22 @@ fn serial_nodes(
                 .map(|r| json!([r.register, r.value]))
                 .collect();
             registers.extend(extra.iter().map(|&(r, v)| json!([r, v])));
-            json!({
+            let mut peer = json!({
                 "kind": "registers",
                 "registers": registers,
                 "clock": sub_cpu.clock.as_ref().map(|c| json!({
                     "first": c.first, "hold": c.hold,
                     "seconds": c.seconds, "ticks_per_second": c.ticks_per_second,
                 })),
-            })
-        } else if let Some(gauge) = reset.battery_gauge.as_ref().filter(|g| g.port == base) {
+            });
+            if let Some(registers) = gauge_registers {
+                peer["frames"] = json!(registers);
+            }
+            peer
+        } else if let Some(registers) = gauge_registers {
             json!({
                 "kind": "frames",
-                "registers": gauge.registers.iter()
-                    .map(|r| json!([r.register, r.value])).collect::<Vec<_>>(),
+                "registers": registers,
             })
         } else if reset.idle_serial_ports.iter().any(|idle| idle.port == base) {
             json!({ "kind": "idle" })
@@ -2637,6 +2656,30 @@ mod tests {
             .unwrap()
             .clone();
         assert_eq!(registers.last().unwrap(), &json!([0x70, 0xa5]));
+    }
+
+    #[test]
+    fn serial_graph_can_share_a_port_between_the_sub_cpu_and_gauge() {
+        let resolved = ResolvedConfiguration::bundled("xt20-211").unwrap();
+        let maps = block_register_layouts(
+            &resolved.reference.soc,
+            &body_profile(&resolved).unwrap().block_overrides,
+        )
+        .unwrap();
+        let mut reset = resolved.hardware_inputs().unwrap().unwrap().reset;
+        let mut separate = super::serial_nodes(&maps, &reset, &[]).unwrap();
+        reset.battery_gauge.as_mut().unwrap().port = reset.sub_cpu.as_ref().unwrap().port;
+        let shared = super::serial_nodes(&maps, &reset, &[]).unwrap();
+        let slot =
+            |nodes: &[Value], name| nodes.iter().position(|node| node["name"] == name).unwrap();
+        let sub_cpu = slot(&shared, "serial2");
+        let gauge = slot(&shared, "serial4");
+        let frames = separate[gauge]["model"]["peer"]["registers"].take();
+        separate[sub_cpu]["model"]["peer"]["frames"] = frames;
+        assert_eq!(shared[sub_cpu], separate[sub_cpu]);
+        assert_eq!(shared[gauge]["model"]["peer"]["kind"], "none");
+        let _: fujimod_emulator_xpp::board::Node =
+            serde_json::from_value(shared[sub_cpu].clone()).unwrap();
     }
 
     #[test]

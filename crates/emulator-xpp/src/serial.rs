@@ -28,6 +28,11 @@
 //! bytes clock the value out, high byte first, or in when writing, and the
 //! byte read back from +0x60 after each send is the value byte shifted out.
 //!
+//! A port declared with both peers uses the transfer width at +0x00 to
+//! distinguish their transactions. This models boards whose firmware selects
+//! the byte-frame peer only for 8-bit transfers and the register-file peer
+//! only for 16-bit transfers.
+//!
 //! A port may instead be declared idle, with nothing attached: the receive
 //! line stays high, so the word read back from +0x60 after each send is 0xff.
 use fujimod_emulator_devices::{Cx, Device};
@@ -37,6 +42,9 @@ use std::collections::BTreeMap;
 
 /// Register window size in bytes.
 pub const REGISTERS: u64 = 0x100;
+const WORD_LENGTH_MASK: u32 = 0xf;
+const BYTE_TRANSFER: u32 = 8 - 1;
+const WORD_TRANSFER: u32 = 16 - 1;
 const STATUS: usize = 0x28 / 4;
 const CLEAR: u64 = 0x2c;
 const RECEIVE: u64 = 0x48;
@@ -250,6 +258,11 @@ pub enum Peer {
     Registers(Vec<u8>),
     /// Byte-frame peer with even-numbered 16-bit registers.
     Frames(BTreeMap<u8, u16>),
+    /// Register-file and byte-frame peers sharing a controller.
+    RegistersAndFrames {
+        registers: Vec<u8>,
+        frames: BTreeMap<u8, u16>,
+    },
 }
 
 /// Discovery endpoint with immediate completion and fixed receive words.
@@ -287,6 +300,11 @@ impl DiscoveryPort {
             }),
             Peer::Registers(registers) => Self::with_peer(base, registers),
             Peer::Frames(registers) => Self::with_frame_peer(base, registers),
+            Peer::RegistersAndFrames { registers, frames } => {
+                let mut port = Self::with_peer(base, registers)?;
+                port.frames = Some(Self::frame_peer(frames)?);
+                Ok(port)
+            }
         }
     }
     /// Answer each declared send word with its reply; a port with a peer refuses.
@@ -330,15 +348,22 @@ impl DiscoveryPort {
     /// A port whose peer exchanges byte frames with these even-numbered
     /// 16-bit registers after reset; unlisted registers read zero.
     pub fn with_frame_peer(base: u64, registers: BTreeMap<u8, u16>) -> Result<Self, String> {
+        let mut port = Self::new(base)?;
+        port.frames = Some(Self::frame_peer(registers)?);
+        Ok(port)
+    }
+    fn frame_peer(registers: BTreeMap<u8, u16>) -> Result<FramePeer, String> {
         if registers.keys().any(|r| r & 1 != 0) {
             return Err("X-Processor Pro serial frame peer registers are even".into());
         }
-        let mut port = Self::new(base)?;
-        port.frames = Some(FramePeer {
+        Ok(FramePeer {
             registers,
             frame: Vec::new(),
-        });
-        Ok(port)
+        })
+    }
+    fn frame_selected(&self) -> bool {
+        self.frames.is_some()
+            && (self.peer.is_none() || self.registers[0] & WORD_LENGTH_MASK == BYTE_TRANSFER)
     }
 }
 impl Device for DiscoveryPort {
@@ -366,14 +391,15 @@ impl Device for DiscoveryPort {
         match o {
             CLEAR => self.registers[STATUS] &= !(value as u32),
             ENABLE => {
-                if value & 1 != 0
+                if self.frame_selected()
+                    && value & 1 != 0
                     && let Some(frames) = &mut self.frames
                 {
                     frames.frame.clear();
                 }
                 self.registers[(o / 4) as usize] = value as u32;
             }
-            SEND if self.frames.is_some() => {
+            SEND if self.frame_selected() => {
                 let Some(byte) = self.frames.as_mut().and_then(|f| f.send(value as u8)) else {
                     return cx.unmodeled();
                 };
@@ -381,6 +407,12 @@ impl Device for DiscoveryPort {
                 self.registers[STATUS] |= DONE;
             }
             SEND => {
+                if self.peer.is_some()
+                    && self.frames.is_some()
+                    && self.registers[0] & WORD_LENGTH_MASK != WORD_TRANSFER
+                {
+                    return cx.unmodeled();
+                }
                 let word = value as u32;
                 self.registers[(SEND / 4) as usize] = match &mut self.peer {
                     Some(peer) => {
@@ -619,6 +651,39 @@ mod tests {
         write(&mut port, &mut h, base + 0x60, 0x5c00);
         assert_eq!(read(&mut port, &mut h, base + 0x60), 0x12);
         assert!(DiscoveryPort::new(base).unwrap().restore(&saved).is_err());
+    }
+
+    #[test]
+    fn shared_port_selects_peer_by_programmed_transfer_width() {
+        let base = 0xfff2a000;
+        let mut port = DiscoveryPort::attached(
+            base,
+            Peer::RegistersAndFrames {
+                registers: vec![0; PEER_REGISTERS],
+                frames: BTreeMap::from([(0, 0xfd50)]),
+            },
+        )
+        .unwrap();
+        let mut h = TestHost::new();
+        write(&mut port, &mut h, base, 0x10f);
+        write(&mut port, &mut h, base + ENABLE, 1);
+        write(&mut port, &mut h, base + SEND, 0xdc12);
+        assert_eq!(read(&mut port, &mut h, base + SEND), 0x12);
+        write(&mut port, &mut h, base + ENABLE, 0);
+        for _ in 0..2 {
+            write(&mut port, &mut h, base, 0x107);
+            write(&mut port, &mut h, base + ENABLE, 1);
+            for response in [0, 0xfd, 0x50] {
+                write(&mut port, &mut h, base + SEND, 0);
+                assert_eq!(read(&mut port, &mut h, base + SEND), response);
+            }
+            write(&mut port, &mut h, base + ENABLE, 0);
+        }
+        let saved = port.checkpoint().unwrap();
+        port.restore_checkpoint(&saved).unwrap();
+        write(&mut port, &mut h, base, 0x10f);
+        write(&mut port, &mut h, base + SEND, 0x5c00);
+        assert_eq!(read(&mut port, &mut h, base + SEND), 0x12);
     }
 
     #[test]

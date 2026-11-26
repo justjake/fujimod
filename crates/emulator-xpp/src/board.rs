@@ -61,9 +61,7 @@ pub struct Nor {
     #[serde(default)]
     pub array: Option<flash::Array>,
 }
-/// A serial port's peer: none, an idle receive line (nothing attached), a
-/// register file (the X-T20 sub-CPU) or a byte-frame device with 16-bit
-/// registers (the battery gauge).
+/// The serial port's wired peers or idle receive line.
 #[derive(Deserialize)]
 #[serde(tag = "kind", rename_all = "kebab-case", deny_unknown_fields)]
 pub enum Peer {
@@ -75,6 +73,9 @@ pub enum Peer {
         registers: Vec<(u8, u8)>,
         #[serde(default)]
         clock: Option<serial::Clock>,
+        /// Byte-frame registers when a battery gauge shares the controller.
+        #[serde(default)]
+        frames: Option<Vec<(u8, u16)>>,
     },
     Frames {
         registers: Vec<(u8, u16)>,
@@ -928,6 +929,7 @@ pub fn build(
                     Peer::Registers {
                         registers,
                         clock: c,
+                        frames,
                     } => {
                         clock = c;
                         let mut values = vec![0; serial::PEER_REGISTERS];
@@ -937,7 +939,13 @@ pub fn build(
                                 .ok_or("X-Processor Pro serial peer register out of range")? =
                                 value;
                         }
-                        serial::Peer::Registers(values)
+                        match frames {
+                            Some(frames) => serial::Peer::RegistersAndFrames {
+                                registers: values,
+                                frames: frames.into_iter().collect(),
+                            },
+                            None => serial::Peer::Registers(values),
+                        }
                     }
                     Peer::Frames { registers } => {
                         serial::Peer::Frames(registers.into_iter().collect())
