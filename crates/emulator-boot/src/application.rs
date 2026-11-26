@@ -150,6 +150,8 @@ impl Board {
 
 pub struct Started {
     pub board: Board,
+    /// The `--card-image` file and what it held, to write the changed sectors back.
+    card_image: Option<CardImage>,
     pub quantum: usize,
     pub ticks_per_second: u64,
     pub engine: RunEngine,
@@ -216,6 +218,15 @@ impl Started {
             }
             Board::Xpp(session) => crate::save_snapshot(session, path),
         }
+    }
+
+    /// Write the sectors of the card that differ from the `--card-image` file back into it,
+    /// as XP5 loader starts do. Returns the number of sectors written, or `None` without an image.
+    pub fn write_back_card(&self) -> Result<Option<usize>, String> {
+        self.card_image
+            .as_ref()
+            .map(|image| image.write_back(&self.board))
+            .transpose()
     }
 
     pub fn display_frames(&self) -> Vec<Frame> {
@@ -326,8 +337,10 @@ pub fn open(resolved: &ResolvedConfiguration, startup: Startup) -> Result<Starte
     }
     let card_image = startup
         .card_image
-        .as_deref()
-        .map(crate::media::read_image)
+        .map(|path| {
+            let original = crate::media::read_image(&path)?;
+            Ok::<_, String>(CardImage { path, original })
+        })
         .transpose()?;
     let execution = resolved.configuration.execution.as_ref();
     let engine = execution.map_or(RunEngine::Unicorn, |execution| execution.engine);
@@ -368,14 +381,17 @@ pub fn open(resolved: &ResolvedConfiguration, startup: Startup) -> Result<Starte
             }
             definition.discovery = startup.discovery;
             let files = files.into_iter().collect::<Vec<_>>();
-            let board = match card_image {
-                Some(medium) => xp4::Session::new_with_media(
+            let board = match &card_image {
+                Some(image) => xp4::Session::new_with_media(
                     definition,
                     flash,
                     Vec::new(),
                     vec![(
                         0,
-                        fujimod_emulator_session::card::merge_files(medium, &files)?,
+                        fujimod_emulator_session::card::merge_files(
+                            image.original.clone(),
+                            &files,
+                        )?,
                     )],
                 )?,
                 None => xp4::Session::new(definition, flash, files)?,
@@ -450,14 +466,14 @@ pub fn open(resolved: &ResolvedConfiguration, startup: Startup) -> Result<Starte
                 engine,
             )?
             .into_session(definition)?;
-            if let Some(medium) = card_image {
+            if let Some(image) = &card_image {
                 let slot = board
                     .contacts
                     .keys()
                     .next()
                     .cloned()
                     .ok_or("board has no modeled SD card slot")?;
-                board.install_card_files(&slot, Some(medium), &files)?;
+                board.install_card_files(&slot, Some(image.original.clone()), &files)?;
             }
             Board::Xpp(Box::new(board))
         }
@@ -486,11 +502,39 @@ pub fn open(resolved: &ResolvedConfiguration, startup: Startup) -> Result<Starte
     };
     Ok(Started {
         board,
+        card_image,
         quantum,
         ticks_per_second,
         engine,
         snapshot_identity,
     })
+}
+
+/// A `--card-image` file and the medium read from it, before the caller's files were merged.
+struct CardImage {
+    path: PathBuf,
+    original: fujimod_emulator_devices::parts::sd_card::Card,
+}
+
+impl CardImage {
+    fn write_back(&self, board: &Board) -> Result<usize, String> {
+        let current = match board {
+            Board::Xp4(board) => board.card_medium(0)?,
+            Board::Xpp(session) => session.card_medium(
+                session
+                    .contacts
+                    .keys()
+                    .next()
+                    .ok_or("board has no modeled SD card slot")?,
+            )?,
+        };
+        let written = crate::media::write_back(&self.path, &self.original, &current)?;
+        eprintln!(
+            "FUJIMOD card image {}: {written} changed sectors written back",
+            self.path.display()
+        );
+        Ok(written)
+    }
 }
 
 fn install_card_files(
@@ -517,4 +561,78 @@ fn install_card_files(
     }
     host["files"] = json!(entries);
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use fujimod_emulator_devices::parts::sd_card::{Card, Options, SECTOR};
+    use std::{
+        fs::File,
+        io::{Read, Seek, SeekFrom, Write},
+    };
+
+    fn sector_of(file: &mut File, lba: u64) -> Vec<u8> {
+        let mut sector = vec![0; SECTOR];
+        file.seek(SeekFrom::Start(lba * SECTOR as u64)).unwrap();
+        file.read_exact(&mut sector).unwrap();
+        sector
+    }
+
+    #[test]
+    fn the_card_image_takes_the_sectors_the_xp4_card_changed() {
+        // The smallest SDHC card: 2 GiB, written sparse.
+        let sectors = 0x40_0000u32;
+        let length = u64::from(sectors) * SECTOR as u64;
+        let path =
+            std::env::temp_dir().join(format!("application-card-{}.img", std::process::id()));
+        let mut file = File::create(&path).unwrap();
+        file.set_len(length).unwrap();
+        let mut original = Card::new(Options {
+            sectors,
+            max_dirty_sectors: 65536,
+        })
+        .unwrap();
+        for (lba, fill) in [(10u64, 0x11u8), (30, 0x44)] {
+            file.seek(SeekFrom::Start(lba * SECTOR as u64)).unwrap();
+            file.write_all(&[fill; SECTOR]).unwrap();
+            original
+                .write_bytes(lba * SECTOR as u64, &[fill; SECTOR])
+                .unwrap();
+        }
+        drop(file);
+        // What the camera left on the card: one sector rewritten, one written, one erased.
+        let mut current = original.clone();
+        current
+            .write_bytes(10 * SECTOR as u64, &[0x22; SECTOR])
+            .unwrap();
+        current
+            .write_bytes(20 * SECTOR as u64, &[0x33; SECTOR])
+            .unwrap();
+        current
+            .write_bytes(30 * SECTOR as u64, &[0; SECTOR])
+            .unwrap();
+        let definition = serde_json::from_value::<xp4::Definition>(json!({
+            "ram_size": 65536, "cores": 1, "discovery": false, "cbar": 0x2000_0000u32,
+            "sd_hosts": [{
+                "options": {"base": 0xfffc_4000u64, "transfer_ticks": 8, "clock_ticks": 8, "rca": 0x1234,
+                    "ram_bytes": 65536, "capabilities": 0, "capabilities_2": 0, "slot_and_version": 0},
+                "card": {"sectors": sectors, "max_dirty_sectors": 65536, "partition_start": 8192,
+                    "sectors_per_cluster": 64, "label": "CAMERA"}}]
+        })).unwrap();
+        let board = Board::Xp4(Box::new(
+            xp4::Session::new_with_media(definition, None, Vec::new(), vec![(0, current)]).unwrap(),
+        ));
+        let card = CardImage {
+            path: path.clone(),
+            original,
+        };
+        assert_eq!(card.write_back(&board).unwrap(), 3);
+        let mut file = File::open(&path).unwrap();
+        assert_eq!(file.metadata().unwrap().len(), length);
+        for (lba, fill) in [(9, 0), (10, 0x22), (20, 0x33), (30, 0), (31, 0)] {
+            assert_eq!(sector_of(&mut file, lba), [fill; SECTOR], "sector {lba}");
+        }
+        std::fs::remove_file(&path).unwrap();
+    }
 }
