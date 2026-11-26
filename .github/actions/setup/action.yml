@@ -10,32 +10,37 @@ inputs:
 runs:
   using: composite
   steps:
-    # Caches are saved only by runs on main, and every other run restores
-    # main's. Pull requests (PR CI's pull_request_target) run their code in
-    # main's cache scope, so they must never save; branch runs would only add
-    # entries no other run can restore and push main's out of the 10 GB limit.
+    # Every run restores and saves caches. GitHub keeps them within the
+    # repository's 10 GB, evicting the least recently used.
     - uses: jdx/mise-action@236a21c3b91f5db6d4e174b348674a0f0caac06d # v5.2.9
       with:
         # The version developers run; later releases refuse emsdk, whose plugin
         # downloads a moving branch that the lockfile cannot checksum.
         version: 2026.9.15
-        cache_save: ${{ github.ref == 'refs/heads/main' && github.event_name != 'pull_request_target' }}
     - name: Install Linux desktop headers
       if: runner.os == 'Linux' && inputs.desktop == 'true'
       shell: bash
       run: |
         sudo apt-get update
         sudo apt-get install -y libglib2.0-dev libgtk-3-dev libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev libxdo-dev protobuf-compiler mesa-vulkan-drivers
-    # One Cargo cache per job: each job builds a different set of crates and
-    # targets, so a shared key would keep whichever job saved first. A failed
-    # test still leaves valid dependency builds worth keeping.
+    # Rust compiles go through sccache's GitHub cache backend: each entry is
+    # keyed by what that compile reads, so a change recompiles only the crates
+    # it touches, in any job. rust-cache keeps the downloaded crates.
+    - uses: mozilla-actions/sccache-action@fc920bf0ec8de6ee65d409111f7ec508035751ba # v0.0.11
+    - shell: bash
+      run: |
+        {
+          echo SCCACHE_GHA_ENABLED=true
+          echo RUSTC_WRAPPER=sccache
+          echo CARGO_INCREMENTAL=0
+        } >> "$GITHUB_ENV"
     - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
       with:
         prefix-key: v1-rust
+        shared-key: crates
+        cache-targets: false
         cache-on-failure: true
-        save-if: ${{ github.ref == 'refs/heads/main' && github.event_name != 'pull_request_target' }}
-    - id: package-caches
-      uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+    - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
       with:
         path: |
           ~/.cache/uv
@@ -55,12 +60,3 @@ runs:
         pnpm install --frozen-lockfile
         pnpm --filter fujimod run setup:tooling
         echo "$GITHUB_WORKSPACE/target/tooling/bin" >> "$GITHUB_PATH"
-    - if: >-
-        github.ref == 'refs/heads/main' && github.event_name != 'pull_request_target' &&
-        steps.package-caches.outputs.cache-hit != 'true'
-      uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-      with:
-        path: |
-          ~/.cache/uv
-          ~/.local/share/pnpm/store
-        key: ${{ steps.package-caches.outputs.cache-primary-key }}
