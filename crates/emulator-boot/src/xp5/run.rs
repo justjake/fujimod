@@ -117,12 +117,12 @@ pub struct Run {
     /// The boot ROM, for a configuration that starts from it.
     pub boot_rom: Option<PathBuf>,
     /// A raw SD card image in place of the in-memory volume. ROM and SD starts load it read-only;
-    /// the loader start puts it in slot 1 and writes changed sectors back at the end of the run.
+    /// installed-firmware starts write changed sectors back at the end of the run.
     pub card_image: Option<PathBuf>,
     /// Files on the SD card, as `(name, path)`: the startup card of a ROM or SD start, or the
-    /// slot-1 card of the loader start.
+    /// first host's card on an installed-firmware start.
     pub card_files: Vec<(String, PathBuf)>,
-    /// The loader start's card in SD slot 2: a raw image (changed sectors are written back at
+    /// The installed-firmware start's card on the second SD host: a raw image (changed sectors are written back at
     /// the end of the run) or files for an in-memory volume.
     pub second_card_image: Option<PathBuf>,
     pub second_card_files: Vec<(String, PathBuf)>,

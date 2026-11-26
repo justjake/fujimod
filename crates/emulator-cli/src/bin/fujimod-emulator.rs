@@ -30,17 +30,17 @@ Run output and limits: --output DIR, --seconds N (guest time), --wall-seconds N 
 Session inputs: --quantum N, --keys SCRIPT,\n\
 --discovery, --stub NAME@ADDR=VALUE, --patch FILE, --mod MANIFEST, --scene PATH,\n\
 --card-image IMAGE, --card-file NAME=PATH, --card-image-2 IMAGE, --card-file-2 NAME=PATH.\n\
-XP5 loader starts put the card in slot 1 and write changed sectors back into IMAGE at the end of the run;\n\
-the -2 options put a second card in slot 2 of a body that has one.\n\
+XP5 installed-firmware starts put the card on the first SD host (X-H2S socket 2) and write changed sectors back into IMAGE;\n\
+the -2 options use the second SD host where the body exposes one.\n\
 --manifest FILE, --watch-pcs ADDR[,ADDR...], --watch-writes ADDR:LEN[,ADDR:LEN...], --dump ADDR:LEN[;ADDR:LEN...], --hash ADDR:LEN[;ADDR:LEN...]\n\
 --gpio PORT:PIN=0|1[,PORT:PIN=0|1...], --poke ADDR=U32, --press TIME_MS:KEY[:HOLD_MS][,...]\n\
 XP5 --gpio also takes PORT:PIN=0|1@MS: the level applies MS guest milliseconds after the run starts.\n\
 XP5 --set CONTROL=POSITION[@MS][,...] moves a dial or switch MS guest milliseconds after the run starts\n\
 (X-T5: iso=A|C|125..12800, ss=A|8000..2|1|T|B, ev=-3..+3|C, drive=PANO|ADV|BKT|CH|CL|S|HDR,\n\
 focus=S|C|M, mode=STILL|MOVIE, power=ON|OFF).\n\
-XP5 --camera-settings NAME=VALUE[,...] boots the loader start from the user profile the firmware's settings\n\
+XP5 --camera-settings NAME=VALUE[,...] boots from the user profile the firmware's settings\n\
 layout locates, built from the update at run time (X-T5: setup=done, language=en). X-T5 --press keys also include AEL, AFON, STICK_UL/UR/DL/DR,\n\
-REAR_PUSH, FRONT_PUSH and one detent of REAR+, REAR-, FRONT+, FRONT-.\n\
+REAR_PUSH, FRONT_PUSH and one detent of REAR+, REAR-, FRONT+, FRONT-. X-H2S has REC.\n\
 XP5 --watch-writes logs each CPU store, DMA and host write into the physical ranges to stderr (needs --engine unicorn).\n\
 XP5 --poke also takes ADDR=U32@MS: the word is written MS guest milliseconds after the run starts.\n\
 Application-profile startup: --application-plan FILE.\n\

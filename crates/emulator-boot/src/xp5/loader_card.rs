@@ -1,13 +1,14 @@
-//! Caller cards for the loader start: SD slot 1 (`--card-image`, `--card-file`) and SD slot 2
+//! Caller cards for installed firmware: first SD host (`--card-image`, `--card-file`) and second host
 //! (`--card-image-2`, `--card-file-2`).
 //!
-//! The default loader start has both SD slots empty (`present = false` in the boot manifest) and
+//! By default the installed firmware starts with both SD hosts empty (`present = false` in the boot manifest) and
 //! polls the hosts, so the shooting screen reports a card error. A run that names a card image
-//! or card files for a slot inserts one card there and wires that slot's host interrupt output
-//! (the stock OS driver drives a card it finds through interrupts). Slot 1 is the UHS-I host at
+//! or files for a host inserts one card there and wires that host's interrupt output
+//! (the stock OS driver drives a card it finds through interrupts). The first UHS-I host is at
 //! `0xff9b0000`; its line is the one the ROM start already wires: `[[window_options]]` for
-//! `0xff9b0000` in `catalog/soc/xp5/rom-start.toml` (INTID 262). Slot 2 is the UHS-I host at
-//! `0xff9b4000`, INTID 269 (`SLOT_2_IRQ`). The changes are made to the boot state, so they
+//! `0xff9b0000` in `catalog/soc/xp5/rom-start.toml` (INTID 262). The second UHS-I host is at
+//! `0xff9b4000`, INTID 269 (`SLOT_2_IRQ`). On the X-H2S the first host serves the SD socket
+//! labeled slot 2. The changes are made to the boot state, so they
 //! are part of the session definition (`boot_wiring_sha256`): a snapshot taken without a card is
 //! refused by a card run and the other way round, and the same holds for the second card. A run
 //! with none of the options keeps the manifest unchanged, and a run without a slot-2 option keeps
@@ -163,6 +164,35 @@ impl LoaderCard {
             // A manifest that already wires the host keeps its own line.
             host.options.entry(key).or_insert(value);
         }
+        // The X-H2S SD socket uses the first host and has a separate active-low
+        // card-detect input. The slot 1 CFexpress socket uses a different bus.
+        if state.firmware == "xh2s-730" && base == SLOT {
+            let gpio = state
+                .device
+                .iter_mut()
+                .find(|window| window.kind == "gpio" && window.base == 0xff90_7000)
+                .ok_or("the X-H2S SD socket needs the GPIO controller at 0xff907000")?;
+            let inputs = gpio
+                .options
+                .entry("initial_inputs")
+                .or_insert_with(|| toml::Value::Array(Vec::new()))
+                .as_array_mut()
+                .ok_or("GPIO initial_inputs must be an array")?;
+            let is_card_detect = |input: &toml::Value| {
+                input.get("port").and_then(toml::Value::as_integer) == Some(11)
+                    && input.get("pin").and_then(toml::Value::as_integer) == Some(12)
+            };
+            inputs.retain(|input| !is_card_detect(input));
+            inputs.push(toml::Value::Table(
+                [
+                    ("port".into(), toml::Value::Integer(11)),
+                    ("pin".into(), toml::Value::Integer(12)),
+                    ("high".into(), toml::Value::Boolean(false)),
+                ]
+                .into_iter()
+                .collect(),
+            ));
+        }
         Ok(())
     }
 }
@@ -317,6 +347,47 @@ label = "NO NAME"
         );
         assert_eq!(both.device[1].options["irq"].as_integer(), Some(SLOT_2_IRQ));
         std::fs::remove_dir_all(&directory).unwrap();
+    }
+
+    #[test]
+    fn xh2s_first_sd_host_drives_the_slot_two_contact_low() {
+        let original = BootState::for_firmware("xh2s-730", None).unwrap();
+        let gpio_inputs = |state: &BootState| {
+            state
+                .device
+                .iter()
+                .find(|window| window.base == 0xff90_7000)
+                .unwrap()
+                .options["initial_inputs"]
+                .as_array()
+                .unwrap()
+                .clone()
+        };
+        let mut state = original.clone();
+        LoaderCard {
+            slot: SLOT_2,
+            card: None,
+            assets: BTreeMap::new(),
+            write_back: None,
+        }
+        .apply(&mut state)
+        .unwrap();
+        assert_eq!(gpio_inputs(&state), gpio_inputs(&original));
+
+        LoaderCard {
+            slot: SLOT,
+            card: None,
+            assets: BTreeMap::new(),
+            write_back: None,
+        }
+        .apply(&mut state)
+        .unwrap();
+        let mut inputs = gpio_inputs(&state);
+        let contact = inputs.pop().unwrap();
+        assert_eq!(inputs, gpio_inputs(&original));
+        assert_eq!(contact["port"].as_integer(), Some(11));
+        assert_eq!(contact["pin"].as_integer(), Some(12));
+        assert_eq!(contact["high"].as_bool(), Some(false));
     }
 
     #[test]

@@ -520,8 +520,7 @@ fn rom_boot_state(state: &BootState, rom: &RomStart) -> Result<BootState, String
             Some(handoff.slot)
         }
         Entry::SetupHandoff(_) => {
-            // The setup start runs from internal flash: no SD host options, no card, and the
-            // power controller's registers are the camera's own.
+            // Keep the installed-firmware board's card and power-controller wiring.
             fragment.power_controller_registers.clear();
             fragment.window_options.clear();
             None
@@ -1124,19 +1123,20 @@ pub(crate) fn open_from(
     let mut windows = state.device.clone();
     xp5_boot::apply_run_scene(&resolved, &mut windows, run_scene, ticks_per_second)?;
     let outputs = crate::output::Outputs::default();
+    let media_rom = rom.filter(|start| !matches!(start.entry, Entry::SetupHandoff(_)));
     let (windows, resources) = devices_and_resources(
         state,
         firmware,
         run_directory,
         &outputs,
         windows,
-        &rom.map(RomStart::assets).unwrap_or_else(|| {
+        &media_rom.map(RomStart::assets).unwrap_or_else(|| {
             loader_cards
                 .iter()
                 .flat_map(|card| card.assets.clone())
                 .collect()
         }),
-        &rom.map_or_else(
+        &media_rom.map_or_else(
             || {
                 loader_cards
                     .iter()

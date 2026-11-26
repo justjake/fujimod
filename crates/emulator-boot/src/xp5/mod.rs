@@ -29,7 +29,7 @@ pub struct Startup {
     pub boot_rom: Option<PathBuf>,
     pub card_image: Option<PathBuf>,
     pub card_files: Vec<(String, PathBuf)>,
-    /// The loader start's card in SD slot 2: a raw image, or files for an in-memory volume.
+    /// The installed-firmware start's card in SD slot 2: a raw image, or files for an in-memory volume.
     pub second_card_image: Option<PathBuf>,
     pub second_card_files: Vec<(String, PathBuf)>,
     pub scene: Option<PathBuf>,
@@ -46,7 +46,7 @@ pub(crate) struct RunFacts {
     pub state: manifest::BootState,
     pub inputs: Option<fujimod_emulator_xp5_board::session::Inputs>,
     pub outputs: crate::output::Outputs,
-    /// The loader start's card images, written back at the end of a run.
+    /// The installed-firmware start's card images, written back at the end of a run.
     pub card_write_back: Vec<loader_card::WriteBack>,
 }
 
@@ -101,10 +101,27 @@ pub(super) fn open_startup(
     if let Some(directory) = &run_directory {
         std::fs::create_dir_all(directory).map_err(|error| error.to_string())?;
     }
-    let mut loader = Vec::new();
+    let startup_card = matches!(start, RunStart::Rom | RunStart::SdCard)
+        || (start == RunStart::Setup && rom_path.is_some());
+    let mut caller_cards = Vec::new();
+    if !startup_card {
+        caller_cards.extend(loader_card::LoaderCard::load(
+            loader_card::SLOT,
+            sd_image.as_deref(),
+            &card_files,
+        )?);
+        caller_cards.extend(loader_card::LoaderCard::load(
+            loader_card::SLOT_2,
+            second_card_image.as_deref(),
+            &second_card_files,
+        )?);
+        for card in &caller_cards {
+            card.apply(&mut state)?;
+        }
+    }
     let rom = if matches!(start, RunStart::Rom | RunStart::SdCard | RunStart::Setup) {
-        if second_card_image.is_some() || !second_card_files.is_empty() {
-            return Err("a card in SD slot 2 needs the loader start".into());
+        if startup_card && (second_card_image.is_some() || !second_card_files.is_empty()) {
+            return Err("a card in SD slot 2 needs an installed-firmware start".into());
         }
         let start = match (rom_path.as_deref(), start) {
             (None, RunStart::Setup) => {
@@ -121,8 +138,8 @@ pub(super) fn open_startup(
             }
             (None, _) => return Err("ROM startup requires --boot-rom".into()),
         };
-        Some(match &sd_image {
-            Some(image) => {
+        Some(match (&sd_image, startup_card) {
+            (Some(image), true) => {
                 let start = start.with_card_image(image)?;
                 if let Some(card) = &start.card_image {
                     for line in &card.layout {
@@ -132,25 +149,11 @@ pub(super) fn open_startup(
                 }
                 start
             }
-            None => start,
+            _ => start,
         })
     } else {
         if rom_path.is_some() {
             return Err("a boot ROM requires a ROM or SD card startup".into());
-        }
-        // The loader start's cards, inserted before the board is built (loader_card.rs).
-        loader.extend(loader_card::LoaderCard::load(
-            loader_card::SLOT,
-            sd_image.as_deref(),
-            &card_files,
-        )?);
-        loader.extend(loader_card::LoaderCard::load(
-            loader_card::SLOT_2,
-            second_card_image.as_deref(),
-            &second_card_files,
-        )?);
-        for card in &loader {
-            card.apply(&mut state)?;
         }
         None
     };
@@ -175,10 +178,10 @@ pub(super) fn open_startup(
         mode,
         quantum_override,
         rom.as_ref(),
-        &loader,
+        &caller_cards,
         profile.as_ref(),
     )?;
-    let card_write_back = loader
+    let card_write_back = caller_cards
         .into_iter()
         .filter_map(|card| card.write_back)
         .collect();
