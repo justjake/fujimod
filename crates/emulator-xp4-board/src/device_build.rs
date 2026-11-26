@@ -81,6 +81,7 @@ pub(crate) fn build(
         checksum_power_spi,
         imaging,
         movdc,
+        movdc_packed10,
         sd_clocks,
         sd_hosts,
         register_banks,
@@ -491,7 +492,9 @@ pub(crate) fn build(
     if !movdc.is_empty() {
         devices
             .get_or_insert_with(devices::Devices::empty)
-            .movdc(movdc)?;
+            .movdc(movdc, movdc_packed10)?;
+    } else if movdc_packed10 {
+        return Err("movdc_packed10 needs a declared MOVDC output".to_owned());
     }
     if let Some((base, irq)) = dmp {
         devices

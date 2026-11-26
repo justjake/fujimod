@@ -251,6 +251,11 @@ pub struct Definition {
     )>,
     #[serde(default)]
     pub movdc: Vec<(u64, u32, u64, u64, u8)>,
+    /// Let the declared MOVDC outputs accept output format 1 (`+08 = 0x101`,
+    /// 10-bit 4:2:2 lines), which X-T3 5.11 programs for FHD movie recording; off
+    /// by default.
+    #[serde(default)]
+    pub movdc_packed10: bool,
     #[serde(default)]
     pub sd_clocks: Vec<(u64, u64)>,
     /// SD hosts with the card in their slot; each owns its page, clock halfword included.
