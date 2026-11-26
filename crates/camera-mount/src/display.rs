@@ -341,6 +341,7 @@ impl Profile {
                         bank: output as usize,
                         regs: r,
                         formats: [Encoding::Unresolved; 4],
+                        hdmi_nv12: false,
                     }
                     .planes(&mut *read)?;
                     let width = r[0x14 / 4] & 0x3fff;
