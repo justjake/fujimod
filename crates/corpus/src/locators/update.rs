@@ -9,7 +9,7 @@ pub fn flash_update<L: Lookup>(
     index: &L,
     firmware: &str,
     processor: &str,
-    jedec_id: Option<u32>,
+    installed: Option<super::flash::InstalledFlash>,
     source: &[u8],
     flash_dat_bias: Option<u64>,
 ) -> Result<Value, String> {
@@ -17,7 +17,7 @@ pub fn flash_update<L: Lookup>(
         index,
         firmware,
         processor,
-        jedec_id,
+        installed,
         source,
         flash_dat_bias,
         false,
@@ -42,7 +42,7 @@ fn flash_update_with_route<L: Lookup>(
     index: &L,
     firmware: &str,
     processor: &str,
-    jedec_id: Option<u32>,
+    installed: Option<super::flash::InstalledFlash>,
     source: &[u8],
     flash_dat_bias: Option<u64>,
     mapped_only: bool,
@@ -61,13 +61,13 @@ fn flash_update_with_route<L: Lookup>(
         exr2_flash(index, firmware, container_origin, control)?
     } else if matches!(processor, "xp4" | "xpp") {
         let bias = flash_dat_bias.ok_or("flash locator requires its registered DAT bias")?;
-        flash(index, firmware, processor, jedec_id, bias, 0)?
+        flash(index, firmware, processor, installed, bias, 0)?
     } else {
         let (origin, control) = image_offsets(index, firmware, &bytes, container_origin)?;
         if mapped_only {
             mapped_xp5_flash(index, firmware, origin, control)?
         } else {
-            flash(index, firmware, processor, jedec_id, origin, control)?
+            flash(index, firmware, processor, installed, origin, control)?
         }
     };
     let offset = value["control"]["offset"]

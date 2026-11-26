@@ -8,7 +8,7 @@ mod update;
 pub use update::{flash_update, flash_update_mapped_e1};
 mod reset;
 pub use exr2::{exr2_control, exr2_flash};
-pub use flash::{flash, image_offsets};
+pub use flash::{FlashTechnology, InstalledFlash, flash, image_offsets};
 pub use reset::{ResetAudit, ResetCall, ResetVector, boot_rom_audit};
 use serde::{Deserialize, Serialize};
 

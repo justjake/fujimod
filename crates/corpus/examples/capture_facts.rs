@@ -8,7 +8,7 @@ use std::io::{self, BufRead};
 struct Input {
     firmware_id: String,
     processor: String,
-    jedec_id: Option<u32>,
+    installed_flash: Option<locators::InstalledFlash>,
     flash_dat_bias: Option<u64>,
     update_path: Option<String>,
 }
@@ -26,7 +26,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     &store,
                     &input.firmware_id,
                     &input.processor,
-                    input.jedec_id,
+                    input.installed_flash,
                     &bytes,
                     input.flash_dat_bias,
                 )

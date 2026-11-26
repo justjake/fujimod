@@ -224,15 +224,33 @@ fn loads(routine: &Routine) -> Vec<(usize, u64)> {
     found
 }
 
-/// Locate a stock flash reader for one processor family. `jedec_id` is the
-/// installed hardware identity, verified against the driver's supported-device
-/// table. It is not selected arbitrarily from the list of supported NOR chips.
+/// The installed serial flash as its catalog part record declares it: the
+/// JEDEC identity and the technology (`serial-nor-flash` or
+/// `serial-nand-flash`, the part's interface kind).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Deserialize)]
+pub struct InstalledFlash {
+    pub jedec_id: u32,
+    pub technology: FlashTechnology,
+}
+
+/// Serial flash technology, named as the part records' interface kinds.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum FlashTechnology {
+    SerialNorFlash,
+    SerialNandFlash,
+}
+
+/// Locate a stock flash reader for one processor family. `installed` is the
+/// installed hardware from its part record; its identity is verified against
+/// the driver's supported-device table. It is not selected arbitrarily from the
+/// list of supported NOR chips.
 /// `image_origin` and `control_offset` come from the decoded update packaging.
 pub fn flash<L: Lookup>(
     index: &L,
     firmware: &str,
     processor: &str,
-    jedec_id: Option<u32>,
+    installed: Option<InstalledFlash>,
     image_origin: u64,
     control_offset: u64,
 ) -> Result<Value> {
@@ -240,7 +258,7 @@ pub fn flash<L: Lookup>(
         index,
         firmware,
         processor,
-        jedec_id,
+        installed,
         image_origin,
         control_offset,
         false,
@@ -268,11 +286,12 @@ fn flash_with_route<L: Lookup>(
     index: &L,
     firmware: &str,
     processor: &str,
-    jedec_id: Option<u32>,
+    installed: Option<InstalledFlash>,
     image_origin: u64,
     control_offset: u64,
     mapped_only: bool,
 ) -> Result<Value> {
+    let jedec_id = installed.map(|flash| flash.jedec_id);
     if processor == "xp4" {
         return xp4_flash(index, firmware, image_origin);
     }
@@ -352,7 +371,7 @@ fn flash_with_route<L: Lookup>(
         "destination cache maintenance",
     )?;
     let mixed = dispatcher.has("tst", "x0, #0x3f");
-    let nand = selected_nand(mixed, jedec_id)?;
+    let nand = selected_nand(mixed, installed)?;
     let mut ranges = vec![
         reader.span("flash_read"),
         request.span("flash read request"),
@@ -631,14 +650,15 @@ impl DmaShape {
 }
 
 /// A driver may contain both technologies; reachable NAND instructions do not
-/// identify the installed chip. Selection requires the checked device identity.
-fn selected_nand(has_nand_path: bool, jedec_id: Option<u32>) -> Result<bool> {
-    match jedec_id {
-        Some(0xefdc21) if has_nand_path => Ok(true),
-        Some(id) if nor_part_name(id).is_some() => Ok(false),
-        Some(id) => Err(format!(
-            "{id:06x}: installed flash technology is not established"
-        )),
+/// identify the installed chip. The installed part record's technology selects
+/// the path, and a NAND part needs a driver with a NAND path.
+fn selected_nand(has_nand_path: bool, installed: Option<InstalledFlash>) -> Result<bool> {
+    match installed.map(|flash| flash.technology) {
+        Some(FlashTechnology::SerialNandFlash) if has_nand_path => Ok(true),
+        Some(FlashTechnology::SerialNandFlash) => {
+            Err("installed serial NAND but the driver has no NAND path".into())
+        }
+        Some(FlashTechnology::SerialNorFlash) => Ok(false),
         None => Err("installed flash identity is not established".into()),
     }
 }
@@ -1651,12 +1671,25 @@ mod tests {
 
     #[test]
     fn mixed_driver_technology_follows_checked_identity() {
-        assert_eq!(selected_nand(true, Some(0x2c5b1b)).unwrap(), false);
-        assert_eq!(selected_nand(true, Some(0xefdc21)).unwrap(), true);
-        assert_eq!(selected_nand(false, Some(0x20bb20)).unwrap(), false);
-        assert!(selected_nand(false, Some(0xefdc21)).is_err());
+        let nor = |jedec_id| {
+            Some(InstalledFlash {
+                jedec_id,
+                technology: FlashTechnology::SerialNorFlash,
+            })
+        };
+        let nand = |jedec_id| {
+            Some(InstalledFlash {
+                jedec_id,
+                technology: FlashTechnology::SerialNandFlash,
+            })
+        };
+        assert_eq!(selected_nand(true, nor(0x2c5b1b)).unwrap(), false);
+        assert_eq!(selected_nand(true, nand(0xefdc21)).unwrap(), true);
+        assert_eq!(selected_nand(false, nor(0x20bb20)).unwrap(), false);
+        // The part record, not the identity value, decides the technology.
+        assert_eq!(selected_nand(true, nand(0x123456)).unwrap(), true);
+        assert!(selected_nand(false, nand(0xefdc21)).is_err());
         assert!(selected_nand(true, None).is_err());
-        assert!(selected_nand(true, Some(0x123456)).is_err());
     }
 
     #[test]
