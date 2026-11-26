@@ -1,0 +1,181 @@
+{
+  "$schema": "https://fujimod.com/schemas/restart.generated.schema.json",
+  "schema": 3,
+  "id": "xt4-212-restart",
+  "firmware_id": "xt4-212",
+  "product": "X-T4",
+  "internal_version": "2.16",
+  "code_alias": 0,
+  "code_checks": [
+    {
+      "name": "sender",
+      "address": 34523032,
+      "size": 236,
+      "sha256": "2794fc28fb901fd689788c5e8894efc9e41cf481501430c48ff3d4590664b206"
+    },
+    {
+      "name": "queue_sender",
+      "address": 34520880,
+      "size": 64,
+      "sha256": "d58bbabb28db39cdf2a1b0f0bbcfcfbde1436449c8dcf033918e389ba3cd05dc"
+    },
+    {
+      "name": "clock_reader",
+      "address": 18706572,
+      "size": 56,
+      "sha256": "837ddc77fb6d454ea9ad0148ebecd95329b8158766b4b0d2d49e5a8bec36cee3"
+    },
+    {
+      "name": "register_reader",
+      "address": 18699164,
+      "size": 260,
+      "sha256": "554d2f6214c313a47f00887ee21ae7f2541ac852e0c6d6a3642e4ac19bbd80ce"
+    },
+    {
+      "name": "bulk_poll",
+      "address": 34213052,
+      "size": 252,
+      "sha256": "8329fafbb9a146823d68e2142d31cbaec6b1576f70830a456a6ea647e5a6819e"
+    },
+    {
+      "name": "bulk_e1",
+      "address": 34215968,
+      "size": 196,
+      "sha256": "4174e7478daf2f17cbf3f9ef6f598c084153695edc93034f24186aee649b5e00"
+    },
+    {
+      "name": "bulk_query",
+      "address": 34219304,
+      "size": 144,
+      "sha256": "dc58dcf72de451e719d6704342cff590bbf02779709b187bc7010909142ddfc4"
+    },
+    {
+      "name": "bulk_forward",
+      "address": 34229016,
+      "size": 40,
+      "sha256": "a5a760ff920b787798516fd44a7835dc6421a3e1468b46714cf0deaee1cf7f8b"
+    },
+    {
+      "name": "bulk_source",
+      "address": 34599036,
+      "size": 64,
+      "sha256": "9c998e66e67e92a9a92196dd41ca561175cf5d21e8c9a6181f38d05941a54031"
+    },
+    {
+      "name": "bulk_be32",
+      "address": 34214032,
+      "size": 52,
+      "sha256": "82d680da35e199be8abad7f4180a111dd128fc64e91c6153a3b040da5bff664d"
+    },
+    {
+      "name": "bulk_selector_0",
+      "address": 34684360,
+      "size": 1136,
+      "sha256": "140a6520a4219e884af2b6b71fae2acc76a7492c57e1b6f95f7ed4076fe77e13"
+    },
+    {
+      "name": "bulk_opcode_compare",
+      "address": 34220604,
+      "size": 16,
+      "sha256": "f52d8aa121164b6c5ba2e55a666c3570de9f476c6c30cada02d4e09e9294aa99"
+    },
+    {
+      "name": "bulk_opcode_case",
+      "address": 34220780,
+      "size": 20,
+      "sha256": "c2a399fd627c22927a2892361e6ad236d67a52f8afa75d76534b3d026ef1b148"
+    },
+    {
+      "name": "restart_query_tag_u32",
+      "address": 34214084,
+      "size": 52,
+      "sha256": "fd8d195a69e3ab7f1ea4fb72ba93c30a87131e866fa973f2fd509d0b05c87a1c"
+    },
+    {
+      "name": "restart_query_full_forward",
+      "address": 34229016,
+      "size": 144,
+      "sha256": "12c178a9039a15833b3352bce1d3936c8e63e373d80f00c2e32625bde10a832a"
+    }
+  ],
+  "mechanism": {
+    "kind": "xp4-wake-deadline",
+    "transport": {
+      "kind": "borrowed_query",
+      "callback_table": 53127436,
+      "callback_offset": 12,
+      "stock_callback": 34684360,
+      "output_fields": 54325040,
+      "output_bytes": 8,
+      "tag_decoder": 34214084,
+      "forward": 34229016,
+      "command": 60
+    },
+    "sender": 34523032,
+    "request": 134,
+    "request_offset": 0,
+    "deadline_offset": 4,
+    "parameter_bytes": 12,
+    "deadline": {
+      "payload_offset": 8,
+      "unit": "epoch-seconds"
+    },
+    "queue": {
+      "id": 2,
+      "sender": 34520880,
+      "enqueue": 19392388,
+      "payload_bytes": 16,
+      "parameters": {
+        "0": 0,
+        "8": 4,
+        "12": 8
+      },
+      "uninitialized_payload_offsets": [
+        4
+      ]
+    },
+    "request_conversion": {
+      "source": 281,
+      "target": 134
+    },
+    "configuration_override": {
+      "enable_key": 949,
+      "delay_keys": [
+        946,
+        947,
+        948
+      ]
+    },
+    "clock": {
+      "reader": 18706572,
+      "writer": null,
+      "register_reader": 18699164,
+      "register_writer": null,
+      "transaction": null,
+      "bank_pointer": 24296128,
+      "registers": {
+        "control": null,
+        "low": 35,
+        "high": 36
+      },
+      "read_order": [
+        35,
+        36
+      ],
+      "start_value": null,
+      "stop_value": null,
+      "absent_reason": "No checked counter writer or control register has been located.",
+      "live_reader": 18699004
+    },
+    "ui": {
+      "mode_address": 28810936,
+      "mode_size": 1,
+      "rec_mode": 3,
+      "pending_mode_address": 28810939,
+      "menu_active_address": 27544592
+    },
+    "power_off": null,
+    "parameter_storage": null,
+    "runtime_qualified": false
+  }
+}
