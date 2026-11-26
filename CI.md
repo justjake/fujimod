@@ -9,11 +9,11 @@ independently and run the native and browser suites.
 
 PR CI tests a pull request into `main` on request:
 
-| Event | What PR CI does |
-| --- | --- |
-| A pull request opens ready, or a draft is marked ready | Runs, for a collaborator's pull request |
-| `ci:run` label | Runs on the latest commit, for anyone's pull request; the label is removed |
-| A push to a ready pull request | Cancels the run in progress; the new commit waits for `ci:run` |
+| Event                                                  | What PR CI does                                                            |
+| ------------------------------------------------------ | -------------------------------------------------------------------------- |
+| A pull request opens ready, or a draft is marked ready | Runs, for a collaborator's pull request                                    |
+| `ci:run` label                                         | Runs on the latest commit, for anyone's pull request; the label is removed |
+| A push to a ready pull request                         | Cancels the run in progress; the new commit waits for `ci:run`             |
 
 The result is the `CI required` commit status on the pull request's head:
 pending while untested or running, then passed or failed, linked to the run.
