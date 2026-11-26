@@ -319,19 +319,13 @@ fn emulator_request(
         Some(CardSource::Release) => release_tag(state, &request.firmware),
         _ => None,
     };
-    let (start, flash) = match request.preset {
-        Preset::Stock => (Start::Rom, Flash::Stock),
-        Preset::SdCard => (
-            Start::Held {
-                combination: "sd".into(),
-            },
-            Flash::Stock,
-        ),
-        Preset::Autostart => (
-            Start::Rom,
-            autostart::flash(state, library, request, &files)?,
-        ),
+    let start = match request.preset {
+        Preset::Stock | Preset::Autostart => Start::Rom,
+        Preset::SdCard => Start::Held {
+            combination: "sd".into(),
+        },
     };
+    let flash = preset_flash(state, library, request, &files)?;
     Ok((
         EmulatorRequest {
             firmware: request.firmware.clone(),
@@ -357,6 +351,22 @@ fn emulator_request(
         },
         release,
     ))
+}
+
+/// The internal flash a preset starts from, as `crates/CAMERAS.md`'s table
+/// states it: every preset starts from the stock flash, which carries the
+/// catalog's reference camera settings; autostart keeps the stage 1 its
+/// installer wrote into that same flash.
+fn preset_flash(
+    state: &StateDir,
+    library: &Library,
+    request: &Request,
+    files: &[(String, Vec<u8>)],
+) -> Result<Flash, Error> {
+    match request.preset {
+        Preset::Stock | Preset::SdCard => Ok(Flash::Stock),
+        Preset::Autostart => autostart::flash(state, library, request, files),
+    }
 }
 
 /// The card source a preset uses, if any.

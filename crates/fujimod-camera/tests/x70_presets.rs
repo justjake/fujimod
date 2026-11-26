@@ -38,6 +38,39 @@ fn request(preset: Preset) -> Request {
     }
 }
 
+/// The same request, stopped before its first instruction.
+fn unbooted(preset: Preset, card: Option<fujimod_camera::CardSource>) -> Request {
+    Request {
+        sd_card: card,
+        run_to_rec: false,
+        ..request(preset)
+    }
+}
+
+#[test]
+fn the_x70_sd_card_boot_starts_from_the_stock_internal_flash() {
+    let Some(library) = library() else {
+        eprintln!("skipped: set FUJIMOD_FIRMWARE_LIBRARY");
+        return;
+    };
+    let state = state();
+    let stock = open(&library, &state, unbooted(Preset::Stock, None))
+        .expect("stock open before the first instruction");
+    let card = open(
+        &library,
+        &state,
+        unbooted(Preset::SdCard, Some(fujimod_camera::CardSource::Files(Vec::new()))),
+    )
+    .expect("SD card open before the first instruction");
+    let facts = library.nand_boot("x70-110").expect("X70 NAND boot facts");
+    let stock_flash = fujimod_camera::read_flash(stock.session(), facts).expect("stock flash");
+    let card_flash = fujimod_camera::read_flash(card.session(), facts).expect("card flash");
+    assert_eq!(
+        card_flash, stock_flash,
+        "the SD card boot did not start from the stock internal flash"
+    );
+}
+
 #[test]
 fn the_x70_release_card_opens_to_rec_twice() {
     let Some(library) = library() else {
@@ -54,6 +87,13 @@ fn the_x70_release_card_opens_to_rec_twice() {
         let report = fujimod_emulator_boot::status(opened.session())
             .unwrap_or_else(|error| panic!("attempt {attempt}: {error}"));
         assert_eq!(report.status, "rec", "attempt {attempt}");
+        // REC is ui mode 3 in system mode 1; first-start setup is another
+        // mode, so the pair distinguishes the two.
+        assert_eq!(
+            (report.ui_mode, report.system_mode),
+            (3, 1),
+            "attempt {attempt}: not the REC screen"
+        );
         release = opened.release.clone();
     }
     let elapsed = started.elapsed();
