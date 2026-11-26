@@ -32,6 +32,7 @@ struct Loader {
     setup_stack_top: usize,
     sd_initialize: usize,
     sd_request: usize,
+    request_abi: RequestAbi,
     sd_progress: usize,
     sd_board: usize,
     /// The host prelude, the root host setups, the stop-5 handoff ranges and the secondary-core
@@ -70,6 +71,7 @@ const CARD: Loader = Loader {
     setup_stack_top: template::XP5_SETUP_STACK_TOP,
     sd_initialize: template::SETUP_SD_INITIALIZE,
     sd_request: template::SETUP_SD_REQUEST,
+    request_abi: template::REQUEST_ABI,
     sd_progress: template::SETUP_SD_PROGRESS,
     sd_board: template::SETUP_SD_BOARD,
     sd_host_prelude: template::SETUP_SD_HOST_PRELUDE,
@@ -91,6 +93,7 @@ const INTERNAL_FLASH: Loader = Loader {
     setup_stack_top: flash_template::XP5_SETUP_STACK_TOP,
     sd_initialize: flash_template::SETUP_SD_INITIALIZE,
     sd_request: flash_template::SETUP_SD_REQUEST,
+    request_abi: flash_template::REQUEST_ABI,
     sd_progress: flash_template::SETUP_SD_PROGRESS,
     sd_board: flash_template::SETUP_SD_BOARD,
     sd_host_prelude: flash_template::SETUP_SD_HOST_PRELUDE,
@@ -275,6 +278,50 @@ pub struct Setup {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub stock_selector: Option<StockSelector>,
 }
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum RequestAbi {
+    Sequential = 1,
+    ZeroRuns = 3,
+}
+
+impl RequestAbi {
+    const fn bytes(self) -> usize {
+        match self {
+            Self::Sequential => 40,
+            Self::ZeroRuns => REQUEST_BYTES,
+        }
+    }
+
+    fn bind(
+        self,
+        program: &mut [u8],
+        request: usize,
+        file_len: usize,
+        file_crc: u32,
+        stop: StartupStop,
+    ) -> Result<()> {
+        let template = extent(program, request, self.bytes())?;
+        require(
+            template[..8] == (self as u64).to_le_bytes()
+                && template[8..].iter().all(|&byte| byte == 0),
+            "XP5 request template changed",
+        )?;
+        for (n, value) in [file_len as u64, u64::from(file_crc), 100, 100000]
+            .into_iter()
+            .enumerate()
+        {
+            put64(program, request + (n + 1) * 8, value)?;
+        }
+        match self {
+            Self::Sequential => require(
+                stop == StartupStop::Continue,
+                "The XP5 sequential loader does not support diagnostic stops",
+            ),
+            Self::ZeroRuns => put64(program, request + 40, stop as u64),
+        }
+    }
+}
+
 /// Request ABI 3: six words, then the count and offset/length pairs of the
 /// RAM prefix's zero runs, which the loader fills instead of reading.
 const REQUEST_BYTES: usize = 56 + ZERO_RUNS * 16;
@@ -1153,26 +1200,13 @@ fn package_inner(
             .fold(0u64, |mask, core| mask | 1 << core);
         put64(&mut program, release, targets)?;
         let request = loader.sd_request;
-        let mut empty = vec![0; REQUEST_BYTES];
-        empty[0] = 3;
-        require(
-            extent(&program, request, REQUEST_BYTES)? == empty,
-            "XP5 request template changed",
+        loader.request_abi.bind(
+            &mut program,
+            request,
+            ram.len(),
+            crate::xp4::crc32(&ram),
+            stop,
         )?;
-        let (file_len, file_crc) = (ram.len(), crate::xp4::crc32(&ram));
-        for (n, value) in [
-            3,
-            file_len as u64,
-            u64::from(file_crc),
-            100,
-            100000,
-            stop as u64,
-        ]
-        .into_iter()
-        .enumerate()
-        {
-            put64(&mut program, request + n * 8, value)?;
-        }
         put(
             &mut raw,
             (call - setup.base) as usize,
@@ -1215,11 +1249,13 @@ fn package_inner(
             word(&program, request + 16)? == crate::xp4::crc32(head),
             "XP5 request CRC differs from the file it reads",
         )?;
-        let runs = zero_runs(head);
-        put64(&mut program, request + 48, runs.len() as u64)?;
-        for (n, (offset, length)) in runs.into_iter().enumerate() {
-            put64(&mut program, request + 56 + n * 16, offset)?;
-            put64(&mut program, request + 64 + n * 16, length)?;
+        if loader.request_abi == RequestAbi::ZeroRuns {
+            let runs = zero_runs(head);
+            put64(&mut program, request + 48, runs.len() as u64)?;
+            for (n, (offset, length)) in runs.into_iter().enumerate() {
+                put64(&mut program, request + 56 + n * 16, offset)?;
+                put64(&mut program, request + 64 + n * 16, length)?;
+            }
         }
         files.push(File::new("ffboot.bin", file)?);
         if !setup.handoff_ranges.is_empty() {
@@ -1253,6 +1289,33 @@ fn package_inner(
 mod tests {
     use super::*;
     use card_boot::Payload;
+    #[test]
+    fn sequential_request_binds_only_five_words() {
+        let mut program = [0; 48];
+        program[0] = 1;
+        program[40..].fill(0xab);
+        RequestAbi::Sequential
+            .bind(&mut program, 0, 4096, 0x12345678, StartupStop::Continue)
+            .unwrap();
+        let expected = [1u64, 4096, 0x12345678, 100, 100000].map(u64::to_le_bytes);
+        assert_eq!(&program[..40], expected.as_flattened());
+        assert_eq!(&program[40..], &[0xab; 8]);
+
+        program[..40].fill(0);
+        program[0] = 1;
+        assert!(
+            RequestAbi::Sequential
+                .bind(
+                    &mut program,
+                    0,
+                    4096,
+                    0,
+                    StartupStop::AfterCrcWithErrorPackets
+                )
+                .is_err()
+        );
+    }
+
     #[test]
     fn extension_window_preserves_default_placement_and_supports_4_kib_pages() {
         const BASE: u64 = 0xff800000;
@@ -1918,7 +1981,7 @@ mod tests {
             loader.sd_host_variants..loader.sd_host_variants + 8 + 8 * 24,
             loader.sd_handoff_ranges..loader.sd_handoff_ranges + 8 + handoff_result::RANGES * 16,
             loader.sd_secondary_release..loader.sd_secondary_release + 8,
-            loader.sd_request..loader.sd_request + REQUEST_BYTES,
+            loader.sd_request..loader.sd_request + loader.request_abi.bytes(),
             loader.setup_return_branch..loader.setup_return_branch + 4,
         ];
         ranges.extend(loader.externals.iter().map(|&(at, _, _)| at..at + 4));

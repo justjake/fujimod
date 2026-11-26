@@ -51,6 +51,17 @@ pub const PRELUDE_STACK_MAX: usize = {};
         layout["prelude_stack_max"].as_u64().unwrap()
     );
     let symbols = layout["symbols"].as_object().unwrap();
+    let request = symbols["setup_sd_request"].as_u64().unwrap() as usize;
+    let bytes = fs::read(&image).expect("XP5 SD loader image");
+    let abi = u64::from_le_bytes(bytes[request..request + 8].try_into().unwrap());
+    let variant = match abi {
+        1 => "Sequential",
+        3 => "ZeroRuns",
+        _ => panic!("Unsupported XP5 SD request ABI {abi} in {stem}"),
+    };
+    rust += &format!(
+        "pub(super) const REQUEST_ABI: super::RequestAbi = super::RequestAbi::{variant};\n"
+    );
     for symbol in extra_symbols {
         assert!(
             symbols.contains_key(*symbol),
