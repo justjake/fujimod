@@ -1,14 +1,14 @@
 //! Application-profile startup plans with caller-selected firmware and media.
+use crate::host::Memory;
 use crate::{graph::ProcessorStart, xpp};
 use fujimod_catalog_configuration::{RunEngine, RunInputs};
 use fujimod_catalog_controls::facts::ConfigurationLocation;
 use fujimod_catalog_resolution::ResolvedConfiguration;
 use fujimod_emulator::board::bus::Mode;
+use fujimod_emulator_controls::Calibration;
 use fujimod_emulator_cpu::Register;
 use fujimod_emulator_devices::graphics::scanout::Frame;
-use fujimod_emulator_controls::Calibration;
 use fujimod_emulator_session::Session;
-use crate::host::Memory;
 use fujimod_emulator_xp4_board as xp4;
 use serde::Deserialize;
 use serde_json::{Value, json};
@@ -145,7 +145,10 @@ pub enum KeyWire {
 
 impl KeyWire {
     /// The direct GPIO contact or single ADC band the catalog declares for a key.
-    pub fn resolve(selection: &fujimod_catalog::reference::ResolvedSelection, name: &str) -> Result<Self, String> {
+    pub fn resolve(
+        selection: &fujimod_catalog::reference::ResolvedSelection,
+        name: &str,
+    ) -> Result<Self, String> {
         if let Some(key) = fujimod_catalog_wiring::digital_key(selection, name)? {
             return Ok(Self::Digital(key));
         }
@@ -181,7 +184,9 @@ impl<'a> LoadedConfiguration<'a> {
 impl Calibration for LoadedConfiguration<'_> {
     fn bytes(&self, offset: u32, length: usize) -> Option<Vec<u8>> {
         let mut bytes = vec![0; length];
-        self.board.read(self.base.checked_add(u64::from(offset))?, &mut bytes).ok()?;
+        self.board
+            .read(self.base.checked_add(u64::from(offset))?, &mut bytes)
+            .ok()?;
         Some(bytes)
     }
 }
@@ -207,8 +212,14 @@ impl Board {
         match wire {
             KeyWire::Digital(key) => self.gpio_input(key.port, key.pin, key.active == pressed),
             KeyWire::Analog(key) => {
-                let calibration = key.calibration.map(|location| LoadedConfiguration::new(self, location)).transpose()?;
-                let (down, up) = fujimod_emulator_controls::adc_levels(key, calibration.as_ref().map(|c| c as &dyn Calibration))?;
+                let calibration = key
+                    .calibration
+                    .map(|location| LoadedConfiguration::new(self, location))
+                    .transpose()?;
+                let (down, up) = fujimod_emulator_controls::adc_levels(
+                    key,
+                    calibration.as_ref().map(|c| c as &dyn Calibration),
+                )?;
                 self.adc_input(key.channel, if pressed { down } else { up })
             }
         }

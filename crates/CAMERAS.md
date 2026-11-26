@@ -51,11 +51,11 @@ A failed open names how far the boot got: boot ROM, firmware loaded, REC.
 
 A small crate above the emulator turns FujiMod presets into emulator inputs:
 
-| Preset | Internal flash | SD card | Combination |
-|---|---|---|---|
-| Stock | Stock | None, or files the caller adds | None |
-| SD card boot | Stock | The FujiMod SD card | `sd` |
-| Autostart | Stock with the internal-flash stage 1 installed | The FujiMod SD card | None |
+| Preset       | Internal flash                                  | SD card                        | Combination |
+| ------------ | ----------------------------------------------- | ------------------------------ | ----------- |
+| Stock        | Stock                                           | None, or files the caller adds | None        |
+| SD card boot | Stock                                           | The FujiMod SD card            | `sd`        |
+| Autostart    | Stock with the internal-flash stage 1 installed | The FujiMod SD card            | None        |
 
 - The FujiMod SD card is a folder or files the caller gives, or the
   published release SD card for the firmware. A release SD card is

@@ -59,7 +59,10 @@ fn the_x70_sd_card_boot_starts_from_the_stock_internal_flash() {
     let card = open(
         &library,
         &state,
-        unbooted(Preset::SdCard, Some(fujimod_camera::CardSource::Files(Vec::new()))),
+        unbooted(
+            Preset::SdCard,
+            Some(fujimod_camera::CardSource::Files(Vec::new())),
+        ),
     )
     .expect("SD card open before the first instruction");
     let facts = library.nand_boot("x70-110").expect("X70 NAND boot facts");

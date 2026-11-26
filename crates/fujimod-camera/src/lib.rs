@@ -27,10 +27,7 @@ use fujimod_emulator_camera::{
 use fujimod_emulator_session::Session;
 use serde_json::Value;
 use sha2::{Digest, Sha256};
-use std::{
-    fs,
-    path::PathBuf,
-};
+use std::{fs, path::PathBuf};
 
 pub use autostart::stock_menus;
 pub use emulator::{
@@ -534,4 +531,3 @@ pub(crate) fn flash_path(state: &StateDir, firmware: &str, files: &[(String, Vec
         .join(firmware)
         .join(format!("{}.flash", flash_key(firmware, files)))
 }
-

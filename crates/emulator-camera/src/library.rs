@@ -195,9 +195,11 @@ impl Library {
         if profile.is_some_and(|profile| profile.camera_configuration_id.is_some()) {
             return Ok(Vec::new());
         }
-        Ok(vec![profile
-            .and_then(|profile| profile.browser_configuration_id.clone())
-            .ok_or_else(|| LibraryError::UnregisteredFirmware(firmware_id.into()))?])
+        Ok(vec![
+            profile
+                .and_then(|profile| profile.browser_configuration_id.clone())
+                .ok_or_else(|| LibraryError::UnregisteredFirmware(firmware_id.into()))?,
+        ])
     }
 
     /// The catalog run configuration the firmware's camera opens with.
@@ -206,8 +208,8 @@ impl Library {
     /// others name a browser overlay, whose configuration it applies.
     pub fn camera_configuration_id(&self, firmware_id: &str) -> Result<String, LibraryError> {
         let profile = self.profile(firmware_id);
-        if let Some(configuration_id) = profile
-            .and_then(|profile| profile.camera_configuration_id.clone())
+        if let Some(configuration_id) =
+            profile.and_then(|profile| profile.camera_configuration_id.clone())
         {
             return Ok(configuration_id);
         }

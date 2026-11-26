@@ -6,10 +6,7 @@
 //! with nothing held, from the boot ROM with a catalog power-on combination
 //! held, or at the native loader with a caller-verified RAM image. Opening
 //! writes nothing to disk unless the caller asked for the boot cache.
-use crate::{
-    Library, LibraryError, Stage, StateDir, flash,
-    library::FirmwareFiles,
-};
+use crate::{Library, LibraryError, Stage, StateDir, flash, library::FirmwareFiles};
 use fujimod_catalog_configuration::{RunEngine, RunInputs};
 use fujimod_catalog_controls::{BootCombination, BootMode, PhysicalControls};
 use fujimod_catalog_remote::{Facts, Selection};
@@ -598,9 +595,12 @@ pub(crate) fn construct(
         let restored = medium.restore_committed(bytes).map_err(|error| {
             OpenError::at(Stage::BootRom, format!("saved internal flash: {error}"))
         })?;
-        camera.session.retain_nand("nand", restored).map_err(|error| {
-            OpenError::at(Stage::BootRom, format!("saved internal flash: {error}"))
-        })?;
+        camera
+            .session
+            .retain_nand("nand", restored)
+            .map_err(|error| {
+                OpenError::at(Stage::BootRom, format!("saved internal flash: {error}"))
+            })?;
     }
     // A power-on's kept medium replaces the flash this request would build.
     apply_kept_media(&mut camera.session, kept)?;

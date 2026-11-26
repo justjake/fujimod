@@ -1,7 +1,7 @@
+use fujimod_camera::{self as camera, Library, LibraryFirmware, StateDir};
 use fujimod_catalog_configuration::{RunInputs, RunStart};
 use fujimod_catalog_resolution::ResolvedConfiguration;
 use fujimod_emulator_boot::xp5::RunHost;
-use fujimod_camera::{self as camera, Library, LibraryFirmware, StateDir};
 use serde::{Deserialize, Serialize};
 use std::{
     path::PathBuf,
@@ -326,9 +326,7 @@ fn open_with_builder(request: OpenCameraRequest) -> Result<(LaunchedCamera, Runn
         LauncherBoot::SdCard => camera::Preset::SdCard,
         LauncherBoot::Autostart => camera::Preset::Autostart,
     };
-    let sd_card = request
-        .sd_card
-        .map(camera::CardSource::Directory);
+    let sd_card = request.sd_card.map(camera::CardSource::Directory);
     let body = resolved.reference.body.id.clone();
     let model = body.to_uppercase();
     let configuration = resolved.configuration.id.clone();
