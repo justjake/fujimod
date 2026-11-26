@@ -1,0 +1,9 @@
+# The recorder resets this block at 0xffd10118 (0x16e3ae0). Its handler
+# uses interrupt source 0xd (INTID 207). Timing is functional.
+[[device]]
+base = 0xffd10000
+size = 0x1000
+kind = "jpeg-encoder"
+[device.options]
+irq = 207
+run_ticks = 1000
