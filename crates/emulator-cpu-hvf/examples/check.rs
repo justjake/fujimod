@@ -457,6 +457,7 @@ fn main() -> Result<(), String> {
         reads: Vec<(u64, u32)>,
         writes: Vec<(u64, u32, u64)>,
         stop_reads: bool,
+        read_value: u64,
     }
     unsafe fn read(offset: u64, size: u32, data: *mut c_void) -> u64 {
         let io = unsafe { &mut *data.cast::<Io<'_>>() };
@@ -466,7 +467,7 @@ fn main() -> Result<(), String> {
         if io.stop_reads {
             io.cpu.stop().unwrap();
         }
-        0x1234567800000080 | offset
+        io.read_value | offset
     }
     unsafe fn write(offset: u64, size: u32, value: u64, data: *mut c_void) {
         let io = unsafe { &mut *data.cast::<Io<'_>>() };
@@ -478,6 +479,7 @@ fn main() -> Result<(), String> {
         reads: vec![],
         writes: vec![],
         stop_reads: false,
+        read_value: 0x1234567800000080,
     };
     unsafe {
         cpu.map_mmio(
@@ -517,6 +519,17 @@ fn main() -> Result<(), String> {
     println!("PASS: data cache cleans by address retire on device windows");
     code(&cpu, 0x10300, &[0xf9400020, 0xf9000420]);
     cpu.invalidate_code(Some((0x10300, 0x10308)))?;
+    cpu.set_execution_policy(ExecutionPolicy::Interactive)?;
+    set(&cpu, Register::X(1), 0x8000000);
+    set(&cpu, Register::Pc, 0x10300);
+    match cpu.run_to_native_exit(2_000_000)? {
+        fujimod_emulator_cpu_hvf::NativeExit::Exception(trap) => {
+            assert_eq!(trap.syndrome >> 26, 0x24);
+            assert_ne!(trap.syndrome & (1 << 24), 0);
+            assert_eq!(trap.physical_address, 0x8000000);
+        }
+        other => panic!("expected scalar stage-2 syndrome, got {other:?}"),
+    }
     // A pause raised inside the parked asynchronous MMIO callback must still
     // commit the load once before the run stops.
     code(&cpu, 0x10300, &[0xf9400020, 0x14000000]);
@@ -648,6 +661,107 @@ fn main() -> Result<(), String> {
     assert_eq!(get(&cpu, Register::X(3)), 0x1234567800000080);
     assert_eq!(get(&cpu, Register::X(4)), 0x1234567800000088);
     assert_eq!(&io.reads[1..], &[(0, 1), (0, 4), (0, 8), (8, 8)]);
+    // Compare the hardware-syndrome path with full instruction decoding,
+    // including the register and device state after fallback instructions.
+    {
+        const PC: u64 = 0x10340;
+        const MMIO: u64 = 0x8000000;
+        const INITIAL: u64 = 0x1234567880008080;
+        let cases = [
+            ("ldrb w0", 0x39400020, 0),
+            ("ldrh w0", 0x79400020, 0),
+            ("ldr w0", 0xb9400020, 0),
+            ("ldr x0", 0xf9400020, 0),
+            ("ldr wzr", 0xb940003f, 0),
+            ("ldr xzr", 0xf940003f, 0),
+            ("ldrsb w0", 0x39c00020, 0),
+            ("ldrsb x0", 0x39800020, 0),
+            ("ldrsh w0", 0x79c00020, 0),
+            ("ldrsh x0", 0x79800020, 0),
+            ("ldrsw x0", 0xb9800020, 0),
+            ("strb w0", 0x39000020, 0),
+            ("strh w0", 0x79000020, 0),
+            ("str w0", 0xb9000020, 0),
+            ("str x0", 0xf9000020, 0),
+            ("str wzr", 0xb900003f, 0),
+            ("str xzr", 0xf900003f, 0),
+            ("ldr w0, [x1], #4", 0xb8404420, 0),
+            ("str w0, [x1, #4]!", 0xb8004c20, 0),
+            ("ldp x3, x4", 0xa9401023, 0),
+            ("stp x3, x4", 0xa9001023, 0),
+            ("ldr q0", 0x3dc00020, 0),
+            ("ldr x0 across 4 KiB", 0xf9400020, 0xffc),
+            ("str x0 across 4 KiB", 0xf9000020, 0xffc),
+        ];
+        let (reads, writes, value) = (io.reads.len(), io.writes.len(), io.read_value);
+        io.read_value = INITIAL;
+        let saved = cpu.snapshot(None)?;
+        set(&cpu, sys(0xc082), get(&cpu, sys(0xc082)) | (3 << 20)); // CPACR_EL1.FPEN
+        // Identity-map normal memory at stage 1 so unaligned accesses reach
+        // stage 2 instead of raising a guest device-alignment fault.
+        cpu.map_zeroed(0x40000, 0x4000, 3)?;
+        cpu.write_memory(0x40000, &0x401u64.to_le_bytes())?;
+        set(&cpu, sys(0xc100), 0x40000);
+        set(&cpu, sys(0xc102), 32);
+        set(&cpu, sys(0xc510), 0xff);
+        set(&cpu, sys(0xc080), 0x30d00801);
+        let regs = [
+            Register::X(0),
+            Register::X(1),
+            Register::X(3),
+            Register::X(4),
+            Register::Pc,
+        ];
+        for (label, word, offset) in cases {
+            code(&cpu, PC, &[word, 0xd503207f]); // WFI ends the interactive run.
+            cpu.invalidate_code(Some((PC, PC + 8)))?;
+            let mut reference = None;
+            for policy in [ExecutionPolicy::Exact, ExecutionPolicy::Interactive] {
+                cpu.set_execution_policy(policy)?;
+                set(&cpu, Register::X(0), INITIAL);
+                set(&cpu, Register::X(1), MMIO + offset);
+                set(&cpu, Register::X(3), INITIAL);
+                set(&cpu, Register::X(4), !INITIAL);
+                let interactive = policy == ExecutionPolicy::Interactive;
+                let outcome = run(&cpu, PC, if interactive { 20_000_000 } else { 1 });
+                let error = match outcome {
+                    Ok(Exit::Stopped) if !interactive => None,
+                    Ok(Exit::Hint(Hint::WaitForInterrupt)) if interactive => {
+                        // The worker has also retired WFI in this policy.
+                        set(&cpu, Register::Pc, get(&cpu, Register::Pc) - 4);
+                        None
+                    }
+                    Err(error) => Some(error.kind()),
+                    other => panic!("{label} {policy:?}: unexpected exit {other:?}"),
+                };
+                let observed = (
+                    error,
+                    regs.map(|r| get(&cpu, r)),
+                    io.reads.split_off(reads),
+                    io.writes.split_off(writes),
+                );
+                if let Some(expected) = &reference {
+                    assert_eq!(&observed, expected, "{label}");
+                } else {
+                    if label == "ldr q0" {
+                        assert_eq!(observed.0, Some("invalid-instruction"));
+                    } else {
+                        assert_eq!(observed.0, None, "{label}");
+                        assert_eq!(observed.1[4], PC + 4, "{label}");
+                        assert!(!observed.2.is_empty() || !observed.3.is_empty(), "{label}");
+                    }
+                    reference = Some(observed);
+                }
+            }
+        }
+        cpu.restore(saved.as_ref())?;
+        cpu.unmap(0x40000, 0x4000)?;
+        io.read_value = value;
+        cpu.set_execution_policy(ExecutionPolicy::Exact)?;
+    }
+    println!(
+        "PASS: interactive MMIO parity for scalar, writeback, pair, SIMD and cross-page accesses"
+    );
     // A strict device refusal stops the access before register/PC commitment.
     io.stop_reads = true;
     set(&cpu, Register::X(0), 0xdeadbeef);

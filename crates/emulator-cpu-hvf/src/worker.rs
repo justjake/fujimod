@@ -86,6 +86,65 @@ impl MmioTransfer {
         value
     }
 }
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct IsvMmio {
+    physical: u64,
+    size: u8,
+    register: u8,
+    load: bool,
+    signed: bool,
+    wide: bool,
+}
+
+impl IsvMmio {
+    fn transfer(self) -> MmioTransfer {
+        MmioTransfer {
+            physical: self.physical,
+            size: self.size,
+            register: self.register,
+            signed: self.signed,
+            wide: self.wide,
+            ram: false,
+            store: 0,
+        }
+    }
+}
+
+/// Use the ISS only when the stage-2 data abort describes a scalar transfer
+/// and HVF supplied the faulting IPA. The instruction decoder handles the
+/// remaining cases, including writeback, pair, SIMD, and cache maintenance.
+fn decode_mmio_from_esr(trap: &Trap) -> Option<IsvMmio> {
+    let syndrome = trap.syndrome;
+    const ISV: u64 = 1 << 24;
+    const FNV_EA_CM_S1PTW: u64 = 0xf << 7;
+    if syndrome >> 26 != 0x24
+        || syndrome & ISV == 0
+        || syndrome & FNV_EA_CM_S1PTW != 0
+        || !(0x04..=0x0f).contains(&(syndrome & 0x3f))
+    {
+        return None;
+    }
+    let size = 1u8 << ((syndrome >> 22) & 3);
+    let load = syndrome & (1 << 6) == 0;
+    let signed = syndrome & (1 << 21) != 0;
+    let wide = syndrome & (1 << 15) != 0;
+    if (trap.physical_address & 0xfff) + u64::from(size) > 0x1000
+        || (size == 8 && (!wide || signed))
+        || (size < 8 && !signed && wide)
+        || (signed && (!load || (size == 4 && !wide)))
+    {
+        return None;
+    }
+    Some(IsvMmio {
+        physical: trap.physical_address,
+        size,
+        register: ((syndrome >> 16) & 0x1f) as u8,
+        load,
+        signed,
+        wide,
+    })
+}
+
 pub fn base_register(r: u8) -> Register {
     if r == 31 {
         Register::Sp
@@ -1140,6 +1199,42 @@ impl Processor {
         access.failure = result.err();
         access
     }
+    fn prepare_mmio_from_isv(&self, isv: IsvMmio) -> Result<MmioAccess, ExecutionError> {
+        let pc = self.reg(ffi::PC)?;
+        let mut transfer = isv.transfer();
+        transfer.ram = self.vm.overlaps(
+            isv.physical,
+            isv.physical.saturating_add(u64::from(isv.size)),
+        )?;
+        if !isv.load && !transfer.ram && isv.register != 31 {
+            transfer.store = self.reg(u32::from(isv.register))?;
+        }
+        let mut transfers = arrayvec::ArrayVec::new();
+        transfers.push(transfer);
+        Ok(MmioAccess {
+            pc,
+            load: isv.load,
+            simd: false,
+            transfers,
+            writeback: None,
+            failure: None,
+            cache_clean: false,
+        })
+    }
+
+    fn fast_mmio_isv(&self, isv: IsvMmio, tick: Option<u64>) -> Result<bool, ExecutionError> {
+        if !isv.load {
+            return Ok(false);
+        }
+        let transfer = isv.transfer();
+        let Some(raw) = self.fast_mmio_value(&transfer, tick)? else {
+            return Ok(false);
+        };
+        self.write_mmio_load(&transfer, raw)?;
+        self.set_reg(ffi::PC, self.reg(ffi::PC)?.wrapping_add(4))?;
+        Ok(true)
+    }
+
     /// Serve a single scalar device load from a published read in an
     /// interactive run, at this core's guest clock. Anything else, including
     /// a declined read, stays an owner callback.
@@ -1161,34 +1256,53 @@ impl Processor {
         {
             return Ok(false);
         }
-        let Some(end) = t.physical.checked_add(u64::from(t.size)) else {
+        let Some(raw) = self.fast_mmio_value(t, tick)? else {
             return Ok(false);
         };
-        let at = self.fast_windows.partition_point(|w| w.base <= t.physical);
-        let Some(window) = at
-            .checked_sub(1)
-            .map(|i| &self.fast_windows[i])
-            .filter(|w| end <= w.end)
-        else {
-            return Ok(false);
-        };
-        let offset = window.offset + t.physical - window.base;
-        let Some(raw) = window
-            .reads
-            .iter()
-            .find_map(|read| read.read_at(offset, u32::from(t.size), tick))
-        else {
-            return Ok(false);
-        };
-        if t.register != 31 {
-            self.set_reg(u32::from(t.register), t.loaded(raw))?;
-        }
+        self.write_mmio_load(t, raw)?;
         if let Some((r, v)) = access.writeback {
             self.write(base_register(r), &v.to_le_bytes())?;
         }
         self.set_reg(ffi::PC, access.pc.wrapping_add(4))?;
         Ok(true)
     }
+
+    fn fast_mmio_value(
+        &self,
+        transfer: &MmioTransfer,
+        tick: Option<u64>,
+    ) -> Result<Option<u64>, ExecutionError> {
+        let address = transfer.physical;
+        let Some(end) = address.checked_add(u64::from(transfer.size)) else {
+            return Ok(None);
+        };
+        let at = self
+            .fast_windows
+            .partition_point(|window| window.base <= address);
+        let Some(window) = at
+            .checked_sub(1)
+            .map(|index| &self.fast_windows[index])
+            .filter(|window| end <= window.end)
+        else {
+            return Ok(None);
+        };
+        if self.vm.overlaps(address, end)? {
+            return Ok(None);
+        }
+        let offset = window.offset + (address - window.base);
+        Ok(window
+            .reads
+            .iter()
+            .find_map(|read| read.read_at(offset, u32::from(transfer.size), tick)))
+    }
+
+    fn write_mmio_load(&self, transfer: &MmioTransfer, raw: u64) -> Result<(), String> {
+        if transfer.register != 31 {
+            self.set_reg(u32::from(transfer.register), transfer.loaded(raw))?;
+        }
+        Ok(())
+    }
+
     /// Report an architectural trap; data aborts carry their decoded access.
     fn trap_event(&self, trap: Trap) -> Event {
         if matches!(trap.syndrome >> 26, 0x24 | 0x25) {
@@ -1517,15 +1631,26 @@ impl Processor {
                         virtual_address: exit.exception.virtual_address,
                         physical_address: exit.exception.physical_address,
                     };
-                    let event = self.trap_event(trap);
-                    if let Event::Mmio(_, access) = &event {
+                    let event = if matches!(ec, 0x24 | 0x25) {
                         let tick = clock
                             .and_then(|clock| clock.after(progress).ok())
                             .map(|clock| clock.now);
-                        if self.fast_mmio(&trap, access, tick)? {
-                            continue;
-                        }
-                    }
+                        let access = if let Some(isv) = decode_mmio_from_esr(&trap) {
+                            if self.fast_mmio_isv(isv, tick)? {
+                                continue;
+                            }
+                            self.prepare_mmio_from_isv(isv)?
+                        } else {
+                            let access = self.prepare_mmio();
+                            if self.fast_mmio(&trap, &access, tick)? {
+                                continue;
+                            }
+                            access
+                        };
+                        Event::Mmio(trap, access)
+                    } else {
+                        Event::Trap
+                    };
                     self.send_event(events, event, "HVF trap owner disconnected")?;
                     let handled = self.paused(commands)?;
                     if !handled {
@@ -1631,5 +1756,62 @@ pub fn serve(
                 let _ = p.reply.send(result);
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn isv_accepts_scalar_transfers_and_declines_incomplete_syndromes() {
+        let syndrome = (0x24 << 26)
+            | (1 << 25)
+            | (1 << 24)
+            | (1 << 22)
+            | (1 << 21)
+            | (31 << 16)
+            | (1 << 15)
+            | 0x07;
+        let trap = Trap {
+            syndrome,
+            virtual_address: 0x456,
+            physical_address: 0x8456,
+        };
+        assert_eq!(
+            decode_mmio_from_esr(&trap),
+            Some(IsvMmio {
+                physical: 0x8456,
+                size: 2,
+                register: 31,
+                load: true,
+                signed: true,
+                wide: true,
+            })
+        );
+        for bit in [26, 24, 10, 9, 8, 7, 6, 5] {
+            assert_eq!(
+                decode_mmio_from_esr(&Trap {
+                    syndrome: syndrome ^ (1 << bit),
+                    ..trap
+                }),
+                None,
+                "syndrome bit {bit}",
+            );
+        }
+        assert_eq!(
+            decode_mmio_from_esr(&Trap {
+                physical_address: 0x8fff,
+                ..trap
+            }),
+            None,
+        );
+        assert_eq!(
+            decode_mmio_from_esr(&Trap {
+                syndrome: syndrome ^ (1 << 21),
+                ..trap
+            }),
+            None,
+        );
     }
 }
