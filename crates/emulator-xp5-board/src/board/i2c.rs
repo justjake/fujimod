@@ -48,10 +48,9 @@ pub fn build(base: u64, size: u64, options: &toml::Table) -> Result<Controller<T
         if let Part::Tmd2772Proximity {
             interrupt: Some(line),
         } = connection.part
+            && (!(32..1020).contains(&line) || !lines.insert(line))
         {
-            if !(32..1020).contains(&line) || !lines.insert(line) {
-                return Err("I2C target needs a distinct shared interrupt line".into());
-            }
+            return Err("I2C target needs a distinct shared interrupt line".into());
         }
     }
     let targets = wiring
