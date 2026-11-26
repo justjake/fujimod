@@ -1,0 +1,29 @@
+# X-mount lens bus on SSP instance 0. The XP5 DMA request pair and controller
+# interrupt use the X-T5 wiring.
+# Lens initialization at 0x1711f70 samples detect 0.11 and the 10.0/1/2 sense
+# pads. The ready handlers at 0x17036a4 and 0x1703668 sample 14.1. Supply,
+# interrupt and timing settings reuse the XP5 connector model.
+[[device]]
+base = 0xff910000
+size = 0x1000
+kind = "pl022"
+[device.options]
+source_hz = 48000000
+ticks_per_second = 1000000000
+receive_request = 0
+transmit_request = 1
+gic_line = 36
+[device.options.wire]
+kind = "x-mount-lens"
+lens = "xf18-55"
+detect = { port = 0, pin = 11 }
+sense = [{ port = 10, pin = 0 }, { port = 10, pin = 1 }, { port = 10, pin = 2 }]
+sense_unpowered = [true, false, true]
+supplies = [{ port = 15, pin = 9 }, { port = 15, pin = 10 }]
+ready = { port = 14, pin = 1 }
+ready_mux = 3
+ready_low_line = 131
+ready_high_line = 115
+startup_us = 2000
+busy_us = 50000
+operation_us = 1000
