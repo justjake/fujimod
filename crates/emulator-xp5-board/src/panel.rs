@@ -681,6 +681,10 @@ mod tests {
             .unwrap();
         assert!(pressed.signals().unwrap().contains(&record_pad(false)));
         assert!(switches.signals().unwrap().contains(&record_pad(true)));
+        let released = pressed
+            .transition("movie_recording_button", "released")
+            .unwrap();
+        assert!(released.signals().unwrap().contains(&record_pad(true)));
     }
 
     #[test]

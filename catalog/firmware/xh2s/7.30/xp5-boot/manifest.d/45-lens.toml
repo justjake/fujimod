@@ -1,3 +1,4 @@
+# Set XT5_LENS=none to run with an empty lens mount.
 # X-mount lens bus on SSP instance 0. The XP5 DMA request pair and controller
 # interrupt use the X-T5 wiring.
 # Lens initialization at 0x1711f70 samples detect 0.11 and the 10.0/1/2 sense
