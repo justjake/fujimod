@@ -24,19 +24,12 @@
     "generated_assets": [
       {
         "id": "live_pixels",
-        "pattern": [
-          64,
-          64,
-          128,
-          128
-        ],
+        "pattern": [64, 64, 128, 128],
         "size": 691200
       },
       {
         "id": "live_statistics_0",
-        "pattern": [
-          0
-        ],
+        "pattern": [0],
         "size": 1024
       }
     ],
@@ -131,24 +124,15 @@
         "initial_position": 0,
         "positions": [
           {
-            "contacts": [
-              true,
-              true
-            ],
+            "contacts": [true, true],
             "drive": 0
           },
           {
-            "contacts": [
-              false,
-              false
-            ],
+            "contacts": [false, false],
             "drive": 1
           },
           {
-            "contacts": [
-              true,
-              true
-            ],
+            "contacts": [true, true],
             "drive": 3
           }
         ],
@@ -157,20 +141,7 @@
       "adc": {
         "kind": "adc",
         "conversion_ticks": 4,
-        "samples": [
-          0,
-          0,
-          1023,
-          63,
-          534,
-          640,
-          512,
-          825,
-          1023,
-          1023,
-          0,
-          0
-        ]
+        "samples": [0, 0, 1023, 63, 534, 640, 512, 825, 1023, 1023, 0, 0]
       },
       "block98000": {
         "kind": "block-98000",
@@ -189,19 +160,13 @@
       },
       "control_bus0": {
         "kind": "i2c",
-        "modes": [
-          1,
-          9
-        ],
+        "modes": [1, 9],
         "transfer_ticks": 4,
         "profile": "declared-register-status-pair-latched-irq-unmeasured"
       },
       "control_bus1": {
         "kind": "i2c",
-        "modes": [
-          1,
-          9
-        ],
+        "modes": [1, 9],
         "transfer_ticks": 4,
         "profile": "usbcharge-disconnected-pwic-startup-tagged"
       },
@@ -310,11 +275,7 @@
         "transfer_ticks": 4,
         "max_program_bytes": 536870912,
         "spi0": {
-          "required": [
-            192,
-            48,
-            0
-          ],
+          "required": [192, 48, 0],
           "selection": {
             "pin": {
               "port": 11,
@@ -333,20 +294,8 @@
       },
       "pulse": {
         "kind": "exr2-pulse",
-        "counter_channels": [
-          0,
-          4
-        ],
-        "timer_channels": [
-          0,
-          2,
-          4,
-          6,
-          8,
-          9,
-          10,
-          11
-        ],
+        "counter_channels": [0, 4],
+        "timer_channels": [0, 2, 4, 6, 8, 9, 10, 11],
         "quadrature": false,
         "initial_phase": 0,
         "capture_channel": null
@@ -374,24 +323,7 @@
       },
       "serial_gpio": {
         "kind": "gpio",
-        "input_levels": [
-          3692,
-          0,
-          4608,
-          777,
-          32,
-          0,
-          0,
-          0,
-          0,
-          0,
-          0,
-          0,
-          128,
-          0,
-          0,
-          0
-        ],
+        "input_levels": [3692, 0, 4608, 777, 32, 0, 0, 0, 0, 0, 0, 0, 128, 0, 0, 0],
         "output_levels": [
           {
             "pin": {
@@ -433,10 +365,7 @@
       },
       "timers": {
         "kind": "exr2-system-timers",
-        "main_targets": [
-          0,
-          1
-        ]
+        "main_targets": [0, 1]
       },
       "usb": {
         "kind": "usb",
@@ -455,9 +384,7 @@
         "command_ticks": 2,
         "phase_ticks": 2,
         "command": "packed_writes",
-        "command_controls": [
-          0
-        ],
+        "command_controls": [0],
         "phase_ack": "inactive",
         "clock": {
           "mode": "input_enable",
@@ -473,42 +400,8 @@
         "raw_dma_ticks": 1000,
         "readback_ticks": 750000,
         "cfa": [
-          0,
-          2,
-          1,
-          2,
-          0,
-          1,
-          1,
-          1,
-          0,
-          1,
-          1,
-          2,
-          1,
-          1,
-          2,
-          1,
-          1,
-          0,
-          2,
-          0,
-          1,
-          0,
-          2,
-          1,
-          1,
-          1,
-          2,
-          1,
-          1,
-          0,
-          1,
-          1,
-          0,
-          1,
-          1,
-          2
+          0, 2, 1, 2, 0, 1, 1, 1, 0, 1, 1, 2, 1, 1, 2, 1, 1, 0, 2, 0, 1, 0, 2, 1, 1, 1, 2, 1, 1, 0,
+          1, 1, 0, 1, 1, 2
         ]
       },
       "peripheral_14_inputauxiliarycontrol": {

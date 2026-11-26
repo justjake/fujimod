@@ -19,8 +19,8 @@ pub mod patch;
 #[cfg(all(feature = "xp5-startup", not(target_arch = "wasm32")))]
 mod png_writer;
 use fujimod_emulator_board_graph as graph;
-mod x70;
 mod exr2;
+mod x70;
 #[cfg(all(feature = "xp5-startup", not(target_arch = "wasm32")))]
 pub mod xp5;
 pub mod xpp;

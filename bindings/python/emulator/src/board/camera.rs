@@ -141,9 +141,9 @@ impl Board {
         };
         let initialization_fault = match sd_card_initialization_fault {
             None => None,
-            Some(text) => Some(serde_json::from_str::<serde_json::Value>(text).map_err(|failure| {
-                PyValueError::new_err(format!("sd_card_initialization_fault: {failure}"))
-            })?),
+            Some(text) => Some(serde_json::from_str::<serde_json::Value>(text).map_err(
+                |failure| PyValueError::new_err(format!("sd_card_initialization_fault: {failure}")),
+            )?),
         };
         let overlays = overlays.unwrap_or_default();
         let card_contents = match sd_card_files {
@@ -164,9 +164,7 @@ impl Board {
                 "name sd_card (a directory) or sd_card_files (their bytes), not both",
             ));
         }
-        let emulator_layer = flash.is_some()
-            || combination.is_some()
-            || image.is_some();
+        let emulator_layer = flash.is_some() || combination.is_some() || image.is_some();
         if emulator_layer {
             if boot != "stock" {
                 return Err(PyValueError::new_err(

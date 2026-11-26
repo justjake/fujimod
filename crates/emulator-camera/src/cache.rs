@@ -313,10 +313,7 @@ fn identity(request: &Request, resolved: &ResolvedConfiguration) -> Result<Strin
         Some(profile) => {
             part(b"face-result-profile");
             let bytes = serde_json::to_vec(profile).map_err(|failure| {
-                OpenError::at(
-                    Stage::BootRom,
-                    format!("face result profile: {failure}"),
-                )
+                OpenError::at(Stage::BootRom, format!("face result profile: {failure}"))
             })?;
             part(&bytes);
         }
@@ -364,7 +361,10 @@ fn identity(request: &Request, resolved: &ResolvedConfiguration) -> Result<Strin
     if let Some(fault) = &request.card.initialization_fault {
         part(b"card-initialization-fault");
         let bytes = serde_json::to_vec(fault).map_err(|failure| {
-            OpenError::at(Stage::BootRom, format!("card initialization fault: {failure}"))
+            OpenError::at(
+                Stage::BootRom,
+                format!("card initialization fault: {failure}"),
+            )
         })?;
         part(&bytes);
     }

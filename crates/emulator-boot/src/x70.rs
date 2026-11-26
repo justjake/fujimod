@@ -395,10 +395,7 @@ const CARD_NODE_RULE: NodeRule = NodeRule {
 };
 
 /// The one GPIO signal of a card contact, with its active level.
-fn card_contact(
-    selection: &ResolvedSelection,
-    connection_id: &str,
-) -> Result<(Pin, bool), String> {
+fn card_contact(selection: &ResolvedSelection, connection_id: &str) -> Result<(Pin, bool), String> {
     match gpio_signals(selection, connection_id)?.as_slice() {
         [(pin, active)] => Ok((*pin, *active)),
         _ => Err(format!(
@@ -526,10 +523,7 @@ fn apply_soc_blocks(
     Ok(())
 }
 
-fn block<'a>(
-    selection: &'a ResolvedSelection,
-    id: &str,
-) -> Result<&'a SocBlock, String> {
+fn block<'a>(selection: &'a ResolvedSelection, id: &str) -> Result<&'a SocBlock, String> {
     selection
         .soc
         .blocks
