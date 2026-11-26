@@ -11,7 +11,6 @@ use fujimod_emulator_xp5_imaging::imaging::paf;
 use fujimod_emulator_xp5_imaging::imaging::preview;
 use fujimod_emulator_xp5_imaging::imaging::work;
 use fujimod_emulator_xp5_imaging::imaging::{STATISTICS_BANK_SIZE, STATISTICS_BASE};
-use fujimod_emulator_xp5_imaging::imaging::{buffer, table};
 
 pub fn register_all(
     bus: &mut DeviceGraph,

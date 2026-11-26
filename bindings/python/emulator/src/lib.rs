@@ -81,8 +81,6 @@ mod binding {
     #[pymodule_export]
     use super::settings::{settings_header, settings_profile};
     #[pymodule_export]
-    use fujimod_python_base::discovery::{FrontierEntry, Intervention};
-    #[pymodule_export]
     use fujimod_python_base::values::DeviceRefusal;
 
     #[pymodule_export]
