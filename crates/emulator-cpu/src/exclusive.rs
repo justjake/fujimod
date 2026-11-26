@@ -88,6 +88,24 @@ impl Monitors {
             .iter()
             .any(|(owner, slot)| *owner != core && slot.reservation.is_some())
     }
+    /// Whether an owner other than `core` holds a reservation whose granule
+    /// overlaps any `[begin, end)` physical span.
+    pub fn active_except_overlapping(&self, core: Owner, spans: &[(u64, u64)]) -> bool {
+        self.cores.iter().any(|(owner, slot)| {
+            if *owner == core {
+                return false;
+            }
+            let Some(r) = slot.reservation else {
+                return false;
+            };
+            let mask = slot.granule - 1;
+            let first = r.address & !mask;
+            let last = r.address.saturating_add(r.size.saturating_sub(1) as u64) | mask;
+            spans
+                .iter()
+                .any(|&(begin, end)| begin < end && begin <= last && end > first)
+        })
+    }
     pub fn load(&mut self, core: Owner, address: u64, size: usize) {
         self.cores
             .get_mut(&core)
@@ -183,5 +201,28 @@ mod tests {
         m.load(a, 0x1000, 8);
         assert!(!m.store(a, 0x1000, 4));
         assert!(!m.store(a, 0x1000, 8));
+    }
+
+    #[test]
+    fn active_except_overlapping_checks_granule_and_span_boundaries() {
+        let mut m = Monitors::default();
+        let a = m.register(64).unwrap();
+        let b = m.register(64).unwrap();
+
+        // Owner a reserves granule [0x1000, 0x103f].
+        m.load(a, 0x1010, 4);
+        // Own reservation is excluded.
+        assert!(!m.active_except_overlapping(a, &[(0x1000, 0x2000)]));
+        // Disjoint spans before, after, and empty spans inside the granule.
+        assert!(!m.active_except_overlapping(b, &[]));
+        assert!(!m.active_except_overlapping(b, &[(0x0fc0, 0x1000), (0x1040, 0x2000)]));
+        assert!(!m.active_except_overlapping(b, &[(0x1010, 0x1010)]));
+        // Overlapping at the first and last byte of the granule.
+        assert!(m.active_except_overlapping(b, &[(0x0fc0, 0x1001)]));
+        assert!(m.active_except_overlapping(b, &[(0x103f, 0x1080)]));
+        assert!(m.active_except_overlapping(b, &[(0x2000, 0x3000), (0x1000, 0x1040)]));
+
+        m.clear(a);
+        assert!(!m.active_except_overlapping(b, &[(0x1000, 0x2000)]));
     }
 }

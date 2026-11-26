@@ -1,10 +1,12 @@
 //! X100VI 48 MHz general/PWM and reload timers (ff908000), plus six
 //! extended general channels (ff909000). Finder logical17 uses general6/IRQ42.
 //! External capture inputs are not synthesized.
+use fujimod_emulator_devices::bus::FastReadWord;
 use fujimod_emulator_devices::checkpoint::Checkpoint;
 use fujimod_emulator_devices::{Cx, Device};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+use std::sync::{Arc, RwLock};
 use std::time::Duration;
 
 const HZ: u128 = 48_000_000;
@@ -63,6 +65,79 @@ impl General {
 /// compare) shared read-only with models of what the PWM outputs drive.
 pub type PwmOutputs = std::sync::Arc<std::sync::Mutex<[[u32; 4]; 6]>>;
 
+#[derive(Clone, Default)]
+struct TimerFastView {
+    counters: [Counter; 16],
+    general: [General; 16],
+    routing: [u32; 2],
+    group: u32,
+    extended: bool,
+    has_focus_capture: bool,
+}
+impl TimerFastView {
+    fn general_len(&self) -> usize {
+        if self.extended { 6 } else { 16 }
+    }
+    fn general_register(&self, o: u64) -> Option<(usize, usize)> {
+        if (0x100..0x100 + self.general_len() as u64 * 16).contains(&o) && o & 3 == 0 {
+            Some(((o - 0x100) as usize / 16, (o as usize & 15) / 4))
+        } else {
+            None
+        }
+    }
+    fn read_offset(&self, offset: u64, now: u64) -> Option<u32> {
+        if offset == 0 {
+            return Some(self.general[..self.general_len()].iter().enumerate().fold(
+                0u32,
+                |v, (n, g)| v | ((g.count.enabled as u32) << n),
+            ));
+        }
+        if offset == 4 || offset == 8 {
+            return Some(self.routing[(offset / 4 - 1) as usize]);
+        }
+        if offset == 0x80 {
+            return Some(self.group);
+        }
+        if (0x10..0x10 + self.general_len() as u64 * 4).contains(&offset) {
+            let g = &self.general[(offset as usize - 0x10) / 4];
+            return Some(g.control | ((g.pending as u32) << 16));
+        }
+        if let Some((n, w)) = self.general_register(offset) {
+            let g = &self.general[n];
+            if n == 9 && w == 0 && g.control & 3 == 3 && self.has_focus_capture {
+                return None;
+            }
+            if w == 0 && g.count.enabled {
+                return Some(g.count.current(Duration::from_nanos(now)));
+            }
+            return Some(g.words[w]);
+        }
+        if (0x200..0x200 + self.general_len() as u64 * 4).contains(&offset) {
+            return Some(
+                self.general[(offset as usize - 0x200) / 4]
+                    .count
+                    .current(Duration::from_nanos(now)),
+            );
+        }
+        if self.extended {
+            return None;
+        }
+        if offset == 0x300 {
+            return Some(self.counters.iter().enumerate().fold(0u32, |v, (n, c)| {
+                v | ((c.enabled as u32) << n)
+            }));
+        }
+        if let Some((n, reload)) = Timer::channel(offset) {
+            return Some(if reload {
+                self.counters[n].reload
+            } else {
+                self.counters[n].current(Duration::from_nanos(now))
+            });
+        }
+        None
+    }
+}
+
 #[derive(Default, Serialize, Deserialize)]
 pub struct Timer {
     #[serde(skip)]
@@ -82,20 +157,35 @@ pub struct Timer {
     focus_capture: Option<fujimod_emulator_devices::xp5::pins::SharedPins>,
     #[serde(skip)]
     pwm: Option<PwmOutputs>,
+    #[serde(skip)]
+    fast_view: Arc<RwLock<TimerFastView>>,
 }
 impl Timer {
     pub fn new(base: u64) -> Self {
-        Self {
+        let timer = Self {
             base,
             ..Self::default()
-        }
+        };
+        timer.publish_fast_view();
+        timer
     }
     pub fn extended(base: u64) -> Self {
-        Self {
+        let timer = Self {
             base,
             extended: true,
             ..Self::default()
-        }
+        };
+        timer.publish_fast_view();
+        timer
+    }
+    fn publish_fast_view(&self) {
+        let mut view = self.fast_view.write().unwrap();
+        view.counters = self.counters;
+        view.general = self.general;
+        view.routing = self.routing;
+        view.group = self.group;
+        view.extended = self.extended;
+        view.has_focus_capture = self.focus_capture.is_some();
     }
     fn general_len(&self) -> usize {
         if self.extended { 6 } else { 16 }
@@ -149,6 +239,7 @@ impl Timer {
     }
     pub fn with_focus_capture(mut self, pins: fujimod_emulator_devices::xp5::pins::SharedPins) -> Self {
         self.focus_capture = Some(pins);
+        self.publish_fast_view();
         self
     }
     /// Publish the general-channel words of an extended timer to `outputs`.
@@ -205,6 +296,40 @@ impl Device for Timer {
         } else {
             "soc-reload-counters"
         }
+    }
+    fn fast_reads(&self, window_base: u64, window_size: u64) -> Vec<FastReadWord> {
+        let Some(window_end) = window_base.checked_add(window_size) else {
+            return Vec::new();
+        };
+        let general_len = self.general_len() as u64;
+        let mut offsets = Vec::new();
+        offsets.extend([0x00u64, 0x04, 0x08]);
+        offsets.extend((0x10..0x10 + general_len * 4).step_by(4));
+        offsets.push(0x80);
+        offsets.extend((0x100..0x100 + general_len * 16).step_by(4));
+        offsets.extend((0x200..0x200 + general_len * 4).step_by(4));
+        if !self.extended {
+            offsets.push(0x300);
+            offsets.extend((0x310..0x390).step_by(4));
+        }
+        let mut words = Vec::with_capacity(offsets.len());
+        for reg_offset in offsets {
+            let Some(address) = self.base.checked_add(reg_offset) else {
+                continue;
+            };
+            let Some(end) = address.checked_add(4) else {
+                continue;
+            };
+            if address < window_base || end > window_end {
+                continue;
+            }
+            let view = self.fast_view.clone();
+            words.push(FastReadWord::clocked_u32(
+                address - window_base,
+                Arc::new(move |now| view.read().ok()?.read_offset(reg_offset, now)),
+            ));
+        }
+        words
     }
     fn read(&mut self, cx: &mut Cx<'_>, address: u64, size: u8) -> u64 {
         let offset = address.wrapping_sub(self.base);
@@ -306,16 +431,19 @@ impl Device for Timer {
                     self.schedule_general(cx, n);
                 }
             }
+            self.publish_fast_view();
             return;
         }
         if offset == 4 || offset == 8 {
             let r = &mut self.routing[(offset / 4 - 1) as usize];
             let mask = value >> 16;
             *r = (*r & !mask) | (value & mask);
+            self.publish_fast_view();
             return;
         }
         if offset == 0x80 {
             self.group = value;
+            self.publish_fast_view();
             return;
         }
         if (0x10..0x10 + self.general_len() as u64 * 4).contains(&offset) {
@@ -331,6 +459,7 @@ impl Device for Timer {
             g.count.started_ns = Duration::from_nanos(cx.now()).as_nanos() as u64;
             g.count.generation += 1;
             self.schedule_general(cx, n);
+            self.publish_fast_view();
             return;
         }
         if let Some((n, w)) = self.general_register(offset) {
@@ -352,6 +481,7 @@ impl Device for Timer {
             g.count.generation += 1;
             self.schedule_general(cx, n);
             self.publish_pwm();
+            self.publish_fast_view();
             return;
         }
         if self.extended {
@@ -374,6 +504,7 @@ impl Device for Timer {
                     self.schedule(cx, n);
                 }
             }
+            self.publish_fast_view();
         } else if let Some((n, reload)) = Self::channel(offset) {
             let c = &mut self.counters[n];
             let now = Duration::from_nanos(cx.now());
@@ -386,6 +517,7 @@ impl Device for Timer {
             }
             c.generation += 1;
             self.schedule(cx, n);
+            self.publish_fast_view();
         } else {
             cx.unmodeled();
         }
@@ -408,6 +540,7 @@ impl Device for Timer {
                 g.count.generation += 1;
                 self.schedule_general(cx, n);
             }
+            self.publish_fast_view();
             return;
         }
         let n = (token & 15) as usize;
@@ -454,6 +587,7 @@ impl Device for Timer {
         self.routing = routing;
         self.group = group;
         self.publish_pwm();
+        self.publish_fast_view();
         Ok(())
     }
     fn save(&self) -> Value {
@@ -466,8 +600,10 @@ impl Device for Timer {
         saved.companion_cpu = self.companion_cpu;
         saved.focus_capture = self.focus_capture.clone();
         saved.pwm = self.pwm.clone();
+        saved.fast_view = self.fast_view.clone();
         *self = saved;
         self.publish_pwm();
+        self.publish_fast_view();
         Ok(())
     }
 }
@@ -686,5 +822,115 @@ mod tests {
         assert!(h.events.iter().all(|e| e.0 == Duration::from_millis(1)));
         h.now = Duration::from_nanos(125);
         assert_eq!(t.read(&mut Cx::new(&mut h, 0, 0, 0), 0x22c, 4), 6);
+    }
+
+    #[test]
+    fn fast_reads_match_device_read_and_decline_focus_capture() {
+        use fujimod_emulator_devices::bus::FastReadValue;
+        use std::collections::BTreeMap;
+
+        let pins = fujimod_emulator_devices::xp5::pins::Pins::shared();
+        let base = 0xff90_8000;
+        let mut timer = Timer::new(base).with_focus_capture(pins.clone());
+        let fast: BTreeMap<u64, Arc<dyn Fn(u64) -> Option<u32> + Send + Sync>> = timer
+            .fast_reads(base, 0x1000)
+            .into_iter()
+            .map(|word| {
+                let FastReadValue::ClockedU32(read) = word.value else {
+                    panic!("expected ClockedU32 at {:#x}", word.offset);
+                };
+                (word.offset, read)
+            })
+            .collect();
+
+        let mut h = Host::default();
+        let assert_parity = |timer: &mut Timer, h: &mut Host, decline: Option<u64>| {
+            let now = h.now.as_nanos() as u64;
+            for offset in (0u64..0x400).step_by(4) {
+                let mut cx = Cx::new(h, 0, 0, 0);
+                let expected = timer.read(&mut cx, base + offset, 4);
+                if cx.is_unmodeled() {
+                    assert!(!fast.contains_key(&offset), "unmodeled {offset:#x}");
+                } else if decline == Some(offset) {
+                    assert_eq!(fast[&offset](now), None, "expected decline at {offset:#x}");
+                } else {
+                    assert_eq!(
+                        fast[&offset](now),
+                        Some(expected as u32),
+                        "offset {offset:#x} at {now}"
+                    );
+                }
+            }
+        };
+        assert_parity(&mut timer, &mut h, None);
+
+        let initial_checkpoint = timer.checkpoint().unwrap();
+        let initial_json = timer.save();
+
+        // Program routing, group, general channel 1 (live countdown), and reload channel 2.
+        for (o, v) in [
+            (0x04, 0x000f_0005u64),
+            (0x08, 0x00ff_00a5),
+            (0x80, 0x1234_5678),
+            (0x14, 0x10004),
+            (0x110, 480_000),
+            (0x114, 479_999),
+            (0x00, 0x20002),
+            (0x320, 96_000),
+            (0x324, 95_999),
+            (0x300, 0x0004_0004),
+        ] {
+            timer.write(&mut Cx::new(&mut h, 0, 0, 0), base + o, 4, v);
+        }
+        h.now = Duration::from_micros(2500);
+        assert_parity(&mut timer, &mut h, None);
+
+        // Fire general channel 1 event so pending bit becomes set.
+        let (at, _, token) = h
+            .events
+            .iter()
+            .copied()
+            .find(|(_, _, t)| t & (1 << 63) != 0)
+            .unwrap();
+        h.now = at;
+        timer.event(&mut Cx::new(&mut h, 0, 0, 0), token);
+        assert_parity(&mut timer, &mut h, None);
+
+        // Focus capture on channel 9 declines +0x190 to owner.
+        timer.write(&mut Cx::new(&mut h, 0, 0, 0), base + 0x34, 4, 3);
+        assert_parity(&mut timer, &mut h, Some(0x190));
+
+        // JSON restore and binary checkpoint restore keep the shared fast view in sync.
+        timer.restore(&initial_json).unwrap();
+        assert_parity(&mut timer, &mut h, None);
+
+        timer.write(&mut Cx::new(&mut h, 0, 0, 0), base + 0x80, 4, 0xdead_beef);
+        assert_parity(&mut timer, &mut h, None);
+
+        timer.restore_checkpoint(&initial_checkpoint).unwrap();
+        assert_parity(&mut timer, &mut h, None);
+
+        // Extended timer omits 0x300..0x390 and channels >= 6.
+        let ext_base = 0xff90_9000;
+        let mut ext = Timer::extended(ext_base);
+        let ext_fast: BTreeMap<u64, Arc<dyn Fn(u64) -> Option<u32> + Send + Sync>> = ext
+            .fast_reads(ext_base, 0x1000)
+            .into_iter()
+            .map(|word| {
+                let FastReadValue::ClockedU32(read) = word.value else {
+                    panic!("expected ClockedU32");
+                };
+                (word.offset, read)
+            })
+            .collect();
+        for offset in (0u64..0x400).step_by(4) {
+            let mut cx = Cx::new(&mut h, 0, 0, 0);
+            let expected = ext.read(&mut cx, ext_base + offset, 4);
+            if cx.is_unmodeled() {
+                assert!(!ext_fast.contains_key(&offset), "ext unmodeled {offset:#x}");
+            } else {
+                assert_eq!(ext_fast[&offset](h.now.as_nanos() as u64), Some(expected as u32));
+            }
+        }
     }
 }

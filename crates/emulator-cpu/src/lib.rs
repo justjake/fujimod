@@ -560,7 +560,8 @@ pub struct ThumbBlockAccounting {
     pub accounting: BlockAccounting,
     pub thumb_page: u64,
 }
-/// Optional append-only record for recovering precharged Thumb blocks.
+/// Optional append-only record for recovering precharged Thumb blocks and
+/// tracking proven 1 KiB pages across the low 1 MiB (`0x0000_0000..0x0010_0000`).
 /// Available only when [`Features::thumb_block_recovery`] is true; a zero
 /// `last_block_bytes` means there is no current recovery record.
 #[repr(C)]
@@ -570,7 +571,21 @@ pub struct ThumbBlockRecoveryAccounting {
     pub last_block_remaining_budget: i64,
     pub last_block_bytes: u32,
     pub last_block_icount: u32,
+    pub thumb_page_bitmap: [u64; 16],
 }
+const _: () = {
+    assert!(std::mem::size_of::<BlockAccounting>() == 48);
+    assert!(std::mem::size_of::<ThumbBlockAccounting>() == 56);
+    assert!(std::mem::offset_of!(ThumbBlockAccounting, thumb_page) == 48);
+    assert!(std::mem::size_of::<ThumbBlockRecoveryAccounting>() == 208);
+    assert!(std::mem::offset_of!(ThumbBlockRecoveryAccounting, last_block_start) == 56);
+    assert!(
+        std::mem::offset_of!(ThumbBlockRecoveryAccounting, last_block_remaining_budget) == 64
+    );
+    assert!(std::mem::offset_of!(ThumbBlockRecoveryAccounting, last_block_bytes) == 72);
+    assert!(std::mem::offset_of!(ThumbBlockRecoveryAccounting, last_block_icount) == 76);
+    assert!(std::mem::offset_of!(ThumbBlockRecoveryAccounting, thumb_page_bitmap) == 80);
+};
 /// A checkpoint associated with an owning processor. Durable export carries
 /// data only; `Cpu::import_snapshot` binds that data to a receiving processor.
 pub trait Snapshot: Any {

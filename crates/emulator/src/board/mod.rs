@@ -494,6 +494,8 @@ pub struct Board {
     store_hook_installs: Cell<u64>,
     /// Native MMIO maps as (core, address, bytes, physical base).
     mmio: Vec<(usize, u64, usize, u64)>,
+    /// Atomic fast-read descriptors installed directly on Cortex-M4 MMIO maps.
+    m4_engine_reads: Vec<fujimod_emulator_cpu::FastMmioRead>,
     mmio_callback_counts: Rc<RefCell<Vec<u64>>>,
     interactive_windows: Cell<u64>,
     interactive_host_duration_ns: Cell<u128>,
@@ -621,6 +623,11 @@ impl Board {
             return Err(error);
         }
         state.execution_policy = policy;
+        let enable_m4_reads =
+            policy == ExecutionPolicy::Interactive && state.bus.loop_window();
+        for read in &self.m4_engine_reads {
+            read.set_enabled(enable_m4_reads);
+        }
         for shadow in state.code_shadow.iter_mut().flatten() {
             shadow.invalidate();
         }
@@ -780,6 +787,7 @@ impl Board {
             store_hooks_on_demand: vec![None; n],
             store_hook_installs: Cell::new(0),
             mmio: vec![],
+            m4_engine_reads: vec![],
             mmio_callback_counts,
             interactive_windows: Cell::new(0),
             interactive_host_duration_ns: Cell::new(0),
@@ -1351,39 +1359,52 @@ impl Board {
         physical: u64,
     ) -> Result<(), String> {
         let cpu = self.cpus.get(core).ok_or("absent processor")?;
-        let fast_reads = self
-            .state
-            .borrow()
-            .bus
-            .fast_reads(physical, bytes)
-            .into_iter()
-            .map(|(offset, value)| match value {
-                fujimod_emulator_devices::bus::FastReadValue::AtomicU16(value) => {
-                    fujimod_emulator_cpu::FastMmioRead::atomic_u16(offset, value)
-                }
-                fujimod_emulator_devices::bus::FastReadValue::AtomicU32(value) => {
-                    fujimod_emulator_cpu::FastMmioRead::atomic_u32(offset, value)
-                }
-                fujimod_emulator_devices::bus::FastReadValue::ClockedU32(read) => {
-                    fujimod_emulator_cpu::FastMmioRead::clocked_u32(offset, read)
-                }
-                fujimod_emulator_devices::bus::FastReadValue::ConsumingU32(read) => {
-                    fujimod_emulator_cpu::FastMmioRead::consuming_u32(offset, read)
-                }
-            })
-            .collect::<Vec<_>>();
+        let is_m4 = cpu.model() == fujimod_emulator_cpu::Model::CortexM4;
+        let mut all_reads = Vec::new();
+        let mut engine_reads = Vec::new();
+        let mut published_reads = Vec::new();
+        for (offset, value) in self.state.borrow().bus.fast_reads(physical, bytes) {
+            let (read, atomic) = match value {
+                fujimod_emulator_devices::bus::FastReadValue::AtomicU16(value) => (
+                    fujimod_emulator_cpu::FastMmioRead::atomic_u16(offset, value),
+                    true,
+                ),
+                fujimod_emulator_devices::bus::FastReadValue::AtomicU32(value) => (
+                    fujimod_emulator_cpu::FastMmioRead::atomic_u32(offset, value),
+                    true,
+                ),
+                fujimod_emulator_devices::bus::FastReadValue::ClockedU32(read) => (
+                    fujimod_emulator_cpu::FastMmioRead::clocked_u32(offset, read),
+                    false,
+                ),
+                fujimod_emulator_devices::bus::FastReadValue::ConsumingU32(read) => (
+                    fujimod_emulator_cpu::FastMmioRead::consuming_u32(offset, read),
+                    false,
+                ),
+            };
+            all_reads.push(read.clone());
+            if is_m4 && !atomic {
+                // Clocked and consuming reads on an M-profile processor need
+                // the board's settled bus tick or side-effect ordering.
+                published_reads.push(read);
+            } else {
+                engine_reads.push(read);
+            }
+        }
         self.state
             .borrow_mut()
             .mprofile_loops
-            .add_reads(core, address, &fast_reads);
-        let mut engine_reads = fast_reads;
-        let published_reads = if cpu.model() == fujimod_emulator_cpu::Model::CortexM4 {
-            // Each synchronous M-profile access settles its own mixed-width
-            // block in the board. Only then is its device tick known.
-            std::mem::take(&mut engine_reads)
-        } else {
-            Vec::new()
-        };
+            .add_reads(core, address, &all_reads);
+        if is_m4 && !engine_reads.is_empty() {
+            let enable = {
+                let s = self.state.borrow();
+                s.execution_policy == ExecutionPolicy::Interactive && s.bus.loop_window()
+            };
+            for read in &engine_reads {
+                read.set_enabled(enable);
+            }
+            self.m4_engine_reads.extend(engine_reads.iter().cloned());
+        }
         let binding = Box::new(Binding {
             state: self.state.clone(),
             callback_service_time: self.state.borrow().callback_service_time.clone(),
@@ -1802,6 +1823,16 @@ impl Board {
             // The exact budget ends at the first device/DMA/processor event
             // or runnable-peer turn; those boundaries end the stable window.
             cpu.set_loop_window(self.state.borrow().loop_window())?;
+            if cpu.model() == fujimod_emulator_cpu::Model::CortexM4
+                && !self.m4_engine_reads.is_empty()
+            {
+                let s = self.state.borrow();
+                let enable =
+                    s.execution_policy == ExecutionPolicy::Interactive && s.bus.loop_window();
+                for read in &self.m4_engine_reads {
+                    read.set_enabled(enable);
+                }
+            }
             let pc = scalar(&**cpu, Register::Pc)?;
             let mut engine_guard = fujimod_perf::engine_run(
                 u8::try_from(core).unwrap_or(u8::MAX),
@@ -2193,12 +2224,10 @@ impl Board {
             shadow.discarded();
             shadow.begin_slice();
         }
-        if fast && let Some(profile) = s.mprofile[core].as_mut() {
-            profile.watch_reservations();
-        }
         let inline = fast && s.execution_policy == ExecutionPolicy::Interactive && s.settled.verify == 0;
         let blocks = s.blocks[core].as_mut().unwrap();
         blocks.active = wanted;
+        blocks.store_hook = self.store_hooks[core];
         blocks.fast_stores = fast;
         blocks.watching |= fast;
         if flushed {
@@ -2720,31 +2749,90 @@ impl State {
             .as_ref()
             .is_some_and(|profile| profile.physical(address, 4096).is_ok())
     }
+    /// Toggle the M-profile store hook between watched-only (`fast_stores = true`)
+    /// and all-stores (`fast_stores = false`) immediately after an exclusive
+    /// reservation is taken or cleared mid-slice.
+    fn sync_mprofile_fast_stores(&mut self, cpu: &dyn Cpu, core: usize) -> Result<(), String> {
+        let Some(blocks) = self.blocks[core].as_ref().filter(|blocks| blocks.active) else {
+            return Ok(());
+        };
+        let Some(hook) = blocks.store_hook else {
+            return Ok(());
+        };
+        let Some(profile) = self.mprofile[core].as_ref() else {
+            return Ok(());
+        };
+        let want_fast = cpu.features().watched_stores
+            && !profile.aliased()
+            && !profile.monitors_need_every_store()?;
+        // First-time enabling requires invalidating existing translations while
+        // stopped (`sync_block_mode`), so only enable mid-slice once `watching`
+        // is already set.
+        let fast = want_fast && blocks.watching;
+        if fast == blocks.fast_stores {
+            return Ok(());
+        }
+        cpu.hook_watched(hook, fast)?;
+        let blocks = self.blocks[core].as_mut().unwrap();
+        blocks.fast_stores = fast;
+        if !fast {
+            let inline = blocks.inline.take()?;
+            if inline != 0 {
+                blocks.room = blocks
+                    .room
+                    .checked_sub(inline)
+                    .ok_or("Thumb block exceeded run budget")?;
+                blocks.admitted += inline;
+                self.account(core, inline)?;
+                self.instructions[core] = self.instructions[core]
+                    .checked_add(inline)
+                    .ok_or("instruction counter overflow")?;
+            }
+        }
+        Ok(())
+    }
     /// Once store watches exist on a processor's engine, the engine detects
-    /// stores into translated code only on watched pages. Watch the page an
-    /// instruction is entered from, and the next (a translation may end
-    /// there), before it runs.
+    /// stores into translated code only on watched pages. Watch only the exact
+    /// 1 KiB ARM page(s) covered by `[pc, pc + bytes)` before code runs so
+    /// code pages do not bleed into adjacent data in the same 4 KiB page.
     #[inline]
-    fn watch_code(&mut self, cpu: &dyn Cpu, core: usize, pc: u64) -> Result<(), String> {
+    fn watch_code(
+        &mut self,
+        cpu: &dyn Cpu,
+        core: usize,
+        pc: u64,
+        bytes: u32,
+    ) -> Result<(), String> {
         let Some(blocks) = self.blocks[core].as_mut().filter(|blocks| blocks.watching) else {
             return Ok(());
         };
-        let page = pc & !0xfff;
-        if blocks.last_watched == Some(page) {
+        let first = pc & !0x3ff;
+        let last = pc.saturating_add(u64::from(bytes.saturating_sub(1))) & !0x3ff;
+        if first == last && blocks.last_watched == Some(first) {
             return Ok(());
         }
-        blocks.last_watched = Some(page);
-        for page in [Some(page), page.checked_add(0x1000)].into_iter().flatten() {
-            if page <= u32::MAX as u64 - 0xfff && blocks.watched.insert(page) {
-                cpu.watch_stores(page, 0x1000)?;
+        let mut page = first;
+        loop {
+            if page <= u32::MAX as u64 - 0x3ff && blocks.watched.insert(page) {
+                cpu.watch_stores(page, 0x400)?;
             }
+            if page == last {
+                break;
+            }
+            let Some(next) = page.checked_add(0x400) else {
+                break;
+            };
+            page = next;
+        }
+        if first == last {
+            blocks.last_watched = Some(first);
         }
         Ok(())
     }
     /// Close a slice of the code shadow at the processor's stop PC.
     fn end_code_slice(&mut self, cpu: &dyn Cpu, core: usize) {
         if let Ok(pc) = scalar(cpu, Register::Pc)
-            && let Err(error) = self.watch_code(cpu, core, pc & !1)
+            && let Err(error) = self.watch_code(cpu, core, pc & !1, 4)
         {
             self.fail(error);
         }
@@ -2768,8 +2856,14 @@ impl State {
     }
     /// Prove the code about to be entered at `pc`, or stop the slice so the
     /// owner discards the translations first. Returns whether to stop.
-    fn enter_code(&mut self, cpu: &dyn Cpu, core: usize, pc: u64) -> Result<bool, String> {
-        self.watch_code(cpu, core, pc)?;
+    fn enter_code(
+        &mut self,
+        cpu: &dyn Cpu,
+        core: usize,
+        pc: u64,
+        bytes: u32,
+    ) -> Result<bool, String> {
+        self.watch_code(cpu, core, pc, bytes)?;
         let Self {
             code_shadow,
             mprofile,
@@ -3902,7 +3996,7 @@ unsafe fn before(pc: u64, _: u32, data: *mut c_void) {
         // Before anything below that is not repeatable: when this stops for
         // a translation resync, the observer runs again for this entry, and
         // repeating the catch-up above at an unchanged time does nothing.
-        if s.enter_code(cpu, b.core, pc)? {
+        if s.enter_code(cpu, b.core, pc, 4)? {
             return Ok(());
         }
         let settled = s.settled();
@@ -4033,15 +4127,12 @@ unsafe fn block_classify_transfers(
     }
     // PUSH can make several independent writes. Keeping it last lets each
     // MMIO or watched store complete without restarting an earlier write.
-    let short_push = word & 0xffff_fe00 == 0xb400 && word & 0x01ff != 0;
-    let wide_push = word >> 16 == 0xe92d
-        && word & 0xa000 == 0
-        && (word as u16).count_ones() >= 2;
-    if short_push || wide_push {
+    if mprofile_blocks::is_terminal_push(word) {
         classification.instruction = fujimod_emulator_cpu::InstructionDisposition::ExecuteAndEndBlock;
         classification.observe_block = false;
     } else {
-        classification.observe_block &= !mprofile_blocks::is_single_transfer(word);
+        classification.observe_block &= !(mprofile_blocks::is_single_transfer(word)
+            || mprofile_blocks::is_non_pc_pop(word));
     }
     classification
 }
@@ -4096,7 +4187,7 @@ unsafe fn block_entered(block: fujimod_emulator_cpu::Block, data: *mut c_void) {
             cpu.stop()?;
             return Ok(());
         }
-        if s.enter_code(cpu, core, pc)? {
+        if s.enter_code(cpu, core, pc, bytes)? {
             return Ok(());
         }
         let was_settled = s.settled();
@@ -4216,6 +4307,7 @@ unsafe fn block_entered(block: fujimod_emulator_cpu::Block, data: *mut c_void) {
         if p.take_alias_write() {
             s.code_run = RunCode::Unknown;
         }
+        s.sync_mprofile_fast_stores(cpu, core)?;
         let execute = matches!(entry, mprofile::Entry::Execute);
         if !execute {
             s.settled.clear();
@@ -4259,7 +4351,13 @@ unsafe fn block_entered(block: fujimod_emulator_cpu::Block, data: *mut c_void) {
         }
         // The translated guard admits subsequent eligible blocks on this
         // checked page. Hooked memory accesses settle and disarm the window.
-        let inline = settled && s.settled.armed && !ready && fetched.is_some()
+        let inline = s.blocks[core]
+            .as_ref()
+            .is_some_and(|blocks| blocks.fast_stores)
+            && settled
+            && s.settled.armed
+            && !ready
+            && fetched.is_some()
             && s.code_run.is_running(core);
         // Admit the block: its first entry is already debited.
         let blocks = s.blocks[core].as_mut().unwrap();
@@ -4423,23 +4521,21 @@ unsafe fn written(
                     }
                     state.code_run = RunCode::Unknown;
                 }
-                if state.execution_policy == ExecutionPolicy::Exact {
-                    let code_shadow_active = state.code_shadow[b.core].is_some();
-                    if diagnostic_m4 && code_shadow_active {
-                        if let Some(counters) = state
-                            .store_observer
-                            .as_mut()
-                            .and_then(|counters| counters.get_mut(b.core))
-                        {
-                            counters.code_shadow_store_checks =
-                                counters.code_shadow_store_checks.saturating_add(1);
-                        }
-                    }
-                    if let Some(shadow) = state.code_shadow[b.core].as_mut() {
-                        shadow.stored(&*cpus[b.core], address, size);
+                let code_shadow_active = state.code_shadow[b.core].is_some();
+                if diagnostic_m4 && code_shadow_active {
+                    if let Some(counters) = state
+                        .store_observer
+                        .as_mut()
+                        .and_then(|counters| counters.get_mut(b.core))
+                    {
+                        counters.code_shadow_store_checks =
+                            counters.code_shadow_store_checks.saturating_add(1);
                     }
                 }
-                let result = notify_memory(
+                if let Some(shadow) = state.code_shadow[b.core].as_mut() {
+                    shadow.stored(&*cpus[b.core], address, size);
+                }
+                let mut result = notify_memory(
                     &cpus,
                     &state.mprofile,
                     &state.exclusive,
@@ -4447,6 +4543,13 @@ unsafe fn written(
                     address,
                     size,
                 );
+                if result.is_ok()
+                    && state.blocks[b.core]
+                        .as_ref()
+                        .is_some_and(|blocks| blocks.active && !blocks.fast_stores)
+                {
+                    result = state.sync_mprofile_fast_stores(&*cpus[b.core], b.core);
+                }
                 if diagnostic_m4 {
                     state.finish_store_observation(b.core, observed_reasons, true);
                     classification_finished = true;

@@ -37,10 +37,14 @@ pub(super) struct Blocks {
     /// The admitted block now executing: address, bytes, entries, and the
     /// address of its last instruction.
     pub pending: Option<(u64, u32, u64, u64)>,
-    /// The board store hook sees only watched pages (code pages, a live
-    /// exclusive granule) and device pages; other stores keep the engine's
-    /// inline path and no longer end their block.
+    /// The board store hook sees only watched pages (code pages) and device
+    /// pages; other stores keep the engine's inline path and no longer end
+    /// their block. Temporarily disabled while an exclusive reservation needs
+    /// every store.
     pub fast_stores: bool,
+    /// Board store hook installed for this processor, used to toggle watched
+    /// filtering immediately when an exclusive reservation starts or clears.
+    pub store_hook: Option<fujimod_emulator_cpu::HookId>,
     /// Store watches were declared on this engine. From then on the engine
     /// detects stores into translated code only on watched pages, so every
     /// page code is entered from must be watched, in every mode.
@@ -159,25 +163,50 @@ pub(super) struct Poll {
 
 /// The number of instructions of the poll loop that starts with the load at
 /// the start of `code`, or `None` when the code is anything else. Accepted:
-/// a 16-bit LDR, LDRB or LDRH with an immediate offset; then 16-bit shift,
-/// add, subtract, move, compare and data-processing instructions on low
-/// registers, sign and zero extension, and 32-bit data processing with an
-/// immediate into R0-R12 or as a comparison; then a 16-bit conditional
-/// branch to the load. None of them stores, loads from memory, changes
-/// control state or leaves the loop except by falling through the branch.
+/// a 16-bit or 32-bit immediate-offset LDR, LDRB or LDRH (into R0-R12 from
+/// R0-R12); then 16-bit shift, add, subtract, move, compare and
+/// data-processing instructions on low registers, sign and zero extension,
+/// and 32-bit data processing with an immediate into R0-R12 or as a
+/// comparison; then a 16-bit or 32-bit conditional branch to the load. None
+/// of them stores, loads from memory, changes control state or leaves the
+/// loop except by falling through the branch.
 pub(super) fn poll_period(code: &[u8]) -> Option<u64> {
     let half = |offset: usize| {
         code.get(offset..offset + 2)
             .map(|b| u16::from_le_bytes([b[0], b[1]]))
     };
-    if !matches!(half(0)? & 0xf800, 0x6800 | 0x7800 | 0x8800) {
+    let head = half(0)?;
+    let (mut offset, mut count) = if matches!(head & 0xf800, 0x6800 | 0x7800 | 0x8800) {
+        (2usize, 1u64)
+    } else if matches!(head & 0xfff0, 0xf8d0 | 0xf8b0 | 0xf890) {
+        let second = half(2)?;
+        let rn = head & 15;
+        let rt = second >> 12;
+        if rn > 12 || rt > 12 {
+            return None;
+        }
+        (4usize, 1u64)
+    } else {
         return None;
-    }
-    let (mut offset, mut count) = (2usize, 1u64);
+    };
     while count < 8 {
         let word = half(offset)?;
         if word >> 11 >= 0x1d {
             let second = half(offset + 2)?;
+            if word & 0xf800 == 0xf000
+                && second & 0xd000 == 0x8000
+                && (word >> 6) & 15 < 14
+            {
+                let s = u32::from((word >> 10) & 1);
+                let j1 = u32::from((second >> 13) & 1);
+                let j2 = u32::from((second >> 11) & 1);
+                let imm6 = u32::from(word & 0x3f);
+                let imm11 = u32::from(second & 0x7ff);
+                let raw = (s << 20) | (j2 << 19) | (j1 << 18) | (imm6 << 12) | (imm11 << 1);
+                let disp = ((raw as i32) << 11) >> 11;
+                let target = offset as i64 + 4 + i64::from(disp);
+                return (target == 0).then_some(count + 1);
+            }
             let rd = (second >> 8) & 15;
             // TST, TEQ, CMN, CMP: flags only.
             let compares = rd == 15
@@ -332,6 +361,33 @@ pub(super) fn is_single_transfer(word: u32) -> bool {
     // Keep transfers to R0-R12. Rn=PC is legal only for the immediate word
     // LDR literal form; all other bases may be R0-R14, including SP and LR.
     rt <= 12 && (rn < 15 || operation == 0xf8d0)
+}
+
+/// Whether a Thumb instruction is a legal stack PUSH (16-bit or 32-bit) that
+/// writes only ordinary registers and LR (never PC or SP). Keeping it terminal
+/// lets each watched or device write complete without restarting earlier words.
+pub(super) fn is_terminal_push(word: u32) -> bool {
+    if word <= u32::from(u16::MAX) {
+        let instruction = word as u16;
+        return instruction & 0xfe00 == 0xb400 && instruction & 0x01ff != 0;
+    }
+    let first = (word >> 16) as u16;
+    let second = word as u16;
+    first == 0xe92d && second & 0xa000 == 0 && second.count_ones() >= 2
+}
+
+/// Whether a Thumb instruction is a legal stack POP (16-bit or 32-bit) that
+/// excludes PC (and SP in 32-bit form). Because it performs only memory loads
+/// and cannot trigger EXC_RETURN, it is safe to run inline in recoverable
+/// blocks.
+pub(super) fn is_non_pc_pop(word: u32) -> bool {
+    if word <= u32::from(u16::MAX) {
+        let instruction = word as u16;
+        return instruction & 0xff00 == 0xbc00 && instruction & 0x00ff != 0;
+    }
+    let first = (word >> 16) as u16;
+    let second = word as u16;
+    first == 0xe8bd && second & 0xa000 == 0 && second.count_ones() >= 2
 }
 
 /// Whether a Thumb instruction is safe to execute without an observation.
@@ -863,6 +919,91 @@ mod tests {
         assert_eq!(poll_period(&code(&[0x6802, 0x3001, 0x3001, 0x3001, 0x3001, 0x3001, 0x3001, 0x3001, 0xd0f6])), None);
         assert_eq!(poll_period(&code(&[0x6802, 0x429a])), None);
         assert_eq!(poll_period(&[]), None);
+    }
+    #[test]
+    fn poll_period_accepts_thumb2_loads_and_conditional_branches() {
+        // ldr.w r2,[r0,#0xc]; tst.w r2,#4; beq .-8
+        assert_eq!(
+            poll_period(&code(&[0xf8d0, 0x200c, 0xf012, 0x0f04, 0xd0fa])),
+            Some(3)
+        );
+        // ldrh.w r5,[r2,#0x10]; and.w r5,r5,#4; cmp r5,#0; bne.w .-10
+        assert_eq!(
+            poll_period(&code(&[0xf8b2, 0x5010, 0xf005, 0x0504, 0x2d00, 0xf47f, 0xaff9])),
+            Some(4)
+        );
+        // ldrb.w r1,[r0,#1]; tst.w r1,#0x80; beq.w .-8
+        assert_eq!(
+            poll_period(&code(&[0xf890, 0x1001, 0xf011, 0x0f80, 0xf43f, 0xaffa])),
+            Some(3)
+        );
+        // Wrong target, forward, unconditional B.W, or reserved condition space.
+        assert_eq!(
+            poll_period(&code(&[0xf890, 0x1001, 0xf011, 0x0f80, 0xf43f, 0xaff9])),
+            None
+        );
+        assert_eq!(
+            poll_period(&code(&[0xf890, 0x1001, 0xf011, 0x0f80, 0xf000, 0x8002])),
+            None
+        );
+        assert_eq!(
+            poll_period(&code(&[0xf890, 0x1001, 0xf011, 0x0f80, 0xf7ff, 0xbffa])),
+            None
+        );
+        assert_eq!(
+            poll_period(&code(&[0xf890, 0x1001, 0xf380, 0x8811])),
+            None
+        );
+        // Disallowed head-load base/destination registers (SP, LR, PC).
+        for (first, second) in [
+            (0xf8df, 0x200c), // Rn = PC (literal)
+            (0xf8dd, 0x200c), // Rn = SP
+            (0xf8de, 0x200c), // Rn = LR
+            (0xf8d0, 0xd00c), // Rt = SP
+            (0xf8d0, 0xe00c), // Rt = LR
+            (0xf8d0, 0xf00c), // Rt = PC
+        ] {
+            assert_eq!(
+                poll_period(&code(&[first, second, 0xf012, 0x0f04, 0xd0fa])),
+                None,
+                "{first:#06x} {second:#06x}"
+            );
+        }
+        assert_eq!(poll_period(&code(&[0xf8d0])), None);
+    }
+    #[test]
+    fn push_and_non_pc_pop_classifiers_enforce_safe_register_lists() {
+        for word in [0xb401, 0xb430, 0xb500, 0xb5f0, 0xe92d_0030, 0xe92d_41f0] {
+            assert!(is_terminal_push(word), "{word:#010x}");
+        }
+        for word in [
+            0xb400,      // empty PUSH
+            0xbc30,      // POP
+            0xbd30,      // POP {..., pc}
+            0xe92d_0010, // single-register PUSH.W
+            0xe92d_2030, // PUSH.W with SP bit set
+            0xe92d_8030, // PUSH.W with PC bit set
+            0xe8bd_0030, // POP.W
+        ] {
+            assert!(!is_terminal_push(word), "{word:#010x}");
+        }
+
+        for word in [0xbc01, 0xbc30, 0xbcff, 0xe8bd_0030, 0xe8bd_4030] {
+            assert!(is_non_pc_pop(word), "{word:#010x}");
+        }
+        for word in [
+            0xbc00,      // empty POP
+            0xbd00,      // POP {pc}
+            0xbd30,      // POP {r4, r5, pc}
+            0xb430,      // PUSH
+            0xe8bd_0010, // single-register POP.W
+            0xe8bd_2030, // POP.W with SP bit set
+            0xe8bd_8030, // POP.W with PC bit set
+            0xe8bd_c030, // POP.W with LR + PC
+            0xe92d_0030, // PUSH.W
+        ] {
+            assert!(!is_non_pc_pop(word), "{word:#010x}");
+        }
     }
     #[test]
     fn scan_counts_entries_and_stops_at_observed_and_unmasking_instructions() {

@@ -1,13 +1,19 @@
 //! Recovered reset/gate latches and request/status mirrors. Initial values
 //! are explicitly zero session assumptions, not hardware reset measurements.
+use fujimod_emulator_devices::bus::FastReadWord;
 use fujimod_emulator_devices::checkpoint::Checkpoint;
 use fujimod_emulator_devices::{Cx, Device};
 use serde_json::Value;
 use std::collections::BTreeMap;
+use std::sync::{
+    Arc,
+    atomic::{AtomicU32, Ordering},
+};
 pub struct Gates {
     power: bool,
     configuration_word: Option<u32>,
     regs: BTreeMap<u64, u32>,
+    mirrors: BTreeMap<u64, Arc<AtomicU32>>,
     panel_clocks: Option<fujimod_emulator_devices::xp5::panel_clocks::Clocks>,
     companion_cpu: Option<usize>,
 }
@@ -19,12 +25,30 @@ impl Gates {
         power: bool,
         panel_clocks: Option<fujimod_emulator_devices::xp5::panel_clocks::Clocks>,
     ) -> Self {
-        Self {
+        let mut gates = Self {
             power,
             configuration_word: None,
             regs: BTreeMap::new(),
+            mirrors: BTreeMap::new(),
             panel_clocks,
             companion_cpu: None,
+        };
+        for offset in (0u64..=0xb64).step_by(4) {
+            if gates.latch(offset) {
+                gates.mirrors.insert(offset, Arc::new(AtomicU32::new(0)));
+            }
+        }
+        gates
+    }
+    fn base(&self) -> u64 {
+        if self.power { 0xff90d000 } else { 0xff90c000 }
+    }
+    fn publish_mirrors(&self) {
+        for (&offset, mirror) in &self.mirrors {
+            mirror.store(
+                self.regs.get(&offset).copied().unwrap_or(0),
+                Ordering::Release,
+            );
         }
     }
     /// BIS reset bank10: c928 bit21 clear holds reset, set releases it.
@@ -79,8 +103,43 @@ impl Device for Gates {
             "clock-reset-gates"
         }
     }
+    fn fast_reads(&self, window_base: u64, window_size: u64) -> Vec<FastReadWord> {
+        let Some(window_end) = window_base.checked_add(window_size) else {
+            return Vec::new();
+        };
+        let base = self.base();
+        let mut words = Vec::new();
+        let mut push = |reg: u64, atom: Arc<AtomicU32>| {
+            if let Some(address) = base.checked_add(reg)
+                && let Some(end) = address.checked_add(4)
+                && address >= window_base
+                && end <= window_end
+            {
+                words.push(FastReadWord::atomic_u32(address - window_base, atom));
+            }
+        };
+        if !self.power
+            && let Some(value) = self.configuration_word
+        {
+            push(4, Arc::new(AtomicU32::new(value)));
+        }
+        for (&offset, mirror) in &self.mirrors {
+            push(offset, mirror.clone());
+        }
+        if self.power {
+            for offset in (0u64..=0xb64).step_by(4) {
+                if let Some(latch) = self.status(offset)
+                    && let Some(mirror) = self.mirrors.get(&latch)
+                {
+                    push(offset, mirror.clone());
+                }
+            }
+        }
+        words.sort_by_key(|word| word.offset);
+        words
+    }
     fn read(&mut self, cx: &mut Cx<'_>, address: u64, n: u8) -> u64 {
-        let o = address.wrapping_sub(if self.power { 0xff90d000 } else { 0xff90c000 });
+        let o = address.wrapping_sub(self.base());
         if n != 4 || o & 3 != 0 {
             cx.unmodeled();
             return 0;
@@ -103,12 +162,15 @@ impl Device for Gates {
         self.regs.get(&a).copied().unwrap_or(0) as u64
     }
     fn write(&mut self, cx: &mut Cx<'_>, address: u64, n: u8, v: u64) {
-        let o = address.wrapping_sub(if self.power { 0xff90d000 } else { 0xff90c000 });
+        let o = address.wrapping_sub(self.base());
         if n != 4 || o & 3 != 0 || !self.latch(o) {
             cx.unmodeled();
             return;
         }
         let previous = self.regs.insert(o, v as u32).unwrap_or(0);
+        if let Some(mirror) = self.mirrors.get(&o) {
+            mirror.store(v as u32, Ordering::Release);
+        }
         if !self.power && o == 0x928 && (previous ^ v as u32) & 0x200000 != 0 {
             self.drive_reset(cx);
         }
@@ -132,6 +194,7 @@ impl Device for Gates {
     fn restore_checkpoint(&mut self, saved: &Checkpoint) -> Result<(), String> {
         self.validate_checkpoint(saved)?;
         self.regs = saved.decode(self.name())?;
+        self.publish_mirrors();
         if !self.power && let Some(clocks) = &self.panel_clocks {
             clocks.selector(self.regs.get(&0x608).copied().unwrap_or(0));
         }
@@ -143,6 +206,7 @@ impl Device for Gates {
     fn restore(&mut self, v: &Value) -> Result<(), String> {
         self.regs = serde_json::from_value(v.clone())
             .map_err(|e| format!("invalid gate checkpoint: {e}"))?;
+        self.publish_mirrors();
         // CPU reset state is restored by the framework with its CPU snapshot.
         if !self.power
             && let Some(clocks) = &self.panel_clocks
@@ -232,5 +296,73 @@ mod tests {
         let mut cx = Cx::new(&mut host, 0, 0, 0);
         power.read(&mut cx, 0xff90d004, 4);
         assert!(cx.is_unmodeled());
+    }
+
+    #[test]
+    fn fast_reads_cover_exact_valid_offsets_and_track_writes_and_restores() {
+        use fujimod_emulator_devices::bus::FastReadValue;
+
+        let mut host = RecordingHost::default();
+        for (power, config_word) in [(false, None), (false, Some(0x1357_2468)), (true, Some(31))] {
+            let mut gates = Gates::new(power).with_configuration_word(config_word);
+            let base = gates.base();
+            let fast: BTreeMap<u64, Arc<AtomicU32>> = gates
+                .fast_reads(base, 0x1000)
+                .into_iter()
+                .map(|word| {
+                    let FastReadValue::AtomicU32(atom) = word.value else {
+                        panic!("expected AtomicU32 at {:#x}", word.offset);
+                    };
+                    (word.offset, atom)
+                })
+                .collect();
+
+            // Every modeled offset in 0..0x1000 must be published, and no unmodeled offset may be.
+            let assert_parity = |gates: &mut Gates, host: &mut RecordingHost| {
+                for offset in (0u64..0x1000).step_by(4) {
+                    let mut cx = Cx::new(host, 0, 0, 0);
+                    let expected = gates.read(&mut cx, base + offset, 4);
+                    if cx.is_unmodeled() {
+                        assert!(!fast.contains_key(&offset), "power={power} offset={offset:#x}");
+                    } else {
+                        assert_eq!(
+                            u64::from(fast[&offset].load(Ordering::Acquire)),
+                            expected,
+                            "power={power} offset={offset:#x}"
+                        );
+                    }
+                }
+            };
+            assert_parity(&mut gates, &mut host);
+
+            let initial_checkpoint = gates.checkpoint().unwrap();
+            let initial_json = gates.save();
+            let sample_writes: &[(u64, u64)] = if power {
+                &[(0x510, 0x11), (0xb00, 0xaa), (0xb44, 0xbb)]
+            } else {
+                &[(0x110, 0xc), (0x304, 0x22), (0x928, 0x200000)]
+            };
+            for &(offset, value) in sample_writes {
+                let mut cx = Cx::new(&mut host, 0, 0, 0);
+                gates.write(&mut cx, base + offset, 4, value);
+                assert!(!cx.is_unmodeled());
+            }
+            if power {
+                assert_eq!(fast[&0xb20].load(Ordering::Acquire), 0xaa);
+                assert_eq!(fast[&0xb64].load(Ordering::Acquire), 0xbb);
+            }
+            assert_parity(&mut gates, &mut host);
+
+            gates.restore(&initial_json).unwrap();
+            assert_parity(&mut gates, &mut host);
+
+            let &(offset, value) = &sample_writes[0];
+            let mut cx = Cx::new(&mut host, 0, 0, 0);
+            gates.write(&mut cx, base + offset, 4, value);
+            assert_parity(&mut gates, &mut host);
+
+            gates.restore_checkpoint(&initial_checkpoint).unwrap();
+            assert_parity(&mut gates, &mut host);
+        }
     }
 }

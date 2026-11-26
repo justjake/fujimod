@@ -33,13 +33,11 @@ pub(super) struct Profile {
     domain: exclusive::Shared,
     owner: exclusive::Owner,
     views: Vec<MemoryView>,
+    physical_spans: Vec<(u64, u64)>,
     alias_write: bool,
     /// Host-only: the last entry asked the engine to stop (an exclusive
     /// instruction), as distinct from only moving the PC.
     stopped: bool,
-    /// Host-only: this processor's store hook sees only watched pages, so a
-    /// new reservation's granule must be watched.
-    watch_reservations: bool,
     /// Host-only: the last entry found an exception ready (pending and
     /// enabled, whatever the masks).
     ready: bool,
@@ -115,9 +113,9 @@ impl Profile {
             domain: _,
             owner: _,
             views,
+            physical_spans: _,
             alias_write,
             stopped: _,
-            watch_reservations: _,
             ready: _,
         } = self;
         Checkpoint {
@@ -173,6 +171,10 @@ impl Profile {
                 return Err("overlapping M-profile RAM views".into());
             }
         }
+        let physical_spans = views
+            .iter()
+            .map(|view| (view.physical, view.physical + view.size as u64))
+            .collect();
         let owner = domain
             .lock()
             .map_err(|_| "exclusive monitors poisoned")?
@@ -188,9 +190,9 @@ impl Profile {
             domain,
             owner,
             views,
+            physical_spans,
             alias_write: false,
             stopped: false,
-            watch_reservations: false,
             ready: false,
         })
     }
@@ -262,23 +264,18 @@ impl Profile {
             })
         })
     }
-    /// Whether this processor's store hook must see every store of its next
-    /// slice for the exclusive monitors: another owner holds a reservation
-    /// (its granule is not watched on this engine), or this processor holds
-    /// one taken before it watched its granules. Reservations change only
-    /// while their owner runs, so the answer holds for the slice.
+    /// Whether this processor's store hook must see every store for the
+    /// exclusive monitors: another owner holds a reservation overlapping this
+    /// processor's mapped physical RAM, or this processor holds a live
+    /// reservation of its own (which clears on STREX, CLREX, or exception
+    /// entry/return).
     pub(super) fn monitors_need_every_store(&self) -> Result<bool, String> {
         let monitors = self
             .domain
             .lock()
             .map_err(|_| "exclusive monitors poisoned")?;
-        Ok(monitors.active_except(self.owner)
-            || !self.watch_reservations && monitors.reservation(self.owner).is_some())
-    }
-    /// From now on, watch the granule of every reservation this processor
-    /// takes (its store hook no longer sees every store).
-    pub(super) fn watch_reservations(&mut self) {
-        self.watch_reservations = true;
+        Ok(monitors.reservation(self.owner).is_some()
+            || monitors.active_except_overlapping(self.owner, &self.physical_spans))
     }
     /// Whether the last entry found an exception ready.
     pub(super) fn ready(&self) -> bool {
@@ -342,13 +339,6 @@ impl Profile {
                     .lock()
                     .map_err(|_| "exclusive monitors poisoned")?;
                 if load {
-                    if self.watch_reservations {
-                        // This processor's own stores into the reserved
-                        // granule must reach the monitor.
-                        let first = address & !63;
-                        let last = (address + size as u64 - 1) | 63;
-                        cpu.watch_stores(first, last - first + 1)?;
-                    }
                     domain.load(self.owner, physical, size);
                     set(cpu, reg(data), u32::from_le_bytes(value))?;
                 } else {
@@ -673,5 +663,43 @@ mod tests {
         assert_eq!(p.access(&cpu, 0xe0001004, 4, None, 1050).unwrap(), 110);
         p.access(&cpu, 0xe0001000, 4, Some(0), 1050).unwrap();
         assert_eq!(p.access(&cpu, 0xe0001004, 4, None, 10000).unwrap(), 110);
+    }
+
+    #[test]
+    fn monitors_need_every_store_tracks_own_and_overlapping_external_reservations() {
+        let domain: exclusive::Shared = Default::default();
+        let peer = domain.lock().unwrap().register(64).unwrap();
+        let profile = Profile::new(
+            Config {
+                clock_hz: 100_000_000,
+                board_ticks_per_second: 1_000_000_000,
+                vector_base: 0,
+            },
+            domain.clone(),
+            vec![MemoryView {
+                address: 0x10000,
+                physical: 0x10000,
+                size: 0x4000,
+            }],
+        )
+        .unwrap();
+
+        assert!(!profile.monitors_need_every_store().unwrap());
+
+        // External reservation outside M4's physical RAM does not force all-stores.
+        domain.lock().unwrap().load(peer, 0x20000, 4);
+        assert!(!profile.monitors_need_every_store().unwrap());
+
+        // External reservation inside M4's physical RAM forces all-stores.
+        domain.lock().unwrap().load(peer, 0x12000, 4);
+        assert!(profile.monitors_need_every_store().unwrap());
+        domain.lock().unwrap().clear(peer);
+        assert!(!profile.monitors_need_every_store().unwrap());
+
+        // Own reservation forces all-stores only while active.
+        domain.lock().unwrap().load(profile.owner, 0x11000, 4);
+        assert!(profile.monitors_need_every_store().unwrap());
+        profile.clear_exclusive().unwrap();
+        assert!(!profile.monitors_need_every_store().unwrap());
     }
 }

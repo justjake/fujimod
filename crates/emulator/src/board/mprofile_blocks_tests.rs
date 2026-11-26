@@ -36,6 +36,7 @@ struct Outcome {
     registers: Vec<u64>,
     memory: Vec<u8>,
     observed: u64,
+    watching: bool,
     fast_stores: bool,
 }
 
@@ -130,14 +131,17 @@ fn outcome(board: &Board) -> Outcome {
     let mut memory = vec![0; 0x24];
     board.read_physical(0x12000, &mut memory[..0x20]).unwrap();
     board.read_physical(0x10800, &mut memory[0x20..]).unwrap();
-    let (observed, fast_stores) = board.state.borrow().blocks[0]
+    let (observed, watching, fast_stores) = board.state.borrow().blocks[0]
         .as_ref()
-        .map_or((0, false), |blocks| (blocks.observed, blocks.fast_stores));
+        .map_or((0, false, false), |blocks| {
+            (blocks.observed, blocks.watching, blocks.fast_stores)
+        });
     Outcome {
         state: board.state(),
         registers,
         memory,
         observed,
+        watching,
         fast_stores,
     }
 }
@@ -150,7 +154,12 @@ fn block_execution_equals_the_instruction_observer() {
             let blocks = run(quantum, true, until, windows, ExecutionPolicy::Exact);
             assert_eq!(reference.observed, 0);
             assert!(blocks.observed > 0, "quantum {quantum}: block execution never ran");
-            assert!(blocks.fast_stores, "quantum {quantum}: the store hook stayed on every store");
+            assert!(blocks.watching, "quantum {quantum}: the store hook stayed on every store");
+            let reserved = !blocks.state["mprofile"][0]["exclusive"].is_null();
+            assert_eq!(
+                blocks.fast_stores, !reserved,
+                "quantum {quantum} until {until}: fast_stores must track live reservation"
+            );
             assert_eq!(blocks.registers, reference.registers, "quantum {quantum} until {until}");
             assert_eq!(blocks.memory, reference.memory, "quantum {quantum} until {until}");
             assert_eq!(blocks.state, reference.state, "quantum {quantum} until {until}");
@@ -226,7 +235,7 @@ fn transfer_loop(blocks: bool, address: u32, advance: bool) -> Board {
 
 #[test]
 fn translated_transfers_match_at_watched_stores_and_data_faults() {
-    for (address, advance) in [(0x12000, false), (0x10800, false), (0xe000_e100, false), (0x17ff0, true)] {
+    for (address, advance) in [(0x12000, false), (0x10300, false), (0xe000_e100, false), (0x17ff0, true)] {
         let mut reference = transfer_loop(false, address, advance);
         let mut translated = transfer_loop(true, address, advance);
         for stop in [11, 51, 139, 2031] {
@@ -248,7 +257,7 @@ fn translated_transfers_match_at_watched_stores_and_data_faults() {
         if !advance && address == 0x12000 {
             assert!(translated.state.borrow().blocks[0].as_ref().unwrap().inline.entries > 500);
         }
-        if address == 0x10800 {
+        if address == 0x10300 {
             // Only the first nonterminal store at this site needs a retry.
             // Other cached block shapes may encounter it before retranslation.
             let counters = translated.cpu(0).unwrap().exit_counters().unwrap();
@@ -476,8 +485,8 @@ fn indexed_stores_match_on_watched_code_pages() {
     let make = |blocks| {
         indexed_transfer_pair(
             blocks,
-            0x10804,
-            0x10804,
+            0x10304,
+            0x10304,
             0xdead_beef,
             [0xf843, 0x3c04],
             [0xf84c, 0xeb04],
@@ -500,10 +509,10 @@ fn indexed_stores_match_on_watched_code_pages() {
     );
     let mut actual = [0; 8];
     let mut expected = [0; 8];
-    translated.read_physical(0x10800, &mut actual).unwrap();
-    reference.read_physical(0x10800, &mut expected).unwrap();
+    translated.read_physical(0x10300, &mut actual).unwrap();
+    reference.read_physical(0x10300, &mut expected).unwrap();
     assert_eq!(actual, expected);
-    assert_eq!(&actual[..4], &0x10804u32.to_le_bytes());
+    assert_eq!(&actual[..4], &0x10304u32.to_le_bytes());
     assert_eq!(&actual[4..], &0xdead_beefu32.to_le_bytes());
     let blocks = translated.state.borrow();
     let blocks = blocks.blocks[0].as_ref().unwrap();
@@ -777,10 +786,10 @@ fn stack_words(board: &Board, base: u32) -> [u8; 8] {
 #[test]
 fn terminal_pushes_match_observer_on_watched_ram_and_partial_fault() {
     for wide in [false, true] {
-        // Both words are in the translated code page. This exercises the
+        // Both words are in the translated 1 KiB code page. This exercises the
         // watched-store terminal path without replaying an earlier push word.
-        let mut reference = push_program(false, 0x10808, wide);
-        let mut translated = push_program(true, 0x10808, wide);
+        let mut reference = push_program(false, 0x10308, wide);
+        let mut translated = push_program(true, 0x10308, wide);
         let a = reference.run_until(3, 3);
         let b = translated.run_until(3, 3);
         assert!(a.is_ok(), "watched reference PUSH: {a:?}");
@@ -791,17 +800,17 @@ fn terminal_pushes_match_observer_on_watched_ram_and_partial_fault() {
         assert_eq!(actual.state, expected.state, "wide={wide}");
         assert_eq!(actual.memory, expected.memory, "wide={wide}");
         assert_eq!(
-            stack_words(&translated, 0x10800),
-            stack_words(&reference, 0x10800)
+            stack_words(&translated, 0x10300),
+            stack_words(&reference, 0x10300)
         );
-        let watched_words = stack_words(&translated, 0x10800);
+        let watched_words = stack_words(&translated, 0x10300);
         assert_eq!(&watched_words[..4], &0x44u32.to_le_bytes());
         assert_eq!(&watched_words[4..], &0x55u32.to_le_bytes());
         assert_eq!(actual.registers[4], 0x44);
         assert_eq!(actual.registers[5], 0x55);
         assert_eq!(
             scalar(translated.cpu(0).unwrap(), Register::Sp).unwrap(),
-            0x10800
+            0x10300
         );
         assert_eq!(
             translated.state.borrow().instructions,
@@ -858,6 +867,305 @@ fn terminal_pushes_match_observer_on_watched_ram_and_partial_fault() {
         let mut committed = [0; 4];
         translated.read_physical(0x17ffc, &mut committed).unwrap();
         assert_eq!(u32::from_le_bytes(committed), 0x44, "fault wide={wide}");
+    }
+}
+
+fn single_m4_board(blocks: bool, program: &[u16], stack: u32) -> Board {
+    use factory::*;
+    let graph = Graph {
+        decoders: vec![],
+        processors: vec![Processor {
+            model: Model::CortexM4,
+            registers: vec![],
+            released: true,
+            parked_until_sgi: false,
+            rprofile: None,
+            mprofile: Some(super::mprofile::Config {
+                clock_hz: 1_000_000_000,
+                board_ticks_per_second: 1_000_000_000,
+                vector_base: 0x10000,
+            }),
+        }],
+        dma_mappings: vec![crate::board::memory::BusMapping::ram(0x10000, 0x8000)],
+        ram: vec![Ram {
+            base: 0x10000,
+            size: 0x8000,
+        }],
+        mappings: vec![MemoryMap {
+            core: 0,
+            address: 0x10000,
+            physical: 0x10000,
+            size: 0x8000,
+            permissions: 7,
+        }],
+        peripherals: vec![],
+        instructions_per_tick: Ratio::new(1, 1).unwrap(),
+    };
+    let board = graph
+        .build(
+            Options::new(RunEngine::Unicorn).with_translation_cache_size_bytes(1024 * 1024),
+            Bus::new(bus::Mode::Strict),
+            None,
+        )
+        .unwrap();
+    board.set_block_execution(blocks);
+    let vectors = [stack, 0x10101u32]
+        .into_iter()
+        .flat_map(u32::to_le_bytes)
+        .collect::<Vec<_>>();
+    board.write_physical(0x10000, &vectors).unwrap();
+    let code = program
+        .iter()
+        .flat_map(|half| half.to_le_bytes())
+        .collect::<Vec<_>>();
+    board.write_physical(0x10100, &code).unwrap();
+    board
+}
+
+#[test]
+fn ldrex_strex_does_not_permanently_watch_data_page_and_normal_store_still_invalidates() {
+    // Part 1: LDREX + STREX on 0x12000 succeeds, then 16 normal STRs to 0x12000
+    // run with fast_stores=true and incur zero store callbacks.
+    // movw r0,#0x2000; movt r0,#1; ldrex r1,[r0]; adds r1,#1; strex r2,r1,[r0];
+    // movs r3,#16; loop: adds r1,#1; str r1,[r0]; subs r3,#1; bne loop; wfi; b .
+    const CLEAN_PAIR: [u16; 15] = [
+        0xf242, 0x0000, 0xf2c0, 0x0001, 0xe850, 0x1f00, 0x3101, 0xe840, 0x1200, 0x2310, 0x3101,
+        0x6001, 0x3b01, 0xd1fb, 0xbf30,
+    ];
+    for policy in [ExecutionPolicy::Exact, ExecutionPolicy::Interactive] {
+        let mut reference = single_m4_board(false, &CLEAN_PAIR, 0x17000);
+        let mut translated = single_m4_board(true, &CLEAN_PAIR, 0x17000);
+        reference.set_execution_policy(policy).unwrap();
+        translated.set_execution_policy(policy).unwrap();
+        reference.run_until(200, 64).unwrap();
+        translated.run_until(200, 64).unwrap();
+
+        let expected = outcome(&reference);
+        let actual = outcome(&translated);
+        assert_eq!(actual.registers, expected.registers, "{policy:?}");
+        assert_eq!(actual.memory, expected.memory, "{policy:?}");
+        assert_eq!(actual.state, expected.state, "{policy:?}");
+        assert_eq!(actual.registers[1], 17, "{policy:?}");
+        assert_eq!(actual.registers[2], 0, "STREX should succeed: {policy:?}");
+        assert_eq!(u32::from_le_bytes(actual.memory[..4].try_into().unwrap()), 17);
+
+        let s = translated.state.borrow();
+        let blocks = s.blocks[0].as_ref().unwrap();
+        assert!(blocks.watching, "{policy:?}");
+        assert!(blocks.fast_stores, "{policy:?}");
+        assert!(
+            !blocks.watched.contains(&0x12000),
+            "LDREX must not permanently watch data page 0x12000: {policy:?}"
+        );
+        assert_eq!(
+            blocks.store_callbacks, 0,
+            "normal stores after STREX must not trigger store callbacks: {policy:?}"
+        );
+    }
+
+    // Part 2: An intervening normal STR to the same 64-byte granule (0x12010)
+    // invalidates the reservation (STREX returns 1), and 16 subsequent normal
+    // STRs to 0x12020 incur zero additional store callbacks.
+    // movw r0,#0x2000; movt r0,#1; ldrex r1,[r0]; adds r1,#1; str r1,[r0,#0x10];
+    // strex r2,r1,[r0]; movs r3,#16; loop: adds r4,#1; str r4,[r0,#0x20];
+    // subs r3,#1; bne loop; wfi; b .
+    const INTERVENING_STORE: [u16; 16] = [
+        0xf242, 0x0000, 0xf2c0, 0x0001, 0xe850, 0x1f00, 0x3101, 0x6101, 0xe840, 0x1200, 0x2310,
+        0x3401, 0x6204, 0x3b01, 0xd1fb, 0xbf30,
+    ];
+    for policy in [ExecutionPolicy::Exact, ExecutionPolicy::Interactive] {
+        let mut reference = single_m4_board(false, &INTERVENING_STORE, 0x17000);
+        let mut translated = single_m4_board(true, &INTERVENING_STORE, 0x17000);
+        reference.set_execution_policy(policy).unwrap();
+        translated.set_execution_policy(policy).unwrap();
+        reference.run_until(200, 64).unwrap();
+        translated.run_until(200, 64).unwrap();
+
+        let expected = outcome(&reference);
+        let actual = outcome(&translated);
+        assert_eq!(actual.registers, expected.registers, "{policy:?}");
+        assert_eq!(actual.memory, expected.memory, "{policy:?}");
+        assert_eq!(actual.state, expected.state, "{policy:?}");
+        assert_eq!(actual.registers[2], 1, "intervening STR must fail STREX: {policy:?}");
+        assert_eq!(u32::from_le_bytes(actual.memory[0..4].try_into().unwrap()), 0);
+        assert_eq!(u32::from_le_bytes(actual.memory[0x10..0x14].try_into().unwrap()), 1);
+
+        let mut word20 = [0; 4];
+        translated.read_physical(0x12020, &mut word20).unwrap();
+        assert_eq!(u32::from_le_bytes(word20), 16, "{policy:?}");
+
+        let s = translated.state.borrow();
+        let blocks = s.blocks[0].as_ref().unwrap();
+        assert!(blocks.watching, "{policy:?}");
+        assert!(blocks.fast_stores, "{policy:?}");
+        assert!(!blocks.watched.contains(&0x12000), "{policy:?}");
+        assert_eq!(
+            blocks.store_callbacks, 1,
+            "only the intervening STR during LDREX..STREX should fire written(): {policy:?}"
+        );
+    }
+}
+
+#[test]
+fn external_reservation_outside_m4_ram_keeps_m4_fast_stores() {
+    // movw r0,#0x2000; movt r0,#1; movs r3,#8; loop: adds r1,#1; str r1,[r0];
+    // subs r3,#1; bne loop; wfi
+    const STORE_LOOP: [u16; 10] = [
+        0xf242, 0x0000, 0xf2c0, 0x0001, 0x2308, 0x3101, 0x6001, 0x3b01, 0xd1fb, 0xbf30,
+    ];
+    let mut board = single_m4_board(true, &STORE_LOOP, 0x17000);
+    let domain = board.state.borrow().exclusive.clone();
+    let peer = domain.lock().unwrap().register(64).unwrap();
+    // Reserve an address outside M4's mapped physical RAM [0x10000, 0x18000).
+    domain.lock().unwrap().load(peer, 0x20000, 4);
+
+    board.run_until(100, 64).unwrap();
+    {
+        let s = board.state.borrow();
+        let blocks = s.blocks[0].as_ref().unwrap();
+        assert!(blocks.watching);
+        assert!(blocks.fast_stores);
+        assert_eq!(blocks.store_callbacks, 0);
+    }
+    assert!(domain.lock().unwrap().reservation(peer).is_some());
+    domain.lock().unwrap().unregister(peer);
+
+    // An overlapping external reservation inside M4's physical RAM must be invalidated.
+    let mut board = single_m4_board(true, &STORE_LOOP, 0x17000);
+    let domain = board.state.borrow().exclusive.clone();
+    let peer = domain.lock().unwrap().register(64).unwrap();
+    domain.lock().unwrap().load(peer, 0x12000, 4);
+
+    board.run_until(100, 64).unwrap();
+    assert!(domain.lock().unwrap().reservation(peer).is_none());
+    {
+        let s = board.state.borrow();
+        let blocks = s.blocks[0].as_ref().unwrap();
+        assert!(blocks.store_callbacks >= 1);
+    }
+    domain.lock().unwrap().unregister(peer);
+}
+
+#[test]
+fn one_kib_watch_code_does_not_watch_adjacent_data_in_same_4k_page() {
+    // Code at 0x10100 (1 KiB page 0x10000..0x10400) stores into 0x10800
+    // (same 4 KiB page 0x10000..0x11000, distinct 1 KiB page 0x10800..0x10c00).
+    // movw r0,#0x0800; movt r0,#1; movs r3,#8; loop: adds r1,#1; str r1,[r0];
+    // subs r3,#1; bne loop; wfi
+    const SAME_4K_STORE: [u16; 10] = [
+        0xf640, 0x0000, 0xf2c0, 0x0001, 0x2308, 0x3101, 0x6001, 0x3b01, 0xd1fb, 0xbf30,
+    ];
+    for policy in [ExecutionPolicy::Exact, ExecutionPolicy::Interactive] {
+        let mut board = single_m4_board(true, &SAME_4K_STORE, 0x17000);
+        board.set_execution_policy(policy).unwrap();
+        board.run_until(100, 64).unwrap();
+
+        let mut word = [0; 4];
+        board.read_physical(0x10800, &mut word).unwrap();
+        assert_eq!(u32::from_le_bytes(word), 8, "{policy:?}");
+
+        let s = board.state.borrow();
+        let blocks = s.blocks[0].as_ref().unwrap();
+        assert!(blocks.watching, "{policy:?}");
+        assert!(blocks.fast_stores, "{policy:?}");
+        assert!(blocks.watched.contains(&0x10000), "{policy:?}");
+        assert!(!blocks.watched.contains(&0x10400), "{policy:?}");
+        assert!(!blocks.watched.contains(&0x10800), "{policy:?}");
+        assert_eq!(
+            blocks.store_callbacks, 0,
+            "adjacent 1 KiB data region in the same 4 KiB page must not be watched: {policy:?}"
+        );
+    }
+}
+
+#[test]
+fn non_pc_pop_runs_inline_and_matches_observer_in_ram_and_on_fault() {
+    let lr = Register::Arm32(fujimod_emulator_cpu::arm::Register::R(14));
+    for wide in [false, true] {
+        // First block arms inline accounting (`adds r0,#1; b .+2`); second
+        // block runs POP / POP.W inline (`pop ...; adds r0,#1; b .+2`); then `wfi`.
+        let program: &[u16] = if wide {
+            &[0x3001, 0xe7ff, 0xe8bd, 0x4030, 0x3001, 0xe7ff, 0xbf30]
+        } else {
+            &[0x3001, 0xe7ff, 0xbc30, 0x3001, 0xe7ff, 0xbf30]
+        };
+        let stack_data: Vec<u8> = [0x1111_2222u32, 0x3333_4444, 0x5555_6666]
+            .into_iter()
+            .flat_map(u32::to_le_bytes)
+            .collect();
+
+        // Ordinary RAM POP executes inline and matches the instruction observer.
+        let mut reference = single_m4_board(false, program, 0x12000);
+        let mut translated = single_m4_board(true, program, 0x12000);
+        for b in [&mut reference, &mut translated] {
+            b.set_execution_policy(ExecutionPolicy::Interactive).unwrap();
+            b.state.borrow_mut().settled.verify = 0;
+            b.write_physical(0x12000, &stack_data).unwrap();
+        }
+        reference.run_until(32, 32).unwrap();
+        translated.run_until(32, 32).unwrap();
+
+        let expected = outcome(&reference);
+        let actual = outcome(&translated);
+        assert_eq!(actual.registers, expected.registers, "wide={wide}");
+        assert_eq!(actual.state, expected.state, "wide={wide}");
+        assert_eq!(actual.registers[0], 2, "wide={wide}");
+        assert_eq!(actual.registers[4], 0x1111_2222, "wide={wide}");
+        assert_eq!(actual.registers[5], 0x3333_4444, "wide={wide}");
+        assert_eq!(
+            scalar(translated.cpu(0).unwrap(), Register::Sp).unwrap(),
+            if wide { 0x1200c } else { 0x12008 },
+            "wide={wide}"
+        );
+        assert_eq!(
+            scalar(translated.cpu(0).unwrap(), lr).unwrap(),
+            scalar(reference.cpu(0).unwrap(), lr).unwrap(),
+            "wide={wide}"
+        );
+        if wide {
+            assert_eq!(scalar(translated.cpu(0).unwrap(), lr).unwrap(), 0x5555_6666);
+        }
+        assert!(
+            translated.state.borrow().blocks[0].as_ref().unwrap().inline.entries > 0,
+            "non-PC POP did not execute in inline translated accounting: wide={wide}"
+        );
+
+        // Partial fault: first word is mapped at 0x17ffc, second faults at 0x18000.
+        let mut reference = single_m4_board(false, program, 0x17ffc);
+        let mut translated = single_m4_board(true, program, 0x17ffc);
+        for b in [&mut reference, &mut translated] {
+            b.set_execution_policy(ExecutionPolicy::Interactive).unwrap();
+            b.state.borrow_mut().settled.verify = 0;
+            b.write_physical(0x17ffc, &0x1111_2222u32.to_le_bytes()).unwrap();
+        }
+        let a = reference.run_until(32, 32);
+        let b = translated.run_until(32, 32);
+        assert!(
+            a.as_ref()
+                .err()
+                .is_some_and(|e| e.to_ascii_lowercase().contains("unmapped")),
+            "expected observer POP fault, got {a:?}"
+        );
+        assert!(
+            b.as_ref()
+                .err()
+                .is_some_and(|e| e.to_ascii_lowercase().contains("unmapped")),
+            "expected translated POP fault, got {b:?}"
+        );
+        let expected = outcome(&reference);
+        let actual = outcome(&translated);
+        assert_eq!(actual.registers, expected.registers, "fault wide={wide}");
+        assert_eq!(actual.state, expected.state, "fault wide={wide}");
+        assert_eq!(
+            translated.state.borrow().instructions,
+            reference.state.borrow().instructions,
+            "fault wide={wide}"
+        );
+        assert_eq!(
+            translated.state.borrow().timeline.now(),
+            reference.state.borrow().timeline.now(),
+            "fault wide={wide}"
+        );
     }
 }
 

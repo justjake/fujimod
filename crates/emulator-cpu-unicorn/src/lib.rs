@@ -357,6 +357,43 @@ fn protection(access: Access) -> u32 {
         Access::Fetch => 4,
     }
 }
+thread_local! {
+    static GUEST_CLOCK_TICK: Cell<Option<u64>> = const { Cell::new(None) };
+}
+
+/// Publish an approximate guest tick on the current CPU thread for clocked
+/// fast MMIO reads across all Unicorn processor profiles.
+pub fn set_guest_clock_tick(tick: Option<u64>) {
+    GUEST_CLOCK_TICK.with(|current| current.set(tick));
+}
+
+/// Return the approximate guest tick published on the current CPU thread.
+/// Reads the shared backend thread-local first and falls back to the R-profile
+/// thread-local until `rprofile` delegates directly to `set_guest_clock_tick`.
+pub fn approximate_guest_tick() -> Option<u64> {
+    GUEST_CLOCK_TICK
+        .with(Cell::get)
+        .or_else(rprofile::approximate_guest_tick)
+}
+
+/// Scoped guard that publishes a guest tick and restores the prior value on drop.
+pub struct GuestClockTickScope {
+    previous: Option<u64>,
+}
+
+impl GuestClockTickScope {
+    pub fn enter(tick: Option<u64>) -> Self {
+        let previous = GUEST_CLOCK_TICK.with(|current| current.replace(tick));
+        Self { previous }
+    }
+}
+
+impl Drop for GuestClockTickScope {
+    fn drop(&mut self) {
+        set_guest_clock_tick(self.previous);
+    }
+}
+
 unsafe extern "C" fn mmio_read(_: ffi::Engine, offset: u64, size: u32, data: *mut c_void) -> u64 {
     let context = unsafe { &*data.cast::<MmioData>() };
     if context.inspection.depth.get() != 0 {
@@ -364,7 +401,7 @@ unsafe extern "C" fn mmio_read(_: ffi::Engine, offset: u64, size: u32, data: *mu
         return 0;
     }
     let offset = context.offset + offset;
-    let tick = rprofile::approximate_guest_tick();
+    let tick = approximate_guest_tick();
     context
         .fast_reads
         .iter()
@@ -844,7 +881,8 @@ impl Cpu for Core {
             block_accounting,
             thumb_block_accounting,
             thumb_block_recovery: thumb_block_accounting
-                && e.features & ffi::FEATURE_THUMB_BLOCK_RECOVERY != 0,
+                && e.features & ffi::FEATURE_THUMB_BLOCK_RECOVERY != 0
+                && e.features & ffi::FEATURE_THUMB_PAGE_BITMAP != 0,
             watched_stores: e.hook_watched.is_some() && e.watch.is_some(),
             backing_observation: e.observe_backings.is_some(),
             store_pc_control: e.write_hook_pc_sync.is_some(),
@@ -1958,12 +1996,14 @@ mod tests {
             })
             .unwrap();
         }
-        let accounting = cpu.thumb_accounting().unwrap();
+        let accounting = cpu.thumb_recovery_accounting().unwrap();
         let accounting_ptr = accounting.as_ptr();
         unsafe {
-            (*accounting_ptr).accounting.enabled = 4;
-            (*accounting_ptr).accounting.budget = 3;
-            (*accounting_ptr).thumb_page = 0x1000;
+            (*accounting_ptr).thumb_accounting.accounting.enabled = 4;
+            (*accounting_ptr).thumb_accounting.accounting.budget = 3;
+            (*accounting_ptr).thumb_accounting.thumb_page = 0x1000;
+            (*accounting_ptr).thumb_page_bitmap = [0; 16];
+            (*accounting_ptr).thumb_page_bitmap[0] = 1u64 << 4;
         }
 
         cpu.run(Run {
@@ -1983,7 +2023,10 @@ mod tests {
         assert_eq!(counters["guard_budget_callbacks"], 1);
         assert_eq!(counters["guard_classifier_slow_callbacks"], 0);
         assert_eq!(counters["guard_other_slow_callbacks"], 0);
-        assert_eq!(unsafe { (*accounting_ptr).accounting.budget }, 0);
+        assert_eq!(
+            unsafe { (*accounting_ptr).thumb_accounting.accounting.budget },
+            0
+        );
     }
     #[test]
     fn mode4_itstate_is_preserved_when_instruction_limit_splits_the_it_block() {
@@ -2016,12 +2059,14 @@ mod tests {
             })
             .unwrap();
         }
-        let accounting = cpu.thumb_accounting().unwrap();
+        let accounting = cpu.thumb_recovery_accounting().unwrap();
         let accounting_ptr = accounting.as_ptr();
         unsafe {
-            (*accounting_ptr).accounting.enabled = 4;
-            (*accounting_ptr).accounting.budget = 2;
-            (*accounting_ptr).thumb_page = 0x1000;
+            (*accounting_ptr).thumb_accounting.accounting.enabled = 4;
+            (*accounting_ptr).thumb_accounting.accounting.budget = 2;
+            (*accounting_ptr).thumb_accounting.thumb_page = 0x1000;
+            (*accounting_ptr).thumb_page_bitmap = [0; 16];
+            (*accounting_ptr).thumb_page_bitmap[0] = 1u64 << 4;
         }
         for (begin, expected_pc) in [(0x1001, 0x1002), (0x1003, 0x1004)] {
             cpu.run(Run {
@@ -2036,7 +2081,10 @@ mod tests {
         assert_eq!(reg(&cpu, arm::CORE[0]), 0x1234);
         let cpsr = reg(&cpu, Register::Arm32(arm::Register::Cpsr)) as u32;
         assert_eq!(((cpsr >> 25) & 3) | ((cpsr >> 8) & 0xfc), 0);
-        assert_eq!(unsafe { (*accounting_ptr).accounting.budget }, 2);
+        assert_eq!(
+            unsafe { (*accounting_ptr).thumb_accounting.accounting.budget },
+            2
+        );
         assert_eq!(it_probe.seen[..2], [(0x1000, 0xbf08), (0x1002, 0x4608)]);
     }
     unsafe fn thumb_restart(_: *mut c_void, _: u64) {}
@@ -2377,7 +2425,7 @@ mod tests {
             .unwrap();
         }
 
-        let accounting = cpu.thumb_accounting().unwrap();
+        let accounting = cpu.thumb_recovery_accounting().unwrap();
         let accounting_ptr = accounting.as_ptr();
         let run_block = || {
             cpu.write_register(arm::CORE[0], &0u32.to_le_bytes())
@@ -2394,10 +2442,16 @@ mod tests {
             assert_eq!(reg(&cpu, arm::CORE[0]), 3);
             assert_eq!(reg(&cpu, arm::CORE[1]), 0x1234);
         };
-        let set_accounting = |enabled, page, budget| unsafe {
-            (*accounting_ptr).accounting.enabled = enabled;
-            (*accounting_ptr).accounting.budget = budget;
-            (*accounting_ptr).thumb_page = page;
+        let set_accounting = |enabled, page: u64, budget| unsafe {
+            (*accounting_ptr).thumb_accounting.accounting.enabled = enabled;
+            (*accounting_ptr).thumb_accounting.accounting.budget = budget;
+            (*accounting_ptr).thumb_accounting.thumb_page = page;
+            (*accounting_ptr).thumb_page_bitmap = [0; 16];
+            let page_idx = page >> 10;
+            if page_idx < 1024 {
+                (*accounting_ptr).thumb_page_bitmap[(page_idx >> 6) as usize] =
+                    1u64 << (page_idx & 63);
+            }
         };
 
         // Translate the TB with the Thumb fast path enabled and the matching
@@ -2405,7 +2459,10 @@ mod tests {
         set_accounting(3, 0x1000, 5);
         run_block();
         assert_eq!(blocks.callbacks, 1);
-        assert_eq!(unsafe { (*accounting_ptr).accounting.budget }, 0);
+        assert_eq!(
+            unsafe { (*accounting_ptr).thumb_accounting.accounting.budget },
+            0
+        );
         let classifications = blocks.classifications;
         assert!(classifications > 0);
 
@@ -2413,19 +2470,28 @@ mod tests {
         blocks.stop_after = blocks.callbacks + 2;
         run_block();
         assert_eq!(blocks.callbacks, 3);
-        assert_eq!(unsafe { (*accounting_ptr).accounting.budget }, 5);
+        assert_eq!(
+            unsafe { (*accounting_ptr).thumb_accounting.accounting.budget },
+            5
+        );
 
         set_accounting(3, 0x2000, 5);
         blocks.stop_after = blocks.callbacks + 2;
         run_block();
         assert_eq!(blocks.callbacks, 5);
-        assert_eq!(unsafe { (*accounting_ptr).accounting.budget }, 5);
+        assert_eq!(
+            unsafe { (*accounting_ptr).thumb_accounting.accounting.budget },
+            5
+        );
 
         set_accounting(3, 0x1000, 5);
         blocks.stop_after = blocks.callbacks + 1;
         run_block();
         assert_eq!(blocks.callbacks, 6);
-        assert_eq!(unsafe { (*accounting_ptr).accounting.budget }, 0);
+        assert_eq!(
+            unsafe { (*accounting_ptr).thumb_accounting.accounting.budget },
+            0
+        );
         assert_eq!(blocks.classifications, classifications);
 
         let counters = cpu.exit_counters().unwrap();
@@ -2494,6 +2560,8 @@ mod tests {
             (*accounting_ptr).thumb_accounting.accounting.budget = 20;
             (*accounting_ptr).thumb_accounting.thumb_page = 0x1000;
             (*accounting_ptr).last_block_bytes = 0;
+            (*accounting_ptr).thumb_page_bitmap = [0; 16];
+            (*accounting_ptr).thumb_page_bitmap[0] = 1u64 << 4;
         }
         let mut probe = ThumbRecoveryProbe {
             cpu: &cpu,
@@ -2749,5 +2817,301 @@ mod tests {
                 (Access::Write, 0x801024, 4, 0x12345678)
             ]
         );
+    }
+
+    #[test]
+    fn thumb_page_bitmap_covers_multiple_sram_pages_and_falls_back_above_1mib() {
+        unsafe fn stop_on_block(_: Block, data: *mut c_void) {
+            unsafe { &*data.cast::<Core>() }.stop().unwrap();
+        }
+
+        let cpu = library().open(Model::CortexM4, 4 * 1024 * 1024).unwrap();
+        cpu.set_guard_diagnostics(true).unwrap();
+        assert_ne!(cpu.api.extensions.features & ffi::FEATURE_THUMB_PAGE_BITMAP, 0);
+        assert!(cpu.features().thumb_block_recovery);
+
+        // Two SRAM pages in different bitmap words: 1 KiB page 4 (0x0000_1000, word 0 bit 4)
+        // and 1 KiB page 772 (0x000c_1000, word 12 bit 4), plus a high page >= 1 MiB (0x0010_0000).
+        cpu.map_zeroed(0x0000_1000, 0x1000, 7).unwrap();
+        cpu.map_zeroed(0x000c_1000, 0x1000, 7).unwrap();
+        cpu.map_zeroed(0x0010_0000, 0x1000, 7).unwrap();
+
+        // 0x0000_1000: ADDS R0, #1 (0x3001); B.W 0x000c_1000 (0xf0bf 0xbffd)
+        cpu.write_memory(0x0000_1000, &[0x01, 0x30, 0xbf, 0xf0, 0xfd, 0xbf])
+            .unwrap();
+        // 0x000c_1000: ADDS R1, #1 (0x3101); B.W 0x0000_1000 (0xf73f 0xbffd)
+        cpu.write_memory(0x000c_1000, &[0x01, 0x31, 0x3f, 0xf7, 0xfd, 0xbf])
+            .unwrap();
+        // 0x0010_0000: ADDS R0, #1 (0x3001); B 0x0010_0000 (0xe7fd)
+        cpu.write_memory(0x0010_0000, &[0x01, 0x30, 0xfd, 0xe7])
+            .unwrap();
+
+        unsafe {
+            cpu.translation_hooks(Some(TranslationHooks {
+                classify: thumb_memory_execute,
+                restart: thumb_restart,
+                data: std::ptr::null_mut(),
+            }))
+            .unwrap();
+            cpu.install_hook(Hook::Block {
+                callback: stop_on_block,
+                data: (&cpu as *const Core).cast_mut().cast(),
+                range: HookRange::All,
+            })
+            .unwrap();
+        }
+
+        let accounting = cpu.thumb_recovery_accounting().unwrap();
+        let accounting_ptr = accounting.as_ptr();
+        unsafe {
+            (*accounting_ptr).thumb_accounting.accounting.enabled = 4;
+            (*accounting_ptr).thumb_accounting.accounting.budget = 8;
+            (*accounting_ptr).thumb_accounting.thumb_page = u64::MAX;
+            (*accounting_ptr).thumb_page_bitmap = [0; 16];
+            (*accounting_ptr).thumb_page_bitmap[0] = 1u64 << 4;
+            (*accounting_ptr).thumb_page_bitmap[12] = 1u64 << 4;
+        }
+
+        // Cross-page loop runs 4 blocks (8 instructions) with zero page mismatches.
+        cpu.run(Run {
+            begin: 0x0000_1001,
+            until: None,
+            watchdog_us: 0,
+            instructions: None,
+        })
+        .unwrap();
+        assert_eq!(reg(&cpu, arm::CORE[0]), 2);
+        assert_eq!(reg(&cpu, arm::CORE[1]), 2);
+        assert_eq!(
+            unsafe { (*accounting_ptr).thumb_accounting.accounting.budget },
+            0
+        );
+        let counters = cpu.exit_counters().unwrap();
+        assert_eq!(counters["guard_page_mismatch_callbacks"], 0);
+        assert_eq!(counters["guard_budget_callbacks"], 1);
+
+        // Clearing word 12 bit 4 causes 1 KiB page 772 to miss after page 4 runs fast.
+        unsafe {
+            (*accounting_ptr).thumb_accounting.accounting.budget = 8;
+            (*accounting_ptr).thumb_page_bitmap[12] = 0;
+        }
+        cpu.run(Run {
+            begin: 0x0000_1001,
+            until: None,
+            watchdog_us: 0,
+            instructions: None,
+        })
+        .unwrap();
+        assert_eq!(reg(&cpu, arm::CORE[0]), 3);
+        assert_eq!(reg(&cpu, arm::CORE[1]), 2);
+        assert_eq!(
+            unsafe { (*accounting_ptr).thumb_accounting.accounting.budget },
+            6
+        );
+        let counters = cpu.exit_counters().unwrap();
+        assert_eq!(counters["guard_page_mismatch_callbacks"], 1);
+
+        // Addresses >= 0x100000 fall back to matching 1 KiB thumb_page.
+        cpu.write_register(arm::CORE[0], &0u32.to_le_bytes())
+            .unwrap();
+        unsafe {
+            (*accounting_ptr).thumb_page_bitmap = [0; 16];
+            (*accounting_ptr).thumb_accounting.thumb_page = 0x0010_0000;
+            (*accounting_ptr).thumb_accounting.accounting.budget = 4;
+        }
+        cpu.run(Run {
+            begin: 0x0010_0001,
+            until: None,
+            watchdog_us: 0,
+            instructions: None,
+        })
+        .unwrap();
+        assert_eq!(reg(&cpu, arm::CORE[0]), 2);
+        assert_eq!(
+            unsafe { (*accounting_ptr).thumb_accounting.accounting.budget },
+            0
+        );
+        let counters = cpu.exit_counters().unwrap();
+        assert_eq!(counters["guard_page_mismatch_callbacks"], 1);
+        assert_eq!(counters["guard_budget_callbacks"], 2);
+
+        unsafe {
+            (*accounting_ptr).thumb_accounting.thumb_page = 0x0010_0400;
+            (*accounting_ptr).thumb_accounting.accounting.budget = 4;
+        }
+        cpu.run(Run {
+            begin: 0x0010_0001,
+            until: None,
+            watchdog_us: 0,
+            instructions: None,
+        })
+        .unwrap();
+        assert_eq!(
+            unsafe { (*accounting_ptr).thumb_accounting.accounting.budget },
+            4
+        );
+        let counters = cpu.exit_counters().unwrap();
+        assert_eq!(counters["guard_page_mismatch_callbacks"], 2);
+    }
+
+    #[test]
+    fn thumb_page_bitmap_isolates_adjacent_1kib_subpages_within_4kib_page() {
+        unsafe fn stop_on_block(_: Block, data: *mut c_void) {
+            unsafe { &*data.cast::<Core>() }.stop().unwrap();
+        }
+
+        let cpu = library().open(Model::CortexM4, 4 * 1024 * 1024).unwrap();
+        cpu.set_guard_diagnostics(true).unwrap();
+
+        // One 4 KiB mapping containing two adjacent 1 KiB pages: 0x10000..0x10400
+        // (page 64, word 1 bit 0) and 0x10400..0x10800 (page 65, word 1 bit 1).
+        cpu.map_zeroed(0x0001_0000, 0x1000, 7).unwrap();
+
+        // 0x10000: ADDS R0, #1 (0x3001); B 0x10400 (0xe1fd)
+        cpu.write_memory(0x0001_0000, &[0x01, 0x30, 0xfd, 0xe1])
+            .unwrap();
+        // 0x10400: ADDS R1, #1 (0x3101); B 0x10000 (0xe5fd)
+        cpu.write_memory(0x0001_0400, &[0x01, 0x31, 0xfd, 0xe5])
+            .unwrap();
+
+        unsafe {
+            cpu.translation_hooks(Some(TranslationHooks {
+                classify: thumb_memory_execute,
+                restart: thumb_restart,
+                data: std::ptr::null_mut(),
+            }))
+            .unwrap();
+            cpu.install_hook(Hook::Block {
+                callback: stop_on_block,
+                data: (&cpu as *const Core).cast_mut().cast(),
+                range: HookRange::All,
+            })
+            .unwrap();
+        }
+
+        let accounting = cpu.thumb_recovery_accounting().unwrap();
+        let accounting_ptr = accounting.as_ptr();
+        unsafe {
+            (*accounting_ptr).thumb_accounting.accounting.enabled = 4;
+            (*accounting_ptr).thumb_accounting.accounting.budget = 8;
+            (*accounting_ptr).thumb_accounting.thumb_page = u64::MAX;
+            (*accounting_ptr).thumb_page_bitmap = [0; 16];
+            // Arm only 0x10000..0x10400 (page 64 = word 1 bit 0).
+            (*accounting_ptr).thumb_page_bitmap[1] = 1u64 << 0;
+        }
+
+        cpu.run(Run {
+            begin: 0x0001_0001,
+            until: None,
+            watchdog_us: 0,
+            instructions: None,
+        })
+        .unwrap();
+        assert_eq!(reg(&cpu, arm::CORE[0]), 1);
+        assert_eq!(reg(&cpu, arm::CORE[1]), 0);
+        assert_eq!(reg(&cpu, Register::Pc), 0x0001_0400);
+        assert_eq!(
+            unsafe { (*accounting_ptr).thumb_accounting.accounting.budget },
+            6
+        );
+        let counters = cpu.exit_counters().unwrap();
+        assert_eq!(counters["guard_page_mismatch_callbacks"], 1);
+
+        // Now arm 0x10400..0x10800 (page 65 = word 1 bit 1) as well; both run fast.
+        unsafe {
+            (*accounting_ptr).thumb_page_bitmap[1] |= 1u64 << 1;
+            (*accounting_ptr).thumb_accounting.accounting.budget = 4;
+        }
+        cpu.run(Run {
+            begin: 0x0001_0401,
+            until: None,
+            watchdog_us: 0,
+            instructions: None,
+        })
+        .unwrap();
+        assert_eq!(reg(&cpu, arm::CORE[0]), 2);
+        assert_eq!(reg(&cpu, arm::CORE[1]), 1);
+        assert_eq!(
+            unsafe { (*accounting_ptr).thumb_accounting.accounting.budget },
+            0
+        );
+        let counters = cpu.exit_counters().unwrap();
+        assert_eq!(counters["guard_page_mismatch_callbacks"], 1);
+        assert_eq!(counters["guard_budget_callbacks"], 1);
+    }
+
+    #[test]
+    fn shared_guest_clock_tick_drives_clocked_fast_mmio_reads() {
+        use std::sync::Arc;
+        use std::sync::atomic::{AtomicUsize, Ordering};
+
+        unsafe fn fallback_read(_: u64, _: u32, data: *mut c_void) -> u64 {
+            let count = unsafe { &*data.cast::<AtomicUsize>() };
+            count.fetch_add(1, Ordering::Relaxed);
+            0xdead_beef
+        }
+        unsafe fn fallback_write(_: u64, _: u32, _: u64, _: *mut c_void) {}
+
+        assert_eq!(approximate_guest_tick(), None);
+        {
+            let _outer = GuestClockTickScope::enter(Some(42));
+            assert_eq!(approximate_guest_tick(), Some(42));
+            {
+                let _inner = GuestClockTickScope::enter(Some(99));
+                assert_eq!(approximate_guest_tick(), Some(99));
+            }
+            assert_eq!(approximate_guest_tick(), Some(42));
+        }
+        assert_eq!(approximate_guest_tick(), None);
+
+        let cpu = library().open(Model::CortexM4, 4 * 1024 * 1024).unwrap();
+        cpu.map_zeroed(0x1000, 0x1000, 7).unwrap();
+        // LDR R0, [R1, #0]
+        cpu.write_memory(0x1000, &[0x08, 0x68]).unwrap();
+        cpu.write_register(arm::CORE[1], &0x4000_0000u32.to_le_bytes())
+            .unwrap();
+
+        let fallback_count = AtomicUsize::new(0);
+        let fast = FastMmioRead::clocked_u32(
+            0,
+            Arc::new(|tick| Some((tick as u32).wrapping_add(1000))),
+        );
+        fast.set_enabled(true);
+        unsafe {
+            cpu.map_mmio_fast(
+                0x4000_0000,
+                0x1000,
+                Mmio {
+                    read: fallback_read,
+                    write: fallback_write,
+                    data: (&fallback_count as *const AtomicUsize).cast_mut().cast(),
+                },
+                vec![fast],
+            )
+            .unwrap();
+        }
+
+        {
+            let _scope = GuestClockTickScope::enter(Some(77));
+            cpu.run(Run {
+                begin: 0x1001,
+                until: None,
+                watchdog_us: 0,
+                instructions: Some(1),
+            })
+            .unwrap();
+        }
+        assert_eq!(reg(&cpu, arm::CORE[0]), 1077);
+        assert_eq!(fallback_count.load(Ordering::Relaxed), 0);
+
+        cpu.run(Run {
+            begin: 0x1001,
+            until: None,
+            watchdog_us: 0,
+            instructions: Some(1),
+        })
+        .unwrap();
+        assert_eq!(reg(&cpu, arm::CORE[0]), 0xdead_beef);
+        assert_eq!(fallback_count.load(Ordering::Relaxed), 1);
     }
 }

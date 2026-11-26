@@ -6,14 +6,14 @@
 //!
 //! This models causal transfers, with no bus-arbitration timing claim: a ready
 //! beat runs at `now`. No timer is invented while waiting for a peripheral.
+use fujimod_emulator_devices::bus::{FastReadWord, InterruptLine};
 use fujimod_emulator_devices::checkpoint::Checkpoint;
-use fujimod_emulator_devices::bus::InterruptLine;
 use fujimod_emulator_devices::dma::{self, Direction, ReadWindow, SharedPort};
 use fujimod_emulator_devices::{Cx, Device};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use std::collections::BTreeMap;
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, RwLock};
 
 const ENABLE: u32 = 1 << 28;
 const SOFTWARE: u32 = 1 << 24;
@@ -101,9 +101,81 @@ struct State {
     control: u32,
     channels: [Channel; 2],
 }
+const FAST_READ_OFFSETS: [u64; 17] = [
+    0x00, 0x10, 0x14, 0x18, 0x1c, 0x20, 0x24, 0x28, 0x30, 0x40, 0x44, 0x48, 0x4c, 0x50, 0x54, 0x58,
+    0x60,
+];
+
+#[derive(Clone, Default)]
+struct ChannelFastView {
+    count: u32,
+    source: u32,
+    destination: u32,
+    source_shape: u32,
+    destination_shape: u32,
+    link: u32,
+    control: u32,
+    status: u8,
+    counter_exhausted: bool,
+    started: bool,
+}
+impl ChannelFastView {
+    fn from_channel(c: &Channel) -> Self {
+        Self {
+            count: c.count,
+            source: c.source,
+            destination: c.destination,
+            source_shape: c.source_shape,
+            destination_shape: c.destination_shape,
+            link: c.link,
+            control: c.control,
+            status: c.status,
+            counter_exhausted: c.counter_exhausted,
+            started: c.started,
+        }
+    }
+}
+#[derive(Clone, Default)]
+struct XdmacFastView {
+    control: u32,
+    channels: [ChannelFastView; 2],
+}
+impl XdmacFastView {
+    fn from_state(state: &State) -> Self {
+        Self {
+            control: state.control,
+            channels: state
+                .channels
+                .each_ref()
+                .map(ChannelFastView::from_channel),
+        }
+    }
+    fn read_offset(&self, offset: u64) -> Option<u32> {
+        if offset == 0 {
+            return Some(
+                self.control | (u32::from(self.channels.iter().any(|c| c.started)) << 16),
+            );
+        }
+        let lane = usize::from(offset >= 0x40);
+        let c = &self.channels[lane];
+        match offset - lane as u64 * 0x30 {
+            0x10 if !c.counter_exhausted => Some(c.count),
+            0x14 => Some(c.source),
+            0x18 => Some(c.destination),
+            0x1c => Some(c.source_shape),
+            0x20 => Some(c.destination_shape),
+            0x24 => Some(c.link),
+            0x28 => Some(c.control),
+            0x30 => Some(c.status as u32 | (u32::from(c.started) << 16)),
+            _ => None,
+        }
+    }
+}
+
 pub struct Pair {
     base: u64,
     state: State,
+    fast_view: Arc<RwLock<XdmacFastView>>,
     routing: SharedRouting,
     connections: BTreeMap<u8, Connection>,
     interrupts: [Vec<InterruptLine>; 2],
@@ -148,14 +220,20 @@ impl Pair {
         if base.checked_add(0x1000).is_none() || connections.keys().any(|&v| v >= 63) {
             return Err("invalid XDMAC pair wiring".into());
         }
+        let state = State::default();
+        let fast_view = Arc::new(RwLock::new(XdmacFastView::from_state(&state)));
         Ok(Self {
             base,
-            state: State::default(),
+            state,
+            fast_view,
             routing,
             connections,
             interrupts,
             read_windows: Vec::new(),
         })
+    }
+    fn publish_fast_view(&self) {
+        *self.fast_view.write().unwrap() = XdmacFastView::from_state(&self.state);
     }
     /// Let the channels read these device-backed windows, such as the serial-flash aperture.
     /// Writes into them still refuse.
@@ -166,6 +244,7 @@ impl Pair {
     /// Global control reset state with the enable bit set (session assumption).
     pub fn with_global_enable_at_reset(mut self) -> Self {
         self.state.control = ENABLE;
+        self.publish_fast_view();
         self
     }
     fn connection(&self, lane: usize, c: &Channel) -> Result<Option<&Connection>, String> {
@@ -417,6 +496,29 @@ impl Device for Pair {
     fn name(&self) -> &'static str {
         "xdmac-pair"
     }
+    fn fast_reads(&self, window_base: u64, window_size: u64) -> Vec<FastReadWord> {
+        let Some(window_end) = window_base.checked_add(window_size) else {
+            return Vec::new();
+        };
+        let mut words = Vec::with_capacity(FAST_READ_OFFSETS.len());
+        for reg_offset in FAST_READ_OFFSETS {
+            let Some(address) = self.base.checked_add(reg_offset) else {
+                continue;
+            };
+            let Some(end) = address.checked_add(4) else {
+                continue;
+            };
+            if address < window_base || end > window_end {
+                continue;
+            }
+            let view = self.fast_view.clone();
+            words.push(FastReadWord::clocked_u32(
+                address - window_base,
+                Arc::new(move |_| view.read().ok()?.read_offset(reg_offset)),
+            ));
+        }
+        words
+    }
     fn read(&mut self, cx: &mut Cx<'_>, address: u64, size: u8) -> u64 {
         let Some(offset) = self.offset(address, size) else {
             cx.unmodeled();
@@ -460,6 +562,7 @@ impl Device for Pair {
         for lane in 0..2 {
             self.publish(cx, lane);
         }
+        self.publish_fast_view();
     }
     fn advance(&mut self, cx: &mut Cx<'_>) {
         for lane in 0..2 {
@@ -487,6 +590,7 @@ impl Device for Pair {
             }
             self.publish(cx, lane);
         }
+        self.publish_fast_view();
     }
     fn next_deadline(&self, now: u64) -> Option<u64> {
         self.state
@@ -512,6 +616,7 @@ impl Device for Pair {
         routing.enabled = state.channels.each_ref().map(|channel| channel.enabled());
         *self.routing.lock().unwrap() = routing;
         self.state = state;
+        self.publish_fast_view();
         Ok(())
     }
     fn save(&self) -> Value {
@@ -547,9 +652,131 @@ impl Device for Pair {
         routing.enabled = state.channels.each_ref().map(|c| c.enabled());
         *self.routing.lock().unwrap() = routing;
         self.state = state;
+        self.publish_fast_view();
         Ok(())
     }
 }
 
 #[cfg(test)]
 mod tests;
+
+#[cfg(test)]
+mod fast_read_tests {
+    use super::*;
+    use fujimod_emulator_devices::bus::FastReadValue;
+    use fujimod_emulator_devices::test_host::recording::RecordingHost;
+
+    #[test]
+    fn fast_reads_match_device_read_and_decline_exhausted_counter() {
+        let base = 0x10_0000;
+        let routing = Arc::new(Mutex::new(Routing::default()));
+        routing.lock().unwrap().set_request(0, 63).unwrap();
+        routing.lock().unwrap().set_request(1, 63).unwrap();
+        let mut pair = Pair::new(
+            base,
+            routing,
+            BTreeMap::new(),
+            [
+                vec![InterruptLine::Shared(42)],
+                vec![InterruptLine::Shared(43)],
+            ],
+        )
+        .unwrap()
+        .with_global_enable_at_reset();
+
+        let fast: BTreeMap<u64, Arc<dyn Fn(u64) -> Option<u32> + Send + Sync>> = pair
+            .fast_reads(base, 0x100)
+            .into_iter()
+            .map(|word| {
+                let FastReadValue::ClockedU32(read) = word.value else {
+                    panic!("expected ClockedU32 at {:#x}", word.offset);
+                };
+                (word.offset, read)
+            })
+            .collect();
+        assert_eq!(
+            fast.keys().copied().collect::<Vec<_>>(),
+            FAST_READ_OFFSETS.to_vec()
+        );
+
+        let mut host = RecordingHost {
+            ram: (0..128).collect(),
+            ..Default::default()
+        };
+        let assert_parity = |pair: &mut Pair, host: &mut RecordingHost| {
+            for offset in (0u64..=0x64).step_by(4) {
+                let mut cx = Cx::new(host, 0, 0, 0);
+                let expected = pair.read(&mut cx, base + offset, 4);
+                if cx.is_unmodeled() {
+                    if let Some(read) = fast.get(&offset) {
+                        assert_eq!(read(0), None, "expected decline at {offset:#x}");
+                    }
+                } else {
+                    assert_eq!(fast[&offset](0), Some(expected as u32), "offset {offset:#x}");
+                }
+            }
+        };
+        assert_parity(&mut pair, &mut host);
+
+        let initial_checkpoint = pair.checkpoint().unwrap();
+        let initial_json = pair.save();
+
+        // Program a 2-beat software transfer on lane 0 and a 1-beat transfer on lane 1.
+        for (offset, value) in [
+            (0x10u64, 15u64),
+            (0x14, 8),
+            (0x18, 64),
+            (0x1c, 0x30000),
+            (0x20, 0x30000),
+            (0x24, 0),
+            (0x28, u64::from(ENABLE | SOFTWARE | 0x100000 | 3)),
+            (0x40, 7),
+            (0x44, 24),
+            (0x48, 96),
+            (0x4c, 0x30000),
+            (0x50, 0x30000),
+            (0x54, 0),
+            (0x58, u64::from(ENABLE | SOFTWARE | 0x100000 | 3)),
+        ] {
+            let mut cx = Cx::new(&mut host, 0, 0, 0);
+            pair.write(&mut cx, base + offset, 4, value);
+            assert!(cx.refusal().is_none(), "write {offset:#x}");
+        }
+        assert_parity(&mut pair, &mut host);
+
+        // First beat: lane 0 is started (mid-transfer), lane 1 finishes and becomes exhausted.
+        let mut cx = Cx::new(&mut host, 0, 0, 0);
+        pair.advance(&mut cx);
+        assert!(cx.refusal().is_none());
+        drop(cx);
+        assert_eq!(fast[&0x00](0), Some(ENABLE | (1 << 16)));
+        assert_eq!(fast[&0x10](0), Some(7));
+        assert_eq!(fast[&0x40](0), None);
+        assert_parity(&mut pair, &mut host);
+
+        // Second beat: lane 0 finishes and becomes exhausted too.
+        let mut cx = Cx::new(&mut host, 0, 0, 0);
+        pair.advance(&mut cx);
+        assert!(cx.refusal().is_none());
+        drop(cx);
+        assert_eq!(fast[&0x10](0), None);
+        assert_eq!(fast[&0x40](0), None);
+        assert_parity(&mut pair, &mut host);
+
+        let exhausted_checkpoint = pair.checkpoint().unwrap();
+
+        // JSON restore returns to non-exhausted initial state.
+        pair.restore(&initial_json).unwrap();
+        assert_eq!(fast[&0x10](0), Some(0));
+        assert_parity(&mut pair, &mut host);
+
+        // Binary checkpoint restore returns to exhausted state.
+        pair.restore_checkpoint(&exhausted_checkpoint).unwrap();
+        assert_eq!(fast[&0x10](0), None);
+        assert_eq!(fast[&0x40](0), None);
+        assert_parity(&mut pair, &mut host);
+
+        pair.restore_checkpoint(&initial_checkpoint).unwrap();
+        assert_parity(&mut pair, &mut host);
+    }
+}

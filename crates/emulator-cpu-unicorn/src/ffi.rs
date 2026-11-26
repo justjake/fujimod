@@ -23,6 +23,7 @@ pub const FEATURE_THUMB_IT_ACCOUNTING: u32 = 1 << 26;
 pub const FEATURE_TRANSLATION_TIMING_COUNTERS: u32 = 1 << 27;
 pub const FEATURE_M4_CLASSIFIER_HISTOGRAM: u32 = 1 << 28;
 pub const FEATURE_TRANSLATION_REPEAT_DETAILS: u32 = 1 << 29;
+pub const FEATURE_THUMB_PAGE_BITMAP: u32 = 1 << 30;
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct TlbiEvent {
@@ -171,6 +172,10 @@ impl Extensions {
                 self.features & FEATURE_INLINE_BLOCK_ACCOUNTING != 0,
                 "uc_embedder_features (translated block accounting)",
             ),
+            (
+                self.features & FEATURE_THUMB_PAGE_BITMAP != 0,
+                "uc_embedder_features (Thumb proven-page bitmap)",
+            ),
         ]
         .into_iter()
         .filter_map(|(present, name)| (!present).then_some(name))
@@ -204,7 +209,8 @@ pub struct ThumbAccounting {
     pub thumb_page: u64,
 }
 /// Recovery extension to the Thumb accounting layout. Read only when the
-/// linked library reports `FEATURE_THUMB_BLOCK_RECOVERY`.
+/// linked library reports `FEATURE_THUMB_BLOCK_RECOVERY` and
+/// `FEATURE_THUMB_PAGE_BITMAP`.
 #[repr(C)]
 pub struct ThumbRecoveryAccounting {
     pub thumb_accounting: ThumbAccounting,
@@ -212,7 +218,35 @@ pub struct ThumbRecoveryAccounting {
     pub last_block_remaining_budget: i64,
     pub last_block_bytes: u32,
     pub last_block_icount: u32,
+    pub thumb_page_bitmap: [u64; 16],
 }
+const _: () = {
+    assert!(std::mem::size_of::<Accounting>() == 48);
+    assert!(std::mem::offset_of!(Accounting, pause_requested) == 40);
+    assert!(std::mem::size_of::<ThumbAccounting>() == 56);
+    assert!(std::mem::offset_of!(ThumbAccounting, thumb_page) == 48);
+    assert!(std::mem::size_of::<ThumbRecoveryAccounting>() == 208);
+    assert!(std::mem::offset_of!(ThumbRecoveryAccounting, last_block_start) == 56);
+    assert!(std::mem::offset_of!(ThumbRecoveryAccounting, last_block_remaining_budget) == 64);
+    assert!(std::mem::offset_of!(ThumbRecoveryAccounting, last_block_bytes) == 72);
+    assert!(std::mem::offset_of!(ThumbRecoveryAccounting, last_block_icount) == 76);
+    assert!(std::mem::offset_of!(ThumbRecoveryAccounting, thumb_page_bitmap) == 80);
+    assert!(
+        std::mem::size_of::<ThumbRecoveryAccounting>()
+            == std::mem::size_of::<fujimod_emulator_cpu::ThumbBlockRecoveryAccounting>()
+    );
+    assert!(
+        std::mem::align_of::<ThumbRecoveryAccounting>()
+            == std::mem::align_of::<fujimod_emulator_cpu::ThumbBlockRecoveryAccounting>()
+    );
+    assert!(
+        std::mem::offset_of!(ThumbRecoveryAccounting, thumb_page_bitmap)
+            == std::mem::offset_of!(
+                fujimod_emulator_cpu::ThumbBlockRecoveryAccounting,
+                thumb_page_bitmap
+            )
+    );
+};
 pub type InsnFilter = unsafe extern "C" fn(*mut c_void, u64, u32) -> c_int;
 pub type Restart = unsafe extern "C" fn(*mut c_void, u64);
 macro_rules! api {

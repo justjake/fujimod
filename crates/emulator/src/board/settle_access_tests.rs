@@ -601,3 +601,157 @@ fn an_aarch64_poll_loop_through_a_read_helper_is_fast_forwarded_with_the_same_re
         }
     }
 }
+
+#[test]
+fn m4_atomic_fast_reads_bypass_board_callbacks_in_interactive_mode_only() {
+    use factory::*;
+    use std::sync::atomic::{AtomicU32, Ordering};
+
+    struct AtomicTransfer {
+        probe: Arc<Mutex<Probe>>,
+        word: Arc<AtomicU32>,
+    }
+    impl Device for AtomicTransfer {
+        fn name(&self) -> &'static str {
+            "test-atomic-transfer"
+        }
+        fn read(&mut self, cx: &mut Cx<'_>, _: u64, _: u8) -> u64 {
+            let mut p = self.probe.lock().unwrap();
+            let status = p.status;
+            p.count += 1;
+            p.read_ticks.push(cx.now());
+            status
+        }
+        fn write(&mut self, cx: &mut Cx<'_>, _: u64, _: u8, _: u64) {
+            let mut p = self.probe.lock().unwrap();
+            p.due = Some(cx.now() + 300 + p.status % 3);
+        }
+        fn fast_reads(&self, _: u64, _: u64) -> Vec<fujimod_emulator_devices::bus::FastReadWord> {
+            vec![fujimod_emulator_devices::bus::FastReadWord::atomic_u32(
+                0,
+                self.word.clone(),
+            )]
+        }
+        fn next_deadline(&self, _: u64) -> Option<u64> {
+            self.probe.lock().unwrap().due
+        }
+        fn advance(&mut self, cx: &mut Cx<'_>) {
+            let mut p = self.probe.lock().unwrap();
+            if p.due.is_some_and(|at| at <= cx.now()) {
+                p.due = None;
+                p.status += 1;
+                self.word.store(p.status as u32, Ordering::Release);
+            }
+        }
+        fn save(&self) -> Value {
+            let p = self.probe.lock().unwrap();
+            json!({"due": p.due, "status": p.status})
+        }
+    }
+
+    let run_atomic = |blocks: bool, policy: ExecutionPolicy| {
+        let arm32 = |r| Register::Arm32(fujimod_emulator_cpu::arm::Register::R(r));
+        let graph = Graph {
+            decoders: vec![],
+            processors: vec![Processor {
+                model: Model::CortexM4,
+                registers: vec![],
+                released: true,
+                parked_until_sgi: false,
+                rprofile: None,
+                mprofile: Some(super::mprofile::Config {
+                    clock_hz: 1_000_000_000,
+                    board_ticks_per_second: 1_000_000_000,
+                    vector_base: 0x10000,
+                }),
+            }],
+            dma_mappings: vec![crate::board::memory::BusMapping::ram(0x10000, 0x8000)],
+            ram: vec![Ram {
+                base: 0x10000,
+                size: 0x8000,
+            }],
+            mappings: vec![MemoryMap {
+                core: 0,
+                address: 0x10000,
+                physical: 0x10000,
+                size: 0x8000,
+                permissions: 7,
+            }],
+            peripherals: vec![Peripheral {
+                core: 0,
+                address: 0x8000000,
+                physical: 0xff910000,
+                size: 0x1000,
+            }],
+            instructions_per_tick: Ratio::new(1, 1).unwrap(),
+        };
+        let probe = Arc::new(Mutex::new(Probe::default()));
+        let word = Arc::new(AtomicU32::new(0));
+        let mut bus = Bus::new(bus::Mode::Strict);
+        bus.register(
+            0xff910000,
+            4,
+            Box::new(AtomicTransfer {
+                probe: probe.clone(),
+                word,
+            }),
+        )
+        .unwrap();
+        let mut board = graph
+            .build(
+                Options::new(RunEngine::Unicorn).with_translation_cache_size_bytes(1024 * 1024),
+                bus,
+                None,
+            )
+            .unwrap();
+        board.set_execution_policy(policy).unwrap();
+        board.set_block_execution(blocks);
+        board.set_poll_loops(false);
+        let words = |words: &[u32]| words.iter().flat_map(|w| w.to_le_bytes()).collect::<Vec<_>>();
+        board.write_physical(0x10000, &words(&[0x17000, 0x10101])).unwrap();
+        board
+            .write_physical(
+                0x10100,
+                &PROGRAM.iter().flat_map(|w| w.to_le_bytes()).collect::<Vec<_>>(),
+            )
+            .unwrap();
+        for &window in &[300, 301, 625, 2111, 5000] {
+            board.run_until(window, 63).unwrap();
+        }
+        let m4 = board.cpu(0).unwrap();
+        let mut registers: Vec<u64> = (0..5).map(|r| scalar(m4, arm32(r)).unwrap()).collect();
+        registers.push(scalar(m4, Register::Pc).unwrap());
+        let accesses = board.mmio_callback_counts.borrow()[0];
+        let served = probe.lock().unwrap().count;
+        let state = board.state();
+        (registers, state, accesses, served)
+    };
+
+    for blocks in [false, true] {
+        let (exact_regs, exact_state, exact_accesses, exact_served) =
+            run_atomic(blocks, ExecutionPolicy::Exact);
+        let (interactive_regs, interactive_state, interactive_accesses, interactive_served) =
+            run_atomic(blocks, ExecutionPolicy::Interactive);
+        let rounds = exact_regs[4];
+        assert!((14..=17).contains(&rounds), "blocks={blocks} rounds={rounds}");
+        assert_eq!(interactive_regs, exact_regs, "blocks={blocks}");
+        assert_eq!(
+            interactive_state["bus"], exact_state["bus"],
+            "blocks={blocks}"
+        );
+        assert_eq!(
+            interactive_served, 0,
+            "blocks={blocks}: atomic fast reads must bypass Device::read in Interactive mode"
+        );
+        assert_eq!(
+            interactive_accesses,
+            rounds + 1,
+            "blocks={blocks}: only writes should reach Board::access in Interactive mode"
+        );
+        assert!(
+            exact_served > 100,
+            "blocks={blocks}: Exact mode must keep FastMmioRead disabled"
+        );
+        assert_eq!(exact_accesses, exact_served + rounds + 1, "blocks={blocks}");
+    }
+}
