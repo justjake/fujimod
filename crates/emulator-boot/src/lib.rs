@@ -1489,8 +1489,17 @@ fn open_prepared_epoch(
                 names.insert(section, name);
             }
             let nand = &mut scene["nands"]["nand"];
-            *nand = json!({"kind": "settings", "options": nand["options"], "base": "nand_base",
-                "layout": layout, "requested": declared.requested, "camera": names});
+            // Without a camera's bank sections the bank can only be fabricated
+            // from the update's defaults table over zero bytes, which stock
+            // firmware reads as a valid bank. Leave the bank erased so the
+            // firmware copies the defaults image the update installed instead.
+            *nand = if names.is_empty() {
+                json!({"kind": "profile", "options": nand["options"], "base": "nand_base",
+                    "layout": layout, "requested": declared.requested})
+            } else {
+                json!({"kind": "settings", "options": nand["options"], "base": "nand_base",
+                    "layout": layout, "requested": declared.requested, "camera": names})
+            };
         }
         None if !camera.is_empty() => {
             return Err("this run declares no settings, but camera sections were supplied".into());
