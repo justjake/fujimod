@@ -179,7 +179,11 @@ impl Board {
                 }
                 for &core in cores {
                     let epoch = state.parallel.as_ref().unwrap();
-                    let room = epoch.room(core);
+                    // A peer must not spend the whole epoch while another is
+                    // parked in a host callback. Bound each segment to one
+                    // processor quantum so every runnable core gets a turn
+                    // before the epoch can end.
+                    let room = epoch.room(core).min(quantum as u64);
                     let cpu = &self.cpus[core];
                     if cpu.features().guest_clock {
                         cpu.set_guest_clock(epoch.clock(core)?)?;
