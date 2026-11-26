@@ -549,13 +549,23 @@ impl ImageInput {
             }
             if v & 3 == 2 {
                 let preserve = self.options.phase_ack == PhaseAck::PreserveFields;
+                // An input-enable clock runs from the same enable bit that
+                // gates it, so a phase published while the input runs is
+                // acknowledged with that bit still set. Other clock modes
+                // acknowledge only a stopped input.
+                let running_input = self
+                    .options
+                    .clock
+                    .as_ref()
+                    .is_some_and(|c| c.mode == ClockMode::InputEnable);
                 if self.options.phase_ack == PhaseAck::Disabled
                     || old & 3 != 3
                     || (!preserve && (old != 3 || v != 2))
                     || preserve && (old & !3) != (v & !3)
                     || self.state.r[0x13c / 4] != 1
                     || self.state.r[0x70 / 4] & 1 != 0
-                    || self.options.phase_ack == PhaseAck::Inactive
+                    || !running_input
+                        && self.options.phase_ack == PhaseAck::Inactive
                         && self.state.r[0x48 / 4] & 1 != 0
                 {
                     return Err(
