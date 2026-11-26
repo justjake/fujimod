@@ -175,8 +175,10 @@ impl Board {
             state.code_run = RunCode::Unknown;
         }
         let result = (|| {
-            for &core in cores {
-                self.sync_store_hook(core)?;
+            if self.ordered_without_mprofile() {
+                for &core in cores {
+                    self.sync_store_hook(core)?;
+                }
             }
             self.interactive_cohort(cores, quantum)
         })();
