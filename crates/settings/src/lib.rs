@@ -285,6 +285,9 @@ fn profile<'a>(
                     seal_journal(&mut bytes, record.parity_offset as usize)?;
                     sealed.extend_from_slice(&bytes);
                 }
+                if let Some(extent) = record.nor_extent_bytes {
+                    sealed.resize(extent as usize, 0xff);
+                }
                 records.push(Record {
                     bytes: sealed,
                     block: record.block,
@@ -326,6 +329,14 @@ fn apply_requested(
             .get_mut(setting.store.as_str())
             .ok_or_else(|| format!("setting {name} names an absent store"))?;
         put(store, setting.offset, encoded);
+        if let Some(writes) = setting.additional_writes.get(value) {
+            for write in writes {
+                let store = stores
+                    .get_mut(write.store.as_str())
+                    .ok_or_else(|| format!("setting {name} names an absent store"))?;
+                put(store, write.offset, &write.bytes);
+            }
+        }
     }
     Ok(())
 }
