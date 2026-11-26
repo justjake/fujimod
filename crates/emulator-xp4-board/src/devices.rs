@@ -921,6 +921,7 @@ impl Devices {
         read_gate: (u16, u8),
         ibuf: Option<(u64, u32, u64, u64, u64, String)>,
         statistics_in_memory: bool,
+        frame_start_pulse: Option<u32>,
     ) -> Result<(), String> {
         use fujimod_emulator_sensor_input::{sensor, slvs};
         let (command_base, receiver_base, normal_irqs, error_irqs, timing_irqs, raw_dma_irqs) = map;
@@ -937,6 +938,7 @@ impl Devices {
                 .chain(&error_irqs)
                 .chain(&timing_irqs)
                 .chain(raw_dma)
+                .chain(&frame_start_pulse)
                 .any(|i| !(32..512).contains(i))
         {
             return Err("Invalid XP4 imaging map".into());
@@ -952,7 +954,10 @@ impl Devices {
                 // The X-T3 5.11 sensor driver writes the stride with the
                 // buffer address: +0x58 = 0x31e0 for 6276 samples.
                 line_stride: true,
-                frame_start_pulse: None,
+                // Declared, an edge at every frame start with no enable or
+                // status word, as on XP5. Whether X-T3 5.11 gates the line
+                // with a +0x140 cause bit is not read.
+                frame_start_pulse,
             }),
             read_gate,
         );
@@ -2063,7 +2068,7 @@ mod imaging_admission_tests {
             let mut devices = Devices::empty();
             assert!(
                 devices
-                    .imaging(map(raw_dma), (100, 50, 10, 8), (0x59, 4), None, false)
+                    .imaging(map(raw_dma), (100, 50, 10, 8), (0x59, 4), None, false, None)
                     .is_err()
             );
             assert!(devices.models.is_empty() && devices.windows.is_empty());
@@ -2071,10 +2076,79 @@ mod imaging_admission_tests {
         for raw_dma in [None, Some(vec![97, 98])] {
             let mut devices = Devices::empty();
             devices
-                .imaging(map(raw_dma), (100, 50, 10, 8), (0x59, 4), None, false)
+                .imaging(map(raw_dma), (100, 50, 10, 8), (0x59, 4), None, false, None)
                 .unwrap();
             assert_eq!(devices.windows.len(), 2);
         }
+    }
+    #[test]
+    fn a_frame_start_pulse_line_is_a_valid_interrupt() {
+        for line in [0, 31, 512, 600] {
+            let mut devices = Devices::empty();
+            assert!(
+                devices
+                    .imaging(
+                        map(None),
+                        (100, 50, 10, 8),
+                        (0x59, 4),
+                        None,
+                        false,
+                        Some(line)
+                    )
+                    .is_err(),
+                "line {line}"
+            );
+            assert!(devices.models.is_empty() && devices.windows.is_empty());
+        }
+    }
+    /// Edges on `line` while the sensor streams three frames: one sensor
+    /// command writes register 0 = 0 (out of standby), then the receiver's
+    /// link runs.
+    fn frame_start_edges(pulse: Option<u32>, line: u32) -> Vec<bool> {
+        use fujimod_emulator_devices::test_host::recording::RecordingHost;
+        let mut devices = Devices::empty();
+        devices
+            .imaging(map(None), (100, 50, 10, 8), (0x59, 4), None, false, pulse)
+            .unwrap();
+        let mut command = devices.models[0].take().unwrap();
+        let mut receiver = devices.models[1].take().unwrap();
+        let mut host = RecordingHost {
+            ram: vec![0x81, 0, 0, 0, 0, 0, 0, 0],
+            ram_base: 0x1000,
+            ..Default::default()
+        };
+        for (offset, value) in [(0x210, 0x1000), (0x208, 0x10401), (0x218, 8), (0x204, 1)] {
+            command.write(
+                &mut Cx::new(&mut host, 0, 0, 0),
+                0xfff6c000 + offset,
+                4,
+                value,
+            );
+        }
+        // The one packet completes after `command_ticks`.
+        host.now = 10;
+        command.read(&mut Cx::new(&mut host, 0, 0, 0), 0xfff6c204, 4);
+        receiver.write(&mut Cx::new(&mut host, 0, 0, 0), 0xfff69000, 4, 0);
+        for _ in 0..3 {
+            host.now += 100;
+            receiver.read(&mut Cx::new(&mut host, 0, 0, 0), 0xfff69000, 4);
+        }
+        host.irqs
+            .iter()
+            .filter(|(l, _)| *l == line)
+            .map(|(_, level)| *level)
+            .collect()
+    }
+    #[test]
+    fn a_declared_frame_start_pulse_is_an_edge_at_every_frame_start() {
+        assert_eq!(
+            frame_start_edges(Some(101), 101),
+            [true, false, true, false, true, false]
+        );
+        // The frame start line (timing[0] = 102) still follows its enable
+        // word, which is zero here.
+        assert!(frame_start_edges(Some(101), 102).iter().all(|level| !level));
+        assert!(frame_start_edges(None, 101).is_empty());
     }
 }
 
