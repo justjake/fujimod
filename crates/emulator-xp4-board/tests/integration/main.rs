@@ -5,6 +5,7 @@ mod card_media;
 mod decompressor;
 mod ff61_controller;
 mod functional_system_control;
+mod imaging_frame_start_pulse;
 mod io_groups;
 mod jpeg_decoder;
 mod mali_v61;
