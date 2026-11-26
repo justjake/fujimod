@@ -3,6 +3,7 @@ base = 0xff948000
 size = 0x1000
 kind = "imaging-sensor"
 [device.options]
+interleaved_raw12 = true
 retain_words = true
 # Functional scheduled latency, not measured camera timing.
 command_latency_us = 1
@@ -41,6 +42,9 @@ kind = "imaging-input"
 retain_words = true
 # Restart waits for +0x17c bit 31 after the run bit at +0x140 clears.
 idle_status = true
+# Functional input-engine frame timing. The period and active phase are inferred.
+frame_period_us = 33333
+frame_active_us = 10000
 
 [[device]]
 base = 0xff950000
@@ -109,7 +113,6 @@ base = 0xffd01000
 size = 0x1000
 kind = "imaging-rifp-io"
 [device.options]
-# Register-list DMA, interrupt 230. Functional completion latency.
 queue_completion_us = 5
 
 [[device]]

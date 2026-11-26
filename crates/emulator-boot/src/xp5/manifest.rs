@@ -247,6 +247,30 @@ pub(crate) fn preload_length(preload: &Preload) -> Result<u64, String> {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn xh2s_movie_pipeline_pairs_raw12_with_input_frame_timing() {
+        let state = BootState::for_firmware("xh2s-730", None).unwrap();
+        let sensor = state
+            .device
+            .iter()
+            .find(|device| device.base == 0xff94_8000)
+            .unwrap();
+        assert_eq!(
+            sensor
+                .options
+                .get("interleaved_raw12")
+                .and_then(toml::Value::as_bool),
+            Some(true)
+        );
+        let input = state
+            .device
+            .iter()
+            .find(|device| device.kind == "imaging-input")
+            .unwrap();
+        assert_eq!(input.options["frame_period_us"].as_integer(), Some(33333));
+        assert_eq!(input.options["frame_active_us"].as_integer(), Some(10000));
+    }
+
     use super::{BootState, Dram};
 
     #[test]
