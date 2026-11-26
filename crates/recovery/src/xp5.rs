@@ -19,6 +19,18 @@ mod flash_template {
     include!(concat!(env!("OUT_DIR"), "/xp5_internal_flash_loader.rs"));
 }
 
+// The layout also lists entry points that only card-resident setup uses.
+#[allow(dead_code)]
+mod xe5_template {
+    include!(concat!(env!("OUT_DIR"), "/xp5_xe5_loader.rs"));
+}
+
+struct DiagnosticTables {
+    host_prelude: usize,
+    host_variants: usize,
+    handoff_ranges: usize,
+}
+
 /// Where one compiled loader build keeps what the packager binds. `CARD` is the card-resident
 /// loader (`template`); `INTERNAL_FLASH` is the same sources built for a startup that keeps the
 /// installed flash attached (`flash_template`).
@@ -35,11 +47,7 @@ struct Loader {
     request_abi: RequestAbi,
     sd_progress: usize,
     sd_board: usize,
-    /// The host prelude, the root host setups, the stop-5 handoff ranges and the secondary-core
-    /// release list: every build carries these tables, which stay empty unless the setup names them.
-    sd_host_prelude: usize,
-    sd_host_variants: usize,
-    sd_handoff_ranges: usize,
+    diagnostics: Option<DiagnosticTables>,
     sd_secondary_release: usize,
     boot_ready: usize,
     boot_zero_gate: usize,
@@ -74,13 +82,35 @@ const CARD: Loader = Loader {
     request_abi: template::REQUEST_ABI,
     sd_progress: template::SETUP_SD_PROGRESS,
     sd_board: template::SETUP_SD_BOARD,
-    sd_host_prelude: template::SETUP_SD_HOST_PRELUDE,
-    sd_host_variants: template::SETUP_SD_HOST_VARIANTS,
-    sd_handoff_ranges: template::SETUP_SD_HANDOFF_RANGES,
+    diagnostics: Some(DiagnosticTables {
+        host_prelude: template::SETUP_SD_HOST_PRELUDE,
+        host_variants: template::SETUP_SD_HOST_VARIANTS,
+        handoff_ranges: template::SETUP_SD_HANDOFF_RANGES,
+    }),
     sd_secondary_release: template::SETUP_SD_SECONDARY_RELEASE,
     boot_ready: template::A64_BOOT_READY,
     boot_zero_gate: template::A64_BOOT_ZERO_GATE,
     externals: template::EXTERNALS,
+    internal_flash_binding: None,
+};
+const XE5: Loader = Loader {
+    image: xe5_template::IMAGE,
+    prelude_stack_max: xe5_template::PRELUDE_STACK_MAX,
+    setup_entry: xe5_template::XP5_SETUP_ENTRY,
+    setup_configuration: xe5_template::XP5_SETUP_CONFIGURATION,
+    setup_return_branch: xe5_template::XP5_SETUP_RETURN_BRANCH,
+    setup_stack: xe5_template::XP5_SETUP_STACK,
+    setup_stack_top: xe5_template::XP5_SETUP_STACK_TOP,
+    sd_initialize: xe5_template::SETUP_SD_INITIALIZE,
+    sd_request: xe5_template::SETUP_SD_REQUEST,
+    request_abi: xe5_template::REQUEST_ABI,
+    sd_progress: xe5_template::SETUP_SD_PROGRESS,
+    sd_board: xe5_template::SETUP_SD_BOARD,
+    diagnostics: None,
+    sd_secondary_release: xe5_template::SETUP_SD_SECONDARY_RELEASE,
+    boot_ready: xe5_template::A64_BOOT_READY,
+    boot_zero_gate: xe5_template::A64_BOOT_ZERO_GATE,
+    externals: xe5_template::EXTERNALS,
     internal_flash_binding: None,
 };
 const INTERNAL_FLASH: Loader = Loader {
@@ -96,9 +126,11 @@ const INTERNAL_FLASH: Loader = Loader {
     request_abi: flash_template::REQUEST_ABI,
     sd_progress: flash_template::SETUP_SD_PROGRESS,
     sd_board: flash_template::SETUP_SD_BOARD,
-    sd_host_prelude: flash_template::SETUP_SD_HOST_PRELUDE,
-    sd_host_variants: flash_template::SETUP_SD_HOST_VARIANTS,
-    sd_handoff_ranges: flash_template::SETUP_SD_HANDOFF_RANGES,
+    diagnostics: Some(DiagnosticTables {
+        host_prelude: flash_template::SETUP_SD_HOST_PRELUDE,
+        host_variants: flash_template::SETUP_SD_HOST_VARIANTS,
+        handoff_ranges: flash_template::SETUP_SD_HANDOFF_RANGES,
+    }),
     sd_secondary_release: flash_template::SETUP_SD_SECONDARY_RELEASE,
     boot_ready: flash_template::A64_BOOT_READY,
     boot_zero_gate: flash_template::A64_BOOT_ZERO_GATE,
@@ -237,11 +269,28 @@ pub struct StockStack {
 #[serde(rename_all = "snake_case")]
 pub enum ExtensionAlignment {
     #[default]
+    #[serde(rename = "16_kib")]
     Page16KiB,
+    #[serde(rename = "4_kib")]
     Page4KiB,
 }
 
 impl ExtensionAlignment {
+    fn is_default(&self) -> bool {
+        *self == Self::default()
+    }
+}
+
+/// The compiled loader selected by the recipe.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum CardLoader {
+    #[default]
+    Standard,
+    Xe5,
+}
+
+impl CardLoader {
     fn is_default(&self) -> bool {
         *self == Self::default()
     }
@@ -254,6 +303,8 @@ pub struct Setup {
     pub low_length: usize,
     #[serde(default, skip_serializing_if = "ExtensionAlignment::is_default")]
     pub extension_alignment: ExtensionAlignment,
+    #[serde(default, skip_serializing_if = "CardLoader::is_default")]
+    pub card_loader: CardLoader,
     pub length_flags: u32,
     pub base: u64,
     pub stack: u64,
@@ -899,6 +950,98 @@ fn extension_window(
     start..base + 0x38800
 }
 
+fn bind_diagnostics(
+    program: &mut [u8],
+    tables: &DiagnosticTables,
+    setup: &Setup,
+    stop: StartupStop,
+) -> Result<()> {
+    let host_prelude = tables.host_prelude;
+    require(
+        setup.host_prelude.len() <= 16,
+        "XP5 host prelude exceeds operation limit",
+    )?;
+    require(
+        extent(program, host_prelude, 8 + 16 * 24)?
+            .iter()
+            .all(|v| *v == 0),
+        "XP5 host prelude template changed",
+    )?;
+    put(program, host_prelude, setup.host_prelude.len() as u32)?;
+    for (n, op) in setup.host_prelude.iter().enumerate() {
+        require(
+            host_prelude_operation(op, setup.board.host),
+            "Invalid XP5 SD host prelude operation",
+        )?;
+        let at = host_prelude + 8 + n * 24;
+        put64(program, at, op.address)?;
+        put(program, at + 8, op.mask)?;
+        put(program, at + 12, op.value)?;
+        put(program, at + 16, op.kind)?;
+    }
+    let variants = tables.host_variants;
+    require(
+        setup.host_variants.len() <= 8,
+        "XP5 host variants exceed their limit",
+    )?;
+    require(
+        extent(program, variants, 8 + 8 * 24)?
+            .iter()
+            .all(|v| *v == 0),
+        "XP5 host variant template changed",
+    )?;
+    put(program, variants, setup.host_variants.len() as u32)?;
+    for (n, variant) in setup.host_variants.iter().enumerate() {
+        require(
+            (1..=0xff).contains(&variant.identification_divider)
+                && (variant.clock_configuration_field <= 3
+                    || variant.clock_configuration_field == u32::MAX)
+                && [
+                    variant.power_off_ms,
+                    variant.power_on_ms,
+                    variant.clock_on_ms,
+                ]
+                .iter()
+                .all(|ms| *ms <= 2000),
+            "Invalid XP5 host variant",
+        )?;
+        let at = variants + 8 + n * 24;
+        for (k, value) in [
+            variant.identification_divider,
+            variant.clock_configuration_field,
+            variant.power_off_ms,
+            variant.power_on_ms,
+            variant.clock_on_ms,
+        ]
+        .into_iter()
+        .enumerate()
+        {
+            put(program, at + 4 * k, value)?;
+        }
+    }
+    let ranges = tables.handoff_ranges;
+    handoff_result::check(&setup.handoff_ranges)?;
+    require(
+        setup.handoff_ranges.is_empty() || matches!(stop, StartupStop::AfterCrcWithErrorPackets),
+        "XP5 handoff ranges require the after-CRC packet stop",
+    )?;
+    require(
+        extent(program, ranges, 8 + handoff_result::RANGES * 16)?
+            .iter()
+            .all(|v| *v == 0),
+        "XP5 handoff range template changed",
+    )?;
+    if !setup.handoff_ranges.is_empty() {
+        put(program, ranges, setup.handoff_ranges.len() as u32)?;
+        put(program, ranges + 4, handoff_result::BYTES as u32)?;
+    }
+    for (n, range) in setup.handoff_ranges.iter().enumerate() {
+        put64(program, ranges + 8 + n * 16, range.address)?;
+        put(program, ranges + 16 + n * 16, range.words)?;
+    }
+    Ok(())
+}
+
 fn package_inner(
     inverted: &[u8],
     setup: &Setup,
@@ -923,10 +1066,21 @@ fn package_inner(
         "The stock-selector startup is a card-loader startup without card-resident setup",
     )?;
     let prefix = setup.verify(inverted)?;
-    let loader = if internal_flash.is_some() {
-        &INTERNAL_FLASH
-    } else {
-        &CARD
+    let loader = match (setup.card_loader, internal_flash.is_some()) {
+        (CardLoader::Standard, false) => &CARD,
+        (CardLoader::Standard, true) => &INTERNAL_FLASH,
+        (CardLoader::Xe5, false) => {
+            require(
+                setup.card_boot.is_none() && stock_selector.is_none(),
+                "The X-E5 loader does not support card-resident setup or a stock-selector startup",
+            )?;
+            &XE5
+        }
+        (CardLoader::Xe5, true) => {
+            return Err(image::Error::Invalid(
+                "The X-E5 loader does not support the internal-flash startup binding".into(),
+            ));
+        }
     };
     let copied_end = setup.base + setup.low_length as u64;
     let window = extension_window(
@@ -1192,89 +1346,15 @@ fn package_inner(
         if let Some(divider) = stock_selector.and_then(|stock| stock.transfer_clock_divider) {
             bind_transfer_clock(&mut program, divider)?;
         }
-        let host_prelude = loader.sd_host_prelude;
-        require(
-            setup.host_prelude.len() <= 16,
-            "XP5 host prelude exceeds operation limit",
-        )?;
-        require(
-            extent(&program, host_prelude, 8 + 16 * 24)?
-                .iter()
-                .all(|v| *v == 0),
-            "XP5 host prelude template changed",
-        )?;
-        put(&mut program, host_prelude, setup.host_prelude.len() as u32)?;
-        for (n, op) in setup.host_prelude.iter().enumerate() {
+        if let Some(tables) = &loader.diagnostics {
+            bind_diagnostics(&mut program, tables, setup, stop)?;
+        } else {
             require(
-                host_prelude_operation(op, setup.board.host),
-                "Invalid XP5 SD host prelude operation",
+                setup.host_prelude.is_empty()
+                    && setup.host_variants.is_empty()
+                    && setup.handoff_ranges.is_empty(),
+                "The XP5 loader has no diagnostic tables",
             )?;
-            let at = host_prelude + 8 + n * 24;
-            put64(&mut program, at, op.address)?;
-            put(&mut program, at + 8, op.mask)?;
-            put(&mut program, at + 12, op.value)?;
-            put(&mut program, at + 16, op.kind)?;
-        }
-        let variants = loader.sd_host_variants;
-        require(
-            setup.host_variants.len() <= 8,
-            "XP5 host variants exceed their limit",
-        )?;
-        require(
-            extent(&program, variants, 8 + 8 * 24)?
-                .iter()
-                .all(|v| *v == 0),
-            "XP5 host variant template changed",
-        )?;
-        put(&mut program, variants, setup.host_variants.len() as u32)?;
-        for (n, variant) in setup.host_variants.iter().enumerate() {
-            require(
-                (1..=0xff).contains(&variant.identification_divider)
-                    && (variant.clock_configuration_field <= 3
-                        || variant.clock_configuration_field == u32::MAX)
-                    && [
-                        variant.power_off_ms,
-                        variant.power_on_ms,
-                        variant.clock_on_ms,
-                    ]
-                    .iter()
-                    .all(|ms| *ms <= 2000),
-                "Invalid XP5 host variant",
-            )?;
-            let at = variants + 8 + n * 24;
-            for (k, value) in [
-                variant.identification_divider,
-                variant.clock_configuration_field,
-                variant.power_off_ms,
-                variant.power_on_ms,
-                variant.clock_on_ms,
-            ]
-            .into_iter()
-            .enumerate()
-            {
-                put(&mut program, at + 4 * k, value)?;
-            }
-        }
-        let ranges = loader.sd_handoff_ranges;
-        handoff_result::check(&setup.handoff_ranges)?;
-        require(
-            setup.handoff_ranges.is_empty()
-                || matches!(stop, StartupStop::AfterCrcWithErrorPackets),
-            "XP5 handoff ranges require the after-CRC packet stop",
-        )?;
-        require(
-            extent(&program, ranges, 8 + handoff_result::RANGES * 16)?
-                .iter()
-                .all(|v| *v == 0),
-            "XP5 handoff range template changed",
-        )?;
-        if !setup.handoff_ranges.is_empty() {
-            put(&mut program, ranges, setup.handoff_ranges.len() as u32)?;
-            put(&mut program, ranges + 4, handoff_result::BYTES as u32)?;
-        }
-        for (n, range) in setup.handoff_ranges.iter().enumerate() {
-            put64(&mut program, ranges + 8 + n * 16, range.address)?;
-            put(&mut program, ranges + 16 + n * 16, range.words)?;
         }
         let release = loader.sd_secondary_release;
         require(
@@ -1387,6 +1467,56 @@ mod tests {
     use super::*;
     use card_boot::Payload;
     #[test]
+    fn xe5_loader_fits_and_binds_its_request() {
+        let (data, mut setup, ram) = fixture();
+        setup.card_loader = CardLoader::Xe5;
+        setup.extension_alignment = ExtensionAlignment::Page4KiB;
+        let window = extension_window(
+            setup.base,
+            setup.base + 0x2c000,
+            setup.base + 0x30d00,
+            setup.extension_alignment,
+        );
+        assert!(XE5.image.len() as u64 + 0x800 <= window.end - window.start);
+
+        let files = package(
+            &data,
+            &setup,
+            Some(ram.clone()),
+            0,
+            StartupStop::Continue,
+            false,
+        )
+        .unwrap();
+        let address = setup.base + 0x9000;
+        let stage = &files[0].bytes;
+        assert_eq!(
+            word(stage, 0).unwrap(),
+            branch(setup.base, address, false).unwrap()
+        );
+        let at = 0x9000 + XE5.sd_request;
+        let expected = [
+            1u64,
+            ram.len() as u64,
+            crate::xp4::crc32(&ram).into(),
+            100,
+            100000,
+        ]
+        .map(u64::to_le_bytes);
+        assert_eq!(&stage[at..at + 40], expected.as_flattened());
+        assert_eq!(files[1].bytes, ram);
+
+        setup.host_variants.push(HostVariant {
+            identification_divider: 2,
+            clock_configuration_field: 0,
+            power_off_ms: 0,
+            power_on_ms: 0,
+            clock_on_ms: 0,
+        });
+        assert!(package(&data, &setup, Some(ram), 0, StartupStop::Continue, false).is_err());
+    }
+
+    #[test]
     fn sequential_request_binds_only_five_words() {
         let mut program = [0; 48];
         program[0] = 1;
@@ -1461,6 +1591,7 @@ mod tests {
             prefix: prefix.clone(),
             low_length: 0x4000,
             extension_alignment: ExtensionAlignment::default(),
+            card_loader: CardLoader::default(),
             length_flags: 0,
             base,
             stack: base + 0x8000,
@@ -2075,13 +2206,17 @@ mod tests {
         let mut ranges = vec![
             loader.setup_configuration..loader.setup_configuration + 216,
             loader.sd_board..loader.sd_board + 16 + 48 * 24,
-            loader.sd_host_prelude..loader.sd_host_prelude + 8 + 16 * 24,
-            loader.sd_host_variants..loader.sd_host_variants + 8 + 8 * 24,
-            loader.sd_handoff_ranges..loader.sd_handoff_ranges + 8 + handoff_result::RANGES * 16,
             loader.sd_secondary_release..loader.sd_secondary_release + 8,
             loader.sd_request..loader.sd_request + loader.request_abi.bytes(),
             loader.setup_return_branch..loader.setup_return_branch + 4,
         ];
+        if let Some(tables) = &loader.diagnostics {
+            ranges.extend([
+                tables.host_prelude..tables.host_prelude + 8 + 16 * 24,
+                tables.host_variants..tables.host_variants + 8 + 8 * 24,
+                tables.handoff_ranges..tables.handoff_ranges + 8 + handoff_result::RANGES * 16,
+            ]);
+        }
         ranges.extend(loader.externals.iter().map(|&(at, _, _)| at..at + 4));
         ranges
     }
