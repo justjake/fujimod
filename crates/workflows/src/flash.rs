@@ -287,7 +287,13 @@ pub async fn backup(
     match payload {
         Payload::MappedE1(_) => {
             payload.validate(flash, bulk, image).map_err(|source| {
-                mapped::receipt(bulk::MappedPhase::Window, 0, flash.window.size, source)
+                mapped::receipt(
+                    bulk::MappedPhase::Window,
+                    bulk::MappedAddressSpace::FlashOffset,
+                    0,
+                    flash.window.size,
+                    source,
+                )
             })?;
             mapped::read(
                 session,
@@ -381,7 +387,13 @@ pub async fn read_range(
 ) -> bulk::Result<Vec<u8>> {
     let target = match payload {
         Payload::MappedE1(_) => enclosing(flash, offset, size).map_err(|source| {
-            mapped::receipt(bulk::MappedPhase::Bounds, offset, u64::from(size), source)
+            mapped::receipt(
+                bulk::MappedPhase::Bounds,
+                bulk::MappedAddressSpace::FlashOffset,
+                offset,
+                u64::from(size),
+                source,
+            )
         })?,
         Payload::XppCommand(_) => enclosing_alignment(flash, offset, size, xpp::READ_ALIGNMENT)?,
         Payload::Xp4Command(_) => enclosing_alignment(flash, offset, size, xp4::READ_ALIGNMENT)?,
@@ -389,7 +401,13 @@ pub async fn read_range(
     };
     match payload {
         Payload::MappedE1(_) => payload.validate(flash, bulk, image).map_err(|source| {
-            mapped::receipt(bulk::MappedPhase::Window, offset, u64::from(size), source)
+            mapped::receipt(
+                bulk::MappedPhase::Window,
+                bulk::MappedAddressSpace::FlashOffset,
+                offset,
+                u64::from(size),
+                source,
+            )
         })?,
         _ => payload.validate(flash, bulk, image)?,
     }

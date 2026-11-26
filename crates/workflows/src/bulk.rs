@@ -54,6 +54,24 @@ pub enum MappedPhase {
     Restore,
 }
 
+/// The address space a mapped failure's `address` is in.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum MappedAddressSpace {
+    /// An offset into the flash device, as callers request ranges.
+    FlashOffset,
+    /// A CPU address in the camera's mapped window.
+    Cpu,
+}
+impl MappedAddressSpace {
+    /// Stable name for bindings.
+    pub fn name(self) -> &'static str {
+        match self {
+            Self::FlashOffset => "flash-offset",
+            Self::Cpu => "cpu",
+        }
+    }
+}
+
 /// Failure receipt naming the phase and exact mapped range that failed.
 ///
 /// Pre-I/O refusals keep `address` and `length` in flash-offset order. Once a
@@ -64,6 +82,8 @@ pub enum MappedPhase {
 #[derive(Debug)]
 pub struct MappedFailure {
     pub phase: MappedPhase,
+    /// Which address space `address` is in.
+    pub space: MappedAddressSpace,
     pub address: u64,
     pub length: u64,
     pub source: Box<BulkError>,
@@ -73,8 +93,15 @@ impl std::fmt::Display for MappedFailure {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
-            "mapped E1 {:?} failed at address {:#x} length {:#x}: {}",
-            self.phase, self.address, self.length, self.source
+            "mapped E1 {:?} failed at {} {:#x} length {:#x}: {}",
+            self.phase,
+            match self.space {
+                MappedAddressSpace::FlashOffset => "flash offset",
+                MappedAddressSpace::Cpu => "CPU address",
+            },
+            self.address,
+            self.length,
+            self.source
         )?;
         if let Some(cleanup) = &self.cleanup {
             write!(f, "; cleanup failed: {cleanup}")?;
