@@ -354,6 +354,17 @@ transfer sizes, and CRC32.
 `cargo run -p fujimod-recovery --example locate_rom_sd -- exr UPDATE.DAT`
 emits freshly located startup plans and header facts from the supplied update.
 Use `exrpro` or `xpp` for the other processor families.
+For a type-5 X-Processor Pro update with more than one device payload, pass
+`--device-selector N` after the update path. The locator reports the selected
+payload's offset and size in the original DAT. The startup plan and header
+source offsets are relative to that payload.
+
+`fujimod-sd-card sd-boot-v1-startup FIRMWARE UPDATE.DAT NEW_DIRECTORY --device-selector N`
+builds SD startup files from a selected type-5 XPP payload. The command
+checks the full official update against the catalog, then constructs the SD
+startup from that payload alone. It writes only `ffsys.bin` and
+`ffboot.bin`. Payload selection does not establish on-camera or updater
+compatibility.
 
 ## Green LED card
 

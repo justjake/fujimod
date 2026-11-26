@@ -2056,6 +2056,14 @@ impl Session {
             }
             use fujimod_emulator_xpp::serial::Peer;
             let peer = match (&sub_cpu, &battery_gauge) {
+                (Some((sub_port, _)), Some((gauge_port, _)))
+                    if *sub_port == base && *gauge_port == base =>
+                {
+                    Peer::RegistersAndFrames {
+                        registers: sub_cpu.take().map(|(_, r)| r).unwrap_or_default(),
+                        frames: battery_gauge.take().map(|(_, r)| r).unwrap_or_default(),
+                    }
+                }
                 (Some((port, _)), _) if *port == base => {
                     Peer::Registers(sub_cpu.take().map(|(_, r)| r).unwrap_or_default())
                 }
@@ -2066,7 +2074,7 @@ impl Session {
                 _ => Peer::None,
             };
             let clock = match peer {
-                Peer::Registers(_) => sub_cpu_clock.take(),
+                Peer::Registers(_) | Peer::RegistersAndFrames { .. } => sub_cpu_clock.take(),
                 _ => None,
             };
             let mut replies = BTreeMap::new();
@@ -2106,9 +2114,18 @@ impl Session {
                 .movdc(movdc)?;
         }
         if let Some((base, irq)) = dmp {
+            use fujimod_emulator_ip_dmp::smaph::PixmapReadback;
+
+            // The XPP scanout consumes B,G,R,A pixmaps, as in the XPP graph
+            // board. XP4 keeps the renderer's A,B,G,R words.
+            let readback = if has_xpp_storage || boot_wiring.is_some() {
+                PixmapReadback::RotatesChannels
+            } else {
+                PixmapReadback::PreservesWords
+            };
             devices
                 .get_or_insert_with(devices::Devices::empty)
-                .dmp(base, irq)?;
+                .dmp(base, irq, readback)?;
         }
         for (base, pixel_ticks, first, second, layout, video) in lcdc {
             devices.get_or_insert_with(devices::Devices::empty).lcdc(

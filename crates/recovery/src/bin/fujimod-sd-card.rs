@@ -135,6 +135,29 @@ fn take_ram_patches(
     Ok(Some(PathBuf::from(value)))
 }
 
+fn take_device_selector(
+    args: &mut Vec<String>,
+    command: &str,
+) -> Result<Option<u8>, Box<dyn std::error::Error>> {
+    let flag = "--device-selector";
+    let Some(at) = args.iter().position(|arg| arg == flag) else {
+        return Ok(None);
+    };
+    if command != "sd-boot-v1-startup" {
+        return Err(format!("{flag} requires sd-boot-v1-startup").into());
+    }
+    let selector = args
+        .get(at + 1)
+        .ok_or("Missing --device-selector value")?
+        .parse::<std::num::NonZeroU8>()
+        .map_err(|_| "--device-selector requires a device number from 1 to 255")?;
+    args.drain(at..=at + 1);
+    if args.iter().any(|arg| arg == flag) {
+        return Err(format!("{flag} was specified twice").into());
+    }
+    Ok(Some(selector.get()))
+}
+
 /// Remove `--prepare-installed-flash` from the arguments (only `sd-boot-v1-startup` and the XP5
 /// diagnostic checks take it).
 fn take_prepare_installed_flash(
@@ -207,6 +230,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             | "sd-boot-v2-sd-card"),
         ) => {
             let mut inputs = args[1..].to_vec();
+            let device_selector = take_device_selector(&mut inputs, command)?;
             let storage = if command == "sd-boot-v1-sd-card-startup" {
                 if inputs.len() != 4 || inputs.iter().any(|v| v.starts_with("--")) {
                     return Err("Expected FIRMWARE DAT STORAGE_IMAGE NEW_DIRECTORY".into());
@@ -249,7 +273,15 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             };
             let recipe = Recipe::bundled(firmware)?.ok_or("Missing SD card recipe")?;
             let source = fs::read(dat)?;
-            let files = if let Some(overlay) = &overlay {
+            let files = if let Some(selector) = device_selector {
+                if options != StartupOptions::default()
+                    || overlay.is_some()
+                    || ram_patches.is_some()
+                {
+                    return Err("--device-selector does not accept other startup options".into());
+                }
+                recipe.build_xpp_device_startup(&source, selector)?
+            } else if let Some(overlay) = &overlay {
                 recipe.build_startup_with_overlay(&source, options, overlay)?
             } else if let Some(patches) = &ram_patches {
                 recipe.build_startup_with_ram_patches(&source, options, patches)?
@@ -282,7 +314,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
         _ => {
             return Err(
-                "Usage: fujimod-sd-card list | sd-card-recovery-build|green-led|sd-boot-v1-startup|sd-boot-v1-stage-one|sd-boot-v1-ram-startup|sd-card-recovery-baseline|sd-boot-v2-sd-card|sd-boot-v1-card-init-check|sd-boot-v1-card-error-check|sd-boot-v1-setup-check|sd-boot-v1-read-check|sd-boot-v1-card-read-check FIRMWARE DAT NEW_DIRECTORY [--success-hold-seconds N | --success-hold-units N] [--fallback-wait-seconds N (sd-boot-v1-ram-startup)] [--ram-overlay FILE (sd-boot-v1-startup, sd-boot-v1-ram-startup)] [--ram-patches FILE (sd-boot-v1-startup)] [--prepare-installed-flash (sd-boot-v1-startup and the checks)] | sd-boot-v1-sd-card-startup FIRMWARE DAT STORAGE_IMAGE NEW_DIRECTORY"
+                "Usage: fujimod-sd-card list | sd-card-recovery-build|green-led|sd-boot-v1-startup|sd-boot-v1-stage-one|sd-boot-v1-ram-startup|sd-card-recovery-baseline|sd-boot-v2-sd-card|sd-boot-v1-card-init-check|sd-boot-v1-card-error-check|sd-boot-v1-setup-check|sd-boot-v1-read-check|sd-boot-v1-card-read-check FIRMWARE DAT NEW_DIRECTORY [--device-selector N (type-5 XPP sd-boot-v1-startup)] [--success-hold-seconds N | --success-hold-units N] [--fallback-wait-seconds N (sd-boot-v1-ram-startup)] [--ram-overlay FILE (sd-boot-v1-startup, sd-boot-v1-ram-startup)] [--ram-patches FILE (sd-boot-v1-startup)] [--prepare-installed-flash (sd-boot-v1-startup and the checks)] | sd-boot-v1-sd-card-startup FIRMWARE DAT STORAGE_IMAGE NEW_DIRECTORY"
                     .into(),
             );
         }
@@ -293,8 +325,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 #[cfg(test)]
 mod tests {
     use super::{
-        construction_args, startup_stop, take_fallback_wait, take_prepare_installed_flash,
-        take_ram_overlay, take_ram_patches,
+        construction_args, startup_stop, take_device_selector, take_fallback_wait,
+        take_prepare_installed_flash, take_ram_overlay, take_ram_patches,
     };
     use fujimod_recovery::{StartupOptions, StartupStop};
     fn seconds(n: u32) -> StartupOptions {
@@ -305,6 +337,23 @@ mod tests {
     }
     fn args(values: &[&str]) -> Vec<String> {
         values.iter().map(|s| s.to_string()).collect()
+    }
+    #[test]
+    fn device_selector_is_explicit_and_startup_only() {
+        let mut values = args(&["camera", "update", "--device-selector", "2", "output"]);
+        assert!(take_device_selector(&mut values.clone(), "sd-card-recovery-build").is_err());
+        assert_eq!(
+            take_device_selector(&mut values, "sd-boot-v1-startup").unwrap(),
+            Some(2)
+        );
+        assert_eq!(values, args(&["camera", "update", "output"]));
+        for malformed in [
+            args(&["--device-selector"]),
+            args(&["--device-selector", "0"]),
+            args(&["--device-selector", "1", "--device-selector", "2"]),
+        ] {
+            assert!(take_device_selector(&mut malformed.clone(), "sd-boot-v1-startup").is_err());
+        }
     }
     #[test]
     fn fallback_wait_is_taken_out_before_the_positional_arguments() {
