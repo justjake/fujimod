@@ -23,7 +23,8 @@ use serde::{Deserialize, Serialize};
 pub use xp4::{ColdStart, FileApi, SdCardRead, Setup, sd_card_fast_read::PackedStage};
 pub use xp5::handoff_result as xp5_handoff_result;
 pub use xp5::{
-    Board as SdBoard, CodeProof as Xp5CodeProof, Flash as Xp5Flash,
+    Board as SdBoard, CardLoader as Xp5CardLoader, CodeProof as Xp5CodeProof,
+    ExtensionAlignment as Xp5ExtensionAlignment, Flash as Xp5Flash,
     HandoffRange as Xp5HandoffRange, HostVariant as SdHostVariant, Lamp as Xp5Lamp,
     Operation as SdOperation, RegisterWrite as Xp5RegisterWrite, Setup as Xp5Setup,
     SourceProof as Xp5SourceProof,

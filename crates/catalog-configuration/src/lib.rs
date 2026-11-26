@@ -1688,6 +1688,19 @@ mod tests {
     }
 
     #[test]
+    fn xe5_bundles_an_sd_card_start() {
+        let config = RunConfiguration::bundled("xe5-112").unwrap();
+        let overlay = RunOverlay::bundled("xe5-112-sd-card-start").unwrap();
+        overlay.validate(&overlay.id, &config.id).unwrap();
+        assert_eq!(
+            overlay.change,
+            RunOverlayChange::Start {
+                start: RunStart::SdCard
+            }
+        );
+    }
+
+    #[test]
     fn statistics_offsets_are_destination_offsets() {
         let mut config = RunConfiguration::bundled("x70-110-rec").unwrap();
         let Some(RunScene::Exr2(scene)) = config.scene.as_mut() else {
