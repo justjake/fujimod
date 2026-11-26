@@ -28,11 +28,11 @@ fn setup() -> Vec<fujimod_usb::testing::Exchange> {
     s
 }
 #[test]
-fn catalog_constant_outside_dram_is_read_twice_before_delivery() {
-    // Outside the E1 window the source wraps into DRAM, so the region is read
-    // with direct memory commands at its own address, never through E1.
+fn catalog_constant_outside_window_is_read_once_and_delivered() {
+    // Outside the E1 window the region uses direct memory reads. The
+    // double-read verification is skipped (ff80 reads may differ between
+    // passes on some processors), so only one read exchange is needed.
     let mut s = setup();
-    s.extend(read(0x3000, b"ROM!"));
     s.extend(read(0x3000, b"ROM!"));
     let (mut session, script) = opened(s);
     let mut captured = Vec::new();
@@ -59,23 +59,22 @@ fn catalog_constant_outside_dram_is_read_twice_before_delivery() {
     assert_eq!(progress, [(0, 8), (4, 8), (8, 8)]);
 }
 #[test]
-fn changed_constants_fail_and_masked_constants_are_omitted() {
-    for second in [*b"DIFF", [0; 4], [255; 4]] {
-        let masked = second == [0; 4] || second == [255; 4];
-        let first = if masked { second } else { *b"ROM!" };
+fn masked_constants_outside_window_are_omitted() {
+    // Constant regions outside the E1 window skip the double-read check,
+    // but all-zero / all-FF masking still applies.
+    for bytes in [[0; 4], [255; 4]] {
         let mut s = setup();
-        s.extend(read(0x3000, &first));
-        s.extend(read(0x3000, &second));
+        s.extend(read(0x3000, &bytes));
         let (mut session, script) = opened(s);
         let result = block_on(dump(
             &mut session,
             &query_camera(),
             &state(true),
             limits(),
-            &mut |_| panic!("unverified or masked constant delivered"),
+            &mut |_| panic!("masked constant delivered"),
             &mut |_, _| Ok(()),
         ));
-        assert_eq!(result.is_ok(), masked);
+        assert!(result.is_ok());
         assert_eq!(script.remaining(), 0);
     }
 }
@@ -131,4 +130,46 @@ fn byte_progress_arrives_before_region_delivery_and_failure_stops_at_the_next_ch
     assert_eq!(progress, [(0, 128), (64, 128)]);
     assert_eq!(script.remaining(), 0);
     assert_eq!(session.state(), fujimod_usb::ff80::SessionState::Ready);
+}
+
+#[test]
+fn region_spanning_window_boundary_zero_fills_prefix_and_reads_bulk_middle() {
+    // Window is [0x1000, 0x2000). Region [0x0FC0, 0x1040) straddles the
+    // boundary: 64 bytes below the window are zero-filled (not read, since
+    // addresses below the E1 window may be unreadable), 64 bytes inside
+    // the window are read via E1.
+    let mut s = setup();
+    s.extend(data(0, &[0xBB; 32]));
+    s.extend(data(0x20, &[0xCC; 32]));
+    let (mut session, script) = opened(s);
+    let mut plan = state(false);
+    plan.regions[0] = StateRegion {
+        name: "spanning".into(),
+        address: 0x0FC0,
+        size: 128,
+        constant: false,
+    };
+    let mut captured = Vec::new();
+    let mut progress = Vec::new();
+    block_on(dump(
+        &mut session,
+        &query_camera(),
+        &plan,
+        limits(),
+        &mut |r| {
+            captured.push(r);
+            Ok(())
+        },
+        &mut |done, total| {
+            progress.push((done, total));
+            Ok(())
+        },
+    ))
+    .unwrap();
+    assert_eq!(captured.len(), 1);
+    assert_eq!(captured[0].data.len(), 128);
+    assert_eq!(&captured[0].data[..64], &[0x00; 64]);
+    assert_eq!(&captured[0].data[64..96], &[0xBB; 32]);
+    assert_eq!(&captured[0].data[96..128], &[0xCC; 32]);
+    assert_eq!(script.remaining(), 0);
 }

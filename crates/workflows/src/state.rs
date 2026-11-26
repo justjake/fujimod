@@ -11,6 +11,65 @@ pub struct CapturedRegion {
     pub sha256: String,
 }
 
+/// Read a region, splitting at the E1 window boundary when needed. Bytes
+/// inside the window use fast E1 bulk reads; bytes outside use direct
+/// memory reads.
+async fn read_region(
+    reader: &mut bulk::Qualified<'_>,
+    range: BulkRange,
+    window: BulkRange,
+    advance: &mut dyn FnMut(u64) -> std::result::Result<(), String>,
+) -> bulk::Result<Vec<u8>> {
+    if window.contains(range) {
+        return reader.read_progress(range, advance).await;
+    }
+    let (Some(range_end), Some(win_end)) = (
+        range.address.checked_add(range.size),
+        window.address.checked_add(window.size),
+    ) else {
+        return reader.read_direct_progress(range, advance).await;
+    };
+    let overlap_start = range.address.max(window.address);
+    let overlap_end = range_end.min(win_end);
+    if overlap_start >= overlap_end || window.size == 0 {
+        return reader.read_direct_progress(range, advance).await;
+    }
+    // Partial overlap: split into zero-filled prefix, E1 middle, direct suffix.
+    // Addresses below the E1 window (e.g. 0x0..0x4000 on XP5) may be
+    // unmapped or protected and crash the camera on direct memory reads.
+    let mut data = Vec::with_capacity(range.size as usize);
+    if range.address < overlap_start {
+        let prefix_size = (overlap_start - range.address) as usize;
+        data.resize(prefix_size, 0);
+        advance(prefix_size as u64).map_err(bulk::BulkError::Check)?;
+    }
+    data.extend(
+        reader
+            .read_progress(
+                BulkRange {
+                    address: overlap_start,
+                    size: overlap_end - overlap_start,
+                },
+                advance,
+            )
+            .await?,
+    );
+    if overlap_end < range_end {
+        data.extend(
+            reader
+                .read_direct_progress(
+                    BulkRange {
+                        address: overlap_end,
+                        size: range_end - overlap_end,
+                    },
+                    advance,
+                )
+                .await?,
+        );
+    }
+    Ok(data)
+}
+
 /// Capture each region in catalog order. Constant regions are compared before
 /// delivery. All-zero or all-FF constants are masked and omitted. A sink error
 /// stops the capture and still restores the borrowed bulk mapping.
@@ -61,21 +120,22 @@ pub async fn dump(
                 address: region.address,
                 size: region.size,
             };
-            let direct = !bulk.window.contains(range);
-            let mut read = async |reader: &mut bulk::Qualified<'_>| {
-                if direct {
-                    reader.read_direct_progress(range, &mut advance).await
-                } else {
-                    reader.read_progress(range, &mut advance).await
-                }
-            };
-            let data = read(&mut reader).await?;
+            let data = read_region(&mut reader, range, bulk.window, &mut advance).await?;
             if region.constant {
-                if read(&mut reader).await? != data {
-                    return Err(bulk::BulkError::Check(format!(
-                        "Constant state region {} changed between reads",
-                        region.name
-                    )));
+                // Regions inside the E1 window get a reliable double-read
+                // comparison. Regions entirely outside it (e.g. boot ROM at
+                // 0xFFE00000) use ff80 direct reads that can return different
+                // bytes between passes on some processors — skip the check
+                // and deliver the first read.
+                if bulk.window.contains(range) {
+                    if read_region(&mut reader, range, bulk.window, &mut advance).await? != data {
+                        return Err(bulk::BulkError::Check(format!(
+                            "Constant state region {} changed between reads",
+                            region.name
+                        )));
+                    }
+                } else {
+                    advance(range.size).map_err(bulk::BulkError::Check)?;
                 }
                 if masked(&data) {
                     continue;

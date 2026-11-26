@@ -375,33 +375,21 @@ pub(crate) async fn read(
             "Diagnostic scratch overlaps protected state or code",
         )?;
         let mut reader = Qualified::prepare_preserving(access.session, bulk, limits).await?;
-        let outcome = if flash.e1_window.is_some() {
-            if mapped_control_matches(&mut reader, flash, payload).await? {
-                read_mapped(&mut reader, flash, target, callbacks).await
-            } else {
-                execute(
-                    &mut reader,
-                    flash,
-                    payload,
-                    image,
-                    limits,
-                    target,
-                    callbacks,
-                )
-                .await
-            }
-        } else {
-            execute(
-                &mut reader,
-                flash,
-                payload,
-                image,
-                limits,
-                target,
-                callbacks,
-            )
-            .await
-        };
+        // The E1 DMA engine may not reach flash-mapped addresses (observed on
+        // XP5: RAM reads succeed, flash reads at 0xf000_0000+ time out with 0
+        // bytes and leave the session CompletionUnknown, which WebUSB cannot
+        // recover). Skip the mapped probe and use the callback reader, which
+        // copies flash into RAM then reads RAM via E1.
+        let outcome = execute(
+            &mut reader,
+            flash,
+            payload,
+            image,
+            limits,
+            target,
+            callbacks,
+        )
+        .await;
         let restored = reader.restore().await;
         bulk::finish(outcome, restored)
     }
@@ -452,96 +440,6 @@ pub(crate) async fn read(
     bulk::finish(outcome, cleanup)
 }
 
-fn mapped_range(flash: &FirmwareFlash, offset: u64, size: u64) -> bulk::Result<BulkRange> {
-    let aperture = flash
-        .e1_window
-        .as_ref()
-        .ok_or_else(|| BulkError::Check("Direct E1 flash window is absent".into()))?;
-    let address = flash
-        .window
-        .address
-        .checked_add(offset)
-        .ok_or_else(|| BulkError::Check("Direct E1 flash address overflow".into()))?;
-    let end = address
-        .checked_add(size)
-        .ok_or_else(|| BulkError::Check("Direct E1 flash range overflow".into()))?;
-    let aperture_end = aperture
-        .address
-        .checked_add(aperture.size)
-        .ok_or_else(|| BulkError::Check("Direct E1 aperture overflow".into()))?;
-    require(
-        size != 0 && address >= aperture.address && end <= aperture_end,
-        "Flash range is outside the direct E1 window",
-    )?;
-    let range = BulkRange { address, size };
-    bulk::memory_range(range)?;
-    Ok(range)
-}
-
-/// Try the update-backed control extent first. A completed E1 mismatch or
-/// refusal selects the stock-reader path; unknown USB completion stops here.
-async fn mapped_control_matches(
-    reader: &mut Qualified<'_>,
-    flash: &FirmwareFlash,
-    payload: &Payload,
-) -> bulk::Result<bool> {
-    let range = mapped_range(flash, flash.control.offset, flash.control.size)?;
-    match reader.read(range).await {
-        Ok(bytes) => Ok(bulk::hex(&sha256_bytes(&bytes)) == payload.control_sha256),
-        Err(_error) if reader.access.session.state() == SessionState::Ready => Ok(false),
-        Err(error) => Err(error),
-    }
-}
-
-/// Capture mapped NOR through E1 after the control bytes match the update.
-/// Each caller-owned chunk is bounded by the live registration and aligned to
-/// the stock reader's source alignment.
-async fn read_mapped(
-    reader: &mut Qualified<'_>,
-    flash: &FirmwareFlash,
-    target: BulkRange,
-    callbacks: &mut super::Callbacks<'_>,
-) -> bulk::Result<Backup> {
-    let alignment = u64::from(flash.reader.as_ref().map_or(1, |reader| reader.alignment));
-    let capacity = reader
-        .capacity()
-        .min(reader.access.session.max_reply_bytes().get());
-    let piece = u64::from(capacity) / alignment * alignment;
-    require(
-        piece != 0,
-        "Direct E1 flash capacity is below reader alignment",
-    )?;
-    let end = target
-        .address
-        .checked_add(target.size)
-        .ok_or_else(|| BulkError::Check("Flash range overflow".into()))?;
-    let mut digest = OrderedDigest::default();
-    let mut done = 0;
-    let mut offset = target.address;
-    while offset < end {
-        let size = piece.min(end - offset);
-        let range = mapped_range(flash, offset, size)?;
-        let bytes = reader.read(range).await?;
-        require(
-            bytes.len() as u64 == size,
-            "Direct E1 flash read returned another length",
-        )?;
-        digest.push(offset - target.address, &bytes);
-        (callbacks.chunk)(offset, bytes).map_err(BulkError::Check)?;
-        done += size;
-        (callbacks.progress)(done, target.size).map_err(BulkError::Check)?;
-        offset += size;
-    }
-    let sha256 = digest.finish(target.size)?;
-    Ok(Backup {
-        device: flash.device.clone(),
-        size: target.size,
-        sha256,
-        uncorrectable_page_offsets: Vec::new(),
-        uncorrectable_granularity_bytes: 0,
-        nand_read_stats: None,
-    })
-}
 
 async fn execute(
     reader: &mut Qualified<'_>,

@@ -455,17 +455,27 @@ impl Source {
                 (*source_state, original, selected, capacity)
             }
             BulkSource::PatternZeroBase {
-                source_state,
-                registered_buffer,
-                capacity,
-                ..
+                source_state, ..
             } => {
-                let descriptor = access.raw(*registered_buffer, 12).await?;
-                let capacity = transfer_capacity(access, word(&descriptor, 8), *capacity)?;
-                let original = access.raw(*source_state, 12).await?;
-                let mut selected = vec![0; 8];
-                selected.extend(capacity.to_le_bytes());
-                (*source_state, original, selected, capacity)
+                // PatternZeroBase requires prepare_data_read() to activate the
+                // XP5 E1 DMA engine; a bare source_state write is not enough.
+                let state = *source_state;
+                let original = access.raw(state, 12).await?;
+                let mut source = match Self::prepare(access, bulk).await {
+                    Ok(source) => source,
+                    Err(error) => {
+                        if access.session.state() == SessionState::Ready
+                            && access.raw(state, 12).await? != original
+                        {
+                            access.session.invalidate_completion();
+                        }
+                        return Err(error);
+                    }
+                };
+                let selected = access.raw(state, 12).await?;
+                source.saved =
+                    Some((state, original.clone(), vec![original, selected]));
+                return Ok(source);
             }
         };
         let source = Self {
