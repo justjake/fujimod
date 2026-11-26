@@ -971,6 +971,17 @@ impl RunOverlay {
         fujimod_catalog_identity::validate_id(&self.configuration_id)?;
         match &self.change {
             RunOverlayChange::Preset { preset } => preset.validate(),
+            RunOverlayChange::UsbConnection {
+                hardware_selection, ..
+            } => {
+                if let Some(hardware) = hardware_selection {
+                    if let Some(id) = &hardware.soc_profile_id {
+                        fujimod_catalog_identity::validate_id(id)?;
+                    }
+                    fujimod_catalog_identity::validate_id(&hardware.body_profile_id)?;
+                }
+                Ok(())
+            }
             RunOverlayChange::Execution { execution } => {
                 if execution.quantum == 0 {
                     return Err("run quantum must be positive".into());
@@ -998,8 +1009,14 @@ impl RunOverlay {
 pub enum RunOverlayChange {
     /// Select a closed set of startup inputs and device policies.
     Preset { preset: RunPreset },
-    /// Connect or disconnect the declared USB cable.
-    UsbConnection { connected: bool },
+    /// Connect or disconnect the declared USB cable, selecting the body
+    /// hardware profile that models the attached port.
+    UsbConnection {
+        connected: bool,
+        /// Body hardware profile selected with the cable's connection.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        hardware_selection: Option<fujimod_catalog_construction::HardwareSelection>,
+    },
     /// Request named camera settings on top of the configuration's own.
     Settings {
         requested: std::collections::BTreeMap<String, String>,
@@ -1647,7 +1664,10 @@ mod tests {
             schema: 1,
             id: "x70-110-rec-usb".into(),
             configuration_id: "x70-110-rec".into(),
-            change: RunOverlayChange::UsbConnection { connected: true },
+            change: RunOverlayChange::UsbConnection {
+                connected: true,
+                hardware_selection: None,
+            },
         };
         assert!(overlay.validate("x70-110-rec-usb", "x70-110-rec").is_ok());
         assert!(overlay.validate("x70-110-rec-usb", "different").is_err());
@@ -1657,7 +1677,13 @@ mod tests {
         assert_eq!(bundled.configuration_id, "x70-110-rec");
         assert_eq!(
             bundled.change,
-            RunOverlayChange::UsbConnection { connected: true }
+            RunOverlayChange::UsbConnection {
+                connected: true,
+                hardware_selection: Some(fujimod_catalog_construction::HardwareSelection {
+                    soc_profile_id: None,
+                    body_profile_id: "x70-110-browser-usb".into(),
+                }),
+            }
         );
     }
 

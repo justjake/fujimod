@@ -3012,10 +3012,21 @@
         },
         {
           "additionalProperties": false,
-          "description": "Connect or disconnect the declared USB cable.",
+          "description": "Connect or disconnect the declared USB cable, selecting the body\nhardware profile that models the attached port.",
           "properties": {
             "connected": {
               "type": "boolean"
+            },
+            "hardware_selection": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/HardwareSelection"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Body hardware profile selected with the cable's connection."
             },
             "kind": {
               "const": "usb_connection",

@@ -5727,6 +5727,7 @@ class RunOverlayChangeVariant0(TypedDict, total=False):
 
 class RunOverlayChangeVariant1(TypedDict, total=False):
     connected: Required[bool]
+    hardware_selection: NotRequired[HardwareSelection | None]
     kind: Required[Literal["usb_connection"]]
 
 

@@ -215,7 +215,10 @@ impl ResolvedConfiguration {
                     }
                     configuration.preset = Some(preset);
                 }
-                RunOverlayChange::UsbConnection { connected } => {
+                RunOverlayChange::UsbConnection {
+                    connected,
+                    hardware_selection,
+                } => {
                     if !changed.insert("usb") {
                         return Err("run overlays change USB connection more than once".into());
                     }
@@ -225,6 +228,15 @@ impl ResolvedConfiguration {
                         ));
                     };
                     inputs.usb.connected = connected;
+                    if let Some(selection) = hardware_selection {
+                        let preset = configuration.preset.as_mut().ok_or_else(|| {
+                            format!(
+                                "run overlay {overlay_id} selects hardware for a run without a preset"
+                            )
+                        })?;
+                        preset.hardware_selection = Some(selection);
+                        selected_hardware = true;
+                    }
                 }
                 RunOverlayChange::Settings { requested } => {
                     let Some(RunInputs::Exr2(inputs)) = &mut configuration.inputs else {
@@ -907,6 +919,31 @@ mod tests {
         };
         assert!(inputs.usb.connected);
         assert_eq!(resolved.configuration.overlays, ["x70-110-rec-usb"]);
+    }
+
+    #[test]
+    fn usb_overlay_selects_the_hardware_that_models_the_attached_port() {
+        let base = ResolvedConfiguration::bundled("x70-110-rec").unwrap();
+        assert_eq!(
+            base.configuration
+                .preset
+                .as_ref()
+                .and_then(|preset| preset.hardware_selection.as_ref())
+                .map(|hardware| hardware.body_profile_id.as_str()),
+            Some("x70")
+        );
+        let resolved =
+            ResolvedConfiguration::with_overlays("x70-110-rec", &["x70-110-rec-usb".into()])
+                .unwrap();
+        assert_eq!(
+            resolved
+                .configuration
+                .preset
+                .as_ref()
+                .and_then(|preset| preset.hardware_selection.as_ref())
+                .map(|hardware| hardware.body_profile_id.as_str()),
+            Some("x70-110-browser-usb")
+        );
     }
 
     #[test]
