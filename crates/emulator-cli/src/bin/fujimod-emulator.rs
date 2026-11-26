@@ -238,6 +238,7 @@ impl Open {
         Ok(camera::Request {
             firmware: self.firmware.clone(),
             files: camera::FirmwareInput::Library,
+            overlays: Vec::new(),
             preset: match self.boot {
                 OpenBoot::Stock => camera::Preset::Stock,
                 OpenBoot::SdCard => camera::Preset::SdCard,
@@ -607,6 +608,7 @@ fn run_exr2(
         capability_reply: None,
         sd_card_transfer_ticks: None,
         card_layout: None,
+        card_initialization_fault: None,
     };
     let screenshot = boot_options.path("--screenshot");
     let limit = boot_options.instruction_limit()?.unwrap_or(2_000_000_000);
@@ -1021,6 +1023,7 @@ fn run_window(mut options: Boot, resolved: ResolvedConfiguration) -> Result<Outc
         discovery: options.discovery,
         sd_card_transfer_ticks: None,
         card_layout: None,
+        card_initialization_fault: None,
     };
     let selection = resolved.reference.clone();
     let camera = boot::open_request(resolved, request)?;

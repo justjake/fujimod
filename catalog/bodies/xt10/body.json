@@ -1388,6 +1388,221 @@
                 "rom",
                 "loader"
               ],
+              "dependencies": [
+                "live_frames"
+              ],
+              "name": "statistics",
+              "windows": [
+                {
+                  "base": 4294017024,
+                  "size": 4096
+                },
+                {
+                  "base": 4294082560,
+                  "size": 13312
+                }
+              ],
+              "model": {
+                "kind": "statistics",
+                "frames": "live_statistics",
+                "images": "live_image",
+                "routes": "imaging_routes"
+              }
+            },
+            {
+              "boot_entries": [
+                "rom",
+                "loader"
+              ],
+              "dependencies": [
+                "live_frames"
+              ],
+              "name": "image_output_0",
+              "windows": [
+                {
+                  "base": 4293992448,
+                  "size": 256
+                }
+              ],
+              "model": {
+                "kind": "output-channel",
+                "base": 4293992448,
+                "channel": 0,
+                "channels": "image_outputs",
+                "frames": "live_image",
+                "irq": 44,
+                "routes": "imaging_routes"
+              }
+            },
+            {
+              "boot_entries": [
+                "rom",
+                "loader"
+              ],
+              "dependencies": [
+                "live_frames"
+              ],
+              "name": "image_output_1",
+              "windows": [
+                {
+                  "base": 4293996544,
+                  "size": 256
+                }
+              ],
+              "model": {
+                "kind": "output-channel",
+                "base": 4293996544,
+                "channel": 1,
+                "channels": "image_outputs",
+                "frames": "live_image",
+                "irq": 45,
+                "routes": "imaging_routes"
+              }
+            },
+            {
+              "boot_entries": [
+                "rom",
+                "loader"
+              ],
+              "dependencies": [
+                "peripheral_16_parameters"
+              ],
+              "name": "peripheral_13_image_input",
+              "windows": [
+                {
+                  "base": 4293984256,
+                  "size": 1024
+                }
+              ],
+              "model": {
+                "kind": "image-input",
+                "edges": "capture_13_phase_edges",
+                "phase_irqs": [
+                  {
+                    "core": 0,
+                    "line": 39
+                  },
+                  {
+                    "core": 0,
+                    "line": 41
+                  },
+                  {
+                    "core": 0,
+                    "line": 40
+                  }
+                ],
+                "raw_irq": {
+                  "core": 0,
+                  "line": 36
+                },
+                "readback_irq": {
+                  "core": 0,
+                  "line": 38
+                }
+              }
+            },
+            {
+              "boot_entries": [
+                "rom",
+                "loader"
+              ],
+              "dependencies": [],
+              "name": "peripheral_14_inputauxiliarycontrol",
+              "windows": [
+                {
+                  "base": 4293988352,
+                  "size": 256
+                }
+              ],
+              "model": {
+                "kind": "block11000"
+              }
+            },
+            {
+              "boot_entries": [
+                "rom",
+                "loader"
+              ],
+              "dependencies": [
+                "peripheral_13_image_input"
+              ],
+              "name": "peripheral_16_parameters",
+              "windows": [
+                {
+                  "base": 4294021120,
+                  "size": 4096
+                }
+              ],
+              "model": {
+                "kind": "parameters",
+                "bank": "capture_16_parameters"
+              }
+            },
+            {
+              "boot_entries": [
+                "rom",
+                "loader"
+              ],
+              "dependencies": [],
+              "name": "live_frames",
+              "windows": [],
+              "model": {
+                "kind": "external-frames",
+                "activity": {
+                  "gpio": "serial_gpio",
+                  "selection": {
+                    "high": false,
+                    "pin": {
+                      "pin": 2,
+                      "port": 0
+                    }
+                  }
+                },
+                "images": "live_image",
+                "statistics": "live_statistics"
+              }
+            },
+            {
+              "boot_entries": [
+                "rom",
+                "loader"
+              ],
+              "dependencies": [
+                "image_output_0",
+                "image_output_1",
+                "live_frames"
+              ],
+              "name": "companion",
+              "windows": [
+                {
+                  "base": 4264656896,
+                  "size": 4096
+                },
+                {
+                  "base": 4265279488,
+                  "size": 4096
+                },
+                {
+                  "base": 4269850624,
+                  "size": 4096
+                },
+                {
+                  "base": 4269854720,
+                  "size": 4096
+                }
+              ],
+              "model": {
+                "kind": "fe80-processing",
+                "frames": "live_image",
+                "routes": "imaging_routes",
+                "transport": {}
+              }
+            },
+            {
+              "boot_entries": [
+                "rom",
+                "loader"
+              ],
               "dependencies": [],
               "name": "nand",
               "windows": [
@@ -1505,10 +1720,524 @@
                 "kind": "power",
                 "gpio": "serial_gpio"
               }
+            },
+            {
+              "boot_entries": [
+                "rom",
+                "loader"
+              ],
+              "dependencies": [
+                "irq0",
+                "irq1"
+              ],
+              "name": "control_bus0",
+              "windows": [
+                {
+                  "base": 4294463488,
+                  "size": 64
+                }
+              ],
+              "model": {
+                "kind": "i2c",
+                "controllers": [
+                  "irq0",
+                  "irq1"
+                ],
+                "hardware": {
+                  "base": 4294463488,
+                  "irq": 101,
+                  "parts": {
+                    "kind": "primary",
+                    "commands": [
+                      {
+                        "address": 57,
+                        "commands": [
+                          229
+                        ],
+                        "prefix_mask": 224,
+                        "prefix_value": 160,
+                        "register_mask": 31,
+                        "write_masks": [
+                          [
+                            0,
+                            255
+                          ],
+                          [
+                            1,
+                            255
+                          ],
+                          [
+                            2,
+                            255
+                          ],
+                          [
+                            3,
+                            255
+                          ],
+                          [
+                            4,
+                            255
+                          ],
+                          [
+                            5,
+                            255
+                          ],
+                          [
+                            6,
+                            255
+                          ],
+                          [
+                            7,
+                            255
+                          ],
+                          [
+                            8,
+                            255
+                          ],
+                          [
+                            9,
+                            255
+                          ],
+                          [
+                            10,
+                            255
+                          ],
+                          [
+                            11,
+                            255
+                          ],
+                          [
+                            12,
+                            255
+                          ],
+                          [
+                            13,
+                            255
+                          ],
+                          [
+                            14,
+                            255
+                          ],
+                          [
+                            15,
+                            255
+                          ],
+                          [
+                            30,
+                            255
+                          ]
+                        ],
+                        "read_frames": [
+                          [
+                            19,
+                            [
+                              0
+                            ]
+                          ],
+                          [
+                            24,
+                            [
+                              0,
+                              0
+                            ]
+                          ]
+                        ]
+                      }
+                    ],
+                    "heartbeat_register": 7174,
+                    "prefix_high": 28,
+                    "sensor_address": 28,
+                    "sensor_fields": [
+                      14,
+                      15,
+                      17,
+                      21,
+                      23,
+                      24,
+                      29,
+                      31,
+                      32,
+                      33,
+                      35,
+                      36,
+                      37,
+                      38,
+                      39,
+                      40,
+                      41,
+                      42,
+                      43,
+                      44,
+                      45,
+                      46,
+                      47,
+                      48,
+                      49
+                    ],
+                    "stationary": true,
+                    "status": [
+                      {
+                        "address": 68,
+                        "writable_registers": [
+                          1,
+                          2,
+                          3,
+                          4,
+                          6
+                        ],
+                        "status": [
+                          0,
+                          0
+                        ],
+                        "transitions": [
+                          {
+                            "register": 2,
+                            "data": 32,
+                            "frame": [
+                              0,
+                              1
+                            ]
+                          },
+                          {
+                            "register": 2,
+                            "data": 64,
+                            "frame": [
+                              0,
+                              0
+                            ]
+                          }
+                        ]
+                      }
+                    ],
+                    "topology": [
+                      24,
+                      68,
+                      57,
+                      25,
+                      12,
+                      28
+                    ]
+                  }
+                }
+              }
+            },
+            {
+              "boot_entries": [
+                "rom",
+                "loader"
+              ],
+              "dependencies": [
+                "irq0",
+                "irq1"
+              ],
+              "name": "control_bus1",
+              "windows": [
+                {
+                  "base": 4294463552,
+                  "size": 64
+                }
+              ],
+              "model": {
+                "kind": "i2c",
+                "cable": "usb_cable",
+                "controllers": [
+                  "irq0",
+                  "irq1"
+                ],
+                "hardware": {
+                  "base": 4294463552,
+                  "irq": 102,
+                  "parts": {
+                    "kind": "secondary",
+                    "connected": false,
+                    "pwic_address": 48,
+                    "pwic_masks": [
+                      [
+                        1,
+                        31
+                      ],
+                      [
+                        97,
+                        16
+                      ],
+                      [
+                        32,
+                        2
+                      ]
+                    ],
+                    "pwic_modes": [
+                      1
+                    ],
+                    "pwic_read_prefixes": [
+                      [
+                        32,
+                        [
+                          0,
+                          0,
+                          0
+                        ]
+                      ]
+                    ],
+                    "pwic_values": [
+                      [
+                        1,
+                        0
+                      ],
+                      [
+                        97,
+                        0
+                      ],
+                      [
+                        32,
+                        128
+                      ]
+                    ],
+                    "register_address": 10,
+                    "register_masks": [
+                      [
+                        12,
+                        255
+                      ],
+                      [
+                        17,
+                        255
+                      ]
+                    ],
+                    "register_modes": [
+                      9
+                    ],
+                    "register_values": [
+                      [
+                        2,
+                        0
+                      ],
+                      [
+                        5,
+                        0
+                      ],
+                      [
+                        12,
+                        0
+                      ],
+                      [
+                        17,
+                        0
+                      ],
+                      [
+                        19,
+                        0
+                      ]
+                    ],
+                    "topology": [
+                      48,
+                      114,
+                      10
+                    ]
+                  }
+                }
+              }
+            },
+            {
+              "boot_entries": [
+                "rom",
+                "loader"
+              ],
+              "dependencies": [],
+              "name": "hdmisink",
+              "windows": [],
+              "model": {
+                "kind": "hdmi-sink"
+              }
+            },
+            {
+              "boot_entries": [
+                "rom",
+                "loader"
+              ],
+              "dependencies": [
+                "hdmisink"
+              ],
+              "name": "hdmi",
+              "windows": [
+                {
+                  "base": 4294344704,
+                  "size": 4096
+                },
+                {
+                  "base": 4294402048,
+                  "size": 4096
+                },
+                {
+                  "base": 4294406144,
+                  "size": 4096
+                }
+              ],
+              "model": {
+                "kind": "hdmi",
+                "hot_plug": {
+                  "Core": {
+                    "core": 0,
+                    "line": 9
+                  }
+                },
+                "sink": "hdmisink"
+              }
+            },
+            {
+              "boot_entries": [
+                "rom",
+                "loader"
+              ],
+              "dependencies": [
+                "irq0",
+                "irq1"
+              ],
+              "name": "graphics",
+              "windows": [
+                {
+                  "base": 4294410240,
+                  "size": 20480
+                }
+              ],
+              "model": {
+                "kind": "vector-gpu",
+                "controllers": [
+                  "irq0",
+                  "irq1"
+                ]
+              }
+            },
+            {
+              "boot_entries": [
+                "rom",
+                "loader"
+              ],
+              "dependencies": [],
+              "name": "scanout",
+              "windows": [
+                {
+                  "base": 4294356992,
+                  "size": 4096
+                },
+                {
+                  "base": 4294369280,
+                  "size": 4096
+                }
+              ],
+              "model": {
+                "kind": "scanout"
+              }
+            },
+            {
+              "boot_entries": [
+                "rom",
+                "loader"
+              ],
+              "dependencies": [],
+              "name": "display_timing",
+              "windows": [
+                {
+                  "base": 4294352896,
+                  "size": 4096
+                },
+                {
+                  "base": 4294365184,
+                  "size": 4096
+                }
+              ],
+              "model": {
+                "kind": "display-timing",
+                "clock": "clocks",
+                "controllers": [
+                  "irq0",
+                  "irq1"
+                ]
+              }
+            },
+            {
+              "boot_entries": [
+                "rom",
+                "loader"
+              ],
+              "dependencies": [],
+              "name": "peripheral_25_displayformatter",
+              "windows": [
+                {
+                  "base": 4294348800,
+                  "size": 4096
+                },
+                {
+                  "base": 4294361088,
+                  "size": 4096
+                }
+              ],
+              "model": {
+                "kind": "formatter"
+              }
+            },
+            {
+              "boot_entries": [
+                "rom",
+                "loader"
+              ],
+              "dependencies": [
+                "irq0",
+                "irq1"
+              ],
+              "name": "serial_audio_transmitter",
+              "windows": [
+                {
+                  "base": 4293926976,
+                  "size": 64
+                },
+                {
+                  "base": 4294574080,
+                  "size": 4096
+                },
+                {
+                  "base": 4294578176,
+                  "size": 4096
+                }
+              ],
+              "model": {
+                "kind": "serial-audio-transmitter",
+                "routes": "imaging_routes",
+                "sinks": [
+                  {
+                    "connected": true
+                  },
+                  {
+                    "connected": true
+                  }
+                ]
+              }
+            },
+            {
+              "boot_entries": [
+                "rom",
+                "loader"
+              ],
+              "dependencies": [],
+              "name": "peripheral_21_outputcontrol",
+              "windows": [
+                {
+                  "base": 4294467584,
+                  "size": 12
+                }
+              ],
+              "model": {
+                "kind": "block86000"
+              }
             }
           ],
           "schema": 1,
           "wires": {
+            "capture_13_phase_edges": "phase-edges",
+            "capture_16_parameters": "parameters",
+            "display_output_hold": {
+              "logic-level": false
+            },
+            "image_outputs": "output-channels",
             "imaging_routes": "irq-routes",
             "release": "software-pulse",
             "usb_cable": {

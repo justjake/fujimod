@@ -236,6 +236,7 @@ fn launch_camera(request: LaunchRequest) -> Result<(LaunchedCamera, Running), St
                     discovery: false,
                     sd_card_transfer_ticks: None,
                     card_layout: None,
+                    card_initialization_fault: None,
                 };
                 let mut camera = fujimod_emulator_boot::open_request(resolved, boot_request)
                     .inspect_err(|error| log_session(format!("session: {error}")))?;
@@ -340,6 +341,7 @@ fn open_with_builder(request: OpenCameraRequest) -> Result<(LaunchedCamera, Runn
     let camera_request = camera::Request {
         firmware: request.firmware,
         files: camera::FirmwareInput::Library,
+        overlays: Vec::new(),
         preset,
         sd_card,
         policy: fujimod_emulator_cpu::ExecutionPolicy::Interactive,

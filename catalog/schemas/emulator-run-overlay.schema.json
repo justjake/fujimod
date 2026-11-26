@@ -96,6 +96,7 @@
       "enum": [
         "endpoint7-and9-virtual-write-ack",
         "endpoint7-stationary-and9-heartbeat-latched-irq-unmeasured",
+        "declared-register-status-pair-latched-irq-unmeasured",
         "usbcharge-disconnected-pwic-startup-tagged"
       ],
       "type": "string"

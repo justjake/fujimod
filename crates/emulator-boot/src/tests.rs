@@ -543,6 +543,7 @@ fn shipped_preparation_opens_the_same_board_as_selected_files() {
                 capability_reply: None,
                 sd_card_transfer_ticks: None,
                 card_layout: None,
+                card_initialization_fault: None,
             },
             Mode::Strict,
         )
@@ -590,6 +591,7 @@ fn restart_payload_reconstructs_the_rom_board_after_wake() {
             capability_reply: None,
             sd_card_transfer_ticks: None,
             card_layout: None,
+            card_initialization_fault: None,
         },
         Mode::Strict,
     )

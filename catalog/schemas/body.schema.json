@@ -3717,6 +3717,91 @@
         }
       ]
     },
+    "ConstructionCommandRegisters": {
+      "additionalProperties": false,
+      "description": "One command-register endpoint with its declared prefix and register frames.",
+      "properties": {
+        "address": {
+          "description": "Seven-bit endpoint address.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "commands": {
+          "description": "Commands that open a register transaction.",
+          "items": {
+            "format": "uint64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "type": "array"
+        },
+        "prefix_mask": {
+          "description": "Bits of the prefix byte that select this endpoint's command bank.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "prefix_value": {
+          "description": "Value the prefix bits must carry.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "read_frames": {
+          "description": "Read frames keyed by the register that selects them.",
+          "items": {
+            "maxItems": 2,
+            "minItems": 2,
+            "prefixItems": [
+              {
+                "format": "uint64",
+                "minimum": 0,
+                "type": "integer"
+              },
+              {
+                "items": {
+                  "format": "uint64",
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                "type": "array"
+              }
+            ],
+            "type": "array"
+          },
+          "type": "array"
+        },
+        "register_mask": {
+          "description": "Register address bits carried by each data byte.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "write_masks": {
+          "description": "Registers that accept writes and the mask each write keeps.",
+          "items": {
+            "items": {
+              "format": "uint64",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "type": "array"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "address",
+        "commands",
+        "prefix_mask",
+        "prefix_value",
+        "register_mask",
+        "write_masks",
+        "read_frames"
+      ],
+      "type": "object"
+    },
     "ConstructionCore": {
       "additionalProperties": false,
       "description": "Declared core facts.",
@@ -5389,7 +5474,7 @@
             "commands": {
               "description": "commands.",
               "items": {
-                "type": "string"
+                "$ref": "#/$defs/ConstructionCommandRegisters"
               },
               "type": "array"
             },
@@ -5440,7 +5525,7 @@
             "status": {
               "description": "status.",
               "items": {
-                "type": "string"
+                "$ref": "#/$defs/ConstructionStatusRegisters"
               },
               "type": "array"
             },
@@ -5904,6 +5989,87 @@
       "required": [
         "line",
         "pulse"
+      ],
+      "type": "object"
+    },
+    "ConstructionStatusRegisters": {
+      "additionalProperties": false,
+      "description": "One register-byte endpoint with declared status replies.",
+      "properties": {
+        "address": {
+          "description": "Seven-bit endpoint address.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "status": {
+          "description": "Status frame before any transition selects another.",
+          "items": {
+            "format": "uint64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "maxItems": 2,
+          "minItems": 2,
+          "type": "array"
+        },
+        "transitions": {
+          "description": "Writes that select a different status frame.",
+          "items": {
+            "$ref": "#/$defs/ConstructionStatusTransition"
+          },
+          "type": "array"
+        },
+        "writable_registers": {
+          "description": "Registers the endpoint accepts writes to.",
+          "items": {
+            "format": "uint64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "address",
+        "writable_registers",
+        "status",
+        "transitions"
+      ],
+      "type": "object"
+    },
+    "ConstructionStatusTransition": {
+      "additionalProperties": false,
+      "description": "One status frame a register write selects.",
+      "properties": {
+        "data": {
+          "description": "Data byte the write carries.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "frame": {
+          "description": "Status frame the write selects.",
+          "items": {
+            "format": "uint64",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "maxItems": 2,
+          "minItems": 2,
+          "type": "array"
+        },
+        "register": {
+          "description": "Register whose write selects the frame.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "register",
+        "data",
+        "frame"
       ],
       "type": "object"
     },

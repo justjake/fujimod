@@ -1385,6 +1385,16 @@ class ConstructionClockVariant2(TypedDict, total=False):
     ticks_per_quantum: Required[int]
 
 
+class ConstructionCommandRegisters(TypedDict, total=False):
+    address: Required[int]
+    commands: Required[list[int]]
+    prefix_mask: Required[int]
+    prefix_value: Required[int]
+    read_frames: Required[list[tuple[int, list[int]]]]
+    register_mask: Required[int]
+    write_masks: Required[list[list[int]]]
+
+
 class ConstructionCore(TypedDict, total=False):
     core: Required[int]
     line: Required[int]
@@ -1812,7 +1822,7 @@ type ConstructionParts = ConstructionPartsVariant0 | ConstructionPartsVariant1
 
 
 class ConstructionPartsVariant0(TypedDict, total=False):
-    commands: Required[list[str]]
+    commands: Required[list[ConstructionCommandRegisters]]
     heartbeat_register: Required[int]
     kind: Required[Literal["primary"]]
     prefix_address: NotRequired[int | None]
@@ -1820,7 +1830,7 @@ class ConstructionPartsVariant0(TypedDict, total=False):
     sensor_address: Required[int]
     sensor_fields: Required[list[int]]
     stationary: Required[bool]
-    status: Required[list[str]]
+    status: Required[list[ConstructionStatusRegisters]]
     topology: Required[list[int]]
     touch: NotRequired[ConstructionTouch | None]
 
@@ -1899,6 +1909,19 @@ class ConstructionSerialAudioSink(TypedDict, total=False):
 class ConstructionSoftware(TypedDict, total=False):
     line: Required[int]
     pulse: Required[str]
+
+
+class ConstructionStatusRegisters(TypedDict, total=False):
+    address: Required[int]
+    status: Required[list[int]]
+    transitions: Required[list[ConstructionStatusTransition]]
+    writable_registers: Required[list[int]]
+
+
+class ConstructionStatusTransition(TypedDict, total=False):
+    data: Required[int]
+    frame: Required[list[int]]
+    register: Required[int]
 
 
 class ConstructionTouch(TypedDict, total=False):
@@ -4047,6 +4070,7 @@ class NativeContactActuatorInputsPosition(TypedDict, total=False):
 type NativeControlBusProfile = Literal[
     "endpoint7-and9-virtual-write-ack",
     "endpoint7-stationary-and9-heartbeat-latched-irq-unmeasured",
+    "declared-register-status-pair-latched-irq-unmeasured",
     "usbcharge-disconnected-pwic-startup-tagged",
 ]
 

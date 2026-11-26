@@ -1256,6 +1256,8 @@ pub enum NativeControlBusProfile {
     SensorWrite,
     #[serde(rename = "endpoint7-stationary-and9-heartbeat-latched-irq-unmeasured")]
     Primary,
+    #[serde(rename = "declared-register-status-pair-latched-irq-unmeasured")]
+    RegisterStatus,
     #[serde(rename = "usbcharge-disconnected-pwic-startup-tagged")]
     Secondary,
 }

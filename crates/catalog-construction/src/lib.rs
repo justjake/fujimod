@@ -149,6 +149,58 @@ pub struct Hardware {
     pub parts: Parts,
 }
 
+/// One status frame a register write selects.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(deny_unknown_fields)]
+#[cfg_attr(feature = "schema", schemars(rename = "ConstructionStatusTransition"))]
+pub struct StatusTransition {
+    /// Register whose write selects the frame.
+    pub register: u64,
+    /// Data byte the write carries.
+    pub data: u64,
+    /// Status frame the write selects.
+    pub frame: [u64; 2],
+}
+
+/// One register-byte endpoint with declared status replies.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(deny_unknown_fields)]
+#[cfg_attr(feature = "schema", schemars(rename = "ConstructionStatusRegisters"))]
+pub struct StatusRegisters {
+    /// Seven-bit endpoint address.
+    pub address: u64,
+    /// Registers the endpoint accepts writes to.
+    pub writable_registers: Vec<u64>,
+    /// Status frame before any transition selects another.
+    pub status: [u64; 2],
+    /// Writes that select a different status frame.
+    pub transitions: Vec<StatusTransition>,
+}
+
+/// One command-register endpoint with its declared prefix and register frames.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(deny_unknown_fields)]
+#[cfg_attr(feature = "schema", schemars(rename = "ConstructionCommandRegisters"))]
+pub struct CommandRegisters {
+    /// Seven-bit endpoint address.
+    pub address: u64,
+    /// Commands that open a register transaction.
+    pub commands: Vec<u64>,
+    /// Bits of the prefix byte that select this endpoint's command bank.
+    pub prefix_mask: u64,
+    /// Value the prefix bits must carry.
+    pub prefix_value: u64,
+    /// Register address bits carried by each data byte.
+    pub register_mask: u64,
+    /// Registers that accept writes and the mask each write keeps.
+    pub write_masks: Vec<Vec<u64>>,
+    /// Read frames keyed by the register that selects them.
+    pub read_frames: Vec<(u64, Vec<u64>)>,
+}
+
 /// Declared module facts.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
@@ -429,7 +481,7 @@ pub enum Parts {
     #[serde(rename = "primary")]
     Primary {
         /// commands.
-        commands: Vec<String>,
+        commands: Vec<CommandRegisters>,
         /// heartbeat register.
         heartbeat_register: u64,
         /// prefix address.
@@ -444,7 +496,7 @@ pub enum Parts {
         /// stationary.
         stationary: bool,
         /// status.
-        status: Vec<String>,
+        status: Vec<StatusRegisters>,
         /// topology.
         topology: Vec<u64>,
         /// touch.
