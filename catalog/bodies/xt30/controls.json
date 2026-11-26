@@ -7,8 +7,44 @@
     "url": "https://app.fujifilm-dsc.com/en/manual/x-t30/x-t30_omw_en_s_f.pdf",
     "title": "X-T30 Owner’s Manual (BL00005003-202 EN)",
     "pages": [
-      2, 3, 4, 5, 6, 7, 9, 14, 16, 20, 21, 22, 28, 29, 31, 36, 44, 45, 46, 54, 57, 58, 65, 69, 77,
-      79, 92, 123, 134, 202, 204, 207, 208, 211, 225, 227, 228, 229
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      9,
+      14,
+      16,
+      20,
+      21,
+      22,
+      28,
+      29,
+      31,
+      36,
+      44,
+      45,
+      46,
+      54,
+      57,
+      58,
+      65,
+      69,
+      77,
+      79,
+      92,
+      123,
+      134,
+      202,
+      204,
+      207,
+      208,
+      211,
+      225,
+      227,
+      228,
+      229
     ]
   },
   "boot": {
@@ -37,7 +73,9 @@
       "location": "rear",
       "manual_page": 228,
       "face": "AE-L",
-      "connection_ids": ["controls-adc-11"],
+      "connection_ids": [
+        "controls-adc-11"
+      ],
       "assignable": true,
       "pushable": true,
       "default_function": "AE LOCK ONLY by default; its role can be assigned using FUNCTION (Fn) SETTING.",
@@ -55,7 +93,9 @@
       "location": "rear",
       "manual_page": 228,
       "face": "AF-L",
-      "connection_ids": ["controls-adc-11"],
+      "connection_ids": [
+        "controls-adc-11"
+      ],
       "assignable": true,
       "pushable": true,
       "default_function": "AF LOCK ONLY by default; its role can be assigned using FUNCTION (Fn) SETTING.",
@@ -130,7 +170,9 @@
       "location": "rear",
       "manual_page": 46,
       "icon": "delete",
-      "connection_ids": ["controls-gpio-0-14"],
+      "connection_ids": [
+        "controls-gpio-0-14"
+      ],
       "assignable": false,
       "pushable": true,
       "default_function": "Delete the displayed picture in playback.",
@@ -164,7 +206,9 @@
       "location": "rear",
       "manual_page": 16,
       "face": "DISP/BACK",
-      "connection_ids": ["controls-adc-5"],
+      "connection_ids": [
+        "controls-adc-5"
+      ],
       "assignable": false,
       "pushable": true,
       "default_function": "Control the indicators shown in the viewfinder and LCD monitor, and return to the previous screen.",
@@ -182,7 +226,9 @@
       "location": "top",
       "manual_page": 5,
       "short_name": "DRIVE",
-      "connection_ids": ["controls-adc-1"],
+      "connection_ids": [
+        "controls-adc-1"
+      ],
       "assignable": false,
       "pushable": false,
       "positions": [
@@ -316,7 +362,9 @@
       "location": "top",
       "manual_page": 77,
       "short_name": "EV",
-      "connection_ids": ["controls-adc-7"],
+      "connection_ids": [
+        "controls-adc-7"
+      ],
       "assignable": false,
       "pushable": false,
       "positions": [
@@ -438,7 +486,9 @@
       "location": "top",
       "manual_page": 228,
       "face": "Fn1",
-      "connection_ids": ["controls-adc-11"],
+      "connection_ids": [
+        "controls-adc-11"
+      ],
       "assignable": true,
       "pushable": true,
       "default_function": "Performance by default; its role can be assigned using FUNCTION (Fn) SETTING.",
@@ -494,7 +544,10 @@
       "location": "rear",
       "manual_page": 4,
       "short_name": "FOCUS",
-      "connection_ids": ["controls-adc-5", "controls-adc-9"],
+      "connection_ids": [
+        "controls-adc-5",
+        "controls-adc-9"
+      ],
       "assignable": true,
       "pushable": true,
       "positions": [
@@ -577,7 +630,9 @@
       "location": "rear",
       "manual_page": 20,
       "face": "MENU/OK",
-      "connection_ids": ["controls-adc-5"],
+      "connection_ids": [
+        "controls-adc-5"
+      ],
       "assignable": false,
       "pushable": true,
       "default_function": "Display menus and confirm a highlighted menu item.",
@@ -626,7 +681,9 @@
       "location": "rear",
       "manual_page": 45,
       "icon": "playback",
-      "connection_ids": ["controls-gpio-8-6"],
+      "connection_ids": [
+        "controls-gpio-8-6"
+      ],
       "assignable": false,
       "pushable": true,
       "default_function": "Display pictures in playback; half-press the shutter button to return to shooting.",
@@ -644,7 +701,9 @@
       "location": "rear",
       "manual_page": 225,
       "face": "Q",
-      "connection_ids": ["controls-adc-5"],
+      "connection_ids": [
+        "controls-adc-5"
+      ],
       "assignable": false,
       "pushable": true,
       "default_function": "Display the quick menu; press and hold to edit its contents.",
@@ -678,7 +737,10 @@
       "location": "top",
       "manual_page": 44,
       "short_name": "SHUTTER",
-      "connection_ids": ["controls-gpio-0-0", "controls-gpio-0-1"],
+      "connection_ids": [
+        "controls-gpio-0-0",
+        "controls-gpio-0-1"
+      ],
       "assignable": false,
       "pushable": true,
       "default_function": "Half-press to focus and lock focus and exposure; press fully to take a photograph.",
@@ -706,7 +768,9 @@
       "location": "top",
       "manual_page": 5,
       "short_name": "SPEED",
-      "connection_ids": ["controls-adc-6"],
+      "connection_ids": [
+        "controls-adc-6"
+      ],
       "assignable": false,
       "pushable": false,
       "positions": [
@@ -922,7 +986,9 @@
       "location": "rear",
       "manual_page": 14,
       "face": "VIEW/MODE",
-      "connection_ids": ["controls-gpio-8-5"],
+      "connection_ids": [
+        "controls-gpio-8-5"
+      ],
       "assignable": false,
       "pushable": true,
       "default_function": "Cycle display modes: EYE SENSOR, EVF ONLY, LCD ONLY, EVF ONLY + EYE SENSOR, and EYE SENSOR + LCD IMAGE DISP.",

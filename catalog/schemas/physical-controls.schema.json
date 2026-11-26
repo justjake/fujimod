@@ -11,10 +11,15 @@
         },
         "usb": {
           "description": "Required USB cable state, when specified.",
-          "type": ["boolean", "null"]
+          "type": [
+            "boolean",
+            "null"
+          ]
         }
       },
-      "required": ["hold"],
+      "required": [
+        "hold"
+      ],
       "type": "object"
     },
     "BootHold": {
@@ -26,10 +31,15 @@
         },
         "stage": {
           "description": "Shutter stage, when required.",
-          "type": ["string", "null"]
+          "type": [
+            "string",
+            "null"
+          ]
         }
       },
-      "required": ["id"],
+      "required": [
+        "id"
+      ],
       "type": "object"
     },
     "BoundPosition": {
@@ -38,7 +48,10 @@
       "properties": {
         "asserted": {
           "description": "Whether this position asserts that input.",
-          "type": ["boolean", "null"]
+          "type": [
+            "boolean",
+            "null"
+          ]
         },
         "id": {
           "description": "Exact position identity accepted by the physical panel.",
@@ -56,7 +69,9 @@
           "description": "Explicit firmware input binding."
         }
       },
-      "required": ["id"],
+      "required": [
+        "id"
+      ],
       "type": "object"
     },
     "ControlBehavior": {
@@ -82,7 +97,9 @@
               "description": "Input asserted by a press and deasserted by release."
             }
           },
-          "required": ["kind"],
+          "required": [
+            "kind"
+          ],
           "type": "object"
         },
         {
@@ -98,13 +115,18 @@
                 "items": {
                   "$ref": "#/$defs/InputBinding"
                 },
-                "type": ["array", "null"]
+                "type": [
+                  "array",
+                  "null"
+                ]
               },
               "description": "Inputs asserted at each named shutter stage.",
               "type": "object"
             }
           },
-          "required": ["kind"],
+          "required": [
+            "kind"
+          ],
           "type": "object"
         },
         {
@@ -141,7 +163,9 @@
               "description": "Center press input, when present."
             }
           },
-          "required": ["kind"],
+          "required": [
+            "kind"
+          ],
           "type": "object"
         },
         {
@@ -183,7 +207,9 @@
               ]
             }
           },
-          "required": ["kind"],
+          "required": [
+            "kind"
+          ],
           "type": "object"
         },
         {
@@ -192,7 +218,10 @@
           "properties": {
             "endless": {
               "description": "Whether the mechanism rotates without an end stop.",
-              "type": ["boolean", "null"]
+              "type": [
+                "boolean",
+                "null"
+              ]
             },
             "kind": {
               "const": "dial",
@@ -214,7 +243,10 @@
               "description": "Press input, when the dial is pushable."
             }
           },
-          "required": ["kind", "motion"],
+          "required": [
+            "kind",
+            "motion"
+          ],
           "type": "object"
         },
         {
@@ -223,7 +255,10 @@
           "properties": {
             "endless": {
               "description": "Whether the mechanism rotates without an end stop.",
-              "type": ["boolean", "null"]
+              "type": [
+                "boolean",
+                "null"
+              ]
             },
             "kind": {
               "const": "ring",
@@ -245,7 +280,10 @@
               "description": "Press input, when the ring is pushable."
             }
           },
-          "required": ["kind", "motion"],
+          "required": [
+            "kind",
+            "motion"
+          ],
           "type": "object"
         },
         {
@@ -264,7 +302,9 @@
               "type": "array"
             }
           },
-          "required": ["kind"],
+          "required": [
+            "kind"
+          ],
           "type": "object"
         },
         {
@@ -277,7 +317,10 @@
             },
             "momentary": {
               "description": "Whether releasing the lever returns it to an unasserted rest position.",
-              "type": ["boolean", "null"]
+              "type": [
+                "boolean",
+                "null"
+              ]
             },
             "positions": {
               "description": "Inputs selecting each documented position.",
@@ -287,7 +330,9 @@
               "type": "array"
             }
           },
-          "required": ["kind"],
+          "required": [
+            "kind"
+          ],
           "type": "object"
         },
         {
@@ -299,14 +344,21 @@
               "type": "string"
             }
           },
-          "required": ["kind"],
+          "required": [
+            "kind"
+          ],
           "type": "object"
         }
       ]
     },
     "ControlIcon": {
       "description": "Printed symbols on a camera control.",
-      "enum": ["playback", "delete", "record", "flash"],
+      "enum": [
+        "playback",
+        "delete",
+        "record",
+        "flash"
+      ],
       "type": "string"
     },
     "ControlLadder": {
@@ -329,7 +381,10 @@
           "format": "uint16",
           "maximum": 65535,
           "minimum": 0,
-          "type": ["integer", "null"]
+          "type": [
+            "integer",
+            "null"
+          ]
         },
         "rungs": {
           "description": "One rung per control; bands are disjoint.",
@@ -343,7 +398,12 @@
           "description": "Where the firmware reads the ladder."
         }
       },
-      "required": ["wire", "levels", "basis", "rungs"],
+      "required": [
+        "wire",
+        "levels",
+        "basis",
+        "rungs"
+      ],
       "type": "object"
     },
     "ControlMotion": {
@@ -365,7 +425,9 @@
               "type": "array"
             }
           },
-          "required": ["kind"],
+          "required": [
+            "kind"
+          ],
           "type": "object"
         },
         {
@@ -399,7 +461,9 @@
               "type": "string"
             }
           },
-          "required": ["kind"],
+          "required": [
+            "kind"
+          ],
           "type": "object"
         }
       ]
@@ -410,7 +474,10 @@
       "properties": {
         "description": {
           "description": "Meaning of an unlabeled position or icon.",
-          "type": ["string", "null"]
+          "type": [
+            "string",
+            "null"
+          ]
         },
         "id": {
           "description": "Unique manual position identity.",
@@ -418,10 +485,15 @@
         },
         "label": {
           "description": "Printed label, when present.",
-          "type": ["string", "null"]
+          "type": [
+            "string",
+            "null"
+          ]
         }
       },
-      "required": ["id"],
+      "required": [
+        "id"
+      ],
       "type": "object"
     },
     "ControlRole": {
@@ -490,7 +562,10 @@
               "type": "string"
             }
           },
-          "required": ["kind", "name"],
+          "required": [
+            "kind",
+            "name"
+          ],
           "type": "object"
         },
         {
@@ -506,7 +581,10 @@
               "type": "string"
             }
           },
-          "required": ["kind", "name"],
+          "required": [
+            "kind",
+            "name"
+          ],
           "type": "object"
         },
         {
@@ -522,7 +600,10 @@
               "type": "string"
             }
           },
-          "required": ["kind", "row"],
+          "required": [
+            "kind",
+            "row"
+          ],
           "type": "object"
         }
       ]
@@ -561,7 +642,13 @@
           "type": "integer"
         }
       },
-      "required": ["control_id", "band_low", "band_high", "sample", "basis"],
+      "required": [
+        "control_id",
+        "band_low",
+        "band_high",
+        "sample",
+        "basis"
+      ],
       "type": "object"
     },
     "LadderWire": {
@@ -583,7 +670,10 @@
               "type": "string"
             }
           },
-          "required": ["kind", "channel"],
+          "required": [
+            "kind",
+            "channel"
+          ],
           "type": "object"
         },
         {
@@ -602,7 +692,10 @@
               "type": "integer"
             }
           },
-          "required": ["kind", "register"],
+          "required": [
+            "kind",
+            "register"
+          ],
           "type": "object"
         }
       ]
@@ -629,7 +722,11 @@
           "type": "string"
         }
       },
-      "required": ["url", "title", "pages"],
+      "required": [
+        "url",
+        "title",
+        "pages"
+      ],
       "type": "object"
     },
     "PhysicalControl": {
@@ -660,11 +757,17 @@
         },
         "default_function": {
           "description": "Documented initial function, when available.",
-          "type": ["string", "null"]
+          "type": [
+            "string",
+            "null"
+          ]
         },
         "face": {
           "description": "Text printed on the control, when present.",
-          "type": ["string", "null"]
+          "type": [
+            "string",
+            "null"
+          ]
         },
         "icon": {
           "anyOf": [
@@ -685,7 +788,10 @@
           "description": "Manual page identifying the control, when available.",
           "format": "uint32",
           "minimum": 0,
-          "type": ["integer", "null"]
+          "type": [
+            "integer",
+            "null"
+          ]
         },
         "mechanical": {
           "description": "Whether this control has no electronic action.",
@@ -719,10 +825,19 @@
         },
         "short_name": {
           "description": "Short uppercase caption for an unmarked control (at most 10 characters).",
-          "type": ["string", "null"]
+          "type": [
+            "string",
+            "null"
+          ]
         }
       },
-      "required": ["name", "location", "assignable", "pushable", "mechanical"],
+      "required": [
+        "name",
+        "location",
+        "assignable",
+        "pushable",
+        "mechanical"
+      ],
       "type": "object"
     }
   },
@@ -741,7 +856,10 @@
       "format": "uint16",
       "maximum": 65535,
       "minimum": 0,
-      "type": ["integer", "null"]
+      "type": [
+        "integer",
+        "null"
+      ]
     },
     "body_id": {
       "description": "Body owning the documented controls.",
@@ -792,7 +910,14 @@
       "type": "integer"
     }
   },
-  "required": ["$schema", "schema", "id", "body_id", "manual", "controls"],
+  "required": [
+    "$schema",
+    "schema",
+    "id",
+    "body_id",
+    "manual",
+    "controls"
+  ],
   "title": "PhysicalControls",
   "type": "object"
 }

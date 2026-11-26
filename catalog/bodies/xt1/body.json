@@ -19,12 +19,22 @@
           "device-8"
         ],
         "attachments": {
-          "serial_part": ["banked-lens"]
+          "serial_part": [
+            "banked-lens"
+          ]
         },
         "card_contacts": {
           "basis": "Declared catalog input.",
-          "detect": [15, 1, 0],
-          "write_protect": [12, 6, 1]
+          "detect": [
+            15,
+            1,
+            0
+          ],
+          "write_protect": [
+            12,
+            6,
+            1
+          ]
         },
         "controllers": {
           "control_bus0": {
@@ -32,32 +42,91 @@
               {
                 "address": 57,
                 "basis": "Declared catalog input.",
-                "commands": [229],
+                "commands": [
+                  229
+                ],
                 "prefix_mask": 224,
                 "prefix_value": 160,
                 "read_frames": [
-                  [19, "00"],
-                  [24, "0000"]
+                  [
+                    19,
+                    "00"
+                  ],
+                  [
+                    24,
+                    "0000"
+                  ]
                 ],
                 "register_mask": 31,
                 "write_masks": [
-                  [0, 255],
-                  [1, 255],
-                  [2, 255],
-                  [3, 255],
-                  [4, 255],
-                  [5, 255],
-                  [6, 255],
-                  [7, 255],
-                  [8, 255],
-                  [9, 255],
-                  [10, 255],
-                  [11, 255],
-                  [12, 255],
-                  [13, 255],
-                  [14, 255],
-                  [15, 255],
-                  [30, 255]
+                  [
+                    0,
+                    255
+                  ],
+                  [
+                    1,
+                    255
+                  ],
+                  [
+                    2,
+                    255
+                  ],
+                  [
+                    3,
+                    255
+                  ],
+                  [
+                    4,
+                    255
+                  ],
+                  [
+                    5,
+                    255
+                  ],
+                  [
+                    6,
+                    255
+                  ],
+                  [
+                    7,
+                    255
+                  ],
+                  [
+                    8,
+                    255
+                  ],
+                  [
+                    9,
+                    255
+                  ],
+                  [
+                    10,
+                    255
+                  ],
+                  [
+                    11,
+                    255
+                  ],
+                  [
+                    12,
+                    255
+                  ],
+                  [
+                    13,
+                    255
+                  ],
+                  [
+                    14,
+                    255
+                  ],
+                  [
+                    15,
+                    255
+                  ],
+                  [
+                    30,
+                    255
+                  ]
                 ]
               }
             ],
@@ -72,11 +141,29 @@
                 "address": 68,
                 "basis": "Declared catalog input.",
                 "status_hex": "0000",
-                "writable_registers": [1, 2, 3, 4, 6],
+                "writable_registers": [
+                  1,
+                  2,
+                  3,
+                  4,
+                  6
+                ],
                 "write_replies": [
-                  [2, 32, "0001"],
-                  [2, 64, "0000"],
-                  [2, 74, "0000"]
+                  [
+                    2,
+                    32,
+                    "0001"
+                  ],
+                  [
+                    2,
+                    64,
+                    "0000"
+                  ],
+                  [
+                    2,
+                    74,
+                    "0000"
+                  ]
                 ]
               }
             ],
@@ -90,8 +177,14 @@
           },
           "fe80": {
             "basis": "Declared catalog input.",
-            "periods": [12, 13, 16],
-            "upload_setup_phases": ["routed"]
+            "periods": [
+              12,
+              13,
+              16
+            ],
+            "upload_setup_phases": [
+              "routed"
+            ]
           }
         },
         "dram_basis": "Declared catalog input.",
@@ -322,12 +415,22 @@
           "device-8"
         ],
         "attachments": {
-          "serial_part": ["banked-lens"]
+          "serial_part": [
+            "banked-lens"
+          ]
         },
         "card_contacts": {
           "basis": "Declared catalog input.",
-          "detect": [15, 1, 0],
-          "write_protect": [12, 6, 1]
+          "detect": [
+            15,
+            1,
+            0
+          ],
+          "write_protect": [
+            12,
+            6,
+            1
+          ]
         },
         "controllers": {
           "control_bus0": {
@@ -335,32 +438,91 @@
               {
                 "address": 57,
                 "basis": "Declared catalog input.",
-                "commands": [229],
+                "commands": [
+                  229
+                ],
                 "prefix_mask": 224,
                 "prefix_value": 160,
                 "read_frames": [
-                  [19, "00"],
-                  [24, "0000"]
+                  [
+                    19,
+                    "00"
+                  ],
+                  [
+                    24,
+                    "0000"
+                  ]
                 ],
                 "register_mask": 31,
                 "write_masks": [
-                  [0, 255],
-                  [1, 255],
-                  [2, 255],
-                  [3, 255],
-                  [4, 255],
-                  [5, 255],
-                  [6, 255],
-                  [7, 255],
-                  [8, 255],
-                  [9, 255],
-                  [10, 255],
-                  [11, 255],
-                  [12, 255],
-                  [13, 255],
-                  [14, 255],
-                  [15, 255],
-                  [30, 255]
+                  [
+                    0,
+                    255
+                  ],
+                  [
+                    1,
+                    255
+                  ],
+                  [
+                    2,
+                    255
+                  ],
+                  [
+                    3,
+                    255
+                  ],
+                  [
+                    4,
+                    255
+                  ],
+                  [
+                    5,
+                    255
+                  ],
+                  [
+                    6,
+                    255
+                  ],
+                  [
+                    7,
+                    255
+                  ],
+                  [
+                    8,
+                    255
+                  ],
+                  [
+                    9,
+                    255
+                  ],
+                  [
+                    10,
+                    255
+                  ],
+                  [
+                    11,
+                    255
+                  ],
+                  [
+                    12,
+                    255
+                  ],
+                  [
+                    13,
+                    255
+                  ],
+                  [
+                    14,
+                    255
+                  ],
+                  [
+                    15,
+                    255
+                  ],
+                  [
+                    30,
+                    255
+                  ]
                 ]
               }
             ],
@@ -375,11 +537,29 @@
                 "address": 68,
                 "basis": "Declared catalog input.",
                 "status_hex": "0000",
-                "writable_registers": [1, 2, 3, 4, 6],
+                "writable_registers": [
+                  1,
+                  2,
+                  3,
+                  4,
+                  6
+                ],
                 "write_replies": [
-                  [2, 32, "0001"],
-                  [2, 64, "0000"],
-                  [2, 74, "0000"]
+                  [
+                    2,
+                    32,
+                    "0001"
+                  ],
+                  [
+                    2,
+                    64,
+                    "0000"
+                  ],
+                  [
+                    2,
+                    74,
+                    "0000"
+                  ]
                 ]
               }
             ],
@@ -393,19 +573,40 @@
           },
           "fe80": {
             "basis": "Declared catalog input.",
-            "periods": [12, 13, 16],
-            "upload_setup_phases": ["routed"]
+            "periods": [
+              12,
+              13,
+              16
+            ],
+            "upload_setup_phases": [
+              "routed"
+            ]
           },
           "usb": {
             "basis": "Declared catalog input.",
             "in_endpoints": [
-              [128, 0],
-              [130, 1],
-              [131, 2]
+              [
+                128,
+                0
+              ],
+              [
+                130,
+                1
+              ],
+              [
+                131,
+                2
+              ]
             ],
             "out_endpoints": [
-              [0, 0],
-              [1, 1]
+              [
+                0,
+                0
+              ],
+              [
+                1,
+                1
+              ]
             ],
             "packet_bytes": 64,
             "transfer_ticks": 4
@@ -917,5 +1118,8 @@
       ]
     }
   ],
-  "parts": ["sd-card", "banked-lens"]
+  "parts": [
+    "sd-card",
+    "banked-lens"
+  ]
 }

@@ -7,8 +7,36 @@
     "url": "https://app.fujifilm-dsc.com/en/manual/x-t20_v20/x-t20_omw_en_s_f.pdf",
     "title": "FUJIFILM X-T20 Owner’s Manual, Ver. 2.00",
     "pages": [
-      2, 3, 4, 5, 6, 7, 8, 9, 11, 14, 16, 20, 22, 23, 24, 31, 36, 39, 42, 50, 51, 52, 78, 93, 107,
-      144, 243, 248, 249, 250
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      11,
+      14,
+      16,
+      20,
+      22,
+      23,
+      24,
+      31,
+      36,
+      39,
+      42,
+      50,
+      51,
+      52,
+      78,
+      93,
+      107,
+      144,
+      243,
+      248,
+      249,
+      250
     ]
   },
   "boot": {
@@ -49,7 +77,9 @@
       "location": "rear",
       "manual_page": 93,
       "face": "AE-L",
-      "connection_ids": ["controls-adc-4"],
+      "connection_ids": [
+        "controls-adc-4"
+      ],
       "assignable": true,
       "pushable": true,
       "default_function": "Lock exposure while pressed.",
@@ -67,7 +97,9 @@
       "location": "rear",
       "manual_page": 93,
       "face": "AF-L",
-      "connection_ids": ["controls-adc-4"],
+      "connection_ids": [
+        "controls-adc-4"
+      ],
       "assignable": true,
       "pushable": true,
       "default_function": "Lock focus while pressed.",
@@ -85,7 +117,9 @@
       "location": "top",
       "manual_page": 7,
       "short_name": "AUTO",
-      "connection_ids": ["controls-adc-4"],
+      "connection_ids": [
+        "controls-adc-4"
+      ],
       "assignable": false,
       "pushable": false,
       "positions": [
@@ -477,7 +511,9 @@
       "location": "top",
       "manual_page": 248,
       "face": "Fn1",
-      "connection_ids": ["controls-adc-4"],
+      "connection_ids": [
+        "controls-adc-4"
+      ],
       "assignable": true,
       "pushable": true,
       "default_function": "Drive settings.",
@@ -548,7 +584,9 @@
       "location": "top",
       "manual_page": 8,
       "short_name": "FRONT DIAL",
-      "connection_ids": ["controls-encoder-front"],
+      "connection_ids": [
+        "controls-encoder-front"
+      ],
       "assignable": false,
       "pushable": true,
       "default_function": "Rotate to select menu tabs, adjust aperture, select an auto scene, adjust exposure compensation when C is selected, or view other pictures; press to switch between aperture and exposure compensation when C is selected.",
@@ -684,7 +722,10 @@
       "location": "rear",
       "manual_page": 9,
       "short_name": "REAR DIAL",
-      "connection_ids": ["controls-adc-4", "controls-encoder-rear"],
+      "connection_ids": [
+        "controls-adc-4",
+        "controls-encoder-rear"
+      ],
       "assignable": true,
       "pushable": true,
       "default_function": "Rotate to adjust settings and focus-frame size or playback zoom; press to zoom the active focus point, use the assigned function (Focus Check by default), or press and hold to choose the manual-focus display.",

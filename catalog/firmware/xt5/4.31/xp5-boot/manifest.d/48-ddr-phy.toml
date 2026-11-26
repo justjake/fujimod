@@ -11,20 +11,14 @@ base = 0xfb1a0000
 size = 0x1000
 kind = "bringup-stub"
 [device.options]
-registers = [
-  { offset = 0x08, mode = "toggle", value = 1 },
-  { offset = 0x64, mode = "constant", value = 7 },
-]
+registers = [{ offset = 0x08, mode = "toggle", value = 1 }, { offset = 0x64, mode = "constant", value = 7 }]
 
 [[device]]
 base = 0xfb5a0000
 size = 0x1000
 kind = "bringup-stub"
 [device.options]
-registers = [
-  { offset = 0x08, mode = "toggle", value = 1 },
-  { offset = 0x64, mode = "constant", value = 7 },
-]
+registers = [{ offset = 0x08, mode = "toggle", value = 1 }, { offset = 0x64, mode = "constant", value = 7 }]
 
 # Memory-controller pages of DRAM channels 2 and 3, written and polled by the same S1 path
 # (stock 0x13afe24 writes both pages; 0x13af930 waits for bit 0 of 0xfaf27800 and 0xfaf37800 to
@@ -37,17 +31,11 @@ base = 0xfaf27000
 size = 0x1000
 kind = "bringup-stub"
 [device.options]
-registers = [
-  { offset = 0x800, mode = "constant", value = 1 },
-  { offset = 0x820, mode = "constant", value = 0 },
-]
+registers = [{ offset = 0x800, mode = "constant", value = 1 }, { offset = 0x820, mode = "constant", value = 0 }]
 
 [[device]]
 base = 0xfaf37000
 size = 0x1000
 kind = "bringup-stub"
 [device.options]
-registers = [
-  { offset = 0x800, mode = "constant", value = 1 },
-  { offset = 0x820, mode = "constant", value = 0 },
-]
+registers = [{ offset = 0x800, mode = "constant", value = 1 }, { offset = 0x820, mode = "constant", value = 0 }]

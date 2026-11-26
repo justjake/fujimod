@@ -21,7 +21,10 @@
               "type": "array"
             }
           },
-          "required": ["kind", "rows"],
+          "required": [
+            "kind",
+            "rows"
+          ],
           "type": "object"
         },
         {
@@ -33,7 +36,9 @@
               "type": "string"
             }
           },
-          "required": ["kind"],
+          "required": [
+            "kind"
+          ],
           "type": "object"
         }
       ]
@@ -83,7 +88,13 @@
           "type": "integer"
         }
       },
-      "required": ["centers", "offset", "hysteresis", "edges_per_step", "direction"],
+      "required": [
+        "centers",
+        "offset",
+        "hysteresis",
+        "edges_per_step",
+        "direction"
+      ],
       "type": "object"
     },
     "AdcInterval": {
@@ -130,7 +141,11 @@
               "description": "Scanner state the firmware requires before the interval counts, when present."
             }
           },
-          "required": ["kind", "lower", "upper"],
+          "required": [
+            "kind",
+            "lower",
+            "upper"
+          ],
           "type": "object"
         },
         {
@@ -172,7 +187,11 @@
               "description": "Scanner state the firmware requires before the interval counts, when present."
             }
           },
-          "required": ["kind", "lower", "upper"],
+          "required": [
+            "kind",
+            "lower",
+            "upper"
+          ],
           "type": "object"
         }
       ]
@@ -190,7 +209,10 @@
           "description": "Unconditional interval tested on this sample."
         }
       },
-      "required": ["connection_id", "interval"],
+      "required": [
+        "connection_id",
+        "interval"
+      ],
       "type": "object"
     },
     "AddressIdentity": {
@@ -214,7 +236,11 @@
           "type": "integer"
         }
       },
-      "required": ["address", "size", "sha256"],
+      "required": [
+        "address",
+        "size",
+        "sha256"
+      ],
       "type": "object"
     },
     "ControlInterface": {
@@ -404,7 +430,10 @@
           "type": "string"
         }
       },
-      "required": ["name", "event"],
+      "required": [
+        "name",
+        "event"
+      ],
       "type": "object"
     },
     "DecodedTouch": {
@@ -431,7 +460,11 @@
           "type": "integer"
         }
       },
-      "required": ["address", "count", "contacts"],
+      "required": [
+        "address",
+        "count",
+        "contacts"
+      ],
       "type": "object"
     },
     "DecodedTouchContact": {
@@ -457,7 +490,11 @@
           "type": "integer"
         }
       },
-      "required": ["active", "x", "y"],
+      "required": [
+        "active",
+        "x",
+        "y"
+      ],
       "type": "object"
     },
     "ElectricalInput": {
@@ -491,7 +528,12 @@
               "type": "array"
             }
           },
-          "required": ["kind", "terms", "callback", "expected_result"],
+          "required": [
+            "kind",
+            "terms",
+            "callback",
+            "expected_result"
+          ],
           "type": "object"
         },
         {
@@ -502,7 +544,10 @@
               "description": "Firmware callback evaluating the input, when present.",
               "format": "uint64",
               "minimum": 0,
-              "type": ["integer", "null"]
+              "type": [
+                "integer",
+                "null"
+              ]
             },
             "connection_id": {
               "description": "Body connection carrying this analog input.",
@@ -512,7 +557,10 @@
               "description": "Callback result interpreted as active, when present.",
               "format": "uint32",
               "minimum": 0,
-              "type": ["integer", "null"]
+              "type": [
+                "integer",
+                "null"
+              ]
             },
             "intervals": {
               "description": "Accepted analog intervals and the source of their bounds.",
@@ -526,7 +574,11 @@
               "type": "string"
             }
           },
-          "required": ["kind", "connection_id", "intervals"],
+          "required": [
+            "kind",
+            "connection_id",
+            "intervals"
+          ],
           "type": "object"
         },
         {
@@ -550,7 +602,12 @@
               "description": "Firmware interpretation of the contact."
             }
           },
-          "required": ["kind", "connection_id", "expected_level", "scanner"],
+          "required": [
+            "kind",
+            "connection_id",
+            "expected_level",
+            "scanner"
+          ],
           "type": "object"
         },
         {
@@ -579,7 +636,12 @@
               "type": "string"
             }
           },
-          "required": ["kind", "connection_id", "expected_levels", "callback"],
+          "required": [
+            "kind",
+            "connection_id",
+            "expected_levels",
+            "callback"
+          ],
           "type": "object"
         },
         {
@@ -803,7 +865,11 @@
               "type": "string"
             }
           },
-          "required": ["kind", "connection_id", "cycle_sign"],
+          "required": [
+            "kind",
+            "connection_id",
+            "cycle_sign"
+          ],
           "type": "object"
         },
         {
@@ -843,7 +909,14 @@
               "type": "integer"
             }
           },
-          "required": ["kind", "connection_id", "endpoint", "register", "mask", "active_value"],
+          "required": [
+            "kind",
+            "connection_id",
+            "endpoint",
+            "register",
+            "mask",
+            "active_value"
+          ],
           "type": "object"
         }
       ]
@@ -876,7 +949,12 @@
           "type": "integer"
         }
       },
-      "required": ["address", "stride", "sha256", "rows"],
+      "required": [
+        "address",
+        "stride",
+        "sha256",
+        "rows"
+      ],
       "type": "object"
     },
     "GpioScanner": {
@@ -891,7 +969,9 @@
               "type": "string"
             }
           },
-          "required": ["kind"],
+          "required": [
+            "kind"
+          ],
           "type": "object"
         },
         {
@@ -923,7 +1003,12 @@
               "type": "integer"
             }
           },
-          "required": ["kind", "source", "lower", "upper"],
+          "required": [
+            "kind",
+            "source",
+            "lower",
+            "upper"
+          ],
           "type": "object"
         }
       ]
@@ -936,7 +1021,10 @@
           "description": "Routine reading 16-bit control calibration values.",
           "format": "uint64",
           "minimum": 0,
-          "type": ["integer", "null"]
+          "type": [
+            "integer",
+            "null"
+          ]
         },
         "scanner": {
           "anyOf": [
@@ -968,7 +1056,10 @@
               "type": "string"
             }
           },
-          "required": ["kind", "control_id"],
+          "required": [
+            "kind",
+            "control_id"
+          ],
           "type": "object"
         },
         {
@@ -984,7 +1075,10 @@
               "type": "string"
             }
           },
-          "required": ["kind", "connection_id"],
+          "required": [
+            "kind",
+            "connection_id"
+          ],
           "type": "object"
         },
         {
@@ -996,7 +1090,9 @@
               "type": "string"
             }
           },
-          "required": ["kind"],
+          "required": [
+            "kind"
+          ],
           "type": "object"
         }
       ]
@@ -1007,7 +1103,10 @@
       "properties": {
         "debug_key": {
           "description": "Exact debug command token for this input, absent for native-only inputs.",
-          "type": ["string", "null"]
+          "type": [
+            "string",
+            "null"
+          ]
         },
         "electrical": {
           "anyOf": [
@@ -1046,7 +1145,11 @@
           "description": "Physical control, connection detector, or unclaimed firmware input."
         }
       },
-      "required": ["id", "event", "target"],
+      "required": [
+        "id",
+        "event",
+        "target"
+      ],
       "type": "object"
     },
     "LocatedScannerRecord": {
@@ -1064,7 +1167,10 @@
           "description": "Event identity, predicate kind, source selector, and bounds stored in the row."
         }
       },
-      "required": ["index", "witness"],
+      "required": [
+        "index",
+        "witness"
+      ],
       "type": "object"
     },
     "NativeKeyName": {
@@ -1088,7 +1194,11 @@
           "type": "integer"
         }
       },
-      "required": ["event", "name", "string_address"],
+      "required": [
+        "event",
+        "name",
+        "string_address"
+      ],
       "type": "object"
     },
     "NativeKeyNames": {
@@ -1119,7 +1229,12 @@
           "type": "integer"
         }
       },
-      "required": ["rows", "reader", "size", "sha256"],
+      "required": [
+        "rows",
+        "reader",
+        "size",
+        "sha256"
+      ],
       "type": "object"
     },
     "ScannerInputKind": {
@@ -1193,7 +1308,13 @@
           "type": "integer"
         }
       },
-      "required": ["stable_offset", "stable_width", "pressed_value", "released_value", "routine"],
+      "required": [
+        "stable_offset",
+        "stable_width",
+        "pressed_value",
+        "released_value",
+        "routine"
+      ],
       "type": "object"
     },
     "ScannerRecordWitness": {
@@ -1229,7 +1350,13 @@
           "type": "integer"
         }
       },
-      "required": ["physical_key", "input_kind", "source", "lower", "upper"],
+      "required": [
+        "physical_key",
+        "input_kind",
+        "source",
+        "lower",
+        "upper"
+      ],
       "type": "object"
     },
     "ScannerTable": {
@@ -1265,7 +1392,13 @@
           "type": "integer"
         }
       },
-      "required": ["base", "count", "stride", "lookup", "sha256"],
+      "required": [
+        "base",
+        "count",
+        "stride",
+        "lookup",
+        "sha256"
+      ],
       "type": "object"
     },
     "TranslatedKey": {
@@ -1285,7 +1418,10 @@
           "type": "integer"
         }
       },
-      "required": ["physical_key", "event"],
+      "required": [
+        "physical_key",
+        "event"
+      ],
       "type": "object"
     }
   },

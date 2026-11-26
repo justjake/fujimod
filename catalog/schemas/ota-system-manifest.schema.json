@@ -5,7 +5,10 @@
   "description": "A.JSN and B.JSN are the two interchangeable system manifests under FUJIMOD/SYSTEM/<firmware>/. The loader and file layer use the higher gen that parses; an unparseable manifest leaves the other slot active.",
   "type": "object",
   "additionalProperties": false,
-  "required": ["gen", "fs"],
+  "required": [
+    "gen",
+    "fs"
+  ],
   "properties": {
     "gen": {
       "type": "integer",

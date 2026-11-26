@@ -12,7 +12,9 @@
   "evidence": [
     {
       "kind": "inferred",
-      "firmware_ids": ["xt3-511"]
+      "firmware_ids": [
+        "xt3-511"
+      ]
     }
   ]
 }

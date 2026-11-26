@@ -45,9 +45,7 @@ initial_inputs = [{ port = 11, pin = 4, high = false }]
 # peer answers 1.14 on 0.4 after rise_delay ticks (ns); the delay is a board guess.
 # On the camera in REC pad 0.4 reads 1 while 1.14 is low (port 1 latch 0x13), so the
 # peer holds 0.4 once it has answered: the wire latches high after its first rise.
-feedback = [
-  { port = 1, register = 0, bit = 14, input_port = 0, input_pin = 4, rise_delay = 30000000, latch_high = true },
-]
+feedback = [{ port = 1, register = 0, bit = 14, input_port = 0, input_pin = 4, rise_delay = 30000000, latch_high = true }]
 companion_input_irqs = [{ port = 0, pin = 4, line = 27, active_high = true }]
 
 

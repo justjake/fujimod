@@ -5,7 +5,11 @@
   "description": "latest.json names one firmware release. Each fs key is an absolute path in the camera file layer; its value is the complete SHA-256 and byte size of the store file for that path. The camera applies a release when its version differs from the active system manifest, in either direction.",
   "type": "object",
   "additionalProperties": false,
-  "required": ["firmware", "version", "fs"],
+  "required": [
+    "firmware",
+    "version",
+    "fs"
+  ],
   "properties": {
     "firmware": {
       "type": "string",
@@ -58,7 +62,10 @@
     "file": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["sha256", "size"],
+      "required": [
+        "sha256",
+        "size"
+      ],
       "properties": {
         "sha256": {
           "type": "string",

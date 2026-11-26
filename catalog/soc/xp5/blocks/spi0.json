@@ -16,7 +16,11 @@
   "evidence": [
     {
       "kind": "located",
-      "firmware_ids": ["x100vi-131", "xe5-112", "xt5-431"]
+      "firmware_ids": [
+        "x100vi-131",
+        "xe5-112",
+        "xt5-431"
+      ]
     }
   ]
 }

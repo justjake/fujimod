@@ -6,7 +6,26 @@
   "manual": {
     "url": "https://dl.fujifilm-x.com/support/manual/x/fujifilm_xa2_manual_en.pdf",
     "title": "X-A2 Owner’s Manual",
-    "pages": [2, 3, 4, 5, 11, 17, 19, 22, 23, 27, 31, 33, 34, 39, 64, 65, 94, 125]
+    "pages": [
+      2,
+      3,
+      4,
+      5,
+      11,
+      17,
+      19,
+      22,
+      23,
+      27,
+      31,
+      33,
+      34,
+      39,
+      64,
+      65,
+      94,
+      125
+    ]
   },
   "analog_levels": 1024,
   "boot": {
@@ -52,7 +71,9 @@
       "location": "rear",
       "manual_page": 19,
       "face": "DISP/BACK",
-      "connection_ids": ["controls-adc-9"],
+      "connection_ids": [
+        "controls-adc-9"
+      ],
       "assignable": false,
       "pushable": true,
       "default_function": "Cycle display modes or go back; press and hold to toggle silent mode.",
@@ -80,7 +101,9 @@
       "location": "top",
       "manual_page": 65,
       "face": "Fn",
-      "connection_ids": ["controls-gpio-0-11"],
+      "connection_ids": [
+        "controls-gpio-0-11"
+      ],
       "assignable": true,
       "pushable": true,
       "default_function": "Runs the function selected in the Fn setting; press and hold to open the Fn Button Setting menu. In playback mode it is the Wi-Fi button.",
@@ -132,7 +155,9 @@
       "location": "rear",
       "manual_page": 4,
       "face": "MENU/OK",
-      "connection_ids": ["controls-adc-9"],
+      "connection_ids": [
+        "controls-adc-9"
+      ],
       "assignable": false,
       "pushable": true,
       "default_function": "Open menus and confirm selections; press and hold to lock or unlock the selector, Q, and movie-recording buttons.",
@@ -150,7 +175,9 @@
       "location": "top",
       "manual_page": 34,
       "short_name": "MODE",
-      "connection_ids": ["controls-adc-3"],
+      "connection_ids": [
+        "controls-adc-3"
+      ],
       "assignable": false,
       "pushable": false,
       "positions": [
@@ -320,7 +347,9 @@
       "location": "rear",
       "manual_page": 31,
       "icon": "record",
-      "connection_ids": ["controls-adc-9"],
+      "connection_ids": [
+        "controls-adc-9"
+      ],
       "assignable": false,
       "pushable": true,
       "default_function": "Start or stop movie recording.",
@@ -338,7 +367,9 @@
       "location": "rear",
       "manual_page": 23,
       "icon": "playback",
-      "connection_ids": ["controls-gpio-2-9"],
+      "connection_ids": [
+        "controls-gpio-2-9"
+      ],
       "assignable": false,
       "pushable": true,
       "default_function": "Start playback.",
@@ -397,7 +428,9 @@
       "location": "rear",
       "manual_page": 33,
       "face": "Q",
-      "connection_ids": ["controls-adc-9"],
+      "connection_ids": [
+        "controls-adc-9"
+      ],
       "assignable": false,
       "pushable": true,
       "default_function": "Open the quick menu; press and hold for monitor sunlight mode. In playback it can open RAW conversion options.",
@@ -415,7 +448,9 @@
       "location": "rear",
       "manual_page": 4,
       "short_name": "SELECTOR",
-      "connection_ids": ["controls-adc-8"],
+      "connection_ids": [
+        "controls-adc-8"
+      ],
       "assignable": false,
       "pushable": false,
       "default_function": "Move the cursor up, down, left, or right. Up is AF in shooting mode and delete in playback; left is self-timer; right is white balance; down is burst shooting. Left and right also browse pictures in playback.",
@@ -447,7 +482,10 @@
       "location": "top",
       "manual_page": 22,
       "short_name": "SHUTTER",
-      "connection_ids": ["controls-gpio-0-2", "controls-gpio-0-3"],
+      "connection_ids": [
+        "controls-gpio-0-2",
+        "controls-gpio-0-3"
+      ],
       "assignable": false,
       "pushable": true,
       "default_function": "Half-press to focus and lock focus and exposure; press fully to take a picture.",
@@ -479,7 +517,10 @@
       "location": "rear",
       "manual_page": 5,
       "short_name": "SUB DIAL",
-      "connection_ids": ["controls-encoder-3-8-3-9", "controls-gpio-0-10"],
+      "connection_ids": [
+        "controls-encoder-3-8-3-9",
+        "controls-gpio-0-10"
+      ],
       "assignable": false,
       "pushable": true,
       "default_function": "Adjust program shift, aperture, or shutter speed; select quick-menu options; zoom or switch between full-frame and thumbnail playback. Press the center in playback to zoom in on the focus point.",

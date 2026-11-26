@@ -37,7 +37,9 @@
       "evidence": [
         {
           "kind": "inferred",
-          "firmware_ids": ["x70-110"],
+          "firmware_ids": [
+            "x70-110"
+          ],
           "addresses": [
             {
               "firmware_id": "x70-110",
@@ -89,7 +91,9 @@
       "evidence": [
         {
           "kind": "inferred",
-          "firmware_ids": ["x70-110"],
+          "firmware_ids": [
+            "x70-110"
+          ],
           "addresses": [
             {
               "firmware_id": "x70-110",
@@ -121,7 +125,9 @@
         "byte": 255,
         "evidence": {
           "kind": "measured",
-          "firmware_ids": ["x70-110"]
+          "firmware_ids": [
+            "x70-110"
+          ]
         }
       }
     },
@@ -476,22 +482,37 @@
     {
       "id": "address-decoder-0",
       "initial": {
-        "processors": ["cpu0-map-00", "cpu1-map-01"],
-        "dma_mappings": ["dma-map-00"]
+        "processors": [
+          "cpu0-map-00",
+          "cpu1-map-01"
+        ],
+        "dma_mappings": [
+          "dma-map-00"
+        ]
       },
       "choices": [
         {
           "id": "choice-0",
           "selection": {
-            "processors": ["cpu0-map-00", "cpu1-map-01"],
-            "dma_mappings": ["dma-map-00"]
+            "processors": [
+              "cpu0-map-00",
+              "cpu1-map-01"
+            ],
+            "dma_mappings": [
+              "dma-map-00"
+            ]
           }
         },
         {
           "id": "choice-1",
           "selection": {
-            "processors": ["decoder-cpu0-map-18", "decoder-cpu1-map-19"],
-            "dma_mappings": ["decoder-dma-map-07"]
+            "processors": [
+              "decoder-cpu0-map-18",
+              "decoder-cpu1-map-19"
+            ],
+            "dma_mappings": [
+              "decoder-dma-map-07"
+            ]
           }
         }
       ]

@@ -2,7 +2,13 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "title": "FujiMod firmware facts",
   "type": "object",
-  "required": ["$schema", "format_version", "firmware_id", "firmware_sha256", "facts"],
+  "required": [
+    "$schema",
+    "format_version",
+    "firmware_id",
+    "firmware_sha256",
+    "facts"
+  ],
   "properties": {
     "$schema": {
       "type": "string"
@@ -21,7 +27,9 @@
       "type": "object",
       "additionalProperties": {
         "type": "object",
-        "required": ["value"],
+        "required": [
+          "value"
+        ],
         "properties": {
           "value": {}
         },

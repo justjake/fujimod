@@ -6,7 +6,29 @@
   "manual": {
     "url": "https://dl.fujifilm-x.com/support/manual/x/fujifilm_x20_manual_en.pdf",
     "title": "FUJIFILM X20 Owner's Manual (BL02101-104 EN)",
-    "pages": [2, 3, 4, 9, 19, 23, 24, 25, 26, 27, 40, 42, 45, 49, 50, 51, 54, 57, 60, 63, 112]
+    "pages": [
+      2,
+      3,
+      4,
+      9,
+      19,
+      23,
+      24,
+      25,
+      26,
+      27,
+      40,
+      42,
+      45,
+      49,
+      50,
+      51,
+      54,
+      57,
+      60,
+      63,
+      112
+    ]
   },
   "analog_levels": 1024,
   "controls": {
@@ -15,7 +37,9 @@
       "location": "rear",
       "manual_page": 50,
       "face": "AE",
-      "connection_ids": ["controls-gpio-2-12"],
+      "connection_ids": [
+        "controls-gpio-2-12"
+      ],
       "assignable": false,
       "pushable": true,
       "default_function": "Choose a metering option; in playback, zoom in on the displayed picture.",
@@ -33,7 +57,9 @@
       "location": "rear",
       "manual_page": 40,
       "face": "AEL/AFL",
-      "connection_ids": ["controls-adc-9"],
+      "connection_ids": [
+        "controls-adc-9"
+      ],
       "assignable": true,
       "pushable": true,
       "default_function": "Lock exposure by default; the setup menu can set the button to lock focus or both exposure and focus.",
@@ -95,7 +121,9 @@
       "location": "rear",
       "manual_page": 9,
       "face": "DISP/BACK",
-      "connection_ids": ["controls-adc-9"],
+      "connection_ids": [
+        "controls-adc-9"
+      ],
       "assignable": false,
       "pushable": true,
       "default_function": "Cycle display modes or go back; hold to toggle silent mode.",
@@ -133,7 +161,9 @@
       "location": "top",
       "manual_page": 57,
       "face": "Fn",
-      "connection_ids": ["controls-gpio-4-4"],
+      "connection_ids": [
+        "controls-gpio-4-4"
+      ],
       "assignable": true,
       "pushable": true,
       "default_function": "Invoke the function assigned through the Fn BUTTON option in the shooting menu.",
@@ -151,7 +181,10 @@
       "location": "front",
       "manual_page": 51,
       "short_name": "FOCUS",
-      "connection_ids": ["controls-gpio-3-7", "controls-gpio-3-6"],
+      "connection_ids": [
+        "controls-gpio-3-7",
+        "controls-gpio-3-6"
+      ],
       "assignable": false,
       "pushable": false,
       "positions": [
@@ -215,7 +248,9 @@
       "location": "top",
       "manual_page": 27,
       "short_name": "MODE",
-      "connection_ids": ["controls-adc-3"],
+      "connection_ids": [
+        "controls-adc-3"
+      ],
       "assignable": false,
       "pushable": false,
       "positions": [
@@ -369,7 +404,9 @@
       "location": "rear",
       "manual_page": 19,
       "icon": "playback",
-      "connection_ids": ["controls-gpio-2-9"],
+      "connection_ids": [
+        "controls-gpio-2-9"
+      ],
       "assignable": false,
       "pushable": true,
       "default_function": "Press to start playback; press again or press the shutter button halfway to return to shooting mode. Hold for about a second to turn the camera on in playback mode.",
@@ -397,7 +434,10 @@
       "location": "rear",
       "manual_page": 3,
       "short_name": "SELECTOR",
-      "connection_ids": ["controls-adc-8", "controls-adc-9"],
+      "connection_ids": [
+        "controls-adc-8",
+        "controls-adc-9"
+      ],
       "assignable": false,
       "pushable": true,
       "default_function": "Up: AF in shooting or delete in playback; left: macro; right: flash; down: self-timer; center: MENU/OK.",
@@ -433,7 +473,10 @@
       "location": "top",
       "manual_page": 24,
       "short_name": "SHUTTER",
-      "connection_ids": ["controls-gpio-0-2", "controls-gpio-0-3"],
+      "connection_ids": [
+        "controls-gpio-0-2",
+        "controls-gpio-0-3"
+      ],
       "assignable": false,
       "pushable": true,
       "default_function": "Press halfway to set focus and exposure; press the rest of the way down to take a picture.",
@@ -475,7 +518,9 @@
       "location": "rear",
       "manual_page": 54,
       "face": "WB",
-      "connection_ids": ["controls-gpio-3-13"],
+      "connection_ids": [
+        "controls-gpio-3-13"
+      ],
       "assignable": false,
       "pushable": true,
       "default_function": "Choose a white balance setting.",

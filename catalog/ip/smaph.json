@@ -277,11 +277,16 @@
       "access": "read-write"
     }
   ],
-  "parameters": ["pixmap_readback"],
+  "parameters": [
+    "pixmap_readback"
+  ],
   "evidence": [
     {
       "kind": "inferred",
-      "firmware_ids": ["xt3-511", "xt5-431"]
+      "firmware_ids": [
+        "xt3-511",
+        "xt5-431"
+      ]
     }
   ]
 }

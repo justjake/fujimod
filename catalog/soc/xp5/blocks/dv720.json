@@ -13,7 +13,9 @@
   "evidence": [
     {
       "kind": "located",
-      "firmware_ids": ["x100vi-131"]
+      "firmware_ids": [
+        "x100vi-131"
+      ]
     }
   ]
 }

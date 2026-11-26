@@ -25,11 +25,18 @@
         "input_connection_id": "sensor-power-sense"
       }
     ],
-    "thermal_connection_ids": ["thermal-0"],
+    "thermal_connection_ids": [
+      "thermal-0"
+    ],
     "bus_drain": [
       {
         "address": 1744830464,
-        "processor_ids": ["core0", "core1", "core2", "core3"],
+        "processor_ids": [
+          "core0",
+          "core1",
+          "core2",
+          "core3"
+        ],
         "basis": "Provisional: the first address past the body's 1664 MiB DRAM catalog extent; the first strict boot stop names the stock drain read."
       }
     ]
@@ -86,7 +93,10 @@
       ]
     }
   ],
-  "parts": ["power-controller", "winbond-w35n01jw"],
+  "parts": [
+    "power-controller",
+    "winbond-w35n01jw"
+  ],
   "wiring": [
     {
       "source_id": "spi8",

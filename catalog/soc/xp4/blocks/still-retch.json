@@ -392,7 +392,9 @@
   "evidence": [
     {
       "kind": "located",
-      "firmware_ids": ["xt3-511"],
+      "firmware_ids": [
+        "xt3-511"
+      ],
       "addresses": [
         {
           "firmware_id": "xt3-511",

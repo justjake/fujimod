@@ -6,7 +6,11 @@
   "manual": {
     "url": "https://fujifilm-dsc.com/en/manual/gfx100s/about_this_camera/parts/index.html",
     "title": "FUJIFILM GFX100S Owner's Manual",
-    "pages": [2, 3, 8]
+    "pages": [
+      2,
+      3,
+      8
+    ]
   },
   "boot": {
     "service": {

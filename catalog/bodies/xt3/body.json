@@ -18,7 +18,11 @@
         "select_connection_id": "xt3-power-registers-select"
       }
     ],
-    "thermal_connection_ids": ["thermal-0", "thermal-8", "thermal-10"]
+    "thermal_connection_ids": [
+      "thermal-0",
+      "thermal-8",
+      "thermal-10"
+    ]
   },
   "connections": [
     {
@@ -211,7 +215,11 @@
       }
     }
   ],
-  "parts": ["xt3-serial-nor", "xt3-power-registers", "xt3-image-sensor"],
+  "parts": [
+    "xt3-serial-nor",
+    "xt3-power-registers",
+    "xt3-image-sensor"
+  ],
   "wiring": [
     {
       "source_id": "serial-flash",

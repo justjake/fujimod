@@ -14,7 +14,16 @@
   ],
   "device": {
     "model": "control_bus",
-    "offsets": [0, 4, 8, 16, 24],
-    "modes": [1, 9]
+    "offsets": [
+      0,
+      4,
+      8,
+      16,
+      24
+    ],
+    "modes": [
+      1,
+      9
+    ]
   }
 }

@@ -18,7 +18,11 @@
         "select_connection_id": "xs10-power-registers-select"
       }
     ],
-    "thermal_connection_ids": ["thermal-0", "thermal-8", "thermal-10"]
+    "thermal_connection_ids": [
+      "thermal-0",
+      "thermal-8",
+      "thermal-10"
+    ]
   },
   "connections": [
     {
@@ -72,7 +76,11 @@
       ]
     }
   ],
-  "parts": ["xs10-serial-nor", "xs10-power-registers", "xt3-image-sensor"],
+  "parts": [
+    "xs10-serial-nor",
+    "xs10-power-registers",
+    "xt3-image-sensor"
+  ],
   "wiring": [
     {
       "source_id": "serial-flash",

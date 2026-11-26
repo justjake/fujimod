@@ -19,12 +19,22 @@
           "device-8"
         ],
         "attachments": {
-          "serial_part": ["banked-lens"]
+          "serial_part": [
+            "banked-lens"
+          ]
         },
         "card_contacts": {
           "basis": "Declared catalog input.",
-          "detect": [12, 7, 0],
-          "write_protect": [12, 6, 1]
+          "detect": [
+            12,
+            7,
+            0
+          ],
+          "write_protect": [
+            12,
+            6,
+            1
+          ]
         },
         "controllers": {
           "control_bus0": {
@@ -32,32 +42,91 @@
               {
                 "address": 57,
                 "basis": "Declared catalog input.",
-                "commands": [229],
+                "commands": [
+                  229
+                ],
                 "prefix_mask": 224,
                 "prefix_value": 160,
                 "read_frames": [
-                  [19, "00"],
-                  [24, "0000"]
+                  [
+                    19,
+                    "00"
+                  ],
+                  [
+                    24,
+                    "0000"
+                  ]
                 ],
                 "register_mask": 31,
                 "write_masks": [
-                  [0, 255],
-                  [1, 255],
-                  [2, 255],
-                  [3, 255],
-                  [4, 255],
-                  [5, 255],
-                  [6, 255],
-                  [7, 255],
-                  [8, 255],
-                  [9, 255],
-                  [10, 255],
-                  [11, 255],
-                  [12, 255],
-                  [13, 255],
-                  [14, 255],
-                  [15, 255],
-                  [30, 255]
+                  [
+                    0,
+                    255
+                  ],
+                  [
+                    1,
+                    255
+                  ],
+                  [
+                    2,
+                    255
+                  ],
+                  [
+                    3,
+                    255
+                  ],
+                  [
+                    4,
+                    255
+                  ],
+                  [
+                    5,
+                    255
+                  ],
+                  [
+                    6,
+                    255
+                  ],
+                  [
+                    7,
+                    255
+                  ],
+                  [
+                    8,
+                    255
+                  ],
+                  [
+                    9,
+                    255
+                  ],
+                  [
+                    10,
+                    255
+                  ],
+                  [
+                    11,
+                    255
+                  ],
+                  [
+                    12,
+                    255
+                  ],
+                  [
+                    13,
+                    255
+                  ],
+                  [
+                    14,
+                    255
+                  ],
+                  [
+                    15,
+                    255
+                  ],
+                  [
+                    30,
+                    255
+                  ]
                 ]
               }
             ],
@@ -72,10 +141,24 @@
                 "address": 68,
                 "basis": "Declared catalog input.",
                 "status_hex": "0000",
-                "writable_registers": [1, 2, 3, 4, 6],
+                "writable_registers": [
+                  1,
+                  2,
+                  3,
+                  4,
+                  6
+                ],
                 "write_replies": [
-                  [2, 32, "0001"],
-                  [2, 64, "0000"]
+                  [
+                    2,
+                    32,
+                    "0001"
+                  ],
+                  [
+                    2,
+                    64,
+                    "0000"
+                  ]
                 ]
               }
             ],
@@ -86,46 +169,143 @@
             "profile": "declared-bus1-register-replies-unmeasured",
             "replies": {
               "pwic_address": 48,
-              "pwic_modes": [1],
-              "pwic_read_prefixes": [[32, "000000"]],
+              "pwic_modes": [
+                1
+              ],
+              "pwic_read_prefixes": [
+                [
+                  32,
+                  "000000"
+                ]
+              ],
               "pwic_values": [
-                [97, 0],
-                [32, 128]
+                [
+                  97,
+                  0
+                ],
+                [
+                  32,
+                  128
+                ]
               ],
               "pwic_write_masks": [
-                [97, 16],
-                [32, 2]
+                [
+                  97,
+                  16
+                ],
+                [
+                  32,
+                  2
+                ]
               ],
               "register_address": 10,
-              "register_modes": [1, 9],
+              "register_modes": [
+                1,
+                9
+              ],
               "register_values": [
-                [2, 0],
-                [5, 0],
-                [7, 0],
-                [8, 0],
-                [9, 0],
-                [10, 0],
-                [11, 0],
-                [12, 0],
-                [13, 0],
-                [14, 0],
-                [16, 0],
-                [17, 0],
-                [18, 0],
-                [19, 0]
+                [
+                  2,
+                  0
+                ],
+                [
+                  5,
+                  0
+                ],
+                [
+                  7,
+                  0
+                ],
+                [
+                  8,
+                  0
+                ],
+                [
+                  9,
+                  0
+                ],
+                [
+                  10,
+                  0
+                ],
+                [
+                  11,
+                  0
+                ],
+                [
+                  12,
+                  0
+                ],
+                [
+                  13,
+                  0
+                ],
+                [
+                  14,
+                  0
+                ],
+                [
+                  16,
+                  0
+                ],
+                [
+                  17,
+                  0
+                ],
+                [
+                  18,
+                  0
+                ],
+                [
+                  19,
+                  0
+                ]
               ],
               "register_write_masks": [
-                [7, 255],
-                [8, 255],
-                [9, 255],
-                [10, 255],
-                [11, 255],
-                [12, 255],
-                [13, 255],
-                [14, 255],
-                [16, 255],
-                [17, 255],
-                [18, 255]
+                [
+                  7,
+                  255
+                ],
+                [
+                  8,
+                  255
+                ],
+                [
+                  9,
+                  255
+                ],
+                [
+                  10,
+                  255
+                ],
+                [
+                  11,
+                  255
+                ],
+                [
+                  12,
+                  255
+                ],
+                [
+                  13,
+                  255
+                ],
+                [
+                  14,
+                  255
+                ],
+                [
+                  16,
+                  255
+                ],
+                [
+                  17,
+                  255
+                ],
+                [
+                  18,
+                  255
+                ]
               ]
             },
             "transfer_ticks": 4
@@ -138,19 +318,40 @@
           },
           "fe80": {
             "basis": "Declared catalog input.",
-            "periods": [12, 13, 16],
-            "upload_setup_phases": ["routed"]
+            "periods": [
+              12,
+              13,
+              16
+            ],
+            "upload_setup_phases": [
+              "routed"
+            ]
           },
           "usb": {
             "basis": "Declared catalog input.",
             "in_endpoints": [
-              [128, 0],
-              [130, 1],
-              [131, 2]
+              [
+                128,
+                0
+              ],
+              [
+                130,
+                1
+              ],
+              [
+                131,
+                2
+              ]
             ],
             "out_endpoints": [
-              [0, 0],
-              [1, 1]
+              [
+                0,
+                0
+              ],
+              [
+                1,
+                1
+              ]
             ],
             "packet_bytes": 512,
             "transfer_ticks": 4
@@ -2150,12 +2351,22 @@
           "device-8"
         ],
         "attachments": {
-          "serial_part": ["banked-lens"]
+          "serial_part": [
+            "banked-lens"
+          ]
         },
         "card_contacts": {
           "basis": "Declared catalog input.",
-          "detect": [12, 7, 0],
-          "write_protect": [12, 6, 1]
+          "detect": [
+            12,
+            7,
+            0
+          ],
+          "write_protect": [
+            12,
+            6,
+            1
+          ]
         },
         "controllers": {
           "control_bus0": {
@@ -2163,32 +2374,91 @@
               {
                 "address": 57,
                 "basis": "Declared catalog input.",
-                "commands": [229],
+                "commands": [
+                  229
+                ],
                 "prefix_mask": 224,
                 "prefix_value": 160,
                 "read_frames": [
-                  [19, "00"],
-                  [24, "0000"]
+                  [
+                    19,
+                    "00"
+                  ],
+                  [
+                    24,
+                    "0000"
+                  ]
                 ],
                 "register_mask": 31,
                 "write_masks": [
-                  [0, 255],
-                  [1, 255],
-                  [2, 255],
-                  [3, 255],
-                  [4, 255],
-                  [5, 255],
-                  [6, 255],
-                  [7, 255],
-                  [8, 255],
-                  [9, 255],
-                  [10, 255],
-                  [11, 255],
-                  [12, 255],
-                  [13, 255],
-                  [14, 255],
-                  [15, 255],
-                  [30, 255]
+                  [
+                    0,
+                    255
+                  ],
+                  [
+                    1,
+                    255
+                  ],
+                  [
+                    2,
+                    255
+                  ],
+                  [
+                    3,
+                    255
+                  ],
+                  [
+                    4,
+                    255
+                  ],
+                  [
+                    5,
+                    255
+                  ],
+                  [
+                    6,
+                    255
+                  ],
+                  [
+                    7,
+                    255
+                  ],
+                  [
+                    8,
+                    255
+                  ],
+                  [
+                    9,
+                    255
+                  ],
+                  [
+                    10,
+                    255
+                  ],
+                  [
+                    11,
+                    255
+                  ],
+                  [
+                    12,
+                    255
+                  ],
+                  [
+                    13,
+                    255
+                  ],
+                  [
+                    14,
+                    255
+                  ],
+                  [
+                    15,
+                    255
+                  ],
+                  [
+                    30,
+                    255
+                  ]
                 ]
               }
             ],
@@ -2203,10 +2473,24 @@
                 "address": 68,
                 "basis": "Declared catalog input.",
                 "status_hex": "0000",
-                "writable_registers": [1, 2, 3, 4, 6],
+                "writable_registers": [
+                  1,
+                  2,
+                  3,
+                  4,
+                  6
+                ],
                 "write_replies": [
-                  [2, 32, "0001"],
-                  [2, 64, "0000"]
+                  [
+                    2,
+                    32,
+                    "0001"
+                  ],
+                  [
+                    2,
+                    64,
+                    "0000"
+                  ]
                 ]
               }
             ],
@@ -2220,8 +2504,14 @@
           },
           "fe80": {
             "basis": "Declared catalog input.",
-            "periods": [12, 13, 16],
-            "upload_setup_phases": ["routed"]
+            "periods": [
+              12,
+              13,
+              16
+            ],
+            "upload_setup_phases": [
+              "routed"
+            ]
           }
         },
         "dram_basis": "Declared catalog input.",
@@ -2435,20 +2725,104 @@
             "basis": "Declared synthetic X-Trans input with fixed inverse-gain RGB normalization. CFA phase, spectral response, exposure and physical cadence are unmeasured on this body.",
             "black": 0,
             "full_scale": 16380,
-            "initial_rgb": [128, 128, 128],
+            "initial_rgb": [
+              128,
+              128,
+              128
+            ],
             "processing_cfa": [
-              0, 2, 1, 2, 0, 1, 1, 1, 0, 1, 1, 2, 1, 1, 2, 1, 1, 0, 2, 0, 1, 0, 2, 1, 1, 1, 2, 1, 1,
-              0, 1, 1, 0, 1, 1, 2
+              0,
+              2,
+              1,
+              2,
+              0,
+              1,
+              1,
+              1,
+              0,
+              1,
+              1,
+              2,
+              1,
+              1,
+              2,
+              1,
+              1,
+              0,
+              2,
+              0,
+              1,
+              0,
+              2,
+              1,
+              1,
+              1,
+              2,
+              1,
+              1,
+              0,
+              1,
+              1,
+              0,
+              1,
+              1,
+              2
             ],
-            "reference_white": [568, 302, 558],
+            "reference_white": [
+              568,
+              302,
+              558
+            ],
             "sensor_cfa": [
-              1, 1, 2, 1, 1, 0, 1, 1, 0, 1, 1, 2, 0, 2, 1, 2, 0, 1, 1, 1, 0, 1, 1, 2, 1, 1, 2, 1, 1,
-              0, 2, 0, 1, 0, 2, 1
+              1,
+              1,
+              2,
+              1,
+              1,
+              0,
+              1,
+              1,
+              0,
+              1,
+              1,
+              2,
+              0,
+              2,
+              1,
+              2,
+              0,
+              1,
+              1,
+              1,
+              0,
+              1,
+              1,
+              2,
+              1,
+              1,
+              2,
+              1,
+              1,
+              0,
+              2,
+              0,
+              1,
+              0,
+              2,
+              1
             ],
-            "sensor_image_area": [0, 62, 4992, 3300]
+            "sensor_image_area": [
+              0,
+              62,
+              4992,
+              3300
+            ]
           },
           "sensor_capture": {
-            "cfa_origin": [0, 62],
+            "cfa_origin": [
+              0,
+              62
+            ],
             "dma_ticks": 1000,
             "height": 3362,
             "period_ticks": 1200000,
@@ -2776,5 +3150,8 @@
       ]
     }
   ],
-  "parts": ["sd-card", "banked-lens"]
+  "parts": [
+    "sd-card",
+    "banked-lens"
+  ]
 }

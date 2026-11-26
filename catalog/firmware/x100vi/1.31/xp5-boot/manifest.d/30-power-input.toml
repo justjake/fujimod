@@ -27,10 +27,7 @@ kind = "gpio"
 # model (+8 enable, +4 data) read every pin as an output once a reset stage had set +8 on all
 # boot's frames are the same under either model.
 pad_model = "data-latch"
-input_irqs = [
-  { port = 0, pin = 0, line = 116, active_high = false },
-  { port = 0, pin = 1, line = 117, active_high = false },
-]
+input_irqs = [{ port = 0, pin = 0, line = 116, active_high = false }, { port = 0, pin = 1, line = 117, active_high = false }]
 # EL1 handoff assumption: calibration CS12.8 is initially inactive, power
 # CS12.10 low/inactive. These latch levels are not a captured reset state.
 initial_outputs = [{ port = 12, levels = 0x100 }]
