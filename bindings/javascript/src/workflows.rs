@@ -486,6 +486,7 @@ fn mapped_error(failure: bulk::MappedFailure) -> JsValue {
     let context = failure.to_string();
     let bulk::MappedFailure {
         phase,
+        space,
         address,
         length,
         source,
@@ -498,6 +499,7 @@ fn mapped_error(failure: bulk::MappedFailure) -> JsValue {
     property(&value, "mappedContext", context);
     property(&value, "mappedPhase", format!("{phase:?}"));
     property(&value, "mappedAddress", address as f64);
+    property(&value, "mappedAddressSpace", space.name().to_string());
     property(&value, "mappedLength", length as f64);
     if let Some(cleanup) = cleanup {
         property(&value, "mappedCleanup", cleanup.to_string());

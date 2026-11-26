@@ -1,11 +1,8 @@
 use super::*;
-use crate::bulk::{
-    tests as api,
-    BulkError, MappedPhase,
-};
+use crate::bulk::{BulkError, MappedPhase, tests as api};
 use fujimod_catalog::capture::{
-    FlashCodeRange, FlashControl, FlashDevice, FlashRange, FlashReader, FlashStateCheck,
-    FlashUpdateImage, FLASH_SCHEMA_URI,
+    FLASH_SCHEMA_URI, FlashCodeRange, FlashControl, FlashDevice, FlashRange, FlashReader,
+    FlashStateCheck, FlashUpdateImage,
 };
 use fujimod_usb::{ff80::SessionState, testing::Exchange as E};
 use futures_lite::future::block_on;
@@ -117,11 +114,7 @@ fn run(
     session: &mut Session,
     flash: &FirmwareFlash,
     target: BulkRange,
-) -> (
-    bulk::Result<Backup>,
-    Vec<(u64, Vec<u8>)>,
-    Vec<(u64, u64)>,
-) {
+) -> (bulk::Result<Backup>, Vec<(u64, Vec<u8>)>, Vec<(u64, u64)>) {
     let bulk = api::query_camera();
     let mut chunks = Vec::new();
     let mut progress = Vec::new();
@@ -190,6 +183,7 @@ fn mapped_public_read_range_bounds_and_missing_window_are_receipts() {
         let receipt = failure(&error);
         assert_eq!(receipt.phase, MappedPhase::Bounds);
         assert_eq!(receipt.address, target.address);
+        assert_eq!(receipt.space, crate::bulk::MappedAddressSpace::FlashOffset);
         assert_eq!(receipt.length, target.size);
         assert!(receipt.cleanup.is_none());
         assert_eq!(session.state(), SessionState::Ready);
@@ -213,6 +207,7 @@ fn mapped_public_read_range_bounds_and_missing_window_are_receipts() {
     let receipt = failure(&error);
     assert_eq!(receipt.phase, MappedPhase::Window);
     assert_eq!(receipt.address, 0);
+    assert_eq!(receipt.space, crate::bulk::MappedAddressSpace::FlashOffset);
     assert_eq!(receipt.length, 4);
     assert!(receipt.source.to_string().contains("metadata differs"));
     assert_eq!(session.state(), SessionState::Ready);
@@ -243,6 +238,7 @@ fn mapped_public_backup_missing_window_is_a_mapped_receipt() {
     let receipt = failure(&error);
     assert_eq!(receipt.phase, MappedPhase::Window);
     assert_eq!(receipt.address, 0);
+    assert_eq!(receipt.space, crate::bulk::MappedAddressSpace::FlashOffset);
     assert_eq!(receipt.length, flash.window.size);
     assert!(receipt.source.to_string().contains("metadata differs"));
     assert_eq!(session.state(), SessionState::Ready);
@@ -260,6 +256,7 @@ fn mapped_control_read_and_hash_mismatch_record_control_scope() {
     let receipt = failure(&error);
     assert_eq!(receipt.phase, MappedPhase::ControlHash);
     assert_eq!(receipt.address, 0x1000);
+    assert_eq!(receipt.space, crate::bulk::MappedAddressSpace::Cpu);
     assert_eq!(receipt.length, CONTROL.len() as u64);
     assert!(receipt.source.to_string().contains("control bytes differ"));
     assert!(chunks.is_empty());
@@ -278,6 +275,7 @@ fn mapped_control_read_and_hash_mismatch_record_control_scope() {
     let receipt = failure(&error);
     assert_eq!(receipt.phase, MappedPhase::ControlRead);
     assert_eq!(receipt.address, 0x1000);
+    assert_eq!(receipt.space, crate::bulk::MappedAddressSpace::Cpu);
     assert_eq!(receipt.length, CONTROL.len() as u64);
     assert!(matches!(&*receipt.source, BulkError::Usb(_)));
     let cleanup = receipt.cleanup.as_ref().expect("cleanup receipt");
@@ -325,6 +323,7 @@ fn mapped_cancellations_fence_restore_and_record_failing_phase_address_length() 
     let receipt = failure(&error);
     assert_eq!(receipt.phase, MappedPhase::ControlRead);
     assert_eq!(receipt.address, 0x1000);
+    assert_eq!(receipt.space, crate::bulk::MappedAddressSpace::Cpu);
     assert_eq!(receipt.length, CONTROL.len() as u64);
     let cleanup = receipt.cleanup.as_ref().expect("cleanup receipt");
     assert!(cleanup.to_string().contains("not restored"));
@@ -348,6 +347,7 @@ fn mapped_cancellations_fence_restore_and_record_failing_phase_address_length() 
     let receipt = failure(&error);
     assert_eq!(receipt.phase, MappedPhase::Piece);
     assert_eq!(receipt.address, 0x1020);
+    assert_eq!(receipt.space, crate::bulk::MappedAddressSpace::Cpu);
     assert_eq!(receipt.length, 32);
     let cleanup = receipt.cleanup.as_ref().expect("cleanup receipt");
     assert!(cleanup.to_string().contains("not restored"));
@@ -388,6 +388,7 @@ fn mapped_public_restore_only_failure_reports_saved_publication_words() {
     let receipt = failure(&error);
     assert_eq!(receipt.phase, MappedPhase::Restore);
     assert_eq!(receipt.address, 0x1200);
+    assert_eq!(receipt.space, crate::bulk::MappedAddressSpace::Cpu);
     assert_eq!(receipt.length, 8);
     assert!(matches!(&*receipt.source, BulkError::Usb(_)));
     assert!(receipt.cleanup.is_none());
@@ -425,6 +426,7 @@ fn mapped_public_qualification_cancellation_keeps_typed_usb_cause_and_withheld_r
     let receipt = failure(&error);
     assert_eq!(receipt.phase, MappedPhase::Prepare);
     assert_eq!(receipt.address, 0x1000);
+    assert_eq!(receipt.space, crate::bulk::MappedAddressSpace::Cpu);
     assert_eq!(receipt.length, 0x1000);
     assert!(
         matches!(&*receipt.source, BulkError::Usb(_)),
@@ -466,6 +468,7 @@ fn mapped_public_transfer_cancellation_keeps_typed_usb_cause_and_withheld_restor
     let receipt = failure(&error);
     assert_eq!(receipt.phase, MappedPhase::Piece);
     assert_eq!(receipt.address, 0x1020);
+    assert_eq!(receipt.space, crate::bulk::MappedAddressSpace::Cpu);
     assert_eq!(receipt.length, 32);
     assert!(
         matches!(&*receipt.source, BulkError::Usb(_)),
