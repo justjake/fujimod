@@ -543,39 +543,6 @@ impl Driver<'_> {
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn the_installer_run_keeps_the_callers_settings_and_asks_for_stock_menus() {
-        let files = vec![
-            (
-                "FUJIMOD/SETTINGS.JSN".to_owned(),
-                br#"{"menu":{"style":"fujimod","quick_start":10},"af":"kept"}"#.to_vec(),
-            ),
-            ("FFBOOT.BIN".to_owned(), vec![1, 2]),
-        ];
-        let styled = stock_menus(&files).unwrap();
-        assert_eq!(
-            styled
-                .iter()
-                .map(|(name, _)| name.as_str())
-                .collect::<Vec<_>>(),
-            ["FFBOOT.BIN", "FUJIMOD/SETTINGS.JSN"]
-        );
-        let settings: Value = serde_json::from_slice(&styled[1].1).unwrap();
-        assert_eq!(settings["menu"]["style"], "stock");
-        assert_eq!(settings["menu"]["quick_start"], 10);
-        assert_eq!(settings["af"], "kept");
-
-        let added = stock_menus(&[("FFBOOT.BIN".to_owned(), vec![1, 2])]).unwrap();
-        assert_eq!(added.len(), 2);
-        let settings: Value = serde_json::from_slice(&added[1].1).unwrap();
-        assert_eq!(settings["menu"]["style"], "stock");
-    }
-}
-
 /// The internal flash an autostart open starts from, installing it once.
 pub(crate) fn flash(
     state: &fujimod_emulator_camera::StateDir,
@@ -639,4 +606,37 @@ fn install_flash(
     )?;
     let nand = library.nand_boot(&request.firmware)?;
     Ok(install(&mut opened, nand)?)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn the_installer_run_keeps_the_callers_settings_and_asks_for_stock_menus() {
+        let files = vec![
+            (
+                "FUJIMOD/SETTINGS.JSN".to_owned(),
+                br#"{"menu":{"style":"fujimod","quick_start":10},"af":"kept"}"#.to_vec(),
+            ),
+            ("FFBOOT.BIN".to_owned(), vec![1, 2]),
+        ];
+        let styled = stock_menus(&files).unwrap();
+        assert_eq!(
+            styled
+                .iter()
+                .map(|(name, _)| name.as_str())
+                .collect::<Vec<_>>(),
+            ["FFBOOT.BIN", "FUJIMOD/SETTINGS.JSN"]
+        );
+        let settings: Value = serde_json::from_slice(&styled[1].1).unwrap();
+        assert_eq!(settings["menu"]["style"], "stock");
+        assert_eq!(settings["menu"]["quick_start"], 10);
+        assert_eq!(settings["af"], "kept");
+
+        let added = stock_menus(&[("FFBOOT.BIN".to_owned(), vec![1, 2])]).unwrap();
+        assert_eq!(added.len(), 2);
+        let settings: Value = serde_json::from_slice(&added[1].1).unwrap();
+        assert_eq!(settings["menu"]["style"], "stock");
+    }
 }
