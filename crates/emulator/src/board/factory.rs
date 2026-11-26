@@ -1,6 +1,6 @@
 //! Checked construction and memory ownership for every execution backend.
-use fujimod_catalog_configuration::RunEngine;
 use super::{Board, InterruptMap, bus::Bus, set};
+use fujimod_catalog_configuration::RunEngine;
 use fujimod_emulator_cpu::{Cpu, Model, Register, memory::Backing, timeline::Ratio};
 use fujimod_emulator_cpu_unicorn::Library;
 use std::ptr::NonNull;
@@ -150,9 +150,18 @@ pub fn translation_cache_size_bytes(processors: usize) -> Result<u32, String> {
     }
 }
 /// Reject configurations whose selected engine cannot run the requested processors.
-pub fn validate_engine(engine: RunEngine, models: impl IntoIterator<Item = Model>) -> Result<(), String> {
-    if engine == RunEngine::Hypervisor && models.into_iter().any(|model| !matches!(model, Model::ArmV8A | Model::CortexM4)) {
-        return Err("Hypervisor boards support AArch64 cores and Unicorn M-profile companions".into());
+pub fn validate_engine(
+    engine: RunEngine,
+    models: impl IntoIterator<Item = Model>,
+) -> Result<(), String> {
+    if engine == RunEngine::Hypervisor
+        && models
+            .into_iter()
+            .any(|model| !matches!(model, Model::ArmV8A | Model::CortexM4))
+    {
+        return Err(
+            "Hypervisor boards support AArch64 cores and Unicorn M-profile companions".into(),
+        );
     }
     Ok(())
 }
@@ -164,7 +173,10 @@ pub(super) struct Engines {
 }
 impl Engines {
     fn new(graph: &Graph, options: &Options) -> Result<Self, String> {
-        validate_engine(options.engine, graph.processors.iter().map(|processor| processor.model))?;
+        validate_engine(
+            options.engine,
+            graph.processors.iter().map(|processor| processor.model),
+        )?;
         let need_uc = graph
             .processors
             .iter()
@@ -577,7 +589,8 @@ mod peripheral_page_tests {
             processors: vec![Processor {
                 model: Model::ArmV8A,
                 registers: vec![],
-                released: true, parked_until_sgi: false,
+                released: true,
+                parked_until_sgi: false,
                 mprofile: None,
                 rprofile: None,
             }],

@@ -78,15 +78,14 @@ impl RawView<'_> {
     /// Interior CFA positions are wrapped into the validated raster before
     /// their byte offsets are formed, so the pair lies inside `bytes`.
     #[inline(always)]
-    unsafe fn sample_from_offset_unchecked<const PACKED12: bool>(
-        &self,
-        i: usize,
-        x: usize,
-    ) -> u16 {
+    unsafe fn sample_from_offset_unchecked<const PACKED12: bool>(&self, i: usize, x: usize) -> u16 {
         // SAFETY: the caller passes an offset derived from a validated raster
         // column and row. Both bytes belong to that sample.
         let v = u16::from_le_bytes(unsafe {
-            [*self.bytes.get_unchecked(i), *self.bytes.get_unchecked(i + 1)]
+            [
+                *self.bytes.get_unchecked(i),
+                *self.bytes.get_unchecked(i + 1),
+            ]
         });
         if !PACKED12 {
             v
@@ -157,8 +156,12 @@ impl Cfa {
     /// CFA phase at the first sample of a programmed sensor window.
     pub fn window(&self, left: usize, top: usize) -> Self {
         let (left, top) = (left % 6, top % 6);
-        Self::new((0..36).map(|i| self.color(left + i % 6, top + i / 6) as u8).collect())
-            .expect("windowing preserves a complete CFA tile")
+        Self::new(
+            (0..36)
+                .map(|i| self.color(left + i % 6, top + i / 6) as u8)
+                .collect(),
+        )
+        .expect("windowing preserves a complete CFA tile")
     }
     #[inline]
     pub fn rgb(&self, raw: &RawView<'_>, x: usize, y: usize) -> [u16; 3] {
@@ -493,10 +496,11 @@ impl Cfa {
                     let positions = self.sample_positions_from_row(raw, nearest_row, xs[x], yy);
                     let w = std::array::from_fn(|c| {
                         let (sx, sy) = positions[c];
-                        let value =
-                            (u64::from(RawView::u14(PACKED12, raw.sample_as::<PACKED12>(sx, sy)).saturating_sub(black))
-                                * exposure_gains[c])
-                                >> 16;
+                        let value = (u64::from(
+                            RawView::u14(PACKED12, raw.sample_as::<PACKED12>(sx, sy))
+                                .saturating_sub(black),
+                        ) * exposure_gains[c])
+                            >> 16;
                         ((value * u64::from(spatial_gain(sx, sy))) >> 11).min(16383) as u16
                     });
                     pixels.develop(w)

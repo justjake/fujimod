@@ -608,7 +608,13 @@ impl SdHost {
     /// reads, while physical low RAM may be shadowed by ROM). Outside the
     /// alias, only the ROM protocol refuses; others address DRAM directly.
     /// `high` supplies DMA address bits 34..32 (XP5 address-high word).
-    fn physical(&self, high: u32, address: u32, len: usize, keep_alias: bool) -> Result<u64, String> {
+    fn physical(
+        &self,
+        high: u32,
+        address: u32,
+        len: usize,
+        keep_alias: bool,
+    ) -> Result<u64, String> {
         let a = u64::from(high) << 32 | u64::from(address);
         let alias = self.options.dram_alias && (0x40000000..0x60000000).contains(&a);
         if self.options.protocol == Protocol::Rom && !alias {
@@ -953,8 +959,13 @@ impl SdHost {
         if self.regs.get(0x3e) & 0x107 == 0x107 {
             return Err("SD command with UHS-II mode selected".into());
         }
-        let stock_clock = |steps: &SpeedDividers| self.contacts.interface_clock() == steps.interface;
-        if let Some(steps) = self.options.speed_dividers.filter(|steps| !rom && stock_clock(steps)) {
+        let stock_clock =
+            |steps: &SpeedDividers| self.contacts.interface_clock() == steps.interface;
+        if let Some(steps) = self
+            .options
+            .speed_dividers
+            .filter(|steps| !rom && stock_clock(steps))
+        {
             let divider = (clock >> 8 & 0xff | (clock >> 6 & 3) << 8) as u16;
             let (mode, step) = if self.access_mode == 1 {
                 ("high speed", steps.high_speed)
@@ -1026,7 +1037,12 @@ impl SdHost {
                 self.regs.get(0x34) & self.regs.get(0x38)
             };
             if r.transfer == Transfer::Dma {
-                self.physical(r.address_high, r.address, r.quantity, rom || r.command == 17)?;
+                self.physical(
+                    r.address_high,
+                    r.address,
+                    r.quantity,
+                    rom || r.command == 17,
+                )?;
                 let boundary = 4096usize << (self.regs.get(4) >> 12 & 7);
                 if !rom
                     && r.quantity > boundary - r.address as usize % boundary
@@ -1054,11 +1070,7 @@ impl SdHost {
             }
         }
         let ticks = self.delay(cx.now(), &r, 0, false);
-        r.due = Some(
-            cx.now()
-                .checked_add(ticks)
-                .ok_or("SD deadline overflow")?,
-        );
+        r.due = Some(cx.now().checked_add(ticks).ok_or("SD deadline overflow")?);
         self.select_fault(&mut r)?;
         self.regs.put_word(12, word);
         self.request = Some(r);
@@ -1538,11 +1550,7 @@ impl SdHost {
             let r = self.request.take().unwrap();
             let ticks = self.delay(cx.now(), &r, 2, false);
             let mut r = r;
-            r.due = Some(
-                cx.now()
-                    .checked_add(ticks)
-                    .ok_or("SD deadline overflow")?,
-            );
+            r.due = Some(cx.now().checked_add(ticks).ok_or("SD deadline overflow")?);
             self.request = Some(r);
             return Ok(());
         }
@@ -2079,14 +2087,24 @@ mod tests {
     #[test]
     fn command_refuses_a_clock_faster_than_the_declared_stock_step() {
         let mut m = host(Protocol::Sdhc);
-        m.options.speed_dividers = Some(SpeedDividers { interface: 2, default_speed: 4, high_speed: 2 });
+        m.options.speed_dividers = Some(SpeedDividers {
+            interface: 2,
+            default_speed: 4,
+            high_speed: 2,
+        });
         let mut h = Ram::new(0x10000);
         setup(&mut m, &mut h);
         // Another interface clock configuration: no step is known, any divider runs.
         command(&mut m, &mut h, 0, 0);
         due(&mut m, &mut h);
         m.contacts.select_interface_clock(2);
-        for (clock, accepted) in [(0x0005, false), (0x0105, false), (0x0205, false), (0x0405, true), (0xfa05, true)] {
+        for (clock, accepted) in [
+            (0x0005, false),
+            (0x0105, false),
+            (0x0205, false),
+            (0x0405, true),
+            (0xfa05, true),
+        ] {
             // The card clock stops before its divider changes.
             write(&mut m, &mut h, 0x2c, 2, 1);
             write(&mut m, &mut h, 0x2c, 2, clock & !4);
@@ -2713,7 +2731,10 @@ mod tests {
         m.options.dram_alias = false;
         assert_eq!(m.physical(0, 0x40001000, 512, true).unwrap(), 0x40001000);
         assert_eq!(m.physical(0, 0x40001000, 512, false).unwrap(), 0x40001000);
-        assert_eq!(m.physical(1, 0xd0ec6bc0, 512, false).unwrap_err(), "SD DMA exceeds aligned DRAM: address 0x1d0ec6bc0 (physical 0x1d0ec6bc0) length 0x200");
+        assert_eq!(
+            m.physical(1, 0xd0ec6bc0, 512, false).unwrap_err(),
+            "SD DMA exceeds aligned DRAM: address 0x1d0ec6bc0 (physical 0x1d0ec6bc0) length 0x200"
+        );
         m.options.ram_banks = vec![(0x1c0000000, 0x40000000)];
         assert_eq!(m.physical(1, 0xd0ec6bc0, 512, false).unwrap(), 0x1d0ec6bc0);
         assert!(m.physical(1, 0xfffffe00, 0x400, false).is_err());

@@ -152,7 +152,13 @@ impl DisplayPipe {
         Ok(())
     }
 
-    fn put(&mut self, cx: &mut Cx<'_>, block: usize, word: usize, value: u32) -> Result<(), String> {
+    fn put(
+        &mut self,
+        cx: &mut Cx<'_>,
+        block: usize,
+        word: usize,
+        value: u32,
+    ) -> Result<(), String> {
         let now = cx.now();
         match (block, word) {
             (0, 0) => {
@@ -256,10 +262,14 @@ impl Device for DisplayPipe {
     }
 
     fn next_deadline(&self, _now: u64) -> Option<u64> {
-        [self.state.layer_due, self.state.update_due, self.state.frame_due]
-            .into_iter()
-            .flatten()
-            .min()
+        [
+            self.state.layer_due,
+            self.state.update_due,
+            self.state.frame_due,
+        ]
+        .into_iter()
+        .flatten()
+        .min()
     }
 
     fn advance(&mut self, cx: &mut Cx<'_>) {
@@ -395,8 +405,35 @@ mod tests {
             active_ticks: 100,
             blank_ticks: 20,
         };
-        assert!(DisplayPipe::new(Options { base: BASE + 4, ..options }, wiring()).is_err());
-        assert!(DisplayPipe::new(Options { reset_ticks: 0, ..options }, wiring()).is_err());
-        assert!(DisplayPipe::new(Options { blank_ticks: 0, ..options }, wiring()).is_err());
+        assert!(
+            DisplayPipe::new(
+                Options {
+                    base: BASE + 4,
+                    ..options
+                },
+                wiring()
+            )
+            .is_err()
+        );
+        assert!(
+            DisplayPipe::new(
+                Options {
+                    reset_ticks: 0,
+                    ..options
+                },
+                wiring()
+            )
+            .is_err()
+        );
+        assert!(
+            DisplayPipe::new(
+                Options {
+                    blank_ticks: 0,
+                    ..options
+                },
+                wiring()
+            )
+            .is_err()
+        );
     }
 }

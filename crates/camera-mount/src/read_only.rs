@@ -1,6 +1,6 @@
 //! A device that refuses every change to the camera's SD card.
 
-use crate::{display, DirectoryEntry, Device, Result};
+use crate::{Device, DirectoryEntry, Result, display};
 
 /// Passes reads to `D` and refuses writes, creation, deletion and truncation
 /// with `EROFS`, so neither a user nor the host's own metadata writes can

@@ -119,20 +119,30 @@ impl Core {
     }
 
     /// Validate detached architectural state for the fresh processor owner.
-    pub fn import_owned_snapshot(&self, owner: &Owner, bytes: &[u8]) -> Result<Box<dyn Snapshot>, String> {
+    pub fn import_owned_snapshot(
+        &self,
+        owner: &Owner,
+        bytes: &[u8],
+    ) -> Result<Box<dyn Snapshot>, String> {
         self.check_translation_owner(owner)?;
         self.check_tlbi_ready()?;
         durable::import(self, bytes)
     }
 
     /// Restore through the owner so it can settle address-translation state.
-    pub fn restore_owned_snapshot(&self, owner: &Owner, snapshot: &dyn Snapshot) -> Result<(), String> {
+    pub fn restore_owned_snapshot(
+        &self,
+        owner: &Owner,
+        snapshot: &dyn Snapshot,
+    ) -> Result<(), String> {
         self.check_translation_owner(owner)?;
         self.check_tlbi_ready()?;
         if snapshot.owner() != self.identity {
             return Err("CPU snapshot belongs to a different processor".into());
         }
-        let imported = snapshot.as_any().downcast_ref::<durable::Imported>()
+        let imported = snapshot
+            .as_any()
+            .downcast_ref::<durable::Imported>()
             .ok_or("translation owner requires a portable CPU snapshot")?;
         imported.restore(self)?;
         self.flush_local_translations(owner)

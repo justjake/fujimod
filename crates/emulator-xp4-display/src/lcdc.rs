@@ -107,13 +107,21 @@ impl Lcdc {
         if self.picture.is_none() && self.video.is_none() {
             return Ok(());
         }
-        let Some(output)=fujimod_framebuffer_xp4::decode(&self.state.regs,self.picture,self.video)? else {return self.status(cx,false,0,None,0)};
-        let (width,height)=(output.width,output.height);
-        let planes:Vec<_>=output.layers.iter().map(|layer|layer.plane).collect();
-        let top=planes.last().unwrap();
-        let source=top.address;
-        let format=if top.order==PixelOrder::YyCbCr{"yycbcr422"}else{"abgr8888-straight"};
-        let rgba=output.render(|a,n|cx.ram_bytes(a,n))?;
+        let Some(output) =
+            fujimod_framebuffer_xp4::decode(&self.state.regs, self.picture, self.video)?
+        else {
+            return self.status(cx, false, 0, None, 0);
+        };
+        let (width, height) = (output.width, output.height);
+        let planes: Vec<_> = output.layers.iter().map(|layer| layer.plane).collect();
+        let top = planes.last().unwrap();
+        let source = top.address;
+        let format = if top.order == PixelOrder::YyCbCr {
+            "yycbcr422"
+        } else {
+            "abgr8888-straight"
+        };
+        let rgba = output.render(|a, n| cx.ram_bytes(a, n))?;
         if self.state.last_image.as_ref() != Some(&(width, height, rgba.clone())) {
             self.state.sequence += 1;
             self.state.last_image = Some((width, height, rgba.clone()));
@@ -151,23 +159,36 @@ struct SavedLcdc {
 }
 
 impl SavedLcdc {
-    fn decode(display: &Lcdc, data: &fujimod_emulator_devices::checkpoint::Checkpoint) -> Result<State, String> {
+    fn decode(
+        display: &Lcdc,
+        data: &fujimod_emulator_devices::checkpoint::Checkpoint,
+    ) -> Result<State, String> {
         let saved: Self = data.decode(display.name())?;
-        if (saved.base, saved.ticks_per_pixel, saved.irqs) != (display.base, display.ticks_per_pixel, display.irqs)
+        if (saved.base, saved.ticks_per_pixel, saved.irqs)
+            != (display.base, display.ticks_per_pixel, display.irqs)
             || data.blobs().len() != usize::from(saved.image_size.is_some())
         {
             return Err("XP4 LCDC checkpoint wiring differs".into());
         }
-        let last_image = saved.image_size.map(|(width, height)| {
-            let length = usize::try_from(u64::from(width) * u64::from(height)).ok().and_then(|n| n.checked_mul(4));
-            if length != Some(data.blobs()[0].len()) {
-                return Err("XP4 LCDC checkpoint image size differs".to_owned());
-            }
-            Ok((width, height, data.blobs()[0].to_vec()))
-        }).transpose()?;
+        let last_image = saved
+            .image_size
+            .map(|(width, height)| {
+                let length = usize::try_from(u64::from(width) * u64::from(height))
+                    .ok()
+                    .and_then(|n| n.checked_mul(4));
+                if length != Some(data.blobs()[0].len()) {
+                    return Err("XP4 LCDC checkpoint image size differs".to_owned());
+                }
+                Ok((width, height, data.blobs()[0].to_vec()))
+            })
+            .transpose()?;
         Ok(State {
-            regs: saved.regs, deadline: saved.deadline, phase: saved.phase,
-            frames: saved.frames, sequence: saved.sequence, last_image,
+            regs: saved.regs,
+            deadline: saved.deadline,
+            phase: saved.phase,
+            frames: saved.frames,
+            sequence: saved.sequence,
+            last_image,
         })
     }
 }
@@ -297,18 +318,36 @@ impl Device for Lcdc {
     fn checkpoint(&self) -> Result<fujimod_emulator_devices::checkpoint::Checkpoint, String> {
         let image = self.state.last_image.as_ref();
         let saved = SavedLcdc {
-            base: self.base, ticks_per_pixel: self.ticks_per_pixel, irqs: self.irqs,
-            regs: self.state.regs.clone(), deadline: self.state.deadline, phase: self.state.phase,
-            frames: self.state.frames, sequence: self.state.sequence,
+            base: self.base,
+            ticks_per_pixel: self.ticks_per_pixel,
+            irqs: self.irqs,
+            regs: self.state.regs.clone(),
+            deadline: self.state.deadline,
+            phase: self.state.phase,
+            frames: self.state.frames,
+            sequence: self.state.sequence,
             image_size: image.map(|(width, height, _)| (*width, *height)),
         };
-        Ok(fujimod_emulator_devices::checkpoint::Checkpoint::encode(self.name(), &saved)?
-            .with_blobs(image.into_iter().map(|(_, _, bytes)| std::sync::Arc::from(bytes.as_slice())).collect()))
+        Ok(
+            fujimod_emulator_devices::checkpoint::Checkpoint::encode(self.name(), &saved)?
+                .with_blobs(
+                    image
+                        .into_iter()
+                        .map(|(_, _, bytes)| std::sync::Arc::from(bytes.as_slice()))
+                        .collect(),
+                ),
+        )
     }
-    fn validate_checkpoint(&self, data: &fujimod_emulator_devices::checkpoint::Checkpoint) -> Result<(), String> {
+    fn validate_checkpoint(
+        &self,
+        data: &fujimod_emulator_devices::checkpoint::Checkpoint,
+    ) -> Result<(), String> {
         self.validate_state(&SavedLcdc::decode(self, data)?)
     }
-    fn restore_checkpoint(&mut self, data: &fujimod_emulator_devices::checkpoint::Checkpoint) -> Result<(), String> {
+    fn restore_checkpoint(
+        &mut self,
+        data: &fujimod_emulator_devices::checkpoint::Checkpoint,
+    ) -> Result<(), String> {
         let state = SavedLcdc::decode(self, data)?;
         self.validate_state(&state)?;
         self.state = state;

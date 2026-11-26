@@ -1,7 +1,7 @@
 //! Opaque external USB bus transactions on the native controller.
 use super::Session;
 use fujimod_emulator_devices::Cx;
-use fujimod_emulator_devices::capability::{UsbPort};
+use fujimod_emulator_devices::capability::UsbPort;
 impl Session {
     fn usb_input<R>(
         &mut self,

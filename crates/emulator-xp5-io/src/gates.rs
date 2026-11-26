@@ -132,7 +132,9 @@ impl Device for Gates {
     fn restore_checkpoint(&mut self, saved: &Checkpoint) -> Result<(), String> {
         self.validate_checkpoint(saved)?;
         self.regs = saved.decode(self.name())?;
-        if !self.power && let Some(clocks) = &self.panel_clocks {
+        if !self.power
+            && let Some(clocks) = &self.panel_clocks
+        {
             clocks.selector(self.regs.get(&0x608).copied().unwrap_or(0));
         }
         Ok(())

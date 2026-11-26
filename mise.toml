@@ -6,9 +6,14 @@ uv = "0.13.1"
 # The pinned nightly supplies rust-src for the Wasm build and is the one
 # toolchain for native builds, formatting and Clippy.
 rust = [
-  { version = "nightly-2026-10-10", profile = "minimal",
-    components = ["rust-src", "rustfmt", "clippy", "llvm-tools"],
-    targets = ["wasm32-unknown-unknown"] },
+  { version = "nightly-2026-10-10", profile = "minimal", components = [
+    "rust-src",
+    "rustfmt",
+    "clippy",
+    "llvm-tools",
+  ], targets = [
+    "wasm32-unknown-unknown",
+  ] },
 ]
 emsdk = "6.0.13"
 cmake = "4.4.4"

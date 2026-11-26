@@ -42,12 +42,12 @@ fn main() -> Result<(), String> {
         })
     }
     fn architectural_board_checks() -> Result<(), String> {
+        use fujimod_emulator::board::aprofile::generic_timer::Clock;
         use fujimod_emulator::board::{
             InterruptMap, aprofile,
             bus::{Bus, Mode},
             factory::*,
         };
-        use fujimod_emulator::board::aprofile::generic_timer::Clock;
         use fujimod_emulator_devices::gic::SecurityStates;
         use fujimod_emulator_ip_arm::gicv3::Gic;
         let graph = |processors: Vec<Processor>| Graph {
@@ -62,7 +62,9 @@ fn main() -> Result<(), String> {
                 })
                 .collect(),
             processors,
-            dma_mappings: vec![fujimod_emulator::board::memory::BusMapping::ram(0x10000, 0x14000)],
+            dma_mappings: vec![fujimod_emulator::board::memory::BusMapping::ram(
+                0x10000, 0x14000,
+            )],
             ram: vec![Ram {
                 base: 0x10000,
                 size: 0x14000,
@@ -70,9 +72,8 @@ fn main() -> Result<(), String> {
             peripherals: vec![],
             instructions_per_tick: fujimod_emulator_cpu::timeline::Ratio::new(1, 1).unwrap(),
         };
-        let options = || {
-            Options::new(RunEngine::Hypervisor).with_translation_cache_size_bytes(1024 * 1024)
-        };
+        let options =
+            || Options::new(RunEngine::Hypervisor).with_translation_cache_size_bytes(1024 * 1024);
         let mut concurrent = graph(
             (0..2)
                 .map(|core| Processor {
@@ -853,22 +854,24 @@ fn main() -> Result<(), String> {
             range: HookRange::All,
         })?
     };
-    assert!(cpu
-        .set_execution_policy(ExecutionPolicy::Interactive)
-        .is_err());
+    assert!(
+        cpu.set_execution_policy(ExecutionPolicy::Interactive)
+            .is_err()
+    );
     cpu.remove_hook(observer)?;
     cpu.set_execution_policy(ExecutionPolicy::Interactive)?;
 
     const INTERACTIVE_BUDGET_NS: u64 = 100_000_000;
     code(&cpu, 0x10900, &[0x91000400, 0x17ffffff]);
     set(&cpu, Register::X(0), 0);
-    match cpu.run(Run {
-        begin: 0x10900,
-        until: None,
-        watchdog_us: 2_000_000,
-        instructions: Some(INTERACTIVE_BUDGET_NS as usize),
-    })
-    .map_err(|e| e.to_string())?
+    match cpu
+        .run(Run {
+            begin: 0x10900,
+            until: None,
+            watchdog_us: 2_000_000,
+            instructions: Some(INTERACTIVE_BUDGET_NS as usize),
+        })
+        .map_err(|e| e.to_string())?
     {
         Exit::Stopped => (),
         other => panic!("Interactive budget did not stop the native loop: {other:?}"),
@@ -876,8 +879,10 @@ fn main() -> Result<(), String> {
     let progress = cpu
         .instruction_progress()
         .expect("Interactive progress is measured");
-    assert!((INTERACTIVE_BUDGET_NS * 3 / 4..=INTERACTIVE_BUDGET_NS * 5 / 4)
-        .contains(&progress), "interactive progress {progress}ns");
+    assert!(
+        (INTERACTIVE_BUDGET_NS * 3 / 4..=INTERACTIVE_BUDGET_NS * 5 / 4).contains(&progress),
+        "interactive progress {progress}ns"
+    );
     let estimated_instructions = get(&cpu, Register::X(0)) * 2;
     let estimated_rate = estimated_instructions as f64 * 1_000_000_000.0 / progress as f64;
     assert!(
@@ -899,18 +904,17 @@ fn main() -> Result<(), String> {
         // SAFETY: the thread calls only Core::stop while the owner is running
         // it. Core::stop uses shared atomics; all other Core access stays on
         // the owner thread, and the CPU outlives this joined thread.
-        unsafe {
-            (&*(stop_cpu as *const fujimod_emulator_cpu_hvf::Core)).stop()
-        }
+        unsafe { (&*(stop_cpu as *const fujimod_emulator_cpu_hvf::Core)).stop() }
     });
     stop_barrier.wait();
-    match cpu.run(Run {
-        begin: 0x10900,
-        until: None,
-        watchdog_us: 1_000_000,
-        instructions: None,
-    })
-    .map_err(|e| e.to_string())?
+    match cpu
+        .run(Run {
+            begin: 0x10900,
+            until: None,
+            watchdog_us: 1_000_000,
+            instructions: None,
+        })
+        .map_err(|e| e.to_string())?
     {
         Exit::Stopped => (),
         other => panic!("Interactive Core::stop did not stop the native loop: {other:?}"),
@@ -926,13 +930,14 @@ fn main() -> Result<(), String> {
     assert!(get(&cpu, Register::X(0)) > 0);
     println!("PASS: Interactive Core::stop returned Stopped at {stop_progress}ns");
 
-    match cpu.run(Run {
-        begin: 0x10600,
-        until: None,
-        watchdog_us: 2_000_000,
-        instructions: Some(10_000_000),
-    })
-    .map_err(|e| e.to_string())?
+    match cpu
+        .run(Run {
+            begin: 0x10600,
+            until: None,
+            watchdog_us: 2_000_000,
+            instructions: Some(10_000_000),
+        })
+        .map_err(|e| e.to_string())?
     {
         Exit::Hint(Hint::WaitForInterrupt) => assert_eq!(get(&cpu, Register::Pc), 0x10604),
         other => panic!("Interactive WFI did not exit as a hint: {other:?}"),
@@ -952,13 +957,14 @@ fn main() -> Result<(), String> {
     cpu.invalidate_code(Some((0x10300, 0x10308)))?;
     set(&cpu, Register::X(1), 0x8000000);
     let reads = io.reads.len();
-    match cpu.run(Run {
-        begin: 0x10300,
-        until: None,
-        watchdog_us: 2_000_000,
-        instructions: Some(100_000_000),
-    })
-    .map_err(|e| e.to_string())?
+    match cpu
+        .run(Run {
+            begin: 0x10300,
+            until: None,
+            watchdog_us: 2_000_000,
+            instructions: Some(100_000_000),
+        })
+        .map_err(|e| e.to_string())?
     {
         Exit::Stopped => (),
         other => panic!("Interactive MMIO load did not resume natively: {other:?}"),
@@ -1012,8 +1018,8 @@ fn main() -> Result<(), String> {
             factory::*,
         };
         use fujimod_emulator_devices::gic::SecurityStates;
-        use fujimod_emulator_ip_arm::gicv3::Gic;
         use fujimod_emulator_devices::{Cx, Device};
+        use fujimod_emulator_ip_arm::gicv3::Gic;
         struct Deadline {
             due: Option<u64>,
             fired: Vec<u64>,
@@ -1162,9 +1168,9 @@ fn main() -> Result<(), String> {
             mprofile,
         };
         use fujimod_emulator_devices::gic::SecurityStates;
+        use fujimod_emulator_devices::{Cx, Device};
         use fujimod_emulator_ip_arm::gicv3::Gic;
         use fujimod_emulator_xp5_io::mailbox::{Channel, Mailbox, Pins};
-        use fujimod_emulator_devices::{Cx, Device};
         struct Reset;
         impl Device for Reset {
             fn name(&self) -> &'static str {

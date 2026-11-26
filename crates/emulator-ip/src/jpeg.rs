@@ -133,7 +133,12 @@ impl Contract {
         let mut sorted = offsets.clone();
         sorted.sort_unstable();
         sorted.dedup();
-        let mask = |offset| self.writable.iter().find(|&&(o, _)| o == offset).map(|&(_, m)| m);
+        let mask = |offset| {
+            self.writable
+                .iter()
+                .find(|&&(o, _)| o == offset)
+                .map(|&(_, m)| m)
+        };
         let valid = sorted.len() == offsets.len()
             && offsets
                 .iter()
@@ -237,9 +242,12 @@ impl Encoder {
             "{}: host scene {width}x{height} into source {base:#x} pitch {pitch} at ({x}, {y})",
             self.name
         ));
-        let written = scene.chunks_exact(width * 2).enumerate().try_for_each(|(line, row)| {
-            cx.ram_write(base + (((y + line) * pitch + x) * 2) as u64, row)
-        });
+        let written = scene
+            .chunks_exact(width * 2)
+            .enumerate()
+            .try_for_each(|(line, row)| {
+                cx.ram_write(base + (((y + line) * pitch + x) * 2) as u64, row)
+            });
         if let Err(error) = written {
             let name = self.name;
             self.note(
@@ -283,8 +291,7 @@ impl Encoder {
         }
     }
     fn interrupt(&self) -> bool {
-        self.state.status & DONE != 0
-            && self.mask_word().is_none_or(|o| self.word(o) & DONE == 0)
+        self.state.status & DONE != 0 && self.mask_word().is_none_or(|o| self.word(o) & DONE == 0)
     }
     /// A buffer address: the low word, and bits 34..32 from `high` under
     /// the wide contract.
@@ -473,7 +480,9 @@ impl Device for Encoder {
         if size != 4
             || offset & 3 != 0
             || offset >= WINDOW
-            || self.contract().is_some_and(|c| !c.readable.contains(&offset))
+            || self
+                .contract()
+                .is_some_and(|c| !c.readable.contains(&offset))
         {
             cx.unmodeled();
             return 0;
@@ -1137,7 +1146,10 @@ mod tests {
             u64::from(DONE | D_FAILED)
         );
         let saved = decoder.save();
-        Decoder::new("decoder", D, 135, 5).unwrap().restore(&saved).unwrap();
+        Decoder::new("decoder", D, 135, 5)
+            .unwrap()
+            .restore(&saved)
+            .unwrap();
     }
 
     mod wide {
@@ -1291,7 +1303,10 @@ mod tests {
             let stream = run(&mut e, &mut h);
             let (ycc, width, height) = decode(&stream, 64, 64).unwrap();
             assert_eq!((width, height), (40, 20));
-            assert!(ycc.chunks(3).all(|p| p[0].abs_diff(200) <= 3), "padding leaked");
+            assert!(
+                ycc.chunks(3).all(|p| p[0].abs_diff(200) <= 3),
+                "padding leaked"
+            );
         }
 
         #[test]
@@ -1324,7 +1339,12 @@ mod tests {
             e.advance(&mut cx);
             assert_eq!(cx.refusal(), None);
             assert!(read(&mut e, &mut h, STREAM) > 0x40);
-            assert!(h.bytes(STREAM_AT + 0x40, 16).unwrap().iter().all(|&b| b == 0));
+            assert!(
+                h.bytes(STREAM_AT + 0x40, 16)
+                    .unwrap()
+                    .iter()
+                    .all(|&b| b == 0)
+            );
         }
     }
 
@@ -1380,7 +1400,8 @@ mod tests {
                 })
                 .collect();
             h.ram_write(SOURCE_AT, &source).unwrap();
-            let mut e = Encoder::new("xp5-jpeg-encoder", ENCODER, 207, 10, Registers::Wide).unwrap();
+            let mut e =
+                Encoder::new("xp5-jpeg-encoder", ENCODER, 207, 10, Registers::Wide).unwrap();
             for _ in 0..TABLE_WORDS {
                 write(&mut e, h, ENCODER + TABLES, 0x0101_0101);
             }
@@ -1388,7 +1409,12 @@ mod tests {
             write(&mut e, h, ENCODER + SIZE, (height << 16 | width) as u32);
             write(&mut e, h, ENCODER + SOURCE_HIGH, (SOURCE_AT >> 32) as u32);
             write(&mut e, h, ENCODER + SOURCE, SOURCE_AT as u32);
-            write(&mut e, h, ENCODER + DESTINATION_HIGH, (STREAM_AT >> 32) as u32);
+            write(
+                &mut e,
+                h,
+                ENCODER + DESTINATION_HIGH,
+                (STREAM_AT >> 32) as u32,
+            );
             write(&mut e, h, ENCODER + DESTINATION, STREAM_AT as u32);
             write(&mut e, h, ENCODER + LIMIT, 0x4_0000);
             write(&mut e, h, ENCODER, START);
@@ -1452,7 +1478,12 @@ mod tests {
             let mut other = Decoder::wide("xp5-jpeg-decoder", BASE, IRQ, 10).unwrap();
             other.restore(&saved).unwrap();
             assert_eq!(read(&mut other, &mut h, BASE + D_END_HIGH), 1);
-            assert!(Decoder::new("decoder", BASE, IRQ, 10).unwrap().restore(&saved).is_err());
+            assert!(
+                Decoder::new("decoder", BASE, IRQ, 10)
+                    .unwrap()
+                    .restore(&saved)
+                    .is_err()
+            );
         }
 
         #[test]
@@ -1464,10 +1495,17 @@ mod tests {
             program(&mut d, &mut h, size, 1, 48 * 16 * 2);
             finish(&mut d, &mut h);
             assert_eq!(read(&mut d, &mut h, BASE + D_STATUS), DONE);
-            assert_eq!(read(&mut d, &mut h, BASE + D_END), (OUTPUT_AT + 24 * 2 * 8) as u32);
+            assert_eq!(
+                read(&mut d, &mut h, BASE + D_END),
+                (OUTPUT_AT + 24 * 2 * 8) as u32
+            );
             let out = h.bytes(OUTPUT_AT, 24 * 2 * 8).unwrap();
             for line in out.chunks(48) {
-                let luma: Vec<i32> = line.chunks(4).flat_map(|q| [q[0], q[1]]).map(i32::from).collect();
+                let luma: Vec<i32> = line
+                    .chunks(4)
+                    .flat_map(|q| [q[0], q[1]])
+                    .map(i32::from)
+                    .collect();
                 for (x, &y) in luma.iter().enumerate().take(20) {
                     assert!((y - (x as i32 * 8 + 2)).abs() <= 3, "{x} {luma:?}");
                 }

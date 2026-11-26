@@ -18,7 +18,11 @@ export interface FilmEditorDemo {
 /** The demo's manifest.json: schema 1, the flat file names the page loads and
  * an optional `developmentOnly` flag. */
 export function parseFilmEditorDemo(json: string): FilmEditorDemo {
-  const manifest = JSON.parse(json) as { schema?: unknown; files?: unknown; developmentOnly?: unknown } | null;
+  const manifest = JSON.parse(json) as {
+    schema?: unknown;
+    files?: unknown;
+    developmentOnly?: unknown;
+  } | null;
   if (manifest?.schema !== 1 || !Array.isArray(manifest.files))
     throw Error('The Film Editor demo manifest has an unknown schema.');
   const files = manifest.files as unknown[];
@@ -46,7 +50,9 @@ export function siteFilmEditorDemo(configured: string | undefined, localPreview:
           throw Error(`FUJIMOD_FILM_EDITOR_DEMO has no manifest.json: ${configured}`);
         const demo = parseFilmEditorDemo(readFileSync(manifest, 'utf8'));
         if (demo.developmentOnly && env.command === 'build' && !localPreview)
-          throw Error(`FUJIMOD_FILM_EDITOR_DEMO is a development-only build and cannot be published: ${configured}`);
+          throw Error(
+            `FUJIMOD_FILM_EDITOR_DEMO is a development-only build and cannot be published: ${configured}`,
+          );
         files = demo.files;
         directory = realpathSync(configured);
       }

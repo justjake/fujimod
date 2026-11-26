@@ -4,8 +4,8 @@
 //! and frame duration are explicit model laws.
 //! The attached wire supplies received bits. No lens protocol is built in.
 use fujimod_emulator_devices::dma::{Direction, Port, Request, SharedPort};
-use fujimod_emulator_parts_io::serial::{Frame, Wire};
 use fujimod_emulator_devices::{Cx, Device};
+use fujimod_emulator_parts_io::serial::{Frame, Wire};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use std::collections::VecDeque;
@@ -288,7 +288,10 @@ impl Device for ByteFifo {
         )?
         .with_children(vec![e.wire.checkpoint()?]))
     }
-    fn validate_checkpoint(&self, saved: &fujimod_emulator_devices::checkpoint::Checkpoint) -> Result<(), String> {
+    fn validate_checkpoint(
+        &self,
+        saved: &fujimod_emulator_devices::checkpoint::Checkpoint,
+    ) -> Result<(), String> {
         let (base, ticks, state): (u64, u64, State) = saved.decode(self.name())?;
         let e = self.engine.lock().unwrap();
         if base != self.base
@@ -313,7 +316,10 @@ impl Device for ByteFifo {
         }
         Ok(())
     }
-    fn restore_checkpoint(&mut self, saved: &fujimod_emulator_devices::checkpoint::Checkpoint) -> Result<(), String> {
+    fn restore_checkpoint(
+        &mut self,
+        saved: &fujimod_emulator_devices::checkpoint::Checkpoint,
+    ) -> Result<(), String> {
         self.validate_checkpoint(saved)?;
         let (_, _, state): (u64, u64, State) = saved.decode(self.name())?;
         let mut e = self.engine.lock().unwrap();

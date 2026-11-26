@@ -147,7 +147,10 @@ impl Timer {
         self.companion_cpu = cpu;
         self
     }
-    pub fn with_focus_capture(mut self, pins: fujimod_emulator_devices::xp5::pins::SharedPins) -> Self {
+    pub fn with_focus_capture(
+        mut self,
+        pins: fujimod_emulator_devices::xp5::pins::SharedPins,
+    ) -> Self {
         self.focus_capture = Some(pins);
         self
     }
@@ -432,12 +435,15 @@ impl Device for Timer {
     // Field-for-field the `checkpoint_fields!` encoding, written out so a restore
     // also republishes the PWM words.
     fn checkpoint(&self) -> Result<Checkpoint, String> {
-        Checkpoint::encode(self.name(), &TimerSnapshotRef {
-            counters: &self.counters,
-            general: &self.general,
-            routing: &self.routing,
-            group: &self.group,
-        })
+        Checkpoint::encode(
+            self.name(),
+            &TimerSnapshotRef {
+                counters: &self.counters,
+                general: &self.general,
+                routing: &self.routing,
+                group: &self.group,
+            },
+        )
     }
     fn validate_checkpoint(&self, saved: &Checkpoint) -> Result<(), String> {
         let _: TimerSnapshot = saved.decode(self.name())?;
@@ -448,7 +454,12 @@ impl Device for Timer {
     }
     fn restore_checkpoint(&mut self, saved: &Checkpoint) -> Result<(), String> {
         self.validate_checkpoint(saved)?;
-        let TimerSnapshot { counters, general, routing, group } = saved.decode(self.name())?;
+        let TimerSnapshot {
+            counters,
+            general,
+            routing,
+            group,
+        } = saved.decode(self.name())?;
         self.counters = counters;
         self.general = general;
         self.routing = routing;

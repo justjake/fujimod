@@ -1,8 +1,8 @@
 //! Shared image DMA: bounded, nonoverlapping addressed rows, then status,
 //! then the physical IRQ. No host read, digest or instruction drives effects.
 use super::due;
-use fujimod_emulator_devices::exr2::irq_routes::Irq;
 use fujimod_emulator_devices::Cx;
+use fujimod_emulator_devices::exr2::irq_routes::Irq;
 use serde::{Deserialize, Serialize};
 
 /// An explicit transfer clock, independent of the external frame cadence.
@@ -413,15 +413,18 @@ mod state_tests {
             identity["pixels"],
             fujimod_emulator_devices::state::bytes(&transfer.pixels)
         );
-        let saved = fujimod_emulator_devices::checkpoint::Checkpoint::encode("transfer", &transfer).unwrap();
+        let saved = fujimod_emulator_devices::checkpoint::Checkpoint::encode("transfer", &transfer)
+            .unwrap();
         let mut restored: Transfer = saved.decode("transfer").unwrap();
         assert_eq!(
-            fujimod_emulator_devices::checkpoint::Checkpoint::encode("transfer", &restored).unwrap(),
+            fujimod_emulator_devices::checkpoint::Checkpoint::encode("transfer", &restored)
+                .unwrap(),
             saved
         );
         *restored.pixels.last_mut().unwrap() ^= 1;
         assert_ne!(
-            fujimod_emulator_devices::checkpoint::Checkpoint::encode("transfer", &restored).unwrap(),
+            fujimod_emulator_devices::checkpoint::Checkpoint::encode("transfer", &restored)
+                .unwrap(),
             saved
         );
         assert_eq!(*transfer.pixels.last().unwrap(), 0xa5);

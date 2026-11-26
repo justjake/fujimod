@@ -1,10 +1,10 @@
 //! Bounded Motorola-master PL022 transport (ARM DDI 0194H).
 //! FIFO/request state and serial clock edges are independent of executing code.
-use fujimod_emulator_devices::checkpoint::Checkpoint;
 use fujimod_emulator_devices::bus::InterruptLine;
+use fujimod_emulator_devices::checkpoint::Checkpoint;
 use fujimod_emulator_devices::dma::{Direction, Port, Request, SharedPort};
-use fujimod_emulator_parts_io::serial::{Frame, Wire};
 use fujimod_emulator_devices::{Cx, Device};
+use fujimod_emulator_parts_io::serial::{Frame, Wire};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use std::collections::VecDeque;
@@ -332,7 +332,11 @@ pub struct Controller {
 }
 impl Controller {
     fn validate_state(
-        &self, e: &Engine, clock: Clock, interrupts: Vec<InterruptLine>, base: Option<u64>,
+        &self,
+        e: &Engine,
+        clock: Clock,
+        interrupts: Vec<InterruptLine>,
+        base: Option<u64>,
         state: &State,
     ) -> Result<(), String> {
         if clock != e.clock
@@ -517,26 +521,34 @@ impl Device for Controller {
     }
     fn checkpoint(&self) -> Result<Checkpoint, String> {
         let e = self.engine.lock().map_err(|_| "PL022 state poisoned")?;
-        Ok(Checkpoint::encode(self.name(), &(e.clock, self.base, &self.interrupts, &e.state))?
-            .with_children(vec![e.wire.checkpoint()?]))
+        Ok(Checkpoint::encode(
+            self.name(),
+            &(e.clock, self.base, &self.interrupts, &e.state),
+        )?
+        .with_children(vec![e.wire.checkpoint()?]))
     }
     fn validate_checkpoint(&self, saved: &Checkpoint) -> Result<(), String> {
         let (clock, base, interrupts, state): (Clock, u64, Vec<InterruptLine>, State) =
             saved.decode(self.name())?;
-        let [wire] = saved.children() else { return Err("PL022 snapshot lacks wire state".into()); };
+        let [wire] = saved.children() else {
+            return Err("PL022 snapshot lacks wire state".into());
+        };
         let e = self.engine.lock().map_err(|_| "PL022 state poisoned")?;
         self.validate_state(&e, clock, interrupts, Some(base), &state)?;
         e.wire.validate_checkpoint(wire)?;
-        if let Some((token, frame)) = state.pending.as_ref().and_then(|pending| {
-            Some((pending.token?, pending.frame))
-        }) {
+        if let Some((token, frame)) = state
+            .pending
+            .as_ref()
+            .and_then(|pending| Some((pending.token?, pending.frame)))
+        {
             e.wire.validate_pending(wire, token, frame)?;
         }
         Ok(())
     }
     fn restore_checkpoint(&mut self, saved: &Checkpoint) -> Result<(), String> {
         self.validate_checkpoint(saved)?;
-        let (_, _, _, state): (Clock, u64, Vec<InterruptLine>, State) = saved.decode(self.name())?;
+        let (_, _, _, state): (Clock, u64, Vec<InterruptLine>, State) =
+            saved.decode(self.name())?;
         let mut e = self.engine.lock().map_err(|_| "PL022 state poisoned")?;
         e.wire.restore_checkpoint(&saved.children()[0])?;
         e.state = state;

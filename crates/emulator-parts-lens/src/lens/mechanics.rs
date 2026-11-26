@@ -153,7 +153,9 @@ pub(super) struct Mechanics {
     encoder_phase: i64,
 }
 impl Mechanics {
-    pub(super) fn checkpoint(&self) -> Result<fujimod_emulator_devices::checkpoint::Checkpoint, String> {
+    pub(super) fn checkpoint(
+        &self,
+    ) -> Result<fujimod_emulator_devices::checkpoint::Checkpoint, String> {
         fujimod_emulator_devices::checkpoint::Checkpoint::encode(
             "lens-mechanics",
             &(&self.motors, self.encoder, self.encoder_phase),

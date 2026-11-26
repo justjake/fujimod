@@ -111,20 +111,7 @@
     ],
     "adc": {
       "block_id": "adc",
-      "samples": [
-        0,
-        0,
-        1023,
-        63,
-        534,
-        640,
-        0,
-        825,
-        1023,
-        60,
-        0,
-        0
-      ]
+      "samples": [0, 0, 1023, 63, 534, 640, 0, 825, 1023, 60, 0, 0]
     },
     "power": {
       "part_id": "power-control",
@@ -134,24 +121,7 @@
     },
     "mcu": {
       "part_id": "mcu-interface",
-      "packet": [
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        170,
-        86
-      ],
+      "packet": [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 170, 86],
       "rtc": {
         "ticks_per_second": 12000000,
         "maximum_seconds": 1609459199,
@@ -232,28 +202,17 @@
     "generated_assets": [
       {
         "id": "x70-110-rec.live-pixels",
-        "pattern": [
-          64,
-          64,
-          128,
-          128
-        ],
+        "pattern": [64, 64, 128, 128],
         "size": 4258176
       },
       {
         "id": "x70-110-rec.live-statistics",
-        "pattern": [
-          0
-        ],
+        "pattern": [0],
         "size": 1024
       },
       {
         "id": "x70-110-rec.capture-sensor",
-        "pattern": [
-          128,
-          128,
-          128
-        ],
+        "pattern": [128, 128, 128],
         "size": 3
       }
     ],

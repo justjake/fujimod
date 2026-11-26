@@ -1,7 +1,7 @@
 //! XP5 15-channel ADC sequencer. External resistor values are explicit inputs.
 use fujimod_emulator_devices::{Cx, Device};
 use serde::{Deserialize, Serialize};
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 
 pub const BASE: u64 = 0xff906000;
 #[derive(Serialize, Deserialize)]
@@ -26,15 +26,28 @@ pub struct Adc {
 /// 3 is the drive dial (4095 = HDR, 3500 = single frame).
 fn parse_overrides(spec: &str) -> Result<[Option<u16>; 15], String> {
     let mut overrides = [None; 15];
-    for item in spec.split(',').map(str::trim).filter(|item| !item.is_empty()) {
-        let (channel, sample) = item.split_once('=').ok_or("XT5_ADC needs CHANNEL=SAMPLE[,...]")?;
-        let channel: usize = channel.trim().parse().map_err(|_| format!("XT5_ADC: invalid channel in {item}"))?;
-        let sample: u16 = sample.trim().parse().map_err(|_| format!("XT5_ADC: invalid sample in {item}"))?;
+    for item in spec
+        .split(',')
+        .map(str::trim)
+        .filter(|item| !item.is_empty())
+    {
+        let (channel, sample) = item
+            .split_once('=')
+            .ok_or("XT5_ADC needs CHANNEL=SAMPLE[,...]")?;
+        let channel: usize = channel
+            .trim()
+            .parse()
+            .map_err(|_| format!("XT5_ADC: invalid channel in {item}"))?;
+        let sample: u16 = sample
+            .trim()
+            .parse()
+            .map_err(|_| format!("XT5_ADC: invalid sample in {item}"))?;
         if sample > 4095 {
             return Err(format!("XT5_ADC: sample {sample} exceeds 12 bits"));
         }
-        *overrides.get_mut(channel).ok_or_else(|| format!("XT5_ADC: channel {channel} is outside 0..=14"))? =
-            Some(sample);
+        *overrides
+            .get_mut(channel)
+            .ok_or_else(|| format!("XT5_ADC: channel {channel} is outside 0..=14"))? = Some(sample);
     }
     Ok(overrides)
 }

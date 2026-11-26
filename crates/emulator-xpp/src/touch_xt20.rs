@@ -52,8 +52,12 @@ impl PanelState {
         let mut down = self.planned_down;
         let mut last = self.inputs.back().map_or(now, |input| input.tick.max(now));
         for input in script {
-            if input.tick < last || input.tick < now || input.tick.checked_add(1).is_none()
-                || input.contact != 0 || input.x > 4095 || input.y > 4095
+            if input.tick < last
+                || input.tick < now
+                || input.tick.checked_add(1).is_none()
+                || input.contact != 0
+                || input.x > 4095
+                || input.y > 4095
             {
                 return Err("X-T20 touch input requires ordered contact-0 coordinates".into());
             }
@@ -158,7 +162,11 @@ struct TouchBus {
 }
 
 impl TouchBus {
-    fn new(parts: Vec<crate::i2c::Part>, options: Options, panel: SharedPanel) -> Result<Self, String> {
+    fn new(
+        parts: Vec<crate::i2c::Part>,
+        options: Options,
+        panel: SharedPanel,
+    ) -> Result<Self, String> {
         if options.address > 0x7f
             || options.input_ready_irq >= 1020
             || options.ticks_per_second < 100
@@ -179,7 +187,9 @@ impl TouchBus {
     }
 
     fn panel_state(&self) -> Result<std::sync::MutexGuard<'_, PanelState>, String> {
-        self.panel.lock().map_err(|_| "X-T20 touch state is poisoned".into())
+        self.panel
+            .lock()
+            .map_err(|_| "X-T20 touch state is poisoned".into())
     }
 
     fn encode_state(&self) -> Result<SavedBus, String> {
@@ -242,8 +252,7 @@ impl Bus for TouchBus {
             .register
             .ok_or_else(|| "X-T20 touch read has no selected register".to_string())?;
         let report_read = self.selection.page == PAGE
-            && (register == self.options.report_register
-                || self.panel_state()?.report_offset > 0);
+            && (register == self.options.report_register || self.panel_state()?.report_offset > 0);
         let byte = if report_read {
             self.panel_state()?.read_report_byte()?
         } else {
@@ -333,7 +342,11 @@ impl Xt20TouchI2c {
         let panel = Arc::new(Mutex::new(PanelState::default()));
         let bus = TouchBus::new(parts, options.clone(), panel.clone())?;
         let controller = dw_i2c::Controller::new(i2c_options, bus)?;
-        Ok(Self { controller, options, panel })
+        Ok(Self {
+            controller,
+            options,
+            panel,
+        })
     }
 
     /// Set a declared register value supplied by a non-touch part on this
@@ -348,7 +361,9 @@ impl Xt20TouchI2c {
     }
 
     fn panel_state(&self) -> Result<std::sync::MutexGuard<'_, PanelState>, String> {
-        self.panel.lock().map_err(|_| "X-T20 touch state is poisoned".into())
+        self.panel
+            .lock()
+            .map_err(|_| "X-T20 touch state is poisoned".into())
     }
 
     fn advance_panel(&mut self, cx: &mut Cx<'_>, i2c_idle: bool) {
@@ -394,8 +409,7 @@ impl Xt20TouchI2c {
 
 impl TouchPanel for Xt20TouchI2c {
     fn touch_period(&self) -> Result<u64, String> {
-        if self.options.ticks_per_second < 100
-            || !self.options.ticks_per_second.is_multiple_of(100)
+        if self.options.ticks_per_second < 100 || !self.options.ticks_per_second.is_multiple_of(100)
         {
             return Err("X-T20 touch clock must be a positive multiple of 100 Hz".into());
         }
@@ -448,9 +462,7 @@ impl Device for Xt20TouchI2c {
                 .inputs
                 .front()
                 .map(|input| input.tick.max(now))
-                .or_else(|| {
-                    (state.report_ack_pending && bus.is_none()).then_some(now)
-                })
+                .or_else(|| (state.report_ack_pending && bus.is_none()).then_some(now))
         });
         match (bus, panel) {
             (Some(a), Some(b)) => Some(a.min(b)),

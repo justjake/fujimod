@@ -1,10 +1,10 @@
 //! XP5 polled SPI controller. GPIO selection routes wire frames to attached
 //! parts; FIFO readiness follows serial clock edges on the guest timeline.
+use fujimod_emulator_devices::bus::FastReadWord;
 use fujimod_emulator_devices::checkpoint::Checkpoint;
 use fujimod_emulator_devices::xp5::pins::SharedPins;
-use fujimod_emulator_parts_io::serial::{Endpoint, Frame};
-use fujimod_emulator_devices::bus::FastReadWord;
 use fujimod_emulator_devices::{Cx, Device};
+use fujimod_emulator_parts_io::serial::{Endpoint, Frame};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use std::sync::Arc;
@@ -55,13 +55,21 @@ pub struct GpioWire {
     state: WireState,
 }
 fn attachment_checkpoints(attachments: &[Attachment]) -> Result<Vec<Checkpoint>, String> {
-    attachments.iter().map(|part| part.endpoint.checkpoint()).collect()
+    attachments
+        .iter()
+        .map(|part| part.endpoint.checkpoint())
+        .collect()
 }
 
 fn validate_attachments(
-    attachments: &[Attachment], selects: &[Select], saved: &[Checkpoint],
+    attachments: &[Attachment],
+    selects: &[Select],
+    saved: &[Checkpoint],
 ) -> Result<(), String> {
-    if selects.iter().copied().ne(attachments.iter().map(|part| part.select))
+    if selects
+        .iter()
+        .copied()
+        .ne(attachments.iter().map(|part| part.select))
         || saved.len() != attachments.len()
     {
         return Err("SPI checkpoint endpoint wiring differs".into());
@@ -154,8 +162,10 @@ impl fujimod_emulator_parts_io::serial::Wire for GpioWire {
     }
     fn checkpoint(&self) -> Result<Checkpoint, String> {
         let selects: Vec<_> = self.attachments.iter().map(|part| part.select).collect();
-        Ok(Checkpoint::encode("gpio-serial-wire", &(&self.state, selects))?
-            .with_children(attachment_checkpoints(&self.attachments)?))
+        Ok(
+            Checkpoint::encode("gpio-serial-wire", &(&self.state, selects))?
+                .with_children(attachment_checkpoints(&self.attachments)?),
+        )
     }
     fn validate_checkpoint(&self, saved: &Checkpoint) -> Result<(), String> {
         let (state, selects): (WireState, Vec<Select>) = saved.decode("gpio-serial-wire")?;
@@ -163,8 +173,10 @@ impl fujimod_emulator_parts_io::serial::Wire for GpioWire {
         let count = self.attachments.len();
         if state.last_endpoint.is_some_and(|index| index >= count)
             || state.active.as_ref().is_some_and(|frame| {
-                frame.endpoint >= count || state.generation == 0
-                    || state.last_endpoint != Some(frame.endpoint) || state.last_epoch != frame.epoch
+                frame.endpoint >= count
+                    || state.generation == 0
+                    || state.last_endpoint != Some(frame.endpoint)
+                    || state.last_epoch != frame.epoch
             })
         {
             return Err("invalid serial wire checkpoint".into());
@@ -322,11 +334,23 @@ impl Spi {
     }
     /// Drive external input bits of the one attached part named `part` (an
     /// external line into that part, not a serial transfer).
-    pub fn set_part_input(&mut self, part: &str, register: u8, mask: u16, value: u16) -> Result<(), String> {
-        let mut parts = self.attachments.iter_mut().filter(|a| a.endpoint.name() == part);
+    pub fn set_part_input(
+        &mut self,
+        part: &str,
+        register: u8,
+        mask: u16,
+        value: u16,
+    ) -> Result<(), String> {
+        let mut parts = self
+            .attachments
+            .iter_mut()
+            .filter(|a| a.endpoint.name() == part);
         match (parts.next(), parts.next()) {
             (Some(attachment), None) => attachment.endpoint.set_input_bits(register, mask, value),
-            _ => Err(format!("SPI controller {:#x} has no single {part} part", self.base)),
+            _ => Err(format!(
+                "SPI controller {:#x} has no single {part} part",
+                self.base
+            )),
         }
     }
     fn route(&self, route: usize) -> Result<&dyn Endpoint, String> {
@@ -340,12 +364,16 @@ impl Spi {
             .filter(|&i| self.attachments[i].endpoint.admit_steps(0).is_ok());
         match (counters.next(), counters.next()) {
             (Some(index), None) => Ok(index),
-            _ => Err(format!("SPI controller {:#x} has no single dial counter", self.base)),
+            _ => Err(format!(
+                "SPI controller {:#x} has no single dial counter",
+                self.base
+            )),
         }
     }
     /// The attachment index of the one part named `part`.
     pub fn part_route(&self, part: &str) -> Option<usize> {
-        let mut found = (0..self.attachments.len()).filter(|&i| self.attachments[i].endpoint.name() == part);
+        let mut found =
+            (0..self.attachments.len()).filter(|&i| self.attachments[i].endpoint.name() == part);
         match (found.next(), found.next()) {
             (Some(index), None) => Some(index),
             _ => None,
@@ -430,13 +458,17 @@ impl fujimod_emulator_devices::capability::SerialStatus for Spi {
     }
     fn status_input(&mut self, route: usize, register: u8, value: u16) -> Result<(), String> {
         self.route(route)?;
-        self.attachments[route].endpoint.set_input_bits(register, 0xffff, value)
+        self.attachments[route]
+            .endpoint
+            .set_input_bits(register, 0xffff, value)
     }
 }
 /// The one attached part that counts a command dial.
 impl fujimod_emulator_devices::capability::RotaryInput for Spi {
     fn admit_edges(&self, _now: u64, edges: i32) -> Result<(), String> {
-        self.attachments[self.counter()?].endpoint.admit_steps(edges)
+        self.attachments[self.counter()?]
+            .endpoint
+            .admit_steps(edges)
     }
     fn queue_edges(&mut self, _now: u64, edges: i32) -> Result<(), String> {
         let index = self.counter()?;
@@ -447,7 +479,9 @@ impl Device for Spi {
     fn name(&self) -> &'static str {
         "xp5-spi"
     }
-    fn serial_status(&self) -> Option<&(dyn fujimod_emulator_devices::capability::SerialStatus + 'static)> {
+    fn serial_status(
+        &self,
+    ) -> Option<&(dyn fujimod_emulator_devices::capability::SerialStatus + 'static)> {
         Some(self)
     }
     fn serial_status_mut(
@@ -455,7 +489,9 @@ impl Device for Spi {
     ) -> Option<&mut (dyn fujimod_emulator_devices::capability::SerialStatus + 'static)> {
         Some(self)
     }
-    fn rotary_input(&self) -> Option<&(dyn fujimod_emulator_devices::capability::RotaryInput + 'static)> {
+    fn rotary_input(
+        &self,
+    ) -> Option<&(dyn fujimod_emulator_devices::capability::RotaryInput + 'static)> {
         Some(self)
     }
     fn rotary_input_mut(
@@ -594,11 +630,15 @@ impl Device for Spi {
     }
     fn checkpoint(&self) -> Result<Checkpoint, String> {
         let selects: Vec<_> = self.attachments.iter().map(|part| part.select).collect();
-        Ok(Checkpoint::encode(self.name(), &(self.base, self.source_hz, &self.state, selects))?
-            .with_children(attachment_checkpoints(&self.attachments)?))
+        Ok(Checkpoint::encode(
+            self.name(),
+            &(self.base, self.source_hz, &self.state, selects),
+        )?
+        .with_children(attachment_checkpoints(&self.attachments)?))
     }
     fn validate_checkpoint(&self, saved: &Checkpoint) -> Result<(), String> {
-        let (base, clock, state, selects): (u64, u64, State, Vec<Select>) = saved.decode(self.name())?;
+        let (base, clock, state, selects): (u64, u64, State, Vec<Select>) =
+            saved.decode(self.name())?;
         if base != self.base || clock != self.source_hz {
             return Err("SPI checkpoint clock/address differs".into());
         }
@@ -659,10 +699,12 @@ impl Device for Spi {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use fujimod_emulator_parts_io::{power_controller::PowerController, serial_calibration::CalibrationRegisters};
     use crate::gpio::Gpio;
-    use fujimod_emulator_devices::xp5::pins::Pins;
     use fujimod_emulator_devices::test_host::recording::RecordingHost;
+    use fujimod_emulator_devices::xp5::pins::Pins;
+    use fujimod_emulator_parts_io::{
+        power_controller::PowerController, serial_calibration::CalibrationRegisters,
+    };
     const BASE: u64 = 0xff910000;
     fn fixture(miso: bool) -> (Spi, Gpio, RecordingHost) {
         let pins = Pins::shared();
@@ -781,8 +823,13 @@ mod tests {
             pin: 8,
             active_high: false,
         };
-        let mut spi = Spi::new(BASE, shared, 48_000_000, vec![Attachment::new(select, Box::new(part))])
-            .unwrap();
+        let mut spi = Spi::new(
+            BASE,
+            shared,
+            48_000_000,
+            vec![Attachment::new(select, Box::new(part))],
+        )
+        .unwrap();
         setup(&mut spi, &mut host, 15, 6);
         for (register, value) in [(0x0019, 0x1234), (0x001d, 0x8001)] {
             pins(&mut gpio, &mut host, false, true);
@@ -801,7 +848,11 @@ mod tests {
         setup(&mut spi, &mut host, 0xc7, 6);
         let mut cx = Cx::new(&mut host, 99, 0x14d3b70, 6);
         spi.write(&mut cx, BASE + 8, 4, 0x92);
-        assert!(cx.refusal().unwrap().contains("exactly one selected endpoint"));
+        assert!(
+            cx.refusal()
+                .unwrap()
+                .contains("exactly one selected endpoint")
+        );
     }
     #[test]
     fn invalid_modes_words_and_selects_refuse_without_data_or_deadlines() {
@@ -851,7 +902,12 @@ mod tests {
     fn published_status(spi: &Spi) -> Arc<dyn Fn(u64) -> Option<u32> + Send + Sync> {
         use fujimod_emulator_devices::bus::FastReadValue;
         match spi.fast_reads(BASE, 0x1000).as_slice() {
-            [FastReadWord { offset: 0xc, value: FastReadValue::ClockedU32(read) }] => read.clone(),
+            [
+                FastReadWord {
+                    offset: 0xc,
+                    value: FastReadValue::ClockedU32(read),
+                },
+            ] => read.clone(),
             _ => panic!("SPI publishes only its status register"),
         }
     }
@@ -875,7 +931,10 @@ mod tests {
                 assert_eq!(status(tick), Some(STATUS_BUSY));
             }
             host.now = tick;
-            assert_eq!(spi.read(&mut Cx::new(&mut host, 0, 0, 6), BASE + 0xc, 4), 0x10);
+            assert_eq!(
+                spi.read(&mut Cx::new(&mut host, 0, 0, 6), BASE + 0xc, 4),
+                0x10
+            );
         }
         assert_eq!(spi.save(), saved);
         // At the edge the published read declines; the ordinary read
@@ -915,7 +974,10 @@ mod tests {
         pins(&mut gpio, &mut host, false, true);
         setup(&mut spi, &mut host, 15, 6);
         write(&mut spi, &mut host, 0x24, 3);
-        assert_eq!(spi.read(&mut Cx::new(&mut host, 0, 0, 6), BASE + 0x24, 4), 3);
+        assert_eq!(
+            spi.read(&mut Cx::new(&mut host, 0, 0, 6), BASE + 0x24, 4),
+            3
+        );
         let saved = spi.save();
         spi.restore(&saved).unwrap();
         let mut cx = Cx::new(&mut host, 0, 0, 6);

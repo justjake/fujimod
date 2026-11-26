@@ -14,8 +14,10 @@ struct State {
     causes: u32,
     pending: Option<u16>,
     rx: Option<u16>,
-    #[serde(default)] tx_fifo: Vec<u16>,
-    #[serde(default)] rx_fifo: Vec<u16>,
+    #[serde(default)]
+    tx_fifo: Vec<u16>,
+    #[serde(default)]
+    rx_fifo: Vec<u16>,
     generation: u64,
     words: Vec<u16>,
     transfers: u64,
@@ -47,14 +49,20 @@ impl PanelSerial {
         })
     }
     fn receive(&mut self) {
-        if self.s.rx.is_none() { self.s.rx = Some(0); }
-        else if self.s.rx_fifo.len() < 7 { self.s.rx_fifo.push(0); }
-        else { self.s.causes |= 1; }
+        if self.s.rx.is_none() {
+            self.s.rx = Some(0);
+        } else if self.s.rx_fifo.len() < 7 {
+            self.s.rx_fifo.push(0);
+        } else {
+            self.s.causes |= 1;
+        }
     }
     fn complete(&mut self, cx: &mut Cx<'_>, word: u16) {
         self.s.transfers += 1;
         if self.s.control & 0xff == 0x0f {
-            if self.s.mode0_words.len() == 4096 { self.s.mode0_words.remove(0); }
+            if self.s.mode0_words.len() == 4096 {
+                self.s.mode0_words.remove(0);
+            }
             self.s.mode0_words.push(word);
             self.receive(); // Declared idle MISO, not a measured response.
             cx.log(&format!("SPI9 unidentified mode-0 tx{word:#06x}"));
@@ -93,12 +101,15 @@ impl Device for PanelSerial {
             4 => self.s.enable as u64,
             8 => {
                 let value = self.s.rx.take().unwrap_or(0);
-                if !self.s.rx_fifo.is_empty() { self.s.rx = Some(self.s.rx_fifo.remove(0)); }
+                if !self.s.rx_fifo.is_empty() {
+                    self.s.rx = Some(self.s.rx_fifo.remove(0));
+                }
                 value as u64
-            },
+            }
             //1467c2c: TFE bit0, TNF bit1, RNE bit2, BSY bit4.
             0xc => {
-                (u64::from(self.s.tx_fifo.len() < 8) << 1) | u64::from(self.s.pending.is_none() && self.s.tx_fifo.is_empty())
+                (u64::from(self.s.tx_fifo.len() < 8) << 1)
+                    | u64::from(self.s.pending.is_none() && self.s.tx_fifo.is_empty())
                     | (u64::from(self.s.rx.is_some()) << 2)
                     | (u64::from(self.s.pending.is_some()) << 4)
             }
@@ -132,26 +143,35 @@ impl Device for PanelSerial {
                     self.s.rx = None;
                     self.s.rx_fifo.clear();
                 }
-                if v & 2 != 0 { self.s.tx_fifo.clear(); }
+                if v & 2 != 0 {
+                    self.s.tx_fifo.clear();
+                }
             }
             0x24 if v == 0 => self.s.interrupt_enable = 0,
             8 if v <= 0xffff => {
-                if !matches!(self.s.control & 0xff, 0x0f | 0xcf) || self.s.enable & 2 == 0 || self.s.divider == 0 {
+                if !matches!(self.s.control & 0xff, 0x0f | 0xcf)
+                    || self.s.enable & 2 == 0
+                    || self.s.divider == 0
+                {
                     cx.fail("unsupported/unconfigured SPI9 panel mode");
                     return;
                 }
-                if self.s.control & 0xff == 0xcf && self
-                    .pins
-                    .lock()
-                    .unwrap()
-                    .output_level(self.chip_select.0, self.chip_select.1)
-                    != 0
+                if self.s.control & 0xff == 0xcf
+                    && self
+                        .pins
+                        .lock()
+                        .unwrap()
+                        .output_level(self.chip_select.0, self.chip_select.1)
+                        != 0
                 {
                     cx.fail("SPI9 panel requires its declared active-low GPIO chip select");
                     return;
                 }
                 if self.s.pending.is_some() {
-                    if self.s.tx_fifo.len() >= 8 { cx.fail("SPI9 transmit FIFO full"); return; }
+                    if self.s.tx_fifo.len() >= 8 {
+                        cx.fail("SPI9 transmit FIFO full");
+                        return;
+                    }
                     self.s.tx_fifo.push(v as u16);
                     return;
                 }
@@ -214,9 +234,9 @@ impl Device for PanelSerial {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use fujimod_emulator_xp5_io::gpio::Gpio;
-    use fujimod_emulator_devices::xp5::pins::Pins;
     use fujimod_emulator_devices::test_host::recording::RecordingHost;
+    use fujimod_emulator_devices::xp5::pins::Pins;
+    use fujimod_emulator_xp5_io::gpio::Gpio;
     const BASE: u64 = 0xff919000;
     #[test]
     fn panel_uses_gpio_drive_and_serial_clock_across_early_ticks_and_restore() {
@@ -326,16 +346,25 @@ mod tests {
         let mut host = RecordingHost::default();
         {
             let mut cx = Cx::new(&mut host, 0, 0, 0);
-            for (o,v) in [(0,0x0f),(4,2),(0x10,28),(8,0x1234),(8,0x5678)] { panel.write(&mut cx, BASE+o,4,v); }
+            for (o, v) in [(0, 0x0f), (4, 2), (0x10, 28), (8, 0x1234), (8, 0x5678)] {
+                panel.write(&mut cx, BASE + o, 4, v);
+            }
             assert!(cx.refusal().is_none());
         }
-        host.now = panel.next_deadline(0).unwrap(); panel.advance(&mut Cx::new(&mut host,0,0,0));
-        host.now = panel.next_deadline(host.now).unwrap(); panel.advance(&mut Cx::new(&mut host,0,0,0));
-        assert_eq!(panel.save()["mode0_words"], serde_json::json!([0x1234,0x5678]));
-        let mut cx=Cx::new(&mut host,0,0,0);
-        assert_ne!(panel.read(&mut cx, BASE+0xc,4)&4,0); panel.read(&mut cx,BASE+8,4);
-        assert_ne!(panel.read(&mut cx, BASE+0xc,4)&4,0); panel.read(&mut cx,BASE+8,4);
-        assert_eq!(panel.read(&mut cx, BASE+0xc,4)&4,0);
+        host.now = panel.next_deadline(0).unwrap();
+        panel.advance(&mut Cx::new(&mut host, 0, 0, 0));
+        host.now = panel.next_deadline(host.now).unwrap();
+        panel.advance(&mut Cx::new(&mut host, 0, 0, 0));
+        assert_eq!(
+            panel.save()["mode0_words"],
+            serde_json::json!([0x1234, 0x5678])
+        );
+        let mut cx = Cx::new(&mut host, 0, 0, 0);
+        assert_ne!(panel.read(&mut cx, BASE + 0xc, 4) & 4, 0);
+        panel.read(&mut cx, BASE + 8, 4);
+        assert_ne!(panel.read(&mut cx, BASE + 0xc, 4) & 4, 0);
+        panel.read(&mut cx, BASE + 8, 4);
+        assert_eq!(panel.read(&mut cx, BASE + 0xc, 4) & 4, 0);
     }
 
     #[test]
@@ -362,5 +391,4 @@ mod tests {
         assert_eq!(panel.save()["words"], serde_json::json!([]));
         assert!(cx.refusal().is_none());
     }
-
 }

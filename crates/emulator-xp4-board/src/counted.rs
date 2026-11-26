@@ -318,7 +318,11 @@ impl Cluster {
         let mut page = None;
         for address in cpu.take_entries()? {
             let address = u32::try_from(address).map_err(|_| "counted XP4 entry above 4 GiB")?;
-            self.record(core, address, self.word_near(core, u64::from(address), &mut page)?);
+            self.record(
+                core,
+                address,
+                self.word_near(core, u64::from(address), &mut page)?,
+            );
         }
         Ok(())
     }
@@ -328,7 +332,12 @@ impl Cluster {
     /// no deadline is due, no coherence or remap work is queued, no translation
     /// maintenance is unsettled and the slice ended where the window goes on.
     /// Then `remaining` is that next slice and the run goes on in place.
-    fn continue_alone(&self, core: usize, remaining: &mut u64, window: &u64) -> Result<bool, String> {
+    fn continue_alone(
+        &self,
+        core: usize,
+        remaining: &mut u64,
+        window: &u64,
+    ) -> Result<bool, String> {
         let state = unsafe { &*self.state.get() };
         if *window == 0
             || state.waiting[core] != 0

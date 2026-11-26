@@ -122,7 +122,8 @@ fn devices() -> (
             CompletionLevel::High,
             connections,
             irqs,
-        ).unwrap(),
+        )
+        .unwrap(),
         super::super::routing::Block98500::new(0x8000, routing).unwrap(),
         port,
     )

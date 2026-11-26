@@ -104,11 +104,18 @@ enum Area {
 
 impl Port {
     pub fn new(options: Options, contacts: Contacts) -> Result<Self, String> {
-        let overlaps = options.phy < options.host + HOST_SIZE && options.host < options.phy + PHY_SIZE;
+        let overlaps =
+            options.phy < options.host + HOST_SIZE && options.host < options.phy + PHY_SIZE;
         if options.phy & 0xff != 0
             || options.host & 0xff != 0
-            || options.phy.checked_add(PHY_SIZE).is_none_or(|end| end > 1 << 32)
-            || options.host.checked_add(HOST_SIZE).is_none_or(|end| end > 1 << 32)
+            || options
+                .phy
+                .checked_add(PHY_SIZE)
+                .is_none_or(|end| end > 1 << 32)
+            || options
+                .host
+                .checked_add(HOST_SIZE)
+                .is_none_or(|end| end > 1 << 32)
             || overlaps
         {
             return Err("Invalid UHS-II port PHY or host base".into());
@@ -123,7 +130,10 @@ impl Port {
     }
 
     fn area(&self, address: u64) -> Option<Area> {
-        if let Some(offset) = address.checked_sub(self.options.phy).filter(|o| *o < PHY_SIZE) {
+        if let Some(offset) = address
+            .checked_sub(self.options.phy)
+            .filter(|o| *o < PHY_SIZE)
+        {
             Some(Area::Phy(offset))
         } else {
             address
@@ -139,7 +149,11 @@ impl Port {
         let present = self.contacts.present();
         0x20000
             | if present { 0x50000 } else { 0 }
-            | if present && !self.contacts.protected() { 0x80000 } else { 0 }
+            | if present && !self.contacts.protected() {
+                0x80000
+            } else {
+                0
+            }
     }
 
     /// Publish which interface owns the slot's lines.
@@ -233,7 +247,11 @@ impl Port {
 
     fn write_host(&mut self, cx: &mut Cx<'_>, offset: u64, size: u8, value: u32) {
         match (offset, size) {
-            (0x2c, 2) => return self.clocks.write(cx, self.options.host + 0x2c, 2, u64::from(value)),
+            (0x2c, 2) => {
+                return self
+                    .clocks
+                    .write(cx, self.options.host + 0x2c, 2, u64::from(value));
+            }
             (0x2f, 1) if value & 1 != 0 && value & !7 == 0 => return self.reset_all(cx),
             _ => {}
         }
@@ -455,7 +473,12 @@ mod tests {
         assert!(cx.refusal().is_some());
         assert!(
             Port::new(
-                Options { phy: PHY, host: PHY + 0x100, capabilities: 0, clock_ticks: 1 },
+                Options {
+                    phy: PHY,
+                    host: PHY + 0x100,
+                    capabilities: 0,
+                    clock_ticks: 1
+                },
                 Contacts::new(false, false),
             )
             .is_err()

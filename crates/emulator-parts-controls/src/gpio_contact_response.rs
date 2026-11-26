@@ -1,7 +1,10 @@
 //! A declared response from driven GPIO pads to sensed GPIO pad levels.
 //! Its mechanical identity is unknown; scenarios provide the pins, phases,
 //! initial levels and physical GPIO interrupt routes.
-use fujimod_emulator_devices::{Cx, Device, parts::pins::{Pin, Pins}};
+use fujimod_emulator_devices::{
+    Cx, Device,
+    parts::pins::{Pin, Pins},
+};
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Deserialize, Serialize)]
@@ -193,7 +196,13 @@ impl Device for GpioContactResponse {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use fujimod_emulator_devices::{bus::InterruptLine, exr2::gpio::{BASE, Edge, Gpio, InitialOutput, InputIrq, Options as GpioOptions, Wiring as GpioWiring}, test_host::{TestHost, advance, write}};
+    use fujimod_emulator_devices::{
+        bus::InterruptLine,
+        exr2::gpio::{
+            BASE, Edge, Gpio, InitialOutput, InputIrq, Options as GpioOptions, Wiring as GpioWiring,
+        },
+        test_host::{TestHost, advance, write},
+    };
 
     fn pin(port: u8, pin: u8) -> Pin {
         Pin { port, pin }

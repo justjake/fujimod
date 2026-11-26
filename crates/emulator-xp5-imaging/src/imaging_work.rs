@@ -94,7 +94,7 @@
 use fujimod_emulator_devices::{Cx, Device};
 use fujimod_emulator_imaging::frame::{self, YuvLayout};
 use serde::{Deserialize, Serialize};
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use std::collections::BTreeMap;
 
 #[derive(Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
@@ -187,7 +187,10 @@ impl Work {
     /// MOVDC: scale the host scene's linear levels by the sensor exposure relative to the
     /// reference ([`frame::paint_scene_exposed`]), read at each frame, so live view follows the
     /// firmware's gain programming.
-    pub fn with_exposure(mut self, exposure: fujimod_emulator_imaging::exposure::ExposureHandle) -> Self {
+    pub fn with_exposure(
+        mut self,
+        exposure: fujimod_emulator_imaging::exposure::ExposureHandle,
+    ) -> Self {
         self.exposure = Some(exposure);
         self
     }
@@ -285,7 +288,10 @@ impl Work {
                         "MOVDC two-plane output requires a nonzero 8-byte-aligned chroma address, not {chroma:#x}"
                     ));
                 }
-                YuvLayout::TwoPlane420 { chroma, chroma_stride: stride }
+                YuvLayout::TwoPlane420 {
+                    chroma,
+                    chroma_stride: stride,
+                }
             };
             // XT5_SCENE (a host input outside the checkpoint) replaces the flat source.
             let exposure = self
@@ -343,7 +349,10 @@ impl Work {
                 || source == 0
                 || address == 0
             {
-                return Err(format!("unsupported MOVRSZ mode/geometry: control={control:#x} size={:#x} input_stride={input_stride:#x} output_stride={output_stride:#x} source={source:#x} destination={address:#x}",self.state.r(0x1c)));
+                return Err(format!(
+                    "unsupported MOVRSZ mode/geometry: control={control:#x} size={:#x} input_stride={input_stride:#x} output_stride={output_stride:#x} source={source:#x} destination={address:#x}",
+                    self.state.r(0x1c)
+                ));
             }
             let length = width as usize * height as usize * 2;
             let mut input = vec![0; length];
@@ -385,8 +394,13 @@ impl Work {
         // Input class (+08 bits 1..0): 0 packed 4:2:2, 1 8-bit luma.
         let bytes = if control & 3 == 0 { 2 } else { 1 };
         let h = r(0x44).to_be_bytes();
-        let v = [(r(0x40) >> 16) & 0x7f, (r(0x40) >> 8) & 0x7f, r(0x40) & 0x7f];
-        let horizontal = (control & 0x0100_0000 != 0).then_some([h[0], h[1], h[2], h[3], h[2], h[1], h[0]]);
+        let v = [
+            (r(0x40) >> 16) & 0x7f,
+            (r(0x40) >> 8) & 0x7f,
+            r(0x40) & 0x7f,
+        ];
+        let horizontal =
+            (control & 0x0100_0000 != 0).then_some([h[0], h[1], h[2], h[3], h[2], h[1], h[0]]);
         let vertical = (control & 0x0010_0000 != 0).then_some([v[0], v[1], v[2], v[1], v[0]]);
         if control & !0x0110_0031 != 0
             || horizontal.is_some_and(|t| t.iter().map(|&w| u32::from(w)).sum::<u32>() != 256)
@@ -424,14 +438,23 @@ impl Work {
         let mut rows = Vec::with_capacity(height * width / 2);
         for y in 0..height {
             cx.ram_read(source + (y * input_stride) as u64, &mut line)?;
-            let luma = |x: usize| if bytes == 2 { line[x / 2 * 4 + x % 2] } else { line[x] };
+            let luma = |x: usize| {
+                if bytes == 2 {
+                    line[x / 2 * 4 + x % 2]
+                } else {
+                    line[x]
+                }
+            };
             rows.extend((0..width / 2).map(|x| match horizontal {
                 None => luma(2 * x),
                 Some(taps) => {
                     let sum: u32 = taps
                         .iter()
                         .enumerate()
-                        .map(|(t, &w)| u32::from(w) * u32::from(luma((2 * x + t).saturating_sub(3).min(width - 1))))
+                        .map(|(t, &w)| {
+                            u32::from(w)
+                                * u32::from(luma((2 * x + t).saturating_sub(3).min(width - 1)))
+                        })
                         .sum();
                     ((sum + 128) >> 8) as u8
                 }
@@ -447,7 +470,11 @@ impl Work {
                         let sum: u32 = taps
                             .iter()
                             .enumerate()
-                            .map(|(t, &w)| w * u32::from(rows[(2 * y + t).saturating_sub(2).min(height - 1) * half + x]))
+                            .map(|(t, &w)| {
+                                w * u32::from(
+                                    rows[(2 * y + t).saturating_sub(2).min(height - 1) * half + x],
+                                )
+                            })
                             .sum();
                         ((sum + 64) >> 7) as u8
                     }
@@ -767,12 +794,18 @@ mod tests {
         // 8x4 frames with stride 8: Y at 0x40 * n, C 0x20 after it.
         let planes = |work: &mut Work, host: &mut RecordingHost, n: u64| {
             let mut cx = Cx::new(host, 0, 0, 0);
-            for (o, v) in [(0xc4, 0x100 + 0x40 * n), (0xc8, 1), (0xcc, 0x120 + 0x40 * n)] {
+            for (o, v) in [
+                (0xc4, 0x100 + 0x40 * n),
+                (0xc8, 1),
+                (0xcc, 0x120 + 0x40 * n),
+            ] {
                 work.write(&mut cx, BASE + o, 4, v);
             }
         };
-        let written = |ram: &[u8], n: usize| ram[0x40 * n..0x40 * n + 0x30].iter().all(|v| *v != 0x55);
-        let clean = |ram: &[u8], n: usize| ram[0x40 * n..0x40 * n + 0x40].iter().all(|v| *v == 0x55);
+        let written =
+            |ram: &[u8], n: usize| ram[0x40 * n..0x40 * n + 0x30].iter().all(|v| *v != 0x55);
+        let clean =
+            |ram: &[u8], n: usize| ram[0x40 * n..0x40 * n + 0x40].iter().all(|v| *v == 0x55);
         let mut host = RecordingHost {
             ram_base: 0x1_0000_0100,
             ram: vec![0x55; 0x200],
@@ -780,7 +813,14 @@ mod tests {
         };
         let mut work = Work::movdc(BASE, 1000, 128).unwrap();
         let mut cx = Cx::new(&mut host, 0, 0, 0);
-        for (o, v) in [(8, 0x101), (0x18, (3 << 16) | 7), (0xc0, 1), (0xd0, 8), (0xd8, 0x10030001), (0xf0, 0xb)] {
+        for (o, v) in [
+            (8, 0x101),
+            (0x18, (3 << 16) | 7),
+            (0xc0, 1),
+            (0xd0, 8),
+            (0xd8, 0x10030001),
+            (0xf0, 0xb),
+        ] {
             work.write(&mut cx, BASE + o, 4, v);
         }
         planes(&mut work, &mut host, 0);
@@ -871,7 +911,12 @@ mod tests {
         };
         setup(&mut work, &mut host, 0xb);
         let mut cx = Cx::new(&mut host, 0, 0, 0);
-        for (o, v) in [(8, 0x100), (0x18, 0x167027f), (0xd0, 0x500), (0xd8, 0x10030002)] {
+        for (o, v) in [
+            (8, 0x100),
+            (0x18, 0x167027f),
+            (0xd0, 0x500),
+            (0xd8, 0x10030002),
+        ] {
             work.write(&mut cx, BASE + o, 4, v);
         }
         host.now = 1_000_000;
@@ -901,7 +946,13 @@ mod tests {
         setup(&mut work, &mut host, 0xb);
         let mut cx = Cx::new(&mut host, 0, 0, 0);
         // 8x3, stride 12: chroma at 0x1_0000_0200 gets ceil(3 / 2) = 2 lines.
-        for (o, v) in [(8, 0x101), (0x18, (2 << 16) | 7), (0xc8, 1), (0xcc, 0x200), (0xd0, 12)] {
+        for (o, v) in [
+            (8, 0x101),
+            (0x18, (2 << 16) | 7),
+            (0xc8, 1),
+            (0xcc, 0x200),
+            (0xd0, 12),
+        ] {
             work.write(&mut cx, BASE + o, 4, v);
         }
         host.now = 1_000_000;
@@ -915,7 +966,10 @@ mod tests {
         assert!(host.ram[16 + 36..0x100].iter().all(|v| *v == 0x55));
         for y in 0..2 {
             assert_eq!(&host.ram[0x100 + y * 12..0x100 + y * 12 + 8], &[128; 8]);
-            assert_eq!(&host.ram[0x100 + y * 12 + 8..0x100 + y * 12 + 12], &[0x55; 4]);
+            assert_eq!(
+                &host.ram[0x100 + y * 12 + 8..0x100 + y * 12 + 12],
+                &[0x55; 4]
+            );
         }
         assert!(host.ram[0x100 + 24..].iter().all(|v| *v == 0x55));
         assert_eq!(work.save()["state"]["frames"], 1);
@@ -1175,18 +1229,46 @@ mod resize_tests {
             work.advance(&mut cx);
             cx.refusal().map(str::to_owned)
         };
-        let rows = |host: &RecordingHost| [0, 1].map(|y| host.ram[0x2000 + y * 24..][..16].to_vec());
+        let rows =
+            |host: &RecordingHost| [0, 1].map(|y| host.ram[0x2000 + y * 24..][..16].to_vec());
         // No filter: input (2x, 2y); the destination stride gap is left alone.
         assert_eq!(run(&mut work, &mut host, &[(8, 0x10)]), None);
-        assert_eq!(rows(&host), [0, 1].map(|y| (0..16).map(|x| luma(2 * x, 2 * y)).collect::<Vec<_>>()));
+        assert_eq!(
+            rows(&host),
+            [0, 1].map(|y| (0..16).map(|x| luma(2 * x, 2 * y)).collect::<Vec<_>>())
+        );
         assert_eq!(host.ram[0x2000 + 16], 0xee);
         // 8-bit luma input (class 1, stride 32): the same picture.
-        assert_eq!(run(&mut work, &mut host, &[(8, 0x11), (0x14, 0x1000), (0x18, 32)]), None);
-        assert_eq!(rows(&host), [0, 1].map(|y| (0..16).map(|x| luma(2 * x, 2 * y)).collect::<Vec<_>>()));
+        assert_eq!(
+            run(
+                &mut work,
+                &mut host,
+                &[(8, 0x11), (0x14, 0x1000), (0x18, 32)]
+            ),
+            None
+        );
+        assert_eq!(
+            rows(&host),
+            [0, 1].map(|y| (0..16).map(|x| luma(2 * x, 2 * y)).collect::<Vec<_>>())
+        );
         // Both filters (+44 taps 0 0 64 128 64 0 0, +40 taps 0 32 64 32 0) on the ramp: exact
         // inside, the clamped top edge pulls line 0 up by 2.
-        assert_eq!(run(&mut work, &mut host, &[(8, 0x1100010), (0x44, 0x40 << 8 | 0x80), (0x40, 32 << 8 | 64)]), None);
-        assert_eq!(rows(&host), [2, 16].map(|base| (0..16).map(|x| (2 * x + base) as u8).collect::<Vec<_>>()));
+        assert_eq!(
+            run(
+                &mut work,
+                &mut host,
+                &[
+                    (8, 0x1100010),
+                    (0x44, 0x40 << 8 | 0x80),
+                    (0x40, 32 << 8 | 64)
+                ]
+            ),
+            None
+        );
+        assert_eq!(
+            rows(&host),
+            [2, 16].map(|base| (0..16).map(|x| (2 * x + base) as u8).collect::<Vec<_>>())
+        );
         // A filter that is not normalized, the undecoded +3c function (bit 16) and a pixel count
         // that is not a multiple of 32 refuse.
         for words in [
@@ -1229,7 +1311,10 @@ mod reset_size_tests {
         let mut work = Work::reset(0xff950000).unwrap();
         let mut host = RecordingHost::default();
         let mut cx = Cx::new(&mut host, 1, 0xdead, 0);
-        let offsets = [0x0c, 0x1c, 0x20, 0x28, 0x2c, 0x38, 0x3c, 0x40, 0x44, 0x48, 0x4c, 0x50, 0x54, 0x58, 0x98, 0x2bc, 0x328, 0x57c, 0x5f0, 0x7a8, 0x7ac];
+        let offsets = [
+            0x0c, 0x1c, 0x20, 0x28, 0x2c, 0x38, 0x3c, 0x40, 0x44, 0x48, 0x4c, 0x50, 0x54, 0x58,
+            0x98, 0x2bc, 0x328, 0x57c, 0x5f0, 0x7a8, 0x7ac,
+        ];
         for (i, o) in offsets.into_iter().enumerate() {
             let v = 0x420012 + i as u64;
             work.write(&mut cx, 0xff950000 + o, 4, v);

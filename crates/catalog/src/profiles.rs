@@ -172,7 +172,10 @@ pub struct PrimaryControlBus {
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
-#[cfg_attr(feature = "schema", schemars(rename = "HardwareSecondaryBusRegisterChip"))]
+#[cfg_attr(
+    feature = "schema",
+    schemars(rename = "HardwareSecondaryBusRegisterChip")
+)]
 pub struct SecondaryBusRegisterChip {
     /// Seven-bit chip address.
     pub address: u64,
@@ -614,7 +617,10 @@ pub struct Radiometry {
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 #[serde(deny_unknown_fields)]
-#[cfg_attr(feature = "schema", schemars(rename = "HardwareRadiometricCalibration"))]
+#[cfg_attr(
+    feature = "schema",
+    schemars(rename = "HardwareRadiometricCalibration")
+)]
 pub struct RadiometricCalibration {
     /// Raw response to the reference white, per colour.
     pub reference_white: Vec<u64>,

@@ -6,8 +6,8 @@
 //!
 //! This models causal transfers, with no bus-arbitration timing claim: a ready
 //! beat runs at `now`. No timer is invented while waiting for a peripheral.
-use fujimod_emulator_devices::checkpoint::Checkpoint;
 use fujimod_emulator_devices::bus::InterruptLine;
+use fujimod_emulator_devices::checkpoint::Checkpoint;
 use fujimod_emulator_devices::dma::{self, Direction, ReadWindow, SharedPort};
 use fujimod_emulator_devices::{Cx, Device};
 use serde::{Deserialize, Serialize};
@@ -213,7 +213,14 @@ impl Pair {
             || !burst_ok(c.source_shape)
             || !burst_ok(c.destination_shape)
             || c.control
-                & !(ENABLE | SOFTWARE | 0xf00000 | SERIAL_ACCESS | REQUEST_OPTION | BLOCK | ACK_WRITE | 3)
+                & !(ENABLE
+                    | SOFTWARE
+                    | 0xf00000
+                    | SERIAL_ACCESS
+                    | REQUEST_OPTION
+                    | BLOCK
+                    | ACK_WRITE
+                    | 3)
                 != 0
             || c.source_shape & !shape_mask != 0
             || c.destination_shape & !shape_mask != 0
@@ -289,17 +296,32 @@ impl Pair {
         match self.connection(lane, c)? {
             Some(p) if p.direction == Direction::Receive => {
                 // Check destination before consuming an irreversible FIFO word.
-                dma::bus_read(&self.read_windows, cx, c.destination as u64, &mut bytes[..width as usize])?;
+                dma::bus_read(
+                    &self.read_windows,
+                    cx,
+                    c.destination as u64,
+                    &mut bytes[..width as usize],
+                )?;
                 let word = p
                     .port
                     .lock()
                     .map_err(|_| "XDMAC port poisoned")?
                     .receive(cx.now(), width)?;
                 bytes = word.to_le_bytes();
-                dma::bus_write(&self.read_windows, cx, c.destination as u64, &bytes[..width as usize])?;
+                dma::bus_write(
+                    &self.read_windows,
+                    cx,
+                    c.destination as u64,
+                    &bytes[..width as usize],
+                )?;
             }
             Some(p) => {
-                dma::bus_read(&self.read_windows, cx, c.source as u64, &mut bytes[..width as usize])?;
+                dma::bus_read(
+                    &self.read_windows,
+                    cx,
+                    c.source as u64,
+                    &mut bytes[..width as usize],
+                )?;
                 p.port.lock().map_err(|_| "XDMAC port poisoned")?.transmit(
                     cx.now(),
                     width,
@@ -307,8 +329,18 @@ impl Pair {
                 )?;
             }
             None => {
-                dma::bus_read(&self.read_windows, cx, c.source as u64, &mut bytes[..width as usize])?;
-                dma::bus_write(&self.read_windows, cx, c.destination as u64, &bytes[..width as usize])?;
+                dma::bus_read(
+                    &self.read_windows,
+                    cx,
+                    c.source as u64,
+                    &mut bytes[..width as usize],
+                )?;
+                dma::bus_write(
+                    &self.read_windows,
+                    cx,
+                    c.destination as u64,
+                    &bytes[..width as usize],
+                )?;
             }
         }
         let c = &mut self.state.channels[lane];

@@ -638,9 +638,7 @@ impl Model {
         match self {
             Self::Power { gpio, .. }
             | Self::ContactActuator { gpio, .. }
-            | Self::ContactCam { gpio, .. } => {
-                refs.push(gpio.as_str())
-            }
+            | Self::ContactCam { gpio, .. } => refs.push(gpio.as_str()),
             Self::SdHost {
                 pins, clock_gate, ..
             } => {

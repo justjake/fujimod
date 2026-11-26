@@ -120,9 +120,11 @@ impl Session {
                 state.packet().ok_or("power packet is unavailable")?
             };
             let counts = self.board.instruction_counts();
-            let inputs = cycle.logic_inputs.iter().map(|name| {
-                Ok((name.clone(), self.resources.logic_level(name)?.high()))
-            }).collect::<Result<Vec<_>, String>>()?;
+            let inputs = cycle
+                .logic_inputs
+                .iter()
+                .map(|name| Ok((name.clone(), self.resources.logic_level(name)?.high())))
+                .collect::<Result<Vec<_>, String>>()?;
             let mut next = cycle.builder.build(target, counts.clone(), packet)?;
             if next.power_cycle.is_some()
                 || next.board.now() != target
@@ -157,7 +159,9 @@ impl Session {
                     let mut offset = 0;
                     while offset < size {
                         let count = buffer.len().min(size - offset);
-                        let address = base.checked_add(offset as u64).ok_or("retained RAM range overflows")?;
+                        let address = base
+                            .checked_add(offset as u64)
+                            .ok_or("retained RAM range overflows")?;
                         self.board.inspect_backing(address, &mut buffer[..count])?;
                         next.board.restore_backing(address, &buffer[..count])?;
                         offset += count;

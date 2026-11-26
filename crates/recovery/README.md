@@ -33,12 +33,12 @@ card, so that DAT can be any firmware the updater flashes.
 
 File names follow the Fujifilm service manuals' SD_BOOT packages:
 
-| Processor | Files | Roles |
-| --- | --- | --- |
-| EXR, EXR Pro | `ffsys.bin`, `ffboot.bin`, `ffuser.bin` | ROM settings header; small loader (the ROM reads only 16 bits of its length); OS image |
-| EXR II, X-Processor Pro | `ffsys.bin`, `ffboot.bin` | ROM settings header; OS image |
-| X-Processor 4 | `ffinit.bin`, `ffboot.bin` | ROM-run first stage that sets up DRAM; OS image |
-| X-Processor 5 | `marble_init.bin`, `ffboot.bin` | ROM-run first stage that sets up DRAM; OS image |
+| Processor               | Files                                   | Roles                                                                                  |
+| ----------------------- | --------------------------------------- | -------------------------------------------------------------------------------------- |
+| EXR, EXR Pro            | `ffsys.bin`, `ffboot.bin`, `ffuser.bin` | ROM settings header; small loader (the ROM reads only 16 bits of its length); OS image |
+| EXR II, X-Processor Pro | `ffsys.bin`, `ffboot.bin`               | ROM settings header; OS image                                                          |
+| X-Processor 4           | `ffinit.bin`, `ffboot.bin`              | ROM-run first stage that sets up DRAM; OS image                                        |
+| X-Processor 5           | `marble_init.bin`, `ffboot.bin`         | ROM-run first stage that sets up DRAM; OS image                                        |
 
 Booting with zeroed or scrambled internal storage is out of scope.
 

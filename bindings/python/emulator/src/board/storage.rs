@@ -111,10 +111,12 @@ impl NandMedium {
     ) -> PyResult<Self> {
         let overlays = overlays
             .into_iter()
-            .map(|(offset, bytes)| fujimod_emulator_devices::parts::nand::Overlay {
-                offset,
-                bytes: bytes.into(),
-            })
+            .map(
+                |(offset, bytes)| fujimod_emulator_devices::parts::nand::Overlay {
+                    offset,
+                    bytes: bytes.into(),
+                },
+            )
             .collect();
         let mut tags = BTreeMap::new();
         for (row, bytes) in spare {

@@ -111,7 +111,8 @@ fn jpeg_engines_restore_tables_and_status() {
         100,
         10,
         jpeg::Registers::LastWrite,
-    ).unwrap();
+    )
+    .unwrap();
     assert_exact_restore(&mut encoder, |d| poke(d, 0x80000 + 0x8c, 0x11223344));
     let mut decoder = jpeg::Decoder::new("xpp-jpeg-decoder", 0x80000, 100, 10).unwrap();
     assert_exact_restore(&mut decoder, |d| poke(d, 0x80000 + 0x118, 1));

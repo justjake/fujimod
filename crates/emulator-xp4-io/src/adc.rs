@@ -93,7 +93,11 @@ impl Adc {
 }
 #[derive(Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
-struct SavedAdc { inputs: [u16; 12], sample_ticks: u64, state: State }
+struct SavedAdc {
+    inputs: [u16; 12],
+    sample_ticks: u64,
+    state: State,
+}
 
 impl Adc {
     fn validate_savedadc(&self, saved: &SavedAdc) -> Result<(), String> {
@@ -200,12 +204,25 @@ impl Device for Adc {
         serde_json::json!({"inputs":self.inputs,"sample_ticks":self.sample_ticks,"adc":self.state})
     }
     fn checkpoint(&self) -> Result<fujimod_emulator_devices::checkpoint::Checkpoint, String> {
-        fujimod_emulator_devices::checkpoint::Checkpoint::encode(self.name(), &SavedAdc { inputs: self.inputs, sample_ticks: self.sample_ticks, state: self.state.clone() })
+        fujimod_emulator_devices::checkpoint::Checkpoint::encode(
+            self.name(),
+            &SavedAdc {
+                inputs: self.inputs,
+                sample_ticks: self.sample_ticks,
+                state: self.state.clone(),
+            },
+        )
     }
-    fn validate_checkpoint(&self, data: &fujimod_emulator_devices::checkpoint::Checkpoint) -> Result<(), String> {
+    fn validate_checkpoint(
+        &self,
+        data: &fujimod_emulator_devices::checkpoint::Checkpoint,
+    ) -> Result<(), String> {
         self.validate_savedadc(&data.decode(self.name())?)
     }
-    fn restore_checkpoint(&mut self, data: &fujimod_emulator_devices::checkpoint::Checkpoint) -> Result<(), String> {
+    fn restore_checkpoint(
+        &mut self,
+        data: &fujimod_emulator_devices::checkpoint::Checkpoint,
+    ) -> Result<(), String> {
         let saved: SavedAdc = data.decode(self.name())?;
         self.validate_savedadc(&saved)?;
         self.inputs = saved.inputs;
@@ -217,7 +234,11 @@ impl Device for Adc {
             serde_json::from_value(value["adc"].clone()).map_err(|e| e.to_string())?;
         let inputs: [u16; 12] =
             serde_json::from_value(value["inputs"].clone()).map_err(|e| e.to_string())?;
-        self.validate_savedadc(&SavedAdc { inputs, sample_ticks: value["sample_ticks"].as_u64().unwrap_or_default(), state: state.clone() })?;
+        self.validate_savedadc(&SavedAdc {
+            inputs,
+            sample_ticks: value["sample_ticks"].as_u64().unwrap_or_default(),
+            state: state.clone(),
+        })?;
         self.inputs = inputs;
         self.state = state;
         Ok(())

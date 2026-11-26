@@ -55,10 +55,7 @@ async fn upload(
         .await
         .map(|inner| data::UploadReply { inner })
 }
-pub(super) fn register(
-    py: Python<'_>,
-    module: &Bound<'_, PyModule>,
-) -> PyResult<()> {
+pub(super) fn register(py: Python<'_>, module: &Bound<'_, PyModule>) -> PyResult<()> {
     let memory = PyModule::new(py, "fujimod.usb.memory")?;
     memory.add_function(wrap_pyfunction!(read_range, &memory)?)?;
     memory.add_function(wrap_pyfunction!(write_range, &memory)?)?;

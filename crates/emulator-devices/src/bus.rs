@@ -5,7 +5,10 @@
 //! modeled refusals.
 
 use crate::record::Record;
-use std::sync::{Arc, atomic::{AtomicU16, AtomicU32}};
+use std::sync::{
+    Arc,
+    atomic::{AtomicU16, AtomicU32},
+};
 
 /// One device-owned register read. `offset` is
 /// relative to one declared device window. Clocked readers may decline a
@@ -63,10 +66,7 @@ impl FastReadWord {
         }
     }
 
-    pub fn clocked_u32(
-        offset: u64,
-        read: Arc<dyn Fn(u64) -> Option<u32> + Send + Sync>,
-    ) -> Self {
+    pub fn clocked_u32(offset: u64, read: Arc<dyn Fn(u64) -> Option<u32> + Send + Sync>) -> Self {
         Self {
             offset,
             value: FastReadValue::ClockedU32(read),
@@ -84,8 +84,7 @@ pub trait CoreInterrupts {
 }
 
 /// A physical level output connected by the checked board graph.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
-#[derive(tsify::Tsify)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize, tsify::Tsify)]
 #[tsify(hashmap_as_object, missing_as_null)]
 pub enum InterruptLine {
     Shared(u32),
@@ -331,7 +330,9 @@ pub trait Device: Send + std::any::Any {
     fn analog_inputs(&self) -> Option<&(dyn crate::capability::AnalogInputs + 'static)> {
         None
     }
-    fn analog_inputs_mut(&mut self) -> Option<&mut (dyn crate::capability::AnalogInputs + 'static)> {
+    fn analog_inputs_mut(
+        &mut self,
+    ) -> Option<&mut (dyn crate::capability::AnalogInputs + 'static)> {
         None
     }
     fn gravity_input(&self) -> Option<&(dyn crate::capability::GravityInput + 'static)> {
@@ -357,7 +358,9 @@ pub trait Device: Send + std::any::Any {
     fn serial_status(&self) -> Option<&(dyn crate::capability::SerialStatus + 'static)> {
         None
     }
-    fn serial_status_mut(&mut self) -> Option<&mut (dyn crate::capability::SerialStatus + 'static)> {
+    fn serial_status_mut(
+        &mut self,
+    ) -> Option<&mut (dyn crate::capability::SerialStatus + 'static)> {
         None
     }
     fn touch_panel(&self) -> Option<&(dyn crate::capability::TouchPanel + 'static)> {
@@ -393,7 +396,9 @@ pub trait Device: Send + std::any::Any {
     fn scanout_source(&self) -> Option<&(dyn crate::capability::ScanoutSource + 'static)> {
         None
     }
-    fn scanout_source_mut(&mut self) -> Option<&mut (dyn crate::capability::ScanoutSource + 'static)> {
+    fn scanout_source_mut(
+        &mut self,
+    ) -> Option<&mut (dyn crate::capability::ScanoutSource + 'static)> {
         None
     }
     fn frame_source(&self) -> Option<&(dyn crate::capability::FrameSource + 'static)> {

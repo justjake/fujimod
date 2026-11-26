@@ -31,12 +31,20 @@ export function Scroller(props: {
  * to spare: smoothly once the screen is showing, at once when it opens. */
 /** `view` is the scroll position and height when the caller knows them, so
  * moving the focus reads no layout. */
-export function reveal(scroller: HTMLElement, top: number, bottom: number, margin: number, smooth: boolean, view?: { top: number; height: number }) {
+export function reveal(
+  scroller: HTMLElement,
+  top: number,
+  bottom: number,
+  margin: number,
+  smooth: boolean,
+  view?: { top: number; height: number },
+) {
   const behavior = smooth ? 'smooth' : 'auto';
   const at = view?.top ?? scroller.scrollTop;
   const height = view?.height ?? scroller.clientHeight;
   if (top < at + margin / 2) scroller.scrollTo({ top: top - margin, behavior });
-  else if (bottom > at + height - margin / 2) scroller.scrollTo({ top: bottom - height + margin, behavior });
+  else if (bottom > at + height - margin / 2)
+    scroller.scrollTo({ top: bottom - height + margin, behavior });
 }
 
 /** A titled group of rows, divided from the group above. */
@@ -58,7 +66,11 @@ export function Section(props: {
     >
       <Show when={props.title}>
         <div class="mb-[6px] flex h-[44px] items-center gap-[8px] px-[6px]">
-          <span class={`grow font-semibold tracking-[0.02em] ${props.long ? TEXT : `whitespace-nowrap ${HEADING}`}`}>{props.title}</span>
+          <span
+            class={`grow font-semibold tracking-[0.02em] ${props.long ? TEXT : `whitespace-nowrap ${HEADING}`}`}
+          >
+            {props.title}
+          </span>
           {props.accessory}
         </div>
       </Show>
@@ -99,7 +111,13 @@ export function Button(props: {
 
 /** A menu row: its name, then its value and a chevron; OK or a tap opens its
  * options in a fly-out, as the camera's menu rows do. */
-export function OptionRow(props: { name: string; value: string; focused: boolean; anchor?: string; onClick: () => void }) {
+export function OptionRow(props: {
+  name: string;
+  value: string;
+  focused: boolean;
+  anchor?: string;
+  onClick: () => void;
+}) {
   return (
     <button
       type="button"

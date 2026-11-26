@@ -13,7 +13,10 @@ fn construction_args(
     while let Some(arg) = args.next() {
         if arg == "--success-hold-seconds" {
             if !allow_hold {
-                return Err("--success-hold-seconds requires sd-boot-v1-startup or sd-boot-v1-stage-one".into());
+                return Err(
+                    "--success-hold-seconds requires sd-boot-v1-startup or sd-boot-v1-stage-one"
+                        .into(),
+                );
             }
             if hold.is_some() {
                 return Err("--success-hold-seconds was specified twice".into());
@@ -25,7 +28,10 @@ fn construction_args(
                 )?);
         } else if arg == "--success-hold-units" {
             if !allow_hold {
-                return Err("--success-hold-units requires sd-boot-v1-startup or sd-boot-v1-stage-one".into());
+                return Err(
+                    "--success-hold-units requires sd-boot-v1-startup or sd-boot-v1-stage-one"
+                        .into(),
+                );
             }
             if units.is_some() {
                 return Err("--success-hold-units was specified twice".into());
@@ -46,7 +52,9 @@ fn construction_args(
         return Err("Expected FIRMWARE DAT NEW_DIRECTORY".into());
     }
     if hold.is_some() && units.is_some() {
-        return Err("--success-hold-seconds and --success-hold-units are mutually exclusive".into());
+        return Err(
+            "--success-hold-seconds and --success-hold-units are mutually exclusive".into(),
+        );
     }
     Ok((
         positional[0],
@@ -94,7 +102,10 @@ fn take_ram_overlay(
     if !allowed {
         return Err("--ram-overlay requires sd-boot-v1-startup or sd-boot-v1-ram-startup".into());
     }
-    let value = args.get(at + 1).ok_or("Missing --ram-overlay value")?.clone();
+    let value = args
+        .get(at + 1)
+        .ok_or("Missing --ram-overlay value")?
+        .clone();
     args.drain(at..=at + 1);
     if args.iter().any(|arg| arg == "--ram-overlay") {
         return Err("--ram-overlay was specified twice".into());
@@ -181,9 +192,19 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             println!("{}", serde_json::to_string_pretty(&rows)?);
         }
         Some(
-            command @ ("sd-card-recovery-build" | "green-led" | "sd-boot-v1-startup" | "sd-boot-v1-sd-card-startup" | "sd-boot-v1-stage-one"
-            | "sd-boot-v1-card-init-check" | "sd-boot-v1-card-error-check" | "sd-boot-v1-setup-check" | "sd-boot-v1-read-check" | "sd-boot-v1-card-read-check"
-            | "sd-boot-v1-ram-startup" | "sd-card-recovery-baseline" | "sd-boot-v2-sd-card"),
+            command @ ("sd-card-recovery-build"
+            | "green-led"
+            | "sd-boot-v1-startup"
+            | "sd-boot-v1-sd-card-startup"
+            | "sd-boot-v1-stage-one"
+            | "sd-boot-v1-card-init-check"
+            | "sd-boot-v1-card-error-check"
+            | "sd-boot-v1-setup-check"
+            | "sd-boot-v1-read-check"
+            | "sd-boot-v1-card-read-check"
+            | "sd-boot-v1-ram-startup"
+            | "sd-card-recovery-baseline"
+            | "sd-boot-v2-sd-card"),
         ) => {
             let mut inputs = args[1..].to_vec();
             let storage = if command == "sd-boot-v1-sd-card-startup" {
@@ -212,8 +233,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 &mut inputs,
                 command == "sd-boot-v1-startup" || CHECKS.contains(&command),
             )?;
-            let (firmware, dat, output, hold) =
-                construction_args(&inputs, matches!(command, "sd-boot-v1-startup" | "sd-boot-v1-stage-one" | "sd-boot-v1-ram-startup"))?;
+            let (firmware, dat, output, hold) = construction_args(
+                &inputs,
+                matches!(
+                    command,
+                    "sd-boot-v1-startup" | "sd-boot-v1-stage-one" | "sd-boot-v1-ram-startup"
+                ),
+            )?;
             let options = StartupOptions {
                 internal_flash: command == "sd-boot-v1-ram-startup",
                 fallback_wait_seconds,
@@ -267,8 +293,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 #[cfg(test)]
 mod tests {
     use super::{
-        construction_args, startup_stop, take_fallback_wait,
-        take_prepare_installed_flash, take_ram_overlay, take_ram_patches,
+        construction_args, startup_stop, take_fallback_wait, take_prepare_installed_flash,
+        take_ram_overlay, take_ram_patches,
     };
     use fujimod_recovery::{StartupOptions, StartupStop};
     fn seconds(n: u32) -> StartupOptions {
@@ -282,7 +308,13 @@ mod tests {
     }
     #[test]
     fn fallback_wait_is_taken_out_before_the_positional_arguments() {
-        let mut values = args(&["--fallback-wait-seconds", "30", "camera", "update", "output"]);
+        let mut values = args(&[
+            "--fallback-wait-seconds",
+            "30",
+            "camera",
+            "update",
+            "output",
+        ]);
         assert_eq!(take_fallback_wait(&mut values, true).unwrap(), Some(30));
         assert_eq!(values, args(&["camera", "update", "output"]));
         let mut values = args(&["camera", "update", "output"]);
@@ -292,13 +324,19 @@ mod tests {
             args(&["camera", "--fallback-wait-seconds"]),
             args(&["camera", "--fallback-wait-seconds", "-1"]),
             args(&["camera", "--fallback-wait-seconds", "x"]),
-            args(&["--fallback-wait-seconds", "1", "--fallback-wait-seconds", "2"]),
+            args(&[
+                "--fallback-wait-seconds",
+                "1",
+                "--fallback-wait-seconds",
+                "2",
+            ]),
         ] {
-            assert!(take_fallback_wait(&mut bad.clone(), true).is_err(), "{bad:?}");
+            assert!(
+                take_fallback_wait(&mut bad.clone(), true).is_err(),
+                "{bad:?}"
+            );
         }
-        assert!(
-            take_fallback_wait(&mut args(&["--fallback-wait-seconds", "1"]), false).is_err()
-        );
+        assert!(take_fallback_wait(&mut args(&["--fallback-wait-seconds", "1"]), false).is_err());
     }
     #[test]
     fn success_hold_defaults_to_zero_and_accepts_either_position() {
@@ -416,7 +454,13 @@ mod tests {
 
     #[test]
     fn ram_overlay_is_taken_out_only_for_the_xp5_startup_commands() {
-        let mut values = args(&["camera", "--ram-overlay", "overlay.json", "update", "output"]);
+        let mut values = args(&[
+            "camera",
+            "--ram-overlay",
+            "overlay.json",
+            "update",
+            "output",
+        ]);
         assert_eq!(
             take_ram_overlay(&mut values, true).unwrap(),
             Some(std::path::PathBuf::from("overlay.json"))
@@ -428,7 +472,10 @@ mod tests {
             (args(&["camera", "--ram-overlay"]), true),
             (args(&["--ram-overlay", "a", "--ram-overlay", "b"]), true),
         ] {
-            assert!(take_ram_overlay(&mut bad.clone(), allowed).is_err(), "{bad:?}");
+            assert!(
+                take_ram_overlay(&mut bad.clone(), allowed).is_err(),
+                "{bad:?}"
+            );
         }
     }
 

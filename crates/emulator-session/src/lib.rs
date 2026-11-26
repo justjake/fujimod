@@ -16,10 +16,10 @@ pub mod usb;
 pub mod usb_host;
 
 use fujimod_emulator::board::Board;
+use fujimod_emulator_devices::capability::{HdmiOutput, SerialStatus};
 use fujimod_emulator_devices::parts::card_contacts::Contacts;
 use fujimod_emulator_exr2_resources::{Resources, SensorFrame};
 use std::collections::BTreeMap;
-use fujimod_emulator_devices::capability::{HdmiOutput, SerialStatus};
 
 pub use state::SessionState;
 
@@ -80,13 +80,10 @@ impl Session {
                 },
             )?;
         self.board
-            .capability_input::<dyn HdmiOutput, _>(
-                transmitter_id,
-                |device, cx| {
-                    device.set_connected(cx, connected);
-                    Ok(())
-                },
-            )
+            .capability_input::<dyn HdmiOutput, _>(transmitter_id, |device, cx| {
+                device.set_connected(cx, connected);
+                Ok(())
+            })
     }
     pub fn configure_frames(
         &mut self,
@@ -110,9 +107,11 @@ impl Session {
     }
     /// Observe the latched sensor exposure and its live frame index.
     pub fn frame_exposure(&self, name: &str) -> Result<Option<(u64, f64, f64)>, String> {
-        self.board.inspect_capability::<dyn fujimod_emulator_devices::capability::FrameSource, _>(
-            self.node(name)?, |frames| frames.frame_exposure(),
-        )
+        self.board
+            .inspect_capability::<dyn fujimod_emulator_devices::capability::FrameSource, _>(
+                self.node(name)?,
+                |frames| frames.frame_exposure(),
+            )
     }
     /// Pure diagnostic sampling of the immutable physical frame before ISP
     /// digital gain, color processing or display encoding. `name` is a frame source.
@@ -139,10 +138,9 @@ impl Session {
         value: u16,
     ) -> Result<(), String> {
         self.board
-            .edit_capability::<dyn SerialStatus, _>(
-                self.node(name)?,
-                |serial| serial.status_input(route, register, value),
-            )
+            .edit_capability::<dyn SerialStatus, _>(self.node(name)?, |serial| {
+                serial.status_input(route, register, value)
+            })
     }
     pub fn node(&self, name: &str) -> Result<usize, String> {
         self.nodes

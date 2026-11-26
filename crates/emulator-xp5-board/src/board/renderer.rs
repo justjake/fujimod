@@ -6,11 +6,11 @@ pub fn register(bus: &mut DeviceGraph, base: u64, size: u64) -> Result<(), Strin
     if base != 0xff93c000 || size != 0x3000 {
         return Err("DMP renderer requires ff93c000+3000".into());
     }
-    bus.register(base, size, Box::new(Renderer::new(
+    bus.register(
         base,
-        153,
-        PixmapReadback::RotatesChannels,
-    )?))?;
+        size,
+        Box::new(Renderer::new(base, 153, PixmapReadback::RotatesChannels)?),
+    )?;
     bus.register(0xff90e73c, 4, Box::new(AddressHigh))?;
     Ok(())
 }

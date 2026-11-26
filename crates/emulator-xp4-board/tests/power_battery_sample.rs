@@ -15,7 +15,11 @@ fn definition(sample: Option<u16>) -> Value {
 }
 
 fn session(value: Value) -> Result<Session, String> {
-    Session::new(serde_json::from_value::<Definition>(value).map_err(|e| e.to_string())?, None, vec![])
+    Session::new(
+        serde_json::from_value::<Definition>(value).map_err(|e| e.to_string())?,
+        None,
+        vec![],
+    )
 }
 
 #[test]

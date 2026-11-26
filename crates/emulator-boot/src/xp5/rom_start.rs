@@ -97,12 +97,18 @@ pub(crate) struct SetupHandoff {
 impl SetupHandoff {
     pub fn for_firmware(firmware: &str) -> Option<Result<Self, String>> {
         match firmware {
-            "xm5-130" => Some(toml::from_str(include_str!(
-                "../../../../catalog/firmware/xm5/1.30/xp5-boot/setup-handoff.toml"
-            )).map_err(|error| format!("setup-handoff.toml: {error}"))),
-            "xe5-112" => Some(toml::from_str(include_str!(
-                "../../../../catalog/firmware/xe5/1.12/xp5-boot/setup-handoff.toml"
-            )).map_err(|error| format!("setup-handoff.toml: {error}"))),
+            "xm5-130" => Some(
+                toml::from_str(include_str!(
+                    "../../../../catalog/firmware/xm5/1.30/xp5-boot/setup-handoff.toml"
+                ))
+                .map_err(|error| format!("setup-handoff.toml: {error}")),
+            ),
+            "xe5-112" => Some(
+                toml::from_str(include_str!(
+                    "../../../../catalog/firmware/xe5/1.12/xp5-boot/setup-handoff.toml"
+                ))
+                .map_err(|error| format!("setup-handoff.toml: {error}")),
+            ),
             _ => None,
         }
     }
@@ -128,12 +134,18 @@ pub(crate) struct Handoff {
 impl Handoff {
     pub fn for_firmware(firmware: &str) -> Option<Result<Self, String>> {
         match firmware {
-            "xt5-431" => Some(toml::from_str(include_str!(
-                "../../../../catalog/firmware/xt5/4.31/xp5-boot/card-handoff.toml"
-            )).map_err(|error| format!("card-handoff.toml: {error}"))),
-            "xh2-530" => Some(toml::from_str(include_str!(
-                "../../../../catalog/firmware/xh2/5.30/xp5-boot/card-handoff.toml"
-            )).map_err(|error| format!("card-handoff.toml: {error}"))),
+            "xt5-431" => Some(
+                toml::from_str(include_str!(
+                    "../../../../catalog/firmware/xt5/4.31/xp5-boot/card-handoff.toml"
+                ))
+                .map_err(|error| format!("card-handoff.toml: {error}")),
+            ),
+            "xh2-530" => Some(
+                toml::from_str(include_str!(
+                    "../../../../catalog/firmware/xh2/5.30/xp5-boot/card-handoff.toml"
+                ))
+                .map_err(|error| format!("card-handoff.toml: {error}")),
+            ),
             _ => None,
         }
     }
@@ -176,9 +188,15 @@ impl RomStart {
             packed
         };
         if rom.len() != ROM_SIZE {
-            return Err(format!("boot ROM is {} bytes, expected {ROM_SIZE}", rom.len()));
+            return Err(format!(
+                "boot ROM is {} bytes, expected {ROM_SIZE}",
+                rom.len()
+            ));
         }
-        let digest: String = Sha256::digest(&rom).iter().map(|b| format!("{b:02x}")).collect();
+        let digest: String = Sha256::digest(&rom)
+            .iter()
+            .map(|b| format!("{b:02x}"))
+            .collect();
         if digest != ROM_SHA256 {
             return Err(format!("boot ROM SHA-256 {digest} is not the captured ROM"));
         }
@@ -194,8 +212,12 @@ impl RomStart {
         Ok(start)
     }
 
-    pub fn from_card_handoff(handoff: Handoff, files: Vec<(String, PathBuf)>) -> Result<Self, String> {
-        let (setup_windows, window_options) = (handoff.device.clone(), handoff.window_options.clone());
+    pub fn from_card_handoff(
+        handoff: Handoff,
+        files: Vec<(String, PathBuf)>,
+    ) -> Result<Self, String> {
+        let (setup_windows, window_options) =
+            (handoff.device.clone(), handoff.window_options.clone());
         let mut start = Self::with_media(Entry::CardHandoff(handoff), true, files, true)?;
         start.setup_windows = setup_windows;
         start.setup_window_options = window_options;
@@ -226,13 +248,19 @@ impl RomStart {
             // file) and `ffboot.bin` (the loader's RAM image), any case, in the root. Every other
             // name, with or without a directory, is refused, so this start cannot carry the
             // update (`FPUPDATE.DAT`, `*.DAT`) and cannot be used to prepare an installable card.
-            if !CARD_FILE_NAMES.iter().any(|allowed| name.eq_ignore_ascii_case(allowed)) {
+            if !CARD_FILE_NAMES
+                .iter()
+                .any(|allowed| name.eq_ignore_ascii_case(allowed))
+            {
                 return Err(format!(
                     "card file {name:?} refused: this emulator start carries startup-card files only \
                      (marble_init.bin, ffboot.bin)"
                 ));
             }
-            if files.iter().any(|(existing, _)| existing.eq_ignore_ascii_case(&name)) {
+            if files
+                .iter()
+                .any(|(existing, _)| existing.eq_ignore_ascii_case(&name))
+            {
                 return Err(format!("card file {name:?} given twice"));
             }
             let size = std::fs::metadata(&source)
@@ -249,7 +277,11 @@ impl RomStart {
         }
         Ok(Self {
             entry,
-            source_straps: if dials_held { STRAPS_SD } else { STRAPS_DIRECT_FLASH },
+            source_straps: if dials_held {
+                STRAPS_SD
+            } else {
+                STRAPS_DIRECT_FLASH
+            },
             card_files: files,
             card_present,
             card_image: None,
@@ -262,7 +294,9 @@ impl RomStart {
     /// Use a raw SD card image instead of the formatted volume.
     pub fn with_card_image(mut self, path: &Path) -> Result<Self, String> {
         if !self.card_files.is_empty() {
-            return Err("--sd-image and --sd-file are alternatives: the image is the whole card".into());
+            return Err(
+                "--sd-image and --sd-file are alternatives: the image is the whole card".into(),
+            );
         }
         self.card_image = Some(super::card_image::CardImage::load(path)?);
         Ok(self)
@@ -284,7 +318,10 @@ mod tests {
     #[test]
     fn x_m5_setup_handoff_declares_the_boot_setup_extent() {
         let handoff = SetupHandoff::for_firmware("xm5-130").unwrap().unwrap();
-        assert_eq!((handoff.pc, handoff.dat_offset, handoff.length), (0xff80_0000, 0xabc, 0x2c000));
+        assert_eq!(
+            (handoff.pc, handoff.dat_offset, handoff.length),
+            (0xff80_0000, 0xabc, 0x2c000)
+        );
         assert_eq!(handoff.sha256.len(), 64);
         assert_eq!(handoff.source_straps, 1);
         assert!(SetupHandoff::for_firmware("xt5-431").is_none());
@@ -296,9 +333,16 @@ mod tests {
     #[test]
     fn the_xt5_card_handoff_lists_its_own_setup_windows() {
         let handoff = Handoff::for_firmware("xt5-431").unwrap().unwrap();
-        assert_eq!((handoff.pc, handoff.sp, handoff.slot), (0xff80_0000, 0xff83_c000, 0xff9b_0000));
+        assert_eq!(
+            (handoff.pc, handoff.sp, handoff.slot),
+            (0xff80_0000, 0xff83_c000, 0xff9b_0000)
+        );
         // The memory-controller status the X-T5 setup polls without writing it first.
-        let status = handoff.device.iter().find(|window| window.base == 0xfaf0_7000).unwrap();
+        let status = handoff
+            .device
+            .iter()
+            .find(|window| window.base == 0xfaf0_7000)
+            .unwrap();
         assert_eq!(status.kind, "bringup-stub");
         let registers = status.options["registers"].as_array().unwrap();
         assert!(registers.iter().any(|register| {
@@ -307,8 +351,11 @@ mod tests {
                 && register["value"].as_integer() == Some(1)
         }));
         // No window is declared twice, and none overlaps another.
-        let mut extents: Vec<(u64, u64)> =
-            handoff.device.iter().map(|window| (window.base, window.base + window.size)).collect();
+        let mut extents: Vec<(u64, u64)> = handoff
+            .device
+            .iter()
+            .map(|window| (window.base, window.base + window.size))
+            .collect();
         extents.sort_unstable();
         assert!(extents.windows(2).all(|pair| pair[0].1 <= pair[1].0));
         assert!(Handoff::for_firmware("x100vi-131").is_none());
@@ -317,28 +364,49 @@ mod tests {
     #[test]
     fn the_xh2_card_handoff_declares_the_stock_setup_it_runs() {
         let handoff = Handoff::for_firmware("xh2-530").unwrap().unwrap();
-        assert_eq!((handoff.pc, handoff.sp, handoff.slot), (0xff80_0000, 0xff83_c000, 0xff9b_0000));
+        assert_eq!(
+            (handoff.pc, handoff.sp, handoff.slot),
+            (0xff80_0000, 0xff83_c000, 0xff9b_0000)
+        );
         assert_eq!(handoff.power_controller_registers["0"], 0x8202);
         assert_eq!(handoff.power_controller_registers["10"], 2);
         // The memory-controller status pages answer the setup's polls.
         for base in [0xfaf0_7000, 0xfaf1_7000, 0xfaf2_7000, 0xfaf3_7000] {
-            let status = handoff.device.iter().find(|window| window.base == base).unwrap();
+            let status = handoff
+                .device
+                .iter()
+                .find(|window| window.base == base)
+                .unwrap();
             assert_eq!(status.kind, "bringup-stub");
         }
         // No window is declared twice, and none overlaps another.
-        let mut extents: Vec<(u64, u64)> =
-            handoff.device.iter().map(|window| (window.base, window.base + window.size)).collect();
+        let mut extents: Vec<(u64, u64)> = handoff
+            .device
+            .iter()
+            .map(|window| (window.base, window.base + window.size))
+            .collect();
         extents.sort_unstable();
         assert!(extents.windows(2).all(|pair| pair[0].1 <= pair[1].0));
         let card = RomStart::from_card_handoff(handoff, vec![]).unwrap();
-        let gpio = card.setup_window_options.iter().find(|options| options.base == 0xff90_7000).unwrap();
+        let gpio = card
+            .setup_window_options
+            .iter()
+            .find(|options| options.base == 0xff90_7000)
+            .unwrap();
         assert_eq!(gpio.set["pad_model"].as_str(), Some("data-latch"));
     }
 
     #[test]
     fn a_mask_rom_start_takes_the_setup_windows_of_its_firmware() {
-        let xt5 = start(true, vec![]).unwrap().with_setup_windows_of("xt5-431").unwrap();
-        assert!(xt5.setup_windows.iter().any(|window| window.base == 0xfaf0_7000));
+        let xt5 = start(true, vec![])
+            .unwrap()
+            .with_setup_windows_of("xt5-431")
+            .unwrap();
+        assert!(
+            xt5.setup_windows
+                .iter()
+                .any(|window| window.base == 0xfaf0_7000)
+        );
         assert_eq!(xt5.reset_registers.as_ref().unwrap()["10"], 2);
         assert!(start(true, vec![]).unwrap().reset_registers.is_none());
         let handoff = Handoff::for_firmware("xt5-431").unwrap().unwrap();
@@ -346,11 +414,25 @@ mod tests {
         assert_eq!(card.setup_windows.len(), xt5.setup_windows.len());
         // The stock setup programs the GPIO output enables, so these starts use the pad model
         // that reads them.
-        let gpio = xt5.setup_window_options.iter().find(|options| options.base == 0xff90_7000).unwrap();
+        let gpio = xt5
+            .setup_window_options
+            .iter()
+            .find(|options| options.base == 0xff90_7000)
+            .unwrap();
         assert_eq!(gpio.set["pad_model"].as_str(), Some("data-latch"));
-        assert_eq!(card.setup_window_options.len(), xt5.setup_window_options.len());
+        assert_eq!(
+            card.setup_window_options.len(),
+            xt5.setup_window_options.len()
+        );
         // A firmware that declares none keeps the shared fragment alone.
-        assert!(start(true, vec![]).unwrap().with_setup_windows_of("x100vi-131").unwrap().setup_windows.is_empty());
+        assert!(
+            start(true, vec![])
+                .unwrap()
+                .with_setup_windows_of("x100vi-131")
+                .unwrap()
+                .setup_windows
+                .is_empty()
+        );
     }
 
     #[test]
@@ -372,7 +454,10 @@ mod tests {
 
     #[test]
     fn released_dials_pick_flash_straps() {
-        assert_eq!(start(false, vec![]).unwrap().source_straps, STRAPS_DIRECT_FLASH);
+        assert_eq!(
+            start(false, vec![]).unwrap().source_straps,
+            STRAPS_DIRECT_FLASH
+        );
     }
 
     #[test]
@@ -398,27 +483,43 @@ mod tests {
             "..",
             "",
         ] {
-            let error = start(true, vec![(name.to_string(), PathBuf::from("/nonexistent"))])
-                .err()
-                .expect(name);
+            let error = start(
+                true,
+                vec![(name.to_string(), PathBuf::from("/nonexistent"))],
+            )
+            .err()
+            .expect(name);
             assert!(error.contains("startup-card files only"), "{name}: {error}");
         }
     }
 
     #[test]
     fn exactly_the_two_boot_files_are_accepted_in_any_case_once_each() {
-        let directory = std::env::temp_dir().join(format!("rom-start-names-{}", std::process::id()));
+        let directory =
+            std::env::temp_dir().join(format!("rom-start-names-{}", std::process::id()));
         std::fs::create_dir_all(&directory).unwrap();
         let file = directory.join("file.bin");
         std::fs::write(&file, b"abcd").unwrap();
         let both = |first: &str, second: &str| {
-            start(true, vec![(first.to_string(), file.clone()), (second.to_string(), file.clone())])
+            start(
+                true,
+                vec![
+                    (first.to_string(), file.clone()),
+                    (second.to_string(), file.clone()),
+                ],
+            )
         };
         let start = both("marble_init.bin", "ffboot.bin").unwrap();
         assert_eq!(start.card_files.len(), 2);
-        assert!(start.assets().contains_key("ffboot.bin") && start.assets().contains_key("marble_init.bin"));
+        assert!(
+            start.assets().contains_key("ffboot.bin")
+                && start.assets().contains_key("marble_init.bin")
+        );
         both("MARBLE_INIT.BIN", "FFBOOT.BIN").unwrap();
-        for (first, second) in [("marble_init.bin", "MARBLE_INIT.BIN"), ("ffboot.bin", "FFBoot.Bin")] {
+        for (first, second) in [
+            ("marble_init.bin", "MARBLE_INIT.BIN"),
+            ("ffboot.bin", "FFBoot.Bin"),
+        ] {
             let error = both(first, second).err().unwrap();
             assert!(error.contains("given twice"), "{error}");
         }

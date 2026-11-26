@@ -146,10 +146,7 @@ impl Device for Dsp {
                 cx.unmodeled();
                 return 0;
             };
-            return bytes
-                .iter()
-                .rev()
-                .fold(0, |v, &b| v << 8 | u64::from(b));
+            return bytes.iter().rev().fold(0, |v, &b| v << 8 | u64::from(b));
         }
         if size != 4 || address & 3 != 0 {
             cx.unmodeled();
@@ -175,11 +172,7 @@ impl Device for Dsp {
         let offset = address.wrapping_sub(CONTROL);
         if offset < CONTROL_WINDOW && MAILBOX.contains(&offset) {
             let start = (offset - MAILBOX.start) as usize;
-            let Some(bytes) = self
-                .state
-                .mailbox
-                .get_mut(start..start + usize::from(size))
-            else {
+            let Some(bytes) = self.state.mailbox.get_mut(start..start + usize::from(size)) else {
                 return cx.unmodeled();
             };
             for (i, b) in bytes.iter_mut().enumerate() {

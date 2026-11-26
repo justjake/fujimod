@@ -203,7 +203,8 @@ impl Mailbox<'_> {
     }
     async fn path(&mut self, p: &str) -> Result<()> {
         require(self.idle().await?[6] == u32::MAX, "Another file is open")?;
-        self.write(self.p[5], &[p.as_bytes(), b"\0"].concat()).await?;
+        self.write(self.p[5], &[p.as_bytes(), b"\0"].concat())
+            .await?;
         self.idle_known = true;
         Ok(())
     }

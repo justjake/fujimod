@@ -121,10 +121,17 @@ fn note_address(base: u64, address: u8, ack: bool) {
     use std::sync::{Mutex, OnceLock};
     static SEEN: OnceLock<Mutex<BTreeSet<(u64, u8, bool)>>> = OnceLock::new();
     let seen = SEEN.get_or_init(|| Mutex::new(BTreeSet::new()));
-    if seen.lock().is_ok_and(|mut seen| seen.insert((base, address, ack))) {
+    if seen
+        .lock()
+        .is_ok_and(|mut seen| seen.insert((base, address, ack)))
+    {
         eprintln!(
             "FUJIMOD XP5 i2c: controller {base:#x} address {address:#04x} {}",
-            if ack { "acknowledged" } else { "not acknowledged" }
+            if ack {
+                "acknowledged"
+            } else {
+                "not acknowledged"
+            }
         );
     }
 }
@@ -192,7 +199,9 @@ impl<B: Bus> Controller<B> {
     }
     fn control(&mut self, cx: &mut Cx<'_>, value: u8) -> Result<(), String> {
         if value & (BCR_INT | BCR_GCAA | BCR_BER) != 0 {
-            return Err(format!("I2C control {value:#04x} sets status or general-call bits"));
+            return Err(format!(
+                "I2C control {value:#04x} sets status or general-call bits"
+            ));
         }
         if self.state.pending.is_some() {
             return Err("I2C control written while a byte is in flight".into());
@@ -359,8 +368,16 @@ impl<B: Bus> Device for Controller<B> {
             FSR => s.fsr,
             BC2R => {
                 s.low_drives
-                    | if s.low_drives & BC2R_SCLL == 0 { BC2R_SCLS } else { 0 }
-                    | if s.low_drives & BC2R_SDAL == 0 { BC2R_SDAS } else { 0 }
+                    | if s.low_drives & BC2R_SCLL == 0 {
+                        BC2R_SCLS
+                    } else {
+                        0
+                    }
+                    | if s.low_drives & BC2R_SDAL == 0 {
+                        BC2R_SDAS
+                    } else {
+                        0
+                    }
             }
             _ => unreachable!(),
         };
@@ -391,12 +408,16 @@ impl<B: Bus> Device for Controller<B> {
         }
     }
     fn checkpoint(&self) -> Result<Checkpoint, String> {
-        Ok(Checkpoint::encode(self.name(), &(&self.options, &self.state))?
-            .with_children(vec![self.bus.checkpoint()?]))
+        Ok(
+            Checkpoint::encode(self.name(), &(&self.options, &self.state))?
+                .with_children(vec![self.bus.checkpoint()?]),
+        )
     }
     fn validate_checkpoint(&self, saved: &Checkpoint) -> Result<(), String> {
         let (options, state): (Options, State) = saved.decode(self.name())?;
-        let [bus] = saved.children() else { return Err("I2C checkpoint lacks target state".into()); };
+        let [bus] = saved.children() else {
+            return Err("I2C checkpoint lacks target state".into());
+        };
         if options != self.options {
             return Err("I2C controller wiring differs from checkpoint".into());
         }

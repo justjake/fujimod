@@ -1,10 +1,10 @@
-use fujimod_emulator_devices::exr2::irq_routes::IrqRoutes;
 use crate::*;
+use fujimod_emulator_devices::Cx;
+use fujimod_emulator_devices::Device;
+use fujimod_emulator_devices::exr2::irq_routes::IrqRoutes;
 use fujimod_emulator_exr2_isp_testing::*;
 use fujimod_emulator_imaging::analysis::ImageLayout;
 use fujimod_emulator_imaging::scene::{FrameEdge, ImageFrames, StatisticsFrames, StatisticsSpan};
-use fujimod_emulator_devices::Cx;
-use fujimod_emulator_devices::Device;
 pub(super) fn producer(
     hist: bool,
 ) -> (Block18000, StatisticsFrames, ImageFrames, IrqRoutes, Memory) {
@@ -742,8 +742,21 @@ fn raster_worker_finishes_while_masked_but_discards_stopped_transfers() {
 fn producer_windows_and_completion_line_are_options() {
     // EXR Processor Pro (X-Pro1) has the same producer registers at FFF22000, its parameter bank at FFF34000 and
     // raises interrupt source 0x27 when a transfer completes.
-    let images = ImageFrames::from_pixels(ImageLayout { width: 4, height: 2, stride: 8 }, vec![5; 16]).unwrap();
-    let frames = StatisticsFrames::new(vec![StatisticsSpan { destination: 0, offset: 0, bytes: vec![3; 4] }]).unwrap();
+    let images = ImageFrames::from_pixels(
+        ImageLayout {
+            width: 4,
+            height: 2,
+            stride: 8,
+        },
+        vec![5; 16],
+    )
+    .unwrap();
+    let frames = StatisticsFrames::new(vec![StatisticsSpan {
+        destination: 0,
+        offset: 0,
+        bytes: vec![3; 4],
+    }])
+    .unwrap();
     let routes = routes(0x27);
     let mut d = Block18000::new(
         fujimod_emulator_imaging::exr2_isp::options::producer::Options {
@@ -761,7 +774,12 @@ fn producer_windows_and_completion_line_are_options() {
             irq: 0x27,
             mode_layout: fujimod_emulator_imaging::exr2_isp::options::producer::ModeLayout::ExrPro,
         },
-        producer::Wiring { grid: None, frames: frames.clone(), images: images.clone(), routes },
+        producer::Wiring {
+            grid: None,
+            frames: frames.clone(),
+            images: images.clone(),
+            routes,
+        },
     )
     .unwrap();
     assert!(d.pollable(0xfff22890, 4));
@@ -799,7 +817,9 @@ fn producer_windows_and_completion_line_are_options() {
         write(&mut d, &mut m, 0xfff22000 + o, v as u64);
     }
     advance(&mut d, &mut m, 2);
-    images.publish(FrameEdge { index: 1, tick: 10 }, &[5; 16]).unwrap();
+    images
+        .publish(FrameEdge { index: 1, tick: 10 }, &[5; 16])
+        .unwrap();
     frames.publish(FrameEdge { index: 1, tick: 10 }).unwrap();
     advance(&mut d, &mut m, 10);
     assert!(m.effects.is_empty());
@@ -809,12 +829,22 @@ fn producer_windows_and_completion_line_are_options() {
 
 #[test]
 fn exr_pro_layout_refuses_parameter_bank_arithmetic() {
-    let images = ImageFrames::from_pixels(ImageLayout { width: 4, height: 2, stride: 8 }, vec![5; 16]).unwrap();
+    let images = ImageFrames::from_pixels(
+        ImageLayout {
+            width: 4,
+            height: 2,
+            stride: 8,
+        },
+        vec![5; 16],
+    )
+    .unwrap();
     let frames = StatisticsFrames::new(vec![]).unwrap();
     let options = fujimod_emulator_imaging::exr2_isp::options::producer::Options {
         pixels_per_tick: None,
         contrast: None,
-        metering: Some(fujimod_emulator_imaging::exr2_isp::options::metering::Arithmetic::RgbCellMeans12),
+        metering: Some(
+            fujimod_emulator_imaging::exr2_isp::options::metering::Arithmetic::RgbCellMeans12,
+        ),
         clock: fujimod_emulator_imaging::exr2_isp::dma::Clock::Fixed { ticks: 5 },
         ack_ticks: 2,
         stop_ticks: 3,
@@ -826,6 +856,11 @@ fn exr_pro_layout_refuses_parameter_bank_arithmetic() {
         irq: 0x27,
         mode_layout: fujimod_emulator_imaging::exr2_isp::options::producer::ModeLayout::ExrPro,
     };
-    let wiring = producer::Wiring { grid: None, frames, images, routes: routes(0x27) };
+    let wiring = producer::Wiring {
+        grid: None,
+        frames,
+        images,
+        routes: routes(0x27),
+    };
     assert!(Block18000::new(options, wiring).is_err());
 }

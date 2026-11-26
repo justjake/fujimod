@@ -104,7 +104,7 @@ impl<T: Send + Sync + 'static> Job<T> {
                 let value = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
                     fujimod_perf::run_on_worker(context, compute)
                 }))
-                    .map_err(|_| "device computation panicked".to_owned());
+                .map_err(|_| "device computation panicked".to_owned());
                 // Cancellation/rollback can discard the receiver. The calculation
                 // owns its inputs and its discarded output cannot reach guest RAM.
                 let _ = complete.send(value);

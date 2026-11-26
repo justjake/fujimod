@@ -9,8 +9,8 @@
 //! measurements.
 //! Software reset commits atomically with its register write on the guest wire;
 //! internal reset latency and the exact silicon identity are unmeasured.
-use fujimod_emulator_devices::checkpoint::Checkpoint;
 use super::serial::{Endpoint, Frame};
+use fujimod_emulator_devices::checkpoint::Checkpoint;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 
@@ -59,11 +59,19 @@ impl Registers {
         match address {
             0xf => 0x6c,
             // TDA, and XLDA and GDA with a declared motion.
-            0x1e => if self.motion.is_some() { 7 } else { 4 },
+            0x1e => {
+                if self.motion.is_some() {
+                    7
+                } else {
+                    4
+                }
+            }
             0x20 => self.temperature as u8,
             0x21 => (self.temperature >> 8) as u8,
             0x22..=0x2d => {
-                let motion = self.motion.expect("motion registers are supported only with motion");
+                let motion = self
+                    .motion
+                    .expect("motion registers are supported only with motion");
                 let index = (address - 0x22) as usize / 2;
                 let word = if index < 3 {
                     motion.angular_rate[index]
@@ -93,7 +101,9 @@ impl Endpoint for Registers {
                 ));
             }
             if !self.state.read && matches!(address, 0x1e | 0x20..=0x2d) {
-                return Err(format!("LSM6DS output register {address:#04x} is read-only"));
+                return Err(format!(
+                    "LSM6DS output register {address:#04x} is read-only"
+                ));
             }
             if !self.state.read
                 && (address == 0xf
@@ -145,8 +155,11 @@ impl Endpoint for Registers {
     }
     fn validate_checkpoint(&self, saved: &Checkpoint) -> Result<(), String> {
         let state: State = saved.decode(self.name())?;
-        if state.address.is_some_and(|a| a > 0x7f) || state.registers[0x12] & !0x74 != 0
-            || state.registers[1] != 0 || state.registers[0xd] != 0 {
+        if state.address.is_some_and(|a| a > 0x7f)
+            || state.registers[0x12] & !0x74 != 0
+            || state.registers[1] != 0
+            || state.registers[0xd] != 0
+        {
             return Err("invalid LSM6DS checkpoint".into());
         }
         Ok(())
@@ -166,8 +179,7 @@ impl Endpoint for Registers {
         if v["motion"] != json!(self.motion) {
             return Err("LSM6DS motion input differs".into());
         }
-        let state: State =
-            serde_json::from_value(v["state"].clone()).map_err(|e| e.to_string())?;
+        let state: State = serde_json::from_value(v["state"].clone()).map_err(|e| e.to_string())?;
         if state.address.is_some_and(|a| a > 0x7f)
             || state.registers[0x12] & !0x74 != 0
             || state.registers[1] != 0
@@ -185,7 +197,11 @@ mod tests {
     use super::*;
 
     fn frame(word: u16) -> Frame {
-        Frame { bits: 8, mode: 3, word }
+        Frame {
+            bits: 8,
+            mode: 3,
+            word,
+        }
     }
     fn exchange(part: &mut Registers, words: &[u16]) -> Result<Vec<u16>, String> {
         part.reset_transaction();
@@ -227,29 +243,39 @@ mod tests {
 
     #[test]
     fn declared_motion_continues_the_temperature_burst_low_byte_first() {
-        let motion = Motion { angular_rate: [1, -2, 0x0304], acceleration: [0, 0, 0x4000] };
+        let motion = Motion {
+            angular_rate: [1, -2, 0x0304],
+            acceleration: [0, 0, 0x4000],
+        };
         let mut part = Registers::new(0x0102, Some(motion));
         let out = exchange(&mut part, &[0xa0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]).unwrap();
-        assert_eq!(
-            out,
-            [0, 2, 1, 1, 0, 0xfe, 0xff, 4, 3, 0, 0, 0, 0, 0, 0x40]
-        );
+        assert_eq!(out, [0, 2, 1, 1, 0, 0xfe, 0xff, 4, 3, 0, 0, 0, 0, 0, 0x40]);
         let error = exchange(&mut part, &[0x22, 1]).unwrap_err();
         assert!(error.contains("read-only"), "{error}");
         let error = exchange(&mut part, &[0xae, 0]).unwrap_err();
         assert!(error.contains("0x2e"), "{error}");
         // The checkpoint carries the motion input.
         assert!(Registers::new(0x0102, None).restore(&part.save()).is_err());
-        assert!(Registers::new(0x0102, Some(motion)).restore(&part.save()).is_ok());
+        assert!(
+            Registers::new(0x0102, Some(motion))
+                .restore(&part.save())
+                .is_ok()
+        );
     }
 
     #[test]
     fn still_body_outputs_read_back_and_refuse_writes() {
-        let still = Motion { angular_rate: [0; 3], acceleration: [0; 3] };
+        let still = Motion {
+            angular_rate: [0; 3],
+            acceleration: [0; 3],
+        };
         let mut part = Registers::new(0, Some(still));
         assert_eq!(exchange(&mut part, &[0x8f, 0]).unwrap(), vec![0, 0x6c]);
         // The servo's burst: temperature, then gyroscope, auto-incremented.
-        assert_eq!(exchange(&mut part, &[0xa0, 0, 0, 0, 0, 0, 0]).unwrap(), vec![0; 7]);
+        assert_eq!(
+            exchange(&mut part, &[0xa0, 0, 0, 0, 0, 0, 0]).unwrap(),
+            vec![0; 7]
+        );
         assert_eq!(exchange(&mut part, &[0x9e, 0]).unwrap(), vec![0, 7]);
         assert!(exchange(&mut part, &[0x22, 1]).is_err());
         assert!(exchange(&mut part, &[0xb0, 0]).is_err());

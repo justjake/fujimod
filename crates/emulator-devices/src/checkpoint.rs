@@ -84,7 +84,10 @@ impl Checkpoint {
             ));
         }
         if let Some(offset) = first_difference(&self.bytes, &other.bytes) {
-            return Some(format!("{path}/{}: bytes differ at offset {offset}", self.kind));
+            return Some(format!(
+                "{path}/{}: bytes differ at offset {offset}",
+                self.kind
+            ));
         }
         if self.blobs.len() != other.blobs.len() {
             return Some(format!(
@@ -111,7 +114,8 @@ impl Checkpoint {
             ));
         }
         for (index, (left, right)) in self.children.iter().zip(&other.children).enumerate() {
-            if let Some(message) = left.diff_at(&format!("{path}/{}/child[{index}]", self.kind), right)
+            if let Some(message) =
+                left.diff_at(&format!("{path}/{}/child[{index}]", self.kind), right)
             {
                 return Some(message);
             }
@@ -382,7 +386,8 @@ mod tests {
         assert!(snapshot.bytes() < 8250);
         let decoded: Buffers = snapshot.decode("buffers").unwrap();
         assert_eq!(decoded, expected);
-        let decoded: Buffers = serde_json::from_value(serde_json::to_value(&expected).unwrap()).unwrap();
+        let decoded: Buffers =
+            serde_json::from_value(serde_json::to_value(&expected).unwrap()).unwrap();
         assert_eq!(decoded, expected);
         assert_eq!(
             serde_json::to_value(&decoded).unwrap(),

@@ -415,7 +415,9 @@ class Guide[C: RecordingCamera]:
 
     def save(self) -> None:
         temporary = self.output / ".guide.json.tmp"
-        temporary.write_text(json.dumps(dict(self._saved_report()), separators=(",", ":")) + "\n")
+        temporary.write_text(
+            json.dumps(dict(self._saved_report()), separators=(",", ":")) + "\n"
+        )
         os.replace(temporary, self.output / "guide.json")
 
     def _overlay_event(self, event: dict[str, object]) -> None:
@@ -614,7 +616,9 @@ class Guide[C: RecordingCamera]:
             self.recording.still(frame, seconds)
 
     @contextmanager
-    def action(self, *, navigation: bool = False, capture: bool = True) -> Generator[None]:
+    def action(
+        self, *, navigation: bool = False, capture: bool = True
+    ) -> Generator[None]:
         """Adapter boundary: present a completed input without advancing time.
 
         Execution readiness belongs to the adapter. These are recording-only
@@ -654,7 +658,9 @@ class Guide[C: RecordingCamera]:
                 print("Replaying prerequisite: " + name, flush=True)
                 entry: Prerequisite = dict(walkthrough=name, passed=False)
                 self.report["prerequisites"].append(entry)
-                with perf.span("prerequisite", board=getattr(self.camera, "board", None)):
+                with perf.span(
+                    "prerequisite", board=getattr(self.camera, "board", None)
+                ):
                     prepare(self.camera, self)
                     if self._failures:
                         raise self._failures[0]
@@ -720,7 +726,9 @@ class Guide[C: RecordingCamera]:
                 if self.input_badges is not None
                 else None,
             )
-            self.report["performance"] = perf.end_guide(getattr(self.camera, "board", None))
+            self.report["performance"] = perf.end_guide(
+                getattr(self.camera, "board", None)
+            )
             self.save()
         if error is not None:
             raise error

@@ -57,10 +57,7 @@ impl LoopbackRoom {
         };
         let owner_key = URL_SAFE_NO_PAD.encode(rng.random::<[u8; 32]>());
         let encoded = URL_SAFE_NO_PAD.encode(serde_json::to_vec(&ticket).map_err(error)?);
-        let link = format!(
-            "{}/#?remotecontrol={encoded}",
-            site.trim_end_matches('/')
-        );
+        let link = format!("{}/#?remotecontrol={encoded}", site.trim_end_matches('/'));
         let room = futures_lite::future::block_on(HostRoom::join(
             &link,
             &owner_key,
@@ -105,7 +102,10 @@ mod tests {
     #[test]
     fn a_controller_on_this_machine_joins_through_the_loopback_link() {
         let room = LoopbackRoom::start("http://127.0.0.1:1420").unwrap();
-        assert!(room.link().starts_with("http://127.0.0.1:1420/#?remotecontrol="));
+        assert!(
+            room.link()
+                .starts_with("http://127.0.0.1:1420/#?remotecontrol=")
+        );
         let link = room.link().to_owned();
         let controller = std::thread::spawn(move || {
             futures_lite::future::block_on(async {
@@ -122,7 +122,8 @@ mod tests {
             })
         });
         let reply = futures_lite::future::block_on(async {
-            let HostEvent::Controller(_, mut owner) = room.room().next_event().await.unwrap() else {
+            let HostEvent::Controller(_, mut owner) = room.room().next_event().await.unwrap()
+            else {
                 panic!("controller expected");
             };
             assert_eq!(owner.receive().await.unwrap(), b"hello");

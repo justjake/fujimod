@@ -34,7 +34,10 @@ try {
   );
   const row = page.locator('[data-asset="step:boot"]');
   const first = await row.innerText();
-  assert(await page.locator('#card-section').isHidden(), 'The SD card must stay hidden until the camera runs.');
+  assert(
+    await page.locator('#card-section').isHidden(),
+    'The SD card must stay hidden until the camera runs.',
+  );
   await page.screenshot({ path: new URL('booting.png', output).pathname, fullPage: true });
   await page.setViewportSize({ width: 390, height: 844 });
   await row.scrollIntoViewIfNeeded();

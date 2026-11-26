@@ -191,9 +191,10 @@ impl Release {
         if commit.as_deref().is_some_and(|value| !valid_commit(value)) {
             return Err(Error::InvalidCommit);
         }
-        if notes.as_ref().is_some_and(|values| {
-            values.len() > 8 || values.iter().any(|value| value.len() > 64)
-        }) {
+        if notes
+            .as_ref()
+            .is_some_and(|values| values.len() > 8 || values.iter().any(|value| value.len() > 64))
+        {
             return Err(Error::InvalidNotes);
         }
         self.date = date;
@@ -639,10 +640,8 @@ mod tests {
                 {
                     return Err(format!("longer than {maximum}"));
                 }
-                if schema.get("pattern").and_then(Value::as_str)
-                    == Some("^[0-9a-fA-F]{64}$")
-                    && (text.len() != 64
-                        || !text.bytes().all(|byte| byte.is_ascii_hexdigit()))
+                if schema.get("pattern").and_then(Value::as_str) == Some("^[0-9a-fA-F]{64}$")
+                    && (text.len() != 64 || !text.bytes().all(|byte| byte.is_ascii_hexdigit()))
                 {
                     return Err("not a full SHA-256".into());
                 }

@@ -1,28 +1,17 @@
 //! Board execution and device scheduling above the CPU backend boundary.
+#[cfg(test)]
+mod accounting_equivalence_tests;
 pub mod aprofile;
 pub mod armv7a;
 pub mod bus;
 mod callback_timing;
 mod code_shadow;
-mod mprofile_blocks;
-mod thumb_accounting;
-mod poll_loops;
-#[cfg(test)]
-mod mprofile_blocks_tests;
 #[cfg(test)]
 mod code_shadow_tests;
-#[cfg(test)]
-mod store_hook_tests;
-#[cfg(test)]
-mod settle_access_tests;
 pub mod continuation;
 pub mod decoder;
 #[cfg(test)]
 mod decoder_tests;
-#[cfg(test)]
-mod accounting_equivalence_tests;
-#[cfg(test)]
-mod restart_tests;
 pub mod discovery;
 pub mod factory;
 pub mod harness;
@@ -34,20 +23,30 @@ pub mod memory;
 #[cfg(test)]
 mod memory_tests;
 pub mod mprofile;
+mod mprofile_blocks;
+#[cfg(test)]
+mod mprofile_blocks_tests;
 pub mod observation;
-pub mod preservation;
 #[cfg(test)]
 mod observation_tests;
+mod observe;
+mod poll_loops;
+pub mod preservation;
 #[cfg(test)]
 mod preservation_tests;
-mod observe;
-pub mod write_watch;
+#[cfg(test)]
+mod restart_tests;
 mod schedule;
-mod state;
 #[cfg(test)]
 mod schedule_tests;
 #[cfg(test)]
+mod settle_access_tests;
+mod state;
+#[cfg(test)]
+mod store_hook_tests;
+#[cfg(test)]
 mod tests;
+mod thumb_accounting;
 #[cfg(test)]
 mod translation_device_tests;
 #[cfg(test)]
@@ -58,6 +57,7 @@ mod translation_matrix_tests;
 mod translation_tests;
 #[cfg(test)]
 mod workers_tests;
+pub mod write_watch;
 use bus::Bus;
 pub use fujimod_emulator_cpu::GuestProfilePhase;
 use fujimod_emulator_cpu::timeline::{Ratio, Target, Timeline};
@@ -655,7 +655,10 @@ impl Board {
         }
         let instructions = previous_instructions.unwrap_or_else(|| vec![0; cpus.len()]);
         if instructions.len() != cpus.len()
-            || instructions.iter().try_fold(0u64, |sum, n| sum.checked_add(*n)).is_none()
+            || instructions
+                .iter()
+                .try_fold(0u64, |sum, n| sum.checked_add(*n))
+                .is_none()
         {
             return Err("invalid prior processor instruction counts".into());
         }
@@ -774,9 +777,7 @@ impl Board {
             block_hooks: vec![vec![]; n],
             store_hooks: vec![None; n],
             block_execution: Cell::new(false),
-            poll_loops: Cell::new(
-                std::env::var_os("FUJIMOD_POLL_LOOPS").is_none_or(|v| v != "0"),
-            ),
+            poll_loops: Cell::new(std::env::var_os("FUJIMOD_POLL_LOOPS").is_none_or(|v| v != "0")),
             store_hooks_on_demand: vec![None; n],
             store_hook_installs: Cell::new(0),
             mmio: vec![],
@@ -938,7 +939,10 @@ impl Board {
     }
     /// Advance only the unpowered interval. Old CPU and device events cannot run.
     pub fn advance_unpowered(&mut self, at: u64) -> Result<(), String> {
-        let mut state = self.state.try_borrow_mut().map_err(|_| "board is executing")?;
+        let mut state = self
+            .state
+            .try_borrow_mut()
+            .map_err(|_| "board is executing")?;
         if !state.power_off || state.active_slice.is_some() || state.parallel.is_some() {
             return Err("unpowered advance requires a stopped, unpowered board".into());
         }
@@ -1450,7 +1454,9 @@ impl Board {
     /// Execute to a guest tick. Exact uses deterministic round-robin slices;
     /// Interactive workers finish blocks and join at device/owner barriers.
     pub fn run_until(&mut self, until: u64, quantum: usize) -> Result<(), String> {
-        if self.is_powered_off() { return Err("cannot run an unpowered board".into()); }
+        if self.is_powered_off() {
+            return Err("cannot run an unpowered board".into());
+        }
         let result = self.run_inner(Some(until), None, None, quantum);
         self.state.borrow_mut().clock_limit = None;
         if let Err(error) = &result {
@@ -1498,7 +1504,9 @@ impl Board {
         pause_after: Option<u64>,
         until: Option<u64>,
     ) -> Result<(), String> {
-        if self.is_powered_off() { return Err("cannot run an unpowered board".into()); }
+        if self.is_powered_off() {
+            return Err("cannot run an unpowered board".into());
+        }
         let start = self.state.borrow().total_instructions()?;
         if end < start && self.execution_policy() == ExecutionPolicy::Exact {
             return Err("board instruction window moved backward".into());
@@ -1708,8 +1716,8 @@ impl Board {
             } else {
                 solo_pause
             })
-                .min(remaining)
-                .min(usize::MAX as u64);
+            .min(remaining)
+            .min(usize::MAX as u64);
             let lag = s
                 .timeline
                 .lags()
@@ -1780,9 +1788,8 @@ impl Board {
             }
             s.code_run = RunCode::Running(core);
             s.code_write_deferred = false;
-            let pins_settled = s.mprofile[core].is_some()
-                && self.block_execution.get()
-                && s.settled.pass;
+            let pins_settled =
+                s.mprofile[core].is_some() && self.block_execution.get() && s.settled.pass;
             s.settled.clear();
             if pins_settled {
                 // The scheduler just refreshed deadlines and pushed pins.
@@ -1803,10 +1810,8 @@ impl Board {
             // or runnable-peer turn; those boundaries end the stable window.
             cpu.set_loop_window(self.state.borrow().loop_window())?;
             let pc = scalar(&**cpu, Register::Pc)?;
-            let mut engine_guard = fujimod_perf::engine_run(
-                u8::try_from(core).unwrap_or(u8::MAX),
-                false,
-            );
+            let mut engine_guard =
+                fujimod_perf::engine_run(u8::try_from(core).unwrap_or(u8::MAX), false);
             // Block execution has no engine counter: the board debits entries.
             let mut limit = budget;
             self.state.borrow_mut().run_entries[core] = 0;
@@ -1863,9 +1868,18 @@ impl Board {
             s.active_slice = None;
             s.mprofile_loops.end_run();
             use fujimod_emulator_cpu::{ExecutionError, Fault};
-            if blocks && matches!(&result, Err(ExecutionError::Memory {
-                fault: Fault::ReadUnmapped | Fault::WriteUnmapped | Fault::ReadProtected | Fault::WriteProtected, ..
-            })) {
+            if blocks
+                && matches!(
+                    &result,
+                    Err(ExecutionError::Memory {
+                        fault: Fault::ReadUnmapped
+                            | Fault::WriteUnmapped
+                            | Fault::ReadProtected
+                            | Fault::WriteProtected,
+                        ..
+                    })
+                )
+            {
                 s.settle_interrupted_block(&**cpu, core, scalar(&**cpu, Register::Pc)? & !1, true)?;
             } else {
                 s.settle_block(core, None)?;
@@ -1985,11 +1999,13 @@ impl Board {
                 };
                 self.hooks.push((core, hook));
                 self.store_hooks_on_demand[core] = Some(Some(hook));
-                self.store_hook_installs.set(self.store_hook_installs.get() + 1);
+                self.store_hook_installs
+                    .set(self.store_hook_installs.get() + 1);
             }
             (false, Some(hook)) => {
                 self.cpus[core].remove_hook(hook)?;
-                self.hooks.retain(|&(owner, other)| !(owner == core && other == hook));
+                self.hooks
+                    .retain(|&(owner, other)| !(owner == core && other == hook));
                 self.store_hooks_on_demand[core] = Some(None);
             }
             _ => (),
@@ -2097,7 +2113,8 @@ impl Board {
             if wanted {
                 if let Some(hook) = self.observer_hooks[core].take() {
                     cpu.remove_hook(hook)?;
-                    self.hooks.retain(|&(owner, other)| !(owner == core && other == hook));
+                    self.hooks
+                        .retain(|&(owner, other)| !(owner == core && other == hook));
                 }
                 // The binding box stays at this address until Board drops its CPU hooks.
                 unsafe {
@@ -2125,12 +2142,11 @@ impl Board {
                     // sees only watched pages) for stores.
                     for &(owner, address, bytes, _) in &self.mmio {
                         if owner == core && bytes != 0 {
-                            let hook = cpu.install_memory_restart_boundary(
-                                HookRange::Inclusive {
+                            let hook =
+                                cpu.install_memory_restart_boundary(HookRange::Inclusive {
                                     begin: address,
                                     end: address + bytes as u64 - 1,
-                                },
-                            )?;
+                                })?;
                             self.block_hooks[core].push(hook);
                         }
                     }
@@ -2140,7 +2156,8 @@ impl Board {
             } else {
                 for hook in std::mem::take(&mut self.block_hooks[core]) {
                     cpu.remove_hook(hook)?;
-                    self.hooks.retain(|&(owner, other)| !(owner == core && other == hook));
+                    self.hooks
+                        .retain(|&(owner, other)| !(owner == core && other == hook));
                 }
                 unsafe {
                     cpu.translation_hooks(None)?;
@@ -2173,7 +2190,10 @@ impl Board {
                 None => false,
             }
         };
-        let was_fast = self.state.borrow().blocks[core].as_ref().unwrap().fast_stores;
+        let was_fast = self.state.borrow().blocks[core]
+            .as_ref()
+            .unwrap()
+            .fast_stores;
         let mut flushed = active != wanted;
         if fast != was_fast {
             let hook = self.store_hooks[core].ok_or("M-profile store hook is missing")?;
@@ -2196,7 +2216,8 @@ impl Board {
         if fast && let Some(profile) = s.mprofile[core].as_mut() {
             profile.watch_reservations();
         }
-        let inline = fast && s.execution_policy == ExecutionPolicy::Interactive && s.settled.verify == 0;
+        let inline =
+            fast && s.execution_policy == ExecutionPolicy::Interactive && s.settled.verify == 0;
         let blocks = s.blocks[core].as_mut().unwrap();
         blocks.active = wanted;
         blocks.fast_stores = fast;
@@ -2301,13 +2322,20 @@ impl Drop for Board {
             );
             for b in &self.bindings {
                 if b.published_hits.get() != 0 {
-                    eprintln!("FUJIMOD execution counters: CPU{} MMIO {:#x} published-reads={}",
-                        b.core, b.base, b.published_hits.get());
+                    eprintln!(
+                        "FUJIMOD execution counters: CPU{} MMIO {:#x} published-reads={}",
+                        b.core,
+                        b.base,
+                        b.published_hits.get()
+                    );
                 }
             }
             for (core, shadow) in s.code_shadow.iter().enumerate() {
                 if let Some(shadow) = shadow {
-                    eprintln!("FUJIMOD execution counters: CPU{core} code {}", shadow.counters());
+                    eprintln!(
+                        "FUJIMOD execution counters: CPU{core} code {}",
+                        shadow.counters()
+                    );
                 }
             }
             for (core, blocks) in s.blocks.iter().enumerate() {
@@ -2339,9 +2367,7 @@ impl Drop for Board {
                 if *skips != 0 || s.polls.refused[core] != 0 {
                     eprintln!(
                         "FUJIMOD execution counters: CPU{core} poll-fast-forwards={skips} poll-reads-left-out={} rounds-refused={} last-refused(pc, entries, link)={:x?}",
-                        s.polls.reads[core],
-                        s.polls.refused[core],
-                        s.polls.refused_at[core]
+                        s.polls.reads[core], s.polls.refused[core], s.polls.refused_at[core]
                     );
                 }
             }
@@ -2452,7 +2478,10 @@ mod access_histogram {
         let key = (core, address, write);
         let should_sample = {
             let mut statistics = statistics.borrow_mut();
-            let calls = statistics.counts.entry((core, address, pc, write)).or_default();
+            let calls = statistics
+                .counts
+                .entry((core, address, pc, write))
+                .or_default();
             *calls = calls.saturating_add(1);
             let register = statistics.registers.entry(key).or_default();
             register.calls = register.calls.saturating_add(1);
@@ -2609,7 +2638,8 @@ impl State {
                 }
                 self.account(core, 1)?;
                 self.instructions[core] = self.instructions[core]
-                    .checked_add(1).ok_or("instruction counter overflow")?;
+                    .checked_add(1)
+                    .ok_or("instruction counter overflow")?;
             }
             Exit::Stopped => (),
             Exit::Hint(hint) => self.hint(core, hint),
@@ -2643,13 +2673,19 @@ impl State {
             return Ok(());
         };
         let inline = blocks.inline.take()?;
-        let admitted = blocks.pending.take().map_or(0, |(_, _, entries, _)| entries);
+        let admitted = blocks
+            .pending
+            .take()
+            .map_or(0, |(_, _, entries, _)| entries);
         if inline != 0 && entered.is_some() {
             return Err("restarted observed block after translated Thumb entries".into());
         }
         let observed = entered.unwrap_or(admitted).min(admitted);
         blocks.room += admitted - observed;
-        blocks.room = blocks.room.checked_sub(inline).ok_or("Thumb block exceeded run budget")?;
+        blocks.room = blocks
+            .room
+            .checked_sub(inline)
+            .ok_or("Thumb block exceeded run budget")?;
         let entered = observed + inline;
         if entered == 0 {
             return Ok(());
@@ -2671,22 +2707,42 @@ impl State {
         pc: u64,
         include_instruction: bool,
     ) -> Result<(), String> {
-        let Some(blocks) = self.blocks[core].as_ref() else { return Ok(()) };
+        let Some(blocks) = self.blocks[core].as_ref() else {
+            return Ok(());
+        };
         let charged = blocks.inline.charged_block();
-        let pending = blocks.pending.map(|(address, bytes, entries, _)| (address, bytes, entries));
-        let Some((address, bytes, entries)) = charged.or(pending) else { return Ok(()) };
-        let offset = pc.checked_sub(address).filter(|offset| *offset < u64::from(bytes))
+        let pending = blocks
+            .pending
+            .map(|(address, bytes, entries, _)| (address, bytes, entries));
+        let Some((address, bytes, entries)) = charged.or(pending) else {
+            return Ok(());
+        };
+        let offset = pc
+            .checked_sub(address)
+            .filter(|offset| *offset < u64::from(bytes))
             .ok_or("interrupted Thumb instruction is outside its block")?;
         let prefix = if offset == 0 {
             0
         } else {
             let mut buffer = Vec::new();
-            mprofile_blocks::count_entries(self.block_code(cpu, core, address, offset as usize, &mut buffer)?)?
+            mprofile_blocks::count_entries(self.block_code(
+                cpu,
+                core,
+                address,
+                offset as usize,
+                &mut buffer,
+            )?)?
         };
         let entered = prefix + u64::from(include_instruction);
         if charged.is_some() {
-            let tail = entries.checked_sub(entered).ok_or("invalid interrupted Thumb instruction count")?;
-            self.blocks[core].as_mut().unwrap().inline.refund_tail(tail)?;
+            let tail = entries
+                .checked_sub(entered)
+                .ok_or("invalid interrupted Thumb instruction count")?;
+            self.blocks[core]
+                .as_mut()
+                .unwrap()
+                .inline
+                .refund_tail(tail)?;
             self.settle_block(core, None)
         } else {
             self.settle_block(core, Some(entered))
@@ -2756,9 +2812,11 @@ impl State {
         } = self;
         if let Some(shadow) = code_shadow[core].as_mut() {
             let profile = &mprofile[core];
-            shadow.end_slice(cpu, scalar(cpu, Register::Pc).ok().map(|pc| pc & !1), |address| {
-                Self::code_page_checked(profile, address)
-            });
+            shadow.end_slice(
+                cpu,
+                scalar(cpu, Register::Pc).ok().map(|pc| pc & !1),
+                |address| Self::code_page_checked(profile, address),
+            );
             // DMA invalidated overlapping translated blocks before acknowledging
             // the write. Other unknown writes can leave stale blocks behind.
             if !code_run.keeps_shadow(core) {
@@ -2786,7 +2844,9 @@ impl State {
             return Ok(true);
         }
         let profile = &mprofile[core];
-        match shadow.touch(cpu, pc & !1, |address| Self::code_page_checked(profile, address)) {
+        match shadow.touch(cpu, pc & !1, |address| {
+            Self::code_page_checked(profile, address)
+        }) {
             code_shadow::Touch::Proven => Ok(false),
             code_shadow::Touch::Unchecked => {
                 shadow.entered_unchecked();
@@ -2886,9 +2946,9 @@ impl State {
                 None if self.execution_policy == ExecutionPolicy::Interactive => {
                     // Interactive runs may overshoot by a block; the frontier
                     // stops at the next deadline or run boundary.
-                    let room =
-                        self.timeline
-                            .processor_budget(core, u64::MAX, self.clock_limit)?;
+                    let room = self
+                        .timeline
+                        .processor_budget(core, u64::MAX, self.clock_limit)?;
                     self.account(core, delta.min(room))?;
                 }
                 None => self.account(core, delta)?,
@@ -3169,7 +3229,8 @@ impl State {
                     changed = true;
                 }
                 if pins.0 || pins.1 {
-                    settled &= !self.waiting[core] && !self.waiting_event[core] && self.events[core];
+                    settled &=
+                        !self.waiting[core] && !self.waiting_event[core] && self.events[core];
                     self.waiting[core] = false;
                     if self.waiting_event[core] {
                         self.waiting_event[core] = false;
@@ -3305,7 +3366,9 @@ impl State {
         self.settle_block(core, None)?;
         // Any access ends a poll loop candidate, unless it is the loop's own
         // read coming round again (`poll_round`).
-        let poll = self.blocks[core].as_mut().and_then(|blocks| blocks.poll.take());
+        let poll = self.blocks[core]
+            .as_mut()
+            .and_then(|blocks| blocks.poll.take());
         let poll64 = self.polls.last[core].take();
         self.sync(&*cpus[core], core)?;
         self.due(cpus)?;
@@ -3324,7 +3387,8 @@ impl State {
             return Ok(result);
         }
         if let Some(g) = &mut self.interrupts
-            && let Some(result) = g.access(core, address, size, value) {
+            && let Some(result) = g.access(core, address, size, value)
+        {
             let result = result?;
             self.push_pins(cpus)?;
             self.tighten(&*cpus[core], core)?;
@@ -3340,8 +3404,10 @@ impl State {
             if use_publication {
                 let tick = host.now();
                 let offset = address - binding.base;
-                if let Some(word) = binding.published_reads.iter().find_map(|read|
-                    read.published_at(offset, u32::from(size), Some(tick)))
+                if let Some(word) = binding
+                    .published_reads
+                    .iter()
+                    .find_map(|read| read.published_at(offset, u32::from(size), Some(tick)))
                 {
                     bus.finish_published_read(host, address, size)?;
                     binding.published_hits.set(binding.published_hits.get() + 1);
@@ -3545,7 +3611,10 @@ impl State {
                 let until = self.clock_limit.unwrap_or(u64::MAX).min(self.settled.until);
                 let room = self.blocks[core].as_ref().map_or(0, |blocks| blocks.room);
                 let rounds = room
-                    .min(self.timeline.processor_budget(core, u64::MAX, Some(until))?)
+                    .min(
+                        self.timeline
+                            .processor_budget(core, u64::MAX, Some(until))?,
+                    )
                     .min(self.scheduler_room(core))
                     .saturating_sub(1)
                     / period;
@@ -3714,9 +3783,9 @@ impl Host for Services<'_> {
             // An MMIO callback is inside the selecting instruction. A raw
             // stop can leave its PC unchanged and replay it on resume.
             let cpu = &self.cpus[core];
-            if let Some(progress)=cpu.instruction_progress() {
+            if let Some(progress) = cpu.instruction_progress() {
                 cpu.tighten_instruction_limit(progress)
-            }else{
+            } else {
                 // The all-instruction hook stops before the next instruction,
                 // after this MMIO instruction has retired and advanced its PC.
                 Ok(())
@@ -3741,7 +3810,9 @@ impl Host for Services<'_> {
         Ok(())
     }
     fn power_off(&mut self) -> Result<(), String> {
-        if self.active_core.is_some() { self.request_pause()?; }
+        if self.active_core.is_some() {
+            self.request_pause()?;
+        }
         self.host_pause.set(true);
         *self.power_off = true;
         Ok(())
@@ -3831,22 +3902,34 @@ impl Host for Services<'_> {
         if self.decoders.pending() {
             return Err("DMA requires committed memory decoding".into());
         }
-        self.memory
-            .watch_transfer(write_watch::WriteSource::Dma, address, bytes, self.timeline.now());
-        let owner = self.active_core.filter(|&core| {
-            self.code_run.keeps_shadow(core) && self.mprofile[core].is_some()
-        });
+        self.memory.watch_transfer(
+            write_watch::WriteSource::Dma,
+            address,
+            bytes,
+            self.timeline.now(),
+        );
+        let owner = self
+            .active_core
+            .filter(|&core| self.code_run.keeps_shadow(core) && self.mprofile[core].is_some());
         // Exact execution can complete its existing slice for a foreign write.
         // Classify the decoded physical chunks under the same mapping as the copy.
         let profile = owner
-            .filter(|&core| self.execution_policy == ExecutionPolicy::Exact && self.code_run.is_running(core))
+            .filter(|&core| {
+                self.execution_policy == ExecutionPolicy::Exact && self.code_run.is_running(core)
+            })
             .and_then(|core| self.mprofile[core].as_ref());
         let mut can_finish_slice = profile.is_some();
-        let result = self.memory.write_dma(self.cpus, self.exclusive, address, bytes, |physical, size| {
-            if can_finish_slice {
-                can_finish_slice = profile.is_some_and(|p| !p.maps_physical(physical, size));
-            }
-        });
+        let result = self.memory.write_dma(
+            self.cpus,
+            self.exclusive,
+            address,
+            bytes,
+            |physical, size| {
+                if can_finish_slice {
+                    can_finish_slice = profile.is_some_and(|p| !p.maps_physical(physical, size));
+                }
+            },
+        );
         if let Err(error) = result {
             *self.code_run = RunCode::Unknown;
             return Err(error);
@@ -3943,17 +4026,25 @@ unsafe fn before(pc: u64, _: u32, data: *mut c_void) {
             return Ok(());
         }
         if let Some(p) = &s.armv7a[b.core]
-            && s.pins[b.core].0 && p.enter_irq(cpu)? {
+            && s.pins[b.core].0
+            && p.enter_irq(cpu)?
+        {
             s.armv7a_entries[b.core].irq += 1;
             return Ok(());
         }
-        if s.observe_entry(b.core,pc,cpu)? {return Ok(());}
+        if s.observe_entry(b.core, pc, cpu)? {
+            return Ok(());
+        }
         // Architectural counters follow the core's own position.
         let now = s.timeline.processor_clock(b.core)?.now;
-        if s.aarch64_before(cpu, b.core, pc)? { return Ok(()); }
+        if s.aarch64_before(cpu, b.core, pc)? {
+            return Ok(());
+        }
         if let Some(p) = &mut s.armv7a[b.core] {
             let entry = p.before(cpu, pc, now)?;
-            if let armv7a::Entry::Hint(hint) = entry { s.hint(b.core, hint); }
+            if let armv7a::Entry::Hint(hint) = entry {
+                s.hint(b.core, hint);
+            }
         }
         // The page just proven is mapped host memory: read the instruction
         // there instead of through the engine.
@@ -4034,11 +4125,10 @@ unsafe fn block_classify_transfers(
     // PUSH can make several independent writes. Keeping it last lets each
     // MMIO or watched store complete without restarting an earlier write.
     let short_push = word & 0xffff_fe00 == 0xb400 && word & 0x01ff != 0;
-    let wide_push = word >> 16 == 0xe92d
-        && word & 0xa000 == 0
-        && (word as u16).count_ones() >= 2;
+    let wide_push = word >> 16 == 0xe92d && word & 0xa000 == 0 && (word as u16).count_ones() >= 2;
     if short_push || wide_push {
-        classification.instruction = fujimod_emulator_cpu::InstructionDisposition::ExecuteAndEndBlock;
+        classification.instruction =
+            fujimod_emulator_cpu::InstructionDisposition::ExecuteAndEndBlock;
         classification.observe_block = false;
     } else {
         classification.observe_block &= !mprofile_blocks::is_single_transfer(word);
@@ -4118,7 +4208,10 @@ unsafe fn block_entered(block: fujimod_emulator_cpu::Block, data: *mut c_void) {
         let scan = {
             let mut buffer = Vec::new();
             let code = s.block_code(cpu, core, pc, bytes as usize, &mut buffer)?;
-            match s.blocks[core].as_ref().and_then(|blocks| blocks.scans.get(pc, code)) {
+            match s.blocks[core]
+                .as_ref()
+                .and_then(|blocks| blocks.scans.get(pc, code))
+            {
                 Some(scan) => scan,
                 None => {
                     let scan = mprofile_blocks::scan(code)?;
@@ -4198,7 +4291,9 @@ unsafe fn block_entered(block: fujimod_emulator_cpu::Block, data: *mut c_void) {
         }
         // This entry reaches the controller: the engine's counter would have
         // counted it.
-        let blocks = s.blocks[core].as_mut().ok_or("block execution without its state")?;
+        let blocks = s.blocks[core]
+            .as_mut()
+            .ok_or("block execution without its state")?;
         blocks.room -= 1;
         blocks.observed += 1;
         let fetched = s.code_shadow[core]
@@ -4259,7 +4354,10 @@ unsafe fn block_entered(block: fujimod_emulator_cpu::Block, data: *mut c_void) {
         }
         // The translated guard admits subsequent eligible blocks on this
         // checked page. Hooked memory accesses settle and disarm the window.
-        let inline = settled && s.settled.armed && !ready && fetched.is_some()
+        let inline = settled
+            && s.settled.armed
+            && !ready
+            && fetched.is_some()
             && s.code_run.is_running(core);
         // Admit the block: its first entry is already debited.
         let blocks = s.blocks[core].as_mut().unwrap();
@@ -4354,7 +4452,8 @@ unsafe fn written(
                     let cpu = &*cpus[b.core];
                     if let Some((start, bytes, _)) = blocks.inline.charged_block() {
                         let pc = scalar(cpu, Register::Pc)? & !1;
-                        let remaining = (start + u64::from(bytes)).checked_sub(pc)
+                        let remaining = (start + u64::from(bytes))
+                            .checked_sub(pc)
                             .ok_or("watched store outside its charged Thumb block")?;
                         let terminal = match remaining {
                             2 => true,

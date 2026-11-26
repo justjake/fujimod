@@ -17,7 +17,8 @@ fn polled_host(high_speed: bool) -> (SdHost, Ram) {
     })
     .unwrap();
     for sector in 0..16u8 {
-        card.write_bytes(u64::from(sector) * 512, &[sector; 512]).unwrap();
+        card.write_bytes(u64::from(sector) * 512, &[sector; 512])
+            .unwrap();
     }
     let host = SdHost::new_polled(
         Options {
@@ -145,7 +146,10 @@ fn polled_multi_block_reads_use_status_enables_without_signal_enables() {
     due(&mut host, &mut ram);
     assert_eq!(read(&mut host, &mut ram, 0x30, 2) & 2, 2);
     for sector in 0..8 {
-        assert_eq!(ram.bytes[0x800 + sector * 512..0xa00 + sector * 512], [sector as u8 + 2; 512]);
+        assert_eq!(
+            ram.bytes[0x800 + sector * 512..0xa00 + sector * 512],
+            [sector as u8 + 2; 512]
+        );
     }
     // PIO multi-block read.
     command(&mut host, &mut ram, 0x123a0036, 5, 2 << 16 | 0x7200);
@@ -155,7 +159,10 @@ fn polled_multi_block_reads_use_status_enables_without_signal_enables() {
         }
         write(&mut host, &mut ram, 0x30, 4, 0x20);
         for _ in 0..128 {
-            assert_eq!(read(&mut host, &mut ram, 0x20, 4) as u32, u32::from_le_bytes([sector; 4]));
+            assert_eq!(
+                read(&mut host, &mut ram, 0x20, 4) as u32,
+                u32::from_le_bytes([sector; 4])
+            );
         }
     }
     due(&mut host, &mut ram);

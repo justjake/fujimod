@@ -311,8 +311,12 @@ mod tests {
             flash_storage::Storage::new((0..32).collect()).unwrap(),
         ));
         let mut bus = TestBus::default();
-        bus.register(0xff939000, 0x1000, Box::new(Dma::new(crate::flash_storage::Medium::Nor(storage.clone()))))
-            .unwrap();
+        bus.register(
+            0xff939000,
+            0x1000,
+            Box::new(Dma::new(crate::flash_storage::Medium::Nor(storage.clone()))),
+        )
+        .unwrap();
         let mut h = RecordingHost {
             ram: vec![0xff; 64],
             events: vec![],
@@ -394,8 +398,12 @@ mod tests {
             flash_storage::Storage::new((0..32).collect()).unwrap(),
         ));
         let mut bus = TestBus::default();
-        bus.register(0xff939000, 0x1000, Box::new(Dma::new(crate::flash_storage::Medium::Nor(storage.clone()))))
-            .unwrap();
+        bus.register(
+            0xff939000,
+            0x1000,
+            Box::new(Dma::new(crate::flash_storage::Medium::Nor(storage.clone()))),
+        )
+        .unwrap();
         let mut h = RecordingHost {
             ram: vec![0xff; 64],
             events: vec![],
@@ -496,7 +504,9 @@ mod tests {
         bus.register(
             0xff939000,
             0x1000,
-            Box::new(Dma::new(crate::flash_storage::Medium::Nand(storage.clone()))),
+            Box::new(Dma::new(crate::flash_storage::Medium::Nand(
+                storage.clone(),
+            ))),
         )
         .unwrap();
         let mut h = RecordingHost {
@@ -529,7 +539,10 @@ mod tests {
         let mut nand = storage.lock().unwrap();
         nand.session.write_enable = true;
         nand.execute_program(0).unwrap();
-        assert_eq!(nand.read(6, 8).unwrap(), [0xff, 0xff, 9, 8, 7, 6, 0xff, 0xff]);
+        assert_eq!(
+            nand.read(6, 8).unwrap(),
+            [0xff, 0xff, 9, 8, 7, 6, 0xff, 0xff]
+        );
     }
     #[test]
     fn disable_cancels_deadline_and_stale_start_is_not_latched() {
@@ -537,8 +550,12 @@ mod tests {
             flash_storage::Storage::new((0..32).collect()).unwrap(),
         ));
         let mut bus = TestBus::default();
-        bus.register(0xff939000, 0x1000, Box::new(Dma::new(crate::flash_storage::Medium::Nor(storage.clone()))))
-            .unwrap();
+        bus.register(
+            0xff939000,
+            0x1000,
+            Box::new(Dma::new(crate::flash_storage::Medium::Nor(storage.clone()))),
+        )
+        .unwrap();
         let mut h = RecordingHost {
             ram: vec![0xff; 64],
             events: vec![],

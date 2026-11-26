@@ -17,9 +17,9 @@ impl RegisterBank {
         let mut sorted = windows.to_vec();
         sorted.sort_unstable();
         if sorted.is_empty()
-            || sorted.iter().any(|&(lo, hi)| {
-                lo & 1 != 0 || hi <= lo || hi > 1 << 32
-            })
+            || sorted
+                .iter()
+                .any(|&(lo, hi)| lo & 1 != 0 || hi <= lo || hi > 1 << 32)
             || sorted.windows(2).any(|pair| pair[0].1 > pair[1].0)
         {
             return Err("Invalid or overlapping XP4 SD host window".into());
@@ -95,10 +95,16 @@ impl Device for RegisterBank {
     fn checkpoint(&self) -> Result<fujimod_emulator_devices::checkpoint::Checkpoint, String> {
         fujimod_emulator_devices::checkpoint::Checkpoint::encode(self.name(), self)
     }
-    fn validate_checkpoint(&self, data: &fujimod_emulator_devices::checkpoint::Checkpoint) -> Result<(), String> {
+    fn validate_checkpoint(
+        &self,
+        data: &fujimod_emulator_devices::checkpoint::Checkpoint,
+    ) -> Result<(), String> {
         self.validate_self(&data.decode(self.name())?)
     }
-    fn restore_checkpoint(&mut self, data: &fujimod_emulator_devices::checkpoint::Checkpoint) -> Result<(), String> {
+    fn restore_checkpoint(
+        &mut self,
+        data: &fujimod_emulator_devices::checkpoint::Checkpoint,
+    ) -> Result<(), String> {
         let saved: Self = data.decode(self.name())?;
         self.validate_self(&saved)?;
         *self = saved;
@@ -114,7 +120,10 @@ impl Device for RegisterBank {
 fn record(message: &'static str, address: u64, value: u32) -> Record {
     Record::new(
         message,
-        [("address", Field::int(address)), ("value", Field::int(value))],
+        [
+            ("address", Field::int(address)),
+            ("value", Field::int(value)),
+        ],
     )
 }
 
@@ -157,7 +166,10 @@ mod tests {
         .unwrap();
         let mut clock = Clock::default();
         host.write(&mut Cx::new(&mut clock, 0, 0, 0), 0xfffc6080, 4, 0xf00);
-        assert_eq!(host.read(&mut Cx::new(&mut clock, 0, 0, 0), 0xfffc6080, 4), 0xf00);
+        assert_eq!(
+            host.read(&mut Cx::new(&mut clock, 0, 0, 0), 0xfffc6080, 4),
+            0xf00
+        );
         // An address outside every window is unmodeled (the clock halfword is
         // owned by the clock device, not the bank).
         let mut cx = Cx::new(&mut clock, 0, 0, 0);
@@ -171,7 +183,10 @@ mod tests {
         let mut clock = Clock::default();
         host.write(&mut Cx::new(&mut clock, 0, 0, 0), 0xfffc6078, 1, 0x1);
         host.write(&mut Cx::new(&mut clock, 0, 0, 0), 0xfffc6079, 1, 0x2);
-        assert_eq!(host.read(&mut Cx::new(&mut clock, 0, 0, 0), 0xfffc6078, 4), 0x201);
+        assert_eq!(
+            host.read(&mut Cx::new(&mut clock, 0, 0, 0), 0xfffc6078, 4),
+            0x201
+        );
         let mut cx = Cx::new(&mut clock, 0, 0, 0);
         assert_eq!(host.read(&mut cx, 0xfffc6079, 1), 0x2);
     }

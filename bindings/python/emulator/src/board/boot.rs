@@ -25,7 +25,9 @@ impl<'a> Owner<'a> {
     }
     fn run(mut self, limit: u64) -> PyResult<String> {
         if self.thread != thread::current().id() {
-            return Err(error("session execution moved from its owner thread".into()));
+            return Err(error(
+                "session execution moved from its owner thread".into(),
+            ));
         }
         boot()?
             .to_rec(unsafe { self.session.as_mut() }, limit)
@@ -101,29 +103,29 @@ impl Board {
     ) -> PyResult<Self> {
         let opened = boot()?
             .open(Inputs {
-            configuration_id,
-            overlays,
-            update,
-            boot_rom,
-            card_image,
-            card_files,
-            second_card_image,
-            second_card_files,
-            scene,
-            nand,
-            settings,
-            clock_seconds_2000,
-            preferred_languages,
-            camera,
-            access_point,
-            capability_reply,
-            camera_settings,
-            engine,
-            manifest,
-            application_plan,
-            discovery,
-            quantum,
-            instruction_rate,
+                configuration_id,
+                overlays,
+                update,
+                boot_rom,
+                card_image,
+                card_files,
+                second_card_image,
+                second_card_files,
+                scene,
+                nand,
+                settings,
+                clock_seconds_2000,
+                preferred_languages,
+                camera,
+                access_point,
+                capability_reply,
+                camera_settings,
+                engine,
+                manifest,
+                application_plan,
+                discovery,
+                quantum,
+                instruction_rate,
             })
             .map_err(error)?;
         let (backend, read_limit) = match opened {
@@ -135,8 +137,12 @@ impl Board {
                 let read_limit = session.ram_bytes();
                 (Backend::Xp4(session), read_limit)
             }
-            Opened::Xp5 {session, inputs, read_limit} => (
-                Backend::Xp5(Box::new(super::xp5::Opened {session, inputs})),
+            Opened::Xp5 {
+                session,
+                inputs,
+                read_limit,
+            } => (
+                Backend::Xp5(Box::new(super::xp5::Opened { session, inputs })),
                 read_limit,
             ),
         };
@@ -155,7 +161,8 @@ impl Board {
     #[getter]
     fn boot_quantum(&self) -> PyResult<usize> {
         if let Some(Backend::Xp4(session)) = &self.backend {
-            return session.catalog_quantum()
+            return session
+                .catalog_quantum()
                 .ok_or_else(|| error("board was not constructed from boot inputs".into()));
         }
         self.session()?.definition["quantum"]
@@ -180,9 +187,15 @@ impl Board {
         let result = py.detach(move || owner.run(instruction_limit));
         // Cold reconstruction replaces the CPUs and their hooks. Memory
         // watch records remain available with an incomplete-observation error.
-        if self.function_watch.as_ref().is_some_and(|watch| !watch.is_live()) {
+        if self
+            .function_watch
+            .as_ref()
+            .is_some_and(|watch| !watch.is_live())
+        {
             self.function_watch.take();
-            return Err(error("boot restarted while a function watch was active".into()));
+            return Err(error(
+                "boot restarted while a function watch was active".into(),
+            ));
         }
         result
     }

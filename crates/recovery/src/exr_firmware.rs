@@ -88,9 +88,9 @@ impl Transport {
         )?;
         let capacity = (source.len() + 0x3fff) & !0x3fff;
         let offset = (ram.len() + 3) & !3;
-        let file_size = offset.checked_add(source.len()).ok_or_else(|| {
-            image::Error::Invalid("EXR OS image size overflows".into())
-        })?;
+        let file_size = offset
+            .checked_add(source.len())
+            .ok_or_else(|| image::Error::Invalid("EXR OS image size overflows".into()))?;
         let mut program = loader.bytes().to_vec();
         for (index, value) in [
             api.open as usize,

@@ -1,4 +1,5 @@
 """Rebase pin mapping: submodule pins follow a rebased submodule."""
+
 import subprocess
 from pathlib import Path
 
@@ -88,11 +89,27 @@ def pin_repositories(tmp_path: Path) -> dict[str, object]:
     run("git", "fetch", "-q", "origin", "main", cwd=shared)
 
     run("git", "-C", "lib", "fetch", "-q", "origin", "topic-rebased", cwd=shared)
-    run("git", "-C", "lib", "checkout", "-q", "-B", "topic", "origin/topic-rebased", cwd=shared)
+    run(
+        "git",
+        "-C",
+        "lib",
+        "checkout",
+        "-q",
+        "-B",
+        "topic",
+        "origin/topic-rebased",
+        cwd=shared,
+    )
     return dict(
-        shared=shared, rebased=rebased, main=library_main, pinned=pinned,
-        pin_commit=pin_commit, work_commit=work_commit, new_base=head_of(other),
-        base_commit=base_commit, base=base,
+        shared=shared,
+        rebased=rebased,
+        main=library_main,
+        pinned=pinned,
+        pin_commit=pin_commit,
+        work_commit=work_commit,
+        new_base=head_of(other),
+        base_commit=base_commit,
+        base=base,
     )
 
 
@@ -104,7 +121,9 @@ def test_replay_maps_a_moved_pin_to_the_rebased_submodule_commit(
     assert isinstance(shared, Path)
     before = head_of(shared)
     head, kept, dropped = replay(
-        Repository(shared), repos["new_base"], [repos["pin_commit"], repos["work_commit"]]
+        Repository(shared),
+        repos["new_base"],
+        [repos["pin_commit"], repos["work_commit"]],
     )
     assert (kept, dropped) == (2, 0)
     assert run("git", "rev-parse", f"{head}^^", cwd=shared).strip() == repos["new_base"]
@@ -121,7 +140,14 @@ def test_replay_names_a_pin_with_no_rebased_commit(tmp_path: Path) -> None:
     shared = repos["shared"]
     assert isinstance(shared, Path)
     unknown = "f" * 40
-    run("git", "update-index", "--add", "--cacheinfo", f"160000,{unknown},lib", cwd=shared)
+    run(
+        "git",
+        "update-index",
+        "--add",
+        "--cacheinfo",
+        f"160000,{unknown},lib",
+        cwd=shared,
+    )
     run("git", "commit", "-qm", "pin unknown", cwd=shared)
     with pytest.raises(Failure, match=f"{unknown}.*patch id"):
         replay(Repository(shared), repos["new_base"], [head_of(shared)])
@@ -164,7 +190,9 @@ def test_replay_keeps_the_new_base_pin_when_a_commit_leaves_it_alone(
     # ``work`` changes only work.txt; its gitlink still names the pin its
     # parent set, while the new base pins the submodule's main commit.
     pin_commit, note = repos["pin_commit"], repos["work_commit"]
-    base_tree = run("git", "rev-parse", f"{repos['new_base']}^{{tree}}", cwd=shared).strip()
+    base_tree = run(
+        "git", "rev-parse", f"{repos['new_base']}^{{tree}}", cwd=shared
+    ).strip()
     tree = resolve_pinned_submodules(
         Repository(shared), repos["new_base"], note, pin_commit, [base_tree, "lib"], {}
     )

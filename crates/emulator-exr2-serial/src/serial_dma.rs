@@ -1,12 +1,15 @@
 //! Graph nodes for clocked byte serial, request DMA, and selector devices.
 //! The fixed external bit level and every channel/request/IRQ connection are
 //! constructor inputs. Guest descriptor addresses are the only RAM authority.
+use crate::{
+    dma::{peripheral, routing},
+    spi::byte_fifo,
+};
 use fujimod_emulator_devices::bus::InterruptLine;
 use fujimod_emulator_devices::dma::Direction;
-use crate::{dma::{peripheral, routing}, spi::byte_fifo};
+use fujimod_emulator_devices::{Cx, Device, graph::Mapping};
 use fujimod_emulator_parts_io::serial::{InputLevel, Wire};
 use fujimod_emulator_parts_lens::x_mount_link;
-use fujimod_emulator_devices::{Cx, Device, graph::Mapping};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use std::collections::BTreeMap;
@@ -222,7 +225,10 @@ impl Device for Transport {
                 .with_children(vec![self.serial.checkpoint()?, self.dma.checkpoint()?]),
         )
     }
-    fn validate_checkpoint(&self, saved: &fujimod_emulator_devices::checkpoint::Checkpoint) -> Result<(), String> {
+    fn validate_checkpoint(
+        &self,
+        saved: &fujimod_emulator_devices::checkpoint::Checkpoint,
+    ) -> Result<(), String> {
         let wiring: Options = saved.decode(self.name())?;
         if wiring != self.wiring || saved.children().len() != 2 || !saved.blobs().is_empty() {
             return Err("serial/DMA checkpoint wiring differs".into());
@@ -230,7 +236,10 @@ impl Device for Transport {
         self.serial.validate_checkpoint(&saved.children()[0])?;
         self.dma.validate_checkpoint(&saved.children()[1])
     }
-    fn restore_checkpoint(&mut self, saved: &fujimod_emulator_devices::checkpoint::Checkpoint) -> Result<(), String> {
+    fn restore_checkpoint(
+        &mut self,
+        saved: &fujimod_emulator_devices::checkpoint::Checkpoint,
+    ) -> Result<(), String> {
         self.validate_checkpoint(saved)?;
         self.serial.restore_checkpoint(&saved.children()[0])?;
         self.dma.restore_checkpoint(&saved.children()[1])

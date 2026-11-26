@@ -20,7 +20,6 @@ import '../../../design/design.css';
    Stock icons come from `mise run stock-icons-svg -- --firmware x70-110`,
    served from the local review directory; they are never published. */
 
-
 /* ---- Recipe model ------------------------------------------------------------ */
 
 interface Choice {
@@ -95,7 +94,12 @@ const DR: Choice[] = [
 const EFFECT: Choice[] = [{ name: 'OFF' }, { name: 'WEAK' }, { name: 'STRONG' }];
 const GRAIN: Choice[] = [{ name: 'OFF' }, { name: 'WEAK' }, { name: 'STRONG' }];
 const GRAIN_SIZE: Choice[] = [{ name: 'SMALL' }, { name: 'LARGE' }];
-const PRIORITY: Choice[] = [{ name: 'OFF' }, { name: 'WEAK' }, { name: 'STRONG' }, { name: 'AUTO' }];
+const PRIORITY: Choice[] = [
+  { name: 'OFF' },
+  { name: 'WEAK' },
+  { name: 'STRONG' },
+  { name: 'AUTO' },
+];
 const CLARITY: Step[] = [-5, -4, -3, -2, -1, 0, 1, 2, 3, 4, 5];
 
 /** A row's icon: a stock Q menu vector, a mod's own artwork, or a word on a
@@ -265,8 +269,6 @@ const ICON_COLUMN = 58;
 const WIDTH = 320;
 const COMPARE_WIDTH = 300;
 
-
-
 /* ---- Input ------------------------------------------------------------------- */
 
 type Side = 'a' | 'b';
@@ -300,20 +302,40 @@ const ICON_WORDS: Record<string, string> = {
 
 function RowIconView(props: { icon: RowIcon; color: string }) {
   const i = () => props.icon;
-  const word = (key: string | number, badge?: string) => <Wordmark word={ICON_WORDS[key] ?? String(key)} badge={badge} color={props.color} />;
+  const word = (key: string | number, badge?: string) => (
+    <Wordmark word={ICON_WORDS[key] ?? String(key)} badge={badge} color={props.color} />
+  );
   return (
     <Show
       when={'word' in i() ? undefined : i()}
-      fallback={'word' in i() ? <Wordmark word={(i() as { word: string }).word} badge={(i() as { badge?: string }).badge} color={props.color} /> : undefined}
+      fallback={
+        'word' in i() ? (
+          <Wordmark
+            word={(i() as { word: string }).word}
+            badge={(i() as { badge?: string }).badge}
+            color={props.color}
+          />
+        ) : undefined
+      }
     >
       {(icon) => {
         const it = icon() as { stock: number } | { mod: string };
         // Q icons are 80 by 48 with their ink in the middle 52 by 40; at 0.75
         // the ink is the root menu's 39 by 30.
         return 'stock' in it ? (
-          <Artwork src={stockArtwork(it.stock)} class="-mx-[10px] h-[36px] w-[60px]" color={props.color} fallback={word(it.stock)} />
+          <Artwork
+            src={stockArtwork(it.stock)}
+            class="-mx-[10px] h-[36px] w-[60px]"
+            color={props.color}
+            fallback={word(it.stock)}
+          />
         ) : (
-          <Artwork src={modArtwork(it.mod)} class="-mx-[2px] h-[30px] w-[44px]" color={props.color} fallback={word(it.mod)} />
+          <Artwork
+            src={modArtwork(it.mod)}
+            class="-mx-[2px] h-[30px] w-[44px]"
+            color={props.color}
+            fallback={word(it.mod)}
+          />
         );
       }}
     </Show>
@@ -336,20 +358,38 @@ function SettingRow(props: {
 }) {
   const controlWidth = () => props.width - ICON_COLUMN - INSET.right;
   const controlHeight = ROW - INSET.top - INSET.bottom;
-  const pick = (value: number) => props.send({ set: props.setting.id, value, focus: props.index, side: props.side });
+  const pick = (value: number) =>
+    props.send({ set: props.setting.id, value, focus: props.index, side: props.side });
   const focus = () => props.send({ focus: props.index, side: props.side });
   /* A row's choices never change: built once, so its strip keeps its cells. */
   const items: ChoiceItem[] =
     props.setting.kind === 'choice'
       ? props.setting.choices.map((choice): ChoiceItem => {
           const src = choice.icon === undefined ? undefined : stockArtwork(choice.icon);
-          return src === undefined ? choice.name : { name: choice.name, art: (ink) => <Artwork src={src} class="h-[24px] w-[40px]" fillInk={props.setting.id === 'wb'} color={ink} /> };
+          return src === undefined
+            ? choice.name
+            : {
+                name: choice.name,
+                art: (ink) => (
+                  <Artwork
+                    src={src}
+                    class="h-[24px] w-[40px]"
+                    fillInk={props.setting.id === 'wb'}
+                    color={ink}
+                  />
+                ),
+              };
         })
       : [];
   return (
     <div
       class="relative flex items-stretch"
-      style={{ height: `${ROW}px`, 'padding-top': `${INSET.top}px`, 'padding-bottom': `${INSET.bottom}px`, 'padding-right': `${INSET.right}px` }}
+      style={{
+        height: `${ROW}px`,
+        'padding-top': `${INSET.top}px`,
+        'padding-bottom': `${INSET.bottom}px`,
+        'padding-right': `${INSET.right}px`,
+      }}
     >
       <Show
         when={props.setting.kind === 'slider' ? (props.setting as SliderSetting) : undefined}
@@ -389,7 +429,15 @@ function SettingRow(props: {
 
 /** A setting's icon, once, beside the rows of every dimension it has; the
  * icon brightens when any of them has the focus. */
-function SettingGroup(props: { rows: number[]; recipe: Recipe; other?: Recipe; focus?: number; width: number; side?: Side; send: Send }) {
+function SettingGroup(props: {
+  rows: number[];
+  recipe: Recipe;
+  other?: Recipe;
+  focus?: number;
+  width: number;
+  side?: Side;
+  send: Send;
+}) {
   const at = () => props.rows.indexOf(props.focus ?? -1);
   return (
     <div class="relative flex">
@@ -398,7 +446,10 @@ function SettingGroup(props: { rows: number[]; recipe: Recipe; other?: Recipe; f
         style={{ width: `${ICON_COLUMN}px`, height: `${props.rows.length * ROW}px` }}
         onClick={() => props.send({ focus: props.rows[Math.max(0, at())], side: props.side })}
       >
-        <RowIconView icon={SETTINGS[props.rows[0]].icon} color={at() >= 0 ? '#fff' : 'rgb(255 255 255 / 0.7)'} />
+        <RowIconView
+          icon={SETTINGS[props.rows[0]].icon}
+          color={at() >= 0 ? '#fff' : 'rgb(255 255 255 / 0.7)'}
+        />
       </div>
       <div class="flex min-w-0 flex-1 flex-col">
         <For each={props.rows}>
@@ -408,7 +459,10 @@ function SettingGroup(props: { rows: number[]; recipe: Recipe; other?: Recipe; f
               index={index}
               recipe={props.recipe}
               focused={index === props.focus}
-              changed={props.other !== undefined && props.other[SETTINGS[index].id] !== props.recipe[SETTINGS[index].id]}
+              changed={
+                props.other !== undefined &&
+                props.other[SETTINGS[index].id] !== props.recipe[SETTINGS[index].id]
+              }
               width={props.width}
               side={props.side}
               send={props.send}
@@ -450,7 +504,10 @@ function Column(props: {
     () => props.focus,
     (focus) => {
       if (!scroller || props.active === false) return;
-      reveal(scroller, focus * ROW, (focus + 1) * ROW, ROW, opened, { top: untrack(() => props.scroll), height: 480 });
+      reveal(scroller, focus * ROW, (focus + 1) * ROW, ROW, opened, {
+        top: untrack(() => props.scroll),
+        height: 480,
+      });
       opened = true;
     },
   );
@@ -458,7 +515,11 @@ function Column(props: {
     <Scroller
       ref={(element) => (scroller = element)}
       class="absolute inset-y-0"
-      style={{ left: `${props.left}px`, width: `${props.width}px`, 'box-shadow': 'var(--m-column-edge)' }}
+      style={{
+        left: `${props.left}px`,
+        width: `${props.width}px`,
+        'box-shadow': 'var(--m-column-edge)',
+      }}
       onScroll={props.setScroll}
     >
       <For each={GROUPS}>
@@ -478,7 +539,13 @@ function Column(props: {
           create; from the shooting menu the rows are the menu's settings. */}
       <Show when={props.side === undefined && props.mode !== undefined && props.mode !== 'live'}>
         <div class="px-[6px] pt-[10px] pb-[12px]">
-          <Button label={props.mode === 'raw' ? 'CREATE' : props.saved ? 'SAVED' : 'SAVE'} class="w-full" focused={false} accent={props.saved} onClick={() => props.send({ key: 'save' })} />
+          <Button
+            label={props.mode === 'raw' ? 'CREATE' : props.saved ? 'SAVED' : 'SAVE'}
+            class="w-full"
+            focused={false}
+            accent={props.saved}
+            onClick={() => props.send({ key: 'save' })}
+          />
         </div>
       </Show>
     </Scroller>
@@ -501,7 +568,8 @@ function ShiftGrid(props: { r: number; b: number; send: Send }) {
   const down = SHIFT_HEIGHT / 19;
   const x = (r: number) => (r + 9) * across + across / 2;
   const y = (b: number) => (9 - b) * down + down / 2;
-  const mix = (a: number[], b: number[], t: number) => a.map((c, i) => Math.round(c + (b[i] - c) * t));
+  const mix = (a: number[], b: number[], t: number) =>
+    a.map((c, i) => Math.round(c + (b[i] - c) * t));
   const dot = (r: number, b: number) => {
     const side = mix([255, 255, 255], r < 0 ? [40, 220, 40] : [235, 40, 70], Math.abs(r) / 9);
     const [red, green, blue] = mix(side, b > 0 ? [40, 110, 255] : [240, 215, 0], Math.abs(b) / 12);
@@ -521,11 +589,37 @@ function ShiftGrid(props: { r: number; b: number; send: Send }) {
       }}
     >
       <For each={steps}>
-        {(b) => <For each={steps}>{(r) => <rect x={x(r) - 2} y={y(b) - 2} width={4} height={4} fill={dot(r, b)} />}</For>}
+        {(b) => (
+          <For each={steps}>
+            {(r) => <rect x={x(r) - 2} y={y(b) - 2} width={4} height={4} fill={dot(r, b)} />}
+          </For>
+        )}
       </For>
-      <line x1={SHIFT_WIDTH / 2} x2={SHIFT_WIDTH / 2} y1={0} y2={SHIFT_HEIGHT} stroke="rgb(255 255 255 / 0.85)" stroke-width={2} />
-      <line y1={SHIFT_HEIGHT / 2} y2={SHIFT_HEIGHT / 2} x1={0} x2={SHIFT_WIDTH} stroke="rgb(255 255 255 / 0.85)" stroke-width={2} />
-      <rect x={x(props.r) - 8} y={y(props.b) - 8} width={16} height={16} fill="none" stroke="#fff" stroke-width={2} />
+      <line
+        x1={SHIFT_WIDTH / 2}
+        x2={SHIFT_WIDTH / 2}
+        y1={0}
+        y2={SHIFT_HEIGHT}
+        stroke="rgb(255 255 255 / 0.85)"
+        stroke-width={2}
+      />
+      <line
+        y1={SHIFT_HEIGHT / 2}
+        y2={SHIFT_HEIGHT / 2}
+        x1={0}
+        x2={SHIFT_WIDTH}
+        stroke="rgb(255 255 255 / 0.85)"
+        stroke-width={2}
+      />
+      <rect
+        x={x(props.r) - 8}
+        y={y(props.b) - 8}
+        width={16}
+        height={16}
+        fill="none"
+        stroke="#fff"
+        stroke-width={2}
+      />
     </svg>
   );
 }
@@ -576,8 +670,10 @@ export function Editor(props: { state: EditorState; send?: Send; hint?: JSX.Elem
     if (compare()) list.push({ glyph: 'AEL', label: 'A/B', key: 'Tab' });
     if (s().snapshot) list.push({ glyph: 'Q', label: s().comparing ? 'HIDE A' : 'A|B', key: 'q' });
     else list.push({ glyph: 'AF-ON', label: 'KEEP A', key: 'a' });
-    if (focused().kind === 'choice' && !compare()) list.push({ glyph: 'OK', label: 'SELECT', key: 'Enter' });
-    else if (s().mode !== 'live') list.push({ glyph: 'OK', label: s().mode === 'raw' ? 'CREATE' : 'SAVE', key: 'Enter' });
+    if (focused().kind === 'choice' && !compare())
+      list.push({ glyph: 'OK', label: 'SELECT', key: 'Enter' });
+    else if (s().mode !== 'live')
+      list.push({ glyph: 'OK', label: s().mode === 'raw' ? 'CREATE' : 'SAVE', key: 'Enter' });
     return list;
   };
 
@@ -598,8 +694,19 @@ export function Editor(props: { state: EditorState; send?: Send; hint?: JSX.Elem
             <div class="absolute inset-y-0 left-[359px] w-[2px] bg-white" />
             <For each={['a', 'b'] as Side[]}>
               {(side) => (
-                <div class="absolute top-[10px]" style={side === 'a' ? { left: `${COMPARE_WIDTH + 8}px` } : { right: `${COMPARE_WIDTH + 8}px` }}>
-                  <KeyHint glyph={side === 'a' ? 'A' : 'B'} accent={s().side === side} tap={() => send({ focus: s().focus, side })} />
+                <div
+                  class="absolute top-[10px]"
+                  style={
+                    side === 'a'
+                      ? { left: `${COMPARE_WIDTH + 8}px` }
+                      : { right: `${COMPARE_WIDTH + 8}px` }
+                  }
+                >
+                  <KeyHint
+                    glyph={side === 'a' ? 'A' : 'B'}
+                    accent={s().side === side}
+                    tap={() => send({ focus: s().focus, side })}
+                  />
                 </div>
               )}
             </For>
@@ -624,35 +731,73 @@ export function Editor(props: { state: EditorState; send?: Send; hint?: JSX.Elem
       </Show>
 
       <Show when={!compare()}>
-        <Column scroll={scroll()} setScroll={setScroll} recipe={s().recipe} other={s().snapshot} focus={s().focus} left={0} width={WIDTH} saved={s().saved} mode={s().mode} send={send} />
-        <Show when={s().list !== undefined && focused().kind === 'choice' ? (focused() as ChoiceSetting) : undefined}>
+        <Column
+          scroll={scroll()}
+          setScroll={setScroll}
+          recipe={s().recipe}
+          other={s().snapshot}
+          focus={s().focus}
+          left={0}
+          width={WIDTH}
+          saved={s().saved}
+          mode={s().mode}
+          send={send}
+        />
+        <Show
+          when={
+            s().list !== undefined && focused().kind === 'choice'
+              ? (focused() as ChoiceSetting)
+              : undefined
+          }
+        >
           {(setting) => (
-            <FlyOut left={WIDTH} rowTop={rowTop()} height={flyOutListHeight(setting().choices.length)}>
-            <PickerList
-              options={setting().choices.map((choice) => {
-                const wb = setting().id === 'wb';
-                const src = choice.icon === undefined ? undefined : stockArtwork(choice.icon);
-                return {
-                  label: choice.name,
-                  art: src === undefined ? undefined : (ink: string) => <Artwork src={src} class="h-[30px] w-[50px]" fillInk={wb} color={ink} />,
-                  more: setting().id === 'wb' ? () => send({ shiftFor: setting().choices.indexOf(choice) }) : undefined,
-                };
-              })}
-              at={s().list ?? 0}
-              current={s().recipe[setting().id]}
-              choose={(value) => send({ set: setting().id, value, focus: s().focus })}
-            />
+            <FlyOut
+              left={WIDTH}
+              rowTop={rowTop()}
+              height={flyOutListHeight(setting().choices.length)}
+            >
+              <PickerList
+                options={setting().choices.map((choice) => {
+                  const wb = setting().id === 'wb';
+                  const src = choice.icon === undefined ? undefined : stockArtwork(choice.icon);
+                  return {
+                    label: choice.name,
+                    art:
+                      src === undefined
+                        ? undefined
+                        : (ink: string) => (
+                            <Artwork src={src} class="h-[30px] w-[50px]" fillInk={wb} color={ink} />
+                          ),
+                    more:
+                      setting().id === 'wb'
+                        ? () => send({ shiftFor: setting().choices.indexOf(choice) })
+                        : undefined,
+                  };
+                })}
+                at={s().list ?? 0}
+                current={s().recipe[setting().id]}
+                choose={(value) => send({ set: setting().id, value, focus: s().focus })}
+              />
             </FlyOut>
           )}
         </Show>
         <Show when={s().fly === 'none' && s().list === undefined}>
-          <div class="absolute top-[10px] flex flex-col items-start gap-[4px]" style={{ left: `${WIDTH + 12}px` }}>
+          <div
+            class="absolute top-[10px] flex flex-col items-start gap-[4px]"
+            style={{ left: `${WIDTH + 12}px` }}
+          >
             <Show when={focused().id !== 'film'}>
               <Card class={`px-[14px] py-[8px] ${LABEL}`}>{focused().name}</Card>
             </Show>
             <Card class={`px-[14px] py-[8px] ${LABEL}`}>{valueName(focused(), s().recipe)}</Card>
             <Show when={focused().id === 'film' ? FILMS[s().recipe.film].note : undefined}>
-              {(note) => <Card class={`max-w-[376px] px-[14px] py-[9px] ${DETAIL} leading-[30px] font-light`}>{note()}</Card>}
+              {(note) => (
+                <Card
+                  class={`max-w-[376px] px-[14px] py-[9px] ${DETAIL} leading-[30px] font-light`}
+                >
+                  {note()}
+                </Card>
+              )}
             </Show>
             {props.hint}
           </div>
@@ -666,7 +811,9 @@ export function Editor(props: { state: EditorState; send?: Send; hint?: JSX.Elem
           <FlyOut left={WIDTH} rowTop={rowTop()} height={SHIFT_HEIGHT + SHIFT_CAPTION + 22}>
             <div class="flex flex-col items-center px-[10px] pt-[10px] pb-[2px]">
               <ShiftGrid r={s().recipe.shiftR} b={s().recipe.shiftB} send={send} />
-              <span class={`flex h-[30px] items-center font-medium tracking-[0.04em] tabular-nums ${TEXT}`}>
+              <span
+                class={`flex h-[30px] items-center font-medium tracking-[0.04em] tabular-nums ${TEXT}`}
+              >
                 R {fmt(s().recipe.shiftR)}&ensp;B {fmt(s().recipe.shiftB)}
               </span>
             </div>
@@ -679,7 +826,11 @@ export function Editor(props: { state: EditorState; send?: Send; hint?: JSX.Elem
           class={`absolute bottom-[12px] flex gap-[4px] ${compare() ? '-translate-x-1/2 flex-col items-stretch' : ''}`}
           style={{ left: `${compare() ? 360 : WIDTH + 12}px` }}
         >
-          <For each={hints()}>{(hint) => <KeyHint glyph={hint.glyph} label={hint.label} tap={() => send({ key: hint.key })} />}</For>
+          <For each={hints()}>
+            {(hint) => (
+              <KeyHint glyph={hint.glyph} label={hint.label} tap={() => send({ key: hint.key })} />
+            )}
+          </For>
         </div>
       </Show>
     </div>
@@ -710,8 +861,14 @@ export function onKey(state: EditorState, input: string): EditorState {
   /* An option list, as stock's: UP, DOWN and the dial move; MENU/OK and LEFT
      choose; RIGHT on a white balance opens its WB SHIFT; BACK closes. */
   if (state.list !== undefined && setting.kind === 'choice') {
-    const keyName = ({ ArrowUp: 'up', ArrowDown: 'down', DialLeft: 'dial-', DialRight: 'dial+' } as Record<string, string>)[input];
-    const at = keyName === undefined ? undefined : pickerStep(state.list, setting.choices.length, keyName);
+    const keyName = (
+      { ArrowUp: 'up', ArrowDown: 'down', DialLeft: 'dial-', DialRight: 'dial+' } as Record<
+        string,
+        string
+      >
+    )[input];
+    const at =
+      keyName === undefined ? undefined : pickerStep(state.list, setting.choices.length, keyName);
     if (at !== undefined) return { ...state, list: at };
     const chosen = state.list;
     const picked = { ...edit(state, (r) => ({ ...r, [setting.id]: chosen })), list: undefined };
@@ -731,22 +888,32 @@ export function onKey(state: EditorState, input: string): EditorState {
     if (input === 'Enter') return { ...state, fly: 'none', shiftFrom: undefined };
     if (input === 'Escape') {
       const [shiftR, shiftB] = state.shiftFrom ?? [state.recipe.shiftR, state.recipe.shiftB];
-      return { ...edit(state, (r) => ({ ...r, shiftR, shiftB })), fly: 'none', shiftFrom: undefined };
+      return {
+        ...edit(state, (r) => ({ ...r, shiftR, shiftB })),
+        fly: 'none',
+        shiftFrom: undefined,
+      };
     }
     return state;
   }
   const key = dial < 0 ? 'ArrowLeft' : dial > 0 ? 'ArrowRight' : input;
   if (key === 'Fn' && setting.id === 'wb' && state.fly === 'none') return openShift(state);
-  if (key === 'Enter' && setting.kind === 'choice' && !state.comparing) return { ...state, list: state.recipe[setting.id] };
-  if ((key === 'save' || key === 'Enter') && state.mode !== 'live') return { ...state, saved: true };
+  if (key === 'Enter' && setting.kind === 'choice' && !state.comparing)
+    return { ...state, list: state.recipe[setting.id] };
+  if ((key === 'save' || key === 'Enter') && state.mode !== 'live')
+    return { ...state, saved: true };
   if (key === 'ArrowUp' || key === 'ArrowDown') {
-    const focus = Math.max(0, Math.min(SETTINGS.length - 1, state.focus + (key === 'ArrowUp' ? -1 : 1)));
+    const focus = Math.max(
+      0,
+      Math.min(SETTINGS.length - 1, state.focus + (key === 'ArrowUp' ? -1 : 1)),
+    );
     return { ...state, focus, fly: 'none' };
   }
   if (key === 'ArrowLeft') return step(state, -1);
   if (key === 'ArrowRight') return step(state, 1);
   if (key === 'a') return { ...state, snapshot: { ...state.recipe }, comparing: false, side: 'b' };
-  if (key === 'q' && state.snapshot) return { ...state, comparing: !state.comparing, fly: 'none', side: 'b' };
+  if (key === 'q' && state.snapshot)
+    return { ...state, comparing: !state.comparing, fly: 'none', side: 'b' };
   if (key === 'Tab' && state.comparing) return { ...state, side: state.side === 'a' ? 'b' : 'a' };
   if (key === 'Escape') return { ...state, fly: 'none', comparing: false };
   return state;
@@ -759,7 +926,8 @@ function openShift(state: EditorState): EditorState {
 
 export function apply(state: EditorState, action: Action): EditorState {
   if ('key' in action) return onKey(state, action.key);
-  if ('shiftFor' in action) return openShift({ ...edit(state, (r) => ({ ...r, wb: action.shiftFor })), list: undefined });
+  if ('shiftFor' in action)
+    return openShift({ ...edit(state, (r) => ({ ...r, wb: action.shiftFor })), list: undefined });
   if ('shift' in action)
     return edit(state, (r) => ({ ...r, shiftR: action.shift[0], shiftB: action.shift[1] }));
   const moved = {
@@ -800,12 +968,23 @@ export const SETTINGS_STATES: { id: string; title: string; state: EditorState }[
   {
     id: 'edited',
     title: 'Edited, with A kept',
-    state: { ...INITIAL, snapshot: BASE, recipe: { ...EDITED, wb: 1 }, focus: 1 } satisfies EditorState,
+    state: {
+      ...INITIAL,
+      snapshot: BASE,
+      recipe: { ...EDITED, wb: 1 },
+      focus: 1,
+    } satisfies EditorState,
   },
   {
     id: 'compare-ab',
     title: 'Compare A and B',
-    state: { ...INITIAL, snapshot: BASE, recipe: EDITED, focus: 4, comparing: true } satisfies EditorState,
+    state: {
+      ...INITIAL,
+      snapshot: BASE,
+      recipe: EDITED,
+      focus: 4,
+      comparing: true,
+    } satisfies EditorState,
   },
   { id: 'slider', title: 'Slider row', state: { ...INITIAL, focus: 4 } },
   {
@@ -814,16 +993,32 @@ export const SETTINGS_STATES: { id: string; title: string; state: EditorState }[
     state: { ...INITIAL, focus: 9, recipe: EDITED },
   },
   { id: 'film-notes', title: 'Film simulation', state: { ...INITIAL, focus: 0 } },
-  { id: 'film-list', title: 'FILM SIMULATION list, opened with OK', state: { ...INITIAL, focus: 0, list: 3 } },
+  {
+    id: 'film-list',
+    title: 'FILM SIMULATION list, opened with OK',
+    state: { ...INITIAL, focus: 0, list: 3 },
+  },
   { id: 'wb-list', title: 'WHITE BALANCE list', state: { ...INITIAL, focus: 1, list: 2 } },
-  { id: 'grain-size', title: 'GRAIN SIZE under the grain icon', state: { ...INITIAL, focus: 13, recipe: EDITED } },
-  { id: 'wb-shift', title: 'WB SHIFT, opened with RIGHT from the WHITE BALANCE list', state: { ...INITIAL, focus: 1, fly: 'shift', shiftFrom: [0, 0] } },
+  {
+    id: 'grain-size',
+    title: 'GRAIN SIZE under the grain icon',
+    state: { ...INITIAL, focus: 13, recipe: EDITED },
+  },
+  {
+    id: 'wb-shift',
+    title: 'WB SHIFT, opened with RIGHT from the WHITE BALANCE list',
+    state: { ...INITIAL, focus: 1, fly: 'shift', shiftFrom: [0, 0] },
+  },
   {
     id: 'compare-b',
     title: 'Compare, editing B',
     state: { ...INITIAL, snapshot: BASE, recipe: EDITED, focus: 4, comparing: true },
   },
-  { id: 'edit-check', title: 'EDIT/CHECK: a saved custom setting, with SAVE', state: { ...INITIAL, mode: 'file', recipe: EDITED, focus: 5 } },
+  {
+    id: 'edit-check',
+    title: 'EDIT/CHECK: a saved custom setting, with SAVE',
+    state: { ...INITIAL, mode: 'file', recipe: EDITED, focus: 5 },
+  },
   {
     id: 'raw',
     title: 'RAW CONVERSION in playback',

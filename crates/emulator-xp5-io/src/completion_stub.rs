@@ -149,7 +149,9 @@ impl CompletionStub {
         }
         let word = |offset: u64, what: &str| {
             if offset & 3 != 0 || offset >= size {
-                Err(format!("completion stub {what} offset {offset:#x} is not a word of the window"))
+                Err(format!(
+                    "completion stub {what} offset {offset:#x} is not a word of the window"
+                ))
             } else {
                 Ok(())
             }
@@ -163,7 +165,9 @@ impl CompletionStub {
         for start in &options.starts {
             word(start.offset, "start")?;
             if start.mask == 0 || start.value.is_some_and(|v| v & !start.mask != 0) {
-                return Err("completion stub start needs a non-zero mask covering its value".into());
+                return Err(
+                    "completion stub start needs a non-zero mask covering its value".into(),
+                );
             }
         }
         for completion in &options.completion {
@@ -172,12 +176,18 @@ impl CompletionStub {
         if let Some(irq) = options.irq
             && !(32..1020).contains(&irq)
         {
-            return Err(format!("completion stub irq {irq} is not a shared interrupt"));
+            return Err(format!(
+                "completion stub irq {irq} is not a shared interrupt"
+            ));
         }
         match (options.irq_mask_offset, options.irq_mask_bit) {
             (None, None) => {}
             (Some(offset), Some(bit)) if bit < 32 => word(offset, "irq mask")?,
-            _ => return Err("completion stub needs both irq_mask_offset and irq_mask_bit < 32".into()),
+            _ => {
+                return Err(
+                    "completion stub needs both irq_mask_offset and irq_mask_bit < 32".into(),
+                );
+            }
         }
         let mut ack_bits = 0;
         if let Some(ack) = &options.ack {
@@ -229,7 +239,10 @@ impl CompletionStub {
     }
 
     fn level(&self) -> bool {
-        self.options.irq.is_some() && !self.options.irq_pulse && self.state.pending && !self.masked()
+        self.options.irq.is_some()
+            && !self.options.irq_pulse
+            && self.state.pending
+            && !self.masked()
     }
 
     fn update_line(&mut self, cx: &mut Cx<'_>) {
@@ -342,10 +355,16 @@ impl Device for CompletionStub {
         self.state.due = None;
         self.state.completions += 1;
         for completion in &self.options.completion {
-            let word = self.state.words.get(&completion.offset).copied().unwrap_or(0);
-            self.state
+            let word = self
+                .state
                 .words
-                .insert(completion.offset, (word | completion.set) & !completion.clear);
+                .get(&completion.offset)
+                .copied()
+                .unwrap_or(0);
+            self.state.words.insert(
+                completion.offset,
+                (word | completion.set) & !completion.clear,
+            );
         }
         self.state.pending = true;
         if let Some(irq) = self.options.irq
@@ -517,10 +536,26 @@ mod tests {
     #[test]
     fn invalid_options_are_refused() {
         let options = |text: &str| -> Options { toml::from_str(text).unwrap() };
-        assert!(CompletionStub::new(BASE, 0x1000, options("starts = [{ offset = 0x2, mask = 1 }]"), 1000).is_err());
+        assert!(
+            CompletionStub::new(
+                BASE,
+                0x1000,
+                options("starts = [{ offset = 0x2, mask = 1 }]"),
+                1000
+            )
+            .is_err()
+        );
         assert!(CompletionStub::new(BASE, 0x1000, options("irq = 5"), 1000).is_err());
         assert!(CompletionStub::new(BASE, 0x1000, options("irq_mask_offset = 0x4"), 1000).is_err());
-        assert!(CompletionStub::new(BASE, 0x1000, options("starts = [{ offset = 0, mask = 1, value = 2 }]"), 1000).is_err());
+        assert!(
+            CompletionStub::new(
+                BASE,
+                0x1000,
+                options("starts = [{ offset = 0, mask = 1, value = 2 }]"),
+                1000
+            )
+            .is_err()
+        );
         assert!(toml::from_str::<Options>("unknown = 1").is_err());
     }
 }

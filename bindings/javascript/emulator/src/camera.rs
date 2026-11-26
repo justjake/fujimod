@@ -1,7 +1,7 @@
 //! Shared EXR II construction from the checked runtime/device plans. Python
 //! transition adapters refuse before CPU construction on every target.
-use fujimod_catalog_configuration::RunEngine;
 use super::session::{Firmware, Session, decode};
+use fujimod_catalog_configuration::RunEngine;
 use fujimod_emulator::board::{
     bus::{Bus, Mode},
     factory,
@@ -451,11 +451,9 @@ impl Session {
         let identity = camera_identity(&g.firmware_id, &g.firmware.sha256, &storage)?;
         let built = g.devices.build(resources, 0, &mut RefuseAdapters)?;
         let bus = Bus::from_graph(Mode::Strict, built.graph)?;
-        let mut board = g.execution.build(
-            factory::Options::new(RunEngine::Unicorn),
-            bus,
-            None,
-        )?;
+        let mut board = g
+            .execution
+            .build(factory::Options::new(RunEngine::Unicorn), bus, None)?;
         board.set_execution_policy(policy)?;
         for irq in built.core_interrupts {
             board.configure_core_interrupts(irq.core, irq.device, Box::new(irq.inputs))?;
@@ -540,10 +538,7 @@ impl Session {
             }
             let images = core.resources.images()?;
             if !images.has_image(&scene.images)
-                || scene
-                    .sensor
-                    .as_ref()
-                    .is_some_and(|s| !images.has_sensor(s))
+                || scene.sensor.as_ref().is_some_and(|s| !images.has_sensor(s))
             {
                 return Err("session scene input is not in the declared graph".into());
             }

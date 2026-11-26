@@ -9,7 +9,9 @@
 use super::*;
 use fujimod_emulator_cpu::loops::LoopMode;
 use fujimod_emulator_cpu::{Access, FastMmioRead, arm};
-use fujimod_emulator_cpu_unicorn::loop_proof::{Advance, AdvanceFailure, Isa, Proof, State as Registers};
+use fujimod_emulator_cpu_unicorn::loop_proof::{
+    Advance, AdvanceFailure, Isa, Proof, State as Registers,
+};
 use std::collections::BTreeMap;
 
 /// Loop fast-forward state of the M-profile cores. Host execution state only:
@@ -149,7 +151,10 @@ impl State {
             return Ok(false);
         }
         l.count(core, "loop_candidate_entries", 1);
-        let end = l.run_end.filter(|(run, _)| *run == core).map(|(_, end)| end);
+        let end = l
+            .run_end
+            .filter(|(run, _)| *run == core)
+            .map(|(_, end)| end);
         let window = self.parallel.is_none()
             && !cpu.features().instruction_progress
             && self.bus.loop_window();
@@ -192,7 +197,10 @@ impl State {
         // runnable, which bounds the slice the run began without.
         let room = end
             .saturating_sub(self.instructions[core])
-            .min(self.timeline.processor_budget(core, u64::MAX, self.clock_limit)?)
+            .min(
+                self.timeline
+                    .processor_budget(core, u64::MAX, self.clock_limit)?,
+            )
             .min(slice);
         let reads = &l.reads[core];
         let device_read = std::cell::Cell::new(false);

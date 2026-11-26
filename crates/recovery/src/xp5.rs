@@ -1,6 +1,6 @@
 //! Raw XP5 entry, serial NOR preparation, and optional post-DDR FAT32 loading.
-use crate::image::{self, File, Result, Source, extent, put, require, word};
 use crate::StartupStop;
+use crate::image::{self, File, Result, Source, extent, put, require, word};
 use serde::{Deserialize, Serialize};
 mod banks;
 pub use banks::Banks;
@@ -54,7 +54,9 @@ fn valid_secondary_sgi(frames: &[u64; 3]) -> bool {
     frames
         .iter()
         .all(|&frame| GICR_WINDOW.contains(&frame) && frame % GICR_STRIDE == GICR_STRIDE / 2)
-        && frames.windows(2).all(|pair| pair[1] == pair[0] + GICR_STRIDE)
+        && frames
+            .windows(2)
+            .all(|pair| pair[1] == pair[0] + GICR_STRIDE)
 }
 const CARD: Loader = Loader {
     image: template::IMAGE,
@@ -435,11 +437,24 @@ pub fn package(
 /// `prepare_installed_flash` makes the prelude set up and scan the installed flash as stage one
 /// does; neither changes the SD image or its CRC.
 pub(crate) fn package_with_storage(
-    inverted: &[u8], setup: &Setup, ram: Option<Vec<u8>>, success_hold_units: u64,
-    stop: StartupStop, prepare_installed_flash: bool, storage: Option<&[u8]>,
+    inverted: &[u8],
+    setup: &Setup,
+    ram: Option<Vec<u8>>,
+    success_hold_units: u64,
+    stop: StartupStop,
+    prepare_installed_flash: bool,
+    storage: Option<&[u8]>,
 ) -> Result<Vec<File>> {
     package_inner(
-        inverted, setup, ram, success_hold_units, stop, prepare_installed_flash, storage, None, None,
+        inverted,
+        setup,
+        ram,
+        success_hold_units,
+        stop,
+        prepare_installed_flash,
+        storage,
+        None,
+        None,
     )
 }
 
@@ -457,7 +472,10 @@ pub(crate) fn package_with_storage(
 /// The recipe's card-resident setup supplies the cores' interrupt frames and is otherwise not
 /// used.
 pub(crate) fn package_internal_flash(
-    inverted: &[u8], setup: &Setup, ram: Vec<u8>, success_hold_units: u64,
+    inverted: &[u8],
+    setup: &Setup,
+    ram: Vec<u8>,
+    success_hold_units: u64,
     fallback_wait_seconds: Option<u32>,
 ) -> Result<Vec<File>> {
     let mut setup = setup.clone();
@@ -539,7 +557,6 @@ pub(crate) fn package_stock_selector(
     )
 }
 
-
 /// How an internal-flash startup differs from a card-resident one.
 #[derive(Clone)]
 struct InternalFlash {
@@ -553,9 +570,15 @@ struct InternalFlash {
 /// Zero the cleared extents of a stock-selector image. Each is whole words after the reset
 /// stage and inside the image; none overlaps another or an edit.
 fn clear_ram(
-    ram: &mut [u8], cleared: &[Cleared], edits: &[image::Edit], reset_copy_size: usize,
+    ram: &mut [u8],
+    cleared: &[Cleared],
+    edits: &[image::Edit],
+    reset_copy_size: usize,
 ) -> Result<()> {
-    let mut taken: Vec<(usize, usize)> = edits.iter().map(|edit| (edit.address, edit.address + 4)).collect();
+    let mut taken: Vec<(usize, usize)> = edits
+        .iter()
+        .map(|edit| (edit.address, edit.address + 4))
+        .collect();
     for extent in cleared {
         let end = extent.address.checked_add(extent.size).filter(|end| {
             extent.size != 0
@@ -564,7 +587,11 @@ fn clear_ram(
                 && extent.address >= reset_copy_size
                 && *end <= ram.len()
         });
-        let end = end.filter(|end| taken.iter().all(|&(low, high)| *end <= low || extent.address >= high));
+        let end = end.filter(|end| {
+            taken
+                .iter()
+                .all(|&(low, high)| *end <= low || extent.address >= high)
+        });
         let end = end.ok_or_else(|| {
             image::Error::Invalid("Invalid cleared extent of the XP5 RAM image".into())
         })?;
@@ -588,8 +615,9 @@ fn bind_transfer_clock(program: &mut [u8], divider: u8) -> Result<()> {
         "Invalid XP5 transfer clock divider",
     )?;
     let words = || (0..program.len() / 4).map(|n| n * 4);
-    let sites: Vec<usize> =
-        words().filter(|&at| word(program, at).is_ok_and(|w| w == MOV_W1_DIVIDER_1)).collect();
+    let sites: Vec<usize> = words()
+        .filter(|&at| word(program, at).is_ok_and(|w| w == MOV_W1_DIVIDER_1))
+        .collect();
     let stored = sites.len() == 1
         && (1..=8).any(|n| {
             // strh w1, [xN, #0x2c]
@@ -597,7 +625,11 @@ fn bind_transfer_clock(program: &mut [u8], divider: u8) -> Result<()> {
         });
     require(stored, "XP5 loader transfer clock differs")?;
     // mov w1, #(divider << 8 | 1)
-    put(program, sites[0], 0x52800001 | (u32::from(divider) << 8 | 1) << 5)
+    put(
+        program,
+        sites[0],
+        0x52800001 | (u32::from(divider) << 8 | 1) << 5,
+    )
 }
 
 /// Apply checked word edits to the RAM image: every old word must match, none may repeat or
@@ -624,20 +656,29 @@ fn edit_ram(ram: &mut [u8], edits: &[image::Edit], selector: usize) -> Result<()
 /// before putting it back. That image is the one the stock setup copied to RAM 0, so the loader
 /// restores exactly what it overwrote (the gate stub and whatever of FFBOOT it had streamed).
 fn bind_internal_flash(
-    program: &mut [u8], loader: &Loader, setup: &Setup, flash: &InternalFlash, ram: Option<&[u8]>,
+    program: &mut [u8],
+    loader: &Loader,
+    setup: &Setup,
+    flash: &InternalFlash,
+    ram: Option<&[u8]>,
     inverted: &[u8],
 ) -> Result<()> {
     let at = loader.internal_flash_binding.ok_or_else(|| {
         image::Error::Invalid("This XP5 loader build has no internal-flash binding".into())
     })?;
     // Inputs, then the three words the loader writes (its fallback status and two CRCs).
-    let empty = [1u64, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0].map(u64::to_le_bytes).concat();
+    let empty = [1u64, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+        .map(u64::to_le_bytes)
+        .concat();
     require(
         extent(program, at, 96)? == empty,
         "XP5 internal-flash binding template changed",
     )?;
     let page = |address: u64| address & !0xfff..(address & !0xfff) + 0x1000;
-    let (aperture, window) = (setup.flash.aperture, u64::from(!setup.flash.window_mask) + 1);
+    let (aperture, window) = (
+        setup.flash.aperture,
+        u64::from(!setup.flash.window_mask) + 1,
+    );
     require(
         valid_secondary_sgi(&flash.secondary_sgi)
             && flash.secondary_sgi.iter().all(|&frame| {
@@ -653,9 +694,7 @@ fn bind_internal_flash(
         let restore_offset = setup
             .reset_dat
             .checked_sub(setup.prefix.dat_offset)
-            .ok_or_else(|| {
-                image::Error::Invalid("XP5 reset image precedes the update".into())
-            })?;
+            .ok_or_else(|| image::Error::Invalid("XP5 reset image precedes the update".into()))?;
         let window = u64::from(!setup.flash.window_mask) + 1;
         require(
             seconds <= MAX_FALLBACK_WAIT_SECONDS
@@ -674,7 +713,11 @@ fn bind_internal_flash(
         // The loader checks the aperture against this before it gates RAM 0 and RAM 0 against it
         // after a restore, so a flash holding anything but this update's reset image (another
         // firmware, an unreadable aperture) never restores.
-        crc = u64::from(crate::xp4::crc32(extent(inverted, setup.reset_dat, setup.reset_copy_size)?));
+        crc = u64::from(crate::xp4::crc32(extent(
+            inverted,
+            setup.reset_dat,
+            setup.reset_copy_size,
+        )?));
     }
     for (n, value) in [1, fallback, wait, source, bytes, crc]
         .into_iter()
@@ -687,8 +730,13 @@ fn bind_internal_flash(
 }
 
 fn package_inner(
-    inverted: &[u8], setup: &Setup, ram: Option<Vec<u8>>, success_hold_units: u64,
-    stop: StartupStop, prepare_installed_flash: bool, storage: Option<&[u8]>,
+    inverted: &[u8],
+    setup: &Setup,
+    ram: Option<Vec<u8>>,
+    success_hold_units: u64,
+    stop: StartupStop,
+    prepare_installed_flash: bool,
+    storage: Option<&[u8]>,
     internal_flash: Option<InternalFlash>,
     stock_selector: Option<&StockSelector>,
 ) -> Result<Vec<File>> {
@@ -790,11 +838,7 @@ fn package_inner(
     )?;
     let stock = extent(&prefix, 0x800, setup.low_length)?;
     let first = word(stock, 0)?;
-    let jump = branch(
-        setup.base,
-        address + loader.setup_entry as u64,
-        false,
-    )?;
+    let jump = branch(setup.base, address + loader.setup_entry as u64, false)?;
     for (n, value) in [
         2,
         flash.controller,
@@ -913,7 +957,12 @@ fn package_inner(
             edit_ram(&mut ram, &flash.ram_edits, setup.selector)?;
         }
         if let Some(stock) = stock_selector {
-            clear_ram(&mut ram, &stock.cleared, &stock.ram_edits, setup.reset_copy_size)?;
+            clear_ram(
+                &mut ram,
+                &stock.cleared,
+                &stock.ram_edits,
+                setup.reset_copy_size,
+            )?;
             edit_ram(&mut ram, &stock.ram_edits, setup.selector)?;
             // Checked above: the stock word is 1 and the plan's image carries 0.
             put64(&mut ram, setup.selector, 1)?;
@@ -1096,14 +1145,26 @@ fn package_inner(
             branch(gate, address + loader.boot_zero_gate as u64, false)?,
         )?;
         if let Some(card) = &setup.card_boot {
-            card.copy_unit_cache(storage, &mut raw, setup.low_length,
-                (setup.stack-setup.base) as usize,
-                (address-setup.base) as usize..(address-setup.base) as usize+program.len(),
-                &setup.banks)?;
-            card.install(inverted, storage, card_boot::Installation {
-                base: setup.base, stock, program_address: address,
-                raw: &mut raw, program: &mut program, ram: &mut ram,
-            })?;
+            card.copy_unit_cache(
+                storage,
+                &mut raw,
+                setup.low_length,
+                (setup.stack - setup.base) as usize,
+                (address - setup.base) as usize..(address - setup.base) as usize + program.len(),
+                &setup.banks,
+            )?;
+            card.install(
+                inverted,
+                storage,
+                card_boot::Installation {
+                    base: setup.base,
+                    stock,
+                    program_address: address,
+                    raw: &mut raw,
+                    program: &mut program,
+                    ram: &mut ram,
+                },
+            )?;
         } else {
             require(storage.is_none(), "Setup has no card storage binding")?;
         }
@@ -1406,8 +1467,17 @@ mod tests {
             let source = 0xc000 + configuration + 200;
             u64::from_le_bytes(raw[source..source + 8].try_into().unwrap())
         };
-        let card = package(&data, &s, Some(ram.clone()), 0, StartupStop::Continue, false).unwrap();
-        let flash = package_internal_flash(&data, &with_frames(s.clone()), ram.clone(), 0, None).unwrap();
+        let card = package(
+            &data,
+            &s,
+            Some(ram.clone()),
+            0,
+            StartupStop::Continue,
+            false,
+        )
+        .unwrap();
+        let flash =
+            package_internal_flash(&data, &with_frames(s.clone()), ram.clone(), 0, None).unwrap();
         assert_eq!(
             flash.iter().map(|f| f.name.as_str()).collect::<Vec<_>>(),
             ["marble_init.bin", "ffboot.bin"]
@@ -1490,25 +1560,44 @@ mod tests {
         assert_eq!(raw.len(), stock.len());
         let source = 0xc000 + template::XP5_SETUP_CONFIGURATION + 200;
         let request = 0xc000 + template::SETUP_SD_REQUEST;
-        assert_eq!((word(raw, source).unwrap(), word(stock, source).unwrap()), (0, 1));
+        assert_eq!(
+            (word(raw, source).unwrap(), word(stock, source).unwrap()),
+            (0, 1)
+        );
         assert_eq!(word(stock, request + 8).unwrap() as usize, expected.len());
-        assert_eq!(word(stock, request + 16).unwrap(), crate::xp4::crc32(&expected));
+        assert_eq!(
+            word(stock, request + 16).unwrap(),
+            crate::xp4::crc32(&expected)
+        );
         // The stock-selector loader runs none of the recipe's board operations: the boot ROM's
         // card routing stays. The plain card start keeps them.
         let board = 0xc000 + template::SETUP_SD_BOARD;
         let operations = 16 + 24 * plain.board.operations.len();
         assert!(!plain.board.operations.is_empty());
-        assert_eq!(word(raw, board + 12).unwrap() as usize, plain.board.operations.len());
+        assert_eq!(
+            word(raw, board + 12).unwrap() as usize,
+            plain.board.operations.len()
+        );
         assert_eq!(word(stock, board + 12).unwrap(), 0);
-        assert!(stock[board + 16..board + operations].iter().all(|b| *b == 0));
+        assert!(
+            stock[board + 16..board + operations]
+                .iter()
+                .all(|b| *b == 0)
+        );
         assert_eq!(stock[board..board + 12], raw[board..board + 12]);
         let differing: Vec<usize> = (0..raw.len())
             .filter(|&at| raw[at] != stock[at] && !(board + 12..board + operations).contains(&at))
             .map(|at| at & !7)
             .collect();
-        assert!(differing.iter().all(|at| [source, request + 16].contains(at)), "{differing:x?}");
+        assert!(
+            differing
+                .iter()
+                .all(|at| [source, request + 16].contains(at)),
+            "{differing:x?}"
+        );
         // It is not the internal-flash build, which holds and wakes the parked cores.
-        let flash = package_internal_flash(&data, &with_frames(plain), ram.clone(), 0, None).unwrap();
+        let flash =
+            package_internal_flash(&data, &with_frames(plain), ram.clone(), 0, None).unwrap();
         assert_ne!(flash[0].bytes.len(), stock.len());
     }
 
@@ -1517,19 +1606,39 @@ mod tests {
     #[test]
     fn stock_selector_startup_binds_the_recipes_transfer_clock_divider() {
         let (data, mut setup, ram) = stock_selector_fixture();
-        let own = package_stock_selector(&data, &setup, ram.clone(), 0, StartupStop::Continue).unwrap();
-        setup.stock_selector.as_mut().unwrap().transfer_clock_divider = Some(4);
-        let bound = package_stock_selector(&data, &setup, ram.clone(), 0, StartupStop::Continue).unwrap();
+        let own =
+            package_stock_selector(&data, &setup, ram.clone(), 0, StartupStop::Continue).unwrap();
+        setup
+            .stock_selector
+            .as_mut()
+            .unwrap()
+            .transfer_clock_divider = Some(4);
+        let bound =
+            package_stock_selector(&data, &setup, ram.clone(), 0, StartupStop::Continue).unwrap();
         assert_eq!(own[1].bytes, bound[1].bytes);
         let (own, bound) = (&own[0].bytes, &bound[0].bytes);
-        let differing: Vec<usize> = (0..own.len()).filter(|&at| own[at] != bound[at]).map(|at| at & !3).collect();
-        assert!(!differing.is_empty() && differing.iter().all(|at| *at == differing[0]), "{differing:x?}");
+        let differing: Vec<usize> = (0..own.len())
+            .filter(|&at| own[at] != bound[at])
+            .map(|at| at & !3)
+            .collect();
+        assert!(
+            !differing.is_empty() && differing.iter().all(|at| *at == differing[0]),
+            "{differing:x?}"
+        );
         // mov w1, #0x101 becomes mov w1, #0x401.
         assert_eq!(word(own, differing[0]).unwrap(), 0x52802021);
         assert_eq!(word(bound, differing[0]).unwrap(), 0x52808021);
         for divider in [0, 3, 0xff] {
-            setup.stock_selector.as_mut().unwrap().transfer_clock_divider = Some(divider);
-            assert!(package_stock_selector(&data, &setup, ram.clone(), 0, StartupStop::Continue).is_err(), "{divider}");
+            setup
+                .stock_selector
+                .as_mut()
+                .unwrap()
+                .transfer_clock_divider = Some(divider);
+            assert!(
+                package_stock_selector(&data, &setup, ram.clone(), 0, StartupStop::Continue)
+                    .is_err(),
+                "{divider}"
+            );
         }
         let mut program = template::IMAGE.to_vec();
         bind_transfer_clock(&mut program, 4).unwrap();
@@ -1556,11 +1665,13 @@ mod tests {
         assert!(with(&|s| s.cleared[0].size = 0x2000).is_err());
         assert!(with(&|s| s.cleared[0].address = 0x2002).is_err());
         assert!(with(&|s| s.cleared[0].size = 0).is_err());
-        assert!(with(&|s| {
-            let again = s.cleared[0].clone();
-            s.cleared.push(again);
-        })
-        .is_err());
+        assert!(
+            with(&|s| {
+                let again = s.cleared[0].clone();
+                s.cleared.push(again);
+            })
+            .is_err()
+        );
         assert!(with(&|s| s.ram_edits[0].address = 0x2400).is_err());
         // A recipe without the startup, or with a card-resident setup as well.
         let mut plain = setup.clone();
@@ -1605,16 +1716,25 @@ mod tests {
             setup.internal_flash_ram_edits = edits;
             setup
         };
-        let plain = package_internal_flash(&data, &with_frames(s.clone()), ram.clone(), 0, None).unwrap();
-        let edited =
-            package_internal_flash(&data, &with(vec![edit(0x100, 0xffff_ffff)]), ram.clone(), 0, None)
-                .unwrap();
+        let plain =
+            package_internal_flash(&data, &with_frames(s.clone()), ram.clone(), 0, None).unwrap();
+        let edited = package_internal_flash(
+            &data,
+            &with(vec![edit(0x100, 0xffff_ffff)]),
+            ram.clone(),
+            0,
+            None,
+        )
+        .unwrap();
         let mut expected = ram.clone();
         put(&mut expected, 0x100, 0x1400_0068).unwrap();
         assert_eq!(edited[1].bytes, expected);
         assert_eq!(plain[1].bytes, ram);
         let request = 0xc000 + flash_template::SETUP_SD_REQUEST;
-        assert_eq!(word(&edited[0].bytes, request + 16).unwrap(), crate::xp4::crc32(&expected));
+        assert_eq!(
+            word(&edited[0].bytes, request + 16).unwrap(),
+            crate::xp4::crc32(&expected)
+        );
         assert_ne!(
             word(&edited[0].bytes, request + 16).unwrap(),
             word(&plain[0].bytes, request + 16).unwrap()
@@ -1657,7 +1777,12 @@ mod tests {
         assert_eq!(ram, before);
         assert!(edit_ram(&mut ram, &[edit(2, 0xffff_ffff)], 0x40).is_err());
         assert!(edit_ram(&mut ram, &[edit(0x20, 0xffff_ffff)], 0x40).is_err());
-        edit_ram(&mut ram, &[edit(0, 0xffff_ffff), edit(8, 0xffff_ffff)], 0x40).unwrap();
+        edit_ram(
+            &mut ram,
+            &[edit(0, 0xffff_ffff), edit(8, 0xffff_ffff)],
+            0x40,
+        )
+        .unwrap();
         assert_eq!(&ram[..12], &[0, 0, 0, 0, 255, 255, 255, 255, 0, 0, 0, 0]);
     }
 
@@ -1700,12 +1825,19 @@ mod tests {
         };
         let names = |files: &[File]| files.iter().map(|f| f.name.clone()).collect::<Vec<_>>();
         let everything = recipe.build_startup_with_options(&update, options).unwrap();
-        assert_eq!(names(&everything), ["marble_init.bin", "ffboot.bin", "FPUPDATE.DAT"]);
+        assert_eq!(
+            names(&everything),
+            ["marble_init.bin", "ffboot.bin", "FPUPDATE.DAT"]
+        );
         let boot = recipe.build_boot_files(&update, options).unwrap();
         assert_eq!(names(&boot), ["marble_init.bin", "ffboot.bin"]);
         assert_eq!(boot[0].bytes, everything[0].bytes);
         assert_eq!(boot[1].bytes, everything[1].bytes);
-        assert!(recipe.build_startup_with_storage(&update, &[0; 8], options).is_err());
+        assert!(
+            recipe
+                .build_startup_with_storage(&update, &[0; 8], options)
+                .is_err()
+        );
         let mut stage_one = recipe.clone();
         stage_one.generation = crate::Generation::Xp4;
         assert!(stage_one.build_boot_files(&update, options).is_err());
@@ -1761,7 +1893,13 @@ mod tests {
             ));
             let expected = match wait {
                 None => [0, 0, 0, 0, 0],
-                Some(wait) => [1, u64::from(wait), restore, s.reset_copy_size as u64, measured],
+                Some(wait) => [
+                    1,
+                    u64::from(wait),
+                    restore,
+                    s.reset_copy_size as u64,
+                    measured,
+                ],
             };
             assert_eq!((1..6).map(|n| field(raw, n)).collect::<Vec<_>>(), expected);
             assert_eq!(
@@ -1769,7 +1907,10 @@ mod tests {
                 [0xfa0b0000, 0xfa0d0000, 0xfa0f0000]
             );
             // The loader's own status words start empty.
-            assert_eq!((9..12).map(|n| field(raw, n)).collect::<Vec<_>>(), [0, 0, 0]);
+            assert_eq!(
+                (9..12).map(|n| field(raw, n)).collect::<Vec<_>>(),
+                [0, 0, 0]
+            );
             // The bootstrap's gate is the loader's own.
             assert_eq!(
                 word(raw, gate).unwrap(),
@@ -1786,7 +1927,11 @@ mod tests {
             let loader = &raw[0xc000..0xc000 + flash_template::IMAGE.len()];
             for at in (0..loader.len()).step_by(4) {
                 if !bound.iter().any(|range| range.contains(&at)) {
-                    assert_eq!(word(loader, at).unwrap(), word(flash_template::IMAGE, at).unwrap(), "{at:#x}");
+                    assert_eq!(
+                        word(loader, at).unwrap(),
+                        word(flash_template::IMAGE, at).unwrap(),
+                        "{at:#x}"
+                    );
                 }
             }
             let header = 0xc000 + flash_template::IMAGE.len();
@@ -1826,7 +1971,16 @@ mod tests {
             assert!(package_internal_flash(&data, &bad, ram.clone(), 0, None).is_err());
         }
         // The wait is bounded at a day.
-        assert!(package_internal_flash(&data, &setup, ram.clone(), 0, Some(MAX_FALLBACK_WAIT_SECONDS + 1)).is_err());
+        assert!(
+            package_internal_flash(
+                &data,
+                &setup,
+                ram.clone(),
+                0,
+                Some(MAX_FALLBACK_WAIT_SECONDS + 1)
+            )
+            .is_err()
+        );
         // The stock reset image has to be a flash-aperture extent that the RAM image covers.
         let mut narrow = setup.clone();
         narrow.flash.window_mask = 0xffff_f000;
@@ -1839,22 +1993,31 @@ mod tests {
     }
 
     #[test]
-    fn the_internal_flash_loader_asset_keeps_its_binding_template_and_the_default_loader_has_none() {
+    fn the_internal_flash_loader_asset_keeps_its_binding_template_and_the_default_loader_has_none()
+    {
         // The packager refuses a loader whose binding is not the empty ABI-1 template.
         assert_eq!(flash_template::SETUP_SD_INTERNAL_FLASH % 8, 0);
         assert_eq!(
             &flash_template::IMAGE[flash_template::SETUP_SD_INTERNAL_FLASH
                 ..flash_template::SETUP_SD_INTERNAL_FLASH + 96],
-            [1u64, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0].map(u64::to_le_bytes).concat()
+            [1u64, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+                .map(u64::to_le_bytes)
+                .concat()
         );
-        assert_eq!(INTERNAL_FLASH.internal_flash_binding, Some(flash_template::SETUP_SD_INTERNAL_FLASH));
+        assert_eq!(
+            INTERNAL_FLASH.internal_flash_binding,
+            Some(flash_template::SETUP_SD_INTERNAL_FLASH)
+        );
         assert_eq!(CARD.internal_flash_binding, None);
         // The default loader is the card-resident build: its layout names no such binding.
         let layout = include_str!("../assets/sd-boot-v1-xp5-loader.generated.json");
         assert!(!layout.contains("setup_sd_internal_flash"));
         assert_ne!(template::IMAGE, flash_template::IMAGE);
         // Both builds share the prelude the packager bounds and configures.
-        assert_eq!(template::PRELUDE_STACK_MAX, flash_template::PRELUDE_STACK_MAX);
+        assert_eq!(
+            template::PRELUDE_STACK_MAX,
+            flash_template::PRELUDE_STACK_MAX
+        );
         assert_eq!(
             template::XP5_SETUP_RETURN_BRANCH,
             flash_template::XP5_SETUP_RETURN_BRANCH

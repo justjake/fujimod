@@ -8,6 +8,7 @@ read_many and write_many should each wait for the device once and write_many
 must not read back: the installer verifies the resulting state itself. The placed notification
 lets callers persist the image and allocation before the first upload.
 """
+
 import json
 
 from . import usb
@@ -27,87 +28,96 @@ class Installer:
         return cls(usb.RuntimeImage(data, json.dumps(metadata)), body, relink=relink)
 
     async def _run(self, operation, **arguments):
-        task = usb.RuntimeTask(self.image, operation,
-                               lease=json.dumps(self.lease) if self.lease else None,
-                               relink=self.relink, **arguments)
+        task = usb.RuntimeTask(
+            self.image,
+            operation,
+            lease=json.dumps(self.lease) if self.lease else None,
+            relink=self.relink,
+            **arguments,
+        )
         response = failure = None
         cause = None
         while True:
             kind, metadata, data = task.step(response, failure)
             facts = json.loads(metadata)
             response = failure = None
-            if kind == 'done':
-                self.lease = facts['lease']
-                if operation != 'read':
-                    self.image = usb.RuntimeImage(data, json.dumps(facts['image']))
-                if 'error' in facts:
-                    raise RuntimeInstallError(facts['error']) from cause
-                return bytes(data) if operation == 'read' else facts['output']
+            if kind == "done":
+                self.lease = facts["lease"]
+                if operation != "read":
+                    self.image = usb.RuntimeImage(data, json.dumps(facts["image"]))
+                if "error" in facts:
+                    raise RuntimeInstallError(facts["error"]) from cause
+                return bytes(data) if operation == "read" else facts["output"]
             try:
-                if kind == 'allocate':
-                    base = await self.body.allocate(facts['size'], facts['align'])
-                    response = base.to_bytes(8, 'little')
-                elif kind == 'placed':
-                    self.image = usb.RuntimeImage(data, json.dumps(facts['image']))
-                    self.lease = facts['lease']
+                if kind == "allocate":
+                    base = await self.body.allocate(facts["size"], facts["align"])
+                    response = base.to_bytes(8, "little")
+                elif kind == "placed":
+                    self.image = usb.RuntimeImage(data, json.dumps(facts["image"]))
+                    self.lease = facts["lease"]
                     await self.body.placed(self.image, self.lease)
-                elif kind == 'free':
-                    await self.body.free(facts['base'])
-                elif kind == 'read':
-                    response = bytes(await self.body.read(facts['address'], facts['size']))
-                elif kind == 'write':
-                    await self.body.write(facts['address'], bytes(data))
-                elif kind == 'read_many':
-                    ranges = [(r['address'], r['size']) for r in facts['ranges']]
+                elif kind == "free":
+                    await self.body.free(facts["base"])
+                elif kind == "read":
+                    response = bytes(
+                        await self.body.read(facts["address"], facts["size"])
+                    )
+                elif kind == "write":
+                    await self.body.write(facts["address"], bytes(data))
+                elif kind == "read_many":
+                    ranges = [(r["address"], r["size"]) for r in facts["ranges"]]
                     parts = await self.body.read_many(ranges)
                     if [len(part) for part in parts] != [size for _, size in ranges]:
-                        raise RuntimeError('read_many returned the wrong sizes')
-                    response = b''.join(bytes(part) for part in parts)
-                elif kind == 'write_many':
+                        raise RuntimeError("read_many returned the wrong sizes")
+                    response = b"".join(bytes(part) for part in parts)
+                elif kind == "write_many":
                     writes, offset = [], 0
-                    for r in facts['ranges']:
-                        writes.append((r['address'], bytes(data[offset:offset + r['size']])))
-                        offset += r['size']
+                    for r in facts["ranges"]:
+                        writes.append((
+                            r["address"],
+                            bytes(data[offset : offset + r["size"]]),
+                        ))
+                        offset += r["size"]
                     await self.body.write_many(writes)
-                elif kind in ('synchronize', 'protect'):
-                    await getattr(self.body, kind)(facts['address'], facts['size'])
-                elif kind == 'control':
+                elif kind in ("synchronize", "protect"):
+                    await getattr(self.body, kind)(facts["address"], facts["size"])
+                elif kind == "control":
                     image = json.loads(self.image.metadata)
-                    if facts['operation'] == image['control']['operations']['install']:
-                        self.lease['publication_attempted'] = True
-                    await self.body.control(facts['entry'], facts['operation'])
+                    if facts["operation"] == image["control"]["operations"]["install"]:
+                        self.lease["publication_attempted"] = True
+                    await self.body.control(facts["entry"], facts["operation"])
                 else:
-                    raise RuntimeError(f'Unknown Rust body operation: {kind}')
+                    raise RuntimeError(f"Unknown Rust body operation: {kind}")
             except Exception as error:
                 cause, failure = error, str(error)
 
     async def prepare(self):
-        return await self._run('prepare')
+        return await self._run("prepare")
 
     async def install(self, token=1):
-        return await self._run('install', token=token)
+        return await self._run("install", token=token)
 
     async def publish(self, token=1):
-        return await self._run('publish', token=token)
+        return await self._run("publish", token=token)
 
     async def init(self, token=1):
-        return await self._run('init', token=token)
+        return await self._run("init", token=token)
 
     async def status(self, token=1):
-        return await self._run('status', token=token)
+        return await self._run("status", token=token)
 
     async def teardown(self, token=1):
-        return await self._run('teardown', token=token)
+        return await self._run("teardown", token=token)
 
     async def rollback(self, token=1):
-        return await self._run('rollback', token=token)
+        return await self._run("rollback", token=token)
 
     async def release(self, token=1):
         """Free an image whose hooks are stock and which holds nothing."""
-        return await self._run('release', token=token)
+        return await self._run("release", token=token)
 
     async def set(self, address, data):
-        return await self._run('set', address=address, data=bytes(data))
+        return await self._run("set", address=address, data=bytes(data))
 
     async def read(self, address, size):
-        return await self._run('read', address=address, size=size)
+        return await self._run("read", address=address, size=size)

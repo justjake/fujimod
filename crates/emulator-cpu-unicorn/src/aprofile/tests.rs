@@ -501,20 +501,24 @@ fn graph_mpidr_policy_preserves_interactive_exits_after_exact_runs() {
         .unwrap();
     let cpu = Core::new(raw, Memory::default()).unwrap();
     cpu.map_zeroed(0x1000, 0x1000, 7).unwrap();
-    cpu.write_register(arm::CPSR, &0xd3u32.to_le_bytes()).unwrap();
+    cpu.write_register(arm::CPSR, &0xd3u32.to_le_bytes())
+        .unwrap();
     let mpidr = 0xee10_0fb0;
     code(&cpu, &[mpidr]);
     cpu.set_armv7a_affinity(0x8000_0001).unwrap();
 
-    cpu.select_armv7a_affinity_policy(ExecutionPolicy::Exact).unwrap();
+    cpu.select_armv7a_affinity_policy(ExecutionPolicy::Exact)
+        .unwrap();
     assert!(matches!(run(&cpu, 0x1000, 1), Exit::Stopped));
     assert_eq!(value(&cpu, arm::CORE[0]), 0x8000_0001);
 
-    cpu.select_armv7a_affinity_policy(ExecutionPolicy::Interactive).unwrap();
+    cpu.select_armv7a_affinity_policy(ExecutionPolicy::Interactive)
+        .unwrap();
     assert!(matches!(run(&cpu, 0x1000, 1), Exit::BeforeInstruction(word) if word == mpidr));
     assert_eq!(cpu.instruction_progress(), Some(0));
 
-    cpu.select_armv7a_affinity_policy(ExecutionPolicy::Exact).unwrap();
+    cpu.select_armv7a_affinity_policy(ExecutionPolicy::Exact)
+        .unwrap();
     assert!(matches!(run(&cpu, 0x1000, 1), Exit::Stopped));
     assert_eq!(cpu.instruction_progress(), Some(1));
 }

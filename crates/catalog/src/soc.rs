@@ -1013,7 +1013,14 @@ impl BlockDevice {
                         | BlockDevice::InputCapture { .. }
                         | BlockDevice::UnmodeledBusDrain { .. }
                 )
-                | (SocBlockKind::ControlBus, BlockDevice::ControlBus { .. } | BlockDevice::SecondaryBus { .. } | BlockDevice::ByteI2c { .. } | BlockDevice::I2c { .. } | BlockDevice::RegisterBlock { .. })
+                | (
+                    SocBlockKind::ControlBus,
+                    BlockDevice::ControlBus { .. }
+                        | BlockDevice::SecondaryBus { .. }
+                        | BlockDevice::ByteI2c { .. }
+                        | BlockDevice::I2c { .. }
+                        | BlockDevice::RegisterBlock { .. }
+                )
                 | (
                     SocBlockKind::NandController,
                     BlockDevice::Nand { .. } | BlockDevice::SerialFlashController { .. }

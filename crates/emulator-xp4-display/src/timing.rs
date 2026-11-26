@@ -32,7 +32,12 @@ impl TimingHost for Host<'_, '_> {
 
 impl XppTiming {
     /// `irqs` are each bank's GIC lines for phases 0, 1 and 2.
-    pub fn new(bases: [u64; 2], irqs: [[u8; 3]; 2], frame_ticks: u64, stop_ticks: u64) -> Result<Self, String> {
+    pub fn new(
+        bases: [u64; 2],
+        irqs: [[u8; 3]; 2],
+        frame_ticks: u64,
+        stop_ticks: u64,
+    ) -> Result<Self, String> {
         if bases[0] & 0xfff != 0
             || bases[1] & 0xfff != 0
             || bases[0].abs_diff(bases[1]) < 0x1000
@@ -42,7 +47,12 @@ impl XppTiming {
         {
             return Err("Invalid X-Processor Pro display timing wiring".into());
         }
-        let mut state = Timing::new(Some(frame_ticks as i64), stop_ticks as i64, "configured-clocked".into(), 0);
+        let mut state = Timing::new(
+            Some(frame_ticks as i64),
+            stop_ticks as i64,
+            "configured-clocked".into(),
+            0,
+        );
         state.bases = bases;
         state.irqs = irqs;
         Ok(Self { state })
@@ -76,7 +86,10 @@ impl Device for XppTiming {
             return;
         }
         let (now, cpu) = (cx.now() as i64, cx.cpu as i64);
-        if let Err(error) = self.state.write(cpu, a, size.into(), value.into(), now, false, &mut Host(cx)) {
+        if let Err(error) =
+            self.state
+                .write(cpu, a, size.into(), value.into(), now, false, &mut Host(cx))
+        {
             cx.fail(error.0);
         }
     }
@@ -92,7 +105,9 @@ impl Device for XppTiming {
         }
     }
     fn next_deadline(&self, now: u64) -> Option<u64> {
-        self.state.deadline_with_clock(now as i64, true).map(|v| v as u64)
+        self.state
+            .deadline_with_clock(now as i64, true)
+            .map(|v| v as u64)
     }
     fn save(&self) -> Value {
         serde_json::to_value(&self.state).unwrap()

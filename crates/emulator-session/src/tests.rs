@@ -1,5 +1,5 @@
-use fujimod_catalog_configuration::RunEngine;
 use super::*;
+use fujimod_catalog_configuration::RunEngine;
 mod portable;
 mod ram_option;
 use fujimod_emulator::board::{
@@ -16,7 +16,12 @@ fn card_session() -> Session {
 fn card_session_with_epoch(epoch: Option<(u64, Vec<u64>)>) -> Session {
     card_session_with_power(epoch, None)
 }
-fn card_session_with_power(epoch: Option<(u64, Vec<u64>)>, power: Option<std::sync::Arc<std::sync::Mutex<fujimod_emulator_devices::exr2::wake_alarm::WakeAlarm>>>) -> Session {
+fn card_session_with_power(
+    epoch: Option<(u64, Vec<u64>)>,
+    power: Option<
+        std::sync::Arc<std::sync::Mutex<fujimod_emulator_devices::exr2::wake_alarm::WakeAlarm>>,
+    >,
+) -> Session {
     card_session_with_power_and_alias(epoch, power, false)
 }
 fn card_session_with_power_and_alias(
@@ -94,11 +99,23 @@ fn card_session_with_power_alias_and_fill(
     let pads = gpio.pads();
     let gpio_id = bus.register(0xfff89000, 0x480, Box::new(gpio)).unwrap();
     let mut resources = Resources::default();
-    resources.wires.insert("usb_cable".into(), fujimod_emulator_exr2_resources::Wire::logic_level(false));
-    resources.users.insert("usb_cable".into(), Default::default());
+    resources.wires.insert(
+        "usb_cable".into(),
+        fujimod_emulator_exr2_resources::Wire::logic_level(false),
+    );
+    resources
+        .users
+        .insert("usb_cable".into(), Default::default());
     if let Some(power) = power {
         use fujimod_emulator_devices::exr2::clock;
-        let clocks = clock::Clocks::new(clock::Options { output_settle_ticks: 2, reset_ready: true }, ()).unwrap();
+        let clocks = clock::Clocks::new(
+            clock::Options {
+                output_settle_ticks: 2,
+                reset_ready: true,
+            },
+            (),
+        )
+        .unwrap();
         clocks.output().attach_power(power).unwrap();
         resources.clocks.insert("clocks".into(), clocks.output());
         bus.register(clock::BASE, 0x100, Box::new(clocks)).unwrap();
@@ -145,19 +162,22 @@ fn card_session_with_power_alias_and_fill(
         });
     }
     if resources.clocks.contains_key("clocks") {
-        graph.peripherals.push(factory::Peripheral { core: 0, address: 0xfff88000, physical: 0xfff88000, size: 0x100 });
+        graph.peripherals.push(factory::Peripheral {
+            core: 0,
+            address: 0xfff88000,
+            physical: 0xfff88000,
+            size: 0x100,
+        });
     }
-    let mut options = factory::Options::new(RunEngine::Unicorn)
-        .with_translation_cache_size_bytes(1 << 20);
+    let mut options =
+        factory::Options::new(RunEngine::Unicorn).with_translation_cache_size_bytes(1 << 20);
     if let Some(byte) = fill {
         options = options.with_ram_fill(byte);
     }
     if let Some((tick, counts)) = epoch {
         options = options.with_epoch(tick, counts);
     }
-    let board = graph
-        .build(options, bus, None)
-        .unwrap();
+    let board = graph.build(options, bus, None).unwrap();
     Session {
         definition: serde_json::json!({"fixture":"card-session"}),
         board,
@@ -266,7 +286,9 @@ fn scene_rgb_prepares_only_the_next_sensor_exposure() {
     let input = Arc::new(Mutex::new(SensorFrames::new(
         Frame::new(1, 1, FramePixels::Rgb24(vec![1, 2, 3].into())).unwrap(),
     )));
-    fujimod_emulator_exr2_images::images_mut(&mut session.resources).unwrap().sensors
+    fujimod_emulator_exr2_images::images_mut(&mut session.resources)
+        .unwrap()
+        .sensors
         .insert("sensor".into(), input.clone());
     let saved = session.checkpoint(None).unwrap();
     let mut history = super::history::History::new(2, 128 << 20).unwrap();
@@ -656,7 +678,9 @@ fn sensor_raw16_replaces_the_current_frame_without_changing_the_latched_frame() 
     let sensor = Arc::new(Mutex::new(SensorFrames::new(
         Frame::new(2, 1, FramePixels::Raw16(vec![1, 2])).unwrap(),
     )));
-    fujimod_emulator_exr2_images::images_mut(&mut session.resources).unwrap().sensors
+    fujimod_emulator_exr2_images::images_mut(&mut session.resources)
+        .unwrap()
+        .sensors
         .insert("sensor".into(), sensor.clone());
     session
         .sensor_raw16("sensor", 3, 1, &[3, 0, 4, 0, 5, 0])
@@ -675,7 +699,9 @@ fn sensor_radiance_is_retained_by_serialized_input_history_and_undo() {
     let sensor = Arc::new(Mutex::new(SensorFrames::new(
         Frame::new(1, 1, FramePixels::Rgb24(vec![1, 2, 3].into())).unwrap(),
     )));
-    fujimod_emulator_exr2_images::images_mut(&mut session.resources).unwrap().sensors
+    fujimod_emulator_exr2_images::images_mut(&mut session.resources)
+        .unwrap()
+        .sensors
         .insert("sensor".into(), sensor.clone());
     let initial = sensor.lock().unwrap().fingerprint();
     let mut history = History::new(2, 128 << 20).unwrap();
@@ -871,7 +897,9 @@ fn automatic_history_admits_one_oversized_input_and_expires_its_old_prefix() {
     let sensor = Arc::new(Mutex::new(SensorFrames::new(
         Frame::new(1, 1, FramePixels::Rgb24(vec![1, 2, 3].into())).unwrap(),
     )));
-    fujimod_emulator_exr2_images::images_mut(&mut session.resources).unwrap().sensors
+    fujimod_emulator_exr2_images::images_mut(&mut session.resources)
+        .unwrap()
+        .sensors
         .insert("sensor".into(), sensor.clone());
     // A tiny retention budget cannot reject a supported external input. As
     // with keyframes, retain one oversized item and expire it on the next mark.
@@ -906,7 +934,9 @@ fn raf_history_and_replay_share_the_installed_frame_and_checkpoint_counts() {
     let input = Arc::new(Mutex::new(SensorFrames::new(
         Frame::new(1, 1, FramePixels::Rgb24(vec![0; 3].into())).unwrap(),
     )));
-    fujimod_emulator_exr2_images::images_mut(&mut session.resources).unwrap().sensors
+    fujimod_emulator_exr2_images::images_mut(&mut session.resources)
+        .unwrap()
+        .sensors
         .insert("sensor".into(), input.clone());
     let saved = session.checkpoint(None).unwrap();
     let frame: Arc<Frame> = Arc::new(

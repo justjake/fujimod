@@ -1,9 +1,9 @@
 //! `lz_osd` driven through XP5 parts.
+use crate::lz::PlaneCodec;
+use fujimod_emulator_devices::lz_osd::*;
+use fujimod_emulator_devices::test_host::recording::RecordingHost;
 use fujimod_emulator_devices::{Cx, Device};
 use std::sync::{Arc, Mutex};
-use fujimod_emulator_devices::lz_osd::*;
-use crate::lz::PlaneCodec;
-use fujimod_emulator_devices::test_host::recording::RecordingHost;
 
 fn write(
     d: &mut Decompressor,
@@ -129,7 +129,8 @@ fn pending_osd_has_exact_deadline_early_events_and_inspection_are_observational(
         // A restored pending job is discoverable without a saved host queue.
         d.advance(&mut Cx::new(&mut h, cpu, pc, 7));
         assert_eq!(&h.ram[0x200..0x208], &[1, 2, 3, 4, 5, 6, 7, 8]);
-        let publication = fujimod_framebuffer_xp5::emulator_codec::decode(&h.ram[0x300..0x320]).unwrap();
+        let publication =
+            fujimod_framebuffer_xp5::emulator_codec::decode(&h.ram[0x300..0x320]).unwrap();
         assert_eq!(publication.primary, 0x200);
         assert_eq!(publication.geometry.bytes, 8);
         assert_eq!(h.irqs, [(201, true)]);

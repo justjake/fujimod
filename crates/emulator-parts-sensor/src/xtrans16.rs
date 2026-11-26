@@ -438,9 +438,9 @@ mod tests {
         assert_eq!(sensor.preview_view([0, 2496]).unwrap(), None);
         sensor
             .command(&[
-                0x81, 0x0a, 2, 0, 0, 0, 0, 0,
-                0x81, 1, 1, 0, 0, 0, 0, 0, 0x81, 0x0b, 0xf2, 0, 0, 0, 0, 0, 0x81, 0x0c, 3, 0, 0, 0,
-                0, 0, 0x81, 0x0d, 0xaa, 0, 0, 0, 0, 0, 0x81, 0x0e, 2, 0, 0, 0, 0, 0,
+                0x81, 0x0a, 2, 0, 0, 0, 0, 0, 0x81, 1, 1, 0, 0, 0, 0, 0, 0x81, 0x0b, 0xf2, 0, 0, 0,
+                0, 0, 0x81, 0x0c, 3, 0, 0, 0, 0, 0, 0x81, 0x0d, 0xaa, 0, 0, 0, 0, 0, 0x81, 0x0e, 2,
+                0, 0, 0, 0, 0,
             ])
             .unwrap();
         let view = sensor.preview_view([735, 1002]).unwrap().unwrap();
@@ -454,8 +454,16 @@ mod tests {
         assert_eq!(sensor.preview_view([735, 1002]).unwrap(), Some(view));
         // A four-row readout retains the same count field's flag bits. Its
         // nominal window spans the center and bottom of the optical field.
-        for (address, value) in [(0x0a, 3), (0x0b, 0x37), (0x0c, 1), (0x0d, 0xb6), (0x0e, 0x22)] {
-            sensor.command(&[0x81, address, value, 0, 0, 0, 0, 0]).unwrap();
+        for (address, value) in [
+            (0x0a, 3),
+            (0x0b, 0x37),
+            (0x0c, 1),
+            (0x0d, 0xb6),
+            (0x0e, 0x22),
+        ] {
+            sensor
+                .command(&[0x81, address, value, 0, 0, 0, 0, 0])
+                .unwrap();
         }
         let movie = sensor.preview_view([0, 2496]).unwrap().unwrap();
         assert_eq!(movie.rectangle, [0, 311, 2496, 2776]);
@@ -878,8 +886,14 @@ mod tests {
         sensor.timing(1482, 3374, None).unwrap();
         let first = sensor.pixel_clock_ticks(0x5c8).unwrap();
         let shots = [
-            (1. / 4000., sensor.pixel_clock_ticks(3 * 1482 + 0x39c).unwrap()),
-            (1. / 250., sensor.pixel_clock_ticks(85 * 1482 + 0x170).unwrap()),
+            (
+                1. / 4000.,
+                sensor.pixel_clock_ticks(3 * 1482 + 0x39c).unwrap(),
+            ),
+            (
+                1. / 250.,
+                sensor.pixel_clock_ticks(85 * 1482 + 0x170).unwrap(),
+            ),
         ];
         for (nominal, second) in shots {
             sensor.command(&[0x81, 1, 0, 0, 0, 0, 0, 0]).unwrap();
@@ -888,7 +902,10 @@ mod tests {
             sensor.comparator_edge(0, 1000 + first).unwrap();
             sensor.comparator_edge(1, 1000 + second).unwrap();
             let light = exposure.lock().unwrap().seconds;
-            assert!((nominal + 0.0002..=nominal + 0.0003).contains(&light), "{nominal} {light}");
+            assert!(
+                (nominal + 0.0002..=nominal + 0.0003).contains(&light),
+                "{nominal} {light}"
+            );
         }
         // A second curtain without a first, or an unrelated output, exposes nothing.
         sensor.command(&[0x81, 1, 0, 0, 0, 0, 0, 0]).unwrap();

@@ -68,7 +68,9 @@ impl Gradient {
     fn at(&self, x: f32, y: f32) -> [u8; 4] {
         let m = &self.matrix;
         let (px, py) = (m[0] * x + m[1] * y + m[2], m[3] * x + m[4] * y + m[5]);
-        let t = ((px - self.start.0) * self.direction.0 + (py - self.start.1) * self.direction.1) * self.scale * 255.0;
+        let t = ((px - self.start.0) * self.direction.0 + (py - self.start.1) * self.direction.1)
+            * self.scale
+            * 255.0;
         // Pad outside the ramp.
         let k = self.stops.iter().rposition(|(p, _)| *p <= t).unwrap_or(0);
         let (p0, c0) = self.stops[k];
@@ -98,7 +100,10 @@ impl Renderer {
     pub fn seed(&mut self, registers: &[(u32, u32)]) -> Result<(), String> {
         self.registers.resize(REGISTERS, 0);
         for &(r, v) in registers {
-            *self.registers.get_mut(r as usize).ok_or("EXR GPU seeded register is outside the register file")? = v;
+            *self
+                .registers
+                .get_mut(r as usize)
+                .ok_or("EXR GPU seeded register is outside the register file")? = v;
         }
         Ok(())
     }
@@ -112,7 +117,9 @@ impl Renderer {
             self.registers.resize(REGISTERS, 0);
         }
         if r >= REGISTERS {
-            return Err(format!("EXR GPU register {r:#x} is outside the register file"));
+            return Err(format!(
+                "EXR GPU register {r:#x} is outside the register file"
+            ));
         }
         self.registers[r] = v;
         if r == 0x410 {
@@ -167,7 +174,9 @@ impl Renderer {
                     let at = (h & 0x3ffff) as usize;
                     let body = &words[(i + 1).min(words.len())..(i + 1 + n).min(words.len())];
                     if at + body.len() > STATE_WORDS {
-                        return Err(format!("EXR GPU state memory write at {at:#x} runs past the state memory"));
+                        return Err(format!(
+                            "EXR GPU state memory write at {at:#x} runs past the state memory"
+                        ));
                     }
                     if self.state.len() < at + body.len() {
                         self.state.resize(at + body.len(), 0);
@@ -175,7 +184,11 @@ impl Renderer {
                     self.state[at..at + body.len()].copy_from_slice(body);
                     i += 1 + n
                 }
-                form => return Err(format!("EXR GPU command header form {form:#x} is not decoded ({h:#010x})")),
+                form => {
+                    return Err(format!(
+                        "EXR GPU command header form {form:#x} is not decoded ({h:#010x})"
+                    ));
+                }
             }
         }
         Ok(())
@@ -206,7 +219,12 @@ impl Renderer {
             .map(|k| {
                 let at = STATE_RAMP + 4 * k;
                 let color = self.word(at + 1);
-                let rgba = [(color >> 8) as u8, (color >> 16) as u8, (color >> 24) as u8, color as u8];
+                let rgba = [
+                    (color >> 8) as u8,
+                    (color >> 16) as u8,
+                    (color >> 24) as u8,
+                    color as u8,
+                ];
                 ((self.word(at) >> 5) as f32, rgba.map(f32::from))
             })
             .collect();
@@ -246,19 +264,31 @@ impl Renderer {
                 };
                 if op == 5 || op == 6 {
                     let (c1, c2) = if op == 6 {
-                        ((f(self.reg(0x414)), f(self.reg(0x415))), (f(self.reg(0x416)), f(self.reg(0x417))))
+                        (
+                            (f(self.reg(0x414)), f(self.reg(0x415))),
+                            (f(self.reg(0x416)), f(self.reg(0x417))),
+                        )
                     } else {
                         let q = (f(self.reg(0x416)), f(self.reg(0x417)));
                         (
-                            (p0.0 + 2.0 / 3.0 * (q.0 - p0.0), p0.1 + 2.0 / 3.0 * (q.1 - p0.1)),
+                            (
+                                p0.0 + 2.0 / 3.0 * (q.0 - p0.0),
+                                p0.1 + 2.0 / 3.0 * (q.1 - p0.1),
+                            ),
                             (x + 2.0 / 3.0 * (q.0 - x), y + 2.0 / 3.0 * (q.1 - y)),
                         )
                     };
                     for s in 1..=CURVE_STEPS {
                         let t = s as f32 / CURVE_STEPS as f32;
                         let u = 1.0 - t;
-                        let px = u * u * u * p0.0 + 3.0 * u * u * t * c1.0 + 3.0 * u * t * t * c2.0 + t * t * t * x;
-                        let py = u * u * u * p0.1 + 3.0 * u * u * t * c1.1 + 3.0 * u * t * t * c2.1 + t * t * t * y;
+                        let px = u * u * u * p0.0
+                            + 3.0 * u * u * t * c1.0
+                            + 3.0 * u * t * t * c2.0
+                            + t * t * t * x;
+                        let py = u * u * u * p0.1
+                            + 3.0 * u * u * t * c1.1
+                            + 3.0 * u * t * t * c2.1
+                            + t * t * t * y;
                         let p = self.transform(px, py);
                         self.subpaths.last_mut().unwrap().push(p);
                     }
@@ -279,9 +309,13 @@ impl Renderer {
             0xe => {
                 let (a, b) = (self.reg(0x412), self.reg(0x413));
                 let s = self.surface(0x200);
-                let (x0, x1) = (i64::from(a & 0xffff).min(i64::from(b & 0xffff)), i64::from(a & 0xffff).max(i64::from(b & 0xffff)));
+                let (x0, x1) = (
+                    i64::from(a & 0xffff).min(i64::from(b & 0xffff)),
+                    i64::from(a & 0xffff).max(i64::from(b & 0xffff)),
+                );
                 let (ya, yb) = (s.height - i64::from(a >> 16), s.height - i64::from(b >> 16));
-                let spans: Vec<(i64, i64, i64)> = (ya.min(yb)..ya.max(yb)).map(|row| (row, x0, x1)).collect();
+                let spans: Vec<(i64, i64, i64)> =
+                    (ya.min(yb)..ya.max(yb)).map(|row| (row, x0, x1)).collect();
                 return self.paint(cx, &spans);
             }
             _ => {}
@@ -296,7 +330,11 @@ impl Renderer {
         let s = self.surface(0x200);
         let mut edges = Vec::new();
         for sp in &self.subpaths {
-            for k in 0..sp.len().saturating_sub(1).max(if sp.len() > 1 { sp.len() } else { 0 }) {
+            for k in 0..sp
+                .len()
+                .saturating_sub(1)
+                .max(if sp.len() > 1 { sp.len() } else { 0 })
+            {
                 let a = sp[k % sp.len()];
                 let b = sp[(k + 1) % sp.len()];
                 if a.1 != b.1 {
@@ -308,15 +346,30 @@ impl Renderer {
             return Ok(());
         }
         // Surface y grows upward from the bottom-left; memory rows grow downward.
-        let lo = edges.iter().map(|(a, b)| a.1.min(b.1)).fold(f32::MAX, f32::min).floor().max(0.0) as i64;
-        let hi = edges.iter().map(|(a, b)| a.1.max(b.1)).fold(f32::MIN, f32::max).ceil().min(s.height as f32) as i64;
+        let lo = edges
+            .iter()
+            .map(|(a, b)| a.1.min(b.1))
+            .fold(f32::MAX, f32::min)
+            .floor()
+            .max(0.0) as i64;
+        let hi = edges
+            .iter()
+            .map(|(a, b)| a.1.max(b.1))
+            .fold(f32::MIN, f32::max)
+            .ceil()
+            .min(s.height as f32) as i64;
         let mut spans = Vec::new();
         for vy in lo..hi {
             let sy = vy as f32 + 0.5;
             let mut crossings: Vec<(f32, i32)> = edges
                 .iter()
                 .filter(|(a, b)| (a.1 <= sy && b.1 > sy) || (b.1 <= sy && a.1 > sy))
-                .map(|(a, b)| (a.0 + (sy - a.1) * (b.0 - a.0) / (b.1 - a.1), if b.1 > a.1 { 1 } else { -1 }))
+                .map(|(a, b)| {
+                    (
+                        a.0 + (sy - a.1) * (b.0 - a.0) / (b.1 - a.1),
+                        if b.1 > a.1 { 1 } else { -1 },
+                    )
+                })
                 .collect();
             crossings.sort_by(|p, q| p.0.total_cmp(&q.0));
             let mut winding = 0;
@@ -344,7 +397,12 @@ impl Renderer {
         let src = self.surface(0x220);
         let m: Vec<f32> = (0..9).map(|k| f(self.reg(0x550 + k))).collect();
         let color = self.reg(0x548);
-        let flat = [(color >> 8) as u8, (color >> 16) as u8, (color >> 24) as u8, color as u8];
+        let flat = [
+            (color >> 8) as u8,
+            (color >> 16) as u8,
+            (color >> 24) as u8,
+            color as u8,
+        ];
         let blend = image || self.reg(0x400) & BLEND != 0;
         if blend && !image && flat[3] == 0 && self.reg(0x604) & GRADIENT != GRADIENT {
             return Ok(());

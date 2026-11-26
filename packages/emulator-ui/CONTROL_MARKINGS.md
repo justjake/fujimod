@@ -64,14 +64,14 @@ export function marking(control: PhysicalControl): Marking;
 export function controlPart(control: PhysicalControl, action?: string, stage?: string): ControlPart;
 ```
 
-| `behavior.kind` | Part | Held state from a boot hold |
-| --- | --- | --- |
-| `button` | `key` | none |
-| `shutter` | `shutter` | `stage` |
-| `dial`, `ring` with steps | `command` | the action after `.` (`press`, `decrease`, `increase`) |
-| `rocker` | `rocker` | the action after `.` (`press`, `decrease`, `increase`) |
-| `pad` | `pad` | the direction or `press` |
-| `switch`, `lever`, positional `dial` or `ring` | `positions` | the position |
+| `behavior.kind`                                | Part        | Held state from a boot hold                            |
+| ---------------------------------------------- | ----------- | ------------------------------------------------------ |
+| `button`                                       | `key`       | none                                                   |
+| `shutter`                                      | `shutter`   | `stage`                                                |
+| `dial`, `ring` with steps                      | `command`   | the action after `.` (`press`, `decrease`, `increase`) |
+| `rocker`                                       | `rocker`    | the action after `.` (`press`, `decrease`, `increase`) |
+| `pad`                                          | `pad`       | the direction or `press`                               |
+| `switch`, `lever`, positional `dial` or `ring` | `positions` | the position                                           |
 
 `controlPart` throws for an unknown control id or an action the control does
 not declare. A control's `pushable` fact admits `.press` when its binding is
@@ -114,7 +114,10 @@ export function PowerComboKeys(props: {
   controls: PhysicalControls;
   modes: BootMode[];
 }): JSX.Element;
-export function bootSequence(controls: PhysicalControls, modes: BootMode[]): {
+export function bootSequence(
+  controls: PhysicalControls,
+  modes: BootMode[],
+): {
   usb?: boolean;
   hold: BootHold[];
 };

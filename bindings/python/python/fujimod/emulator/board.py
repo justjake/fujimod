@@ -62,7 +62,9 @@ def _json_object(value: object) -> dict[str, object]:
 class BoardState(dict[str, object]):
     """Diagnostic board state with direct complete-state equality."""
 
-    def __init__(self, diagnostic: dict[str, object], native: _native.emulator.BoardState) -> None:
+    def __init__(
+        self, diagnostic: dict[str, object], native: _native.emulator.BoardState
+    ) -> None:
         super().__init__(diagnostic)
         self._native = native
         self._complete: dict[str, object] | None = None
@@ -305,7 +307,9 @@ class Board:
             raise ValueError("overlays must contain unique catalog identities")
         update = cls._input_path(update, "update")
         boot_rom = None if boot_rom is None else cls._input_path(boot_rom, "boot_rom")
-        card_image = None if card_image is None else cls._input_path(card_image, "card_image")
+        card_image = (
+            None if card_image is None else cls._input_path(card_image, "card_image")
+        )
         scene = None if scene is None else cls._input_path(scene, "scene")
         if card_files is not None and not isinstance(card_files, Mapping):
             raise TypeError("card_files must map SD card file names to paths")
@@ -343,7 +347,9 @@ class Board:
             capability = bytes(capability_reply)
             if len(capability) != 20:
                 raise ValueError("capability_reply must contain 20 bytes")
-        if isinstance(preferred_languages, (str, bytes)) or not isinstance(preferred_languages, Sequence):
+        if isinstance(preferred_languages, (str, bytes)) or not isinstance(
+            preferred_languages, Sequence
+        ):
             raise TypeError("preferred_languages must be a sequence of BCP 47 tags")
         if any(not isinstance(tag, str) for tag in preferred_languages):
             raise TypeError("preferred_languages must contain strings")
@@ -355,9 +361,13 @@ class Board:
         if camera_settings is not None and not isinstance(camera_settings, Mapping):
             raise TypeError("camera_settings must map setting names to value names")
         selected_settings = dict(camera_settings or {})
-        if any(type(key) is not str or type(value) is not str or not key or not value
-               for key, value in selected_settings.items()):
-            raise TypeError("camera_settings must map nonempty strings to nonempty strings")
+        if any(
+            type(key) is not str or type(value) is not str or not key or not value
+            for key, value in selected_settings.items()
+        ):
+            raise TypeError(
+                "camera_settings must map nonempty strings to nonempty strings"
+            )
         native = _native.Board.from_inputs(
             configuration_id=configuration_id,
             overlays=selected_overlays,
@@ -784,10 +794,14 @@ class Board:
             raise ValueError("at most 4096 physical memory ranges are supported")
         checked: list[tuple[int, int]] = []
         for row in ranges:
-            if not isinstance(row, Sequence) or isinstance(
-                row, (str, bytes, bytearray)
-            ) or len(row) != 2:
-                raise TypeError("each physical memory range must be an (address, size) pair")
+            if (
+                not isinstance(row, Sequence)
+                or isinstance(row, (str, bytes, bytearray))
+                or len(row) != 2
+            ):
+                raise TypeError(
+                    "each physical memory range must be an (address, size) pair"
+                )
             address, size = row
             self._validate_range(address, size)
             checked.append((address, size))
@@ -804,7 +818,8 @@ class Board:
         """Return the current diagnostic and complete modeled state."""
         self._ensure_open()
         return BoardState(
-            _json_object(json.loads(self._native.state())), self._native.complete_state()
+            _json_object(json.loads(self._native.state())),
+            self._native.complete_state(),
         )
 
     def complete_state_json(self) -> dict[str, object]:
@@ -892,7 +907,9 @@ class Session:
     def xp5_gpio_input(self, port: int, pin: int, high: bool) -> None:
         """Drive a physical input pad on an XP5 board."""
         if type(port) is not int or type(pin) is not int or type(high) is not bool:
-            raise TypeError("XP5 GPIO input needs an integer port/pin and boolean level")
+            raise TypeError(
+                "XP5 GPIO input needs an integer port/pin and boolean level"
+            )
         self._native_board().xp5_gpio_input(port, pin, high)
 
     def xp5_gpio_level(self, port: int, pin: int) -> bool:
@@ -903,8 +920,14 @@ class Session:
 
     def xp5_key(self, at_ns: int, key: str, pressed: bool) -> None:
         """Queue a declared key-model edge at an absolute guest nanosecond."""
-        if type(at_ns) is not int or not 0 <= at_ns < 1 << 64 or type(pressed) is not bool:
-            raise TypeError("XP5 key edge needs an unsigned time and boolean pressed state")
+        if (
+            type(at_ns) is not int
+            or not 0 <= at_ns < 1 << 64
+            or type(pressed) is not bool
+        ):
+            raise TypeError(
+                "XP5 key edge needs an unsigned time and boolean pressed state"
+            )
         if not isinstance(key, str) or not key:
             raise TypeError("XP5 key must have a name")
         self._native_board().xp5_key(at_ns, key, pressed)
@@ -913,7 +936,12 @@ class Session:
         """Queue a latched dial or switch position at an absolute guest nanosecond."""
         if type(at_ns) is not int or not 0 <= at_ns < 1 << 64:
             raise TypeError("XP5 position change needs an unsigned time")
-        if not isinstance(dial, str) or not dial or not isinstance(position, str) or not position:
+        if (
+            not isinstance(dial, str)
+            or not dial
+            or not isinstance(position, str)
+            or not position
+        ):
             raise TypeError("XP5 position change needs a dial name and a position name")
         self._native_board().xp5_set_position(at_ns, dial, position)
 
@@ -943,12 +971,15 @@ class Session:
         if len(values) != 3:
             raise ValueError("gravity must contain three components")
         if any(
-            isinstance(value, bool) or not isinstance(value, (int, float))
+            isinstance(value, bool)
+            or not isinstance(value, (int, float))
             or not math.isfinite(value)
             for value in values
         ):
             raise ValueError("gravity components must be finite numbers")
-        self._native_board().set_gravity_g(self._node(node), [float(value) for value in values])
+        self._native_board().set_gravity_g(
+            self._node(node), [float(value) for value in values]
+        )
 
     def input_graph(self) -> dict[str, object]:
         """Return input-capable nodes and their checked graph mappings."""
@@ -1000,7 +1031,9 @@ class Session:
 
     def card_state(self, node: str) -> dict[str, object]:
         """Return the modeled SD card's contacts, capacity and faults."""
-        return _json_object(json.loads(self._native_board().card_state(self._node(node))))
+        return _json_object(
+            json.loads(self._native_board().card_state(self._node(node)))
+        )
 
     def set_position(self, control_id: str, position: str) -> None:
         """Set a named physical control to one of its declared positions."""
@@ -1070,9 +1103,7 @@ class Session:
         """Return a PNG screenshot for a catalog runtime after it has a frame."""
         return self._native_board().screenshot()
 
-    def set_image_rgb(
-        self, name: str, width: int, height: int, rgb: Buffer
-    ) -> None:
+    def set_image_rgb(self, name: str, width: int, height: int, rgb: Buffer) -> None:
         """Replace a named external RGB image without advancing guest time."""
         if type(width) is not int or not 1 <= width <= sys.maxsize:
             raise ValueError("width must be a positive host-sized integer")
@@ -1093,7 +1124,9 @@ class Session:
             raise ValueError("height must be a positive host-sized integer")
         payload = bytes(raw16)
         if len(payload) != width * height * 2:
-            raise ValueError("RAW input must contain exactly width * height U16 samples")
+            raise ValueError(
+                "RAW input must contain exactly width * height U16 samples"
+            )
         self._native_board().sensor_raw16(self._node(name), width, height, payload)
 
     def frame_state(self, node: str) -> dict[str, object]:

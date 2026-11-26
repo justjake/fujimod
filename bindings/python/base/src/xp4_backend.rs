@@ -1,8 +1,8 @@
 //! What the emulator bindings call on an XP4 session. `fujimod-python-xp4` implements it and
 //! registers its factory, so the emulator bindings depend on no XP4 crate.
-use fujimod_emulator_devices::parts::sd_card::Card;
 use crate::discovery::{FrontierEntry, Intervention};
 use fujimod_emulator_cpu::{Register, arm};
+use fujimod_emulator_devices::parts::sd_card::Card;
 use pyo3::{
     PyTraverseError, PyVisit,
     prelude::*,
@@ -42,7 +42,12 @@ pub trait Xp4Backend {
         return_sites: Option<Vec<u64>>,
         quota_per_edge: bool,
     ) -> PyResult<()>;
-    fn memory_watch_begin(&self, ranges: Vec<(u64, u64)>, limit: usize, writes_only: bool) -> PyResult<()>;
+    fn memory_watch_begin(
+        &self,
+        ranges: Vec<(u64, u64)>,
+        limit: usize,
+        writes_only: bool,
+    ) -> PyResult<()>;
     fn memory_watch_end(&self) -> PyResult<()>;
     fn cpr_read(&self, core: usize, crn: u32, crm: u32, opc1: u32, opc2: u32) -> PyResult<u64>;
     fn write(&self, address: usize, data: &[u8]) -> PyResult<()>;

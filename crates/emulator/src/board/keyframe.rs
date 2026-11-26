@@ -210,7 +210,8 @@ impl State {
             .clone_from(&saved.interrupt_delivery);
         self.irq_observations.clone_from(&saved.irq_observations);
         self.instructions.clone_from(&saved.instructions);
-        self.epoch_instructions.clone_from(&saved.epoch_instructions);
+        self.epoch_instructions
+            .clone_from(&saved.epoch_instructions);
         self.accounted.clone_from(&saved.accounted);
         self.deadlines.clone_from(&saved.deadlines);
         self.generations.clone_from(&saved.generations);
@@ -329,7 +330,15 @@ impl Board {
                 .mprofile
                 .iter()
                 .map(Option::is_some))
-            || state.armv7a.iter().map(|p|p.as_ref().map(|p|&p.config)).ne(saved.saved.armv7a.iter().map(|p|p.as_ref().map(|p|&p.config)))
+            || state
+                .armv7a
+                .iter()
+                .map(|p| p.as_ref().map(|p| &p.config))
+                .ne(saved
+                    .saved
+                    .armv7a
+                    .iter()
+                    .map(|p| p.as_ref().map(|p| &p.config)))
             || state.aprofile.iter().map(Option::is_some).ne(saved
                 .saved
                 .aprofile

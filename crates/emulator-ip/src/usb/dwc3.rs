@@ -933,16 +933,29 @@ fn physical(endpoint: u8) -> Result<usize, String> {
 impl Dwc3 {
     /// The finished reply of the port's transaction on `ep`, if any.
     fn host_reply(&self, ep: usize) -> Result<Option<&Reply>, String> {
-        match self.state.host.get(&ep).and_then(|id| self.state.replies.get(id)) {
+        match self
+            .state
+            .host
+            .get(&ep)
+            .and_then(|id| self.state.replies.get(id))
+        {
             Some(Reply::Stall) => Err(format!("USB physical endpoint {ep} stalled")),
             reply => Ok(reply),
         }
     }
     /// Start a port transaction on `ep`, releasing its previous reply.
-    fn host_start(&mut self, now: u64, ep: usize, setup: bool, out: Option<Vec<u8>>) -> Result<(), String> {
+    fn host_start(
+        &mut self,
+        now: u64,
+        ep: usize,
+        setup: bool,
+        out: Option<Vec<u8>>,
+    ) -> Result<(), String> {
         if let Some(id) = self.state.host.remove(&ep) {
             if self.state.parked.remove(&ep).is_none() && self.state.replies.remove(&id).is_none() {
-                return Err(format!("USB physical endpoint {ep} has a transaction in flight"));
+                return Err(format!(
+                    "USB physical endpoint {ep} has a transaction in flight"
+                ));
             }
         }
         let id = self.transaction(now, ep, setup, out)?;
@@ -977,7 +990,12 @@ impl UsbPort for Dwc3 {
         self.host_start(cx.now(), 0, true, Some(packet.to_vec()))
     }
     fn host_out(&mut self, cx: &mut Cx<'_>, endpoint: u8, packet: &[u8]) -> Result<(), String> {
-        self.host_start(cx.now(), physical(endpoint & 0x7f)?, false, Some(packet.to_vec()))
+        self.host_start(
+            cx.now(),
+            physical(endpoint & 0x7f)?,
+            false,
+            Some(packet.to_vec()),
+        )
     }
     fn host_in(&mut self, _cx: &mut Cx<'_>, endpoint: u8, size: usize) -> Result<Vec<u8>, String> {
         let ep = physical(endpoint | 0x80)?;
@@ -985,10 +1003,17 @@ impl UsbPort for Dwc3 {
             return Err(format!("USB IN endpoint {endpoint:#04x} holds no packet"));
         };
         if data.len() > size {
-            return Err(format!("USB IN packet of {} bytes exceeds {size}", data.len()));
+            return Err(format!(
+                "USB IN packet of {} bytes exceeds {size}",
+                data.len()
+            ));
         }
         let data = data.clone();
-        let id = self.state.host.remove(&ep).ok_or("USB IN transaction vanished")?;
+        let id = self
+            .state
+            .host
+            .remove(&ep)
+            .ok_or("USB IN transaction vanished")?;
         self.consume_reply(id)?;
         Ok(data)
     }
@@ -1005,8 +1030,12 @@ impl UsbPort for Dwc3 {
                         return Ok(false);
                     }
                 }
-                !self.state.pending.iter().any(|p| matches!(p.operation,
-                    Operation::Transaction { .. } | Operation::BusReset | Operation::Link(_)))
+                !self.state.pending.iter().any(|p| {
+                    matches!(
+                        p.operation,
+                        Operation::Transaction { .. } | Operation::BusReset | Operation::Link(_)
+                    )
+                })
             }
             UsbHostWait::SetupTaken | UsbHostWait::ControlOutTaken(_) => acked(0)?,
             UsbHostWait::OutTaken(endpoint) => {
@@ -1014,7 +1043,10 @@ impl UsbPort for Dwc3 {
                 !self.state.host.contains_key(&ep) || acked(ep)?
             }
             UsbHostWait::InPacket(endpoint) => {
-                matches!(self.host_reply(physical(endpoint | 0x80)?)?, Some(Reply::Data(_)))
+                matches!(
+                    self.host_reply(physical(endpoint | 0x80)?)?,
+                    Some(Reply::Data(_))
+                )
             }
         })
     }

@@ -9,7 +9,9 @@ from rebase import pull_request_base, rebase_tree
 from repository import Failure, Repository
 
 
-def fake_gh(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, output: str, code: int = 0) -> None:
+def fake_gh(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, output: str, code: int = 0
+) -> None:
     gh = tmp_path / "bin" / "gh"
     gh.parent.mkdir()
     gh.write_text(f"#!/bin/sh\ncat <<'EOF'\n{output}\nEOF\nexit {code}\n")
@@ -20,7 +22,11 @@ def fake_gh(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, output: str, code: 
 def test_the_base_is_the_open_pull_requests_base(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    fake_gh(tmp_path, monkeypatch, json.dumps([{"baseRefName": "someone/base", "number": 7}]))
+    fake_gh(
+        tmp_path,
+        monkeypatch,
+        json.dumps([{"baseRefName": "someone/base", "number": 7}]),
+    )
     assert pull_request_base(Repository(tmp_path), "someone/stacked") == "someone/base"
 
 
@@ -56,7 +62,9 @@ def test_a_branch_submodule_rebases_before_its_superproject(
     tmp_path: Path,
 ) -> None:
     library_remote = tmp_path / "library.git"
-    command("git", "init", "-q", "--bare", "-b", "main", str(library_remote), cwd=tmp_path)
+    command(
+        "git", "init", "-q", "--bare", "-b", "main", str(library_remote), cwd=tmp_path
+    )
     library = checkout(library_remote, tmp_path / "library")
     (library / "v.txt").write_text("base\n")
     command("git", "add", "v.txt", cwd=library)
@@ -79,7 +87,9 @@ def test_a_branch_submodule_rebases_before_its_superproject(
     command("git", "init", "-q", "--bare", "-b", "main", str(remote), cwd=tmp_path)
     other = checkout(remote, tmp_path / "other")
     allow = ("-c", "protocol.file.allow=always")
-    command("git", *allow, "submodule", "add", "-q", str(library_remote), "lib", cwd=other)
+    command(
+        "git", *allow, "submodule", "add", "-q", str(library_remote), "lib", cwd=other
+    )
     command("git", "-C", "lib", "checkout", "-q", "--detach", base, cwd=other)
     command("git", "add", "lib", cwd=other)
     command("git", "commit", "-qm", "add lib", cwd=other)
@@ -89,7 +99,9 @@ def test_a_branch_submodule_rebases_before_its_superproject(
 
     command("git", "switch", "-q", "-c", "topic", cwd=shared)
     command("git", "-C", "lib", "fetch", "-q", "origin", cwd=shared)
-    command("git", "-C", "lib", "checkout", "-q", "-B", "topic", "origin/topic", cwd=shared)
+    command(
+        "git", "-C", "lib", "checkout", "-q", "-B", "topic", "origin/topic", cwd=shared
+    )
     command("git", "add", "lib", cwd=shared)
     command("git", "commit", "-qm", "pin topic", cwd=shared)
     (shared / "work.txt").write_text("work\n")
@@ -112,7 +124,10 @@ def test_a_branch_submodule_rebases_before_its_superproject(
     assert (shared / "lib" / "a.txt").read_text() == "topic\n"
     super_head = command("git", "rev-parse", "HEAD", cwd=shared)
     assert command("git", "rev-parse", "HEAD~2", cwd=shared) == new_base
-    assert command("git", "ls-tree", super_head, "lib", cwd=shared).split()[2] == library_head
+    assert (
+        command("git", "ls-tree", super_head, "lib", cwd=shared).split()[2]
+        == library_head
+    )
     assert (shared / "work.txt").read_text() == "work\n"
     assert command("git", "rev-parse", "topic", cwd=remote) == super_head
     assert command("git", "rev-parse", "topic", cwd=library_remote) == library_head

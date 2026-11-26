@@ -1,6 +1,6 @@
 use super::*;
-use fujimod_emulator_parts_io::serial::Unconnected;
 use fujimod_emulator_devices::test_host::recording::RecordingHost;
+use fujimod_emulator_parts_io::serial::Unconnected;
 const BASE: u64 = 0x100000;
 
 fn controller() -> Controller {
@@ -301,9 +301,14 @@ fn unconnected_interrupt_output_drives_nothing_and_undeclared_output_refuses() {
     let mut cx = Cx::new(&mut h, 0, 0x1234, 0);
     c.write(&mut cx, BASE + 0x14, 2, 0xf);
     assert!(cx.is_unmodeled());
-    let connected = Controller::new(BASE, clock, vec![InterruptLine::Shared(77)], Box::new(Unconnected))
-        .unwrap()
-        .with_unconnected_interrupt();
+    let connected = Controller::new(
+        BASE,
+        clock,
+        vec![InterruptLine::Shared(77)],
+        Box::new(Unconnected),
+    )
+    .unwrap()
+    .with_unconnected_interrupt();
     assert!(connected.is_err());
 }
 /// Each published register as the CPU would see it through the fast path:
@@ -314,8 +319,12 @@ fn published(c: &Controller) -> Vec<(u64, u8, u64)> {
     c.fast_reads(BASE, 0x1000)
         .into_iter()
         .map(|word| match word.value {
-            FastReadValue::AtomicU32(value) => (word.offset, 4, value.load(Ordering::Acquire) as u64),
-            FastReadValue::AtomicU16(value) => (word.offset, 2, value.load(Ordering::Acquire) as u64),
+            FastReadValue::AtomicU32(value) => {
+                (word.offset, 4, value.load(Ordering::Acquire) as u64)
+            }
+            FastReadValue::AtomicU16(value) => {
+                (word.offset, 2, value.load(Ordering::Acquire) as u64)
+            }
             _ => panic!("PL022 publishes only atomic registers"),
         })
         .collect()
@@ -332,7 +341,11 @@ fn assert_published(c: &mut Controller, h: &mut RecordingHost, step: &str) {
     let fast = published(c);
     let mut offsets: Vec<_> = fast.iter().map(|(offset, _, _)| *offset).collect();
     offsets.dedup();
-    assert_eq!(offsets, vec![0, 4, 0xc, 0x10, 0x14, 0x18, 0x1c, 0x24], "{step}");
+    assert_eq!(
+        offsets,
+        vec![0, 4, 0xc, 0x10, 0x14, 0x18, 0x1c, 0x24],
+        "{step}"
+    );
     assert_eq!(fast.len(), 16, "{step}: both widths of each register");
     for (offset, size, value) in fast {
         assert_eq!(
@@ -394,17 +407,31 @@ fn published_registers_match_reads_after_every_state_change() {
     assert_eq!(published(&restored), published(&c));
 
     let mut restored = controller();
-    restored.restore_checkpoint(&c.checkpoint().unwrap()).unwrap();
+    restored
+        .restore_checkpoint(&c.checkpoint().unwrap())
+        .unwrap();
     assert_eq!(published(&restored), published(&c));
 }
 #[test]
 fn data_and_clear_registers_are_never_published() {
     let c = controller();
-    let offsets: Vec<_> = c.fast_reads(BASE, 0x1000).into_iter().map(|w| w.offset).collect();
+    let offsets: Vec<_> = c
+        .fast_reads(BASE, 0x1000)
+        .into_iter()
+        .map(|w| w.offset)
+        .collect();
     assert!(!offsets.contains(&8) && !offsets.contains(&0x20));
     // A window that covers only part of the aperture publishes only that part.
-    let part: Vec<_> = c.fast_reads(BASE + 0xc, 4).into_iter().map(|w| w.offset).collect();
+    let part: Vec<_> = c
+        .fast_reads(BASE + 0xc, 4)
+        .into_iter()
+        .map(|w| w.offset)
+        .collect();
     assert_eq!(part, vec![0, 0]);
-    let half: Vec<_> = c.fast_reads(BASE + 0xc, 2).into_iter().map(|w| w.value.width()).collect();
+    let half: Vec<_> = c
+        .fast_reads(BASE + 0xc, 2)
+        .into_iter()
+        .map(|w| w.value.width())
+        .collect();
     assert_eq!(half, vec![2]);
 }

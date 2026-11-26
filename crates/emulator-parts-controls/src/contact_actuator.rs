@@ -69,7 +69,10 @@ impl ContactActuator {
             transitions: 0,
         })
     }
-    fn decoded_checkpoint(&self, saved: &fujimod_emulator_devices::checkpoint::Checkpoint) -> Result<Saved, String> {
+    fn decoded_checkpoint(
+        &self,
+        saved: &fujimod_emulator_devices::checkpoint::Checkpoint,
+    ) -> Result<Saved, String> {
         let state: Saved = saved.decode(self.name())?;
         let (options, observed, position, pending, _) = &state;
         if options != &self.options
@@ -165,10 +168,16 @@ impl Device for ContactActuator {
             ),
         )
     }
-    fn validate_checkpoint(&self, saved: &fujimod_emulator_devices::checkpoint::Checkpoint) -> Result<(), String> {
+    fn validate_checkpoint(
+        &self,
+        saved: &fujimod_emulator_devices::checkpoint::Checkpoint,
+    ) -> Result<(), String> {
         self.decoded_checkpoint(saved).map(|_| ())
     }
-    fn restore_checkpoint(&mut self, saved: &fujimod_emulator_devices::checkpoint::Checkpoint) -> Result<(), String> {
+    fn restore_checkpoint(
+        &mut self,
+        saved: &fujimod_emulator_devices::checkpoint::Checkpoint,
+    ) -> Result<(), String> {
         let (_, observed, position, pending, transitions) = self.decoded_checkpoint(saved)?;
         self.observed = observed;
         self.position = position;

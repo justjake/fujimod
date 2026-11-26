@@ -27,7 +27,11 @@ fn exr_plls() -> Vec<u32> {
     vec![0x34]
 }
 fn exr_latches() -> Vec<u32> {
-    (0..=0x38).step_by(4).filter(|&o| o != 0x34).chain([0x84]).collect()
+    (0..=0x38)
+        .step_by(4)
+        .filter(|&o| o != 0x34)
+        .chain([0x84])
+        .collect()
 }
 #[derive(Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -99,9 +103,7 @@ impl Clocks {
             return None;
         }
         let index = (offset / 4) as usize;
-        (self.plls.contains(&index)
-            || index == READY as usize / 4
-            || self.latches.contains(&index))
+        (self.plls.contains(&index) || index == READY as usize / 4 || self.latches.contains(&index))
             .then_some(index)
     }
 }

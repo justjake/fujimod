@@ -67,7 +67,9 @@ impl Maintenance {
             // settles its accepted events before another engine can run.
             let owner = unsafe { cpu.attach_translation_owner()? };
             let status = cpu.translation_maintenance_status()?;
-            if status.owner == 0 || status.pending != 0 || status.poison != 0
+            if status.owner == 0
+                || status.pending != 0
+                || status.poison != 0
                 || status.next_sequence != 1
             {
                 return Err("Translation owner did not attach to a fresh engine".into());
@@ -105,7 +107,9 @@ impl Maintenance {
         if cpus.len() != self.owners.len() {
             return Err("Translation domain membership changed".into());
         }
-        (0..cpus.len()).map(|index| self.status(cpus, index)).collect()
+        (0..cpus.len())
+            .map(|index| self.status(cpus, index))
+            .collect()
     }
 
     pub fn ready(&self, cpus: &[impl Borrow<Core>]) -> Result<(), String> {
@@ -119,8 +123,10 @@ impl Maintenance {
         for core in 0..cpus.len() {
             let status = self.status(cpus, core)?;
             if status.pending != 0 || status.poison != 0 {
-                return Err(format!("Core {core} has unsettled translation maintenance: {} pending, poison {}",
-                    status.pending, status.poison));
+                return Err(format!(
+                    "Core {core} has unsettled translation maintenance: {} pending, poison {}",
+                    status.pending, status.poison
+                ));
             }
         }
         Ok(())
@@ -144,22 +150,33 @@ impl Maintenance {
 
     pub fn portable(&self, cpus: &[impl Borrow<Core>]) -> Result<Vec<Vec<u8>>, String> {
         self.ready(cpus)?;
-        cpus.iter().zip(&self.owners)
-            .map(|(cpu, owner)| cpu.borrow().owned_snapshot(owner)).collect()
+        cpus.iter()
+            .zip(&self.owners)
+            .map(|(cpu, owner)| cpu.borrow().owned_snapshot(owner))
+            .collect()
     }
 
-    pub fn import_portable(&self, cpus: &[impl Borrow<Core>], data: &[std::sync::Arc<[u8]>])
-        -> Result<Vec<Box<dyn fujimod_emulator_cpu::Snapshot>>, String>
-    {
+    pub fn import_portable(
+        &self,
+        cpus: &[impl Borrow<Core>],
+        data: &[std::sync::Arc<[u8]>],
+    ) -> Result<Vec<Box<dyn fujimod_emulator_cpu::Snapshot>>, String> {
         self.ready(cpus)?;
         if data.len() != cpus.len() {
             return Err("XP4 snapshot processor count differs".into());
         }
-        cpus.iter().zip(&self.owners).zip(data)
-            .map(|((cpu, owner), data)| cpu.borrow().import_owned_snapshot(owner, data)).collect()
+        cpus.iter()
+            .zip(&self.owners)
+            .zip(data)
+            .map(|((cpu, owner), data)| cpu.borrow().import_owned_snapshot(owner, data))
+            .collect()
     }
 
-    pub fn restore_portable(&self, cpus: &[impl Borrow<Core>], state: &[Box<dyn fujimod_emulator_cpu::Snapshot>]) -> Result<(), String> {
+    pub fn restore_portable(
+        &self,
+        cpus: &[impl Borrow<Core>],
+        state: &[Box<dyn fujimod_emulator_cpu::Snapshot>],
+    ) -> Result<(), String> {
         for ((cpu, owner), saved) in cpus.iter().zip(&self.owners).zip(state) {
             cpu.borrow().restore_owned_snapshot(owner, saved.as_ref())?;
         }
@@ -204,8 +221,11 @@ impl Maintenance {
         // Only the core that ran can have queued work or poison: no other
         // engine has executed since its own settlement left it clean.
         if cpus.len() == self.owners.len() {
-            let status = cpus.get(source).ok_or("Invalid translation source core")?
-                .borrow().translation_maintenance_status()?;
+            let status = cpus
+                .get(source)
+                .ok_or("Invalid translation source core")?
+                .borrow()
+                .translation_maintenance_status()?;
             if status.owner == self.tokens[source] && status.pending == 0 && status.poison == 0 {
                 return Ok(());
             }
@@ -214,13 +234,21 @@ impl Maintenance {
         // Poison anywhere freezes the domain before any new peer effect.
         for (core, status) in statuses.iter().enumerate() {
             if status.poison != 0 {
-                return Err(format!("Core {core} translation maintenance poison {}", status.poison));
+                return Err(format!(
+                    "Core {core} translation maintenance poison {}",
+                    status.poison
+                ));
             }
             if core != source && status.pending != 0 {
-                return Err(format!("Paused core {core} has unexpected translation work"));
+                return Err(format!(
+                    "Paused core {core} has unexpected translation work"
+                ));
             }
         }
-        let count = statuses.get(source).ok_or("Invalid translation source core")?.pending;
+        let count = statuses
+            .get(source)
+            .ok_or("Invalid translation source core")?
+            .pending;
         for _ in 0..count {
             let status = cpus[source].borrow().translation_maintenance_status()?;
             if status.poison != 0 || status.pending == 0 || status.owner != self.tokens[source] {
@@ -239,13 +267,17 @@ impl Maintenance {
                 error: None,
                 raw_error: raw_error.map(str::to_owned),
             });
-            let expected = self.state.borrow().sequences[source].checked_add(1)
+            let expected = self.state.borrow().sequences[source]
+                .checked_add(1)
                 .ok_or("Translation sequence exhausted")?;
             // Native code emits only after instruction condition/access checks.
             // Security, EL, TTBR and VMID are evidence, never peer filters.
-            if event.owner != self.tokens[source] || event.sequence != expected
-                || event.selector != native::TLBIALLIS || event.secure > 1
-                || event.exception_level > 3 || event.actlr & DDVM != 0
+            if event.owner != self.tokens[source]
+                || event.sequence != expected
+                || event.selector != native::TLBIALLIS
+                || event.secure > 1
+                || event.exception_level > 3
+                || event.actlr & DDVM != 0
             {
                 return Err("Unsupported or inconsistent accepted translation event".into());
             }
@@ -258,9 +290,19 @@ impl Maintenance {
                 let actlr = if core == source {
                     event.actlr
                 } else {
-                    u32::try_from(cpu.coprocessor(arm::Coprocessor {
-                        cp: 15, wide: false, secure: 0, crn: 1, crm: 0, opc1: 0, opc2: 1,
-                    }, None)?).map_err(|_| "ACTLR exceeds 32 bits")?
+                    u32::try_from(cpu.coprocessor(
+                        arm::Coprocessor {
+                            cp: 15,
+                            wide: false,
+                            secure: 0,
+                            crn: 1,
+                            crm: 0,
+                            opc1: 0,
+                            opc2: 1,
+                        },
+                        None,
+                    )?)
+                    .map_err(|_| "ACTLR exceeds 32 bits")?
                 };
                 peer_actlr.push(actlr);
                 if core != source {
@@ -279,16 +321,27 @@ impl Maintenance {
                 pending.peer_actlr = peer_actlr;
                 pending.recipients = recipients;
                 pending.excluded = excluded;
-                if pending.peer_actlr.iter().enumerate()
+                if pending
+                    .peer_actlr
+                    .iter()
+                    .enumerate()
                     .any(|(core, actlr)| recipients & (1 << core) != 0 && actlr & DDVM != 0)
                 {
                     return Err("Participating translation peer has unsupported ACTLR.DDVM".into());
                 }
-                state.completed.checked_add(1).ok_or("Translation completion count exhausted")?;
-                state.delivered_peers.checked_add(u64::from(recipients.count_ones()))
+                state
+                    .completed
+                    .checked_add(1)
+                    .ok_or("Translation completion count exhausted")?;
+                state
+                    .delivered_peers
+                    .checked_add(u64::from(recipients.count_ones()))
                     .ok_or("Translation peer count exhausted")?;
                 if state.records.len() == RECORD_LIMIT {
-                    state.dropped.checked_add(1).ok_or("Translation diagnostic count exhausted")?;
+                    state
+                        .dropped
+                        .checked_add(1)
+                        .ok_or("Translation diagnostic count exhausted")?;
                 }
             }
             // The complete recipient set is frozen before the first flush.

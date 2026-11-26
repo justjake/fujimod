@@ -1,5 +1,8 @@
 use super::*;
-use fujimod_emulator_devices::{bus::InterruptLine, test_host::ram::{Effect, Ram}};
+use fujimod_emulator_devices::{
+    bus::InterruptLine,
+    test_host::ram::{Effect, Ram},
+};
 const CORE: u64 = super::super::CORE as u64;
 const PHY: u64 = super::super::PHY as u64;
 fn model(endpoints: bool) -> (UsbController, Level) {

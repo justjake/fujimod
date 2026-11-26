@@ -1,12 +1,12 @@
 //! FFF480 reset, interrupt status and explicitly selected image arithmetic.
 //! The selected pixel laws are declared approximations; other operations refuse.
-use fujimod_emulator_imaging::exr2_isp::dma::{Raster, Transfer, physical};
 use fujimod_emulator_devices::exr2::irq_routes::Irq;
 use fujimod_emulator_devices::{Cx, Device};
+use fujimod_emulator_imaging::exr2_isp::dma::{Raster, Transfer, physical};
+use fujimod_emulator_imaging::exr2_isp::options::combination::{Arithmetic, BASE, Options};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use std::collections::BTreeMap;
-use fujimod_emulator_imaging::exr2_isp::options::combination::{Options, Arithmetic, BASE};
 mod linear;
 mod masked;
 mod pyramid;
@@ -280,8 +280,8 @@ impl Device for Combination {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use fujimod_emulator_imaging::exr2_isp::dma::Clock;
     use fujimod_emulator_devices::test_host::{TestHost, advance, read, write};
+    use fujimod_emulator_imaging::exr2_isp::dma::Clock;
     fn model(reset_ticks: u64) -> Combination {
         Combination::new(
             Options {

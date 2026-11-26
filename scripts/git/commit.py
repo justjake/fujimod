@@ -157,10 +157,7 @@ class Repository(GitRepository):
         ref = self.branch()
         name = ref.removeprefix("refs/heads/")
         overlapping = sorted(
-            file
-            for file in self.patched(patch)
-            for path in paths
-            if within(file, path)
+            file for file in self.patched(patch) for path in paths if within(file, path)
         )
         if overlapping:
             raise Failure(

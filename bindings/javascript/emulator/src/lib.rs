@@ -16,8 +16,8 @@ use fujimod_emulator_session::card::{CardState, CardTree};
 use jit::{JitSelection, JitStatistics};
 use lifecycle::BootInput;
 use results::{
-    CardFile, Checkpoint, DeviceStates, DeviceWorkers, ErrorReport, InputLog, Point,
-    Preview, Profile, SavedMedia, SessionSnapshot, SessionState, TouchPhase, UsbStatus,
+    CardFile, Checkpoint, DeviceStates, DeviceWorkers, ErrorReport, InputLog, Point, Preview,
+    Profile, SavedMedia, SessionSnapshot, SessionState, TouchPhase, UsbStatus,
 };
 use serde::{Deserialize, Serialize};
 pub use session::Session;

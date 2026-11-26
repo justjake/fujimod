@@ -147,10 +147,20 @@ impl Display {
         })
     }
     fn scanout(&mut self, cx: &mut Cx<'_>) -> Result<(), String> {
-        let decoder=fujimod_framebuffer_xp5::Decoder{bank:self.bank,regs:&self.state.regs,
-            formats:self.formats.map(|p|p.map_or(fujimod_framebuffer_xp5::Encoding::EmulatorConverted,fujimod_framebuffer_xp5::Encoding::Linear))};
-        let (planes,messages)=decoder.planes(|a,n|cx.ram_bytes(a,n))?;
-        for message in messages {cx.log(&message);}
+        let decoder = fujimod_framebuffer_xp5::Decoder {
+            bank: self.bank,
+            regs: &self.state.regs,
+            formats: self.formats.map(|p| {
+                p.map_or(
+                    fujimod_framebuffer_xp5::Encoding::EmulatorConverted,
+                    fujimod_framebuffer_xp5::Encoding::Linear,
+                )
+            }),
+        };
+        let (planes, messages) = decoder.planes(|a, n| cx.ram_bytes(a, n))?;
+        for message in messages {
+            cx.log(&message);
+        }
         let work_width = planes
             .iter()
             .map(|p| p.work_x + p.work_width)
@@ -764,7 +774,10 @@ mod tests {
         due(&mut d, &mut h);
         due(&mut d, &mut h);
         assert_eq!(h.frames.len(), 1);
-        assert_eq!((h.frames[0].output, h.frames[0].width, h.frames[0].height), (1, 2, 2));
+        assert_eq!(
+            (h.frames[0].output, h.frames[0].width, h.frames[0].height),
+            (1, 2, 2)
+        );
         assert_eq!(h.frames[0].rgba, [0, 0, 0, 255].repeat(4));
         let blank_sequence = h.frames[0].sequence;
 
@@ -777,10 +790,12 @@ mod tests {
         assert_eq!(h.frames.len(), 2);
         assert_eq!(h.frames[1].sequence, blank_sequence + 1);
         assert_eq!(h.frames[1].output, 1);
-        assert_eq!(h.frames[1].rgba, [
-            255, 0, 0, 255, 0, 255, 0, 255,
-            0, 0, 255, 255, 255, 255, 255, 255,
-        ]);
+        assert_eq!(
+            h.frames[1].rgba,
+            [
+                255, 0, 0, 255, 0, 255, 0, 255, 0, 0, 255, 255, 255, 255, 255, 255,
+            ]
+        );
 
         let token = d.state.generation;
         write(&mut d, &mut h, base + 4, 0);
@@ -858,7 +873,9 @@ mod tests {
         let next = (1 << 32) + 160;
         h.ram[128..144].copy_from_slice(&[0, 0, 255, 255].repeat(4));
         h.ram[160..176].copy_from_slice(&[255; 16]);
-        let header = fujimod_framebuffer_xp5::emulator_codec::encode(primary, 2, 2, &h.ram[128..144]).unwrap();
+        let header =
+            fujimod_framebuffer_xp5::emulator_codec::encode(primary, 2, 2, &h.ram[128..144])
+                .unwrap();
         h.ram[80..112].copy_from_slice(&header);
         for (o, v) in [
             (8, 1 << 20),
@@ -878,7 +895,8 @@ mod tests {
         write(&mut d, &mut h, base + a + 4, 160);
         d.scanout(&mut Cx::new(&mut h, 0, 0, 0)).unwrap();
         assert_eq!(h.frames.len(), 1);
-        let header = fujimod_framebuffer_xp5::emulator_codec::encode(next, 2, 2, &h.ram[160..176]).unwrap();
+        let header =
+            fujimod_framebuffer_xp5::emulator_codec::encode(next, 2, 2, &h.ram[160..176]).unwrap();
         h.ram[80..112].copy_from_slice(&header);
         d.scanout(&mut Cx::new(&mut h, 0, 0, 0)).unwrap();
         assert_eq!(h.frames.len(), 2);

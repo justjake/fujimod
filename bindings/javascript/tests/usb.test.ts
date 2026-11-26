@@ -140,12 +140,15 @@ await test('asynchronous failures carry the stack of the call that started them'
 
 await test('single-packet commands refuse lengths beyond the advertised packet', async () => {
   const { session, script } = await opened([]);
-  assert.throws(() => session.readSinglePacket(0x1000, 5), (error: unknown) => {
-    assert.ok(usb.isError(error));
-    assert.equal(error.kind, usb.ErrorKind.InvalidArgument);
-    assert.match(error.message, /at most 4 bytes; use session\.memory\(firmwareId\)/);
-    return true;
-  });
+  assert.throws(
+    () => session.readSinglePacket(0x1000, 5),
+    (error: unknown) => {
+      assert.ok(usb.isError(error));
+      assert.equal(error.kind, usb.ErrorKind.InvalidArgument);
+      assert.match(error.message, /at most 4 bytes; use session\.memory\(firmwareId\)/);
+      return true;
+    },
+  );
   assert.throws(
     () => session.writeSinglePacket(0x1000, new Uint8Array(5)),
     kind(usb.ErrorKind.InvalidArgument),
@@ -362,7 +365,10 @@ await test('invalid enum choices and address types fail before reserving or disp
     null,
   ] as const) {
     // @ts-expect-error Runtime boundary deliberately exercises invalid JavaScript input.
-    assert.throws(() => session.writeSinglePacket(0x1000, bytes), kind(usb.ErrorKind.InvalidArgument));
+    assert.throws(
+      () => session.writeSinglePacket(0x1000, bytes),
+      kind(usb.ErrorKind.InvalidArgument),
+    );
   }
   assert.equal(script.remaining, 0);
   assert.equal(session.state, usb.SessionState.Ready);
@@ -526,7 +532,8 @@ await test('typed command selection errors retain enum reasons without fallback'
       e.reason.argument === usb.app80.ArgumentKind.WordAlignment,
   );
   assert.throws(
-    () => service.prepare(new catalog.service.ServiceModes(1), usb.app80.Command.flushConfiguration()),
+    () =>
+      service.prepare(new catalog.service.ServiceModes(1), usb.app80.Command.flushConfiguration()),
     (e) =>
       usb.app80.isError(e) &&
       e.reason.kind === usb.app80.CommandFailureKind.Unsupported &&
@@ -1708,14 +1715,26 @@ await test('missing workflow capabilities fail before leasing the session', asyn
   const { session, script } = await opened(closeSteps());
   const facts = JSON.stringify({
     $schema: 'https://fujimod.com/schemas/service-workflow.generated.schema.json',
-    schema: 1, firmware_id: 'body-100', firmware_sha256: 'ab'.repeat(32),
+    schema: 1,
+    firmware_id: 'body-100',
+    firmware_sha256: 'ab'.repeat(32),
     identity: { products: ['BODY'], internal_versions: ['1.0'], code_checks: [] },
-    setup: null, persistence: null,
+    setup: null,
+    persistence: null,
   });
   for (const method of ['armResetGuard', 'enterDebugMode', 'leaveDebugMode'] as const) {
-    assert.throws(() => session[method]('{}', 'body-100', 'ab'.repeat(32)), kind(usb.ErrorKind.Workflow));
-    assert.throws(() => session[method](facts, 'other-100', 'ab'.repeat(32)), kind(usb.ErrorKind.Workflow));
-    assert.throws(() => session[method](facts, 'body-100', 'ab'.repeat(32)), kind(usb.ErrorKind.Workflow));
+    assert.throws(
+      () => session[method]('{}', 'body-100', 'ab'.repeat(32)),
+      kind(usb.ErrorKind.Workflow),
+    );
+    assert.throws(
+      () => session[method](facts, 'other-100', 'ab'.repeat(32)),
+      kind(usb.ErrorKind.Workflow),
+    );
+    assert.throws(
+      () => session[method](facts, 'body-100', 'ab'.repeat(32)),
+      kind(usb.ErrorKind.Workflow),
+    );
     assert.equal(session.state, usb.SessionState.Ready);
   }
   await session.close();
@@ -1726,18 +1745,42 @@ await test('workflow USB errors retain the existing USB tag', async () => {
   const { session } = await opened([]);
   const table = JSON.stringify({
     $schema: 'https://fujimod.com/schemas/service-workflow.generated.schema.json',
-    schema: 1, firmware_id: 'body-100', firmware_sha256: 'ab'.repeat(32),
+    schema: 1,
+    firmware_id: 'body-100',
+    firmware_sha256: 'ab'.repeat(32),
     identity: { products: ['BODY'], internal_versions: ['1.0'], code_checks: [] },
-    setup: { ram_alias: 0,
-      configuration: { address: 4096, cached_address: 4096, size: 256, page_bytes: 16, memory_read_bytes: 256 },
+    setup: {
+      ram_alias: 0,
+      configuration: {
+        address: 4096,
+        cached_address: 4096,
+        size: 256,
+        page_bytes: 16,
+        memory_read_bytes: 256,
+      },
       debug_offset: 0,
-      guard: { offset: 1, value: 1, aliases: [4097], code_checks: [{ name: 'guard', address: 9000, size: 4, sha256: 'ab'.repeat(32) }], state_words: [],
-        callback_table: { address: 8192, words: [0] }, output_state: { address: 8200, size: 1 }, payloads: [{ name: 'main', address: 8300, size: 100 }] },
-    }, persistence: null,
+      guard: {
+        offset: 1,
+        value: 1,
+        aliases: [4097],
+        code_checks: [{ name: 'guard', address: 9000, size: 4, sha256: 'ab'.repeat(32) }],
+        state_words: [],
+        callback_table: { address: 8192, words: [0] },
+        output_state: { address: 8200, size: 1 },
+        payloads: [{ name: 'main', address: 8300, size: 100 }],
+      },
+    },
+    persistence: null,
   });
-  assert.throws(() => session.enterDebugMode(table, 'body-100', 'ab'.repeat(32)), kind(usb.ErrorKind.Workflow));
+  assert.throws(
+    () => session.enterDebugMode(table, 'body-100', 'ab'.repeat(32)),
+    kind(usb.ErrorKind.Workflow),
+  );
   // With no scripted product reply the synthetic endpoint reports a replay
   // mismatch, which must retain its existing USB error tag.
-  await assert.rejects(session.armResetGuard(table, 'body-100', 'ab'.repeat(32)), kind(usb.ErrorKind.Usb));
+  await assert.rejects(
+    session.armResetGuard(table, 'body-100', 'ab'.repeat(32)),
+    kind(usb.ErrorKind.Usb),
+  );
   session.abandon();
 });

@@ -208,25 +208,61 @@ impl Transport {
     }
 }
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
-enum Phase { Idle, Write, Read, Nacked, ReadEnded }
+enum Phase {
+    Idle,
+    Write,
+    Read,
+    Nacked,
+    ReadEnded,
+}
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
-enum Operation { Address(u8), Write(u8), Read { ack: bool, byte: u8 }, Stop }
+enum Operation {
+    Address(u8),
+    Write(u8),
+    Read { ack: bool, byte: u8 },
+    Stop,
+}
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
-struct Pending { submitted: u64, deadline: u64, operation: Operation }
+struct Pending {
+    submitted: u64,
+    deadline: u64,
+    operation: Operation,
+}
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 struct State {
-    ccr: u8, adr: u8, csr: u8, fsr: u8, bcr: u8, bsr: u8, dar: u8,
-    staged: bool, rx_ready: bool, low_drives: u8, phase: Phase,
-    pending: Option<Pending>, transport: Transport,
+    ccr: u8,
+    adr: u8,
+    csr: u8,
+    fsr: u8,
+    bcr: u8,
+    bsr: u8,
+    dar: u8,
+    staged: bool,
+    rx_ready: bool,
+    low_drives: u8,
+    phase: Phase,
+    pending: Option<Pending>,
+    transport: Transport,
 }
 #[derive(Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
-struct Snapshot { version: u8, base: u64, irq: u32, profile: Profile, factory: Value, state: State }
+struct Snapshot {
+    version: u8,
+    base: u64,
+    irq: u32,
+    profile: Profile,
+    factory: Value,
+    state: State,
+}
 
 pub struct ByteI2c {
-    base: u64, irq: u32, profile: Profile, factory: Value, initial_peer: Peer,
+    base: u64,
+    irq: u32,
+    profile: Profile,
+    factory: Value,
+    initial_peer: Peer,
     state: State,
     // Host synchronization is not guest state. A restored device requests an
     // immediate advance, which drives even a low line before future work.
@@ -234,8 +270,13 @@ pub struct ByteI2c {
 }
 impl ByteI2c {
     pub fn new(base: u64, irq: u32, profile: Profile, peer: Peer) -> Result<Self, String> {
-        if base & 3 != 0 || base.checked_add(0x20).is_none() || profile.byte_ticks == 0
-            || profile.reset.ccr & 0x80 != 0 || profile.reset.adr != 0 || profile.reset.csr > 0x3f {
+        if base & 3 != 0
+            || base.checked_add(0x20).is_none()
+            || profile.byte_ticks == 0
+            || profile.reset.ccr & 0x80 != 0
+            || profile.reset.adr != 0
+            || profile.reset.csr > 0x3f
+        {
             return Err("Invalid explicit byte I2C idle profile".into());
         }
         if let Peer::Register(p) = &peer
@@ -288,56 +329,85 @@ impl ByteI2c {
             irq_dirty: true,
         })
     }
-    pub fn windows(&self) -> Vec<(u64,u64)> { vec![(self.base, self.base + 0x20)] }
-    fn offset(&self, address:u64, size:u8) -> Result<u64,String> {
-        let o = address.checked_sub(self.base).ok_or("Byte I2C address below base")?;
-        if size != 1 || o > 0x1c || o & 3 != 0 { return Err("Byte I2C requires a known byte register".into()); }
+    pub fn windows(&self) -> Vec<(u64, u64)> {
+        vec![(self.base, self.base + 0x20)]
+    }
+    fn offset(&self, address: u64, size: u8) -> Result<u64, String> {
+        let o = address
+            .checked_sub(self.base)
+            .ok_or("Byte I2C address below base")?;
+        if size != 1 || o > 0x1c || o & 3 != 0 {
+            return Err("Byte I2C requires a known byte register".into());
+        }
         Ok(o)
     }
-    fn irq(&self) -> bool { self.state.bcr & (INT|INTE) == INT|INTE || self.state.bcr & (BER|BEIE) == BER|BEIE }
-    fn sync_irq(&mut self, cx:&mut Cx<'_>) { cx.set_irq(self.irq,self.irq()); self.irq_dirty=false; }
-    fn command(&self, value:u8) -> Result<Option<Operation>,String> {
-        let s=&self.state;
-        if value & 4 != 0 { return Err("I2C general-call mode unsupported".into()); }
+    fn irq(&self) -> bool {
+        self.state.bcr & (INT | INTE) == INT | INTE || self.state.bcr & (BER | BEIE) == BER | BEIE
+    }
+    fn sync_irq(&mut self, cx: &mut Cx<'_>) {
+        cx.set_irq(self.irq, self.irq());
+        self.irq_dirty = false;
+    }
+    fn command(&self, value: u8) -> Result<Option<Operation>, String> {
+        let s = &self.state;
+        if value & 4 != 0 {
+            return Err("I2C general-call mode unsupported".into());
+        }
         // INT and BER are clear-on-zero, never guest-generated status.
         if value & INT != 0 && s.bcr & INT == 0 || value & BER != 0 && s.bcr & BER == 0 {
             return Err("I2C status cannot be set by software".into());
         }
-        let control=value & !(INT|BER);
+        let control = value & !(INT | BER);
         if value & INT != 0 {
-            if s.pending.is_some() || s.staged || control & !(INTE|BEIE) != s.bcr & !(INT|BER|INTE|BEIE) {
+            if s.pending.is_some()
+                || s.staged
+                || control & !(INTE | BEIE) != s.bcr & !(INT | BER | INTE | BEIE)
+            {
                 return Err("I2C retained event permits only interrupt enable changes".into());
             }
             return Ok(None);
         }
-        if s.pending.as_ref().is_some_and(|p| p.operation==Operation::Stop) {
+        if s.pending
+            .as_ref()
+            .is_some_and(|p| p.operation == Operation::Stop)
+        {
             return Err("I2C STOP already pending".into());
         }
         if control & MSS == 0 {
-            if s.rx_ready { return Err("I2C STOP requires receive data consumption".into()); }
-            if control & (ACK|SCC) != 0 { return Err("Unsupported idle I2C control".into()); }
+            if s.rx_ready {
+                return Err("I2C STOP requires receive data consumption".into());
+            }
+            if control & (ACK | SCC) != 0 {
+                return Err("Unsupported idle I2C control".into());
+            }
             return Ok((s.phase != Phase::Idle || s.pending.is_some()).then_some(Operation::Stop));
         }
         if s.ccr & 0x20 == 0 || s.low_drives != 0 || s.pending.is_some() || s.rx_ready {
             return Err("I2C command while disabled, recovering, pending or unread".into());
         }
         if control & SCC != 0 || s.phase == Phase::Idle {
-            if !s.staged || !(8..=0x77).contains(&(s.dar>>1)) || control & ACK != 0 {
+            if !s.staged || !(8..=0x77).contains(&(s.dar >> 1)) || control & ACK != 0 {
                 return Err("I2C START requires a staged seven-bit address".into());
             }
             return Ok(Some(Operation::Address(s.dar)));
         }
-        if s.bcr & INT == 0 { return Err("I2C continuation requires completed event".into()); }
+        if s.bcr & INT == 0 {
+            return Err("I2C continuation requires completed event".into());
+        }
         match s.phase {
             Phase::Write if s.staged && control & ACK == 0 => {
-                s.transport.check_write(s.dar)?; Ok(Some(Operation::Write(s.dar)))
+                s.transport.check_write(s.dar)?;
+                Ok(Some(Operation::Write(s.dar)))
             }
-            Phase::Read if !s.staged => Ok(Some(Operation::Read {ack:control&ACK!=0,byte:s.transport.read()?})),
+            Phase::Read if !s.staged => Ok(Some(Operation::Read {
+                ack: control & ACK != 0,
+                byte: s.transport.read()?,
+            })),
             _ => Err("Unsupported I2C phase continuation".into()),
         }
     }
-    fn write_checked(&mut self, cx:&mut Cx<'_>, offset:u64, value:u8) -> Result<(),String> {
-        let mut next=self.state.clone();
+    fn write_checked(&mut self, cx: &mut Cx<'_>, offset: u64, value: u8) -> Result<(), String> {
+        let mut next = self.state.clone();
         match offset {
             0 => return Err("I2C bus status is read-only".into()),
             4 => {
@@ -373,13 +443,19 @@ impl ByteI2c {
                     }
                     next.staged = false;
                 }
-                next.pending=pending;
+                next.pending = pending;
             }
-            8|12|20|24 => {
+            8 | 12 | 20 | 24 => {
                 // Disabling is an explicit cancellation, without bus-byte effects.
-                if offset==8 && value & 0x20 == 0 && value & 0x80 == 0 {
-                    next.pending=None; next.phase=Phase::Idle; next.bcr=0; next.bsr=0;
-                    next.staged=false; next.rx_ready=false; next.transport.stop(); next.ccr=value;
+                if offset == 8 && value & 0x20 == 0 && value & 0x80 == 0 {
+                    next.pending = None;
+                    next.phase = Phase::Idle;
+                    next.bcr = 0;
+                    next.bsr = 0;
+                    next.staged = false;
+                    next.rx_ready = false;
+                    next.transport.stop();
+                    next.ccr = value;
                 } else {
                     // Rewriting the value a register already holds changes nothing,
                     // so drivers may restate their configuration during a transfer.
@@ -393,30 +469,45 @@ impl ByteI2c {
                         return Err("Active I2C reconfiguration unsupported".into());
                     }
                     match offset {
-                        8 if value & 0x80 == 0 => next.ccr=value,
-                        12 if value==0 => next.adr=value,
-                        20 if value<=0x3f => next.csr=value,
-                        24 => next.fsr=value,
+                        8 if value & 0x80 == 0 => next.ccr = value,
+                        12 if value == 0 => next.adr = value,
+                        20 if value <= 0x3f => next.csr = value,
+                        24 => next.fsr = value,
                         _ => return Err("Unsupported I2C configuration value".into()),
                     }
                 }
             }
             16 => {
-                if next.pending.is_some() || next.rx_ready || next.staged || matches!(next.phase,Phase::ReadEnded|Phase::Nacked) {
+                if next.pending.is_some()
+                    || next.rx_ready
+                    || next.staged
+                    || matches!(next.phase, Phase::ReadEnded | Phase::Nacked)
+                {
                     return Err("I2C data staging in illegal phase".into());
                 }
-                next.dar=value; next.staged=true;
+                next.dar = value;
+                next.staged = true;
             }
             28 => {
-                if value>3 || next.phase!=Phase::Idle || next.pending.is_some() {return Err("I2C virtual recovery requires idle low-drive bits".into());}
-                next.low_drives=value;
+                if value > 3 || next.phase != Phase::Idle || next.pending.is_some() {
+                    return Err("I2C virtual recovery requires idle low-drive bits".into());
+                }
+                next.low_drives = value;
             }
             _ => unreachable!(),
         }
-        self.state=next; self.sync_irq(cx); Ok(())
+        self.state = next;
+        self.sync_irq(cx);
+        Ok(())
     }
-    fn validate(&self, s:&State) -> Result<(),String> {
-        if s.ccr&0x80!=0 || s.adr!=0 || s.csr>0x3f || s.bcr&0xa4!=0 || s.bsr&!0x99!=0 || s.low_drives>3 {
+    fn validate(&self, s: &State) -> Result<(), String> {
+        if s.ccr & 0x80 != 0
+            || s.adr != 0
+            || s.csr > 0x3f
+            || s.bcr & 0xa4 != 0
+            || s.bsr & !0x99 != 0
+            || s.low_drives > 3
+        {
             return Err("Invalid byte I2C checkpoint register bits".into());
         }
         match (&self.initial_peer, &s.transport.peer) {
@@ -490,8 +581,12 @@ impl ByteI2c {
         {
             return Err("Incoherent byte I2C phase checkpoint".into());
         }
-        if let Some(p)=&s.pending {
-            if p.submitted.checked_add(self.profile.byte_ticks)!=Some(p.deadline) || s.bcr&INT!=0 || s.rx_ready || s.staged {
+        if let Some(p) = &s.pending {
+            if p.submitted.checked_add(self.profile.byte_ticks) != Some(p.deadline)
+                || s.bcr & INT != 0
+                || s.rx_ready
+                || s.staged
+            {
                 return Err("Invalid byte I2C pending deadline/event".into());
             }
             let legal = match p.operation {
@@ -516,7 +611,9 @@ impl ByteI2c {
                 }
                 Operation::Stop => s.bsr & 0x80 != 0 && s.bcr & MSS == 0,
             };
-            if !legal {return Err("Invalid byte I2C pending operation".into());}
+            if !legal {
+                return Err("Invalid byte I2C pending operation".into());
+            }
         }
         Ok(())
     }
@@ -537,13 +634,26 @@ impl ByteI2c {
             fields.push(("address7", Field::int(address7)));
         }
         match p.operation {
-            Operation::Address(b)=>{
-                let ack=s.transport.address(b);
-                fields.extend([("operation",Field::constant("address")),("address7",Field::int(b>>1)),
-                    ("direction",Field::constant(if b&1==0 {"write"} else {"read"})),("peer_ack",Field::Bool(ack))]);
-                s.phase=if !ack {Phase::Nacked} else if b&1==0 {Phase::Write}else{Phase::Read};
-                s.bsr=0x81 | if b&1==0 {8}else{0} | if ack {0}else{0x10};
-                s.bcr|=INT;
+            Operation::Address(b) => {
+                let ack = s.transport.address(b);
+                fields.extend([
+                    ("operation", Field::constant("address")),
+                    ("address7", Field::int(b >> 1)),
+                    (
+                        "direction",
+                        Field::constant(if b & 1 == 0 { "write" } else { "read" }),
+                    ),
+                    ("peer_ack", Field::Bool(ack)),
+                ]);
+                s.phase = if !ack {
+                    Phase::Nacked
+                } else if b & 1 == 0 {
+                    Phase::Write
+                } else {
+                    Phase::Read
+                };
+                s.bsr = 0x81 | if b & 1 == 0 { 8 } else { 0 } | if ack { 0 } else { 0x10 };
+                s.bcr |= INT;
             }
             Operation::Write(b) => {
                 if let Err(e) = s.transport.write(b) {
@@ -578,11 +688,17 @@ impl ByteI2c {
                 }
                 s.bcr |= INT;
             }
-            Operation::Stop=>{
-                fields.push(("operation",Field::constant("stop")));
-                s.phase=Phase::Idle;s.bsr=0;s.transport.stop();s.rx_ready=false;}
+            Operation::Stop => {
+                fields.push(("operation", Field::constant("stop")));
+                s.phase = Phase::Idle;
+                s.bsr = 0;
+                s.transport.stop();
+                s.rx_ready = false;
+            }
         }
-        cx.at_tick(p.deadline,|cx|cx.record(Record::new("Byte I2C virtual phase completed",fields)));
+        cx.at_tick(p.deadline, |cx| {
+            cx.record(Record::new("Byte I2C virtual phase completed", fields))
+        });
         self.sync_irq(cx);
     }
     /// Run due chip input edges; an input-ready edge raises the chip's interrupt.
@@ -754,7 +870,10 @@ impl Device for ByteI2c {
         {
             return Err("Changed byte I2C checkpoint binding".into());
         }
-        self.validate(&snapshot.state)?;self.state=snapshot.state;self.irq_dirty=true;Ok(())
+        self.validate(&snapshot.state)?;
+        self.state = snapshot.state;
+        self.irq_dirty = true;
+        Ok(())
     }
 }
 #[cfg(test)]

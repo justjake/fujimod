@@ -108,7 +108,10 @@ pub(super) fn prepare(cx: &Cx<'_>, word: impl Fn(u16) -> u32) -> Result<Prepared
                 }
             }
         }
-        for (&sum, pixel) in sums.iter().zip(&mut pixels[y * row_bytes..(y + 1) * row_bytes]) {
+        for (&sum, pixel) in sums
+            .iter()
+            .zip(&mut pixels[y * row_bytes..(y + 1) * row_bytes])
+        {
             *pixel = ((sum + 128) >> 8).clamp(0, 255) as u8;
         }
     }
@@ -170,7 +173,13 @@ pub(super) mod tests {
         host.ram[0x10000..0x10008].copy_from_slice(&[60, 70, 128, 128, 90, 30, 140, 120]);
         host.ram[0x20000..0x20008].copy_from_slice(&[0, 0, 255, 255, 0, 0, 255, 255]);
         words.insert(4, 0x44);
-        for (offset, value) in [(0x18, 0x10000), (0x20, 0x10000), (0x24, 8), (0x28, 0x20000), (0x2c, 8)] {
+        for (offset, value) in [
+            (0x18, 0x10000),
+            (0x20, 0x10000),
+            (0x24, 8),
+            (0x28, 0x20000),
+            (0x2c, 8),
+        ] {
             words.insert(offset, value);
         }
         words.insert(0x60, 0x01000100);
@@ -184,7 +193,13 @@ pub(super) mod tests {
         host.ram[0x10000..0x10008].copy_from_slice(&[20, 21, 128, 128, 60, 10, 128, 128]);
         host.ram[0x20000..0x20008].copy_from_slice(&[43, 43, 255, 255, 43, 43, 255, 255]);
         words.insert(4, 0x44);
-        for (offset, value) in [(0x18, 0x10000), (0x20, 0x10000), (0x24, 8), (0x28, 0x20000), (0x2c, 8)] {
+        for (offset, value) in [
+            (0x18, 0x10000),
+            (0x20, 0x10000),
+            (0x24, 8),
+            (0x28, 0x20000),
+            (0x2c, 8),
+        ] {
             words.insert(offset, value);
         }
         words.insert(0x60, 0x01000100);

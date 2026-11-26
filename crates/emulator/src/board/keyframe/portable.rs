@@ -83,7 +83,12 @@ impl Board {
         if header.processors != n
             || encoded.blobs().len() != n + 1
             || encoded.children().len() != 2
-            || header.hooks != self.hook_wiring().iter().map(|(core, _)| *core).collect::<Vec<_>>()
+            || header.hooks
+                != self
+                    .hook_wiring()
+                    .iter()
+                    .map(|(core, _)| *core)
+                    .collect::<Vec<_>>()
             || header.mmio != self.mmio
             || header.controllers
                 != state
@@ -113,7 +118,11 @@ impl Board {
             || saved.pins.len() != n
             || saved.instructions.len() != n
             || saved.epoch_instructions.len() != n
-            || saved.epoch_instructions.iter().zip(&saved.instructions).any(|(start, now)| start > now)
+            || saved
+                .epoch_instructions
+                .iter()
+                .zip(&saved.instructions)
+                .any(|(start, now)| start > now)
             || saved.accounted.len() != n
             || saved.mprofile.len() != n
             || saved.aprofile.len() != n

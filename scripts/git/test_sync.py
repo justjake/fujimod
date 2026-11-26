@@ -253,11 +253,16 @@ def test_onto_drops_commits_of_a_stacked_base_that_landed_by_rebase(
     push(other, {"b.txt": "base\n"})
     rebased = rebase(Repository(shared), "main")
     assert (rebased.replayed, rebased.dropped) == (1, 1)
-    assert run("git", "log", "--format=%s", "origin/main..HEAD", cwd=shared).split("\n")[0] == (
-        "stacked change"
+    assert run("git", "log", "--format=%s", "origin/main..HEAD", cwd=shared).split(
+        "\n"
+    )[0] == ("stacked change")
+    assert (
+        run("git", "rev-list", "--count", "origin/main..HEAD", cwd=shared).strip()
+        == "1"
     )
-    assert run("git", "rev-list", "--count", "origin/main..HEAD", cwd=shared).strip() == "1"
-    assert run("git", "rev-parse", "someone/stacked", cwd=remote).strip() == rebased.head
+    assert (
+        run("git", "rev-parse", "someone/stacked", cwd=remote).strip() == rebased.head
+    )
 
 
 def test_onto_drops_a_landed_base_series_that_rewrote_its_own_lines(
@@ -279,7 +284,9 @@ def test_onto_drops_a_landed_base_series_that_rewrote_its_own_lines(
     push(other, {"b.txt": "second\n"})
     rebased = rebase(Repository(shared), "main")
     assert (rebased.replayed, rebased.dropped) == (1, 2)
-    assert run("git", "log", "--format=%s", "origin/main..HEAD", cwd=shared).strip() == (
-        "stacked change"
+    assert run(
+        "git", "log", "--format=%s", "origin/main..HEAD", cwd=shared
+    ).strip() == ("stacked change")
+    assert (
+        run("git", "rev-parse", "someone/stacked", cwd=remote).strip() == rebased.head
     )
-    assert run("git", "rev-parse", "someone/stacked", cwd=remote).strip() == rebased.head

@@ -2,12 +2,10 @@
 use fujimod_emulator_devices::bus::InterruptLine;
 use fujimod_emulator_devices::checkpoint::Checkpoint;
 use fujimod_emulator_devices::parts::gpio::{Feedback, InputIrq};
+use fujimod_emulator_devices::xp5::pins::{Pins, SharedPins};
 use fujimod_emulator_devices::{Cx, Device};
 use serde::{Deserialize, Serialize};
-use serde_json::{json, Value};
-use fujimod_emulator_devices::xp5::pins::{Pins, SharedPins};
-
-
+use serde_json::{Value, json};
 
 #[derive(Clone, Copy, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -80,7 +78,10 @@ impl Gpio {
         // Processor interrupt inputs begin deasserted. An initially active
         // physical level is ready immediately, without waiting for an edge.
         let previous = input_irqs.iter().map(|irq| !irq.active_high).collect();
-        let targets = input_irqs.iter().map(|irq| InterruptLine::Shared(irq.line)).collect();
+        let targets = input_irqs
+            .iter()
+            .map(|irq| InterruptLine::Shared(irq.line))
+            .collect();
         Ok(Self {
             pins,
             base,
@@ -94,11 +95,18 @@ impl Gpio {
         })
     }
     /// Pads wired to a core's own interrupt inputs (e.g. the companion's NVIC).
-    pub fn with_core_input_irqs(mut self, core: usize, irqs: Vec<InputIrq>) -> Result<Self, String> {
+    pub fn with_core_input_irqs(
+        mut self,
+        core: usize,
+        irqs: Vec<InputIrq>,
+    ) -> Result<Self, String> {
         for irq in irqs {
             irq.validate(20)?;
             self.previous.push(!irq.active_high);
-            self.targets.push(InterruptLine::Core { core, line: irq.line });
+            self.targets.push(InterruptLine::Core {
+                core,
+                line: irq.line,
+            });
             self.input_irqs.push(irq);
         }
         Ok(self)
@@ -127,9 +135,11 @@ impl Gpio {
     /// Explicit register state at the selected boot handoff. Construction
     /// performs no guest write, pin transition, or interrupt delivery.
     pub fn with_initial_outputs(self, outputs: Vec<InitialOutput>) -> Result<Self, String> {
-        if outputs.iter().enumerate().any(|(i, o)| {
-            o.port >= 20 || outputs[..i].iter().any(|p| p.port == o.port)
-        }) {
+        if outputs
+            .iter()
+            .enumerate()
+            .any(|(i, o)| o.port >= 20 || outputs[..i].iter().any(|p| p.port == o.port))
+        {
             return Err("invalid initial GPIO output ports".into());
         }
         {
@@ -149,7 +159,9 @@ impl Gpio {
             for (i, r) in registers.iter().enumerate() {
                 if r.port >= pins.ports.len()
                     || r.register >= pins.ports[r.port].registers.len()
-                    || registers[..i].iter().any(|p| (p.port, p.register) == (r.port, r.register))
+                    || registers[..i]
+                        .iter()
+                        .any(|p| (p.port, p.register) == (r.port, r.register))
                 {
                     return Err(format!(
                         "invalid initial GPIO register: port {} register {}",
@@ -201,8 +213,11 @@ impl Gpio {
     }
     fn route_inputs(&mut self, cx: &mut Cx<'_>) {
         let pins = self.pins.lock().unwrap();
-        for ((irq, target), previous) in
-            self.input_irqs.iter().zip(&self.targets).zip(&mut self.previous)
+        for ((irq, target), previous) in self
+            .input_irqs
+            .iter()
+            .zip(&self.targets)
+            .zip(&mut self.previous)
         {
             let current = pins.level(irq.port, irq.pin) != 0;
             if current != *previous {
@@ -215,7 +230,12 @@ impl Gpio {
     }
     fn complete_rises(&mut self, now: u64) {
         let mut pins = self.pins.lock().unwrap();
-        for ((wire, rising), held) in self.feedback.iter().zip(&mut self.rising).zip(&mut self.held) {
+        for ((wire, rising), held) in self
+            .feedback
+            .iter()
+            .zip(&mut self.rising)
+            .zip(&mut self.held)
+        {
             if rising.is_some_and(|due| due <= now) {
                 pins.set_input(wire.input_port, wire.input_pin, true);
                 *rising = None;
@@ -479,7 +499,9 @@ impl Device for Gpio {
         Ok(())
     }
     fn fingerprint(&self) -> Result<Value, String> {
-        Ok(json!({"pins":*self.pins.lock().unwrap(), "previous":self.previous, "rising":self.rising, "held":self.held}))
+        Ok(
+            json!({"pins":*self.pins.lock().unwrap(), "previous":self.previous, "rising":self.rising, "held":self.held}),
+        )
     }
 }
 
@@ -488,17 +510,27 @@ mod tests {
     #[test]
     fn initial_output_latches_do_not_emit_edges_or_interrupts() {
         let pins = Pins::shared();
-        let gpio = Gpio::new(0xff907000, pins.clone(), false, Vec::new()).unwrap()
-            .with_initial_outputs(vec![InitialOutput { port: 12, levels: 0x100 }])
+        let gpio = Gpio::new(0xff907000, pins.clone(), false, Vec::new())
+            .unwrap()
+            .with_initial_outputs(vec![InitialOutput {
+                port: 12,
+                levels: 0x100,
+            }])
             .unwrap();
         assert_eq!(pins.lock().unwrap().output_level(12, 8), 1);
         assert_eq!(pins.lock().unwrap().output_level(12, 10), 0);
         assert_eq!(pins.lock().unwrap().output_rising_edges(12, 8), 0);
         let saved = gpio.save();
         assert_eq!(gpio.save(), saved);
-        assert!(Gpio::new(0xff907000, pins, false, Vec::new()).unwrap()
-            .with_initial_outputs(vec![InitialOutput {port:20,levels:0}])
-            .is_err());
+        assert!(
+            Gpio::new(0xff907000, pins, false, Vec::new())
+                .unwrap()
+                .with_initial_outputs(vec![InitialOutput {
+                    port: 20,
+                    levels: 0
+                }])
+                .is_err()
+        );
     }
     use super::*;
     use fujimod_emulator_devices::test_host::recording::RecordingHost;
@@ -508,7 +540,11 @@ mod tests {
         let mut control = Gpio::new(0xff90b000, pins.clone(), true, Vec::new()).unwrap();
         let mut host = RecordingHost::default();
         let mut cx = Cx::new(&mut host, 0, 0, 0);
-        for (offset, value) in [(0u64, 0x0002_0002u64), (4, 0x000f_000f), (0x14, 0x3ff2_3ff2)] {
+        for (offset, value) in [
+            (0u64, 0x0002_0002u64),
+            (4, 0x000f_000f),
+            (0x14, 0x3ff2_3ff2),
+        ] {
             control.write(&mut cx, 0xff90b000 + offset, 4, value);
             assert_eq!(cx.refusal(), None, "{offset:#x}");
         }
@@ -572,7 +608,11 @@ mod tests {
         let pins = Pins::shared();
         let mut gpio = Gpio::new(0xff907000, pins.clone(), false, Vec::new())
             .unwrap()
-            .with_initial_inputs(vec![InitialInput { port: 11, pin: 4, high: false }])
+            .with_initial_inputs(vec![InitialInput {
+                port: 11,
+                pin: 4,
+                high: false,
+            }])
             .unwrap();
         assert_eq!(pins.lock().unwrap().level(11, 4), 0);
         assert_eq!(pins.lock().unwrap().level(11, 3), 1);
@@ -580,17 +620,35 @@ mod tests {
         let mut cx = Cx::new(&mut host, 0, 0, 0);
         assert_eq!(gpio.read(&mut cx, 0xff907000 + 11 * 0x40 + 0x14, 4), 0xffef);
         for invalid in [
-            vec![InitialInput { port: 20, pin: 0, high: true }],
-            vec![InitialInput { port: 1, pin: 16, high: true }],
+            vec![InitialInput {
+                port: 20,
+                pin: 0,
+                high: true,
+            }],
+            vec![InitialInput {
+                port: 1,
+                pin: 16,
+                high: true,
+            }],
             vec![
-                InitialInput { port: 1, pin: 2, high: true },
-                InitialInput { port: 1, pin: 2, high: false },
+                InitialInput {
+                    port: 1,
+                    pin: 2,
+                    high: true,
+                },
+                InitialInput {
+                    port: 1,
+                    pin: 2,
+                    high: false,
+                },
             ],
         ] {
-            assert!(Gpio::new(0xff907000, Pins::shared(), false, Vec::new())
-                .unwrap()
-                .with_initial_inputs(invalid)
-                .is_err());
+            assert!(
+                Gpio::new(0xff907000, Pins::shared(), false, Vec::new())
+                    .unwrap()
+                    .with_initial_inputs(invalid)
+                    .is_err()
+            );
         }
     }
     #[test]
@@ -675,7 +733,15 @@ mod wiring_tests {
 
     #[test]
     fn a_fed_pad_starts_at_its_drive_bit_level() {
-        let wire = Feedback { port: 4, register: 0, bit: 4, input_port: 4, input_pin: 4, rise_delay: 0, latch_high: false };
+        let wire = Feedback {
+            port: 4,
+            register: 0,
+            bit: 4,
+            input_port: 4,
+            input_pin: 4,
+            rise_delay: 0,
+            latch_high: false,
+        };
         // Undeclared pads read high; the wire pulls a low drive bit's pad low.
         let pins = Pins::shared();
         assert_eq!(pins.lock().unwrap().level(4, 4), 1);
@@ -689,7 +755,10 @@ mod wiring_tests {
         pins.lock().unwrap().set_input(4, 4, false);
         Gpio::new(0xff907000, pins.clone(), false, Vec::new())
             .unwrap()
-            .with_initial_outputs(vec![InitialOutput { port: 4, levels: 1 << 4 }])
+            .with_initial_outputs(vec![InitialOutput {
+                port: 4,
+                levels: 1 << 4,
+            }])
             .unwrap()
             .with_feedback(vec![wire])
             .unwrap();
@@ -698,9 +767,22 @@ mod wiring_tests {
 
     #[test]
     fn a_delayed_wire_rises_after_its_delay_and_edges_a_core_irq() {
-        let wire = Feedback { port: 1, register: 0, bit: 14, input_port: 0, input_pin: 4, rise_delay: 1000, latch_high: false };
+        let wire = Feedback {
+            port: 1,
+            register: 0,
+            bit: 14,
+            input_port: 0,
+            input_pin: 4,
+            rise_delay: 1000,
+            latch_high: false,
+        };
         let pins = Pins::shared();
-        let route = InputIrq { port: 0, pin: 4, line: 27, active_high: true };
+        let route = InputIrq {
+            port: 0,
+            pin: 4,
+            line: 27,
+            active_high: true,
+        };
         let mut gpio = Gpio::new(0xff907000, pins.clone(), false, Vec::new())
             .unwrap()
             .with_core_input_irqs(1, vec![route])
@@ -742,8 +824,13 @@ mod wiring_tests {
     #[test]
     fn a_latched_wire_holds_its_pad_high_after_the_first_rise() {
         let wire = Feedback {
-            port: 1, register: 0, bit: 14, input_port: 0, input_pin: 4,
-            rise_delay: 1000, latch_high: true,
+            port: 1,
+            register: 0,
+            bit: 14,
+            input_port: 0,
+            input_pin: 4,
+            rise_delay: 1000,
+            latch_high: true,
         };
         let pins = Pins::shared();
         let mut gpio = Gpio::new(0xff907000, pins.clone(), false, Vec::new())

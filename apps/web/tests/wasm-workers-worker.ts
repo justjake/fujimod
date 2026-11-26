@@ -1,8 +1,4 @@
-import {
-  loadEmulatorModule,
-  type Camera,
-  type DeviceWorkers,
-} from 'fujimod/emulator';
+import { loadEmulatorModule, type Camera, type DeviceWorkers } from 'fujimod/emulator';
 
 interface Status {
   ticks: string;

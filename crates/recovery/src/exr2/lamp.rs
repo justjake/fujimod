@@ -37,9 +37,10 @@ struct Layout {
 
 impl StartupLamp {
     pub(crate) fn install(&self, plan: &Plan, ram: &mut [u8]) -> Result<()> {
-        let layout: Layout =
-            serde_json::from_str(include_str!("../../assets/sd-boot-v1-startup-lamp.generated.json"))
-                .map_err(|e| image::Error::Invalid(e.to_string()))?;
+        let layout: Layout = serde_json::from_str(include_str!(
+            "../../assets/sd-boot-v1-startup-lamp.generated.json"
+        ))
+        .map_err(|e| image::Error::Invalid(e.to_string()))?;
         require(
             layout.schema == 1
                 && layout.address == 0x101000

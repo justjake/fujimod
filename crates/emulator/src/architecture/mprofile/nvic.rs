@@ -59,8 +59,8 @@ impl Nvic {
             // phase belongs to hardware, not the scheduler's service time.
             let period = u128::from(self.period());
             let wraps = u128::from(now - self.deadline) / period + 1;
-            self.deadline = (u128::from(self.deadline) + wraps * period)
-                .min(u128::from(u64::MAX)) as u64;
+            self.deadline =
+                (u128::from(self.deadline) + wraps * period).min(u128::from(u64::MAX)) as u64;
         }
     }
     pub fn next(&self, primask: u32, basepri: u32, faultmask: u32) -> Option<u16> {

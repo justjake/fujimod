@@ -37,12 +37,7 @@ impl TestBus {
             })
             .ok_or("unmapped test access".into())
     }
-    pub fn read(
-        &mut self,
-        cx: &mut crate::Cx<'_>,
-        address: u64,
-        size: u8,
-    ) -> Result<u64, String> {
+    pub fn read(&mut self, cx: &mut crate::Cx<'_>, address: u64, size: u8) -> Result<u64, String> {
         let index = self.index(address, size)?;
         cx.device = index;
         let result = self.windows[index].2.read(cx, address, size);

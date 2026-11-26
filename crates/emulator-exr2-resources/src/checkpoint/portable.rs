@@ -83,10 +83,7 @@ impl Resources {
                 .ok_or_else(|| "resource snapshot is missing a child".to_owned())
         };
         let mut group = |names: Vec<String>| -> Result<BTreeMap<String, Checkpoint>, String> {
-            names
-                .into_iter()
-                .map(|name| Ok((name, next()?)))
-                .collect()
+            names.into_iter().map(|name| Ok((name, next()?))).collect()
         };
         let all_wires = group(metadata.wires)?;
         let images = group(metadata.images)?;

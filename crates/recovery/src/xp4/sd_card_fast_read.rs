@@ -48,7 +48,8 @@ use crate::image::{self, Result, put, require, word};
 use serde::{Deserialize, Serialize};
 use std::{collections::BTreeMap, ops::Range, sync::LazyLock};
 
-const PROGRAM: &[u8] = include_bytes!("../../assets/sd-boot-v1-xp4-sd-card-fast-read.generated.bin");
+const PROGRAM: &[u8] =
+    include_bytes!("../../assets/sd-boot-v1-xp4-sd-card-fast-read.generated.bin");
 static LAYOUT: LazyLock<Layout> = LazyLock::new(|| {
     serde_json::from_str(include_str!(
         "../../assets/sd-boot-v1-xp4-sd-card-fast-read.generated.json"
@@ -116,7 +117,10 @@ pub fn placement(base: u32) -> Result<Placement> {
             .symbols
             .get(name)
             .ok_or_else(|| image::Error::Invalid(format!("Missing {name}")))?;
-        require(value < layout.size, "SD card fast read symbol outside program")?;
+        require(
+            value < layout.size,
+            "SD card fast read symbol outside program",
+        )?;
         base.checked_add((OFFSET + value) as u32)
             .ok_or_else(|| image::Error::Invalid("SD card fast read placement overflow".into()))
     };
@@ -167,7 +171,12 @@ pub struct PackedStage {
 /// routine and route `ffinit_load`'s entry and its call of `ffinit_enter_ram`
 /// through the program's hooks. The caller selects the program as FFINIT's
 /// read. No packed stage is bound.
-pub fn install(output: &mut [u8], base: u32, code_size: usize, bindings: &Bindings) -> Result<Placement> {
+pub fn install(
+    output: &mut [u8],
+    base: u32,
+    code_size: usize,
+    bindings: &Bindings,
+) -> Result<Placement> {
     let placed = placement(base)?;
     require(
         code_size + DDR_SETUP_STACK <= OFFSET && OFFSET + PROGRAM.len() <= TEMPLATE,
@@ -196,7 +205,10 @@ pub fn install(output: &mut [u8], base: u32, code_size: usize, bindings: &Bindin
     )?;
     for &at in &LAYOUT.fixups {
         let value = word(&program, at)?;
-        require((value as usize) < program.len(), "SD card fast read fixup outside program")?;
+        require(
+            (value as usize) < program.len(),
+            "SD card fast read fixup outside program",
+        )?;
         put(&mut program, at, value + base + OFFSET as u32)?;
     }
     for (index, value) in [
@@ -228,15 +240,27 @@ pub fn install(output: &mut [u8], base: u32, code_size: usize, bindings: &Bindin
         true,
     )?;
     output[OFFSET..OFFSET + program.len()].copy_from_slice(&program);
-    put(output, load_branch, branch(base + load_branch as u32, placed.entry, false)?)?;
-    put(output, enter_ram_call, branch(base + enter_ram_call as u32, placed.enter_ram, true)?)?;
+    put(
+        output,
+        load_branch,
+        branch(base + load_branch as u32, placed.entry, false)?,
+    )?;
+    put(
+        output,
+        enter_ram_call,
+        branch(base + enter_ram_call as u32, placed.enter_ram, true)?,
+    )?;
     let site = bindings
         .template_crc32
         .checked_sub(base)
         .map(|s| s as usize)
         .filter(|s| *s >= TEMPLATE && s + 4 <= output.len() && s.is_multiple_of(4))
         .ok_or_else(|| image::Error::Invalid("FFINIT CRC32 routine outside FFINIT".into()))?;
-    put(output, site, branch(bindings.template_crc32, placed.crc32, false)?)?;
+    put(
+        output,
+        site,
+        branch(bindings.template_crc32, placed.crc32, false)?,
+    )?;
     Ok(placed)
 }
 
@@ -251,7 +275,10 @@ pub fn bind_packed_stage(output: &mut [u8], base: u32, stage: &PackedStage) -> R
             && stage.size.is_multiple_of(32)
             && stage.address.is_multiple_of(32)
             && stage.header.is_multiple_of(4)
-            && stage.header.checked_add(32).is_some_and(|end| end <= stage.size)
+            && stage
+                .header
+                .checked_add(32)
+                .is_some_and(|end| end <= stage.size)
             && stage.records.is_multiple_of(4)
             && stage.records <= stage.size,
         "Invalid packed FFBOOT stage",
@@ -368,7 +395,17 @@ mod tests {
             .collect();
         assert_eq!(
             words,
-            [0xfffc4000, 0xfff025e4, 0x03cb1000, BASE + 0x4380, BASE + 0x4788, 0, 0, 0, 0]
+            [
+                0xfffc4000,
+                0xfff025e4,
+                0x03cb1000,
+                BASE + 0x4380,
+                BASE + 0x4788,
+                0,
+                0,
+                0,
+                0
+            ]
         );
         let end = OFFSET + PROGRAM.len();
         for &at in &LAYOUT.fixups {
@@ -382,7 +419,10 @@ mod tests {
         assert_eq!(word(&output, ENTER_RAM_CALL).unwrap() >> 24, 0xeb);
         assert_eq!(target(&output, ENTER_RAM_CALL), placed.enter_ram);
         // The hooks continue at the template's own targets.
-        assert_eq!(word(&output, (placed.ffinit_load - BASE) as usize).unwrap(), BASE + 0x4198);
+        assert_eq!(
+            word(&output, (placed.ffinit_load - BASE) as usize).unwrap(),
+            BASE + 0x4198
+        );
         assert_eq!(
             word(&output, (placed.ffinit_enter_ram - BASE) as usize).unwrap(),
             BASE + 0x4340
@@ -427,7 +467,12 @@ mod tests {
     }
 
     fn stage() -> PackedStage {
-        PackedStage { address: 0x104000, header: 0x1a0, records: 0x1c0, size: 0x480 }
+        PackedStage {
+            address: 0x104000,
+            header: 0x1a0,
+            records: 0x1c0,
+            size: 0x480,
+        }
     }
 
     #[test]
@@ -444,7 +489,11 @@ mod tests {
         let changed: Vec<usize> = (0..output.len())
             .filter(|&i| output[i] != installed[i])
             .collect();
-        assert!(changed.iter().all(|&i| (config + 20..config + 36).contains(&i)));
+        assert!(
+            changed
+                .iter()
+                .all(|&i| (config + 20..config + 36).contains(&i))
+        );
         assert!(bind_packed_stage(&mut output, BASE, &stage()).is_err());
     }
 
@@ -454,14 +503,35 @@ mod tests {
         install(&mut output, BASE, 0x1ac0, &bindings(BASE)).unwrap();
         for invalid in [
             PackedStage { size: 0, ..stage() },
-            PackedStage { size: 0x470, ..stage() },
-            PackedStage { size: PACKED_STAGE_LIMIT + 32, ..stage() },
-            PackedStage { address: 0x104010, ..stage() },
-            PackedStage { header: 0x462, ..stage() },
-            PackedStage { header: 0x480, ..stage() },
-            PackedStage { records: 0x484, ..stage() },
+            PackedStage {
+                size: 0x470,
+                ..stage()
+            },
+            PackedStage {
+                size: PACKED_STAGE_LIMIT + 32,
+                ..stage()
+            },
+            PackedStage {
+                address: 0x104010,
+                ..stage()
+            },
+            PackedStage {
+                header: 0x462,
+                ..stage()
+            },
+            PackedStage {
+                header: 0x480,
+                ..stage()
+            },
+            PackedStage {
+                records: 0x484,
+                ..stage()
+            },
         ] {
-            assert!(bind_packed_stage(&mut output.clone(), BASE, &invalid).is_err(), "{invalid:?}");
+            assert!(
+                bind_packed_stage(&mut output.clone(), BASE, &invalid).is_err(),
+                "{invalid:?}"
+            );
         }
         assert!(bind_packed_stage(&mut ffinit(), BASE, &stage()).is_err());
     }

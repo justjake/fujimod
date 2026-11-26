@@ -8,12 +8,8 @@ fn main() {
         let schemas = PathBuf::from(args.next().expect("catalog schema directory"));
         let python = PathBuf::from(args.next().expect("Python runtime type module"));
         assert!(args.next().is_none(), "unexpected argument");
-        fujimod_bindgen::generate_catalog_types(
-            &schemas,
-            &python,
-            mode == "--check-catalog-types",
-        )
-        .unwrap_or_else(|error| panic!("{error}"));
+        fujimod_bindgen::generate_catalog_types(&schemas, &python, mode == "--check-catalog-types")
+            .unwrap_or_else(|error| panic!("{error}"));
         return;
     }
     assert!(

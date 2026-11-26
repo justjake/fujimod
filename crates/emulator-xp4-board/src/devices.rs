@@ -77,13 +77,22 @@ impl<T: Device> Device for Connected<T> {
         self.0.lock().unwrap().next_deadline(now)
     }
     fn checkpoint(&self) -> Result<Checkpoint, String> {
-        self.0.lock().map_err(|_| "device lock poisoned")?.checkpoint()
+        self.0
+            .lock()
+            .map_err(|_| "device lock poisoned")?
+            .checkpoint()
     }
     fn validate_checkpoint(&self, saved: &Checkpoint) -> Result<(), String> {
-        self.0.lock().map_err(|_| "device lock poisoned")?.validate_checkpoint(saved)
+        self.0
+            .lock()
+            .map_err(|_| "device lock poisoned")?
+            .validate_checkpoint(saved)
     }
     fn restore_checkpoint(&mut self, saved: &Checkpoint) -> Result<(), String> {
-        self.0.lock().map_err(|_| "device lock poisoned")?.restore_checkpoint(saved)
+        self.0
+            .lock()
+            .map_err(|_| "device lock poisoned")?
+            .restore_checkpoint(saved)
     }
     fn save(&self) -> serde_json::Value {
         self.0.lock().unwrap().save()
@@ -152,33 +161,65 @@ impl Devices {
             return Err(errors.join("; "));
         }
         let state = DeviceState {
-            windows: self.windows.clone(), events: self.events.clone(), log: self.log.clone(),
-            prior_records: self.prior_records, outputs: self.outputs.clone(),
-            frames: self.frames.values().map(|frame| (frame.output, frame.sequence, frame.width, frame.height)).collect(),
-            usb_present: self.usb_presence.as_ref().map(|level| level.load(std::sync::atomic::Ordering::Relaxed)),
-            nor_epoch: self.nor_epoch.as_ref().map(|epoch| epoch.load(std::sync::atomic::Ordering::Relaxed)),
+            windows: self.windows.clone(),
+            events: self.events.clone(),
+            log: self.log.clone(),
+            prior_records: self.prior_records,
+            outputs: self.outputs.clone(),
+            frames: self
+                .frames
+                .values()
+                .map(|frame| (frame.output, frame.sequence, frame.width, frame.height))
+                .collect(),
+            usb_present: self
+                .usb_presence
+                .as_ref()
+                .map(|level| level.load(std::sync::atomic::Ordering::Relaxed)),
+            nor_epoch: self
+                .nor_epoch
+                .as_ref()
+                .map(|epoch| epoch.load(std::sync::atomic::Ordering::Relaxed)),
         };
-        Ok(Checkpoint::encode(CHECKPOINT_KIND, &state)?.with_children(children)
-            .with_blobs(self.frames.values().map(|frame| Arc::from(frame.rgba.as_slice())).collect()))
+        Ok(Checkpoint::encode(CHECKPOINT_KIND, &state)?
+            .with_children(children)
+            .with_blobs(
+                self.frames
+                    .values()
+                    .map(|frame| Arc::from(frame.rgba.as_slice()))
+                    .collect(),
+            ))
     }
 
     pub fn validate_checkpoint(&self, saved: &Checkpoint) -> Result<(), String> {
         let state: DeviceState = saved.decode(CHECKPOINT_KIND)?;
-        if state.windows != self.windows || saved.children().len() != self.models.len()
+        if state.windows != self.windows
+            || saved.children().len() != self.models.len()
             || state.usb_present.is_some() != self.usb_presence.is_some()
             || state.nor_epoch.is_some() != self.nor_epoch.is_some()
-            || state.events.iter().any(|(_, node, _)| *node >= self.models.len())
+            || state
+                .events
+                .iter()
+                .any(|(_, node, _)| *node >= self.models.len())
             || state.frames.len() != saved.blobs().len()
             || state.frames.windows(2).any(|row| row[0].0 >= row[1].0)
-            || state.frames.iter().zip(saved.blobs()).any(|((_, _, w, h), blob)| {
-                usize::try_from(u64::from(*w) * u64::from(*h)).ok().and_then(|pixels| pixels.checked_mul(4)) != Some(blob.len())
-            })
+            || state
+                .frames
+                .iter()
+                .zip(saved.blobs())
+                .any(|((_, _, w, h), blob)| {
+                    usize::try_from(u64::from(*w) * u64::from(*h))
+                        .ok()
+                        .and_then(|pixels| pixels.checked_mul(4))
+                        != Some(blob.len())
+                })
         {
             return Err("XP4 checkpoint device graph or frame geometry differs".into());
         }
         for (model, child) in self.models.iter().zip(saved.children()) {
             let model = model.as_ref().ok_or("XP4 device is in use")?;
-            model.validate_checkpoint(child).map_err(|error| format!("{}: {error}", model.name()))?;
+            model
+                .validate_checkpoint(child)
+                .map_err(|error| format!("{}: {error}", model.name()))?;
         }
         Ok(())
     }
@@ -187,15 +228,32 @@ impl Devices {
         self.validate_checkpoint(saved)?;
         let state: DeviceState = saved.decode(CHECKPOINT_KIND)?;
         for (model, child) in self.models.iter_mut().zip(saved.children()) {
-            model.as_mut().ok_or("XP4 device is in use")?.restore_checkpoint(child)?;
+            model
+                .as_mut()
+                .ok_or("XP4 device is in use")?
+                .restore_checkpoint(child)?;
         }
         self.events = state.events;
         self.log = state.log;
         self.prior_records = state.prior_records;
         self.outputs = state.outputs;
-        self.frames = state.frames.into_iter().zip(saved.blobs()).map(|((output, sequence, width, height), rgba)| {
-            (output, Frame { output, sequence, width, height, rgba: rgba.to_vec() })
-        }).collect();
+        self.frames = state
+            .frames
+            .into_iter()
+            .zip(saved.blobs())
+            .map(|((output, sequence, width, height), rgba)| {
+                (
+                    output,
+                    Frame {
+                        output,
+                        sequence,
+                        width,
+                        height,
+                        rgba: rgba.to_vec(),
+                    },
+                )
+            })
+            .collect();
         if let Some((presence, saved)) = self.usb_presence.as_ref().zip(state.usb_present) {
             presence.store(saved, std::sync::atomic::Ordering::Relaxed);
         }
@@ -309,16 +367,27 @@ impl Host for PhysicalHost<'_> {
 }
 impl Devices {
     pub fn byte_i2c(&mut self, input: super::definition::ByteI2c) -> Result<(), String> {
-        if !(32..512).contains(&input.irq) || input.base.checked_add(0x20).is_none_or(|end| end > 1 << 32) {
+        if !(32..512).contains(&input.irq)
+            || input.base.checked_add(0x20).is_none_or(|end| end > 1 << 32)
+        {
             return Err("Invalid ARM32 byte I2C wiring".into());
         }
-        let model = fujimod_emulator_xp4_io::i2c::ByteI2c::new(input.base, input.irq, input.profile, input.peer)?;
+        let model = fujimod_emulator_xp4_io::i2c::ByteI2c::new(
+            input.base,
+            input.irq,
+            input.profile,
+            input.peer,
+        )?;
         let ranges = model.windows();
-        if ranges.iter().any(|&(a,b)| self.windows.iter().any(|&(lo,hi,_)| a < hi && lo < b)) {
+        if ranges
+            .iter()
+            .any(|&(a, b)| self.windows.iter().any(|&(lo, hi, _)| a < hi && lo < b))
+        {
             return Err("Overlapping byte I2C window".into());
         }
         let id = self.models.len();
-        self.windows.extend(ranges.into_iter().map(|(a,b)| (a,b,id)));
+        self.windows
+            .extend(ranges.into_iter().map(|(a, b)| (a, b, id)));
         self.models.push(Some(Box::new(model)));
         Ok(())
     }
@@ -384,7 +453,9 @@ impl Devices {
         &self,
         name: &str,
     ) -> Result<&fujimod_emulator_devices::parts::encoder_input::EncoderInput, String> {
-        self.dials.get(name).ok_or_else(|| format!("No XP4 command dial named {name}"))
+        self.dials
+            .get(name)
+            .ok_or_else(|| format!("No XP4 command dial named {name}"))
     }
     pub fn gpio_registers(&self) -> Option<Vec<[u32; 8]>> {
         let pins = self.pins.as_ref()?.lock().unwrap();
@@ -650,9 +721,7 @@ impl Devices {
         }
         let picture = match layout {
             None => None,
-            Some("abgr8888-straight") => {
-                Some(fujimod_framebuffer_xp4::Picture::Abgr8888Straight)
-            }
+            Some("abgr8888-straight") => Some(fujimod_framebuffer_xp4::Picture::Abgr8888Straight),
             _ => return Err("Unsupported XP4 LCDC picture layout".into()),
         };
         let video = match video_layout {
@@ -684,7 +753,9 @@ impl Devices {
         let card = match medium {
             Some(mut card) => {
                 if !files.is_empty() {
-                    return Err("An SD host takes SD card files or an SD card medium, not both".into());
+                    return Err(
+                        "An SD host takes SD card files or an SD card medium, not both".into(),
+                    );
                 }
                 card.validate()?;
                 if card.sectors() != host.card.sectors {
@@ -741,37 +812,48 @@ impl Devices {
         Ok(())
     }
     pub fn functional_system_control(
-        &mut self, config: fujimod_emulator_xp4_system::system_control::Config,
+        &mut self,
+        config: fujimod_emulator_xp4_system::system_control::Config,
     ) -> Result<(), String> {
         let model = fujimod_emulator_xp4_system::system_control::SystemControl::new(config)?;
         let windows = model.windows();
-        if windows.iter().any(|&(a, b)| self.windows.iter().any(|&(lo, hi, _)| a < hi && lo < b)) {
+        if windows
+            .iter()
+            .any(|&(a, b)| self.windows.iter().any(|&(lo, hi, _)| a < hi && lo < b))
+        {
             return Err("Overlapping XP4 functional system-control window".into());
         }
         let id = self.models.len();
-        self.windows.extend(windows.into_iter().map(|(a, b)| (a, b, id)));
+        self.windows
+            .extend(windows.into_iter().map(|(a, b)| (a, b, id)));
         self.models.push(Some(Box::new(model)));
         Ok(())
     }
     pub fn requests(&mut self, inputs: Vec<(u64, u64)>) -> Result<(), String> {
-        if inputs.iter().any(|&(a, _)| self.windows.iter().any(|&(lo, hi, _)| a < hi && lo < a.saturating_add(4))) {
+        if inputs.iter().any(|&(a, _)| {
+            self.windows
+                .iter()
+                .any(|&(lo, hi, _)| a < hi && lo < a.saturating_add(4))
+        }) {
             return Err("Overlapping XP4 control request window".into());
         }
         let id = self.models.len();
         let model = fujimod_emulator_xp4_io::requests::Requests::new(&inputs)?;
         // Each request word is the `+0x80` word of a block; own the whole block
         // so its command, gate and completion words are modeled too.
-        self.windows
-            .extend(inputs.iter().map(|&(a, _)| (a - 0x80, a - 0x80 + 0x100, id)));
+        self.windows.extend(
+            inputs
+                .iter()
+                .map(|&(a, _)| (a - 0x80, a - 0x80 + 0x100, id)),
+        );
         self.models.push(Some(Box::new(model)));
         Ok(())
     }
     pub fn register_banks(&mut self, windows: Vec<(u64, u64)>) -> Result<(), String> {
-        if windows.iter().any(|&(lo, hi)| {
-            self.windows
-                .iter()
-                .any(|&(a, b, _)| lo < b && a < hi)
-        }) {
+        if windows
+            .iter()
+            .any(|&(lo, hi)| self.windows.iter().any(|&(a, b, _)| lo < b && a < hi))
+        {
             return Err("Overlapping XP4 register bank window".into());
         }
         let model = fujimod_emulator_xp4_io::register_bank::RegisterBank::new(&windows)?;
@@ -782,9 +864,15 @@ impl Devices {
         Ok(())
     }
     pub fn request_acknowledgment(&mut self, ticks: u64) -> Result<(), String> {
-        use fujimod_emulator_xp4_io::request_acknowledgment::{ADDRESS, RequestAcknowledgment, WIDTH};
+        use fujimod_emulator_xp4_io::request_acknowledgment::{
+            ADDRESS, RequestAcknowledgment, WIDTH,
+        };
         let end = ADDRESS + u64::from(WIDTH);
-        if self.windows.iter().any(|&(lo, hi, _)| ADDRESS < hi && lo < end) {
+        if self
+            .windows
+            .iter()
+            .any(|&(lo, hi, _)| ADDRESS < hi && lo < end)
+        {
             return Err("Overlapping XP4 request acknowledgment window".into());
         }
         let model = RequestAcknowledgment::new(ticks)?;
@@ -802,14 +890,23 @@ impl Devices {
         use fujimod_emulator_xp4_io::countdown_timers::{CountdownTimers, DialWiring};
         let wiring: Vec<_> = dials
             .iter()
-            .map(|d| DialWiring { channel: d.channel, phase_ticks: d.phase_ticks, rest_phase: d.rest_phase })
+            .map(|d| DialWiring {
+                channel: d.channel,
+                phase_ticks: d.phase_ticks,
+                rest_phase: d.rest_phase,
+            })
             .collect();
         let model = CountdownTimers::new(base, routes, &wiring)?;
         for d in dials {
             if d.name.is_empty() || self.dials.contains_key(&d.name) {
                 return Err("Invalid XP4 countdown dial name".into());
             }
-            self.dials.insert(d.name.clone(), model.dial_input(d.channel).ok_or("Unwired XP4 countdown dial")?);
+            self.dials.insert(
+                d.name.clone(),
+                model
+                    .dial_input(d.channel)
+                    .ok_or("Unwired XP4 countdown dial")?,
+            );
         }
         let windows = model.windows();
         if windows
@@ -882,8 +979,13 @@ impl Devices {
         }
         let windows = model.windows();
         for &(lo, hi) in &windows {
-            if let Some(&(base, end, owner)) = self.windows.iter().find(|&&(a, b, _)| lo < b && a < hi) {
-                let name = self.models.get(owner).and_then(Option::as_ref)
+            if let Some(&(base, end, owner)) =
+                self.windows.iter().find(|&&(a, b, _)| lo < b && a < hi)
+            {
+                let name = self
+                    .models
+                    .get(owner)
+                    .and_then(Option::as_ref)
                     .map_or("unknown model", |device| device.name());
                 return Err(format!(
                     "XP4 still engine {} at {lo:#x}..{hi:#x} overlaps {name} at {base:#x}..{end:#x}",
@@ -909,11 +1011,15 @@ impl Devices {
             }
         }
         let id = self.models.len();
-        self.windows.extend(windows.into_iter().map(|(lo, hi)| (lo, hi, id)));
+        self.windows
+            .extend(windows.into_iter().map(|(lo, hi)| (lo, hi, id)));
         self.models.push(Some(Box::new(model)));
         Ok(())
     }
-    pub fn face_detector(&mut self, wiring: &crate::definition::FaceDetector) -> Result<(), String> {
+    pub fn face_detector(
+        &mut self,
+        wiring: &crate::definition::FaceDetector,
+    ) -> Result<(), String> {
         let model = fujimod_emulator_xp4_io::face_detector::FaceDetector::new(
             wiring.base,
             wiring.irq,
@@ -944,7 +1050,10 @@ impl Devices {
         self.models.push(Some(Box::new(model)));
         Ok(())
     }
-    pub fn filter_engine(&mut self, wiring: &crate::definition::FilterEngine) -> Result<(), String> {
+    pub fn filter_engine(
+        &mut self,
+        wiring: &crate::definition::FilterEngine,
+    ) -> Result<(), String> {
         let model = fujimod_emulator_xp4_io::filter_engine::FilterEngine::new(
             wiring.base,
             wiring.memory_types,
@@ -1023,8 +1132,7 @@ impl Devices {
         statistics_in_memory: bool,
     ) -> Result<(), String> {
         use fujimod_emulator_sensor_input::{sensor, slvs};
-        let (command_base, receiver_base, normal_irqs, error_irqs, timing_irqs, raw_dma_irqs) =
-            map;
+        let (command_base, receiver_base, normal_irqs, error_irqs, timing_irqs, raw_dma_irqs) = map;
         let (period, active, command_ticks, reset_ticks) = timing;
         let raw_dma = raw_dma_irqs.as_deref().unwrap_or(&[]);
         if command_base != 0xfff6c000
@@ -1057,8 +1165,8 @@ impl Devices {
             }),
             read_gate,
         );
-        let command =
-            sensor::Command::new(command_base, sensor.clone(), command_ticks)?.with_retained_words();
+        let command = sensor::Command::new(command_base, sensor.clone(), command_ticks)?
+            .with_retained_words();
         let mut receiver = slvs::Receiver::new(
             sensor,
             slvs::Wiring {
@@ -1177,8 +1285,14 @@ impl Devices {
         }
     }
     pub fn io_groups(&mut self, base: u64) -> Result<(), String> {
-        let end = base.checked_add(0xa0).ok_or("Invalid XP4 IO-group extent")?;
-        if self.windows.iter().any(|&(lo, hi, _)| base < hi && lo < end) {
+        let end = base
+            .checked_add(0xa0)
+            .ok_or("Invalid XP4 IO-group extent")?;
+        if self
+            .windows
+            .iter()
+            .any(|&(lo, hi, _)| base < hi && lo < end)
+        {
             return Err("Overlapping XP4 IO-group window".into());
         }
         let id = self.models.len();
@@ -1189,8 +1303,14 @@ impl Devices {
         Ok(())
     }
     pub fn decompressor(&mut self, base: u64, irq: u32) -> Result<(), String> {
-        let end = base.checked_add(0x6c).ok_or("Invalid decompressor extent")?;
-        if self.windows.iter().any(|&(lo, hi, _)| base < hi && lo < end) {
+        let end = base
+            .checked_add(0x6c)
+            .ok_or("Invalid decompressor extent")?;
+        if self
+            .windows
+            .iter()
+            .any(|&(lo, hi, _)| base < hi && lo < end)
+        {
             return Err("Overlapping decompressor window".into());
         }
         let id = self.models.len();
@@ -1247,17 +1367,30 @@ impl Devices {
         self.windows.push((base, base + 0x28, id));
         Ok(())
     }
-    pub fn standalone_dma(&mut self, input: super::definition::StandaloneDma) -> Result<(), String> {
-        let routes: [u32; 16] = input.irq_routes.try_into()
+    pub fn standalone_dma(
+        &mut self,
+        input: super::definition::StandaloneDma,
+    ) -> Result<(), String> {
+        let routes: [u32; 16] = input
+            .irq_routes
+            .try_into()
             .map_err(|_| "Standalone XP4 DMA requires 16 explicit IRQ routes")?;
         let model = DmaController::standalone(routes, &input.reset_profile, &input.timing_profile)?
             .with_serial_links(self.serial_links.clone());
-        let windows = [(storage::DMA, storage::DMA + 0x10000), (0xfff4a500, 0xfff4a520), (0xfff4a800, 0xfff4a880)];
-        if windows.iter().any(|&(a, b)| self.windows.iter().any(|&(lo, hi, _)| a < hi && lo < b)) {
+        let windows = [
+            (storage::DMA, storage::DMA + 0x10000),
+            (0xfff4a500, 0xfff4a520),
+            (0xfff4a800, 0xfff4a880),
+        ];
+        if windows
+            .iter()
+            .any(|&(a, b)| self.windows.iter().any(|&(lo, hi, _)| a < hi && lo < b))
+        {
             return Err("Overlapping standalone XP4 DMA window".into());
         }
         let id = self.models.len();
-        self.windows.extend(windows.into_iter().map(|(a, b)| (a, b, id)));
+        self.windows
+            .extend(windows.into_iter().map(|(a, b)| (a, b, id)));
         self.models.push(Some(Box::new(model)));
         Ok(())
     }
@@ -1275,7 +1408,9 @@ impl Devices {
                 *hi = start;
             }
         }
-        if let Some(window) = tail { self.windows.push(window); }
+        if let Some(window) = tail {
+            self.windows.push(window);
+        }
         self.windows.retain(|(lo, hi, _)| lo < hi);
         self.owner_index = Default::default();
     }
@@ -1294,7 +1429,14 @@ impl Devices {
         strict_backing: bool,
         erased_ranges: Vec<storage::ErasedRange>,
         audio: Option<storage::AudioPacing>,
-    ) -> Result<(Self, Option<storage::ImmutableView>, Option<storage::ExecutableView>), String> {
+    ) -> Result<
+        (
+            Self,
+            Option<storage::ImmutableView>,
+            Option<storage::ExecutableView>,
+        ),
+        String,
+    > {
         let routes: [u32; 16] = routes
             .try_into()
             .map_err(|_| "XP4 DMA requires 16 physical IRQ routes")?;
@@ -1314,12 +1456,24 @@ impl Devices {
                 page_ticks: geometry.3,
             },
         )?;
-        if let Some(prefix) = prefix { nor = nor.with_immutable_prefix(prefix)?; }
-        if let Some(range) = executable { nor = nor.with_executable_range(range)?; }
-        if write_protect { nor = nor.with_write_protect(); }
-        if strict_backing { nor = nor.with_strict_backing(); }
-        if !erased_ranges.is_empty() { nor = nor.with_erased_ranges(erased_ranges)?; }
-        if !write_ranges.is_empty() { nor = nor.with_write_ranges(write_ranges)?; }
+        if let Some(prefix) = prefix {
+            nor = nor.with_immutable_prefix(prefix)?;
+        }
+        if let Some(range) = executable {
+            nor = nor.with_executable_range(range)?;
+        }
+        if write_protect {
+            nor = nor.with_write_protect();
+        }
+        if strict_backing {
+            nor = nor.with_strict_backing();
+        }
+        if !erased_ranges.is_empty() {
+            nor = nor.with_erased_ranges(erased_ranges)?;
+        }
+        if !write_ranges.is_empty() {
+            nor = nor.with_write_ranges(write_ranges)?;
+        }
         let view = nor.immutable_view();
         let executable_view = nor.executable_view();
         let port = storage::try_port_from_nor(nor)?;
@@ -1331,7 +1485,11 @@ impl Devices {
             if input.address < 0xff000000 {
                 return Err("Discovery transmit receiver requires a peripheral destination".into());
             }
-            let mut receiver = fujimod_emulator_xp4_storage::tx_receiver::TxReceiver::new(input.address, input.request, input.capacity)?;
+            let mut receiver = fujimod_emulator_xp4_storage::tx_receiver::TxReceiver::new(
+                input.address,
+                input.request,
+                input.capacity,
+            )?;
             receiver.offer(input.offer_at, input.offer_bytes)?;
             dma = dma.with_receiver(std::sync::Arc::new(std::sync::Mutex::new(receiver)));
         }
@@ -1344,10 +1502,7 @@ impl Devices {
         let controller = Arc::new(Mutex::new(controller));
         let mut devices = Self {
             nor_controller: Some(controller.clone()),
-            models: vec![
-                Some(Box::new(Connected(controller))),
-                Some(Box::new(dma)),
-            ],
+            models: vec![Some(Box::new(Connected(controller))), Some(Box::new(dma))],
             events: Default::default(),
             log: Vec::new(),
             prior_records: 0,
@@ -1374,7 +1529,11 @@ impl Devices {
             serial_links,
         };
         if let Some(pad) = pad {
-            if devices.windows.iter().any(|&(lo, hi, _)| pad < hi && lo < pad + 4) {
+            if devices
+                .windows
+                .iter()
+                .any(|&(lo, hi, _)| pad < hi && lo < pad + 4)
+            {
                 return Err("Flash pad register overlaps the flash controller windows".into());
             }
             // One word the controller owns inside another block's register
@@ -2082,7 +2241,8 @@ impl Devices {
         };
         let unmodeled = cx.is_unmodeled();
         let refusal = cx.take_refusal();
-        self.last_read_stable = !write && !unmodeled && refusal.is_none() && model.read_stable(address, size as u8);
+        self.last_read_stable =
+            !write && !unmodeled && refusal.is_none() && model.read_stable(address, size as u8);
         self.models[id] = Some(model);
         if let Some(reason) = refusal
             && !unmodeled
@@ -2115,7 +2275,10 @@ impl Devices {
             .last_access
             .and_then(|id| self.models[id].as_ref())
             .and_then(|m| m.next_deadline(now));
-        [self.events.first().map(|e| e.0), own].into_iter().flatten().min()
+        [self.events.first().map(|e| e.0), own]
+            .into_iter()
+            .flatten()
+            .min()
     }
     pub fn due(&mut self, c: &Cluster) -> Result<(), String> {
         let now = unsafe { (*c.state.get()).ticks };
@@ -2189,18 +2352,22 @@ impl Devices {
             *counts.entry(model.name()).or_insert(0usize) += 1;
         }
         let mut indices = BTreeMap::new();
-        self.models.iter().flatten().map(|model| {
-            let name = model.name();
-            let key = if counts[name] == 1 {
-                name.to_owned()
-            } else {
-                let index = indices.entry(name).or_insert(0usize);
-                let key = format!("{name}#{index}");
-                *index += 1;
-                key
-            };
-            (key, model.save().to_string())
-        }).collect()
+        self.models
+            .iter()
+            .flatten()
+            .map(|model| {
+                let name = model.name();
+                let key = if counts[name] == 1 {
+                    name.to_owned()
+                } else {
+                    let index = indices.entry(name).or_insert(0usize);
+                    let key = format!("{name}#{index}");
+                    *index += 1;
+                    key
+                };
+                (key, model.save().to_string())
+            })
+            .collect()
     }
 }
 
@@ -2215,7 +2382,11 @@ impl Cluster {
             let state = unsafe { &mut *self.state.get() };
             state.device_scan_at = devices.next_deadline(state.ticks).unwrap_or(u64::MAX);
             state.devices = Some(devices);
-            if self.executable_nor.as_ref().is_some_and(|view| view.dirty()) {
+            if self
+                .executable_nor
+                .as_ref()
+                .is_some_and(|view| view.dirty())
+            {
                 state.cache_dirty = true;
                 state.exclusive.fill(None);
             }
@@ -2237,9 +2408,11 @@ impl Cluster {
         };
         let result = devices.access(self, core, address, size, write, value);
         let state = unsafe { &mut *self.state.get() };
-        state.device_scan_at = state
-            .device_scan_at
-            .min(devices.deadline_after_access(state.ticks).unwrap_or(u64::MAX));
+        state.device_scan_at = state.device_scan_at.min(
+            devices
+                .deadline_after_access(state.ticks)
+                .unwrap_or(u64::MAX),
+        );
         state.devices = Some(devices);
         result
     }
@@ -2268,7 +2441,11 @@ impl Cluster {
             let all = std::mem::take(&mut state.dirty_all);
             let pages = std::mem::take(&mut state.dirty_pages);
             state.cache_dirty = false;
-            if let Some(view) = &self.executable_nor { unsafe { view.clear_dirty(); } }
+            if let Some(view) = &self.executable_nor {
+                unsafe {
+                    view.clear_dirty();
+                }
+            }
             if all || pages.is_empty() {
                 for cpu in &self.cpus {
                     cpu.invalidate_code(None)?;
@@ -2279,7 +2456,8 @@ impl Cluster {
                 for (page, pointer) in pages {
                     match runs.last_mut() {
                         Some(run)
-                            if run.0 + run.2 as u64 == page && run.1.wrapping_add(run.2) == pointer =>
+                            if run.0 + run.2 as u64 == page
+                                && run.1.wrapping_add(run.2) == pointer =>
                         {
                             run.2 += 0x1000;
                         }
@@ -2311,15 +2489,37 @@ mod io_group_admission_tests {
     use super::*;
     #[test]
     fn overflow_and_duplicate_windows_refuse_before_mutating_devices() {
-        let mut devices=Devices::empty();
-        let before=(devices.models.len(),devices.windows.clone(),devices.snapshots());
-        assert!(devices.io_groups(u64::MAX-0x9f).is_err());
-        assert_eq!((devices.models.len(),devices.windows.clone(),devices.snapshots()),before);
+        let mut devices = Devices::empty();
+        let before = (
+            devices.models.len(),
+            devices.windows.clone(),
+            devices.snapshots(),
+        );
+        assert!(devices.io_groups(u64::MAX - 0x9f).is_err());
+        assert_eq!(
+            (
+                devices.models.len(),
+                devices.windows.clone(),
+                devices.snapshots()
+            ),
+            before
+        );
         devices.io_groups(0xfff42000).unwrap();
-        let before=(devices.models.len(),devices.windows.clone(),devices.snapshots());
-        for base in [0xfff42000,0xfff41fff,0xfff4209f] {
+        let before = (
+            devices.models.len(),
+            devices.windows.clone(),
+            devices.snapshots(),
+        );
+        for base in [0xfff42000, 0xfff41fff, 0xfff4209f] {
             assert!(devices.io_groups(base).is_err());
-            assert_eq!((devices.models.len(),devices.windows.clone(),devices.snapshots()),before);
+            assert_eq!(
+                (
+                    devices.models.len(),
+                    devices.windows.clone(),
+                    devices.snapshots()
+                ),
+                before
+            );
         }
     }
 }
@@ -2329,15 +2529,37 @@ mod decompressor_admission_tests {
     use super::*;
     #[test]
     fn overflow_and_overlap_refuse_before_mutation() {
-        let mut devices=Devices::empty();
-        let before=(devices.models.len(),devices.windows.clone(),devices.snapshots());
-        assert!(devices.decompressor(u64::MAX-0x6b,128).is_err());
-        assert_eq!((devices.models.len(),devices.windows.clone(),devices.snapshots()),before);
-        devices.decompressor(0xfff79000,128).unwrap();
-        let before=(devices.models.len(),devices.windows.clone(),devices.snapshots());
-        for base in [0xfff79000,0xfff78fff,0xfff7906b] {
-            assert!(devices.decompressor(base,128).is_err());
-            assert_eq!((devices.models.len(),devices.windows.clone(),devices.snapshots()),before);
+        let mut devices = Devices::empty();
+        let before = (
+            devices.models.len(),
+            devices.windows.clone(),
+            devices.snapshots(),
+        );
+        assert!(devices.decompressor(u64::MAX - 0x6b, 128).is_err());
+        assert_eq!(
+            (
+                devices.models.len(),
+                devices.windows.clone(),
+                devices.snapshots()
+            ),
+            before
+        );
+        devices.decompressor(0xfff79000, 128).unwrap();
+        let before = (
+            devices.models.len(),
+            devices.windows.clone(),
+            devices.snapshots(),
+        );
+        for base in [0xfff79000, 0xfff78fff, 0xfff7906b] {
+            assert!(devices.decompressor(base, 128).is_err());
+            assert_eq!(
+                (
+                    devices.models.len(),
+                    devices.windows.clone(),
+                    devices.snapshots()
+                ),
+                before
+            );
         }
     }
 }
@@ -2345,19 +2567,34 @@ mod decompressor_admission_tests {
 #[cfg(test)]
 mod imaging_admission_tests {
     use super::*;
-    fn map(raw_dma: Option<Vec<u32>>) -> (u64, u64, Vec<u32>, Vec<u32>, Vec<u32>, Option<Vec<u32>>) {
-        (0xfff6c000, 0xfff69000, vec![296, 298], vec![297, 297], vec![102, 100], raw_dma)
+    fn map(
+        raw_dma: Option<Vec<u32>>,
+    ) -> (u64, u64, Vec<u32>, Vec<u32>, Vec<u32>, Option<Vec<u32>>) {
+        (
+            0xfff6c000,
+            0xfff69000,
+            vec![296, 298],
+            vec![297, 297],
+            vec![102, 100],
+            raw_dma,
+        )
     }
     #[test]
     fn raw_dma_lines_are_two_valid_interrupts_or_absent() {
         for raw_dma in [Some(vec![97]), Some(vec![97, 98, 99]), Some(vec![97, 600])] {
             let mut devices = Devices::empty();
-            assert!(devices.imaging(map(raw_dma), (100, 50, 10, 8), (0x59, 4), None, false).is_err());
+            assert!(
+                devices
+                    .imaging(map(raw_dma), (100, 50, 10, 8), (0x59, 4), None, false)
+                    .is_err()
+            );
             assert!(devices.models.is_empty() && devices.windows.is_empty());
         }
         for raw_dma in [None, Some(vec![97, 98])] {
             let mut devices = Devices::empty();
-            devices.imaging(map(raw_dma), (100, 50, 10, 8), (0x59, 4), None, false).unwrap();
+            devices
+                .imaging(map(raw_dma), (100, 50, 10, 8), (0x59, 4), None, false)
+                .unwrap();
             assert_eq!(devices.windows.len(), 2);
         }
     }

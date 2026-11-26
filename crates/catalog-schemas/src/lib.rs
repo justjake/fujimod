@@ -168,9 +168,8 @@ pub fn generated_documents() -> BTreeMap<&'static str, Value> {
         "ip.schema.json",
         schema::<fujimod_catalog::ip::Ip>(fujimod_catalog::ip::IP_SCHEMA_URI),
     );
-    let mut soc = schema::<fujimod_catalog::reference::Soc>(
-        "https://fujimod.com/schemas/soc.schema.json",
-    );
+    let mut soc =
+        schema::<fujimod_catalog::reference::Soc>("https://fujimod.com/schemas/soc.schema.json");
     // A processor document lists no blocks; each block is its own record file.
     if let Some(properties) = soc.get_mut("properties").and_then(Value::as_object_mut) {
         properties.remove("blocks");

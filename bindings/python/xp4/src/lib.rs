@@ -19,10 +19,14 @@ fn open(
 }
 
 /// Adopt a catalog-created XP4 session on its Python owner thread.
-pub fn adopt(session: fujimod_emulator_xp4_board::Session, quantum: usize)
-    -> PyResult<Box<dyn Xp4Backend>>
-{
-    Ok(Box::new(session::Xp4Session::from_session(session, Some(quantum))?))
+pub fn adopt(
+    session: fujimod_emulator_xp4_board::Session,
+    quantum: usize,
+) -> PyResult<Box<dyn Xp4Backend>> {
+    Ok(Box::new(session::Xp4Session::from_session(
+        session,
+        Some(quantum),
+    )?))
 }
 
 /// Let `Board.from_xp4` build XP4 sessions.

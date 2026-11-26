@@ -21,7 +21,10 @@ impl Image {
             }
         }
         // Ties keep the lowest byte, so an all-zero image omits zero pages.
-        let blank = (0..=255u8).rev().max_by_key(|&byte| counts[byte as usize]).unwrap();
+        let blank = (0..=255u8)
+            .rev()
+            .max_by_key(|&byte| counts[byte as usize])
+            .unwrap();
         let stored = (0..self.pages.len())
             .filter(|&index| uniform_byte(self.page_bytes(index)) != Some(blank))
             .map(|index| (index, &self.pages[index]))
@@ -64,7 +67,8 @@ impl Image {
             return Err("snapshot page image extent differs".into());
         }
         let count = usize::try_from(word(16)?).map_err(|_| "snapshot page count exceeds target")?;
-        let blank = u8::try_from(word(24)?).map_err(|_| "snapshot blank page byte is not a byte")?;
+        let blank =
+            u8::try_from(word(24)?).map_err(|_| "snapshot blank page byte is not a byte")?;
         let page_count = expected_len.div_ceil(PAGE_BYTES);
         if count > page_count {
             return Err("snapshot page count exceeds extent".into());

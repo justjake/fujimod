@@ -52,10 +52,7 @@ impl Device for Flag {
         Ok(self.save())
     }
     fn checkpoint(&self) -> Result<fujimod_emulator_devices::checkpoint::Checkpoint, String> {
-        fujimod_emulator_devices::checkpoint::Checkpoint::encode(
-            "test-stable-flag",
-            &self.save(),
-        )
+        fujimod_emulator_devices::checkpoint::Checkpoint::encode("test-stable-flag", &self.save())
     }
 }
 fn board(mmio: bool, declared: bool, peer: bool, irq: bool, mode: LoopMode) -> Board {
@@ -443,7 +440,11 @@ fn interactive_fifo_mapping_bypasses_only_the_published_prefix() {
 /// bit 0 of the RAM flag (0x3000) or the device register, then `B .`.
 /// `poll` is the instruction between the load and the branch.
 fn m4_board(mmio: bool, declared: bool, mode: LoopMode, poll: u16) -> Board {
-    let (base, shift) = if mmio { (0x2201, 0x06d2) } else { (0x2203, 0x0312) };
+    let (base, shift) = if mmio {
+        (0x2201, 0x06d2)
+    } else {
+        (0x2203, 0x0312)
+    };
     let code = [
         0x2014, // MOVS R0,#20
         0x3801, // SUBS R0,#1
@@ -451,8 +452,7 @@ fn m4_board(mmio: bool, declared: bool, mode: LoopMode, poll: u16) -> Board {
         base,   // MOVS R2,#1 or #3
         shift,  // LSLS R2,R2,#27 or #12
         0x6811, // LDR  R1,[R2]
-        poll,
-        0xd5fc, // BPL  0x200a
+        poll, 0xd5fc, // BPL  0x200a
         0x2777, // MOVS R7,#0x77
         0xe7fe, // B    .
     ];
@@ -474,7 +474,8 @@ fn m4_board_with(device: Box<dyn Device>, code: &[u16], mode: LoopMode) -> Board
         processors: vec![Processor {
             model: Model::CortexM4,
             registers: vec![],
-            released: true, parked_until_sgi: false,
+            released: true,
+            parked_until_sgi: false,
             rprofile: None,
             mprofile: Some(crate::board::mprofile::Config {
                 clock_hz: 1_000_000_000,
@@ -522,7 +523,10 @@ fn m4_board_with(device: Box<dyn Device>, code: &[u16], mode: LoopMode) -> Board
         .write_memory(
             0,
             0x2000,
-            &code.iter().flat_map(|h| h.to_le_bytes()).collect::<Vec<_>>(),
+            &code
+                .iter()
+                .flat_map(|h| h.to_le_bytes())
+                .collect::<Vec<_>>(),
         )
         .unwrap();
     board.set_loop_mode(mode).unwrap();
@@ -543,7 +547,9 @@ fn m4_state(board: &Board) -> (Value, Vec<u32>, Vec<u8>) {
     (board.state(), registers, ram)
 }
 fn m4_statistic(board: &Board, name: &str) -> u64 {
-    board.loop_statistics().unwrap()[0][name].as_u64().unwrap_or(0)
+    board.loop_statistics().unwrap()[0][name]
+        .as_u64()
+        .unwrap_or(0)
 }
 #[test]
 fn m4_polls_and_delays_stop_at_device_deadlines_with_rational_time() {
@@ -577,7 +583,12 @@ fn m4_polls_and_delays_stop_at_device_deadlines_with_rational_time() {
 fn m4_undeclared_device_reads_and_stores_never_accelerate_the_poll() {
     // An undeclared register, and a poll that stores (STR R1,[R2,#4]).
     for (mmio, declared, poll, failure) in [
-        (true, false, LSLS_31, "loop_proofs_failed_loop_read_unavailable"),
+        (
+            true,
+            false,
+            LSLS_31,
+            "loop_proofs_failed_loop_read_unavailable",
+        ),
         (false, true, 0x6051, "loop_proofs_failed_structural"),
     ] {
         let mut off = m4_board(mmio, declared, LoopMode::Disabled, poll);
@@ -585,7 +596,11 @@ fn m4_undeclared_device_reads_and_stores_never_accelerate_the_poll() {
         for board in [&mut off, &mut on] {
             board.run_until(50, 1000).unwrap();
         }
-        assert_eq!(m4_state(&on), m4_state(&off), "mmio={mmio} declared={declared}");
+        assert_eq!(
+            m4_state(&on),
+            m4_state(&off),
+            "mmio={mmio} declared={declared}"
+        );
         assert_eq!(m4_statistic(&on, "loop_poll_instructions"), 0, "{failure}");
         assert!(m4_statistic(&on, failure) > 0, "{failure}");
         // The counted delay before the poll still accelerates.
@@ -653,7 +668,11 @@ fn m4_windows_end_at_a_deadline_the_core_schedules_during_its_run() {
         for tick in [40, 60] {
             off.run_until(tick, quantum).unwrap();
             on.run_until(tick, quantum).unwrap();
-            assert_eq!(m4_state(&on), m4_state(&off), "quantum={quantum} tick={tick}");
+            assert_eq!(
+                m4_state(&on),
+                m4_state(&off),
+                "quantum={quantum} tick={tick}"
+            );
         }
         assert_eq!(on.read_register(0, arm::CORE[7]).unwrap(), 0x77);
         assert!(m4_statistic(&on, "loop_accelerated_instructions") > 0);
@@ -692,7 +711,8 @@ fn m4_pair(mode: LoopMode) -> Board {
     let processor = |vector_base| Processor {
         model: Model::CortexM4,
         registers: vec![],
-        released: true, parked_until_sgi: false,
+        released: true,
+        parked_until_sgi: false,
         rprofile: None,
         mprofile: Some(crate::board::mprofile::Config {
             clock_hz: 1_000_000_000,
@@ -731,14 +751,28 @@ fn m4_pair(mode: LoopMode) -> Board {
     board.map_mmio(0, 0x8000000, 0x1000, 0x8000000).unwrap();
     let words = |board: &mut Board, address, values: &[u32]| {
         board
-            .write_memory(0, address, &values.iter().flat_map(|v| v.to_le_bytes()).collect::<Vec<_>>())
+            .write_memory(
+                0,
+                address,
+                &values
+                    .iter()
+                    .flat_map(|v| v.to_le_bytes())
+                    .collect::<Vec<_>>(),
+            )
             .unwrap();
     };
     words(&mut board, 0, &[0x3f00, 0x2001]);
     words(&mut board, 0x1000, &[0x3e00, 0x2101]);
     let halfwords = |board: &mut Board, address, code: &[u16]| {
         board
-            .write_memory(0, address, &code.iter().flat_map(|h| h.to_le_bytes()).collect::<Vec<_>>())
+            .write_memory(
+                0,
+                address,
+                &code
+                    .iter()
+                    .flat_map(|h| h.to_le_bytes())
+                    .collect::<Vec<_>>(),
+            )
             .unwrap();
     };
     halfwords(
@@ -807,10 +841,21 @@ fn m4_windows_end_at_the_slice_of_a_peer_woken_during_the_run() {
         for tick in [20, 60, 120, 200, 1200] {
             off.run_until(tick, quantum).unwrap();
             on.run_until(tick, quantum).unwrap();
-            assert_eq!(m4_pair_state(&on), m4_pair_state(&off), "quantum={quantum} tick={tick}");
+            assert_eq!(
+                m4_pair_state(&on),
+                m4_pair_state(&off),
+                "quantum={quantum} tick={tick}"
+            );
         }
-        assert_eq!(on.read_register(0, arm::CORE[7]).unwrap(), 0x77, "quantum={quantum}");
-        assert!(m4_statistic(&on, "loop_accelerated_instructions") > 0, "quantum={quantum}");
+        assert_eq!(
+            on.read_register(0, arm::CORE[7]).unwrap(),
+            0x77,
+            "quantum={quantum}"
+        );
+        assert!(
+            m4_statistic(&on, "loop_accelerated_instructions") > 0,
+            "quantum={quantum}"
+        );
     }
 }
 
@@ -827,7 +872,8 @@ fn m4_ssp(mode: LoopMode, peer: bool) -> Board {
     let processor = |vector_base| Processor {
         model: Model::CortexM4,
         registers: vec![],
-        released: true, parked_until_sgi: false,
+        released: true,
+        parked_until_sgi: false,
         rprofile: None,
         mprofile: Some(crate::board::mprofile::Config {
             clock_hz: 1_000_000_000,

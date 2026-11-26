@@ -143,7 +143,8 @@ impl Device for Mailbox {
     }
     fn validate_checkpoint(&self, saved: &Checkpoint) -> Result<(), String> {
         let state: State = saved.decode(self.name())?;
-        if state.causes & !CAUSES != 0 || state.words[MASK] & !0x7f != 0 || state.traffic.len() > 64 {
+        if state.causes & !CAUSES != 0 || state.words[MASK] & !0x7f != 0 || state.traffic.len() > 64
+        {
             return Err("unsupported mailbox checkpoint state".into());
         }
         Ok(())

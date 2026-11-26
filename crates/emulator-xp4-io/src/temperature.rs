@@ -57,7 +57,11 @@ impl Temperature {
 }
 #[derive(Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
-struct SavedTemperature { raw: i16, ticks: u64, state: State }
+struct SavedTemperature {
+    raw: i16,
+    ticks: u64,
+    state: State,
+}
 
 impl Temperature {
     fn validate_savedtemperature(&self, saved: &SavedTemperature) -> Result<(), String> {
@@ -154,12 +158,25 @@ impl Device for Temperature {
         serde_json::json!({"raw":self.raw,"millicelsius":i32::from(self.raw)*125,"ticks":self.ticks,"sensor":self.state})
     }
     fn checkpoint(&self) -> Result<fujimod_emulator_devices::checkpoint::Checkpoint, String> {
-        fujimod_emulator_devices::checkpoint::Checkpoint::encode(self.name(), &SavedTemperature { raw: self.raw, ticks: self.ticks, state: self.state.clone() })
+        fujimod_emulator_devices::checkpoint::Checkpoint::encode(
+            self.name(),
+            &SavedTemperature {
+                raw: self.raw,
+                ticks: self.ticks,
+                state: self.state.clone(),
+            },
+        )
     }
-    fn validate_checkpoint(&self, data: &fujimod_emulator_devices::checkpoint::Checkpoint) -> Result<(), String> {
+    fn validate_checkpoint(
+        &self,
+        data: &fujimod_emulator_devices::checkpoint::Checkpoint,
+    ) -> Result<(), String> {
         self.validate_savedtemperature(&data.decode(self.name())?)
     }
-    fn restore_checkpoint(&mut self, data: &fujimod_emulator_devices::checkpoint::Checkpoint) -> Result<(), String> {
+    fn restore_checkpoint(
+        &mut self,
+        data: &fujimod_emulator_devices::checkpoint::Checkpoint,
+    ) -> Result<(), String> {
         let saved: SavedTemperature = data.decode(self.name())?;
         self.validate_savedtemperature(&saved)?;
         self.state = saved.state;
@@ -167,7 +184,14 @@ impl Device for Temperature {
     }
     fn restore(&mut self, v: &Value) -> Result<(), String> {
         let s: State = serde_json::from_value(v["sensor"].clone()).map_err(|e| e.to_string())?;
-        self.validate_savedtemperature(&SavedTemperature { raw: v["raw"].as_i64().and_then(|raw| i16::try_from(raw).ok()).ok_or("invalid temperature input")?, ticks: v["ticks"].as_u64().unwrap_or_default(), state: s.clone() })?;
+        self.validate_savedtemperature(&SavedTemperature {
+            raw: v["raw"]
+                .as_i64()
+                .and_then(|raw| i16::try_from(raw).ok())
+                .ok_or("invalid temperature input")?,
+            ticks: v["ticks"].as_u64().unwrap_or_default(),
+            state: s.clone(),
+        })?;
         self.state = s;
         Ok(())
     }

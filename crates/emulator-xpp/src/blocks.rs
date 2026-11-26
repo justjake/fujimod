@@ -1062,9 +1062,7 @@ impl Block {
     fn access_offset(&self, address: u64, size: u8) -> Option<u64> {
         let offset = address.checked_sub(self.base)?;
         let width = u64::from(size);
-        ((1..=4).contains(&size)
-            && offset % width == 0
-            && offset.checked_add(width)? <= self.size)
+        ((1..=4).contains(&size) && offset % width == 0 && offset.checked_add(width)? <= self.size)
             .then_some(offset)
     }
     /// The four-byte word at a four-byte-aligned offset, with its fixed, idle

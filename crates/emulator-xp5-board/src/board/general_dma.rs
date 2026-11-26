@@ -2,13 +2,12 @@
 use fujimod_emulator_devices::bus::InterruptLine;
 use fujimod_emulator_devices::dma::Direction;
 use fujimod_emulator_devices::graph::{DeviceGraph, DeviceWindow};
-use fujimod_emulator_ip_arm::pl022::{Clock, Controller};
 use fujimod_emulator_ip::socionext::xdmac::{Connection, Pair};
+use fujimod_emulator_ip_arm::pl022::{Clock, Controller};
 use fujimod_emulator_parts_io::serial::{InputLevel, Unconnected, Wire};
 use fujimod_emulator_xp5_storage::{dma_registers, flash_storage, general_dma::Global};
 use serde::Deserialize;
 use std::collections::BTreeMap;
-
 
 pub fn owns(kind: &str) -> bool {
     matches!(
@@ -113,7 +112,10 @@ pub fn register_all(
             (Some(receive), Some(transmit))
                 if receive < 63 && transmit < 63 && receive != transmit =>
             {
-                vec![(receive, Direction::Receive), (transmit, Direction::Transmit)]
+                vec![
+                    (receive, Direction::Receive),
+                    (transmit, Direction::Transmit),
+                ]
             }
             (None, None) => vec![],
             _ => return Err("invalid XP5 serial DMA request wiring".into()),
@@ -155,8 +157,15 @@ pub fn register_all(
                     // width of the APS-C sensor.
                     const SENSOR_WIDTH_UM: f64 = 23_500.;
                     let (motor, (min, max)) = (port.clone(), port.focus_range());
-                    let blur = port.defocus_circle_um().map(|um| f64::from(um) / SENSOR_WIDTH_UM);
-                    fujimod_emulator_imaging::focus::attach_lens(move |now| motor.focus(now).0, min, max, blur);
+                    let blur = port
+                        .defocus_circle_um()
+                        .map(|um| f64::from(um) / SENSOR_WIDTH_UM);
+                    fujimod_emulator_imaging::focus::attach_lens(
+                        move |now| motor.focus(now).0,
+                        min,
+                        max,
+                        blur,
+                    );
                 }
                 lens = Some((options, choice, port));
                 wire
@@ -194,13 +203,15 @@ pub fn register_all(
             }
         }
         let device: Box<dyn fujimod_emulator_devices::Device> = match lens {
-            Some((options, choice, port)) => Box::new(fujimod_emulator_xp5_io::x_mount::Connector::new(
-                options,
-                choice,
-                port,
-                pins.clone(),
-                Box::new(serial),
-            )?),
+            Some((options, choice, port)) => {
+                Box::new(fujimod_emulator_xp5_io::x_mount::Connector::new(
+                    options,
+                    choice,
+                    port,
+                    pins.clone(),
+                    Box::new(serial),
+                )?)
+            }
             None => Box::new(serial),
         };
         serials.push(bus.register(w.base, w.size, device)?);
@@ -217,7 +228,11 @@ pub fn register_all(
         let capture = match wiring.sequencer {
             Some(sequencer) => {
                 let core = companion.ok_or("input-capture sequencer requires the companion")?;
-                if !wiring.dma_transmit.iter().any(|t| t.channel == sequencer.channel) {
+                if !wiring
+                    .dma_transmit
+                    .iter()
+                    .any(|t| t.channel == sequencer.channel)
+                {
                     return Err("input-capture sequencer channel needs a DMA transmit wire".into());
                 }
                 InputCapture::with_sequencer(w.base, sequencer, core, Some(pwm.clone()))?
@@ -284,7 +299,12 @@ pub fn register_all(
                 Box::new({
                     // Memory-to-memory copies read the serial-flash CPU aperture from its backing.
                     let pair = Pair::new(base, route.clone(), connections.clone(), interrupts)?
-                        .with_read_windows(flash.map(flash_storage::Medium::read_window).into_iter().collect());
+                        .with_read_windows(
+                            flash
+                                .map(flash_storage::Medium::read_window)
+                                .into_iter()
+                                .collect(),
+                        );
                     if wiring.global_enable_at_reset {
                         pair.with_global_enable_at_reset()
                     } else {

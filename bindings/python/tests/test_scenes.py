@@ -1,4 +1,5 @@
 """The default asset is shared with the web build and retains sensor radiance."""
+
 import math
 import struct
 
@@ -17,10 +18,12 @@ def test_default_scene_is_sized_and_reused():
 
 
 def test_default_raf_retains_linear_color_in_its_visible_sensor_crop():
-    width, height, data = emulator.raf_radiance_rgb(scenes.default_scene_raf().read_bytes())
+    width, height, data = emulator.raf_radiance_rgb(
+        scenes.default_scene_raf().read_bytes()
+    )
     assert (width, height) == (816, 544)
     assert len(data) == width * height * 3 * 4
-    samples = struct.unpack(f'<{width*height*3}f', data)
+    samples = struct.unpack(f"<{width * height * 3}f", data)
     assert all(math.isfinite(value) and value >= 0 for value in samples)
     assert max(samples) > 16383  # Exposure-normalized radiance, not clipped ADC counts.
     assert sum(samples[0::3]) != sum(samples[1::3])

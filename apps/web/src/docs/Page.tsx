@@ -25,13 +25,15 @@ function declarationSignature(declaration: FocalApiDeclaration): string {
 }
 
 const sdkRoot = '/docs/sdk/focal/';
-const chapters = [{
-  title: 'Components',
-  pages: focalComponents.map((component) => ({
-    title: component.title,
-    href: `${sdkRoot}components/${component.slug}/`,
-  })),
-}];
+const chapters = [
+  {
+    title: 'Components',
+    pages: focalComponents.map((component) => ({
+      title: component.title,
+      href: `${sdkRoot}components/${component.slug}/`,
+    })),
+  },
+];
 
 function Members(props: { declaration: FocalApiDeclaration }) {
   return (
@@ -46,7 +48,9 @@ function Members(props: { declaration: FocalApiDeclaration }) {
                   <span class="sdk-member-type">{member.type}</span>
                 </Show>
               </dt>
-              <dd><Markdown text={member.comment} inline /></dd>
+              <dd>
+                <Markdown text={member.comment} inline />
+              </dd>
             </div>
           )}
         </For>
@@ -63,7 +67,9 @@ function ComponentPage(props: { component: FocalComponent }) {
         <p class="sdk-header-name">{props.component.header}</p>
       </header>
       <Show when={props.component.summary}>
-        <div class="sdk-summary"><Markdown text={props.component.summary} /></div>
+        <div class="sdk-summary">
+          <Markdown text={props.component.summary} />
+        </div>
       </Show>
       <For each={props.component.previews}>{(preview) => <FocalUIPreview preview={preview} />}</For>
       <For each={props.component.declarations}>
@@ -95,7 +101,9 @@ function Index() {
               <a href={`/docs/sdk/focal/components/${component.slug}/`}>
                 <h2>{component.title}</h2>
                 <Show when={component.summary}>
-                  <p><Markdown text={component.summary.split('\n\n')[0]} inline /></p>
+                  <p>
+                    <Markdown text={component.summary.split('\n\n')[0]} inline />
+                  </p>
                 </Show>
               </a>
             </li>
@@ -111,7 +119,12 @@ export default function Docs() {
   const component = componentAt(path);
   return (
     <SiteFrame class="sdk-docs">
-      <DocsLayout title="FocalUI" home={{ title: 'FocalUI', href: sdkRoot }} chapters={chapters} path={path}>
+      <DocsLayout
+        title="FocalUI"
+        home={{ title: 'FocalUI', href: sdkRoot }}
+        chapters={chapters}
+        path={path}
+      >
         <Show when={component} fallback={<Index />}>
           {(found) => <ComponentPage component={found()} />}
         </Show>

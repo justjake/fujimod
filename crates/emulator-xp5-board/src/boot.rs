@@ -4,25 +4,29 @@
 //! values supplied to those devices; neither the caller nor a board runner
 //! needs a second copy of the register-window map.
 
-use fujimod_catalog_configuration::RunEngine;
-use fujimod_emulator::board::{
-    InterruptMap, aprofile,
-    bus::{Bus, Mode},
-    factory,
-};
-use fujimod_catalog_configuration::application_inputs::ApplicationRunScene;
-use fujimod_catalog_resolution::ResolvedConfiguration;
+use crate::board as xp5_board;
 use fujimod_catalog::{
     firmware::{FirmwareProfile, GicSecurityStates},
     profiles::RegisterWindow,
     reference::{AProfileState, ConnectionSignal, ProcessorModel, ResolvedSelection, SocBlockKind},
     soc::BlockDevice,
 };
-use fujimod_emulator_cpu::{Register, arm64};
-use fujimod_emulator_devices::{gic::SecurityStates, graph::{DeviceGraph, DeviceWindow}, parts::gpio::Feedback};
+use fujimod_catalog_configuration::RunEngine;
+use fujimod_catalog_configuration::application_inputs::ApplicationRunScene;
+use fujimod_catalog_resolution::ResolvedConfiguration;
 use fujimod_emulator::board::aprofile::generic_timer;
+use fujimod_emulator::board::{
+    InterruptMap, aprofile,
+    bus::{Bus, Mode},
+    factory,
+};
+use fujimod_emulator_cpu::{Register, arm64};
+use fujimod_emulator_devices::{
+    gic::SecurityStates,
+    graph::{DeviceGraph, DeviceWindow},
+    parts::gpio::Feedback,
+};
 use fujimod_emulator_ip_arm::gicv3::Gic;
-use crate::board as xp5_board;
 use serde_json::Value;
 
 use std::collections::BTreeMap;
@@ -80,9 +84,7 @@ pub fn startup_from_profile(
         .processors
         .iter()
         .filter_map(|processor| match &processor.aprofile {
-            Some(AProfileState::Armv8a { affinity, .. }) => {
-                Some((processor.id.clone(), *affinity))
-            }
+            Some(AProfileState::Armv8a { affinity, .. }) => Some((processor.id.clone(), *affinity)),
             _ => None,
         })
         .collect::<BTreeMap<_, _>>();
@@ -274,7 +276,9 @@ pub fn startup_from_profile(
             .ok_or_else(|| format!("SoC clock {id} has no declared frequency"))
     };
     let distributor = match interrupts.as_ref().map(|gic| &gic.registers) {
-        Some(fujimod_emulator::board::InterruptRegisters::GicV3 { distributor, .. }) => *distributor,
+        Some(fujimod_emulator::board::InterruptRegisters::GicV3 { distributor, .. }) => {
+            *distributor
+        }
         None => 0,
         _ => return Err("XP5 requires GICv3 interrupt registers".into()),
     };
@@ -525,7 +529,9 @@ pub fn windows(
         let gpio = devices
             .iter_mut()
             .find(|window| window.kind == "gpio")
-            .ok_or_else(|| format!("SoC profile {profile_id} has no GPIO window for body feedback"))?;
+            .ok_or_else(|| {
+                format!("SoC profile {profile_id} has no GPIO window for body feedback")
+            })?;
         if gpio.options.contains_key("feedback") {
             return Err(format!(
                 "SoC profile {profile_id} GPIO window and body {} both declare feedback",
@@ -552,11 +558,20 @@ fn gpio_feedback(selection: &ResolvedSelection) -> Result<Vec<Feedback>, String>
             .connections
             .iter()
             .find(|connection| connection.id == id)
-            .ok_or_else(|| format!("body {} feedback refers to missing connection {id}", body.id))?;
+            .ok_or_else(|| {
+                format!(
+                    "body {} feedback refers to missing connection {id}",
+                    body.id
+                )
+            })?;
         match connection.signals.as_slice() {
-            [ConnectionSignal::Gpio { port, pin, active_level }] => {
-                Ok((usize::from(*port), usize::from(*pin), *active_level))
-            }
+            [
+                ConnectionSignal::Gpio {
+                    port,
+                    pin,
+                    active_level,
+                },
+            ] => Ok((usize::from(*port), usize::from(*pin), *active_level)),
             _ => Err(format!(
                 "body {} feedback connection {id} must be exactly one GPIO pin",
                 body.id
@@ -575,7 +590,15 @@ fn gpio_feedback(selection: &ResolvedSelection) -> Result<Vec<Feedback>, String>
                     body.id, wire.output_connection_id, wire.input_connection_id
                 ));
             }
-            Ok(Feedback { port, register: 0, bit, input_port, input_pin, rise_delay: 0, latch_high: false })
+            Ok(Feedback {
+                port,
+                register: 0,
+                bit,
+                input_port,
+                input_pin,
+                rise_delay: 0,
+                latch_high: false,
+            })
         })
         .collect()
 }
@@ -632,7 +655,11 @@ pub fn assemble_devices(
     mut resources: xp5_board::Resources,
     mode: Mode,
 ) -> Result<DeviceAssembly, String> {
-    let contacts = resources.sd.iter().map(|(base, media)| (format!("{base:#x}"), media.contacts.clone())).collect();
+    let contacts = resources
+        .sd
+        .iter()
+        .map(|(base, media)| (format!("{base:#x}"), media.contacts.clone()))
+        .collect();
     let mut graph = DeviceGraph::new();
     let mut unknown = |window: &fujimod_emulator_devices::graph::DeviceWindow| {
         Err(format!(
@@ -888,7 +915,13 @@ mod gpio_feedback_tests {
     #[test]
     fn a_body_without_feedback_leaves_the_gpio_window_unchanged() {
         let mut selection = selection("xt5", "xt5-431");
-        selection.body.hardware.as_mut().unwrap().gpio_feedback.clear();
+        selection
+            .body
+            .hardware
+            .as_mut()
+            .unwrap()
+            .gpio_feedback
+            .clear();
         assert_eq!(feedback(&selection), serde_json::Value::Null);
     }
 
@@ -898,14 +931,31 @@ mod gpio_feedback_tests {
         let input = inverted.body.hardware.as_ref().unwrap().gpio_feedback[0]
             .input_connection_id
             .clone();
-        let connection = inverted.body.connections.iter_mut().find(|c| c.id == input).unwrap();
-        connection.signals = vec![ConnectionSignal::Gpio { port: 4, pin: 4, active_level: false }];
+        let connection = inverted
+            .body
+            .connections
+            .iter_mut()
+            .find(|c| c.id == input)
+            .unwrap();
+        connection.signals = vec![ConnectionSignal::Gpio {
+            port: 4,
+            pin: 4,
+            active_level: false,
+        }];
         let error = windows(&inverted, "xp5").err().unwrap();
         assert!(error.contains("inverting GPIO feedback"), "{error}");
 
         let mut analog = selection("xt5", "xt5-431");
-        let connection = analog.body.connections.iter_mut().find(|c| c.id == input).unwrap();
-        connection.signals = vec![ConnectionSignal::Adc { channel: 0, threshold: None }];
+        let connection = analog
+            .body
+            .connections
+            .iter_mut()
+            .find(|c| c.id == input)
+            .unwrap();
+        connection.signals = vec![ConnectionSignal::Adc {
+            channel: 0,
+            threshold: None,
+        }];
         let error = windows(&analog, "xp5").err().unwrap();
         assert!(error.contains("exactly one GPIO pin"), "{error}");
     }

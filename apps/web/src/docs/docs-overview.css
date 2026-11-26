@@ -40,7 +40,9 @@
   background: #121214;
   color: inherit;
   text-decoration: none;
-  transition: background 0.12s, border-color 0.12s;
+  transition:
+    background 0.12s,
+    border-color 0.12s;
 }
 .docs-overview-card:hover {
   background: #1c1c1e;

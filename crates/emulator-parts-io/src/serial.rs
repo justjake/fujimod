@@ -18,13 +18,22 @@ pub trait Endpoint: Send {
     /// The last serial clock edge arrived while chip select remained active.
     fn transfer(&mut self, frame: Frame, now_ns: u64) -> u16;
     fn checkpoint(&self) -> Result<Checkpoint, String> {
-        Err(format!("{} has no exact checkpoint implementation", self.name()))
+        Err(format!(
+            "{} has no exact checkpoint implementation",
+            self.name()
+        ))
     }
     fn validate_checkpoint(&self, _: &Checkpoint) -> Result<(), String> {
-        Err(format!("{} has no exact checkpoint implementation", self.name()))
+        Err(format!(
+            "{} has no exact checkpoint implementation",
+            self.name()
+        ))
     }
     fn restore_checkpoint(&mut self, _: &Checkpoint) -> Result<(), String> {
-        Err(format!("{} has no exact checkpoint implementation", self.name()))
+        Err(format!(
+            "{} has no exact checkpoint implementation",
+            self.name()
+        ))
     }
     fn save(&self) -> Value;
     fn restore(&mut self, state: &Value) -> Result<(), String>;

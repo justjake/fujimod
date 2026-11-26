@@ -776,7 +776,9 @@ fn usb_port_parks_naked_transactions_until_the_guest_starts_a_transfer() {
     assert!(UsbPort::cable_connected(&d));
     assert!(d.host_ready(UsbHostWait::Enabled).unwrap());
     assert!(d.host_in_wants_token(0x81).unwrap());
-    port(&mut d, &mut b, &mut |d, cx| d.host_in_token(cx, 0x81).unwrap());
+    port(&mut d, &mut b, &mut |d, cx| {
+        d.host_in_token(cx, 0x81).unwrap()
+    });
     assert!(!d.host_in_wants_token(0x81).unwrap());
     assert!(!d.host_ready(UsbHostWait::Idle).unwrap());
     let at = d.next_deadline(b.now).unwrap();
@@ -828,7 +830,12 @@ fn usb_port_reset_drops_parked_and_in_flight_transactions() {
         d.host_reset(&mut cx).unwrap();
     }
     assert!(d.state.host.is_empty() && d.state.parked.is_empty());
-    assert!(!d.state.pending.iter().any(|p| matches!(p.operation, Operation::Transaction { .. })));
+    assert!(
+        !d.state
+            .pending
+            .iter()
+            .any(|p| matches!(p.operation, Operation::Transaction { .. }))
+    );
     while let Some(at) = d.next_deadline(b.now) {
         tick(&mut d, &mut b, at);
     }

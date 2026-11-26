@@ -7,27 +7,27 @@ updates:
       interval: monthly
     groups:
       github-actions:
-        patterns: ["*"]
+        patterns: ['*']
   - package-ecosystem: uv
     directory: /
     schedule:
       interval: monthly
     groups:
       python:
-        patterns: ["*"]
+        patterns: ['*']
   - package-ecosystem: npm
     directories: [/, /apps/web, /apps/usb-sharing, /bindings/javascript, /crates/simulation/tools]
     schedule:
       interval: monthly
     groups:
       javascript:
-        patterns: ["*"]
+        patterns: ['*']
   - package-ecosystem: cargo
     directory: /
     exclude-paths:
-      - "crates/workspace-hack/Cargo.toml"
+      - 'crates/workspace-hack/Cargo.toml'
     schedule:
       interval: monthly
     groups:
       rust:
-        patterns: ["*"]
+        patterns: ['*']

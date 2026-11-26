@@ -1,7 +1,7 @@
 //! Declarative EL1 handoff. Addresses and register values are TOML integers
 //! (0x hexadecimal is accepted).
-use serde::{Deserialize, Serialize};
 use fujimod_emulator_devices::graph::DeviceWindow;
+use serde::{Deserialize, Serialize};
 use std::path::Path;
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -133,7 +133,10 @@ impl BootState {
             }
         };
         if state.firmware != firmware {
-            return Err(format!("boot manifest is for {}, not {firmware}", state.firmware));
+            return Err(format!(
+                "boot manifest is for {}, not {firmware}",
+                state.firmware
+            ));
         }
         Ok(state)
     }
@@ -145,7 +148,11 @@ impl BootState {
             Ok(entries) => entries
                 .flatten()
                 .map(|entry| entry.path())
-                .filter(|fragment| fragment.extension().is_some_and(|extension| extension == "toml"))
+                .filter(|fragment| {
+                    fragment
+                        .extension()
+                        .is_some_and(|extension| extension == "toml")
+                })
                 .collect::<Vec<_>>(),
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => Vec::new(),
             Err(e) => return Err(format!("{}: {e}", directory.display())),
@@ -154,11 +161,15 @@ impl BootState {
         let fragments = names
             .iter()
             .map(|fragment| {
-                std::fs::read_to_string(fragment).map_err(|e| format!("{}: {e}", fragment.display()))
+                std::fs::read_to_string(fragment)
+                    .map_err(|e| format!("{}: {e}", fragment.display()))
             })
             .collect::<Result<Vec<_>, _>>()?;
-        Self::parse(&text, &fragments.iter().map(String::as_str).collect::<Vec<_>>())
-            .map_err(|error| format!("{}: {error}", path.display()))
+        Self::parse(
+            &text,
+            &fragments.iter().map(String::as_str).collect::<Vec<_>>(),
+        )
+        .map_err(|error| format!("{}: {error}", path.display()))
     }
 
     fn parse(text: &str, fragments: &[&str]) -> Result<Self, String> {
@@ -188,13 +199,21 @@ pub(crate) fn preload_bytes(
         return firmware.xor_dat_range(
             offset,
             preload.length.ok_or("DAT preload requires length")?,
-            preload.sha256.as_deref().ok_or("DAT preload requires SHA-256")?,
+            preload
+                .sha256
+                .as_deref()
+                .ok_or("DAT preload requires SHA-256")?,
         );
     }
     let (words, width) = match &preload.words {
-        Some(words) => (words.as_slice(), preload.word_size.ok_or("word preload requires word_size")?),
-        None => (std::slice::from_ref(preload.value.as_ref().unwrap()),
-                 preload.size.ok_or("value preload requires size")?),
+        Some(words) => (
+            words.as_slice(),
+            preload.word_size.ok_or("word preload requires word_size")?,
+        ),
+        None => (
+            std::slice::from_ref(preload.value.as_ref().unwrap()),
+            preload.size.ok_or("value preload requires size")?,
+        ),
     };
     if ![1, 2, 4, 8].contains(&width) {
         return Err("invalid preload word width".into());
@@ -220,7 +239,10 @@ pub(crate) fn preload_length(preload: &Preload) -> Result<u64, String> {
             .checked_mul(preload.word_size.ok_or("word preload requires word_size")?)
             .ok_or_else(|| "preload length overflows".into());
     }
-    preload.length.or(preload.size).ok_or_else(|| "preload has no length".into())
+    preload
+        .length
+        .or(preload.size)
+        .ok_or_else(|| "preload has no length".into())
 }
 
 #[cfg(test)]
@@ -231,8 +253,23 @@ mod tests {
     fn dram_override_refuses_what_the_run_could_not_honor() {
         let dram = |limit, bus_drain| Dram { limit, bus_drain };
         assert!(dram(0x8000_0000, 0x8000_0000).validate(false).is_ok());
-        assert!(dram(0x8000_0000, 0x8000_0002).validate(false).unwrap_err().contains("aligned"));
-        assert!(dram(0x8000_0000, 0x6800_0000).validate(false).unwrap_err().contains("inside"));
-        assert!(dram(0x8000_0000, 0x8000_0000).validate(true).unwrap_err().contains("dram_address_space"));
+        assert!(
+            dram(0x8000_0000, 0x8000_0002)
+                .validate(false)
+                .unwrap_err()
+                .contains("aligned")
+        );
+        assert!(
+            dram(0x8000_0000, 0x6800_0000)
+                .validate(false)
+                .unwrap_err()
+                .contains("inside")
+        );
+        assert!(
+            dram(0x8000_0000, 0x8000_0000)
+                .validate(true)
+                .unwrap_err()
+                .contains("dram_address_space")
+        );
     }
 }

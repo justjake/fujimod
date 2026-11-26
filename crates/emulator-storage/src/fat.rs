@@ -36,8 +36,7 @@ pub enum CardEntryKind {
     File,
     Directory,
 }
-#[derive(Clone, Debug, Serialize)]
-#[derive(tsify::Tsify)]
+#[derive(Clone, Debug, Serialize, tsify::Tsify)]
 #[tsify(hashmap_as_object, missing_as_null)]
 pub struct CardEntry {
     pub name: String,
@@ -478,10 +477,7 @@ pub fn normalize_paths<T: AsRef<[u8]>>(files: &[(String, T)]) -> Result<Vec<Stri
 }
 /// Construct a new medium atomically. Existing media is never rebuilt to insert
 /// files into a mounted filesystem; session insertion replaces the external part.
-pub fn format<T: AsRef<[u8]>>(
-    options: &Options,
-    files: &[(String, T)],
-) -> Result<Card, String> {
+pub fn format<T: AsRef<[u8]>>(options: &Options, files: &[(String, T)]) -> Result<Card, String> {
     let mut card = Card::new(CardOptions {
         sectors: options.sectors,
         max_dirty_sectors: options.max_dirty_sectors,

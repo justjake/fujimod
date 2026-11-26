@@ -39,7 +39,11 @@ impl CardImage {
                 path.display()
             ));
         }
-        Ok(Self { card, layout: listing.layout, names: listing.names })
+        Ok(Self {
+            card,
+            layout: listing.layout,
+            names: listing.names,
+        })
     }
 }
 
@@ -77,7 +81,10 @@ pub(crate) fn list_roots(card: &Card) -> Result<Listing, String> {
     if first[510..512] != [0x55, 0xaa] {
         return Err("sector 0 has no 0x55AA signature: not an MBR or a volume".into());
     }
-    let mut listing = Listing { layout: Vec::new(), names: Vec::new() };
+    let mut listing = Listing {
+        layout: Vec::new(),
+        names: Vec::new(),
+    };
     if first[3..11] == *b"EXFAT   " || first[82..90] == *b"FAT32   " {
         volume(card, 0, "no partition table (superfloppy)", &mut listing)?;
         return Ok(listing);
@@ -93,10 +100,20 @@ pub(crate) fn list_roots(card: &Card) -> Result<Listing, String> {
         if kind == 0xee {
             return Err("GPT card (protective MBR): not supported by this reader".into());
         }
-        if start == 0 || count == 0 || u64::from(start) + u64::from(count) > u64::from(card.sectors()) {
-            return Err(format!("MBR entry {} (type {kind:#04x}) is empty or exceeds the card", index + 1));
+        if start == 0
+            || count == 0
+            || u64::from(start) + u64::from(count) > u64::from(card.sectors())
+        {
+            return Err(format!(
+                "MBR entry {} (type {kind:#04x}) is empty or exceeds the card",
+                index + 1
+            ));
         }
-        let label = format!("MBR entry {} type {kind:#04x} start LBA {start} ({} MiB) sectors {count}", index + 1, u64::from(start) * 512 >> 20);
+        let label = format!(
+            "MBR entry {} type {kind:#04x} start LBA {start} ({} MiB) sectors {count}",
+            index + 1,
+            u64::from(start) * 512 >> 20
+        );
         volume(card, u64::from(start), &label, &mut listing)?;
     }
     if used == 0 {
@@ -108,25 +125,46 @@ pub(crate) fn list_roots(card: &Card) -> Result<Listing, String> {
 fn volume(card: &Card, start: u64, label: &str, listing: &mut Listing) -> Result<(), String> {
     let boot = sector(card, start)?;
     if boot[510..512] != [0x55, 0xaa] {
-        return Err(format!("{label}: no 0x55AA signature in the volume's boot sector"));
+        return Err(format!(
+            "{label}: no 0x55AA signature in the volume's boot sector"
+        ));
     }
     if boot[3..11] == *b"EXFAT   " {
         exfat(card, start, boot, label, listing)
     } else if boot[82..90] == *b"FAT32   " {
         fat32(card, start, boot, label, listing)
     } else {
-        Err(format!("{label}: neither exFAT nor FAT32; the root cannot be checked"))
+        Err(format!(
+            "{label}: neither exFAT nor FAT32; the root cannot be checked"
+        ))
     }
 }
 
-fn fat32(card: &Card, start: u64, boot: &[u8], label: &str, listing: &mut Listing) -> Result<(), String> {
+fn fat32(
+    card: &Card,
+    start: u64,
+    boot: &[u8],
+    label: &str,
+    listing: &mut Listing,
+) -> Result<(), String> {
     let spc = u64::from(boot[13]);
     let reserved = u64::from(le16(boot, 14));
     let fats = u64::from(boot[16]);
     let fat_sectors = u64::from(le32(boot, 36));
-    let total = if le16(boot, 19) != 0 { u64::from(le16(boot, 19)) } else { u64::from(le32(boot, 32)) };
+    let total = if le16(boot, 19) != 0 {
+        u64::from(le16(boot, 19))
+    } else {
+        u64::from(le32(boot, 32))
+    };
     let root = le32(boot, 44);
-    if le16(boot, 11) != 512 || spc == 0 || !spc.is_power_of_two() || reserved == 0 || fats == 0 || fat_sectors == 0 || le16(boot, 17) != 0 {
+    if le16(boot, 11) != 512
+        || spc == 0
+        || !spc.is_power_of_two()
+        || reserved == 0
+        || fats == 0
+        || fat_sectors == 0
+        || le16(boot, 17) != 0
+    {
         return Err(format!("{label}: unsupported FAT32 boot sector"));
     }
     let fat = start + reserved;
@@ -136,7 +174,9 @@ fn fat32(card: &Card, start: u64, boot: &[u8], label: &str, listing: &mut Listin
         .ok_or_else(|| format!("{label}: FAT tables exceed the volume"))?
         / spc;
     if clusters < 65525 || !(2..clusters + 2).contains(&u64::from(root)) {
-        return Err(format!("{label}: not a FAT32 cluster count or root cluster"));
+        return Err(format!(
+            "{label}: not a FAT32 cluster count or root cluster"
+        ));
     }
     let next = |cluster: u32| -> Result<u32, String> {
         let entry = sector(card, fat + u64::from(cluster) / 128)?;
@@ -152,7 +192,9 @@ fn fat32(card: &Card, start: u64, boot: &[u8], label: &str, listing: &mut Listin
             directory.extend_from_slice(sector(card, data + u64::from(cluster - 2) * spc + index)?);
         }
         if directory.len() > MAX_DIRECTORY_BYTES {
-            return Err(format!("{label}: root directory is over {MAX_DIRECTORY_BYTES} bytes"));
+            return Err(format!(
+                "{label}: root directory is over {MAX_DIRECTORY_BYTES} bytes"
+            ));
         }
         let following = next(cluster)?;
         if following >= 0x0fff_fff8 {
@@ -183,7 +225,11 @@ fn fat_names(directory: &[u8], names: &mut Vec<String>) {
         if entry[11] == 0x0f {
             let mut units = Vec::with_capacity(13);
             for range in [1..11, 14..26, 28..32] {
-                units.extend(entry[range].chunks_exact(2).map(|pair| u16::from_le_bytes([pair[0], pair[1]])));
+                units.extend(
+                    entry[range]
+                        .chunks_exact(2)
+                        .map(|pair| u16::from_le_bytes([pair[0], pair[1]])),
+                );
             }
             long.push((entry[0] & 0x1f, units));
             continue;
@@ -196,28 +242,54 @@ fn fat_names(directory: &[u8], names: &mut Vec<String>) {
         if raw[0] == 0x05 {
             raw[0] = 0xe5;
         }
-        let text = |bytes: &[u8]| String::from_utf8_lossy(bytes).trim_end_matches(' ').to_string();
+        let text = |bytes: &[u8]| {
+            String::from_utf8_lossy(bytes)
+                .trim_end_matches(' ')
+                .to_string()
+        };
         let (base, extension) = (text(&raw[..8]), text(&raw[8..]));
-        names.push(if extension.is_empty() { base } else { format!("{base}.{extension}") });
+        names.push(if extension.is_empty() {
+            base
+        } else {
+            format!("{base}.{extension}")
+        });
         if !pieces.is_empty() {
             let mut ordered = pieces;
             ordered.sort_by_key(|(order, _)| *order);
-            let units: Vec<u16> = ordered.into_iter().flat_map(|(_, units)| units).take_while(|unit| *unit != 0).collect();
+            let units: Vec<u16> = ordered
+                .into_iter()
+                .flat_map(|(_, units)| units)
+                .take_while(|unit| *unit != 0)
+                .collect();
             names.push(String::from_utf16_lossy(&units));
         }
     }
 }
 
-fn exfat(card: &Card, start: u64, boot: &[u8], label: &str, listing: &mut Listing) -> Result<(), String> {
+fn exfat(
+    card: &Card,
+    start: u64,
+    boot: &[u8],
+    label: &str,
+    listing: &mut Listing,
+) -> Result<(), String> {
     let (sector_shift, cluster_shift) = (boot[108], boot[109]);
     if sector_shift != 9 || cluster_shift > 25 - 9 || boot[110] == 0 || boot[110] > 2 {
-        return Err(format!("{label}: unsupported exFAT geometry (sector shift {sector_shift}, cluster shift {cluster_shift})"));
+        return Err(format!(
+            "{label}: unsupported exFAT geometry (sector shift {sector_shift}, cluster shift {cluster_shift})"
+        ));
     }
     let (fat_offset, fat_length) = (u64::from(le32(boot, 80)), u64::from(le32(boot, 84)));
     let (heap, clusters, root) = (u64::from(le32(boot, 88)), le32(boot, 92), le32(boot, 96));
     let volume_length = le64(boot, 72);
-    if !(2..clusters.saturating_add(2)).contains(&root) || fat_length == 0 || heap < fat_offset + fat_length || heap + (u64::from(clusters) << cluster_shift) > volume_length {
-        return Err(format!("{label}: exFAT heap, FAT or root cluster out of bounds"));
+    if !(2..clusters.saturating_add(2)).contains(&root)
+        || fat_length == 0
+        || heap < fat_offset + fat_length
+        || heap + (u64::from(clusters) << cluster_shift) > volume_length
+    {
+        return Err(format!(
+            "{label}: exFAT heap, FAT or root cluster out of bounds"
+        ));
     }
     let per_cluster = 1u64 << cluster_shift;
     let mut directory = Vec::new();
@@ -227,10 +299,15 @@ fn exfat(card: &Card, start: u64, boot: &[u8], label: &str, listing: &mut Listin
             return Err(format!("{label}: root chain leaves the cluster heap"));
         }
         for index in 0..per_cluster {
-            directory.extend_from_slice(sector(card, start + heap + u64::from(cluster - 2) * per_cluster + index)?);
+            directory.extend_from_slice(sector(
+                card,
+                start + heap + u64::from(cluster - 2) * per_cluster + index,
+            )?);
         }
         if directory.len() > MAX_DIRECTORY_BYTES {
-            return Err(format!("{label}: root directory is over {MAX_DIRECTORY_BYTES} bytes"));
+            return Err(format!(
+                "{label}: root directory is over {MAX_DIRECTORY_BYTES} bytes"
+            ));
         }
         let entry = sector(card, start + fat_offset + u64::from(cluster) / 128)?;
         let following = le32(entry, (cluster % 128) as usize * 4);
@@ -259,7 +336,11 @@ fn exfat(card: &Card, start: u64, boot: &[u8], label: &str, listing: &mut Listin
                 for next in entries.iter().skip(index + 1).take(secondary) {
                     match next[0] {
                         0xc0 => length = next[3] as usize,
-                        0xc1 => units.extend(next[2..32].chunks_exact(2).map(|pair| u16::from_le_bytes([pair[0], pair[1]]))),
+                        0xc1 => units.extend(
+                            next[2..32]
+                                .chunks_exact(2)
+                                .map(|pair| u16::from_le_bytes([pair[0], pair[1]])),
+                        ),
                         _ => {}
                     }
                 }
@@ -277,12 +358,19 @@ fn exfat(card: &Card, start: u64, boot: &[u8], label: &str, listing: &mut Listin
 mod tests {
     use super::*;
     use fujimod_emulator_devices::parts::sd_card::Options;
-    use std::{fs::File, io::{Seek, SeekFrom, Write}};
+    use std::{
+        fs::File,
+        io::{Seek, SeekFrom, Write},
+    };
 
     const SECTORS: u32 = 0x40_0000; // 2 GiB, the smallest card the model takes
 
     fn blank() -> Card {
-        Card::new(Options { sectors: SECTORS, max_dirty_sectors: 65536 }).unwrap()
+        Card::new(Options {
+            sectors: SECTORS,
+            max_dirty_sectors: 65536,
+        })
+        .unwrap()
     }
     fn put(card: &mut Card, lba: u64, bytes: &[u8]) {
         card.write_bytes(lba * 512, bytes).unwrap();
@@ -305,9 +393,16 @@ mod tests {
              max_dirty_sectors=65536\npartition_start=8192\nsectors_per_cluster=32\nlabel='BOOT'\n",
         )
         .unwrap();
-        input.files = files.iter().map(|(name, _)| (name.to_string(), name.to_string())).collect();
-        let assets = files.iter().map(|(name, bytes)| (name.to_string(), bytes.to_vec())).collect();
-        let mut media = fujimod_emulator_xp5_board::board::sd::resolve(vec![input], &assets).unwrap();
+        input.files = files
+            .iter()
+            .map(|(name, _)| (name.to_string(), name.to_string()))
+            .collect();
+        let assets = files
+            .iter()
+            .map(|(name, bytes)| (name.to_string(), bytes.to_vec()))
+            .collect();
+        let mut media =
+            fujimod_emulator_xp5_board::board::sd::resolve(vec![input], &assets).unwrap();
         media.remove(&4288946176).unwrap().card.take().unwrap()
     }
 
@@ -315,26 +410,62 @@ mod tests {
     fn a_formatted_fat32_card_lists_its_long_and_short_names() {
         let card = fat32_card(&[("marble_init.bin", b"abcd")]);
         let listing = list_roots(&card).unwrap();
-        assert!(listing.names.iter().any(|name| name.eq_ignore_ascii_case("marble_init.bin")), "{:?}", listing.names);
-        assert!(listing.names.iter().all(|name| !forbidden(name)), "{:?}", listing.names);
+        assert!(
+            listing
+                .names
+                .iter()
+                .any(|name| name.eq_ignore_ascii_case("marble_init.bin")),
+            "{:?}",
+            listing.names
+        );
+        assert!(
+            listing.names.iter().all(|name| !forbidden(name)),
+            "{:?}",
+            listing.names
+        );
         assert!(listing.layout[0].contains("FAT32"), "{:?}", listing.layout);
     }
 
     #[test]
     fn an_update_or_loader_image_in_a_fat32_root_is_found() {
-        for name in ["FPUPDATE.DAT", "fpupdate.dat", "FFBOOT.BIN", "ffboot.bin", "NOTES.DAT"] {
+        for name in [
+            "FPUPDATE.DAT",
+            "fpupdate.dat",
+            "FFBOOT.BIN",
+            "ffboot.bin",
+            "NOTES.DAT",
+        ] {
             let card = fat32_card(&[("marble_init.bin", b"abcd"), (name, b"x")]);
             let listing = list_roots(&card).unwrap();
-            assert!(listing.names.iter().any(|found| forbidden(found)), "{name}: {:?}", listing.names);
+            assert!(
+                listing.names.iter().any(|found| forbidden(found)),
+                "{name}: {:?}",
+                listing.names
+            );
         }
     }
 
     #[test]
     fn forbidden_names_are_the_update_the_loader_image_and_dat_files() {
-        for name in ["FPUPDATE.DAT", "FPUPDA~1.DAT", "fpupdate.bin", "FFBOOT.BIN", "FFBOOT~1.BIN", "ffboot", "x.dat", "A.DaT"] {
+        for name in [
+            "FPUPDATE.DAT",
+            "FPUPDA~1.DAT",
+            "fpupdate.bin",
+            "FFBOOT.BIN",
+            "FFBOOT~1.BIN",
+            "ffboot",
+            "x.dat",
+            "A.DaT",
+        ] {
             assert!(forbidden(name), "{name}");
         }
-        for name in ["marble_init.bin", "MARBLE~1.BIN", "readme.txt", "DAT", "data"] {
+        for name in [
+            "marble_init.bin",
+            "MARBLE~1.BIN",
+            "readme.txt",
+            "DAT",
+            "data",
+        ] {
             assert!(!forbidden(name), "{name}");
         }
     }
@@ -395,7 +526,11 @@ mod tests {
                 root.extend_from_slice(&entry);
             }
         }
-        put(&mut card, u64::from(start + heap) + 2 * (1 << shift_cluster), &root);
+        put(
+            &mut card,
+            u64::from(start + heap) + 2 * (1 << shift_cluster),
+            &root,
+        );
         if with_mbr {
             mbr(&mut card, 0x07, start, u32::try_from(length).unwrap());
         }
@@ -407,18 +542,43 @@ mod tests {
         let card = exfat_card(8192, &["marble_init.bin"], true);
         let listing = list_roots(&card).unwrap();
         assert_eq!(listing.names, ["marble_init.bin"]);
-        assert!(listing.layout[0].contains("exFAT, 131072 bytes per cluster"), "{:?}", listing.layout);
-        assert!(listing.layout[0].contains("start LBA 8192 (4 MiB)"), "{:?}", listing.layout);
-        assert!(list_roots(&exfat_card(8192, &[], true)).unwrap().names.is_empty());
+        assert!(
+            listing.layout[0].contains("exFAT, 131072 bytes per cluster"),
+            "{:?}",
+            listing.layout
+        );
+        assert!(
+            listing.layout[0].contains("start LBA 8192 (4 MiB)"),
+            "{:?}",
+            listing.layout
+        );
+        assert!(
+            list_roots(&exfat_card(8192, &[], true))
+                .unwrap()
+                .names
+                .is_empty()
+        );
     }
 
     #[test]
     fn an_exfat_root_with_an_update_or_a_long_dat_name_is_found() {
-        for name in ["FPUPDATE.DAT", "a_rather_long_name_that_ends.dat", "FFBOOT.BIN"] {
+        for name in [
+            "FPUPDATE.DAT",
+            "a_rather_long_name_that_ends.dat",
+            "FFBOOT.BIN",
+        ] {
             let card = exfat_card(8192, &["marble_init.bin", name], true);
             let listing = list_roots(&card).unwrap();
-            assert!(listing.names.iter().any(|found| forbidden(found)), "{name}: {:?}", listing.names);
-            assert!(listing.names.iter().any(|found| found == name), "{name}: {:?}", listing.names);
+            assert!(
+                listing.names.iter().any(|found| forbidden(found)),
+                "{name}: {:?}",
+                listing.names
+            );
+            assert!(
+                listing.names.iter().any(|found| found == name),
+                "{name}: {:?}",
+                listing.names
+            );
         }
     }
 
@@ -430,7 +590,11 @@ mod tests {
         let boot = source.sector(0).unwrap().to_vec();
         assert_eq!(&boot[3..11], b"EXFAT   ");
         let listing = list_roots(&source).unwrap();
-        assert!(listing.layout[0].contains("no partition table"), "{:?}", listing.layout);
+        assert!(
+            listing.layout[0].contains("no partition table"),
+            "{:?}",
+            listing.layout
+        );
         assert_eq!(listing.names, ["marble_init.bin"]);
     }
 
@@ -450,7 +614,11 @@ mod tests {
             sector[510..].copy_from_slice(&[0x55, 0xaa]);
             sector
         });
-        assert!(list_roots(&card).unwrap_err().contains("neither exFAT nor FAT32"));
+        assert!(
+            list_roots(&card)
+                .unwrap_err()
+                .contains("neither exFAT nor FAT32")
+        );
         let mut card = blank();
         mbr(&mut card, 0x0c, 8192, SECTORS); // runs past the card
         assert!(list_roots(&card).unwrap_err().contains("exceeds the card"));
@@ -474,7 +642,11 @@ mod tests {
         let before = std::fs::read(&path).unwrap();
         let image = CardImage::load(&path).unwrap();
         assert_eq!(image.card.sectors(), SECTORS);
-        assert!(image.card.dirty_sectors() < 64, "{}", image.card.dirty_sectors());
+        assert!(
+            image.card.dirty_sectors() < 64,
+            "{}",
+            image.card.dirty_sectors()
+        );
         assert_eq!(image.names, ["marble_init.bin"]);
         assert_eq!(std::fs::read(&path).unwrap(), before);
         std::fs::remove_dir_all(&directory).ok();
@@ -482,7 +654,8 @@ mod tests {
 
     #[test]
     fn an_image_with_an_update_in_its_root_is_refused() {
-        let directory = std::env::temp_dir().join(format!("card-image-refuse-{}", std::process::id()));
+        let directory =
+            std::env::temp_dir().join(format!("card-image-refuse-{}", std::process::id()));
         std::fs::create_dir_all(&directory).unwrap();
         for (index, card) in [
             exfat_card(8192, &["marble_init.bin", "FPUPDATE.DAT"], true),
@@ -501,11 +674,17 @@ mod tests {
 
     #[test]
     fn odd_image_sizes_are_refused() {
-        let directory = std::env::temp_dir().join(format!("card-image-size-{}", std::process::id()));
+        let directory =
+            std::env::temp_dir().join(format!("card-image-size-{}", std::process::id()));
         std::fs::create_dir_all(&directory).unwrap();
         let path = directory.join("short.img");
         std::fs::write(&path, vec![0u8; 1000]).unwrap();
-        assert!(CardImage::load(&path).err().unwrap().contains("512-byte sectors"));
+        assert!(
+            CardImage::load(&path)
+                .err()
+                .unwrap()
+                .contains("512-byte sectors")
+        );
         std::fs::write(&path, vec![0u8; 1 << 20]).unwrap();
         assert!(CardImage::load(&path).err().unwrap().contains("refused"));
         std::fs::remove_dir_all(&directory).ok();

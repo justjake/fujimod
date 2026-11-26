@@ -147,7 +147,11 @@ pub fn assert_exact_restore(
     let saved = d.checkpoint().unwrap();
     assert_eq!(d.checkpoint().unwrap(), before);
     mutate(d);
-    assert_ne!(d.checkpoint().unwrap(), before, "the mutation changed nothing");
+    assert_ne!(
+        d.checkpoint().unwrap(),
+        before,
+        "the mutation changed nothing"
+    );
     d.validate_checkpoint(&saved).unwrap();
     d.restore_checkpoint(&saved).unwrap();
     assert_eq!(d.checkpoint().unwrap(), before);

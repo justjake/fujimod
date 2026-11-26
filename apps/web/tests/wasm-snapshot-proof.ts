@@ -93,10 +93,7 @@ if (new URL(location.href).searchParams.has('load')) {
     const direct = await source.exportSnapshot();
     check(direct.length > 0, 'Explicit export is empty.');
     const bytes = await snapshotMember(await source.errorReport());
-    check(
-      sameBytes(await source.completeState(), before),
-      'Export changed the source machine.',
-    );
+    check(sameBytes(await source.completeState(), before), 'Export changed the source machine.');
     await source.replay([{ action: 'advance', ticks: 687 }]);
     const expected = await source.completeState();
     source.dispose();

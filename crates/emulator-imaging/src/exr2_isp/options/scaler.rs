@@ -1,5 +1,5 @@
 //! Plan options of the EXR II scaler model in `fujimod-emulator-exr2-isp`.
-use serde::{Deserialize};
+use serde::Deserialize;
 
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]

@@ -1,4 +1,8 @@
-import { Miniflare, type Request as WorkerRequest, type Response as WorkerResponse } from 'miniflare';
+import {
+  Miniflare,
+  type Request as WorkerRequest,
+  type Response as WorkerResponse,
+} from 'miniflare';
 import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { mkdtempSync, readFileSync, readdirSync, rmSync } from 'node:fs';
@@ -86,9 +90,7 @@ export async function runtime(
                 ALLOWED_ORIGINS: origin,
                 SHARING_ORIGIN: 'https://share.fujimod.com',
                 ...options.bindings,
-              }).map(
-                ([key, value]) => [key, { type: 'json', value }],
-              ),
+              }).map(([key, value]) => [key, { type: 'json', value }]),
             ),
           },
         },

@@ -319,7 +319,10 @@ impl Device for PeripheralChannels {
             ),
         )
     }
-    fn validate_checkpoint(&self, saved: &fujimod_emulator_devices::checkpoint::Checkpoint) -> Result<(), String> {
+    fn validate_checkpoint(
+        &self,
+        saved: &fujimod_emulator_devices::checkpoint::Checkpoint,
+    ) -> Result<(), String> {
         let (wiring, channels, routing): (Value, [Channel; CHANNELS], Routing) =
             saved.decode(self.name())?;
         if wiring != self.wiring() || !saved.children().is_empty() || !saved.blobs().is_empty() {
@@ -327,7 +330,10 @@ impl Device for PeripheralChannels {
         }
         self.validate_state(&channels, &routing)
     }
-    fn restore_checkpoint(&mut self, saved: &fujimod_emulator_devices::checkpoint::Checkpoint) -> Result<(), String> {
+    fn restore_checkpoint(
+        &mut self,
+        saved: &fujimod_emulator_devices::checkpoint::Checkpoint,
+    ) -> Result<(), String> {
         self.validate_checkpoint(saved)?;
         let (_, channels, routing): (Value, [Channel; CHANNELS], Routing) =
             saved.decode(self.name())?;

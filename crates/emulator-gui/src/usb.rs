@@ -77,11 +77,13 @@ impl UsbShare {
     pub(crate) fn connect(run: &mut dyn Run, link: &str) -> Result<Self, String> {
         let ports = run.session().usb_ports();
         let [port] = ports.as_slice() else {
-            return Err(format!("this camera has {} USB ports to share", ports.len()));
+            return Err(format!(
+                "this camera has {} USB ports to share",
+                ports.len()
+            ));
         };
         let port = port.clone();
-        let descriptors =
-            UsbHost::new(&mut Guest(run), &port, DEVICE_TIMEOUT)?.enumerate()?;
+        let descriptors = UsbHost::new(&mut Guest(run), &port, DEVICE_TIMEOUT)?.enumerate()?;
         let (send, requests) = mpsc::channel();
         let device = EmulatedPort {
             descriptor: descriptor(&descriptors)?,
@@ -100,9 +102,7 @@ impl UsbShare {
     /// the camera's input and video responsive during long transfers.
     pub(crate) fn service(&mut self, run: &mut dyn Run) {
         if let Ok((op, reply)) = self.requests.try_recv() {
-            let completion = self
-                .execute(run, op)
-                .unwrap_or_else(failed);
+            let completion = self.execute(run, op).unwrap_or_else(failed);
             let _ = reply.send_blocking(completion);
         }
     }

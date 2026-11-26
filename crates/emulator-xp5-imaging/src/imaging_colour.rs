@@ -116,7 +116,11 @@ fn matrix(word: &impl Fn(u64) -> u32, at: u64, packed: bool) -> [[i32; 3]; 3] {
     std::array::from_fn(|row| {
         std::array::from_fn(|column| {
             let (row, column) = (row as u64, column as u64);
-            half(if packed { 3 * row + column } else { 4 * row + column })
+            half(if packed {
+                3 * row + column
+            } else {
+                4 * row + column
+            })
         })
     })
 }
@@ -153,8 +157,12 @@ fn expand(points: &[u16; POINTS], inputs: &[i32; POINTS]) -> Vec<u16> {
 impl ColourPath {
     /// The colour path of the RIFP words `word` gives (offsets from 0xffd02000).
     pub fn from_words(word: impl Fn(u64) -> u32) -> Self {
-        let gains = [word(GAINS) & 0x3ff, word(GAINS) >> 16 & 0x3ff, word(GAINS + 4) & 0x3ff]
-            .map(|gain| if gain == 0 { 0x100 } else { gain as i32 });
+        let gains = [
+            word(GAINS) & 0x3ff,
+            word(GAINS) >> 16 & 0x3ff,
+            word(GAINS + 4) & 0x3ff,
+        ]
+        .map(|gain| if gain == 0 { 0x100 } else { gain as i32 });
         let switches = word(SWITCHES);
         let steps: [u8; 10] =
             std::array::from_fn(|i| (word(STEPS + i as u64 / 8 * 4) >> (i % 8 * 4) & 0xf) as u8);
@@ -208,10 +216,14 @@ impl ColourPath {
             None => rgb.map(|level| i32::from(srgb()[level as usize])),
         };
         let ycbcr = self.ycbcr.unwrap_or(BT601);
-        let row = |row: [i32; 3]| (row[0] * bytes[0] + row[1] * bytes[1] + row[2] * bytes[2] + 512) >> 10;
+        let row =
+            |row: [i32; 3]| (row[0] * bytes[0] + row[1] * bytes[1] + row[2] * bytes[2] + 512) >> 10;
         let (y, mut cb, mut cr) = (row(ycbcr[0]), row(ycbcr[1]), row(ycbcr[2]));
         if let Some(m) = &self.chroma {
-            (cb, cr) = ((m[0][0] * cb + m[0][1] * cr + 512) >> 10, (m[1][0] * cb + m[1][1] * cr + 512) >> 10);
+            (cb, cr) = (
+                (m[0][0] * cb + m[0][1] * cr + 512) >> 10,
+                (m[1][0] * cb + m[1][1] * cr + 512) >> 10,
+            );
         }
         [y, cb + 128, cr + 128]
     }
@@ -248,7 +260,9 @@ const IDENTITY: [[i32; 2]; 2] = [[0x400, 0], [0, 0x400]];
 fn srgb() -> &'static [u8] {
     static LUT: std::sync::OnceLock<Vec<u8>> = std::sync::OnceLock::new();
     LUT.get_or_init(|| {
-        (0..=FULL).map(|level| xtrans::srgb_byte(f64::from(level) / f64::from(FULL))).collect()
+        (0..=FULL)
+            .map(|level| xtrans::srgb_byte(f64::from(level) / f64::from(FULL)))
+            .collect()
     })
 }
 
@@ -318,7 +332,10 @@ mod tests {
     fn curve(words: &mut BTreeMap<u64, u32>, at: u64, points: &[u16; POINTS]) {
         for (i, pair) in points.chunks(2).enumerate() {
             let high = pair.get(1).copied().unwrap_or(0);
-            words.insert(at + 4 * i as u64, u32::from(pair[0]) | u32::from(high) << 16);
+            words.insert(
+                at + 4 * i as u64,
+                u32::from(pair[0]) | u32::from(high) << 16,
+            );
         }
     }
 
@@ -330,7 +347,10 @@ mod tests {
         assert!(path(&BTreeMap::new()).is_declared());
         // Declared: sRGB encoding, then BT.601 full range. Mid grey stays neutral.
         let [y, cb, cr] = stock.ycbcr([0x1000; 3]);
-        assert_eq!(y, i32::from(xtrans::srgb_byte(f64::from(0x1000) / f64::from(FULL))));
+        assert_eq!(
+            y,
+            i32::from(xtrans::srgb_byte(f64::from(0x1000) / f64::from(FULL)))
+        );
         assert_eq!((cb, cr), (128, 128));
         assert_eq!(stock.ycbcr([FULL as u16; 3]), [255, 128, 128]);
     }
@@ -349,18 +369,27 @@ mod tests {
         assert!(!straight.is_declared());
         // A straight curve: the byte is the level's top 8 bits (within the points' rounding).
         let [y, cb, cr] = straight.ycbcr([0x2000; 3]);
-        assert!((y - 0x80).abs() <= 1 && (cb, cr) == (128, 128), "{y} {cb} {cr}");
+        assert!(
+            (y - 0x80).abs() <= 1 && (cb, cr) == (128, 128),
+            "{y} {cb} {cr}"
+        );
         assert_eq!(straight.ycbcr([0x3fff; 3]), [255, 128, 128]);
         for at in CURVES {
             curve(&mut words, at, &half);
         }
         let dark = path(&words);
         let [y, cb, cr] = dark.ycbcr([0x2000; 3]);
-        assert!((y - 0x40).abs() <= 1 && (cb, cr) == (128, 128), "{y} {cb} {cr}");
+        assert!(
+            (y - 0x40).abs() <= 1 && (cb, cr) == (128, 128),
+            "{y} {cb} {cr}"
+        );
         // Different curves a colour: grey is no longer neutral.
         curve(&mut words, CURVES[0], &line);
         let [_, cb, cr] = path(&words).ycbcr([0x2000; 3]);
-        assert!(cr > 128 && cb < 128, "red curve above the others: Cb {cb} Cr {cr}");
+        assert!(
+            cr > 128 && cb < 128,
+            "red curve above the others: Cb {cb} Cr {cr}"
+        );
         // The switch alone, without points, is not a programmed curve.
         let mut empty = stock();
         empty.insert(0x4200, 1 << 16);
@@ -376,12 +405,20 @@ mod tests {
         let steps = [3, 3, 4, 5, 6, 6, 6, 7, 6, 6];
         let at = inputs(&steps);
         assert_eq!(at[..7], [0, 85, 170, 256, 341, 426, 512]);
-        assert_eq!((at[12], at[13], at[24], at[30]), (2048, 2730, 12288, FULL + 1));
+        assert_eq!(
+            (at[12], at[13], at[24], at[30]),
+            (2048, 2730, 12288, FULL + 1)
+        );
         // A straight line through those points is the identity, whatever the steps.
         let ramp: [u16; POINTS] = std::array::from_fn(|i| (at[i].min(FULL)) as u16);
         let table = expand(&ramp, &at);
         assert_eq!(table.len(), 0x4000);
-        assert!(table.iter().enumerate().all(|(level, out)| (i32::from(*out) - level as i32).abs() <= 1));
+        assert!(
+            table
+                .iter()
+                .enumerate()
+                .all(|(level, out)| (i32::from(*out) - level as i32).abs() <= 1)
+        );
         // The step fields come from 0xffd0621c (eight) and 0xffd06220 (two), four bits each.
         let mut words = stock();
         words.insert(0x4200, 1 << 16);
@@ -410,14 +447,20 @@ mod tests {
         assert!(!double.is_declared());
         let out = double.ycbcr(colour);
         assert_eq!(out[0], plain[0]);
-        assert_eq!((out[1] - 128, out[2] - 128), (2 * (plain[1] - 128), 2 * (plain[2] - 128)));
+        assert_eq!(
+            (out[1] - 128, out[2] - 128),
+            (2 * (plain[1] - 128), 2 * (plain[2] - 128))
+        );
         // The cross terms: m01 in bits 28..16 of the first word, m10 in bits 28..16 of the second.
         words.insert(0x5234, 0x0400_0000);
         words.insert(0x5238, 0x1c00_0000);
         let crossed = path(&words);
         assert_eq!(crossed.chroma, Some([[0, 0x400], [-0x400, 0]]));
         let out = crossed.ycbcr(colour);
-        assert_eq!((out[1] - 128, out[2] - 128), (plain[2] - 128, -(plain[1] - 128)));
+        assert_eq!(
+            (out[1] - 128, out[2] - 128),
+            (plain[2] - 128, -(plain[1] - 128))
+        );
         // A zero matrix with the switch set removes the colour (the monochrome films).
         words.insert(0x5234, 0);
         words.insert(0x5238, 0);
@@ -453,9 +496,15 @@ mod tests {
         words.insert(0x4214, 0x400);
         words.insert(0x4218, 0);
         let swapped = path(&words);
-        assert_eq!(swapped.matrix, Some([[0, 0, 0x400], [0, 0x400, 0], [0x400, 0, 0]]));
+        assert_eq!(
+            swapped.matrix,
+            Some([[0, 0, 0x400], [0, 0x400, 0], [0x400, 0, 0]])
+        );
         let plain = path(&stock());
-        assert_eq!(swapped.ycbcr([0x3000, 0x1000, 0x200]), plain.ycbcr([0x200, 0x1000, 0x3000]));
+        assert_eq!(
+            swapped.ycbcr([0x3000, 0x1000, 0x200]),
+            plain.ycbcr([0x200, 0x1000, 0x3000])
+        );
         // Negative coefficients are 13-bit signed.
         assert_eq!(signed13(0x1fad), -83);
     }
@@ -475,7 +524,10 @@ mod tests {
         let declared = xtrans::develop_422_line(&raw, 5, 8, |x| x);
         let modelled = develop_422_line(&raw, &path(&stock()), &levels, 5, 8, |x| x);
         for (a, b) in declared.iter().zip(&modelled) {
-            assert!((i32::from(*a) - i32::from(*b)).abs() <= 1, "{declared:?} {modelled:?}");
+            assert!(
+                (i32::from(*a) - i32::from(*b)).abs() <= 1,
+                "{declared:?} {modelled:?}"
+            );
         }
         // A programmed curve changes the patch.
         let mut words = stock();
@@ -486,6 +538,9 @@ mod tests {
         }
         let linear = develop_422_line(&raw, &path(&words), &levels, 5, 8, |x| x);
         assert_ne!(linear, modelled);
-        assert!(linear[0] < modelled[0], "a straight curve is darker than the sRGB encoding");
+        assert!(
+            linear[0] < modelled[0],
+            "a straight curve is darker than the sRGB encoding"
+        );
     }
 }

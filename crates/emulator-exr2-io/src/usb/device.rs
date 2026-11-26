@@ -52,7 +52,9 @@ impl Device for UsbController {
     fn usb_port(&self) -> Option<&(dyn fujimod_emulator_devices::capability::UsbPort + 'static)> {
         Some(self)
     }
-    fn usb_port_mut(&mut self) -> Option<&mut (dyn fujimod_emulator_devices::capability::UsbPort + 'static)> {
+    fn usb_port_mut(
+        &mut self,
+    ) -> Option<&mut (dyn fujimod_emulator_devices::capability::UsbPort + 'static)> {
         Some(self)
     }
     fn checkpoint(&self) -> Result<fujimod_emulator_devices::checkpoint::Checkpoint, String> {
@@ -63,15 +65,16 @@ impl Device for UsbController {
             .transpose()?
             .into_iter()
             .collect();
-        Ok(
-            fujimod_emulator_devices::checkpoint::Checkpoint::encode(
-                self.name(),
-                &(&self.startup, self.cable.high()),
-            )?
-            .with_children(children),
-        )
+        Ok(fujimod_emulator_devices::checkpoint::Checkpoint::encode(
+            self.name(),
+            &(&self.startup, self.cable.high()),
+        )?
+        .with_children(children))
     }
-    fn validate_checkpoint(&self, saved: &fujimod_emulator_devices::checkpoint::Checkpoint) -> Result<(), String> {
+    fn validate_checkpoint(
+        &self,
+        saved: &fujimod_emulator_devices::checkpoint::Checkpoint,
+    ) -> Result<(), String> {
         let _: (UsbStartup, bool) = saved.decode(self.name())?;
         if saved.children().len() != usize::from(self.endpoint.is_some()) {
             return Err("USB snapshot endpoint wiring differs".into());
@@ -81,7 +84,10 @@ impl Device for UsbController {
         }
         Ok(())
     }
-    fn restore_checkpoint(&mut self, saved: &fujimod_emulator_devices::checkpoint::Checkpoint) -> Result<(), String> {
+    fn restore_checkpoint(
+        &mut self,
+        saved: &fujimod_emulator_devices::checkpoint::Checkpoint,
+    ) -> Result<(), String> {
         self.validate_checkpoint(saved)?;
         let (startup, high) = saved.decode(self.name())?;
         if let Some(endpoint) = &mut self.endpoint {
@@ -177,22 +183,46 @@ impl fujimod_emulator_devices::capability::UsbPort for UsbController {
     fn bus_status(&self) -> std::result::Result<serde_json::Value, String> {
         serde_json::to_value(self.endpoint()?.bus_status()).map_err(|e| e.to_string())
     }
-    fn host_reset(&mut self, cx: &mut fujimod_emulator_devices::Cx<'_>) -> std::result::Result<(), String> {
+    fn host_reset(
+        &mut self,
+        cx: &mut fujimod_emulator_devices::Cx<'_>,
+    ) -> std::result::Result<(), String> {
         self.endpoint_mut()?.host_reset(cx)
     }
-    fn host_setup(&mut self, cx: &mut fujimod_emulator_devices::Cx<'_>, packet: &[u8]) -> std::result::Result<(), String> {
+    fn host_setup(
+        &mut self,
+        cx: &mut fujimod_emulator_devices::Cx<'_>,
+        packet: &[u8],
+    ) -> std::result::Result<(), String> {
         self.endpoint_mut()?.host_setup(cx, packet)
     }
-    fn host_out(&mut self, cx: &mut fujimod_emulator_devices::Cx<'_>, endpoint: u8, packet: &[u8]) -> std::result::Result<(), String> {
+    fn host_out(
+        &mut self,
+        cx: &mut fujimod_emulator_devices::Cx<'_>,
+        endpoint: u8,
+        packet: &[u8],
+    ) -> std::result::Result<(), String> {
         self.endpoint_mut()?.host_out(cx, endpoint, packet)
     }
-    fn host_in(&mut self, cx: &mut fujimod_emulator_devices::Cx<'_>, endpoint: u8, size: usize) -> std::result::Result<Vec<u8>, String> {
+    fn host_in(
+        &mut self,
+        cx: &mut fujimod_emulator_devices::Cx<'_>,
+        endpoint: u8,
+        size: usize,
+    ) -> std::result::Result<Vec<u8>, String> {
         self.endpoint_mut()?.host_in(cx, endpoint, size)
     }
-    fn host_in_token(&mut self, cx: &mut fujimod_emulator_devices::Cx<'_>, endpoint: u8) -> std::result::Result<(), String> {
+    fn host_in_token(
+        &mut self,
+        cx: &mut fujimod_emulator_devices::Cx<'_>,
+        endpoint: u8,
+    ) -> std::result::Result<(), String> {
         self.endpoint_mut()?.host_in_token(cx, endpoint)
     }
-    fn host_ready(&self, wait: fujimod_emulator_devices::capability::UsbHostWait) -> std::result::Result<bool, String> {
+    fn host_ready(
+        &self,
+        wait: fujimod_emulator_devices::capability::UsbHostWait,
+    ) -> std::result::Result<bool, String> {
         self.endpoint()?.host_ready(wait)
     }
     fn host_in_wants_token(&self, endpoint: u8) -> std::result::Result<bool, String> {

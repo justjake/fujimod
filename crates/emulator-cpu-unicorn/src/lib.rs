@@ -54,8 +54,8 @@ macro_rules! guard_sample_names {
     };
 }
 const GUARD_SAMPLE_NAMES: [&str; 96] = guard_sample_names!(
-    00, 01, 02, 03, 04, 05, 06, 07, 08, 09, 10, 11, 12, 13, 14, 15,
-    16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31
+    00, 01, 02, 03, 04, 05, 06, 07, 08, 09, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23,
+    24, 25, 26, 27, 28, 29, 30, 31
 );
 macro_rules! m4_classifier_counter_names {
     ($($class:literal),* $(,)?) => {
@@ -66,20 +66,52 @@ macro_rules! m4_classifier_counter_names {
     };
 }
 const M4_CLASSIFIER_COUNTER_NAMES: [&str; 94] = m4_classifier_counter_names!(
-    "thumb16_hi_0", "thumb16_hi_1", "thumb16_hi_2", "thumb16_hi_3",
-    "thumb16_4_register_data", "thumb16_4_bx_blx", "thumb16_4_literal_ldr",
-    "thumb16_hi_5", "thumb16_hi_6", "thumb16_hi_7", "thumb16_hi_8",
-    "thumb16_hi_9", "thumb16_hi_a", "thumb16_b_it_hints", "thumb16_b_push",
-    "thumb16_b_pop", "thumb16_b_cbz_cbnz", "thumb16_b_misc",
-    "thumb16_hi_c", "thumb16_hi_d", "thumb16_hi_e", "thumb16_hi_f",
-    "thumb32_1d_major_0", "thumb32_1d_major_1", "thumb32_1d_major_2",
-    "thumb32_1d_major_3", "thumb32_1d_major_4", "thumb32_1d_major_5",
-    "thumb32_1d_major_6", "thumb32_1d_major_7", "thumb32_1e_major_0",
-    "thumb32_1e_major_1", "thumb32_1e_major_2", "thumb32_1e_major_3",
-    "thumb32_1e_major_4", "thumb32_1e_major_5", "thumb32_1e_major_6",
-    "thumb32_1e_major_7", "thumb32_1f_major_0", "thumb32_1f_major_1",
-    "thumb32_1f_major_2", "thumb32_1f_major_3", "thumb32_1f_major_4",
-    "thumb32_1f_major_5", "thumb32_1f_major_6", "thumb32_1f_major_7",
+    "thumb16_hi_0",
+    "thumb16_hi_1",
+    "thumb16_hi_2",
+    "thumb16_hi_3",
+    "thumb16_4_register_data",
+    "thumb16_4_bx_blx",
+    "thumb16_4_literal_ldr",
+    "thumb16_hi_5",
+    "thumb16_hi_6",
+    "thumb16_hi_7",
+    "thumb16_hi_8",
+    "thumb16_hi_9",
+    "thumb16_hi_a",
+    "thumb16_b_it_hints",
+    "thumb16_b_push",
+    "thumb16_b_pop",
+    "thumb16_b_cbz_cbnz",
+    "thumb16_b_misc",
+    "thumb16_hi_c",
+    "thumb16_hi_d",
+    "thumb16_hi_e",
+    "thumb16_hi_f",
+    "thumb32_1d_major_0",
+    "thumb32_1d_major_1",
+    "thumb32_1d_major_2",
+    "thumb32_1d_major_3",
+    "thumb32_1d_major_4",
+    "thumb32_1d_major_5",
+    "thumb32_1d_major_6",
+    "thumb32_1d_major_7",
+    "thumb32_1e_major_0",
+    "thumb32_1e_major_1",
+    "thumb32_1e_major_2",
+    "thumb32_1e_major_3",
+    "thumb32_1e_major_4",
+    "thumb32_1e_major_5",
+    "thumb32_1e_major_6",
+    "thumb32_1e_major_7",
+    "thumb32_1f_major_0",
+    "thumb32_1f_major_1",
+    "thumb32_1f_major_2",
+    "thumb32_1f_major_3",
+    "thumb32_1f_major_4",
+    "thumb32_1f_major_5",
+    "thumb32_1f_major_6",
+    "thumb32_1f_major_7",
     "other_or_non_thumb",
 );
 const TRANSLATION_REPEAT_COUNTER_NAMES: [&str; 24] = [
@@ -499,11 +531,7 @@ impl Core {
     pub(crate) fn invalidate_backing(&self, pointer: usize, bytes: usize) -> Result<(), String> {
         self.check_tlbi_mutation()?;
         self.check(unsafe {
-            ffi::uc_embedder_invalidate_backing(
-                self.raw,
-                pointer as *const c_void,
-                bytes,
-            )
+            ffi::uc_embedder_invalidate_backing(self.raw, pointer as *const c_void, bytes)
         })
     }
     fn inspect(&self, operation: impl FnOnce() -> i32) -> Result<(), String> {
@@ -772,9 +800,7 @@ impl Core {
         }
         Ok(self.hooks.borrow().get(&hook.key).unwrap().native)
     }
-    fn translation_repeat_counter_snapshot(
-        &self,
-    ) -> Result<BTreeMap<&'static str, u64>, String> {
+    fn translation_repeat_counter_snapshot(&self) -> Result<BTreeMap<&'static str, u64>, String> {
         if self.api.extensions.features & ffi::FEATURE_TRANSLATION_REPEAT_DETAILS == 0 {
             return Ok(BTreeMap::new());
         }
@@ -796,14 +822,15 @@ impl Core {
             .into_iter()
             .zip(values.iter().copied())
             .collect();
-        let attributed_same_generation = std::iter::once(
-            counters["translation_repeat_same_generation_unknown_cause_count"],
-        )
-        .chain((6..TRANSLATION_REPEAT_COUNTER_NAMES.len()).step_by(2).map(|index| values[index]))
-        .fold(0u64, u64::saturating_add);
-        if attributed_same_generation
-            != counters["translation_repeat_same_generation_count"]
-        {
+        let attributed_same_generation =
+            std::iter::once(counters["translation_repeat_same_generation_unknown_cause_count"])
+                .chain(
+                    (6..TRANSLATION_REPEAT_COUNTER_NAMES.len())
+                        .step_by(2)
+                        .map(|index| values[index]),
+                )
+                .fold(0u64, u64::saturating_add);
+        if attributed_same_generation != counters["translation_repeat_same_generation_count"] {
             return Err("same-generation translation repeat causes do not reconcile".into());
         }
         Ok(counters)
@@ -818,15 +845,16 @@ impl Cpu for Core {
     }
     fn features(&self) -> Features {
         let e = &self.api.extensions;
-        let frontend = self.model != Model::ArmV8A
-            || e.features & ffi::FEATURE_AARCH64_ACCOUNTING != 0;
-        let block_accounting = frontend && e.features & 2 != 0
+        let frontend =
+            self.model != Model::ArmV8A || e.features & ffi::FEATURE_AARCH64_ACCOUNTING != 0;
+        let block_accounting = frontend
+            && e.features & 2 != 0
             && e.features & ffi::FEATURE_PAUSE_ACCOUNTING_LAYOUT != 0
             && e.features & ffi::FEATURE_PARALLEL_TCG != 0
             && e.set_parallel_cpus.is_some()
             && e.accounting.is_some();
-        let thumb_block_accounting = block_accounting
-            && e.features & ffi::FEATURE_THUMB_BLOCK_ACCOUNTING != 0;
+        let thumb_block_accounting =
+            block_accounting && e.features & ffi::FEATURE_THUMB_BLOCK_ACCOUNTING != 0;
         Features {
             asynchronous_runs: false,
             guest_clock: false,
@@ -1374,16 +1402,17 @@ impl Cpu for Core {
     fn install_memory_restart_boundary(&self, span: HookRange) -> Result<HookId, String> {
         self.check_tlbi_mutation()?;
         let add = self.api.extensions.add_restart_boundary;
-        if self.api.extensions.features & ffi::FEATURE_NATIVE_RESTART_BOUNDARY == 0
-            || add.is_none()
+        if self.api.extensions.features & ffi::FEATURE_NATIVE_RESTART_BOUNDARY == 0 || add.is_none()
         {
-            return unsafe { self.install_hook(Hook::Memory {
-                callback: memory_restart_boundary_noop,
-                data: std::ptr::null_mut(),
-                read: true,
-                write: true,
-                range: span,
-            }) };
+            return unsafe {
+                self.install_hook(Hook::Memory {
+                    callback: memory_restart_boundary_noop,
+                    data: std::ptr::null_mut(),
+                    read: true,
+                    write: true,
+                    range: span,
+                })
+            };
         }
         let (begin, end) = range(span);
         let mut native = 0;
@@ -1422,8 +1451,7 @@ impl Cpu for Core {
         let mut context = hooks.map(|hooks| {
             Box::new(InstalledTranslationHooks {
                 hooks,
-                native_execute_end: self.api.extensions.features
-                    & ffi::FEATURE_THUMB_EXECUTE_END
+                native_execute_end: self.api.extensions.features & ffi::FEATURE_THUMB_EXECUTE_END
                     != 0,
                 native_it_accounting: self.api.extensions.features
                     & ffi::FEATURE_THUMB_IT_ACCOUNTING
@@ -1566,11 +1594,12 @@ impl Cpu for Core {
             "watched_store_terminal_requests",
             "watched_store_cap_misses",
         ];
-        let extra: &[&str] = if self.api.extensions.features & ffi::FEATURE_WATCHED_STORE_COUNTERS != 0 {
-            &watched
-        } else {
-            &[]
-        };
+        let extra: &[&str] =
+            if self.api.extensions.features & ffi::FEATURE_WATCHED_STORE_COUNTERS != 0 {
+                &watched
+            } else {
+                &[]
+            };
         let guard = [
             "guard_classifier_slow_callbacks",
             "guard_other_slow_callbacks",
@@ -1581,11 +1610,12 @@ impl Cpu for Core {
             "guard_pause_callbacks",
             "guard_sample_count",
         ];
-        let guard_extra: &[&str] = if self.api.extensions.features & ffi::FEATURE_GUARD_REFUSAL_COUNTERS != 0 {
-            &guard
-        } else {
-            &[]
-        };
+        let guard_extra: &[&str] =
+            if self.api.extensions.features & ffi::FEATURE_GUARD_REFUSAL_COUNTERS != 0 {
+                &guard
+            } else {
+                &[]
+            };
         let guard_samples: &[&str] =
             if self.api.extensions.features & ffi::FEATURE_GUARD_REFUSAL_COUNTERS != 0 {
                 &GUARD_SAMPLE_NAMES
@@ -1623,7 +1653,8 @@ impl Cpu for Core {
                     + classifier_histogram_extra.len(),
             )
         };
-        let mut counters: BTreeMap<_, _> = names.into_iter()
+        let mut counters: BTreeMap<_, _> = names
+            .into_iter()
             .chain(extra.iter().copied())
             .chain(guard_extra.iter().copied())
             .chain(guard_samples.iter().copied())
@@ -1734,14 +1765,7 @@ unsafe extern "C" fn memory(
         }
     }
 }
-unsafe fn memory_restart_boundary_noop(
-    _: Access,
-    _: u64,
-    _: i32,
-    _: i64,
-    _: *mut c_void,
-) {
-}
+unsafe fn memory_restart_boundary_noop(_: Access, _: u64, _: i32, _: i64, _: *mut c_void) {}
 unsafe extern "C" fn fault(
     raw: ffi::Engine,
     kind: i32,
@@ -1791,8 +1815,10 @@ unsafe extern "C" fn classify(data: *mut c_void, address: u64, word: u32) -> i32
             0
         }
         | if decision.observe_block
-            || (matches!(decision.instruction, InstructionDisposition::ExecuteAndEndBlock)
-                && !context.native_execute_end)
+            || (matches!(
+                decision.instruction,
+                InstructionDisposition::ExecuteAndEndBlock
+            ) && !context.native_execute_end)
         {
             4
         } else {
@@ -1903,8 +1929,14 @@ mod tests {
             native_execute_end: false,
             ..native
         };
-        assert_eq!(unsafe { classify(&native as *const _ as *mut c_void, 0x1000, 0xb480) }, 8);
-        assert_eq!(unsafe { classify(&fallback as *const _ as *mut c_void, 0x1000, 0xb480) }, 6);
+        assert_eq!(
+            unsafe { classify(&native as *const _ as *mut c_void, 0x1000, 0xb480) },
+            8
+        );
+        assert_eq!(
+            unsafe { classify(&fallback as *const _ as *mut c_void, 0x1000, 0xb480) },
+            6
+        );
     }
     #[test]
     fn it_safe_disposition_requires_native_feature() {
@@ -1921,20 +1953,32 @@ mod tests {
             native_it_accounting: false,
             ..native
         };
-        assert_eq!(unsafe { classify(&native as *const _ as *mut c_void, 0x1000, 0xbf08) }, 16);
-        assert_eq!(unsafe { classify(&fallback as *const _ as *mut c_void, 0x1000, 0xbf08) }, 0);
+        assert_eq!(
+            unsafe { classify(&native as *const _ as *mut c_void, 0x1000, 0xbf08) },
+            16
+        );
+        assert_eq!(
+            unsafe { classify(&fallback as *const _ as *mut c_void, 0x1000, 0xbf08) },
+            0
+        );
     }
     #[test]
     fn mode4_it_pure_instructions_use_native_accounting() {
         let cpu = library().open(Model::CortexM4, 4 * 1024 * 1024).unwrap();
         cpu.set_guard_diagnostics(true).unwrap();
-        assert_ne!(cpu.api.extensions.features & ffi::FEATURE_THUMB_IT_ACCOUNTING, 0);
+        assert_ne!(
+            cpu.api.extensions.features & ffi::FEATURE_THUMB_IT_ACCOUNTING,
+            0
+        );
         cpu.map_zeroed(0x1000, 0x1000, 7).unwrap();
         // IT EQ; MOV R0,R1; B . The fast TB contains only pure IT work before
         // its terminal branch, then the exhausted guard stops the next entry.
-        cpu.write_memory(0x1000, &[0x08, 0xbf, 0x08, 0x46, 0xfe, 0xe7]).unwrap();
-        cpu.write_register(arm::CORE[0], &0u32.to_le_bytes()).unwrap();
-        cpu.write_register(arm::CORE[1], &0x1234u32.to_le_bytes()).unwrap();
+        cpu.write_memory(0x1000, &[0x08, 0xbf, 0x08, 0x46, 0xfe, 0xe7])
+            .unwrap();
+        cpu.write_register(arm::CORE[0], &0u32.to_le_bytes())
+            .unwrap();
+        cpu.write_register(arm::CORE[1], &0x1234u32.to_le_bytes())
+            .unwrap();
         cpu.write_register(
             Register::Arm32(arm::Register::Cpsr),
             &0x4100_0020u32.to_le_bytes(),
@@ -1979,7 +2023,10 @@ mod tests {
         let itstate = ((cpsr >> 25) & 3) | ((cpsr >> 8) & 0xfc);
         assert_eq!(itstate, 0);
         let counters = cpu.exit_counters().unwrap();
-        assert_eq!(&it_probe.seen[..3], [(0x1000, 0xbf08), (0x1002, 0x4608), (0x1004, 0xe7fe)]);
+        assert_eq!(
+            &it_probe.seen[..3],
+            [(0x1000, 0xbf08), (0x1002, 0x4608), (0x1004, 0xe7fe)]
+        );
         assert_eq!(counters["guard_budget_callbacks"], 1);
         assert_eq!(counters["guard_classifier_slow_callbacks"], 0);
         assert_eq!(counters["guard_other_slow_callbacks"], 0);
@@ -1991,8 +2038,10 @@ mod tests {
         cpu.set_guard_diagnostics(true).unwrap();
         cpu.map_zeroed(0x1000, 0x1000, 7).unwrap();
         cpu.write_memory(0x1000, &[0x08, 0xbf, 0x08, 0x46]).unwrap();
-        cpu.write_register(arm::CORE[0], &0u32.to_le_bytes()).unwrap();
-        cpu.write_register(arm::CORE[1], &0x1234u32.to_le_bytes()).unwrap();
+        cpu.write_register(arm::CORE[0], &0u32.to_le_bytes())
+            .unwrap();
+        cpu.write_register(arm::CORE[1], &0x1234u32.to_le_bytes())
+            .unwrap();
         cpu.write_register(
             Register::Arm32(arm::Register::Cpsr),
             &0x4100_0020u32.to_le_bytes(),
@@ -2350,7 +2399,9 @@ mod tests {
         // MOVS R0,#1; MOVW R1,#0x1234 (32-bit); ADDS R0,#1 twice; B 0x1000.
         cpu.write_memory(
             0x1000,
-            &[0x01, 0x20, 0x41, 0xf2, 0x34, 0x21, 0x01, 0x30, 0x01, 0x30, 0xf9, 0xe7],
+            &[
+                0x01, 0x20, 0x41, 0xf2, 0x34, 0x21, 0x01, 0x30, 0x01, 0x30, 0xf9, 0xe7,
+            ],
         )
         .unwrap();
         let mut blocks = ThumbBlockProbe {
@@ -2442,7 +2493,9 @@ mod tests {
         let callbacks_before_classifier = blocks.callbacks;
         cpu.write_memory(
             0x1000,
-            &[0x01, 0x20, 0x41, 0xf2, 0x34, 0x21, 0x01, 0x30, 0x01, 0x30, 0xf9, 0xe7],
+            &[
+                0x01, 0x20, 0x41, 0xf2, 0x34, 0x21, 0x01, 0x30, 0x01, 0x30, 0xf9, 0xe7,
+            ],
         )
         .unwrap();
         cpu.invalidate_code(None).unwrap();
@@ -2462,15 +2515,19 @@ mod tests {
         assert_eq!(after_classifier["guard_sample_00_pc"], 0x1000);
         assert_eq!(after_classifier["guard_sample_00_word"], 0x2001);
         assert!(after_classifier["guard_classifier_thumb16_hi_2_callbacks"] > 0);
-        assert!(after_classifier[
-            "guard_classifier_thumb16_hi_2_translated_tb_instruction_opportunities"
-        ] > 0);
+        assert!(
+            after_classifier["guard_classifier_thumb16_hi_2_translated_tb_instruction_opportunities"]
+                > 0
+        );
         let class_callbacks = M4_CLASSIFIER_COUNTER_NAMES
             .iter()
             .step_by(2)
             .map(|name| after_classifier[*name])
             .fold(0u64, u64::saturating_add);
-        assert_eq!(class_callbacks, after_classifier["guard_classifier_slow_callbacks"]);
+        assert_eq!(
+            class_callbacks,
+            after_classifier["guard_classifier_slow_callbacks"]
+        );
     }
     #[test]
     fn thumb_memory_restart_exposes_exact_precharged_mixed_width_span() {

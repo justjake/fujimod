@@ -87,7 +87,11 @@ impl MmioTransfer {
     }
 }
 pub fn base_register(r: u8) -> Register {
-    if r == 31 { Register::Sp } else { Register::X(r) }
+    if r == 31 {
+        Register::Sp
+    } else {
+        Register::X(r)
+    }
 }
 pub enum Value {
     Empty,

@@ -22,6 +22,7 @@ export default defineConfig({
   },
   fmt: {
     singleQuote: true,
-    ignorePatterns: generated,
+    // Catalog records have their own canonical form (mise run catalog-format).
+    ignorePatterns: [...generated, 'catalog/**'],
   },
 });

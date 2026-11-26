@@ -4,8 +4,8 @@
 //! IRQ/DMA configurations refuse. The shared controller owns route channel
 //! instances and enforces exclusive use of the physical shifter and RX FIFO.
 use fujimod_emulator_devices::parts::pins::{Pins, Selection};
-use fujimod_emulator_parts_io::spi::{Endpoint, Shift};
 use fujimod_emulator_devices::{Cx, Device};
+use fujimod_emulator_parts_io::spi::{Endpoint, Shift};
 use serde::Deserialize;
 use std::collections::VecDeque;
 
@@ -55,8 +55,10 @@ pub struct SerialChannel {
 
 impl SerialChannel {
     pub fn new(options: Options, wiring: Wiring) -> Result<Self, String> {
-        if !matches!(options.base, 0xfff84000 | 0xfff84040 | 0xfff84080 | 0xfff840c0)
-            || options.transfer_ticks == 0
+        if !matches!(
+            options.base,
+            0xfff84000 | 0xfff84040 | 0xfff84080 | 0xfff840c0
+        ) || options.transfer_ticks == 0
             || options.transports.is_empty()
             || options.transports.len() > 16
             || options.selection.is_empty()
@@ -212,7 +214,10 @@ impl Device for SerialChannel {
         )?
         .with_children(vec![self.wiring.endpoint.checkpoint()?]))
     }
-    fn validate_checkpoint(&self, saved: &fujimod_emulator_devices::checkpoint::Checkpoint) -> Result<(), String> {
+    fn validate_checkpoint(
+        &self,
+        saved: &fujimod_emulator_devices::checkpoint::Checkpoint,
+    ) -> Result<(), String> {
         let _: ([u32; 8], Option<Pending>, VecDeque<Shift>, VecDeque<u16>) =
             saved.decode(self.name())?;
         if saved.children().len() != 1 {
@@ -222,7 +227,10 @@ impl Device for SerialChannel {
             .endpoint
             .validate_checkpoint(&saved.children()[0])
     }
-    fn restore_checkpoint(&mut self, saved: &fujimod_emulator_devices::checkpoint::Checkpoint) -> Result<(), String> {
+    fn restore_checkpoint(
+        &mut self,
+        saved: &fujimod_emulator_devices::checkpoint::Checkpoint,
+    ) -> Result<(), String> {
         self.validate_checkpoint(saved)?;
         let (registers, pending, tx, rx) = saved.decode(self.name())?;
         self.wiring

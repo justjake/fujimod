@@ -175,10 +175,7 @@ pub(super) fn locate(data: &[u8]) -> Result<Located> {
             .step_by(4)
             .filter(|at| call(&code, *at).ok() == Some(*wrapper))
             .collect();
-        require(
-            callers.len() == 1,
-            "Older EXR table wrapper callers differ",
-        )?;
+        require(callers.len() == 1, "Older EXR table wrapper callers differ")?;
         edits.push(edit(
             &code,
             callers[0],
@@ -351,10 +348,7 @@ fn five_word_nand_edits(code: &[u8], table_call: usize) -> Result<Vec<Edit>> {
             scans[0],
             "retain empty five-word EXR bad-block list without OOB scan",
         ),
-        (
-            probes[0],
-            "skip five-word EXR installed-image header probe",
-        ),
+        (probes[0], "skip five-word EXR installed-image header probe"),
         (closes[0], "skip five-word EXR NAND shutdown"),
     ]
     .into_iter()

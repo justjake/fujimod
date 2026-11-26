@@ -1,7 +1,7 @@
 //! Connected HDMI sink input and its explicitly supplied EDID bytes.
+use crate::{Cx, Device};
 use serde::Deserialize;
 use serde_json::{Value, json};
-use crate::{Cx, Device};
 
 #[derive(Clone, Debug, Default, Deserialize)]
 #[serde(deny_unknown_fields)]

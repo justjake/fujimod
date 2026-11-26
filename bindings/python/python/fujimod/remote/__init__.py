@@ -1,4 +1,5 @@
 """Reference-based camera control over local Rust futures."""
+
 from __future__ import annotations
 
 import asyncio
@@ -35,7 +36,9 @@ Reference = Menu | Option | Control
 
 
 def facts_from_selection(selection: dict, manifest: dict | None = None) -> dict:
-    return json.loads(_native.facts_from_selection(json.dumps(selection), json.dumps(manifest)))
+    return json.loads(
+        _native.facts_from_selection(json.dumps(selection), json.dumps(manifest))
+    )
 
 
 def menu(id: str | int, *, key: int | None = None, via: Menu | None = None) -> Menu:
@@ -54,7 +57,10 @@ def _reference(value: Reference | None) -> str:
     if value is None:
         return "null"
     kind = {Menu: "menu", Option: "option", Control: "control"}[type(value)]
-    return json.dumps({"kind": kind, "reference": value.id if isinstance(value, Control) else asdict(value)})
+    return json.dumps({
+        "kind": kind,
+        "reference": value.id if isinstance(value, Control) else asdict(value),
+    })
 
 
 @dataclass(frozen=True)
@@ -118,7 +124,9 @@ def _convert(value):
         if "state" not in data:
             return Readiness(**data)
         kind = MenuState if data["value"]["kind"] == "menu" else ControlState
-        return RemoteReadResult(State(**data["state"]), kind(**data["value"]["value"]), data["reads"])
+        return RemoteReadResult(
+            State(**data["state"]), kind(**data["value"]["value"]), data["reads"]
+        )
     if isinstance(value, tuple):
         png, time, clock, output, sequence = value
         return Capture(recording.Frame.from_png(png), time, clock, output, sequence)
@@ -151,6 +159,7 @@ async def _drive(task):
                 def notify():
                     if not future.done():
                         future.set_result(None)
+
                 if not loop.is_closed():
                     loop.call_soon_threadsafe(notify)
 
@@ -167,26 +176,61 @@ class Camera:
         self._native = native
 
     @classmethod
-    def from_board(cls, board, facts: dict, *, quantum: int, window_instructions: int,
-                   scanout_node: str, frame_counter_kind: str, frame_counter_pointer: str,
-                   output: str = "lcd", observer: Callable[[], dict] | None = None) -> Camera:
+    def from_board(
+        cls,
+        board,
+        facts: dict,
+        *,
+        quantum: int,
+        window_instructions: int,
+        scanout_node: str,
+        frame_counter_kind: str,
+        frame_counter_pointer: str,
+        output: str = "lcd",
+        observer: Callable[[], dict] | None = None,
+    ) -> Camera:
         """``observer`` runs before every wait, including the waits inside an
         input's readiness and acceptance. It returns the read set it observed
         (``{"stores": [(lo, hi)], "devices": [name]}``), which joins the wait."""
-        options = dict(quantum=quantum, window_instructions=window_instructions,
-                       scanout_node=scanout_node, output=output,
-                       frame_counter_kind=frame_counter_kind,
-                       frame_counter_pointer=frame_counter_pointer)
+        options = dict(
+            quantum=quantum,
+            window_instructions=window_instructions,
+            scanout_node=scanout_node,
+            output=output,
+            frame_counter_kind=frame_counter_kind,
+            frame_counter_pointer=frame_counter_pointer,
+        )
         observe = None if observer is None else lambda: json.dumps(observer())
-        return cls(_native.Camera.from_board(board, json.dumps(facts), json.dumps(options), observe))
+        return cls(
+            _native.Camera.from_board(
+                board, json.dumps(facts), json.dumps(options), observe
+            )
+        )
 
     @classmethod
-    def from_ff80(cls, session, facts: dict, *, read_bytes: int, write_bytes: int,
-                  event_bytes: int, poll_seconds: float = .1, output: str = "lcd",
-                  operation_scoped: bool = False) -> Camera:
+    def from_ff80(
+        cls,
+        session,
+        facts: dict,
+        *,
+        read_bytes: int,
+        write_bytes: int,
+        event_bytes: int,
+        poll_seconds: float = 0.1,
+        output: str = "lcd",
+        operation_scoped: bool = False,
+    ) -> Camera:
         def connect():
-            return _native.Camera.from_ff80(session, json.dumps(facts), read_bytes, write_bytes,
-                                            event_bytes, poll_seconds, output)
+            return _native.Camera.from_ff80(
+                session,
+                json.dumps(facts),
+                read_bytes,
+                write_bytes,
+                event_bytes,
+                poll_seconds,
+                output,
+            )
+
         return cls(_ScopedNative(connect) if operation_scoped else connect())
 
     @property
@@ -197,16 +241,28 @@ class Camera:
     def blocking(self) -> BlockingCamera:
         return BlockingCamera(self)
 
-    def _task(self, action: str, reference: Reference | None, deadline: int, steps: int = 0):
+    def _task(
+        self, action: str, reference: Reference | None, deadline: int, steps: int = 0
+    ):
         return self._native.operation(action, _reference(reference), deadline, steps)
 
     async def read(self, reference: Reference) -> RemoteReadResult:
         return await _drive(self._task("read", reference, 0))
 
-    async def set_input(self, reference: Control, state: str, *, deadline: int,
-                        stage: str | None = None, position: str | None = None) -> None:
-        await _drive(self._native.set_input(_reference(reference),
-                                            _input_state(state, stage, position), deadline))
+    async def set_input(
+        self,
+        reference: Control,
+        state: str,
+        *,
+        deadline: int,
+        stage: str | None = None,
+        position: str | None = None,
+    ) -> None:
+        await _drive(
+            self._native.set_input(
+                _reference(reference), _input_state(state, stage, position), deadline
+            )
+        )
 
     async def wait(self, reads: dict, *, deadline: int) -> None:
         await _drive(self._native.wait_reads(json.dumps(reads), deadline))
@@ -214,11 +270,19 @@ class Camera:
     async def readiness(self) -> Readiness:
         return await _drive(self._task("readiness", None, 0))
 
-    async def wait_until_ready(self, *, deadline: int, control: Control | None = None) -> None:
+    async def wait_until_ready(
+        self, *, deadline: int, control: Control | None = None
+    ) -> None:
         await _drive(self._task("wait_ready", control, deadline))
 
-    async def wait_for(self, predicate: Callable[[], Awaitable[T]], *, deadline: int,
-                       reads: dict, condition: str) -> T:
+    async def wait_for(
+        self,
+        predicate: Callable[[], Awaitable[T]],
+        *,
+        deadline: int,
+        reads: dict,
+        condition: str,
+    ) -> T:
         """Compose async observations with the remote wait primitive.
 
         The predicate records its store/device observations in reads on each
@@ -231,7 +295,9 @@ class Camera:
             if value:
                 return value
             if self.now >= deadline:
-                raise TimeoutError(f"Timed out waiting for {condition}; read set: {reads}")
+                raise TimeoutError(
+                    f"Timed out waiting for {condition}; read set: {reads}"
+                )
             await self.wait(reads, deadline=deadline)
 
     async def navigate(self, reference: Menu, *, deadline: int) -> RemoteReadResult:
@@ -246,20 +312,40 @@ class Camera:
     async def turn(self, reference: Control, n: int, *, deadline: int) -> None:
         await _drive(self._task("turn", reference, deadline, n))
 
-    async def touch_start(self, reference: Control, x: int, y: int, *, deadline: int) -> None:
-        await _drive(self._native.set_input(_reference(reference), _touch(x, y, "touch_start"), deadline))
+    async def touch_start(
+        self, reference: Control, x: int, y: int, *, deadline: int
+    ) -> None:
+        await _drive(
+            self._native.set_input(
+                _reference(reference), _touch(x, y, "touch_start"), deadline
+            )
+        )
 
-    async def touch_move(self, reference: Control, x: int, y: int, *, deadline: int) -> None:
-        await _drive(self._native.set_input(_reference(reference), _touch(x, y, "touch_move"), deadline))
+    async def touch_move(
+        self, reference: Control, x: int, y: int, *, deadline: int
+    ) -> None:
+        await _drive(
+            self._native.set_input(
+                _reference(reference), _touch(x, y, "touch_move"), deadline
+            )
+        )
 
     async def touch_end(self, reference: Control, *, deadline: int) -> None:
-        await _drive(self._native.set_input(_reference(reference), _TOUCH_END, deadline))
+        await _drive(
+            self._native.set_input(_reference(reference), _TOUCH_END, deadline)
+        )
 
     async def tap(self, reference: Control, x: int, y: int, *, deadline: int) -> None:
         await self.drag(reference, [(x, y)], deadline=deadline)
 
-    async def drag(self, reference: Control, points: list[tuple[int, int]], *, deadline: int) -> None:
-        await _drive(self._native.touch_gesture(_reference(reference), json.dumps(points), deadline))
+    async def drag(
+        self, reference: Control, points: list[tuple[int, int]], *, deadline: int
+    ) -> None:
+        await _drive(
+            self._native.touch_gesture(
+                _reference(reference), json.dumps(points), deadline
+            )
+        )
 
     async def frame(self) -> Capture:
         return await _drive(self._task("frame", None, 0))
@@ -267,26 +353,54 @@ class Camera:
     async def screenshot(self, *, deadline: int) -> Capture:
         return await _drive(self._task("screenshot", None, deadline))
 
-    async def wait_until(self, predicate: Callable[[RemoteReadResult], bool], reference: Reference,
-                         *, deadline: int) -> RemoteReadResult:
-        return await _drive(self._native.wait_until(_reference(reference), predicate, deadline))
+    async def wait_until(
+        self,
+        predicate: Callable[[RemoteReadResult], bool],
+        reference: Reference,
+        *,
+        deadline: int,
+    ) -> RemoteReadResult:
+        return await _drive(
+            self._native.wait_until(_reference(reference), predicate, deadline)
+        )
 
-    async def wait_until_memory(self, predicate: Callable[[list[tuple[int, bytes]]], bool],
-                                ranges: list[tuple[int, int]], *, deadline: int,
-                                condition: str) -> list[tuple[int, bytes]]:
+    async def wait_until_memory(
+        self,
+        predicate: Callable[[list[tuple[int, bytes]]], bool],
+        ranges: list[tuple[int, int]],
+        *,
+        deadline: int,
+        condition: str,
+    ) -> list[tuple[int, bytes]]:
         """Repeat explicit byte observations and predicate checks in Rust."""
-        return await _drive(self._native.wait_until_memory(
-            json.dumps(ranges), predicate, deadline, condition))
+        return await _drive(
+            self._native.wait_until_memory(
+                json.dumps(ranges), predicate, deadline, condition
+            )
+        )
 
-    async def wait_until_stable_memory(self, ranges: list[tuple[int, int]], *,
-                                       stable_spans: list[tuple[int, int]],
-                                       equals: list[tuple[int, bytes]], stable_comparisons: int,
-                                       deadline: int, condition: str) -> list[tuple[int, bytes]]:
+    async def wait_until_stable_memory(
+        self,
+        ranges: list[tuple[int, int]],
+        *,
+        stable_spans: list[tuple[int, int]],
+        equals: list[tuple[int, bytes]],
+        stable_comparisons: int,
+        deadline: int,
+        condition: str,
+    ) -> list[tuple[int, bytes]]:
         """Wait in Rust for caller-selected bytes to match and stabilize."""
         encoded_equals = [(address, list(expected)) for address, expected in equals]
-        return await _drive(self._native.wait_until_stable_memory_task(
-            json.dumps(ranges), json.dumps(stable_spans), json.dumps(encoded_equals),
-            stable_comparisons, deadline, condition))
+        return await _drive(
+            self._native.wait_until_stable_memory_task(
+                json.dumps(ranges),
+                json.dumps(stable_spans),
+                json.dumps(encoded_equals),
+                stable_comparisons,
+                deadline,
+                condition,
+            )
+        )
 
     def close(self) -> None:
         self._native.close()
@@ -300,8 +414,16 @@ class BlockingCamera:
     def now(self) -> int:
         return self._camera.now
 
-    def _call(self, action: str, reference: Reference | None = None, deadline: int = 0, steps: int = 0):
-        return _convert(self._camera._task(action, reference, deadline, steps).blocking())
+    def _call(
+        self,
+        action: str,
+        reference: Reference | None = None,
+        deadline: int = 0,
+        steps: int = 0,
+    ):
+        return _convert(
+            self._camera._task(action, reference, deadline, steps).blocking()
+        )
 
     def read(self, reference: Reference) -> RemoteReadResult:
         return self._call("read", reference)
@@ -309,7 +431,9 @@ class BlockingCamera:
     def readiness(self) -> Readiness:
         return self._call("readiness")
 
-    def wait_until_ready(self, *, deadline: int, control: Control | None = None) -> None:
+    def wait_until_ready(
+        self, *, deadline: int, control: Control | None = None
+    ) -> None:
         self._call("wait_ready", control, deadline)
 
     def navigate(self, reference: Menu, *, deadline: int) -> RemoteReadResult:
@@ -318,10 +442,18 @@ class BlockingCamera:
     def select(self, reference: Option, *, deadline: int) -> None:
         self._call("select", reference, deadline)
 
-    def set_input(self, reference: Control, state: str, *, deadline: int,
-                  stage: str | None = None, position: str | None = None) -> None:
-        self._camera._native.set_input(_reference(reference), _input_state(state, stage, position),
-                                       deadline).blocking()
+    def set_input(
+        self,
+        reference: Control,
+        state: str,
+        *,
+        deadline: int,
+        stage: str | None = None,
+        position: str | None = None,
+    ) -> None:
+        self._camera._native.set_input(
+            _reference(reference), _input_state(state, stage, position), deadline
+        ).blocking()
 
     def press(self, reference: Control, *, deadline: int) -> None:
         self._call("press", reference, deadline)
@@ -330,22 +462,29 @@ class BlockingCamera:
         self._call("turn", reference, deadline, n)
 
     def touch_start(self, reference: Control, x: int, y: int, *, deadline: int) -> None:
-        self._camera._native.set_input(_reference(reference), _touch(x, y, "touch_start"),
-                                       deadline).blocking()
+        self._camera._native.set_input(
+            _reference(reference), _touch(x, y, "touch_start"), deadline
+        ).blocking()
 
     def touch_move(self, reference: Control, x: int, y: int, *, deadline: int) -> None:
-        self._camera._native.set_input(_reference(reference), _touch(x, y, "touch_move"),
-                                       deadline).blocking()
+        self._camera._native.set_input(
+            _reference(reference), _touch(x, y, "touch_move"), deadline
+        ).blocking()
 
     def touch_end(self, reference: Control, *, deadline: int) -> None:
-        self._camera._native.set_input(_reference(reference), _TOUCH_END, deadline).blocking()
+        self._camera._native.set_input(
+            _reference(reference), _TOUCH_END, deadline
+        ).blocking()
 
     def tap(self, reference: Control, x: int, y: int, *, deadline: int) -> None:
         self.drag(reference, [(x, y)], deadline=deadline)
 
-    def drag(self, reference: Control, points: list[tuple[int, int]], *, deadline: int) -> None:
-        self._camera._native.touch_gesture(_reference(reference), json.dumps(points),
-                                           deadline).blocking()
+    def drag(
+        self, reference: Control, points: list[tuple[int, int]], *, deadline: int
+    ) -> None:
+        self._camera._native.touch_gesture(
+            _reference(reference), json.dumps(points), deadline
+        ).blocking()
 
     def frame(self) -> Capture:
         return self._call("frame")
@@ -353,24 +492,50 @@ class BlockingCamera:
     def screenshot(self, *, deadline: int) -> Capture:
         return self._call("screenshot", deadline=deadline)
 
-    def wait_until(self, predicate: Callable[[RemoteReadResult], bool], reference: Reference,
-                   *, deadline: int) -> RemoteReadResult:
-        return _convert(self._camera._native.wait_until(_reference(reference), predicate, deadline).blocking())
+    def wait_until(
+        self,
+        predicate: Callable[[RemoteReadResult], bool],
+        reference: Reference,
+        *,
+        deadline: int,
+    ) -> RemoteReadResult:
+        return _convert(
+            self._camera._native.wait_until(
+                _reference(reference), predicate, deadline
+            ).blocking()
+        )
 
-    def wait_until_memory(self, predicate: Callable[[list[tuple[int, bytes]]], bool],
-                          ranges: list[tuple[int, int]], *, deadline: int,
-                          condition: str) -> list[tuple[int, bytes]]:
+    def wait_until_memory(
+        self,
+        predicate: Callable[[list[tuple[int, bytes]]], bool],
+        ranges: list[tuple[int, int]],
+        *,
+        deadline: int,
+        condition: str,
+    ) -> list[tuple[int, bytes]]:
         return self._camera._native.wait_until_memory(
-            json.dumps(ranges), predicate, deadline, condition).blocking()
+            json.dumps(ranges), predicate, deadline, condition
+        ).blocking()
 
-    def wait_until_stable_memory(self, ranges: list[tuple[int, int]], *,
-                                 stable_spans: list[tuple[int, int]],
-                                 equals: list[tuple[int, bytes]], stable_comparisons: int,
-                                 deadline: int, condition: str) -> list[tuple[int, bytes]]:
+    def wait_until_stable_memory(
+        self,
+        ranges: list[tuple[int, int]],
+        *,
+        stable_spans: list[tuple[int, int]],
+        equals: list[tuple[int, bytes]],
+        stable_comparisons: int,
+        deadline: int,
+        condition: str,
+    ) -> list[tuple[int, bytes]]:
         encoded_equals = [(address, list(expected)) for address, expected in equals]
         return self._camera._native.wait_until_stable_memory_task(
-            json.dumps(ranges), json.dumps(stable_spans), json.dumps(encoded_equals),
-            stable_comparisons, deadline, condition).blocking()
+            json.dumps(ranges),
+            json.dumps(stable_spans),
+            json.dumps(encoded_equals),
+            stable_comparisons,
+            deadline,
+            condition,
+        ).blocking()
 
 
 class _ScopedTask:
@@ -401,6 +566,7 @@ class _ScopedTask:
 
 class _ScopedNative:
     """Return a borrowed USB session between operations and predicate reads."""
+
     def __init__(self, connect):
         self.connect = connect
         self.closed = False
@@ -429,7 +595,9 @@ class _ScopedNative:
             raise RuntimeError("Camera is closed")
         native = self.connect()
         try:
-            task = native.operation(action, reference, native.now + max(0, deadline - self.now), steps)
+            task = native.operation(
+                action, reference, native.now + max(0, deadline - self.now), steps
+            )
             return _ScopedTask(task, native)
         except BaseException:
             native.close()
@@ -438,15 +606,22 @@ class _ScopedNative:
     def wait_until(self, reference, predicate, deadline):
         return self._call("wait_until", (reference, predicate), deadline)
 
-    def wait_until_stable_memory_task(self, ranges, stable_spans, equals, stable_comparisons,
-                                      deadline, condition):
+    def wait_until_stable_memory_task(
+        self, ranges, stable_spans, equals, stable_comparisons, deadline, condition
+    ):
         if self.closed:
             raise RuntimeError("Camera is closed")
         native = self.connect()
         try:
             local_deadline = native.now + max(0, deadline - self.now)
             task = native.wait_until_stable_memory_task(
-                ranges, stable_spans, equals, stable_comparisons, local_deadline, condition)
+                ranges,
+                stable_spans,
+                equals,
+                stable_comparisons,
+                local_deadline,
+                condition,
+            )
             return _ScopedTask(task, native)
         except BaseException:
             native.close()

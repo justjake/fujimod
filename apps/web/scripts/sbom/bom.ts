@@ -89,7 +89,8 @@ function externalReferences({ name, version, source, purl }: Component) {
     type = 'website';
   } else if (name === 'FatFs' && version === 'R0.16') {
     // Zephyr's original R0.16 import matches ChaN's ff.c and ff.h.
-    url = 'https://github.com/zephyrproject-rtos/fatfs/tree/18ad3932f7f18b59abf99cb2f8a6cd5d6746cfe0';
+    url =
+      'https://github.com/zephyrproject-rtos/fatfs/tree/18ad3932f7f18b59abf99cb2f8a6cd5d6746cfe0';
   } else if (name === 'GNU Arm Toolchain libgcc' && version === '13.2.Rel1') {
     // GCC revision listed in the Arm GNU Toolchain 13.2.Rel1 release notes.
     url =

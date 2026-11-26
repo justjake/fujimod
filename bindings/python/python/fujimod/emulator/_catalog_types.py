@@ -5691,9 +5691,10 @@ class RunPreview(TypedDict, total=False):
     statistics_profile: Required[str]
 
 
-type RunProducerDataProfile = Literal[
-    "xm1-150-declared-continuous-statistics-scene-unmeasured"] | Literal["recorded-statistics",
-]
+type RunProducerDataProfile = (
+    Literal["xm1-150-declared-continuous-statistics-scene-unmeasured"]
+    | Literal["recorded-statistics",]
+)
 
 
 type RunProducerStopProfile = Literal["stock-idle-stop-handshakes-unmeasured"]
@@ -5759,9 +5760,9 @@ type RunSdCardProfile = Literal[
 ]
 
 
-type RunSecondaryBusProfile = Literal[
-    "usbcharge-disconnected-pwic-startup-tagged"] | Literal["disabled",
-]
+type RunSecondaryBusProfile = (
+    Literal["usbcharge-disconnected-pwic-startup-tagged"] | Literal["disabled",]
+)
 
 
 type RunSensorFrameClock = Literal["sensor", "periodic"]
@@ -5812,11 +5813,12 @@ class RunStatisticsSpan(TypedDict, total=False):
 type RunStillCapture = Literal["register-capture-readonly-card-observation"]
 
 
-type RunStorageProfile = Literal[
-    "captured",
-    "browser",
-    "erased"] | Literal["settings"] | Literal["profile"] | Literal["factory",
-]
+type RunStorageProfile = (
+    Literal["captured", "browser", "erased"]
+    | Literal["settings"]
+    | Literal["profile"]
+    | Literal["factory",]
+)
 
 
 class RunUsbInput(TypedDict, total=False):

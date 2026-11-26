@@ -5,8 +5,8 @@
 //! Both policies are pinned to the state the engine produced when the
 //! translated path replaced the helper path.
 use super::*;
-use fujimod_emulator_cpu::arm;
 use fujimod_emulator_cpu::Model;
+use fujimod_emulator_cpu::arm;
 use fujimod_emulator_cpu_unicorn::Library;
 use fujimod_emulator_devices::{Cx, Device};
 use std::sync::{Arc, Mutex};
@@ -58,7 +58,10 @@ fn set(cpu: &dyn Cpu, register: Register, value: u32) {
 fn words(cpu: &dyn Cpu, address: u64, values: &[u32]) {
     cpu.write_memory(
         address,
-        &values.iter().flat_map(|v| v.to_le_bytes()).collect::<Vec<_>>(),
+        &values
+            .iter()
+            .flat_map(|v| v.to_le_bytes())
+            .collect::<Vec<_>>(),
     )
     .unwrap();
 }
@@ -143,8 +146,22 @@ fn cases() -> [Case; 2] {
         Case {
             policy: ExecutionPolicy::Interactive,
             registers: [
-                3, 2, 1, 3_850_633_232, 0x20000, 0x8000000, 0, 0x20004, 0x10034, 0x11001,
-                0, 0, 0, 0, 0x10040, 0x10044,
+                3,
+                2,
+                1,
+                3_850_633_232,
+                0x20000,
+                0x8000000,
+                0,
+                0x20004,
+                0x10034,
+                0x11001,
+                0,
+                0,
+                0,
+                0,
+                0x10040,
+                0x10044,
             ],
             ram: [
                 2, 0, 0, 0, 0x10, 0, 0x84, 0xe5, 1, 0, 0, 0, 3, 0, 0, 0, 1, 0, 0, 0,
@@ -155,8 +172,22 @@ fn cases() -> [Case; 2] {
         Case {
             policy: ExecutionPolicy::Exact,
             registers: [
-                2, 2, 0, 3_850_633_232, 0x20000, 0x8000000, 0, 0x20004, 0x10034, 0x11001,
-                0, 0, 0, 0, 0x10040, 0x10044,
+                2,
+                2,
+                0,
+                3_850_633_232,
+                0x20000,
+                0x8000000,
+                0,
+                0x20004,
+                0x10034,
+                0x11001,
+                0,
+                0,
+                0,
+                0,
+                0x10040,
+                0x10044,
             ],
             ram: [
                 2, 0, 0, 0, 0x10, 0, 0x84, 0xe5, 0, 0, 0, 0, 2, 0, 0, 0, 0, 0, 0, 0,
@@ -195,12 +226,7 @@ fn translated_accounting_lands_on_the_expected_state() {
             "{:?}: architectural registers",
             case.policy
         );
-        assert_eq!(
-            board.now(),
-            case.clock,
-            "{:?}: board clock",
-            case.policy
-        );
+        assert_eq!(board.now(), case.clock, "{:?}: board clock", case.policy);
 
         let mut ram = vec![0; case.ram.len()];
         board.read_memory(0, 0x20000, &mut ram).unwrap();

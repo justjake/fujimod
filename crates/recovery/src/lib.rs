@@ -1,23 +1,23 @@
 //! SD card construction from explicit source identities and located recipes.
 #![forbid(unsafe_code)]
-pub mod image;
-pub mod green_led;
 pub mod early_led;
 mod exr;
-mod exr_loader;
 mod exr_firmware;
 mod exr_load_maps;
+mod exr_loader;
+pub mod green_led;
+pub mod image;
 pub mod rom_sd;
 pub use exr::Exr;
 mod exr2;
-pub use exr2::lamp::StartupLamp;
-pub use exr2::footer::LoaderFooter;
 pub use exr2::defaults::ConfigurationDefaults;
+pub use exr2::footer::LoaderFooter;
+pub use exr2::lamp::StartupLamp;
 pub use exr2::startup_reads::StartupReads;
-pub mod xpp;
+pub mod ram_patch;
 mod xp4;
 mod xp5;
-pub mod ram_patch;
+pub mod xpp;
 use image::{File, Packaging, Plan, Result, require};
 use serde::{Deserialize, Serialize};
 pub use xp4::{ColdStart, FileApi, SdCardRead, Setup, sd_card_fast_read::PackedStage};
@@ -274,7 +274,14 @@ impl Recipe {
             Some(workspace),
             read,
         )?;
-        early_led::stage(self, source, &mut bytes, base, xp4::indicator_entry()?, ((api.workspace - setup.linked_sram_base) & !0xfff) as usize - 0x1000)?;
+        early_led::stage(
+            self,
+            source,
+            &mut bytes,
+            base,
+            xp4::indicator_entry()?,
+            ((api.workspace - setup.linked_sram_base) & !0xfff) as usize - 0x1000,
+        )?;
         let mut layout = xp4::layout(setup, api, base, read)?;
         layout["workspace"] = workspace.into();
         layout["file_api"] = serde_json::json!(api);
@@ -417,9 +424,15 @@ impl Recipe {
     /// packaged, so the loader's length and CRC checks cover it. With `internal_flash` the
     /// result is the boot files alone, as from `build_boot_files`.
     pub fn build_startup_with_overlay(
-        &self, source: &[u8], options: StartupOptions, overlay: &image::Overlay,
+        &self,
+        source: &[u8],
+        options: StartupOptions,
+        overlay: &image::Overlay,
     ) -> Result<Vec<File>> {
-        require(matches!(self.generation, Generation::Xp5), "RAM overlays require XP5")?;
+        require(
+            matches!(self.generation, Generation::Xp5),
+            "RAM overlays require XP5",
+        )?;
         let files = self.startup_inputs(source, options, None, Some(overlay), None)?;
         if options.internal_flash {
             boot_files_only(files, &self.update_filename)
@@ -458,9 +471,15 @@ impl Recipe {
     }
     /// Include the unit's retained storage data in a checked card startup.
     pub fn build_startup_with_storage(
-        &self, source: &[u8], storage: &[u8], options: StartupOptions,
+        &self,
+        source: &[u8],
+        storage: &[u8],
+        options: StartupOptions,
     ) -> Result<Vec<File>> {
-        require(matches!(self.generation, Generation::Xp5), "Card storage requires XP5")?;
+        require(
+            matches!(self.generation, Generation::Xp5),
+            "Card storage requires XP5",
+        )?;
         self.startup_inputs(source, options, Some(storage), None, None)
     }
     /// Identifies the `FFSYS.BIN` that `build_ota_startup` writes, without the
@@ -502,8 +521,12 @@ impl Recipe {
     }
 
     fn startup_inputs(
-        &self, source: &[u8], options: StartupOptions, storage: Option<&[u8]>,
-        overlay: Option<&image::Overlay>, ram_patches: Option<&ram_patch::RamPatches>,
+        &self,
+        source: &[u8],
+        options: StartupOptions,
+        storage: Option<&[u8]>,
+        overlay: Option<&image::Overlay>,
+        ram_patches: Option<&ram_patch::RamPatches>,
     ) -> Result<Vec<File>> {
         require(
             overlay.is_none() || matches!(self.generation, Generation::Xp5),
@@ -564,13 +587,7 @@ impl Recipe {
                     })?;
                     let mut ram = image::transform(&inverted, plan)?;
                     green_led::preserve_loader_green(self, source, &mut ram)?;
-                    let mut files = exr::package(
-                        api,
-                        header,
-                        &inverted,
-                        plan,
-                        ram,
-                    )?;
+                    let mut files = exr::package(api, header, &inverted, plan, ram)?;
                     early_led::stage(self, source, &mut files[1].bytes, 0, 0, 0xffff)?;
                     files
                 }
@@ -614,8 +631,14 @@ impl Recipe {
                         image::Error::Invalid("Missing Topaz filesystem ABI".into())
                     })?;
                     let mut files = xp4::package(self, source, &inverted, plan, cold, setup, api)?;
-                    early_led::stage(self, source, &mut files[0].bytes, api.load_address, xp4::indicator_entry()?,
-                        ((api.workspace - setup.linked_sram_base) & !0xfff) as usize - 0x1000)?;
+                    early_led::stage(
+                        self,
+                        source,
+                        &mut files[0].bytes,
+                        api.load_address,
+                        xp4::indicator_entry()?,
+                        ((api.workspace - setup.linked_sram_base) & !0xfff) as usize - 0x1000,
+                    )?;
                     files
                 }
                 Generation::Xp5 => {
@@ -745,9 +768,7 @@ pub fn availability(firmware_id: &str) -> Result<Availability> {
                     output_filenames.push("ffuser.bin".into());
                 }
             }
-            Generation::Xp4 => {
-                output_filenames.extend(["ffinit.bin".into(), "ffboot.bin".into()])
-            }
+            Generation::Xp4 => output_filenames.extend(["ffinit.bin".into(), "ffboot.bin".into()]),
             Generation::Xp5 => {
                 output_filenames.extend(["marble_init.bin".into(), "ffboot.bin".into()])
             }

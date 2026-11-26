@@ -2,7 +2,11 @@
 //!
 //! The channel engines retain their own transfer laws. This device owns the
 //! shared aperture and dispatches each declared channel to exactly one mode.
-use fujimod_emulator_devices::{Cx, Device, checkpoint::Checkpoint, graph::{Mapping, validate_mappings}};
+use fujimod_emulator_devices::{
+    Cx, Device,
+    checkpoint::Checkpoint,
+    graph::{Mapping, validate_mappings},
+};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 
@@ -127,7 +131,11 @@ impl Controller {
 }
 
 impl Device for Controller {
-    fn fast_reads(&self, window_base: u64, window_size: u64) -> Vec<fujimod_emulator_devices::bus::FastReadWord> {
+    fn fast_reads(
+        &self,
+        window_base: u64,
+        window_size: u64,
+    ) -> Vec<fujimod_emulator_devices::bus::FastReadWord> {
         self.modes
             .iter()
             .flat_map(|mode| mode.device.fast_reads(window_base, window_size))

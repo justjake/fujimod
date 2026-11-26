@@ -140,10 +140,7 @@ fn words(board: &Board, address: u64, words: &[u32]) {
 }
 fn assert_same(a: &Board, b: &Board) {
     assert_eq!(a.state(), b.state());
-    assert_eq!(
-        a.memory_state().unwrap(),
-        b.memory_state().unwrap()
-    );
+    assert_eq!(a.memory_state().unwrap(), b.memory_state().unwrap());
     for core in 0..a.instruction_counts().len() {
         for r in (0..31)
             .map(Register::X)

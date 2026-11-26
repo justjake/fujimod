@@ -130,7 +130,10 @@ impl Mix {
     fn address(&self, low: u64) -> Result<u64, String> {
         let high = self.stub.word(low + 4);
         if high > 7 {
-            return Err(format!("MIX: address high word +{:#x} = {high:#x} is not bits 34..32", low + 4));
+            return Err(format!(
+                "MIX: address high word +{:#x} = {high:#x} is not bits 34..32",
+                low + 4
+            ));
         }
         Ok(u64::from(self.stub.word(low)) | u64::from(high) << 32)
     }
@@ -177,7 +180,9 @@ impl Mix {
                 || inputs.iter().any(|g| g.second != 0)
                 || inputs[2..].iter().any(|g| g.address != 0);
             if bad {
-                return Err(format!("{geometry} is outside the decoded packed 4:2:2 layout"));
+                return Err(format!(
+                    "{geometry} is outside the decoded packed 4:2:2 layout"
+                ));
             }
             // GUESS (module notes): the blend is input 0.
             return Ok(Job::Average {
@@ -226,9 +231,13 @@ impl Mix {
             || inputs[..used]
                 .iter()
                 .any(|g| g.address == 0 || g.second != 0 || g.pitch < row)
-            || inputs[used..].iter().any(|g| g.address != 0 || g.second != 0);
+            || inputs[used..]
+                .iter()
+                .any(|g| g.address != 0 || g.second != 0);
         if bad {
-            return Err(format!("{geometry} is outside the decoded packed 4:2:2 layout"));
+            return Err(format!(
+                "{geometry} is outside the decoded packed 4:2:2 layout"
+            ));
         }
         // GUESS (module notes): the blend is input 0, the composite the average of all three.
         let averaged = if mode == MODE_BLEND { 1 } else { used };
@@ -449,7 +458,10 @@ mod tests {
     #[test]
     fn hdr_composite_averages_three_inputs() {
         let mut host = host();
-        assert_eq!(program(&mut Mix::new(mix_stub()), &mut host, &composite_words()), None);
+        assert_eq!(
+            program(&mut Mix::new(mix_stub()), &mut host, &composite_words()),
+            None
+        );
         assert!(host.ram[0x1000..0x1040].iter().all(|&b| b == 0xee));
         let refusal = program(
             &mut Mix::new(mix_stub()).with_still_path(),

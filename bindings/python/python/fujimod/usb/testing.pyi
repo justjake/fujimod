@@ -44,8 +44,8 @@ async def peer_session(
     ep_in: int = ...,
     ep_out: int = ...,
 ) -> Session: ...
-
-
 def connection(
-    exchanges: Sequence[Exchange], *, max_reply_bytes: int = ...,
+    exchanges: Sequence[Exchange],
+    *,
+    max_reply_bytes: int = ...,
 ) -> tuple[Connection, Script]: ...

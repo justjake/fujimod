@@ -3,7 +3,6 @@ use fujimod_emulator_devices::graph::DeviceGraph;
 use fujimod_emulator_devices::graph::DeviceWindow;
 use fujimod_emulator_sensor_input::statistics;
 use fujimod_emulator_sensor_input::{sensor, slvs};
-use fujimod_emulator_xp5_imaging::imaging::{buffer, table};
 use fujimod_emulator_xp5_imaging::imaging::focus;
 use fujimod_emulator_xp5_imaging::imaging::input;
 use fujimod_emulator_xp5_imaging::imaging::iris;
@@ -11,6 +10,7 @@ use fujimod_emulator_xp5_imaging::imaging::paf;
 use fujimod_emulator_xp5_imaging::imaging::preview;
 use fujimod_emulator_xp5_imaging::imaging::work;
 use fujimod_emulator_xp5_imaging::imaging::{STATISTICS_BANK_SIZE, STATISTICS_BASE};
+use fujimod_emulator_xp5_imaging::imaging::{buffer, table};
 
 pub fn register_all(
     bus: &mut DeviceGraph,
@@ -72,14 +72,19 @@ pub fn register_all(
     // frame_timing_line_ns (its line length). Without them every frame keeps the stand-in
     // periods of the receiver and preview windows.
     let sensor = match windows.iter().find(|w| w.kind == "imaging-sensor") {
-        Some(w) if w.options.contains_key("frame_timing_readout") || w.options.contains_key("frame_timing_line_ns") => {
+        Some(w)
+            if w.options.contains_key("frame_timing_readout")
+                || w.options.contains_key("frame_timing_line_ns") =>
+        {
             let number = |key: &str, max: u64| {
                 w.options
                     .get(key)
                     .and_then(toml::Value::as_integer)
                     .and_then(|n| u64::try_from(n).ok())
                     .filter(|n| (1..=max).contains(n))
-                    .ok_or_else(|| format!("imaging-sensor {key} must be a positive bounded integer"))
+                    .ok_or_else(|| {
+                        format!("imaging-sensor {key} must be a positive bounded integer")
+                    })
             };
             sensor.with_frame_timing(sensor::FrameTiming {
                 readout: number("frame_timing_readout", 0xff)? as u8,
@@ -120,11 +125,21 @@ pub fn register_all(
         }
         // X-H2S assumption: no register-0 standby gate (`standby_gate = false`); see
         // Sensor::set_no_standby_gate. Default keeps the X100VI behavior.
-        if window.options.get("standby_gate").and_then(toml::Value::as_bool) == Some(false) {
+        if window
+            .options
+            .get("standby_gate")
+            .and_then(toml::Value::as_bool)
+            == Some(false)
+        {
             sensor.set_no_standby_gate(true);
         }
         // X-H2S assumption: reads are not gated on register 0x59 (`read_gate = false`).
-        if window.options.get("read_gate").and_then(toml::Value::as_bool) == Some(false) {
+        if window
+            .options
+            .get("read_gate")
+            .and_then(toml::Value::as_bool)
+            == Some(false)
+        {
             sensor.set_no_read_gate(true);
         }
         bus.register(
@@ -137,7 +152,12 @@ pub fn register_all(
                     ticks(&window.options, "command_latency_us")?,
                 )?;
                 // Bring-up option: unmodeled words of the window keep their last write.
-                if window.options.get("retain_words").and_then(|v| v.as_bool()).unwrap_or(false) {
+                if window
+                    .options
+                    .get("retain_words")
+                    .and_then(|v| v.as_bool())
+                    .unwrap_or(false)
+                {
                     command.with_retained_window()
                 } else {
                     command
@@ -230,14 +250,21 @@ pub fn register_all(
             _ => 0xff974000,
         };
         // The RIFP window may also hold the pages of its sub-blocks (0xffd03000..0xffd0bfff).
-        let pages = if w.kind == "imaging-rifp" { 1..=10 } else { 1..=1 };
+        let pages = if w.kind == "imaging-rifp" {
+            1..=10
+        } else {
+            1..=1
+        };
         if w.base != expected || w.size % 0x1000 != 0 || !pages.contains(&(w.size / 0x1000)) {
             return Err("invalid preview/RIFP window".into());
         }
         let device: Box<dyn fujimod_emulator_devices::Device> = if w.kind == "imaging-rifp-io" {
             // Register-list DMA (see preview::Io): ticks from START to its done status.
             // Opt-in; a command-image scene adds source_luma to this window too.
-            if w.options.keys().any(|key| !matches!(key.as_str(), "queue_completion_us" | "source_luma")) {
+            if w.options
+                .keys()
+                .any(|key| !matches!(key.as_str(), "queue_completion_us" | "source_luma"))
+            {
                 return Err("unknown imaging-rifp-io option".into());
             }
             match w.options.get("queue_completion_us") {
@@ -277,7 +304,9 @@ pub fn register_all(
         // Option `completion_us`: a +0x40 start completes with interrupt 169 after that time.
         let device = match w.options.get("completion_us") {
             None => buffer::Buffer::default(),
-            Some(_) => buffer::Buffer::default().with_completion(ticks(&w.options, "completion_us")?)?,
+            Some(_) => {
+                buffer::Buffer::default().with_completion(ticks(&w.options, "completion_us")?)?
+            }
         };
         bus.register(w.base, w.size, Box::new(device))?;
     }
@@ -292,7 +321,10 @@ pub fn register_all(
     // The advanced-filter scaler 0xff983000 is the same stub; it scales at every start, with
     // or without the still path (its live-view user reads the destination as the panel picture).
     for w in windows.iter().filter(|w| {
-        matches!(w.kind.as_str(), "imaging-resz" | "imaging-rzl2" | "imaging-filter-scaler")
+        matches!(
+            w.kind.as_str(),
+            "imaging-resz" | "imaging-rzl2" | "imaging-filter-scaler"
+        )
     }) {
         use fujimod_emulator_xp5_imaging::imaging::still;
         let (layout, base) = match w.kind.as_str() {
@@ -309,8 +341,9 @@ pub fn register_all(
                 .try_into()
                 .map_err(|e| format!("{} options: {e}", w.kind))?;
         // XP5 board time is in nanoseconds.
-        let stub =
-            fujimod_emulator_xp5_io::completion_stub::CompletionStub::new(w.base, w.size, options, 1000)?;
+        let stub = fujimod_emulator_xp5_io::completion_stub::CompletionStub::new(
+            w.base, w.size, options, 1000,
+        )?;
         bus.register(
             w.base,
             w.size,
@@ -417,7 +450,10 @@ fn retain_words(options: &toml::Table) -> Result<bool, String> {
 /// STILL switch) is packed 12-bit whatever the code; see `sensor::StillChannel`.
 fn still_raw16_codes() -> Result<u8, String> {
     let mut codes = 1u8 | 1 << 5;
-    for code in std::env::var("XT5_STILL_RAW16").unwrap_or_default().split(',') {
+    for code in std::env::var("XT5_STILL_RAW16")
+        .unwrap_or_default()
+        .split(',')
+    {
         let code = code.trim();
         if code.is_empty() {
             continue;
@@ -451,14 +487,29 @@ mod tests {
             .filter(|w| matches!(w.kind.as_str(), "imaging-resz" | "imaging-rzl2"))
             .collect();
         assert_eq!(
-            windows.iter().map(|w| (w.kind.as_str(), w.base)).collect::<Vec<_>>(),
+            windows
+                .iter()
+                .map(|w| (w.kind.as_str(), w.base))
+                .collect::<Vec<_>>(),
             [("imaging-resz", 0xffd0c000), ("imaging-rzl2", 0xff984000)]
         );
         let mut bus = DeviceGraph::new();
-        register_all(&mut bus, &windows, &fujimod_emulator_devices::xp5::pins::Pins::shared()).unwrap();
+        register_all(
+            &mut bus,
+            &windows,
+            &fujimod_emulator_devices::xp5::pins::Pins::shared(),
+        )
+        .unwrap();
         let mut moved = windows[1].clone();
         moved.base = 0xff983000;
-        assert!(register_all(&mut DeviceGraph::new(), &[moved], &fujimod_emulator_devices::xp5::pins::Pins::shared()).is_err());
+        assert!(
+            register_all(
+                &mut DeviceGraph::new(),
+                &[moved],
+                &fujimod_emulator_devices::xp5::pins::Pins::shared()
+            )
+            .is_err()
+        );
     }
 
     /// The X-T5 4.31 manifest's 0xff983000 window registers as the advanced-filter scaler, and
@@ -473,10 +524,22 @@ mod tests {
             "../../../../catalog/firmware/xt5/4.31/xp5-boot/manifest.d/57-develop-stubs-3.toml"
         ))
         .unwrap();
-        let windows: Vec<_> =
-            fragment.device.into_iter().filter(|w| w.kind == "imaging-filter-scaler").collect();
-        assert_eq!(windows.iter().map(|w| w.base).collect::<Vec<_>>(), [0xff983000]);
-        assert_eq!(windows[0].options.get("irq").and_then(toml::Value::as_integer), Some(204));
+        let windows: Vec<_> = fragment
+            .device
+            .into_iter()
+            .filter(|w| w.kind == "imaging-filter-scaler")
+            .collect();
+        assert_eq!(
+            windows.iter().map(|w| w.base).collect::<Vec<_>>(),
+            [0xff983000]
+        );
+        assert_eq!(
+            windows[0]
+                .options
+                .get("irq")
+                .and_then(toml::Value::as_integer),
+            Some(204)
+        );
         let pins = fujimod_emulator_devices::xp5::pins::Pins::shared();
         register_all(&mut DeviceGraph::new(), &windows, &pins).unwrap();
         let mut moved = windows[0].clone();

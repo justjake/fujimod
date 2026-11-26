@@ -48,6 +48,7 @@ In this order:
      turn on HALATION under FILM EFFECTS, shoot, and playback shows the look.
    - Controls and system: assign ISO to the EV dial under UNLOCKED CONTROLS,
      turn the dial in live view to change ISO, then open CHECK FOR UPDATES.
+
 3. Two columns: the release notes on the left, a small SD card on the right
    with a checkbox per camera, a Recipes checkbox with a recipe list, and the
    download button. The SD card states that Fujimod lives on the SD card; it

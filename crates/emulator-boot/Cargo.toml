@@ -13,19 +13,19 @@ doctest = false
 
 [features]
 xp5-startup = [
-    "dep:fujimod-emulator-parts-controls",
-    "dep:fujimod-emulator-xp5-board",
-    "dep:fujimod-emulator-xp4-board",
-    "dep:fujimod-emulator-xpp",
-    "dep:fujimod-emulator-xp5-display",
-    "dep:fujimod-emulator-xp5-io",
-    "dep:fujimod-emulator-xp5-storage",
-    "dep:fujimod-framebuffer",
-    "dep:fujimod-firmware",
-    "dep:ctrlc",
-    "dep:regex",
-    "dep:toml",
-    "dep:zstd",
+  "dep:fujimod-emulator-parts-controls",
+  "dep:fujimod-emulator-xp5-board",
+  "dep:fujimod-emulator-xp4-board",
+  "dep:fujimod-emulator-xpp",
+  "dep:fujimod-emulator-xp5-display",
+  "dep:fujimod-emulator-xp5-io",
+  "dep:fujimod-emulator-xp5-storage",
+  "dep:fujimod-framebuffer",
+  "dep:fujimod-firmware",
+  "dep:ctrlc",
+  "dep:regex",
+  "dep:toml",
+  "dep:zstd",
 ]
 
 [dependencies]

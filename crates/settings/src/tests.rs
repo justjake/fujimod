@@ -493,7 +493,10 @@ fn the_layout_names_the_header_marker() {
         .unwrap()
         .header;
     assert_eq!(header[14], 0x36);
-    assert_eq!(header.iter().fold(0u8, |sum, byte| sum.wrapping_add(*byte)), 0);
+    assert_eq!(
+        header.iter().fold(0u8, |sum, byte| sum.wrapping_add(*byte)),
+        0
+    );
     // A layout that names another marker refuses the stock header.
     layout.profile.as_mut().unwrap().marker = 0xaa;
     assert!(

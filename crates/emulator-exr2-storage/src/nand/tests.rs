@@ -422,9 +422,17 @@ fn rom_dma_reads_two_sectors_without_touching_the_rest_of_the_page() {
     let mut h = TestHost::new();
     h.ram.ram_write(0x1000, &[0x55; 2048]).unwrap();
     for (offset, value) in [
-        (0, 1), (0xe8, 0x10003), (0x1c, 0x300002), (0x18, 0x8003),
-        (0x20, 0), (0x24, 0), (0x58, 512), (0x884, 0x10001),
-        (0x8a0, 0x401000), (0x8a4, 0x1000), (0x8a8, 1024),
+        (0, 1),
+        (0xe8, 0x10003),
+        (0x1c, 0x300002),
+        (0x18, 0x8003),
+        (0x20, 0),
+        (0x24, 0),
+        (0x58, 512),
+        (0x884, 0x10001),
+        (0x8a0, 0x401000),
+        (0x8a4, 0x1000),
+        (0x8a8, 1024),
         (0x08, 0x8013b3),
     ] {
         write(&mut m, &mut h, offset, value);

@@ -216,11 +216,14 @@ test('validates hash-to-filename catalog and rejects path traversal, missing map
   duplicate.firmwares.push(duplicate.firmwares[0]);
   assert.throws(() => validateIndex(duplicate));
   const sd_boot_v1_installable = index();
-  Object.assign(sd_boot_v1_installable.firmwares[0], { downloads: { sd_boot_v1_installable: true } });
+  Object.assign(sd_boot_v1_installable.firmwares[0], {
+    downloads: { sd_boot_v1_installable: true },
+  });
   assert.throws(() => validateIndex(sd_boot_v1_installable), /update file name/);
   for (const name of ['FWUP0009.DAT', '../FPUPDATE.DAT', 'fwup0009.dat', 7]) {
     Object.assign(sd_boot_v1_installable.firmwares[0], { update_filename: name });
-    if (name === 'FWUP0009.DAT') assert.equal(validateIndex(sd_boot_v1_installable).firmwares.length, 1);
+    if (name === 'FWUP0009.DAT')
+      assert.equal(validateIndex(sd_boot_v1_installable).firmwares.length, 1);
     else assert.throws(() => validateIndex(sd_boot_v1_installable), /update file name/);
   }
 });

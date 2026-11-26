@@ -152,7 +152,9 @@ impl Cluster {
         }
         let watch = &mut unsafe { &mut *self.state.get() }.poll[core];
         watch.bitmaps.resize_with(backings.len(), Default::default);
-        watch.summaries.resize_with(backings.len(), Default::default);
+        watch
+            .summaries
+            .resize_with(backings.len(), Default::default);
         let mut ranges = Vec::with_capacity(backings.len());
         for (index, &(base, bytes)) in backings.iter().enumerate() {
             let words = (bytes >> PAGE_SHIFT).div_ceil(64) + 1;
@@ -160,7 +162,9 @@ impl Cluster {
             let summary = &mut watch.summaries[index];
             if map.len() != words {
                 *map = (0..words).map(|_| AtomicU64::new(0)).collect();
-                *summary = (0..words.div_ceil(64) + 1).map(|_| AtomicU64::new(0)).collect();
+                *summary = (0..words.div_ceil(64) + 1)
+                    .map(|_| AtomicU64::new(0))
+                    .collect();
             } else {
                 // Only the words the summary marks can hold set bits.
                 for (group, marks) in summary.iter().enumerate() {
@@ -192,14 +196,22 @@ impl Cluster {
                 && base.as_ptr() as usize + bytes <= end
         };
         inside(self.ram.as_ptr(), self.ram.len())
-            || self.memory.iter().any(|window| inside(window.data.as_ptr(), window.data.len()))
+            || self
+                .memory
+                .iter()
+                .any(|window| inside(window.data.as_ptr(), window.data.len()))
     }
     /// The pages recorded since arming, with their bytes; `None` for too many
     /// or for pages of a backing the board does not own.
     fn poll_pages(&self, core: usize) -> Option<Pages> {
         let watch = &unsafe { &*self.state.get() }.poll[core];
-        let mut pages = Pages { list: Vec::new(), bytes: Vec::new() };
-        for ((map, summary), &(base, bytes)) in watch.bitmaps.iter().zip(&watch.summaries).zip(&watch.armed) {
+        let mut pages = Pages {
+            list: Vec::new(),
+            bytes: Vec::new(),
+        };
+        for ((map, summary), &(base, bytes)) in
+            watch.bitmaps.iter().zip(&watch.summaries).zip(&watch.armed)
+        {
             // Words the summary marks, in ascending order.
             let marked = summary.iter().enumerate().flat_map(|(group, marks)| {
                 let mut marks = marks.load(std::sync::atomic::Ordering::Relaxed);
@@ -225,9 +237,9 @@ impl Cluster {
                         return None;
                     }
                     let host = unsafe { NonNull::new_unchecked(base.as_ptr().add(start)) };
-                    pages
-                        .bytes
-                        .extend_from_slice(unsafe { std::slice::from_raw_parts(host.as_ptr(), len) });
+                    pages.bytes.extend_from_slice(unsafe {
+                        std::slice::from_raw_parts(host.as_ptr(), len)
+                    });
                     pages.list.push((host, len));
                 }
             }
@@ -243,12 +255,22 @@ impl Cluster {
         for register in [arm::CPSR, arm::SPSR] {
             out.extend_from_slice(&self.reg(core, register).unwrap_or(0).to_le_bytes());
         }
-        for (crn, crm, opc1, opc2) in [(1, 0, 0, 0), (2, 0, 0, 0), (2, 0, 0, 1), (2, 0, 0, 2), (3, 0, 0, 0), (13, 0, 0, 1)] {
+        for (crn, crm, opc1, opc2) in [
+            (1, 0, 0, 0),
+            (2, 0, 0, 0),
+            (2, 0, 0, 1),
+            (2, 0, 0, 2),
+            (3, 0, 0, 0),
+            (13, 0, 0, 1),
+        ] {
             out.extend_from_slice(&self.cp(core, crn, crm, opc1, opc2)?.to_le_bytes());
         }
         if self.reg(core, FPEXC).unwrap_or(0) & 0x4000_0000 != 0 {
             out.extend_from_slice(
-                &self.reg(core, Register::Arm32(arm::Register::Fpscr)).unwrap_or(0).to_le_bytes(),
+                &self
+                    .reg(core, Register::Arm32(arm::Register::Fpscr))
+                    .unwrap_or(0)
+                    .to_le_bytes(),
             );
             for index in 0..32 {
                 let mut bytes = [0u8; 8];
@@ -280,7 +302,11 @@ impl Cluster {
             }
             return Ok(());
         };
-        if !stopped || state.redirected.is_some() || state.failure.is_some() || !self.poll_permitted() {
+        if !stopped
+            || state.redirected.is_some()
+            || state.failure.is_some()
+            || !self.poll_permitted()
+        {
             self.poll_abandon(core);
             return Ok(());
         }
@@ -307,7 +333,12 @@ impl Cluster {
             }
             watch.fixed = None;
         }
-        let point = Point { read, registers, at, observations };
+        let point = Point {
+            read,
+            registers,
+            at,
+            observations,
+        };
         match std::mem::take(&mut watch.stage) {
             Stage::Idle => match self.poll_arm(core) {
                 Ok(()) => unsafe { &mut *self.state.get() }.poll[core].stage = Stage::Armed(point),
@@ -369,10 +400,9 @@ impl Cluster {
             peer == core || (state.waiting[peer] != 0 && state.gic.next_irq(peer).is_none())
         }) && !state.cache_dirty
             && !(state.remap_ready && state.low_alias.is_some())
-            && state
-                .xip_source
-                .as_ref()
-                .is_none_or(|source| source.load(std::sync::atomic::Ordering::SeqCst) == state.xip_seen)
+            && state.xip_source.as_ref().is_none_or(|source| {
+                source.load(std::sync::atomic::Ordering::SeqCst) == state.xip_seen
+            })
     }
     /// Charges whole iterations that end before the board has device work:
     /// within the slice, or, when this core runs alone in its scheduler
@@ -388,7 +418,12 @@ impl Cluster {
     ) -> Result<(), String> {
         let room = self.room()?.saturating_sub(1);
         let across = *window > *remaining && self.poll_alone(core);
-        let skipped = if across { (*window).min(room) } else { (*remaining).min(room) } / period * period;
+        let skipped = if across {
+            (*window).min(room)
+        } else {
+            (*remaining).min(room)
+        } / period
+            * period;
         if skipped == 0 {
             return Ok(());
         }

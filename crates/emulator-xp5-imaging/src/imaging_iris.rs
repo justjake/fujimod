@@ -100,7 +100,9 @@ impl Device for Iris {
     }
     fn validate_checkpoint(&self, saved: &Checkpoint) -> Result<(), String> {
         let _: Motion = saved.decode(self.name())?;
-        let [serial] = saved.children() else { return Err("missing serial motion state".into()); };
+        let [serial] = saved.children() else {
+            return Err("missing serial motion state".into());
+        };
         self.serial.validate_checkpoint(serial)
     }
     fn restore_checkpoint(&mut self, saved: &Checkpoint) -> Result<(), String> {

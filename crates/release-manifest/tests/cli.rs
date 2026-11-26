@@ -87,10 +87,9 @@ fn writes_optional_release_metadata() {
         .arg("--note")
         .arg("Second note");
     assert_success(run(&mut command));
-    let manifest: serde_json::Value = serde_json::from_str(
-        &fs::read_to_string(directory.join("out/latest.json")).unwrap(),
-    )
-    .unwrap();
+    let manifest: serde_json::Value =
+        serde_json::from_str(&fs::read_to_string(directory.join("out/latest.json")).unwrap())
+            .unwrap();
     assert_eq!(manifest["date"], "2026-11-10");
     assert_eq!(manifest["commit"], "abcdef0123456789");
     assert_eq!(manifest["notes"][0], "First note");

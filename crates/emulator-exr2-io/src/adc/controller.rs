@@ -100,23 +100,36 @@ impl Converter {
     }
 }
 impl Device for Converter {
-    fn analog_inputs(&self) -> Option<&(dyn fujimod_emulator_devices::capability::AnalogInputs + 'static)> {
+    fn analog_inputs(
+        &self,
+    ) -> Option<&(dyn fujimod_emulator_devices::capability::AnalogInputs + 'static)> {
         Some(self)
     }
-    fn analog_inputs_mut(&mut self) -> Option<&mut (dyn fujimod_emulator_devices::capability::AnalogInputs + 'static)> {
+    fn analog_inputs_mut(
+        &mut self,
+    ) -> Option<&mut (dyn fujimod_emulator_devices::capability::AnalogInputs + 'static)> {
         Some(self)
     }
     fn checkpoint(&self) -> Result<fujimod_emulator_devices::checkpoint::Checkpoint, String> {
-        fujimod_emulator_devices::checkpoint::Checkpoint::encode(self.name(), &(&self.state, self.samples()))
+        fujimod_emulator_devices::checkpoint::Checkpoint::encode(
+            self.name(),
+            &(&self.state, self.samples()),
+        )
     }
-    fn validate_checkpoint(&self, saved: &fujimod_emulator_devices::checkpoint::Checkpoint) -> Result<(), String> {
+    fn validate_checkpoint(
+        &self,
+        saved: &fujimod_emulator_devices::checkpoint::Checkpoint,
+    ) -> Result<(), String> {
         let (_, samples): (State, Vec<u16>) = saved.decode(self.name())?;
         if samples.len() != self.samples().len() {
             return Err("ADC snapshot channel count differs".into());
         }
         Ok(())
     }
-    fn restore_checkpoint(&mut self, saved: &fujimod_emulator_devices::checkpoint::Checkpoint) -> Result<(), String> {
+    fn restore_checkpoint(
+        &mut self,
+        saved: &fujimod_emulator_devices::checkpoint::Checkpoint,
+    ) -> Result<(), String> {
         self.validate_checkpoint(saved)?;
         let (state, samples): (State, Vec<u16>) = saved.decode(self.name())?;
         self.external.replace(&samples)?;

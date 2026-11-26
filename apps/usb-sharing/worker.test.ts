@@ -48,13 +48,7 @@ function inbox(socket: WebSocket) {
     }
   };
 }
-async function connect(
-  mf: Miniflare,
-  id: string,
-  role: string,
-  native = false,
-  ownerKey?: string,
-) {
+async function connect(mf: Miniflare, id: string, role: string, native = false, ownerKey?: string) {
   const response = await mf.dispatchFetch(`https://worker.example/usb-proxy/signal?room=${id}`, {
     headers: { Upgrade: 'websocket', ...(native ? {} : { Origin: origin }) },
   });

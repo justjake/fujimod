@@ -1,6 +1,6 @@
 //! Complete stopped-board state for direct comparison. Device state is the
 //! same typed checkpoint used by keyframes; no content digest is computed.
-use super::{bus, memory, Board};
+use super::{Board, bus, memory};
 use fujimod_emulator_cpu::Model;
 use serde_json::Value;
 use std::fmt;
@@ -111,7 +111,9 @@ impl BoardState {
     }
 
     /// Canonical typed encoding for clients that compare states as bytes.
-    pub fn to_checkpoint(&self) -> Result<fujimod_emulator_devices::checkpoint::Checkpoint, String> {
+    pub fn to_checkpoint(
+        &self,
+    ) -> Result<fujimod_emulator_devices::checkpoint::Checkpoint, String> {
         use fujimod_emulator_devices::checkpoint::Checkpoint;
         let mut processors = Vec::new();
         for processor in &self.processors {
@@ -232,7 +234,10 @@ impl BoardState {
 impl Board {
     /// Complete future-affecting state while every processor is stopped.
     pub fn complete_state(&self) -> Result<BoardState, String> {
-        let s = self.state.try_borrow().map_err(|_| "state requires a stopped board")?;
+        let s = self
+            .state
+            .try_borrow()
+            .map_err(|_| "state requires a stopped board")?;
         if s.active_slice.is_some() || s.parallel.is_some() || s.memory_access {
             return Err("state requires a stopped board".into());
         }
@@ -269,7 +274,11 @@ impl Board {
             "isolated_core":self.isolated_core.get(),
             "host_pause":self.host_pause.get(),
         });
-        let records = s.records.iter().map(|record| format!("{record:?}")).collect();
+        let records = s
+            .records
+            .iter()
+            .map(|record| format!("{record:?}"))
+            .collect();
         let console = s.console.clone();
         let frames = s
             .frames
@@ -304,7 +313,11 @@ fn diff_bus(left: &bus::State, right: &bus::State) -> Option<String> {
     }
     for (name, a, b) in [
         ("unmodeled", &left.unmodeled, &right.unmodeled),
-        ("discovery_shadow", &left.discovery_shadow, &right.discovery_shadow),
+        (
+            "discovery_shadow",
+            &left.discovery_shadow,
+            &right.discovery_shadow,
+        ),
         ("frontier", &left.frontier, &right.frontier),
     ] {
         if let Some(message) = diff_value(a, b, name) {
@@ -331,7 +344,10 @@ fn diff_bus(left: &bus::State, right: &bus::State) -> Option<String> {
         ));
     }
     for (index, (a, b)) in left.devices.iter().zip(&right.devices).enumerate() {
-        if a.kind != b.kind || a.mappings != b.mappings || a.native_dependencies != b.native_dependencies {
+        if a.kind != b.kind
+            || a.mappings != b.mappings
+            || a.native_dependencies != b.native_dependencies
+        {
             return Some(format!("devices[{index}]: wiring or kind differs"));
         }
         if let Some(message) = a.checkpoint.diff(&b.checkpoint) {
@@ -360,7 +376,11 @@ fn diff_value(left: &Value, right: &Value, path: &str) -> Option<String> {
         }
         (Value::Array(a), Value::Array(b)) => {
             if a.len() != b.len() {
-                return Some(format!("{path}: length {} differs from {}", a.len(), b.len()));
+                return Some(format!(
+                    "{path}: length {} differs from {}",
+                    a.len(),
+                    b.len()
+                ));
             }
             for (index, (x, y)) in a.iter().zip(b).enumerate() {
                 if let Some(message) = diff_value(x, y, &format!("{path}[{index}]")) {

@@ -139,7 +139,10 @@ mod tests {
         bus.write(0x60).unwrap();
         bus.stop();
         assert_eq!(read(&mut bus, 0x10, 1), [0x60]);
-        assert_eq!(read(&mut bus, ACCELERATION, 6), [0x23, 0x01, 0xfe, 0xff, 0x00, 0x40]);
+        assert_eq!(
+            read(&mut bus, ACCELERATION, 6),
+            [0x23, 0x01, 0xfe, 0xff, 0x00, 0x40]
+        );
         // A reset restores configuration; identity and outputs are read only.
         assert!(bus.start(0x6a, false));
         bus.write(CTRL3_C).unwrap();

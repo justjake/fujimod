@@ -12,15 +12,25 @@ fn input(pin: bool) -> Value {
         "spi_inputs":[[SPI3,pin]]})
 }
 fn board(value: Value) -> Result<Session, String> {
-    Session::new(serde_json::from_value::<Definition>(value).map_err(|e| e.to_string())?, None, vec![])
+    Session::new(
+        serde_json::from_value::<Definition>(value).map_err(|e| e.to_string())?,
+        None,
+        vec![],
+    )
 }
 fn step(session: &Session, instruction: u32, address: u32, value: u32) -> u32 {
     let pc = 0x1000 + session.state(false).instructions as usize * 4;
     session.write(pc, &instruction.to_le_bytes()).unwrap();
     session.write_register(0, arm::PC, pc as u64).unwrap();
-    session.write_register(0, arm::CORE[0], address.into()).unwrap();
-    session.write_register(0, arm::CORE[1], value.into()).unwrap();
-    session.run(0, 1).unwrap_or_else(|error| panic!("{instruction:#x} at {address:#x}: {error}"));
+    session
+        .write_register(0, arm::CORE[0], address.into())
+        .unwrap();
+    session
+        .write_register(0, arm::CORE[1], value.into())
+        .unwrap();
+    session
+        .run(0, 1)
+        .unwrap_or_else(|error| panic!("{instruction:#x} at {address:#x}: {error}"));
     session.read_register(0, arm::CORE[1]).unwrap() as u32
 }
 fn ww(session: &Session, address: u32, value: u32) {
@@ -62,9 +72,13 @@ fn spi3_shift_returns_the_declared_miso_level() {
 #[test]
 fn undeclared_spi3_stays_a_strict_refusal() {
     let session = board(json!({"ram_size":65536,"cores":1,"discovery":false,"cbar":CBAR})).unwrap();
-    session.write(0x1000, &0xe590_1000u32.to_le_bytes()).unwrap();
+    session
+        .write(0x1000, &0xe590_1000u32.to_le_bytes())
+        .unwrap();
     session.write_register(0, arm::PC, 0x1000).unwrap();
-    session.write_register(0, arm::CORE[0], SPI3.into()).unwrap();
+    session
+        .write_register(0, arm::CORE[0], SPI3.into())
+        .unwrap();
     assert!(session.run(0, 1).is_err());
     let failure = session.state(false).failure.unwrap_or_default();
     assert!(failure.contains("0xfff35000"), "{failure}");

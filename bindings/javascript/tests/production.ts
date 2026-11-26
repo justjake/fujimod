@@ -1451,17 +1451,29 @@ await test('external WebUSB attachment reuses one Rust owner without navigator d
     assert.equal(first.id, 'attached-camera');
     assert.equal(second.id, first.id);
     assert.equal(fixture.log.filter(([kind]) => kind === 'open').length, 1);
-    assert.equal(fixture.log.some(([kind]) => kind === 'list' || kind === 'picker'), false);
-    const selections = await first.interfaces(), limits = new usb.FirmwareLimits(256, 256, 256, 256), options = new usb.TransferOptions(1000, 1024);
+    assert.equal(
+      fixture.log.some(([kind]) => kind === 'list' || kind === 'picker'),
+      false,
+    );
+    const selections = await first.interfaces(),
+      limits = new usb.FirmwareLimits(256, 256, 256, 256),
+      options = new usb.TransferOptions(1000, 1024);
     try {
-      const session = await first.acquireSession(selections[0], limits, options, 'Attached identity');
+      const session = await first.acquireSession(
+        selections[0],
+        limits,
+        options,
+        'Attached identity',
+      );
       try {
         assert.deepEqual(second.sessionOwner, { kind: 'local', tool: 'Attached identity' });
         const reply = await session.deviceInfo(usb.InfoSelector.Product);
         assert.equal(reply.text, 'SYNTHETIC');
         reply.free();
         await session.close();
-      } finally { session.free(); }
+      } finally {
+        session.free();
+      }
       assert.equal(second.sessionOwner, null);
       await first.close();
       await second.open();
@@ -1473,9 +1485,18 @@ await test('external WebUSB attachment reuses one Rust owner without navigator d
         usb.detachWebUsbDevice(first);
         assert.equal(second.present, false);
         assert.equal((await events.next())?.present, false);
-      } finally { events.close(); events.free(); }
+      } finally {
+        events.close();
+        events.free();
+      }
     } finally {
-      selections.forEach((selection) => selection.free()); limits.free(); options.free();
+      selections.forEach((selection) => selection.free());
+      limits.free();
+      options.free();
     }
-  } finally { first.free(); second.free(); fixture.restore(); }
+  } finally {
+    first.free();
+    second.free();
+    fixture.restore();
+  }
 });

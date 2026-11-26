@@ -9,12 +9,12 @@ use fujimod_catalog::reference::{
     SensorRadiometry, SocBlock, SocBlockKind,
 };
 use fujimod_catalog::soc::BlockDevice;
+use fujimod_catalog_configuration::DEFAULT_CLOCK_SECONDS_2000;
 use fujimod_catalog_configuration::{
     Exr2RunInputs, Exr2RunScene, RunBrowserCamera, RunConfiguration, RunPurpose, RunStart,
 };
-use fujimod_emulator_exr2_plan::{BootEntry, Model, Node, Plan, WireKind};
 use fujimod_emulator_devices::{graph::Mapping as DeviceMapping, parts::pins::Pin};
-use fujimod_catalog_configuration::DEFAULT_CLOCK_SECONDS_2000;
+use fujimod_emulator_exr2_plan::{BootEntry, Model, Node, Plan, WireKind};
 use serde_json::{Value, json};
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -1897,9 +1897,10 @@ fn apply_connected_usb(
 /// The SoC's USB core interrupt lines: the endpoint engine's `device` output
 /// and the DMA controller's `host` output.
 fn usb_interrupt_lines(soc: &fujimod_catalog::reference::Soc) -> Option<(u32, u32)> {
-    let block = soc.blocks.iter().find(|block| {
-        matches!(block.device, Some(BlockDevice::Usb { .. }))
-    })?;
+    let block = soc
+        .blocks
+        .iter()
+        .find(|block| matches!(block.device, Some(BlockDevice::Usb { .. })))?;
     let line = |output: &str| {
         block
             .interrupts

@@ -1,13 +1,18 @@
 //! Keep the camera window the shape of its contents: a 3:2 screen beside the
 //! fixed-width controls panel, so the screen fills its area at every size.
+use super::{PANEL, SCREEN, window_width as width};
 use objc2::runtime::{AnyClass, AnyObject, Imp, Sel};
 use objc2::{msg_send, sel};
 use objc2_foundation::{NSRect, NSSize};
-use super::{PANEL, SCREEN, window_width as width};
 
 /// `windowWillResize:toSize:`: follow the edge the person drags most and
 /// derive the other.
-extern "C-unwind" fn will_resize(_: &AnyObject, _: Sel, window: &AnyObject, proposed: NSSize) -> NSSize {
+extern "C-unwind" fn will_resize(
+    _: &AnyObject,
+    _: Sel,
+    window: &AnyObject,
+    proposed: NSSize,
+) -> NSSize {
     let frame: NSRect = unsafe { msg_send![window, frame] };
     let content: NSRect = unsafe { msg_send![window, contentRectForFrameRect: frame] };
     let chrome = NSSize::new(
@@ -15,7 +20,10 @@ extern "C-unwind" fn will_resize(_: &AnyObject, _: Sel, window: &AnyObject, prop
         frame.size.height - content.size.height,
     );
     let (w, h) = fit(
-        (proposed.width - chrome.width, proposed.height - chrome.height),
+        (
+            proposed.width - chrome.width,
+            proposed.height - chrome.height,
+        ),
         (content.size.width, content.size.height),
     );
     NSSize::new(w + chrome.width, h + chrome.height)
@@ -33,7 +41,8 @@ fn fit((w, h): (f64, f64), (current_w, current_h): (f64, f64)) -> (f64, f64) {
 
 /// Constrain live resizing of `ns_window`.
 pub fn constrain(ns_window: *mut std::ffi::c_void) -> Result<(), String> {
-    let window = unsafe { ns_window.cast::<AnyObject>().as_ref() }.ok_or("window has no NSWindow")?;
+    let window =
+        unsafe { ns_window.cast::<AnyObject>().as_ref() }.ok_or("window has no NSWindow")?;
     let delegate: *mut AnyObject = unsafe { msg_send![window, delegate] };
     let delegate = unsafe { delegate.as_ref() }.ok_or("window has no delegate")?;
     let class: *const AnyClass = delegate.class();

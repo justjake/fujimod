@@ -62,26 +62,9 @@ pub const DESCRIPTORS: [(u64, u64); 52] = [
     (0xfffae000, 0xfffae040),
 ];
 pub const GROUP_BASES: [u64; 20] = [
-    0xff701000,
-    0xff701200,
-    0xff701400,
-    0xff701600,
-    0xff701800,
-    0xff701a00,
-    0xff701c00,
-    0xff702000,
-    0xff702200,
-    0xff703000,
-    0xff704000,
-    0xff707000,
-    0xff708000,
-    0xff70c000,
-    0xff70a000,
-    0xff70b000,
-    0xff706000,
-    0xff709000,
-    0xff705000,
-    0xfffae000,
+    0xff701000, 0xff701200, 0xff701400, 0xff701600, 0xff701800, 0xff701a00, 0xff701c00, 0xff702000,
+    0xff702200, 0xff703000, 0xff704000, 0xff707000, 0xff708000, 0xff70c000, 0xff70a000, 0xff70b000,
+    0xff706000, 0xff709000, 0xff705000, 0xfffae000,
 ];
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -100,14 +83,22 @@ impl Inputs {
         if self.initial_values.len() != DESCRIPTORS.len()
             || self.completion_ticks.len() != GROUP_BASES.len()
             || self.initial_values.iter().any(|value| value & !0x1ff != 0)
-            || self.completion_ticks.iter().any(|ticks| !(1..=1_000_000).contains(ticks))
+            || self
+                .completion_ticks
+                .iter()
+                .any(|ticks| !(1..=1_000_000).contains(ticks))
         {
             return Err("Invalid explicit XP4 configuration/request reset or delay inputs".into());
         }
-        if self.command5_completion_ticks.is_some_and(|ticks| ticks.iter().any(|tick| !(1..=1_000_000).contains(tick))) {
+        if self
+            .command5_completion_ticks
+            .is_some_and(|ticks| ticks.iter().any(|tick| !(1..=1_000_000).contains(tick)))
+        {
             return Err("Invalid explicit XP4 command-5 completion delays".into());
         }
-        if let Some(inputs) = &self.base_parameters { inputs.validate()?; }
+        if let Some(inputs) = &self.base_parameters {
+            inputs.validate()?;
+        }
         Ok(())
     }
 }
@@ -135,99 +126,176 @@ pub struct ConfigurationRequests {
 impl ConfigurationRequests {
     pub fn new(inputs: Inputs) -> Result<Self, String> {
         inputs.validate()?;
-        let base_state = inputs.base_parameters.clone()
-            .map(crate::base_parameter::BaseParameters::new).transpose()?;
+        let base_state = inputs
+            .base_parameters
+            .clone()
+            .map(crate::base_parameter::BaseParameters::new)
+            .transpose()?;
         Ok(Self {
-            base_state, staged: inputs.initial_values.clone(), applied: inputs.initial_values.clone(),
-            inputs, written: vec![false; 20], pending: vec![None; 20], generation: 0, admitted: false,
+            base_state,
+            staged: inputs.initial_values.clone(),
+            applied: inputs.initial_values.clone(),
+            inputs,
+            written: vec![false; 20],
+            pending: vec![None; 20],
+            generation: 0,
+            admitted: false,
         })
     }
     pub fn windows(&self) -> Vec<(u64, u64)> {
-        DESCRIPTORS.iter().map(|&(_, address)| (address, address + 4))
+        DESCRIPTORS
+            .iter()
+            .map(|&(_, address)| (address, address + 4))
             .chain(GROUP_BASES.iter().map(|base| (base + 0x80, base + 0x84)))
-            .chain(self.base_state.as_ref().map_or_else(Vec::new, |model| model.windows())).collect()
+            .chain(
+                self.base_state
+                    .as_ref()
+                    .map_or_else(Vec::new, |model| model.windows()),
+            )
+            .collect()
     }
     fn selector(address: u64) -> Option<usize> {
         DESCRIPTORS.iter().position(|&(_, word)| word == address)
     }
-    fn group(base: u64) -> usize { GROUP_BASES.iter().position(|&b| b == base).unwrap() }
+    fn group(base: u64) -> usize {
+        GROUP_BASES.iter().position(|&b| b == base).unwrap()
+    }
     fn request(address: u64) -> Option<usize> {
         GROUP_BASES.iter().position(|base| base + 0x80 == address)
     }
     fn command5_ticks(&self, group: usize) -> Option<u64> {
-        let index = COMMAND5_BASES.iter().position(|base| *base == GROUP_BASES[group])?;
-        self.inputs.command5_completion_ticks.map(|ticks| ticks[index])
+        let index = COMMAND5_BASES
+            .iter()
+            .position(|base| *base == GROUP_BASES[group])?;
+        self.inputs
+            .command5_completion_ticks
+            .map(|ticks| ticks[index])
     }
     fn values(&self, group: usize) -> Vec<u32> {
-        DESCRIPTORS.iter().enumerate().filter(|(_, (base, _))| *base == GROUP_BASES[group])
-            .map(|(index, _)| self.staged[index]).collect()
+        DESCRIPTORS
+            .iter()
+            .enumerate()
+            .filter(|(_, (base, _))| *base == GROUP_BASES[group])
+            .map(|(index, _)| self.staged[index])
+            .collect()
     }
     pub(crate) fn owns(&self, address: u64, size: u8) -> bool {
-        size == 4 && (Self::selector(address).is_some() || Self::request(address).is_some()
-            || self.base_state.as_ref().is_some_and(|model| model.owns(address, size)))
+        size == 4
+            && (Self::selector(address).is_some()
+                || Self::request(address).is_some()
+                || self
+                    .base_state
+                    .as_ref()
+                    .is_some_and(|model| model.owns(address, size)))
     }
     fn admit(&mut self, cx: &mut Cx<'_>) {
-        if self.admitted { return; }
+        if self.admitted {
+            return;
+        }
         cx.record(Record::new("XP4 experimental configuration/request assumptions; no physical clock/reset effects", [
             ("profile", Field::constant(super::system_control::PROFILE)),
             ("law", Field::constant("Declared nine-bit retention and virtual command-2 acknowledgment; unmeasured delay")),
         ]));
         for (index, &(_, address)) in DESCRIPTORS.iter().enumerate() {
-            cx.record(Record::new("XP4 experimental configuration reset input", [
-                ("address", Field::int(address)), ("declared_reset", Field::int(self.inputs.initial_values[index])),
-            ]));
+            cx.record(Record::new(
+                "XP4 experimental configuration reset input",
+                [
+                    ("address", Field::int(address)),
+                    (
+                        "declared_reset",
+                        Field::int(self.inputs.initial_values[index]),
+                    ),
+                ],
+            ));
         }
         for (index, base) in GROUP_BASES.iter().enumerate() {
-            cx.record(Record::new("XP4 experimental request group delay input", [
-                ("request_address", Field::int(base + 0x80)),
-                ("ticks_unmeasured", Field::int(self.inputs.completion_ticks[index])),
-            ]));
+            cx.record(Record::new(
+                "XP4 experimental request group delay input",
+                [
+                    ("request_address", Field::int(base + 0x80)),
+                    (
+                        "ticks_unmeasured",
+                        Field::int(self.inputs.completion_ticks[index]),
+                    ),
+                ],
+            ));
         }
         if let Some(ticks) = self.inputs.command5_completion_ticks {
             for (base, delay) in COMMAND5_BASES.into_iter().zip(ticks) {
-                cx.record(Record::new("XP4 experimental command-only completion input; no physical effects", [
-                    ("request_address", Field::int(base + 0x80)),
-                    ("command", Field::int(5u32)), ("ticks_unmeasured", Field::int(delay)),
-                ]));
+                cx.record(Record::new(
+                    "XP4 experimental command-only completion input; no physical effects",
+                    [
+                        ("request_address", Field::int(base + 0x80)),
+                        ("command", Field::int(5u32)),
+                        ("ticks_unmeasured", Field::int(delay)),
+                    ],
+                ));
             }
         }
         self.admitted = true;
     }
     pub(crate) fn validate_state(&self, expected: &Inputs) -> Result<(), String> {
         self.inputs.validate()?;
-        if &self.inputs != expected || self.staged.len() != 52 || self.applied.len() != 52
-            || self.written.len() != 20 || self.pending.len() != 20
-            || self.staged.iter().chain(self.applied.iter()).any(|value| value & !0x1ff != 0)
+        if &self.inputs != expected
+            || self.staged.len() != 52
+            || self.applied.len() != 52
+            || self.written.len() != 20
+            || self.pending.len() != 20
+            || self
+                .staged
+                .iter()
+                .chain(self.applied.iter())
+                .any(|value| value & !0x1ff != 0)
             || self.generation == 0 && self.applied != self.inputs.initial_values
         {
             return Err("Invalid XP4 configuration/request checkpoint or changed inputs".into());
         }
         match (&self.base_state, &self.inputs.base_parameters) {
-            (None, None) => {},
+            (None, None) => {}
             (Some(model), Some(inputs)) => model.validate_state(inputs, self.generation)?,
             _ => return Err("Invalid XP4 parameter checkpoint presence".into()),
         }
         let mut tokens = BTreeSet::new();
-        if let Some(model) = &self.base_state { tokens.extend(model.tokens()); }
+        if let Some(model) = &self.base_state {
+            tokens.extend(model.tokens());
+        }
         for group in 0..20 {
-            if self.pending[group].is_some() && self.base_state.as_ref().is_some_and(|model| model.busy(GROUP_BASES[group])) {
+            if self.pending[group].is_some()
+                && self
+                    .base_state
+                    .as_ref()
+                    .is_some_and(|model| model.busy(GROUP_BASES[group]))
+            {
                 return Err("Overlapping XP4 request checkpoint operations".into());
             }
-            if !self.written[group] && (self.pending[group].as_ref().is_some_and(|p| p.command == 2)
-                || DESCRIPTORS.iter().enumerate().any(|(index, &(base, _))| base == GROUP_BASES[group]
-                    && (self.staged[index] != self.inputs.initial_values[index]
-                        || self.applied[index] != self.inputs.initial_values[index])))
+            if !self.written[group]
+                && (self.pending[group].as_ref().is_some_and(|p| p.command == 2)
+                    || DESCRIPTORS.iter().enumerate().any(|(index, &(base, _))| {
+                        base == GROUP_BASES[group]
+                            && (self.staged[index] != self.inputs.initial_values[index]
+                                || self.applied[index] != self.inputs.initial_values[index])
+                    }))
             {
                 return Err("Invalid unwritten XP4 configuration group checkpoint".into());
             }
             if let Some(pending) = &self.pending[group] {
                 let (ticks, valid_values) = match pending.command {
-                    2 => (self.inputs.completion_ticks[group], pending.values == self.values(group)),
-                    5 => (self.command5_ticks(group).ok_or("Undeclared XP4 command-5 checkpoint")?, pending.values.is_empty()),
+                    2 => (
+                        self.inputs.completion_ticks[group],
+                        pending.values == self.values(group),
+                    ),
+                    5 => (
+                        self.command5_ticks(group)
+                            .ok_or("Undeclared XP4 command-5 checkpoint")?,
+                        pending.values.is_empty(),
+                    ),
                     _ => return Err("Unknown XP4 pending request command".into()),
                 };
-                if pending.token == 0 || pending.token > self.generation
-                    || !tokens.insert(pending.token) || pending.at < ticks || !valid_values
+                if pending.token == 0
+                    || pending.token > self.generation
+                    || !tokens.insert(pending.token)
+                    || pending.at < ticks
+                    || !valid_values
                 {
                     return Err("Invalid XP4 configuration/request pending checkpoint".into());
                 }
@@ -237,19 +305,30 @@ impl ConfigurationRequests {
     }
 }
 impl Device for ConfigurationRequests {
-    fn name(&self) -> &'static str { "xp4-functional-configuration-requests" }
+    fn name(&self) -> &'static str {
+        "xp4-functional-configuration-requests"
+    }
     fn read(&mut self, cx: &mut Cx<'_>, address: u64, size: u8) -> u64 {
-        if !self.owns(address, size) { cx.unmodeled(); return 0; }
+        if !self.owns(address, size) {
+            cx.unmodeled();
+            return 0;
+        }
         self.admit(cx);
         if let Some(model) = &mut self.base_state
             && model.owns(address, size)
         {
             return model.read(cx, address);
         }
-        if let Some(index) = Self::selector(address) { return u64::from(self.staged[index]); }
+        if let Some(index) = Self::selector(address) {
+            return u64::from(self.staged[index]);
+        }
         let group = Self::request(address).unwrap();
-        if let Some(pending) = &self.pending[group] { u64::from(pending.command) } else {
-            self.base_state.as_ref().map_or(0, |model| model.request_value(GROUP_BASES[group]))
+        if let Some(pending) = &self.pending[group] {
+            u64::from(pending.command)
+        } else {
+            self.base_state
+                .as_ref()
+                .map_or(0, |model| model.request_value(GROUP_BASES[group]))
         }
     }
     fn write(&mut self, cx: &mut Cx<'_>, address: u64, size: u8, value: u64) {
@@ -270,24 +349,40 @@ impl Device for ConfigurationRequests {
         }
         if let Some(index) = Self::selector(address) {
             let group = Self::group(DESCRIPTORS[index].0);
-            if value > 0x1ff || self.pending[group].is_some()
-                || self.base_state.as_ref().is_some_and(|model| model.busy(GROUP_BASES[group])) {
-                cx.fail("XP4 configuration write outside nine-bit mask or while group busy"); return;
+            if value > 0x1ff
+                || self.pending[group].is_some()
+                || self
+                    .base_state
+                    .as_ref()
+                    .is_some_and(|model| model.busy(GROUP_BASES[group]))
+            {
+                cx.fail("XP4 configuration write outside nine-bit mask or while group busy");
+                return;
             }
-            self.admit(cx); self.staged[index] = value as u32; self.written[group] = true;
-            cx.record(Record::new("XP4 experimental configuration staged", [
-                ("address", Field::int(address)), ("value", Field::int(value)),
-            ]));
+            self.admit(cx);
+            self.staged[index] = value as u32;
+            self.written[group] = true;
+            cx.record(Record::new(
+                "XP4 experimental configuration staged",
+                [
+                    ("address", Field::int(address)),
+                    ("value", Field::int(value)),
+                ],
+            ));
             return;
         }
         let group = Self::request(address).unwrap();
         if matches!(value, 3 | 6) {
             let command = value as u32;
             if self.pending[group].is_some() {
-                cx.fail(format!("XP4 command {command} while another request is busy")); return;
+                cx.fail(format!(
+                    "XP4 command {command} while another request is busy"
+                ));
+                return;
             }
             let Some(model) = &mut self.base_state else {
-                cx.fail(format!("XP4 command {command} parameter family is absent")); return;
+                cx.fail(format!("XP4 command {command} parameter family is absent"));
+                return;
             };
             let base = GROUP_BASES[group];
             if let Some(pending) = model.pending_command(base) {
@@ -299,74 +394,141 @@ impl Device for ConfigurationRequests {
                 return;
             }
             let deadlines = match model.deadlines(base, command, cx.now()) {
-                Ok(deadlines) => deadlines, Err(error) => { cx.fail(error); return; }
+                Ok(deadlines) => deadlines,
+                Err(error) => {
+                    cx.fail(error);
+                    return;
+                }
             };
-            let (Some(first), Some(second)) = (self.generation.checked_add(1), self.generation.checked_add(2)) else {
-                cx.fail("XP4 parameter token generation overflow"); return;
+            let (Some(first), Some(second)) = (
+                self.generation.checked_add(1),
+                self.generation.checked_add(2),
+            ) else {
+                cx.fail("XP4 parameter token generation overflow");
+                return;
             };
-            model.submit(cx, base, command, deadlines, (first, second)); self.generation = second; return;
+            model.submit(cx, base, command, deadlines, (first, second));
+            self.generation = second;
+            return;
         }
-        if self.base_state.as_ref().is_some_and(|model| model.busy(GROUP_BASES[group])) {
-            cx.fail("XP4 request while a parameter command is still busy or settling"); return;
+        if self
+            .base_state
+            .as_ref()
+            .is_some_and(|model| model.busy(GROUP_BASES[group]))
+        {
+            cx.fail("XP4 request while a parameter command is still busy or settling");
+            return;
         }
         let ticks = if value == 5 {
             let Some(ticks) = self.command5_ticks(group) else {
-                cx.fail("XP4 command 5 is not declared for this group"); return;
+                cx.fail("XP4 command 5 is not declared for this group");
+                return;
             };
             ticks
         } else {
             if value != 2 || !self.written[group] {
-                cx.fail("XP4 configuration group requires prior configuration then command 2"); return;
+                cx.fail("XP4 configuration group requires prior configuration then command 2");
+                return;
             }
             self.inputs.completion_ticks[group]
         };
         if let Some(pending) = &self.pending[group] {
             if u64::from(pending.command) != value {
-                cx.fail("XP4 request conflicts with the pending command"); return;
+                cx.fail("XP4 request conflicts with the pending command");
+                return;
             }
-            cx.record(Record::new("XP4 experimental configuration request reissue preserves deadline", [
-                ("request_address", Field::int(address)), ("deadline", Field::int(pending.at)),
-            ]));
+            cx.record(Record::new(
+                "XP4 experimental configuration request reissue preserves deadline",
+                [
+                    ("request_address", Field::int(address)),
+                    ("deadline", Field::int(pending.at)),
+                ],
+            ));
             return;
         }
-        let (Some(at), Some(token)) = (cx.now().checked_add(ticks), self.generation.checked_add(1)) else {
-            cx.fail("XP4 configuration/request deadline or generation overflow"); return;
+        let (Some(at), Some(token)) = (cx.now().checked_add(ticks), self.generation.checked_add(1))
+        else {
+            cx.fail("XP4 configuration/request deadline or generation overflow");
+            return;
         };
-        let values = if value == 2 { self.values(group) } else { Vec::new() };
-        self.admit(cx); self.generation = token;
-        self.pending[group] = Some(Pending { command: value as u32, at, token, values });
-        cx.record(Record::new("XP4 experimental configuration request scheduled", [
-            ("request_address", Field::int(address)), ("command", Field::int(value)),
-            ("deadline", Field::int(at)), ("ticks_unmeasured", Field::int(ticks)),
-        ]));
+        let values = if value == 2 {
+            self.values(group)
+        } else {
+            Vec::new()
+        };
+        self.admit(cx);
+        self.generation = token;
+        self.pending[group] = Some(Pending {
+            command: value as u32,
+            at,
+            token,
+            values,
+        });
+        cx.record(Record::new(
+            "XP4 experimental configuration request scheduled",
+            [
+                ("request_address", Field::int(address)),
+                ("command", Field::int(value)),
+                ("deadline", Field::int(at)),
+                ("ticks_unmeasured", Field::int(ticks)),
+            ],
+        ));
         cx.schedule(at, token);
     }
     fn next_deadline(&self, _: u64) -> Option<u64> {
-        self.pending.iter().flatten().map(|pending| pending.at)
-            .chain(self.base_state.as_ref().and_then(|model| model.next_deadline())).min()
+        self.pending
+            .iter()
+            .flatten()
+            .map(|pending| pending.at)
+            .chain(
+                self.base_state
+                    .as_ref()
+                    .and_then(|model| model.next_deadline()),
+            )
+            .min()
     }
     fn event(&mut self, cx: &mut Cx<'_>, token: u64) {
-        if let Some(model) = &mut self.base_state { model.event(cx, token); }
+        if let Some(model) = &mut self.base_state {
+            model.event(cx, token);
+        }
         for group in 0..20 {
-            if self.pending[group].as_ref().is_some_and(|p| p.token == token && p.at <= cx.now()) {
+            if self.pending[group]
+                .as_ref()
+                .is_some_and(|p| p.token == token && p.at <= cx.now())
+            {
                 let pending = self.pending[group].take().unwrap();
                 if pending.command == 2 {
                     let mut values = pending.values.into_iter();
                     for (index, &(base, _)) in DESCRIPTORS.iter().enumerate() {
-                        if base == GROUP_BASES[group] { self.applied[index] = values.next().unwrap(); }
+                        if base == GROUP_BASES[group] {
+                            self.applied[index] = values.next().unwrap();
+                        }
                     }
                 }
-                cx.record(Record::new(if pending.command == 5 { "XP4 experimental command 5 acknowledged; busy bits cleared" } else { "XP4 experimental configuration request acknowledged; busy bits cleared" }, [
-                    ("request_address", Field::int(GROUP_BASES[group] + 0x80)),
-                    ("deadline", Field::int(pending.at)), ("tick", Field::int(cx.now())),
-                ]));
+                cx.record(Record::new(
+                    if pending.command == 5 {
+                        "XP4 experimental command 5 acknowledged; busy bits cleared"
+                    } else {
+                        "XP4 experimental configuration request acknowledged; busy bits cleared"
+                    },
+                    [
+                        ("request_address", Field::int(GROUP_BASES[group] + 0x80)),
+                        ("deadline", Field::int(pending.at)),
+                        ("tick", Field::int(cx.now())),
+                    ],
+                ));
             }
         }
     }
-    fn save(&self) -> Value { json!(self) }
+    fn save(&self) -> Value {
+        json!(self)
+    }
     fn restore(&mut self, value: &Value) -> Result<(), String> {
-        let state: Self = serde_json::from_value(value.clone()).map_err(|error| error.to_string())?;
-        state.validate_state(&self.inputs)?; *self = state; Ok(())
+        let state: Self =
+            serde_json::from_value(value.clone()).map_err(|error| error.to_string())?;
+        state.validate_state(&self.inputs)?;
+        *self = state;
+        Ok(())
     }
 }
 
@@ -376,35 +538,77 @@ mod tests {
     use crate::base_parameter::{BaseParameters, COMMAND6_BASES, Command6Delays};
     use fujimod_emulator_devices::Host;
     #[derive(Default)]
-    struct Clock { now: u64, events: Vec<(u64, u64)>, records: Vec<Record> }
+    struct Clock {
+        now: u64,
+        events: Vec<(u64, u64)>,
+        records: Vec<Record>,
+    }
     impl Host for Clock {
-        fn now(&self) -> u64 { self.now }
-        fn schedule(&mut self, _: usize, at: u64, token: u64) { self.events.push((at, token)); }
-        fn set_irq(&mut self, _: u32, _: bool) { panic!("configuration requests have no IRQ") }
-        fn raise_irq(&mut self, _: usize, _: u32) -> Result<(), String> { panic!("no IRQ") }
-        fn ram_read(&self, _: u64, _: &mut [u8]) -> Result<(), String> { panic!("no DMA") }
-        fn ram_write(&mut self, _: u64, _: &[u8]) -> Result<(), String> { panic!("no DMA") }
-        fn record(&mut self, record: Record) { self.records.push(record); }
+        fn now(&self) -> u64 {
+            self.now
+        }
+        fn schedule(&mut self, _: usize, at: u64, token: u64) {
+            self.events.push((at, token));
+        }
+        fn set_irq(&mut self, _: u32, _: bool) {
+            panic!("configuration requests have no IRQ")
+        }
+        fn raise_irq(&mut self, _: usize, _: u32) -> Result<(), String> {
+            panic!("no IRQ")
+        }
+        fn ram_read(&self, _: u64, _: &mut [u8]) -> Result<(), String> {
+            panic!("no DMA")
+        }
+        fn ram_write(&mut self, _: u64, _: &[u8]) -> Result<(), String> {
+            panic!("no DMA")
+        }
+        fn record(&mut self, record: Record) {
+            self.records.push(record);
+        }
     }
     fn inputs(value: u32, ticks: u64) -> Inputs {
-        Inputs { initial_values: vec![value; 52], completion_ticks: vec![ticks; 20], command5_completion_ticks: None, base_parameters: None }
+        Inputs {
+            initial_values: vec![value; 52],
+            completion_ticks: vec![ticks; 20],
+            command5_completion_ticks: None,
+            base_parameters: None,
+        }
     }
-    fn write(model: &mut ConfigurationRequests, clock: &mut Clock, address: u64, size: u8, value: u64) -> Result<(), String> {
-        let mut cx = Cx::new(clock, 0, 0, 0); model.write(&mut cx, address, size, value);
+    fn write(
+        model: &mut ConfigurationRequests,
+        clock: &mut Clock,
+        address: u64,
+        size: u8,
+        value: u64,
+    ) -> Result<(), String> {
+        let mut cx = Cx::new(clock, 0, 0, 0);
+        model.write(&mut cx, address, size, value);
         cx.take_refusal().map_or(Ok(()), Err)
     }
-    fn read(model: &mut ConfigurationRequests, clock: &mut Clock, address: u64, size: u8) -> Result<u64, String> {
-        let mut cx = Cx::new(clock, 0, 0, 0); let value = model.read(&mut cx, address, size);
+    fn read(
+        model: &mut ConfigurationRequests,
+        clock: &mut Clock,
+        address: u64,
+        size: u8,
+    ) -> Result<u64, String> {
+        let mut cx = Cx::new(clock, 0, 0, 0);
+        let value = model.read(&mut cx, address, size);
         cx.take_refusal().map_or(Ok(value), Err)
     }
     #[test]
     fn all_configuration_words_have_explicit_reset_and_exact_windows() {
         for reset in [0, 0x1ff, 0x155] {
-            let mut model = ConfigurationRequests::new(inputs(reset, 8)).unwrap(); let mut clock = Clock::default();
-            let mut windows = model.windows(); windows.sort_unstable();
-            assert_eq!(windows.len(), 72); assert!(windows.windows(2).all(|w| w[0].1 <= w[1].0));
+            let mut model = ConfigurationRequests::new(inputs(reset, 8)).unwrap();
+            let mut clock = Clock::default();
+            let mut windows = model.windows();
+            windows.sort_unstable();
+            assert_eq!(windows.len(), 72);
+            assert!(windows.windows(2).all(|w| w[0].1 <= w[1].0));
             for &(_, address) in &DESCRIPTORS {
-                assert_eq!(read(&mut model, &mut clock, address, 4).unwrap(), u64::from(reset));
+                assert_eq!(
+                    read(&mut model, &mut clock, address, 4).unwrap(),
+                    u64::from(reset)
+                );
                 write(&mut model, &mut clock, address, 4, 0x100).unwrap();
                 assert_eq!(read(&mut model, &mut clock, address, 4).unwrap(), 0x100);
                 let before = model.save();
@@ -416,7 +620,9 @@ mod tests {
                 }
                 assert_eq!(model.save(), before);
             }
-            for address in [0xff701a00, 0xff701a50, 0xff701a81, 0xff701a84, 0xfff48604, 0xfff4860c] {
+            for address in [
+                0xff701a00, 0xff701a50, 0xff701a81, 0xff701a84, 0xfff48604, 0xfff4860c,
+            ] {
                 assert!(read(&mut model, &mut clock, address, 4).is_err());
                 assert!(write(&mut model, &mut clock, address, 4, 0).is_err());
             }
@@ -425,107 +631,197 @@ mod tests {
     #[test]
     fn every_group_latches_all_members_and_completes_only_at_its_deadline() {
         for ticks in [1, 2, 8, 256, 4096] {
-            let mut model = ConfigurationRequests::new(inputs(0, ticks)).unwrap(); let mut clock = Clock::default();
-            for &(_, address) in &DESCRIPTORS { write(&mut model, &mut clock, address, 4, address & 0x1ff).unwrap(); }
+            let mut model = ConfigurationRequests::new(inputs(0, ticks)).unwrap();
+            let mut clock = Clock::default();
+            for &(_, address) in &DESCRIPTORS {
+                write(&mut model, &mut clock, address, 4, address & 0x1ff).unwrap();
+            }
             for group in 0..20 {
                 let address = GROUP_BASES[group] + 0x80;
                 write(&mut model, &mut clock, address, 4, 2).unwrap();
                 let token = model.pending[group].as_ref().unwrap().token;
                 let before = model.save();
-                for _ in 0..20 { assert_eq!(read(&mut model, &mut clock, address, 4).unwrap(), 2); }
+                for _ in 0..20 {
+                    assert_eq!(read(&mut model, &mut clock, address, 4).unwrap(), 2);
+                }
                 assert_eq!(model.save(), before);
-                clock.now = ticks - 1; model.event(&mut Cx::new(&mut clock, 0, 0, 0), token);
+                clock.now = ticks - 1;
+                model.event(&mut Cx::new(&mut clock, 0, 0, 0), token);
                 assert!(model.pending[group].is_some());
-                clock.now = ticks + u64::from(group == 19); model.event(&mut Cx::new(&mut clock, 0, 0, 0), token);
+                clock.now = ticks + u64::from(group == 19);
+                model.event(&mut Cx::new(&mut clock, 0, 0, 0), token);
                 assert_eq!(read(&mut model, &mut clock, address, 4).unwrap(), 0);
                 for (index, &(base, _)) in DESCRIPTORS.iter().enumerate() {
-                    if base == GROUP_BASES[group] { assert_eq!(model.applied[index], model.staged[index]); }
+                    if base == GROUP_BASES[group] {
+                        assert_eq!(model.applied[index], model.staged[index]);
+                    }
                 }
                 clock.now = 0;
             }
-            assert_eq!(clock.events.len(), 20); assert!(model.pending.iter().all(Option::is_none));
+            assert_eq!(clock.events.len(), 20);
+            assert!(model.pending.iter().all(Option::is_none));
         }
     }
     #[test]
-    fn shared_groups_refuse_busy_writes_reissues_do_not_postpone_and_other_groups_are_independent() {
-        let mut model = ConfigurationRequests::new(inputs(0, 8)).unwrap(); let mut clock = Clock::default();
+    fn shared_groups_refuse_busy_writes_reissues_do_not_postpone_and_other_groups_are_independent()
+    {
+        let mut model = ConfigurationRequests::new(inputs(0, 8)).unwrap();
+        let mut clock = Clock::default();
         assert!(write(&mut model, &mut clock, GROUP_BASES[0] + 0x80, 4, 2).is_err());
-        for &(_, address) in &DESCRIPTORS { write(&mut model, &mut clock, address, 4, 1).unwrap(); }
-        for &base in &GROUP_BASES { write(&mut model, &mut clock, base + 0x80, 4, 2).unwrap(); }
-        let before = model.save(); clock.now = 3;
+        for &(_, address) in &DESCRIPTORS {
+            write(&mut model, &mut clock, address, 4, 1).unwrap();
+        }
+        for &base in &GROUP_BASES {
+            write(&mut model, &mut clock, base + 0x80, 4, 2).unwrap();
+        }
+        let before = model.save();
+        clock.now = 3;
         for &base in &GROUP_BASES {
             write(&mut model, &mut clock, base + 0x80, 4, 2).unwrap();
             for value in [0, 1, 3, 5, 6, 1u64 << 32] {
                 assert!(write(&mut model, &mut clock, base + 0x80, 4, value).is_err());
             }
-            for size in [1, 2, 8] { assert!(read(&mut model, &mut clock, base + 0x80, size).is_err()); }
+            for size in [1, 2, 8] {
+                assert!(read(&mut model, &mut clock, base + 0x80, size).is_err());
+            }
         }
-        for &(_, address) in &DESCRIPTORS { assert!(write(&mut model, &mut clock, address, 4, 1).is_err()); }
-        assert_eq!(model.save(), before); assert_eq!(clock.events.len(), 20);
-        clock.now = 8; model.event(&mut Cx::new(&mut clock, 0, 0, 0), 1);
-        assert!(model.pending[0].is_none()); assert!(model.pending[1].is_some());
+        for &(_, address) in &DESCRIPTORS {
+            assert!(write(&mut model, &mut clock, address, 4, 1).is_err());
+        }
+        assert_eq!(model.save(), before);
+        assert_eq!(clock.events.len(), 20);
+        clock.now = 8;
+        model.event(&mut Cx::new(&mut clock, 0, 0, 0), 1);
+        assert!(model.pending[0].is_none());
+        assert!(model.pending[1].is_some());
         write(&mut model, &mut clock, DESCRIPTORS[0].1, 4, 2).unwrap();
     }
     #[test]
     fn inputs_reject_missing_lengths_masks_delays_and_duplicate_fields() {
-        for (field, length) in [("initial_values", 51), ("initial_values", 53), ("completion_ticks", 19), ("completion_ticks", 21)] {
-            let mut bad = json!(inputs(0, 8)); bad[field] = json!(vec![1; length]);
+        for (field, length) in [
+            ("initial_values", 51),
+            ("initial_values", 53),
+            ("completion_ticks", 19),
+            ("completion_ticks", 21),
+        ] {
+            let mut bad = json!(inputs(0, 8));
+            bad[field] = json!(vec![1; length]);
             assert!(ConfigurationRequests::new(serde_json::from_value(bad).unwrap()).is_err());
         }
-        for index in 0..52 { let mut bad = inputs(0, 8); bad.initial_values[index] = 0x200; assert!(ConfigurationRequests::new(bad).is_err()); }
+        for index in 0..52 {
+            let mut bad = inputs(0, 8);
+            bad.initial_values[index] = 0x200;
+            assert!(ConfigurationRequests::new(bad).is_err());
+        }
         for index in 0..20 {
-            for ticks in [0, 1_000_001, u64::MAX] { let mut bad = inputs(0, 8); bad.completion_ticks[index] = ticks; assert!(ConfigurationRequests::new(bad).is_err()); }
+            for ticks in [0, 1_000_001, u64::MAX] {
+                let mut bad = inputs(0, 8);
+                bad.completion_ticks[index] = ticks;
+                assert!(ConfigurationRequests::new(bad).is_err());
+            }
         }
         assert!(serde_json::from_value::<Inputs>(json!({"initial_values": []})).is_err());
-        assert!(serde_json::from_str::<Inputs>(r#"{"initial_values":[],"initial_values":[],"completion_ticks":[]}"#).is_err());
+        assert!(
+            serde_json::from_str::<Inputs>(
+                r#"{"initial_values":[],"initial_values":[],"completion_ticks":[]}"#
+            )
+            .is_err()
+        );
     }
     #[test]
     fn checkpoint_roundtrip_refuses_bad_masks_lengths_inputs_and_pending_tokens() {
-        let mut model = ConfigurationRequests::new(inputs(0, 8)).unwrap(); let mut clock = Clock::default();
-        for &(_, address) in &DESCRIPTORS { write(&mut model, &mut clock, address, 4, 1).unwrap(); }
-        for &base in &GROUP_BASES { write(&mut model, &mut clock, base + 0x80, 4, 2).unwrap(); }
-        let saved = model.save(); let mut resumed = ConfigurationRequests::new(inputs(0, 8)).unwrap(); resumed.restore(&saved).unwrap();
+        let mut model = ConfigurationRequests::new(inputs(0, 8)).unwrap();
+        let mut clock = Clock::default();
+        for &(_, address) in &DESCRIPTORS {
+            write(&mut model, &mut clock, address, 4, 1).unwrap();
+        }
+        for &base in &GROUP_BASES {
+            write(&mut model, &mut clock, base + 0x80, 4, 2).unwrap();
+        }
+        let saved = model.save();
+        let mut resumed = ConfigurationRequests::new(inputs(0, 8)).unwrap();
+        resumed.restore(&saved).unwrap();
         for field in ["staged", "applied"] {
-            let mut bad = saved.clone(); bad[field][0] = json!(0x200); assert!(resumed.restore(&bad).is_err());
-            let mut bad = saved.clone(); bad[field].as_array_mut().unwrap().pop(); assert!(resumed.restore(&bad).is_err());
+            let mut bad = saved.clone();
+            bad[field][0] = json!(0x200);
+            assert!(resumed.restore(&bad).is_err());
+            let mut bad = saved.clone();
+            bad[field].as_array_mut().unwrap().pop();
+            assert!(resumed.restore(&bad).is_err());
         }
-        for (field, value) in [("token", json!(0)), ("token", json!(21)), ("at", json!(0)), ("values", json!([]))] {
-            let mut bad = saved.clone(); bad["pending"][0][field] = value; assert!(resumed.restore(&bad).is_err());
+        for (field, value) in [
+            ("token", json!(0)),
+            ("token", json!(21)),
+            ("at", json!(0)),
+            ("values", json!([])),
+        ] {
+            let mut bad = saved.clone();
+            bad["pending"][0][field] = value;
+            assert!(resumed.restore(&bad).is_err());
         }
-        let mut bad = saved.clone(); bad["pending"][1]["token"] = bad["pending"][0]["token"].clone(); assert!(resumed.restore(&bad).is_err());
-        let mut bad = saved.clone(); bad["written"][0] = json!(false); assert!(resumed.restore(&bad).is_err());
-        assert!(ConfigurationRequests::new(inputs(0, 9)).unwrap().restore(&saved).is_err());
+        let mut bad = saved.clone();
+        bad["pending"][1]["token"] = bad["pending"][0]["token"].clone();
+        assert!(resumed.restore(&bad).is_err());
+        let mut bad = saved.clone();
+        bad["written"][0] = json!(false);
+        assert!(resumed.restore(&bad).is_err());
+        assert!(
+            ConfigurationRequests::new(inputs(0, 9))
+                .unwrap()
+                .restore(&saved)
+                .is_err()
+        );
         assert_eq!(resumed.save(), saved);
         clock.now = 8;
         for token in 1..=20 {
             model.event(&mut Cx::new(&mut clock, 0, 0, 0), token);
             resumed.event(&mut Cx::new(&mut clock, 0, 0, 0), token);
         }
-        assert_eq!(model.save(), resumed.save()); resumed.restore(&model.save()).unwrap();
+        assert_eq!(model.save(), resumed.save());
+        resumed.restore(&model.save()).unwrap();
     }
     #[test]
     fn stale_idle_events_and_overflow_never_complete_or_mutate_requests() {
-        let mut model = ConfigurationRequests::new(inputs(0, 8)).unwrap(); let mut clock = Clock::default();
-        let before = model.save(); model.event(&mut Cx::new(&mut clock, 0, 0, 0), 1); assert_eq!(model.save(), before);
+        let mut model = ConfigurationRequests::new(inputs(0, 8)).unwrap();
+        let mut clock = Clock::default();
+        let before = model.save();
+        model.event(&mut Cx::new(&mut clock, 0, 0, 0), 1);
+        assert_eq!(model.save(), before);
         write(&mut model, &mut clock, DESCRIPTORS[0].1, 4, 1).unwrap();
-        clock.now = u64::MAX; let before = model.save();
-        assert!(write(&mut model, &mut clock, GROUP_BASES[0] + 0x80, 4, 2).is_err()); assert_eq!(model.save(), before);
-        clock.now = 0; model.generation = u64::MAX; let before = model.save();
-        assert!(write(&mut model, &mut clock, GROUP_BASES[0] + 0x80, 4, 2).is_err()); assert_eq!(model.save(), before);
-        model.generation = 0; write(&mut model, &mut clock, GROUP_BASES[0] + 0x80, 4, 2).unwrap();
-        clock.now = 8; model.event(&mut Cx::new(&mut clock, 0, 0, 0), 1);
-        write(&mut model, &mut clock, GROUP_BASES[0] + 0x80, 4, 2).unwrap(); let before = model.save();
-        model.event(&mut Cx::new(&mut clock, 0, 0, 0), 1); assert_eq!(model.save(), before);
+        clock.now = u64::MAX;
+        let before = model.save();
+        assert!(write(&mut model, &mut clock, GROUP_BASES[0] + 0x80, 4, 2).is_err());
+        assert_eq!(model.save(), before);
+        clock.now = 0;
+        model.generation = u64::MAX;
+        let before = model.save();
+        assert!(write(&mut model, &mut clock, GROUP_BASES[0] + 0x80, 4, 2).is_err());
+        assert_eq!(model.save(), before);
+        model.generation = 0;
+        write(&mut model, &mut clock, GROUP_BASES[0] + 0x80, 4, 2).unwrap();
+        clock.now = 8;
+        model.event(&mut Cx::new(&mut clock, 0, 0, 0), 1);
+        write(&mut model, &mut clock, GROUP_BASES[0] + 0x80, 4, 2).unwrap();
+        let before = model.save();
+        model.event(&mut Cx::new(&mut clock, 0, 0, 0), 1);
+        assert_eq!(model.save(), before);
     }
     #[test]
     fn identical_register_and_time_trace_is_cpu_pc_independent() {
         let mut outputs = Vec::new();
         for (cpu, pc) in [(0, 0), (3, 0xdead0000)] {
-            let mut model = ConfigurationRequests::new(inputs(0, 8)).unwrap(); let mut clock = Clock::default();
-            for &(_, address) in &DESCRIPTORS { model.write(&mut Cx::new(&mut clock, cpu, pc, 0), address, 4, 0x100); }
-            for &base in &GROUP_BASES { model.write(&mut Cx::new(&mut clock, cpu, pc, 0), base + 0x80, 4, 2); }
+            let mut model = ConfigurationRequests::new(inputs(0, 8)).unwrap();
+            let mut clock = Clock::default();
+            for &(_, address) in &DESCRIPTORS {
+                model.write(&mut Cx::new(&mut clock, cpu, pc, 0), address, 4, 0x100);
+            }
+            for &base in &GROUP_BASES {
+                model.write(&mut Cx::new(&mut clock, cpu, pc, 0), base + 0x80, 4, 2);
+            }
             clock.now = 8;
-            for token in 1..=20 { model.event(&mut Cx::new(&mut clock, cpu, pc, 0), token); }
+            for token in 1..=20 {
+                model.event(&mut Cx::new(&mut clock, cpu, pc, 0), token);
+            }
             outputs.push((model.save(), json!(clock.records), clock.events));
         }
         assert_eq!(outputs[0], outputs[1]);
@@ -533,8 +829,10 @@ mod tests {
     fn parameter_inputs(status: u32, request_ticks: u64, settle_ticks: u64) -> Inputs {
         let mut cfg = inputs(0, 8);
         cfg.base_parameters = Some(crate::base_parameter::Inputs {
-            initial_pairs: vec![[0, 0]; 13], initial_status: vec![status; 13],
-            request_ticks: vec![request_ticks; 13], settle_ticks: vec![settle_ticks; 13],
+            initial_pairs: vec![[0, 0]; 13],
+            initial_status: vec![status; 13],
+            request_ticks: vec![request_ticks; 13],
+            settle_ticks: vec![settle_ticks; 13],
             command6_delays: None,
         });
         cfg
@@ -548,12 +846,21 @@ mod tests {
         for reset in [0, u32::MAX, 0x55555555] {
             let mut cfg = parameter_inputs(0, 8, 16);
             cfg.base_parameters.as_mut().unwrap().initial_pairs = vec![[reset, !reset]; 13];
-            let mut model = ConfigurationRequests::new(cfg).unwrap(); let mut clock = Clock::default();
-            let mut windows = model.windows(); windows.sort_unstable();
-            assert_eq!(windows.len(), 111); assert!(windows.windows(2).all(|w| w[0].1 <= w[1].0));
+            let mut model = ConfigurationRequests::new(cfg).unwrap();
+            let mut clock = Clock::default();
+            let mut windows = model.windows();
+            windows.sort_unstable();
+            assert_eq!(windows.len(), 111);
+            assert!(windows.windows(2).all(|w| w[0].1 <= w[1].0));
             for &base in &crate::base_parameter::BASES {
-                assert_eq!(read(&mut model, &mut clock, base, 4).unwrap(), u64::from(reset));
-                assert_eq!(read(&mut model, &mut clock, base + 8, 4).unwrap(), u64::from(!reset));
+                assert_eq!(
+                    read(&mut model, &mut clock, base, 4).unwrap(),
+                    u64::from(reset)
+                );
+                assert_eq!(
+                    read(&mut model, &mut clock, base + 8, 4).unwrap(),
+                    u64::from(!reset)
+                );
                 assert!(write(&mut model, &mut clock, base + 0x80, 4, 3).is_err());
                 write(&mut model, &mut clock, base, 4, 0x16).unwrap();
                 assert!(write(&mut model, &mut clock, base + 0x80, 4, 3).is_err());
@@ -562,51 +869,81 @@ mod tests {
                 assert_eq!(read(&mut model, &mut clock, base + 0x80, 4).unwrap(), 3);
                 assert_eq!(read(&mut model, &mut clock, base + 0xf0, 4).unwrap(), 1);
             }
-            assert_eq!(clock.events.len(), 26); assert_eq!(model.next_deadline(0), Some(8));
+            assert_eq!(clock.events.len(), 26);
+            assert_eq!(model.next_deadline(0), Some(8));
             clock.now = 8;
-            for token in (1..=25).step_by(2) { model.event(&mut Cx::new(&mut clock, 0, 0, 0), token); }
+            for token in (1..=25).step_by(2) {
+                model.event(&mut Cx::new(&mut clock, 0, 0, 0), token);
+            }
             assert_eq!(model.next_deadline(8), Some(24));
             for &base in &crate::base_parameter::BASES {
                 assert_eq!(read(&mut model, &mut clock, base + 0x80, 4).unwrap(), 0);
                 assert_eq!(read(&mut model, &mut clock, base + 0xf0, 4).unwrap(), 1);
             }
-            assert_eq!(model.save()["base_state"]["applied"], json!(vec![[reset, !reset]; 13]));
+            assert_eq!(
+                model.save()["base_state"]["applied"],
+                json!(vec![[reset, !reset]; 13])
+            );
             clock.now = 24;
-            for token in (2..=26).step_by(2) { model.event(&mut Cx::new(&mut clock, 0, 0, 0), token); }
+            for token in (2..=26).step_by(2) {
+                model.event(&mut Cx::new(&mut clock, 0, 0, 0), token);
+            }
             assert_eq!(model.next_deadline(24), None);
-            assert_eq!(model.save()["base_state"]["applied"], json!(vec![[0x16, 0x26]; 13]));
-            for &base in &crate::base_parameter::BASES { assert_eq!(read(&mut model, &mut clock, base + 0xf0, 4).unwrap(), 0); }
+            assert_eq!(
+                model.save()["base_state"]["applied"],
+                json!(vec![[0x16, 0x26]; 13])
+            );
+            for &base in &crate::base_parameter::BASES {
+                assert_eq!(read(&mut model, &mut clock, base + 0xf0, 4).unwrap(), 0);
+            }
         }
     }
     #[test]
     fn command_two_and_three_have_one_owner_and_freeze_each_others_writes() {
         let base = crate::base_parameter::BASES[0];
-        let mut model = ConfigurationRequests::new(parameter_inputs(1, 8, 8)).unwrap(); let mut clock = Clock::default();
+        let mut model = ConfigurationRequests::new(parameter_inputs(1, 8, 8)).unwrap();
+        let mut clock = Clock::default();
         write(&mut model, &mut clock, base + 0x40, 4, 1).unwrap();
         write(&mut model, &mut clock, base + 0x80, 4, 2).unwrap();
         assert!(write(&mut model, &mut clock, base, 4, 0x16).is_err());
         assert!(write(&mut model, &mut clock, base + 0x80, 4, 3).is_err());
-        clock.now = 8; model.event(&mut Cx::new(&mut clock, 0, 0, 0), 1);
+        clock.now = 8;
+        model.event(&mut Cx::new(&mut clock, 0, 0, 0), 1);
         assert_eq!(read(&mut model, &mut clock, base + 0xf0, 4).unwrap(), 1); // Command 2 has no status effect.
         stage_pair(&mut model, &mut clock, base);
         write(&mut model, &mut clock, base + 0x80, 4, 3).unwrap();
         for (now, request_value) in [(9, 3), (16, 0)] {
             clock.now = now;
-            if now == 16 { model.event(&mut Cx::new(&mut clock, 0, 0, 0), 2); }
-            assert_eq!(read(&mut model, &mut clock, base + 0x80, 4).unwrap(), request_value);
+            if now == 16 {
+                model.event(&mut Cx::new(&mut clock, 0, 0, 0), 2);
+            }
+            assert_eq!(
+                read(&mut model, &mut clock, base + 0x80, 4).unwrap(),
+                request_value
+            );
             assert_eq!(read(&mut model, &mut clock, base + 0xf0, 4).unwrap(), 1);
-            let before = model.save(); let event_count = clock.events.len();
+            let before = model.save();
+            let event_count = clock.events.len();
             write(&mut model, &mut clock, base + 0x80, 4, 3).unwrap();
-            for (address, value) in [(base, 0x16), (base + 8, 0x26), (base + 0x40, 1), (base + 0x80, 2), (base + 0x80, 0)] {
+            for (address, value) in [
+                (base, 0x16),
+                (base + 8, 0x26),
+                (base + 0x40, 1),
+                (base + 0x80, 2),
+                (base + 0x80, 0),
+            ] {
                 assert!(write(&mut model, &mut clock, address, 4, value).is_err());
             }
-            assert_eq!(model.save(), before); assert_eq!(clock.events.len(), event_count);
+            assert_eq!(model.save(), before);
+            assert_eq!(clock.events.len(), event_count);
         }
-        clock.now = 24; model.event(&mut Cx::new(&mut clock, 0, 0, 0), 3);
+        clock.now = 24;
+        model.event(&mut Cx::new(&mut clock, 0, 0, 0), 3);
         assert_eq!(read(&mut model, &mut clock, base + 0xf0, 4).unwrap(), 0);
         write(&mut model, &mut clock, base + 0x80, 4, 2).unwrap();
         assert_eq!(clock.events.last(), Some(&(32, 4)));
-        clock.now = 32; model.event(&mut Cx::new(&mut clock, 0, 0, 0), 4);
+        clock.now = 32;
+        model.event(&mut Cx::new(&mut clock, 0, 0, 0), 4);
         assert_eq!(read(&mut model, &mut clock, base + 0x80, 4).unwrap(), 0);
     }
     #[test]
@@ -618,27 +955,47 @@ mod tests {
             ..Default::default()
         };
         assert_eq!(read(&mut model, &mut clock, base + 0xf0, 4).unwrap(), 1);
-        assert_eq!(model.next_deadline(100), None); let before = model.save();
-        model.event(&mut Cx::new(&mut clock, 0, 0, 0), 1); assert_eq!(model.save(), before);
-        stage_pair(&mut model, &mut clock, base); write(&mut model, &mut clock, base + 0x80, 4, 3).unwrap();
-        let pending = model.save(); clock.now = 107;
-        model.event(&mut Cx::new(&mut clock, 0, 0, 0), 1); assert_eq!(model.save(), pending);
+        assert_eq!(model.next_deadline(100), None);
+        let before = model.save();
+        model.event(&mut Cx::new(&mut clock, 0, 0, 0), 1);
+        assert_eq!(model.save(), before);
+        stage_pair(&mut model, &mut clock, base);
+        write(&mut model, &mut clock, base + 0x80, 4, 3).unwrap();
+        let pending = model.save();
+        clock.now = 107;
+        model.event(&mut Cx::new(&mut clock, 0, 0, 0), 1);
+        assert_eq!(model.save(), pending);
         clock.now = 200; // Out-of-order settling cannot skip Request phase.
-        model.event(&mut Cx::new(&mut clock, 0, 0, 0), 2); assert_eq!(model.save(), pending);
+        model.event(&mut Cx::new(&mut clock, 0, 0, 0), 2);
+        assert_eq!(model.save(), pending);
         model.event(&mut Cx::new(&mut clock, 0, 0, 0), 1);
         assert_eq!(read(&mut model, &mut clock, base + 0x80, 4).unwrap(), 0);
         assert_eq!(read(&mut model, &mut clock, base + 0xf0, 4).unwrap(), 1);
-        let settling = model.save(); model.event(&mut Cx::new(&mut clock, 0, 0, 0), 1); assert_eq!(model.save(), settling);
+        let settling = model.save();
+        model.event(&mut Cx::new(&mut clock, 0, 0, 0), 1);
+        assert_eq!(model.save(), settling);
         model.event(&mut Cx::new(&mut clock, 0, 0, 0), 2);
-        let settled = model.save(); model.event(&mut Cx::new(&mut clock, 0, 0, 0), 2); assert_eq!(model.save(), settled);
+        let settled = model.save();
+        model.event(&mut Cx::new(&mut clock, 0, 0, 0), 2);
+        assert_eq!(model.save(), settled);
     }
     #[test]
     fn parameter_inputs_widths_status_and_unknown_offsets_are_strict() {
         let good = json!(parameter_inputs(0, 8, 8));
-        for field in ["initial_pairs", "initial_status", "request_ticks", "settle_ticks"] {
-            let mut bad = good.clone(); bad["base_parameters"].as_object_mut().unwrap().remove(field);
+        for field in [
+            "initial_pairs",
+            "initial_status",
+            "request_ticks",
+            "settle_ticks",
+        ] {
+            let mut bad = good.clone();
+            bad["base_parameters"]
+                .as_object_mut()
+                .unwrap()
+                .remove(field);
             assert!(serde_json::from_value::<Inputs>(bad).is_err());
-            let mut bad = good.clone(); bad["base_parameters"][field].as_array_mut().unwrap().pop();
+            let mut bad = good.clone();
+            bad["base_parameters"][field].as_array_mut().unwrap().pop();
             assert!(ConfigurationRequests::new(serde_json::from_value(bad).unwrap()).is_err());
         }
         for ticks in [0, 1_000_001, u64::MAX] {
@@ -646,8 +1003,10 @@ mod tests {
             assert!(ConfigurationRequests::new(parameter_inputs(0, 8, ticks)).is_err());
         }
         assert!(ConfigurationRequests::new(parameter_inputs(2, 8, 8)).is_err());
-        let mut model = ConfigurationRequests::new(parameter_inputs(0, 8, 8)).unwrap(); let mut clock = Clock::default();
-        read(&mut model, &mut clock, DESCRIPTORS[0].1, 4).unwrap(); let before = model.save();
+        let mut model = ConfigurationRequests::new(parameter_inputs(0, 8, 8)).unwrap();
+        let mut clock = Clock::default();
+        read(&mut model, &mut clock, DESCRIPTORS[0].1, 4).unwrap();
+        let before = model.save();
         for &base in &crate::base_parameter::BASES {
             for address in [base, base + 8, base + 0xf0] {
                 for size in [1, 2, 8] {
@@ -657,7 +1016,9 @@ mod tests {
             }
             assert!(write(&mut model, &mut clock, base, 4, 1u64 << 32).is_err());
             assert!(write(&mut model, &mut clock, base + 0xf0, 4, 0).is_err());
-            for address in [base + 4, base + 0xc, base + 0xf4] { assert!(read(&mut model, &mut clock, address, 4).is_err()); }
+            for address in [base + 4, base + 0xc, base + 0xf4] {
+                assert!(read(&mut model, &mut clock, address, 4).is_err());
+            }
         }
         assert_eq!(model.save(), before);
         let mut absent = ConfigurationRequests::new(inputs(0, 8)).unwrap();
@@ -666,47 +1027,80 @@ mod tests {
     }
     #[test]
     fn parameter_restore_validates_both_phases_and_cross_family_tokens() {
-        let base = crate::base_parameter::BASES[0]; let other = crate::base_parameter::BASES[1];
-        let cfg = parameter_inputs(0, 8, 8); let mut model = ConfigurationRequests::new(cfg.clone()).unwrap(); let mut clock = Clock::default();
-        write(&mut model, &mut clock, base + 0x40, 4, 1).unwrap(); stage_pair(&mut model, &mut clock, base);
+        let base = crate::base_parameter::BASES[0];
+        let other = crate::base_parameter::BASES[1];
+        let cfg = parameter_inputs(0, 8, 8);
+        let mut model = ConfigurationRequests::new(cfg.clone()).unwrap();
+        let mut clock = Clock::default();
+        write(&mut model, &mut clock, base + 0x40, 4, 1).unwrap();
+        stage_pair(&mut model, &mut clock, base);
         write(&mut model, &mut clock, base + 0x80, 4, 3).unwrap();
         write(&mut model, &mut clock, other + 0x40, 4, 1).unwrap();
         write(&mut model, &mut clock, other + 0x80, 4, 2).unwrap(); // Same token namespace; independent group.
-        let good = model.save(); let mut resumed = ConfigurationRequests::new(cfg.clone()).unwrap(); resumed.restore(&good).unwrap();
-        for (field, value) in [("request_token", json!(0)), ("settle_token", json!(1)), ("request_at", json!(0)),
-            ("settle_at", json!(9)), ("phase", json!("Unknown")), ("pair", json!([0, 0]))] {
-            let mut bad = good.clone(); bad["base_state"]["pending"][0][field] = value;
-            assert!(resumed.restore(&bad).is_err()); assert_eq!(resumed.save(), good);
+        let good = model.save();
+        let mut resumed = ConfigurationRequests::new(cfg.clone()).unwrap();
+        resumed.restore(&good).unwrap();
+        for (field, value) in [
+            ("request_token", json!(0)),
+            ("settle_token", json!(1)),
+            ("request_at", json!(0)),
+            ("settle_at", json!(9)),
+            ("phase", json!("Unknown")),
+            ("pair", json!([0, 0])),
+        ] {
+            let mut bad = good.clone();
+            bad["base_state"]["pending"][0][field] = value;
+            assert!(resumed.restore(&bad).is_err());
+            assert_eq!(resumed.save(), good);
         }
-        let mut bad = good.clone(); bad["base_state"]["status"][0] = json!(0); assert!(resumed.restore(&bad).is_err());
+        let mut bad = good.clone();
+        bad["base_state"]["status"][0] = json!(0);
+        assert!(resumed.restore(&bad).is_err());
         let other_group = ConfigurationRequests::group(other);
-        let mut bad = good.clone(); bad["pending"][other_group]["token"] = json!(1); assert!(resumed.restore(&bad).is_err());
-        let mut bad = good.clone(); bad["pending"][0] = bad["pending"][other_group].clone();
+        let mut bad = good.clone();
+        bad["pending"][other_group]["token"] = json!(1);
+        assert!(resumed.restore(&bad).is_err());
+        let mut bad = good.clone();
+        bad["pending"][0] = bad["pending"][other_group].clone();
         assert!(resumed.restore(&bad).unwrap_err().contains("Overlapping"));
-        assert!(ConfigurationRequests::new(parameter_inputs(0, 9, 8)).unwrap().restore(&good).is_err());
+        assert!(
+            ConfigurationRequests::new(parameter_inputs(0, 9, 8))
+                .unwrap()
+                .restore(&good)
+                .is_err()
+        );
         clock.now = 8;
         for target in [&mut model, &mut resumed] {
             target.event(&mut Cx::new(&mut clock, 0, 0, 0), 1);
             target.event(&mut Cx::new(&mut clock, 0, 0, 0), 3);
         }
-        assert_eq!(model.save(), resumed.save()); resumed.restore(&model.save()).unwrap();
+        assert_eq!(model.save(), resumed.save());
+        resumed.restore(&model.save()).unwrap();
         clock.now = 16;
-        for target in [&mut model, &mut resumed] { target.event(&mut Cx::new(&mut clock, 0, 0, 0), 2); }
-        assert_eq!(model.save(), resumed.save()); resumed.restore(&model.save()).unwrap();
+        for target in [&mut model, &mut resumed] {
+            target.event(&mut Cx::new(&mut clock, 0, 0, 0), 2);
+        }
+        assert_eq!(model.save(), resumed.save());
+        resumed.restore(&model.save()).unwrap();
     }
     #[test]
     fn parameter_deadline_and_token_overflow_leave_every_state_unchanged() {
         let base = crate::base_parameter::BASES[0];
-        let mut model = ConfigurationRequests::new(parameter_inputs(0, 8, 8)).unwrap(); let mut clock = Clock::default();
+        let mut model = ConfigurationRequests::new(parameter_inputs(0, 8, 8)).unwrap();
+        let mut clock = Clock::default();
         stage_pair(&mut model, &mut clock, base);
         for now in [u64::MAX - 4, u64::MAX - 12] {
-            clock.now = now; let before = model.save();
-            assert!(write(&mut model, &mut clock, base + 0x80, 4, 3).is_err()); assert_eq!(model.save(), before);
+            clock.now = now;
+            let before = model.save();
+            assert!(write(&mut model, &mut clock, base + 0x80, 4, 3).is_err());
+            assert_eq!(model.save(), before);
         }
         clock.now = 0;
         for generation in [u64::MAX, u64::MAX - 1] {
-            model.generation = generation; let before = model.save();
-            assert!(write(&mut model, &mut clock, base + 0x80, 4, 3).is_err()); assert_eq!(model.save(), before);
+            model.generation = generation;
+            let before = model.save();
+            assert!(write(&mut model, &mut clock, base + 0x80, 4, 3).is_err());
+            assert_eq!(model.save(), before);
         }
         assert!(clock.events.is_empty());
     }
@@ -714,17 +1108,25 @@ mod tests {
     fn all_parameter_groups_are_cpu_pc_independent_through_both_phases() {
         let mut outcomes = Vec::new();
         for (cpu, pc) in [(0, 0), (3, 0xdead0000)] {
-            let mut model = ConfigurationRequests::new(parameter_inputs(0, 8, 8)).unwrap(); let mut clock = Clock::default();
+            let mut model = ConfigurationRequests::new(parameter_inputs(0, 8, 8)).unwrap();
+            let mut clock = Clock::default();
             for &base in &crate::base_parameter::BASES {
-                for (address, value) in [(base, 0xffffffff), (base + 8, 0x55555555), (base + 0x80, 3)] {
+                for (address, value) in
+                    [(base, 0xffffffff), (base + 8, 0x55555555), (base + 0x80, 3)]
+                {
                     let mut cx = Cx::new(&mut clock, cpu, pc, 0);
-                    model.write(&mut cx, address, 4, value); assert!(cx.take_refusal().is_none());
+                    model.write(&mut cx, address, 4, value);
+                    assert!(cx.take_refusal().is_none());
                 }
             }
             clock.now = 8;
-            for token in (1..=25).step_by(2) { model.event(&mut Cx::new(&mut clock, cpu, pc, 0), token); }
+            for token in (1..=25).step_by(2) {
+                model.event(&mut Cx::new(&mut clock, cpu, pc, 0), token);
+            }
             clock.now = 16;
-            for token in (2..=26).step_by(2) { model.event(&mut Cx::new(&mut clock, cpu, pc, 0), token); }
+            for token in (2..=26).step_by(2) {
+                model.event(&mut Cx::new(&mut clock, cpu, pc, 0), token);
+            }
             outcomes.push((model.save(), json!(clock.records), clock.events));
         }
         assert_eq!(outcomes[0], outcomes[1]);
@@ -741,21 +1143,30 @@ mod tests {
         for ticks in [1, 8, 256] {
             for base in COMMAND5_BASES {
                 let mut model = ConfigurationRequests::new(command5_inputs([ticks; 3])).unwrap();
-                let mut clock = Clock::default(); clock.now = 10;
-                let original = model.save(); let group = ConfigurationRequests::group(base);
+                let mut clock = Clock::default();
+                clock.now = 10;
+                let original = model.save();
+                let group = ConfigurationRequests::group(base);
                 write(&mut model, &mut clock, base + 0x80, 4, 5).unwrap();
-                let saved = model.save(); let token = model.pending[group].as_ref().unwrap().token;
-                for _ in 0..20 { assert_eq!(read(&mut model, &mut clock, base + 0x80, 4).unwrap(), 5); }
+                let saved = model.save();
+                let token = model.pending[group].as_ref().unwrap().token;
+                for _ in 0..20 {
+                    assert_eq!(read(&mut model, &mut clock, base + 0x80, 4).unwrap(), 5);
+                }
                 assert_eq!(model.save(), saved);
                 clock.now = 10 + ticks - 1;
                 write(&mut model, &mut clock, base + 0x80, 4, 5).unwrap();
-                assert_eq!(model.save(), saved); assert_eq!(clock.events, [(10 + ticks, token)]);
+                assert_eq!(model.save(), saved);
+                assert_eq!(clock.events, [(10 + ticks, token)]);
                 model.event(&mut Cx::new(&mut clock, 0, 0, 0), token);
                 assert_eq!(read(&mut model, &mut clock, base + 0x80, 4).unwrap(), 5);
-                clock.now += 1; model.event(&mut Cx::new(&mut clock, 0, 0, 0), token);
+                clock.now += 1;
+                model.event(&mut Cx::new(&mut clock, 0, 0, 0), token);
                 assert_eq!(read(&mut model, &mut clock, base + 0x80, 4).unwrap(), 0);
                 let after = model.save();
-                for key in ["staged", "applied", "written", "base_state"] { assert_eq!(after[key], original[key], "{key}"); }
+                for key in ["staged", "applied", "written", "base_state"] {
+                    assert_eq!(after[key], original[key], "{key}");
+                }
                 model.restore(&after).unwrap();
             }
         }
@@ -765,24 +1176,33 @@ mod tests {
     fn command5_requires_explicit_valid_delays_and_exact_groups() {
         for bad in [0, 1_000_001, u64::MAX] {
             for index in 0..3 {
-                let mut ticks = [8; 3]; ticks[index] = bad;
+                let mut ticks = [8; 3];
+                ticks[index] = bad;
                 assert!(ConfigurationRequests::new(command5_inputs(ticks)).is_err());
             }
         }
         for base in GROUP_BASES {
-            let mut absent = ConfigurationRequests::new(inputs(0, 8)).unwrap(); let mut clock = Clock::default();
+            let mut absent = ConfigurationRequests::new(inputs(0, 8)).unwrap();
+            let mut clock = Clock::default();
             let before = absent.save();
             assert!(write(&mut absent, &mut clock, base + 0x80, 4, 5).is_err());
-            assert_eq!(absent.save(), before); assert!(clock.events.is_empty());
+            assert_eq!(absent.save(), before);
+            assert!(clock.events.is_empty());
             if !COMMAND5_BASES.contains(&base) {
-                let mut model = ConfigurationRequests::new(command5_inputs([8; 3])).unwrap(); let before = model.save();
+                let mut model = ConfigurationRequests::new(command5_inputs([8; 3])).unwrap();
+                let before = model.save();
                 assert!(write(&mut model, &mut clock, base + 0x80, 4, 5).is_err());
                 assert_eq!(model.save(), before);
             }
         }
-        let mut model = ConfigurationRequests::new(command5_inputs([8; 3])).unwrap(); let mut clock = Clock::default();
-        for size in [1, 2, 8] { assert!(write(&mut model, &mut clock, COMMAND5_BASES[0] + 0x80, size, 5).is_err()); }
-        for value in [0, 1, 4, 6, 7, 1u64 << 32] { assert!(write(&mut model, &mut clock, COMMAND5_BASES[0] + 0x80, 4, value).is_err()); }
+        let mut model = ConfigurationRequests::new(command5_inputs([8; 3])).unwrap();
+        let mut clock = Clock::default();
+        for size in [1, 2, 8] {
+            assert!(write(&mut model, &mut clock, COMMAND5_BASES[0] + 0x80, size, 5).is_err());
+        }
+        for value in [0, 1, 4, 6, 7, 1u64 << 32] {
+            assert!(write(&mut model, &mut clock, COMMAND5_BASES[0] + 0x80, 4, value).is_err());
+        }
         assert!(clock.events.is_empty());
     }
 
@@ -790,21 +1210,31 @@ mod tests {
     fn command5_shares_request_ownership_and_does_not_apply_staged_values() {
         let base = COMMAND5_BASES[0];
         for first in [2, 3, 5] {
-            let mut model = ConfigurationRequests::new(command5_inputs([8; 3])).unwrap(); let mut clock = Clock::default();
+            let mut model = ConfigurationRequests::new(command5_inputs([8; 3])).unwrap();
+            let mut clock = Clock::default();
             write(&mut model, &mut clock, base + 0x40, 4, 0x123).unwrap();
             stage_pair(&mut model, &mut clock, base);
             write(&mut model, &mut clock, base + 0x80, 4, first).unwrap();
-            let saved = model.save(); let events = clock.events.clone();
+            let saved = model.save();
+            let events = clock.events.clone();
             for command in [2, 3, 5] {
-                if command != first { assert!(write(&mut model, &mut clock, base + 0x80, 4, command).is_err()); }
+                if command != first {
+                    assert!(write(&mut model, &mut clock, base + 0x80, 4, command).is_err());
+                }
             }
             for (address, value) in [(base, 1), (base + 8, 1), (base + 0x40, 1)] {
                 assert!(write(&mut model, &mut clock, address, 4, value).is_err());
             }
-            assert_eq!(model.save(), saved); assert_eq!(clock.events, events);
+            assert_eq!(model.save(), saved);
+            assert_eq!(clock.events, events);
             if first == 5 {
-                clock.now = 8; model.event(&mut Cx::new(&mut clock, 0, 0, 0), events[0].1);
-                assert_eq!(model.applied, vec![0; 52]); assert_eq!(model.staged, serde_json::from_value::<Vec<u32>>(saved["staged"].clone()).unwrap());
+                clock.now = 8;
+                model.event(&mut Cx::new(&mut clock, 0, 0, 0), events[0].1);
+                assert_eq!(model.applied, vec![0; 52]);
+                assert_eq!(
+                    model.staged,
+                    serde_json::from_value::<Vec<u32>>(saved["staged"].clone()).unwrap()
+                );
                 assert_eq!(model.save()["base_state"], saved["base_state"]);
             }
         }
@@ -813,22 +1243,49 @@ mod tests {
     #[test]
     fn command5_checkpoint_refuses_wrong_command_values_tokens_and_changed_inputs() {
         let cfg = command5_inputs([8, 16, 32]);
-        let mut model = ConfigurationRequests::new(cfg.clone()).unwrap(); let mut clock = Clock::default();
-        for base in COMMAND5_BASES { write(&mut model, &mut clock, base + 0x80, 4, 5).unwrap(); }
-        let saved = model.save(); let group = ConfigurationRequests::group(COMMAND5_BASES[0]);
-        let mut resumed = ConfigurationRequests::new(cfg).unwrap(); resumed.restore(&saved).unwrap();
-        for (field, value) in [("command", json!(2)), ("command", json!(6)), ("values", json!([1])), ("token", json!(0)), ("at", json!(7))] {
-            let mut bad = saved.clone(); bad["pending"][group][field] = value;
-            assert!(resumed.restore(&bad).is_err()); assert_eq!(resumed.save(), saved);
+        let mut model = ConfigurationRequests::new(cfg.clone()).unwrap();
+        let mut clock = Clock::default();
+        for base in COMMAND5_BASES {
+            write(&mut model, &mut clock, base + 0x80, 4, 5).unwrap();
         }
-        let mut bad = saved.clone(); bad["pending"][0] = bad["pending"][group].clone(); bad["pending"][group] = Value::Null;
+        let saved = model.save();
+        let group = ConfigurationRequests::group(COMMAND5_BASES[0]);
+        let mut resumed = ConfigurationRequests::new(cfg).unwrap();
+        resumed.restore(&saved).unwrap();
+        for (field, value) in [
+            ("command", json!(2)),
+            ("command", json!(6)),
+            ("values", json!([1])),
+            ("token", json!(0)),
+            ("at", json!(7)),
+        ] {
+            let mut bad = saved.clone();
+            bad["pending"][group][field] = value;
+            assert!(resumed.restore(&bad).is_err());
+            assert_eq!(resumed.save(), saved);
+        }
+        let mut bad = saved.clone();
+        bad["pending"][0] = bad["pending"][group].clone();
+        bad["pending"][group] = Value::Null;
         assert!(resumed.restore(&bad).is_err());
-        let mut bad = saved.clone(); bad["pending"][ConfigurationRequests::group(COMMAND5_BASES[1])]["token"] = json!(1);
+        let mut bad = saved.clone();
+        bad["pending"][ConfigurationRequests::group(COMMAND5_BASES[1])]["token"] = json!(1);
         assert!(resumed.restore(&bad).is_err());
-        assert!(ConfigurationRequests::new(command5_inputs([9,16,32])).unwrap().restore(&saved).is_err());
-        assert!(ConfigurationRequests::new(parameter_inputs(1,8,16)).unwrap().restore(&saved).is_err());
+        assert!(
+            ConfigurationRequests::new(command5_inputs([9, 16, 32]))
+                .unwrap()
+                .restore(&saved)
+                .is_err()
+        );
+        assert!(
+            ConfigurationRequests::new(parameter_inputs(1, 8, 16))
+                .unwrap()
+                .restore(&saved)
+                .is_err()
+        );
         for (tick, token) in clock.events.clone() {
-            clock.now = tick; model.event(&mut Cx::new(&mut clock, 0, 0, 0), token);
+            clock.now = tick;
+            model.event(&mut Cx::new(&mut clock, 0, 0, 0), token);
             resumed.event(&mut Cx::new(&mut clock, 0, 0, 0), token);
         }
         assert_eq!(resumed.save(), model.save());
@@ -837,30 +1294,50 @@ mod tests {
     #[test]
     fn command5_overflow_refuses_without_mutation_and_trace_is_cpu_independent() {
         for overflow_generation in [false, true] {
-            let mut model = ConfigurationRequests::new(command5_inputs([8; 3])).unwrap(); let mut clock = Clock::default();
-            if overflow_generation { model.generation = u64::MAX; } else { clock.now = u64::MAX - 3; }
+            let mut model = ConfigurationRequests::new(command5_inputs([8; 3])).unwrap();
+            let mut clock = Clock::default();
+            if overflow_generation {
+                model.generation = u64::MAX;
+            } else {
+                clock.now = u64::MAX - 3;
+            }
             let before = model.save();
             assert!(write(&mut model, &mut clock, COMMAND5_BASES[0] + 0x80, 4, 5).is_err());
-            assert_eq!(model.save(), before); assert!(clock.events.is_empty()); assert!(clock.records.is_empty());
+            assert_eq!(model.save(), before);
+            assert!(clock.events.is_empty());
+            assert!(clock.records.is_empty());
         }
         let mut outcomes = Vec::new();
         for (cpu, pc) in [(0, 0), (3, 0xdead0000)] {
-            let mut model = ConfigurationRequests::new(command5_inputs([8; 3])).unwrap(); let mut clock = Clock::default();
+            let mut model = ConfigurationRequests::new(command5_inputs([8; 3])).unwrap();
+            let mut clock = Clock::default();
             for base in COMMAND5_BASES {
-                let mut cx = Cx::new(&mut clock, cpu, pc, 0); model.write(&mut cx, base + 0x80, 4, 5);
+                let mut cx = Cx::new(&mut clock, cpu, pc, 0);
+                model.write(&mut cx, base + 0x80, 4, 5);
                 assert!(cx.take_refusal().is_none());
             }
             clock.now = 8;
-            for token in 1..=3 { model.event(&mut Cx::new(&mut clock, cpu, pc, 0), token); }
+            for token in 1..=3 {
+                model.event(&mut Cx::new(&mut clock, cpu, pc, 0), token);
+            }
             outcomes.push((model.save(), json!(clock.records), clock.events));
         }
         assert_eq!(outcomes[0], outcomes[1]);
     }
 
     const COMMAND6_DELAYS: [Command6Delays; 3] = [
-        Command6Delays { request_ticks: 3, settle_ticks: 5 },
-        Command6Delays { request_ticks: 7, settle_ticks: 11 },
-        Command6Delays { request_ticks: 13, settle_ticks: 17 },
+        Command6Delays {
+            request_ticks: 3,
+            settle_ticks: 5,
+        },
+        Command6Delays {
+            request_ticks: 7,
+            settle_ticks: 11,
+        },
+        Command6Delays {
+            request_ticks: 13,
+            settle_ticks: 17,
+        },
     ];
 
     fn command6_inputs() -> Inputs {
@@ -875,7 +1352,10 @@ mod tests {
             let cfg = command6_inputs();
             let mut model = ConfigurationRequests::new(cfg.clone()).unwrap();
             let mut resumed = ConfigurationRequests::new(cfg).unwrap();
-            let mut clock = Clock { now: 100, ..Default::default() };
+            let mut clock = Clock {
+                now: 100,
+                ..Default::default()
+            };
             let index = BaseParameters::index(base).unwrap();
             let request = base + 0x80;
             let status = base + 0xf0;
@@ -895,7 +1375,10 @@ mod tests {
             model.event(&mut Cx::new(&mut clock, 0, 0, 0), 1);
             assert_eq!(model.save(), pending);
             for (request_word, deadline, token) in [(6, request_at, 1), (0, settle_at, 2)] {
-                assert_eq!(read(&mut model, &mut clock, request, 4).unwrap(), request_word);
+                assert_eq!(
+                    read(&mut model, &mut clock, request, 4).unwrap(),
+                    request_word
+                );
                 assert_eq!(read(&mut model, &mut clock, status, 4).unwrap(), 1);
                 let phase = model.save();
                 assert_eq!(phase["base_state"]["applied"][index], json!([0, 0]));
@@ -926,7 +1409,8 @@ mod tests {
         let mut clock = Clock::default();
         let omitted = json!(command5_inputs([8; 3]));
         assert!(omitted["base_parameters"].get("command6_delays").is_none());
-        let mut legacy = ConfigurationRequests::new(serde_json::from_value(omitted).unwrap()).unwrap();
+        let mut legacy =
+            ConfigurationRequests::new(serde_json::from_value(omitted).unwrap()).unwrap();
         stage_pair(&mut legacy, &mut clock, base);
         let before = legacy.save();
         assert!(write(&mut legacy, &mut clock, base + 0x80, 4, 6).is_err());
@@ -935,14 +1419,27 @@ mod tests {
             for index in 0..COMMAND6_BASES.len() {
                 for request in [true, false] {
                     let mut cfg = command6_inputs();
-                    let delay = &mut cfg.base_parameters.as_mut().unwrap().command6_delays.as_mut().unwrap()[index];
-                    if request { delay.request_ticks = bad; } else { delay.settle_ticks = bad; }
+                    let delay = &mut cfg
+                        .base_parameters
+                        .as_mut()
+                        .unwrap()
+                        .command6_delays
+                        .as_mut()
+                        .unwrap()[index];
+                    if request {
+                        delay.request_ticks = bad;
+                    } else {
+                        delay.settle_ticks = bad;
+                    }
                     assert!(ConfigurationRequests::new(cfg).is_err());
                 }
             }
         }
         let mut bad = json!(command6_inputs());
-        bad["base_parameters"]["command6_delays"].as_array_mut().unwrap().pop();
+        bad["base_parameters"]["command6_delays"]
+            .as_array_mut()
+            .unwrap()
+            .pop();
         assert!(serde_json::from_value::<Inputs>(bad).is_err());
 
         let mut model = ConfigurationRequests::new(command6_inputs()).unwrap();
@@ -1007,7 +1504,12 @@ mod tests {
         let mut clock = Clock::default();
         stage_pair(&mut model, &mut clock, base);
         clock.records.clear();
-        for (now, generation) in [(u64::MAX - 2, 0), (u64::MAX - 7, 0), (0, u64::MAX - 1), (0, u64::MAX)] {
+        for (now, generation) in [
+            (u64::MAX - 2, 0),
+            (u64::MAX - 7, 0),
+            (0, u64::MAX - 1),
+            (0, u64::MAX),
+        ] {
             clock.now = now;
             model.generation = generation;
             let before = model.save();
@@ -1047,9 +1549,14 @@ mod tests {
             resumed.restore(&saved).unwrap();
             assert_eq!(saved["base_state"]["pending"][index]["phase"], json!(phase));
             for (field, value) in [
-                ("command", json!(2)), ("command", json!(3)), ("request_at", json!(2)),
-                ("settle_at", json!(7)), ("phase", json!("Unknown")),
-                ("pair", json!([0, 0])), ("request_token", json!(0)), ("settle_token", json!(1)),
+                ("command", json!(2)),
+                ("command", json!(3)),
+                ("request_at", json!(2)),
+                ("settle_at", json!(7)),
+                ("phase", json!("Unknown")),
+                ("pair", json!([0, 0])),
+                ("request_token", json!(0)),
+                ("settle_token", json!(1)),
             ] {
                 let mut bad = saved.clone();
                 bad["base_state"]["pending"][index][field] = value;
@@ -1057,7 +1564,10 @@ mod tests {
                 assert_eq!(resumed.save(), saved);
             }
             let mut bad = saved.clone();
-            bad["base_state"]["pending"][index].as_object_mut().unwrap().remove("command");
+            bad["base_state"]["pending"][index]
+                .as_object_mut()
+                .unwrap()
+                .remove("command");
             assert!(resumed.restore(&bad).is_err());
             let mut bad = saved.clone();
             bad["base_state"]["status"][index] = json!(0);
@@ -1085,8 +1595,18 @@ mod tests {
             let mut changed = cfg.clone();
             let parameter_inputs = changed.base_parameters.as_mut().unwrap();
             parameter_inputs.command6_delays.as_mut().unwrap()[0].settle_ticks += 1;
-            assert!(ConfigurationRequests::new(changed).unwrap().restore(&saved).is_err());
-            assert!(ConfigurationRequests::new(command5_inputs([8; 3])).unwrap().restore(&saved).is_err());
+            assert!(
+                ConfigurationRequests::new(changed)
+                    .unwrap()
+                    .restore(&saved)
+                    .is_err()
+            );
+            assert!(
+                ConfigurationRequests::new(command5_inputs([8; 3]))
+                    .unwrap()
+                    .restore(&saved)
+                    .is_err()
+            );
         }
     }
 }

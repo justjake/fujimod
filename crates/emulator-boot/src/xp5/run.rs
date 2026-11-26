@@ -1,21 +1,34 @@
 //! The XP5 bring-up run: open a session from explicit inputs, drive it in slices and record
 //! the outcome in the run directory.
 use super::{RunFacts, Startup};
-use crate::mod_loader;
 use crate::host::{parse_gpio, parse_number, parse_stub, parse_timed_poke};
+use crate::mod_loader;
+use fujimod_catalog_resolution::ResolvedConfiguration;
 use fujimod_emulator::board::Board;
+use fujimod_emulator_cpu::ExecutionPolicy;
 use fujimod_emulator_devices::graphics::scanout::Frame;
 use fujimod_emulator_session::Session;
-use fujimod_catalog_resolution::ResolvedConfiguration;
-use fujimod_emulator_cpu::ExecutionPolicy;
 use fujimod_emulator_xp5_board::keys::Key;
 use serde_json::{Value, json};
-use std::{collections::VecDeque, path::{Path, PathBuf}, sync::{Arc, atomic::{AtomicBool, Ordering}}, time::{Duration, Instant}};
+use std::{
+    collections::VecDeque,
+    path::{Path, PathBuf},
+    sync::{
+        Arc,
+        atomic::{AtomicBool, Ordering},
+    },
+    time::{Duration, Instant},
+};
 
 /// Write one little-endian word for --poke: a physical address first, else CPU0's virtual view.
-fn poke_word(board: &fujimod_emulator::board::Board, address: u64, value: u32) -> Result<(), String> {
+fn poke_word(
+    board: &fujimod_emulator::board::Board,
+    address: u64,
+    value: u32,
+) -> Result<(), String> {
     let bytes = value.to_le_bytes();
-    board.write_physical(address, &bytes)
+    board
+        .write_physical(address, &bytes)
         .or_else(|_| board.write_memory(0, address, &bytes))
         .map_err(|error| format!("poke {address:#x}: {error}"))
 }
@@ -219,7 +232,10 @@ pub struct RunHost {
     limits: crate::host::Limits,
     save_snapshot: Option<PathBuf>,
     screenshot: Option<PathBuf>,
-    pc_trace: Option<(crate::TraceOutput, fujimod_emulator::board::observation::PcTrace)>,
+    pc_trace: Option<(
+        crate::TraceOutput,
+        fujimod_emulator::board::observation::PcTrace,
+    )>,
     dumps: Vec<(u64, usize)>,
     hashes: Vec<(u64, u64)>,
     card_write_back: Vec<super::loader_card::WriteBack>,
@@ -327,9 +343,12 @@ impl RunHost {
         }
         timed_gpio.sort_by_key(|(at_ms, _)| *at_ms);
         let watch_after_ms = match std::env::var("XT5_WATCH_AFTER_MS") {
-            Ok(value) => Some(value.trim().parse::<u64>().map_err(|_| {
-                "XT5_WATCH_AFTER_MS needs whole milliseconds".to_string()
-            })?)
+            Ok(value) => Some(
+                value
+                    .trim()
+                    .parse::<u64>()
+                    .map_err(|_| "XT5_WATCH_AFTER_MS needs whole milliseconds".to_string())?,
+            )
             .filter(|ms| *ms > 0),
             Err(_) => None,
         };
@@ -380,13 +399,18 @@ impl RunHost {
             session.board.set_execution_policy(policy)?;
             crate::load_snapshot(&mut session, &path)?;
         }
-        session.board.install_discovery_callee_stubs(&callee_stubs)?;
+        session
+            .board
+            .install_discovery_callee_stubs(&callee_stubs)?;
         session.board.set_execution_policy(policy)?;
         if watch_after_ms.is_none() {
             session.board.watch_pcs(&watch_pcs)?;
             session.board.watch_writes(&watch_writes)?;
         }
-        let trace = pc_trace.as_ref().map(|output| output.begin(&session)).transpose()?;
+        let trace = pc_trace
+            .as_ref()
+            .map(|output| output.begin(&session))
+            .transpose()?;
         let fujimod = if mod_specs.is_empty() {
             None
         } else {
@@ -454,7 +478,10 @@ impl RunHost {
                 &change.control,
                 &change.position,
             )?;
-            eprintln!("FUJIMOD XP5 set: {}={} at {} ms", change.control, change.position, change.at_ms);
+            eprintln!(
+                "FUJIMOD XP5 set: {}={} at {} ms",
+                change.control, change.position, change.at_ms
+            );
         }
         let timed_gpio = timed_gpio
             .into_iter()
@@ -469,8 +496,9 @@ impl RunHost {
         let signal = interrupted.clone();
         ctrlc::set_handler(move || signal.store(true, Ordering::Release))
             .map_err(|error| error.to_string())?;
-        let limits = crate::host::Limits::new(&session, instruction_limit, limit, ticks_per_second)?
-            .with_wall(wall_seconds);
+        let limits =
+            crate::host::Limits::new(&session, instruction_limit, limit, ticks_per_second)?
+                .with_wall(wall_seconds);
         eprintln!(
             "FUJIMOD XP5 session configuration={configuration_id} firmware={} policy={} quantum={quantum} run={}",
             firmware.id,
@@ -489,10 +517,8 @@ impl RunHost {
             quantum,
             run_directory: run_directory.clone(),
             start,
-            next_status: start.saturating_add(crate::host::duration_ticks(
-                status_every,
-                ticks_per_second,
-            )),
+            next_status: start
+                .saturating_add(crate::host::duration_ticks(status_every, ticks_per_second)),
             status_every,
             next_wall_status: Instant::now() + WALL_STATUS_EVERY,
             slice: ((ticks_per_second / 1_000).max(1)).min(100_000_000),
@@ -635,8 +661,10 @@ impl RunHost {
                 "FUJIMOD XP5 status: {}",
                 shared_boot_summary(&state, &session.board, *policy)
             );
-            *next_status = now
-                .saturating_add(crate::host::duration_ticks(*status_every, *ticks_per_second));
+            *next_status = now.saturating_add(crate::host::duration_ticks(
+                *status_every,
+                *ticks_per_second,
+            ));
         }
         Ok(true)
     }
@@ -662,9 +690,7 @@ impl RunHost {
     }
 
     /// The session and its physical input handle, borrowed together for one input change.
-    pub fn parts_mut(
-        &mut self,
-    ) -> (&mut Session, &fujimod_emulator_xp5_board::session::Inputs) {
+    pub fn parts_mut(&mut self) -> (&mut Session, &fujimod_emulator_xp5_board::session::Inputs) {
         (&mut self.session, &self.inputs)
     }
 
@@ -732,7 +758,9 @@ impl RunHost {
         let stop_reason = if interrupted.load(Ordering::Acquire) {
             crate::host::StopReason::Other
         } else {
-            limits.stop_reason(&session).unwrap_or(crate::host::StopReason::Other)
+            limits
+                .stop_reason(&session)
+                .unwrap_or(crate::host::StopReason::Other)
         };
         eprintln!("FUJIMOD XP5 end: {}", stop_reason.name());
         let phase_write = phase.record_end(
@@ -750,10 +778,8 @@ impl RunHost {
         let card_write = card_write_back
             .iter()
             .try_for_each(|back| back.write(&session));
-        let output_finish = screenshot.map_or_else(
-            || outputs.finish(),
-            |path| outputs.screenshot(&path),
-        );
+        let output_finish =
+            screenshot.map_or_else(|| outputs.finish(), |path| outputs.screenshot(&path));
         let state = session.board.state();
         let state_write = serde_json::to_vec_pretty(&state)
             .map_err(|error| error.to_string())
@@ -810,7 +836,10 @@ impl RunHost {
 /// The board's refusal, with where every core stood, for run records.
 fn stop_error(board: &Board, policy: ExecutionPolicy, error: String) -> String {
     let state = board.state();
-    eprintln!("FUJIMOD XP5 stop: {}", shared_boot_summary(&state, board, policy));
+    eprintln!(
+        "FUJIMOD XP5 stop: {}",
+        shared_boot_summary(&state, board, policy)
+    );
     let stop_site = state["bus"]["frontier"]
         .as_array()
         .and_then(|frontier| frontier.last());
@@ -853,16 +882,20 @@ pub fn run_boot(run: Run) -> Result<Value, String> {
 const DUMP_LIMIT: u64 = 16 << 20;
 
 fn parse_ranges(option: &str, spec: &str) -> Result<Vec<(u64, u64)>, String> {
-    spec.split(';').filter(|item| !item.trim().is_empty()).map(|item| {
-        let (address, length) = item.split_once(':')
-            .ok_or_else(|| format!("{option} item {item:?} is not ADDR:LEN"))?;
-        let address = parse_number(address.trim())?;
-        let length = parse_number(length.trim())?;
-        if length == 0 || address.checked_add(length).is_none() {
-            return Err(format!("{option} range {item:?} is empty or overflows"));
-        }
-        Ok((address, length))
-    }).collect()
+    spec.split(';')
+        .filter(|item| !item.trim().is_empty())
+        .map(|item| {
+            let (address, length) = item
+                .split_once(':')
+                .ok_or_else(|| format!("{option} item {item:?} is not ADDR:LEN"))?;
+            let address = parse_number(address.trim())?;
+            let length = parse_number(length.trim())?;
+            if length == 0 || address.checked_add(length).is_none() {
+                return Err(format!("{option} range {item:?} is empty or overflows"));
+            }
+            Ok((address, length))
+        })
+        .collect()
 }
 
 /// Print the `--watch-writes` notes recorded since the last call.
@@ -872,7 +905,9 @@ fn print_write_notes(board: &fujimod_emulator::board::Board, ticks_per_second: u
         eprintln!("FUJIMOD XP5 write: {}", note.line(ticks_per_second));
     }
     if dropped > 0 {
-        eprintln!("FUJIMOD XP5 write: {dropped} more watched writes were not recorded (note bound)");
+        eprintln!(
+            "FUJIMOD XP5 write: {dropped} more watched writes were not recorded (note bound)"
+        );
     }
 }
 
@@ -890,7 +925,11 @@ fn parse_dumps(spec: &str) -> Result<Vec<(u64, usize)>, String> {
     Ok(dumps)
 }
 
-fn print_hashes(board: &fujimod_emulator::board::Board, run_directory: &Path, ranges: &[(u64, u64)]) {
+fn print_hashes(
+    board: &fujimod_emulator::board::Board,
+    run_directory: &Path,
+    ranges: &[(u64, u64)],
+) {
     if ranges.is_empty() {
         return;
     }
@@ -921,7 +960,10 @@ fn post_mortem(
             .map_err(|error| error.to_string())
             .and_then(|()| std::fs::write(&path, &bytes).map_err(|error| error.to_string()))
         {
-            Ok(()) => eprintln!("FUJIMOD XP5 dump: {address:#x}+{length:#x} -> {}", path.display()),
+            Ok(()) => eprintln!(
+                "FUJIMOD XP5 dump: {address:#x}+{length:#x} -> {}",
+                path.display()
+            ),
             Err(error) => eprintln!("FUJIMOD XP5 dump {address:#x}+{length:#x} failed: {error}"),
         }
     }
@@ -951,7 +993,18 @@ mod tests {
             assert_eq!(Key::parse(name), Ok(key), "{name}");
         }
         let edges = crate::host::parse_keys(None, Some("100:REAR+,200:AEL:300")).unwrap();
-        let names: Vec<_> = edges.iter().map(|edge| (edge.delay.as_millis(), edge.name.as_str(), edge.pressed)).collect();
-        assert_eq!(names, [(100, "REAR+", true), (200, "AEL", true), (250, "REAR+", false), (500, "AEL", false)]);
+        let names: Vec<_> = edges
+            .iter()
+            .map(|edge| (edge.delay.as_millis(), edge.name.as_str(), edge.pressed))
+            .collect();
+        assert_eq!(
+            names,
+            [
+                (100, "REAR+", true),
+                (200, "AEL", true),
+                (250, "REAR+", false),
+                (500, "AEL", false)
+            ]
+        );
     }
 }

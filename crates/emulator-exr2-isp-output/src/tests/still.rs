@@ -1,7 +1,7 @@
-use fujimod_emulator_devices::exr2::irq_routes::Irq;
 use crate::*;
-use fujimod_emulator_devices::test_host::*;
 use fujimod_emulator_devices::Device;
+use fujimod_emulator_devices::exr2::irq_routes::Irq;
+use fujimod_emulator_devices::test_host::*;
 #[test]
 fn still_isp_reconstructs_addressed_pixels_and_refuses_unequal_black() {
     let mut h = TestHost::new();

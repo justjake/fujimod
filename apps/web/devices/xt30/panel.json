@@ -134,19 +134,13 @@
           "kind": "control",
           "id": "menu_ok_button",
           "variant": "key",
-          "face": [
-            "MENU",
-            "OK"
-          ]
+          "face": ["MENU", "OK"]
         },
         {
           "kind": "control",
           "id": "disp_back_button",
           "variant": "key",
-          "face": [
-            "DISP",
-            "BACK"
-          ]
+          "face": ["DISP", "BACK"]
         },
         {
           "kind": "control",
@@ -164,42 +158,31 @@
           "kind": "control",
           "id": "quick_menu_button",
           "variant": "key",
-          "face": [
-            "Q"
-          ]
+          "face": ["Q"]
         },
         {
           "kind": "control",
           "id": "ae_lock_button",
           "variant": "key",
-          "face": [
-            "AE-L"
-          ]
+          "face": ["AE-L"]
         },
         {
           "kind": "control",
           "id": "af_lock_button",
           "variant": "key",
-          "face": [
-            "AF-L"
-          ]
+          "face": ["AF-L"]
         },
         {
           "kind": "control",
           "id": "fn1_button",
           "variant": "key",
-          "face": [
-            "Fn1"
-          ]
+          "face": ["Fn1"]
         },
         {
           "kind": "control",
           "id": "view_mode_button",
           "variant": "key",
-          "face": [
-            "VIEW",
-            "MODE"
-          ]
+          "face": ["VIEW", "MODE"]
         }
       ]
     }

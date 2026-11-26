@@ -109,7 +109,10 @@ pub fn rifp_inline_picture(word: impl Fn(u64) -> u32) -> Option<Result<YcPicture
     let pitch = u64::from(word(0x1c));
     let input = (u64::from(word(0x20) & 0xffff), u64::from(word(0x20) >> 16));
     let origin = (u64::from(word(0x24) & 0xffff), u64::from(word(0x24) >> 16));
-    let size = (u64::from(word(0x28) & 0xffff) + 1, u64::from(word(0x2c) & 0xffff) + 1);
+    let size = (
+        u64::from(word(0x28) & 0xffff) + 1,
+        u64::from(word(0x2c) & 0xffff) + 1,
+    );
     let geometry = || {
         format!(
             "RIFP movie run: input {luma:#x} / {chroma:#x} pitch {pitch:#x} (+0x20 {:#x}), crop \
@@ -126,7 +129,10 @@ pub fn rifp_inline_picture(word: impl Fn(u64) -> u32) -> Option<Result<YcPicture
         || origin.1 + size.1 > input.1
         || pitch < origin.0 + size.0
     {
-        return Some(Err(format!("{} is outside the modelled layout", geometry())));
+        return Some(Err(format!(
+            "{} is outside the modelled layout",
+            geometry()
+        )));
     }
     Some(Ok(YcPicture {
         address: luma + origin.1 * pitch + origin.0,
@@ -191,7 +197,13 @@ impl Tnr {
         }
         let planes = [
             (luma, pitches[0], out_luma, pitches[2], lines),
-            (chroma, pitches[1], out_chroma, pitches[3], lines.div_ceil(2)),
+            (
+                chroma,
+                pitches[1],
+                out_chroma,
+                pitches[3],
+                lines.div_ceil(2),
+            ),
         ];
         for (source, source_pitch, output, output_pitch, rows) in planes {
             let bytes = cx.ram_bytes(source, (source_pitch * (rows - 1) + width) as usize)?;
@@ -287,9 +299,15 @@ mod tests {
         );
         // The still ConvertToYC mode (bits 1..0 = 0) and a run without a second plane are not.
         assert!(rifp_inline_picture(|o| if o == 0x08 { 0x1122_0000 } else { words(o) }).is_none());
-        assert!(rifp_inline_picture(|o| if o == 0x14 || o == 0x18 { 0 } else { words(o) }).is_none());
+        assert!(
+            rifp_inline_picture(|o| if o == 0x14 || o == 0x18 { 0 } else { words(o) }).is_none()
+        );
         // A crop beyond the input refuses.
-        assert!(rifp_inline_picture(|o| if o == 0x2c { 0x45a } else { words(o) }).unwrap().is_err());
+        assert!(
+            rifp_inline_picture(|o| if o == 0x2c { 0x45a } else { words(o) })
+                .unwrap()
+                .is_err()
+        );
     }
 
     fn tnr_stub() -> CompletionStub {
@@ -351,7 +369,10 @@ mod tests {
         }
         for y in 0..2 {
             let at = 0x800 + y * 16;
-            assert_eq!(host.ram[at..at + 4], host.ram[0x100 + y * 8..0x100 + y * 8 + 4]);
+            assert_eq!(
+                host.ram[at..at + 4],
+                host.ram[0x100 + y * 8..0x100 + y * 8 + 4]
+            );
         }
         assert_eq!(host.ram[0x820], 0xee);
     }

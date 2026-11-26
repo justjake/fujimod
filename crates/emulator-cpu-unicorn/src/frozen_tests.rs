@@ -531,7 +531,8 @@ fn backing_writes_update_every_live_alias_without_flushing_independent_code() {
     }
     assert_eq!(cpu.backing_pointer(FIRST, 4096), Some(pointer(&shared)));
     assert_eq!(
-        cpu.backing_pointer(FIRST + 8, 16).map(|p| p.as_ptr() as usize),
+        cpu.backing_pointer(FIRST + 8, 16)
+            .map(|p| p.as_ptr() as usize),
         Some(shared.as_ptr() as usize + 8)
     );
     assert_eq!(cpu.backing_pointer(FIRST, 4097), None);
@@ -621,7 +622,10 @@ fn unmapping_an_alias_removes_it_from_later_backing_write_invalidation() {
 
     cpu.unmap(ALIAS, 4096).unwrap();
     assert_eq!(cpu.backing_pointer(ALIAS, 4096), None);
-    unsafe { cpu.map_backing(ALIAS, 4096, 7, pointer(&replacement)).unwrap() };
+    unsafe {
+        cpu.map_backing(ALIAS, 4096, 7, pointer(&replacement))
+            .unwrap()
+    };
     assert_eq!(run_r0(&cpu, ALIAS), 7);
     let translations = counter(&cpu, "translations");
     let flushes = counter(&cpu, "translation_flushes");

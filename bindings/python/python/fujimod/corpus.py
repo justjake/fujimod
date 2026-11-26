@@ -29,7 +29,9 @@ from ._native import corpus as _core
 CorpusIndex = _core.CorpusIndex
 
 
-def align_sequences(left: list[str], right: list[str]) -> list[tuple[int | None, int | None]]:
+def align_sequences(
+    left: list[str], right: list[str]
+) -> list[tuple[int | None, int | None]]:
     """Return paired token indexes, retaining unmatched tokens on either side."""
     return _core.align_sequences(left, right)
 
@@ -201,9 +203,7 @@ class Index:
 
     def pairs_for(self, function: int, other: str) -> list[Pair]:
         """Return pair rows for one reference function without querying all families."""
-        return cast(
-            list[Pair], self._query("pairs_for", id=function, other=other)
-        )
+        return cast(list[Pair], self._query("pairs_for", id=function, other=other))
 
     def names(
         self,

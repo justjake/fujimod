@@ -1,7 +1,7 @@
-use fujimod_catalog_configuration::RunEngine;
 use super::*;
 use decoder::{Choice, Decoder};
 use factory::{Graph, MemoryMap, Options, Peripheral, Processor, Ram};
+use fujimod_catalog_configuration::RunEngine;
 use fujimod_emulator_cpu::{Model, arm};
 use fujimod_emulator_cpu_unicorn::rprofile;
 use fujimod_emulator_devices::{Cx, Device};
@@ -53,7 +53,8 @@ fn graph(private_peer: bool) -> Graph {
             .map(|core| Processor {
                 model: Model::CortexR5F,
                 mprofile: None,
-                released: true, parked_until_sgi: false,
+                released: true,
+                parked_until_sgi: false,
                 rprofile: Some(rprofile::core::Options {
                     tcm: if private_peer && core == 1 {
                         rprofile::tcm::Options {

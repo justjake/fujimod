@@ -272,7 +272,11 @@ pub struct PulseUnit {
 
 /// Input route nibble of `channel`: +0x10 holds channels 0..7, +0x18 channels 8..11.
 fn route_nibble(s: &State, channel: usize) -> u32 {
-    if channel < 8 { s.route >> (channel * 4) & 15 } else { s.route_high >> ((channel - 8) * 4) & 15 }
+    if channel < 8 {
+        s.route >> (channel * 4) & 15
+    } else {
+        s.route_high >> ((channel - 8) * 4) & 15
+    }
 }
 
 impl PulseUnit {
@@ -510,7 +514,9 @@ impl PulseUnit {
                     if nibble != 0 && (self.pins.counters & (1 << ch) == 0 || nibble != ch as u32) {
                         return Err("unsupported pulse input route".into());
                     }
-                    if s.enabled & (1 << ch) != 0 && (value ^ s.route_high) & (15 << ((ch - 8) * 4)) != 0 {
+                    if s.enabled & (1 << ch) != 0
+                        && (value ^ s.route_high) & (15 << ((ch - 8) * 4)) != 0
+                    {
                         return Err("changing an armed pulse input route".into());
                     }
                 }
@@ -708,7 +714,12 @@ impl Device for PulseUnit {
                 }
                 InterruptLine::Shared(line) => cx.set_irq(line, true),
             }
-            for m in self.pins.mirrored.iter().filter(|m| usize::from(m.channel) == ch) {
+            for m in self
+                .pins
+                .mirrored
+                .iter()
+                .filter(|m| usize::from(m.channel) == ch)
+            {
                 if let Err(error) = cx.raise_irq(m.core, m.line) {
                     cx.fail(error);
                     return;

@@ -16,10 +16,7 @@ pub trait Controls: Send + Sync {
     fn checkpoint(&self) -> Result<crate::checkpoint::Checkpoint, String> {
         Err("physical controls have no exact checkpoint implementation".into())
     }
-    fn validate_checkpoint(
-        &self,
-        _: &crate::checkpoint::Checkpoint,
-    ) -> Result<(), String> {
+    fn validate_checkpoint(&self, _: &crate::checkpoint::Checkpoint) -> Result<(), String> {
         Err("physical controls have no exact checkpoint implementation".into())
     }
     fn restore_checkpoint(&self, _: &crate::checkpoint::Checkpoint) -> Result<(), String> {

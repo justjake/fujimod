@@ -31,7 +31,11 @@ impl MediaSnapshot {
             + self
                 .files
                 .values()
-                .flat_map(|entries| entries.iter().map(|(path, data)| path.len() + data.len() + 8))
+                .flat_map(|entries| {
+                    entries
+                        .iter()
+                        .map(|(path, data)| path.len() + data.len() + 8)
+                })
                 .sum::<usize>()
     }
 
