@@ -186,12 +186,13 @@ fn xt5_431_startup_is_the_stock_selector_startup() {
     assert_eq!(stock.transfer_clock_divider, Some(4));
     assert!(stock.ram_edits.iter().all(|e| !e.what.is_empty()));
     assert!(stock.cleared.iter().all(|c| !c.what.is_empty()));
-    // No other bundled recipe names one, except the X-H2 5.30's: its SD card start also runs
-    // the stock setup (card-handoff.toml).
+    // No other bundled recipe names one, except the X-H2 5.30's (its SD card start also runs
+    // the stock setup, card-handoff.toml) and the GFX100RF 1.14's (the same startup on a
+    // reset stage that decodes section 6 in a shared routine).
     let catalog = fujimod_catalog::ReferenceCatalog::bundled().unwrap();
     for id in catalog
         .firmware_ids()
-        .filter(|id| !matches!(*id, "xt5-431" | "xh2-530"))
+        .filter(|id| !matches!(*id, "xt5-431" | "xh2-530" | "gfx100rf-114"))
     {
         if let Some(other) = Recipe::bundled(id).unwrap() {
             assert!(
