@@ -19,8 +19,6 @@ for (const config of [
   'scripts/cloudflare/tsconfig.json',
   'crates/usb-proxy/web/tsconfig.json',
   'apps/usb-sharing/tsconfig.json',
-  'crates/simulation/tsconfig.json',
-  'crates/simulation/tools/tsconfig.json',
 ])
   check(config);
 const bindings = resolve(root, 'bindings/javascript');

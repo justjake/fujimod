@@ -43,8 +43,6 @@ test('cloudflare', ['scripts/cloudflare/*.test.ts']);
 test('review-mount', ['scripts/local-review-files.test.ts'], 'apps/web');
 test('wheel', ['bindings/python/scripts/*.test.ts']);
 test('proxy', ['crates/usb-proxy/web/*.test.ts']);
-// The standalone simulation's curated GLBs; the website never loads them.
-test('simulation-assets', ['crates/simulation/*.test.ts']);
 test('staging', ['bindings/javascript/scripts/*.test.ts']);
 test('sharing', ['*.test.ts'], 'apps/usb-sharing');
 for (const [name, testing] of [

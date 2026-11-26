@@ -26,7 +26,7 @@
     "predev": "pnpm run build:usb",
     "prebuild": "pnpm run build:usb",
     "prebuild:local-preview": "pnpm run build:usb",
-    "pretest": "pnpm run build:usb && node ../../crates/simulation/build-web.ts",
+    "pretest": "pnpm run build:usb",
     "precheck": "pnpm run build:usb",
     "test:debug-mode:browser": "node src/dev-tools/debug-mode/browser.ts",
     "test:dev-tools:browser": "node src/dev-tools/browser.ts",
