@@ -343,3 +343,35 @@ fn buffer_overlapping_the_callback_slot_is_refused() {
     .unwrap_err();
     assert!(error.to_string().contains("overlap"), "{error}");
 }
+
+#[test]
+fn unaligned_entry_is_refused() {
+    let fixture = fixture();
+    let unaligned = ENTRY + 2;
+    edit_json(&fixture.input.manifest, |manifest| {
+        manifest["symbols"][0]["address"] = json!(unaligned);
+        manifest["entrypoints"][0]["address"] = json!(unaligned);
+    });
+    let error = prepare_xp4(
+        &fixture.input,
+        &fixture.selected,
+        &fixture.flash,
+        &fixture.bulk,
+    )
+    .unwrap_err();
+    assert!(error.to_string().contains("aligned"), "{error}");
+}
+
+#[test]
+fn control_hash_mismatch_is_refused() {
+    let mut fixture = fixture();
+    fixture.flash.control.sha256 = sha256(b"different control");
+    let error = prepare_xp4(
+        &fixture.input,
+        &fixture.selected,
+        &fixture.flash,
+        &fixture.bulk,
+    )
+    .unwrap_err();
+    assert!(error.to_string().contains("control"), "{error}");
+}
