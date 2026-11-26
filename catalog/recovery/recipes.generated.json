@@ -8019,7 +8019,15 @@
         "edits": []
       },
       "extension_alignment": "4_kib",
-      "card_loader": "xe5"
+      "card_loader": "xe5",
+      "preloaded_ram_edits": [
+        {
+          "address": 8660,
+          "old": 4043310111,
+          "new": 4043309087,
+          "what": "Match the preloaded selector at the secondary-core park comparison"
+        }
+      ]
     },
     "cold_start": null,
     "file_api": null,
