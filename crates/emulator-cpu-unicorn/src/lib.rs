@@ -376,6 +376,39 @@ struct MmioMapping {
     fast_reads: Vec<FastMmioRead>,
     offset: u64,
 }
+thread_local! {
+    static FAST_MMIO_READS: Cell<Option<bool>> = const { Cell::new(None) };
+}
+
+pub(crate) fn approximate_guest_tick() -> Option<u64> {
+    rprofile::approximate_guest_tick()
+}
+
+pub(crate) struct GuestClockTickScope {
+    previous_tick: Option<u64>,
+    previous_fast_reads: Option<bool>,
+}
+impl GuestClockTickScope {
+    pub(crate) fn new(fast_reads: bool) -> Self {
+        let previous_tick = approximate_guest_tick();
+        Self::publish(None);
+        Self {
+            previous_tick,
+            previous_fast_reads: FAST_MMIO_READS.replace(Some(fast_reads)),
+        }
+    }
+
+    pub(crate) fn publish(tick: Option<u64>) {
+        rprofile::publish_guest_tick(tick);
+    }
+}
+impl Drop for GuestClockTickScope {
+    fn drop(&mut self) {
+        Self::publish(self.previous_tick);
+        FAST_MMIO_READS.set(self.previous_fast_reads);
+    }
+}
+
 struct MmioData {
     callbacks: Mmio,
     fast_reads: Vec<FastMmioRead>,
@@ -396,14 +429,18 @@ unsafe extern "C" fn mmio_read(_: ffi::Engine, offset: u64, size: u32, data: *mu
         return 0;
     }
     let offset = context.offset + offset;
-    let tick = rprofile::approximate_guest_tick();
-    context
-        .fast_reads
-        .iter()
-        .find_map(|read| read.read_at(offset, size, tick))
-        .unwrap_or_else(|| unsafe {
-            (context.callbacks.read)(offset, size, context.callbacks.data)
-        })
+    if !context.fast_reads.is_empty() {
+        let policy = FAST_MMIO_READS.get();
+        let tick = approximate_guest_tick();
+        if let Some(value) = context.fast_reads.iter().find_map(|read| match policy {
+            Some(true) => read.published_at(offset, size, tick),
+            Some(false) => None,
+            None => read.read_at(offset, size, tick),
+        }) {
+            return value;
+        }
+    }
+    unsafe { (context.callbacks.read)(offset, size, context.callbacks.data) }
 }
 unsafe extern "C" fn mmio_write(
     _: ffi::Engine,
