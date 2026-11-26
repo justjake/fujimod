@@ -339,3 +339,25 @@ fn fixture_validation_rejects_oversized_arena_and_mutable_entry() {
     assert!(limits().memory.read.get() > 0);
     payload.validate(&flash, &bulk, &image).unwrap();
 }
+
+#[test]
+fn runtime_validation_rejects_unaligned_entry() {
+    let (bulk, flash, mut payload, image) = fixture();
+    payload.entry = u64::from(ENTRY + 2);
+    let error = payload
+        .validate(&flash, &bulk, &image)
+        .unwrap_err()
+        .to_string();
+    assert!(error.contains("reader ABI"), "{error}");
+}
+
+#[test]
+fn runtime_validation_rejects_mismatched_control_hash() {
+    let (bulk, flash, mut payload, image) = fixture();
+    payload.control_sha256 = "b".repeat(64);
+    let error = payload
+        .validate(&flash, &bulk, &image)
+        .unwrap_err()
+        .to_string();
+    assert!(error.contains("hash fields"), "{error}");
+}
