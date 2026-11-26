@@ -106,3 +106,42 @@ fn xt3_boot_wires_the_touch_bus_to_a_declared_byte_i2c_controller() {
         Some(fujimod_catalog::soc::BlockDevice::ByteI2c { byte_ticks, .. }) if byte_ticks > 0
     ));
 }
+
+#[test]
+fn xt3_discovery_inputs_release_the_x_t3_buttons() {
+    let catalog = fujimod_catalog::ReferenceCatalog::bundled().unwrap();
+    let body = catalog.body("xt3").expect("declared X-T3 body");
+    let inputs = HardwareInputs::bundled("xt3-discovery").unwrap();
+    let levels = inputs
+        .reset
+        .gpio_input
+        .expect("declared GPIO levels")
+        .levels;
+    for id in [
+        "xt3-shutter-s1",
+        "xt3-shutter-s2",
+        "xt3-rear-dial-press",
+        "xt3-fn1-button",
+        "xt3-fn2-button",
+    ] {
+        let connection = body
+            .connections
+            .iter()
+            .find(|connection| connection.id == id)
+            .unwrap_or_else(|| panic!("declared {id}"));
+        let (port, pin) = connection
+            .signals
+            .iter()
+            .find_map(|signal| match *signal {
+                fujimod_catalog::reference::ConnectionSignal::Gpio {
+                    port,
+                    pin,
+                    active_level: false,
+                } => Some((port, pin)),
+                _ => None,
+            })
+            .unwrap_or_else(|| panic!("{id} has an active-low GPIO contact"));
+        let level = levels.get(usize::from(port)).copied().unwrap_or(0);
+        assert_ne!(level >> pin & 1, 0, "{id} reads pressed at reset");
+    }
+}
