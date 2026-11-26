@@ -85,8 +85,8 @@
       "basis": "Sample array read from an X-T3 in still shooting with no button pressed. Dials: drive BKT, evaluative metering, ISO 160, shutter 250x, exposure compensation -2 1/3 EV. Channels 3, 4, 9 and 11 are button ladders at rest."
     },
     "gpio_input": {
-      "levels": [3, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-      "basis": "Declared catalog input."
+      "levels": [24579, 0, 8192, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+      "basis": "Every button the X-T3 body declares on an active-low GPIO pad reads released (pin high): shutter S1 and S2 (port 0 bits 0 and 1), the rear command dial push (port 0 bit 13), Fn1 (port 0 bit 14) and Fn2 (port 2 bit 13). The dial and button pads used to read 0, so in emulation the firmware saw the rear dial pushed from power-on and a rear-dial step opened the magnified view (focus check) instead of only changing the shutter speed. The other bits are 0 as before; they are not measured on an X-T3."
     },
     "gpio_interrupts": {
       "basis": "Shutter button. The firmware's key scanner reads GPIO 0.0 (S1) and 0.1 (S2) through the bank's data register (0xfff41014) and reports a key pressed when its level is 0, so both are active low. The firmware registers the two pads' interrupts as GIC 167 and 168, level-sensitive and routed to CPU0, through the GICv2 distributor. Its arm, dispatch and disarm paths write only the distributor, and it arms 167 while S1 is released, so each line is asserted while its pad is low.",
