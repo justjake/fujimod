@@ -8,9 +8,8 @@ run-name: >-
 # GitHub runs main's copy of this file for every pull request into main, so a
 # branch cannot change when its commits are tested or what status they get.
 # Only the checks run the pull request's code, with a read-only token, and they
-# restore caches without saving them (.github/actions/setup). That code still
-# runs in main's cache scope, so an outside contributor's pull request runs only
-# after a maintainer has read it and added the ci:run label.
+# share main's caches (.github/actions/setup). Any author's pull request runs
+# when it is opened ready or marked ready for review.
 on:
   pull_request_target:
     types: [opened, ready_for_review, synchronize, labeled]
@@ -44,7 +43,6 @@ jobs:
           ACTION: ${{ github.event.action }}
           LABEL: ${{ github.event.label.name }}
           DRAFT: ${{ github.event.pull_request.draft }}
-          ASSOCIATION: ${{ github.event.pull_request.author_association }}
           NUMBER: ${{ github.event.pull_request.number }}
           SHA: ${{ github.event.pull_request.head.sha }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
@@ -53,13 +51,9 @@ jobs:
             gh api -X POST "repos/$REPO/statuses/$SHA" -f context='CI required' \
               -f state="$1" -f description="$2" -f target_url="$RUN_URL" > /dev/null
           }
-          trusted=false
-          case "$ASSOCIATION" in OWNER|MEMBER|COLLABORATOR) trusted=true ;; esac
           run=false
           if [ "$ACTION" = labeled ]; then
             if [ "$LABEL" = ci:run ]; then
-              # Only someone with triage access can add a label, so ci:run also
-              # starts runs for outside contributors.
               gh api -X DELETE "repos/$REPO/issues/$NUMBER/labels/ci:run" > /dev/null || true
               if [ "$DRAFT" = true ]; then status pending 'Mark the pull request ready to test it'
               else run=true; fi
@@ -67,10 +61,8 @@ jobs:
           elif [ "$DRAFT" != true ]; then
             if [ "$ACTION" = synchronize ]; then
               status pending 'Not tested yet: add the ci:run label'
-            elif [ "$trusted" = true ]; then
-              run=true
             else
-              status pending 'A maintainer adds the ci:run label to test this'
+              run=true
             fi
           fi
           if [ "$run" = true ]; then status pending 'Running'; fi
