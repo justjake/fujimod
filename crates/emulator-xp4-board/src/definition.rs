@@ -256,6 +256,14 @@ pub struct Definition {
         (u16, u8),
         Option<(u64, u32, u64, u64, u64, String)>,
     )>,
+    /// An interrupt line the declared `imaging` sensor pulses at every frame
+    /// start, with no enable or status word (see
+    /// `fujimod_emulator_sensor_input::sensor::ImageRoutes::frame_start_pulse`);
+    /// absent by default. X-T3 5.11 movie recording waits for it (GIC 101,
+    /// entry 2 of the imaging interrupt table 0x149d2d4) to arm its 4K
+    /// V_TIMING timer.
+    #[serde(default)]
+    pub imaging_frame_start_pulse: Option<u32>,
     #[serde(default)]
     pub movdc: Vec<(u64, u32, u64, u64, u8)>,
     /// Let the declared MOVDC outputs accept output format 1 (`+08 = 0x101`,

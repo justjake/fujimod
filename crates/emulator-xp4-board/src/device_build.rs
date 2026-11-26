@@ -81,6 +81,7 @@ pub(crate) fn build(
         stabilizer_link,
         checksum_power_spi,
         imaging,
+        imaging_frame_start_pulse,
         movdc,
         movdc_packed10,
         sd_clocks,
@@ -482,6 +483,9 @@ pub(crate) fn build(
             .get_or_insert_with(devices::Devices::empty)
             .adc(inputs, sample_ticks)?;
     }
+    if imaging_frame_start_pulse.is_some() && imaging.is_none() {
+        return Err("An imaging frame start pulse requires the imaging wiring".into());
+    }
     if let Some((map, timing, read_gate, ibuf)) = imaging {
         // The statistics banks are guest memory when a declared memory
         // region holds them (the boot ROM start keeps its SRAM there).
@@ -492,7 +496,14 @@ pub(crate) fn build(
         });
         devices
             .get_or_insert_with(devices::Devices::empty)
-            .imaging(map, timing, read_gate, ibuf, statistics_in_memory)?;
+            .imaging(
+                map,
+                timing,
+                read_gate,
+                ibuf,
+                statistics_in_memory,
+                imaging_frame_start_pulse,
+            )?;
     }
     if !movdc.is_empty() {
         devices
