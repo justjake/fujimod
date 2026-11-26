@@ -7,7 +7,7 @@ use crate::board::{
     set,
 };
 use fujimod_emulator_cpu::{Cpu, ExecutionPolicy, Register, memory::Backing, timeline::Ratio};
-use fujimod_emulator_cpu_unicorn::{memory as cpu_memory, rprofile::worker};
+use fujimod_emulator_cpu_unicorn::{memory as cpu_memory, worker};
 use fujimod_emulator_devices::{Cx, Device, checkpoint::Checkpoint};
 use serde::{Deserialize, Serialize};
 
