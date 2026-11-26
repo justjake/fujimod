@@ -1,0 +1,38 @@
+{
+  "$schema": "https://fujimod.com/schemas/soc-block.schema.json",
+  "schema": 1,
+  "id": "block-fff78000",
+  "base": 4294410240,
+  "size": 4096,
+  "kind": "address-window",
+  "device": {
+    "model": "register_block",
+    "idle_bits": [],
+    "commands": [
+      {
+        "mask": 1,
+        "state": 0,
+        "status": 28,
+        "value": 1,
+        "word": 28
+      }
+    ],
+    "basis": "Second audio serial-port register block (sibling of 0xfff4f000, with audio-fifo-1-transmit at +0x04). The firmware writes 1 to +0x01c and waits for bit 0 of +0x01c to read 0; the command completes at once and clears bit 0. Other words read back their last write; nothing else in this block is modeled."
+  },
+  "registers": [
+    {
+      "name": "audio-fifo-1-transmit",
+      "offset": 4,
+      "width_bytes": 4,
+      "access": "read-write"
+    }
+  ],
+  "evidence": [
+    {
+      "kind": "located",
+      "firmware_ids": [
+        "xt3-511"
+      ]
+    }
+  ]
+}
