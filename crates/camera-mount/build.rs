@@ -7,15 +7,13 @@ fn run(command: &mut Command) {
         String::from_utf8_lossy(&result.stderr)
     );
 }
-/// The clang that compiles the ARM payloads: `CLANG`, else Apple clang on
-/// macOS, else the first `clang` on PATH whose registered targets include ARM.
-/// A PATH can put a WebAssembly-only clang (Emscripten's) first.
+/// The clang that compiles the ARM payloads: `CLANG`, else the first `clang`
+/// on PATH whose registered targets include ARM, which is the pinned toolchain
+/// under mise on every host. A PATH can put a WebAssembly-only clang
+/// (Emscripten's) first.
 fn arm_clang() -> OsString {
     if let Some(clang) = env::var_os("CLANG").filter(|clang| !clang.is_empty()) {
         return clang;
-    }
-    if cfg!(target_os = "macos") {
-        return "/usr/bin/clang".into();
     }
     println!("cargo:rerun-if-env-changed=PATH");
     let path = env::var_os("PATH").unwrap_or_default();
