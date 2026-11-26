@@ -27,17 +27,17 @@ def release_card() -> Path:
 
 def test_open_camera_refuses_unknown_options() -> None:
     with pytest.raises(ValueError, match="boot"):
-        Board.open_camera(firmware="x70-110", boot="sd")
+        Board.open_camera(firmware="x70-110", boot="sd")  # ty: ignore[invalid-argument-type]  # deliberately invalid
     with pytest.raises(ValueError, match="execution_policy"):
-        Board.open_camera(firmware="x70-110", execution_policy="fast")
+        Board.open_camera(firmware="x70-110", execution_policy="fast")  # ty: ignore[invalid-argument-type]  # deliberately invalid
     with pytest.raises(TypeError, match="boot_cache"):
-        Board.open_camera(firmware="x70-110", boot_cache=1)
+        Board.open_camera(firmware="x70-110", boot_cache=1)  # ty: ignore[invalid-argument-type]  # deliberately invalid
     with pytest.raises(TypeError, match="run_to_rec"):
-        Board.open_camera(firmware="x70-110", run_to_rec=1)
+        Board.open_camera(firmware="x70-110", run_to_rec=1)  # ty: ignore[invalid-argument-type]  # deliberately invalid
     with pytest.raises(TypeError, match="sd_card_present"):
-        Board.open_camera(firmware="x70-110", sd_card_present="yes")
+        Board.open_camera(firmware="x70-110", sd_card_present="yes")  # ty: ignore[invalid-argument-type]  # deliberately invalid
     with pytest.raises(TypeError, match="sd_card_write_protected"):
-        Board.open_camera(firmware="x70-110", sd_card_write_protected=None)
+        Board.open_camera(firmware="x70-110", sd_card_write_protected=None)  # ty: ignore[invalid-argument-type]  # deliberately invalid
     with pytest.raises(ValueError, match="sd_card_transfer_ticks"):
         Board.open_camera(firmware="x70-110", sd_card_transfer_ticks=0)
     with pytest.raises(ValueError, match="autostart"):
@@ -234,7 +234,7 @@ def test_the_x70_powers_on_with_its_flash_and_card_kept() -> None:
         board.power_on(hold_controls=True, fresh_card=True)
         assert board.status()["status"] == "rec"
         with pytest.raises(TypeError, match="fresh_card"):
-            board.power_on(fresh_card=1)
+            board.power_on(fresh_card=1)  # ty: ignore[invalid-argument-type]  # deliberately invalid
 
 
 def test_a_stock_boot_cannot_power_on_holding_card_controls() -> None:
@@ -279,7 +279,7 @@ def test_a_verified_image_starts_at_the_loader(tmp_path: Path) -> None:
             image_sha256="0" * 64,
         )
     with pytest.raises(ValueError, match="start"):
-        Board.open_camera(firmware="x70-110", start="boot")
+        Board.open_camera(firmware="x70-110", start="boot")  # ty: ignore[invalid-argument-type]  # deliberately invalid
     with pytest.raises(ValueError, match="requires image"):
         Board.open_camera(firmware="x70-110", start="loader")
     with pytest.raises(ValueError, match="image requires"):
@@ -299,7 +299,9 @@ def test_a_camera_opens_from_named_files_and_card_bytes() -> None:
     ) as board:
         assert board.status()["status"] == "rec"
     with pytest.raises(ValueError, match="not both"):
-        Board.open_camera(firmware="x70-110", sd_card=root, sd_card_files={"NOTE.TXT": b"x"})
+        Board.open_camera(
+            firmware="x70-110", sd_card=root, sd_card_files={"NOTE.TXT": b"x"}
+        )
 
 
 def test_a_camera_opened_from_named_files_powers_on_from_them(

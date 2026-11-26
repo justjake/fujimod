@@ -1956,6 +1956,7 @@ dependencies = [
  "fujimod-emulator-session",
  "fujimod-recovery",
  "fujimod-remote",
+ "fujimod-workspace-hack",
  "futures-lite",
  "serde",
  "serde_json",
