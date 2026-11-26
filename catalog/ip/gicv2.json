@@ -200,11 +200,18 @@
       "access": "read-only"
     }
   ],
-  "parameters": ["cpu_interface_base", "lines", "cores"],
+  "parameters": [
+    "cpu_interface_base",
+    "lines",
+    "cores"
+  ],
   "evidence": [
     {
       "kind": "inferred",
-      "firmware_ids": ["xt3-511", "xt2-441"]
+      "firmware_ids": [
+        "xt3-511",
+        "xt2-441"
+      ]
     }
   ]
 }

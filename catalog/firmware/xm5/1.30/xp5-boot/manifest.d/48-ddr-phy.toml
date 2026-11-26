@@ -10,17 +10,11 @@ base = 0xfb1a0000
 size = 0x1000
 kind = "bringup-stub"
 [device.options]
-registers = [
-  { offset = 0x08, mode = "toggle", value = 1 },
-  { offset = 0x64, mode = "constant", value = 7 },
-]
+registers = [{ offset = 0x08, mode = "toggle", value = 1 }, { offset = 0x64, mode = "constant", value = 7 }]
 
 [[device]]
 base = 0xfb5a0000
 size = 0x1000
 kind = "bringup-stub"
 [device.options]
-registers = [
-  { offset = 0x08, mode = "toggle", value = 1 },
-  { offset = 0x64, mode = "constant", value = 7 },
-]
+registers = [{ offset = 0x08, mode = "toggle", value = 1 }, { offset = 0x64, mode = "constant", value = 7 }]

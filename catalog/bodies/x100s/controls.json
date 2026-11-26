@@ -7,8 +7,35 @@
     "url": "https://dl.fujifilm-x.com/support/manual/x/fujifilm_x100s_manual_en.pdf",
     "title": "DIGITAL CAMERA X100S Owner’s Manual (English, BL02401-102)",
     "pages": [
-      2, 3, 4, 5, 16, 18, 19, 20, 21, 23, 24, 25, 32, 34, 36, 37, 38, 39, 40, 41, 46, 49, 51, 52,
-      56, 69, 77, 78, 107
+      2,
+      3,
+      4,
+      5,
+      16,
+      18,
+      19,
+      20,
+      21,
+      23,
+      24,
+      25,
+      32,
+      34,
+      36,
+      37,
+      38,
+      39,
+      40,
+      41,
+      46,
+      49,
+      51,
+      52,
+      56,
+      69,
+      77,
+      78,
+      107
     ]
   },
   "analog_levels": 1024,
@@ -18,7 +45,9 @@
       "location": "rear",
       "manual_page": 52,
       "face": "AE",
-      "connection_ids": ["controls-gpio-2-12"],
+      "connection_ids": [
+        "controls-gpio-2-12"
+      ],
       "assignable": false,
       "pushable": true,
       "default_function": "Display metering options; also zoom in during playback.",
@@ -36,7 +65,9 @@
       "location": "rear",
       "manual_page": 78,
       "face": "AFL/AEL",
-      "connection_ids": ["controls-adc-9"],
+      "connection_ids": [
+        "controls-adc-9"
+      ],
       "assignable": true,
       "pushable": true,
       "default_function": "AE lock only by default; the lock is active while pressed by default. Its role and lock behavior can be changed in the setup menu.",
@@ -82,7 +113,11 @@
       "location": "rear",
       "manual_page": 5,
       "short_name": "COMMAND",
-      "connection_ids": ["controls-gpio-3-8", "controls-gpio-3-9", "controls-gpio-3-10"],
+      "connection_ids": [
+        "controls-gpio-3-8",
+        "controls-gpio-3-9",
+        "controls-gpio-3-10"
+      ],
       "assignable": false,
       "pushable": true,
       "default_function": "Press left or right to act like rotating the command dial; the center press zooms in on the focus area or point.",
@@ -109,7 +144,9 @@
       "location": "rear",
       "manual_page": 4,
       "short_name": "COMMAND",
-      "connection_ids": ["controls-encoder-3-11-3-12"],
+      "connection_ids": [
+        "controls-encoder-3-11-3-12"
+      ],
       "assignable": false,
       "pushable": false,
       "default_function": "Rotate to adjust settings or navigate; press up for delete or autofocus, right for flash, down for white balance, left for macro, or press the center MENU/OK button.",
@@ -144,7 +181,9 @@
       "location": "rear",
       "manual_page": 21,
       "face": "DISP/BACK",
-      "connection_ids": ["controls-adc-9"],
+      "connection_ids": [
+        "controls-adc-9"
+      ],
       "assignable": false,
       "pushable": true,
       "default_function": "Change display indicators or go back; press and hold to enable or disable silent mode.",
@@ -182,7 +221,9 @@
       "location": "top",
       "manual_page": 69,
       "face": "Fn",
-      "connection_ids": ["controls-gpio-4-4"],
+      "connection_ids": [
+        "controls-gpio-4-4"
+      ],
       "assignable": true,
       "pushable": true,
       "default_function": "User-assignable function; the manual does not state the factory assignment.",
@@ -200,7 +241,10 @@
       "location": "front",
       "manual_page": 46,
       "short_name": "FOCUS",
-      "connection_ids": ["controls-gpio-3-7", "controls-gpio-3-6"],
+      "connection_ids": [
+        "controls-gpio-3-7",
+        "controls-gpio-3-6"
+      ],
       "assignable": false,
       "pushable": false,
       "positions": [
@@ -288,7 +332,9 @@
       "location": "rear",
       "manual_page": 4,
       "face": "MENU/OK",
-      "connection_ids": ["controls-adc-9"],
+      "connection_ids": [
+        "controls-adc-9"
+      ],
       "assignable": false,
       "pushable": true,
       "default_function": "Open menus and select items; press and hold to lock or unlock the Q button and command-dial directions.",
@@ -306,7 +352,9 @@
       "location": "rear",
       "manual_page": 25,
       "icon": "playback",
-      "connection_ids": ["controls-gpio-2-9"],
+      "connection_ids": [
+        "controls-gpio-2-9"
+      ],
       "assignable": false,
       "pushable": true,
       "default_function": "Start playback; from playback, half-press the shutter button to return to shooting mode.",
@@ -375,7 +423,9 @@
       "location": "rear",
       "manual_page": 4,
       "short_name": "SELECTOR",
-      "connection_ids": ["controls-adc-8"],
+      "connection_ids": [
+        "controls-adc-8"
+      ],
       "assignable": false,
       "pushable": false,
       "mechanical": false,
@@ -406,7 +456,10 @@
       "location": "top",
       "manual_page": 24,
       "short_name": "SHUTTER",
-      "connection_ids": ["controls-gpio-0-2", "controls-gpio-0-3"],
+      "connection_ids": [
+        "controls-gpio-0-2",
+        "controls-gpio-0-3"
+      ],
       "assignable": false,
       "pushable": true,
       "default_function": "Half-press to focus and lock focus and exposure; press fully to take a picture or start or stop movie recording.",
@@ -465,7 +518,9 @@
       "location": "front",
       "manual_page": 20,
       "short_name": "VIEW",
-      "connection_ids": ["controls-gpio-3-13"],
+      "connection_ids": [
+        "controls-gpio-3-13"
+      ],
       "assignable": false,
       "pushable": true,
       "default_function": "Choose the optical or electronic viewfinder.",

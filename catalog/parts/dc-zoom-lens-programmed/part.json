@@ -10,8 +10,17 @@
         "kind": "divided",
         "ticks_per_second": 12000000,
         "period_picoseconds": [
-          213333333, 106666666, 53333333, 26666666, 13333333, 6666666, 3333333, 1666666, 833333,
-          416666, 208333
+          213333333,
+          106666666,
+          53333333,
+          26666666,
+          13333333,
+          6666666,
+          3333333,
+          1666666,
+          833333,
+          416666,
+          208333
         ]
       }
     ],
@@ -25,7 +34,10 @@
     "motors": [
       {
         "initial_position": 0,
-        "travel_limits": [-32767, 32767],
+        "travel_limits": [
+          -32767,
+          32767
+        ],
         "ticks_per_step": 1000,
         "settle_ticks": 4000,
         "home": {
@@ -35,7 +47,10 @@
       },
       {
         "initial_position": 0,
-        "travel_limits": [-32767, 32767],
+        "travel_limits": [
+          -32767,
+          32767
+        ],
         "ticks_per_step": 1000,
         "settle_ticks": 4000
       }
@@ -53,8 +68,20 @@
   },
   "attachment": {
     "pulse": {
-      "counter_channels": [0, 4],
-      "timer_channels": [0, 2, 4, 6, 8, 9, 10, 11],
+      "counter_channels": [
+        0,
+        4
+      ],
+      "timer_channels": [
+        0,
+        2,
+        4,
+        6,
+        8,
+        9,
+        10,
+        11
+      ],
       "quadrature": false,
       "initial_phase": 0,
       "capture_channel": 1

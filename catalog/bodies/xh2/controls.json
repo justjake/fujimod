@@ -7,8 +7,40 @@
     "url": "https://fujifilm-dsc.com/en-int/manual/x-h2/x-h2_manual_en_s_f.pdf",
     "title": "FUJIFILM X-H2 Owner's Manual (FF210003)",
     "pages": [
-      2, 3, 4, 7, 8, 9, 10, 12, 13, 18, 21, 27, 28, 31, 39, 50, 56, 58, 59, 62, 64, 97, 105, 110,
-      217, 270, 271, 272, 277, 297, 298, 299, 300, 303
+      2,
+      3,
+      4,
+      7,
+      8,
+      9,
+      10,
+      12,
+      13,
+      18,
+      21,
+      27,
+      28,
+      31,
+      39,
+      50,
+      56,
+      58,
+      59,
+      62,
+      64,
+      97,
+      105,
+      110,
+      217,
+      270,
+      271,
+      272,
+      277,
+      297,
+      298,
+      299,
+      300,
+      303
     ]
   },
   "boot": {
@@ -130,7 +162,9 @@
       "location": "rear",
       "manual_page": 21,
       "face": "DISP/BACK",
-      "connection_ids": ["controls-adc-6"],
+      "connection_ids": [
+        "controls-adc-6"
+      ],
       "assignable": false,
       "pushable": true,
       "default_function": "Control the EVF and LCD indicator display and return from menus; the parts diagram also names a Bluetooth button at this entry.",
@@ -286,7 +320,9 @@
       "location": "rear",
       "manual_page": 28,
       "face": "MENU/OK",
-      "connection_ids": ["controls-adc-6"],
+      "connection_ids": [
+        "controls-adc-6"
+      ],
       "assignable": false,
       "pushable": true,
       "default_function": "Display menus and confirm selections.",
@@ -514,7 +550,9 @@
       "location": "rear",
       "manual_page": 299,
       "short_name": "DOWN",
-      "connection_ids": ["controls-adc-13"],
+      "connection_ids": [
+        "controls-adc-13"
+      ],
       "assignable": true,
       "pushable": true,
       "default_function": "Move down in menus; default function button assignment: DIGITAL TELE-CONV./DIGITAL ZOOM.",
@@ -532,7 +570,9 @@
       "location": "rear",
       "manual_page": 299,
       "short_name": "LEFT",
-      "connection_ids": ["controls-adc-13"],
+      "connection_ids": [
+        "controls-adc-13"
+      ],
       "assignable": true,
       "pushable": true,
       "default_function": "Move left in menus; default function button assignment: PERFORMANCE.",
@@ -550,7 +590,9 @@
       "location": "rear",
       "manual_page": 299,
       "short_name": "RIGHT",
-      "connection_ids": ["controls-adc-13"],
+      "connection_ids": [
+        "controls-adc-13"
+      ],
       "assignable": true,
       "pushable": true,
       "default_function": "Move right in menus; default function button assignment: FILM SIMULATION.",
@@ -568,7 +610,9 @@
       "location": "rear",
       "manual_page": 299,
       "short_name": "UP",
-      "connection_ids": ["controls-adc-13"],
+      "connection_ids": [
+        "controls-adc-13"
+      ],
       "assignable": true,
       "pushable": true,
       "default_function": "Move up in menus; default function button assignment: PHOTOMETRY.",
@@ -586,7 +630,10 @@
       "location": "top",
       "manual_page": 58,
       "short_name": "SHUTTER",
-      "connection_ids": ["controls-gpio-0-0", "controls-gpio-0-1"],
+      "connection_ids": [
+        "controls-gpio-0-0",
+        "controls-gpio-0-1"
+      ],
       "assignable": false,
       "pushable": true,
       "default_function": "Half-press to focus; press the rest of the way to take a photograph.",

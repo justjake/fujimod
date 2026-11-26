@@ -168,11 +168,16 @@
       ]
     }
   ],
-  "parameters": ["queues", "session_count"],
+  "parameters": [
+    "queues",
+    "session_count"
+  ],
   "evidence": [
     {
       "kind": "inferred",
-      "firmware_ids": ["xt3-511"]
+      "firmware_ids": [
+        "xt3-511"
+      ]
     }
   ]
 }

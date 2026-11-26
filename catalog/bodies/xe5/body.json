@@ -13,7 +13,12 @@
     "bus_drain": [
       {
         "address": 1743781888,
-        "processor_ids": ["core0", "core1", "core2", "core3"],
+        "processor_ids": [
+          "core0",
+          "core1",
+          "core2",
+          "core3"
+        ],
         "basis": "The stock firmware drains the bus with a discarded read of the first address past its DRAM map (the supplied Linux device tree's 366 MiB Linux carveout at 0x40000000 plus the AMP, rpmsg and ISGC shared arenas ending at 0x67F00000)."
       }
     ]
@@ -44,7 +49,12 @@
       "kind": "dram"
     }
   ],
-  "parts": ["xe5-serial-nor", "power-controller", "serial-calibration", "bis-configuration"],
+  "parts": [
+    "xe5-serial-nor",
+    "power-controller",
+    "serial-calibration",
+    "bis-configuration"
+  ],
   "wiring": [
     {
       "source_id": "flash",

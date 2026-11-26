@@ -2,7 +2,11 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "title": "FujiMod emulator option profile",
   "type": "object",
-  "required": ["$schema", "schema", "options"],
+  "required": [
+    "$schema",
+    "schema",
+    "options"
+  ],
   "properties": {
     "$schema": {
       "type": "string"
@@ -24,7 +28,10 @@
           "type": "string"
         }
       },
-      "required": ["id", "profile"],
+      "required": [
+        "id",
+        "profile"
+      ],
       "additionalProperties": false
     }
   },

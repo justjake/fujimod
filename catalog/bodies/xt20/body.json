@@ -154,7 +154,9 @@
       ]
     }
   ],
-  "parts": ["xt20-flash"],
+  "parts": [
+    "xt20-flash"
+  ],
   "wiring": [
     {
       "source_id": "flash-controller",

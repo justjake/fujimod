@@ -425,7 +425,9 @@
             "size": 4325376
           },
           "pointer_address": 9882192,
-          "sections": ["stream-0016025c"],
+          "sections": [
+            "stream-0016025c"
+          ],
           "static_oracle_sha256": "a0246bdafbb983bb805ab38a9deae199eb754c2b604709381cc235485da52b7e",
           "store_limit": 2097152,
           "table": {
@@ -499,7 +501,10 @@
           },
           "journals": [
             {
-              "bank_rows": [8, 9],
+              "bank_rows": [
+                8,
+                9
+              ],
               "check_view": "main_check",
               "default_copies": [
                 {
@@ -517,7 +522,9 @@
                 {
                   "mask": 254,
                   "offset": 31,
-                  "values": [1]
+                  "values": [
+                    1
+                  ]
                 }
               ],
               "parity_context": 8553832,
@@ -573,7 +580,10 @@
               ]
             },
             {
-              "bank_rows": [10, 11],
+              "bank_rows": [
+                10,
+                11
+              ],
               "check_view": "custom_check",
               "kind": 3,
               "name": "custom",
@@ -581,7 +591,9 @@
                 {
                   "mask": 159,
                   "offset": 26,
-                  "values": [96]
+                  "values": [
+                    96
+                  ]
                 }
               ],
               "parity_context": 8553840,
@@ -609,7 +621,10 @@
           "max_instructions": 1000000,
           "raw_records": [
             {
-              "bank_rows": [15, 16],
+              "bank_rows": [
+                15,
+                16
+              ],
               "basis": "Declared catalog input.",
               "consumer_view": "wireless_consumer",
               "name": "wireless_record",
@@ -621,19 +636,27 @@
                   "offset": 1088
                 }
               ],
-              "seed_sequences": [1, 2],
+              "seed_sequences": [
+                1,
+                2
+              ],
               "size": 2048
             }
           ],
           "record": {
             "empty_fill": 255,
             "protected_bytes": 492,
-            "seed_sequences": [1, 2],
+            "seed_sequences": [
+              1,
+              2
+            ],
             "sequence_offset": 0,
             "size": 512
           },
           "scratch_record": 1124073472,
-          "sections": ["stream-0016025c"],
+          "sections": [
+            "stream-0016025c"
+          ],
           "views": [
             {
               "address": 8162492,

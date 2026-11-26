@@ -12,7 +12,9 @@
           "role": "boot-reason",
           "evidence": {
             "kind": "inferred",
-            "firmware_ids": ["xs10-311"]
+            "firmware_ids": [
+              "xs10-311"
+            ]
           }
         },
         {
@@ -20,7 +22,9 @@
           "role": "usb-power-status",
           "evidence": {
             "kind": "inferred",
-            "firmware_ids": ["xs10-311"]
+            "firmware_ids": [
+              "xs10-311"
+            ]
           }
         },
         {
@@ -28,7 +32,9 @@
           "role": "rtc-stage-low",
           "evidence": {
             "kind": "inferred",
-            "firmware_ids": ["xs10-311"]
+            "firmware_ids": [
+              "xs10-311"
+            ]
           }
         },
         {
@@ -36,7 +42,9 @@
           "role": "rtc-stage-high",
           "evidence": {
             "kind": "inferred",
-            "firmware_ids": ["xs10-311"]
+            "firmware_ids": [
+              "xs10-311"
+            ]
           }
         },
         {
@@ -44,7 +52,9 @@
           "role": "rtc-seconds-low",
           "evidence": {
             "kind": "inferred",
-            "firmware_ids": ["xs10-311"]
+            "firmware_ids": [
+              "xs10-311"
+            ]
           }
         },
         {
@@ -52,7 +62,9 @@
           "role": "rtc-seconds-high",
           "evidence": {
             "kind": "inferred",
-            "firmware_ids": ["xs10-311"]
+            "firmware_ids": [
+              "xs10-311"
+            ]
           }
         },
         {
@@ -60,7 +72,9 @@
           "role": "rtc-control",
           "evidence": {
             "kind": "inferred",
-            "firmware_ids": ["xs10-311"]
+            "firmware_ids": [
+              "xs10-311"
+            ]
           }
         }
       ],

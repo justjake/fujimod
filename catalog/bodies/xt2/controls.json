@@ -7,8 +7,45 @@
     "url": "https://fujifilm-dsc.com/en/manual/x-t2/x-t2_omw_en_s_f.pdf",
     "title": "FUJIFILM X-T2 Version 2.10 Owner's Manual",
     "pages": [
-      2, 3, 4, 5, 6, 7, 11, 16, 18, 29, 34, 36, 37, 42, 50, 51, 52, 64, 66, 72, 75, 80, 88, 91, 92,
-      93, 94, 223, 226, 227, 228, 229, 230, 231, 232, 251, 256, 257, 258
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      11,
+      16,
+      18,
+      29,
+      34,
+      36,
+      37,
+      42,
+      50,
+      51,
+      52,
+      64,
+      66,
+      72,
+      75,
+      80,
+      88,
+      91,
+      92,
+      93,
+      94,
+      223,
+      226,
+      227,
+      228,
+      229,
+      230,
+      231,
+      232,
+      251,
+      256,
+      257,
+      258
     ]
   },
   "analog_levels": 1024,
@@ -50,7 +87,9 @@
       "location": "rear",
       "manual_page": 94,
       "face": "AE-L",
-      "connection_ids": ["controls-gpio-6-2"],
+      "connection_ids": [
+        "controls-gpio-6-2"
+      ],
       "assignable": true,
       "pushable": true,
       "default_function": "Lock exposure while pressed.",
@@ -68,7 +107,9 @@
       "location": "rear",
       "manual_page": 94,
       "face": "AF-L",
-      "connection_ids": ["controls-gpio-6-4"],
+      "connection_ids": [
+        "controls-gpio-6-4"
+      ],
       "assignable": true,
       "pushable": true,
       "default_function": "Lock focus while pressed.",
@@ -112,7 +153,9 @@
       "location": "rear",
       "manual_page": 52,
       "icon": "delete",
-      "connection_ids": ["controls-gpio-13-6"],
+      "connection_ids": [
+        "controls-gpio-13-6"
+      ],
       "assignable": false,
       "pushable": true,
       "default_function": "Delete the selected picture during playback.",
@@ -146,7 +189,9 @@
       "location": "rear",
       "manual_page": 18,
       "face": "DISP/BACK",
-      "connection_ids": ["controls-adc-3"],
+      "connection_ids": [
+        "controls-adc-3"
+      ],
       "assignable": false,
       "pushable": true,
       "default_function": "Cycle display modes or go back.",
@@ -164,7 +209,9 @@
       "location": "top",
       "manual_page": 5,
       "short_name": "DRIVE",
-      "connection_ids": ["controls-adc-1"],
+      "connection_ids": [
+        "controls-adc-1"
+      ],
       "assignable": false,
       "pushable": false,
       "positions": [
@@ -284,7 +331,9 @@
       "location": "top",
       "manual_page": 92,
       "short_name": "EV",
-      "connection_ids": ["controls-adc-7"],
+      "connection_ids": [
+        "controls-adc-7"
+      ],
       "assignable": false,
       "pushable": false,
       "positions": [
@@ -401,7 +450,9 @@
       "location": "top",
       "manual_page": 256,
       "face": "Fn1",
-      "connection_ids": ["controls-gpio-0-14"],
+      "connection_ids": [
+        "controls-gpio-0-14"
+      ],
       "assignable": true,
       "pushable": true,
       "default_function": "Face/eye detection settings.",
@@ -419,7 +470,9 @@
       "location": "front",
       "manual_page": 256,
       "face": "Fn2",
-      "connection_ids": ["controls-gpio-2-4"],
+      "connection_ids": [
+        "controls-gpio-2-4"
+      ],
       "assignable": true,
       "pushable": true,
       "default_function": "Drive settings.",
@@ -579,7 +632,9 @@
       "location": "rear",
       "manual_page": 4,
       "face": "MENU/OK",
-      "connection_ids": ["controls-adc-3"],
+      "connection_ids": [
+        "controls-adc-3"
+      ],
       "assignable": false,
       "pushable": true,
       "default_function": "Open menus and confirm selections; press and hold to lock or unlock the selector and Q button during shooting.",
@@ -597,7 +652,9 @@
       "location": "top",
       "manual_page": 91,
       "short_name": "METER",
-      "connection_ids": ["controls-adc-2"],
+      "connection_ids": [
+        "controls-adc-2"
+      ],
       "assignable": false,
       "pushable": false,
       "positions": [
@@ -701,7 +758,9 @@
       "location": "rear",
       "manual_page": 51,
       "icon": "playback",
-      "connection_ids": ["controls-gpio-7-6"],
+      "connection_ids": [
+        "controls-gpio-7-6"
+      ],
       "assignable": false,
       "pushable": true,
       "default_function": "Start picture playback; half-press the shutter button to return to shooting mode.",
@@ -764,7 +823,9 @@
       "location": "rear",
       "manual_page": 256,
       "short_name": "DOWN",
-      "connection_ids": ["controls-adc-3"],
+      "connection_ids": [
+        "controls-adc-3"
+      ],
       "assignable": true,
       "pushable": true,
       "default_function": "Fn6 default: Performance; can instead be used to position the focus area.",
@@ -782,7 +843,9 @@
       "location": "rear",
       "manual_page": 256,
       "short_name": "LEFT",
-      "connection_ids": ["controls-adc-3"],
+      "connection_ids": [
+        "controls-adc-3"
+      ],
       "assignable": true,
       "pushable": true,
       "default_function": "Fn4 default: Film simulation; can instead be used to position the focus area.",
@@ -800,7 +863,9 @@
       "location": "rear",
       "manual_page": 256,
       "short_name": "RIGHT",
-      "connection_ids": ["controls-adc-3"],
+      "connection_ids": [
+        "controls-adc-3"
+      ],
       "assignable": true,
       "pushable": true,
       "default_function": "Fn5 default: White balance; can instead be used to position the focus area.",
@@ -818,7 +883,9 @@
       "location": "rear",
       "manual_page": 256,
       "short_name": "UP",
-      "connection_ids": ["controls-adc-3"],
+      "connection_ids": [
+        "controls-adc-3"
+      ],
       "assignable": true,
       "pushable": true,
       "default_function": "Fn3 default: AF mode; can instead be used to position the focus area.",
@@ -836,7 +903,9 @@
       "location": "top",
       "manual_page": 88,
       "short_name": "ISO",
-      "connection_ids": ["controls-adc-5"],
+      "connection_ids": [
+        "controls-adc-5"
+      ],
       "assignable": false,
       "pushable": false,
       "positions": [
@@ -1021,7 +1090,9 @@
       "location": "top",
       "manual_page": 64,
       "short_name": "SPEED",
-      "connection_ids": ["controls-adc-6"],
+      "connection_ids": [
+        "controls-adc-6"
+      ],
       "assignable": false,
       "pushable": false,
       "positions": [
@@ -1259,7 +1330,9 @@
       "location": "rear",
       "manual_page": 16,
       "face": "VIEW/MODE",
-      "connection_ids": ["controls-gpio-0-15"],
+      "connection_ids": [
+        "controls-gpio-0-15"
+      ],
       "assignable": false,
       "pushable": true,
       "default_function": "Choose the display mode for the viewfinder and LCD monitor.",

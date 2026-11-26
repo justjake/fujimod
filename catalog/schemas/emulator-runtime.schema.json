@@ -28,7 +28,10 @@
           "pattern": "^[0-9a-f]{64}$"
         }
       },
-      "required": ["size", "sha256"],
+      "required": [
+        "size",
+        "sha256"
+      ],
       "additionalProperties": false
     },
     "flash_offset": {
@@ -50,7 +53,10 @@
               "pattern": "^[0-9a-f]{64}$"
             }
           },
-          "required": ["size", "sha256"],
+          "required": [
+            "size",
+            "sha256"
+          ],
           "additionalProperties": false
         },
         "address": {
@@ -58,7 +64,10 @@
           "minimum": 0
         }
       },
-      "required": ["content", "address"],
+      "required": [
+        "content",
+        "address"
+      ],
       "additionalProperties": false
     },
     "quantum": {
@@ -74,7 +83,12 @@
             "type": "object",
             "properties": {
               "model": {
-                "enum": ["cortex-r5f", "cortex-m4", "armv8a", "cortex-a7"]
+                "enum": [
+                  "cortex-r5f",
+                  "cortex-m4",
+                  "armv8a",
+                  "cortex-a7"
+                ]
               },
               "registers": {
                 "type": "array",
@@ -88,13 +102,25 @@
                 "type": "boolean"
               },
               "mprofile": {
-                "type": ["object", "null"]
+                "type": [
+                  "object",
+                  "null"
+                ]
               },
               "rprofile": {
-                "type": ["object", "null"]
+                "type": [
+                  "object",
+                  "null"
+                ]
               }
             },
-            "required": ["model", "registers", "released", "mprofile", "rprofile"],
+            "required": [
+              "model",
+              "registers",
+              "released",
+              "mprofile",
+              "rprofile"
+            ],
             "additionalProperties": false
           }
         },
@@ -112,7 +138,10 @@
                 "minimum": 1
               }
             },
-            "required": ["base", "size"],
+            "required": [
+              "base",
+              "size"
+            ],
             "additionalProperties": false
           }
         },
@@ -143,7 +172,13 @@
                 "maximum": 7
               }
             },
-            "required": ["core", "address", "physical", "size", "permissions"],
+            "required": [
+              "core",
+              "address",
+              "physical",
+              "size",
+              "permissions"
+            ],
             "additionalProperties": false
           }
         },
@@ -169,7 +204,12 @@
                 "minimum": 1
               }
             },
-            "required": ["core", "address", "physical", "size"],
+            "required": [
+              "core",
+              "address",
+              "physical",
+              "size"
+            ],
             "additionalProperties": false
           }
         },
@@ -196,7 +236,12 @@
                 "maximum": 7
               }
             },
-            "required": ["address", "physical", "size", "permissions"],
+            "required": [
+              "address",
+              "physical",
+              "size",
+              "permissions"
+            ],
             "additionalProperties": false
           }
         },
@@ -250,7 +295,13 @@
                             "maximum": 7
                           }
                         },
-                        "required": ["core", "address", "physical", "size", "permissions"],
+                        "required": [
+                          "core",
+                          "address",
+                          "physical",
+                          "size",
+                          "permissions"
+                        ],
                         "additionalProperties": false
                       }
                     },
@@ -277,17 +328,28 @@
                             "maximum": 7
                           }
                         },
-                        "required": ["address", "physical", "size", "permissions"],
+                        "required": [
+                          "address",
+                          "physical",
+                          "size",
+                          "permissions"
+                        ],
                         "additionalProperties": false
                       }
                     }
                   },
-                  "required": ["processors", "dma"],
+                  "required": [
+                    "processors",
+                    "dma"
+                  ],
                   "additionalProperties": false
                 }
               }
             },
-            "required": ["initial", "choices"],
+            "required": [
+              "initial",
+              "choices"
+            ],
             "additionalProperties": false
           }
         }
@@ -310,7 +372,10 @@
           "const": 1
         },
         "boot_entry": {
-          "enum": ["rom", "loader"]
+          "enum": [
+            "rom",
+            "loader"
+          ]
         },
         "wires": {
           "type": "object"
@@ -327,7 +392,10 @@
               "boot_entries": {
                 "type": "array",
                 "items": {
-                  "enum": ["rom", "loader"]
+                  "enum": [
+                    "rom",
+                    "loader"
+                  ]
                 }
               },
               "windows": {
@@ -344,7 +412,10 @@
                       "minimum": 1
                     }
                   },
-                  "required": ["base", "size"],
+                  "required": [
+                    "base",
+                    "size"
+                  ],
                   "additionalProperties": false
                 }
               },
@@ -363,16 +434,29 @@
                     "minLength": 1
                   }
                 },
-                "required": ["kind"],
+                "required": [
+                  "kind"
+                ],
                 "additionalProperties": true
               }
             },
-            "required": ["name", "boot_entries", "windows", "dependencies", "model"],
+            "required": [
+              "name",
+              "boot_entries",
+              "windows",
+              "dependencies",
+              "model"
+            ],
             "additionalProperties": false
           }
         }
       },
-      "required": ["schema", "boot_entry", "wires", "nodes"],
+      "required": [
+        "schema",
+        "boot_entry",
+        "wires",
+        "nodes"
+      ],
       "additionalProperties": false
     },
     "scene": {
@@ -401,7 +485,11 @@
             "minimum": 1
           }
         },
-        "required": ["name", "pattern", "size"],
+        "required": [
+          "name",
+          "pattern",
+          "size"
+        ],
         "additionalProperties": false
       }
     },
@@ -422,7 +510,11 @@
           "maximum": 255
         }
       },
-      "required": ["node", "route", "first_register"],
+      "required": [
+        "node",
+        "route",
+        "first_register"
+      ],
       "additionalProperties": false
     },
     "reset_coprocessors": {
@@ -465,7 +557,15 @@
                 "minimum": 0
               }
             },
-            "required": ["cp", "wide", "secure", "crn", "crm", "opc1", "opc2"],
+            "required": [
+              "cp",
+              "wide",
+              "secure",
+              "crn",
+              "crm",
+              "opc1",
+              "opc2"
+            ],
             "additionalProperties": false
           },
           "set_bits": {
@@ -473,7 +573,11 @@
             "minimum": 0
           }
         },
-        "required": ["core", "register", "set_bits"],
+        "required": [
+          "core",
+          "register",
+          "set_bits"
+        ],
         "additionalProperties": false
       }
     },
@@ -528,7 +632,10 @@
               "minimum": 0
             },
             "input_pending": {
-              "type": ["integer", "null"],
+              "type": [
+                "integer",
+                "null"
+              ],
               "minimum": 0
             },
             "override_address": {
@@ -540,7 +647,10 @@
               "minimum": 0
             },
             "operation_alert_timer": {
-              "type": ["integer", "null"],
+              "type": [
+                "integer",
+                "null"
+              ],
               "minimum": 0
             }
           },

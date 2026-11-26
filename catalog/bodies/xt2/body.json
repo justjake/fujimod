@@ -196,7 +196,9 @@
       ]
     }
   ],
-  "parts": ["xt2-flash"],
+  "parts": [
+    "xt2-flash"
+  ],
   "wiring": [
     {
       "source_id": "flash-controller",

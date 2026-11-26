@@ -7,8 +7,35 @@
     "url": "https://fujifilm-dsc.com/en/manual/x100t/x100t_om-full_en_01.pdf",
     "title": "FUJIFILM X100T Owner’s Manual",
     "pages": [
-      12, 13, 14, 15, 16, 17, 18, 19, 20, 22, 24, 26, 29, 31, 53, 74, 91, 93, 105, 112, 116, 120,
-      122, 124, 128, 133, 135, 237, 249
+      12,
+      13,
+      14,
+      15,
+      16,
+      17,
+      18,
+      19,
+      20,
+      22,
+      24,
+      26,
+      29,
+      31,
+      53,
+      74,
+      91,
+      93,
+      105,
+      112,
+      116,
+      120,
+      122,
+      124,
+      128,
+      133,
+      135,
+      237,
+      249
     ]
   },
   "analog_levels": 1024,
@@ -37,7 +64,9 @@
       "location": "rear",
       "manual_page": 120,
       "face": "AEL/AFL",
-      "connection_ids": ["controls-adc-8"],
+      "connection_ids": [
+        "controls-adc-8"
+      ],
       "assignable": true,
       "pushable": true,
       "default_function": "Lock exposure only by default; the button can be set to lock focus only or both focus and exposure.",
@@ -55,7 +84,9 @@
       "location": "front",
       "manual_page": 19,
       "short_name": "APERTURE",
-      "connection_ids": ["controls-adc-9"],
+      "connection_ids": [
+        "controls-adc-9"
+      ],
       "assignable": false,
       "pushable": false,
       "positions": [
@@ -335,7 +366,10 @@
       "location": "rear",
       "manual_page": 16,
       "short_name": "COMMAND",
-      "connection_ids": ["controls-gpio-0-10", "controls-encoder-3-8-3-9"],
+      "connection_ids": [
+        "controls-gpio-0-10",
+        "controls-encoder-3-8-3-9"
+      ],
       "assignable": false,
       "pushable": true,
       "default_function": "Rotate to navigate menus, zoom, choose the number of playback images, and select quick-menu options; press the center to zoom in on the active focus area.",
@@ -365,7 +399,9 @@
       "location": "rear",
       "manual_page": 14,
       "icon": "delete",
-      "connection_ids": ["controls-gpio-3-3"],
+      "connection_ids": [
+        "controls-gpio-3-3"
+      ],
       "assignable": false,
       "pushable": true,
       "default_function": "Delete pictures in playback mode.",
@@ -392,7 +428,9 @@
       "location": "rear",
       "manual_page": 24,
       "face": "DISP/BACK",
-      "connection_ids": ["controls-adc-8"],
+      "connection_ids": [
+        "controls-adc-8"
+      ],
       "assignable": false,
       "pushable": true,
       "default_function": "Control the display of indicators in the viewfinder and LCD monitor; go back in menus.",
@@ -410,7 +448,9 @@
       "location": "top",
       "manual_page": 31,
       "face": "DRIVE",
-      "connection_ids": ["controls-gpio-2-12"],
+      "connection_ids": [
+        "controls-gpio-2-12"
+      ],
       "assignable": false,
       "pushable": true,
       "default_function": "Choose drive mode options.",
@@ -428,7 +468,9 @@
       "location": "top",
       "manual_page": 116,
       "short_name": "EV",
-      "connection_ids": ["controls-adc-4"],
+      "connection_ids": [
+        "controls-adc-4"
+      ],
       "assignable": false,
       "pushable": false,
       "positions": [
@@ -666,7 +708,9 @@
       "location": "front",
       "manual_page": 74,
       "face": "Fn1",
-      "connection_ids": ["controls-gpio-0-11"],
+      "connection_ids": [
+        "controls-gpio-0-11"
+      ],
       "assignable": true,
       "pushable": true,
       "default_function": "Start movie recording.",
@@ -694,7 +738,9 @@
       "location": "front",
       "manual_page": 122,
       "short_name": "FOCUS",
-      "connection_ids": ["controls-contacts-3-6-3-7"],
+      "connection_ids": [
+        "controls-contacts-3-6-3-7"
+      ],
       "assignable": false,
       "pushable": false,
       "positions": [
@@ -748,7 +794,9 @@
       "location": "front",
       "manual_page": 124,
       "short_name": "FOCUS",
-      "connection_ids": ["controls-encoder-adc-6-7"],
+      "connection_ids": [
+        "controls-encoder-adc-6-7"
+      ],
       "assignable": false,
       "pushable": false,
       "default_function": "Focus manually; rotate to change the focus distance.",
@@ -783,7 +831,9 @@
       "location": "rear",
       "manual_page": 15,
       "face": "MENU/OK",
-      "connection_ids": ["controls-adc-8"],
+      "connection_ids": [
+        "controls-adc-8"
+      ],
       "assignable": false,
       "pushable": true,
       "default_function": "Select the highlighted item.",
@@ -801,7 +851,9 @@
       "location": "rear",
       "manual_page": 14,
       "icon": "playback",
-      "connection_ids": ["controls-gpio-2-9"],
+      "connection_ids": [
+        "controls-gpio-2-9"
+      ],
       "assignable": false,
       "pushable": true,
       "default_function": "Start playback; half-press the shutter button to return to shooting mode.",
@@ -819,7 +871,9 @@
       "location": "top",
       "manual_page": 26,
       "face": "ON/OFF",
-      "connection_ids": ["power"],
+      "connection_ids": [
+        "power"
+      ],
       "assignable": false,
       "pushable": false,
       "positions": [
@@ -861,7 +915,9 @@
       "location": "rear",
       "manual_page": 91,
       "face": "Q",
-      "connection_ids": ["controls-adc-8"],
+      "connection_ids": [
+        "controls-adc-8"
+      ],
       "assignable": false,
       "pushable": true,
       "default_function": "Display the quick menu.",
@@ -879,7 +935,9 @@
       "location": "rear",
       "manual_page": 105,
       "short_name": "SELECTOR",
-      "connection_ids": ["controls-adc-8"],
+      "connection_ids": [
+        "controls-adc-8"
+      ],
       "assignable": true,
       "pushable": false,
       "default_function": "Select macro mode by default (function button 2).",
@@ -911,7 +969,10 @@
       "location": "top",
       "manual_page": 53,
       "short_name": "SHUTTER",
-      "connection_ids": ["controls-gpio-0-2", "controls-gpio-0-3"],
+      "connection_ids": [
+        "controls-gpio-0-2",
+        "controls-gpio-0-3"
+      ],
       "assignable": false,
       "pushable": true,
       "default_function": "Half-press to focus and lock focus and exposure; press fully to take a picture.",
@@ -943,7 +1004,9 @@
       "location": "top",
       "manual_page": 18,
       "short_name": "SPEED",
-      "connection_ids": ["controls-adc-3"],
+      "connection_ids": [
+        "controls-adc-3"
+      ],
       "assignable": false,
       "pushable": false,
       "positions": [
@@ -1157,7 +1220,9 @@
       "location": "rear",
       "manual_page": 20,
       "face": "VIEW/MODE",
-      "connection_ids": ["controls-gpio-4-5"],
+      "connection_ids": [
+        "controls-gpio-4-5"
+      ],
       "assignable": false,
       "pushable": true,
       "default_function": "Cycle the viewfinder and LCD display modes.",
@@ -1175,7 +1240,9 @@
       "location": "front",
       "manual_page": 22,
       "short_name": "VIEW",
-      "connection_ids": ["controls-gpio-5-11"],
+      "connection_ids": [
+        "controls-gpio-5-11"
+      ],
       "assignable": false,
       "pushable": true,
       "default_function": "Switch between the electronic viewfinder, optical viewfinder, and dual optical viewfinder/electronic range finder display.",
@@ -1193,7 +1260,9 @@
       "location": "rear",
       "manual_page": 249,
       "face": "Fn",
-      "connection_ids": ["controls-gpio-2-11"],
+      "connection_ids": [
+        "controls-gpio-2-11"
+      ],
       "assignable": true,
       "pushable": true,
       "default_function": "Start wireless communication.",

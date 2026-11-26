@@ -208,11 +208,17 @@
       "access": "read-write"
     }
   ],
-  "parameters": ["run_ticks", "register_contract"],
+  "parameters": [
+    "run_ticks",
+    "register_contract"
+  ],
   "evidence": [
     {
       "kind": "inferred",
-      "firmware_ids": ["xt3-511", "xt20-211"]
+      "firmware_ids": [
+        "xt3-511",
+        "xt20-211"
+      ]
     }
   ]
 }

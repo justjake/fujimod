@@ -76,7 +76,9 @@
     "channels": 16,
     "request_mux_block_id": "dma-request-mux",
     "timing": "16 guest setup ticks plus ceil(bytes/16); functional transfer timing, not measured bus bandwidth.",
-    "native_dependencies": ["serial_flash"],
+    "native_dependencies": [
+      "serial_flash"
+    ],
     "basis": "Declared catalog input."
   }
 }

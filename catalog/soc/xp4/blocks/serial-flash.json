@@ -15,7 +15,9 @@
     "model": "serial_flash",
     "aperture_block_id": "flash-aperture",
     "timing": "8 guest ticks per command acceptance; functional latency, not measured silicon timing.",
-    "native_dependencies": ["dma"],
+    "native_dependencies": [
+      "dma"
+    ],
     "basis": "Declared catalog input."
   }
 }
