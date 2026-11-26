@@ -14,6 +14,10 @@ use std::{
     ffi::c_void,
     ptr::NonNull,
     rc::Rc,
+    sync::{
+        Arc,
+        atomic::{AtomicU32, Ordering},
+    },
 };
 mod backend;
 pub mod coherence;
@@ -40,6 +44,7 @@ struct Execution {
     id: Cell<usize>,
     record: NonNull<BlockAccounting>,
     policy: Cell<ExecutionPolicy>,
+    pause_requested: Option<Arc<AtomicU32>>,
     clock: Cell<Option<Clock>>,
     loop_mode: Cell<loops::LoopMode>,
     loop_window: Cell<bool>,
@@ -106,6 +111,32 @@ pub struct Core {
 }
 impl Core {
     pub fn new(cpu: RawCore, memory: Memory) -> Result<Self, String> {
+        Self::with_pause(cpu, memory, None)
+    }
+
+    #[cfg(not(target_os = "emscripten"))]
+    pub(crate) fn new_parallel_worker(
+        cpu: RawCore,
+        memory: Memory,
+        pause_requested: Arc<AtomicU32>,
+    ) -> Result<Self, String> {
+        Self::with_pause(cpu, memory, Some(pause_requested))
+    }
+
+    #[cfg(not(target_os = "emscripten"))]
+    pub(crate) fn owner_callback_parked(&self, parked: bool) -> Result<(), String> {
+        let execution = &self.execution;
+        if execution.active.get() {
+            execution.memory.set_parked(execution.id.get(), parked)?;
+        }
+        Ok(())
+    }
+
+    fn with_pause(
+        cpu: RawCore,
+        memory: Memory,
+        pause_requested: Option<Arc<AtomicU32>>,
+    ) -> Result<Self, String> {
         let a32 = cpu.model() == Model::CortexA7;
         if !(a32 || cpu.model() == Model::ArmV8A) || !cpu.features().translation_filter {
             return Err("counted A-profile requires an A-profile translation frontend".into());
@@ -130,6 +161,7 @@ impl Core {
             id: Cell::new(usize::MAX),
             record,
             policy: Cell::new(ExecutionPolicy::Exact),
+            pause_requested,
             clock: Cell::new(None),
             loop_mode: Cell::default(),
             loop_window: Cell::new(false),
@@ -178,6 +210,10 @@ impl Core {
             r.ring = (*e.ring.get()).as_mut_ptr();
             r.mask = 63;
             r.enabled = 1;
+            r.pause_requested = e
+                .pause_requested
+                .as_ref()
+                .map_or(std::ptr::null(), Arc::as_ptr);
             if a32 {
                 // A device access ends its block and every other stop raised
                 // from a callback takes effect at the next block entry, so
@@ -567,6 +603,15 @@ impl Execution {
         if self.stopped.get() {
             return Ok(());
         }
+        if self
+            .pause_requested
+            .as_ref()
+            .is_some_and(|pause| pause.load(Ordering::Acquire) != 0)
+        {
+            self.stopped.set(true);
+            self.reset();
+            return self.cpu.stop();
+        }
         if self.memory.flush_pending() && self.restart.get() != Some(b.address) {
             self.reset();
             return self.cpu.stop();
@@ -874,6 +919,14 @@ unsafe fn written(access: Access, address: u64, size: i32, value: i64, data: *mu
     let e = unsafe { &*data.cast::<Execution>() };
     e.guarded(|| {
         store_histogram::count(e.id.get(), address);
+        if e.pause_requested.is_some() && e.policy.get() == ExecutionPolicy::Interactive {
+            let observers = e.index.borrow().synchronization.clone();
+            for (_, hook) in observers {
+                if let Hook::Synchronization { callback, data } = hook {
+                    unsafe { callback(data) };
+                }
+            }
+        }
         if e.memory.guest_store(e.id.get(), address, size as usize)? {
             e.cpu.request_restart()?;
         }

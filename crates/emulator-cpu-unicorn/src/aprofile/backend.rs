@@ -55,6 +55,10 @@ impl Cpu for Core {
         if e.policy.get() != policy {
             e.cpu.set_execution_policy(policy)?;
             if !e.a32 {
+                if e.pause_requested.is_some() {
+                    e.cpu
+                        .set_parallel_cpus(policy == ExecutionPolicy::Interactive)?;
+                }
                 e.cpu
                     .set_entry_exits(policy == ExecutionPolicy::Interactive)?;
             }
@@ -299,7 +303,9 @@ impl Cpu for Core {
         if request.watchdog_us != 0 {
             return Err("counted A-profile runs require exact limits or explicit owner stops, without a host watchdog".into());
         }
-        let _reservation = e.memory.reserve_run(e.id.get(), e.policy.get(), false)?;
+        let _reservation =
+            e.memory
+                .reserve_run(e.id.get(), e.policy.get(), e.pause_requested.is_some())?;
         if e.memory.flush_pending() {
             e.memory.flush()?;
         }
@@ -502,6 +508,7 @@ impl Cpu for Core {
             }
             // Owner aborts: the abort settles first, then its observers run.
             Hook::Exception { .. } if e.owner_aborts.get() => None,
+            Hook::Synchronization { .. } if e.pause_requested.is_some() => None,
             _ => Some(unsafe { e.cpu.install_hook(hook)? }),
         };
         e.index.borrow_mut().insert(key, hook);

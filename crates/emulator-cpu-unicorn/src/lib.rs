@@ -11,6 +11,8 @@ mod observers;
 pub mod rprofile;
 #[cfg(test)]
 mod test_support;
+#[cfg(not(target_os = "emscripten"))]
+pub mod worker;
 
 use fujimod_emulator_cpu::*;
 use std::{any::Any, ffi::c_void, ptr::NonNull};
