@@ -298,9 +298,7 @@
             "size": 4325376
           },
           "pointer_address": 12581772,
-          "sections": [
-            "stream-0016025c"
-          ],
+          "sections": ["stream-0016025c"],
           "static_oracle_sha256": "af9c783e638931b8bd04272a99e97959b4b444b0ad283d57b1f43d59e3a552a2",
           "store_limit": 2097152,
           "table": {
@@ -389,10 +387,7 @@
           },
           "journals": [
             {
-              "bank_rows": [
-                6,
-                7
-              ],
+              "bank_rows": [6, 7],
               "check_view": "main_check",
               "default_copies": [
                 {
@@ -410,9 +405,7 @@
                 {
                   "mask": 192,
                   "offset": 31,
-                  "values": [
-                    1
-                  ]
+                  "values": [1]
                 }
               ],
               "parity_context": 12079324,
@@ -443,10 +436,7 @@
               ]
             },
             {
-              "bank_rows": [
-                8,
-                9
-              ],
+              "bank_rows": [8, 9],
               "check_view": "custom_check",
               "kind": 3,
               "name": "custom",
@@ -454,41 +444,17 @@
                 {
                   "mask": 159,
                   "offset": 33,
-                  "values": [
-                    32,
-                    32,
-                    32,
-                    32,
-                    32,
-                    32,
-                    32
-                  ]
+                  "values": [32, 32, 32, 32, 32, 32, 32]
                 },
                 {
                   "mask": 31,
                   "offset": 13,
-                  "values": [
-                    0,
-                    0,
-                    0,
-                    0,
-                    32,
-                    32,
-                    32
-                  ]
+                  "values": [0, 0, 0, 0, 32, 32, 32]
                 },
                 {
                   "mask": 159,
                   "offset": 35,
-                  "values": [
-                    0,
-                    32,
-                    64,
-                    96,
-                    0,
-                    32,
-                    64
-                  ]
+                  "values": [0, 32, 64, 96, 0, 32, 64]
                 }
               ],
               "parity_context": 12079332,
@@ -513,17 +479,12 @@
           "record": {
             "empty_fill": 255,
             "protected_bytes": 3964,
-            "seed_sequences": [
-              1,
-              2
-            ],
+            "seed_sequences": [1, 2],
             "sequence_offset": 0,
             "size": 4096
           },
           "scratch_record": 1124073472,
-          "sections": [
-            "stream-0016025c"
-          ],
+          "sections": ["stream-0016025c"],
           "views": [
             {
               "address": 11577908,
@@ -975,10 +936,7 @@
           },
           "journals": [
             {
-              "bank_rows": [
-                6,
-                7
-              ],
+              "bank_rows": [6, 7],
               "check_view": "main_check",
               "default_copies": [
                 {
@@ -996,9 +954,7 @@
                 {
                   "mask": 192,
                   "offset": 31,
-                  "values": [
-                    1
-                  ]
+                  "values": [1]
                 }
               ],
               "parity_context": 12079324,
@@ -1029,10 +985,7 @@
               ]
             },
             {
-              "bank_rows": [
-                8,
-                9
-              ],
+              "bank_rows": [8, 9],
               "check_view": "custom_check",
               "kind": 3,
               "name": "custom",
@@ -1040,41 +993,17 @@
                 {
                   "mask": 159,
                   "offset": 33,
-                  "values": [
-                    32,
-                    32,
-                    32,
-                    32,
-                    32,
-                    32,
-                    32
-                  ]
+                  "values": [32, 32, 32, 32, 32, 32, 32]
                 },
                 {
                   "mask": 31,
                   "offset": 13,
-                  "values": [
-                    0,
-                    0,
-                    0,
-                    0,
-                    32,
-                    32,
-                    32
-                  ]
+                  "values": [0, 0, 0, 0, 32, 32, 32]
                 },
                 {
                   "mask": 159,
                   "offset": 35,
-                  "values": [
-                    0,
-                    32,
-                    64,
-                    96,
-                    0,
-                    32,
-                    64
-                  ]
+                  "values": [0, 32, 64, 96, 0, 32, 64]
                 }
               ],
               "parity_context": 12079332,
@@ -1099,17 +1028,12 @@
           "record": {
             "empty_fill": 255,
             "protected_bytes": 3964,
-            "seed_sequences": [
-              1,
-              2
-            ],
+            "seed_sequences": [1, 2],
             "sequence_offset": 0,
             "size": 4096
           },
           "scratch_record": 1124073472,
-          "sections": [
-            "stream-0016025c"
-          ],
+          "sections": ["stream-0016025c"],
           "views": [
             {
               "address": 11577908,

@@ -7,35 +7,8 @@
     "url": "https://dl.fujifilm-x.com/support/manual/x/fujifilm_xe2_manual_en.pdf",
     "title": "FUJIFILM X-E2 Owner’s Manual (Version 4.00)",
     "pages": [
-      2,
-      3,
-      4,
-      5,
-      16,
-      20,
-      24,
-      25,
-      29,
-      30,
-      35,
-      37,
-      40,
-      43,
-      44,
-      46,
-      47,
-      52,
-      53,
-      55,
-      56,
-      57,
-      58,
-      65,
-      68,
-      69,
-      79,
-      92,
-      106
+      2, 3, 4, 5, 16, 20, 24, 25, 29, 30, 35, 37, 40, 43, 44, 46, 47, 52, 53, 55, 56, 57, 58, 65,
+      68, 69, 79, 92, 106
     ]
   },
   "analog_levels": 1024,
@@ -64,9 +37,7 @@
       "location": "rear",
       "manual_page": 53,
       "face": "AE-L",
-      "connection_ids": [
-        "controls-adc-9"
-      ],
+      "connection_ids": ["controls-adc-9"],
       "assignable": true,
       "pushable": true,
       "default_function": "Lock exposure while pressed, or toggle the lock when AE/AF-lock mode is set to AE&AF ON/OFF SWITCH.",
@@ -84,9 +55,7 @@
       "location": "rear",
       "manual_page": 53,
       "face": "AF-L",
-      "connection_ids": [
-        "controls-adc-9"
-      ],
+      "connection_ids": ["controls-adc-9"],
       "assignable": true,
       "pushable": true,
       "default_function": "Lock focus while pressed, or toggle the lock when AE/AF-lock mode is set to AE&AF ON/OFF SWITCH.",
@@ -122,10 +91,7 @@
       "location": "top",
       "manual_page": 5,
       "short_name": "COMMAND",
-      "connection_ids": [
-        "controls-gpio-0-10",
-        "controls-encoder-3-8-3-9"
-      ],
+      "connection_ids": ["controls-gpio-0-10", "controls-encoder-3-8-3-9"],
       "assignable": true,
       "pushable": true,
       "default_function": "Rotate to select quick-menu options, review pictures, adjust focus-area size, or choose shutter speed or program shift. Press the center to zoom in on the active focus area; press and hold it to choose a manual-focus assist option. With a lens without an aperture ring, COMMAND DIAL SETTING chooses shutter speed (default) or aperture.",
@@ -163,9 +129,7 @@
       "location": "rear",
       "manual_page": 25,
       "face": "DISP/BACK",
-      "connection_ids": [
-        "controls-adc-9"
-      ],
+      "connection_ids": ["controls-adc-9"],
       "assignable": false,
       "pushable": true,
       "default_function": "Change the display or return to the previous menu; press and hold to assign roles to the function buttons.",
@@ -183,9 +147,7 @@
       "location": "rear",
       "manual_page": 57,
       "face": "DRIVE",
-      "connection_ids": [
-        "controls-adc-6"
-      ],
+      "connection_ids": ["controls-adc-6"],
       "assignable": false,
       "pushable": true,
       "default_function": "Display drive-mode options; in playback mode, zoom in.",
@@ -203,9 +165,7 @@
       "location": "top",
       "manual_page": 52,
       "short_name": "EV",
-      "connection_ids": [
-        "controls-adc-4"
-      ],
+      "connection_ids": ["controls-adc-4"],
       "assignable": false,
       "pushable": false,
       "positions": [
@@ -395,9 +355,7 @@
       "location": "rear",
       "manual_page": 43,
       "face": "Fn2",
-      "connection_ids": [
-        "controls-gpio-2-9"
-      ],
+      "connection_ids": ["controls-gpio-2-9"],
       "assignable": true,
       "pushable": true,
       "default_function": "Select white balance; in playback mode, delete pictures.",
@@ -415,9 +373,7 @@
       "location": "top",
       "manual_page": 43,
       "face": "Fn7",
-      "connection_ids": [
-        "controls-gpio-0-11"
-      ],
+      "connection_ids": ["controls-gpio-0-11"],
       "assignable": true,
       "pushable": true,
       "default_function": "Start or stop movie recording; in playback mode, the button provides Wi-Fi access.",
@@ -435,9 +391,7 @@
       "location": "front",
       "manual_page": 65,
       "short_name": "FOCUS",
-      "connection_ids": [
-        "controls-adc-6"
-      ],
+      "connection_ids": ["controls-adc-6"],
       "assignable": false,
       "pushable": false,
       "positions": [
@@ -491,9 +445,7 @@
       "location": "rear",
       "manual_page": 4,
       "face": "MENU/OK",
-      "connection_ids": [
-        "controls-adc-9"
-      ],
+      "connection_ids": ["controls-adc-9"],
       "assignable": false,
       "pushable": true,
       "default_function": "Open menus and confirm selections; press and hold to lock or unlock the selector and AE-L/AF-L buttons during shooting.",
@@ -511,9 +463,7 @@
       "location": "rear",
       "manual_page": 30,
       "icon": "playback",
-      "connection_ids": [
-        "controls-adc-6"
-      ],
+      "connection_ids": ["controls-adc-6"],
       "assignable": false,
       "pushable": true,
       "default_function": "Start playback; half-press the shutter button to return to shooting mode.",
@@ -572,9 +522,7 @@
       "location": "rear",
       "manual_page": 40,
       "face": "Q",
-      "connection_ids": [
-        "controls-gpio-4-5"
-      ],
+      "connection_ids": ["controls-gpio-4-5"],
       "assignable": false,
       "pushable": true,
       "default_function": "Press to display the quick menu; press and hold to display quick-menu editing options, or edit custom settings when the quick menu is displayed. In playback mode, use for RAW conversion.",
@@ -592,9 +540,7 @@
       "location": "rear",
       "manual_page": 5,
       "short_name": "SELECTOR",
-      "connection_ids": [
-        "controls-adc-8"
-      ],
+      "connection_ids": ["controls-adc-8"],
       "assignable": true,
       "pushable": false,
       "default_function": "Press directions to highlight items. Up/Fn3 selects AF mode; left/Fn4 selects film simulation; right/Fn5 selects flash mode; down/Fn6 selects the focus frame.",
@@ -626,10 +572,7 @@
       "location": "top",
       "manual_page": 29,
       "short_name": "SHUTTER",
-      "connection_ids": [
-        "controls-gpio-0-2",
-        "controls-gpio-0-3"
-      ],
+      "connection_ids": ["controls-gpio-0-2", "controls-gpio-0-3"],
       "assignable": false,
       "pushable": true,
       "default_function": "Half-press to focus and lock focus and exposure; press fully to take a photograph.",
@@ -661,9 +604,7 @@
       "location": "top",
       "manual_page": 46,
       "short_name": "SPEED",
-      "connection_ids": [
-        "controls-adc-3"
-      ],
+      "connection_ids": ["controls-adc-3"],
       "assignable": false,
       "pushable": false,
       "positions": [

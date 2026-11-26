@@ -17,9 +17,7 @@
           "device-6"
         ],
         "attachments": {
-          "serial_part": [
-            "banked-lens"
-          ]
+          "serial_part": ["banked-lens"]
         },
         "controllers": {
           "control_bus0": {
@@ -40,39 +38,19 @@
           },
           "fe80": {
             "basis": "Declared catalog input.",
-            "periods": [
-              12,
-              18
-            ],
-            "upload_setup_phases": [
-              "disabled"
-            ]
+            "periods": [12, 18],
+            "upload_setup_phases": ["disabled"]
           },
           "usb": {
             "basis": "Declared catalog input.",
             "in_endpoints": [
-              [
-                128,
-                0
-              ],
-              [
-                130,
-                1
-              ],
-              [
-                131,
-                2
-              ]
+              [128, 0],
+              [130, 1],
+              [131, 2]
             ],
             "out_endpoints": [
-              [
-                0,
-                0
-              ],
-              [
-                1,
-                1
-              ]
+              [0, 0],
+              [1, 1]
             ],
             "packet_bytes": 64,
             "transfer_ticks": 4
@@ -297,22 +275,12 @@
           "device-6"
         ],
         "attachments": {
-          "serial_part": [
-            "banked-lens"
-          ]
+          "serial_part": ["banked-lens"]
         },
         "card_contacts": {
           "basis": "Declared catalog input.",
-          "detect": [
-            12,
-            7,
-            0
-          ],
-          "write_protect": [
-            12,
-            6,
-            1
-          ]
+          "detect": [12, 7, 0],
+          "write_protect": [12, 6, 1]
         },
         "controllers": {
           "control_bus0": {
@@ -330,143 +298,46 @@
             "profile": "declared-bus1-register-replies-unmeasured",
             "replies": {
               "pwic_address": 48,
-              "pwic_modes": [
-                1
-              ],
-              "pwic_read_prefixes": [
-                [
-                  32,
-                  "000000"
-                ]
-              ],
+              "pwic_modes": [1],
+              "pwic_read_prefixes": [[32, "000000"]],
               "pwic_values": [
-                [
-                  97,
-                  0
-                ],
-                [
-                  32,
-                  128
-                ]
+                [97, 0],
+                [32, 128]
               ],
               "pwic_write_masks": [
-                [
-                  97,
-                  16
-                ],
-                [
-                  32,
-                  2
-                ]
+                [97, 16],
+                [32, 2]
               ],
               "register_address": 10,
-              "register_modes": [
-                1,
-                9
-              ],
+              "register_modes": [1, 9],
               "register_values": [
-                [
-                  2,
-                  0
-                ],
-                [
-                  5,
-                  0
-                ],
-                [
-                  7,
-                  0
-                ],
-                [
-                  8,
-                  0
-                ],
-                [
-                  9,
-                  0
-                ],
-                [
-                  10,
-                  0
-                ],
-                [
-                  11,
-                  0
-                ],
-                [
-                  12,
-                  0
-                ],
-                [
-                  13,
-                  0
-                ],
-                [
-                  14,
-                  0
-                ],
-                [
-                  16,
-                  0
-                ],
-                [
-                  17,
-                  0
-                ],
-                [
-                  18,
-                  0
-                ],
-                [
-                  19,
-                  0
-                ]
+                [2, 0],
+                [5, 0],
+                [7, 0],
+                [8, 0],
+                [9, 0],
+                [10, 0],
+                [11, 0],
+                [12, 0],
+                [13, 0],
+                [14, 0],
+                [16, 0],
+                [17, 0],
+                [18, 0],
+                [19, 0]
               ],
               "register_write_masks": [
-                [
-                  7,
-                  255
-                ],
-                [
-                  8,
-                  255
-                ],
-                [
-                  9,
-                  255
-                ],
-                [
-                  10,
-                  255
-                ],
-                [
-                  11,
-                  255
-                ],
-                [
-                  12,
-                  255
-                ],
-                [
-                  13,
-                  255
-                ],
-                [
-                  14,
-                  255
-                ],
-                [
-                  16,
-                  255
-                ],
-                [
-                  17,
-                  255
-                ],
-                [
-                  18,
-                  255
-                ]
+                [7, 255],
+                [8, 255],
+                [9, 255],
+                [10, 255],
+                [11, 255],
+                [12, 255],
+                [13, 255],
+                [14, 255],
+                [16, 255],
+                [17, 255],
+                [18, 255]
               ]
             },
             "transfer_ticks": 4
@@ -479,39 +350,19 @@
           },
           "fe80": {
             "basis": "Declared catalog input.",
-            "periods": [
-              12,
-              18
-            ],
-            "upload_setup_phases": [
-              "disabled"
-            ]
+            "periods": [12, 18],
+            "upload_setup_phases": ["disabled"]
           },
           "usb": {
             "basis": "Declared catalog input.",
             "in_endpoints": [
-              [
-                128,
-                0
-              ],
-              [
-                130,
-                1
-              ],
-              [
-                131,
-                2
-              ]
+              [128, 0],
+              [130, 1],
+              [131, 2]
             ],
             "out_endpoints": [
-              [
-                0,
-                0
-              ],
-              [
-                1,
-                1
-              ]
+              [0, 0],
+              [1, 1]
             ],
             "packet_bytes": 512,
             "transfer_ticks": 4
@@ -2479,25 +2330,13 @@
           "device-6"
         ],
         "attachments": {
-          "contact_actuators": [
-            "acquisition-contacts"
-          ],
-          "serial_part": [
-            "banked-lens"
-          ]
+          "contact_actuators": ["acquisition-contacts"],
+          "serial_part": ["banked-lens"]
         },
         "card_contacts": {
           "basis": "Declared catalog input.",
-          "detect": [
-            12,
-            7,
-            0
-          ],
-          "write_protect": [
-            12,
-            6,
-            1
-          ]
+          "detect": [12, 7, 0],
+          "write_protect": [12, 6, 1]
         },
         "controllers": {
           "control_bus0": {
@@ -2518,13 +2357,8 @@
           },
           "fe80": {
             "basis": "Declared catalog input.",
-            "periods": [
-              12,
-              18
-            ],
-            "upload_setup_phases": [
-              "disabled"
-            ]
+            "periods": [12, 18],
+            "upload_setup_phases": ["disabled"]
           }
         },
         "dram_basis": "Declared catalog input.",
@@ -2797,9 +2631,7 @@
           "device-6"
         ],
         "attachments": {
-          "serial_part": [
-            "banked-lens"
-          ]
+          "serial_part": ["banked-lens"]
         },
         "controllers": {
           "control_bus0": {
@@ -2820,39 +2652,19 @@
           },
           "fe80": {
             "basis": "Declared catalog input.",
-            "periods": [
-              12,
-              18
-            ],
-            "upload_setup_phases": [
-              "disabled"
-            ]
+            "periods": [12, 18],
+            "upload_setup_phases": ["disabled"]
           },
           "usb": {
             "basis": "Declared catalog input.",
             "in_endpoints": [
-              [
-                128,
-                0
-              ],
-              [
-                130,
-                1
-              ],
-              [
-                131,
-                2
-              ]
+              [128, 0],
+              [130, 1],
+              [131, 2]
             ],
             "out_endpoints": [
-              [
-                0,
-                0
-              ],
-              [
-                1,
-                1
-              ]
+              [0, 0],
+              [1, 1]
             ],
             "packet_bytes": 64,
             "transfer_ticks": 4
@@ -3291,9 +3103,5 @@
       ]
     }
   ],
-  "parts": [
-    "sd-card",
-    "banked-lens",
-    "acquisition-contacts"
-  ]
+  "parts": ["sd-card", "banked-lens", "acquisition-contacts"]
 }

@@ -35,7 +35,7 @@ class RoutineBoard:
             )
         self._board = board
         self.identity = list(cpu_identity)
-        self.cpus = board.cpus
+        self.cpus: tuple[Processor, ...] | list[Processor] = board.cpus
         self.quantum = board.quantum
         self.selected_core = 0
         self.transaction_limit = 4096

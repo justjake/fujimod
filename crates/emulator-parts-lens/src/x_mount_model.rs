@@ -199,6 +199,7 @@ pub const CATALOG_BLOCK_BYTES: usize = 2048;
 /// - +0x65 bit 1 announces the extended record (family 0x96); without it the
 ///   body skips that read and the class check above fails the startup;
 /// - +0x64 bits 4..5 = 0 and the other flag bits clear (meanings unknown).
+///
 /// Everything else (code at +0x00, focal and F-number words, the name) is a
 /// scenario layout the body is not known to read.
 pub struct Identity<'a> {

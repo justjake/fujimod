@@ -7,6 +7,7 @@ import subprocess
 import sys
 from collections.abc import Iterable
 from pathlib import Path, PurePosixPath
+from typing import TypedDict, cast
 
 MAIN_REF = "refs/heads/main"
 WASM_TARGET = "wasm32-unknown-unknown"
@@ -21,13 +22,39 @@ RUST_INPUT_NAMES = {
 }
 
 
+class Package(TypedDict):
+    name: str
+    id: str
+    manifest_path: str
+
+
+class Dependency(TypedDict, total=False):
+    pkg: str
+    dep_kinds: list[dict[str, object]]
+
+
+class Node(TypedDict, total=False):
+    id: str
+    deps: list[Dependency]
+
+
+class Resolve(TypedDict):
+    nodes: list[Node]
+
+
+class Metadata(TypedDict):
+    workspace_members: list[str]
+    packages: list[Package]
+    resolve: Resolve
+
+
 def parse_updates(lines: Iterable[str]) -> list[tuple[str, str, str, str]]:
-    updates = []
+    updates: list[tuple[str, str, str, str]] = []
     for line in lines:
         fields = line.split()
         if len(fields) != 4:
             raise ValueError(f"invalid pre-push update: {line.rstrip()}")
-        updates.append(tuple(fields))
+        updates.append((fields[0], fields[1], fields[2], fields[3]))
     return updates
 
 
@@ -49,7 +76,7 @@ def is_zero_oid(value: str) -> bool:
 
 
 def pushed_paths(root: Path, updates: Iterable[tuple[str, str, str, str]]) -> set[str]:
-    paths = set()
+    paths: set[str] = set()
     for _local_ref, local_sha, remote_ref, remote_sha in updates:
         if remote_ref != MAIN_REF or is_zero_oid(local_sha):
             continue
@@ -89,11 +116,11 @@ def is_rust_input(path: str) -> bool:
 
 def select_touched_crates(
     paths: Iterable[str],
-    packages: Iterable[dict],
+    packages: Iterable[Package],
     workspace_root: Path,
-) -> list[dict]:
+) -> list[Package]:
     root = workspace_root.resolve()
-    package_roots = []
+    package_roots: list[tuple[Path, Path, Package]] = []
     for package in packages:
         manifest = Path(package["manifest_path"]).resolve()
         try:
@@ -102,7 +129,7 @@ def select_touched_crates(
             continue
         package_roots.append((relative_root, manifest.relative_to(root), package))
 
-    selected = {}
+    selected: dict[str, Package] = {}
     all_packages = {package["name"]: package for _, _, package in package_roots}
     for path in paths:
         if not is_rust_input(path):
@@ -129,10 +156,10 @@ def select_touched_crates(
 
 
 def select_browser_wasm_packages(
-    metadata: dict,
-    touched_packages: Iterable[dict],
+    metadata: Metadata,
+    touched_packages: Iterable[Package],
     workspace_root: Path,
-) -> list[dict]:
+) -> list[Package]:
     """Select touched workspace crates built for the production browser module."""
     workspace_members = set(metadata["workspace_members"])
     packages = {
@@ -161,8 +188,8 @@ def select_browser_wasm_packages(
             f"Cargo metadata has no dependency node for {BROWSER_WASM_PACKAGE}"
         )
 
-    closure = set()
-    pending = [browser_id]
+    closure: set[str] = set()
+    pending: list[str] = [browser_id]
     while pending:
         package_id = pending.pop()
         if package_id in closure:
@@ -191,7 +218,7 @@ def select_browser_wasm_packages(
     )
 
 
-def workspace_metadata(root: Path) -> dict:
+def workspace_metadata(root: Path) -> Metadata:
     result = subprocess.run(
         [
             "cargo",
@@ -207,11 +234,11 @@ def workspace_metadata(root: Path) -> dict:
         text=True,
         check=True,
     )
-    return json.loads(result.stdout)
+    return cast(Metadata, json.loads(result.stdout))
 
 
 def cargo_check_command(
-    packages: Iterable[dict], target: str | None = None
+    packages: Iterable[Package], target: str | None = None
 ) -> list[str]:
     command = ["cargo", "check", "--locked"]
     if target:

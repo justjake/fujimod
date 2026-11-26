@@ -20,6 +20,7 @@ doctest = false
 
 ### BEGIN HAKARI SECTION
 [dependencies]
+arrayvec = { version = "0.7" }
 bitflags = { version = "2", default-features = false, features = ["std"] }
 bytemuck = { version = "1", default-features = false, features = ["aarch64_simd"] }
 concurrent-queue = { version = "2" }
@@ -75,6 +76,7 @@ typenum = { version = "1", default-features = false, features = ["const-generics
 zerocopy = { version = "0.8", default-features = false, features = ["derive", "simd"] }
 
 [build-dependencies]
+arrayvec = { version = "0.7" }
 bitflags = { version = "2", default-features = false, features = ["std"] }
 bytemuck = { version = "1", default-features = false, features = ["aarch64_simd"] }
 cc = { version = "1", default-features = false, features = ["parallel"] }
@@ -170,6 +172,9 @@ nix = { version = "0.31", features = ["fs", "net", "signal"] }
 prost-types = { version = "0.14" }
 rmcp = { version = "3", features = ["transport-io"] }
 rustix = { version = "1", features = ["event", "fs", "net", "pipe", "process", "time"] }
+rustls = { version = "0.23", default-features = false, features = ["logging", "ring", "std", "tls12"] }
+rusty_h264-common = { version = "0.17", default-features = false, features = ["asm", "libm"] }
+rusty_h264-encoder = { version = "0.17", default-features = false, features = ["asm", "libm"] }
 schemars = { version = "1", features = ["chrono04"] }
 serde_core = { version = "1" }
 serde_json = { version = "1", default-features = false, features = ["raw_value"] }
@@ -198,6 +203,7 @@ crypto-common-c65f7effa3be6d31 = { package = "crypto-common", version = "0.1", d
   "std",
 ] }
 digest-93f6ce9d446188ac = { package = "digest", version = "0.10", features = ["mac", "std"] }
+displaydoc = { version = "0.2" }
 errno = { version = "0.3" }
 form_urlencoded = { version = "1" }
 futures-channel = { version = "0.3", features = ["sink"] }
@@ -219,6 +225,9 @@ nix = { version = "0.31", features = ["fs", "net", "signal"] }
 prost-types = { version = "0.14" }
 rmcp = { version = "3", features = ["transport-io"] }
 rustix = { version = "1", features = ["event", "fs", "net", "pipe", "process", "time"] }
+rustls = { version = "0.23", default-features = false, features = ["logging", "ring", "std", "tls12"] }
+rusty_h264-common = { version = "0.17", default-features = false, features = ["asm", "libm"] }
+rusty_h264-encoder = { version = "0.17", default-features = false, features = ["asm", "libm"] }
 schemars = { version = "1", features = ["chrono04"] }
 serde_core = { version = "1" }
 serde_json = { version = "1", default-features = false, features = ["raw_value"] }
@@ -281,6 +290,9 @@ naga-types = { version = "30", default-features = false, features = ["std"] }
 nix = { version = "0.31", features = ["fs", "net", "signal"] }
 rmcp = { version = "3", features = ["transport-io"] }
 rustix = { version = "1", features = ["event", "fs", "mm", "net", "pipe", "process", "time"] }
+rustls = { version = "0.23", default-features = false, features = ["logging", "ring", "std", "tls12"] }
+rusty_h264-common = { version = "0.17", default-features = false, features = ["asm", "libm"] }
+rusty_h264-encoder = { version = "0.17", default-features = false, features = ["asm", "libm"] }
 schemars = { version = "1", features = ["chrono04"] }
 serde_core = { version = "1" }
 serde_json = { version = "1", default-features = false, features = ["raw_value"] }
@@ -316,6 +328,7 @@ crypto-common-c65f7effa3be6d31 = { package = "crypto-common", version = "0.1", d
   "std",
 ] }
 digest-93f6ce9d446188ac = { package = "digest", version = "0.10", features = ["mac", "std"] }
+displaydoc = { version = "0.2" }
 form_urlencoded = { version = "1" }
 futures-channel = { version = "0.3", features = ["sink"] }
 futures-io = { version = "0.3" }
@@ -346,6 +359,9 @@ naga-types = { version = "30", default-features = false, features = ["std"] }
 nix = { version = "0.31", features = ["fs", "net", "signal"] }
 rmcp = { version = "3", features = ["transport-io"] }
 rustix = { version = "1", features = ["event", "fs", "mm", "net", "pipe", "process", "time"] }
+rustls = { version = "0.23", default-features = false, features = ["logging", "ring", "std", "tls12"] }
+rusty_h264-common = { version = "0.17", default-features = false, features = ["asm", "libm"] }
+rusty_h264-encoder = { version = "0.17", default-features = false, features = ["asm", "libm"] }
 schemars = { version = "1", features = ["chrono04"] }
 serde_core = { version = "1" }
 serde_json = { version = "1", default-features = false, features = ["raw_value"] }
@@ -490,6 +506,8 @@ futures-sink = { version = "0.3" }
 js-sys = { version = "0.3" }
 libc = { version = "0.2", features = ["extra_traits"] }
 rustix = { version = "1", features = ["event", "fs", "net", "pipe", "process", "time"] }
+rusty_h264-common = { version = "0.17", default-features = false, features = ["asm", "libm"] }
+rusty_h264-encoder = { version = "0.17", default-features = false, features = ["asm", "libm"] }
 wasm-bindgen = { version = "0.2" }
 web-sys = { version = "0.3", features = [
   "AddEventListenerOptions",
@@ -533,9 +551,9 @@ futures-sink = { version = "0.3" }
 js-sys = { version = "0.3" }
 libc = { version = "0.2", features = ["extra_traits"] }
 rustix = { version = "1", features = ["event", "fs", "net", "pipe", "process", "time"] }
-syn-f595c2ba2a3f28df = { package = "syn", version = "2", default-features = false, features = [
-  "visit-mut",
-] }
+rusty_h264-common = { version = "0.17", default-features = false, features = ["asm", "libm"] }
+rusty_h264-encoder = { version = "0.17", default-features = false, features = ["asm", "libm"] }
+syn-f595c2ba2a3f28df = { package = "syn", version = "2", default-features = false, features = ["visit-mut"] }
 wasm-bindgen = { version = "0.2" }
 web-sys = { version = "0.3", features = [
   "AddEventListenerOptions",

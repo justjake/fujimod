@@ -16,7 +16,7 @@ const READY_LATENCY_NS: u64 = 100_000;
 /// before storing), mode +0x1c, enable +0x40 (bit 0), the address words +0x44 to +0x5c, +0x60
 /// and +0x70, and the request words +0x68 and +0x6c.
 fn known(offset: u64) -> bool {
-    offset % 4 == 0 && matches!(offset, 0..=0x24 | 0x40..=0x70)
+    offset.is_multiple_of(4) && matches!(offset, 0..=0x24 | 0x40..=0x70)
 }
 
 /// Plain word bank. Every word reads back what was last written, from zero at reset. Bit 0 of

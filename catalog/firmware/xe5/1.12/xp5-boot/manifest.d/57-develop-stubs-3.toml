@@ -44,9 +44,7 @@ base = 0xffd24000
 size = 0x1000
 kind = "imaging-tnr"
 [device.options]
-registers = [
-  { offset = 0x000, mode = "constant", value = 0x1 },
-]
+registers = [{ offset = 0x000, mode = "constant", value = 0x1 }]
 irq = 218
 starts = [{ offset = 0x04, mask = 0x1 }]
 delay_us = 200

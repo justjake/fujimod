@@ -143,18 +143,18 @@ impl NandBootRom {
             }
         }
         let header = &self.header;
-        if header.signature.is_empty() || header.address % 4 != 0 {
+        if header.signature.is_empty() || !header.address.is_multiple_of(4) {
             return Err("NAND boot header is invalid".into());
         }
         let program = &self.program;
         if program.page_bytes < 4
             || !program.page_bytes.is_power_of_two()
-            || program.destination % 4 != 0
+            || !program.destination.is_multiple_of(4)
             || program.page_mask == 0
         {
             return Err("NAND boot program is invalid".into());
         }
-        if self.data_window % 4 != 0 {
+        if !self.data_window.is_multiple_of(4) {
             return Err("NAND boot data window is not word aligned".into());
         }
         Ok(())

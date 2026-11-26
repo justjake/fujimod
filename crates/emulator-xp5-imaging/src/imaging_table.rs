@@ -44,7 +44,7 @@ fn runs(base: u64) -> &'static [(u64, u64)] {
     }
 }
 fn table(base: u64, offset: u64) -> bool {
-    offset % 4 == 0 && runs(base).iter().any(|&(a, b)| (a..=b).contains(&offset))
+    offset.is_multiple_of(4) && runs(base).iter().any(|&(a, b)| (a..=b).contains(&offset))
 }
 
 /// Words latch what was written. The status word reads zero at reset and is not changed by

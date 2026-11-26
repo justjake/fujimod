@@ -459,10 +459,10 @@ impl Cache {
                     }
                 }
                 (Policy::WriteBackAllocate | Policy::WriteBack, true, hit) => {
-                    if hit.is_none() {
-                        if let Err(hazard) = self.fill(line) {
-                            return Ok(Some(hazard));
-                        }
+                    if hit.is_none()
+                        && let Err(hazard) = self.fill(line)
+                    {
+                        return Ok(Some(hazard));
                     }
                     if self.lines.get(line).owner() != Some(self.core) {
                         let (core, pc) = (self.core, pc()?);

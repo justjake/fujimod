@@ -513,7 +513,6 @@ fn h264_codec() -> RTCRtpCodecParameters {
             rtcp_feedback: vec![],
         },
         payload_type: 102,
-        ..Default::default()
     }
 }
 

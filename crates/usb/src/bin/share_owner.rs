@@ -1,13 +1,23 @@
 //! `fujimod-share-owner`: create, serve and end persistent share links for a
 //! camera on this computer's USB (crates/usb-proxy/SHARING.md).
+
+/// Cargo builds every binary for integration tests, including under the Wasm
+/// target, where sharing is unavailable.
+#[cfg(target_arch = "wasm32")]
+fn main() {}
+
+#[cfg(not(target_arch = "wasm32"))]
 use fujimod_usb::share_owner::{OwnerHooks, serve};
+#[cfg(not(target_arch = "wasm32"))]
 use fujimod_webrtc::{CandidatePolicy, HostRoom, Pacing, share::OwnerTicket};
 
+#[cfg(not(target_arch = "wasm32"))]
 const USAGE: &str = "usage:
   fujimod-share-owner create --signal URL [--site URL] TICKET.json
   fujimod-share-owner serve TICKET.json [--device BUS-PORTS] [--attention-command CMD ARGS...]
   fujimod-share-owner end TICKET.json";
 
+#[cfg(not(target_arch = "wasm32"))]
 fn main() {
     let args: Vec<String> = std::env::args().skip(1).collect();
     if let Err(message) = futures_lite::future::block_on(run(args)) {
@@ -16,6 +26,7 @@ fn main() {
     }
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 async fn run(args: Vec<String>) -> Result<(), String> {
     let (command, rest) = args.split_first().ok_or(USAGE)?;
     match command.as_str() {

@@ -2,7 +2,6 @@
 
 from typing import Literal, TypedDict
 
-
 ScreenKind = Literal[
     "list", "popup", "window", "checklist", "full_page", "editor", "live_picker", "grid"
 ]
@@ -70,7 +69,7 @@ def menu_model(state: MenuScreen) -> MenuScreen:
     if "visible_indices" not in model:
         visible = [
             row["index"]
-            for row, status in zip(rows, model["item_statuses"])
+            for row, status in zip(rows, model["item_statuses"], strict=True)
             if status != 3
         ]
         width = model.get("rows_per_page", 0)

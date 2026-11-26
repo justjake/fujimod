@@ -261,7 +261,7 @@ pub fn packed12_bytes(width: usize) -> usize {
 /// sensor input RAW DMA channels' packed lines. `out` holds [`packed12_bytes`] of the width.
 pub fn pack12_line(samples: &[u8], out: &mut [u8]) {
     let twelve = |pair: &[u8]| u16::from_le_bytes([pair[0], pair[1]]) >> 2;
-    for (pair, packed) in samples.chunks(4).zip(out.chunks_exact_mut(3)) {
+    for (pair, packed) in samples.chunks(4).zip(out.as_chunks_mut::<3>().0.iter_mut()) {
         let a = twelve(pair);
         let b = if pair.len() == 4 {
             twelve(&pair[2..])

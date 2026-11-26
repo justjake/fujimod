@@ -9,16 +9,29 @@ from __future__ import annotations
 import json
 import os
 import weakref
-from collections.abc import Iterator, Mapping
+from collections.abc import Generator, Mapping
 from contextlib import contextmanager
 from os import PathLike
-from typing import Any
+from typing import Protocol, cast
 
 from ._native import perf as _native
 
 # Weak, so an attached board that is dropped without close() can still be freed.
-_boards: list[weakref.ref[Any]] = []
+_boards: list[weakref.ref[object]] = []
 _DEFAULT = object()
+
+
+class _Counters(Protocol):
+    def exit_counters(self) -> str: ...
+
+
+class _Attached(Protocol):
+    @property
+    def instructions(self) -> int: ...
+    @property
+    def virtual_ticks(self) -> int: ...
+    @property
+    def native(self) -> _Counters: ...
 
 
 def attach_board(board: object) -> None:
@@ -34,7 +47,7 @@ def detach_board(board: object) -> None:
             del _boards[index]
 
 
-def _board() -> Any | None:
+def _board() -> object | None:
     while _boards:
         if (board := _boards[-1]()) is not None:
             return board
@@ -42,22 +55,23 @@ def _board() -> Any | None:
     return None
 
 
-def _guest(board: Any = _DEFAULT) -> tuple[int, int]:
+def _guest(board: object = _DEFAULT) -> tuple[int, int]:
     board = _board() if board is _DEFAULT else board
     if board is None:
         return 0, 0
     try:
-        return getattr(board, "instructions", 0), getattr(board, "virtual_ticks", 0)
-    except RuntimeError:
+        attached = cast(_Attached, board)
+        return attached.instructions, attached.virtual_ticks
+    except AttributeError, RuntimeError:
         return 0, 0
 
 
-def _snapshot_counters(board: Any = _DEFAULT) -> None:
+def _snapshot_counters(board: object = _DEFAULT) -> None:
     board = _board() if board is _DEFAULT else board
     if board is None:
         return
     try:
-        snapshot = board.native.exit_counters()
+        snapshot = cast(_Attached, board).native.exit_counters()
     except RuntimeError:
         return
     _native.set_cpu_counters(snapshot)
@@ -67,19 +81,19 @@ def begin_guide(guide_id: str) -> None:
     _native.begin_guide(guide_id)
 
 
-def snapshot_counters(board: Any = _DEFAULT) -> None:
+def snapshot_counters(board: object = _DEFAULT) -> None:
     """Capture the board's existing CPU and R-profile counters."""
     _snapshot_counters(board)
 
 
-def end_guide(board: Any = _DEFAULT) -> dict[str, object]:
+def end_guide(board: object = _DEFAULT) -> dict[str, object]:
     _snapshot_counters(board)
     instructions, ticks = _guest(board)
     _native.end_span(instructions, ticks, [])
     summary = json.loads(_native.end_guide())
     if not isinstance(summary, dict):
         raise RuntimeError("Native guide summary must be an object")
-    return summary
+    return cast(dict[str, object], summary)
 
 
 @contextmanager
@@ -87,9 +101,9 @@ def span(
     kind: str,
     wait_kind: str | None = None,
     properties: Mapping[str, int] | None = None,
-    board: Any = _DEFAULT,
+    board: object = _DEFAULT,
     wait_counter: int | None = None,
-) -> Iterator[None]:
+) -> Generator[None]:
     """Record one phase span, including guest progress across its body."""
     selected = _board() if board is _DEFAULT else board
     instructions, ticks = _guest(selected)

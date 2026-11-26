@@ -7,53 +7,8 @@
     "url": "https://dl.fujifilm-x.com/support/manual/x/fujifilm_xt1_manual_en.pdf",
     "title": "X-T1 Owner’s Manual",
     "pages": [
-      2,
-      3,
-      4,
-      8,
-      12,
-      14,
-      17,
-      19,
-      20,
-      21,
-      25,
-      26,
-      30,
-      31,
-      34,
-      39,
-      40,
-      41,
-      42,
-      43,
-      44,
-      45,
-      46,
-      47,
-      48,
-      49,
-      50,
-      52,
-      53,
-      54,
-      55,
-      56,
-      57,
-      58,
-      59,
-      61,
-      62,
-      63,
-      64,
-      67,
-      70,
-      71,
-      81,
-      91,
-      95,
-      96,
-      97,
+      2, 3, 4, 8, 12, 14, 17, 19, 20, 21, 25, 26, 30, 31, 34, 39, 40, 41, 42, 43, 44, 45, 46, 47,
+      48, 49, 50, 52, 53, 54, 55, 56, 57, 58, 59, 61, 62, 63, 64, 67, 70, 71, 81, 91, 95, 96, 97,
       126
     ]
   },
@@ -83,9 +38,7 @@
       "location": "rear",
       "manual_page": 67,
       "face": "AE-L",
-      "connection_ids": [
-        "controls-gpio-0-10"
-      ],
+      "connection_ids": ["controls-gpio-0-10"],
       "assignable": false,
       "pushable": true,
       "default_function": "Lock exposure while pressed, or until pressed again when AE&AF ON/OFF SWITCH is selected.",
@@ -103,9 +56,7 @@
       "location": "rear",
       "manual_page": 67,
       "face": "AF-L",
-      "connection_ids": [
-        "controls-gpio-8-3"
-      ],
+      "connection_ids": ["controls-gpio-8-3"],
       "assignable": false,
       "pushable": true,
       "default_function": "Lock focus by default; the setup menu can set it to lock both focus and exposure.",
@@ -141,9 +92,7 @@
       "location": "rear",
       "manual_page": 30,
       "icon": "delete",
-      "connection_ids": [
-        "controls-gpio-3-6"
-      ],
+      "connection_ids": ["controls-gpio-3-6"],
       "assignable": false,
       "pushable": true,
       "default_function": "Delete pictures in playback mode.",
@@ -170,9 +119,7 @@
       "location": "rear",
       "manual_page": 21,
       "face": "DISP/BACK",
-      "connection_ids": [
-        "controls-adc-9"
-      ],
+      "connection_ids": ["controls-adc-9"],
       "assignable": false,
       "pushable": true,
       "default_function": "Control display indicators and return to the previous screen or cancel an operation.",
@@ -190,9 +137,7 @@
       "location": "top",
       "manual_page": 54,
       "face": "DRIVE",
-      "connection_ids": [
-        "controls-adc-6"
-      ],
+      "connection_ids": ["controls-adc-6"],
       "assignable": false,
       "pushable": false,
       "positions": [
@@ -310,9 +255,7 @@
       "location": "front",
       "manual_page": 39,
       "face": "Fn1",
-      "connection_ids": [
-        "controls-gpio-0-11"
-      ],
+      "connection_ids": ["controls-gpio-0-11"],
       "assignable": true,
       "pushable": true,
       "default_function": "Default role: select bracketing or advanced filter options.",
@@ -499,9 +442,7 @@
       "location": "rear",
       "manual_page": 26,
       "icon": "playback",
-      "connection_ids": [
-        "controls-gpio-3-2"
-      ],
+      "connection_ids": ["controls-gpio-3-2"],
       "assignable": false,
       "pushable": true,
       "default_function": "Start playback.",
@@ -560,9 +501,7 @@
       "location": "rear",
       "manual_page": 34,
       "face": "Q",
-      "connection_ids": [
-        "controls-adc-9"
-      ],
+      "connection_ids": ["controls-adc-9"],
       "assignable": false,
       "pushable": true,
       "default_function": "Open the Quick Menu while shooting; in playback, open RAW conversion. Press and hold while the still-image Quick Menu is displayed for quick access to custom settings banks.",
@@ -605,10 +544,7 @@
       "location": "rear",
       "manual_page": 4,
       "short_name": "SELECTOR",
-      "connection_ids": [
-        "controls-adc-8",
-        "controls-adc-9"
-      ],
+      "connection_ids": ["controls-adc-8", "controls-adc-9"],
       "assignable": true,
       "pushable": true,
       "default_function": "Use up, right, down, and left to navigate; press MENU/OK to select. Directions double as Fn3/Fn4/Fn5/Fn6. Factory defaults are Macro, Film Simulation, White Balance, and Focus Area, respectively.",
@@ -644,9 +580,7 @@
       "location": "top",
       "manual_page": 50,
       "short_name": "ISO",
-      "connection_ids": [
-        "controls-adc-1"
-      ],
+      "connection_ids": ["controls-adc-1"],
       "assignable": false,
       "pushable": false,
       "positions": [

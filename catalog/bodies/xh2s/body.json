@@ -19,38 +19,21 @@
         "select_connection_id": "power-controller-select"
       }
     ],
-    "thermal_connection_ids": [
-      "thermal-0"
-    ],
+    "thermal_connection_ids": ["thermal-0"],
     "bus_drain": [
       {
         "address": 2147483648,
-        "processor_ids": [
-          "core0",
-          "core1",
-          "core2",
-          "core3"
-        ],
+        "processor_ids": ["core0", "core1", "core2", "core3"],
         "basis": "The stock firmware drains the bus with a discarded read of the end of its first memory region: helper 0x17f1794 (slot 1) and classifier 0x17f15b0 read 0x80000000, where X-T5 and X-S20 read 0x60000000 and X100VI 0x68000000."
       },
       {
         "address": 4294967296,
-        "processor_ids": [
-          "core0",
-          "core1",
-          "core2",
-          "core3"
-        ],
+        "processor_ids": ["core0", "core1", "core2", "core3"],
         "basis": "The stock firmware drains the second bus port with a discarded read at 0x100000000; helper 0x17f1794 names the port after 0x80000000 (D9)."
       },
       {
         "address": 6442450944,
-        "processor_ids": [
-          "core0",
-          "core1",
-          "core2",
-          "core3"
-        ],
+        "processor_ids": ["core0", "core1", "core2", "core3"],
         "basis": "The stock firmware drains the third bus port with a discarded read at 0x180000000; helper 0x17f1794 names the port after 0x100000000 (D9)."
       }
     ]
@@ -83,10 +66,7 @@
       ]
     }
   ],
-  "parts": [
-    "power-controller",
-    "xh2s-serial-nor"
-  ],
+  "parts": ["power-controller", "xh2s-serial-nor"],
   "wiring": [
     {
       "source_id": "spi8",

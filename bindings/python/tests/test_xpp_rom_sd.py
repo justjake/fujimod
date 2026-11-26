@@ -3,6 +3,7 @@
 import json
 import os
 from pathlib import Path
+from typing import cast
 
 import pytest
 from fujimod._native import emulator as native
@@ -86,7 +87,12 @@ def test_rom_loads_card_image_and_reaches_its_terminal_loop() -> None:
         board.run(100_000, 1000)
         state = xp4.state()
         assert state["failure"] is None
-        milestones = {(core, address): n for core, address, n in state["milestones"]}
+        milestones = {
+            (core, address): n
+            for core, address, n in cast(
+                list[tuple[int, int, int]], state["milestones"]
+            )
+        }
         if (0, TERMINAL) in milestones:
             break
     assert (0, 0) in milestones and (0, TERMINAL) in milestones

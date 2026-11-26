@@ -189,17 +189,11 @@
       "access": "read-write"
     }
   ],
-  "parameters": [
-    "command_ticks",
-    "transaction_ticks",
-    "speed"
-  ],
+  "parameters": ["command_ticks", "transaction_ticks", "speed"],
   "evidence": [
     {
       "kind": "inferred",
-      "firmware_ids": [
-        "xt3-511"
-      ]
+      "firmware_ids": ["xt3-511"]
     }
   ]
 }

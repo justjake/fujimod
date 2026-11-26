@@ -5,41 +5,24 @@
   "model": {
     "kind": "contact-cam",
     "run_drive": 1,
-    "hold_drives": [
-      0,
-      3
-    ],
-    "release_drives": [
-      0
-    ],
+    "hold_drives": [0, 3],
+    "release_drives": [0],
     "positions": [
       {
         "run_ticks": 0,
-        "contacts": [
-          false,
-          false
-        ]
+        "contacts": [false, false]
       },
       {
         "run_ticks": 330000,
-        "contacts": [
-          false,
-          true
-        ]
+        "contacts": [false, true]
       },
       {
         "run_ticks": 525000,
-        "contacts": [
-          true,
-          true
-        ]
+        "contacts": [true, true]
       },
       {
         "run_ticks": 750000,
-        "contacts": [
-          false,
-          true
-        ]
+        "contacts": [false, true]
       }
     ],
     "latch_overrun_ticks": 30000,

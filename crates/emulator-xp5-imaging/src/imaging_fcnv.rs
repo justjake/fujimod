@@ -92,7 +92,7 @@ impl Fcnv {
         for y in 0..lines {
             let line = cx.ram_bytes(source + y * in_pitch, (width * 2) as usize)?;
             let mut out = Vec::with_capacity((width * out_bytes) as usize);
-            for pair in line.chunks_exact(4) {
+            for pair in line.as_chunks::<4>().0.iter() {
                 // Y0 Y1 Cb Cr.
                 let (cb, cr) = (pair[2] as i32 - 128, pair[3] as i32 - 128);
                 for luma in [pair[0] as i32, pair[1] as i32] {

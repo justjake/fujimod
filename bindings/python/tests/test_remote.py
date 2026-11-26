@@ -1,36 +1,50 @@
 """Camera binding tests over the Rust synthetic transport."""
 
 from dataclasses import FrozenInstanceError
+from typing import Never, cast
 
 import pytest
 from fujimod import _native
-from fujimod.remote import Camera, Readiness, RemoteReadResult, control, menu, option
+from fujimod.remote import (
+    Camera,
+    ControlState,
+    MenuState,
+    Readiness,
+    RemoteReadResult,
+    control,
+    menu,
+    option,
+)
 
 
-def camera():
+def camera() -> Camera:
     return Camera(_native.remote.Camera.synthetic())
 
 
-def test_references_are_immutable_without_a_camera():
+def test_references_are_immutable_without_a_camera() -> None:
     item = menu(1, key=20, via=menu("shooting", key=10))
     assert item.id == "1"
     assert option(item, "ON").item is item
     with pytest.raises(FrozenInstanceError):
-        item.key = 30
+        item.__setattr__("key", 30)
 
 
-async def test_async_navigation_selection_readback_and_frame():
+async def test_async_navigation_selection_readback_and_frame() -> None:
     remote = camera()
     item = menu("shooting", key=20)
     value = await remote.navigate(item, deadline=100)
     assert isinstance(value, RemoteReadResult)
+    assert isinstance(value.value, MenuState)
     assert value.value.selected
     await remote.select(option(item, "ON"), deadline=100)
     await remote.navigate(item, deadline=100)
     await remote.press(control("selector.right"), deadline=100)
     read_result = await remote.wait_until(
-        lambda value: value.value.selected, option(item, "ON"), deadline=100
+        lambda result: isinstance(result.value, MenuState) and result.value.selected,
+        option(item, "ON"),
+        deadline=100,
     )
+    assert isinstance(read_result.value, MenuState)
     assert read_result.value.value == "ON"
     before = remote.now
     frame = await remote.screenshot(deadline=100)
@@ -39,7 +53,7 @@ async def test_async_navigation_selection_readback_and_frame():
     remote.close()
 
 
-def test_blocking_uses_the_same_actions_and_read_result_types():
+def test_blocking_uses_the_same_actions_and_read_result_types() -> None:
     remote = camera()
     blocking = remote.blocking
     item = menu("shooting", key=20)
@@ -47,8 +61,11 @@ def test_blocking_uses_the_same_actions_and_read_result_types():
     blocking.navigate(item, deadline=100)
     blocking.press(control("selector.right"), deadline=100)
     value = blocking.wait_until(
-        lambda value: value.value.selected, option(item, "ON"), deadline=100
+        lambda result: isinstance(result.value, MenuState) and result.value.selected,
+        option(item, "ON"),
+        deadline=100,
     )
+    assert isinstance(value.value, MenuState)
     assert value.value.value == "ON"
     before = remote.now
     assert blocking.read(option(item, "ON")) == value
@@ -57,7 +74,7 @@ def test_blocking_uses_the_same_actions_and_read_result_types():
     assert blocking.screenshot(deadline=100).frame.height == 1
 
 
-async def test_readiness_is_read_and_awaited_apart_from_state():
+async def test_readiness_is_read_and_awaited_apart_from_state() -> None:
     remote = camera()
     readiness = await remote.readiness()
     assert isinstance(readiness, Readiness)
@@ -69,18 +86,19 @@ async def test_readiness_is_read_and_awaited_apart_from_state():
     remote.close()
 
 
-async def test_task_cancellation_returns_camera_ownership():
+async def test_task_cancellation_returns_camera_ownership() -> None:
     remote = camera()
     task = remote._task("screenshot", None, 100)
     with pytest.raises(RuntimeError, match="busy"):
         remote.blocking.read(control("selector.down"))
     assert not task.poll(lambda: None)
     task.cancel()
-    assert (await remote.read(control("selector.down"))).value.supported
+    down = await remote.read(control("selector.down"))
+    assert isinstance(down.value, ControlState) and down.value.supported
     remote.close()
 
 
-async def test_ff80_camera_leases_and_returns_existing_session():
+async def test_ff80_camera_leases_and_returns_existing_session() -> None:
     from fujimod import usb
 
     from .test_async import opened
@@ -102,7 +120,7 @@ async def test_ff80_camera_leases_and_returns_existing_session():
     assert script.remaining == 0
 
 
-async def test_abandoned_usb_owner_fences_remote_without_more_io():
+async def test_abandoned_usb_owner_fences_remote_without_more_io() -> None:
     from .test_async import opened
 
     session, script = await opened()
@@ -114,14 +132,14 @@ async def test_abandoned_usb_owner_fences_remote_without_more_io():
     remote.close()
 
 
-async def test_async_observation_predicate_deadline_and_original_exception():
+async def test_async_observation_predicate_deadline_and_original_exception() -> None:
     remote = camera()
-    reads = {"stores": [], "devices": []}
-    calls = []
+    reads: dict[str, object] = {"stores": [], "devices": []}
+    calls: list[int] = []
 
-    async def frozen():
+    async def frozen() -> None:
         calls.append(remote.now)
-        reads["stores"].append((16, 20))
+        cast(list[tuple[int, int]], reads["stores"]).append((16, 20))
         return None
 
     with pytest.raises(TimeoutError, match="frozen"):
@@ -130,7 +148,7 @@ async def test_async_observation_predicate_deadline_and_original_exception():
     assert reads["stores"] == [(16, 20)]
     failure = ValueError("unsafe observation")
 
-    async def unsafe():
+    async def unsafe() -> Never:
         raise failure
 
     with pytest.raises(ValueError) as caught:
@@ -140,11 +158,11 @@ async def test_async_observation_predicate_deadline_and_original_exception():
     remote.close()
 
 
-async def test_memory_wait_repeats_raw_reads_and_predicate_in_rust():
+async def test_memory_wait_repeats_raw_reads_and_predicate_in_rust() -> None:
     remote = camera()
     calls = []
 
-    def ready(reads):
+    def ready(reads: list[tuple[int, bytes]]) -> bool:
         calls.append(reads)
         address, value = reads[0]
         assert address == 768
@@ -159,7 +177,7 @@ async def test_memory_wait_repeats_raw_reads_and_predicate_in_rust():
     remote.close()
 
 
-async def test_stable_memory_wait_checks_bytes_and_repeats_in_rust():
+async def test_stable_memory_wait_checks_bytes_and_repeats_in_rust() -> None:
     from .test_async import opened
     from .test_stream import E, memory_read
     from .test_stream import control as envelope
@@ -183,7 +201,7 @@ async def test_stable_memory_wait_checks_bytes_and_repeats_in_rust():
     assert script.remaining == 0
 
 
-async def test_staged_shutter_and_position_inputs():
+async def test_staged_shutter_and_position_inputs() -> None:
     remote = camera()
     await remote.set_input(
         control("shutter_button"), "stage", stage="half_press", deadline=10
@@ -198,7 +216,7 @@ async def test_staged_shutter_and_position_inputs():
     remote.close()
 
 
-async def test_touch_reaches_the_remote_and_awaits_the_decoded_report():
+async def test_touch_reaches_the_remote_and_awaits_the_decoded_report() -> None:
     remote = camera()
     screen = control("touchscreen")
     with pytest.raises(RuntimeError, match="No finger is down"):
@@ -216,8 +234,9 @@ async def test_touch_reaches_the_remote_and_awaits_the_decoded_report():
     remote.close()
 
 
-async def test_operation_scoped_camera_returns_usb_between_wait_and_observation():
-    from fujimod import usb
+async def test_operation_scoped_camera_returns_usb_between_wait_and_observation() -> (
+    None
+):
     from fujimod.remote import _ScopedNative
 
     from .test_async import opened
@@ -257,11 +276,12 @@ async def test_operation_scoped_camera_returns_usb_between_wait_and_observation(
     assert script.remaining == 0
 
 
-async def test_observed_board_device_names_resolve_before_waiting():
+async def test_observed_board_device_names_resolve_before_waiting() -> None:
     remote = camera()
     await remote.wait({"stores": [], "devices": ["scanout"]}, deadline=3)
     assert remote.now == 1
     with pytest.raises(ValueError, match="Unknown observed device"):
         await remote.wait({"stores": [], "devices": ["absent"]}, deadline=3)
-    assert (await remote.read(control("selector.down"))).value.supported
+    down = await remote.read(control("selector.down"))
+    assert isinstance(down.value, ControlState) and down.value.supported
     remote.close()

@@ -74,7 +74,7 @@ impl Peer {
     pub fn new(config: Config) -> Result<Self, String> {
         if config.flash_bytes < 1024
             || config.flash_bytes > 0x100000
-            || config.flash_bytes % 1024 != 0
+            || !config.flash_bytes.is_multiple_of(1024)
         {
             return Err("Invalid virtual RL78 code-flash size".into());
         }
@@ -136,7 +136,7 @@ impl Peer {
         self.config.flash_bytes == self.flash.len()
             && self.flash.len() >= BLOCK
             && self.flash.len() <= 0x100000
-            && self.flash.len() % BLOCK == 0
+            && self.flash.len().is_multiple_of(BLOCK)
             && valid_frame
             && (!self.ready || self.baud_set)
             && self.transfer.as_ref().is_none_or(|t| {

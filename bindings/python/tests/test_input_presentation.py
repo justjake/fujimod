@@ -4,6 +4,7 @@ import json
 import unittest
 from io import BytesIO
 from pathlib import Path
+from typing import cast
 
 from fujimod.presentation import SPEC, control
 from fujimod.recording import Frame
@@ -75,17 +76,23 @@ class InputPresentationTests(unittest.TestCase):
         self.assertEqual(bounds[3], 480 - SPEC["badge"]["bottom"])
         self.assertEqual(bounds[3] - bounds[1], 2 * height + SPEC["badge"]["gap"])
         self.assertEqual(bounds[2], 708)
-        newest = output.crop((
-            bounds[0],
-            480 - SPEC["badge"]["bottom"] - height,
-            bounds[2],
-            bounds[3],
-        )).getextrema()[1][0]
-        oldest = output.crop((
-            bounds[0],
-            bounds[1],
-            bounds[2],
-            bounds[1] + height,
-        )).getextrema()[1][0]
+        newest = cast(
+            tuple[tuple[float, float], ...],
+            output.crop((
+                bounds[0],
+                480 - SPEC["badge"]["bottom"] - height,
+                bounds[2],
+                bounds[3],
+            )).getextrema(),
+        )[1][0]
+        oldest = cast(
+            tuple[tuple[float, float], ...],
+            output.crop((
+                bounds[0],
+                bounds[1],
+                bounds[2],
+                bounds[1] + height,
+            )).getextrema(),
+        )[1][0]
         self.assertLess(newest, 100)
         self.assertGreater(oldest, newest + 100)

@@ -80,7 +80,7 @@ NATIVE_EXPORTS = frozenset({
 
 
 def test_emulator_is_a_nested_native_module_with_complete_exports() -> None:
-    assert len(NATIVE_EXPORTS) == 55
+    assert len(NATIVE_EXPORTS) == 54
     importlib.import_module("fujimod")
     assert importlib.import_module("fujimod.catalog") is catalog
     assert importlib.import_module("fujimod.usb") is usb
@@ -242,6 +242,11 @@ def test_board_from_inputs_forwards_ordered_overlay_ids(
             "overlays": ("x70-110-rec-usb",),
             "update": "update.dat",
             "boot_rom": "boot.rom",
+            "card_image": None,
+            "card_files": [],
+            "second_card_image": None,
+            "second_card_files": [],
+            "scene": None,
             "nand": None,
             "settings": None,
             "clock_seconds_2000": None,
@@ -249,6 +254,7 @@ def test_board_from_inputs_forwards_ordered_overlay_ids(
             "camera": None,
             "access_point": None,
             "capability_reply": None,
+            "camera_settings": {},
             "engine": None,
             "manifest": None,
             "application_plan": None,

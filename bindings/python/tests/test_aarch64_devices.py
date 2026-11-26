@@ -12,8 +12,16 @@ from fujimod.emulator.aarch64_harness import (
     Aarch64DriverHarness,
     Aarch64Image,
     Aarch64Inputs,
+    HarnessResult,
 )
 from fujimod.emulator.driver_harness import DriverHarness
+
+
+def failure(result: HarnessResult) -> str:
+    value = result["failure"]
+    assert isinstance(value, str)
+    return value
+
 
 BASE = 0x1_0000_0000
 CODE, DATA, SP, RETURN = BASE + 0x1000, BASE + 0x4000, BASE + 0x9000, BASE + 0xB000
@@ -135,7 +143,7 @@ def test_undeclared_device_window_refuses_before_execution() -> None:
     with harness(code, ((NOR, NOR + 0x1000),)) as h:
         result = h.call(CODE, args=(DMA,), max_instructions=10)
         assert not result["returned"]
-        assert "read outside declared range" in result["failure"]
+        assert "read outside declared range" in failure(result)
         assert result["device_transactions"] == []
 
 
@@ -144,7 +152,7 @@ def test_unmodeled_register_inside_a_declared_window_refuses() -> None:
     with harness(code, ((NOR, NOR + 0x1000),)) as h:
         result = h.call(CODE, args=(NOR,), max_instructions=10)
         assert not result["returned"]
-        assert "unmodeled MMIO read4 at 0xff90a00c" in result["failure"]
+        assert "unmodeled MMIO read4 at 0xff90a00c" in failure(result)
 
 
 def test_exclusive_access_to_a_device_window_refuses() -> None:
@@ -152,7 +160,7 @@ def test_exclusive_access_to_a_device_window_refuses() -> None:
     with harness(code, ((NOR, NOR + 0x1000),)) as h:
         result = h.call(CODE, args=(NOR + 0xF0,), max_instructions=10)
         assert not result["returned"]
-        assert "exclusive read outside declared RAM" in result["failure"]
+        assert "exclusive read outside declared RAM" in failure(result)
         assert result["device_transactions"] == []
 
 

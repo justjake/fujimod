@@ -91,7 +91,7 @@ impl Boot for CatalogBoot {
                     .board
                     .set_scene(&boot::host::read_scene(&path)?)?;
             }
-            return Ok(Opened::Graph(camera.session));
+            return Ok(Opened::Graph(Box::new(camera.session)));
         }
         if inputs.application_plan.is_some() {
             return Err("application startup plan does not match this configuration".into());
@@ -134,8 +134,8 @@ impl Boot for CatalogBoot {
             let read_limit = camera.read_limit;
             let session = camera.session;
             return Ok(Opened::Xp5 {
-                session,
-                inputs,
+                session: Box::new(session),
+                inputs: Box::new(inputs),
                 read_limit,
             });
         }
@@ -198,7 +198,7 @@ impl Boot for CatalogBoot {
             inputs.card_image.as_deref(),
             &inputs.card_files,
         )?;
-        Ok(Opened::Graph(session))
+        Ok(Opened::Graph(Box::new(session)))
     }
     fn to_rec(&self, session: &mut Session, limit: u64) -> Result<String, String> {
         let report = boot::to_rec(session, limit)?;

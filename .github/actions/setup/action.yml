@@ -4,6 +4,9 @@ inputs:
   javascript:
     description: Install all JavaScript packages and matching Wasm tools
     default: 'false'
+  desktop:
+    description: Install the Linux headers the desktop GUI crate builds against
+    default: 'false'
 runs:
   using: composite
   steps:
@@ -14,7 +17,12 @@ runs:
         # The version developers run; later releases refuse emsdk, whose plugin
         # downloads a moving branch that the lockfile cannot checksum.
         version: 2026.9.15
-        cache_save: ${{ github.event_name != 'pull_request_target' }}
+    - name: Install Linux desktop headers
+      if: runner.os == 'Linux' && inputs.desktop == 'true'
+      shell: bash
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y libglib2.0-dev libgtk-3-dev libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev libxdo-dev
     - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
       with:
         shared-key: ${{ runner.os }}-ci

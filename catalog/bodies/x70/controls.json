@@ -7,37 +7,8 @@
     "url": "https://fujifilm-dsc.com/en/manual/x70/X70_OMW_EN_S_F_02.pdf",
     "title": "FUJIFILM X70 Owner's Manual",
     "pages": [
-      2,
-      3,
-      4,
-      5,
-      6,
-      14,
-      21,
-      24,
-      25,
-      29,
-      30,
-      35,
-      36,
-      39,
-      42,
-      43,
-      48,
-      49,
-      51,
-      52,
-      53,
-      54,
-      62,
-      65,
-      74,
-      81,
-      85,
-      96,
-      107,
-      111,
-      128
+      2, 3, 4, 5, 6, 14, 21, 24, 25, 29, 30, 35, 36, 39, 42, 43, 48, 49, 51, 52, 53, 54, 62, 65, 74,
+      81, 85, 96, 107, 111, 128
     ]
   },
   "analog_levels": 1024,
@@ -78,9 +49,7 @@
       "location": "rear",
       "manual_page": 85,
       "face": "AF-L/AE-L",
-      "connection_ids": [
-        "controls-adc-8"
-      ],
+      "connection_ids": ["controls-adc-8"],
       "assignable": false,
       "pushable": true,
       "default_function": "AE lock only by default; lock behavior can be set to remain active while pressed or until the button is pressed again.",
@@ -98,9 +67,7 @@
       "location": "front",
       "manual_page": 51,
       "short_name": "APERTURE",
-      "connection_ids": [
-        "controls-adc-9"
-      ],
+      "connection_ids": ["controls-adc-9"],
       "assignable": false,
       "pushable": false,
       "positions": [
@@ -316,9 +283,7 @@
       "location": "top",
       "manual_page": 5,
       "short_name": "AUTO",
-      "connection_ids": [
-        "controls-gpio-2-11"
-      ],
+      "connection_ids": ["controls-gpio-2-11"],
       "assignable": false,
       "pushable": false,
       "positions": [
@@ -380,11 +345,7 @@
       "location": "rear",
       "manual_page": 6,
       "short_name": "COMMAND",
-      "connection_ids": [
-        "controls-gpio-0-10",
-        "controls-gpio-3-8",
-        "controls-gpio-3-9"
-      ],
+      "connection_ids": ["controls-gpio-0-10", "controls-gpio-3-8", "controls-gpio-3-9"],
       "assignable": false,
       "pushable": true,
       "default_function": "Press left or right to choose shutter speed and aperture combinations or fine-tune shutter speed, and to zoom during playback; press the center to zoom in on the selected focus area. Press and hold the center during manual focus to choose a focus-assist display.",
@@ -411,9 +372,7 @@
       "location": "front",
       "manual_page": 49,
       "short_name": "LENS",
-      "connection_ids": [
-        "controls-encoder-3-6-3-7"
-      ],
+      "connection_ids": ["controls-encoder-3-6-3-7"],
       "assignable": true,
       "pushable": false,
       "default_function": "Provides the selected control-ring function; DEFAULT varies by shooting mode. In manual focus mode, it adjusts focus distance.",
@@ -439,9 +398,7 @@
       "location": "front",
       "manual_page": 49,
       "short_name": "SIDE",
-      "connection_ids": [
-        "controls-adc-7"
-      ],
+      "connection_ids": ["controls-adc-7"],
       "assignable": true,
       "pushable": true,
       "default_function": "Displays control ring options; Fn7 is assigned to control ring options by default and its function-button role is assignable.",
@@ -459,9 +416,7 @@
       "location": "rear",
       "manual_page": 35,
       "icon": "delete",
-      "connection_ids": [
-        "controls-gpio-3-3"
-      ],
+      "connection_ids": ["controls-gpio-3-3"],
       "assignable": true,
       "pushable": true,
       "default_function": "Deletes pictures in playback; Fn8 has no function assigned by default and can be assigned.",
@@ -479,9 +434,7 @@
       "location": "rear",
       "manual_page": 25,
       "face": "DISP/BACK",
-      "connection_ids": [
-        "controls-adc-8"
-      ],
+      "connection_ids": ["controls-adc-8"],
       "assignable": false,
       "pushable": true,
       "default_function": "Cycles display modes and serves as BACK in menus; press and hold to display function-button role settings.",
@@ -499,9 +452,7 @@
       "location": "top",
       "manual_page": 65,
       "face": "DRIVE",
-      "connection_ids": [
-        "controls-gpio-2-12"
-      ],
+      "connection_ids": ["controls-gpio-2-12"],
       "assignable": false,
       "pushable": true,
       "default_function": "Displays drive options for still image, continuous, bracketing, motion panorama, multiple exposure, and advanced filter modes.",
@@ -519,9 +470,7 @@
       "location": "top",
       "manual_page": 62,
       "short_name": "EV",
-      "connection_ids": [
-        "controls-adc-4"
-      ],
+      "connection_ids": ["controls-adc-4"],
       "assignable": false,
       "pushable": false,
       "positions": [
@@ -759,9 +708,7 @@
       "location": "front",
       "manual_page": 74,
       "short_name": "FOCUS",
-      "connection_ids": [
-        "controls-adc-7"
-      ],
+      "connection_ids": ["controls-adc-7"],
       "assignable": false,
       "pushable": false,
       "positions": [
@@ -823,9 +770,7 @@
       "name": "LCD tilt switch",
       "location": "rear",
       "short_name": "SCREEN",
-      "connection_ids": [
-        "controls-gpio-1-1"
-      ],
+      "connection_ids": ["controls-gpio-1-1"],
       "assignable": false,
       "pushable": false,
       "positions": [
@@ -866,9 +811,7 @@
       "location": "rear",
       "manual_page": 3,
       "face": "MENU/OK",
-      "connection_ids": [
-        "controls-adc-8"
-      ],
+      "connection_ids": ["controls-adc-8"],
       "assignable": false,
       "pushable": true,
       "default_function": "Opens menus and selects items; press and hold to lock or unlock the selector, Q, Fn6, and AF-L/AE-L buttons during shooting.",
@@ -886,9 +829,7 @@
       "location": "top",
       "manual_page": 36,
       "icon": "record",
-      "connection_ids": [
-        "controls-gpio-0-11"
-      ],
+      "connection_ids": ["controls-gpio-0-11"],
       "assignable": true,
       "pushable": true,
       "default_function": "Starts and stops movie recording by default; its function-button role is assignable and the assigned role is accessed by pressing and holding.",
@@ -906,9 +847,7 @@
       "location": "rear",
       "manual_page": 30,
       "icon": "playback",
-      "connection_ids": [
-        "controls-gpio-2-9"
-      ],
+      "connection_ids": ["controls-gpio-2-9"],
       "assignable": false,
       "pushable": true,
       "default_function": "Starts playback.",
@@ -926,9 +865,7 @@
       "location": "top",
       "manual_page": 21,
       "face": "ON/OFF",
-      "connection_ids": [
-        "power"
-      ],
+      "connection_ids": ["power"],
       "assignable": false,
       "pushable": false,
       "positions": [
@@ -970,9 +907,7 @@
       "location": "rear",
       "manual_page": 39,
       "face": "Q",
-      "connection_ids": [
-        "controls-adc-8"
-      ],
+      "connection_ids": ["controls-adc-8"],
       "assignable": false,
       "pushable": true,
       "default_function": "Displays the quick menu; press and hold to display quick-menu edit options.",
@@ -990,9 +925,7 @@
       "location": "rear",
       "manual_page": 4,
       "short_name": "SELECTOR",
-      "connection_ids": [
-        "controls-adc-8"
-      ],
+      "connection_ids": ["controls-adc-8"],
       "assignable": true,
       "pushable": false,
       "default_function": "Highlights items; up selects AF mode, left selects self-timer, right selects flash mode, and down selects the focus area by default. These directions are assignable as function buttons Fn2–Fn5.",
@@ -1024,10 +957,7 @@
       "location": "top",
       "manual_page": 29,
       "short_name": "SHUTTER",
-      "connection_ids": [
-        "s1",
-        "s2"
-      ],
+      "connection_ids": ["s1", "s2"],
       "assignable": false,
       "pushable": true,
       "default_function": "Half-presses to focus and lock focus and exposure; press fully to take a picture.",
@@ -1059,9 +989,7 @@
       "location": "top",
       "manual_page": 51,
       "short_name": "SPEED",
-      "connection_ids": [
-        "controls-adc-3"
-      ],
+      "connection_ids": ["controls-adc-3"],
       "assignable": false,
       "pushable": false,
       "positions": [
@@ -1274,9 +1202,7 @@
       "name": "LCD monitor (touchscreen)",
       "location": "rear",
       "manual_page": 24,
-      "connection_ids": [
-        "controls-touch"
-      ],
+      "connection_ids": ["controls-touch"],
       "assignable": false,
       "pushable": false,
       "default_function": "Touch controls are off by default; touch mode can be set to touch shooting or focus-area selection.",
@@ -1290,9 +1216,7 @@
       "location": "rear",
       "manual_page": 48,
       "face": "Fn",
-      "connection_ids": [
-        "controls-adc-8"
-      ],
+      "connection_ids": ["controls-adc-8"],
       "assignable": true,
       "pushable": true,
       "default_function": "Wireless options are assigned to Fn6 by default; its function-button role is assignable.",

@@ -1022,7 +1022,7 @@ impl Cpu for Core {
         match self.rpc(Op::Snapshot)? {
             Value::Registers(registers) => Ok(Box::new(State {
                 owner: self.identity,
-                registers,
+                registers: *registers,
             })),
             _ => unreachable!(),
         }
@@ -1033,7 +1033,7 @@ impl Cpu for Core {
             .downcast_ref::<State>()
             .filter(|s| s.owner == self.identity)
             .ok_or("snapshot belongs to a different CPU")?;
-        self.rpc(Op::Restore(state.registers.clone()))?;
+        self.rpc(Op::Restore(Box::new(state.registers.clone())))?;
         Ok(())
     }
     fn import_snapshot(&self, bytes: &[u8]) -> Result<Box<dyn Snapshot>, String> {
@@ -1190,13 +1190,9 @@ impl Drop for Core {
                 if active.pending_callback.take().is_some() {
                     let _ = self.rpc(Op::Resume(false));
                 }
-                loop {
-                    match self.events.recv() {
-                        Ok(Event::Before(_) | Event::Trap | Event::Mmio(..)) => {
-                            let _ = self.rpc(Op::Resume(false));
-                        }
-                        Ok(Event::Done(_)) | Err(_) => break,
-                    }
+                while let Ok(Event::Before(_) | Event::Trap | Event::Mmio(..)) = self.events.recv()
+                {
+                    let _ = self.rpc(Op::Resume(false));
                 }
             }
             active.watchdog.take();

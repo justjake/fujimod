@@ -103,7 +103,7 @@ fn main() -> Result<(), String> {
         }
         concurrent.run_for_instructions(20_000_000, 128)?;
         let concurrent_counts = concurrent.instruction_counts();
-        if concurrent_counts.len() != 2 || concurrent_counts.iter().any(|count| *count == 0) {
+        if concurrent_counts.len() != 2 || concurrent_counts.contains(&0) {
             return Err(format!(
                 "two-vCPU interactive run did not advance both cores: {concurrent_counts:?}"
             ));

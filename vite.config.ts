@@ -12,6 +12,7 @@ const generated = [
   'apps/web/public/artifacts/**',
   'mods/lib/settings/upstream/**',
   'crates/emulator-cpu-unicorn/vendor/**',
+  'crates/workspace-hack/Cargo.toml',
   '**/*.generated.*',
 ];
 

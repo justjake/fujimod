@@ -3,7 +3,7 @@
 import json
 
 import pytest
-from fujimod._native.emulator import NativeError
+from fujimod._native import emulator as native
 from fujimod.emulator import Asset, Xp4Definition, make_board
 
 
@@ -53,9 +53,9 @@ def test_nor_observation_refuses_board_without_nor() -> None:
         {},
     )
     try:
-        with pytest.raises(NativeError, match="no (devices|XP4 NOR)"):
+        with pytest.raises(native.NativeError, match="no (devices|XP4 NOR)"):
             board.native.xp4.nor_medium()
-        with pytest.raises(NativeError, match="no (devices|XP4 NOR)"):
+        with pytest.raises(native.NativeError, match="no (devices|XP4 NOR)"):
             board.native.xp4.reset_nor_program_coverage()
     finally:
         board.close()

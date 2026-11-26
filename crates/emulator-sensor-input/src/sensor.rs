@@ -612,14 +612,14 @@ fn ramp_line(y: u32, frame: u64, packed12: bool, out: &mut [u8]) {
         & 0x3fff) as u32;
     let sample = |x: usize| (offset.wrapping_add((x as u32).wrapping_mul(31)) & 0x3fff) as u16;
     if packed12 {
-        for (pair_index, pair) in out.chunks_exact_mut(3).enumerate() {
+        for (pair_index, pair) in out.as_chunks_mut::<3>().0.iter_mut().enumerate() {
             let (a, b) = (sample(2 * pair_index) >> 2, sample(2 * pair_index + 1) >> 2);
             pair[0] = a as u8;
             pair[1] = (a >> 8) as u8 | (b << 4) as u8;
             pair[2] = (b >> 4) as u8;
         }
     } else {
-        for (x, container) in out.chunks_exact_mut(2).enumerate() {
+        for (x, container) in out.as_chunks_mut::<2>().0.iter_mut().enumerate() {
             let [low, high] = sample(x).to_le_bytes();
             container[0] = low;
             container[1] = high;

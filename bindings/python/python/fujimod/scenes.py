@@ -1,7 +1,7 @@
 """Shared scene assets for native runs and the browser build."""
 
-from pathlib import Path
 import subprocess
+from pathlib import Path
 
 _DEFAULT_RAF_SIZE = 33_786_368
 # Last accepted state per materialized file: (size, mtime, inode).

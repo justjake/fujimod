@@ -23,6 +23,7 @@ pub(super) const READ_ALIGNMENT: u64 = 32;
 /// The largest control read and the largest owned-RAM transfer piece.
 const CHUNK_CAPACITY: u64 = 0x8000;
 /// The stock diagnostic query that invokes the published callback.
+#[cfg(test)]
 pub const QUERY_COMMAND: u32 = 0x450006;
 /// Marker field returned by the query and echoed through the result object.
 pub const MAGIC: u32 = 0x5058_3401;

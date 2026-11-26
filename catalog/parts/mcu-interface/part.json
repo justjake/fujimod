@@ -20,17 +20,6 @@
       "width_bytes": 1
     },
     "status_register": 96,
-    "initial_registers": [
-      69,
-      70,
-      73,
-      74,
-      75,
-      76,
-      78,
-      104,
-      105,
-      106
-    ]
+    "initial_registers": [69, 70, 73, 74, 75, 76, 78, 104, 105, 106]
   }
 }

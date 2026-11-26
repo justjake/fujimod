@@ -7,41 +7,8 @@
     "url": "https://app.fujifilm-dsc.com/en/manual/x-e4/x-e4_manual_en_s_f.pdf",
     "title": "X-E4 Owner's Manual (English)",
     "pages": [
-      2,
-      3,
-      4,
-      5,
-      6,
-      9,
-      16,
-      19,
-      21,
-      22,
-      23,
-      24,
-      25,
-      29,
-      30,
-      35,
-      44,
-      45,
-      46,
-      56,
-      57,
-      59,
-      60,
-      67,
-      80,
-      81,
-      85,
-      86,
-      183,
-      224,
-      225,
-      226,
-      253,
-      254,
-      256
+      2, 3, 4, 5, 6, 9, 16, 19, 21, 22, 23, 24, 25, 29, 30, 35, 44, 45, 46, 56, 57, 59, 60, 67, 80,
+      81, 85, 86, 183, 224, 225, 226, 253, 254, 256
     ]
   },
   "boot": {
@@ -113,9 +80,7 @@
       "location": "rear",
       "manual_page": 3,
       "face": "DISP/BACK",
-      "connection_ids": [
-        "controls-adc-3"
-      ],
+      "connection_ids": ["controls-adc-3"],
       "assignable": false,
       "pushable": true,
       "default_function": "Control the display of indicators in the viewfinder, LCD monitor, and playback display; back out of a menu or dialog.",
@@ -235,9 +200,7 @@
       "location": "rear",
       "manual_page": 3,
       "short_name": "FOCUS",
-      "connection_ids": [
-        "controls-adc-2"
-      ],
+      "connection_ids": ["controls-adc-2"],
       "assignable": true,
       "pushable": true,
       "default_function": "Tilt or press to select the focus area and navigate menus; the center and tilt roles can be configured.",
@@ -295,9 +258,7 @@
       "location": "rear",
       "manual_page": 3,
       "face": "MENU/OK",
-      "connection_ids": [
-        "controls-adc-3"
-      ],
+      "connection_ids": ["controls-adc-3"],
       "assignable": false,
       "pushable": true,
       "default_function": "Display the menus and confirm selections.",
@@ -346,9 +307,7 @@
       "location": "rear",
       "manual_page": 3,
       "icon": "playback",
-      "connection_ids": [
-        "controls-gpio-7-6"
-      ],
+      "connection_ids": ["controls-gpio-7-6"],
       "assignable": false,
       "pushable": true,
       "default_function": "Start playback; half-press the shutter button to return to shooting.",
@@ -379,10 +338,7 @@
       "location": "top",
       "manual_page": 2,
       "short_name": "SHUTTER",
-      "connection_ids": [
-        "controls-gpio-0-0",
-        "controls-gpio-0-1"
-      ],
+      "connection_ids": ["controls-gpio-0-0", "controls-gpio-0-1"],
       "assignable": false,
       "pushable": true,
       "positions": [

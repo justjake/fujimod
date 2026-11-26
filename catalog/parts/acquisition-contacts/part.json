@@ -7,24 +7,15 @@
     "positions": [
       {
         "drive": 0,
-        "contacts": [
-          true,
-          true
-        ]
+        "contacts": [true, true]
       },
       {
         "drive": 1,
-        "contacts": [
-          false,
-          false
-        ]
+        "contacts": [false, false]
       },
       {
         "drive": 3,
-        "contacts": [
-          true,
-          true
-        ]
+        "contacts": [true, true]
       }
     ],
     "settle_ticks": 3000

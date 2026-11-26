@@ -17,25 +17,13 @@
           "device-6"
         ],
         "attachments": {
-          "serial_outputs": [
-            "spi1-word-output"
-          ],
-          "serial_part": [
-            "mixed-width-dual-counter-lens"
-          ]
+          "serial_outputs": ["spi1-word-output"],
+          "serial_part": ["mixed-width-dual-counter-lens"]
         },
         "card_contacts": {
           "basis": "Declared catalog input.",
-          "detect": [
-            12,
-            7,
-            0
-          ],
-          "write_protect": [
-            12,
-            6,
-            1
-          ]
+          "detect": [12, 7, 0],
+          "write_protect": [12, 6, 1]
         },
         "controllers": {
           "control_bus0": {
@@ -51,24 +39,10 @@
                 "address": 68,
                 "basis": "Declared catalog input.",
                 "status_hex": "0000",
-                "writable_registers": [
-                  1,
-                  2,
-                  3,
-                  4,
-                  6
-                ],
+                "writable_registers": [1, 2, 3, 4, 6],
                 "write_replies": [
-                  [
-                    2,
-                    32,
-                    "0001"
-                  ],
-                  [
-                    2,
-                    64,
-                    "0000"
-                  ]
+                  [2, 32, "0001"],
+                  [2, 64, "0000"]
                 ]
               }
             ],
@@ -79,162 +53,51 @@
             "profile": "declared-bus1-register-replies-unmeasured",
             "replies": {
               "pwic_address": 48,
-              "pwic_modes": [
-                1
-              ],
-              "pwic_read_prefixes": [
-                [
-                  32,
-                  "000000"
-                ]
-              ],
+              "pwic_modes": [1],
+              "pwic_read_prefixes": [[32, "000000"]],
               "pwic_values": [
-                [
-                  1,
-                  0
-                ],
-                [
-                  2,
-                  0
-                ],
-                [
-                  4,
-                  0
-                ],
-                [
-                  5,
-                  0
-                ],
-                [
-                  6,
-                  0
-                ],
-                [
-                  7,
-                  0
-                ],
-                [
-                  8,
-                  0
-                ],
-                [
-                  9,
-                  0
-                ],
-                [
-                  11,
-                  0
-                ],
-                [
-                  14,
-                  0
-                ],
-                [
-                  32,
-                  128
-                ],
-                [
-                  97,
-                  0
-                ],
-                [
-                  98,
-                  0
-                ]
+                [1, 0],
+                [2, 0],
+                [4, 0],
+                [5, 0],
+                [6, 0],
+                [7, 0],
+                [8, 0],
+                [9, 0],
+                [11, 0],
+                [14, 0],
+                [32, 128],
+                [97, 0],
+                [98, 0]
               ],
               "pwic_write_masks": [
-                [
-                  1,
-                  31
-                ],
-                [
-                  2,
-                  255
-                ],
-                [
-                  4,
-                  255
-                ],
-                [
-                  5,
-                  255
-                ],
-                [
-                  6,
-                  240
-                ],
-                [
-                  7,
-                  7
-                ],
-                [
-                  8,
-                  119
-                ],
-                [
-                  9,
-                  243
-                ],
-                [
-                  11,
-                  255
-                ],
-                [
-                  14,
-                  1
-                ],
-                [
-                  32,
-                  31
-                ],
-                [
-                  97,
-                  16
-                ],
-                [
-                  98,
-                  1
-                ]
+                [1, 31],
+                [2, 255],
+                [4, 255],
+                [5, 255],
+                [6, 240],
+                [7, 7],
+                [8, 119],
+                [9, 243],
+                [11, 255],
+                [14, 1],
+                [32, 31],
+                [97, 16],
+                [98, 1]
               ],
               "register_address": 114,
-              "register_modes": [
-                1
-              ],
+              "register_modes": [1],
               "register_values": [
-                [
-                  0,
-                  0
-                ],
-                [
-                  1,
-                  0
-                ],
-                [
-                  2,
-                  0
-                ],
-                [
-                  3,
-                  0
-                ]
+                [0, 0],
+                [1, 0],
+                [2, 0],
+                [3, 0]
               ],
               "register_write_masks": [
-                [
-                  0,
-                  255
-                ],
-                [
-                  1,
-                  255
-                ],
-                [
-                  2,
-                  255
-                ],
-                [
-                  3,
-                  31
-                ]
+                [0, 255],
+                [1, 255],
+                [2, 255],
+                [3, 31]
               ]
             },
             "transfer_ticks": 4
@@ -247,45 +110,23 @@
           },
           "fe80": {
             "basis": "Declared catalog input.",
-            "periods": [
-              12,
-              18
-            ],
-            "upload_setup_phases": [
-              "disabled"
-            ]
+            "periods": [12, 18],
+            "upload_setup_phases": ["disabled"]
           },
           "input_processing": {
             "basis": "Declared catalog input.",
-            "command_controls": [
-              0
-            ]
+            "command_controls": [0]
           },
           "usb": {
             "basis": "Declared catalog input.",
             "in_endpoints": [
-              [
-                128,
-                0
-              ],
-              [
-                130,
-                1
-              ],
-              [
-                131,
-                2
-              ]
+              [128, 0],
+              [130, 1],
+              [131, 2]
             ],
             "out_endpoints": [
-              [
-                0,
-                0
-              ],
-              [
-                1,
-                1
-              ]
+              [0, 0],
+              [1, 1]
             ],
             "packet_bytes": 512,
             "transfer_ticks": 4
@@ -600,25 +441,13 @@
           "device-6"
         ],
         "attachments": {
-          "serial_outputs": [
-            "spi1-word-output"
-          ],
-          "serial_part": [
-            "mixed-width-dual-counter-lens"
-          ]
+          "serial_outputs": ["spi1-word-output"],
+          "serial_part": ["mixed-width-dual-counter-lens"]
         },
         "card_contacts": {
           "basis": "Declared catalog input.",
-          "detect": [
-            12,
-            7,
-            0
-          ],
-          "write_protect": [
-            12,
-            6,
-            1
-          ]
+          "detect": [12, 7, 0],
+          "write_protect": [12, 6, 1]
         },
         "controllers": {
           "control_bus0": {
@@ -634,24 +463,10 @@
                 "address": 68,
                 "basis": "Declared catalog input.",
                 "status_hex": "0000",
-                "writable_registers": [
-                  1,
-                  2,
-                  3,
-                  4,
-                  6
-                ],
+                "writable_registers": [1, 2, 3, 4, 6],
                 "write_replies": [
-                  [
-                    2,
-                    32,
-                    "0001"
-                  ],
-                  [
-                    2,
-                    64,
-                    "0000"
-                  ]
+                  [2, 32, "0001"],
+                  [2, 64, "0000"]
                 ]
               }
             ],
@@ -662,162 +477,51 @@
             "profile": "declared-bus1-register-replies-unmeasured",
             "replies": {
               "pwic_address": 48,
-              "pwic_modes": [
-                1
-              ],
-              "pwic_read_prefixes": [
-                [
-                  32,
-                  "000000"
-                ]
-              ],
+              "pwic_modes": [1],
+              "pwic_read_prefixes": [[32, "000000"]],
               "pwic_values": [
-                [
-                  1,
-                  0
-                ],
-                [
-                  2,
-                  0
-                ],
-                [
-                  4,
-                  0
-                ],
-                [
-                  5,
-                  0
-                ],
-                [
-                  6,
-                  0
-                ],
-                [
-                  7,
-                  0
-                ],
-                [
-                  8,
-                  0
-                ],
-                [
-                  9,
-                  0
-                ],
-                [
-                  11,
-                  0
-                ],
-                [
-                  14,
-                  0
-                ],
-                [
-                  32,
-                  128
-                ],
-                [
-                  97,
-                  0
-                ],
-                [
-                  98,
-                  0
-                ]
+                [1, 0],
+                [2, 0],
+                [4, 0],
+                [5, 0],
+                [6, 0],
+                [7, 0],
+                [8, 0],
+                [9, 0],
+                [11, 0],
+                [14, 0],
+                [32, 128],
+                [97, 0],
+                [98, 0]
               ],
               "pwic_write_masks": [
-                [
-                  1,
-                  31
-                ],
-                [
-                  2,
-                  255
-                ],
-                [
-                  4,
-                  255
-                ],
-                [
-                  5,
-                  255
-                ],
-                [
-                  6,
-                  240
-                ],
-                [
-                  7,
-                  7
-                ],
-                [
-                  8,
-                  119
-                ],
-                [
-                  9,
-                  243
-                ],
-                [
-                  11,
-                  255
-                ],
-                [
-                  14,
-                  1
-                ],
-                [
-                  32,
-                  31
-                ],
-                [
-                  97,
-                  16
-                ],
-                [
-                  98,
-                  1
-                ]
+                [1, 31],
+                [2, 255],
+                [4, 255],
+                [5, 255],
+                [6, 240],
+                [7, 7],
+                [8, 119],
+                [9, 243],
+                [11, 255],
+                [14, 1],
+                [32, 31],
+                [97, 16],
+                [98, 1]
               ],
               "register_address": 114,
-              "register_modes": [
-                1
-              ],
+              "register_modes": [1],
               "register_values": [
-                [
-                  0,
-                  0
-                ],
-                [
-                  1,
-                  0
-                ],
-                [
-                  2,
-                  0
-                ],
-                [
-                  3,
-                  0
-                ]
+                [0, 0],
+                [1, 0],
+                [2, 0],
+                [3, 0]
               ],
               "register_write_masks": [
-                [
-                  0,
-                  255
-                ],
-                [
-                  1,
-                  255
-                ],
-                [
-                  2,
-                  255
-                ],
-                [
-                  3,
-                  31
-                ]
+                [0, 255],
+                [1, 255],
+                [2, 255],
+                [3, 31]
               ]
             },
             "transfer_ticks": 4
@@ -830,19 +534,12 @@
           },
           "fe80": {
             "basis": "Declared catalog input.",
-            "periods": [
-              12,
-              18
-            ],
-            "upload_setup_phases": [
-              "disabled"
-            ]
+            "periods": [12, 18],
+            "upload_setup_phases": ["disabled"]
           },
           "input_processing": {
             "basis": "Declared catalog input.",
-            "command_controls": [
-              0
-            ]
+            "command_controls": [0]
           },
           "window_analysis": {
             "basis": "Declared catalog input.",
@@ -1424,9 +1121,5 @@
       ]
     }
   ],
-  "parts": [
-    "sd-card",
-    "mixed-width-dual-counter-lens",
-    "spi1-word-output"
-  ]
+  "parts": ["sd-card", "mixed-width-dual-counter-lens", "spi1-word-output"]
 }

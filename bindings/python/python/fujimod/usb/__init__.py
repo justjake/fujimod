@@ -90,7 +90,7 @@ if TYPE_CHECKING:
         ) -> Session: ...
 
     class RuntimeImage:
-        def __init__(self, data: Buffer, metadata: str): ...
+        def __init__(self, data: Buffer, metadata: str) -> None: ...
         def relocate(self, base: int) -> RuntimeImage: ...
         @property
         def metadata(self) -> str: ...
@@ -111,7 +111,7 @@ if TYPE_CHECKING:
             size: int = 0,
             data: Buffer = b"",
             relink: Callable[[int], RuntimeImage] | None = None,
-        ): ...
+        ) -> None: ...
         def step(
             self, response: Buffer | None = None, failure: str | None = None
         ) -> tuple[str, str, bytes]: ...
@@ -412,12 +412,15 @@ class Session(Handle["JsSession"]):
 
     async def read_memory(self, address: int, length: int) -> bytes:
         return await self._call(
-            self._js.readMemory, buffer_out, uint(address), uint(length)
+            self._js.readSinglePacket, buffer_out, uint(address), uint(length)
         )
 
     async def write_memory(self, address: int, data: Buffer) -> None:
         await self._call(
-            self._js.writeMemory, (lambda value: value), uint(address), buffer_in(data)
+            self._js.writeSinglePacket,
+            (lambda value: value),
+            uint(address),
+            buffer_in(data),
         )
 
     async def configuration_geometry(

@@ -7,40 +7,8 @@
     "url": "https://fujifilm-dsc.com/en/manual/x30/x30_om-full_en_01.pdf",
     "title": "FUJIFILM X30 Owner's Manual",
     "pages": [
-      12,
-      13,
-      14,
-      15,
-      16,
-      17,
-      18,
-      19,
-      22,
-      24,
-      25,
-      26,
-      27,
-      28,
-      47,
-      64,
-      68,
-      75,
-      98,
-      101,
-      112,
-      118,
-      119,
-      120,
-      121,
-      124,
-      125,
-      168,
-      183,
-      218,
-      219,
-      224,
-      225,
-      236
+      12, 13, 14, 15, 16, 17, 18, 19, 22, 24, 25, 26, 27, 28, 47, 64, 68, 75, 98, 101, 112, 118,
+      119, 120, 121, 124, 125, 168, 183, 218, 219, 224, 225, 236
     ]
   },
   "analog_levels": 1024,
@@ -69,9 +37,7 @@
       "location": "rear",
       "manual_page": 225,
       "face": "AEL/AFL",
-      "connection_ids": [
-        "controls-adc-8"
-      ],
+      "connection_ids": ["controls-adc-8"],
       "assignable": true,
       "pushable": true,
       "default_function": "Locks exposure, focus, or both according to the configurable [AE/AF-LOCK BUTTON] setting.",
@@ -107,10 +73,7 @@
       "location": "rear",
       "manual_page": 16,
       "short_name": "COMMAND",
-      "connection_ids": [
-        "controls-gpio-0-10",
-        "controls-encoder-3-8-3-9"
-      ],
+      "connection_ids": ["controls-gpio-0-10", "controls-encoder-3-8-3-9"],
       "assignable": false,
       "pushable": true,
       "default_function": "Navigates menus, views pictures, and selects quick-menu options; pressing its center zooms in on the active focus area.",
@@ -140,9 +103,7 @@
       "location": "front",
       "manual_page": 17,
       "short_name": "LENS",
-      "connection_ids": [
-        "controls-encoder-adc-6-7"
-      ],
+      "connection_ids": ["controls-encoder-adc-6-7"],
       "assignable": true,
       "pushable": false,
       "default_function": "At [DEFAULT], adjusts program shift ([P]), shutter speed ([S]), aperture ([A]), shutter speed/aperture ([M]), filter selection ([Filter]), advanced mode selection ([Adv.]), or scene selection ([SP1]/[SP2]); it provides manual focus in the applicable modes. Other assignments are ISO, white balance, film simulation, and continuous shooting.",
@@ -204,9 +165,7 @@
       "location": "rear",
       "manual_page": 24,
       "face": "DISP/BACK",
-      "connection_ids": [
-        "controls-adc-8"
-      ],
+      "connection_ids": ["controls-adc-8"],
       "assignable": false,
       "pushable": true,
       "default_function": "Controls indicators in the viewfinder and LCD monitor and serves as [BACK] in menus.",
@@ -224,9 +183,7 @@
       "location": "rear",
       "manual_page": 28,
       "face": "DRIVE",
-      "connection_ids": [
-        "controls-gpio-2-11"
-      ],
+      "connection_ids": ["controls-gpio-2-11"],
       "assignable": false,
       "pushable": true,
       "default_function": "Chooses the drive mode.",
@@ -244,9 +201,7 @@
       "location": "top",
       "manual_page": 118,
       "short_name": "EV",
-      "connection_ids": [
-        "controls-adc-4"
-      ],
+      "connection_ids": ["controls-adc-4"],
       "assignable": false,
       "pushable": false,
       "positions": [
@@ -494,9 +449,7 @@
       "location": "front",
       "manual_page": 124,
       "short_name": "FOCUS",
-      "connection_ids": [
-        "controls-contacts-3-6-3-7"
-      ],
+      "connection_ids": ["controls-contacts-3-6-3-7"],
       "assignable": false,
       "pushable": false,
       "positions": [
@@ -550,9 +503,7 @@
       "location": "top",
       "manual_page": 75,
       "short_name": "MODE",
-      "connection_ids": [
-        "controls-adc-3"
-      ],
+      "connection_ids": ["controls-adc-3"],
       "assignable": false,
       "pushable": false,
       "positions": [
@@ -706,9 +657,7 @@
       "location": "top",
       "manual_page": 68,
       "icon": "record",
-      "connection_ids": [
-        "controls-gpio-4-5"
-      ],
+      "connection_ids": ["controls-gpio-4-5"],
       "assignable": true,
       "pushable": true,
       "default_function": "Starts and stops movie recording by default; its function-button role is assignable.",
@@ -726,9 +675,7 @@
       "location": "rear",
       "manual_page": 47,
       "icon": "playback",
-      "connection_ids": [
-        "controls-gpio-2-9"
-      ],
+      "connection_ids": ["controls-gpio-2-9"],
       "assignable": false,
       "pushable": true,
       "default_function": "Starts playback; holding it for about a second turns the camera on in playback mode.",
@@ -746,9 +693,7 @@
       "location": "rear",
       "manual_page": 98,
       "face": "Q",
-      "connection_ids": [
-        "controls-adc-8"
-      ],
+      "connection_ids": ["controls-adc-8"],
       "assignable": false,
       "pushable": true,
       "default_function": "Opens the quick menu during shooting and displays RAW conversion options during playback.",
@@ -766,9 +711,7 @@
       "location": "rear",
       "manual_page": 15,
       "short_name": "SELECTOR",
-      "connection_ids": [
-        "controls-adc-8"
-      ],
+      "connection_ids": ["controls-adc-8"],
       "assignable": true,
       "pushable": true,
       "default_function": "The up, left, right, and down buttons highlight items and act as function buttons 2 through 5; pressing the center [MENU/OK] selects an item. Selector directions can be assigned as function buttons or used to position the focus area.",
@@ -804,10 +747,7 @@
       "location": "top",
       "manual_page": 120,
       "short_name": "SHUTTER",
-      "connection_ids": [
-        "controls-gpio-0-2",
-        "controls-gpio-0-3"
-      ],
+      "connection_ids": ["controls-gpio-0-2", "controls-gpio-0-3"],
       "assignable": false,
       "pushable": true,
       "default_function": "Half-press sets focus and exposure and keeps them locked while held; press fully to take a picture.",
@@ -839,9 +779,7 @@
       "location": "rear",
       "manual_page": 19,
       "face": "VIEW/MODE",
-      "connection_ids": [
-        "controls-gpio-0-11"
-      ],
+      "connection_ids": ["controls-gpio-0-11"],
       "assignable": false,
       "pushable": true,
       "default_function": "Cycles through the viewfinder and monitor display modes.",

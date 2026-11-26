@@ -12,9 +12,7 @@
           "role": "port-detection-request",
           "evidence": {
             "kind": "located",
-            "firmware_ids": [
-              "xt30-201"
-            ],
+            "firmware_ids": ["xt30-201"],
             "addresses": [
               {
                 "firmware_id": "xt30-201",
@@ -34,9 +32,7 @@
           "role": "port-detection-result",
           "evidence": {
             "kind": "located",
-            "firmware_ids": [
-              "xt30-201"
-            ],
+            "firmware_ids": ["xt30-201"],
             "addresses": [
               {
                 "firmware_id": "xt30-201",
@@ -56,9 +52,7 @@
           "role": "accessory-status",
           "evidence": {
             "kind": "inferred",
-            "firmware_ids": [
-              "xt30-201"
-            ]
+            "firmware_ids": ["xt30-201"]
           }
         },
         {
@@ -66,9 +60,7 @@
           "role": "battery-sample",
           "evidence": {
             "kind": "located",
-            "firmware_ids": [
-              "xt30-201"
-            ],
+            "firmware_ids": ["xt30-201"],
             "addresses": [
               {
                 "firmware_id": "xt30-201",

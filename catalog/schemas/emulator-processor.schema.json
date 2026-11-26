@@ -17,10 +17,7 @@
           "type": "integer"
         }
       },
-      "required": [
-        "address",
-        "size"
-      ],
+      "required": ["address", "size"],
       "type": "object"
     },
     "RunInstructionRate": {
@@ -40,10 +37,7 @@
           "type": "integer"
         }
       },
-      "required": [
-        "numerator",
-        "denominator"
-      ],
+      "required": ["numerator", "denominator"],
       "type": "object"
     }
   },
@@ -61,10 +55,7 @@
       "description": "Board ticks per second, when the processor declares its own time base.",
       "format": "uint64",
       "minimum": 0,
-      "type": [
-        "integer",
-        "null"
-      ]
+      "type": ["integer", "null"]
     },
     "cpu_model": {
       "description": "CPU model the emulator executes, standing in for an unavailable one.",
@@ -108,19 +99,13 @@
     },
     "mmu": {
       "description": "Memory-management model the emulator implements, when it has one.",
-      "type": [
-        "string",
-        "null"
-      ]
+      "type": ["string", "null"]
     },
     "pmu_cycles_per_tick": {
       "description": "PMU counter cycles per board tick, when declared.",
       "format": "uint64",
       "minimum": 0,
-      "type": [
-        "integer",
-        "null"
-      ]
+      "type": ["integer", "null"]
     },
     "private_mmio": {
       "description": "Processor blocks the emulator backs privately for each CPU.",
@@ -140,13 +125,7 @@
       "type": "integer"
     }
   },
-  "required": [
-    "$schema",
-    "schema",
-    "id",
-    "cpu_model",
-    "runtime_abi"
-  ],
+  "required": ["$schema", "schema", "id", "cpu_model", "runtime_abi"],
   "title": "ProcessorEmulation",
   "type": "object"
 }

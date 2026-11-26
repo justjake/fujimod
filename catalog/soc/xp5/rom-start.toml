@@ -22,28 +22,44 @@ base = 0xfaf07000
 size = 0x1000
 kind = "bringup-stub"
 [device.options]
-registers = [{ offset = 0x780, mode = "after_write", value = 1 }, { offset = 0x784, mode = "constant", value = 0 }, { offset = 0x800, mode = "constant", value = 1 }]
+registers = [
+  { offset = 0x780, mode = "after_write", value = 1 },
+  { offset = 0x784, mode = "constant", value = 0 },
+  { offset = 0x800, mode = "constant", value = 1 },
+]
 
 [[device]]
 base = 0xfaf17000
 size = 0x1000
 kind = "bringup-stub"
 [device.options]
-registers = [{ offset = 0x780, mode = "after_write", value = 1 }, { offset = 0x784, mode = "constant", value = 0 }, { offset = 0x800, mode = "constant", value = 1 }]
+registers = [
+  { offset = 0x780, mode = "after_write", value = 1 },
+  { offset = 0x784, mode = "constant", value = 0 },
+  { offset = 0x800, mode = "constant", value = 1 },
+]
 
 [[device]]
 base = 0xfaf27000
 size = 0x1000
 kind = "bringup-stub"
 [device.options]
-registers = [{ offset = 0x780, mode = "after_write", value = 1 }, { offset = 0x784, mode = "constant", value = 0 }, { offset = 0x800, mode = "constant", value = 1 }]
+registers = [
+  { offset = 0x780, mode = "after_write", value = 1 },
+  { offset = 0x784, mode = "constant", value = 0 },
+  { offset = 0x800, mode = "constant", value = 1 },
+]
 
 [[device]]
 base = 0xfaf37000
 size = 0x1000
 kind = "bringup-stub"
 [device.options]
-registers = [{ offset = 0x780, mode = "after_write", value = 1 }, { offset = 0x784, mode = "constant", value = 0 }, { offset = 0x800, mode = "constant", value = 1 }]
+registers = [
+  { offset = 0x780, mode = "after_write", value = 1 },
+  { offset = 0x784, mode = "constant", value = 0 },
+  { offset = 0x800, mode = "constant", value = 1 },
+]
 
 # DDR PHY register space. The stock setup reads back hundreds of PHY registers per PHY through
 # halfword loads at 0xfb000000 / 0xfb400000 + 2 * APB index (the table at flash 0xf0012510, read in

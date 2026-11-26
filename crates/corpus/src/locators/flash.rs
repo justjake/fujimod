@@ -1686,11 +1686,11 @@ mod tests {
                 technology: FlashTechnology::SerialNandFlash,
             })
         };
-        assert_eq!(selected_nand(true, nor(0x2c5b1b)).unwrap(), false);
-        assert_eq!(selected_nand(true, nand(0xefdc21)).unwrap(), true);
-        assert_eq!(selected_nand(false, nor(0x20bb20)).unwrap(), false);
+        assert!(!selected_nand(true, nor(0x2c5b1b)).unwrap());
+        assert!(selected_nand(true, nand(0xefdc21)).unwrap());
+        assert!(!selected_nand(false, nor(0x20bb20)).unwrap());
         // The part record, not the identity value, decides the technology.
-        assert_eq!(selected_nand(true, nand(0x123456)).unwrap(), true);
+        assert!(selected_nand(true, nand(0x123456)).unwrap());
         assert!(selected_nand(false, nand(0xefdc21)).is_err());
         assert!(selected_nand(true, None).is_err());
     }

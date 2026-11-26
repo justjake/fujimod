@@ -18,10 +18,7 @@
           "type": "integer"
         }
       },
-      "required": [
-        "run_ticks",
-        "contacts"
-      ],
+      "required": ["run_ticks", "contacts"],
       "type": "object"
     },
     "ContactPosition": {
@@ -42,10 +39,7 @@
           "type": "integer"
         }
       },
-      "required": [
-        "drive",
-        "contacts"
-      ],
+      "required": ["drive", "contacts"],
       "type": "object"
     },
     "DisplayOrientation": {
@@ -91,9 +85,7 @@
           "description": "How the fact was established."
         }
       },
-      "required": [
-        "kind"
-      ],
+      "required": ["kind"],
       "type": "object"
     },
     "EvidenceAddress": {
@@ -115,11 +107,7 @@
           "description": "Whether the address selects code or data."
         }
       },
-      "required": [
-        "firmware_id",
-        "address",
-        "space"
-      ],
+      "required": ["firmware_id", "address", "space"],
       "type": "object"
     },
     "EvidenceKind": {
@@ -183,9 +171,7 @@
           "type": "integer"
         }
       },
-      "required": [
-        "threshold"
-      ],
+      "required": ["threshold"],
       "type": "object"
     },
     "HomeSwitchSide": {
@@ -215,9 +201,7 @@
               "type": "string"
             }
           },
-          "required": [
-            "kind"
-          ],
+          "required": ["kind"],
           "type": "object"
         },
         {
@@ -244,11 +228,7 @@
               "type": "integer"
             }
           },
-          "required": [
-            "kind",
-            "ticks_per_second",
-            "period_picoseconds"
-          ],
+          "required": ["kind", "ticks_per_second", "period_picoseconds"],
           "type": "object"
         },
         {
@@ -266,10 +246,7 @@
               "type": "integer"
             }
           },
-          "required": [
-            "kind",
-            "ticks_per_quantum"
-          ],
+          "required": ["kind", "ticks_per_quantum"],
           "type": "object"
         },
         {
@@ -287,10 +264,7 @@
               "type": "integer"
             }
           },
-          "required": [
-            "kind",
-            "ticks_per_quantum"
-          ],
+          "required": ["kind", "ticks_per_quantum"],
           "type": "object"
         }
       ]
@@ -338,12 +312,7 @@
           "type": "array"
         }
       },
-      "required": [
-        "initial_position",
-        "travel_limits",
-        "ticks_per_step",
-        "settle_ticks"
-      ],
+      "required": ["initial_position", "travel_limits", "ticks_per_step", "settle_ticks"],
       "type": "object"
     },
     "LensMotorCounter": {
@@ -372,11 +341,7 @@
           "type": "integer"
         }
       },
-      "required": [
-        "motor",
-        "channel",
-        "divider"
-      ],
+      "required": ["motor", "channel", "divider"],
       "type": "object"
     },
     "LensProtocol": {
@@ -444,12 +409,7 @@
           "type": "integer"
         }
       },
-      "required": [
-        "sample_first",
-        "sample_last",
-        "miss_byte",
-        "evidence"
-      ],
+      "required": ["sample_first", "sample_last", "miss_byte", "evidence"],
       "type": "object"
     },
     "PartAssemblyEdge": {
@@ -490,10 +450,7 @@
           "type": "integer"
         }
       },
-      "required": [
-        "core",
-        "line"
-      ],
+      "required": ["core", "line"],
       "type": "object"
     },
     "PartAssemblyPin": {
@@ -515,10 +472,7 @@
           "type": "integer"
         }
       },
-      "required": [
-        "port",
-        "pin"
-      ],
+      "required": ["port", "pin"],
       "type": "object"
     },
     "PartAssemblyPinInterrupt": {
@@ -541,11 +495,7 @@
           "description": "GPIO input pad."
         }
       },
-      "required": [
-        "pin",
-        "edge",
-        "outputs"
-      ],
+      "required": ["pin", "edge", "outputs"],
       "type": "object"
     },
     "PartAssemblyPinLevel": {
@@ -561,10 +511,7 @@
           "description": "Selected GPIO pad."
         }
       },
-      "required": [
-        "pin",
-        "high"
-      ],
+      "required": ["pin", "high"],
       "type": "object"
     },
     "PartAssemblyPositionBridge": {
@@ -707,12 +654,7 @@
           "type": "boolean"
         }
       },
-      "required": [
-        "control",
-        "configuration",
-        "bits",
-        "receive"
-      ],
+      "required": ["control", "configuration", "bits", "receive"],
       "type": "object"
     },
     "PartAssemblyZoomAttachment": {
@@ -738,11 +680,7 @@
           "type": "integer"
         }
       },
-      "required": [
-        "pulse_channel",
-        "counter_channel",
-        "home_pin"
-      ],
+      "required": ["pulse_channel", "counter_channel", "home_pin"],
       "type": "object"
     },
     "PartAttachment": {
@@ -751,85 +689,58 @@
       "properties": {
         "basis": {
           "description": "Qualification of these declared attachment facts.",
-          "type": [
-            "string",
-            "null"
-          ]
+          "type": ["string", "null"]
         },
         "completion_interrupts": {
           "description": "Interrupts raised when each motor completes its movement.",
           "items": {
             "$ref": "#/$defs/PartAssemblyInterrupt"
           },
-          "type": [
-            "array",
-            "null"
-          ]
+          "type": ["array", "null"]
         },
         "contact_pins": {
           "description": "Actuator contact GPIO pins in contact order.",
           "items": {
             "$ref": "#/$defs/PartAssemblyPin"
           },
-          "type": [
-            "array",
-            "null"
-          ]
+          "type": ["array", "null"]
         },
         "drive_pins": {
           "description": "Actuator drive GPIO pins in bit order.",
           "items": {
             "$ref": "#/$defs/PartAssemblyPin"
           },
-          "type": [
-            "array",
-            "null"
-          ]
+          "type": ["array", "null"]
         },
         "encoder_pins": {
           "description": "Encoder GPIO pins in phase order.",
           "items": {
             "$ref": "#/$defs/PartAssemblyPin"
           },
-          "type": [
-            "array",
-            "null"
-          ]
+          "type": ["array", "null"]
         },
         "gpio_interrupts": {
           "description": "Pin edges routed to processor interrupt inputs.",
           "items": {
             "$ref": "#/$defs/PartAssemblyPinInterrupt"
           },
-          "type": [
-            "array",
-            "null"
-          ]
+          "type": ["array", "null"]
         },
         "initial_position": {
           "description": "Actuator position at reset.",
           "format": "int32",
-          "type": [
-            "integer",
-            "null"
-          ]
+          "type": ["integer", "null"]
         },
         "interrupts": {
           "description": "Interrupt outputs for the pulse channels, in channel order.",
           "items": {
             "$ref": "#/$defs/PartAssemblyInterrupt"
           },
-          "type": [
-            "array",
-            "null"
-          ]
+          "type": ["array", "null"]
         },
         "label": {
           "description": "Assembly label used when constructing a device graph.",
-          "type": [
-            "string",
-            "null"
-          ]
+          "type": ["string", "null"]
         },
         "limits": {
           "description": "Known limits of the assembly.",
@@ -850,10 +761,7 @@
               }
             ]
           },
-          "type": [
-            "array",
-            "null"
-          ]
+          "type": ["array", "null"]
         },
         "position_bridge": {
           "anyOf": [
@@ -882,10 +790,7 @@
           "items": {
             "$ref": "#/$defs/PartAssemblySerialAttachment"
           },
-          "type": [
-            "array",
-            "null"
-          ]
+          "type": ["array", "null"]
         },
         "zoom": {
           "anyOf": [
@@ -909,10 +814,7 @@
           "description": "Guest ticks per encoder phase transition.",
           "format": "uint64",
           "minimum": 0,
-          "type": [
-            "integer",
-            "null"
-          ]
+          "type": ["integer", "null"]
         },
         "rest_phase": {
           "description": "Initial encoder phase.",
@@ -925,15 +827,10 @@
           "description": "Encoder edges per phase in the declared protocol, when specified.",
           "format": "uint32",
           "minimum": 0,
-          "type": [
-            "integer",
-            "null"
-          ]
+          "type": ["integer", "null"]
         }
       },
-      "required": [
-        "rest_phase"
-      ],
+      "required": ["rest_phase"],
       "type": "object"
     },
     "PartModel": {
@@ -948,17 +845,11 @@
               "items": {
                 "$ref": "#/$defs/LensClockMode"
               },
-              "type": [
-                "array",
-                "null"
-              ]
+              "type": ["array", "null"]
             },
             "direction_high": {
               "description": "Protocol direction polarity, when declared.",
-              "type": [
-                "boolean",
-                "null"
-              ]
+              "type": ["boolean", "null"]
             },
             "encoder": {
               "anyOf": [
@@ -993,10 +884,7 @@
               "description": "Protocol period in guest ticks, when specified.",
               "format": "uint64",
               "minimum": 0,
-              "type": [
-                "integer",
-                "null"
-              ]
+              "type": ["integer", "null"]
             },
             "protocol": {
               "$ref": "#/$defs/LensProtocol",
@@ -1025,11 +913,7 @@
               "description": "Optional zoom mechanism."
             }
           },
-          "required": [
-            "kind",
-            "protocol",
-            "motors"
-          ],
+          "required": ["kind", "protocol", "motors"],
           "type": "object"
         },
         {
@@ -1054,11 +938,7 @@
               "type": "integer"
             }
           },
-          "required": [
-            "kind",
-            "positions",
-            "settle_ticks"
-          ],
+          "required": ["kind", "positions", "settle_ticks"],
           "type": "object"
         },
         {
@@ -1074,10 +954,7 @@
               "type": "string"
             }
           },
-          "required": [
-            "kind",
-            "endpoint"
-          ],
+          "required": ["kind", "endpoint"],
           "type": "object"
         },
         {
@@ -1113,10 +990,7 @@
               "description": "Status register exposed by the endpoint, when present.",
               "format": "uint32",
               "minimum": 0,
-              "type": [
-                "integer",
-                "null"
-              ]
+              "type": ["integer", "null"]
             }
           },
           "required": [
@@ -1151,11 +1025,7 @@
               "type": "array"
             }
           },
-          "required": [
-            "kind",
-            "registers",
-            "readable"
-          ],
+          "required": ["kind", "registers", "readable"],
           "type": "object"
         },
         {
@@ -1174,10 +1044,7 @@
               "type": "array"
             }
           },
-          "required": [
-            "kind",
-            "status_registers"
-          ],
+          "required": ["kind", "status_registers"],
           "type": "object"
         },
         {
@@ -1189,9 +1056,7 @@
               "type": "string"
             }
           },
-          "required": [
-            "kind"
-          ],
+          "required": ["kind"],
           "type": "object"
         },
         {
@@ -1272,10 +1137,7 @@
               "description": "Display raster height in pixels.",
               "format": "uint32",
               "minimum": 0,
-              "type": [
-                "integer",
-                "null"
-              ]
+              "type": ["integer", "null"]
             },
             "kind": {
               "const": "display-panel",
@@ -1306,17 +1168,10 @@
               "description": "Display raster width in pixels.",
               "format": "uint32",
               "minimum": 0,
-              "type": [
-                "integer",
-                "null"
-              ]
+              "type": ["integer", "null"]
             }
           },
-          "required": [
-            "kind",
-            "serial",
-            "used_mask"
-          ],
+          "required": ["kind", "serial", "used_mask"],
           "type": "object"
         },
         {
@@ -1332,10 +1187,7 @@
               "type": "string"
             }
           },
-          "required": [
-            "kind",
-            "interface"
-          ],
+          "required": ["kind", "interface"],
           "type": "object"
         },
         {
@@ -1415,9 +1267,7 @@
               "type": "string"
             }
           },
-          "required": [
-            "kind"
-          ],
+          "required": ["kind"],
           "type": "object"
         },
         {
@@ -1429,9 +1279,7 @@
               "type": "string"
             }
           },
-          "required": [
-            "kind"
-          ],
+          "required": ["kind"],
           "type": "object"
         },
         {
@@ -1443,9 +1291,7 @@
               "type": "string"
             }
           },
-          "required": [
-            "kind"
-          ],
+          "required": ["kind"],
           "type": "object"
         },
         {
@@ -1457,9 +1303,7 @@
               "type": "string"
             }
           },
-          "required": [
-            "kind"
-          ],
+          "required": ["kind"],
           "type": "object"
         },
         {
@@ -1485,11 +1329,7 @@
               "type": "integer"
             }
           },
-          "required": [
-            "kind",
-            "read_gate_register",
-            "read_gate_mask"
-          ],
+          "required": ["kind", "read_gate_register", "read_gate_mask"],
           "type": "object"
         },
         {
@@ -1530,9 +1370,7 @@
               "description": "Transport the controller speaks, when located."
             }
           },
-          "required": [
-            "kind"
-          ],
+          "required": ["kind"],
           "type": "object"
         },
         {
@@ -1544,9 +1382,7 @@
               "type": "string"
             }
           },
-          "required": [
-            "kind"
-          ],
+          "required": ["kind"],
           "type": "object"
         },
         {
@@ -1558,9 +1394,7 @@
               "type": "string"
             }
           },
-          "required": [
-            "kind"
-          ],
+          "required": ["kind"],
           "type": "object"
         },
         {
@@ -1572,9 +1406,7 @@
               "type": "string"
             }
           },
-          "required": [
-            "kind"
-          ],
+          "required": ["kind"],
           "type": "object"
         },
         {
@@ -1605,12 +1437,7 @@
               "type": "integer"
             }
           },
-          "required": [
-            "kind",
-            "commands",
-            "status",
-            "telemetry"
-          ],
+          "required": ["kind", "commands", "status", "telemetry"],
           "type": "object"
         },
         {
@@ -1642,12 +1469,7 @@
               "type": "integer"
             }
           },
-          "required": [
-            "kind",
-            "command_prefix",
-            "data_prefix",
-            "payload_bytes"
-          ],
+          "required": ["kind", "command_prefix", "data_prefix", "payload_bytes"],
           "type": "object"
         },
         {
@@ -1658,19 +1480,13 @@
               "description": "Erase-unit capacity in bytes, when declared.",
               "format": "uint64",
               "minimum": 0,
-              "type": [
-                "integer",
-                "null"
-              ]
+              "type": ["integer", "null"]
             },
             "jedec_id": {
               "description": "JEDEC identification value, when supplied by the part definition.",
               "format": "uint32",
               "minimum": 0,
-              "type": [
-                "integer",
-                "null"
-              ]
+              "type": ["integer", "null"]
             },
             "kind": {
               "const": "serial-nor-flash",
@@ -1680,10 +1496,7 @@
               "description": "Program-page capacity in bytes, when declared.",
               "format": "uint64",
               "minimum": 0,
-              "type": [
-                "integer",
-                "null"
-              ]
+              "type": ["integer", "null"]
             },
             "sampling": {
               "anyOf": [
@@ -1697,9 +1510,7 @@
               "description": "Sample-point window and miss byte of the controller's read states, when declared."
             }
           },
-          "required": [
-            "kind"
-          ],
+          "required": ["kind"],
           "type": "object"
         },
         {
@@ -1710,10 +1521,7 @@
               "description": "JEDEC identification value, when supplied by the part definition.",
               "format": "uint32",
               "minimum": 0,
-              "type": [
-                "integer",
-                "null"
-              ]
+              "type": ["integer", "null"]
             },
             "kind": {
               "const": "serial-nand-flash",
@@ -1723,33 +1531,22 @@
               "description": "Program-page capacity in bytes, when declared.",
               "format": "uint64",
               "minimum": 0,
-              "type": [
-                "integer",
-                "null"
-              ]
+              "type": ["integer", "null"]
             },
             "pages_per_block": {
               "description": "Pages per erase block, when declared.",
               "format": "uint64",
               "minimum": 0,
-              "type": [
-                "integer",
-                "null"
-              ]
+              "type": ["integer", "null"]
             },
             "spare_bytes": {
               "description": "Spare bytes per page, when declared.",
               "format": "uint64",
               "minimum": 0,
-              "type": [
-                "integer",
-                "null"
-              ]
+              "type": ["integer", "null"]
             }
           },
-          "required": [
-            "kind"
-          ],
+          "required": ["kind"],
           "type": "object"
         }
       ]
@@ -1781,11 +1578,7 @@
           "description": "What the firmware reads or writes there."
         }
       },
-      "required": [
-        "first",
-        "role",
-        "evidence"
-      ],
+      "required": ["first", "role", "evidence"],
       "type": "object"
     },
     "PowerControllerRole": {
@@ -1870,9 +1663,7 @@
               "type": "string"
             }
           },
-          "required": [
-            "kind"
-          ],
+          "required": ["kind"],
           "type": "object"
         },
         {
@@ -1912,13 +1703,7 @@
               "type": "integer"
             }
           },
-          "required": [
-            "kind",
-            "register_mask",
-            "write_mask",
-            "data_bytes",
-            "request_sum"
-          ],
+          "required": ["kind", "register_mask", "write_mask", "data_bytes", "request_sum"],
           "type": "object"
         }
       ]
@@ -1981,10 +1766,7 @@
           "format": "uint8",
           "maximum": 255,
           "minimum": 0,
-          "type": [
-            "integer",
-            "null"
-          ]
+          "type": ["integer", "null"]
         },
         "counter_channels": {
           "description": "Counter channels sampled by the mechanism.",
@@ -2017,12 +1799,7 @@
           "type": "array"
         }
       },
-      "required": [
-        "counter_channels",
-        "timer_channels",
-        "quadrature",
-        "initial_phase"
-      ],
+      "required": ["counter_channels", "timer_channels", "quadrature", "initial_phase"],
       "type": "object"
     },
     "RegisterRange": {
@@ -2049,11 +1826,7 @@
           "type": "integer"
         }
       },
-      "required": [
-        "first",
-        "count",
-        "width_bytes"
-      ],
+      "required": ["first", "count", "width_bytes"],
       "type": "object"
     },
     "SensorControlInterface": {
@@ -2075,10 +1848,7 @@
           "type": "integer"
         }
       },
-      "required": [
-        "register_address_bits",
-        "data_bits"
-      ],
+      "required": ["register_address_bits", "data_bits"],
       "type": "object"
     },
     "SensorIllumination": {
@@ -2111,16 +1881,11 @@
                   "type": "number"
                 }
               },
-              "required": [
-                "r2",
-                "r4"
-              ],
+              "required": ["r2", "r4"],
               "type": "object"
             }
           },
-          "required": [
-            "radial-polynomial"
-          ],
+          "required": ["radial-polynomial"],
           "type": "object"
         }
       ]
@@ -2183,10 +1948,7 @@
           },
           "maxItems": 2,
           "minItems": 2,
-          "type": [
-            "array",
-            "null"
-          ]
+          "type": ["array", "null"]
         },
         "projection": {
           "$ref": "#/$defs/SensorProjection",
@@ -2279,10 +2041,7 @@
           "description": "Sensor clock frequency in hertz when known.",
           "format": "uint64",
           "minimum": 0,
-          "type": [
-            "integer",
-            "null"
-          ]
+          "type": ["integer", "null"]
         },
         "width": {
           "description": "Sensor output width in pixels.",
@@ -2291,11 +2050,7 @@
           "type": "integer"
         }
       },
-      "required": [
-        "width",
-        "height",
-        "image_area"
-      ],
+      "required": ["width", "height", "image_area"],
       "type": "object"
     },
     "SensorRollingReference": {
@@ -2328,12 +2083,7 @@
           "type": "integer"
         }
       },
-      "required": [
-        "mode",
-        "horizontal",
-        "vertical",
-        "lines"
-      ],
+      "required": ["mode", "horizontal", "vertical", "lines"],
       "type": "object"
     },
     "SerialOutputKind": {
@@ -2384,11 +2134,7 @@
           "description": "Command operation."
         }
       },
-      "required": [
-        "code",
-        "bits",
-        "operation"
-      ],
+      "required": ["code", "bits", "operation"],
       "type": "object"
     },
     "StabilizerCommandOperation": {
@@ -2403,9 +2149,7 @@
               "type": "string"
             }
           },
-          "required": [
-            "kind"
-          ],
+          "required": ["kind"],
           "type": "object"
         },
         {
@@ -2417,9 +2161,7 @@
               "type": "string"
             }
           },
-          "required": [
-            "kind"
-          ],
+          "required": ["kind"],
           "type": "object"
         },
         {
@@ -2438,10 +2180,7 @@
               "type": "string"
             }
           },
-          "required": [
-            "kind",
-            "bank"
-          ],
+          "required": ["kind", "bank"],
           "type": "object"
         }
       ]
@@ -2465,10 +2204,7 @@
           "type": "integer"
         }
       },
-      "required": [
-        "address",
-        "value"
-      ],
+      "required": ["address", "value"],
       "type": "object"
     },
     "ZoomMechanism": {
@@ -2479,10 +2215,7 @@
           "description": "Counter-to-position scale declared for the zoom mechanism.",
           "format": "uint32",
           "minimum": 0,
-          "type": [
-            "integer",
-            "null"
-          ]
+          "type": ["integer", "null"]
         },
         "home": {
           "anyOf": [
@@ -2514,17 +2247,10 @@
           "description": "Guest ticks per zoom pulse.",
           "format": "uint64",
           "minimum": 0,
-          "type": [
-            "integer",
-            "null"
-          ]
+          "type": ["integer", "null"]
         }
       },
-      "required": [
-        "initial_position",
-        "minimum_position",
-        "maximum_position"
-      ],
+      "required": ["initial_position", "minimum_position", "maximum_position"],
       "type": "object"
     }
   },
@@ -2564,12 +2290,7 @@
       "type": "integer"
     }
   },
-  "required": [
-    "$schema",
-    "schema",
-    "id",
-    "model"
-  ],
+  "required": ["$schema", "schema", "id", "model"],
   "title": "Part",
   "type": "object"
 }

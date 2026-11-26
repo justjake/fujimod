@@ -12,8 +12,8 @@ from os import PathLike, fspath
 from typing import Literal, Protocol, Self, TypedDict, TypeGuard, cast
 
 from fujimod._native import emulator as _native
-from .. import perf as _perf
 
+from .. import perf as _perf
 from .definition import Definition, Xp4Definition
 from .processor import Processor
 
@@ -63,7 +63,7 @@ class BoardState(dict[str, object]):
     """Diagnostic board state with direct complete-state equality."""
 
     def __init__(
-        self, diagnostic: dict[str, object], native: _native.emulator.BoardState
+        self, diagnostic: dict[str, object], native: _native.BoardState
     ) -> None:
         super().__init__(diagnostic)
         self._native = native
@@ -79,8 +79,8 @@ class BoardState(dict[str, object]):
             self._load_complete()
         return super().__getitem__(key)
 
-    def get(self, key: str, default: object = None) -> object:
-        if key not in self:
+    def get(self, key: object, default: object = None) -> object:
+        if not isinstance(key, str) or key not in self:
             self._load_complete()
         return super().get(key, default)
 

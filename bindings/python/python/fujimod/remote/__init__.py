@@ -3,15 +3,14 @@
 from __future__ import annotations
 
 import asyncio
-from dataclasses import asdict, dataclass
 import json
-from typing import Awaitable, Callable, TypeVar
+from collections.abc import Awaitable, Callable
+from dataclasses import asdict, dataclass
 from time import monotonic_ns
+from typing import Protocol, cast
 
-T = TypeVar("T")
-
-from .._native import remote as _native
 from .. import recording
+from .._native import remote as _native
 
 
 @dataclass(frozen=True)
@@ -35,10 +34,15 @@ class Control:
 Reference = Menu | Option | Control
 
 
-def facts_from_selection(selection: dict, manifest: dict | None = None) -> dict:
-    return json.loads(
+def facts_from_selection(
+    selection: dict[str, object], manifest: dict[str, object] | None = None
+) -> dict[str, object]:
+    data = json.loads(
         _native.facts_from_selection(json.dumps(selection), json.dumps(manifest))
     )
+    if not isinstance(data, dict):
+        raise TypeError("Remote facts must be a JSON object")
+    return cast(dict[str, object], data)
 
 
 def menu(id: str | int, *, key: int | None = None, via: Menu | None = None) -> Menu:
@@ -56,7 +60,12 @@ def control(id: str) -> Control:
 def _reference(value: Reference | None) -> str:
     if value is None:
         return "null"
-    kind = {Menu: "menu", Option: "option", Control: "control"}[type(value)]
+    if isinstance(value, Control):
+        kind = "control"
+    elif isinstance(value, Option):
+        kind = "option"
+    else:
+        kind = "menu"
     return json.dumps({
         "kind": kind,
         "reference": value.id if isinstance(value, Control) else asdict(value),
@@ -76,7 +85,7 @@ class State:
 class Readiness:
     ready: bool
     pending: list[str]
-    reads: dict
+    reads: dict[str, object]
 
 
 @dataclass(frozen=True)
@@ -91,7 +100,7 @@ class MenuState:
     selected: bool
     enabled: bool
     value: str | None
-    ancestors: list[dict]
+    ancestors: list[dict[str, object]]
     root: str
 
 
@@ -106,7 +115,7 @@ class ControlState:
 class RemoteReadResult:
     state: State
     value: MenuState | ControlState
-    reads: dict
+    reads: dict[str, object]
 
 
 @dataclass(frozen=True)
@@ -118,17 +127,80 @@ class Capture:
     sequence: int
 
 
-def _convert(value):
+def _json_object(value: object) -> dict[str, object]:
+    if not isinstance(value, dict):
+        raise TypeError("Native remote result must be a JSON object")
+    return cast(dict[str, object], value)
+
+
+def _optional_int(value: object) -> int | None:
+    return None if value is None else int(cast(int, value))
+
+
+def _optional_str(value: object) -> str | None:
+    return None if value is None else str(value)
+
+
+def _convert(value: object) -> object:
     if isinstance(value, str):
-        data = json.loads(value)
+        data = _json_object(json.loads(value))
         if "state" not in data:
-            return Readiness(**data)
-        kind = MenuState if data["value"]["kind"] == "menu" else ControlState
+            return Readiness(
+                ready=bool(data["ready"]),
+                pending=[str(item) for item in cast(list[object], data["pending"])],
+                reads=_json_object(data["reads"]),
+            )
+        marked = _json_object(data["value"])
+        state = _json_object(data["state"])
+        if marked["kind"] == "menu":
+            value = _json_object(marked["value"])
+            return RemoteReadResult(
+                state=State(
+                    mode=int(cast(int, state["mode"])),
+                    menu_active=bool(state["menu_active"]),
+                    node=int(cast(int, state["node"])),
+                    cursor=int(cast(int, state["cursor"])),
+                    current_key=_optional_int(state["current_key"]),
+                ),
+                value=MenuState(
+                    node=int(cast(int, value["node"])),
+                    key=_optional_int(value["key"]),
+                    index=_optional_int(value["index"]),
+                    child=_optional_int(value["child"]),
+                    label=str(value["label"]),
+                    exists=bool(value["exists"]),
+                    visible=bool(value["visible"]),
+                    selected=bool(value["selected"]),
+                    enabled=bool(value["enabled"]),
+                    value=_optional_str(value["value"]),
+                    ancestors=[
+                        _json_object(entry)
+                        for entry in cast(list[object], value["ancestors"])
+                    ],
+                    root=str(value["root"]),
+                ),
+                reads=_json_object(data["reads"]),
+            )
+        value = _json_object(marked["value"])
         return RemoteReadResult(
-            State(**data["state"]), kind(**data["value"]["value"]), data["reads"]
+            state=State(
+                mode=int(cast(int, state["mode"])),
+                menu_active=bool(state["menu_active"]),
+                node=int(cast(int, state["node"])),
+                cursor=int(cast(int, state["cursor"])),
+                current_key=_optional_int(state["current_key"]),
+            ),
+            value=ControlState(
+                id=str(value["id"]),
+                position=_optional_str(value["position"]),
+                supported=bool(value["supported"]),
+            ),
+            reads=_json_object(data["reads"]),
         )
     if isinstance(value, tuple):
-        png, time, clock, output, sequence = value
+        png, time, clock, output, sequence = cast(
+            tuple[bytes, int, str, str, int], value
+        )
         return Capture(recording.Frame.from_png(png), time, clock, output, sequence)
     return value
 
@@ -149,14 +221,55 @@ def _touch(x: int, y: int, kind: str) -> str:
 _TOUCH_END = json.dumps({"kind": "touch_end"})
 
 
-async def _drive(task):
+class _Task(Protocol):
+    def poll(self, wake: Callable[[], None]) -> bool: ...
+    def result(self) -> object: ...
+    def blocking(self) -> object: ...
+    def cancel(self) -> None: ...
+
+
+class _Camera(Protocol):
+    @property
+    def now(self) -> int: ...
+    def close(self) -> None: ...
+    def operation(
+        self, action: str, reference: str, deadline: int, steps: int
+    ) -> _Task: ...
+    def set_input(self, reference: str, state: str, deadline: int) -> _Task: ...
+    def touch_gesture(self, reference: str, points: str, deadline: int) -> _Task: ...
+    def wait_reads(self, reads: str, deadline: int) -> _Task: ...
+    def wait_until(
+        self,
+        reference: str,
+        predicate: Callable[[RemoteReadResult], bool],
+        deadline: int,
+    ) -> _Task: ...
+    def wait_until_memory(
+        self,
+        ranges: str,
+        predicate: Callable[[list[tuple[int, bytes]]], bool],
+        deadline: int,
+        condition: str,
+    ) -> _Task: ...
+    def wait_until_stable_memory_task(
+        self,
+        ranges: str,
+        stable_spans: str,
+        equals: str,
+        stable_comparisons: int,
+        deadline: int,
+        condition: str,
+    ) -> _Task: ...
+
+
+async def _drive(task: _Task) -> object:
     loop = asyncio.get_running_loop()
     try:
         while True:
-            wake = loop.create_future()
+            wake = cast(asyncio.Future[None], loop.create_future())
 
-            def resumed(future=wake):
-                def notify():
+            def resumed(future: asyncio.Future[None] = wake) -> None:
+                def notify() -> None:
                     if not future.done():
                         future.set_result(None)
 
@@ -172,14 +285,14 @@ async def _drive(task):
 
 
 class Camera:
-    def __init__(self, native):
+    def __init__(self, native: _Camera) -> None:
         self._native = native
 
     @classmethod
     def from_board(
         cls,
-        board,
-        facts: dict,
+        board: object,
+        facts: dict[str, object],
         *,
         quantum: int,
         window_instructions: int,
@@ -187,7 +300,7 @@ class Camera:
         frame_counter_kind: str,
         frame_counter_pointer: str,
         output: str = "lcd",
-        observer: Callable[[], dict] | None = None,
+        observer: Callable[[], dict[str, object]] | None = None,
     ) -> Camera:
         """``observer`` runs before every wait, including the waits inside an
         input's readiness and acceptance. It returns the read set it observed
@@ -200,7 +313,13 @@ class Camera:
             frame_counter_kind=frame_counter_kind,
             frame_counter_pointer=frame_counter_pointer,
         )
-        observe = None if observer is None else lambda: json.dumps(observer())
+        selected = observer
+
+        def encode() -> str:
+            assert selected is not None
+            return json.dumps(selected())
+
+        observe: Callable[[], str] | None = None if selected is None else encode
         return cls(
             _native.Camera.from_board(
                 board, json.dumps(facts), json.dumps(options), observe
@@ -210,8 +329,8 @@ class Camera:
     @classmethod
     def from_ff80(
         cls,
-        session,
-        facts: dict,
+        session: object,
+        facts: dict[str, object],
         *,
         read_bytes: int,
         write_bytes: int,
@@ -220,7 +339,7 @@ class Camera:
         output: str = "lcd",
         operation_scoped: bool = False,
     ) -> Camera:
-        def connect():
+        def connect() -> _native.Camera:
             return _native.Camera.from_ff80(
                 session,
                 json.dumps(facts),
@@ -243,11 +362,11 @@ class Camera:
 
     def _task(
         self, action: str, reference: Reference | None, deadline: int, steps: int = 0
-    ):
+    ) -> _Task:
         return self._native.operation(action, _reference(reference), deadline, steps)
 
     async def read(self, reference: Reference) -> RemoteReadResult:
-        return await _drive(self._task("read", reference, 0))
+        return cast(RemoteReadResult, await _drive(self._task("read", reference, 0)))
 
     async def set_input(
         self,
@@ -264,23 +383,23 @@ class Camera:
             )
         )
 
-    async def wait(self, reads: dict, *, deadline: int) -> None:
+    async def wait(self, reads: dict[str, object], *, deadline: int) -> None:
         await _drive(self._native.wait_reads(json.dumps(reads), deadline))
 
     async def readiness(self) -> Readiness:
-        return await _drive(self._task("readiness", None, 0))
+        return cast(Readiness, await _drive(self._task("readiness", None, 0)))
 
     async def wait_until_ready(
         self, *, deadline: int, control: Control | None = None
     ) -> None:
         await _drive(self._task("wait_ready", control, deadline))
 
-    async def wait_for(
+    async def wait_for[T](
         self,
         predicate: Callable[[], Awaitable[T]],
         *,
         deadline: int,
-        reads: dict,
+        reads: dict[str, object],
         condition: str,
     ) -> T:
         """Compose async observations with the remote wait primitive.
@@ -301,7 +420,9 @@ class Camera:
             await self.wait(reads, deadline=deadline)
 
     async def navigate(self, reference: Menu, *, deadline: int) -> RemoteReadResult:
-        return await _drive(self._task("navigate", reference, deadline))
+        return cast(
+            RemoteReadResult, await _drive(self._task("navigate", reference, deadline))
+        )
 
     async def select(self, reference: Option, *, deadline: int) -> None:
         await _drive(self._task("select", reference, deadline))
@@ -348,10 +469,10 @@ class Camera:
         )
 
     async def frame(self) -> Capture:
-        return await _drive(self._task("frame", None, 0))
+        return cast(Capture, await _drive(self._task("frame", None, 0)))
 
     async def screenshot(self, *, deadline: int) -> Capture:
-        return await _drive(self._task("screenshot", None, deadline))
+        return cast(Capture, await _drive(self._task("screenshot", None, deadline)))
 
     async def wait_until(
         self,
@@ -360,8 +481,11 @@ class Camera:
         *,
         deadline: int,
     ) -> RemoteReadResult:
-        return await _drive(
-            self._native.wait_until(_reference(reference), predicate, deadline)
+        return cast(
+            RemoteReadResult,
+            await _drive(
+                self._native.wait_until(_reference(reference), predicate, deadline)
+            ),
         )
 
     async def wait_until_memory(
@@ -373,10 +497,13 @@ class Camera:
         condition: str,
     ) -> list[tuple[int, bytes]]:
         """Repeat explicit byte observations and predicate checks in Rust."""
-        return await _drive(
-            self._native.wait_until_memory(
-                json.dumps(ranges), predicate, deadline, condition
-            )
+        return cast(
+            list[tuple[int, bytes]],
+            await _drive(
+                self._native.wait_until_memory(
+                    json.dumps(ranges), predicate, deadline, condition
+                )
+            ),
         )
 
     async def wait_until_stable_memory(
@@ -391,15 +518,18 @@ class Camera:
     ) -> list[tuple[int, bytes]]:
         """Wait in Rust for caller-selected bytes to match and stabilize."""
         encoded_equals = [(address, list(expected)) for address, expected in equals]
-        return await _drive(
-            self._native.wait_until_stable_memory_task(
-                json.dumps(ranges),
-                json.dumps(stable_spans),
-                json.dumps(encoded_equals),
-                stable_comparisons,
-                deadline,
-                condition,
-            )
+        return cast(
+            list[tuple[int, bytes]],
+            await _drive(
+                self._native.wait_until_stable_memory_task(
+                    json.dumps(ranges),
+                    json.dumps(stable_spans),
+                    json.dumps(encoded_equals),
+                    stable_comparisons,
+                    deadline,
+                    condition,
+                )
+            ),
         )
 
     def close(self) -> None:
@@ -407,7 +537,7 @@ class Camera:
 
 
 class BlockingCamera:
-    def __init__(self, camera: Camera):
+    def __init__(self, camera: Camera) -> None:
         self._camera = camera
 
     @property
@@ -420,16 +550,16 @@ class BlockingCamera:
         reference: Reference | None = None,
         deadline: int = 0,
         steps: int = 0,
-    ):
+    ) -> object:
         return _convert(
             self._camera._task(action, reference, deadline, steps).blocking()
         )
 
     def read(self, reference: Reference) -> RemoteReadResult:
-        return self._call("read", reference)
+        return cast(RemoteReadResult, self._call("read", reference))
 
     def readiness(self) -> Readiness:
-        return self._call("readiness")
+        return cast(Readiness, self._call("readiness"))
 
     def wait_until_ready(
         self, *, deadline: int, control: Control | None = None
@@ -437,7 +567,7 @@ class BlockingCamera:
         self._call("wait_ready", control, deadline)
 
     def navigate(self, reference: Menu, *, deadline: int) -> RemoteReadResult:
-        return self._call("navigate", reference, deadline)
+        return cast(RemoteReadResult, self._call("navigate", reference, deadline))
 
     def select(self, reference: Option, *, deadline: int) -> None:
         self._call("select", reference, deadline)
@@ -487,10 +617,10 @@ class BlockingCamera:
         ).blocking()
 
     def frame(self) -> Capture:
-        return self._call("frame")
+        return cast(Capture, self._call("frame"))
 
     def screenshot(self, *, deadline: int) -> Capture:
-        return self._call("screenshot", deadline=deadline)
+        return cast(Capture, self._call("screenshot", deadline=deadline))
 
     def wait_until(
         self,
@@ -499,10 +629,13 @@ class BlockingCamera:
         *,
         deadline: int,
     ) -> RemoteReadResult:
-        return _convert(
-            self._camera._native.wait_until(
-                _reference(reference), predicate, deadline
-            ).blocking()
+        return cast(
+            RemoteReadResult,
+            _convert(
+                self._camera._native.wait_until(
+                    _reference(reference), predicate, deadline
+                ).blocking()
+            ),
         )
 
     def wait_until_memory(
@@ -513,9 +646,12 @@ class BlockingCamera:
         deadline: int,
         condition: str,
     ) -> list[tuple[int, bytes]]:
-        return self._camera._native.wait_until_memory(
-            json.dumps(ranges), predicate, deadline, condition
-        ).blocking()
+        return cast(
+            list[tuple[int, bytes]],
+            self._camera._native.wait_until_memory(
+                json.dumps(ranges), predicate, deadline, condition
+            ).blocking(),
+        )
 
     def wait_until_stable_memory(
         self,
@@ -528,36 +664,39 @@ class BlockingCamera:
         condition: str,
     ) -> list[tuple[int, bytes]]:
         encoded_equals = [(address, list(expected)) for address, expected in equals]
-        return self._camera._native.wait_until_stable_memory_task(
-            json.dumps(ranges),
-            json.dumps(stable_spans),
-            json.dumps(encoded_equals),
-            stable_comparisons,
-            deadline,
-            condition,
-        ).blocking()
+        return cast(
+            list[tuple[int, bytes]],
+            self._camera._native.wait_until_stable_memory_task(
+                json.dumps(ranges),
+                json.dumps(stable_spans),
+                json.dumps(encoded_equals),
+                stable_comparisons,
+                deadline,
+                condition,
+            ).blocking(),
+        )
 
 
 class _ScopedTask:
-    def __init__(self, task, owner):
+    def __init__(self, task: _Task, owner: _native.Camera | None) -> None:
         self.task, self.owner = task, owner
 
-    def poll(self, wake):
+    def poll(self, wake: Callable[[], None]) -> bool:
         return self.task.poll(wake)
 
-    def result(self):
+    def result(self) -> object:
         try:
             return self.task.result()
         finally:
             self.cancel()
 
-    def blocking(self):
+    def blocking(self) -> object:
         try:
             return self.task.blocking()
         finally:
             self.cancel()
 
-    def cancel(self):
+    def cancel(self) -> None:
         self.task.cancel()
         if self.owner is not None:
             self.owner.close()
@@ -567,29 +706,34 @@ class _ScopedTask:
 class _ScopedNative:
     """Return a borrowed USB session between operations and predicate reads."""
 
-    def __init__(self, connect):
+    def __init__(self, connect: Callable[[], _native.Camera]) -> None:
         self.connect = connect
         self.closed = False
 
     @property
-    def now(self):
+    def now(self) -> int:
         return monotonic_ns()
 
-    def close(self):
+    def close(self) -> None:
         self.closed = True
 
-    def _call(self, method, args, deadline):
+    def _call(
+        self, method: str, args: tuple[object, ...], deadline: int
+    ) -> _ScopedTask:
         if self.closed:
             raise RuntimeError("Camera is closed")
         native = self.connect()
         try:
             local_deadline = native.now + max(0, deadline - self.now)
-            return _ScopedTask(getattr(native, method)(*args, local_deadline), native)
+            task = cast(_Task, getattr(native, method)(*args, local_deadline))
+            return _ScopedTask(task, native)
         except BaseException:
             native.close()
             raise
 
-    def operation(self, action, reference, deadline, steps):
+    def operation(
+        self, action: str, reference: str, deadline: int, steps: int
+    ) -> _ScopedTask:
         # operation's steps follow its deadline in the native signature.
         if self.closed:
             raise RuntimeError("Camera is closed")
@@ -603,12 +747,43 @@ class _ScopedNative:
             native.close()
             raise
 
-    def wait_until(self, reference, predicate, deadline):
+    def wait_until(
+        self,
+        reference: str,
+        predicate: Callable[[RemoteReadResult], bool],
+        deadline: int,
+    ) -> _ScopedTask:
         return self._call("wait_until", (reference, predicate), deadline)
 
+    def wait_until_memory(
+        self,
+        ranges: str,
+        predicate: Callable[[list[tuple[int, bytes]]], bool],
+        deadline: int,
+        condition: str,
+    ) -> _ScopedTask:
+        if self.closed:
+            raise RuntimeError("Camera is closed")
+        native = self.connect()
+        try:
+            local_deadline = native.now + max(0, deadline - self.now)
+            task = native.wait_until_memory(
+                ranges, predicate, local_deadline, condition
+            )
+            return _ScopedTask(task, native)
+        except BaseException:
+            native.close()
+            raise
+
     def wait_until_stable_memory_task(
-        self, ranges, stable_spans, equals, stable_comparisons, deadline, condition
-    ):
+        self,
+        ranges: str,
+        stable_spans: str,
+        equals: str,
+        stable_comparisons: int,
+        deadline: int,
+        condition: str,
+    ) -> _ScopedTask:
         if self.closed:
             raise RuntimeError("Camera is closed")
         native = self.connect()
@@ -627,11 +802,11 @@ class _ScopedNative:
             native.close()
             raise
 
-    def wait_reads(self, reads, deadline):
+    def wait_reads(self, reads: str, deadline: int) -> _ScopedTask:
         return self._call("wait_reads", (reads,), deadline)
 
-    def set_input(self, reference, state, deadline):
+    def set_input(self, reference: str, state: str, deadline: int) -> _ScopedTask:
         return self._call("set_input", (reference, state), deadline)
 
-    def touch_gesture(self, reference, points, deadline):
+    def touch_gesture(self, reference: str, points: str, deadline: int) -> _ScopedTask:
         return self._call("touch_gesture", (reference, points), deadline)

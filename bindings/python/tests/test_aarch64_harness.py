@@ -1,18 +1,27 @@
 """Synthetic instruction contracts for checked isolated AArch64 calls."""
 
 import struct
+from collections.abc import Callable
+from typing import cast
 
 import pytest
 from fujimod.emulator.aarch64_harness import (
     Aarch64DriverHarness,
     Aarch64Image,
     Aarch64Inputs,
+    HarnessResult,
     StubContext,
 )
 from fujimod.emulator.driver_harness import DriverHarness
 
 BASE = 0x1_0000_0000
 CODE, DATA, SP, RETURN = BASE + 0x1000, BASE + 0x4000, BASE + 0x9000, BASE + 0xB000
+
+
+def failure(result: HarnessResult) -> str:
+    value = result["failure"]
+    assert value is not None
+    return value
 
 
 def words(*values: int) -> bytes:
@@ -55,10 +64,12 @@ def harness(
         {"executable": 1},
     ],
 )
-def test_image_retains_name_byte_address_and_execution_checks(changes) -> None:
+def test_image_retains_name_byte_address_and_execution_checks(
+    changes: dict[str, object],
+) -> None:
     values = dict(name="code", address=CODE, data=words(0xD65F03C0))
     with pytest.raises(ValueError):
-        Aarch64Image(**(values | changes))
+        cast(Callable[..., Aarch64Image], Aarch64Image)(**(values | changes))
 
 
 def test_arguments_and_returns_preserve_all_64_bits() -> None:
@@ -117,7 +128,7 @@ def test_strict_refusals(code: bytes, reason: str) -> None:
     with harness(code) as h:
         result = h.call(CODE, max_instructions=8)
         assert not result["returned"]
-        assert reason in result["failure"]
+        assert reason in failure(result)
 
 
 def test_exclusive_increment_on_declared_ram() -> None:
@@ -135,7 +146,7 @@ def test_exclusive_access_outside_declared_ram_refuses() -> None:
     with harness(code) as h:
         result = h.call(CODE, args=(0, BASE + 0xA000), max_instructions=4)
         assert not result["returned"]
-        assert "exclusive read outside declared RAM" in result["failure"]
+        assert "exclusive read outside declared RAM" in failure(result)
 
 
 def test_stack_alignment_rejected_before_execution() -> None:
@@ -147,7 +158,7 @@ def test_fetch_cannot_run_past_declared_code() -> None:
     with harness(words(0xD503201F)) as h:
         result = h.call(CODE, max_instructions=10)
         assert not result["returned"]
-        assert "fetch" in result["failure"]
+        assert "fetch" in failure(result)
         assert result["instructions"] == 1
 
 
@@ -157,7 +168,7 @@ def test_pair_store_checks_both_transfers_before_either_mutates_memory() -> None
         result = h.call(
             CODE, args=(BASE + 3, DATA, BASE + 7), allowed_stores=[(DATA, DATA + 8)]
         )
-        assert not result["returned"] and "store" in result["failure"]
+        assert not result["returned"] and "store" in failure(result)
         assert h.read(DATA, 32) == before
         assert result["stores"] == [] and result["instructions"] == 0
 
@@ -170,7 +181,7 @@ def test_permitted_store_records_actual_value_and_limit_prevents_next_store() ->
             allowed_stores=[(DATA, DATA + 16)],
             store_limit=1,
         )
-        assert not result["returned"] and "Store limit" in result["failure"]
+        assert not result["returned"] and "Store limit" in failure(result)
         assert h.read(DATA, 16) == (BASE + 7).to_bytes(8, "little") + bytes(8)
         assert len(result["stores"]) == 1
         assert result["stores"][0]["value"] == BASE + 7
@@ -180,7 +191,7 @@ def test_permitted_store_records_actual_value_and_limit_prevents_next_store() ->
 def test_mmio_refused_before_access(opcode: int) -> None:
     with harness(words(opcode, 0xD65F03C0)) as h:
         result = h.call(CODE, args=(7, 0xFA000000))
-        assert not result["returned"] and "range" in result["failure"]
+        assert not result["returned"] and "range" in failure(result)
         assert result["instructions"] == 0
 
 
@@ -211,7 +222,7 @@ def test_callee_saved_pair_roundtrip_and_stack_store_log() -> None:
 def test_fixture_is_only_readable_within_its_exact_declared_span() -> None:
     with harness(words(0xF9400020, 0xD65F03C0), fixture=[(DATA, b"1234")]) as h:
         result = h.call(CODE, args=(0, DATA))
-        assert not result["returned"] and "read" in result["failure"]
+        assert not result["returned"] and "read" in failure(result)
 
 
 def test_dynamic_stub_snapshots_and_declared_writes_are_recorded() -> None:
@@ -245,7 +256,7 @@ def test_dynamic_stub_forbidden_effects_are_validated_before_any_write() -> None
 
         h.stub(CODE + 16, returns=writes)
         result = h.call(CODE)
-        assert not result["returned"] and "Stub write" in result["failure"]
+        assert not result["returned"] and "Stub write" in failure(result)
         assert h.read(DATA, 8) == bytes(8)
 
 
@@ -264,7 +275,7 @@ def test_partial_frame_requires_explicit_fragment_exit_expectations() -> None:
 def test_simd_pair_guard_checks_full_width_before_first_store() -> None:
     with harness(words(0xAD000420, 0xD65F03C0)) as h:  # stp q0,q1,[x1]
         result = h.call(CODE, args=(0, DATA), allowed_stores=[(DATA, DATA + 16)])
-        assert not result["returned"] and "store" in result["failure"]
+        assert not result["returned"] and "store" in failure(result)
         assert h.read(DATA, 32) == bytes(32) and result["stores"] == []
 
 
@@ -324,7 +335,7 @@ def test_narrow_fetch_allowlist_does_not_make_remaining_image_writable() -> None
     code = words(0xF9000020, 0xD65F03C0) + bytes(24)
     with harness(code, fixture=[(CODE + 16, bytes(8))]) as h:
         result = h.call(CODE, args=(7, CODE + 24), allowed_code=[(CODE, CODE + 8)])
-        assert not result["returned"] and "store" in result["failure"]
+        assert not result["returned"] and "store" in failure(result)
         assert h.read(CODE + 24, 8) == bytes(8)
 
 
@@ -358,7 +369,7 @@ def test_observer_bound_refuses_before_the_next_observed_instruction() -> None:
     with harness(words(0x91000400, 0x17FFFFFF)) as h:
         h.observe_at(CODE)
         result = h.call(CODE, observer_limit=2)
-        assert not result["returned"] and "Observer limit" in result["failure"]
+        assert not result["returned"] and "Observer limit" in failure(result)
         assert [o["registers"]["x0"] for o in result["observations"]] == [0, 1]
         assert result["registers"]["x0"] == 2 and result["instructions"] == 4
 
@@ -447,7 +458,7 @@ def test_declared_system_value_tracks_writes_to_the_same_register() -> None:
 def test_unimplemented_register_read_without_a_declaration_is_refused() -> None:
     with harness(words(0xD539F221, 0xD65F03C0)) as h:
         result = h.call(CODE)
-        assert "undeclared MRS" in result["failure"]
+        assert "undeclared MRS" in failure(result)
 
 
 def test_system_read_mismatch_is_rejected_before_execution() -> None:

@@ -214,22 +214,24 @@ impl ProgramCoverage {
         }
         self.first = self.first.min(start / 8);
         self.end = self.end.max(end.div_ceil(8));
-        for byte in start / 8..end.div_ceil(8) {
+        let (from, to) = (start / 8, end.div_ceil(8));
+        for (offset, slot) in self.bits[from..to].iter_mut().enumerate() {
+            let byte = from + offset;
             let lo = start.saturating_sub(byte * 8).min(8);
             let hi = end.saturating_sub(byte * 8).min(8);
             let mask = ((0xffu16 << lo) & (0xffu16 >> (8 - hi))) as u8;
             if programmed {
-                self.bits[byte] |= mask;
+                *slot |= mask;
             } else {
-                self.bits[byte] &= !mask;
+                *slot &= !mask;
             }
         }
     }
     fn ranges(&self) -> Vec<(usize, usize)> {
         let mut result = Vec::new();
         let mut start = None;
-        for index in self.first..self.end {
-            let byte = self.bits[index];
+        for (offset, &byte) in self.bits[self.first..self.end].iter().enumerate() {
+            let index = self.first + offset;
             if byte == 0 {
                 if let Some(begin) = start.take() {
                     result.push((begin, index * 8));

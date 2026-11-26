@@ -9,7 +9,9 @@ import pytest
 from fujimod import scenes
 
 
-def test_default_scene_repairs_missing_and_stale_output(tmp_path, monkeypatch):
+def test_default_scene_repairs_missing_and_stale_output(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     root = Path(scenes.__file__).resolve().parents[4]
     script = tmp_path / "scripts/assets/default-scene.ts"
     script.parent.mkdir(parents=True)
@@ -33,7 +35,7 @@ def test_default_scene_repairs_missing_and_stale_output(tmp_path, monkeypatch):
     assert scenes.default_scene_raf().read_bytes() == expected
 
 
-def scene_path(tmp_path, monkeypatch):
+def scene_path(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     monkeypatch.setattr(
         scenes, "__file__", str(tmp_path / "bindings/python/python/fujimod/scenes.py")
     )
@@ -43,13 +45,15 @@ def scene_path(tmp_path, monkeypatch):
     return asset
 
 
-def test_existing_scene_is_reused_without_reading_its_bytes(tmp_path, monkeypatch):
+def test_existing_scene_is_reused_without_reading_its_bytes(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     asset = scene_path(tmp_path, monkeypatch)
     # Sparse output exercises the real byte-count check without decoding a RAF.
     with asset.open("wb") as output:
         output.truncate(scenes._DEFAULT_RAF_SIZE)
 
-    def unexpected(*args, **kwargs):
+    def unexpected(*args: object, **kwargs: object) -> None:
         pytest.fail("Loading an unchanged scene must not read or regenerate it")
 
     monkeypatch.setattr(Path, "read_bytes", unexpected)
@@ -60,21 +64,25 @@ def test_existing_scene_is_reused_without_reading_its_bytes(tmp_path, monkeypatc
 
 @pytest.mark.parametrize("output", [None, b"short"])
 def test_materialization_requires_an_existing_output_of_the_expected_size(
-    tmp_path, monkeypatch, output
-):
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, output: bytes | None
+) -> None:
     asset = scene_path(tmp_path, monkeypatch)
 
-    def materialize(*args, **kwargs):
+    def materialize(
+        *args: object, **kwargs: object
+    ) -> subprocess.CompletedProcess[str]:
         if output is not None:
             asset.write_bytes(output)
-        return subprocess.CompletedProcess(args, 0)
+        return subprocess.CompletedProcess([str(arg) for arg in args], 0)
 
     monkeypatch.setattr(scenes.subprocess, "run", materialize)
     with pytest.raises(ValueError, match="missing or.*byte count"):
         scenes.default_scene_raf()
 
 
-def test_replacing_the_scene_inode_requires_materialization(tmp_path, monkeypatch):
+def test_replacing_the_scene_inode_requires_materialization(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     asset = scene_path(tmp_path, monkeypatch)
     monkeypatch.setattr(scenes, "_DEFAULT_RAF_SIZE", 4)
     asset.write_bytes(b"good")
@@ -86,10 +94,12 @@ def test_replacing_the_scene_inode_requires_materialization(tmp_path, monkeypatc
     replacement.replace(asset)
     calls = []
 
-    def materialize(*args, **kwargs):
+    def materialize(
+        *args: object, **kwargs: object
+    ) -> subprocess.CompletedProcess[str]:
         calls.append(args)
         asset.write_bytes(b"good")
-        return subprocess.CompletedProcess(args, 0)
+        return subprocess.CompletedProcess([str(arg) for arg in args], 0)
 
     monkeypatch.setattr(scenes.subprocess, "run", materialize)
     assert scenes.default_scene_raf().read_bytes() == b"good"

@@ -145,8 +145,10 @@ impl Pl011 {
         {
             return Err("Invalid PL011 UART".into());
         }
-        let mut state = State::default();
-        state.rl78 = config.map(Rl78::new).transpose()?;
+        let state = State {
+            rl78: config.map(Rl78::new).transpose()?,
+            ..Default::default()
+        };
         Ok(Self { base, irq, state })
     }
     pub fn base(&self) -> u64 {

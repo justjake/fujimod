@@ -88,6 +88,7 @@
 //! * saclac needs that completion: callback 0x2e7fb34 sets [0x4a101f0] bit 1, which 0x2e7877c
 //!   turns into bit 1 of [0x4a101e8]; without it the movie job never calls MOVDC back
 //!   (0x3056164) and the movie live view stays black.
+//!
 //! The model completes a start after `completion_us`, clears +0x40 bit 0, latches the completion
 //! and raises INTID 169 while +0x68 enables it. It writes no pixels: the RAW destination is not
 //! read by anything the emulator models yet.

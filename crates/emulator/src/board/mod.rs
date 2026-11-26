@@ -4524,15 +4524,15 @@ unsafe fn written(
                 }
                 if state.execution_policy == ExecutionPolicy::Exact {
                     let code_shadow_active = state.code_shadow[b.core].is_some();
-                    if diagnostic_m4 && code_shadow_active {
-                        if let Some(counters) = state
+                    if diagnostic_m4
+                        && code_shadow_active
+                        && let Some(counters) = state
                             .store_observer
                             .as_mut()
                             .and_then(|counters| counters.get_mut(b.core))
-                        {
-                            counters.code_shadow_store_checks =
-                                counters.code_shadow_store_checks.saturating_add(1);
-                        }
+                    {
+                        counters.code_shadow_store_checks =
+                            counters.code_shadow_store_checks.saturating_add(1);
                     }
                     if let Some(shadow) = state.code_shadow[b.core].as_mut() {
                         shadow.stored(&*cpus[b.core], address, size);

@@ -3,9 +3,8 @@
 import struct
 
 import pytest
-from fujimod.usb import research, testing
-
 from fujimod import usb
+from fujimod.usb import research, testing
 
 LIMITS = usb.FirmwareLimits(memory_read=64, memory_write=64, configuration=1, console=1)
 E = testing.Exchange

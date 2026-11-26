@@ -281,10 +281,10 @@ impl Raf {
         match black_recorded.len() {
             0 => return Err(bad("RAF records no black level")),
             36 => {
-                for y in 0..6 {
-                    for x in 0..6 {
+                for (y, row) in black.iter_mut().enumerate() {
+                    for (x, cell) in row.iter_mut().enumerate() {
                         let (ry, rx) = ((y + active.top) % 6, (x + active.left) % 6);
-                        black[y][x] = black_recorded[ry * 6 + rx] as f32;
+                        *cell = black_recorded[ry * 6 + rx] as f32;
                     }
                 }
             }
@@ -401,7 +401,10 @@ impl FrameSource for Raf {
         file.read_exact(&mut buf)?;
         for r in 0..rows {
             let src = &buf[r * stride + self.active.left * 2..][..w * 2];
-            for (o, b) in out[r * w..(r + 1) * w].iter_mut().zip(src.chunks_exact(2)) {
+            for (o, b) in out[r * w..(r + 1) * w]
+                .iter_mut()
+                .zip(src.as_chunks::<2>().0.iter())
+            {
                 *o = u16::from_le_bytes([b[0], b[1]]);
             }
         }

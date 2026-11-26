@@ -185,16 +185,11 @@
       ]
     }
   ],
-  "parameters": [
-    "dma_high_words"
-  ],
+  "parameters": ["dma_high_words"],
   "evidence": [
     {
       "kind": "inferred",
-      "firmware_ids": [
-        "xt3-511",
-        "xt2-441"
-      ]
+      "firmware_ids": ["xt3-511", "xt2-441"]
     }
   ]
 }

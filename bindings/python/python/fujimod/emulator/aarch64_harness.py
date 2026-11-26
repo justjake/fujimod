@@ -6,7 +6,7 @@ import hashlib
 import json
 from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass
-from typing import Self
+from typing import Self, TypedDict, cast
 
 from fujimod._native import emulator as _native
 
@@ -16,6 +16,52 @@ from .driver_harness import _intersect, _merge, _subtract
 
 Span = tuple[int, bytes]
 Range = tuple[int, int]
+
+
+class Observation(TypedDict):
+    registers: dict[str, int]
+    pc: int
+
+
+class StubHit(TypedDict):
+    reads: list[dict[str, int]]
+    writes: list[dict[str, int]]
+
+
+class HarnessResult(TypedDict):
+    returned: bool
+    return_value: int
+    registers: dict[str, int]
+    instructions: int
+    failure: str | None
+    images: list[dict[str, object]]
+    device_transactions: list[dict[str, object]]
+    device_transactions_omitted: int
+    devices: dict[str, object]
+    device_assets: list[dict[str, object]]
+    execution: dict[str, object]
+    ram_fixture: list[dict[str, int]]
+    allowed_code: list[list[int]]
+    code: list[dict[str, int]]
+    patches: list[dict[str, int]]
+    stubs: list[dict[str, object]]
+    stores: list[dict[str, int]]
+    caller: dict[str, object]
+    observations: list[Observation]
+    observers: list[dict[str, object]]
+    stopped_at: int
+    stops: list[dict[str, object]]
+    stub_hits: list[StubHit]
+    system_read_model_values: list[list[str | int]]
+    system_read_observations: list[dict[str, object]]
+    system_writes: list[dict[str, object]]
+    virtual_ticks: int
+
+
+def _json_object(value: object) -> dict[str, object]:
+    if not isinstance(value, dict):
+        raise TypeError("Native AArch64 result must be a JSON object")
+    return cast(dict[str, object], value)
 
 
 def _range(begin: int, end: int) -> Range:
@@ -30,7 +76,7 @@ def _word(value: int) -> int:
     return value
 
 
-def _receipt(address: int, size: int) -> dict:
+def _receipt(address: int, size: int) -> dict[str, int]:
     return {
         "address": address,
         "size": size,
@@ -198,9 +244,9 @@ class Aarch64DriverHarness:
         self.inputs, self.quantum = inputs, quantum
         self._fixture = [(a, bytes(data)) for a, data in ram_fixture]
         self._patches = [(a, bytes(data)) for a, data in patches]
-        self._stubs: list[dict] = []
-        self._stops: list[dict] = []
-        self._observers: list[dict] = []
+        self._stubs: list[dict[str, object]] = []
+        self._stops: list[dict[str, object]] = []
+        self._observers: list[dict[str, object]] = []
         self._handlers: dict[int, Callable[[StubContext], int]] = {}
         self._allocations: list[Span] = []
         self._alloc_next = inputs.scratch[0]
@@ -400,8 +446,8 @@ class Aarch64DriverHarness:
         reads = tuple(
             (i, {"argument": int(n[1:])} if isinstance(n, str) else n) for i, n in reads
         )
-        dynamic = callable(returns)
-        if dynamic:
+        dynamic = not isinstance(returns, int)
+        if not isinstance(returns, int):
             self._handlers[target] = returns
         self._stubs.append({
             "address": target,
@@ -451,7 +497,7 @@ class Aarch64DriverHarness:
         system_registers: Iterable[str] = (),
         entry_level: str = "el1",
         transaction_limit: int = 4096,
-    ) -> dict:
+    ) -> HarnessResult:
         """Execute a routine with optional expected CPU-model system reads.
 
         Each ``system_reads`` pair names a read-only architectural register and
@@ -557,8 +603,10 @@ class Aarch64DriverHarness:
             "registers": reg_values,
             "fragment_exit": dict(fragment_exit or {}),
         }
-        result = json.loads(
-            self.board.native.call_aarch64(json.dumps(options), self._callback)
+        result = _json_object(
+            json.loads(
+                self.board.native.call_aarch64(json.dumps(options), self._callback)
+            )
         )
         self._failed = result["failure"] is not None
         result.update(
@@ -597,4 +645,4 @@ class Aarch64DriverHarness:
                 else "Isolated synthetic caller state; no MMU, cache, device, reset, boot, timing or hardware success established"
             ),
         )
-        return result
+        return cast(HarnessResult, result)

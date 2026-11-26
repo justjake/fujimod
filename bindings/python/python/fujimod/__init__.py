@@ -4,7 +4,8 @@ import sys
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from . import catalog, corpus, emulator, firmware, recovery, scenes, usb
+    from . import catalog, corpus, emulator, firmware, scenes, usb
+    from ._native import recovery
 elif sys.platform == "emscripten":
     from . import catalog, usb
 else:

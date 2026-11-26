@@ -1,7 +1,10 @@
 from pathlib import Path
+from typing import cast
 
 from pre_push_cargo_check import (
     WASM_TARGET,
+    Metadata,
+    Package,
     cargo_check_command,
     is_rust_input,
     select_browser_wasm_packages,
@@ -10,20 +13,23 @@ from pre_push_cargo_check import (
 
 
 def test_touched_rust_paths_select_only_their_workspace_crates(tmp_path: Path) -> None:
-    packages = [
-        {
-            "name": "fujimod-core",
-            "manifest_path": str(tmp_path / "crates/core/Cargo.toml"),
-        },
-        {
-            "name": "fujimod-usb",
-            "manifest_path": str(tmp_path / "crates/usb/Cargo.toml"),
-        },
-        {
-            "name": "fujimod-web",
-            "manifest_path": str(tmp_path / "bindings/web/Cargo.toml"),
-        },
-    ]
+    packages = cast(
+        list[Package],
+        [
+            {
+                "name": "fujimod-core",
+                "manifest_path": str(tmp_path / "crates/core/Cargo.toml"),
+            },
+            {
+                "name": "fujimod-usb",
+                "manifest_path": str(tmp_path / "crates/usb/Cargo.toml"),
+            },
+            {
+                "name": "fujimod-web",
+                "manifest_path": str(tmp_path / "bindings/web/Cargo.toml"),
+            },
+        ],
+    )
 
     selected = select_touched_crates(
         [
@@ -42,16 +48,19 @@ def test_touched_rust_paths_select_only_their_workspace_crates(tmp_path: Path) -
 
 
 def test_workspace_rust_configuration_selects_every_crate(tmp_path: Path) -> None:
-    packages = [
-        {
-            "name": "fujimod-core",
-            "manifest_path": str(tmp_path / "crates/core/Cargo.toml"),
-        },
-        {
-            "name": "fujimod-usb",
-            "manifest_path": str(tmp_path / "crates/usb/Cargo.toml"),
-        },
-    ]
+    packages = cast(
+        list[Package],
+        [
+            {
+                "name": "fujimod-core",
+                "manifest_path": str(tmp_path / "crates/core/Cargo.toml"),
+            },
+            {
+                "name": "fujimod-usb",
+                "manifest_path": str(tmp_path / "crates/usb/Cargo.toml"),
+            },
+        ],
+    )
 
     selected = select_touched_crates(["Cargo.toml"], packages, tmp_path)
 
@@ -69,47 +78,53 @@ def test_workspace_manifest_change_does_not_wasm_check_unicorn_sys(
         ("fujimod-unicorn-sys", "crates/emulator-cpu-unicorn/sys"),
         ("fujimod-emulator-gpu", "crates/emulator-gpu"),
     ]
-    packages = [
-        {
-            "id": package_name,
-            "name": package_name,
-            "manifest_path": str(tmp_path / package_path / "Cargo.toml"),
-        }
-        for package_name, package_path in package_specs
-    ]
+    packages = cast(
+        list[Package],
+        [
+            {
+                "id": package_name,
+                "name": package_name,
+                "manifest_path": str(tmp_path / package_path / "Cargo.toml"),
+            }
+            for package_name, package_path in package_specs
+        ],
+    )
     ids = {package["name"]: package["id"] for package in packages}
 
-    def dependency(package_name: str, kind: str | None = None) -> dict:
+    def dependency(package_name: str, kind: str | None = None) -> dict[str, object]:
         return {
             "pkg": ids[package_name],
             "dep_kinds": [{"kind": kind, "target": None}],
         }
 
-    metadata = {
-        "workspace_members": [package["id"] for package in packages],
-        "packages": packages,
-        "resolve": {
-            "nodes": [
-                {
-                    "id": ids["fujimod-javascript"],
-                    "deps": [
-                        dependency("fujimod-usb"),
-                        dependency("fujimod-emulator-cpu-unicorn", "dev"),
-                        dependency("fujimod-unicorn-sys", "build"),
-                        dependency("fujimod-emulator-gpu", "build"),
-                    ],
-                },
-                {
-                    "id": ids["fujimod-usb"],
-                    "deps": [dependency("fujimod-usb-proxy")],
-                },
-                {"id": ids["fujimod-usb-proxy"], "deps": []},
-                {"id": ids["fujimod-emulator-cpu-unicorn"], "deps": []},
-                {"id": ids["fujimod-unicorn-sys"], "deps": []},
-                {"id": ids["fujimod-emulator-gpu"], "deps": []},
-            ],
+    metadata = cast(
+        Metadata,
+        {
+            "workspace_members": [package["id"] for package in packages],
+            "packages": packages,
+            "resolve": {
+                "nodes": [
+                    {
+                        "id": ids["fujimod-javascript"],
+                        "deps": [
+                            dependency("fujimod-usb"),
+                            dependency("fujimod-emulator-cpu-unicorn", "dev"),
+                            dependency("fujimod-unicorn-sys", "build"),
+                            dependency("fujimod-emulator-gpu", "build"),
+                        ],
+                    },
+                    {
+                        "id": ids["fujimod-usb"],
+                        "deps": [dependency("fujimod-usb-proxy")],
+                    },
+                    {"id": ids["fujimod-usb-proxy"], "deps": []},
+                    {"id": ids["fujimod-emulator-cpu-unicorn"], "deps": []},
+                    {"id": ids["fujimod-unicorn-sys"], "deps": []},
+                    {"id": ids["fujimod-emulator-gpu"], "deps": []},
+                ],
+            },
         },
-    }
+    )
 
     native_packages = select_touched_crates(["Cargo.toml"], packages, tmp_path)
     wasm_packages = select_browser_wasm_packages(metadata, native_packages, tmp_path)
@@ -123,7 +138,7 @@ def test_workspace_manifest_change_does_not_wasm_check_unicorn_sys(
 
 
 def test_wasm_check_covers_only_libraries() -> None:
-    packages = [{"name": "fujimod-usb"}]
+    packages = cast(list[Package], [{"name": "fujimod-usb"}])
     assert cargo_check_command(packages) == [
         "cargo",
         "check",

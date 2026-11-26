@@ -2465,17 +2465,17 @@ impl Part {
                         ));
                     }
                 }
-                crate::assembly::PeripheralPart::SerialNorFlash { sampling, .. } => {
-                    if let Some(sampling) = sampling {
-                        if sampling.sample_first > sampling.sample_last || sampling.sample_last > 15
-                        {
-                            return Err(format!(
-                                "serial NOR part {} has an invalid sample window",
-                                self.id
-                            ));
-                        }
-                        sampling.evidence.validate()?;
+                crate::assembly::PeripheralPart::SerialNorFlash {
+                    sampling: Some(sampling),
+                    ..
+                } => {
+                    if sampling.sample_first > sampling.sample_last || sampling.sample_last > 15 {
+                        return Err(format!(
+                            "serial NOR part {} has an invalid sample window",
+                            self.id
+                        ));
                     }
+                    sampling.evidence.validate()?;
                 }
                 _ => {}
             }

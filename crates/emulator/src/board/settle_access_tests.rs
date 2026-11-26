@@ -76,10 +76,10 @@ impl Device for Transfer {
     }
     fn checkpoint(&self) -> Result<fujimod_emulator_devices::checkpoint::Checkpoint, String> {
         let p = self.0.lock().unwrap();
-        Ok(fujimod_emulator_devices::checkpoint::Checkpoint::encode(
+        fujimod_emulator_devices::checkpoint::Checkpoint::encode(
             self.name(),
             &(p.due, p.status, &p.reads),
-        )?)
+        )
     }
     fn validate_checkpoint(
         &self,

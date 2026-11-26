@@ -17,9 +17,7 @@
           "device-6"
         ],
         "attachments": {
-          "serial_part": [
-            "banked-lens"
-          ]
+          "serial_part": ["banked-lens"]
         },
         "controllers": {
           "control_bus0": {
@@ -40,13 +38,8 @@
           },
           "fe80": {
             "basis": "Declared catalog input.",
-            "periods": [
-              12,
-              18
-            ],
-            "upload_setup_phases": [
-              "disabled"
-            ]
+            "periods": [12, 18],
+            "upload_setup_phases": ["disabled"]
           }
         },
         "dram_basis": "Declared catalog input.",
@@ -310,7 +303,5 @@
       "polarity_selector": 1
     }
   ],
-  "parts": [
-    "banked-lens"
-  ]
+  "parts": ["banked-lens"]
 }

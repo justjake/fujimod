@@ -59,10 +59,7 @@ pub use fujimod_emulator_session::inputs::Panel;
 const RELEASED: &str = "released";
 const PRESSED: &str = "pressed";
 
-fn named<'a>(
-    names: &'a BTreeMap<Key, (String, String)>,
-    key: Key,
-) -> Result<&'a (String, String), String> {
+fn named(names: &BTreeMap<Key, (String, String)>, key: Key) -> Result<&(String, String), String> {
     names
         .get(&key)
         .ok_or_else(|| format!("{key:?} has no catalog control"))

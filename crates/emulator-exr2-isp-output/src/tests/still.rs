@@ -258,7 +258,7 @@ fn spatial_filter_configuration_is_retained_and_its_gap_still_refuses() {
     )
     .unwrap();
     for offset in (0x04..=0x34).step_by(4) {
-        let value = 0x3fff_0000 | offset as u64;
+        let value = 0x3fff_0000 | offset;
         let mut cx = h.cx();
         d.write(&mut cx, 0xfff30000 + offset, 4, value);
         assert!(cx.refusal().is_none(), "{offset:#x}");

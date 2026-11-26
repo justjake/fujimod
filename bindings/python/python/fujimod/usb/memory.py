@@ -2,36 +2,19 @@
 
 from collections.abc import Buffer
 
-from .._bridge import buffer_in, buffer_out, call, jsusb, uint, unwrap
-from . import Reader, Session
+from . import DataWindow, OffsetMode, Reader, Session
+from .data import read_chunks as _read_data_chunks
 
 
 async def read_range(session: Session, address: int, length: int) -> bytes:
-    return await session._call(
-        jsusb.memory.readRange,
-        buffer_out,
-        unwrap(session, Session),
-        uint(address),
-        uint(length),
-    )
+    return await session.read_memory(address, length)
 
 
 async def write_range(session: Session, address: int, data: Buffer) -> None:
-    await session._call(
-        jsusb.memory.writeRange,
-        (lambda value: value),
-        unwrap(session, Session),
-        uint(address),
-        buffer_in(data),
-    )
+    await session.write_memory(address, data)
 
 
 def read_chunks(session: Session, address: int, length: int) -> Reader:
-    return Reader._wrap(
-        call(
-            jsusb.memory.readChunks,
-            unwrap(session, Session),
-            uint(address),
-            uint(length),
-        )
-    )
+    """Stream a range through the session's diagnostic data window."""
+    window = DataWindow(address, address, length, length, OffsetMode.Checked)
+    return _read_data_chunks(session, window, 0, length)

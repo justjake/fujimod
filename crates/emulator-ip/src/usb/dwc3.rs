@@ -951,12 +951,13 @@ impl Dwc3 {
         setup: bool,
         out: Option<Vec<u8>>,
     ) -> Result<(), String> {
-        if let Some(id) = self.state.host.remove(&ep) {
-            if self.state.parked.remove(&ep).is_none() && self.state.replies.remove(&id).is_none() {
-                return Err(format!(
-                    "USB physical endpoint {ep} has a transaction in flight"
-                ));
-            }
+        if let Some(id) = self.state.host.remove(&ep)
+            && self.state.parked.remove(&ep).is_none()
+            && self.state.replies.remove(&id).is_none()
+        {
+            return Err(format!(
+                "USB physical endpoint {ep} has a transaction in flight"
+            ));
         }
         let id = self.transaction(now, ep, setup, out)?;
         self.state.host.insert(ep, id);

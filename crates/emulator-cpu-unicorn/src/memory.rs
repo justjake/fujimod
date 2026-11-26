@@ -881,14 +881,14 @@ impl Memory {
             let Some((invalidation, core)) = next else {
                 break;
             };
-            if let Some(core) = core {
-                if let Err(error) = core.invalidate_backing_page(invalidation.backing) {
-                    let mut state = self.state();
-                    if !state.invalidations.contains(&invalidation) {
-                        state.invalidations.push(invalidation);
-                    }
-                    return Err(error);
+            if let Some(core) = core
+                && let Err(error) = core.invalidate_backing_page(invalidation.backing)
+            {
+                let mut state = self.state();
+                if !state.invalidations.contains(&invalidation) {
+                    state.invalidations.push(invalidation);
                 }
+                return Err(error);
             }
         }
         Ok(())

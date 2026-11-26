@@ -33,7 +33,6 @@ serde_json.workspace = true
 sha2.workspace = true
 tauri = { version = "2.12.7", features = [] }
 tauri-plugin-dialog = "2"
-fujimod-workspace-hack.workspace = true
 
 [features]
 default = ["custom-protocol"]

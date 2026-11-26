@@ -789,8 +789,10 @@ mod wiring_tests {
             .unwrap()
             .with_feedback(vec![wire])
             .unwrap();
-        let mut host = RecordingHost::default();
-        host.now = 100;
+        let mut host = RecordingHost {
+            now: 100,
+            ..Default::default()
+        };
         let mut cx = Cx::new(&mut host, 0, 0, 0);
         gpio.advance(&mut cx);
         assert_eq!(pins.lock().unwrap().level(0, 4), 0);
@@ -837,8 +839,10 @@ mod wiring_tests {
             .unwrap()
             .with_feedback(vec![wire])
             .unwrap();
-        let mut host = RecordingHost::default();
-        host.now = 100;
+        let mut host = RecordingHost {
+            now: 100,
+            ..Default::default()
+        };
         let mut cx = Cx::new(&mut host, 0, 0, 0);
         // A fall before the rise lands cancels it, as for an unlatched wire.
         gpio.write(&mut cx, 0xff907040, 4, (1 << 30) | (1 << 14));

@@ -1756,7 +1756,7 @@ mod tests {
                     &host.ram[from..from + 2],
                     "({x}, {y})"
                 );
-                assert!(sample <= xtrans::WHITE && sample >= xtrans::BLACK);
+                assert!((xtrans::BLACK..=xtrans::WHITE).contains(&sample));
             }
         }
         assert_eq!(

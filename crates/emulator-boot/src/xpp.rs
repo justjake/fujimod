@@ -1157,7 +1157,7 @@ fn nodes(
             }),
         );
     }
-    for serial in serial_nodes(&maps, reset, inputs.sub_cpu_registers)? {
+    for serial in serial_nodes(maps, reset, inputs.sub_cpu_registers)? {
         out.push(serial);
     }
     let mut node = |name: String, model: Value| out.push(json!({ "name": name, "model": model }));

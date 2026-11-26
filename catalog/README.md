@@ -7,15 +7,15 @@ store another document's file path. Input file locations belong to callers.
 Each fact lives with the thing it describes. To place a fact, ask what would
 have to differ in the world for its value to differ:
 
-| The value differs with | Layer | Location |
-| --- | --- | --- |
-| an IP design used by several processors | IP | `ip/<id>.json` |
-| the processor design | Processor | `soc/<id>/` |
-| an attached chip, panel, sensor or lens | Part | `parts/<id>/` |
-| the circuit board | Body | `bodies/<id>/` |
-| the firmware build | Firmware | `firmware/<body>/<version>/` |
-| our emulator's choices, not the hardware | Emulation | `../configurations/emulator/processors/<soc>.json` |
-| one run: selection, start inputs, overlays | Run configuration | `../configurations/emulator/<id>/` |
+| The value differs with                     | Layer             | Location                                           |
+| ------------------------------------------ | ----------------- | -------------------------------------------------- |
+| an IP design used by several processors    | IP                | `ip/<id>.json`                                     |
+| the processor design                       | Processor         | `soc/<id>/`                                        |
+| an attached chip, panel, sensor or lens    | Part              | `parts/<id>/`                                      |
+| the circuit board                          | Body              | `bodies/<id>/`                                     |
+| the firmware build                         | Firmware          | `firmware/<body>/<version>/`                       |
+| our emulator's choices, not the hardware   | Emulation         | `../configurations/emulator/processors/<soc>.json` |
+| one run: selection, start inputs, overlays | Run configuration | `../configurations/emulator/<id>/`                 |
 
 A fact is recorded in exactly one place and referenced by ID everywhere else,
 even where an earlier layout happened to hold a copy. A stand-in for an
@@ -55,16 +55,16 @@ The file holds the block's fields at the top level beside `$schema` and
 processor by ID, refusing a repeated ID or a block file outside its processor,
 and orders the blocks by base address then ID.
 
-| Field | Holds |
-| --- | --- |
-| `id`, `kind`, `base`, `size` | Identity and the register window |
-| `ip` | The IP record the block instantiates, when it is shared |
-| `clock_id` | The clock domain that drives it |
-| `views` | Per-core addresses where a core sees the block somewhere other than `base` |
-| `interrupts` | Each named output, the interrupt-controller line it raises and, for fixed routing, the core |
-| `device` | The device model, tagged by `model`, with its typed parameters |
-| `registers` | The register layout of a block without an IP record: named registers at offsets, with width, reset value, access and named bit fields with their values |
-| `evidence` | How the facts were established |
+| Field                        | Holds                                                                                                                                                   |
+| ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `id`, `kind`, `base`, `size` | Identity and the register window                                                                                                                        |
+| `ip`                         | The IP record the block instantiates, when it is shared                                                                                                 |
+| `clock_id`                   | The clock domain that drives it                                                                                                                         |
+| `views`                      | Per-core addresses where a core sees the block somewhere other than `base`                                                                              |
+| `interrupts`                 | Each named output, the interrupt-controller line it raises and, for fixed routing, the core                                                             |
+| `device`                     | The device model, tagged by `model`, with its typed parameters                                                                                          |
+| `registers`                  | The register layout of a block without an IP record: named registers at offsets, with width, reset value, access and named bit fields with their values |
+| `evidence`                   | How the facts were established                                                                                                                          |
 
 An interrupt controller's line count and partner interfaces are its block's
 `device` parameters. A companion processor is a core, and its mailbox is a

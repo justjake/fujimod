@@ -7,45 +7,8 @@
     "url": "https://fujifilm-dsc.com/en/manual/x-t3/x-t3_omw_en_s_f.pdf",
     "title": "FUJIFILM X-T3 Owner’s Manual",
     "pages": [
-      2,
-      3,
-      4,
-      5,
-      6,
-      7,
-      9,
-      14,
-      15,
-      16,
-      21,
-      22,
-      30,
-      34,
-      35,
-      36,
-      39,
-      48,
-      49,
-      50,
-      58,
-      60,
-      61,
-      62,
-      66,
-      70,
-      73,
-      78,
-      80,
-      81,
-      83,
-      202,
-      206,
-      207,
-      208,
-      223,
-      226,
-      227,
-      228
+      2, 3, 4, 5, 6, 7, 9, 14, 15, 16, 21, 22, 30, 34, 35, 36, 39, 48, 49, 50, 58, 60, 61, 62, 66,
+      70, 73, 78, 80, 81, 83, 202, 206, 207, 208, 223, 226, 227, 228
     ]
   },
   "analog_levels": 4096,
@@ -75,9 +38,7 @@
       "location": "rear",
       "manual_page": 83,
       "face": "AE-L",
-      "connection_ids": [
-        "xt3-key-ladder-11"
-      ],
+      "connection_ids": ["xt3-key-ladder-11"],
       "assignable": true,
       "pushable": true,
       "default_function": "Lock exposure.",
@@ -95,9 +56,7 @@
       "location": "rear",
       "manual_page": 83,
       "face": "AF-L",
-      "connection_ids": [
-        "xt3-key-ladder-11"
-      ],
+      "connection_ids": ["xt3-key-ladder-11"],
       "assignable": true,
       "pushable": true,
       "default_function": "Lock focus.",
@@ -168,9 +127,7 @@
       "location": "rear",
       "manual_page": 16,
       "face": "DISP/BACK",
-      "connection_ids": [
-        "xt3-key-ladder-3"
-      ],
+      "connection_ids": ["xt3-key-ladder-3"],
       "assignable": false,
       "pushable": true,
       "default_function": "Control indicators in the viewfinder and LCD; go back in menus.",
@@ -425,9 +382,7 @@
       "location": "top",
       "manual_page": 226,
       "face": "Fn1",
-      "connection_ids": [
-        "xt3-fn1-button"
-      ],
+      "connection_ids": ["xt3-fn1-button"],
       "assignable": true,
       "pushable": true,
       "default_function": "Face/eye detection setting.",
@@ -445,9 +400,7 @@
       "location": "front",
       "manual_page": 226,
       "face": "Fn2",
-      "connection_ids": [
-        "xt3-fn2-button"
-      ],
+      "connection_ids": ["xt3-fn2-button"],
       "assignable": true,
       "pushable": false,
       "default_function": "Drive settings.",
@@ -511,10 +464,7 @@
       "location": "rear",
       "manual_page": 4,
       "short_name": "FOCUS",
-      "connection_ids": [
-        "xt3-key-ladder-3",
-        "xt3-key-ladder-9"
-      ],
+      "connection_ids": ["xt3-key-ladder-3", "xt3-key-ladder-9"],
       "assignable": false,
       "pushable": true,
       "default_function": "Tilt or press to select the focus area; it can also navigate menus.",
@@ -550,9 +500,7 @@
       "location": "front",
       "manual_page": 7,
       "short_name": "FRONT DIAL",
-      "connection_ids": [
-        "xt3-front-dial-count"
-      ],
+      "connection_ids": ["xt3-front-dial-count"],
       "assignable": true,
       "pushable": true,
       "default_function": "Rotate to adjust aperture or other assigned settings; press to switch between aperture, sensitivity, and exposure compensation as configured, or press and hold to choose its command-dial role.",
@@ -600,9 +548,7 @@
       "location": "rear",
       "manual_page": 21,
       "face": "MENU/OK",
-      "connection_ids": [
-        "xt3-key-ladder-3"
-      ],
+      "connection_ids": ["xt3-key-ladder-3"],
       "assignable": false,
       "pushable": true,
       "default_function": "Open menus and confirm selections.",
@@ -751,9 +697,7 @@
       "location": "rear",
       "manual_page": 223,
       "face": "Q",
-      "connection_ids": [
-        "xt3-key-ladder-3"
-      ],
+      "connection_ids": ["xt3-key-ladder-3"],
       "assignable": false,
       "pushable": true,
       "default_function": "Open the quick menu.",
@@ -771,10 +715,7 @@
       "location": "rear",
       "manual_page": 73,
       "short_name": "REAR DIAL",
-      "connection_ids": [
-        "xt3-rear-dial-count",
-        "xt3-rear-dial-press"
-      ],
+      "connection_ids": ["xt3-rear-dial-count", "xt3-rear-dial-press"],
       "assignable": true,
       "pushable": true,
       "default_function": "Rotate to highlight menu items, adjust settings, change focus-frame size, and zoom in or out in playback; press for Focus check by default.",
@@ -804,9 +745,7 @@
       "location": "rear",
       "manual_page": 226,
       "short_name": "SELECTOR",
-      "connection_ids": [
-        "xt3-key-ladder-3"
-      ],
+      "connection_ids": ["xt3-key-ladder-3"],
       "assignable": true,
       "pushable": false,
       "default_function": "Fn3 default: AF mode; can also be used to highlight items and position the focus area.",
@@ -857,10 +796,7 @@
       "location": "top",
       "manual_page": 48,
       "short_name": "SHUTTER",
-      "connection_ids": [
-        "xt3-shutter-s1",
-        "xt3-shutter-s2"
-      ],
+      "connection_ids": ["xt3-shutter-s1", "xt3-shutter-s2"],
       "assignable": false,
       "pushable": true,
       "default_function": "Half-press to focus and lock focus/exposure; press the rest of the way to take a picture.",
@@ -1138,9 +1074,7 @@
       "location": "rear",
       "manual_page": 14,
       "face": "VIEW/MODE",
-      "connection_ids": [
-        "xt3-key-ladder-11"
-      ],
+      "connection_ids": ["xt3-key-ladder-11"],
       "assignable": false,
       "pushable": true,
       "default_function": "Cycle through viewfinder and LCD display modes.",

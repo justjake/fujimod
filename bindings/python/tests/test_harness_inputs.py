@@ -1,10 +1,10 @@
 """Explicit input bounds and modification receipts for isolated ARM calls."""
 
-from dataclasses import replace
 import struct
+from collections.abc import Generator
+from dataclasses import replace
 
 import pytest
-
 from fujimod.emulator import Definition, make_board
 from fujimod.emulator.driver_harness import DriverHarness
 from fujimod.emulator.harness_inputs import CallerLayout, CodeImage, HarnessInputs
@@ -16,23 +16,23 @@ PAYLOAD = 0x14000
 ALIAS = 0x50000000
 
 
-def words(*values):
+def words(*values: int) -> bytes:
     return struct.pack("<" + "I" * len(values), *values)
 
 
 class Labels:
-    def entries(self, name):
+    def entries(self, name: str) -> tuple[int, ...]:
         return (CODE,) if name == "store_argument" else ()
 
-    def ranges(self, entry):
+    def ranges(self, entry: int) -> tuple[tuple[int, int], ...] | None:
         return ((CODE, CODE + 8),) if entry == CODE else None
 
-    def containing(self, address):
+    def containing(self, address: int) -> tuple[int, str] | None:
         return (CODE, "store_argument") if CODE <= address < CODE + 8 else None
 
 
 @pytest.fixture
-def inputs():
+def inputs() -> Generator[HarnessInputs]:
     graph = {
         "processors": [
             {
@@ -91,12 +91,16 @@ def inputs():
         {"readonly": 1},
     ],
 )
-def test_code_image_retains_name_byte_address_and_readonly_checks(changes):
+def test_code_image_retains_name_byte_address_and_readonly_checks(
+    changes: dict[str, object],
+) -> None:
     with pytest.raises(ValueError):
         replace(CodeImage("code", CODE, words(0xE12FFF1E)), **changes)
 
 
-def test_readonly_images_require_resident_bytes_and_refuse_modifications(inputs):
+def test_readonly_images_require_resident_bytes_and_refuse_modifications(
+    inputs: HarnessInputs,
+) -> None:
     image = replace(inputs.images[0], readonly=True)
     readonly = replace(inputs, images=(image,))
     with pytest.raises(ValueError, match="Read-only image differs"):
@@ -110,14 +114,16 @@ def test_readonly_images_require_resident_bytes_and_refuse_modifications(inputs)
     assert harness.read(CODE, len(image.data)) == image.data
 
 
-def test_input_overlap_and_reservations_still_refuse(inputs):
+def test_input_overlap_and_reservations_still_refuse(inputs: HarnessInputs) -> None:
     with pytest.raises(ValueError, match="images overlap"):
         replace(inputs, images=(*inputs.images, CodeImage("other", CODE + 4, b"data")))
     with pytest.raises(ValueError, match="reservations overlap"):
         replace(inputs, caller=replace(inputs.caller, return_address=0x1B000))
 
 
-def test_patches_and_override_restore_keep_bytes_and_ordered_receipts(inputs):
+def test_patches_and_override_restore_keep_bytes_and_ordered_receipts(
+    inputs: HarnessInputs,
+) -> None:
     patch = words(0xE3A0002A)  # mov r0,#42
     harness = DriverHarness(inputs, ram_fixture=(), patches=((CODE, patch),))
     assert harness.patches == [{"address": CODE, "length": 4, "section": "authored"}]
@@ -149,7 +155,9 @@ def test_patches_and_override_restore_keep_bytes_and_ordered_receipts(inputs):
         harness.data_override_restore(CODE + 16)
 
 
-def test_patch_bounds_and_overlap_are_checked_before_writes(inputs):
+def test_patch_bounds_and_overlap_are_checked_before_writes(
+    inputs: HarnessInputs,
+) -> None:
     for patches in (
         ((CODE + 30, bytes(4)),),
         ((CODE, bytes(4)), (CODE + 2, bytes(4))),
@@ -160,8 +168,8 @@ def test_patch_bounds_and_overlap_are_checked_before_writes(inputs):
 
 
 def test_payload_replacement_keeps_tail_aliases_and_breakpoints_without_reads(
-    inputs, monkeypatch
-):
+    inputs: HarnessInputs, monkeypatch: pytest.MonkeyPatch
+) -> None:
     payload = words(0xE3A00001, 0xE12FFF1E)  # mov r0,#1; bx lr
     harness = DriverHarness(inputs, ram_fixture=(), payloads=((PAYLOAD, payload),))
     assert harness.payloads == [{"address": PAYLOAD, "length": len(payload)}]
@@ -169,7 +177,7 @@ def test_payload_replacement_keeps_tail_aliases_and_breakpoints_without_reads(
     seen = []
     harness.observe(PAYLOAD + 4, lambda context: seen.append(context.reg("r0")))
 
-    def unexpected_read(*args, **kwargs):
+    def unexpected_read(*args: object, **kwargs: object) -> None:
         pytest.fail("Replacing a payload must not reread it for a receipt")
 
     with monkeypatch.context() as scoped:
@@ -212,6 +220,8 @@ def test_payload_replacement_keeps_tail_aliases_and_breakpoints_without_reads(
         ((PAYLOAD, b"data"), (PAYLOAD + 2, b"data")),
     ],
 )
-def test_payload_declarations_keep_reserved_and_overlap_checks(inputs, payloads):
+def test_payload_declarations_keep_reserved_and_overlap_checks(
+    inputs: HarnessInputs, payloads: tuple[tuple[int, bytes], ...]
+) -> None:
     with pytest.raises(ValueError):
         DriverHarness(inputs, ram_fixture=(), payloads=payloads)

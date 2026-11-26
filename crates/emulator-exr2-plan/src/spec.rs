@@ -100,6 +100,9 @@ pub enum SensorControls {
 }
 #[derive(Deserialize)]
 #[serde(tag = "kind", rename_all = "kebab-case", deny_unknown_fields)]
+// Plans are deserialized once and converted immediately; boxing the largest
+// field would buy nothing and would change how a missing field is accepted.
+#[allow(clippy::large_enum_variant)]
 pub enum SerialEndpoint {
     #[serde(rename = "lens-unit")]
     LensUnit {
@@ -184,6 +187,8 @@ pub struct InputSignal {
 }
 #[derive(Deserialize)]
 #[serde(tag = "kind", rename_all = "kebab-case", deny_unknown_fields)]
+// As above: a transient deserialization value, not a stored plan.
+#[allow(clippy::large_enum_variant)]
 pub enum Model {
     Power {
         options: super::serial::Options,
