@@ -229,11 +229,28 @@ pub struct StockStack {
     /// Its size. The stack pointer starts at `offset + size`.
     pub size: usize,
 }
+/// Alignment of the loader above the stock stack.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ExtensionAlignment {
+    #[default]
+    Page16KiB,
+    Page4KiB,
+}
+
+impl ExtensionAlignment {
+    fn is_default(&self) -> bool {
+        *self == Self::default()
+    }
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Setup {
     pub prefix: Source,
     pub low_length: usize,
+    #[serde(default, skip_serializing_if = "ExtensionAlignment::is_default")]
+    pub extension_alignment: ExtensionAlignment,
     pub length_flags: u32,
     pub base: u64,
     pub stack: u64,
@@ -819,6 +836,22 @@ fn bind_internal_flash(
     Ok(())
 }
 
+/// The XP5 boot service uses SRAM from `base + 0x38800` onward. The loader
+/// starts on a page above the copied setup and the stock stack's reserved space.
+fn extension_window(
+    base: u64,
+    copied_end: u64,
+    stack: u64,
+    alignment: ExtensionAlignment,
+) -> std::ops::Range<u64> {
+    let page = match alignment {
+        ExtensionAlignment::Page16KiB => 0x4000,
+        ExtensionAlignment::Page4KiB => 0x1000,
+    };
+    let start = copied_end.max(stack + 0x100).next_multiple_of(page);
+    start..base + 0x38800
+}
+
 fn package_inner(
     inverted: &[u8],
     setup: &Setup,
@@ -849,9 +882,13 @@ fn package_inner(
         &CARD
     };
     let copied_end = setup.base + setup.low_length as u64;
-    // XP5 raw-entry SRAM reserves its upper workspace for the boot service.
-    let workspace = setup.base + 0x38800;
-    let address = (copied_end.max(setup.stack + 0x100) + 0x3fff) & !0x3fff;
+    let window = extension_window(
+        setup.base,
+        copied_end,
+        setup.stack,
+        setup.extension_alignment,
+    );
+    let (address, workspace) = (window.start, window.end);
     let capacity = workspace.saturating_sub(address);
     // The stock stack is above the copied setup unless the recipe declares where it lies in
     // the copy (`StockStack`); the extension then starts at the copy's end.
@@ -1313,6 +1350,20 @@ fn package_inner(
 mod tests {
     use super::*;
     use card_boot::Payload;
+    #[test]
+    fn extension_window_preserves_default_placement_and_supports_4_kib_pages() {
+        const BASE: u64 = 0xff800000;
+        let copied_end = BASE + 0x2c000;
+        let stack = BASE + 0x30d00;
+        assert_eq!(
+            extension_window(BASE, copied_end, stack, ExtensionAlignment::default()),
+            0xff834000..0xff838800
+        );
+        let window = extension_window(BASE, copied_end, stack, ExtensionAlignment::Page4KiB);
+        assert_eq!(window, 0xff831000..0xff838800);
+        assert_eq!(window.end - window.start, 0x7800);
+    }
+
     pub(super) fn source(bytes: &[u8]) -> Source {
         Source {
             dat_offset: 0,
@@ -1346,6 +1397,7 @@ mod tests {
         let setup = Setup {
             prefix: prefix.clone(),
             low_length: 0x4000,
+            extension_alignment: ExtensionAlignment::default(),
             length_flags: 0,
             base,
             stack: base + 0x8000,
