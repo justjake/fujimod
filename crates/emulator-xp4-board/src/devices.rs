@@ -1272,6 +1272,7 @@ impl Devices {
         strict_backing: bool,
         erased_ranges: Vec<storage::ErasedRange>,
         audio: Option<storage::AudioPacing>,
+        linked: Vec<usize>,
     ) -> Result<Self, String> {
         let routes: [u32; 16] = routes
             .try_into()
@@ -1314,6 +1315,7 @@ impl Devices {
         let serial_links = SerialLinks::default();
         let mut dma = DmaController::new(port.clone(), routes)
             .with_audio(audio)?
+            .with_linked(linked)?
             .with_serial_links(serial_links.clone());
         if let Some(input) = receiver_input {
             if input.address < 0xff000000 {

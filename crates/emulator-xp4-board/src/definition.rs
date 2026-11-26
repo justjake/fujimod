@@ -106,6 +106,13 @@ pub struct Definition {
     /// channel is unchanged.
     #[serde(default)]
     pub storage_dma_audio: Option<fujimod_emulator_xp4_storage::storage::AudioPacing>,
+    /// Declared XP4 storage DMA channels that follow a linked descriptor
+    /// list, as an audio channel does, raising their IRQ at the end of the
+    /// list only (see
+    /// [`fujimod_emulator_xp4_storage::storage::DmaController::with_linked`]).
+    /// Absent, every channel is unchanged.
+    #[serde(default)]
+    pub storage_dma_linked: Vec<usize>,
     #[serde(default)]
     pub xpp_storage: Option<XppStorage>,
     #[serde(default)]
