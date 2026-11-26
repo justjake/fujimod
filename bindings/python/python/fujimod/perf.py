@@ -56,8 +56,13 @@ def _snapshot_counters(board: Any = _DEFAULT) -> None:
     board = _board() if board is _DEFAULT else board
     if board is None:
         return
+    # CPU exit counters exist only on emulated boards; hardware boards (a USB
+    # memory reader, for one) have no native core to count.
+    native = getattr(board, "native", None)
+    if native is None:
+        return
     try:
-        snapshot = board.native.exit_counters()
+        snapshot = native.exit_counters()
     except RuntimeError:
         return
     _native.set_cpu_counters(snapshot)
