@@ -245,13 +245,8 @@
           "errors": []
         },
         "memory-reservations": {
-          "status": "unavailable",
-          "errors": [
-            {
-              "locator": "memory-reservations",
-              "reason": "ValueError: No reviewed AArch64 memory reservation seeds"
-            }
-          ]
+          "status": "available",
+          "errors": []
         },
         "restart": {
           "status": "available",

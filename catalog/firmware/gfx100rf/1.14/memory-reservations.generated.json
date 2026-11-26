@@ -1,0 +1,25 @@
+{
+  "$schema": "https://fujimod.com/schemas/memory-reservations.generated.schema.json",
+  "schema": 1,
+  "id": "gfx100rf-114-memory-reservations",
+  "firmware_id": "gfx100rf-114",
+  "dram_size": 268435456,
+  "reservations": [
+    {
+      "name": "main_heap",
+      "address": 43918432,
+      "size": 2097152
+    },
+    {
+      "name": "font_library",
+      "address": 153739264,
+      "size": 1048576
+    },
+    {
+      "name": "language_fonts",
+      "address": 17174528,
+      "size": 1441792
+    }
+  ],
+  "locator_failures": []
+}
