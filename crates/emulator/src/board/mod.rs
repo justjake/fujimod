@@ -2933,16 +2933,7 @@ impl State {
                     self.accounted[core], self.execution_policy.name(), self.parallel.is_some())
             })?;
             match self.parallel.as_mut() {
-                Some(epoch) => {
-                    let elapsed = epoch.advance(core, delta)?;
-                    let boundary = self.timeline.ratio().budget(
-                        self.timeline.now(),
-                        self.timeline.phase(),
-                        self.clock_limit.unwrap_or(u64::MAX),
-                    )?;
-                    let elapsed = self.timeline.budget(elapsed.min(boundary))?;
-                    self.timeline.advance_instructions(elapsed)?;
-                }
+                Some(_) => self.account_interactive(core, delta)?,
                 None if self.execution_policy == ExecutionPolicy::Interactive => {
                     // Interactive runs may overshoot by a block; the frontier
                     // stops at the next deadline or run boundary.
@@ -2965,6 +2956,9 @@ impl State {
     /// Account one processor's entries on its own position; runnable peers
     /// fall behind the frontier it advances.
     fn account(&mut self, core: usize, entries: u64) -> Result<(), String> {
+        if self.parallel.is_some() {
+            return self.account_interactive(core, entries);
+        }
         let (released, waiting) = (&self.released, &self.waiting);
         self.timeline
             .advance_processor(core, entries, |c| released[c] && !waiting[c])

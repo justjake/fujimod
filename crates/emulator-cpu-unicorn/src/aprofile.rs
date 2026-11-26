@@ -542,10 +542,16 @@ impl Execution {
                 || word & 0xff000000 == 0xd4000000
         };
         let coarse = self.coarse();
+        let may_access_memory = word & 0x0a00_0000 == 0x0800_0000;
         let wide_exact = address > u32::MAX as u64 && !coarse;
+        // A worker's hooked memory access may park while a peer requests
+        // a pause. End its block before the native engine has to restart
+        // the access dynamically under parallel TCG.
+        let worker_memory_boundary = coarse && may_access_memory && self.pause_requested.is_some();
         let instruction = if framework {
             InstructionDisposition::Replace
         } else if wide_exact
+            || worker_memory_boundary
             || self.can_prove_loops() && word == Self::SELF_BRANCH
             || boundary
             || (self.is_coherent()
@@ -561,7 +567,6 @@ impl Execution {
         // Loads and stores can fault, restart or enter an MMIO callback before
         // the end of the block. In coarse mode keep the full-width span for
         // those blocks so each such exit can settle only its entered prefix.
-        let may_access_memory = word & 0x0a00_0000 == 0x0800_0000;
         Ok(Translation {
             instruction,
             observe_block: wide_exact
