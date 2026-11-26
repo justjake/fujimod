@@ -2271,6 +2271,97 @@
               "model": {
                 "kind": "block86000"
               }
+            },
+            {
+              "boot_entries": [
+                "rom",
+                "loader"
+              ],
+              "dependencies": [],
+              "name": "pulse",
+              "windows": [
+                {
+                  "base": 4294610944,
+                  "size": 3328
+                }
+              ],
+              "model": {
+                "kind": "exr2-pulse",
+                "irqs": [
+                  {
+                    "Core": {
+                      "core": 0,
+                      "line": 20
+                    }
+                  },
+                  {
+                    "Core": {
+                      "core": 0,
+                      "line": 21
+                    }
+                  },
+                  {
+                    "Core": {
+                      "core": 0,
+                      "line": 22
+                    }
+                  },
+                  {
+                    "Core": {
+                      "core": 0,
+                      "line": 23
+                    }
+                  },
+                  {
+                    "Core": {
+                      "core": 0,
+                      "line": 24
+                    }
+                  },
+                  {
+                    "Core": {
+                      "core": 0,
+                      "line": 25
+                    }
+                  },
+                  {
+                    "Core": {
+                      "core": 0,
+                      "line": 26
+                    }
+                  },
+                  {
+                    "Core": {
+                      "core": 0,
+                      "line": 27
+                    }
+                  },
+                  {
+                    "Core": {
+                      "core": 0,
+                      "line": 28
+                    }
+                  },
+                  {
+                    "Core": {
+                      "core": 0,
+                      "line": 29
+                    }
+                  },
+                  {
+                    "Core": {
+                      "core": 0,
+                      "line": 30
+                    }
+                  },
+                  {
+                    "Core": {
+                      "core": 0,
+                      "line": 31
+                    }
+                  }
+                ]
+              }
             }
           ],
           "schema": 1,

@@ -331,6 +331,26 @@
           }
         }
       },
+      "pulse": {
+        "kind": "exr2-pulse",
+        "counter_channels": [
+          0,
+          4
+        ],
+        "timer_channels": [
+          0,
+          2,
+          4,
+          6,
+          8,
+          9,
+          10,
+          11
+        ],
+        "quadrature": false,
+        "initial_phase": 0,
+        "capture_channel": null
+      },
       "release": {
         "kind": "core-release",
         "released": false
@@ -438,12 +458,12 @@
         "command_controls": [
           0
         ],
-        "phase_ack": "preserve_fields",
+        "phase_ack": "inactive",
         "clock": {
-          "mode": "register_periods",
+          "mode": "input_enable",
           "source": {
             "kind": "periodic",
-            "period_ticks": 200000,
+            "period_ticks": 400000,
             "first_delay_ticks": null
           },
           "secondary": true,
@@ -452,7 +472,44 @@
         "sensor_period_ticks": null,
         "raw_dma_ticks": 1000,
         "readback_ticks": 750000,
-        "cfa": null
+        "cfa": [
+          0,
+          2,
+          1,
+          2,
+          0,
+          1,
+          1,
+          1,
+          0,
+          1,
+          1,
+          2,
+          1,
+          1,
+          2,
+          1,
+          1,
+          0,
+          2,
+          0,
+          1,
+          0,
+          2,
+          1,
+          1,
+          1,
+          2,
+          1,
+          1,
+          0,
+          1,
+          1,
+          0,
+          1,
+          1,
+          2
+        ]
       },
       "peripheral_14_inputauxiliarycontrol": {
         "kind": "block11000",

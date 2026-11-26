@@ -90,23 +90,16 @@ fn stock_opens_boot_the_declared_hardware_to_rec_mode() {
     }
 }
 
-/// A stock open reports the observation that keeps it from REC.
+/// The camera API's stock open reaches REC on every sibling body.
 #[test]
-fn stock_open_reports_the_observation_short_of_rec() {
+fn stock_open_through_the_camera_api_reaches_rec() {
     let Some(library) = library() else {
         eprintln!("skipped: set FUJIMOD_FIRMWARE_LIBRARY");
         return;
     };
     for firmware in BODIES {
-        let error = open(&library, &state(), request(firmware))
-            .err()
-            .unwrap_or_else(|| panic!("{firmware}: the open reported REC"));
-        assert_eq!(error.stage, Stage::FirmwareLoaded, "{firmware}: {error}");
-        assert!(
-            error.detail.contains("ui_mode 3") && error.detail.contains("scanout false"),
-            "{firmware}: {}",
-            error.detail
-        );
-        eprintln!("{firmware}: {error}");
+        let opened = open(&library, &state(), request(firmware))
+            .unwrap_or_else(|error| panic!("{firmware}: {error}"));
+        assert_eq!(opened.stage, Stage::Rec, "{firmware} stopped short of REC");
     }
 }
