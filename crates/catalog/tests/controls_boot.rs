@@ -68,6 +68,20 @@ fn confirmed_combinations_load_from_controls() {
                 .collect::<Vec<_>>(),
             ["quick_menu_button", "front_command_dial.press"]
         );
+        let xe3 = catalog.resolve_firmware("xe3-132").unwrap();
+        let xe3 = fujimod_catalog_controls::PhysicalControls::decode_document(
+            xe3.physical_controls.as_ref().unwrap(),
+            "xe3",
+        )
+        .unwrap();
+        assert_eq!(
+            xe3.boot[&BootMode::Sd]
+                .hold
+                .iter()
+                .map(|input| input.id.as_str())
+                .collect::<Vec<_>>(),
+            ["rear_command_dial.press", "fn1_button"]
+        );
     }
 }
 

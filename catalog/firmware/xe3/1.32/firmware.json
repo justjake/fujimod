@@ -1,0 +1,11 @@
+{
+  "$schema": "https://fujimod.com/schemas/firmware.schema.json",
+  "schema": 1,
+  "id": "xe3-132",
+  "body_id": "xe3",
+  "version": "1.32",
+  "update": {
+    "size": 107104384,
+    "sha256": "28a7786ee3cd86b44d714daaa19f82e0d61710798cffd0fa142c1a960a67830d"
+  }
+}
