@@ -2,6 +2,7 @@
 pub mod cortex_a53;
 pub mod generic_timer;
 mod instructions;
+use fujimod_emulator_cpu::FastCounters;
 use generic_timer::{Clock, Register, Timer};
 use serde_json::{Value, json};
 
@@ -41,17 +42,19 @@ struct Pmu {
     overflow: bool,
 }
 impl Pmu {
+    fn fast_counters(&self, config: Config) -> FastCounters {
+        FastCounters {
+            counter_hz: config.clock.counter_hz,
+            ticks_per_second: config.clock.ticks_per_second,
+            pmu_hz: config.pmu_hz,
+            pmu_control: self.control,
+            pmu_enabled: self.enabled,
+            pmu_offset: self.offset,
+            pmu_anchor: self.anchor,
+        }
+    }
     fn raw(&self, now: u64, config: Config) -> Result<u128, String> {
-        let elapsed = now
-            .checked_sub(self.anchor)
-            .ok_or("PMU clock moved backward")?;
-        let cycles = if self.control & 1 != 0 && self.enabled {
-            (elapsed as u128 * config.pmu_hz as u128 / config.clock.ticks_per_second as u128)
-                / if self.control & 8 != 0 { 64 } else { 1 }
-        } else {
-            0
-        };
-        Ok(self.offset as u128 + cycles)
+        self.fast_counters(config).pmu_raw(now)
     }
     fn value(&self, now: u64, config: Config) -> Result<u64, String> {
         Ok(self.raw(now, config)? as u64)
@@ -72,7 +75,7 @@ impl Pmu {
         config: Config,
         value: Option<u64>,
     ) -> Result<Option<u64>, String> {
-        if !matches!(r, 0xdce0..=0xdce8 | 0xdcf0) {
+        if !is_pmu_register(r) {
             return Ok(None);
         }
         if let Some(value) = value {
@@ -152,7 +155,15 @@ impl Pmu {
         }))
     }
 }
+pub(super) fn is_pmu_register(register: u16) -> bool {
+    matches!(register, 0xdce0..=0xdce8 | 0xdcf0)
+}
+
 impl Profile {
+    pub fn fast_counters(&self) -> FastCounters {
+        self.pmu.fast_counters(self.config)
+    }
+
     pub(super) fn validate_checkpoint(&self, saved: &Self, now: u64) -> Result<(), String> {
         if self.config != saved.config || saved.pmu.anchor > now {
             return Err("A-profile snapshot configuration or clock differs".into());

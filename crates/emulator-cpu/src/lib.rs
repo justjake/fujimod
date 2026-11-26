@@ -204,6 +204,63 @@ impl Clock {
         Ok(Self { now, phase, ..self })
     }
 }
+/// Read-only state published by an A-profile architectural counter model.
+/// The owner continues to handle writes, timer controls, and interrupts.
+#[derive(Clone, Copy, Debug)]
+pub struct FastCounters {
+    pub counter_hz: u64,
+    pub ticks_per_second: u64,
+    pub pmu_hz: u64,
+    pub pmu_control: u32,
+    pub pmu_enabled: bool,
+    pub pmu_offset: u64,
+    pub pmu_anchor: u64,
+}
+
+impl FastCounters {
+    /// Cycle count before architectural wrap, shared with PMU overflow logic.
+    pub fn pmu_raw(self, now: u64) -> Result<u128, String> {
+        let elapsed = now
+            .checked_sub(self.pmu_anchor)
+            .ok_or("PMU clock moved backward")?;
+        let cycles = if self.pmu_control & 1 != 0 && self.pmu_enabled {
+            (u128::from(elapsed) * u128::from(self.pmu_hz))
+                .checked_div(u128::from(self.ticks_per_second))
+                .ok_or("invalid architectural counter clock")?
+                / if self.pmu_control & 8 != 0 { 64 } else { 1 }
+        } else {
+            0
+        };
+        Ok(u128::from(self.pmu_offset) + cycles)
+    }
+}
+
+/// Convert a guest tick to an architectural counter value.
+pub fn architectural_counter_count(
+    now: u64,
+    counter_hz: u64,
+    ticks_per_second: u64,
+) -> Result<u64, String> {
+    if ticks_per_second == 0 {
+        return Err("invalid architectural counter clock".into());
+    }
+    // The common product fits 64 bits; the wide form is the same value.
+    if let Some(product) = now.checked_mul(counter_hz) {
+        return Ok(product / ticks_per_second);
+    }
+    // floor((a * t + b) * h / t) = a * h + floor(b * h / t) for b < t.
+    let (whole, rest) = (now / ticks_per_second, now % ticks_per_second);
+    if let Some(count) = rest.checked_mul(counter_hz).and_then(|part| {
+        whole
+            .checked_mul(counter_hz)?
+            .checked_add(part / ticks_per_second)
+    }) {
+        return Ok(count);
+    }
+    u64::try_from(now as u128 * counter_hz as u128 / ticks_per_second as u128)
+        .map_err(|_| "architectural counter overflow".into())
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Access {
     Read,
@@ -687,6 +744,9 @@ pub trait Cpu {
     fn features(&self) -> Features;
     fn set_guest_clock(&self, _clock: Clock) -> Result<(), String> {
         Err("backend does not consume a guest-clock anchor".into())
+    }
+    fn set_fast_counters(&self, _counters: Option<FastCounters>) -> Result<(), String> {
+        Ok(())
     }
     fn read_register(&self, register: Register, out: &mut [u8]) -> Result<usize, String>;
     fn write_register(&self, register: Register, bytes: &[u8]) -> Result<(), String>;
