@@ -30,7 +30,8 @@ Run output and limits: --output DIR, --seconds N (guest time), --wall-seconds N 
 Session inputs: --quantum N, --keys SCRIPT,\n\
 --discovery, --stub NAME@ADDR=VALUE, --patch FILE, --mod MANIFEST, --scene PATH,\n\
 --card-image IMAGE, --card-file NAME=PATH, --card-image-2 IMAGE, --card-file-2 NAME=PATH.\n\
-XP5 loader starts put the card in slot 1 and write changed sectors back into IMAGE at the end of the run;\n\
+XP5 loader starts put the card in slot 1; they and application-profile runs write changed sectors back\n\
+into IMAGE at the end of the run;\n\
 the -2 options put a second card in slot 2 of a body that has one.\n\
 --manifest FILE, --watch-pcs ADDR[,ADDR...], --watch-writes ADDR:LEN[,ADDR:LEN...], --dump ADDR:LEN[;ADDR:LEN...], --hash ADDR:LEN[;ADDR:LEN...]\n\
 --gpio PORT:PIN=0|1[,PORT:PIN=0|1...], --poke ADDR=U32, --press TIME_MS:KEY[:HOLD_MS][,...]\n\
@@ -989,6 +990,7 @@ fn run_application(mut options: Boot, resolved: ResolvedConfiguration) -> Result
     if let boot::application::Board::Xpp(session) = &started.board {
         session.board.check_discovery_callee_stubs()?;
     }
+    started.write_back_card()?;
     if let Some(path) = save_snapshot {
         started.save_snapshot(&path)?;
     }
