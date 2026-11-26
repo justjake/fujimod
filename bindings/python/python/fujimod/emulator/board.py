@@ -516,9 +516,7 @@ class Board:
                 raise ValueError("card_layout needs the card present")
             layout_text = json.dumps(selected_layout)
         emulator_layer = (
-            flash is not None
-            or combination is not None
-            or image is not None
+            flash is not None or combination is not None or image is not None
         )
         if emulator_layer and boot != "stock":
             raise ValueError(
@@ -543,7 +541,9 @@ class Board:
         if isinstance(overlays, (str, bytes)) or not isinstance(overlays, Sequence):
             raise TypeError("overlays must be a sequence of catalog overlay IDs")
         selected_overlays = list(overlays)
-        if any(type(overlay) is not str or not overlay for overlay in selected_overlays):
+        if any(
+            type(overlay) is not str or not overlay for overlay in selected_overlays
+        ):
             raise TypeError("overlays must be nonempty strings")
         fault_text = None
         if sd_card_initialization_fault is not None:
@@ -581,7 +581,9 @@ class Board:
         if image_contents is not None and image_sha256 is not None:
             raise ValueError("image bytes carry their own SHA-256")
         update_path = None if update is None else cls._input_path(update, "update")
-        boot_rom_path = None if boot_rom is None else cls._input_path(boot_rom, "boot_rom")
+        boot_rom_path = (
+            None if boot_rom is None else cls._input_path(boot_rom, "boot_rom")
+        )
         flash_path = None if flash is None else cls._input_path(flash, "flash")
         native = _native.Board.open_camera(
             firmware=firmware,
