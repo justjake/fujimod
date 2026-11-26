@@ -66,6 +66,8 @@ jobs:
       - if: ${{ !cancelled() }}
         name: Check catalog record formatting
         run: mise run catalog-format-check
+      - name: Build the emulator GUI frontend the desktop crate embeds
+        run: pnpm --filter @fujimod/emulator-gui run build
       - if: ${{ !cancelled() }}
         run: mise run rust-check
       - name: Check the generated workspace-hack crate
@@ -112,6 +114,8 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y libjpeg-dev
+      - name: Build the emulator GUI frontend the desktop crate embeds
+        run: pnpm --filter @fujimod/emulator-gui run build
       - run: mise run rust-test
       - name: Python tests
         if: ${{ !cancelled() }}
