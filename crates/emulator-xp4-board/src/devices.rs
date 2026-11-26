@@ -897,7 +897,11 @@ impl Devices {
         self.models.push(Some(Box::new(model)));
         Ok(())
     }
-    pub fn movdc(&mut self, outputs: Vec<(u64, u32, u64, u64, u8)>) -> Result<(), String> {
+    pub fn movdc(
+        &mut self,
+        outputs: Vec<(u64, u32, u64, u64, u8)>,
+        packed10: bool,
+    ) -> Result<(), String> {
         for (base, irq, reset, period, luma) in outputs {
             if self
                 .windows
@@ -906,8 +910,11 @@ impl Devices {
             {
                 return Err("Overlapping XP4 MOVDC window".into());
             }
-            let model =
+            let mut model =
                 fujimod_emulator_xp4_display::movdc::Movdc::new(base, irq, reset, period, luma)?;
+            if packed10 {
+                model = model.accept_packed10();
+            }
             let id = self.models.len();
             self.models.push(Some(Box::new(model)));
             self.windows.push((base, base + 0x10c, id));
