@@ -827,6 +827,10 @@ fn prepare_xp4(
         )? == entry,
         "entrypoint differs",
     )?;
+    check(
+        entry.is_multiple_of(4),
+        "XP4 flash reader entrypoint is not word aligned",
+    )?;
     let request = symbol(
         &manifest,
         "flash_reader_request",
@@ -910,6 +914,11 @@ fn prepare_xp4(
         .min(flash.window.size);
     let update_bytes = extent(&inverted, flash.update_image.dat_offset, update_size)?;
     let control = extent(update_bytes, flash.control.offset, flash.control.size)?;
+    let control_sha256 = sha256(control);
+    check(
+        control_sha256 == flash.control.sha256,
+        "XP4 flash control differs from the update",
+    )?;
     let payload = super::xp4::Payload {
         schema: 1,
         firmware_id: selected.firmware.id.clone(),
@@ -932,7 +941,7 @@ fn prepare_xp4(
             checks: vec![callback_check],
         },
         checks,
-        control_sha256: sha256(control),
+        control_sha256,
         update_size,
     };
     payload.validate(flash, bulk, &image)?;
