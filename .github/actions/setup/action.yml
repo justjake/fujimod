@@ -11,6 +11,9 @@ runs:
     # code in main's cache scope, so they restore caches but never save them.
     - uses: jdx/mise-action@236a21c3b91f5db6d4e174b348674a0f0caac06d # v5.2.9
       with:
+        # The version developers run; later releases refuse emsdk, whose plugin
+        # downloads a moving branch that the lockfile cannot checksum.
+        version: 2026.9.15
         cache_save: ${{ github.event_name != 'pull_request_target' }}
     - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
       with:
