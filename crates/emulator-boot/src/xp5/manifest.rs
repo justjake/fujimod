@@ -369,4 +369,13 @@ mod tests {
             }));
         }
     }
+
+    #[test]
+    fn xh2s_movie_stream_starts_in_ram() {
+        let state = BootState::for_firmware("xh2s-730", None).unwrap();
+        assert!(state.ram.iter().any(|region| {
+            region.base == 0x100000000 && region.base + region.size == 0x180000000
+        }));
+        assert!(state.device.iter().all(|device| device.base != 0x100000000));
+    }
 }

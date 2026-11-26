@@ -73,14 +73,10 @@ kind = "power-gates"
 
 # The bus-drain helper 0x17f1794 (mask in w0) calls the word reader 0x5de38 on 0x80000000
 # (bit 1, 0x17f17d8), 0x100000000 (bit 2, 0x17f17e4) and 0x180000000 (bit 3, 0x17f17f0) and
-# discards the value; bit 0 reads 0x1fef3a8. Zero readback is a session assumption.
+# discards the value; bit 0 reads 0x1fef3a8. The read at 0x100000000 also
+# uses RAM, where the first H.264 bitstream bank starts at +0x1000.
 [[device]]
 base = 0x80000000
-size = 4
-kind = "discarded-read"
-
-[[device]]
-base = 0x100000000
 size = 4
 kind = "discarded-read"
 
