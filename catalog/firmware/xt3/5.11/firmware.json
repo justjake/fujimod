@@ -56,7 +56,7 @@
       {
         "name": "unit-5",
         "address": 15863808,
-        "size": 6193152,
+        "size": 6191112,
         "sha256": "7cd5f9f8cce57fc3d9100bf303ac01ae74735e5daa7392138ef73759a343d673",
         "native_flash_offset": 2490368
       },
@@ -70,7 +70,7 @@
       {
         "name": "unit-7",
         "address": 54202368,
-        "size": 8224768,
+        "size": 9494528,
         "sha256": "72178b9fff8a9931cc352d6400a578dad9483dedff317eb31b96b50f5cf9208a",
         "native_flash_offset": 10223616
       }
