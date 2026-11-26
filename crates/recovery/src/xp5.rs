@@ -763,8 +763,11 @@ fn package_inner(
     let workspace = setup.base + 0x38800;
     let address = (copied_end.max(setup.stack + 0x100) + 0x3fff) & !0x3fff;
     let capacity = workspace.saturating_sub(address);
+    // The stock stack is above the copied setup on most bodies. A body whose header copies
+    // more than its code needs (GFX100RF: 0x20000 bytes, stack 0xff81f600) has the stack in
+    // the copied extent, as on its own flash boot; the extension then starts at the copy's end.
     require(
-        copied_end < setup.stack && setup.stack < workspace && capacity >= 0x4000,
+        setup.base < setup.stack && setup.stack < workspace && capacity >= 0x4000,
         "No XP5 extension above the stock stack and below boot workspace",
     )?;
     let count = word(&prefix, 0x14)? as usize;
