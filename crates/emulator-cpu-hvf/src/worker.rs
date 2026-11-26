@@ -212,6 +212,7 @@ pub struct Shared {
     pub native_active: AtomicBool,
     pub deadline: AtomicBool,
     pub progress: AtomicU64,
+    pub interactive_time_scale: AtomicU64,
     pub limit: AtomicU64,
     /// Wall time the timer thread waits before it interrupts the vCPU again. The
     /// worker shrinks it to the execution budget still left after a preemption.
@@ -294,6 +295,13 @@ impl Default for Shared {
             native_active: AtomicBool::new(false),
             deadline: AtomicBool::new(false),
             progress: AtomicU64::new(0),
+            interactive_time_scale: AtomicU64::new(
+                std::env::var("FUJIMOD_HVF_TIME_SCALE")
+                    .ok()
+                    .and_then(|value| value.parse::<u64>().ok())
+                    .unwrap_or(1)
+                    .clamp(1, 16),
+            ),
             limit: AtomicU64::new(u64::MAX),
             wake_limit_ns: AtomicU64::new(u64::MAX),
             measured: AtomicBool::new(false),
@@ -396,7 +404,7 @@ impl Drop for BudgetTimer {
 pub struct BudgetRun(Arc<Shared>);
 
 impl BudgetRun {
-    pub fn start(shared: Arc<Shared>) -> Result<Self, String> {
+    pub fn start(shared: Arc<Shared>, scale: u64) -> Result<Self, String> {
         {
             let _guard = shared
                 .budget_lock
@@ -410,9 +418,10 @@ impl BudgetRun {
             shared
                 .budget_start_ticks
                 .store(unsafe { ffi::mach_absolute_time() }, Ordering::Release);
-            shared
-                .wake_limit_ns
-                .store(shared.limit.load(Ordering::Acquire), Ordering::Release);
+            shared.wake_limit_ns.store(
+                guest_to_host_wait_ns(shared.limit.load(Ordering::Acquire), scale),
+                Ordering::Release,
+            );
             shared.budget_active.store(true, Ordering::Release);
             shared.budget_generation.fetch_add(1, Ordering::AcqRel);
         }
@@ -655,6 +664,18 @@ fn mach_deadline(start: u64, limit_ns: u64, timebase: ffi::MachTimebaseInfo) -> 
     let ticks = numerator.div_ceil(u128::from(timebase.numer));
     start.saturating_add(ticks.min(u128::from(u64::MAX)) as u64)
 }
+fn host_to_guest_ns(host_ns: u64, scale: u64) -> u64 {
+    host_ns.saturating_mul(scale.max(1))
+}
+
+fn guest_to_host_wait_ns(guest_ns: u64, scale: u64) -> u64 {
+    if guest_ns == u64::MAX {
+        u64::MAX
+    } else {
+        guest_ns.div_ceil(scale.max(1)).max(1)
+    }
+}
+
 struct Processor {
     cpu: u64,
     monitor: fujimod_emulator_cpu::exclusive::Owner,
@@ -664,6 +685,8 @@ struct Processor {
     interrupts: [bool; 2],
     fast_windows: Vec<FastWindow>,
     timebase: ffi::MachTimebaseInfo,
+    /// Upper bound on the count a guest could have read in a previous run.
+    virtual_counter_floor: u64,
     reply: mpsc::SyncSender<Result<Value, String>>,
 }
 impl Processor {
@@ -708,6 +731,7 @@ impl Processor {
             interrupts: [false; 2],
             fast_windows: Vec::new(),
             timebase,
+            virtual_counter_floor: 0,
             reply,
         };
         unsafe {
@@ -1067,6 +1091,7 @@ impl Processor {
             self.set_sys(r, v)?;
         }
         self.interrupts = state.interrupts;
+        self.virtual_counter_floor = 0;
         self.vm.restore_exclusive(self.monitor, state.exclusive);
         Ok(())
     }
@@ -1548,15 +1573,15 @@ impl Processor {
         }
         Ok(mach_nanoseconds(time, self.timebase))
     }
-    fn update_interactive_progress(&self, started: u64) -> Result<u64, ExecutionError> {
-        let progress = self.exec_time()?.saturating_sub(started);
+    fn update_interactive_progress(&self, started: u64, scale: u64) -> Result<u64, ExecutionError> {
+        let progress = host_to_guest_ns(self.exec_time()?.saturating_sub(started), scale);
         self.shared.progress.fetch_max(progress, Ordering::Relaxed);
         Ok(progress)
     }
     /// Stop at the execution budget. A wall timer that fired while the thread
     /// was not running only interrupts the vCPU; the worker re-arms it for the
     /// budget that execution has not consumed yet.
-    fn interactive_budget_spent(&self, progress: u64) -> Result<bool, ExecutionError> {
+    fn interactive_budget_spent(&self, progress: u64, scale: u64) -> Result<bool, ExecutionError> {
         let limit = self.shared.limit.load(Ordering::Acquire);
         if progress >= limit {
             return Ok(true);
@@ -1572,9 +1597,10 @@ impl Processor {
                 self.shared
                     .budget_start_ticks
                     .store(unsafe { ffi::mach_absolute_time() }, Ordering::Release);
-                self.shared
-                    .wake_limit_ns
-                    .store(limit.saturating_sub(progress).max(1), Ordering::Release);
+                self.shared.wake_limit_ns.store(
+                    guest_to_host_wait_ns(limit.saturating_sub(progress), scale),
+                    Ordering::Release,
+                );
                 self.shared.budget_generation.fetch_add(1, Ordering::AcqRel);
             }
             self.shared
@@ -1583,6 +1609,24 @@ impl Processor {
         }
         Ok(false)
     }
+    /// Native CNTVCT and CNTFRQ run at the Mach counter frequency. Set
+    /// their origin to guest time here; HVF still advances CNTVCT at the
+    /// native rate until the next anchor, even with a scaled run budget.
+    fn anchor_virtual_counter(&self, clock: Clock, counters: FastCounters) -> Result<u64, String> {
+        let native_hz =
+            1_000_000_000 * u64::from(self.timebase.denom) / u64::from(self.timebase.numer);
+        let count = architectural_counter_count(clock.now, native_hz, counters.ticks_per_second)?
+            .max(self.virtual_counter_floor);
+        let offset = unsafe { ffi::mach_absolute_time() }.wrapping_sub(count);
+        unsafe {
+            ffi::check(
+                ffi::hv_vcpu_set_vtimer_offset(self.cpu, offset),
+                "anchor native virtual counter",
+            )?;
+        }
+        Ok(offset)
+    }
+
     fn disable_single_step(&self) -> Result<(), String> {
         let mdscr = self.sys(ffi::MDSCR)?;
         if mdscr & 1 != 0 {
@@ -1633,13 +1677,19 @@ impl Processor {
             .fast_counters
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
-        let _budget = BudgetRun::start(self.shared.clone()).map_err(ExecutionError::Backend)?;
+        let scale = self.shared.interactive_time_scale.load(Ordering::Relaxed);
+        let virtual_counter_offset = match (clock, counters) {
+            (Some(clock), Some(counters)) => Some(self.anchor_virtual_counter(clock, counters)?),
+            _ => None,
+        };
+        let _budget =
+            BudgetRun::start(self.shared.clone(), scale).map_err(ExecutionError::Backend)?;
         self.disable_single_step()?;
         loop {
             if self.shared.stop.load(Ordering::Acquire) {
                 return Ok(Exit::Stopped);
             }
-            if self.interactive_budget_spent(progress)? {
+            if self.interactive_budget_spent(progress, scale)? {
                 return Ok(Exit::Stopped);
             }
 
@@ -1652,12 +1702,18 @@ impl Processor {
             let run_result = self.run_vcpu("run");
             self.shared.native_active.store(false, Ordering::Release);
             run_result?;
-            progress = self.update_interactive_progress(started)?;
+            if let Some(offset) = virtual_counter_offset {
+                // Sample before owner callbacks. Time parked after an exit
+                // could not have been observed by this vCPU.
+                self.virtual_counter_floor =
+                    unsafe { ffi::mach_absolute_time() }.wrapping_sub(offset);
+            }
+            progress = self.update_interactive_progress(started, scale)?;
             let exit = unsafe { *self.exit };
             if self.shared.stop.load(Ordering::Acquire) {
                 return Ok(Exit::Stopped);
             }
-            if self.interactive_budget_spent(progress)? {
+            if self.interactive_budget_spent(progress, scale)? {
                 return Ok(Exit::Stopped);
             }
             match exit.reason {
@@ -1817,6 +1873,19 @@ pub fn serve(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn scaled_progress_and_wait_preserve_deadlines_and_unbounded_runs() {
+        assert_eq!(host_to_guest_ns(40_000_000, 1), 40_000_000);
+        assert_eq!(guest_to_host_wait_ns(40_000_000, 1), 40_000_000);
+        assert_eq!(host_to_guest_ns(10_000_000, 4), 40_000_000);
+        assert_eq!(guest_to_host_wait_ns(40_000_000, 4), 10_000_000);
+        assert_eq!(guest_to_host_wait_ns(40_000_001, 4), 10_000_001);
+        assert_eq!(guest_to_host_wait_ns(0, 4), 1);
+        assert_eq!(host_to_guest_ns(u64::MAX, 16), u64::MAX);
+        assert_eq!(guest_to_host_wait_ns(u64::MAX, 16), u64::MAX);
+        assert_eq!(guest_to_host_wait_ns(u64::MAX - 1, 16), 1 << 60);
+    }
 
     #[test]
     fn counter_reads_use_the_guest_clock_and_decline_writes() {

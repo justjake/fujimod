@@ -248,6 +248,7 @@ fn main() -> Result<(), String> {
                 Restore,
             }
             let mut saved = None;
+            let mut previous_virtual_count = 0;
             for change in [
                 Change::None,
                 Change::Write(0xdce0, 1),
@@ -264,6 +265,7 @@ fn main() -> Result<(), String> {
                         let (keyframe, profile) = saved.take().unwrap();
                         board.restore_keyframe(&keyframe)?;
                         reference = profile;
+                        previous_virtual_count = 0;
                     }
                     Change::Write(register, value) => {
                         let cpu = board.cpu(0)?;
@@ -287,7 +289,7 @@ fn main() -> Result<(), String> {
                     let mrs = 0xd5200000 | (u32::from(register) << 5);
                     program.extend([mrs | rt as u32, mrs | 31]);
                 }
-                program.push(0xd503207f);
+                program.extend([0xd53be043, 0xd503207f]); // MRS X3, CNTVCT_EL0; WFI
                 code(cpu, 0x10040, &program);
                 cpu.invalidate_code(Some((0x10040, 0x10040 + program.len() as u64 * 4)))?;
                 cpu.set_guest_clock(fujimod_emulator_cpu::Clock {
@@ -307,11 +309,21 @@ fn main() -> Result<(), String> {
                         "counter {register:#06x} after {change:?}",
                     );
                 }
+                let virtual_count = get(cpu, Register::X(3));
+                assert!(
+                    (tick..tick + 24_000_000).contains(&virtual_count),
+                    "virtual count {virtual_count} was not anchored to {tick}"
+                );
+                assert!(
+                    virtual_count >= previous_virtual_count,
+                    "virtual counter moved backward"
+                );
+                previous_virtual_count = virtual_count;
                 cpu.set_execution_policy(ExecutionPolicy::Exact)?;
             }
         }
         println!(
-            "PASS: interactive architectural counter reads follow board PMU writes and restore"
+            "PASS: interactive counters follow board PMU writes, restore, and the native virtual counter anchor"
         );
         // SEVL is consumed by the first WFE; SEV completes the second WFE.
         // The same peer event must leave a WFI-only processor waiting.
@@ -1084,9 +1096,15 @@ fn main() -> Result<(), String> {
     cpu.remove_hook(observer)?;
     cpu.set_execution_policy(ExecutionPolicy::Interactive)?;
 
-    const INTERACTIVE_BUDGET_NS: u64 = 100_000_000;
+    const INTERACTIVE_BUDGET_NS: u64 = 40_000_000;
+    let expected_scale = std::env::var("FUJIMOD_HVF_TIME_SCALE")
+        .ok()
+        .and_then(|value| value.parse::<u64>().ok())
+        .unwrap_or(1)
+        .clamp(1, 16);
     code(&cpu, 0x10900, &[0x91000400, 0x17ffffff]);
     set(&cpu, Register::X(0), 0);
+    let wall_start = std::time::Instant::now();
     match cpu
         .run(Run {
             begin: 0x10900,
@@ -1099,13 +1117,20 @@ fn main() -> Result<(), String> {
         Exit::Stopped => (),
         other => panic!("Interactive budget did not stop the native loop: {other:?}"),
     }
+    let wall = wall_start.elapsed();
     let progress = cpu
         .instruction_progress()
         .expect("Interactive progress is measured");
     assert!(
-        (INTERACTIVE_BUDGET_NS * 3 / 4..=INTERACTIVE_BUDGET_NS * 5 / 4).contains(&progress),
+        progress >= INTERACTIVE_BUDGET_NS,
         "interactive progress {progress}ns"
     );
+    if expected_scale == 4 {
+        assert!(
+            wall < std::time::Duration::from_millis(40),
+            "scaled native loop took {wall:?}"
+        );
+    }
     let estimated_instructions = get(&cpu, Register::X(0)) * 2;
     let estimated_rate = estimated_instructions as f64 * 1_000_000_000.0 / progress as f64;
     assert!(
@@ -1113,7 +1138,7 @@ fn main() -> Result<(), String> {
         "estimated native rate was {estimated_rate:.0} instructions/s"
     );
     println!(
-        "PASS: Interactive native loop estimated {:.1}M instructions/s; {progress}ns for {INTERACTIVE_BUDGET_NS}ns budget",
+        "PASS: Interactive native loop at scale {expected_scale} took {wall:?}; estimated {:.1}M instructions/s; {progress}ns for {INTERACTIVE_BUDGET_NS}ns guest budget",
         estimated_rate / 1_000_000.0
     );
 
@@ -1147,7 +1172,7 @@ fn main() -> Result<(), String> {
         .instruction_progress()
         .expect("Interactive stop progress is measured");
     assert!(
-        (20_000_000..500_000_000).contains(&stop_progress),
+        (20_000_000..500_000_000).contains(&(stop_progress / expected_scale)),
         "Interactive stop progress was {stop_progress}ns"
     );
     assert!(get(&cpu, Register::X(0)) > 0);

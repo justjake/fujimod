@@ -2,9 +2,10 @@
 //!
 //! A Vm is one physical address space. Its Core values remain thread-affine;
 //! callbacks execute on their owner, never on a native vCPU worker. Exact mode
-//! uses host time only to cancel execution. Interactive progress is host
-//! nanoseconds, and guest CNTVCT/CNTV use the host's native virtual counter and
-//! timer.
+//! uses host time only to cancel execution. Interactive progress charges
+//! native execution time in guest nanoseconds, optionally scaled by
+//! `FUJIMOD_HVF_TIME_SCALE`. The native virtual counter is anchored to the
+//! declared guest clock at interactive segment entry.
 #![cfg(all(target_os = "macos", target_arch = "aarch64"))]
 
 mod ffi;
