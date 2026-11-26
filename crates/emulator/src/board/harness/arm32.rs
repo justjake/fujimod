@@ -28,6 +28,7 @@ pub struct Guard {
     writable: Vec<Span>,
     return_address: u64,
     store_limit: usize,
+    record_stores: bool,
     stores: Vec<Store>,
     model_readable: Vec<Span>,
     model_writable: Vec<Span>,
@@ -40,6 +41,10 @@ pub struct Guard {
     pub failure: Option<String>,
     accepted: u64,
 }
+
+/// Largest accepted record bound. It matches the isolated driver call's
+/// store-log bound, so one limit is valid for both entry points.
+pub const MAX_STORE_LIMIT: usize = 1 << 24;
 
 fn contains(spans: &[Span], address: u64, size: u64) -> bool {
     address.checked_add(size).is_some_and(|end| {
@@ -142,7 +147,7 @@ impl Guard {
         let writable = spans(writable, &physical_backing)?;
         if executable.is_empty()
             || store_limit == 0
-            || store_limit > 1 << 20
+            || store_limit > MAX_STORE_LIMIT
             || return_address & 3 != 0
             || !contains(&physical_backing, return_address, 4)
             || executable
@@ -164,6 +169,7 @@ impl Guard {
             writable,
             return_address,
             store_limit,
+            record_stores: true,
             stores: Vec::new(),
             model_readable: Vec::new(),
             model_writable: Vec::new(),
@@ -397,7 +403,12 @@ impl Guard {
             // reserved and ARMv8 load-only options outside this A32 guard.
             let scoped_barrier = matches!(word & 0xfffffff0, 0xf57ff040 | 0xf57ff050)
                 && matches!(word & 15, 2 | 3 | 6 | 7 | 10 | 11 | 14 | 15);
-            if scoped_barrier || matches!(word, 0xf57ff01f | 0xf57ff06f) {
+            // PLD/PLDW preload hints (immediate and register forms) have no
+            // architectural effect and cannot fault; the register form with
+            // Rm = PC is unpredictable and stays refused.
+            let preload = word & 0xff30f000 == 0xf510f000
+                || (word & 0xff30f010 == 0xf710f000 && word & 15 != 15);
+            if scoped_barrier || preload || matches!(word, 0xf57ff01f | 0xf57ff06f) {
                 self.accepted += 1;
                 return Ok(());
             }
@@ -440,7 +451,13 @@ impl Guard {
                     let bitfield =
                         matches!(word & 0x0fe00070, 0x07a00050 | 0x07e00050 | 0x07c00010);
                     let divide = matches!(word & 0x0ff0f0f0, 0x0710f010 | 0x0730f010);
-                    if extend || reverse || bitfield || divide {
+                    // UQADD8/UQSUB8: unsigned saturating byte arithmetic. Pure
+                    // register operations; they leave APSR.GE unchanged.
+                    let saturating = matches!(word & 0x0ff00ff0, 0x06600f90 | 0x06600ff0);
+                    // SSAT/USAT (immediate saturate, shifted register): pure
+                    // register operations that may only set APSR.Q.
+                    let saturate = matches!(word & 0x0fe00030, 0x06a00010 | 0x06e00010);
+                    if extend || reverse || bitfield || divide || saturating || saturate {
                         self.accepted += 1;
                         return Ok(());
                     }
@@ -596,7 +613,7 @@ impl Guard {
             }
         }
         let stores = accesses.iter().filter(|a| a.2).count();
-        if stores > self.store_limit - self.stores.len() {
+        if self.record_stores && stores > self.store_limit - self.stores.len() {
             return Err("Driver guard store record bound reached before instruction".into());
         }
         let plain_single = accesses.len() == 1
@@ -631,7 +648,17 @@ impl Guard {
         Ok(())
     }
 
+    /// Stop keeping store records. Every store is still checked against the
+    /// writable ranges; only the record and its bound are dropped.
+    pub fn without_store_records(mut self) -> Self {
+        self.record_stores = false;
+        self
+    }
+
     pub fn store(&mut self, core: usize, pc: u64, address: u64, size: u32, value: u64) {
+        if !self.record_stores {
+            return;
+        }
         self.stores.push((core, pc, address, size, value));
     }
 
@@ -715,6 +742,135 @@ mod tests {
             assert!(snapshot.stores.is_empty());
             assert!(snapshot.mmio_accesses.is_empty());
         }
+    }
+
+    #[test]
+    fn saturating_byte_arithmetic_and_preloads_are_admitted_for_every_condition() {
+        for condition in 0..15u32 {
+            for word in [0x06600f90u32, 0x06600ff0] {
+                let word = condition << 28 | word | 3 << 16 | 2 << 12 | 4;
+                let mut isolated = guard();
+                isolated.preflight(0x1000, word, 0xd3, |_| Ok(0)).unwrap();
+                assert!(isolated.snapshot().stores.is_empty());
+            }
+        }
+        for word in [
+            0xf5d0f008u32, // pld [r0, #8]
+            0xf550f008,    // pld [r0, #-8]
+            0xf590f008,    // pldw [r0, #8]
+            0xf510f008,    // pldw [r0, #-8]
+            0xf5dff008,    // pld [pc, #8]
+            0xf7d0f001,    // pld [r0, r1]
+            0xf790f101,    // pldw [r0, r1, lsl #2]
+        ] {
+            let mut isolated = guard();
+            isolated
+                .preflight(0x1000, word, 0xd3, |_| {
+                    panic!("A preload hint must not derive a memory address")
+                })
+                .unwrap();
+            assert_eq!(isolated.snapshot().accepted_instructions, 1);
+        }
+    }
+
+    #[test]
+    fn signed_and_unsigned_saturate_are_admitted() {
+        for word in [
+            0xe6a71012u32, // ssat r1, #8, r2
+            0xe6a71052,    // ssat r1, #8, r2, asr #32
+            0xe6ef1392,    // usat r1, #15, r2, lsl #7
+            0x16e01012,    // usatne r1, #0, r2
+        ] {
+            let mut isolated = guard();
+            isolated
+                .preflight(0x1000, word, 0xd3, |_| {
+                    panic!("A saturate must not derive a memory address")
+                })
+                .unwrap();
+            assert_eq!(isolated.snapshot().accepted_instructions, 1, "{word:#010x}");
+        }
+        for word in [
+            0xe6a71f32u32, // ssat16
+            0xe6e71f32,    // usat16
+        ] {
+            assert!(
+                guard().preflight(0x1000, word, 0xd3, |_| Ok(0)).is_err(),
+                "{word:#010x}"
+            );
+        }
+    }
+
+    #[test]
+    fn neighboring_media_and_preload_encodings_remain_refused() {
+        for word in [
+            0xe6600f10u32, // uqadd16
+            0xe6600f50,    // uqasx
+            0xe6700f90,    // uhadd8
+            0xe6500f90,    // uadd8-family neighbor (unsigned, GE-setting)
+            0xe6200f90,    // sadd8-family neighbor
+            0xe6600fd0,    // reserved between the byte add and subtract
+            0xf450f008,    // pli [r0, #8]
+            0xf7d0f00f,    // pld with Rm = pc
+            0xf5d0e008,    // not the preload hint
+        ] {
+            assert!(
+                guard().preflight(0x1000, word, 0xd3, |_| Ok(0)).is_err(),
+                "{word:#010x}"
+            );
+        }
+    }
+
+    fn store_word() -> u32 {
+        0xe5821000 // str r1, [r2]
+    }
+
+    #[test]
+    fn unrecorded_stores_keep_no_records_and_no_record_bound() {
+        let mut recorded = guard();
+        for _ in 0..16 {
+            recorded
+                .preflight(0x1000, store_word(), 0xd3, |_| Ok(0x3000))
+                .unwrap();
+            recorded.store(0, 0x1000, 0x3000, 4, 1);
+        }
+        assert!(
+            recorded
+                .preflight(0x1000, store_word(), 0xd3, |_| Ok(0x3000))
+                .is_err()
+        );
+        assert_eq!(recorded.snapshot().stores.len(), 16);
+
+        let mut unrecorded = guard().without_store_records();
+        for _ in 0..100 {
+            unrecorded
+                .preflight(0x1000, store_word(), 0xd3, |_| Ok(0x3000))
+                .unwrap();
+            unrecorded.store(0, 0x1000, 0x3000, 4, 1);
+        }
+        assert!(unrecorded.snapshot().stores.is_empty());
+        // The writable range still applies to every store.
+        assert!(
+            unrecorded
+                .preflight(0x1000, store_word(), 0xd3, |_| Ok(0x3004))
+                .is_err()
+        );
+    }
+
+    #[test]
+    fn record_bound_may_reach_the_driver_call_bound() {
+        let build = |limit| {
+            Guard::new(
+                0,
+                vec![(0x1000, 0x1010)],
+                vec![],
+                vec![(0x3000, 0x3004)],
+                0x4000,
+                limit,
+                vec![(0, 0x5000)],
+            )
+        };
+        assert!(build(MAX_STORE_LIMIT).is_ok());
+        assert!(build(MAX_STORE_LIMIT + 1).is_err());
     }
 
     #[test]

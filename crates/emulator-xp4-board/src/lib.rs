@@ -2692,6 +2692,7 @@ impl Session {
         store_limit: usize,
         core: usize,
         device_policy: Option<String>,
+        record_stores: bool,
     ) -> Result<(), String> {
         self.inner.host_mutation()?;
         self.inner.cpu(core)?;
@@ -2741,6 +2742,9 @@ impl Session {
                 )
                 .collect(),
         )?;
+        if !record_stores {
+            guard = guard.without_store_records();
+        }
         if let Some(policy) = policy {
             let mut windows = state
                 .devices
