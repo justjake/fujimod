@@ -401,6 +401,26 @@ pub(super) fn is_non_pc_pop(word: u32) -> bool {
     first == 0xe8bd && second & 0xa000 == 0 && second.count_ones() >= 2
 }
 
+/// Whether a Thumb instruction is a legal stack POP (16-bit or 32-bit) that
+/// loads PC (and excludes SP/LR in 32-bit form). Safe to run inline in Thread
+/// Mode where EXC_RETURN cannot legally occur; Handler Mode keeps inline
+/// accounting disarmed so `block_entered` routes EXC_RETURN to the controller.
+pub(super) fn is_pc_pop(word: u32) -> bool {
+    if word <= u32::from(u16::MAX) {
+        let instruction = word as u16;
+        return instruction & 0xff00 == 0xbd00;
+    }
+    let first = (word >> 16) as u16;
+    let second = word as u16;
+    first == 0xe8bd && second & 0x8000 != 0 && second & 0x6000 == 0 && second.count_ones() >= 2
+}
+
+/// Whether a Thumb instruction is `BX LR` (`0x4770`). Safe to run inline in
+/// Thread Mode where EXC_RETURN cannot legally occur.
+pub(super) fn is_bx_lr(word: u32) -> bool {
+    word == 0x4770
+}
+
 /// Whether a Thumb instruction is safe to execute without an observation.
 /// A 16-bit instruction is zero-extended; for 32-bit instructions, the first
 /// halfword is in bits 31..16. Accepted operations use general registers,

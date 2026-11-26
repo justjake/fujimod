@@ -321,11 +321,13 @@ impl Board {
         // All device/DMA and guest MMIO callbacks pause the cohort.
         state.settled.pass = true;
         state.arm_settled()?;
+        let in_thread_mode = state.mprofile[core].as_ref().unwrap().in_thread_mode();
         let interrupt_ready = state.mprofile[core].as_mut().unwrap().pending();
         if !interrupt_ready {
             state.settled.idle = Some(core);
             let pc = scalar(cpu, Register::Pc)? & !1;
-            if !state.enter_code(cpu, core, pc, 4)?
+            if in_thread_mode
+                && !state.enter_code(cpu, core, pc, 4)?
                 && state.code_shadow[core]
                     .as_ref()
                     .and_then(|shadow| shadow.fetch(pc))

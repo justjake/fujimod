@@ -281,6 +281,12 @@ impl Profile {
     pub(super) fn ready(&self) -> bool {
         self.ready
     }
+    /// Whether the processor is in Thread Mode (no active exception handler).
+    /// EXC_RETURN is only legal in Handler Mode, so Thread Mode may run
+    /// `POP {..., pc}` and `BX LR` inline.
+    pub(super) fn in_thread_mode(&self) -> bool {
+        self.nvic.active.is_empty()
+    }
     /// Whether the last emulated entry stopped the engine itself.
     pub(super) fn take_stopped(&mut self) -> bool {
         std::mem::take(&mut self.stopped)

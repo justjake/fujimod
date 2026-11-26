@@ -2251,6 +2251,9 @@ impl Board {
         if !shadow.resync(&*self.cpus[core])? {
             return Ok(false);
         }
+        if let Some(blocks) = s.blocks[core].as_mut() {
+            blocks.inline.clear_pages();
+        }
         s.settled.clear();
         Ok(true)
     }
@@ -4126,7 +4129,9 @@ unsafe fn block_classify_transfers(
         classification.observe_block = false;
     } else {
         classification.observe_block &= !(mprofile_blocks::is_single_transfer(word)
-            || mprofile_blocks::is_non_pc_pop(word));
+            || mprofile_blocks::is_non_pc_pop(word)
+            || mprofile_blocks::is_pc_pop(word)
+            || mprofile_blocks::is_bx_lr(word));
     }
     classification
 }
@@ -4295,6 +4300,7 @@ unsafe fn block_entered(block: fujimod_emulator_cpu::Block, data: *mut c_void) {
             .ok_or("block execution without an M-profile controller")?;
         let entry = p.before(cpu, pc, fetched, idle)?;
         let ready = p.ready();
+        let in_thread_mode = p.in_thread_mode();
         // An exclusive instruction stops the engine as a scheduling boundary;
         // other emulated instructions only move the PC.
         let stopped = p.take_stopped();
@@ -4344,10 +4350,12 @@ unsafe fn block_entered(block: fujimod_emulator_cpu::Block, data: *mut c_void) {
             return cpu.stop();
         }
         // The translated guard admits subsequent eligible blocks on this
-        // checked page. Hooked memory accesses settle and disarm the window.
-        let inline = s.blocks[core]
-            .as_ref()
-            .is_some_and(|blocks| blocks.fast_stores)
+        // checked page in Thread Mode. Handler Mode keeps inline disarmed so
+        // EXC_RETURN reaches the controller via `block_entered`.
+        let inline = in_thread_mode
+            && s.blocks[core]
+                .as_ref()
+                .is_some_and(|blocks| blocks.fast_stores)
             && settled
             && s.settled.armed
             && !ready
