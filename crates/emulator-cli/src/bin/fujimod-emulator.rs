@@ -48,6 +48,7 @@ XP5 --watch-writes logs each CPU store, DMA and host write into the physical ran
 XP5 --poke also takes ADDR=U32@MS: the word is written MS guest milliseconds after the run starts.\n\
 Application-profile startup: --application-plan FILE. Its --keys and --press drive the key's GPIO contact or,\n\
 for a key read as one ADC band, the middle of that band; configuration bounds come from the block the firmware has loaded.\n\
+A press of a command dial's step key (X-T3: CMD_RIGHT/CMD_LEFT rear, CMD2_R/CMD2_L front) turns that dial one edge.\n\
 Session observations: --load-snapshot FILE, --save-snapshot FILE, --pc-trace FILE [--pc-trace-limit N].\n\
 Native GUI: --gui opens the desktop window connected to this session.\n\
 Prints a JSON boot report; exits 0 at REC (EXR II) or at the end of the run (XP5), 2 at a stopped frontier.\n\

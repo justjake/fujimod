@@ -141,10 +141,13 @@ impl crate::mod_loader::Machine for Board {
 pub enum KeyWire {
     Digital(fujimod_catalog_wiring::DigitalKey),
     Analog(fujimod_catalog_wiring::AnalogKey),
+    /// One step of a command dial; a press turns it, a release does nothing.
+    Dial(fujimod_catalog_wiring::DialStep),
 }
 
 impl KeyWire {
-    /// The direct GPIO contact or single ADC band the catalog declares for a key.
+    /// The direct GPIO contact, single ADC band or command-dial step the catalog
+    /// declares for a key.
     pub fn resolve(
         selection: &fujimod_catalog::reference::ResolvedSelection,
         name: &str,
@@ -152,9 +155,12 @@ impl KeyWire {
         if let Some(key) = fujimod_catalog_wiring::digital_key(selection, name)? {
             return Ok(Self::Digital(key));
         }
-        fujimod_catalog_wiring::analog_key(selection, name)?
-            .map(Self::Analog)
-            .ok_or_else(|| format!("{name} has no declared GPIO contact or ADC band"))
+        if let Some(key) = fujimod_catalog_wiring::analog_key(selection, name)? {
+            return Ok(Self::Analog(key));
+        }
+        fujimod_catalog_wiring::dial_step(selection, name)?
+            .map(Self::Dial)
+            .ok_or_else(|| format!("{name} has no declared GPIO contact, ADC band or dial step"))
     }
 }
 
@@ -206,6 +212,14 @@ impl Board {
         }
     }
 
+    /// Turn a command dial the board declares by `edges` quadrature edges.
+    pub fn turn_dial(&mut self, name: &str, edges: i32) -> Result<(), String> {
+        match self {
+            Self::Xp4(board) => board.turn_dial(name, edges),
+            Self::Xpp(_) => Err("X-Processor Pro command dials are not wired".into()),
+        }
+    }
+
     /// Present a key pressed or released. ADC bands whose bounds live in the
     /// firmware's configuration are read from the block the firmware has loaded.
     pub fn key_input(&mut self, wire: &KeyWire, pressed: bool) -> Result<(), String> {
@@ -222,6 +236,11 @@ impl Board {
                 )?;
                 self.adc_input(key.channel, if pressed { down } else { up })
             }
+            // One firmware step is one edge, as the X-T3 discovery inputs declare.
+            KeyWire::Dial(step) if pressed => {
+                self.turn_dial(&step.control, i32::from(step.direction))
+            }
+            KeyWire::Dial(_) => Ok(()),
         }
     }
 
@@ -665,6 +684,7 @@ fn install_card_files(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use fujimod_catalog::reference::{ReferenceCatalog, ResolvedSelection};
     use fujimod_emulator_devices::parts::sd_card::{Card, Options, SECTOR};
     use std::{
         fs::File,
@@ -733,5 +753,40 @@ mod tests {
             assert_eq!(sector_of(&mut file, lba), [fill; SECTOR], "sector {lba}");
         }
         std::fs::remove_file(&path).unwrap();
+    }
+
+    fn selection(id: &str) -> ResolvedSelection {
+        ReferenceCatalog::bundled()
+            .unwrap()
+            .resolve_firmware(id)
+            .unwrap()
+    }
+
+    #[test]
+    fn command_dial_steps_resolve_after_gpio_contacts_and_adc_bands() {
+        let xt3 = selection("xt3-511");
+        assert!(matches!(
+            KeyWire::resolve(&xt3, "CMD_RIGHT"),
+            Ok(KeyWire::Dial(step)) if step.control == "rear_command_dial" && step.direction == 1
+        ));
+        assert!(matches!(
+            KeyWire::resolve(&xt3, "CMD2_L"),
+            Ok(KeyWire::Dial(step)) if step.control == "front_command_dial" && step.direction == -1
+        ));
+        // Keys that already resolved keep their wires.
+        assert!(matches!(
+            KeyWire::resolve(&xt3, "xt3-fn1-button"),
+            Ok(KeyWire::Digital(_))
+        ));
+        assert!(matches!(
+            KeyWire::resolve(&selection("x70-110"), "EXE_M"),
+            Ok(KeyWire::Analog(_))
+        ));
+        // An unknown name is still refused.
+        let error = KeyWire::resolve(&xt3, "CMD_NOWHERE").err().unwrap();
+        assert_eq!(
+            error,
+            "CMD_NOWHERE has no declared GPIO contact, ADC band or dial step"
+        );
     }
 }
