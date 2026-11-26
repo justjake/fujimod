@@ -3,7 +3,7 @@
 //! Set `FUJIMOD_FIRMWARE_LIBRARY` to a directory holding the catalog's X70
 //! update and boot ROM.
 mod support;
-use support::{Boot, CardSource, library, state};
+use support::{Boot, library, state};
 
 use fujimod_emulator_camera::{BootCache, Library, LoaderImage, OpenError, Opened, Request, Stage};
 
