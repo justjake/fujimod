@@ -19,6 +19,8 @@ pub struct Movdc {
     reset_ticks: u64,
     period_ticks: u64,
     luma: u8,
+    /// See [`Movdc::accept_packed10`]; construction input, not state.
+    packed10: bool,
     state: State,
 }
 impl Movdc {
@@ -43,6 +45,7 @@ impl Movdc {
             reset_ticks,
             period_ticks,
             luma,
+            packed10: false,
             state: State {
                 regs: vec![0; 0x10c / 4],
                 ..State::default()
@@ -82,15 +85,24 @@ impl Movdc {
         // output. As on XP5 (51d955d01), the nibble follows the source scale
         // and does not change the output pixel layout, so 2 and 3 write the
         // same rows; other nibbles are still refused.
+        // +08[1:0] is the output format written by 01055d74 (0x100 | format).
+        // 011117ac's divisor base is 01111770's per-format factor
+        // [8, 6, 16, 4] beside 01111818's row units [0x100, 0xc0, 0x200,
+        // 0x80]. Format 1 (X-T3 5.11 FHD movie recording, 1920x1080) is the
+        // pixel format 0x80402 (code 1 in 01e74404): 10-bit 4:2:2 lines of
+        // 8n/3 bytes for n pixels (011563bc), six pixels to 16 bytes; it is
+        // accepted only with `accept_packed10`.
         let exponent = (self.r(0xd4) >> 16) & 7;
         let selector = [3, 3, 3, 2, 1, 0].get(exponent as usize);
         let width = (self.r(0x18) & 0x7ff) + 1;
         let d8 = self.r(0xd8);
-        if self.r(8) != 0x100
+        let packed10 = self.packed10 && self.r(8) == 0x101;
+        let factor = if packed10 { 6 } else { 8 };
+        if !(self.r(8) == 0x100 || packed10)
             || selector.is_none_or(|selector| d8 & !0xf != 0x10000000 | selector << 16)
             || !matches!(d8 & 0xf, 2 | 3)
             || self.r(0xd4) & !0x10070000 != 0
-            || !width.is_multiple_of(8 << exponent)
+            || !width.is_multiple_of(factor << exponent)
             || self.r(0x18) & !0x07ff07ff != 0
             || self.r(0xc0) > 3
             || self.r(0xc8) != 0
@@ -102,6 +114,9 @@ impl Movdc {
         let address = (u64::from(self.r(0xc0)) << 32) | u64::from(self.r(0xc4));
         if address == 0 || address & 7 != 0 {
             return Err("XP4 MOVDC needs a nonzero aligned DMA destination".into());
+        }
+        if packed10 {
+            return self.packed10_rows(cx, address, width, (size >> 16) + 1);
         }
         frame::paint(
             cx,
@@ -115,6 +130,50 @@ impl Movdc {
         self.state.pending = true;
         self.irq(cx);
         Ok(())
+    }
+    /// Format 1 output: the declared luma (widened to 10 bits) with neutral
+    /// chroma (512), as 10-bit 4:2:2 lines of `width / 6 x 16` bytes at the
+    /// programmed stride. Each six pixels are four little-endian words of
+    /// three samples at bits 0, 10 and 20, in the declared order Cb0 Y0 Cr0,
+    /// Y1 Cb2 Y2, Cr2 Y3 Cb4, Y4 Cr4 Y5. The width is a multiple of six.
+    fn packed10_rows(
+        &mut self,
+        cx: &mut Cx<'_>,
+        address: u64,
+        width: u32,
+        height: u32,
+    ) -> Result<(), String> {
+        let stride = self.r(0xd0);
+        let line = width / 6 * 16;
+        if width > 4096
+            || height > 4096
+            || stride < line
+            || stride & 3 != 0
+            || u64::from(stride) * u64::from(height) > 32 * 1024 * 1024
+        {
+            return Err("YUV picture geometry exceeds modeled bounds".into());
+        }
+        address
+            .checked_add(u64::from(stride) * u64::from(height))
+            .ok_or("YUV DMA address overflow")?;
+        let (y, c) = (u32::from(self.luma) << 2, 512);
+        let word = |a: u32, b: u32, d: u32| (a | b << 10 | d << 20).to_le_bytes();
+        let group = [word(c, y, c), word(y, c, y), word(c, y, c), word(y, c, y)].concat();
+        let row = group.repeat(width as usize / 6);
+        for y in 0..u64::from(height) {
+            cx.ram_write(address + y * u64::from(stride), &row)?;
+        }
+        self.state.frames += 1;
+        self.state.pending = true;
+        self.irq(cx);
+        Ok(())
+    }
+    /// Also accept output format 1 (`+08 = 0x101`), which X-T3 5.11 programs
+    /// for FHD movie recording, as 10-bit 4:2:2 lines with the firmware's
+    /// width divisor 6.
+    pub fn accept_packed10(mut self) -> Self {
+        self.packed10 = true;
+        self
     }
     fn known(offset: u64) -> bool {
         // This is the DMA front end with an explicit processed-frame input.
@@ -134,6 +193,8 @@ struct SavedMovdc {
     reset_ticks: u64,
     period_ticks: u64,
     luma: u8,
+    #[serde(default)]
+    packed10: bool,
     state: State,
 }
 
@@ -146,12 +207,14 @@ impl Movdc {
             saved.reset_ticks,
             saved.period_ticks,
             saved.luma,
+            saved.packed10,
         ) != (
             self.base,
             self.irq,
             self.reset_ticks,
             self.period_ticks,
             self.luma,
+            self.packed10,
         ) || s.regs.len() != 0x10c / 4
             || s.regs[1] > 1
             || s.frame_deadline.is_some()
@@ -273,6 +336,7 @@ impl Device for Movdc {
                 reset_ticks: self.reset_ticks,
                 period_ticks: self.period_ticks,
                 luma: self.luma,
+                packed10: self.packed10,
                 state: self.state.clone(),
             },
         )
@@ -300,6 +364,7 @@ impl Device for Movdc {
             reset_ticks: self.reset_ticks,
             period_ticks: self.period_ticks,
             luma: self.luma,
+            packed10: self.packed10,
             state: s.clone(),
         })?;
         self.state = s;
@@ -501,5 +566,130 @@ mod tests {
         assert_eq!(d.state.frames, 0);
         assert!(!d.state.pending);
         assert!(h.ram.iter().all(|v| *v == 0xaa));
+    }
+
+    /// Output setup: `+08 = format`, `width` x 2 rows, exponent `exponent`.
+    fn output(d: Movdc, format: u64, width: u32, exponent: u32, stride: u32) -> (Movdc, Clock) {
+        let mut d = d;
+        let mut h = Clock {
+            now: 10,
+            ram: vec![0xaa; 64 + stride as usize * 2 + 64],
+            irqs: vec![],
+        };
+        put(&mut d, &mut h, 0, 0, 0);
+        h.now = 13;
+        d.advance(&mut Cx::new(&mut h, 1, 0, 0));
+        for (offset, value) in [
+            (8, format),
+            (0x18, 0x10000 | u64::from(width - 1)),
+            (0xc4, 64),
+            (0xd0, u64::from(stride)),
+            (
+                0xd8,
+                0x10000002 | [3, 3, 3, 2, 1, 0][exponent as usize] << 16,
+            ),
+            (0xd4, 0x10000000 | u64::from(exponent) << 16),
+            (4, 1),
+        ] {
+            put(&mut d, &mut h, 0, offset, value);
+        }
+        h.now = 33;
+        (d, h)
+    }
+    #[test]
+    fn format_one_stays_refused_without_the_option() {
+        let (mut d, mut h) = output(
+            Movdc::new(0xfff73000, 108, 3, 20, 81).unwrap(),
+            0x101,
+            192,
+            5,
+            200,
+        );
+        let mut cx = Cx::new(&mut h, 0, 0, 0);
+        d.advance(&mut cx);
+        assert!(cx.refusal().unwrap().contains("output mode"));
+        assert_eq!(d.state.frames, 0);
+        assert!(h.ram.iter().all(|v| *v == 0xaa));
+    }
+    #[test]
+    fn format_one_writes_neutral_10_bit_4_2_2_lines_with_the_firmware_divisor() {
+        let new = || {
+            Movdc::new(0xfff73000, 108, 3, 20, 81)
+                .unwrap()
+                .accept_packed10()
+        };
+        // Luma 81 is 324 in 10 bits; chroma is 512. Six pixels are the words
+        // Cb0 Y0 Cr0, Y1 Cb2 Y2, Cr2 Y3 Cb4, Y4 Cr4 Y5 (bits 0, 10, 20).
+        let (cyc, ycy) = (512 | 324 << 10 | 512 << 20, 324 | 512 << 10 | 324 << 20);
+        let group: Vec<u8> = [cyc, ycy, cyc, ycy]
+            .iter()
+            .flat_map(|w: &u32| w.to_le_bytes())
+            .collect();
+        // 1920 = 10 x (6 << 5): the X-T3 5.11 FHD recording output, 5120
+        // bytes a line at the firmware's pitch 0x1800.
+        for (width, exponent, stride) in
+            [(1920, 5, 0x1800), (192, 5, 576), (96, 4, 256), (12, 1, 32)]
+        {
+            let (mut d, mut h) = output(new(), 0x101, width, exponent, stride);
+            let mut cx = Cx::new(&mut h, 0, 0, 0);
+            d.advance(&mut cx);
+            assert_eq!(cx.refusal(), None, "{width}");
+            let (w, s) = (width as usize / 6 * 16, stride as usize);
+            assert_eq!(h.ram[64..64 + w], group.repeat(width as usize / 6));
+            assert_eq!(h.ram[64 + s..64 + s + w], h.ram[64..64 + w]);
+            assert!(h.ram[64 + w..64 + s].iter().all(|v| *v == 0xaa), "{width}");
+            assert!(
+                h.ram[..64]
+                    .iter()
+                    .chain(&h.ram[64 + 2 * s..])
+                    .all(|v| *v == 0xaa)
+            );
+            assert!(h.irqs.contains(&(33, 108, true)));
+            assert_eq!(d.state.frames, 1);
+            assert!(d.state.pending);
+        }
+        // A width the factor 6 does not divide and a pitch shorter than the
+        // line stay refused, as do formats 2 and 3.
+        for (width, stride) in [(1920 - 64, 0x1800), (1920, 5120 - 4)] {
+            let (mut d, mut h) = output(new(), 0x101, width, 5, stride);
+            let mut cx = Cx::new(&mut h, 0, 0, 0);
+            d.advance(&mut cx);
+            assert!(cx.refusal().is_some(), "{width} {stride}");
+            assert_eq!(d.state.frames, 0);
+            assert!(h.ram.iter().all(|v| *v == 0xaa));
+        }
+        for format in [0x102, 0x103, 0x1] {
+            let (mut d, mut h) = output(new(), format, 192, 5, 200);
+            let mut cx = Cx::new(&mut h, 0, 0, 0);
+            d.advance(&mut cx);
+            assert!(cx.refusal().is_some(), "{format:#x}");
+            assert_eq!(d.state.frames, 0);
+        }
+    }
+    #[test]
+    fn the_option_leaves_format_zero_unchanged() {
+        let (mut d, mut h) = setup(0x1000, 0x10030002);
+        d.packed10 = true;
+        h.now = 33;
+        d.advance(&mut Cx::new(&mut h, 0, 0x1000, 0));
+        let (mut f, mut g) = setup(0x1000, 0x10030002);
+        g.now = 33;
+        f.advance(&mut Cx::new(&mut g, 0, 0x1000, 0));
+        assert_eq!((d.save(), &h.ram, &h.irqs), (f.save(), &g.ram, &g.irqs));
+    }
+    #[test]
+    fn checkpoints_keep_the_format_option() {
+        let plain = Movdc::new(0xfff73000, 108, 3, 20, 81).unwrap();
+        let packed10 = Movdc::new(0xfff73000, 108, 3, 20, 81)
+            .unwrap()
+            .accept_packed10();
+        let saved = packed10.checkpoint().unwrap();
+        assert!(packed10.validate_checkpoint(&saved).is_ok());
+        assert!(plain.validate_checkpoint(&saved).is_err());
+        assert!(
+            packed10
+                .validate_checkpoint(&plain.checkpoint().unwrap())
+                .is_err()
+        );
     }
 }
