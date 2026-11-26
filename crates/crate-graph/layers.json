@@ -49,7 +49,7 @@
       "fujimod-emulator-xp5-io",
       "fujimod-emulator-xp5-storage"
     ],
-    "plan": ["fujimod-emulator-exr2-plan"],
+    "plan": ["fujimod-emulator-exr2-plan", "fujimod-emulator-board-graph"],
     "board": [
       "fujimod-emulator-exr2-board",
       "fujimod-emulator-preparation",
@@ -84,7 +84,6 @@
       "fujimod-emulator-cli",
       "fujimod-camera",
       "fujimod-emulator-camera",
-      "fujimod-emulator-xp5-bringup",
       "fujimod-emulator-ip-dmp-webgpu",
       "fujimod-emulator-javascript",
       "fujimod-emulator-models",
@@ -93,7 +92,11 @@
       "fujimod-python-graphics",
       "fujimod-python-host-image",
       "fujimod-python-module",
-      "fujimod-python-xp4"
+      "fujimod-python-xp4",
+      "fujimod-emulator-gui",
+      "fujimod-emulator-gui-app",
+      "fujimod-mcp",
+      "fujimod-mcp-camera"
     ],
     "other": [
       "fujimod-bindgen",
@@ -142,7 +145,12 @@
       "fujimod-recovery",
       "fujimod-runtime-install",
       "fujimod-catalog-memory-reservations",
-      "fujimod-sync-protocol"
+      "fujimod-sync-protocol",
+      "fujimod-catalog-format",
+      "fujimod-catalog-wiring",
+      "fujimod-mcp-core",
+      "fujimod-multishot",
+      "fujimod-emulator-controls"
     ]
   },
   "remaining": {
@@ -150,6 +158,7 @@
     "model_dependencies": {
       "fujimod-emulator-xp5-board": [
         "fujimod-emulator-graphics",
+        "fujimod-emulator-image-codecs",
         "fujimod-emulator-ip",
         "fujimod-emulator-ip-arm",
         "fujimod-emulator-ip-dmp",
@@ -179,14 +188,26 @@
         "fujimod-emulator-ip-arm",
         "fujimod-emulator-ip-dmp",
         "fujimod-emulator-parts-controls",
+        "fujimod-emulator-xp4-display",
         "fujimod-emulator-xp4-io"
       ],
-      "fujimod-python-emulator": ["fujimod-emulator-ip"]
+      "fujimod-python-emulator": ["fujimod-emulator-ip"],
+      "fujimod-emulator": ["fujimod-emulator-ip-arm"],
+      "fujimod-emulator-boot": [
+        "fujimod-emulator-parts-controls",
+        "fujimod-emulator-xp5-display",
+        "fujimod-emulator-xp5-io",
+        "fujimod-emulator-xp5-storage"
+      ]
     },
     "oversize_models": [
       "fujimod-emulator-exr2-gpu",
       "fujimod-emulator-ip",
-      "fujimod-emulator-ip-dmp"
+      "fujimod-emulator-ip-dmp",
+      "fujimod-emulator-parts-lens",
+      "fujimod-emulator-xp4-io",
+      "fujimod-emulator-xp5-imaging",
+      "fujimod-emulator-xp5-io"
     ],
     "interface_devices": [
       "fujimod-emulator-devices/src/exr.rs",
@@ -203,7 +224,6 @@
       "fujimod-emulator-devices/src/exr2/pulse/block86000.rs",
       "fujimod-emulator-devices/src/keyed_io.rs",
       "fujimod-emulator-devices/src/lz_osd.rs",
-      "fujimod-emulator-devices/src/parts/controls.rs",
       "fujimod-emulator-devices/src/parts/hdmi_sink.rs"
     ]
   }
