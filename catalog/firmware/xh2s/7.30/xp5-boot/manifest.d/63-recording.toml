@@ -1,0 +1,36 @@
+# X-H2S interrupt source 0xa at 0x1c0a038 maps to INTID 203.
+[[device]]
+base = 0xffd0c000
+size = 0x1000
+kind = "imaging-resz"
+[device.options]
+registers = [
+  { offset = 0x00, mode = "constant", value = 0x1 },
+  { offset = 0x108, mode = "constant", value = 0x01000100 },
+]
+irq = 203
+starts = [{ offset = 0x04, mask = 0x1 }]
+delay_us = 200
+completion = [{ offset = 0x10c, set = 0x1 }, { offset = 0x04, clear = 0x1 }]
+ack = { offset = 0x110, mode = "w1c", status_offset = 0x10c, bits = 0x3 }
+irq_mask_offset = 0x114
+irq_mask_bit = 0
+irq_mask_set_masks = false
+
+# X-H2S interrupt source 0x18 at 0x1c0a118 maps to INTID 218.
+[[device]]
+base = 0xffd24000
+size = 0x1000
+kind = "imaging-tnr"
+[device.options]
+registers = [
+  { offset = 0x000, mode = "constant", value = 0x1 },
+]
+irq = 218
+starts = [{ offset = 0x04, mask = 0x1 }]
+delay_us = 200
+completion = [{ offset = 0x314, set = 0x1 }, { offset = 0x04, clear = 0x1 }]
+ack = { offset = 0x310, mode = "w1c", status_offset = 0x314, bits = 0x1 }
+irq_mask_offset = 0x30c
+irq_mask_bit = 0
+irq_mask_set_masks = false

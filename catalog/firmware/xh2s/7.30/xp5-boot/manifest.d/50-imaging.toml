@@ -104,15 +104,20 @@ frame_period_us = 33333
 source_luma = 128
 
 [[device]]
+# Register-list DMA uses interrupt source 0x15 (INTID 230) and a functional completion delay.
 base = 0xffd01000
 size = 0x1000
 kind = "imaging-rifp-io"
+[device.options]
+queue_completion_us = 5
 
 [[device]]
+# Include the colour and correction sub-blocks programmed during Movie REC.
 base = 0xffd02000
-size = 0x1000
+size = 0xa000
 kind = "imaging-rifp"
 [device.options]
+retain_words = true
 completion_us = 1000
 source_luma = 128
 
@@ -124,3 +129,23 @@ size = 0x1000
 kind = "imaging-buffer"
 [device.options]
 completion_us = 8000
+
+# IIFP control and IRQ 206 (source 0x9). The model supplies completion timing.
+[[device]]
+base = 0xff975000
+size = 0x1000
+kind = "completion-stub"
+[device.options]
+registers = [
+  { offset = 0x00, mode = "constant", value = 0x1 },
+  { offset = 0x98, mode = "constant", value = 0x1 },
+  { offset = 0x100, mode = "constant", value = 0x1 },
+]
+irq = 206
+starts = [{ offset = 0x04, mask = 0x1 }]
+delay_us = 200
+completion = [{ offset = 0x104, set = 0x1 }, { offset = 0x04, clear = 0x1 }]
+ack = { offset = 0x108, mode = "w1c", status_offset = 0x104, bits = 0x1 }
+irq_mask_offset = 0x10c
+irq_mask_bit = 0
+irq_mask_set_masks = false
