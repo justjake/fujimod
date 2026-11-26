@@ -33,11 +33,19 @@ impl Contacts {
     }
     pub fn set(&self, present: bool, protected: bool) {
         let level = present as u8 | (protected as u8) << 1;
-        self.0
-            .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |bits| {
-                Some(bits & !CONTACTS | level)
-            })
-            .ok();
+        self.replace(CONTACTS, level);
+    }
+    /// Replaces the bits under `mask` with `value`, leaving the others as they are.
+    fn replace(&self, mask: u8, value: u8) {
+        let mut bits = self.0.load(Ordering::Relaxed);
+        while let Err(current) = self.0.compare_exchange_weak(
+            bits,
+            bits & !mask | value,
+            Ordering::Relaxed,
+            Ordering::Relaxed,
+        ) {
+            bits = current;
+        }
     }
     /// True while the slot's UHS-II port has its interface enabled. The slot's
     /// lines then belong to the UHS-II PHY, not to the 4-bit SD interface.
@@ -50,11 +58,7 @@ impl Contacts {
         (self.0.load(Ordering::Relaxed) & INTERFACE_CLOCK) >> 4
     }
     pub fn select_interface_clock(&self, field: u8) {
-        self.0
-            .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |bits| {
-                Some(bits & !INTERFACE_CLOCK | (field & 3) << 4)
-            })
-            .ok();
+        self.replace(INTERFACE_CLOCK, (field & 3) << 4);
     }
     pub fn select_uhs2_interface(&self, enabled: bool) {
         if enabled {
