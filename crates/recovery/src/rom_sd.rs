@@ -5,6 +5,7 @@ use crate::image::{
 };
 use image::{Result, extent, require, word};
 use serde::{Deserialize, Serialize};
+use std::ops::Range;
 
 #[derive(Clone, Copy, Debug, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
@@ -20,6 +21,60 @@ pub struct Located {
     pub packaging: Packaging,
     pub missing: Vec<String>,
 }
+
+/// Bound a device's update payload in the original, non-inverted type-5 DAT.
+/// A locator running on this slice produces source offsets relative to the slice.
+pub fn select_xpp_device(source: &[u8], selector: u8) -> Result<Range<usize>> {
+    const MODEL_END: usize = 0x204;
+    const VERSION_END: usize = 0x20c;
+    const DEVICE_OFFSET: usize = 0x214;
+    const FLASH_HEADER: [u8; 16] = [
+        0, 0, 0, 0, 255, 255, 255, 255, 170, 170, 170, 170, 85, 85, 85, 85,
+    ];
+
+    let header = fujimod_firmware::outer_header(source)?;
+    require(
+        header.kind == 5,
+        "An XPP device selector requires a type-5 update",
+    )?;
+    let model = &header.header[..MODEL_END];
+    let version = &header.header[MODEL_END..VERSION_END];
+    let mut devices = Vec::new();
+    for (index, word_bytes) in source.chunks_exact(4).enumerate() {
+        if word_bytes != &model[..4] {
+            continue;
+        }
+        let start = index * 4;
+        if source.get(start..start + MODEL_END) != Some(model) {
+            continue;
+        }
+        let flash = start + header.payload_offset;
+        require(
+            source.get(start + MODEL_END..start + VERSION_END) == Some(version)
+                && source.get(flash..flash + FLASH_HEADER.len()) == Some(&FLASH_HEADER),
+            "Type-5 device header differs from the update version or flash header",
+        )?;
+        let device = u8::try_from(word(source, start + DEVICE_OFFSET)?)
+            .ok()
+            .filter(|device| *device != 0)
+            .ok_or_else(|| image::Error::Invalid("Invalid type-5 device selector".into()))?;
+        require(
+            devices.iter().all(|(other, _)| *other != device),
+            "Repeated type-5 device selector",
+        )?;
+        devices.push((device, start));
+    }
+
+    let index = devices
+        .iter()
+        .position(|(device, _)| *device == selector)
+        .ok_or_else(|| image::Error::Invalid(format!("No type-5 payload for device {selector}")))?;
+    let end = devices
+        .get(index + 1)
+        .map_or(source.len(), |(_, start)| *start);
+    Ok(devices[index].1..end)
+}
+
 pub(super) fn source(
     data: &[u8],
     offset: usize,
@@ -623,6 +678,41 @@ pub fn locate(processor: Processor, data: &[u8]) -> Result<Located> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn type5_update() -> Vec<u8> {
+        let mut bytes = vec![0; 0x1000];
+        for (start, device) in [(0, 1), (0x800, 2)] {
+            image::put(&mut bytes, start, 5).unwrap();
+            image::put(&mut bytes, start + 0x204, 1).unwrap();
+            image::put(&mut bytes, start + 0x208, 32).unwrap();
+            image::put(&mut bytes, start + 0x214, device).unwrap();
+            for (index, value) in [0, u32::MAX, 0xaaaaaaaa, 0x55555555]
+                .into_iter()
+                .enumerate()
+            {
+                image::put(&mut bytes, start + 0x268 + index * 4, value).unwrap();
+            }
+        }
+        bytes
+    }
+
+    #[test]
+    fn selects_each_type5_device_without_crossing_into_its_neighbor() {
+        let update = type5_update();
+        assert_eq!(select_xpp_device(&update, 1).unwrap(), 0..0x800);
+        assert_eq!(select_xpp_device(&update, 2).unwrap(), 0x800..0x1000);
+        assert!(select_xpp_device(&update, 3).is_err());
+    }
+
+    #[test]
+    fn refuses_invalid_type5_device_headers_even_when_selecting_the_first() {
+        for (offset, update_word) in [(0, 4), (0xa04, 2), (0xa14, 1), (0xa14, 0), (0xa70, 0)] {
+            let mut update = type5_update();
+            image::put(&mut update, offset, update_word).unwrap();
+            assert!(select_xpp_device(&update, 1).is_err(), "{offset:#x}");
+        }
+    }
+
     fn flash_probe_loader() -> Vec<u8> {
         let mut code = vec![0; 0x1000];
         let branch = |at: usize, target: usize| {

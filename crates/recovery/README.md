@@ -354,6 +354,10 @@ transfer sizes, and CRC32.
 `cargo run -p fujimod-recovery --example locate_rom_sd -- exr UPDATE.DAT`
 emits freshly located startup plans and header facts from the supplied update.
 Use `exrpro` or `xpp` for the other processor families.
+For a type-5 X-Processor Pro update with more than one device payload, pass
+`--device-selector N` after the update path. The locator reports the selected
+payload's offset and size in the original DAT. The startup plan and header
+source offsets are relative to that payload.
 
 ## Green LED card
 
