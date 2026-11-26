@@ -42,6 +42,12 @@ impl Decoder<'_> {
     /// still holds the viewfinder's 1280x960 window; its next present writes
     /// the 720x480 window. What the panel shows for such a frame is not
     /// modeled, so no frame is published for it.
+    ///
+    /// A video window that starts on the panel is cut at the panel's edge.
+    /// Playing a 16:9 movie, the 5.11 firmware centers it in its 480-line
+    /// window: the 720x405 picture sits at the top of a 720x480 buffer, shown
+    /// at 1:1 from y 37 = (480 - 405) / 2. The 37 rows past the panel are the
+    /// unused bottom of that buffer, below the picture.
     fn plane(&self, video: bool, width: u32, height: u32) -> Result<Option<Plane>, String> {
         let (address, stride, geometry, order) = if video {
             if self.video.is_none() || self.r(0x164) > 3 || self.r(0x16c) & !0xfff != 0 {
@@ -87,6 +93,11 @@ impl Decoder<'_> {
         {
             return Err("Invalid XP4 LCDC picture geometry/address".into());
         }
+        let (w, h) = if video && x < width && y < height {
+            (w.min(width - x), h.min(height - y))
+        } else {
+            (w, h)
+        };
         if x + w > width || y + h > height {
             return Ok(None);
         }
@@ -270,5 +281,54 @@ mod tests {
             tint[0] > gray[0] && tint[1] < gray[1] && tint[1] > gray[1] - 20,
             "{tint:?}"
         );
+    }
+    /// X-T3 5.11 playing a 1920x1080 movie on the 720x480 rear screen: the
+    /// video window is the whole 720x480 buffer at 1:1 from y 37, and the
+    /// panel scans its rows 0 to 442. A video window starting past the panel,
+    /// and a picture window past the panel, still publish no frame.
+    #[test]
+    fn a_video_window_past_the_panel_is_cut_at_its_edge() {
+        let mut regs = vec![0; REGISTER_BYTES / 4];
+        for (o, v) in [
+            (4, 1),
+            (8, 0x10),
+            (0x14, 720),
+            (0x20, 480),
+            (0x168, 0x2b46_5000),
+            (0x16c, 0xb8),
+            (0x170, 0x1e0_02d0),
+            (0x174, 0x25_0000),
+            (0x178, 0x1e0_02d0),
+            (0x17c, 0x1000_1000),
+        ] {
+            regs[o / 4] = v;
+        }
+        let out = decode(&regs, None, Some(Video::YyCbCr422))
+            .unwrap()
+            .unwrap();
+        let p = &out.layers[0].plane;
+        assert_eq!(out.layers[0].id, "4");
+        assert_eq!(
+            (p.work_x, p.work_y, p.work_width, p.work_height),
+            (0, 37, 720, 443)
+        );
+        assert_eq!(
+            (p.source_width, p.source_height, p.stride),
+            (720, 480, 0xb8 * 8)
+        );
+        let rgba = out
+            .render(|a, n| {
+                assert!(a >= 0x2b46_5000);
+                Ok([128, 128, 128, 128].repeat(n / 4))
+            })
+            .unwrap();
+        assert_eq!(rgba.len(), 720 * 480 * 4);
+        // Red of column 0: black above the window, gray on it to the last row.
+        let row = |y: usize| rgba[4 * 720 * y];
+        assert_eq!(row(36), 0);
+        assert!(row(37) > 100 && row(479) == row(37));
+        regs[0x174 / 4] = 480 << 16;
+        let video = Some(Video::YyCbCr422);
+        assert!(decode(&regs, None, video).unwrap().is_none());
     }
 }
