@@ -2,7 +2,6 @@
 //! Instruction encodings follow the pinned Cortex-R5 Unicorn translator.
 
 use fujimod_emulator_cpu::{Cpu, Model, Register, arm};
-use std::cell::Cell;
 
 pub mod abort;
 pub mod core;
@@ -10,31 +9,6 @@ pub mod data_cache;
 pub mod tcm;
 #[cfg(not(target_os = "emscripten"))]
 pub mod worker;
-
-thread_local! {
-    static APPROXIMATE_GUEST_TICK: Cell<Option<u64>> = const { Cell::new(None) };
-}
-
-pub(crate) fn approximate_guest_tick() -> Option<u64> {
-    APPROXIMATE_GUEST_TICK.with(Cell::get)
-}
-
-pub(crate) fn publish_guest_tick(tick: Option<u64>) {
-    APPROXIMATE_GUEST_TICK.with(|current| current.set(tick));
-}
-
-pub(crate) struct GuestTickScope;
-impl GuestTickScope {
-    pub(crate) fn new() -> Self {
-        publish_guest_tick(None);
-        Self
-    }
-}
-impl Drop for GuestTickScope {
-    fn drop(&mut self) {
-        publish_guest_tick(None);
-    }
-}
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct IrqEntry {

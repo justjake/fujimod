@@ -63,6 +63,23 @@ impl Cpu for Core {
         }
         Ok(())
     }
+    fn set_loop_mode(&self, mode: loops::LoopMode) -> Result<(), String> {
+        let e = &self.execution;
+        e.memory.require_stopped()?;
+        if e.loop_mode.get() != mode {
+            e.cpu.invalidate_code(None)?;
+            e.loop_mode.set(mode);
+        }
+        Ok(())
+    }
+    fn set_loop_window(&self, stable: bool) -> Result<(), String> {
+        let e = &self.execution;
+        if e.active.get() {
+            return Err("loop window requires a stopped processor".into());
+        }
+        e.loop_window.set(stable);
+        Ok(())
+    }
     fn set_guest_clock(&self, clock: Clock) -> Result<(), String> {
         let e = &self.execution;
         if e.active.get() {
@@ -255,8 +272,13 @@ impl Cpu for Core {
         if e.active.get() {
             return Err("nested A-profile execution is refused".into());
         }
-        let _guest_tick =
-            crate::GuestClockTickScope::new(e.policy.get() == ExecutionPolicy::Interactive);
+        let _guest_tick = crate::GuestClockTickScope::new(e.policy.get());
+        e.prove_loops.set(
+            e.loop_window.replace(false)
+                && e.can_prove_loops()
+                && request.until.is_none()
+                && request.instructions.is_some(),
+        );
         e.count.set(0);
         unsafe { (*e.record.as_ptr()).enabled = if e.coarse() { 2 } else { 1 } };
         e.reset();

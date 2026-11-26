@@ -41,6 +41,9 @@ struct Execution {
     record: NonNull<BlockAccounting>,
     policy: Cell<ExecutionPolicy>,
     clock: Cell<Option<Clock>>,
+    loop_mode: Cell<loops::LoopMode>,
+    loop_window: Cell<bool>,
+    prove_loops: Cell<bool>,
     ring: UnsafeCell<Box<[u64; 64]>>,
     owned: RefCell<Vec<fujimod_emulator_cpu::memory::Backing>>,
     count: Cell<u64>,
@@ -128,6 +131,9 @@ impl Core {
             record,
             policy: Cell::new(ExecutionPolicy::Exact),
             clock: Cell::new(None),
+            loop_mode: Cell::default(),
+            loop_window: Cell::new(false),
+            prove_loops: Cell::new(false),
             ring: UnsafeCell::new(Box::new([0; 64])),
             owned: RefCell::new(vec![]),
             count: Cell::new(0),
@@ -459,6 +465,32 @@ impl Execution {
         }
         let _ = self.cpu.stop();
     }
+    // B #0 takes one instruction and leaves every architectural register,
+    // memory location and pin alone. Other loops do not qualify here.
+    const SELF_BRANCH: u32 = 0x1400_0000;
+
+    fn can_prove_loops(&self) -> bool {
+        self.coarse() && self.loop_mode.get() == loops::LoopMode::Accelerate
+    }
+
+    fn skip_self_branch(&self, word: u32) -> bool {
+        if word != Self::SELF_BRANCH || !self.prove_loops.get() || self.irq.get() || self.fiq.get()
+        {
+            return false;
+        }
+        let observers = self.index.borrow();
+        if !observers.blocks.is_empty()
+            || !observers.instructions.is_empty()
+            || !observers.stores.is_empty()
+        {
+            return false;
+        }
+        // At this exact instruction boundary each entry is identical. The
+        // owner has bounded the whole run by the next change to its inputs.
+        self.count.set(self.cap.get());
+        true
+    }
+
     fn classify(&self, address: u64, word: u32) -> Result<Translation, String> {
         let physical = self.cpu.translate(address, Access::Fetch)?;
         if self.memory.note_code(self.id.get(), physical, 4)? {
@@ -478,6 +510,7 @@ impl Execution {
         let instruction = if framework {
             InstructionDisposition::Replace
         } else if wide_exact
+            || self.can_prove_loops() && word == Self::SELF_BRANCH
             || boundary
             || (self.is_coherent()
                 && (coherent_cpu::maintenance(word).is_some()
@@ -624,6 +657,8 @@ impl Execution {
             if self.framework(word) {
                 self.count.set(self.count.get() - 1);
                 self.exit.set(Some(word));
+                self.cpu.stop()?;
+            } else if self.skip_self_branch(word) {
                 self.cpu.stop()?;
             }
         }
@@ -910,6 +945,30 @@ mod interactive_tests {
                 InstructionDisposition::Execute
             ));
         }
+    }
+
+    #[test]
+    fn self_branch_proof_matches_interpreter_state_and_progress() {
+        let cpu = core();
+        set(&cpu, Register::Pstate, 0x3c5);
+        cpu.map_zeroed(0x1000, 0x4000, 7).unwrap();
+        cpu.write_memory(0x1000, &Execution::SELF_BRANCH.to_le_bytes())
+            .unwrap();
+        cpu.set_execution_policy(ExecutionPolicy::Interactive)
+            .unwrap();
+        let initial = cpu.snapshot(None).unwrap();
+        let execute = |mode| {
+            cpu.restore(&*initial).unwrap();
+            cpu.set_loop_mode(mode).unwrap();
+            cpu.set_loop_window(true).unwrap();
+            run(&cpu, 0x1000, 513);
+            assert_eq!(cpu.instruction_progress(), Some(513));
+            cpu.state().unwrap()
+        };
+        assert_eq!(
+            execute(loops::LoopMode::Disabled),
+            execute(loops::LoopMode::Accelerate)
+        );
     }
 
     unsafe fn read(_: u64, _: u32, data: *mut c_void) -> u64 {

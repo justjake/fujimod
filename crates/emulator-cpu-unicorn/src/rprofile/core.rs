@@ -670,7 +670,7 @@ impl Execution {
             .get()
             .map(|clock| clock.after(self.count.get()).map(|current| current.now))
             .transpose()?;
-        crate::rprofile::publish_guest_tick(tick);
+        crate::GuestClockTickScope::publish(tick);
         self.guest_profile_block(block.address);
         if self.thumb_common_block_path(block) {
             #[cfg(test)]

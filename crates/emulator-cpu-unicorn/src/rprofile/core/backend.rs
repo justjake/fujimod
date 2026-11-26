@@ -410,7 +410,7 @@ impl Cpu for Core {
     }
     fn run(&self, request: Run) -> Result<Exit, ExecutionError> {
         let e = &self.execution;
-        let _guest_tick_scope = crate::rprofile::GuestTickScope::new();
+        let _guest_tick_scope = crate::GuestClockTickScope::new(e.policy.get());
         if e.active.get() {
             return Err("nested R-profile execution is refused".into());
         }
