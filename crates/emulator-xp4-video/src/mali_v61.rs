@@ -60,11 +60,15 @@
 //! owes a picture. A bitstream with flags bit 0 (end of stream) owes one only
 //! if the session owed none yet. 1004 returns the held frames with flags 0,
 //! then 2008 OUT_FLUSHED. After that flush, an owed picture goes to the next
-//! held frame `picture_ticks` later. The frame is filled with 0x80 (luma
-//! rows x stride at +0x1c, and half as many chroma rows at +0x20 unless the
-//! format is the one-plane 0x121), then returned with flags 4 and 2006. The
-//! driver only takes a frame whose +0x10 is not 0, once its state reached 3.
-//! A JOB starts the session over. No H.264 is decoded.
+//! held frame `picture_ticks` later. The frame is filled with a neutral grey
+//! (luma rows x stride at +0x1c, and half as many chroma rows at +0x20 unless
+//! the format is the one-plane 0x121), then returned with flags 4 and 2006:
+//! 0x80 bytes for the 8-bit two-plane 0x201, `Y0L2_GREY` blocks for the
+//! 10-bit 0x121. 0x80 bytes read as Y0L2 are no grey: Y 128 and Cb, Cr 32 of
+//! 1023, which the 5.11 player's playback resize (RESZ source format 3, the
+//! frame's Y0L2) turns into a flat green picture. The driver only takes a
+//! frame whose +0x10 is not 0, once its state reached 3. A JOB starts the
+//! session over. No H.264 is decoded.
 //!
 //! With both options, each session follows its first buffer: encoding sends
 //! frames on page 2, decoding sends bitstreams there.
@@ -139,6 +143,10 @@ const STOPPED: u32 = 0;
 const PICTURE: u32 = 4;
 /// Frame format of the one-plane frames (chroma address 0).
 const ONE_PLANE: u32 = 0x121;
+/// Neutral grey of a one-plane frame: one Y0L2 block (2 x 2 pixels, one
+/// little-endian 64-bit word) whose four luma samples, Cb and Cr are all 512
+/// of 1023, at the bit positions of `fujimod_emulator_xpp::development::Y0L2`.
+const Y0L2_GREY: [u8; 8] = [0x00, 0x02, 0x08, 0x20, 0x00, 0x02, 0x08, 0x20];
 /// Largest grey fill of one frame plane, in bytes.
 const FILL_MAX: u64 = 64 << 20;
 /// Default `picture_ticks`: 10 ms at 54 MHz. The 5.11 player drops a decoded
@@ -498,19 +506,21 @@ impl MaliV61 {
         self.send(cx, lsid, 1, OUTPUT, Vec::new())?;
         self.send(cx, lsid, 5, STREAM, payload)
     }
-    /// Decode: fills a frame with 0x80 and returns it with 2006 OUTPUT.
+    /// Decode: fills a frame with grey and returns it with 2006 OUTPUT.
     /// Payload words: handle 1..2, flags 5, rows 6 (low half), format 7, luma
     /// 8, chroma 9, luma stride 14, chroma stride 15. The 5.11 driver
     /// (0x109a248, 0x109a314) sends either format 0x201 (two planes: chroma
     /// at luma + rows x stride, same stride, half the rows) or format 0x121
-    /// (one plane, stride 4 bytes per pixel, chroma 0). Each byte of 0x80 is a
-    /// neutral grey either way. A one-plane frame is filled over rows x stride.
+    /// (one plane, stride 4 bytes per pixel, chroma 0). A two-plane frame is
+    /// filled with 0x80 bytes, a one-plane frame with `Y0L2_GREY` blocks
+    /// over rows x stride.
     fn picture(&mut self, cx: &mut Cx<'_>, lsid: u32, mut frame: Vec<u32>) -> Result<(), String> {
         let rows = u64::from(frame[6] & 0xffff);
-        let chroma = if frame[7] & 0xffff == ONE_PLANE {
-            0
+        let one_plane = frame[7] & 0xffff == ONE_PLANE;
+        let (chroma, grey): (u32, &[u8]) = if one_plane {
+            (0, &Y0L2_GREY)
         } else {
-            frame[9]
+            (frame[9], &[0x80])
         };
         let planes = [(frame[8], frame[14], rows), (chroma, frame[15], rows / 2)];
         for (va, stride, n) in planes {
@@ -524,7 +534,8 @@ impl MaliV61 {
                 ));
                 continue;
             }
-            if let Err(e) = self.write_va(cx, lsid, va.into(), &vec![0x80; bytes as usize]) {
+            let fill: Vec<u8> = grey.iter().copied().cycle().take(bytes as usize).collect();
+            if let Err(e) = self.write_va(cx, lsid, va.into(), &fill) {
                 cx.log(&format!("xp4-mali-v61: frame plane not filled: {e}"));
             }
         }
@@ -1759,24 +1770,21 @@ mod tests {
             (v.state.owed, v.state.decoded, v.state.picture_at),
             (1, 2, None)
         );
-        assert!(
-            h.bytes(BUFFER_PAGES + 0x1000, 0x400)
+        // Each one-plane frame holds neutral Y0L2 blocks, its rows x stride only.
+        let grey = |at: u64| {
+            h.bytes(at, 0x400)
                 .unwrap()
-                .iter()
-                .all(|&b| b == 0x80)
-        );
+                .chunks(8)
+                .all(|block| block == Y0L2_GREY)
+        };
+        assert!(grey(BUFFER_PAGES + 0x1000));
         assert!(
             h.bytes(BUFFER_PAGES + 0x1400, 0x400)
                 .unwrap()
                 .iter()
                 .all(|&b| b == 0)
         );
-        assert!(
-            h.bytes(BUFFER_PAGES + 0x1800, 0x400)
-                .unwrap()
-                .iter()
-                .all(|&b| b == 0x80)
-        );
+        assert!(grey(BUFFER_PAGES + 0x1800));
         // The driver shows the first one and gives it back: the third picture.
         post(&mut h, 4, FRAME, &frame(9, STREAM_VA));
         ring(&mut v, &mut h);
