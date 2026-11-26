@@ -636,11 +636,11 @@ impl ReszJob {
             if y % 2 != 0 {
                 continue;
             }
-            for (pair, chroma) in row.chunks_exact_mut(2).enumerate() {
+            for (pair, chroma) in row.as_chunks_mut::<2>().0.iter_mut().enumerate() {
                 let x = p.column(2 * pair) & !1;
                 let y = p.row(y) & !1;
                 let color = sample(x, y);
-                chroma.copy_from_slice(&[color[1] as u8, color[2] as u8]);
+                *chroma = [color[1] as u8, color[2] as u8];
             }
             cx.ram_write(p.out_chroma + (y / 2 * p.out_pitch) as u64, &row)?;
         }
@@ -2143,11 +2143,11 @@ mod tests {
         rifp.advance(&mut cx);
         assert!(cx.refusal().is_none(), "{:?}", cx.refusal());
         let [luma, cb, cr] = ycbcr(colour).map(|v| v as u8);
-        for row in host.ram[0x2000..][..6 * 16].chunks_exact(16) {
+        for row in host.ram[0x2000..][..6 * 16].as_chunks::<16>().0 {
             assert_eq!(&row[..8], &[luma; 8]);
             assert_eq!(&row[8..], &[0xee; 8]);
         }
-        for row in host.ram[0x3000..][..3 * 16].chunks_exact(16) {
+        for row in host.ram[0x3000..][..3 * 16].as_chunks::<16>().0 {
             assert_eq!(&row[..8], &[cb, cr, cb, cr, cb, cr, cb, cr]);
             assert_eq!(&row[8..], &[0xee; 8]);
         }

@@ -170,7 +170,7 @@ pub fn rifp_raw_movie(
     // of +0x28 and +0x2c. The per-stripe low field of +0x20 saturates.
     let width = (word(0x28) & 0xffff) as usize + 1;
     let lines = (word(0x2c) & 0xffff) as usize + 1;
-    if offset % pitch % 3 != 0
+    if !(offset % pitch).is_multiple_of(3)
         || column + width > buffer.width as usize
         || row + lines > buffer.lines as usize
     {

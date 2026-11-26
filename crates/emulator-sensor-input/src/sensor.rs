@@ -421,8 +421,8 @@ impl Sensor {
         let peer_address = u64::from(reg(peer + 0x10)) | (u64::from(reg(peer + 0x0c) & 7) << 32);
         let pitch = stride / 2;
         if self.6.is_none()
-            || stride % 2 != 0
-            || width % 2 != 0
+            || !stride.is_multiple_of(2)
+            || !width.is_multiple_of(2)
             || peer_address == 0
             || address.abs_diff(peer_address) != pitch
             || width != reg(peer + 4) & 0x7fff
