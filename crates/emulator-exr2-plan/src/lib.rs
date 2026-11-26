@@ -110,9 +110,12 @@ impl Plan {
                     .as_array()
                     .ok_or("boot control has no selections")?;
                 let choice = |s: &serde_json::Value| s["choice"].as_u64().map(|c| c as usize);
-                if selections.iter().any(|s| choice(s).is_none_or(|c| c >= decoder.choices))
+                if selections
+                    .iter()
+                    .any(|s| choice(s).is_none_or(|c| c >= decoder.choices))
                     || !selections.iter().any(|s| {
-                        s["word"] == options["selection_reset"] && choice(s) == Some(decoder.initial)
+                        s["word"] == options["selection_reset"]
+                            && choice(s) == Some(decoder.initial)
                     })
                 {
                     return Err(

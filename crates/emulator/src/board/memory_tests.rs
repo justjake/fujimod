@@ -1,5 +1,5 @@
-use fujimod_catalog_configuration::RunEngine;
 use super::*;
+use fujimod_catalog_configuration::RunEngine;
 use fujimod_emulator_cpu::{Model, arm, memory::Backing};
 use fujimod_emulator_cpu_unicorn::rprofile;
 use fujimod_emulator_devices::{Cx, Device};
@@ -28,9 +28,11 @@ fn physical_ranges_are_checked_before_any_byte_changes() {
     assert_eq!(bytes, [0, 0, 1, 2, 3, 4, 0, 0]);
     assert!(memory.host_bytes_equal(0x1000, &bytes).unwrap());
     assert!(!memory.host_bytes_equal(0x1002, &[1, 2, 3, 5]).unwrap());
-    assert!(memory
-        .write_dma(&[], &domain, 0x1007, &[9, 9, 9], |_, _| {})
-        .is_err());
+    assert!(
+        memory
+            .write_dma(&[], &domain, 0x1007, &[9, 9, 9], |_, _| {})
+            .is_err()
+    );
     memory.read_host(0x1000, &mut bytes).unwrap();
     assert_eq!(bytes, [0, 0, 1, 2, 3, 4, 0, 0]);
     bytes.fill(0x55);
@@ -78,9 +80,11 @@ fn bus_permissions_preflight_a_whole_transfer_and_host_loading_is_explicit() {
         .unwrap();
     let owner = domain.lock().unwrap().register(4).unwrap();
     domain.lock().unwrap().load(owner, 0x1000, 4);
-    assert!(memory
-        .write_dma(&[], &domain, 0x1002, &[9; 4], |_, _| {})
-        .is_err());
+    assert!(
+        memory
+            .write_dma(&[], &domain, 0x1002, &[9; 4], |_, _| {})
+            .is_err()
+    );
     assert!(domain.lock().unwrap().reservation(owner).is_some());
     let mut bytes = [0; 8];
     memory.read_host(0x1000, &mut bytes).unwrap();
@@ -106,7 +110,9 @@ fn high_canonical_backing_and_invalid_bus_maps_do_not_wrap_or_fall_back() {
     };
     let memory = memory::Memory::new(vec![(base, Backing::zeros(0x1000))], vec![map]).unwrap();
     let domain = fujimod_emulator_cpu::exclusive::Shared::default();
-    memory.write_dma(&[], &domain, 0x2001, &[42], |_, _| {}).unwrap();
+    memory
+        .write_dma(&[], &domain, 0x2001, &[42], |_, _| {})
+        .unwrap();
     let mut byte = [0];
     memory.read_dma(0x2001, &mut byte).unwrap();
     assert_eq!(byte, [42]);
@@ -461,8 +467,10 @@ fn continuation_stops_after_a_completed_store_and_tracks_physical_alias_reads() 
     assert!(board.continuation_end().unwrap());
     assert_eq!(board.instruction_counts(), vec![2, 0]);
     assert_eq!(word(&board, 0, 0x20000), 42);
-    assert!(board
-        .physical_bytes_equal(0x40010000, &42u32.to_le_bytes())
-        .unwrap());
+    assert!(
+        board
+            .physical_bytes_equal(0x40010000, &42u32.to_le_bytes())
+            .unwrap()
+    );
     assert_eq!(board.read_register(0, Register::Pc).unwrap(), 0x30008);
 }

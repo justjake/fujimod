@@ -43,17 +43,34 @@ impl Header {
     fn capture(board: &Session, identity: String) -> Self {
         let state = unsafe { &*board.inner.state.get() };
         Self {
-            identity, instructions: state.instructions, ticks: state.ticks, tick_phase: state.tick_phase,
-            device_scan_at: state.device_scan_at, per_core: state.per_core.clone(),
-            waiting: state.waiting.clone(), events: state.events.clone(), recent: state.recent.clone(),
-            milestones: state.milestones.clone(), cbar_reads: state.cbar_reads, gic: state.gic.clone(),
-            timer: state.timer.clone(), irq_entries: state.irq_entries.clone(),
-            undefined_entries: state.undefined_entries.clone(), prefetch_aborts: state.prefetch_aborts.clone(),
-            data_aborts: state.data_aborts.clone(), calls: state.calls.clone(),
-            pending_calls: state.pending_calls.clone(), observe_filter: state.observe_filter.clone(),
-            exclusive: state.exclusive.clone(), cache_dirty: state.cache_dirty, pmu: state.pmu.clone(),
-            low_alias: state.low_alias, remap_pending: state.remap_pending, remap_ready: state.remap_ready,
-            next_core: board.next_core.get(), quiescent: board.quiescent.get(),
+            identity,
+            instructions: state.instructions,
+            ticks: state.ticks,
+            tick_phase: state.tick_phase,
+            device_scan_at: state.device_scan_at,
+            per_core: state.per_core.clone(),
+            waiting: state.waiting.clone(),
+            events: state.events.clone(),
+            recent: state.recent.clone(),
+            milestones: state.milestones.clone(),
+            cbar_reads: state.cbar_reads,
+            gic: state.gic.clone(),
+            timer: state.timer.clone(),
+            irq_entries: state.irq_entries.clone(),
+            undefined_entries: state.undefined_entries.clone(),
+            prefetch_aborts: state.prefetch_aborts.clone(),
+            data_aborts: state.data_aborts.clone(),
+            calls: state.calls.clone(),
+            pending_calls: state.pending_calls.clone(),
+            observe_filter: state.observe_filter.clone(),
+            exclusive: state.exclusive.clone(),
+            cache_dirty: state.cache_dirty,
+            pmu: state.pmu.clone(),
+            low_alias: state.low_alias,
+            remap_pending: state.remap_pending,
+            remap_ready: state.remap_ready,
+            next_core: board.next_core.get(),
+            quiescent: board.quiescent.get(),
             memory: board.memory_geometry(),
         }
     }
@@ -61,20 +78,49 @@ impl Header {
     fn validate(&self, board: &Session, identity: &str) -> Result<(), String> {
         let live = unsafe { &*board.inner.state.get() };
         let cores = board.inner.cpus.len();
-        if self.identity != identity || self.memory != board.memory_geometry() || self.next_core >= cores
-            || [self.per_core.len(), self.waiting.len(), self.events.len(), self.recent.len(), self.irq_entries.len(),
-                self.undefined_entries.len(), self.prefetch_aborts.len(), self.data_aborts.len(),
-                self.pending_calls.len(), self.exclusive.len(), self.pmu.len()].into_iter().any(|n| n != cores)
-            || self.per_core.iter().try_fold(0u64, |sum, &n| sum.checked_add(n)) != Some(self.instructions)
+        if self.identity != identity
+            || self.memory != board.memory_geometry()
+            || self.next_core >= cores
+            || [
+                self.per_core.len(),
+                self.waiting.len(),
+                self.events.len(),
+                self.recent.len(),
+                self.irq_entries.len(),
+                self.undefined_entries.len(),
+                self.prefetch_aborts.len(),
+                self.data_aborts.len(),
+                self.pending_calls.len(),
+                self.exclusive.len(),
+                self.pmu.len(),
+            ]
+            .into_iter()
+            .any(|n| n != cores)
+            || self
+                .per_core
+                .iter()
+                .try_fold(0u64, |sum, &n| sum.checked_add(n))
+                != Some(self.instructions)
             || self.waiting.iter().any(|state| *state > 2)
             || self.recent.iter().any(|entries| entries.len() > 32)
             || self.observe_filter.len() != live.observe_filter.len()
             || self.calls.len() > 4096
-            || self.calls.iter().any(|call| call.core >= cores || call.args.len() > 10)
-            || self.pending_calls.iter().flatten().flat_map(|(_, indices)| indices).any(|&index| index >= self.calls.len())
+            || self
+                .calls
+                .iter()
+                .any(|call| call.core >= cores || call.args.len() > 10)
+            || self
+                .pending_calls
+                .iter()
+                .flatten()
+                .flat_map(|(_, indices)| indices)
+                .any(|&index| index >= self.calls.len())
             || self.low_alias != live.low_alias
-            || self.timer.as_ref().map(std::mem::discriminant) != live.timer.as_ref().map(std::mem::discriminant)
-            || self.pmu.iter().zip(&live.pmu).any(|(saved, live)| saved.as_ref().map(|p| &p.config) != live.as_ref().map(|p| &p.config))
+            || self.timer.as_ref().map(std::mem::discriminant)
+                != live.timer.as_ref().map(std::mem::discriminant)
+            || self.pmu.iter().zip(&live.pmu).any(|(saved, live)| {
+                saved.as_ref().map(|p| &p.config) != live.as_ref().map(|p| &p.config)
+            })
         {
             return Err("XP4 snapshot execution wiring or state differs".into());
         }
@@ -117,9 +163,14 @@ impl Header {
 
 impl Session {
     fn memory_geometry(&self) -> Vec<(u64, usize, u32)> {
-        std::iter::once((0, self.inner.ram.len(), 7)).chain(
-            self.inner.memory.iter().map(|window| (window.base, window.data.len(), window.permissions))
-        ).collect()
+        std::iter::once((0, self.inner.ram.len(), 7))
+            .chain(
+                self.inner
+                    .memory
+                    .iter()
+                    .map(|window| (window.base, window.data.len(), window.permissions)),
+            )
+            .collect()
     }
 
     fn snapshot_backings(&self) -> impl Iterator<Item = &Backing> {
@@ -130,10 +181,20 @@ impl Session {
         self.inner.host_mutation()?;
         self.inner.maintenance.ready(&self.inner.cpus)?;
         let state = unsafe { &*self.inner.state.get() };
-        if self.inner.counted || state.discovery.enabled || state.counted_core.is_some()
-            || state.failure.is_some() || state.redirected.is_some() || state.driver_guard.is_some()
-            || state.recorder.is_some() || state.memory_watch.is_some() || state.pc_trace.is_some()
-            || state.pc_observers.iter().any(|observer| !observer.is_empty()) || !state.xip.is_empty()
+        if self.inner.counted
+            || state.discovery.enabled
+            || state.counted_core.is_some()
+            || state.failure.is_some()
+            || state.redirected.is_some()
+            || state.driver_guard.is_some()
+            || state.recorder.is_some()
+            || state.memory_watch.is_some()
+            || state.pc_trace.is_some()
+            || state
+                .pc_observers
+                .iter()
+                .any(|observer| !observer.is_empty())
+            || !state.xip.is_empty()
         {
             return Err("XP4 portable snapshots require a stopped strict exact board without diagnostic hooks or live flash execution".into());
         }
@@ -144,15 +205,28 @@ impl Session {
     pub fn export_snapshot(&self, identity: &str) -> Result<Vec<u8>, String> {
         self.snapshot_boundary()?;
         let state = unsafe { &*self.inner.state.get() };
-        let devices = state.devices.as_ref().map(devices::Devices::checkpoint).transpose()?;
+        let devices = state
+            .devices
+            .as_ref()
+            .map(devices::Devices::checkpoint)
+            .transpose()?;
         let processors = self.inner.maintenance.portable(&self.inner.cpus)?;
-        let memory = self.snapshot_backings().map(|backing| {
-            let tracker = Tracker::new(backing.len());
-            unsafe { tracker.capture_all(backing.as_ptr()) }.to_bytes()
-        }).collect::<Result<Vec<_>, _>>()?;
+        let memory = self
+            .snapshot_backings()
+            .map(|backing| {
+                let tracker = Tracker::new(backing.len());
+                unsafe { tracker.capture_all(backing.as_ptr()) }.to_bytes()
+            })
+            .collect::<Result<Vec<_>, _>>()?;
         Checkpoint::encode(KIND, &Header::capture(self, identity.into()))?
             .with_children(devices.into_iter().collect())
-            .with_blobs(processors.into_iter().chain(memory).map(std::sync::Arc::from).collect())
+            .with_blobs(
+                processors
+                    .into_iter()
+                    .chain(memory)
+                    .map(std::sync::Arc::from)
+                    .collect(),
+            )
             .to_bytes()
     }
 
@@ -175,14 +249,22 @@ impl Session {
         if let Some((device, data)) = state.devices.as_ref().zip(saved.children().first()) {
             device.validate_checkpoint(data)?;
         }
-        let processors = self.inner.maintenance.import_portable(&self.inner.cpus, &saved.blobs()[..cores])?;
-        let memory = saved.blobs()[cores..].iter().zip(&header.memory)
-            .map(|(data, (_, bytes, _))| Image::from_bytes(data, *bytes)).collect::<Result<Vec<_>, _>>()?;
+        let processors = self
+            .inner
+            .maintenance
+            .import_portable(&self.inner.cpus, &saved.blobs()[..cores])?;
+        let memory = saved.blobs()[cores..]
+            .iter()
+            .zip(&header.memory)
+            .map(|(data, (_, bytes, _))| Image::from_bytes(data, *bytes))
+            .collect::<Result<Vec<_>, _>>()?;
         let result = (|| {
             for (backing, image) in self.snapshot_backings().zip(memory) {
                 unsafe { Tracker::new(backing.len()).restore(&image, backing.as_ptr()) }?;
             }
-            self.inner.maintenance.restore_portable(&self.inner.cpus, &processors)?;
+            self.inner
+                .maintenance
+                .restore_portable(&self.inner.cpus, &processors)?;
             let state = unsafe { &mut *self.inner.state.get() };
             if let Some((device, data)) = state.devices.as_mut().zip(saved.children().first()) {
                 device.restore_checkpoint(data)?;

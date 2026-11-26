@@ -50,9 +50,7 @@ impl Cluster {
         size: usize,
     ) -> Option<&fujimod_emulator_cpu_unicorn::aprofile::Core> {
         let end = address.saturating_add(size as u64);
-        if self.coherent.is_empty()
-            || !self.coherent.iter().any(|&(b, e)| address < e && b < end)
-        {
+        if self.coherent.is_empty() || !self.coherent.iter().any(|&(b, e)| address < e && b < end) {
             return None;
         }
         self.cpus.iter().find_map(|cpu| cpu.counted())
@@ -69,7 +67,11 @@ impl Cluster {
         if let Some(view) = &self.frozen_nor {
             let base = fujimod_emulator_xp4_storage::storage::FLASH;
             if address < base + view.len() as u64 && base < end {
-                if address < base || end > base + view.len() as u64 || permissions == 0 || permissions & 2 != 0 {
+                if address < base
+                    || end > base + view.len() as u64
+                    || permissions == 0
+                    || permissions & 2 != 0
+                {
                     return Err("Protected immutable NOR physical memory".into());
                 }
                 return Ok(unsafe { view.as_ptr().add((address - base) as usize).cast_mut() });
@@ -78,7 +80,11 @@ impl Cluster {
         if let Some(view) = &self.executable_nor {
             let base = fujimod_emulator_xp4_storage::storage::FLASH + view.offset() as u64;
             if address < base + view.len() as u64 && base < end {
-                if address < base || end > base + view.len() as u64 || permissions == 0 || permissions & 2 != 0 {
+                if address < base
+                    || end > base + view.len() as u64
+                    || permissions == 0
+                    || permissions & 2 != 0
+                {
                     return Err("Protected executable NOR physical memory".into());
                 }
                 return Ok(unsafe { view.as_ptr().add((address - base) as usize).cast_mut() });

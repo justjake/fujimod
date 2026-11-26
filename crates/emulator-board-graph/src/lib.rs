@@ -308,10 +308,7 @@ pub fn assemble_with_starts(
                     )
                 })?;
                 let clock_id = processor.clock_id.as_ref().ok_or_else(|| {
-                    format!(
-                        "SoC {} has no clock for processor {}",
-                        soc.id, processor.id
-                    )
+                    format!("SoC {} has no clock for processor {}", soc.id, processor.id)
                 })?;
                 let clock_hz = soc
                     .clocks
@@ -319,10 +316,7 @@ pub fn assemble_with_starts(
                     .find(|clock| clock.id == *clock_id)
                     .and_then(|clock| clock.frequency_hz)
                     .ok_or_else(|| {
-                        format!(
-                            "SoC {} has no frequency for clock {clock_id}",
-                            soc.id
-                        )
+                        format!("SoC {} has no frequency for clock {clock_id}", soc.id)
                     })?;
                 Some(fujimod_emulator::board::mprofile::Config {
                     clock_hz,
@@ -946,8 +940,13 @@ mod tests {
                     registers: vec![],
                 })
                 .collect();
-            let graph = assemble_with_starts(&selection, limit, rate, Some(1_000_000_000), &starts).unwrap();
-            let other = if drain == 0x6800_0000 { 0x6000_0000 } else { 0x6800_0000 };
+            let graph = assemble_with_starts(&selection, limit, rate, Some(1_000_000_000), &starts)
+                .unwrap();
+            let other = if drain == 0x6800_0000 {
+                0x6000_0000
+            } else {
+                0x6800_0000
+            };
             let cores = |address: u64| {
                 graph
                     .peripherals
@@ -990,9 +989,10 @@ mod tests {
                 registers: vec![],
             })
             .collect();
-        let error = assemble_with_starts(&selection, 0x4000_0000, rate, Some(1_000_000_000), &starts)
-            .err()
-            .unwrap();
+        let error =
+            assemble_with_starts(&selection, 0x4000_0000, rate, Some(1_000_000_000), &starts)
+                .err()
+                .unwrap();
         assert!(error.contains("core9"), "{error}");
     }
 }

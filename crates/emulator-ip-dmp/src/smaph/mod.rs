@@ -1283,7 +1283,11 @@ mod tests {
         }
     }
     fn register(bus: &mut TestBus, base: u64, size: u64) -> Result<(), String> {
-        bus.register(base, size, Box::new(Renderer::new(base, 153, PixmapReadback::RotatesChannels)?))?;
+        bus.register(
+            base,
+            size,
+            Box::new(Renderer::new(base, 153, PixmapReadback::RotatesChannels)?),
+        )?;
         bus.register(0xff90e73c, 4, Box::new(AddressHigh))?;
         Ok(())
     }

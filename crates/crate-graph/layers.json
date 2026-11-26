@@ -49,9 +49,7 @@
       "fujimod-emulator-xp5-io",
       "fujimod-emulator-xp5-storage"
     ],
-    "plan": [
-      "fujimod-emulator-exr2-plan"
-    ],
+    "plan": ["fujimod-emulator-exr2-plan"],
     "board": [
       "fujimod-emulator-exr2-board",
       "fujimod-emulator-preparation",
@@ -182,9 +180,7 @@
         "fujimod-emulator-parts-controls",
         "fujimod-emulator-xp4-io"
       ],
-      "fujimod-python-emulator": [
-        "fujimod-emulator-ip"
-      ]
+      "fujimod-python-emulator": ["fujimod-emulator-ip"]
     },
     "oversize_models": [
       "fujimod-emulator-exr2-gpu",

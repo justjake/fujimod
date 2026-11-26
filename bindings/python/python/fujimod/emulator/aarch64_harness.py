@@ -86,9 +86,10 @@ class Aarch64Devices:
     assets: tuple[Aarch64Asset, ...] = ()
 
     def __post_init__(self) -> None:
-        if not isinstance(self.definition, Mapping) or self.definition.get(
-            "kind"
-        ) in (None, "none"):
+        if not isinstance(self.definition, Mapping) or self.definition.get("kind") in (
+            None,
+            "none",
+        ):
             raise ValueError("Device set requires a native device definition kind")
         if not self.windows:
             raise ValueError("Device set requires at least one routine window")
@@ -547,7 +548,8 @@ class Aarch64DriverHarness:
             "readable": readable,
             "writable": writable,
             "devices": [
-                list(w) for w in (self.inputs.devices.windows if self.inputs.devices else ())
+                list(w)
+                for w in (self.inputs.devices.windows if self.inputs.devices else ())
             ],
             "transaction_limit": transaction_limit,
             "store_limit": store_limit,

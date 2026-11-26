@@ -65,7 +65,11 @@ unsafe fn substitute_callee(address: u64, _: u32, data: *mut c_void) {
     let (result, return_address, width) = if cpu.model() == Model::ArmV8A {
         (Register::X(0), Register::X(30), 8)
     } else {
-        (Register::Arm32(arm::Register::R(0)), Register::Arm32(arm::Register::R(14)), 4)
+        (
+            Register::Arm32(arm::Register::R(0)),
+            Register::Arm32(arm::Register::R(14)),
+            4,
+        )
     };
     let mut link = [0; 8];
     let redirect = (|| {
@@ -96,11 +100,14 @@ impl Board {
         }
         if stubs.len() + self.discovery_stub_contexts.len() > 4096
             || stubs.iter().any(|stub| {
-                let Some(cpu) = self.cpus.get(stub.core) else { return true; };
+                let Some(cpu) = self.cpus.get(stub.core) else {
+                    return true;
+                };
                 match cpu.model() {
                     Model::ArmV8A => stub.address & 3 != 0,
                     Model::CortexR5F | Model::CortexA7 => {
-                        stub.address & 1 != 0 || u32::try_from(stub.address).is_err()
+                        stub.address & 1 != 0
+                            || u32::try_from(stub.address).is_err()
                             || u32::try_from(stub.value).is_err()
                     }
                     Model::CortexM4 => true,

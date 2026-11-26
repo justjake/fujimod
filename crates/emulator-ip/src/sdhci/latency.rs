@@ -228,7 +228,11 @@ mod tests {
         let mut a = Model::new(latency(7)).unwrap();
         let mut b = Model::new(latency(7)).unwrap();
         let mut c = Model::new(latency(8)).unwrap();
-        let steps = |m: &mut Model| (0..32).map(|i| m.step(i * 1000, 17, Some(false), 4, 0, false, false)).collect::<Vec<_>>();
+        let steps = |m: &mut Model| {
+            (0..32)
+                .map(|i| m.step(i * 1000, 17, Some(false), 4, 0, false, false))
+                .collect::<Vec<_>>()
+        };
         let first = steps(&mut a);
         assert_eq!(first, steps(&mut b));
         assert_ne!(first, steps(&mut c));

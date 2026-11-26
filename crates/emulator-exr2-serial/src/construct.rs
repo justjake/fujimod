@@ -193,7 +193,10 @@ fn i2c_motor_bridge(builder: Builder<'_>, model: Model) -> Result<Built, String>
             if let Some(nd) = &optics.nd {
                 bridge.attach_nd(wire!(resources, id, nd, Aperture));
             }
-            bridge.attach_aperture(wire!(resources, id, optics.output, Aperture), optics.positions)?;
+            bridge.attach_aperture(
+                wire!(resources, id, optics.output, Aperture),
+                optics.positions,
+            )?;
         }
         Box::new(bridge)
     }))

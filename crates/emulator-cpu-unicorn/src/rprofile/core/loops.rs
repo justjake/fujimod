@@ -52,7 +52,10 @@ impl Loops {
         let hits = self.unsupported_model_hits.borrow();
         let mut entries: Vec<_> = hits.iter().collect();
         entries.sort_by_key(|(_, (_, count))| std::cmp::Reverse(*count));
-        eprintln!("unsupported loop iteration models: {} distinct PCs", hits.len());
+        eprintln!(
+            "unsupported loop iteration models: {} distinct PCs",
+            hits.len()
+        );
         for (&pc, (bytes, count)) in entries.into_iter().take(32) {
             let words = bytes_to_words(bytes);
             eprintln!("  pc=0x{pc:08x} entries={count} words={words:08x?}");
@@ -71,7 +74,9 @@ impl Loops {
             return;
         };
         let models = self.unsupported_models.borrow();
-        let Some(bytes) = models.get(&branch).filter(|bytes| bytes.len() == block.bytes as usize)
+        let Some(bytes) = models
+            .get(&branch)
+            .filter(|bytes| bytes.len() == block.bytes as usize)
         else {
             return;
         };

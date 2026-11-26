@@ -448,7 +448,10 @@ mod state_tests {
         source.latch(10).unwrap();
         let saved = source.clone();
         let before = source.fingerprint();
-        assert_eq!(before["current"]["pixels"]["contents"]["bytes"], 1536 * 1024 * 3);
+        assert_eq!(
+            before["current"]["pixels"]["contents"]["bytes"],
+            1536 * 1024 * 3
+        );
         source.set_frame(Frame::new(1, 1, FramePixels::Rgb24(vec![4, 5, 6].into())).unwrap());
         assert_ne!(source.fingerprint(), before);
         assert_eq!(saved.fingerprint(), before);
@@ -463,10 +466,18 @@ mod state_tests {
         let words = [0x1234, 0xff00, 0, 0xabcd];
         let frame = Frame::new(2, 2, FramePixels::Raw16(words.to_vec())).unwrap();
         let saved = frame.checkpoint().unwrap();
-        assert_eq!(saved.blobs()[0].as_ref(), [0x34, 0x12, 0x00, 0xff, 0, 0, 0xcd, 0xab]);
-        let other =
-            Frame::new(2, 2, FramePixels::Raw16(vec![0x1234, 0xff00, 0, 0xabce])).unwrap();
+        assert_eq!(
+            saved.blobs()[0].as_ref(),
+            [0x34, 0x12, 0x00, 0xff, 0, 0, 0xcd, 0xab]
+        );
+        let other = Frame::new(2, 2, FramePixels::Raw16(vec![0x1234, 0xff00, 0, 0xabce])).unwrap();
         assert_ne!(other.checkpoint().unwrap(), saved);
-        assert_eq!(Frame::from_checkpoint(&saved).unwrap().checkpoint().unwrap(), saved);
+        assert_eq!(
+            Frame::from_checkpoint(&saved)
+                .unwrap()
+                .checkpoint()
+                .unwrap(),
+            saved
+        );
     }
 }

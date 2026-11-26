@@ -1,18 +1,15 @@
 //! Pure XP5 device construction. Firmware transport, CPU execution and host
 //! output publication are supplied by the application, outside these models.
 use fujimod_emulator_devices::graph::{DeviceGraph, DeviceWindow};
+use fujimod_emulator_xp5_display::{display, panel_clock, panel_serial};
+use fujimod_emulator_xp5_imaging::serial_sink;
 use fujimod_emulator_xp5_io::{
     adc, connection_status, discarded_read, gates, gpio, mailbox, memory_configuration,
     register_input, reset_handshake, sd_controller_wrapper, timer, write_only_registers,
 };
-use fujimod_emulator_xp5_display::{display, panel_clock, panel_serial};
 use fujimod_emulator_xp5_storage::{
-    flash_storage,
-    flash_storage_controller,
-    flash_storage_dma,
-    nand_controller,
+    flash_storage, flash_storage_controller, flash_storage_dma, nand_controller,
 };
-use fujimod_emulator_xp5_imaging::serial_sink;
 use std::collections::BTreeMap;
 pub mod audio;
 pub mod clocks;
@@ -23,8 +20,8 @@ pub mod imaging;
 pub mod jpeg;
 pub mod lz;
 pub mod renderer;
-pub mod serial;
 pub mod sd;
+pub mod serial;
 pub mod uart;
 pub mod usb;
 
@@ -78,12 +75,26 @@ fn register_with_resources(
             )?;
         }
         "unmodeled-bus-drain" => {
-            if !window.options.is_empty() { return Err("unmodeled bus drain takes no options".into()); }
+            if !window.options.is_empty() {
+                return Err("unmodeled bus drain takes no options".into());
+            }
             bus.register(window.base, window.size, Box::new(UnmodeledBusDrain))?;
         }
         "sd-interface" => {
-            if window.size != 8 || !window.options.is_empty() {return Err("Invalid SD interface window".into());}
-            bus.register(window.base,window.size,Box::new(fujimod_emulator_xp5_io::sd_interface::Interface::for_slot(window.base, resources.sd.get(&(window.base & !0xfff)).map(|slot| slot.contacts.clone()))?))?;
+            if window.size != 8 || !window.options.is_empty() {
+                return Err("Invalid SD interface window".into());
+            }
+            bus.register(
+                window.base,
+                window.size,
+                Box::new(fujimod_emulator_xp5_io::sd_interface::Interface::for_slot(
+                    window.base,
+                    resources
+                        .sd
+                        .get(&(window.base & !0xfff))
+                        .map(|slot| slot.contacts.clone()),
+                )?),
+            )?;
         }
         "sd-controller-wrapper" => {
             if window.size != 4
@@ -136,12 +147,28 @@ fn register_with_resources(
                 return Err("invalid boot-control source window".into());
             }
             let inputs: fujimod_emulator_xp5_io::boot_control::Inputs =
-                toml::Value::Table(window.options.clone()).try_into().map_err(|e|format!("boot-control inputs: {e}"))?;
-            bus.register_windows(vec![
-                fujimod_emulator_devices::graph::Mapping { base:0xff90e000,size:4 },
-                fujimod_emulator_devices::graph::Mapping { base:0xff90e400,size:8 },
-                fujimod_emulator_devices::graph::Mapping { base:0xfa140000,size:4 },
-            ],Box::new(fujimod_emulator_xp5_io::boot_control::BootControl::new(inputs)))?;
+                toml::Value::Table(window.options.clone())
+                    .try_into()
+                    .map_err(|e| format!("boot-control inputs: {e}"))?;
+            bus.register_windows(
+                vec![
+                    fujimod_emulator_devices::graph::Mapping {
+                        base: 0xff90e000,
+                        size: 4,
+                    },
+                    fujimod_emulator_devices::graph::Mapping {
+                        base: 0xff90e400,
+                        size: 8,
+                    },
+                    fujimod_emulator_devices::graph::Mapping {
+                        base: 0xfa140000,
+                        size: 4,
+                    },
+                ],
+                Box::new(fujimod_emulator_xp5_io::boot_control::BootControl::new(
+                    inputs,
+                )),
+            )?;
         }
         "interprocessor-mailbox" => {
             if window.base != 0xff90e100 || window.size != 0x24 || !window.options.is_empty() {
@@ -168,7 +195,10 @@ fn register_with_resources(
             bus.register(
                 window.base,
                 window.size,
-                Box::new(discarded_read::DiscardedRead::new(window.base, window.size)?),
+                Box::new(discarded_read::DiscardedRead::new(
+                    window.base,
+                    window.size,
+                )?),
             )?;
         }
         "usb-connection-status" => {
@@ -271,9 +301,7 @@ fn register_with_resources(
             )?;
         }
         "memory-configuration" => {
-            if window.size != 0x1000
-                || window.options.keys().any(|key| key != "commit_ticks")
-            {
+            if window.size != 0x1000 || window.options.keys().any(|key| key != "commit_ticks") {
                 return Err("invalid memory-configuration window or options".into());
             }
             let commit_ticks = window
@@ -297,16 +325,24 @@ fn register_with_resources(
         }
         "bringup-stub" => {
             let options: fujimod_emulator_xp5_io::bringup_stub::Options =
-                toml::Value::Table(window.options.clone()).try_into().map_err(|e| format!("bring-up stub options: {e}"))?;
+                toml::Value::Table(window.options.clone())
+                    .try_into()
+                    .map_err(|e| format!("bring-up stub options: {e}"))?;
             bus.register(
                 window.base,
                 window.size,
-                Box::new(fujimod_emulator_xp5_io::bringup_stub::BringupStub::new(window.base, window.size, options)?),
+                Box::new(fujimod_emulator_xp5_io::bringup_stub::BringupStub::new(
+                    window.base,
+                    window.size,
+                    options,
+                )?),
             )?;
         }
         "completion-stub" => {
             let options: fujimod_emulator_xp5_io::completion_stub::Options =
-                toml::Value::Table(window.options.clone()).try_into().map_err(|e| format!("completion stub options: {e}"))?;
+                toml::Value::Table(window.options.clone())
+                    .try_into()
+                    .map_err(|e| format!("completion stub options: {e}"))?;
             // XP5 board time is in nanoseconds.
             let stub = fujimod_emulator_xp5_io::completion_stub::CompletionStub::new(
                 window.base,
@@ -314,7 +350,9 @@ fn register_with_resources(
                 options,
                 1000,
             )?;
-            if window.base == fujimod_emulator_xp5_imaging::imaging::mix::MIX_BASE && window.size == 0x1000 {
+            if window.base == fujimod_emulator_xp5_imaging::imaging::mix::MIX_BASE
+                && window.size == 0x1000
+            {
                 // MIX 0xffd22000: the same stub that, with XT5_STILL_PATH=real, also writes the
                 // HDR blend and composite (emulator-xp5-imaging imaging_mix.rs). Same device
                 // name and checkpoint, so the manifest and snapshots are unchanged.
@@ -339,14 +377,20 @@ fn register_with_resources(
                 return Err("invalid imaging-fcnv window".into());
             }
             let options: fujimod_emulator_xp5_io::completion_stub::Options =
-                toml::Value::Table(window.options.clone()).try_into().map_err(|e| format!("imaging-fcnv options: {e}"))?;
+                toml::Value::Table(window.options.clone())
+                    .try_into()
+                    .map_err(|e| format!("imaging-fcnv options: {e}"))?;
             let stub = fujimod_emulator_xp5_io::completion_stub::CompletionStub::new(
                 window.base,
                 window.size,
                 options,
                 1000,
             )?;
-            bus.register(window.base, window.size, Box::new(fujimod_emulator_xp5_imaging::imaging::fcnv::Fcnv::new(stub)))?;
+            bus.register(
+                window.base,
+                window.size,
+                Box::new(fujimod_emulator_xp5_imaging::imaging::fcnv::Fcnv::new(stub)),
+            )?;
         }
         "imaging-tnr" => {
             // TNR 0xffd24000: the completion stub that, with XT5_MOVIE_PATH=real, also copies
@@ -357,7 +401,9 @@ fn register_with_resources(
                 return Err("invalid imaging-tnr window".into());
             }
             let options: fujimod_emulator_xp5_io::completion_stub::Options =
-                toml::Value::Table(window.options.clone()).try_into().map_err(|e| format!("imaging-tnr options: {e}"))?;
+                toml::Value::Table(window.options.clone())
+                    .try_into()
+                    .map_err(|e| format!("imaging-tnr options: {e}"))?;
             let stub = fujimod_emulator_xp5_io::completion_stub::CompletionStub::new(
                 window.base,
                 window.size,
@@ -426,7 +472,11 @@ fn register_with_resources(
             bus.register(
                 window.base,
                 window.size,
-                Box::new(if readback { registers.with_readback() } else { registers }),
+                Box::new(if readback {
+                    registers.with_readback()
+                } else {
+                    registers
+                }),
             )?;
         }
         "audio-spi-sink" => {
@@ -536,7 +586,9 @@ fn register_with_resources(
             bus.register(
                 window.base,
                 window.size,
-                Box::new(timer::Timer::extended(window.base).with_pwm_outputs(resources.pwm.clone())),
+                Box::new(
+                    timer::Timer::extended(window.base).with_pwm_outputs(resources.pwm.clone()),
+                ),
             )?;
         }
         "timer" | "timer-focus-capture" => {
@@ -553,7 +605,9 @@ fn register_with_resources(
             bus.register(
                 window.base,
                 window.size,
-                Box::new(fujimod_emulator_devices::keyed_io::KeyedIoGroup::new(window.base)),
+                Box::new(fujimod_emulator_devices::keyed_io::KeyedIoGroup::new(
+                    window.base,
+                )),
             )?;
         }
         "adc" => {
@@ -581,16 +635,18 @@ fn register_with_resources(
             )?;
         }
         "gpio" | "gpio-port3" => {
-            if window
-                .options
-                .keys()
-                .any(|k| {
-                    !matches!(
-                        k.as_str(),
-                        "input_irqs" | "companion_input_irqs" | "feedback" | "initial_outputs" | "initial_registers" | "initial_inputs" | "pad_model"
-                    )
-                })
-            {
+            if window.options.keys().any(|k| {
+                !matches!(
+                    k.as_str(),
+                    "input_irqs"
+                        | "companion_input_irqs"
+                        | "feedback"
+                        | "initial_outputs"
+                        | "initial_registers"
+                        | "initial_inputs"
+                        | "pad_model"
+                )
+            }) {
                 return Err("unknown GPIO option".into());
             }
             if let Some(model) = window.options.get("pad_model") {
@@ -801,9 +857,9 @@ pub fn register_all(
                     Some(length) => start.checked_add(length),
                     None => Some(bytes.len()),
                 };
-                let part = end
-                    .and_then(|end| bytes.get(start..end))
-                    .ok_or_else(|| format!("flash storage seed_file {path}: slice outside the file"))?;
+                let part = end.and_then(|end| bytes.get(start..end)).ok_or_else(|| {
+                    format!("flash storage seed_file {path}: slice outside the file")
+                })?;
                 storage.seed_bytes(offset, part)?;
             }
         }
@@ -814,12 +870,9 @@ pub fn register_all(
         )?;
         aperture = true;
     }
-    for w in windows
-        .iter()
-        .filter(|w| {
-            w.kind != "flash-storage" && !general_dma::owns(&w.kind) && !audio::owns(&w.kind)
-        })
-    {
+    for w in windows.iter().filter(|w| {
+        w.kind != "flash-storage" && !general_dma::owns(&w.kind) && !audio::owns(&w.kind)
+    }) {
         match w.kind.as_str() {
             "imaging-serial-sink"
             | "focus-actuator"
@@ -969,9 +1022,12 @@ pub fn register_all(
 // still refuses; its presence supplies no completion or register value.
 struct UnmodeledBusDrain;
 impl fujimod_emulator_devices::Device for UnmodeledBusDrain {
-    fn name(&self) -> &'static str { "unmodeled-bus-drain" }
+    fn name(&self) -> &'static str {
+        "unmodeled-bus-drain"
+    }
     fn read(&mut self, cx: &mut fujimod_emulator_devices::Cx<'_>, _: u64, _: u8) -> u64 {
-        cx.unmodeled(); 0
+        cx.unmodeled();
+        0
     }
     fn write(&mut self, cx: &mut fujimod_emulator_devices::Cx<'_>, _: u64, _: u8, _: u64) {
         cx.unmodeled();

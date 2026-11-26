@@ -186,7 +186,10 @@ def sync(repository: Repository) -> Result:
 def fetch(repository: Repository, name: str) -> str | None:
     """Origin's commit for branch ``name``, or None when origin has no such branch."""
     fetched = repository.git(
-        "fetch", "-q", "origin", f"+refs/heads/{name}:refs/remotes/origin/{name}",
+        "fetch",
+        "-q",
+        "origin",
+        f"+refs/heads/{name}:refs/remotes/origin/{name}",
         check=False,
     )
     if fetched.returncode:
@@ -246,13 +249,21 @@ def replay(
     kept = dropped = 0
     cache: dict[tuple[str, str], str | None] = {}
     for commit in commits:
-        parents = repository.output("rev-list", "--parents", "-n", "1", commit).split()[1:]
+        parents = repository.output("rev-list", "--parents", "-n", "1", commit).split()[
+            1:
+        ]
         if len(parents) != 1:
             raise Failure(f"{commit[:10]} is a merge; rebase it by hand")
         moved = moved_pins(repository, commit, parents[0], cache, pin_maps)
         merged = repository.git(
-            "merge-tree", "--write-tree", "--name-only", "--no-messages",
-            f"--merge-base={parents[0]}", head, commit, check=False,
+            "merge-tree",
+            "--write-tree",
+            "--name-only",
+            "--no-messages",
+            f"--merge-base={parents[0]}",
+            head,
+            commit,
+            check=False,
         )
         lines = merged.stdout.strip().splitlines()
         if merged.returncode:
@@ -317,17 +328,28 @@ def rebased_pin(
     if key in cache:
         return cache[key]
     found = None
-    if submodule.git("cat-file", "-e", f"{pinned}^{{commit}}", check=False).returncode == 0:
-        if submodule.git(
-            "merge-base", "--is-ancestor", pinned, "HEAD", check=False
-        ).returncode == 0:
+    if (
+        submodule.git("cat-file", "-e", f"{pinned}^{{commit}}", check=False).returncode
+        == 0
+    ):
+        if (
+            submodule.git(
+                "merge-base", "--is-ancestor", pinned, "HEAD", check=False
+            ).returncode
+            == 0
+        ):
             found = pinned
     if found is None:
         wanted = patch_id(submodule, pinned)
         if wanted is not None:
             subject = submodule.output("log", "-1", "--format=%s", pinned)
             candidates = submodule.git(
-                "log", "--format=%H", "--fixed-strings", "--grep", subject, "HEAD",
+                "log",
+                "--format=%H",
+                "--fixed-strings",
+                "--grep",
+                subject,
+                "HEAD",
                 check=False,
             ).stdout.split()
             for candidate in candidates:
@@ -357,8 +379,10 @@ def moved_pins(
         old = entry(repository, parent, path)
         new = entry(repository, commit, path)
         if (
-            old is None or new is None
-            or old[0] != GITLINK or new[0] != GITLINK
+            old is None
+            or new is None
+            or old[0] != GITLINK
+            or new[0] != GITLINK
             or old[1] == new[1]
         ):
             continue
@@ -368,9 +392,7 @@ def moved_pins(
         submodule = Repository(root)
         if submodule.git("symbolic-ref", "-q", "HEAD", check=False).returncode:
             continue
-        target = rebased_pin(
-            submodule, new[1], cache, (pin_maps or {}).get(path)
-        )
+        target = rebased_pin(submodule, new[1], cache, (pin_maps or {}).get(path))
         if target is None:
             raise Failure(
                 f"{commit[:10]} pins {path} at {new[1]}, but no commit on its branch "
@@ -381,17 +403,18 @@ def moved_pins(
     return targets
 
 
-def tree_with_pins(
-    repository: Repository, tree: str, pins: dict[str, str]
-) -> str:
+def tree_with_pins(repository: Repository, tree: str, pins: dict[str, str]) -> str:
     """``tree`` with submodule gitlinks replaced, edited in a private index."""
     with tempfile.TemporaryDirectory(prefix="fujimod-rebase-index-") as scratch:
         env = dict(os.environ, GIT_INDEX_FILE=str(Path(scratch, "index")))
         repository.git("read-tree", tree, env=env)
         for path, pinned in pins.items():
             repository.git(
-                "update-index", "--add", "--cacheinfo",
-                f"{GITLINK},{pinned},{path}", env=env,
+                "update-index",
+                "--add",
+                "--cacheinfo",
+                f"{GITLINK},{pinned},{path}",
+                env=env,
             )
         return repository.git("write-tree", env=env).stdout.strip()
 
@@ -436,9 +459,7 @@ def resolve_pinned_submodules(
             # The commit leaves this pin alone, so the new base's pin stands.
             continue
         submodule = Repository(Path(repository.root, path))
-        target = rebased_pin(
-            submodule, new[1], cache, (pin_maps or {}).get(path)
-        )
+        target = rebased_pin(submodule, new[1], cache, (pin_maps or {}).get(path))
         if target is None:
             raise Failure(
                 f"{commit[:10]} pins {path} at {new[1]}, but no commit on its branch "
@@ -736,7 +757,9 @@ def rebase_and_report(
     rebased = rebase(repository, base, pin_maps)
     report(rebased.moved)
     if rebased.replayed or rebased.dropped:
-        dropped = f", dropped {rebased.dropped} it already has" if rebased.dropped else ""
+        dropped = (
+            f", dropped {rebased.dropped} it already has" if rebased.dropped else ""
+        )
         print(f"sync: replayed {rebased.replayed} commits onto origin/{base}{dropped}")
     print(
         f"sync: at {rebased.head[:10]}"

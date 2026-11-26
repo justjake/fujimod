@@ -12,14 +12,29 @@ fn raw_readback_keeps_neutral_light_across_sensor_window_origins() {
     let sensor = Cfa::new(layout.clone()).unwrap();
     let mut reference = None;
     for (left, top, captured_origin) in [
-        (0, 0, false), (0, 62, false), (4, 4, false),
-        (0, 0, true), (0, 62, true), (4, 4, true),
+        (0, 0, false),
+        (0, 62, false),
+        (4, 4, false),
+        (0, 0, true),
+        (0, 62, true),
+        (4, 4, true),
     ] {
         let mut h = TestHost::new();
-        let outputs: fujimod_emulator_imaging::exr2_isp::memory_outputs::MemoryOutputHandle = Default::default();
-        outputs.lock().unwrap().configure(0, Some(dma::Raster {
-            address: 0x9000, width: 6, height: 6, pitch: 12,
-        })).unwrap();
+        let outputs: fujimod_emulator_imaging::exr2_isp::memory_outputs::MemoryOutputHandle =
+            Default::default();
+        outputs
+            .lock()
+            .unwrap()
+            .configure(
+                0,
+                Some(dma::Raster {
+                    address: 0x9000,
+                    width: 6,
+                    height: 6,
+                    pitch: 12,
+                }),
+            )
+            .unwrap();
         for y in 0..6 {
             for x in 0..6 {
                 let value = [100u16, 200, 400][sensor.color(left + x, top + y)];
@@ -45,14 +60,28 @@ fn raw_readback_keeps_neutral_light_across_sensor_window_origins() {
         }
         for (offset, value) in [
             (4, u32::from(!captured_origin)),
-            (0x14, (left as u32) << 16 | 5), (0x18, (top as u32) << 16 | 5),
-            (0x358, 0x8000), (0x35c, 1),
-            (0x394, 0x1000000), (0x398, 6 << 16), (0x39c, 0x40000),
-            (0x3a0, 6), (0x3a4, 12), (0x3a8, 0x40008000),
-            (0x3ac, 0xc003), (0x3b8, 0xfb000000), (0x390, 1),
-        ] { write(&mut device, &mut h, 0xfff10000 + offset, value); }
+            (0x14, (left as u32) << 16 | 5),
+            (0x18, (top as u32) << 16 | 5),
+            (0x358, 0x8000),
+            (0x35c, 1),
+            (0x394, 0x1000000),
+            (0x398, 6 << 16),
+            (0x39c, 0x40000),
+            (0x3a0, 6),
+            (0x3a4, 12),
+            (0x3a8, 0x40008000),
+            (0x3ac, 0xc003),
+            (0x3b8, 0xfb000000),
+            (0x390, 1),
+        ] {
+            write(&mut device, &mut h, 0xfff10000 + offset, value);
+        }
         h.now = 7;
-        assert!(outputs.lock().unwrap().transfers[0].write(&mut h.cx()).unwrap());
+        assert!(
+            outputs.lock().unwrap().transfers[0]
+                .write(&mut h.cx())
+                .unwrap()
+        );
         let pixels = h.ram[0x9000..0x9000 + 72].to_vec();
         assert!(
             pixels
@@ -88,7 +117,11 @@ fn input_wiring() -> input::Wiring {
         frame_period: None,
         statistics_grid: None,
 
-        phase_irqs: [Irq { core: 0, line: 39 }, Irq { core: 1, line: 41 }, Irq { core: 0, line: 40 }],
+        phase_irqs: [
+            Irq { core: 0, line: 39 },
+            Irq { core: 1, line: 41 },
+            Irq { core: 0, line: 40 },
+        ],
         raw_irq: Irq { core: 0, line: 36 },
         readback_irq: Irq { core: 0, line: 38 },
         shutter_output: None,
@@ -172,7 +205,8 @@ fn clearing_command_start_stops_the_transmitter_and_allows_rearm() {
 fn packed_opcode_writes_still_refuse_nonzero_padding() {
     let mut h = TestHost::new();
     let mut options = input_options();
-    options.command = Some(fujimod_emulator_imaging::exr2_isp::options::input::Command::PackedWrites);
+    options.command =
+        Some(fujimod_emulator_imaging::exr2_isp::options::input::Command::PackedWrites);
     let mut d = ImageInput::new(options, input_wiring()).unwrap();
     h.ram[0x8a00..0x8a08].copy_from_slice(&[0x81, 0x12, 0x34, 0xa5, 0, 0, 0, 0]);
     for (o, v) in [(0x170, 0x101000), (0x174, 0x8a00), (0x15c, 7), (0x9c, 2)] {
@@ -221,7 +255,10 @@ fn phase_clock_coalesces_irqs_but_preserves_physical_edges() {
     );
     write(&mut d, &mut h, 0xfff10388, 1);
     advance(&mut d, &mut h, 40);
-    assert_eq!(h.irqs, [(0, 39), (1, 41), (0, 40), (0, 40), (0, 39), (0, 40)]);
+    assert_eq!(
+        h.irqs,
+        [(0, 39), (1, 41), (0, 40), (0, 40), (0, 39), (0, 40)]
+    );
     assert_eq!(edges.lock().unwrap()[0].unwrap().index, 4);
     write(&mut d, &mut h, 0xfff10048, 0);
     assert_eq!(d.next_deadline(40), None);
@@ -488,10 +525,12 @@ fn explicit_sensor_clock_refuses_missing_sources_and_unused_periodic_fields() {
     });
     assert!(ImageInput::new(options, input_wiring()).is_err());
     assert!(
-        serde_json::from_value::<fujimod_emulator_imaging::exr2_isp::options::input::Clock>(serde_json::json!({
-            "mode":"register_periods", "source":{"kind":"sensor","period_ticks":4},
-            "secondary":true, "companion_secondary":false,
-        }))
+        serde_json::from_value::<fujimod_emulator_imaging::exr2_isp::options::input::Clock>(
+            serde_json::json!({
+                "mode":"register_periods", "source":{"kind":"sensor","period_ticks":4},
+                "secondary":true, "companion_secondary":false,
+            })
+        )
         .is_err()
     );
 }
@@ -834,7 +873,8 @@ fn packed_raw_readback_matches_u16_with_independent_row_padding() {
     use fujimod_emulator_image_processing::raw::Packing;
     fn render(packing: Packing, padding: usize, mutate_after_start: bool) -> Vec<Vec<u8>> {
         let mut h = TestHost::new();
-        let outputs: fujimod_emulator_imaging::exr2_isp::memory_outputs::MemoryOutputHandle = Default::default();
+        let outputs: fujimod_emulator_imaging::exr2_isp::memory_outputs::MemoryOutputHandle =
+            Default::default();
         for i in 0..2 {
             outputs
                 .lock()
@@ -967,7 +1007,8 @@ fn packed_raw_readback_refuses_unknown_controls_and_short_pitch() {
 #[test]
 fn raw_readback_waits_for_both_outputs_then_eof() {
     let mut h = TestHost::new();
-    let outputs: fujimod_emulator_imaging::exr2_isp::memory_outputs::MemoryOutputHandle = Default::default();
+    let outputs: fujimod_emulator_imaging::exr2_isp::memory_outputs::MemoryOutputHandle =
+        Default::default();
     for i in 0..2 {
         outputs
             .lock()
@@ -1027,7 +1068,9 @@ fn raw_readback_waits_for_both_outputs_then_eof() {
 }
 
 fn raw_readback_fixture() -> (
-    TestHost, ImageInput, [OutputChannel; 2],
+    TestHost,
+    ImageInput,
+    [OutputChannel; 2],
     fujimod_emulator_imaging::scene::ImageFrames,
     fujimod_emulator_devices::exr2::irq_routes::IrqRoutes,
 ) {
@@ -1036,7 +1079,8 @@ fn raw_readback_fixture() -> (
     let mut h = TestHost::new();
     h.ram[0x9000..0x9100].fill(0xa5);
     h.ram[0xa000..0xa100].fill(0xa5);
-    let memory: fujimod_emulator_imaging::exr2_isp::memory_outputs::MemoryOutputHandle = Default::default();
+    let memory: fujimod_emulator_imaging::exr2_isp::memory_outputs::MemoryOutputHandle =
+        Default::default();
     let frames = ImageFrames::new(ImageLayout {
         width: 8,
         height: 2,
@@ -1098,10 +1142,19 @@ fn raw_transport_enable_keeps_both_preview_banks_running() {
     write(&mut input, &mut h, 0xfff10004, 0x10001);
     for index in 1..=2 {
         let tick = (index - 1) * 6;
-        frames.publish(fujimod_emulator_imaging::scene::FrameEdge { index, tick }, &[7; 32]).unwrap();
-        for output in &mut outputs { advance(output, &mut h, tick); }
+        frames
+            .publish(
+                fujimod_emulator_imaging::scene::FrameEdge { index, tick },
+                &[7; 32],
+            )
+            .unwrap();
+        for output in &mut outputs {
+            advance(output, &mut h, tick);
+        }
         assert_eq!(h.irqs.len(), (index as usize - 1) * 2);
-        for output in &mut outputs { advance(output, &mut h, tick + 5); }
+        for output in &mut outputs {
+            advance(output, &mut h, tick + 5);
+        }
         assert_eq!(h.irqs.len(), index as usize * 2);
         assert_eq!(&h.ram[0x9000..0x9010], &[7; 16]);
         assert_eq!(&h.ram[0xa000..0xa010], &[7; 16]);
@@ -1109,7 +1162,7 @@ fn raw_transport_enable_keeps_both_preview_banks_running() {
             write(output, &mut h, 0xfff120d4 + channel as u64 * 0x1000, 1);
         }
     }
-    assert_eq!(h.irqs, [(0,44),(0,45),(0,44),(0,45)]);
+    assert_eq!(h.irqs, [(0, 44), (0, 45), (0, 44), (0, 45)]);
 }
 
 #[test]
@@ -1130,7 +1183,12 @@ fn raw_readback_flows_through_both_output_channels_before_eof() {
         write(&mut input, &mut h, 0xfff10000 + offset, value);
     }
     // An active memory readback owns the banks even if a sensor frame arrives.
-    frames.publish(fujimod_emulator_imaging::scene::FrameEdge { index: 1, tick: 0 }, &[7; 32]).unwrap();
+    frames
+        .publish(
+            fujimod_emulator_imaging::scene::FrameEdge { index: 1, tick: 0 },
+            &[7; 32],
+        )
+        .unwrap();
     assert_eq!(a.next_deadline(0), Some(0));
     // Repeating the current geometry is an idempotent register write even
     // while the memory input is filling the latched output raster.
@@ -1193,8 +1251,10 @@ fn raw_readback_only_uses_armed_output_banks_and_their_irq_routes() {
     for mask in 0..4 {
         let mut h = TestHost::new();
         h.ram[0x9000..0xb000].fill(0xa5);
-        let memory: fujimod_emulator_imaging::exr2_isp::memory_outputs::MemoryOutputHandle = Default::default();
-        let channels = fujimod_emulator_imaging::exr2_isp::output_channels::OutputChannels::default();
+        let memory: fujimod_emulator_imaging::exr2_isp::memory_outputs::MemoryOutputHandle =
+            Default::default();
+        let channels =
+            fujimod_emulator_imaging::exr2_isp::output_channels::OutputChannels::default();
         let routes = fujimod_emulator_devices::exr2::irq_routes::IrqRoutes::default();
         let frames = ImageFrames::new(ImageLayout {
             width: 6,
@@ -1459,9 +1519,19 @@ fn raw_readback_retains_captured_color_phase_after_sensor_capture_is_disabled() 
     for (left, top) in [(0, 62), (4, 3)] {
         let mut h = TestHost::new();
         let outputs: memory_outputs::MemoryOutputHandle = Default::default();
-        outputs.lock().unwrap().configure(0, Some(dma::Raster {
-            address: 0x9000, width: 6, height: 6, pitch: 12,
-        })).unwrap();
+        outputs
+            .lock()
+            .unwrap()
+            .configure(
+                0,
+                Some(dma::Raster {
+                    address: 0x9000,
+                    width: 6,
+                    height: 6,
+                    pitch: 12,
+                }),
+            )
+            .unwrap();
         for y in 0..6 {
             for x in 0..6 {
                 let value = [400u16, 800, 1600][sensor.color(left + x, top + y)];
@@ -1486,10 +1556,19 @@ fn raw_readback_retains_captured_color_phase_after_sensor_capture_is_disabled() 
         checkpoint[0]["raw_origins"] = serde_json::json!({"32768": [left, top]});
         device.restore(&checkpoint).unwrap();
         for (offset, value) in [
-            (4, 0), (0x394, 0x1000000), (0x398, 6 << 16), (0x39c, 0x40000),
-            (0x3a0, 6), (0x3a4, 12), (0x3a8, 0x40008000),
-            (0x3ac, 0xc003), (0x3b8, 0xfb000000), (0x390, 1),
-        ] { write(&mut device, &mut h, 0xfff10000 + offset, value); }
+            (4, 0),
+            (0x394, 0x1000000),
+            (0x398, 6 << 16),
+            (0x39c, 0x40000),
+            (0x3a0, 6),
+            (0x3a4, 12),
+            (0x3a8, 0x40008000),
+            (0x3ac, 0xc003),
+            (0x3b8, 0xfb000000),
+            (0x390, 1),
+        ] {
+            write(&mut device, &mut h, 0xfff10000 + offset, value);
+        }
         h.now = 7;
         assert!(
             outputs.lock().unwrap().transfers[0]

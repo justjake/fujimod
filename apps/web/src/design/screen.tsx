@@ -60,7 +60,9 @@ export function Fit(props: { children: JSX.Element }) {
   onSettled(() => {
     const element = host;
     if (!element) return;
-    const observer = new ResizeObserver(() => setFitScale(Math.min(1, element.clientWidth / SCREEN.width)));
+    const observer = new ResizeObserver(() =>
+      setFitScale(Math.min(1, element.clientWidth / SCREEN.width)),
+    );
     observer.observe(element);
     return () => observer.disconnect();
   });
@@ -72,11 +74,22 @@ export function Fit(props: { children: JSX.Element }) {
       style={
         actualSize()
           ? /* Centered on the page, past its side padding if it must be. */
-            { width: `${SCREEN.width * scale()}px`, height: `${SCREEN.height * scale()}px`, 'margin-left': `calc(50% - ${(SCREEN.width * scale()) / 2}px)` }
-          : { width: '100%', 'max-width': `${SCREEN.width}px`, height: `${SCREEN.height * scale()}px` }
+            {
+              width: `${SCREEN.width * scale()}px`,
+              height: `${SCREEN.height * scale()}px`,
+              'margin-left': `calc(50% - ${(SCREEN.width * scale()) / 2}px)`,
+            }
+          : {
+              width: '100%',
+              'max-width': `${SCREEN.width}px`,
+              height: `${SCREEN.height * scale()}px`,
+            }
       }
     >
-      <div class="origin-top-left" style={{ transform: `scale(${scale()})`, width: `${SCREEN.width}px` }}>
+      <div
+        class="origin-top-left"
+        style={{ transform: `scale(${scale()})`, width: `${SCREEN.width}px` }}
+      >
         {props.children}
       </div>
     </div>
@@ -84,7 +97,18 @@ export function Fit(props: { children: JSX.Element }) {
 }
 
 /** The camera's keys a prototype answers. */
-export type CameraKey = 'left' | 'right' | 'up' | 'down' | 'ok' | 'back' | 'dial-' | 'dial+' | 'q' | 'fn' | 'play';
+export type CameraKey =
+  | 'left'
+  | 'right'
+  | 'up'
+  | 'down'
+  | 'ok'
+  | 'back'
+  | 'dial-'
+  | 'dial+'
+  | 'q'
+  | 'fn'
+  | 'play';
 
 /** The camera's keys on screen, under a prototype, for touch. */
 export function CameraKeys(props: { send: (key: CameraKey) => void }) {
@@ -124,7 +148,12 @@ export function CameraKeys(props: { send: (key: CameraKey) => void }) {
 }
 
 /** A key hint over the picture: the key's glyph on a white plate, and what it does. */
-export function KeyHint(props: { glyph: string; label?: string; tap?: () => void; accent?: boolean }) {
+export function KeyHint(props: {
+  glyph: string;
+  label?: string;
+  tap?: () => void;
+  accent?: boolean;
+}) {
   return (
     <button
       type="button"
@@ -135,7 +164,11 @@ export function KeyHint(props: { glyph: string; label?: string; tap?: () => void
         props.tap?.();
       }}
     >
-      <span class={`flex h-[26px] min-w-[26px] items-center justify-center rounded-[6px] bg-white px-[4px] font-semibold text-black ${SMALL}`}>{props.glyph}</span>
+      <span
+        class={`flex h-[26px] min-w-[26px] items-center justify-center rounded-[6px] bg-white px-[4px] font-semibold text-black ${SMALL}`}
+      >
+        {props.glyph}
+      </span>
       <Show when={props.label}>
         <span class={`pr-[3px] font-light tracking-[0.04em] ${SMALL}`}>{props.label}</span>
       </Show>
@@ -146,14 +179,21 @@ export function KeyHint(props: { glyph: string; label?: string; tap?: () => void
 /** A glass card over the picture: names, values and notes, and fly-out bodies. */
 export function Card(props: { class?: string; style?: JSX.CSSProperties; children: JSX.Element }) {
   return (
-    <div class={`rounded-[12px] font-semibold ${props.class ?? ''}`} style={{ ...GLASS, ...props.style }}>
+    <div
+      class={`rounded-[12px] font-semibold ${props.class ?? ''}`}
+      style={{ ...GLASS, ...props.style }}
+    >
       {props.children}
     </div>
   );
 }
 
 /** A prototype's review states: each under its title, linkable by its id. */
-export function States<T>(props: { title: string; states: { id: string; title: string; state: T }[]; render: (state: T) => JSX.Element }) {
+export function States<T>(props: {
+  title: string;
+  states: { id: string; title: string; state: T }[];
+  render: (state: T) => JSX.Element;
+}) {
   return (
     <>
       <h2 class="mt-[40px] text-[22px] font-semibold">{props.title}</h2>
@@ -176,7 +216,10 @@ export function States<T>(props: { title: string; states: { id: string; title: s
 /** The camera's 720 by 480 screen. The chosen look's materials apply inside it. */
 export function CameraScreen(props: { style?: JSX.CSSProperties; children: JSX.Element }) {
   return (
-    <div class="fm-screen relative h-[480px] w-[720px] overflow-hidden bg-black font-sans text-white select-none" style={props.style}>
+    <div
+      class="fm-screen relative h-[480px] w-[720px] overflow-hidden bg-black font-sans text-white select-none"
+      style={props.style}
+    >
       {props.children}
     </div>
   );

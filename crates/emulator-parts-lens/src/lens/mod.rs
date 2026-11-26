@@ -8,11 +8,11 @@ mod three_byte_clock;
 pub use three_byte_clock::ThreeByteClock;
 pub mod bridge;
 mod mechanics;
+pub use banked_clock::BankedClock;
 use fujimod_emulator_devices::exr2::pulse::{PulsePins, Pwm};
 use fujimod_emulator_devices::parts::pins::Pins;
-use fujimod_emulator_parts_io::spi::{Endpoint, Shift};
 use fujimod_emulator_devices::{Cx, bus::InterruptLine};
-pub use banked_clock::BankedClock;
+use fujimod_emulator_parts_io::spi::{Endpoint, Shift};
 use mechanics::Mechanics;
 pub use mechanics::{CounterOutput, EncoderOptions, MotorOptions, Side, TravelBoundary, Vane};
 use serde::{Deserialize, Serialize};
@@ -91,8 +91,15 @@ pub struct LensUnit {
     mechanics: Mechanics,
     zoom: Option<Zoom>,
     position: Option<fujimod_emulator_devices::parts::optics::Position>,
-    aperture: Option<(fujimod_emulator_devices::parts::optics::ApertureHandle, Vec<(i64, f64)>)>,
-    focus: Option<(fujimod_emulator_devices::parts::optics::FocusHandle, i64, f64)>,
+    aperture: Option<(
+        fujimod_emulator_devices::parts::optics::ApertureHandle,
+        Vec<(i64, f64)>,
+    )>,
+    focus: Option<(
+        fujimod_emulator_devices::parts::optics::FocusHandle,
+        i64,
+        f64,
+    )>,
     nd: Option<(
         NdOptions,
         fujimod_emulator_devices::parts::optics::ApertureHandle,
@@ -232,7 +239,9 @@ impl LensUnit {
         } else {
             return Ok(());
         };
-        let mut t = transmission.lock().map_err(|_| "ND transmission poisoned")?;
+        let mut t = transmission
+            .lock()
+            .map_err(|_| "ND transmission poisoned")?;
         if *t != target {
             let mut a = aperture.lock().map_err(|_| "iris transmission poisoned")?;
             *a = *a / *t * target;
@@ -571,7 +580,10 @@ impl Endpoint for LensUnit {
         )?
         .with_children(vec![self.mechanics.checkpoint()?]))
     }
-    fn validate_checkpoint(&self, saved: &fujimod_emulator_devices::checkpoint::Checkpoint) -> Result<(), String> {
+    fn validate_checkpoint(
+        &self,
+        saved: &fujimod_emulator_devices::checkpoint::Checkpoint,
+    ) -> Result<(), String> {
         let (protocol, r, _, n, _, focus, iris, position): (
             Protocol,
             Vec<u16>,
@@ -598,7 +610,10 @@ impl Endpoint for LensUnit {
         }
         self.mechanics.validate_checkpoint(&saved.children()[0])
     }
-    fn restore_checkpoint(&mut self, saved: &fujimod_emulator_devices::checkpoint::Checkpoint) -> Result<(), String> {
+    fn restore_checkpoint(
+        &mut self,
+        saved: &fujimod_emulator_devices::checkpoint::Checkpoint,
+    ) -> Result<(), String> {
         self.validate_checkpoint(saved)?;
         let (protocol, r, frame, length, zoom, _, _, _): (
             Protocol,

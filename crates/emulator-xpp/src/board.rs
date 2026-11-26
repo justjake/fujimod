@@ -528,7 +528,9 @@ impl Device for Timers {
     }
     fn read_without_advance(&self, address: u64, size: u8, now: u64) -> Option<u64> {
         let offset = address.checked_sub(self.base)?;
-        if size != 4 || offset < 0x100 || offset & 0xf != 0
+        if size != 4
+            || offset < 0x100
+            || offset & 0xf != 0
             || self.scheduled.is_none_or(|at| now >= at)
         {
             return None;
@@ -1328,17 +1330,26 @@ pub fn build(
                     .collect::<Result<_, _>>()?;
                 let routes: [[u8; 3]; 2] = routes
                     .chunks(3)
-                    .map(|r| r.try_into().map_err(|_| "Display needs three IRQs per bank"))
+                    .map(|r| {
+                        r.try_into()
+                            .map_err(|_| "Display needs three IRQs per bank")
+                    })
                     .collect::<Result<Vec<_>, _>>()?
                     .try_into()
                     .map_err(|_| "Display needs two timing banks")?;
                 let model = fujimod_emulator_xp4_display::timing::XppTiming::new(
-                    bases, routes, period_ticks, stop_ticks,
+                    bases,
+                    routes,
+                    period_ticks,
+                    stop_ticks,
                 )?;
                 let mappings = model
                     .windows()
                     .into_iter()
-                    .map(|(lo, hi)| Mapping { base: lo, size: hi - lo })
+                    .map(|(lo, hi)| Mapping {
+                        base: lo,
+                        size: hi - lo,
+                    })
                     .collect();
                 devices.register_windows(mappings, Box::new(model))?
             }

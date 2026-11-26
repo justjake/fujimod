@@ -1,7 +1,7 @@
 use crate::*;
-use fujimod_emulator_devices::exr2::irq_routes::IrqRoutes;
 use fujimod_emulator_devices::Cx;
 use fujimod_emulator_devices::Device;
+use fujimod_emulator_devices::exr2::irq_routes::IrqRoutes;
 use fujimod_emulator_exr2_isp_testing::*;
 fn window() -> (WindowAnalysis, Memory, IrqRoutes) {
     let routes = routes(0x46);

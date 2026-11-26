@@ -144,7 +144,11 @@ impl Device for Generator {
         };
         match self.offset(address, size) {
             Some(Ok(o)) => {
-                let flag = if o == 0 && self.reads_set_after_clear { FRAME } else { 0 };
+                let flag = if o == 0 && self.reads_set_after_clear {
+                    FRAME
+                } else {
+                    0
+                };
                 self.state.words.insert(o, value | flag);
                 if o == 0 && (value | flag) & FRAME == 0 {
                     match cx.now().checked_add(FLAG_SETTLE_TICKS) {

@@ -18,16 +18,14 @@ export function featureMediaFiles(media: FeatureMedia, shownCards: Iterable<stri
   const cards = Object.entries(media.cards)
     .filter(([id]) => shown.has(id))
     .map(([, recording]) => recording);
-  return new Set(
-    [
-      ...cards.flatMap(({ video, still, photos = [] }) => [
-        video,
-        still,
-        ...photos.flatMap(({ image, full }) => [image, full]),
-      ]),
-      ...Object.values(media.reels ?? {}).flatMap(({ video, still }) => [video, still]),
-    ],
-  );
+  return new Set([
+    ...cards.flatMap(({ video, still, photos = [] }) => [
+      video,
+      still,
+      ...photos.flatMap(({ image, full }) => [image, full]),
+    ]),
+    ...Object.values(media.reels ?? {}).flatMap(({ video, still }) => [video, still]),
+  ]);
 }
 
 /** Cold inputs named by prepared manifests accompany the ordinary runtime files. */

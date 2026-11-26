@@ -57,7 +57,10 @@ impl<'a> UsbHost<'a> {
         })
     }
 
-    fn inspect<R>(&self, observe: impl FnOnce(&dyn UsbPort) -> Result<R, String>) -> Result<R, String> {
+    fn inspect<R>(
+        &self,
+        observe: impl FnOnce(&dyn UsbPort) -> Result<R, String>,
+    ) -> Result<R, String> {
         self.guest
             .session()
             .board
@@ -234,7 +237,11 @@ impl<'a> UsbHost<'a> {
                     continue;
                 }
                 let raw = descriptor(self, 0x300 | u16::from(index), language, 255)?;
-                if raw.len() < 2 || usize::from(raw[0]) != raw.len() || raw[1] != 3 || raw.len() % 2 != 0 {
+                if raw.len() < 2
+                    || usize::from(raw[0]) != raw.len()
+                    || raw[1] != 3
+                    || raw.len() % 2 != 0
+                {
                     return Err("USB string descriptor is invalid".into());
                 }
                 let units: Vec<u16> = raw[2..]

@@ -41,7 +41,9 @@ impl CommandRegisters {
             .find(|row| u32::from(row.0) == register)
             .map(|row| row.1.clone())
             .ok_or_else(|| {
-                fujimod_emulator_devices::Unsupported("Command-register read has no declared input frame".into())
+                fujimod_emulator_devices::Unsupported(
+                    "Command-register read has no declared input frame".into(),
+                )
             })
     }
 
@@ -77,9 +79,7 @@ impl CommandRegisters {
             return fail("Command-register burst exceeds its register range");
         }
         let Some(mask) = self.write_masks.get(register) else {
-            return fail(
-                "Command-register write selects a read-only or undeclared register",
-            );
+            return fail("Command-register write selects a read-only or undeclared register");
         };
         if u32::from(byte) & !mask != 0 {
             return fail("Command-register write contains undeclared data bits");
@@ -96,7 +96,10 @@ impl CommandRegisters {
             // declared frame for this register.
             let register = self.register(*prefix)?;
             if self.write_masks.get(register).is_some()
-                || self.read_frames.iter().any(|row| u32::from(row.0) == register)
+                || self
+                    .read_frames
+                    .iter()
+                    .any(|row| u32::from(row.0) == register)
             {
                 return Ok(());
             }

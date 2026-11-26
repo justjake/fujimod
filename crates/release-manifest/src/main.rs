@@ -203,7 +203,13 @@ mod tests {
     #[test]
     fn parses_optional_release_metadata() {
         let options = parse(&[
-            "--date", "2026-11-10", "--commit", "abcdef0", "--note", "First note", "/a=b",
+            "--date",
+            "2026-11-10",
+            "--commit",
+            "abcdef0",
+            "--note",
+            "First note",
+            "/a=b",
         ])
         .unwrap();
         assert_eq!(options.date.as_deref(), Some("2026-11-10"));

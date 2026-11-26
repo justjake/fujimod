@@ -27,22 +27,22 @@ later IDRs are omitted; changed parameter sets refuse. Optional SEI, AUD and
 filler are omitted. Unsupported parameter-set sizes, multiple slices and
 skipped frames refuse.
 
-| Offset | Modeled meaning |
-| --- | --- |
-| `400` | Packed input DMA address, tightly packed two bytes per luma sample |
-| `490/494`, `498/49C` | First/second bitstream base and byte capacity |
-| `4A4` bits 2/3/4 | Release first/second output bank; common output enable |
-| `4A4` bit 5 | Current output bank, read-only |
-| `4AC` | Running byte offset in the current bank |
-| `C00` | `800` initialize; `8000` encode; `1000` pause; `2000` finish |
-| `C20` bits 2–3 | Primary operation mode (1) after completion |
-| `C24` | W1C status: bank start bit 9, frame bit 12, pause bit 14, finish bit 15 |
-| `D88/D8C` | Low/high halves of the actual frame bit count |
-| `E00/E04` | Luma width and padded height; progressive packed input only |
-| `E08` | Software target rate in 1024 bits/s units |
-| `E0C` | Frame rate (`23/29/59` select `24/30/60`) |
-| `E10` | GOP length: an IDR starts every `E10` frames |
-| `E34` | H.264 `level_idc` written to the sequence parameter set |
+| Offset               | Modeled meaning                                                         |
+| -------------------- | ----------------------------------------------------------------------- |
+| `400`                | Packed input DMA address, tightly packed two bytes per luma sample      |
+| `490/494`, `498/49C` | First/second bitstream base and byte capacity                           |
+| `4A4` bits 2/3/4     | Release first/second output bank; common output enable                  |
+| `4A4` bit 5          | Current output bank, read-only                                          |
+| `4AC`                | Running byte offset in the current bank                                 |
+| `C00`                | `800` initialize; `8000` encode; `1000` pause; `2000` finish            |
+| `C20` bits 2–3       | Primary operation mode (1) after completion                             |
+| `C24`                | W1C status: bank start bit 9, frame bit 12, pause bit 14, finish bit 15 |
+| `D88/D8C`            | Low/high halves of the actual frame bit count                           |
+| `E00/E04`            | Luma width and padded height; progressive packed input only             |
+| `E08`                | Software target rate in 1024 bits/s units                               |
+| `E0C`                | Frame rate (`23/29/59` select `24/30/60`)                               |
+| `E10`                | GOP length: an IDR starts every `E10` frames                            |
+| `E34`                | H.264 `level_idc` written to the sequence parameter set                 |
 
 The per-mode values firmware writes match these meanings: `E10` takes the
 per-mode keyframe interval (30 at 60 frames/s) and `E34` the per-mode level

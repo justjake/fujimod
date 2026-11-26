@@ -137,7 +137,10 @@ mod tests {
         let storage = storage(vec![0xa5; PAGE + 2]);
         let mut die = storage.lock().unwrap();
         die.seed_bytes(PAGE as u64 - 1, &[1, 2, 3]).unwrap();
-        assert_eq!(die.read(PAGE as u64 - 2, 6).unwrap(), [0xa5, 1, 2, 3, 0xff, 0xff]);
+        assert_eq!(
+            die.read(PAGE as u64 - 2, 6).unwrap(),
+            [0xa5, 1, 2, 3, 0xff, 0xff]
+        );
         die.seed_bytes(0x40000, &[9]).unwrap();
         assert_eq!(die.read(0x40000, 2).unwrap(), [9, 0xff]);
         // A seed over a seed is refused, and so is one past the medium.

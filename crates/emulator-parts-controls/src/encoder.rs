@@ -2,15 +2,15 @@
 //! Host inspection never emits an edge. Firmware decodes GPIO or ADC levels;
 //! optional counter wiring delivers the same phases to the pulse unit.
 //! ADC channels and their low/high raw codes are explicit body configuration.
-use fujimod_emulator_devices::parts::pins::{Pin, Pins};
-use fujimod_emulator_devices::parts::analog::Samples;
 use fujimod_emulator_devices::exr2::pulse::PulsePins;
+use fujimod_emulator_devices::parts::analog::Samples;
+use fujimod_emulator_devices::parts::encoder_input::{EncoderInput, EncoderQueue};
+use fujimod_emulator_devices::parts::pins::{Pin, Pins};
 use fujimod_emulator_devices::{Cx, Device};
+use parking_lot::Mutex;
 use serde::Deserialize;
 use std::collections::VecDeque;
-use parking_lot::Mutex;
 use std::sync::Arc;
-use fujimod_emulator_devices::parts::encoder_input::{EncoderInput, EncoderQueue};
 
 #[derive(Clone, Copy, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -170,7 +170,9 @@ impl fujimod_emulator_devices::capability::RotaryInput for Encoder {
     }
 }
 impl Device for Encoder {
-    fn rotary_input(&self) -> Option<&(dyn fujimod_emulator_devices::capability::RotaryInput + 'static)> {
+    fn rotary_input(
+        &self,
+    ) -> Option<&(dyn fujimod_emulator_devices::capability::RotaryInput + 'static)> {
         Some(self)
     }
     fn rotary_input_mut(
@@ -181,17 +183,20 @@ impl Device for Encoder {
     fn checkpoint(&self) -> Result<fujimod_emulator_devices::checkpoint::Checkpoint, String> {
         fujimod_emulator_devices::checkpoint::Checkpoint::encode(
             self.name(),
-            &(
-                self.phase,
-                &self.input.events.lock().events,
-            ),
+            &(self.phase, &self.input.events.lock().events),
         )
     }
-    fn validate_checkpoint(&self, saved: &fujimod_emulator_devices::checkpoint::Checkpoint) -> Result<(), String> {
+    fn validate_checkpoint(
+        &self,
+        saved: &fujimod_emulator_devices::checkpoint::Checkpoint,
+    ) -> Result<(), String> {
         let _: (u8, VecDeque<(u64, u8)>) = saved.decode(self.name())?;
         Ok(())
     }
-    fn restore_checkpoint(&mut self, saved: &fujimod_emulator_devices::checkpoint::Checkpoint) -> Result<(), String> {
+    fn restore_checkpoint(
+        &mut self,
+        saved: &fujimod_emulator_devices::checkpoint::Checkpoint,
+    ) -> Result<(), String> {
         let (phase, events): (u8, VecDeque<(u64, u8)>) = saved.decode(self.name())?;
         self.phase = phase;
         let mut queue = self.input.events.lock();
@@ -224,12 +229,9 @@ impl Device for Encoder {
             if at > cx.now() {
                 break;
             }
-            if let Err(error) = Self::drive_phase(
-                &self.options,
-                &mut self.wiring.outputs,
-                cx,
-                phase,
-            ) {
+            if let Err(error) =
+                Self::drive_phase(&self.options, &mut self.wiring.outputs, cx, phase)
+            {
                 cx.fail(error);
                 return;
             }

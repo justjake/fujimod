@@ -3,9 +3,13 @@
 //! Pad mux/direction/enable registers and interrupt sense registers are the
 //! only control inputs. Startup duration and electrical interpretation remain
 //! explicit inferred board inputs; no optical operation is qualified here.
-use fujimod_emulator_devices::exr2::{gpio, irq};
 use crate::serial_dma;
-use fujimod_emulator_devices::{Cx, Device, checkpoint::Checkpoint, parts::pins::{Pin, Pins}};
+use fujimod_emulator_devices::exr2::{gpio, irq};
+use fujimod_emulator_devices::{
+    Cx, Device,
+    checkpoint::Checkpoint,
+    parts::pins::{Pin, Pins},
+};
 use fujimod_emulator_parts_lens::{x_mount_lens, x_mount_link};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};

@@ -2,8 +2,8 @@
 //! Restoring positions does not drive contacts again or emit duplicate edges.
 use super::Session;
 use fujimod_emulator::board::keyframe::Keyframe;
-use fujimod_emulator_exr2_resources::ResourceSnapshot;
 use fujimod_emulator_devices::parts::switch_panel::SwitchPanel;
+use fujimod_emulator_exr2_resources::ResourceSnapshot;
 mod portable;
 
 pub struct Snapshot {

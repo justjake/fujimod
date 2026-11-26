@@ -43,11 +43,13 @@ fn main() {
     let browser = env::var("CARGO_CFG_TARGET_OS").as_deref() == Ok("emscripten");
     // Stream the JSON records from one compressed frame in the browser build.
     let mut packed = browser.then(|| {
-        let file = fs::File::create(out.join("bundled_catalog.zst")).expect("create packed catalog");
+        let file =
+            fs::File::create(out.join("bundled_catalog.zst")).expect("create packed catalog");
         zstd::stream::write::Encoder::new(file, 9).expect("start packed catalog")
     });
     let document_type = if browser { "usize" } else { "&str" };
-    let mut source = format!("const BUNDLED_CATALOG: &[(ReferenceKind, &str, {document_type})] = &[\n");
+    let mut source =
+        format!("const BUNDLED_CATALOG: &[(ReferenceKind, &str, {document_type})] = &[\n");
     for path in files {
         let Some(layer) = path.strip_prefix(&catalog).ok().and_then(|relative| {
             relative
@@ -114,7 +116,9 @@ fn main() {
         } else {
             format!("include_str!(concat!(env!(\"CARGO_MANIFEST_DIR\"), \"/../../{include}\"))")
         };
-        source.push_str(&format!("    (ReferenceKind::{kind}, {label:?}, {document}),\n"));
+        source.push_str(&format!(
+            "    (ReferenceKind::{kind}, {label:?}, {document}),\n"
+        ));
         println!("cargo:rerun-if-changed={}", path.display());
     }
     source.push_str("];\n");

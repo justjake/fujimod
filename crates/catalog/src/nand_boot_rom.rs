@@ -162,9 +162,7 @@ impl NandBootRom {
 
     /// The settings a boot-source mode loads with, when it loads from NAND.
     pub fn source_mode(&self, mode: u8) -> Option<&NandBootSourceMode> {
-        self.source_modes
-            .iter()
-            .find(|source| source.mode == mode)
+        self.source_modes.iter().find(|source| source.mode == mode)
     }
 }
 

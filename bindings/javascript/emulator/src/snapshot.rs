@@ -4,9 +4,9 @@ use super::{
     results::{Point, SessionSnapshot},
     session::Session,
 };
-use fujimod_emulator_session::checkpoint::Snapshot;
 use fujimod_emulator_cpu::ExecutionPolicy;
 use fujimod_emulator_devices::{checkpoint::Checkpoint as Encoded, graphics::scanout::Frame};
+use fujimod_emulator_session::checkpoint::Snapshot;
 use serde::{Deserialize, Serialize};
 use std::{collections::BTreeMap, sync::Arc};
 

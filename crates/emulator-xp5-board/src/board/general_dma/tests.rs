@@ -1,8 +1,8 @@
 use super::*;
 use fujimod_emulator_devices::Cx;
-use fujimod_emulator_xp5_io::gpio::Gpio;
-use fujimod_emulator_devices::xp5::pins::Pins;
 use fujimod_emulator_devices::test_host::recording::RecordingHost;
+use fujimod_emulator_devices::xp5::pins::Pins;
+use fujimod_emulator_xp5_io::gpio::Gpio;
 use serde_json::json;
 const GPIO: u64 = 0xff907000;
 const SPI: u64 = 0xff911000;
@@ -49,7 +49,15 @@ impl Fixture {
             window(0xff90e500, 0x20, "dma-request-routing", json!({})),
             window(0xff90e748, 0x40, "dma-address-high", json!({})),
         ];
-        register_all(&mut graph, &windows, Some(4), pins, Default::default(), None).unwrap();
+        register_all(
+            &mut graph,
+            &windows,
+            Some(4),
+            pins,
+            Default::default(),
+            None,
+        )
+        .unwrap();
         let mut f = Self {
             graph,
             host: RecordingHost {
@@ -133,8 +141,12 @@ fn a53_software_dma_completion_is_per_channel_and_acknowledged() {
     f.write(0xff90e500, 0x01003f00); // Channel 1 software request selector.
     f.write(bank, 0x10000000);
     for (offset, value) in [
-        (0x10, 3), (0x14, 0x100), (0x18, 0x200),
-        (0x1c, 0), (0x20, 0), (0x24, 0),
+        (0x10, 3),
+        (0x14, 0x100),
+        (0x18, 0x200),
+        (0x1c, 0),
+        (0x20, 0),
+        (0x24, 0),
     ] {
         f.write(lane + offset, value);
     }
@@ -163,8 +175,6 @@ fn a53_software_dma_completion_is_per_channel_and_acknowledged() {
     assert_eq!(cx.refusal(), None);
 }
 
-
-
 #[test]
 fn companion_zero_base_routes_each_full_duplex_dma_completion_independently() {
     let mut f = Fixture::with_dma(json!({"companion_irq_base":0,"a53_irq_base":237}));
@@ -173,13 +183,18 @@ fn companion_zero_base_routes_each_full_duplex_dma_completion_independently() {
     f.write(bank, 0x10000000);
     f.write(GPIO + 0x2c0, 0x00280008); // Select the synthetic configuration endpoint.
     f.host.ram[0x1000..0x1002].copy_from_slice(&[0xa1, 0]);
-    for (lane, source, destination, ss, ds) in [
-        (0, 0x1000, SPI + 8, 0, 4),
-        (1, SPI + 8, 0x1100, 4, 0),
-    ] {
+    for (lane, source, destination, ss, ds) in
+        [(0, 0x1000, SPI + 8, 0, 4), (1, SPI + 8, 0x1100, 4, 0)]
+    {
         let base = bank + lane * 0x30;
-        for (offset, value) in [(0x10, 1), (0x14, source), (0x18, destination),
-                                (0x1c, ss), (0x20, ds), (0x24, 0)] {
+        for (offset, value) in [
+            (0x10, 1),
+            (0x14, source),
+            (0x18, destination),
+            (0x1c, ss),
+            (0x20, ds),
+            (0x24, 0),
+        ] {
             f.write(base + offset, value);
         }
     }
@@ -197,7 +212,9 @@ fn companion_zero_base_routes_each_full_duplex_dma_completion_independently() {
     f.write(bank + 0x28, 0x10209011);
     // The transmit FIFO drains before the last received frame is clocked.
     for _ in 0..100 {
-        if !f.host.core_irqs.is_empty() { break; }
+        if !f.host.core_irqs.is_empty() {
+            break;
+        }
         f.until(f.host.now + 50);
     }
     assert_eq!(f.host.core_irqs, [(4, 12, true)]);
@@ -210,11 +227,20 @@ fn companion_zero_base_routes_each_full_duplex_dma_completion_independently() {
 
     // Clear each lane separately; the other lane's outputs remain asserted.
     f.write(bank + 0x30, 0);
-    assert_eq!(f.host.core_irqs, [(4, 12, true), (4, 13, true), (4, 12, false)]);
+    assert_eq!(
+        f.host.core_irqs,
+        [(4, 12, true), (4, 13, true), (4, 12, false)]
+    );
     assert_eq!(f.host.irqs, [(249, true), (250, true), (249, false)]);
     f.write(bank + 0x60, 0);
-    assert_eq!(f.host.core_irqs, [(4, 12, true), (4, 13, true), (4, 12, false), (4, 13, false)]);
-    assert_eq!(f.host.irqs, [(249, true), (250, true), (249, false), (250, false)]);
+    assert_eq!(
+        f.host.core_irqs,
+        [(4, 12, true), (4, 13, true), (4, 12, false), (4, 13, false)]
+    );
+    assert_eq!(
+        f.host.irqs,
+        [(249, true), (250, true), (249, false), (250, false)]
+    );
 }
 
 #[test]
@@ -343,7 +369,12 @@ fn ssp5_windows(options: serde_json::Value) -> Vec<DeviceWindow> {
     vec![
         window(GPIO, 0x1000, "gpio", json!({})),
         window(0xff915000, 0x1000, "pl022", options),
-        window(0xff930000, 0x8000, "general-dma", json!({"companion_irq_base":83})),
+        window(
+            0xff930000,
+            0x8000,
+            "general-dma",
+            json!({"companion_irq_base":83}),
+        ),
         window(0xff90e500, 0x20, "dma-request-routing", json!({})),
         window(0xff90e748, 0x40, "dma-address-high", json!({})),
     ]
@@ -357,15 +388,30 @@ fn ssp_instance_without_declared_dma_requests_or_irq_polls_and_refuses_dma() {
     let pins = Pins::shared();
     let mut graph = DeviceGraph::new();
     graph
-        .register(GPIO, 0x1000, Box::new(Gpio::new(GPIO, pins.clone(), false, vec![]).unwrap()))
+        .register(
+            GPIO,
+            0x1000,
+            Box::new(Gpio::new(GPIO, pins.clone(), false, vec![]).unwrap()),
+        )
         .unwrap();
     let windows = ssp5_windows(
         json!({"source_hz":48000000,"ticks_per_second":1000000000,"wire":wire.clone()}),
     );
-    register_all(&mut graph, &windows, Some(4), pins.clone(), Default::default(), None).unwrap();
+    register_all(
+        &mut graph,
+        &windows,
+        Some(4),
+        pins.clone(),
+        Default::default(),
+        None,
+    )
+    .unwrap();
     let mut f = Fixture {
         graph,
-        host: RecordingHost { ram: vec![0; 0x2000], ..Default::default() },
+        host: RecordingHost {
+            ram: vec![0; 0x2000],
+            ..Default::default()
+        },
     };
     // The companion's receive-FIFO drain reads the status word (bit 2, receive not empty).
     let id = f.graph.at(0xff91500c).unwrap();
@@ -379,14 +425,24 @@ fn ssp_instance_without_declared_dma_requests_or_irq_polls_and_refuses_dma() {
     }
     f.write(0xff90e514, 0x01010203);
     f.write(DMA, 0x10000000);
-    for (offset, value) in [(0x10, 0), (0x14, 0x1000), (0x18, 0xff915008), (0x1c, 0), (0x20, 4), (0x24, 0)] {
+    for (offset, value) in [
+        (0x10, 0),
+        (0x14, 0x1000),
+        (0x18, 0xff915008),
+        (0x1c, 0),
+        (0x20, 4),
+        (0x24, 0),
+    ] {
         f.write(DMA + offset, value);
     }
     let id = f.graph.at(DMA).unwrap();
     let mut cx = Cx::new(&mut f.host, 4, 0, id);
-    f.graph.nodes[id].device.write(&mut cx, DMA + 0x28, 4, 0x10209011);
+    f.graph.nodes[id]
+        .device
+        .write(&mut cx, DMA + 0x28, 4, 0x10209011);
     assert!(
-        cx.refusal().is_some_and(|r| r.contains("no connected peripheral; request=3")),
+        cx.refusal()
+            .is_some_and(|r| r.contains("no connected peripheral; request=3")),
         "{:?}",
         cx.refusal()
     );
@@ -397,12 +453,30 @@ fn ssp_instance_without_declared_dma_requests_or_irq_polls_and_refuses_dma() {
         json!({"source_hz":48000000,"ticks_per_second":1000000000,"receive_request":2,"transmit_request":2,"wire":wire.clone()}),
     ] {
         let pins = Pins::shared();
-        let error = register_all(&mut DeviceGraph::new(), &ssp5_windows(options), Some(4), pins, Default::default(), None);
-        assert_eq!(error.err().as_deref(), Some("invalid XP5 serial DMA request wiring"));
+        let error = register_all(
+            &mut DeviceGraph::new(),
+            &ssp5_windows(options),
+            Some(4),
+            pins,
+            Default::default(),
+            None,
+        );
+        assert_eq!(
+            error.err().as_deref(),
+            Some("invalid XP5 serial DMA request wiring")
+        );
     }
-    let mut outside = ssp5_windows(json!({"source_hz":48000000,"ticks_per_second":1000000000,"wire":wire}));
+    let mut outside =
+        ssp5_windows(json!({"source_hz":48000000,"ticks_per_second":1000000000,"wire":wire}));
     outside[1].base = 0xff91c000;
-    let error = register_all(&mut DeviceGraph::new(), &outside, Some(4), Pins::shared(), Default::default(), None);
+    let error = register_all(
+        &mut DeviceGraph::new(),
+        &outside,
+        Some(4),
+        Pins::shared(),
+        Default::default(),
+        None,
+    );
     assert_eq!(error.err().as_deref(), Some("invalid XP5 PL022 window"));
 }
 
@@ -412,20 +486,42 @@ fn ssp_instance_with_an_unconnected_interrupt_output_unmasks_without_driving_a_l
         {"select":{"port":12,"pin":8,"active_high":false},"part":{"kind":"bis-configuration-registers","revision":[0,0],"samples":[0,0],"idle_high":false}}
     ]});
     let options = |extra: serde_json::Value| {
-        let mut options = json!({"source_hz":48000000,"ticks_per_second":1000000000,"wire":wire.clone()});
-        options.as_object_mut().unwrap().extend(extra.as_object().unwrap().clone());
+        let mut options =
+            json!({"source_hz":48000000,"ticks_per_second":1000000000,"wire":wire.clone()});
+        options
+            .as_object_mut()
+            .unwrap()
+            .extend(extra.as_object().unwrap().clone());
         options
     };
-    for (extra, refused) in [(json!({"companion_irq_unconnected":true}), false), (json!({}), true)] {
+    for (extra, refused) in [
+        (json!({"companion_irq_unconnected":true}), false),
+        (json!({}), true),
+    ] {
         let pins = Pins::shared();
         let mut graph = DeviceGraph::new();
         graph
-            .register(GPIO, 0x1000, Box::new(Gpio::new(GPIO, pins.clone(), false, vec![]).unwrap()))
+            .register(
+                GPIO,
+                0x1000,
+                Box::new(Gpio::new(GPIO, pins.clone(), false, vec![]).unwrap()),
+            )
             .unwrap();
-        register_all(&mut graph, &ssp5_windows(options(extra)), Some(4), pins, Default::default(), None).unwrap();
+        register_all(
+            &mut graph,
+            &ssp5_windows(options(extra)),
+            Some(4),
+            pins,
+            Default::default(),
+            None,
+        )
+        .unwrap();
         let mut f = Fixture {
             graph,
-            host: RecordingHost { ram: vec![0; 0x2000], ..Default::default() },
+            host: RecordingHost {
+                ram: vec![0; 0x2000],
+                ..Default::default()
+            },
         };
         for (offset, value) in [(0, 0xc7), (0x10, 6), (0x24, 3), (4, 0xa)] {
             f.write(0xff915000 + offset, value);
@@ -439,8 +535,18 @@ fn ssp_instance_with_an_unconnected_interrupt_output_unmasks_without_driving_a_l
         assert!(f.host.core_irqs.is_empty() && f.host.irqs.is_empty());
     }
     let both = options(json!({"companion_irq_line":99,"companion_irq_unconnected":true}));
-    let error = register_all(&mut DeviceGraph::new(), &ssp5_windows(both), Some(4), Pins::shared(), Default::default(), None);
-    assert_eq!(error.err().as_deref(), Some("PL022 interrupt output is both connected and unconnected"));
+    let error = register_all(
+        &mut DeviceGraph::new(),
+        &ssp5_windows(both),
+        Some(4),
+        Pins::shared(),
+        Default::default(),
+        None,
+    );
+    assert_eq!(
+        error.err().as_deref(),
+        Some("PL022 interrupt output is both connected and unconnected")
+    );
 }
 
 #[test]
@@ -486,7 +592,17 @@ fn a53_irq_base_outside_the_gic_spi_range_refuses() {
             window(0xff90e748, 0x40, "dma-address-high", json!({})),
         ];
         let mut graph = DeviceGraph::new();
-        assert!(register_all(&mut graph, &windows, Some(4), Pins::shared(), Default::default(), None).is_err());
+        assert!(
+            register_all(
+                &mut graph,
+                &windows,
+                Some(4),
+                Pins::shared(),
+                Default::default(),
+                None
+            )
+            .is_err()
+        );
     }
 }
 
@@ -496,7 +612,9 @@ fn the_xt5_lens_fragment_registers_the_lens_bus_connector() {
         "../../../../../catalog/firmware/xt5/4.31/xp5-boot/manifest.d/45-lens.toml"
     ))
     .unwrap();
-    let device = fragment["device"].as_array().unwrap()[0].as_table().unwrap();
+    let device = fragment["device"].as_array().unwrap()[0]
+        .as_table()
+        .unwrap();
     let lens = DeviceWindow {
         base: device["base"].as_integer().unwrap() as u64,
         size: device["size"].as_integer().unwrap() as u64,
@@ -506,16 +624,33 @@ fn the_xt5_lens_fragment_registers_the_lens_bus_connector() {
     let pins = Pins::shared();
     let mut graph = DeviceGraph::new();
     graph
-        .register(GPIO, 0x1000, Box::new(Gpio::new(GPIO, pins.clone(), false, vec![]).unwrap()))
+        .register(
+            GPIO,
+            0x1000,
+            Box::new(Gpio::new(GPIO, pins.clone(), false, vec![]).unwrap()),
+        )
         .unwrap();
     let windows = vec![
         window(GPIO, 0x1000, "gpio", json!({})),
         lens,
-        window(0xff930000, 0x8000, "general-dma", json!({"companion_irq_base":83,"a53_irq_base":237})),
+        window(
+            0xff930000,
+            0x8000,
+            "general-dma",
+            json!({"companion_irq_base":83,"a53_irq_base":237}),
+        ),
         window(0xff90e500, 0x20, "dma-request-routing", json!({})),
         window(0xff90e748, 0x40, "dma-address-high", json!({})),
     ];
-    register_all(&mut graph, &windows, Some(4), pins.clone(), Default::default(), None).unwrap();
+    register_all(
+        &mut graph,
+        &windows,
+        Some(4),
+        pins.clone(),
+        Default::default(),
+        None,
+    )
+    .unwrap();
     let id = graph.at(0xff910000).unwrap();
     assert_eq!(graph.nodes[id].device.name(), "xp5-x-mount-lens");
     let attached = std::env::var("XT5_LENS").map_or(true, |v| v != "none");
@@ -528,7 +663,15 @@ fn standalone_views_work_without_dma_or_companion_and_keep_checkpoint_state() {
         window(0xff90e748, 0x40, "dma-address-high", json!({})),
         window(0xff90e500, 0x20, "dma-request-routing", json!({})),
     ];
-    register_all(&mut graph, &windows, None, Pins::shared(), Default::default(), None).unwrap();
+    register_all(
+        &mut graph,
+        &windows,
+        None,
+        Pins::shared(),
+        Default::default(),
+        None,
+    )
+    .unwrap();
     let mut host = RecordingHost::default();
     let id = graph.at(0xff90e74c).unwrap();
     let mut cx = Cx::new(&mut host, 4, 0, id);
@@ -540,7 +683,12 @@ fn standalone_views_work_without_dma_or_companion_and_keep_checkpoint_state() {
     view.write(&mut cx, 0xff90e74c, 4, 0);
     view.restore_checkpoint(&checkpoint).unwrap();
     assert_eq!(view.read(&mut cx, 0xff90e74c, 4), 0x12340001);
-    for (address, width) in [(0xff90e74c, 1), (0xff90e74c, 2), (0xff90e74d, 4), (0xff90e788, 4)] {
+    for (address, width) in [
+        (0xff90e74c, 1),
+        (0xff90e74c, 2),
+        (0xff90e74d, 4),
+        (0xff90e788, 4),
+    ] {
         let mut cx = Cx::new(&mut host, width, 0, id);
         view.write(&mut cx, address, width as u8, 0);
         assert!(cx.is_unmodeled());
@@ -563,7 +711,32 @@ fn standalone_views_work_without_dma_or_companion_and_keep_checkpoint_state() {
 
 #[test]
 fn dma_still_requires_companion_and_both_views() {
-    let dma = window(0xff930000, 0x8000, "general-dma", json!({"companion_irq_base":83}));
-    assert!(register_all(&mut DeviceGraph::new(), &[dma.clone()], None, Pins::shared(), Default::default(), None).is_err());
-    assert!(register_all(&mut DeviceGraph::new(), &[dma], Some(4), Pins::shared(), Default::default(), None).is_err());
+    let dma = window(
+        0xff930000,
+        0x8000,
+        "general-dma",
+        json!({"companion_irq_base":83}),
+    );
+    assert!(
+        register_all(
+            &mut DeviceGraph::new(),
+            &[dma.clone()],
+            None,
+            Pins::shared(),
+            Default::default(),
+            None
+        )
+        .is_err()
+    );
+    assert!(
+        register_all(
+            &mut DeviceGraph::new(),
+            &[dma],
+            Some(4),
+            Pins::shared(),
+            Default::default(),
+            None
+        )
+        .is_err()
+    );
 }

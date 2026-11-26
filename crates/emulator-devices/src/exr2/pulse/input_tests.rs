@@ -125,9 +125,17 @@ fn channel_eleven_counts_through_the_high_input_route() {
     // high_route: +0x18 nibble 3 is channel 11, routed to its own input as on EXR Pro (0x7a5ad8 writes 0xb000).
     crate::test_host::write(&mut device, &mut host, BASE + 0x18, 0xb000);
     for (offset, value) in [(0, 0x208b), (4, 0), (8, 0), (12, 0), (16, 0xffff)] {
-        crate::test_host::write(&mut device, &mut host, CHANNEL_BASE + 11 * 0x100 + offset, value);
+        crate::test_host::write(
+            &mut device,
+            &mut host,
+            CHANNEL_BASE + 11 * 0x100 + offset,
+            value,
+        );
     }
     crate::test_host::write(&mut device, &mut host, BASE, 0x08000800);
     assert!(pins.counter_wired(11));
-    assert_eq!(crate::test_host::read(&mut device, &mut host, BASE + 0x18), 0xb000);
+    assert_eq!(
+        crate::test_host::read(&mut device, &mut host, BASE + 0x18),
+        0xb000
+    );
 }

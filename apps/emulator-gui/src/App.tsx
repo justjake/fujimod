@@ -53,24 +53,29 @@ export default function App() {
     let catalog: NativeCatalog | undefined;
     let nativeState: NativeSessionState | undefined;
     let sessionInitialized = false;
-    const session = startSession(state() as never, updateState as never, { viewer, lcd }, {
-      async createEngine() {
-        return photo;
+    const session = startSession(
+      state() as never,
+      updateState as never,
+      { viewer, lcd },
+      {
+        async createEngine() {
+          return photo;
+        },
+        identity: () => ({
+          camera: { id: launched.body, model: launched.model },
+          firmwareSha256: launched.firmware,
+          build: 'Native',
+          modBuild: 'Native',
+          canRestart: false,
+          sceneInput: false,
+        }),
+        simulatorBuild: 'Native',
+        restart: async () => {},
+        fault() {},
+        ready() {},
+        cameraSaved() {},
       },
-      identity: () => ({
-        camera: { id: launched.body, model: launched.model },
-        firmwareSha256: launched.firmware,
-        build: 'Native',
-        modBuild: 'Native',
-        canRestart: false,
-        sceneInput: false,
-      }),
-      simulatorBuild: 'Native',
-      restart: async () => {},
-      fault() {},
-      ready() {},
-      cameraSaved() {},
-    });
+    );
     setRuntime(session);
     const bootWhenReady = () => {
       if (!catalog || !nativeState || sessionInitialized) return;
@@ -98,14 +103,20 @@ export default function App() {
         value.message = 'Booting camera…';
       });
       try {
-        await session.boot(new ArrayBuffer(0), panel, controls, () => true, () => ({
-          config: {
-            firmwareId: metadata.firmware,
-            bundle: '',
-            sceneInput: false,
-            camera: { id: metadata.body, revision: 0, modEnabled: false },
-          } satisfies EngineConfig,
-        }));
+        await session.boot(
+          new ArrayBuffer(0),
+          panel,
+          controls,
+          () => true,
+          () => ({
+            config: {
+              firmwareId: metadata.firmware,
+              bundle: '',
+              sceneInput: false,
+              camera: { id: metadata.body, revision: 0, modEnabled: false },
+            } satisfies EngineConfig,
+          }),
+        );
         session.panel.synchronize(initial.positions);
         session.panel.setPowered(initial.poweredOn);
         session.panel.resume();
@@ -127,12 +138,14 @@ export default function App() {
     setBusy(true);
     setLauncherError('');
     try {
-      await startCamera(await bridge.openCamera({
-        firmware: firmware(),
-        boot: boot(),
-        sdCard: boot() === 'stock' ? undefined : sdCard() || undefined,
-        skipBootCache: skipCache() || undefined,
-      }));
+      await startCamera(
+        await bridge.openCamera({
+          firmware: firmware(),
+          boot: boot(),
+          sdCard: boot() === 'stock' ? undefined : sdCard() || undefined,
+          skipBootCache: skipCache() || undefined,
+        }),
+      );
     } catch (error) {
       setLauncherError(shownError(error));
     } finally {
@@ -164,10 +177,13 @@ export default function App() {
       setPageError(shownError(event.reason));
     });
     if (!bridge) return;
-    void bridge.launcherCameras().then((rows) => {
-      setCameras(rows);
-      setFirmware(rows[0]?.firmware ?? '');
-    }).catch((error) => setLauncherError(shownError(error)));
+    void bridge
+      .launcherCameras()
+      .then((rows) => {
+        setCameras(rows);
+        setFirmware(rows[0]?.firmware ?? '');
+      })
+      .catch((error) => setLauncherError(shownError(error)));
     void bridge.connection().then(async (endpoint) => {
       if (!endpoint) return;
       try {
@@ -195,30 +211,50 @@ export default function App() {
 
   return (
     <main class="window">
-      <h1 id="emulator-title" class="visually-hidden">Fujimod Emulator</h1>
+      <h1 id="emulator-title" class="visually-hidden">
+        Fujimod Emulator
+      </h1>
       <EmulatorWorkspace
         state={state()}
         runtime={runtime()}
         bodyPreview=""
         labelledBy="emulator-title"
         workspace={() => {}}
-        viewer={(element) => { viewer = element; }}
-        lcd={(element) => { lcd = element; }}
+        viewer={(element) => {
+          viewer = element;
+        }}
+        lcd={(element) => {
+          lcd = element;
+        }}
         selectFile={() => {}}
         toolbar={<span />}
       >
         <Show when={state().idle}>
           <section class="launcher" aria-labelledby="emulator-title">
-            <Show when={bridge} fallback={<p class="status">{launcherError() || 'Start the emulator with a native session.'}</p>}>
+            <Show
+              when={bridge}
+              fallback={
+                <p class="status">
+                  {launcherError() || 'Start the emulator with a native session.'}
+                </p>
+              }
+            >
               <div class="launcher-heading">
                 <h2>Open a camera</h2>
               </div>
               <label>
                 <span>Camera</span>
-                <select value={firmware()} onChange={(event) => setFirmware(event.currentTarget.value)}>
-                  <For each={cameras()}>{(camera) => (
-                    <option value={camera.firmware}>{camera.model} · {camera.version}</option>
-                  )}</For>
+                <select
+                  value={firmware()}
+                  onChange={(event) => setFirmware(event.currentTarget.value)}
+                >
+                  <For each={cameras()}>
+                    {(camera) => (
+                      <option value={camera.firmware}>
+                        {camera.model} · {camera.version}
+                      </option>
+                    )}
+                  </For>
                 </select>
               </label>
               <Show when={cameras().length === 0}>
@@ -227,19 +263,37 @@ export default function App() {
               <fieldset class="boot-choice">
                 <legend>Boot</legend>
                 <label class="boot-option">
-                  <input type="radio" name="boot" value="stock" checked={boot() === 'stock'} onChange={() => setBoot('stock')} />
+                  <input
+                    type="radio"
+                    name="boot"
+                    value="stock"
+                    checked={boot() === 'stock'}
+                    onChange={() => setBoot('stock')}
+                  />
                   <span>
                     <strong>Stock</strong>
                   </span>
                 </label>
                 <label class="boot-option">
-                  <input type="radio" name="boot" value="sd-card" checked={boot() === 'sd-card'} onChange={() => setBoot('sd-card')} />
+                  <input
+                    type="radio"
+                    name="boot"
+                    value="sd-card"
+                    checked={boot() === 'sd-card'}
+                    onChange={() => setBoot('sd-card')}
+                  />
                   <span>
                     <strong>SD card</strong>
                   </span>
                 </label>
                 <label class="boot-option">
-                  <input type="radio" name="boot" value="automatic-boot" checked={boot() === 'automatic-boot'} onChange={() => setBoot('automatic-boot')} />
+                  <input
+                    type="radio"
+                    name="boot"
+                    value="automatic-boot"
+                    checked={boot() === 'automatic-boot'}
+                    onChange={() => setBoot('automatic-boot')}
+                  />
                   <span>
                     <strong>Automatic boot</strong>
                   </span>
@@ -247,22 +301,40 @@ export default function App() {
               </fieldset>
               <Show when={boot() !== 'stock'}>
                 <div class="file-row">
-                  <button type="button" onClick={() => void bridge!.chooseSdCard().then((path) => path && setSdCard(path))}>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      void bridge!.chooseSdCard().then((path) => path && setSdCard(path))
+                    }
+                  >
                     Choose SD card folder
                   </button>
-                  <span>{sdCard() ? sdCard().split(/[\\/]/).filter(Boolean).at(-1) : 'Release SD card'}</span>
+                  <span>
+                    {sdCard() ? sdCard().split(/[\\/]/).filter(Boolean).at(-1) : 'Release SD card'}
+                  </span>
                 </div>
               </Show>
               <label class="launcher-check">
-                <input type="checkbox" checked={skipCache()} onChange={(event) => setSkipCache(event.currentTarget.checked)} />
+                <input
+                  type="checkbox"
+                  checked={skipCache()}
+                  onChange={(event) => setSkipCache(event.currentTarget.checked)}
+                />
                 Boot from scratch
               </label>
-              <button class="primary" type="button"
+              <button
+                class="primary"
+                type="button"
                 disabled={!firmware() || busy()}
-                onClick={() => void launch()}>
+                onClick={() => void launch()}
+              >
                 {busy() ? 'Opening…' : 'Open camera'}
               </button>
-              <Show when={launcherError()}><p class="error" role="alert">{launcherError()}</p></Show>
+              <Show when={launcherError()}>
+                <p class="error" role="alert">
+                  {launcherError()}
+                </p>
+              </Show>
             </Show>
             <Show when={state().loading}>
               <LoadingAssets assets={state().loadingAssets} />
@@ -271,7 +343,9 @@ export default function App() {
         </Show>
       </EmulatorWorkspace>
       <Show when={pageError()}>
-        <pre class="page-error" role="alert">{pageError()}</pre>
+        <pre class="page-error" role="alert">
+          {pageError()}
+        </pre>
       </Show>
     </main>
   );

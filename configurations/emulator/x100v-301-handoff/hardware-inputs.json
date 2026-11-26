@@ -121,7 +121,10 @@
     "usb_phy_input": {
       "basis": "Virtual zeroed XP4 USB PHY input; physical X100V PHY reset values are unmeasured.",
       "parallel": 0,
-      "registers": [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+      "registers": [
+        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+        0
+      ]
     }
   }
 }

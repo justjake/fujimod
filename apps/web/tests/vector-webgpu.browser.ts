@@ -32,11 +32,9 @@ async function run(cpuRenderer: boolean, label: 'cpu' | 'webgpu') {
   const errors: string[] = [];
   page.on('pageerror', (error) => errors.push(error.message));
   await page.goto(scenario);
-  await page.waitForFunction(
-    () => window.cameraPerformance !== undefined,
-    undefined,
-    { timeout: 55000 },
-  );
+  await page.waitForFunction(() => window.cameraPerformance !== undefined, undefined, {
+    timeout: 55000,
+  });
   const adapter = await page.evaluate(async () => {
     const gpuNavigator = navigator as Navigator & {
       gpu?: {
@@ -48,9 +46,9 @@ async function run(cpuRenderer: boolean, label: 'cpu' | 'webgpu') {
     const adapter = await gpuNavigator.gpu?.requestAdapter({ powerPreference: 'high-performance' });
     const canvas = document.createElement('canvas');
     const gl = canvas.getContext('webgl2');
-    const debug = gl?.getExtension('WEBGL_debug_renderer_info') as
-      | { UNMASKED_RENDERER_WEBGL: number }
-      | null;
+    const debug = gl?.getExtension('WEBGL_debug_renderer_info') as {
+      UNMASKED_RENDERER_WEBGL: number;
+    } | null;
     return {
       available: adapter !== undefined && adapter !== null,
       info: adapter?.info,
@@ -125,7 +123,10 @@ try {
   assert(webgpu.diagnostics.gpuGlesLists > 0, 'The vector GLES path did not use WebGPU.');
   assert(webgpu.diagnostics.gpuVectorPaintCalls > 0, 'Vector coverage/paint did not use WebGPU.');
   assert(cpu.diagnostics.cpuRasterCalls > 0, 'The CPU renderer baseline was not exercised.');
-  assert(cpu.diagnostics.cpuVectorPaintCalls > 0, 'The CPU vector paint baseline was not exercised.');
+  assert(
+    cpu.diagnostics.cpuVectorPaintCalls > 0,
+    'The CPU vector paint baseline was not exercised.',
+  );
   console.log(
     `${webgpu.adapter.renderer} (WebGPU ${webgpu.adapter.info?.vendor}/${webgpu.adapter.info?.architecture}): X70 REC and MENU match CPU; CPU raster/vector paint calls 0; vector GLES lists ${webgpu.diagnostics.gpuGlesLists}; vector GPU batches ${webgpu.diagnostics.gpuVectorPaintCalls}.`,
   );

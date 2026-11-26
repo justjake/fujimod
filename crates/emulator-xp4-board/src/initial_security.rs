@@ -35,7 +35,10 @@ fn selector(opc2: u32) -> arm::Coprocessor {
 }
 
 pub(crate) fn is_cpsr(register: Register) -> bool {
-    matches!(register, Register::Pstate | Register::Arm32(arm::Register::Cpsr))
+    matches!(
+        register,
+        Register::Pstate | Register::Arm32(arm::Register::Cpsr)
+    )
 }
 
 impl InitialSecurity {
@@ -46,15 +49,20 @@ impl InitialSecurity {
         if self.nsacr & !(NSACR_NS_SMP | NSACR_CP10_CP11) != 0
             || !matches!(self.nsacr & NSACR_CP10_CP11, 0 | NSACR_CP10_CP11)
         {
-            return Err("Initial Cortex-A7 NSACR requires supported bits and paired CP10/CP11 permissions".into());
+            return Err(
+                "Initial Cortex-A7 NSACR requires supported bits and paired CP10/CP11 permissions"
+                    .into(),
+            );
         }
         Ok(())
     }
 
     pub(crate) fn validate_cpsr(self, cpsr: u32) -> Result<(), String> {
         let mode = cpsr & 31;
-        if !matches!(mode, 0x10 | 0x11 | 0x12 | 0x13 | 0x16 | 0x17 | 0x1a | 0x1b | 0x1f)
-            || (mode == 0x1a && self.scr & SCR_NS == 0)
+        if !matches!(
+            mode,
+            0x10 | 0x11 | 0x12 | 0x13 | 0x16 | 0x17 | 0x1a | 0x1b | 0x1f
+        ) || (mode == 0x1a && self.scr & SCR_NS == 0)
         {
             return Err("Initial Cortex-A7 security state has an invalid CPSR mode".into());
         }
@@ -109,8 +117,13 @@ mod tests {
 
     #[test]
     fn another_cpu_model_is_rejected_before_coprocessor_access() {
-        let cpu = Library::linked().unwrap().open(Model::CortexR5F, 1 << 20).unwrap();
-        let error = InitialSecurity { scr: 0, nsacr: 0 }.apply(&cpu).unwrap_err();
+        let cpu = Library::linked()
+            .unwrap()
+            .open(Model::CortexR5F, 1 << 20)
+            .unwrap();
+        let error = InitialSecurity { scr: 0, nsacr: 0 }
+            .apply(&cpu)
+            .unwrap_err();
         assert_eq!(error, "Initial security state requires Cortex-A7");
     }
 }

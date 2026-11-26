@@ -173,21 +173,31 @@ impl Core {
     }
     /// Give an isolated native diagnostic another physical view of VM-owned RAM.
     pub fn map_owned_alias(
-        &self, address: u64, source: u64, bytes: usize, permissions: u32,
+        &self,
+        address: u64,
+        source: u64,
+        bytes: usize,
+        permissions: u32,
     ) -> Result<(), String> {
         if self.running.get() || self.execution_policy.get() != ExecutionPolicy::Interactive {
             return Err("native RAM aliases require a stopped interactive CPU".into());
         }
-        self.machine.alias_owned(address, source, bytes, permissions)
+        self.machine
+            .alias_owned(address, source, bytes, permissions)
     }
 
     /// Run one native diagnostic interval from the current PC. Report the raw
     /// architectural exit to the caller that owns the diagnostic semantics.
     pub fn run_to_native_exit(&self, watchdog_us: u64) -> Result<NativeExit, String> {
-        if watchdog_us == 0 || self.execution_policy.get() != ExecutionPolicy::Interactive
-            || self.has_instruction_hooks() || self.running.get() || self.active_run.borrow().is_some()
+        if watchdog_us == 0
+            || self.execution_policy.get() != ExecutionPolicy::Interactive
+            || self.has_instruction_hooks()
+            || self.running.get()
+            || self.active_run.borrow().is_some()
         {
-            return Err("native diagnostics need an idle interactive CPU, no hooks, and a watchdog".into());
+            return Err(
+                "native diagnostics need an idle interactive CPU, no hooks, and a watchdog".into(),
+            );
         }
         self.shared.stop.store(false, Ordering::Release);
         let _watchdog = Watchdog::new(self.native_cpu, watchdog_us, self.shared.clone());
@@ -203,7 +213,10 @@ impl Core {
         self.commands
             .send(op)
             .map_err(|_| "HVF worker disconnected")?;
-        let result = self.replies.recv().map_err(|_| "HVF worker reply disconnected")?;
+        let result = self
+            .replies
+            .recv()
+            .map_err(|_| "HVF worker reply disconnected")?;
         self.parked.set(!resumes);
         result
     }
@@ -404,7 +417,12 @@ impl Core {
             } else {
                 let mask = u64::MAX >> (64 - u32::from(t.size) * 8);
                 unsafe {
-                    (w.callbacks.write)(offset, u32::from(t.size), t.store & mask, w.callbacks.data);
+                    (w.callbacks.write)(
+                        offset,
+                        u32::from(t.size),
+                        t.store & mask,
+                        w.callbacks.data,
+                    );
                 }
                 if !complete_after_pause && self.shared.stop.load(Ordering::Acquire) {
                     return Ok(MmioOutcome::Resume(true));
@@ -487,7 +505,13 @@ impl Core {
         for base in keys {
             let w = windows.remove(&base).unwrap();
             if base < address {
-                windows.insert(base, Window { end: address, ..w.clone() });
+                windows.insert(
+                    base,
+                    Window {
+                        end: address,
+                        ..w.clone()
+                    },
+                );
             }
             if w.end > end {
                 windows.insert(
@@ -774,8 +798,9 @@ impl Cpu for Core {
             .map_err(|_| ExecutionError::Backend("HVF worker disconnected".into()))?;
         let mut error = None;
         loop {
-            let event = self.events.recv()
-                .map_err(|_| ExecutionError::Backend("HVF worker disconnected during run".into()))?;
+            let event = self.events.recv().map_err(|_| {
+                ExecutionError::Backend("HVF worker disconnected during run".into())
+            })?;
             self.parked.set(true);
             let result = match event {
                 Event::Before(pc) => {

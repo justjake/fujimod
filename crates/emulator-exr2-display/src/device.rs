@@ -133,8 +133,7 @@ impl Scanout {
                         return;
                     };
                     let pipe = reset_fields(token).0;
-                    self.deadlines
-                        .retain(|t, _| reset_fields(*t).0 != pipe);
+                    self.deadlines.retain(|t, _| reset_fields(*t).0 != pipe);
                     self.deadlines.insert(token, due);
                 }
                 _ => cx.fail("unsupported scanout device effect"),
@@ -147,8 +146,7 @@ impl Scanout {
         if saved.deadlines.len() > 2
             || saved.deadlines.iter().any(|(token, due)| {
                 *due > i64::MAX as u64
-                    || reset_fields(*token).1
-                        != saved.pipes[reset_fields(*token).0].generation
+                    || reset_fields(*token).1 != saved.pipes[reset_fields(*token).0].generation
             })
             || saved.pipes.iter().enumerate().any(|(i, p)| {
                 p.generation < 0
@@ -689,9 +687,17 @@ mod tests {
                 let mut d = model();
                 let mut host = TestHost::new();
                 for (offset, value) in [
-                    (0, 1), (0x10, 7 << 16 | 5), (0x1c, 2 << 16 | 1),
-                    (0x20, 3 << 16 | 3), (0x24, 0), (0x28, 7 << 16 | 5),
-                    (0x2c, source), (0x30, 0), (0xd4, 0x10001000), (0xd8, 0), (0xdc, 0),
+                    (0, 1),
+                    (0x10, 7 << 16 | 5),
+                    (0x1c, 2 << 16 | 1),
+                    (0x20, 3 << 16 | 3),
+                    (0x24, 0),
+                    (0x28, 7 << 16 | 5),
+                    (0x2c, source),
+                    (0x30, 0),
+                    (0xd4, 0x10001000),
+                    (0xd8, 0),
+                    (0xdc, 0),
                 ] {
                     write(&mut d, &mut host, scanout::BASES[pipe] + offset, value);
                 }
@@ -712,7 +718,9 @@ mod tests {
                     for x in 0..8 {
                         let expected = if (2..6).contains(&x) && (1..5).contains(&y) {
                             [0, 135, 0]
-                        } else { [0, 0, 0] };
+                        } else {
+                            [0, 0, 0]
+                        };
                         assert_eq!(&rgb[(y * 8 + x) * 3..(y * 8 + x + 1) * 3], &expected);
                     }
                 }

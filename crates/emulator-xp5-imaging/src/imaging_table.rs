@@ -6,8 +6,7 @@ use std::collections::BTreeMap;
 
 /// Windows of this kind and the word runs the stock firmware writes in each (inclusive start and
 /// end offsets), one 32-bit store each.
-pub const BASES: [u64; 5] =
-    [0xff96c000, 0xff96e000, 0xff959000, 0xff95a000, 0xff95b000];
+pub const BASES: [u64; 5] = [0xff96c000, 0xff96e000, 0xff959000, 0xff95a000, 0xff95b000];
 /// The status word of the first window; stock code reads it and keeps only bit 0.
 pub const STATUS: u64 = 0xb30;
 
@@ -59,7 +58,10 @@ pub struct Table {
 }
 impl Table {
     pub fn reset(base: u64) -> Option<Self> {
-        BASES.contains(&base).then(|| Self { base, words: BTreeMap::new() })
+        BASES.contains(&base).then(|| Self {
+            base,
+            words: BTreeMap::new(),
+        })
     }
     fn known(&self, offset: u64) -> bool {
         table(self.base, offset) || (self.base == BASES[0] && offset == STATUS)
@@ -110,7 +112,12 @@ mod tests {
     }
     #[test]
     fn table_words_read_back() {
-        for (base, o, v) in [(C, 0x0, 0x10302), (C, 0xca0, 5), (E, 0x0, 0x111121), (E, 0x5ec, 9)] {
+        for (base, o, v) in [
+            (C, 0x0, 0x10302),
+            (C, 0xca0, 5),
+            (E, 0x0, 0x111121),
+            (E, 0x5ec, 9),
+        ] {
             let mut t = Table::reset(base).unwrap();
             let mut host = RecordingHost::default();
             t.write(&mut Cx::new(&mut host, 0, 0, 0), base + o, 4, v);
@@ -119,19 +126,32 @@ mod tests {
     }
     #[test]
     fn the_coefficient_windows_latch_their_runs_and_refuse_the_rest() {
-        for (base, last, past) in [(BASES[2], 0x8fc, 0x900), (BASES[3], 0xbfc, 0xc00), (BASES[4], 0xbfc, 0xc00)] {
+        for (base, last, past) in [
+            (BASES[2], 0x8fc, 0x900),
+            (BASES[3], 0xbfc, 0xc00),
+            (BASES[4], 0xbfc, 0xc00),
+        ] {
             let mut t = Table::reset(base).unwrap();
             let mut host = RecordingHost::default();
             for o in [0, 0x100, last] {
                 t.write(&mut Cx::new(&mut host, 0, 0, 0), base + o, 4, 0xa28065 + o);
-                assert_eq!(t.read(&mut Cx::new(&mut host, 0, 0, 0), base + o, 4), 0xa28065 + o);
+                assert_eq!(
+                    t.read(&mut Cx::new(&mut host, 0, 0, 0), base + o, 4),
+                    0xa28065 + o
+                );
             }
             assert!(table(base, last) && !table(base, past) && !table(base, 2));
         }
     }
     #[test]
     fn an_unlisted_word_is_unmodeled() {
-        assert!(!table(C, 0x10) && !table(C, 0xb30) && !table(C, 0x2) && !table(C, 0x670) && !table(C, 0xca4));
+        assert!(
+            !table(C, 0x10)
+                && !table(C, 0xb30)
+                && !table(C, 0x2)
+                && !table(C, 0x670)
+                && !table(C, 0xca4)
+        );
         assert!(table(C, 0x668) && table(C, 0xc00));
         assert!(!table(E, 0x4) && !table(E, 0x124) && table(E, 0x700));
         assert!(Table::reset(0xff96d000).is_none());

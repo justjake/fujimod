@@ -276,9 +276,7 @@ impl Endpoint {
             UsbHostWait::Enabled => self.reg(0x90) & 6 == 6,
             UsbHostWait::Idle => self.drained(),
             UsbHostWait::SetupTaken => self.setup_position == 8 && self.reg(0x2c) & 0x2000 == 0,
-            UsbHostWait::ControlOutTaken(length) => {
-                self.rx_position[0] == length && self.drained()
-            }
+            UsbHostWait::ControlOutTaken(length) => self.rx_position[0] == length && self.drained(),
             UsbHostWait::OutTaken(endpoint) => {
                 let port = self.out_port(endpoint)?;
                 self.rx_position[port] >= self.rx_length[port]

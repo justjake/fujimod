@@ -49,6 +49,7 @@ From the bottom of the graph to the top:
    bindings that inspect image inputs name it, so an image interface edit
    does not rebuild the resources, the plan, the session, preparation, the
    boot crate or the models that name no image type.
+
 3. Plan crates: each family's checked board description and construction
    interface, such as `fujimod-emulator-exr2-plan`. A plan carries each model's
    options as JSON for the model crate to decode, so an option change in a
@@ -363,45 +364,45 @@ figures below are the one-minute load average immediately before each build;
 times are the two samples in seconds. The catalog and plan source boundaries
 were not changed in step 17.
 
-| Edit | Before step 17 (s; load) | After step 17 (s; load) |
-|---|---|---|
-| USB core (`crates/usb/src/lib.rs`) | 3.16, 2.97; 3.37, 3.26 | 2.03, 2.06; 2.89, 3.06 |
-| Catalog controls (`crates/catalog-controls/src/lib.rs`) | 3.12, 2.85; 3.26, 3.24 | 3.44, 2.92; 2.75, 3.49 |
-| Catalog identity (`crates/catalog-identity/src/lib.rs`) | 3.16, 3.16; 3.24, 4.26 | 3.15, 3.16; 3.49, 4.09 |
-| EXR II plan (`crates/emulator-exr2-plan/src/lib.rs`) | 2.83, 2.66; 4.08, 4.08 | 2.82, 2.82; 3.92, 3.92 |
+| Edit                                                    | Before step 17 (s; load) | After step 17 (s; load) |
+| ------------------------------------------------------- | ------------------------ | ----------------------- |
+| USB core (`crates/usb/src/lib.rs`)                      | 3.16, 2.97; 3.37, 3.26   | 2.03, 2.06; 2.89, 3.06  |
+| Catalog controls (`crates/catalog-controls/src/lib.rs`) | 3.12, 2.85; 3.26, 3.24   | 3.44, 2.92; 2.75, 3.49  |
+| Catalog identity (`crates/catalog-identity/src/lib.rs`) | 3.16, 3.16; 3.24, 4.26   | 3.15, 3.16; 3.49, 4.09  |
+| EXR II plan (`crates/emulator-exr2-plan/src/lib.rs`)    | 2.83, 2.66; 4.08, 4.08   | 2.82, 2.82; 3.92, 3.92  |
 
-| Edit | Extension before step 2 | Before steps 6 and 8 | Before step 9 | Before step 12 | Before step 13 | Before step 14 | Before step 16 | Extension now | Unit tests now | Target |
-|---|---|---|---|---|---|---|---|---|---|---|
-| EXR II I2C controller | 23–26 | 1.4 | 1.4 | 1.0–1.1 | 1.0 | 0.9–1.0 | 1.0–1.1 | 1.0–1.1 | 0.9 | 2–3; under 1 |
-| EXR II ISP image input | 15–19 | 1.6 | 1.4 | 1.0–1.3 | 0.9–1.0 | 0.9–1.0 | 1.0–1.1 | 1.1 | 1.1 | 2–3; under 1 |
-| Lens part | 23–26 | 2.0 | 1.8 | 1.4–1.6 | 1.4 | 1.3–1.5 | 1.7–1.8 | 1.4–1.7 | 0.9 | 2–3; under 1 |
-| XP4 I/O | | 2.0–2.1 | 1.6 | 1.3–1.4 | 1.3 | 1.2–1.3 | 1.2–1.4 | 1.3–1.5 | 0.9 | 2–3; under 1 |
-| XP5 I/O | | not linked | not linked | not linked | not linked | not linked | not linked | not linked | 0.8 | under 1 |
-| Arm interrupt controller | | 3.3–3.5 | 1.5 | 1.2 | 1.1–1.2 | 1.1 | 1.2–1.4 | 1.2–1.4 | 0.8 | 2–3; under 1 |
-| Image formation | | 6.5–7.8 | 2.3–4.6 | 1.5–1.7 | 1.5 | 1.4–1.5 | 1.5–1.6 | 1.5–1.6 | 0.8 | 2–3; under 1 |
-| Image processing | | 6.5–7.8 | 2.1–2.2 | 1.4 | 1.3 | 1.2–1.3 | 1.3–1.4 | 1.3 | 0.8 | 2–3; under 1 |
-| Image interface | 23–26 | 6.5–7.8 | 4.7–5.2 | 3.4–3.9 | 3.2–3.7 | 3.1–3.5 | 3.2–3.7 | 2.0–2.3 | 1.0 | 2–3 |
-| EXR II plan | | 12.7–17 | 6.0–7.7 | 2.4–2.5 | 2.2–2.3 | 2.2–2.3 | 2.5 | 2.5–2.7 | 2.8 | 0.9 | 2–3 |
-| Boot assembly | | | | 1.3 | 1.3 | 1.2 | 1.3–1.4 | 1.2–1.3 | 1.5 | 2–3 |
-| Run input preparation | | | | 1.9–2.4 | 1.4–1.7 | 1.4–1.5 | 1.5–2.0 | 1.4–1.6 | 0.8 | 2–3 |
-| Emulator sessions | | | | | | 1.7–1.9 | 1.8–2.2 | 1.8–1.9 | 1.0 | 2–3 |
-| EXR II image part | | | | | | | | 1.7–1.9 | 1.2 | 2–3 |
-| USB core (`fujimod-usb`) | | | | | 3.4–5.5 | 3.2–3.3 | 2.8–2.9 | 2.8–2.9 | 2.0–2.1 | 1.1 | 2–3 |
-| Run configuration (`lib.rs`) | | | 8.1–9.6 | 1.7–1.8 | 1.7 | 1.7 | 1.8 | 1.6–1.8 | 1.0 | 2–3 |
-| Run configuration resolution | | | | | | 1.4 | 1.4–1.5 | 1.4 | 0.7 | 2–3 |
-| Run inputs (`options.rs`) | | | 8.1–9.6 | 2.8–3.2 | 2.5–2.9 | 2.1–2.2 | 2.2–2.3 | 2.1–2.3 | 1.0 | 2–3 |
-| Reference catalog (`reference.rs`) | | 9.7–10.6 | 8.1–9.6 | 3.5–4.4 | 3.2–3.3 | 2.5–2.8 | 2.7–2.9 | 3.0–4.1 | 1.9 | 2–3 |
-| Hardware profiles (`profiles.rs`) | | | 8.1–9.6 | 3.2 | 3.1–3.2 | 2.5 | 2.6–2.7 | 2.5–2.8 | 1.5 | 2–3 |
-| Catalog identity (was in content) | | | 8.1–9.6 | 4.5–5.6 | 3.9–5.0 | 3.3–3.5 | 3.1–3.4 | 3.1–3.4 | 3.1–3.2 | 0.6 | 2–3 |
-| Catalog assets (was in content) | | | 8.1–9.6 | 4.5–5.6 | 1.4 | 1.4 | 1.5 | 1.5–1.8 | 0.7 | 2–3 |
-| Catalog camera (was in service) | | | 8.1–9.6 | 3.5–3.8 | 3.0 | 3.0 | 2.7–3.2 | 1.6–1.8 | 0.7 | 2–3 |
-| Catalog firmware identity | | | | | | | | 3.2–3.4 | 0.6 | 2–3 |
-| Catalog service | | | 8.1–9.6 | 3.5–3.8 | 2.5–2.6 | 2.5 | 2.6–2.7 | 2.6–2.8 | 0.7 | 2–3 |
-| Catalog construction | | | 8.1–9.6 | 3.9–4.2 | 3.3–3.4 | 2.8–3.0 | 2.9 | 2.8–2.9 | 0.7 | 2–3 |
-| Catalog controls (`lib.rs`) | | | 8.1–9.6 | 3.7 | 3.6 | 2.8 | 2.9 | 2.9 | 2.9–3.4 | 0.9 | 2–3 |
-| Catalog remote | | | 8.1–9.6 | 3.3–3.4 | 3.3 | 2.6 | 2.7–2.9 | 2.6–2.7 | 0.7 | 2–3 |
-| Catalog settings | | | 8.1–9.6 | 3.2–3.3 | 3.2–3.3 | 2.6 | 2.7 | 2.6 | 0.7 | 2–3 |
-| Catalog bulk | | | 8.1–9.6 | 3.3–3.5 | 3.3–3.4 | 3.1 | 2.7 | 2.5–2.6 | 0.6 | 2–3 |
+| Edit                               | Extension before step 2 | Before steps 6 and 8 | Before step 9 | Before step 12 | Before step 13 | Before step 14 | Before step 16 | Extension now | Unit tests now | Target       |
+| ---------------------------------- | ----------------------- | -------------------- | ------------- | -------------- | -------------- | -------------- | -------------- | ------------- | -------------- | ------------ |
+| EXR II I2C controller              | 23–26                   | 1.4                  | 1.4           | 1.0–1.1        | 1.0            | 0.9–1.0        | 1.0–1.1        | 1.0–1.1       | 0.9            | 2–3; under 1 |
+| EXR II ISP image input             | 15–19                   | 1.6                  | 1.4           | 1.0–1.3        | 0.9–1.0        | 0.9–1.0        | 1.0–1.1        | 1.1           | 1.1            | 2–3; under 1 |
+| Lens part                          | 23–26                   | 2.0                  | 1.8           | 1.4–1.6        | 1.4            | 1.3–1.5        | 1.7–1.8        | 1.4–1.7       | 0.9            | 2–3; under 1 |
+| XP4 I/O                            |                         | 2.0–2.1              | 1.6           | 1.3–1.4        | 1.3            | 1.2–1.3        | 1.2–1.4        | 1.3–1.5       | 0.9            | 2–3; under 1 |
+| XP5 I/O                            |                         | not linked           | not linked    | not linked     | not linked     | not linked     | not linked     | not linked    | 0.8            | under 1      |
+| Arm interrupt controller           |                         | 3.3–3.5              | 1.5           | 1.2            | 1.1–1.2        | 1.1            | 1.2–1.4        | 1.2–1.4       | 0.8            | 2–3; under 1 |
+| Image formation                    |                         | 6.5–7.8              | 2.3–4.6       | 1.5–1.7        | 1.5            | 1.4–1.5        | 1.5–1.6        | 1.5–1.6       | 0.8            | 2–3; under 1 |
+| Image processing                   |                         | 6.5–7.8              | 2.1–2.2       | 1.4            | 1.3            | 1.2–1.3        | 1.3–1.4        | 1.3           | 0.8            | 2–3; under 1 |
+| Image interface                    | 23–26                   | 6.5–7.8              | 4.7–5.2       | 3.4–3.9        | 3.2–3.7        | 3.1–3.5        | 3.2–3.7        | 2.0–2.3       | 1.0            | 2–3          |
+| EXR II plan                        |                         | 12.7–17              | 6.0–7.7       | 2.4–2.5        | 2.2–2.3        | 2.2–2.3        | 2.5            | 2.5–2.7       | 2.8            | 0.9          | 2–3 |
+| Boot assembly                      |                         |                      |               | 1.3            | 1.3            | 1.2            | 1.3–1.4        | 1.2–1.3       | 1.5            | 2–3          |
+| Run input preparation              |                         |                      |               | 1.9–2.4        | 1.4–1.7        | 1.4–1.5        | 1.5–2.0        | 1.4–1.6       | 0.8            | 2–3          |
+| Emulator sessions                  |                         |                      |               |                |                | 1.7–1.9        | 1.8–2.2        | 1.8–1.9       | 1.0            | 2–3          |
+| EXR II image part                  |                         |                      |               |                |                |                |                | 1.7–1.9       | 1.2            | 2–3          |
+| USB core (`fujimod-usb`)           |                         |                      |               |                | 3.4–5.5        | 3.2–3.3        | 2.8–2.9        | 2.8–2.9       | 2.0–2.1        | 1.1          | 2–3 |
+| Run configuration (`lib.rs`)       |                         |                      | 8.1–9.6       | 1.7–1.8        | 1.7            | 1.7            | 1.8            | 1.6–1.8       | 1.0            | 2–3          |
+| Run configuration resolution       |                         |                      |               |                |                | 1.4            | 1.4–1.5        | 1.4           | 0.7            | 2–3          |
+| Run inputs (`options.rs`)          |                         |                      | 8.1–9.6       | 2.8–3.2        | 2.5–2.9        | 2.1–2.2        | 2.2–2.3        | 2.1–2.3       | 1.0            | 2–3          |
+| Reference catalog (`reference.rs`) |                         | 9.7–10.6             | 8.1–9.6       | 3.5–4.4        | 3.2–3.3        | 2.5–2.8        | 2.7–2.9        | 3.0–4.1       | 1.9            | 2–3          |
+| Hardware profiles (`profiles.rs`)  |                         |                      | 8.1–9.6       | 3.2            | 3.1–3.2        | 2.5            | 2.6–2.7        | 2.5–2.8       | 1.5            | 2–3          |
+| Catalog identity (was in content)  |                         |                      | 8.1–9.6       | 4.5–5.6        | 3.9–5.0        | 3.3–3.5        | 3.1–3.4        | 3.1–3.4       | 3.1–3.2        | 0.6          | 2–3 |
+| Catalog assets (was in content)    |                         |                      | 8.1–9.6       | 4.5–5.6        | 1.4            | 1.4            | 1.5            | 1.5–1.8       | 0.7            | 2–3          |
+| Catalog camera (was in service)    |                         |                      | 8.1–9.6       | 3.5–3.8        | 3.0            | 3.0            | 2.7–3.2        | 1.6–1.8       | 0.7            | 2–3          |
+| Catalog firmware identity          |                         |                      |               |                |                |                |                | 3.2–3.4       | 0.6            | 2–3          |
+| Catalog service                    |                         |                      | 8.1–9.6       | 3.5–3.8        | 2.5–2.6        | 2.5            | 2.6–2.7        | 2.6–2.8       | 0.7            | 2–3          |
+| Catalog construction               |                         |                      | 8.1–9.6       | 3.9–4.2        | 3.3–3.4        | 2.8–3.0        | 2.9            | 2.8–2.9       | 0.7            | 2–3          |
+| Catalog controls (`lib.rs`)        |                         |                      | 8.1–9.6       | 3.7            | 3.6            | 2.8            | 2.9            | 2.9           | 2.9–3.4        | 0.9          | 2–3 |
+| Catalog remote                     |                         |                      | 8.1–9.6       | 3.3–3.4        | 3.3            | 2.6            | 2.7–2.9        | 2.6–2.7       | 0.7            | 2–3          |
+| Catalog settings                   |                         |                      | 8.1–9.6       | 3.2–3.3        | 3.2–3.3        | 2.6            | 2.7            | 2.6           | 0.7            | 2–3          |
+| Catalog bulk                       |                         |                      | 8.1–9.6       | 3.3–3.5        | 3.3–3.4        | 3.1            | 2.7            | 2.5–2.6       | 0.6            | 2–3          |
 
 An EXR II model edit recompiles the model crate (0.2–0.3 s),
 `fujimod-emulator-models` (0.1 s) and the extension module (0.5 s since step

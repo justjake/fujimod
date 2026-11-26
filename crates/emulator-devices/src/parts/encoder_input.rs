@@ -4,8 +4,8 @@
 //! Edge requests continue from the last queued phase, even after the queue drains.
 //! Full-cycle requests remain four edges per cycle. The single shared queue allocation
 //! carries its final phase independently of the encoder model's current physical phase.
-use std::collections::VecDeque;
 use parking_lot::Mutex;
+use std::collections::VecDeque;
 use std::sync::Arc;
 
 pub struct EncoderQueue {

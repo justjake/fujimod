@@ -114,7 +114,7 @@ card.format(formatted_snapshot)
 assert not card.paths
 card.hide()
 
-display = guide.show_display(hdmi_frame, label="HDMI", width=.6)
+display = guide.show_display(hdmi_frame, label="HDMI", width=0.6)
 display.update(next_hdmi_frame)
 assert display.visible and display.label == "HDMI"
 display.hide()

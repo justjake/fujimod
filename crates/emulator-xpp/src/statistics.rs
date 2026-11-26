@@ -532,7 +532,9 @@ impl Device for Engine {
     fn set_scene(&mut self, input: &Value) -> Result<bool, String> {
         #[derive(serde::Deserialize)]
         #[serde(deny_unknown_fields)]
-        struct Scene { light: f64 }
+        struct Scene {
+            light: f64,
+        }
 
         if self.scene.is_none() {
             return Ok(false);

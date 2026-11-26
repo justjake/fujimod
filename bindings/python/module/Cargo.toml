@@ -17,16 +17,16 @@ doctest = false
 [features]
 default = ["emulator"]
 emulator = [
-    "dep:fujimod-emulator-exr2-board",
-    "dep:fujimod-python-base",
-    "dep:fujimod-emulator-boot",
-    "dep:fujimod-emulator-session",
-    "dep:serde_json",
-    "dep:fujimod-python-emulator",
-    "dep:fujimod-python-graphics",
-    "dep:fujimod-python-host-image",
-    "dep:fujimod-python-xp4",
-    "fujimod-python-remote/emulator",
+  "dep:fujimod-emulator-exr2-board",
+  "dep:fujimod-python-base",
+  "dep:fujimod-emulator-boot",
+  "dep:fujimod-emulator-session",
+  "dep:serde_json",
+  "dep:fujimod-python-emulator",
+  "dep:fujimod-python-graphics",
+  "dep:fujimod-python-host-image",
+  "dep:fujimod-python-xp4",
+  "fujimod-python-remote/emulator",
 ]
 
 [dependencies]

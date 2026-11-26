@@ -604,7 +604,8 @@ impl Board {
         continue_refusals: bool,
         engine: &str,
     ) -> PyResult<Self> {
-        let engine: RunEngine = engine.parse()
+        let engine: RunEngine = engine
+            .parse()
             .map_err(|e| PyValueError::new_err(format!("invalid engine: {e}")))?;
         let mode = match execution_mode {
             "strict" => Mode::Strict,
@@ -663,9 +664,7 @@ impl Board {
             .and_then(serde_json::Value::as_str)
             == Some("xpp")
         {
-            if !models.is_empty()
-                || json::<serde_json::Value>(scene)? != serde_json::json!({})
-            {
+            if !models.is_empty() || json::<serde_json::Value>(scene)? != serde_json::json!({}) {
                 return Err(PyValueError::new_err(
                     "X-Processor Pro requires its native devices and explicit assets",
                 ));
@@ -1414,10 +1413,18 @@ impl Board {
             "fetch" => Access::Fetch,
             _ => return Err(PyValueError::new_err("invalid translation access")),
         };
-        self.board()?.cpu(core).map_err(error)?.translate(address, access).map_err(error)
+        self.board()?
+            .cpu(core)
+            .map_err(error)?
+            .translate(address, access)
+            .map_err(error)
     }
     fn read_virtual<'py>(
-        &self, py: Python<'py>, core: usize, address: u64, size: usize,
+        &self,
+        py: Python<'py>,
+        core: usize,
+        address: u64,
+        size: usize,
     ) -> PyResult<Bound<'py, PyBytes>> {
         self.check_read(size)?;
         let cpu = self.board()?.cpu(core).map_err(error)?;
@@ -2047,4 +2054,3 @@ pub struct NandMedium(fujimod_emulator_devices::parts::nand::Nand);
 pub(super) use context::DeviceContext;
 pub(super) use storage::{normalize_card_files, persistent_packet};
 pub(super) use xp4::Xp4;
-

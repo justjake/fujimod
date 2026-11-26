@@ -149,9 +149,19 @@ mod tests {
         });
         let mut inputs: RunFirmwareInputs = serde_json::from_value(value).unwrap();
         assert!(inputs.validate().is_ok());
-        inputs.settings.as_mut().unwrap().requested.insert("language".into(), String::new());
+        inputs
+            .settings
+            .as_mut()
+            .unwrap()
+            .requested
+            .insert("language".into(), String::new());
         assert!(inputs.validate().is_err());
-        inputs.settings.as_mut().unwrap().requested.remove("language");
+        inputs
+            .settings
+            .as_mut()
+            .unwrap()
+            .requested
+            .remove("language");
         inputs.source_sha256 = "invalid".into();
         assert!(inputs.validate().is_err());
     }

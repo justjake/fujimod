@@ -3,6 +3,13 @@
     "name": "Unicorn Engine",
     "submodule": "crates/emulator-cpu-unicorn/vendor/unicorn",
     "license": "GPL-2.0-only AND LGPL-2.0-or-later AND LGPL-2.1-or-later",
-    "files": ["COPYING", "COPYING.LGPL2", "COPYING_GLIB", "qemu/COPYING", "qemu/COPYING.LIB", "qemu/LICENSE"]
+    "files": [
+      "COPYING",
+      "COPYING.LGPL2",
+      "COPYING_GLIB",
+      "qemu/COPYING",
+      "qemu/COPYING.LIB",
+      "qemu/LICENSE"
+    ]
   }
 ]

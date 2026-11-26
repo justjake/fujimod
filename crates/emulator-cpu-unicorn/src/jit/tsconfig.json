@@ -7,18 +7,8 @@
     "allowJs": false,
     "noEmit": true,
     "allowImportingTsExtensions": true,
-    "lib": [
-      "ES2023",
-      "DOM"
-    ],
-    "types": [
-      "node"
-    ]
+    "lib": ["ES2023", "DOM"],
+    "types": ["node"]
   },
-  "files": [
-    "emit.test.mts",
-    "memory.test.mts",
-    "helper.test.mts",
-    "source.test.mts"
-  ]
+  "files": ["emit.test.mts", "memory.test.mts", "helper.test.mts", "source.test.mts"]
 }

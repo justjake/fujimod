@@ -691,7 +691,9 @@ pub struct XppBoot {
 /// Explicit immutable NOR aperture policy.
 #[derive(Clone, Copy, Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
-pub struct NorImmutablePrefix { pub bytes: usize }
+pub struct NorImmutablePrefix {
+    pub bytes: usize,
+}
 
 /// Initial values supported by the modeled GIC register interface.
 #[derive(Clone, Debug, Deserialize)]
@@ -711,14 +713,22 @@ pub struct GicCpuInitial {
 
 impl GicInitial {
     pub(super) fn apply(self, gic: &mut Gic, cores: usize) -> Result<(), String> {
-        if self.distributor_control > 1 || self.cpu_interfaces.len() != cores
-            || self.cpu_interfaces.iter().any(|cpu| cpu.control > 1
-                || cpu.priority_mask > 255 || cpu.binary_point > 7) {
+        if self.distributor_control > 1
+            || self.cpu_interfaces.len() != cores
+            || self
+                .cpu_interfaces
+                .iter()
+                .any(|cpu| cpu.control > 1 || cpu.priority_mask > 255 || cpu.binary_point > 7)
+        {
             return Err("Invalid initial GIC registers or CPU interface count".into());
         }
         gic.access(0, true, 0, 4, true, self.distributor_control)?;
         for (core, cpu) in self.cpu_interfaces.into_iter().enumerate() {
-            for (offset, value) in [(0, cpu.control), (4, cpu.priority_mask), (8, cpu.binary_point)] {
+            for (offset, value) in [
+                (0, cpu.control),
+                (4, cpu.priority_mask),
+                (8, cpu.binary_point),
+            ] {
                 gic.access(core, false, offset, 4, true, value)?;
             }
         }

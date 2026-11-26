@@ -6,8 +6,8 @@
 
 mod card_image;
 mod display_output;
-mod loader_card;
 pub mod firmware;
+mod loader_card;
 mod manifest;
 mod open;
 mod phase;
@@ -16,7 +16,6 @@ mod rom_start;
 mod run;
 
 pub use run::{Run, RunHost, run_boot};
-
 
 use fujimod_catalog_configuration::RunStart;
 use fujimod_catalog_resolution::ResolvedConfiguration;
@@ -55,20 +54,45 @@ pub(super) fn open_startup(
     configuration: &ResolvedConfiguration,
     startup: Startup,
 ) -> Result<crate::Camera, String> {
-    let Startup { update, manifest, boot_rom: rom_path, card_image: sd_image, card_files,
-        second_card_image, second_card_files, scene, output: run_directory, mode, quantum: quantum_override,
-        camera_settings } = startup;
+    let Startup {
+        update,
+        manifest,
+        boot_rom: rom_path,
+        card_image: sd_image,
+        card_files,
+        second_card_image,
+        second_card_files,
+        scene,
+        output: run_directory,
+        mode,
+        quantum: quantum_override,
+        camera_settings,
+    } = startup;
     let start = configuration.configuration.start;
-    if start == RunStart::SdCard && sd_image.is_none()
-        && !card_files.iter().any(|(name, _)| name.eq_ignore_ascii_case(rom_start::CARD_FILE_NAME))
+    if start == RunStart::SdCard
+        && sd_image.is_none()
+        && !card_files
+            .iter()
+            .any(|(name, _)| name.eq_ignore_ascii_case(rom_start::CARD_FILE_NAME))
     {
         return Err("XP5 SD card startup requires marble_init.bin or an SD card image".into());
     }
     let firmware_id = configuration.configuration.firmware_id.clone();
     let mut state = manifest::BootState::for_firmware(&firmware_id, manifest.as_deref())?;
-    let preloads = configuration.configuration.preset.as_ref()
+    let preloads = configuration
+        .configuration
+        .preset
+        .as_ref()
         .and_then(|preset| preset.firmware_profile_id.as_ref())
-        .and_then(|id| configuration.reference.firmware.layouts.as_ref()?.profiles.get(id))
+        .and_then(|id| {
+            configuration
+                .reference
+                .firmware
+                .layouts
+                .as_ref()?
+                .profiles
+                .get(id)
+        })
         .and_then(|profile| profile.preload.as_deref())
         .unwrap_or_default();
     state.preload.splice(..0, preloads.iter().cloned());
@@ -115,9 +139,15 @@ pub(super) fn open_startup(
             return Err("a boot ROM requires a ROM or SD card startup".into());
         }
         // The loader start's cards, inserted before the board is built (loader_card.rs).
-        loader.extend(loader_card::LoaderCard::load(loader_card::SLOT, sd_image.as_deref(), &card_files)?);
         loader.extend(loader_card::LoaderCard::load(
-            loader_card::SLOT_2, second_card_image.as_deref(), &second_card_files,
+            loader_card::SLOT,
+            sd_image.as_deref(),
+            &card_files,
+        )?);
+        loader.extend(loader_card::LoaderCard::load(
+            loader_card::SLOT_2,
+            second_card_image.as_deref(),
+            &second_card_files,
         )?);
         for card in &loader {
             card.apply(&mut state)?;
@@ -129,7 +159,12 @@ pub(super) fn open_startup(
     let profile = if camera_settings.is_empty() {
         None
     } else {
-        Some(profile::place(&mut state, &firmware, configuration, &camera_settings)?)
+        Some(profile::place(
+            &mut state,
+            &firmware,
+            configuration,
+            &camera_settings,
+        )?)
     };
     let opened = open::open_from(
         &firmware,
@@ -143,7 +178,10 @@ pub(super) fn open_startup(
         &loader,
         profile.as_ref(),
     )?;
-    let card_write_back = loader.into_iter().filter_map(|card| card.write_back).collect();
+    let card_write_back = loader
+        .into_iter()
+        .filter_map(|card| card.write_back)
+        .collect();
     let open::Opened {
         session,
         inputs,

@@ -9,7 +9,11 @@ pub(super) fn state<'py>(py: Python<'py>, saved: Snapshot) -> PyResult<Bound<'py
     let out = PyDict::new(py);
     out.set_item(
         "identities",
-        saved.identities.into_iter().map(|id| id.get()).collect::<Vec<_>>(),
+        saved
+            .identities
+            .into_iter()
+            .map(|id| id.get())
+            .collect::<Vec<_>>(),
     )?;
     let native = PyList::empty(py);
     for item in saved.native {

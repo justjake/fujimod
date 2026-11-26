@@ -287,7 +287,10 @@ export default defineConfig(({ mode, command }) => ({
     previewLicenseFiles(),
     isolationHeaders(),
     siteSdkDocs(loadEnv(mode, process.cwd(), 'FUJIMOD_').FUJIMOD_SDK_DOCS),
-    siteFilmEditorDemo(loadEnv(mode, process.cwd(), 'FUJIMOD_').FUJIMOD_FILM_EDITOR_DEMO, mode === 'local-preview'),
+    siteFilmEditorDemo(
+      loadEnv(mode, process.cwd(), 'FUJIMOD_').FUJIMOD_FILM_EDITOR_DEMO,
+      mode === 'local-preview',
+    ),
     localMedia(
       loadEnv(mode, process.cwd(), 'FUJIMOD_').FUJIMOD_MEDIA_ROOT,
       loadEnv(mode, process.cwd(), 'FUJIMOD_').FUJIMOD_MEDIA,
@@ -342,6 +345,7 @@ export default defineConfig(({ mode, command }) => ({
       'dist-local-preview/**',
       'public/runtime/**',
       'public/artifacts/**',
+      '**/*.generated.*',
     ],
   },
   test: {

@@ -74,7 +74,9 @@ async def check(args: argparse.Namespace) -> None:
             )
             # A full reload must recover the saved bytes without regenerating them.
             await page.goto(args.url.split("?")[0])
-            await page.locator('#viewer-tools[data-ready="true"]').wait_for(state="attached")
+            await page.locator('#viewer-tools[data-ready="true"]').wait_for(
+                state="attached"
+            )
             await page.locator("#feedback-recover").wait_for(
                 state="visible", timeout=30000
             )

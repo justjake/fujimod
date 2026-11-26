@@ -1,6 +1,9 @@
 //! EXR II board constructors for this crate's models.
 use crate::{jpeg, lz};
-use fujimod_emulator_exr2_plan::{Model, construction::{Builder, Built, Constructors, controllers, decode, route}};
+use fujimod_emulator_exr2_plan::{
+    Model,
+    construction::{Builder, Built, Constructors, controllers, decode, route},
+};
 
 /// Add this crate's EXR II constructors.
 pub fn register(constructors: &mut Constructors) {
@@ -48,7 +51,10 @@ fn jpeg_encoder(builder: Builder<'_>, model: Model) -> Result<Built, String> {
         let options: crate::jpeg::encoder::Options = decode(options)?;
         Box::new(jpeg::Encoder::new(
             options,
-            (route(irq)?, fujimod_emulator_exr2_images::image_wire!(resources, id, stream, Stream)),
+            (
+                route(irq)?,
+                fujimod_emulator_exr2_images::image_wire!(resources, id, stream, Stream),
+            ),
         )?)
     }))
 }

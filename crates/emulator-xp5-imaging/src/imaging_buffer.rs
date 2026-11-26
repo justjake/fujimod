@@ -67,7 +67,10 @@ impl Buffer {
         Ok(self)
     }
     fn publish(&self, cx: &mut Cx<'_>) {
-        cx.set_irq(COMPLETION_IRQ, self.transfer.pending && self.transfer.irq_enable);
+        cx.set_irq(
+            COMPLETION_IRQ,
+            self.transfer.pending && self.transfer.irq_enable,
+        );
     }
 }
 impl Device for Buffer {
@@ -153,7 +156,10 @@ impl Device for Buffer {
         }
     }
     fn next_deadline(&self, _: u64) -> Option<u64> {
-        self.deadline.into_iter().chain(self.transfer.deadline).min()
+        self.deadline
+            .into_iter()
+            .chain(self.transfer.deadline)
+            .min()
     }
     fn advance(&mut self, cx: &mut Cx<'_>) {
         Buffer::advance(self, cx);
@@ -200,7 +206,13 @@ mod tests {
     fn size_words_read_back_unchanged() {
         let mut b = Buffer::default();
         let mut host = RecordingHost::default();
-        for (o, v) in [(0x14, 0x0e1c_1234), (0x18, 0x0e1c_0abc), (0x44, 0xdead_beef), (0x5c, 7), (0x6c, 1)] {
+        for (o, v) in [
+            (0x14, 0x0e1c_1234),
+            (0x18, 0x0e1c_0abc),
+            (0x44, 0xdead_beef),
+            (0x5c, 7),
+            (0x6c, 1),
+        ] {
             write(&mut b, &mut host, o, v);
             assert_eq!(read(&mut b, &mut host, o), v);
         }

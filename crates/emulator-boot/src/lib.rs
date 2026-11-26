@@ -3,41 +3,40 @@
 //! Preparation runs before execution. Host readiness checks only observe RAM;
 //! first-start acceptance drives the ordinary ADC input on the guest timeline.
 #[cfg(all(feature = "xp5-startup", not(target_arch = "wasm32")))]
-#[cfg(all(feature = "xp5-startup", not(target_arch = "wasm32")))]
-mod png_writer;
-#[cfg(all(feature = "xp5-startup", not(target_arch = "wasm32")))]
-pub mod output;
-#[cfg(all(feature = "xp5-startup", not(target_arch = "wasm32")))]
-pub mod media;
-#[cfg(all(feature = "xp5-startup", not(target_arch = "wasm32")))]
-pub mod patch;
-#[cfg(all(feature = "xp5-startup", not(target_arch = "wasm32")))]
-pub mod mod_loader;
-#[cfg(all(feature = "xp5-startup", not(target_arch = "wasm32")))]
 pub mod application;
 mod first_start;
 pub mod host;
+#[cfg(all(feature = "xp5-startup", not(target_arch = "wasm32")))]
+pub mod media;
+#[cfg(all(feature = "xp5-startup", not(target_arch = "wasm32")))]
+pub mod mod_loader;
+#[cfg(all(feature = "xp5-startup", not(target_arch = "wasm32")))]
+pub mod output;
+#[cfg(all(feature = "xp5-startup", not(target_arch = "wasm32")))]
+pub mod patch;
+#[cfg(all(feature = "xp5-startup", not(target_arch = "wasm32")))]
+#[cfg(all(feature = "xp5-startup", not(target_arch = "wasm32")))]
+mod png_writer;
 use fujimod_emulator_board_graph as graph;
 mod x70;
-pub mod xpp;
 #[cfg(all(feature = "xp5-startup", not(target_arch = "wasm32")))]
 pub mod xp5;
+pub mod xpp;
 
-use fujimod_emulator::board::{
-        bus::{Bus, Mode},
-        factory,
-    };
-use fujimod_emulator_session::Session;
-use fujimod_emulator_preparation as preparation;
 use fujimod_catalog::reference::PartModel;
+use fujimod_catalog_assets::Content;
 use fujimod_catalog_configuration::{
-    Exr2RunInputs, RunExecution, RunInputs, RunPurpose, RunScene,
-    RunStart,
+    Exr2RunInputs, RunExecution, RunInputs, RunPurpose, RunScene, RunStart,
 };
 use fujimod_catalog_resolution::ResolvedConfiguration;
-use fujimod_catalog_assets::Content;
+use fujimod_emulator::board::{
+    bus::{Bus, Mode},
+    factory,
+};
 use fujimod_emulator_cpu::arm::Coprocessor;
 use fujimod_emulator_exr2_plan::{MemoryChoices, Plan, RefuseAdapters};
+use fujimod_emulator_preparation as preparation;
+use fujimod_emulator_session::Session;
 use serde::Serialize;
 use serde_json::{Value, json};
 use std::{
@@ -105,10 +104,7 @@ impl CardLayout {
         if self.partition_start == 0 || self.partition_start >= self.sectors {
             return Err("card layout partition start must lie inside the card".into());
         }
-        if !matches!(
-            self.sectors_per_cluster,
-            1 | 2 | 4 | 8 | 16 | 32 | 64 | 128
-        ) {
+        if !matches!(self.sectors_per_cluster, 1 | 2 | 4 | 8 | 16 | 32 | 64 | 128) {
             return Err("card layout cluster size must be 1, 2, 4, 8, 16, 32, 64 or 128".into());
         }
         Ok(())
@@ -297,11 +293,11 @@ fn prepared(resolved: ResolvedConfiguration) -> Result<Prepared, String> {
         .ok_or("selected firmware has no installation layout")?;
     let observation: fujimod_catalog_remote::FirmwareObservation = serde_json::from_value(
         firmware
-        .generated_facts
-        .as_ref()
-        .and_then(|facts| facts.observation.as_ref())
-        .cloned()
-        .ok_or("selected firmware has no observation facts")?,
+            .generated_facts
+            .as_ref()
+            .and_then(|facts| facts.observation.as_ref())
+            .cloned()
+            .ok_or("selected firmware has no observation facts")?,
     )
     .map_err(|error| format!("firmware observation facts: {error}"))?;
     let quantum = execution_policy.quantum;
@@ -788,12 +784,19 @@ impl Prepared {
 
 /// Select whether undeclared accesses stop or are recorded for model discovery.
 pub fn discovery_mode(discovery: bool) -> Mode {
-    if discovery { Mode::Discovery } else { Mode::Strict }
+    if discovery {
+        Mode::Discovery
+    } else {
+        Mode::Strict
+    }
 }
 
 /// Files and startup settings for the selected processor generation.
 pub enum StartupInputs {
-    Exr2 { options: Options, mode: Mode },
+    Exr2 {
+        options: Options,
+        mode: Mode,
+    },
     #[cfg(all(feature = "xp5-startup", not(target_arch = "wasm32")))]
     Xp5(xp5::Startup),
     #[cfg(all(feature = "xp5-startup", not(target_arch = "wasm32")))]
@@ -827,10 +830,8 @@ impl Camera {
 }
 
 fn graph_read_limit(session: &Session) -> Result<usize, String> {
-    let execution: factory::Graph = serde_json::from_value(
-        session.definition["execution"].clone(),
-    )
-    .map_err(|error| format!("session execution graph: {error}"))?;
+    let execution: factory::Graph = serde_json::from_value(session.definition["execution"].clone())
+        .map_err(|error| format!("session execution graph: {error}"))?;
     execution
         .ram
         .iter()
@@ -843,7 +844,8 @@ fn graph_read_limit(session: &Session) -> Result<usize, String> {
                 .flat_map(|profile| [profile.tcm.atcm.bytes, profile.tcm.btcm.bytes]),
         )
         .try_fold(0usize, |sum, bytes| {
-            sum.checked_add(bytes).ok_or_else(|| "declared RAM extent overflows".to_owned())
+            sum.checked_add(bytes)
+                .ok_or_else(|| "declared RAM extent overflows".to_owned())
         })
 }
 
@@ -926,17 +928,24 @@ pub fn open_request(resolved: ResolvedConfiguration, request: Request) -> Result
             quantum: None,
             camera_settings: Default::default(),
         }),
-        _ if resolved.reference.soc.id == "xpp" => StartupInputs::Application(application::Startup {
-            update: request.update,
-            plan: request
-                .application_plan
-                .ok_or("this camera needs its application startup plan")?,
-            discovery: request.discovery,
-            quantum: None,
-            card_image: None,
-            card_files: request.card_files,
-        }),
-        _ => return Err(format!("{} cannot be opened as a camera", resolved.configuration.id)),
+        _ if resolved.reference.soc.id == "xpp" => {
+            StartupInputs::Application(application::Startup {
+                update: request.update,
+                plan: request
+                    .application_plan
+                    .ok_or("this camera needs its application startup plan")?,
+                discovery: request.discovery,
+                quantum: None,
+                card_image: None,
+                card_files: request.card_files,
+            })
+        }
+        _ => {
+            return Err(format!(
+                "{} cannot be opened as a camera",
+                resolved.configuration.id
+            ));
+        }
     };
     let mut camera = open(resolved, inputs)?;
     media::attach(&mut camera.session, None, &card_after_open)?;
@@ -1005,21 +1014,25 @@ pub struct TraceOutput {
 
 impl TraceOutput {
     pub fn begin(
-        &self, session: &Session,
+        &self,
+        session: &Session,
     ) -> Result<fujimod_emulator::board::observation::PcTrace, String> {
         session.board.trace_pcs(self.limit)
     }
 
     pub fn write(
-        &self, trace: fujimod_emulator::board::observation::PcTrace,
+        &self,
+        trace: fujimod_emulator::board::observation::PcTrace,
     ) -> Result<(), String> {
         self.write_entries(trace.take())
     }
 
     pub fn write_entries(
-        &self, entries: fujimod_emulator::board::observation::PcEntries,
+        &self,
+        entries: fujimod_emulator::board::observation::PcEntries,
     ) -> Result<(), String> {
-        let file = File::create(&self.path).map_err(|error| format!("{}: {error}", self.path.display()))?;
+        let file = File::create(&self.path)
+            .map_err(|error| format!("{}: {error}", self.path.display()))?;
         let mut writer = std::io::BufWriter::new(file);
         serde_json::to_writer(&mut writer, &entries).map_err(|error| error.to_string())?;
         std::io::Write::flush(&mut writer).map_err(|error| error.to_string())
@@ -1047,7 +1060,11 @@ pub fn save_snapshot(session: &Session, path: &Path) -> Result<(), String> {
 
 /// Construct an unexecuted strict board from explicitly selected files.
 /// No directory search, downloaded image, captured default or firmware patch is used.
-fn open_exr2(resolved: ResolvedConfiguration, options: Options, mode: Mode) -> Result<Session, String> {
+fn open_exr2(
+    resolved: ResolvedConfiguration,
+    options: Options,
+    mode: Mode,
+) -> Result<Session, String> {
     let mut prepared = prepared(resolved)?;
     if options.access_point.is_some() || options.capability_reply.is_some() {
         prepared.set_mt5931(options.access_point, options.capability_reply)?;
@@ -1137,9 +1154,7 @@ impl Prepared {
             .and_then(Value::as_object_mut)
             .ok_or("run SD card host has no options")?;
         if options.contains_key("latency") {
-            return Err(
-                "run SD card host has a measured timing model, not transfer ticks".into(),
-            );
+            return Err("run SD card host has a measured timing model, not transfer ticks".into());
         }
         options.insert("transfer_ticks".into(), json!(ticks));
         Ok(())
@@ -1215,7 +1230,10 @@ struct RestartBuilder {
 impl fujimod_emulator_session::power_cycle::ColdBoot for RestartBuilder {
     fn build(&mut self, tick: u64, counts: Vec<u64>, packet: [u8; 16]) -> Result<Session, String> {
         open_prepared_epoch(
-            self.prepared.duplicate()?, self.inputs.clone(), self.mode, Some((tick, counts, packet)),
+            self.prepared.duplicate()?,
+            self.inputs.clone(),
+            self.mode,
+            Some((tick, counts, packet)),
         )
     }
 }
@@ -1226,9 +1244,17 @@ pub fn open_prepared(prepared: Prepared, inputs: InputBytes) -> Result<Session, 
     open_prepared_mode(prepared, inputs, Mode::Strict)
 }
 
-fn open_prepared_mode(prepared: Prepared, inputs: InputBytes, mode: Mode) -> Result<Session, String> {
+fn open_prepared_mode(
+    prepared: Prepared,
+    inputs: InputBytes,
+    mode: Mode,
+) -> Result<Session, String> {
     let cycle = if prepared.resolved.reference.firmware.id == "x70-110" {
-        Some(RestartBuilder { prepared: prepared.duplicate()?, inputs: inputs.clone(), mode })
+        Some(RestartBuilder {
+            prepared: prepared.duplicate()?,
+            inputs: inputs.clone(),
+            mode,
+        })
     } else {
         None
     };
@@ -1420,7 +1446,9 @@ fn open_prepared_epoch(
     }
     let graph = prepared.execution;
     graph.validate()?;
-    let plan = if settings.is_some() || header_applied || clock_seconds_2000.is_some()
+    let plan = if settings.is_some()
+        || header_applied
+        || clock_seconds_2000.is_some()
         || epoch.is_some()
     {
         Plan::parse(&serde_json::to_vec(&devices).map_err(|e| e.to_string())?)?
@@ -1452,7 +1480,11 @@ fn open_prepared_epoch(
     let resources = serde_json::from_value::<preparation::Spec>(scene.clone())
         .map_err(|e| e.to_string())?
         .build(&assets)?;
-    let built = plan.build(resources, epoch.as_ref().map_or(0, |e| e.0), &mut RefuseAdapters)?;
+    let built = plan.build(
+        resources,
+        epoch.as_ref().map_or(0, |e| e.0),
+        &mut RefuseAdapters,
+    )?;
     let bus = Bus::from_graph(mode, built.graph)?;
     let mut options = factory::Options::new(prepared.execution_policy.engine);
     if epoch.is_none()
@@ -1463,11 +1495,7 @@ fn open_prepared_epoch(
     if let Some((tick, counts, _)) = epoch {
         options = options.with_epoch(tick, counts);
     }
-    let mut board = graph.build(
-        options,
-        bus,
-        None,
-    )?;
+    let mut board = graph.build(options, bus, None)?;
     for controller in built.core_interrupts {
         board.configure_core_interrupts(
             controller.core,
@@ -1497,8 +1525,7 @@ fn open_prepared_epoch(
 
 /// A stopped, passive boot observation. `rec` also identifies the first-start
 /// recording role (`system_mode == 3`) after its menus close.
-#[derive(Clone, Debug, Serialize)]
-#[derive(tsify::Tsify)]
+#[derive(Clone, Debug, Serialize, tsify::Tsify)]
 #[tsify(hashmap_as_object, missing_as_null)]
 pub struct RecReport {
     pub status: String,
@@ -1609,7 +1636,10 @@ impl Driver<'_> {
         let now: u64 = session.board.instruction_counts().iter().sum();
         let pause = now.saturating_add(1_000_000).min(self.limits.instructions);
         let until = until.into_iter().chain((self.action)(session)?).min();
-        if !self.limits.step(session, spec.quantum, Some(pause), until)? {
+        if !self
+            .limits
+            .step(session, spec.quantum, Some(pause), until)?
+        {
             return Err("board is quiescent without an input or device deadline".into());
         }
         Ok(())
@@ -1664,7 +1694,14 @@ fn press_setup_key(
 ) -> Result<(), String> {
     let selection = &spec.resolved.reference;
     let key = |session: &mut Session, pressed| {
-        fujimod_emulator_controls::set_key(session, selection, &s.located, name, pressed, EXR2_TICKS_PER_SECOND)
+        fujimod_emulator_controls::set_key(
+            session,
+            selection,
+            &s.located,
+            name,
+            pressed,
+            EXR2_TICKS_PER_SECOND,
+        )
     };
     key(session, true)?;
     let held = driver.advance_ticks(session, spec, s.hold_ticks);
@@ -1681,7 +1718,10 @@ fn setup_key(
     driver: &mut Driver<'_>,
     presses: &mut usize,
 ) -> Result<(), String> {
-    let start = spec.first_start.as_ref().ok_or("first-start policy is absent")?;
+    let start = spec
+        .first_start
+        .as_ref()
+        .ok_or("first-start policy is absent")?;
     *presses += 1;
     press_setup_key(session, spec, start, key, driver)
 }
@@ -1795,7 +1835,14 @@ pub fn to_rec_with(
     duration: Option<std::time::Duration>,
     observe_window: impl FnMut(&mut Session, &RecReport) -> Result<(), String>,
 ) -> Result<RecReport, String> {
-    to_rec_with_actions(session, instruction_limit, duration, true, |_| Ok(None), observe_window)
+    to_rec_with_actions(
+        session,
+        instruction_limit,
+        duration,
+        true,
+        |_| Ok(None),
+        observe_window,
+    )
 }
 
 /// Run with explicit scheduled host actions before each scheduler window.
@@ -1809,8 +1856,17 @@ pub fn to_rec_with_actions(
 ) -> Result<RecReport, String> {
     let mut span = fujimod_perf::span(fujimod_perf::SpanKind::Boot);
     let start = boot_progress(session);
-    let limits = host::Limits::new(session, Some(instruction_limit), duration, EXR2_TICKS_PER_SECOND)?;
-    let mut driver = Driver { limits, action: &mut action, automatic_setup };
+    let limits = host::Limits::new(
+        session,
+        Some(instruction_limit),
+        duration,
+        EXR2_TICKS_PER_SECOND,
+    )?;
+    let mut driver = Driver {
+        limits,
+        action: &mut action,
+        automatic_setup,
+    };
     let result = to_rec_inner(session, &mut driver, &mut observe_window);
     span.guest(start, boot_progress(session));
     result
@@ -1840,7 +1896,8 @@ fn to_rec_inner(
                 "instruction-limit"
             } else {
                 "time-limit"
-            }.into();
+            }
+            .into();
             return Ok(report);
         }
         let presented = report.scanout_instance.is_some();
@@ -1854,7 +1911,8 @@ fn to_rec_inner(
             report.status = "rec".into();
             return Ok(report);
         }
-        let result = if driver.automatic_setup && report.ui_mode == spec.observation.setup_mode
+        let result = if driver.automatic_setup
+            && report.ui_mode == spec.observation.setup_mode
             && report.system_mode == 3
             && report.menu_active != 0
             && report.pending_mode == 0
@@ -2052,8 +2110,14 @@ pub fn lcd_frames(
     Ok(vec![fujimod_emulator_devices::graphics::scanout::Frame {
         output: instance,
         sequence: 0,
-        width: frame.width.try_into().map_err(|_| "frame width exceeds u32")?,
-        height: frame.height.try_into().map_err(|_| "frame height exceeds u32")?,
+        width: frame
+            .width
+            .try_into()
+            .map_err(|_| "frame width exceeds u32")?,
+        height: frame
+            .height
+            .try_into()
+            .map_err(|_| "frame height exceeds u32")?,
         rgba,
     }])
 }

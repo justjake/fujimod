@@ -80,7 +80,14 @@ mod tests {
             [[targets]]\naddress = 0x6a\npart = { kind = 'lsm6ds', acceleration = [1, 2, 3] }\n";
         assert!(build(0xff925000, 0x1000, &options(wiring)).is_ok());
         assert!(build(0xff925000, 0x2000, &options(wiring)).is_err());
-        assert!(build(0xff926000, 0x1000, &options("interrupt = 290\nbyte_ns = 1000000")).is_ok());
+        assert!(
+            build(
+                0xff926000,
+                0x1000,
+                &options("interrupt = 290\nbyte_ns = 1000000")
+            )
+            .is_ok()
+        );
         assert!(build(0xff926000, 0x1000, &options("interrupt = 290")).is_err());
         assert!(
             build(

@@ -218,8 +218,10 @@ impl Film {
         let tone = [self.tone[0] * wn / wd, self.tone[1] * wn / wd];
         [
             y as u8,
-            (128 + (((cb + tone[0]).clamp(-512, 511) * f + 512) >> 10) + tint[0]).clamp(0, 255) as u8,
-            (128 + (((cr + tone[1]).clamp(-512, 511) * f + 512) >> 10) + tint[1]).clamp(0, 255) as u8,
+            (128 + (((cb + tone[0]).clamp(-512, 511) * f + 512) >> 10) + tint[0]).clamp(0, 255)
+                as u8,
+            (128 + (((cr + tone[1]).clamp(-512, 511) * f + 512) >> 10) + tint[1]).clamp(0, 255)
+                as u8,
         ]
     }
     #[inline(always)]

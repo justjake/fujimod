@@ -3,17 +3,52 @@ import type { JSX } from '@solidjs/web';
 import './markdown.css';
 
 const KEYWORDS = new Set([
-  'break', 'case', 'const', 'continue', 'default', 'do', 'else', 'enum', 'extern',
-  'for', 'goto', 'if', 'inline', 'return', 'sizeof', 'static', 'struct', 'switch',
-  'typedef', 'union', 'volatile', 'while',
+  'break',
+  'case',
+  'const',
+  'continue',
+  'default',
+  'do',
+  'else',
+  'enum',
+  'extern',
+  'for',
+  'goto',
+  'if',
+  'inline',
+  'return',
+  'sizeof',
+  'static',
+  'struct',
+  'switch',
+  'typedef',
+  'union',
+  'volatile',
+  'while',
 ]);
 const TYPES = new Set([
-  'bool', 'char', 'double', 'float', 'int', 'long', 'short', 'signed', 'size_t',
-  'uint8_t', 'uint16_t', 'uint32_t', 'uint64_t', 'unsigned', 'void',
-  'Clay_Color', 'Clay_String', 'Clay_StringSlice',
+  'bool',
+  'char',
+  'double',
+  'float',
+  'int',
+  'long',
+  'short',
+  'signed',
+  'size_t',
+  'uint8_t',
+  'uint16_t',
+  'uint32_t',
+  'uint64_t',
+  'unsigned',
+  'void',
+  'Clay_Color',
+  'Clay_String',
+  'Clay_StringSlice',
 ]);
 
-const TOKEN = /\/\/[^\n]*|\/\*[\s\S]*?\*\/|"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|^[ \t]*#[^\n]*|\b(?:0x[0-9a-fA-F]+|\d+(?:\.\d+)?)\b|\b[A-Za-z_]\w*\b/gm;
+const TOKEN =
+  /\/\/[^\n]*|\/\*[\s\S]*?\*\/|"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|^[ \t]*#[^\n]*|\b(?:0x[0-9a-fA-F]+|\d+(?:\.\d+)?)\b|\b[A-Za-z_]\w*\b/gm;
 
 /** Tokenize C so documentation code can be read without an HTML pipeline. */
 export function highlightC(source: string): JSX.Element[] {
@@ -100,8 +135,7 @@ function blocks(text: string): Block[] {
         else result.push({ kind: 'list', ordered, items: [item[1]] });
       } else if (previous?.kind === 'list' && /^\s{2,}\S/.test(lines[i]))
         previous.items[previous.items.length - 1] += ' ' + line;
-      else if (previous?.kind === 'paragraph' && lines[i - 1]?.trim())
-        previous.text += ' ' + line;
+      else if (previous?.kind === 'paragraph' && lines[i - 1]?.trim()) previous.text += ' ' + line;
       else result.push({ kind: 'paragraph', text: line });
     }
   }
@@ -111,7 +145,9 @@ function blocks(text: string): Block[] {
 function Code(props: { text: string; lang?: string }) {
   return (
     <pre class="sdk-code">
-      <code>{props.lang === 'text' || props.lang === 'sh' ? props.text : highlightC(props.text)}</code>
+      <code>
+        {props.lang === 'text' || props.lang === 'sh' ? props.text : highlightC(props.text)}
+      </code>
     </pre>
   );
 }
@@ -141,11 +177,23 @@ export function Markdown(props: { text: string; inline?: boolean }) {
             case 'list':
               return block.ordered ? (
                 <ol>
-                  <For each={block.items}>{(item) => <li><Inline text={item} /></li>}</For>
+                  <For each={block.items}>
+                    {(item) => (
+                      <li>
+                        <Inline text={item} />
+                      </li>
+                    )}
+                  </For>
                 </ol>
               ) : (
                 <ul>
-                  <For each={block.items}>{(item) => <li><Inline text={item} /></li>}</For>
+                  <For each={block.items}>
+                    {(item) => (
+                      <li>
+                        <Inline text={item} />
+                      </li>
+                    )}
+                  </For>
                 </ul>
               );
           }

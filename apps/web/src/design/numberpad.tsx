@@ -7,12 +7,33 @@ import { DETAIL, LABEL, TEXT } from './materials';
    between keys, OK presses one, BACK puts the value back. */
 
 /** The pad's keys in order; the last row is delete and OK (two cells). */
-export const PAD_KEYS = ['7', '8', '9', '4', '5', '6', '1', '2', '3', '±', '0', '.', '⌫', 'OK'] as const;
+export const PAD_KEYS = [
+  '7',
+  '8',
+  '9',
+  '4',
+  '5',
+  '6',
+  '1',
+  '2',
+  '3',
+  '±',
+  '0',
+  '.',
+  '⌫',
+  'OK',
+] as const;
 export type PadKey = (typeof PAD_KEYS)[number];
 export const PAD_WIDTH = 276;
 
 /** Each key's row and first and last column. */
-const PLACE = PAD_KEYS.map((_, i) => (i < 12 ? { row: Math.floor(i / 3), from: i % 3, to: i % 3 } : i === 12 ? { row: 4, from: 0, to: 0 } : { row: 4, from: 1, to: 2 }));
+const PLACE = PAD_KEYS.map((_, i) =>
+  i < 12
+    ? { row: Math.floor(i / 3), from: i % 3, to: i % 3 }
+    : i === 12
+      ? { row: 4, from: 0, to: 0 }
+      : { row: 4, from: 1, to: 2 },
+);
 
 /** The key the D-pad reaches from `at`, or `at` at an edge. */
 export function padStep(at: number, key: 'up' | 'down' | 'left' | 'right'): number {
@@ -28,7 +49,10 @@ export function padType(text: string, fresh: boolean, key: PadKey, decimals: boo
   const base = fresh ? '' : text;
   if (key === '⌫') return fresh ? '' : base.slice(0, -1);
   if (key === '±') return text.startsWith('−') ? text.slice(1) : `−${text}`;
-  if (key === '.') return !decimals || base.includes('.') ? text : `${base === '' || base === '−' ? `${base}0` : base}.`;
+  if (key === '.')
+    return !decimals || base.includes('.')
+      ? text
+      : `${base === '' || base === '−' ? `${base}0` : base}.`;
   if (key === 'OK') return text;
   return base.length >= 7 ? text : base + key;
 }
@@ -51,7 +75,11 @@ export function NumberPad(props: {
   return (
     <div
       class="absolute inset-y-0 right-0 flex flex-col gap-[6px] p-[8px]"
-      style={{ width: `${PAD_WIDTH}px`, background: 'var(--m-popup)', 'box-shadow': 'var(--m-popup-edge)' }}
+      style={{
+        width: `${PAD_WIDTH}px`,
+        background: 'var(--m-popup)',
+        'box-shadow': 'var(--m-popup-edge)',
+      }}
     >
       <div class="flex flex-col gap-[6px] px-[6px] pt-[2px] pb-[4px]">
         <span class={`font-medium text-white/70 ${TEXT}`}>{props.name}</span>
@@ -70,7 +98,12 @@ export function NumberPad(props: {
                 type="button"
                 class={`flex items-center justify-center rounded-[10px] font-medium ${key === 'OK' ? 'col-span-2' : ''} ${TEXT}`}
                 style={{
-                  background: key === 'OK' ? 'var(--m-confirm)' : key === '⌫' || key === '±' || key === '.' ? 'var(--m-key-special)' : 'var(--m-key)',
+                  background:
+                    key === 'OK'
+                      ? 'var(--m-confirm)'
+                      : key === '⌫' || key === '±' || key === '.'
+                        ? 'var(--m-key-special)'
+                        : 'var(--m-key)',
                   'box-shadow': props.at === i() ? 'var(--m-focus-edge)' : 'var(--m-key-edge)',
                   color: off() ? 'rgb(255 255 255 / 0.25)' : '#fff',
                 }}

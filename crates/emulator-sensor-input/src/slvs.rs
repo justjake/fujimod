@@ -464,7 +464,11 @@ mod tests {
             sensor.0.lock().unwrap().writes = 1;
             sensor.set_no_standby_gate(option);
             enable(&mut receiver, &mut host);
-            assert_eq!(receiver.next_deadline(0).is_some(), armed, "option {option}");
+            assert_eq!(
+                receiver.next_deadline(0).is_some(),
+                armed,
+                "option {option}"
+            );
         }
         // The option does not stream an unprogrammed sensor.
         let (sensor, mut receiver, mut host) = rig(false);

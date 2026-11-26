@@ -51,9 +51,7 @@ await test('the installed station has matching provenance and bounded geometry a
 });
 
 await test('the camera fits its geometry budget and retains every authored control and dial face', async () => {
-  const bytes = await readFile(
-    new URL('assets/x70.glb', import.meta.url),
-  );
+  const bytes = await readFile(new URL('assets/x70.glb', import.meta.url));
   assert.ok(bytes.length < 5 * 1024 * 1024);
   const gltf: Gltf = JSON.parse(bytes.subarray(20, 20 + bytes.readUInt32LE(12)).toString());
   const parts = JSON.parse(

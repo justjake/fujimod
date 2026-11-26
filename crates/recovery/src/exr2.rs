@@ -10,9 +10,9 @@ use crate::{
     image::{Plan, Result, put, require, word},
     rom_sd::{call, sequence},
 };
-pub mod lamp;
-pub mod footer;
 pub mod defaults;
+pub mod footer;
+pub mod lamp;
 pub mod startup_reads;
 /// `mov r0, #0`: the read call's success status.
 const SUCCESS: u32 = 0xe3a00000;

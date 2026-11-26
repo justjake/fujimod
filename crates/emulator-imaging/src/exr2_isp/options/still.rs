@@ -1,5 +1,5 @@
 //! Plan options of the EXR II still processor model in `fujimod-emulator-exr2-isp`.
-use serde::{Deserialize};
+use serde::Deserialize;
 
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]

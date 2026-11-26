@@ -5,10 +5,10 @@
 //! Completed I2C writes call `write_register`; host reads are observational.
 use fujimod_emulator_devices::exr2::gpio::Pads;
 use fujimod_emulator_devices::exr2::pulse::{PulsePins, Pwm};
+use fujimod_emulator_devices::parts::lens_bridge::Registers;
 use fujimod_emulator_devices::parts::pins::{Pin, Pins};
 use fujimod_emulator_devices::{Cx, Device, bus::InterruptLine};
 use serde::{Deserialize, Serialize};
-use fujimod_emulator_devices::parts::lens_bridge::Registers;
 
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -43,7 +43,10 @@ pub struct Bridge {
     due: Option<u64>,
     position: i64,
     /// Iris output (f-number squared) and its position/f-number calibration.
-    aperture: Option<(fujimod_emulator_devices::parts::optics::ApertureHandle, Vec<(i64, f64)>)>,
+    aperture: Option<(
+        fujimod_emulator_devices::parts::optics::ApertureHandle,
+        Vec<(i64, f64)>,
+    )>,
     nd: Option<fujimod_emulator_devices::parts::optics::ApertureHandle>,
 }
 impl Bridge {
@@ -58,9 +61,10 @@ impl Bridge {
                 "lens bridge requires a pulse pad and position units divisible by 64".into(),
             );
         }
-        if options.travel_limits.is_some_and(|[lo, hi]| {
-            lo >= hi || !(lo..=hi).contains(&options.initial_position)
-        }) {
+        if options
+            .travel_limits
+            .is_some_and(|[lo, hi]| lo >= hi || !(lo..=hi).contains(&options.initial_position))
+        {
             return Err("lens bridge travel limits must enclose its initial position".into());
         }
         Ok(Self {
@@ -74,7 +78,10 @@ impl Bridge {
         })
     }
     /// ND transmission wire: the published f-number squared is scaled by it.
-    pub fn attach_nd(&mut self, transmission: fujimod_emulator_devices::parts::optics::ApertureHandle) {
+    pub fn attach_nd(
+        &mut self,
+        transmission: fujimod_emulator_devices::parts::optics::ApertureHandle,
+    ) {
         self.nd = Some(transmission);
     }
     /// Publish the iris f-number from this bridge's position.
@@ -262,12 +269,18 @@ impl Device for Bridge {
 mod tests {
     use super::*;
     use fujimod_emulator_devices::exr2::gpio;
-    use fujimod_emulator_devices::exr2::pulse::{Options as PulseOptions, PulseUnit, Wiring as PulseWiring};
+    use fujimod_emulator_devices::exr2::pulse::{
+        Options as PulseOptions, PulseUnit, Wiring as PulseWiring,
+    };
     use std::sync::{Arc, Mutex};
 
     fn bridge(travel_limits: Option<[i64; 2]>, initial_position: i64) -> Result<Bridge, String> {
         let gpio = gpio::Gpio::new(
-            gpio::Options { input_levels: [0; 16], output_levels: vec![], high_port_input_levels: None },
+            gpio::Options {
+                input_levels: [0; 16],
+                output_levels: vec![],
+                high_port_input_levels: None,
+            },
             gpio::Wiring { irqs: vec![] },
         )
         .unwrap();
@@ -306,7 +319,12 @@ mod tests {
     // X100T-like iris: position -102 is f/2, -11 is f/16.
     const IRIS: [(i64, f64); 3] = [(-102, 2.0), (-54, 5.6568), (-11, 16.0)];
     fn moving(close: bool) -> Configuration {
-        Configuration { control: 0xc0 | if close { 0x10 } else { 0 }, divider: 64, clock: None, manual: None }
+        Configuration {
+            control: 0xc0 | if close { 0x10 } else { 0 },
+            divider: 64,
+            clock: None,
+            manual: None,
+        }
     }
 
     #[test]
@@ -334,7 +352,10 @@ mod tests {
         let mut b = bridge(Some([-109, 0]), 0).unwrap();
         let aperture = Arc::new(Mutex::new(1.0));
         assert!(b.attach_aperture(aperture.clone(), vec![(0, 2.0)]).is_err());
-        assert!(b.attach_aperture(aperture.clone(), vec![(0, 2.0), (-5, 4.0)]).is_err());
+        assert!(
+            b.attach_aperture(aperture.clone(), vec![(0, 2.0), (-5, 4.0)])
+                .is_err()
+        );
         b.attach_aperture(aperture.clone(), IRIS.to_vec()).unwrap();
         assert_eq!(*aperture.lock().unwrap(), 256.0); // beyond the last point: f/16
         b.step(moving(true), 500).unwrap(); // homing into the open stop

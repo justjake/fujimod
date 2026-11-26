@@ -125,12 +125,24 @@ impl Device for Phy {
         .unwrap()
     }
     fn checkpoint(&self) -> Result<fujimod_emulator_devices::checkpoint::Checkpoint, String> {
-        fujimod_emulator_devices::checkpoint::Checkpoint::encode(self.name(), &SavedPhy { config: self.config, state: self.state.clone() })
+        fujimod_emulator_devices::checkpoint::Checkpoint::encode(
+            self.name(),
+            &SavedPhy {
+                config: self.config,
+                state: self.state.clone(),
+            },
+        )
     }
-    fn validate_checkpoint(&self, data: &fujimod_emulator_devices::checkpoint::Checkpoint) -> Result<(), String> {
+    fn validate_checkpoint(
+        &self,
+        data: &fujimod_emulator_devices::checkpoint::Checkpoint,
+    ) -> Result<(), String> {
         self.validate_savedphy(&data.decode(self.name())?)
     }
-    fn restore_checkpoint(&mut self, data: &fujimod_emulator_devices::checkpoint::Checkpoint) -> Result<(), String> {
+    fn restore_checkpoint(
+        &mut self,
+        data: &fujimod_emulator_devices::checkpoint::Checkpoint,
+    ) -> Result<(), String> {
         let saved: SavedPhy = data.decode(self.name())?;
         self.validate_savedphy(&saved)?;
         self.state = saved.state;

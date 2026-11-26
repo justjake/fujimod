@@ -217,12 +217,12 @@ impl Board {
 
 #[cfg(test)]
 mod tests {
-    use fujimod_catalog_configuration::RunEngine;
     use super::*;
     use crate::board::{
         bus::{Bus, Mode},
         factory,
     };
+    use fujimod_catalog_configuration::RunEngine;
     use serde_json::json;
 
     #[test]
@@ -361,8 +361,11 @@ mod tests {
         .unwrap();
         // The engine hardwires MPIDR bit 31, so this profile's zero value
         // still comes from the board. Then execute vmov; mov r2, #2; wfi.
-        b.write_physical(0x1000, &words(&[0xee101fb0, 0xee000a10, 0xe3a02002, 0xe320f003]))
-            .unwrap();
+        b.write_physical(
+            0x1000,
+            &words(&[0xee101fb0, 0xee000a10, 0xe3a02002, 0xe320f003]),
+        )
+        .unwrap();
         b.run_for_instructions(100, 10).unwrap();
         assert_eq!(b.read_register(0, arm::CORE[1]).unwrap(), 0);
         assert_eq!(b.read_register(0, arm::CORE[3]).unwrap(), 1);

@@ -110,15 +110,30 @@ impl FirmwareExecution {
                 code_checks,
             } => {
                 let configuration = match allocation.configuration {
-                    Configuration::Pointer { address } | Configuration::Fixed { address } => address,
+                    Configuration::Pointer { address } | Configuration::Fixed { address } => {
+                        address
+                    }
                 };
-                if [allocation.allocate, allocation.release, configuration, cache.data_clean,
-                    cache.instruction_invalidate, cache.data_barrier, cache.instruction_barrier]
-                    .into_iter().any(|address| address == 0 || !address.is_multiple_of(4))
+                if [
+                    allocation.allocate,
+                    allocation.release,
+                    configuration,
+                    cache.data_clean,
+                    cache.instruction_invalidate,
+                    cache.data_barrier,
+                    cache.instruction_barrier,
+                ]
+                .into_iter()
+                .any(|address| address == 0 || !address.is_multiple_of(4))
                     || code_checks.is_empty()
-                    || code_checks.iter().any(|check| check.size == 0 || check.sha256.len() != 64)
+                    || code_checks
+                        .iter()
+                        .any(|check| check.size == 0 || check.sha256.len() != 64)
                 {
-                    return Err(format!("execution {}: incomplete EXR II mechanism", self.id));
+                    return Err(format!(
+                        "execution {}: incomplete EXR II mechanism",
+                        self.id
+                    ));
                 }
             }
         }

@@ -79,47 +79,13 @@
       "basis": "Declared catalog input."
     },
     "adc_input": {
-      "samples": [
-        1850,
-        1001,
-        672,
-        4088,
-        4088,
-        351,
-        2643,
-        3625,
-        2004,
-        4093,
-        2258,
-        4093
-      ],
+      "samples": [1850, 1001, 672, 4088, 4088, 351, 2643, 3625, 2004, 4093, 2258, 4093],
       "ambient_celsius": 25,
-      "thermal_channels": [
-        0,
-        8,
-        10
-      ],
+      "thermal_channels": [0, 8, 10],
       "basis": "Sample array read from an X-T3 in still shooting with no button pressed. Dials: drive BKT, evaluative metering, ISO 160, shutter 250x, exposure compensation -2 1/3 EV. Channels 3, 4, 9 and 11 are button ladders at rest."
     },
     "gpio_input": {
-      "levels": [
-        3,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0
-      ],
+      "levels": [3, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
       "basis": "Declared catalog input."
     },
     "gpio_interrupts": {
@@ -191,46 +157,13 @@
       "basis": "Read on an X-T3 in REC with the cable connected: control word 0x00000dcc, parallel word 0x00000000 and the selected register's readback 0x00000000. The other register bytes were not read and are declared 0.",
       "parallel": 0,
       "registers": [
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
+        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
         0
       ]
     },
     "execution_clock": {
       "basis": "Estimated, not measured: four Cortex-A7 cores at roughly 1.2 GHz against the 54 MHz device tick give about 22 instructions per tick at one instruction per cycle; 24 is the ratio the other bodies' overlays declare. At one instruction per tick the sensor command and SD card paths overlap in time (a card in slot 1 stops the strict boot at 646,309,679 instructions with 'reconfiguring active sensor command'); at 24 the same run reaches REC with the card-inserted message posted.",
-      "instructions_per_tick": [
-        24,
-        1
-      ]
+      "instructions_per_tick": [24, 1]
     },
     "sd_cards": [
       {
@@ -260,38 +193,9 @@
           "restart_register": 7177,
           "restart_value": 193,
           "writable_registers": [
-            7170,
-            7171,
-            7175,
-            7177,
-            7179,
-            7195,
-            7196,
-            7197,
-            7198,
-            7199,
-            7203,
-            7204,
-            7209,
-            7214,
-            7215,
-            7218,
-            7219,
-            7224,
-            7228,
-            7229,
-            7230,
-            7231,
-            7321,
-            7360,
-            7361,
-            7362,
-            7363,
-            7364,
-            7365,
-            7376,
-            7168,
-            7176
+            7170, 7171, 7175, 7177, 7179, 7195, 7196, 7197, 7198, 7199, 7203, 7204, 7209, 7214,
+            7215, 7218, 7219, 7224, 7228, 7229, 7230, 7231, 7321, 7360, 7361, 7362, 7363, 7364,
+            7365, 7376, 7168, 7176
           ],
           "contact_ids": [1, 2],
           "input_ready_irq": 153,

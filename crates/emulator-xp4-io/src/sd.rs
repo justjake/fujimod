@@ -221,7 +221,11 @@ impl Device for Controller {
         saved: &fujimod_emulator_devices::checkpoint::Checkpoint,
     ) -> Result<(), String> {
         let (options, vendor): (Options, BTreeMap<u64, u32>) = saved.decode(self.name())?;
-        if options != self.options || vendor.keys().any(|o| !self.options.vendor_offsets.contains(o)) {
+        if options != self.options
+            || vendor
+                .keys()
+                .any(|o| !self.options.vendor_offsets.contains(o))
+        {
             return Err("SD host checkpoint wiring differs".into());
         }
         if saved.children().len() != 1 {

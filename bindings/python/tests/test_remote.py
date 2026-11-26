@@ -1,4 +1,5 @@
 """Camera binding tests over the Rust synthetic transport."""
+
 from dataclasses import FrozenInstanceError
 
 import pytest
@@ -27,8 +28,9 @@ async def test_async_navigation_selection_readback_and_frame():
     await remote.select(option(item, "ON"), deadline=100)
     await remote.navigate(item, deadline=100)
     await remote.press(control("selector.right"), deadline=100)
-    read_result = await remote.wait_until(lambda value: value.value.selected,
-        option(item, "ON"), deadline=100)
+    read_result = await remote.wait_until(
+        lambda value: value.value.selected, option(item, "ON"), deadline=100
+    )
     assert read_result.value.value == "ON"
     before = remote.now
     frame = await remote.screenshot(deadline=100)
@@ -44,7 +46,9 @@ def test_blocking_uses_the_same_actions_and_read_result_types():
     blocking.select(option(item, "ON"), deadline=100)
     blocking.navigate(item, deadline=100)
     blocking.press(control("selector.right"), deadline=100)
-    value = blocking.wait_until(lambda value: value.value.selected, option(item, "ON"), deadline=100)
+    value = blocking.wait_until(
+        lambda value: value.value.selected, option(item, "ON"), deadline=100
+    )
     assert value.value.value == "ON"
     before = remote.now
     assert blocking.read(option(item, "ON")) == value
@@ -84,8 +88,10 @@ async def test_ff80_camera_leases_and_returns_existing_session():
     from .test_stream import control as envelope
 
     session, script = await opened([
-        E.control(envelope(0xC2, 2)), E.read(2, b"ok"),
-        E.control(envelope(0xC4, 2)), E.read(2, b"ok"),
+        E.control(envelope(0xC2, 2)),
+        E.read(2, b"ok"),
+        E.control(envelope(0xC4, 2)),
+        E.read(2, b"ok"),
     ])
     remote = Camera(_native.remote.Camera.synthetic_ff80(session))
     with pytest.raises(usb.SessionBusyError):
@@ -110,25 +116,25 @@ async def test_abandoned_usb_owner_fences_remote_without_more_io():
 
 async def test_async_observation_predicate_deadline_and_original_exception():
     remote = camera()
-    reads = {'stores': [], 'devices': []}
+    reads = {"stores": [], "devices": []}
     calls = []
 
     async def frozen():
         calls.append(remote.now)
-        reads['stores'].append((16, 20))
+        reads["stores"].append((16, 20))
         return None
 
-    with pytest.raises(TimeoutError, match='frozen'):
-        await remote.wait_for(frozen, deadline=3, reads=reads, condition='frozen')
+    with pytest.raises(TimeoutError, match="frozen"):
+        await remote.wait_for(frozen, deadline=3, reads=reads, condition="frozen")
     assert calls == [0, 1, 2, 3]
-    assert reads['stores'] == [(16, 20)]
-    failure = ValueError('unsafe observation')
+    assert reads["stores"] == [(16, 20)]
+    failure = ValueError("unsafe observation")
 
     async def unsafe():
         raise failure
 
     with pytest.raises(ValueError) as caught:
-        await remote.wait_for(unsafe, deadline=9, reads=reads, condition='unsafe')
+        await remote.wait_for(unsafe, deadline=9, reads=reads, condition="unsafe")
     assert caught.value is failure
     assert remote.now == 3
     remote.close()
@@ -145,8 +151,9 @@ async def test_memory_wait_repeats_raw_reads_and_predicate_in_rust():
         assert value == (3).to_bytes(4, "little")
         return len(calls) == 3
 
-    observed = await remote.wait_until_memory(ready, [(768, 4)], deadline=10,
-                                               condition="synthetic mode settled")
+    observed = await remote.wait_until_memory(
+        ready, [(768, 4)], deadline=10, condition="synthetic mode settled"
+    )
     assert observed == [(768, (3).to_bytes(4, "little"))]
     assert len(calls) == 3
     remote.close()
@@ -163,8 +170,12 @@ async def test_stable_memory_wait_checks_bytes_and_repeats_in_rust():
     session, script = await opened(exchanges)
     remote = Camera(_native.remote.Camera.synthetic_ff80(session))
     observed = await remote.wait_until_stable_memory(
-        [(768, 4)], stable_spans=[(768, 4)], equals=[(768, value)],
-        stable_comparisons=2, deadline=1_000_000_000, condition="stable synthetic bytes",
+        [(768, 4)],
+        stable_spans=[(768, 4)],
+        equals=[(768, value)],
+        stable_comparisons=2,
+        deadline=1_000_000_000,
+        condition="stable synthetic bytes",
     )
     assert observed == [(768, value)]
     remote.close()
@@ -174,10 +185,16 @@ async def test_stable_memory_wait_checks_bytes_and_repeats_in_rust():
 
 async def test_staged_shutter_and_position_inputs():
     remote = camera()
-    await remote.set_input(control('shutter_button'), 'stage', stage='half_press', deadline=10)
-    await remote.set_input(control('shutter_button'), 'stage', stage='full_press', deadline=10)
-    await remote.set_input(control('shutter_button'), 'released', deadline=10)
-    await remote.set_input(control('position_dial'), 'position', position='A', deadline=10)
+    await remote.set_input(
+        control("shutter_button"), "stage", stage="half_press", deadline=10
+    )
+    await remote.set_input(
+        control("shutter_button"), "stage", stage="full_press", deadline=10
+    )
+    await remote.set_input(control("shutter_button"), "released", deadline=10)
+    await remote.set_input(
+        control("position_dial"), "position", position="A", deadline=10
+    )
     remote.close()
 
 
@@ -208,24 +225,33 @@ async def test_operation_scoped_camera_returns_usb_between_wait_and_observation(
     from .test_stream import control as envelope
 
     session, script = await opened([
-        E.control(envelope(0xC2, 2)), E.read(2, b'ok'),
-        *memory_read(768, (3).to_bytes(4, 'little')),
-        *memory_read(768, (3).to_bytes(4, 'little')),
-        *memory_read(768, (3).to_bytes(4, 'little')),
-        E.control(envelope(0xC2, 2)), E.read(2, b'ok'),
-        E.control(envelope(0xC4, 2)), E.read(2, b'ok'),
+        E.control(envelope(0xC2, 2)),
+        E.read(2, b"ok"),
+        *memory_read(768, (3).to_bytes(4, "little")),
+        *memory_read(768, (3).to_bytes(4, "little")),
+        *memory_read(768, (3).to_bytes(4, "little")),
+        E.control(envelope(0xC2, 2)),
+        E.read(2, b"ok"),
+        E.control(envelope(0xC4, 2)),
+        E.read(2, b"ok"),
     ])
-    remote = Camera(_ScopedNative(lambda: _native.remote.Camera.synthetic_ff80(session)))
+    remote = Camera(
+        _ScopedNative(lambda: _native.remote.Camera.synthetic_ff80(session))
+    )
     deadline = remote.now + 1_000_000_000
-    await remote.wait({'stores': [], 'devices': []}, deadline=deadline)
-    assert await session.ping() == b'ok'
-    value = (3).to_bytes(4, 'little')
+    await remote.wait({"stores": [], "devices": []}, deadline=deadline)
+    assert await session.ping() == b"ok"
+    value = (3).to_bytes(4, "little")
     assert await remote.wait_until_stable_memory(
-        [(768, 4)], stable_spans=[(768, 4)], equals=[(768, value)],
-        stable_comparisons=2, deadline=deadline, condition='stable synthetic bytes',
+        [(768, 4)],
+        stable_spans=[(768, 4)],
+        equals=[(768, value)],
+        stable_comparisons=2,
+        deadline=deadline,
+        condition="stable synthetic bytes",
     ) == [(768, value)]
-    assert await session.ping() == b'ok'
-    await remote.wait({'stores': [], 'devices': []}, deadline=deadline)
+    assert await session.ping() == b"ok"
+    await remote.wait({"stores": [], "devices": []}, deadline=deadline)
     remote.close()
     await session.close()
     assert script.remaining == 0
@@ -233,9 +259,9 @@ async def test_operation_scoped_camera_returns_usb_between_wait_and_observation(
 
 async def test_observed_board_device_names_resolve_before_waiting():
     remote = camera()
-    await remote.wait({'stores': [], 'devices': ['scanout']}, deadline=3)
+    await remote.wait({"stores": [], "devices": ["scanout"]}, deadline=3)
     assert remote.now == 1
-    with pytest.raises(ValueError, match='Unknown observed device'):
-        await remote.wait({'stores': [], 'devices': ['absent']}, deadline=3)
-    assert (await remote.read(control('selector.down'))).value.supported
+    with pytest.raises(ValueError, match="Unknown observed device"):
+        await remote.wait({"stores": [], "devices": ["absent"]}, deadline=3)
+    assert (await remote.read(control("selector.down"))).value.supported
     remote.close()

@@ -682,9 +682,7 @@ impl FirmwareRestart {
                 return fail("a fixed-interval wake takes no request");
             }
             (None, None) => {
-                return fail(
-                    "a restart needs either a request transport or a fixed-interval wake",
-                );
+                return fail("a restart needs either a request transport or a fixed-interval wake");
             }
             (None, Some(interval)) => {
                 if request != (None, None, None, None, None)
@@ -711,13 +709,9 @@ impl FirmwareRestart {
                 {
                     return fail("a request restart saves the deadline and its rollover byte");
                 }
-                if let Err(reason) = validate_transport(
-                    transport,
-                    bytes,
-                    request_offset,
-                    deadline_offset,
-                    true,
-                ) {
+                if let Err(reason) =
+                    validate_transport(transport, bytes, request_offset, deadline_offset, true)
+                {
                     return fail(reason);
                 }
             }
@@ -769,7 +763,8 @@ impl FirmwareRestart {
             m.request_offset,
             m.deadline_offset,
             m.parameter_bytes,
-        ) else {
+        )
+        else {
             return fail("a message request needs every request field");
         };
         let (Some(deadline), Some(queue), Some(conversion), Some(configuration), Some(clock)) = (
@@ -910,12 +905,16 @@ impl FirmwareRestart {
                 || constants.exr2_restart_spi_base != 0xfff84000 + spi_channel * 0x40
                 || constants.exr2_restart_packet_bytes != 16
                 || Some(constants.exr2_restart_alarm_low)
-                    != m.power_off.as_ref().and_then(|p| p.alarm.seconds.first().copied())
+                    != m.power_off
+                        .as_ref()
+                        .and_then(|p| p.alarm.seconds.first().copied())
                 || Some(constants.exr2_restart_alarm_high)
-                    != m.power_off.as_ref().and_then(|p| p.alarm.seconds.get(1).copied())
-                || m.power_off.as_ref().is_none_or(|p| {
-                    constants.exr2_restart_alarm_enable != p.alarm.enable
-                })
+                    != m.power_off
+                        .as_ref()
+                        .and_then(|p| p.alarm.seconds.get(1).copied())
+                || m.power_off
+                    .as_ref()
+                    .is_none_or(|p| constants.exr2_restart_alarm_enable != p.alarm.enable)
                 || constants.restart_gpio_pin >= 16
                 || constants.restart_power_gpio_bank >= 16
                 || constants.restart_panel_gpio_bank >= 16)
@@ -935,9 +934,9 @@ impl FirmwareRestart {
                 return fail("invalid deferred callback timer");
             }
             let covered = |routine: &TimerRoutine| {
-                self.code_checks.iter().any(|check| {
-                    check.address == routine.address && check.size == routine.size
-                })
+                self.code_checks
+                    .iter()
+                    .any(|check| check.address == routine.address && check.size == routine.size)
             };
             if !covered(&timer.start) || !covered(&timer.cancel) {
                 return fail("deferred timer routines need matching code checks");

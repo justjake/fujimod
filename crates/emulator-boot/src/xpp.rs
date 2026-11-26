@@ -139,8 +139,11 @@ fn block_register_layouts(
 ) -> Result<RegisterLayouts, String> {
     use fujimod_catalog::profiles::*;
 
-    let blocks: BTreeMap<&str, &SocBlock> =
-        soc.blocks.iter().map(|block| (block.id.as_str(), block)).collect();
+    let blocks: BTreeMap<&str, &SocBlock> = soc
+        .blocks
+        .iter()
+        .map(|block| (block.id.as_str(), block))
+        .collect();
     for override_ in overrides {
         if !blocks.contains_key(override_.block_id.as_str()) {
             return Err(format!(
@@ -157,7 +160,13 @@ fn block_register_layouts(
             .find(|item| item.output == output)
             .map(|item| item.line as u64)
     };
-    let irqs = |block: &SocBlock| block.interrupts.iter().map(|item| item.line as u64).collect::<Vec<_>>();
+    let irqs = |block: &SocBlock| {
+        block
+            .interrupts
+            .iter()
+            .map(|item| item.line as u64)
+            .collect::<Vec<_>>()
+    };
 
     let mut maps = RegisterLayouts::default();
     let mut sd_clocks = Vec::new();
@@ -205,7 +214,10 @@ fn block_register_layouts(
             BlockDevice::UsbPhy { basis } => {
                 usb_phy = Some((block, basis.clone()));
             }
-            BlockDevice::SdHostClock { settle_ticks, basis } => {
+            BlockDevice::SdHostClock {
+                settle_ticks,
+                basis,
+            } => {
                 sd_clocks.push((block.base, *settle_ticks, basis.clone()));
             }
             BlockDevice::Gpio { basis } => {
@@ -215,7 +227,10 @@ fn block_register_layouts(
                     size: block.size,
                 });
             }
-            BlockDevice::Adc { sample_ticks, basis } => {
+            BlockDevice::Adc {
+                sample_ticks,
+                basis,
+            } => {
                 let value = Adc {
                     base: block.base,
                     basis: basis.clone(),
@@ -241,7 +256,11 @@ fn block_register_layouts(
                 irq: first_irq(block).unwrap_or_default(),
                 reset_ticks: *reset_ticks,
             }),
-            BlockDevice::ControlRequest { ack_ticks, request_offset, basis } => {
+            BlockDevice::ControlRequest {
+                ack_ticks,
+                request_offset,
+                basis,
+            } => {
                 control_requests.push((block.base + *request_offset, *ack_ticks, basis.clone()));
             }
             BlockDevice::IoGroups { basis } => {
@@ -250,7 +269,10 @@ fn block_register_layouts(
                     basis: basis.clone(),
                 });
             }
-            BlockDevice::Spi { parent_clock_ticks, basis } => {
+            BlockDevice::Spi {
+                parent_clock_ticks,
+                basis,
+            } => {
                 if let Some(name) = block.id.strip_prefix("spi") {
                     spi.insert(
                         name.into(),
@@ -270,7 +292,10 @@ fn block_register_layouts(
                 basis,
             } => {
                 let aperture = blocks.get(aperture_block_id.as_str()).ok_or_else(|| {
-                    format!("serial flash {} names absent aperture {}", block.id, aperture_block_id)
+                    format!(
+                        "serial flash {} names absent aperture {}",
+                        block.id, aperture_block_id
+                    )
                 })?;
                 let size = aperture_size.unwrap_or(aperture.size);
                 if timing.is_some() || !native_dependencies.is_empty() {
@@ -301,7 +326,10 @@ fn block_register_layouts(
                 basis,
             } => {
                 let mux = blocks.get(request_mux_block_id.as_str()).ok_or_else(|| {
-                    format!("DMA {} names absent request mux {}", block.id, request_mux_block_id)
+                    format!(
+                        "DMA {} names absent request mux {}",
+                        block.id, request_mux_block_id
+                    )
                 })?;
                 maps.dma = Some(Dma {
                     base: block.base,
@@ -313,7 +341,11 @@ fn block_register_layouts(
                     timing: timing.clone().unwrap_or_default(),
                 });
             }
-            BlockDevice::IntervalTimer { layout, clock, basis } => {
+            BlockDevice::IntervalTimer {
+                layout,
+                clock,
+                basis,
+            } => {
                 maps.interval_timer = Some(IntervalTimer {
                     base: block.base,
                     basis: basis.clone(),
@@ -322,7 +354,10 @@ fn block_register_layouts(
                     routes: irqs(block)
                         .into_iter()
                         .enumerate()
-                        .map(|(channel, irq)| TimerRoute { channel: channel as u64, irq })
+                        .map(|(channel, irq)| TimerRoute {
+                            channel: channel as u64,
+                            irq,
+                        })
                         .collect(),
                 });
             }
@@ -362,7 +397,12 @@ fn block_register_layouts(
                     },
                 ));
             }
-            BlockDevice::Pl330 { setup_ticks, bytes_per_tick, timing, basis } => {
+            BlockDevice::Pl330 {
+                setup_ticks,
+                bytes_per_tick,
+                timing,
+                basis,
+            } => {
                 maps.pl330 = Some(Pl330 {
                     base: block.base,
                     irq_routes: irqs(block),
@@ -373,7 +413,9 @@ fn block_register_layouts(
                 });
             }
             BlockDevice::SerialPort { basis } => serial_bases.push((block.base, basis.clone())),
-            BlockDevice::JpegCodec { run_ticks, basis, .. } => {
+            BlockDevice::JpegCodec {
+                run_ticks, basis, ..
+            } => {
                 let value = JpegCodec {
                     base: block.base,
                     basis: basis.clone(),
@@ -396,7 +438,15 @@ fn block_register_layouts(
                     size: block.size,
                 });
             }
-            BlockDevice::SdHost { capabilities, capabilities_2, clock_ticks, slot_and_version, transfer_ticks, vendor_offsets, basis } => {
+            BlockDevice::SdHost {
+                capabilities,
+                capabilities_2,
+                clock_ticks,
+                slot_and_version,
+                transfer_ticks,
+                vendor_offsets,
+                basis,
+            } => {
                 sd_hosts.push(SdHost {
                     base: block.base,
                     basis: basis.clone(),
@@ -410,7 +460,11 @@ fn block_register_layouts(
                     vendor_offsets: vendor_offsets.clone(),
                 });
             }
-            BlockDevice::XppUsb { command_ticks, transaction_ticks, basis } => {
+            BlockDevice::XppUsb {
+                command_ticks,
+                transaction_ticks,
+                basis,
+            } => {
                 maps.xpp_usb = Some(XppUsb {
                     base: block.base,
                     basis: basis.clone(),
@@ -420,7 +474,14 @@ fn block_register_layouts(
                     transaction_ticks: *transaction_ticks,
                 });
             }
-            BlockDevice::DisplayOutput { set_bits, clear_bits, handshake_ticks, scanout, basis, order } => {
+            BlockDevice::DisplayOutput {
+                set_bits,
+                clear_bits,
+                handshake_ticks,
+                scanout,
+                basis,
+                order,
+            } => {
                 display_outputs.push((
                     order.unwrap_or(u32::MAX),
                     DisplayOutput {
@@ -456,7 +517,10 @@ fn block_register_layouts(
                     size: block.size,
                 });
             }
-            BlockDevice::ImagingStatistics { period_ticks, basis } => {
+            BlockDevice::ImagingStatistics {
+                period_ticks,
+                basis,
+            } => {
                 maps.imaging_statistics = Some(ImagingStatistics {
                     base: block.base,
                     basis: basis.clone(),
@@ -472,7 +536,13 @@ fn block_register_layouts(
                     size: block.size,
                 });
             }
-            BlockDevice::FrameSync { interrupts, period_ticks, sources, basis, reads_set_after_clear } => {
+            BlockDevice::FrameSync {
+                interrupts,
+                period_ticks,
+                sources,
+                basis,
+                reads_set_after_clear,
+            } => {
                 maps.frame_sync = Some(FrameSync {
                     base: block.base,
                     basis: basis.clone(),
@@ -483,9 +553,12 @@ fn block_register_layouts(
                     sources: sources
                         .iter()
                         .map(|source| FrameSource {
-                            irq_route: named_irq(block, &format!("frame-status-{}", source.status_bit))
-                                .or_else(|| first_irq(block))
-                                .unwrap_or_default() as u32,
+                            irq_route: named_irq(
+                                block,
+                                &format!("frame-status-{}", source.status_bit),
+                            )
+                            .or_else(|| first_irq(block))
+                            .unwrap_or_default() as u32,
                             status_bit: source.status_bit,
                         })
                         .collect(),
@@ -512,7 +585,12 @@ fn block_register_layouts(
                     size: block.size,
                 });
             }
-            BlockDevice::I2c { fifo_depth, clock_hz, tick_hz, basis } => i2c.push((
+            BlockDevice::I2c {
+                fifo_depth,
+                clock_hz,
+                tick_hz,
+                basis,
+            } => i2c.push((
                 block.base,
                 basis.clone(),
                 *clock_hz,
@@ -521,7 +599,14 @@ fn block_register_layouts(
                 block.size,
                 *tick_hz,
             )),
-            BlockDevice::XppSd { register_offset, reset_channel, transfer_ticks, clock_ticks, reset_ticks, basis } => {
+            BlockDevice::XppSd {
+                register_offset,
+                reset_channel,
+                transfer_ticks,
+                clock_ticks,
+                reset_ticks,
+                basis,
+            } => {
                 maps.xpp_sd = Some(XppSdHost {
                     base: block.base,
                     basis: basis.clone(),
@@ -543,7 +628,11 @@ fn block_register_layouts(
                     size: block.size,
                 });
             }
-            BlockDevice::SensorCommand { command_ticks, reset_ticks, basis } => {
+            BlockDevice::SensorCommand {
+                command_ticks,
+                reset_ticks,
+                basis,
+            } => {
                 let _ = (command_ticks, reset_ticks, basis);
             }
             BlockDevice::ImagingReceiver { basis } => {
@@ -581,7 +670,11 @@ fn block_register_layouts(
                         period_ticks: *period_ticks,
                     });
                 }
-                if !set_bits.is_empty() || !clear_bits.is_empty() || scanout.is_some() || handshake_ticks.is_some() {
+                if !set_bits.is_empty()
+                    || !clear_bits.is_empty()
+                    || scanout.is_some()
+                    || handshake_ticks.is_some()
+                {
                     display_outputs.push((
                         order.unwrap_or(u32::MAX),
                         DisplayOutput {
@@ -596,7 +689,9 @@ fn block_register_layouts(
                     ));
                 }
             }
-            BlockDevice::ImagingInputBuffer { reset_ticks, basis, .. } => {
+            BlockDevice::ImagingInputBuffer {
+                reset_ticks, basis, ..
+            } => {
                 let _ = (reset_ticks, basis);
             }
             BlockDevice::SerialDma { .. }
@@ -670,7 +765,10 @@ fn block_register_layouts(
             words: sd_clocks.iter().map(|item| item.0).collect(),
         });
     }
-    if let Some((ack_ticks, basis)) = control_requests.first().map(|item| (item.1, item.2.clone())) {
+    if let Some((ack_ticks, basis)) = control_requests
+        .first()
+        .map(|item| (item.1, item.2.clone()))
+    {
         control_requests.sort_by_key(|item| item.0);
         maps.control_requests = Some(ControlRequests {
             ack_ticks,
@@ -698,7 +796,10 @@ fn block_register_layouts(
     if !serial_bases.is_empty() {
         maps.serial_ports = Some(SerialPorts {
             bases: serial_bases.iter().map(|item| item.0).collect(),
-            basis: serial_bases.first().map(|item| item.1.clone()).unwrap_or_default(),
+            basis: serial_bases
+                .first()
+                .map(|item| item.1.clone())
+                .unwrap_or_default(),
         });
     }
     if !spi.is_empty() {
@@ -712,7 +813,10 @@ fn block_register_layouts(
         fifo_depth: first.3,
         irq_routes: i2c.iter().map(|item| item.4).collect(),
         size: first.5,
-        stride: i2c.get(1).map(|second| second.0 - first.0).unwrap_or(first.5),
+        stride: i2c
+            .get(1)
+            .map(|second| second.0 - first.0)
+            .unwrap_or(first.5),
         tick_hz: first.6,
     });
     Ok(maps)
@@ -745,7 +849,9 @@ fn gic_node(soc: &Soc) -> Result<Value, String> {
         .iter()
         .find(|block| block.id == *cpu_interface_block_id)
         .map(|block| block.base)
-        .ok_or_else(|| format!("interrupt controller names absent block {cpu_interface_block_id}"))?;
+        .ok_or_else(|| {
+            format!("interrupt controller names absent block {cpu_interface_block_id}")
+        })?;
     Ok(json!({
         "distributor": distributor.base,
         "cpu_interface": cpu_interface,
@@ -1323,7 +1429,10 @@ fn nodes(
                 "fifo_depth": buses.fifo_depth, "clock_hz": buses.clock_hz, "tick_hz": buses.tick_hz,
             });
             if let Some(part) = touch_parts.first() {
-                let touch = part.touch_panel.as_ref().ok_or("touch model options are absent")?;
+                let touch = part
+                    .touch_panel
+                    .as_ref()
+                    .ok_or("touch model options are absent")?;
                 node(
                     format!("i2c{bus}"),
                     json!({ "kind": "xt20-touch-i2c", "options": options, "parts": parts,
@@ -1912,7 +2021,14 @@ mod tests {
         let assembly = xt20(&assets).unwrap();
         let spec: Spec = serde_json::from_value(assembly.devices).unwrap();
         let flash = BTreeMap::from([(assembly.flash_asset.to_string(), vec![0xff; 0x1000])]);
-        let built = build(assembly.execution, spec, &flash, Mode::Strict, fujimod_catalog_configuration::RunEngine::Unicorn).unwrap();
+        let built = build(
+            assembly.execution,
+            spec,
+            &flash,
+            Mode::Strict,
+            fujimod_catalog_configuration::RunEngine::Unicorn,
+        )
+        .unwrap();
         for name in [
             "gpio",
             "resets",
@@ -2546,5 +2662,4 @@ mod tests {
             "reset registers name 1 cores; SoC xpp has 2"
         );
     }
-
 }

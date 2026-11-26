@@ -1,7 +1,10 @@
 //! XP5 preview input-buffer and RIFP processor maps.
-use fujimod_emulator_sensor_input::{input_buffer::{InputBuffer, Output, Wiring}, statistics::{Planes, Statistics}};
 use fujimod_emulator_devices::checkpoint::Checkpoint;
 use fujimod_emulator_devices::{Cx, Device};
+use fujimod_emulator_sensor_input::{
+    input_buffer::{InputBuffer, Output, Wiring},
+    statistics::{Planes, Statistics},
+};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::BTreeMap;
@@ -54,7 +57,12 @@ fn trace(line: impl FnOnce() -> String) {
     static FILE: std::sync::OnceLock<Option<Mutex<std::fs::File>>> = std::sync::OnceLock::new();
     let file = FILE.get_or_init(|| {
         let path = std::env::var_os("XT5_RIFP_TRACE").filter(|path| !path.is_empty())?;
-        std::fs::OpenOptions::new().create(true).append(true).open(path).ok().map(Mutex::new)
+        std::fs::OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(path)
+            .ok()
+            .map(Mutex::new)
     });
     if let Some(file) = file {
         let _ = writeln!(file.lock().unwrap(), "{}", line());
@@ -84,7 +92,9 @@ impl Io {
             || state.r(0x7c) & 0x1ffff != 4
             || state.r(0x80) & 0xffff != count
         {
-            cx.unsupported("rifp-io: register-list geometry is not 8-byte entries to 4-byte writes");
+            cx.unsupported(
+                "rifp-io: register-list geometry is not 8-byte entries to 4-byte writes",
+            );
             return false;
         }
         let address = u64::from(state.r(0x50)) | (u64::from(source & 7) << 32);
@@ -189,21 +199,27 @@ impl Preview {
             .ok_or("preview requires a declared limited-range source_luma")?;
         let retain_words = match options.get("retain_words") {
             None => false,
-            Some(value) => value.as_bool().ok_or("preview retain_words must be a boolean")?,
+            Some(value) => value
+                .as_bool()
+                .ok_or("preview retain_words must be a boolean")?,
         };
         // X-T5 4.31: the output at +0x400 fills statistics planes 0..3, which only the AF
         // service reads, as 13 x 9 cells of its four contrast filters (`statistics::FocusFrame`).
         // Without the option it writes the 7 x 7 colour sums, as before.
         let focus_filters = match options.get("focus_filters") {
             None => false,
-            Some(value) => value.as_bool().ok_or("preview focus_filters must be a boolean")?,
+            Some(value) => value
+                .as_bool()
+                .ok_or("preview focus_filters must be a boolean")?,
         };
         // X-T5 4.31: the focus outputs (planes 0..3 with `focus_filters`, 0x21, 0xe, 0xf) measure
         // the window of words +0x7c (x) and +0x80 (y) (`statistics::FocusWindow`), not the full
         // frame. Without the option they measure the 13 x 9 full-frame grid, as before.
         let focus_window = match options.get("focus_window") {
             None => false,
-            Some(value) => value.as_bool().ok_or("preview focus_window must be a boolean")?,
+            Some(value) => value
+                .as_bool()
+                .ok_or("preview focus_window must be a boolean")?,
         };
         if rifp && (focus_filters || focus_window) {
             return Err("focus_filters and focus_window are input buffer options".into());
@@ -469,7 +485,9 @@ impl Device for Rifp {
                 if let Some(still) = &self.still {
                     let regs = &self.state.regs;
                     if still.develop
-                        || still.movie_run(&self.io, |o| regs.get(&o).copied().unwrap_or(0)).is_some()
+                        || still
+                            .movie_run(&self.io, |o| regs.get(&o).copied().unwrap_or(0))
+                            .is_some()
                     {
                         still.output.set_busy(true);
                     }
@@ -510,10 +528,14 @@ impl Device for Rifp {
             // for it scales the run's input picture (movie module notes).
             if let Some(picture) = still.movie_run(&self.io, r) {
                 let result = picture.and_then(|picture| {
-                    cx.log(&format!("RIFP movie run: inline two-plane 4:2:0 picture {picture:?}"));
+                    cx.log(&format!(
+                        "RIFP movie run: inline two-plane 4:2:0 picture {picture:?}"
+                    ));
                     match still.output.take_deferred() {
                         Some(job) if job.two_plane() => job.scale_two_plane(cx, Some(picture)),
-                        Some(_) => Err("RIFP movie run: the waiting RESZ start is not two-plane".into()),
+                        Some(_) => {
+                            Err("RIFP movie run: the waiting RESZ start is not two-plane".into())
+                        }
                         None => Err("RIFP movie run: no RESZ start waits for it".into()),
                     }
                 });
@@ -533,9 +555,10 @@ impl Device for Rifp {
             }
             // The still channel picture this run's input is in: the HDR exposures are three
             // pictures, developed after the last one was written.
-            let raw = still
-                .sensor
-                .still_raw_at(u64::from(r(0x0c)) | u64::from(r(0x10) & 7) << 32, u64::from(r(0x1c)));
+            let raw = still.sensor.still_raw_at(
+                u64::from(r(0x0c)) | u64::from(r(0x10) & 7) << 32,
+                u64::from(r(0x1c)),
+            );
             // RCIZ (drive-mode BKT): a queued run without an output address streams its
             // output into the inline RESZ start that waits for it (still module notes).
             if still.develop
@@ -544,8 +567,7 @@ impl Device for Rifp {
                 && r(0x0c) | r(0x10) & 7 != 0
                 && r(0x40) | r(0x44) & 7 == 0
                 && let Some(job) = still.output.take_deferred()
-                && let Err(e) =
-                    super::still::rifp_into_resz(cx, r, raw, &job)
+                && let Err(e) = super::still::rifp_into_resz(cx, r, raw, &job)
             {
                 // As for the other movie starts: one the model cannot follow is logged.
                 if job.two_plane() {
@@ -842,8 +864,22 @@ mod tests {
     #[test]
     fn focus_filters_option_fills_planes_zero_to_three_with_the_focus_filters() {
         let options = |text: &str| toml::from_str::<toml::Table>(text).unwrap();
-        assert!(Preview::new(false, Io::default(), &options("frame_period_us=1000\nsource_luma=128\nfocus_filters=1")).is_err());
-        assert!(Preview::new(true, Io::default(), &options("completion_us=1\nsource_luma=128\nfocus_filters=true")).is_err());
+        assert!(
+            Preview::new(
+                false,
+                Io::default(),
+                &options("frame_period_us=1000\nsource_luma=128\nfocus_filters=1")
+            )
+            .is_err()
+        );
+        assert!(
+            Preview::new(
+                true,
+                Io::default(),
+                &options("completion_us=1\nsource_luma=128\nfocus_filters=true")
+            )
+            .is_err()
+        );
         let statistics = Statistics::new(
             super::super::STATISTICS_BASE,
             super::super::STATISTICS_BANK_SIZE,
@@ -863,7 +899,12 @@ mod tests {
         };
         {
             let mut cx = Cx::new(&mut host, 2, 0xbeef, 0);
-            for (o, v) in [(0x400, 0x100), (0x404, 1), (0x500, 0x100), (4, (1 << 23) | (1 << 7))] {
+            for (o, v) in [
+                (0x400, 0x100),
+                (0x404, 1),
+                (0x500, 0x100),
+                (4, (1 << 23) | (1 << 7)),
+            ] {
                 preview.write(&mut cx, 0xff974000 + o, 4, v);
             }
             assert!(cx.refusal().is_none());
@@ -966,7 +1007,11 @@ mod tests {
             .collect();
         assert_eq!(
             posted,
-            [(0xffd02148, 4, 1), (0xffd0b050, 4, 0x1234), (0xffd02004, 4, 1)]
+            [
+                (0xffd02148, 4, 1),
+                (0xffd0b050, 4, 0x1234),
+                (0xffd02004, 4, 1)
+            ]
         );
         drop(cx);
         assert_eq!(io.next_deadline(0), Some(5_000));

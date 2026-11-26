@@ -12,8 +12,16 @@ export default function CustomSettingsEditorPage() {
     <SiteFrame class="design-page">
       <DesignFrame title="Custom settings editor">
         <CustomSettingsApp />
-        <States title="Custom settings editor" states={SETTINGS_STATES} render={(state) => <SettingsEditor state={state} />} />
-        <States title="Film editor" states={FILM_STATES} render={(start) => <FilmScreen start={start} />} />
+        <States
+          title="Custom settings editor"
+          states={SETTINGS_STATES}
+          render={(state) => <SettingsEditor state={state} />}
+        />
+        <States
+          title="Film editor"
+          states={FILM_STATES}
+          render={(start) => <FilmScreen start={start} />}
+        />
       </DesignFrame>
     </SiteFrame>
   );

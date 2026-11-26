@@ -1,8 +1,8 @@
 //! External XP5 controls and GPIO inputs of an opened XP5 session.
-use fujimod_emulator_session::Session;
-use fujimod_emulator_devices::xp5::pins::SharedPins;
 pub use crate::keys::Key;
+use fujimod_emulator_devices::xp5::pins::SharedPins;
 use fujimod_emulator_ip::usb::dwc3::{Dwc3, Reply};
+use fujimod_emulator_session::Session;
 
 /// External XP5 controls retained after device construction, for the session
 /// `boot::open` returned with them. Their modeled state is checkpointed by the
@@ -53,7 +53,10 @@ impl PanelInputs {
         let rotary = |names: &Option<(String, String)>, steps| {
             names
                 .as_ref()
-                .map(|(id, _)| Scheduled::Rotate { id: id.clone(), steps })
+                .map(|(id, _)| Scheduled::Rotate {
+                    id: id.clone(),
+                    steps,
+                })
                 .ok_or_else(|| format!("{key:?} is not a control of this body"))
         };
         let shutter = || {
@@ -71,18 +74,33 @@ impl PanelInputs {
             (Key::RearMinus, true) => rotary(&self.names.rear_dial, -1)?,
             (Key::FrontPlus, true) => rotary(&self.names.front_dial, 1)?,
             (Key::FrontMinus, true) => rotary(&self.names.front_dial, -1)?,
-            (Key::ShutterHalf, true) => Scheduled::Press { id: shutter()?, stage: Some("half".into()) },
-            (Key::ShutterFull, true) => Scheduled::Press { id: shutter()?, stage: Some("full".into()) },
+            (Key::ShutterHalf, true) => Scheduled::Press {
+                id: shutter()?,
+                stage: Some("half".into()),
+            },
+            (Key::ShutterFull, true) => Scheduled::Press {
+                id: shutter()?,
+                stage: Some("full".into()),
+            },
             (Key::ShutterHalf, false) => Scheduled::Release { id: shutter()? },
-            (Key::ShutterFull, false) => Scheduled::Press { id: shutter()?, stage: Some("half".into()) },
-            (key, true) => Scheduled::Press { id: self.control(key)?.into(), stage: None },
-            (key, false) => Scheduled::Release { id: self.control(key)?.into() },
+            (Key::ShutterFull, false) => Scheduled::Press {
+                id: shutter()?,
+                stage: Some("half".into()),
+            },
+            (key, true) => Scheduled::Press {
+                id: self.control(key)?.into(),
+                stage: None,
+            },
+            (key, false) => Scheduled::Release {
+                id: self.control(key)?.into(),
+            },
         }))
     }
     fn position(&self, dial: &str, position: &str) -> Result<Scheduled, String> {
         let wanted = dial.trim();
         let (model, label) = if let Some(found) = self.options.dials.iter().find(|d| {
-            d.name.eq_ignore_ascii_case(wanted) || d.aliases.iter().any(|a| a.eq_ignore_ascii_case(wanted))
+            d.name.eq_ignore_ascii_case(wanted)
+                || d.aliases.iter().any(|a| a.eq_ignore_ascii_case(wanted))
         }) {
             let label = found
                 .positions
@@ -94,7 +112,12 @@ impl PanelInputs {
                 })
                 .ok_or_else(|| format!("{} has no position {position}", found.name))?;
             (found.name.clone(), label.label.clone())
-        } else if let Some(found) = self.options.switches.iter().find(|s| s.name.eq_ignore_ascii_case(wanted)) {
+        } else if let Some(found) = self
+            .options
+            .switches
+            .iter()
+            .find(|s| s.name.eq_ignore_ascii_case(wanted))
+        {
             let label = [&found.set, &found.clear]
                 .into_iter()
                 .find(|l| l.eq_ignore_ascii_case(position.trim()))
@@ -108,7 +131,10 @@ impl PanelInputs {
             .positions
             .get(&model)
             .ok_or_else(|| format!("{model} has no catalog control"))?;
-        Ok(Scheduled::Position { id: id.clone(), position: label })
+        Ok(Scheduled::Position {
+            id: id.clone(),
+            position: label,
+        })
     }
 }
 use fujimod_emulator_session::contact_driver::Scheduled;
@@ -118,11 +144,7 @@ impl Inputs {
     pub fn use_panel(&mut self, panel: PanelInputs) {
         self.panel = Some(panel);
     }
-    pub(crate) fn new(
-        pins: SharedPins,
-        gpio_devices: Vec<usize>,
-        usb: Option<UsbWiring>,
-    ) -> Self {
+    pub(crate) fn new(pins: SharedPins, gpio_devices: Vec<usize>, usb: Option<UsbWiring>) -> Self {
         Self {
             pins,
             panel: None,
@@ -169,14 +191,16 @@ impl Inputs {
             }
         }
         let power = power.ok_or("the XP5 board has no power controller for the USB supply")?;
-        session.board.with_device_inputs::<Spi, _>(power, |spi, _| {
-            spi.set_part_input(
-                "power-controller",
-                VBUS_REGISTER,
-                VBUS_MASK,
-                if connected { VBUS_HOST } else { 0 },
-            )
-        })?;
+        session
+            .board
+            .with_device_inputs::<Spi, _>(power, |spi, _| {
+                spi.set_part_input(
+                    "power-controller",
+                    VBUS_REGISTER,
+                    VBUS_MASK,
+                    if connected { VBUS_HOST } else { 0 },
+                )
+            })?;
         self.usb_link(session, connected)
     }
 
@@ -184,7 +208,9 @@ impl Inputs {
     pub fn usb_link(&self, session: &mut Session, connected: bool) -> Result<(), String> {
         session
             .board
-            .with_device_inputs::<Dwc3, _>(self.usb()?.controller, |usb, now| usb.link(now, connected))
+            .with_device_inputs::<Dwc3, _>(self.usb()?.controller, |usb, now| {
+                usb.link(now, connected)
+            })
     }
 
     pub fn usb_bus_reset(&self, session: &mut Session) -> Result<(), String> {

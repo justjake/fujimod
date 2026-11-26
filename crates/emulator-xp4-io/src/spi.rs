@@ -360,9 +360,18 @@ fn is_zero(value: &u32) -> bool {
 impl Spi {
     fn capture<T>(&self, input: T) -> SpiState<T> {
         SpiState {
-            base: self.base, input, control: self.control, enable: self.enable, divider: self.divider,
-            causes: self.causes, tx: self.tx.clone(), rx: self.rx.clone(), pending: self.pending,
-            generation: self.generation, requests: self.requests, exchange: self.exchange,
+            base: self.base,
+            input,
+            control: self.control,
+            enable: self.enable,
+            divider: self.divider,
+            causes: self.causes,
+            tx: self.tx.clone(),
+            rx: self.rx.clone(),
+            pending: self.pending,
+            generation: self.generation,
+            requests: self.requests,
+            exchange: self.exchange,
         }
     }
 
@@ -507,7 +516,8 @@ impl Device for Spi {
         state
     }
     fn checkpoint(&self) -> Result<Checkpoint, String> {
-        Ok(Checkpoint::encode(self.name(), &self.capture(()))?.with_children(vec![self.input.checkpoint()?]))
+        Ok(Checkpoint::encode(self.name(), &self.capture(()))?
+            .with_children(vec![self.input.checkpoint()?]))
     }
     fn validate_checkpoint(&self, data: &Checkpoint) -> Result<(), String> {
         let state: SpiState<()> = data.decode(self.name())?;
@@ -524,7 +534,8 @@ impl Device for Spi {
         self.apply(state)
     }
     fn restore(&mut self, value: &Value) -> Result<(), String> {
-        let state: SpiState<Value> = serde_json::from_value(value.clone()).map_err(|e| e.to_string())?;
+        let state: SpiState<Value> =
+            serde_json::from_value(value.clone()).map_err(|e| e.to_string())?;
         self.validate(&state)?;
         self.input.restore(&state.input)?;
         self.apply(state)

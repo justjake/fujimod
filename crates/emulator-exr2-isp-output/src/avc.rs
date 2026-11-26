@@ -408,8 +408,7 @@ impl AvcCodec {
                     || pending.writes
                         != [(physical(output.destination, output.bytes)?, output.bytes)]
                     || saved.blobs()[0].as_ref() != output.content.as_slice()
-                    || saved.blobs()[decode_offset + 2].as_ref()
-                        != output.input_content.as_slice()
+                    || saved.blobs()[decode_offset + 2].as_ref() != output.input_content.as_slice()
                     || pending
                         .decode_input
                         .as_ref()

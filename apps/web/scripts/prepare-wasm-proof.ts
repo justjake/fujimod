@@ -2,8 +2,10 @@ import { cp, mkdir, writeFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { wasmFixture } from '../tests/wasm-fixture.ts';
 import { wasmSessionFixture } from '../tests/wasm-session-fixture.ts';
-const [source, destination = process.env.FUJIMOD_RUNTIME ?? 'public/runtime'] = process.argv.slice(2);
-if (!source) throw Error('Usage: node scripts/prepare-wasm-proof.ts <module-directory> [runtime-directory]');
+const [source, destination = process.env.FUJIMOD_RUNTIME ?? 'public/runtime'] =
+  process.argv.slice(2);
+if (!source)
+  throw Error('Usage: node scripts/prepare-wasm-proof.ts <module-directory> [runtime-directory]');
 const runtime = resolve(destination);
 for (const fault of [false, true]) {
   const output = resolve(runtime, fault ? 'wasm-proof-fault' : 'wasm-proof');

@@ -193,7 +193,9 @@ export function parseEmulatorManifest(value: unknown): EmulatorManifest {
       new Set(manifest.displays).size !== manifest.displays.length ||
       manifest.displays.some(
         (output: unknown) =>
-          !Number.isSafeInteger(output) || (output as number) < 0 || (output as number) > 0xffffffff,
+          !Number.isSafeInteger(output) ||
+          (output as number) < 0 ||
+          (output as number) > 0xffffffff,
       ))
   )
     throw new Error('Invalid emulator displays.');

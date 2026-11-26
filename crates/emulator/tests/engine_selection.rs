@@ -91,19 +91,32 @@ fn launchers_leave_backend_selection_to_the_board_factory() {
             } else if path.extension().is_some_and(|ext| ext == "rs") {
                 let source = fs::read_to_string(&path).unwrap();
                 let code = source.split("#[cfg(test)]").next().unwrap();
-                assert!(!code.contains("fujimod_emulator_cpu_hvf"),
-                        "launcher imports the HVF backend: {}", path.display());
-                assert!(!code.contains("fujimod_emulator_cpu_unicorn"),
-                        "launcher imports the Unicorn backend: {}", path.display());
+                assert!(
+                    !code.contains("fujimod_emulator_cpu_hvf"),
+                    "launcher imports the HVF backend: {}",
+                    path.display()
+                );
+                assert!(
+                    !code.contains("fujimod_emulator_cpu_unicorn"),
+                    "launcher imports the Unicorn backend: {}",
+                    path.display()
+                );
                 let tokens: Vec<_> = code
                     .split(|c: char| !c.is_ascii_alphanumeric() && c != '_')
                     .filter(|token| !token.is_empty())
                     .collect();
                 for pair in tokens.windows(2) {
-                    assert!(!(pair[0] == "enum" && pair[1].ends_with("Engine")),
-                            "local engine type {} in {}", pair[1], path.display());
-                    assert!(pair != ["RunEngine", "Hypervisor"],
-                            "launcher branches on HVF in {}", path.display());
+                    assert!(
+                        !(pair[0] == "enum" && pair[1].ends_with("Engine")),
+                        "local engine type {} in {}",
+                        pair[1],
+                        path.display()
+                    );
+                    assert!(
+                        pair != ["RunEngine", "Hypervisor"],
+                        "launcher branches on HVF in {}",
+                        path.display()
+                    );
                 }
             }
         }

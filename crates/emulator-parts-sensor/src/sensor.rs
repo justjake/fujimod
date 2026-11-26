@@ -11,8 +11,14 @@ use serde::{Deserialize, Serialize};
 use std::{ops::Range, sync::Arc};
 pub trait Controls: Send {
     fn checkpoint(&self) -> Result<fujimod_emulator_devices::checkpoint::Checkpoint, String>;
-    fn validate_checkpoint(&self, saved: &fujimod_emulator_devices::checkpoint::Checkpoint) -> Result<(), String>;
-    fn restore_checkpoint(&mut self, saved: &fujimod_emulator_devices::checkpoint::Checkpoint) -> Result<(), String>;
+    fn validate_checkpoint(
+        &self,
+        saved: &fujimod_emulator_devices::checkpoint::Checkpoint,
+    ) -> Result<(), String>;
+    fn restore_checkpoint(
+        &mut self,
+        saved: &fujimod_emulator_devices::checkpoint::Checkpoint,
+    ) -> Result<(), String>;
     fn fingerprint(&self) -> serde_json::Value;
 
     fn command(&mut self, bytes: &[u8]) -> Result<(), String>;
@@ -172,17 +178,26 @@ impl Sensor {
     pub fn attach_register_controls(&mut self, controls: Box<dyn Controls>) {
         self.controls = Some(controls);
     }
-    pub fn attach_projection(&mut self, projection: fujimod_emulator_image_formation::optics::Projection) {
+    pub fn attach_projection(
+        &mut self,
+        projection: fujimod_emulator_image_formation::optics::Projection,
+    ) {
         self.projection = Some(projection);
     }
     pub fn edge_at_raw_readout_end(&self) -> bool {
-        self.controls.as_ref().is_some_and(|c| c.edge_at_raw_readout_end())
+        self.controls
+            .as_ref()
+            .is_some_and(|c| c.edge_at_raw_readout_end())
     }
     pub fn pixel_clock_ticks(&self, clocks: u64) -> Option<u64> {
-        self.controls.as_ref().and_then(|c| c.pixel_clock_ticks(clocks))
+        self.controls
+            .as_ref()
+            .and_then(|c| c.pixel_clock_ticks(clocks))
     }
     pub fn comparator_edge(&mut self, output: usize, tick: u64) -> Result<(), String> {
-        self.controls.as_mut().map_or(Ok(()), |c| c.comparator_edge(output, tick))
+        self.controls
+            .as_mut()
+            .map_or(Ok(()), |c| c.comparator_edge(output, tick))
     }
     pub fn command(&mut self, bytes: &[u8]) -> Result<(), String> {
         self.controls.as_mut().map_or(Ok(()), |c| c.command(bytes))
@@ -227,7 +242,10 @@ impl Sensor {
         )?
         .with_children(children))
     }
-    pub fn validate_checkpoint(&self, saved: &fujimod_emulator_devices::checkpoint::Checkpoint) -> Result<(), String> {
+    pub fn validate_checkpoint(
+        &self,
+        saved: &fujimod_emulator_devices::checkpoint::Checkpoint,
+    ) -> Result<(), String> {
         let Snapshot {
             configuration,
             controls,

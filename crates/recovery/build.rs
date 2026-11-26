@@ -52,7 +52,10 @@ pub const PRELUDE_STACK_MAX: usize = {};
     );
     let symbols = layout["symbols"].as_object().unwrap();
     for symbol in extra_symbols {
-        assert!(symbols.contains_key(*symbol), "XP5 SD loader lacks {symbol}");
+        assert!(
+            symbols.contains_key(*symbol),
+            "XP5 SD loader lacks {symbol}"
+        );
     }
     for (name, offset) in symbols {
         rust += &format!(

@@ -94,9 +94,17 @@ pub struct Bounds {
 
 impl Bounds {
     /// Level 4.2 and 1920x1088: the bound of [`sequence`] and [`sequence_high`].
-    pub const FULL_HD: Self = Self { level_idc: 42, coded_width: 1920, coded_height: 1088 };
+    pub const FULL_HD: Self = Self {
+        level_idc: 42,
+        coded_width: 1920,
+        coded_height: 1088,
+    };
     /// Level 5.2 and 4096x2304: 4K movies.
-    pub const UHD: Self = Self { level_idc: 52, coded_width: 4096, coded_height: 2304 };
+    pub const UHD: Self = Self {
+        level_idc: 52,
+        coded_width: 4096,
+        coded_height: 2304,
+    };
 }
 
 fn sequence_profile(nal: &[u8], allow_high: bool) -> Result<Sequence, String> {
@@ -369,16 +377,32 @@ mod tests {
         })
         .unwrap();
         let unit = encoder.encode_i420(&input(false)).unwrap();
-        let refusal = Decoder::new_movie(&[]).unwrap().decode_movie_unit(&unit).err().unwrap();
-        assert_eq!(refusal, "AVC SPS level or identifiers exceed supported bounds");
-        let picture =
-            Decoder::new_movie_bounded(&[], Bounds::UHD).unwrap().decode_movie_unit(&unit).unwrap();
+        let refusal = Decoder::new_movie(&[])
+            .unwrap()
+            .decode_movie_unit(&unit)
+            .err()
+            .unwrap();
+        assert_eq!(
+            refusal,
+            "AVC SPS level or identifiers exceed supported bounds"
+        );
+        let picture = Decoder::new_movie_bounded(&[], Bounds::UHD)
+            .unwrap()
+            .decode_movie_unit(&unit)
+            .unwrap();
         assert_eq!((picture.sequence.width, picture.sequence.height), (64, 32));
         assert_eq!(picture.i420.len(), 64 * 32 * 3 / 2);
         // A picture larger than the bound is refused before the host codec runs.
-        let small = Bounds { level_idc: 52, coded_width: 48, coded_height: 32 };
-        let refusal =
-            Decoder::new_movie_bounded(&[], small).unwrap().decode_movie_unit(&unit).err().unwrap();
+        let small = Bounds {
+            level_idc: 52,
+            coded_width: 48,
+            coded_height: 32,
+        };
+        let refusal = Decoder::new_movie_bounded(&[], small)
+            .unwrap()
+            .decode_movie_unit(&unit)
+            .err()
+            .unwrap();
         assert_eq!(refusal, "AVC decoder requires bounded progressive pictures");
     }
 
@@ -591,7 +615,11 @@ impl Decoder {
         Self::new_bounded(history, allow_high, Bounds::FULL_HD)
     }
 
-    fn new_bounded(history: &[Arc<[u8]>], allow_high: bool, bounds: Bounds) -> Result<Self, String> {
+    fn new_bounded(
+        history: &[Arc<[u8]>],
+        allow_high: bool,
+        bounds: Bounds,
+    ) -> Result<Self, String> {
         #[cfg(all(target_arch = "wasm32", not(target_os = "emscripten")))]
         {
             let _ = (history, allow_high, bounds);

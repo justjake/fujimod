@@ -2,7 +2,11 @@
 use super::png_writer;
 use fujimod_emulator_devices::graphics::scanout::Frame;
 use serde_json::Value;
-use std::{collections::BTreeMap, path::{Path, PathBuf}, sync::{Arc, Mutex}};
+use std::{
+    collections::BTreeMap,
+    path::{Path, PathBuf},
+    sync::{Arc, Mutex},
+};
 
 #[derive(Clone, Default)]
 pub struct Outputs(Arc<Mutex<BTreeMap<usize, Output>>>);
@@ -42,7 +46,8 @@ impl Outputs {
         for (&bank, output) in self.0.lock().unwrap().iter() {
             let frame = output.directory.join(format!("latest-bank{bank}.png"));
             if output.next_archive > 0 && frame.is_file() {
-                std::fs::copy(&frame, path).map_err(|error| format!("{}: {error}", path.display()))?;
+                std::fs::copy(&frame, path)
+                    .map_err(|error| format!("{}: {error}", path.display()))?;
                 return Ok(());
             }
         }
@@ -59,20 +64,30 @@ impl Outputs {
         let Some(frame) = session.scanout("scanout", instance, true, false)? else {
             return Ok(());
         };
-        let Some(rgb) = frame.rgb else { return Ok(()); };
+        let Some(rgb) = frame.rgb else {
+            return Ok(());
+        };
         self.frame(Frame {
             output: 0,
             sequence,
             width: u32::try_from(frame.width).map_err(|_| "frame width exceeds u32")?,
             height: u32::try_from(frame.height).map_err(|_| "frame height exceeds u32")?,
-            rgba: rgb.chunks_exact(3).flat_map(|rgb| [rgb[0], rgb[1], rgb[2], 255]).collect(),
+            rgba: rgb
+                .chunks_exact(3)
+                .flat_map(|rgb| [rgb[0], rgb[1], rgb[2], 255])
+                .collect(),
         })?;
-        self.status(0, serde_json::json!({"bank":0,"enabled":true,"sequence":sequence}))
+        self.status(
+            0,
+            serde_json::json!({"bank":0,"enabled":true,"sequence":sequence}),
+        )
     }
 
     /// Publish each newly observed output sequence through the shared frame writer.
     pub fn capture(
-        &self, directory: &Path, frames: impl IntoIterator<Item = Frame>,
+        &self,
+        directory: &Path,
+        frames: impl IntoIterator<Item = Frame>,
         sequences: &mut BTreeMap<usize, u64>,
     ) -> Result<(), String> {
         for frame in frames {
@@ -84,7 +99,10 @@ impl Outputs {
                 self.add(bank, directory.to_owned())?;
             }
             self.frame(frame)?;
-            self.status(bank, serde_json::json!({"bank":bank,"enabled":true,"sequence":sequence}))?;
+            self.status(
+                bank,
+                serde_json::json!({"bank":bank,"enabled":true,"sequence":sequence}),
+            )?;
             sequences.insert(bank, sequence);
         }
         Ok(())

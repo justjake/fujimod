@@ -130,16 +130,28 @@ pub(super) fn round_is_pure(
         if word == 0xd503_201f {
             paths.push((next, step + 1, link));
         } else if word & 0xfc00_0000 == 0x1400_0000 {
-            paths.push((branch_target(address, word & 0x03ff_ffff, 26), step + 1, link));
+            paths.push((
+                branch_target(address, word & 0x03ff_ffff, 26),
+                step + 1,
+                link,
+            ));
         } else if word & 0xfc00_0000 == 0x9400_0000 {
             let target = branch_target(address, word & 0x03ff_ffff, 26);
             paths.push((target, step + 1, Some(next)));
         } else if word & 0xff00_0010 == 0x5400_0000 || word & 0x7e00_0000 == 0x3400_0000 {
             paths.push((next, step + 1, link));
-            paths.push((branch_target(address, (word >> 5) & 0x7ffff, 19), step + 1, link));
+            paths.push((
+                branch_target(address, (word >> 5) & 0x7ffff, 19),
+                step + 1,
+                link,
+            ));
         } else if word & 0x7e00_0000 == 0x3600_0000 {
             paths.push((next, step + 1, link));
-            paths.push((branch_target(address, (word >> 5) & 0x3fff, 14), step + 1, link));
+            paths.push((
+                branch_target(address, (word >> 5) & 0x3fff, 14),
+                step + 1,
+                link,
+            ));
         } else if word & 0xffff_fc1f == 0xd65f_0000 {
             match link {
                 Some(target) if (word >> 5) & 31 == 30 => paths.push((target, step + 1, link)),
@@ -196,10 +208,22 @@ mod tests {
     fn anything_but_register_computation_on_any_path_refuses_the_round() {
         let round = |body: u32| {
             // 0x100: ldr w0,[x1]; <body>; cbz w0,0x100
-            pure(&[(0x100, 0xb940_0020), (0x104, body), (0x108, 0x34ff_ffc0)], 0x100, 3, 0)
+            pure(
+                &[(0x100, 0xb940_0020), (0x104, body), (0x108, 0x34ff_ffc0)],
+                0x100,
+                3,
+                0,
+            )
         };
         // and w0,w0,#1; add x2,x2,#1; cmp w0,w3; csel; nop; adr.
-        for body in [0x1200_0000u32, 0x9100_0442, 0x6b03_001f, 0x9a82_1020, 0xd503_201f, 0x1000_0002] {
+        for body in [
+            0x1200_0000u32,
+            0x9100_0442,
+            0x6b03_001f,
+            0x9a82_1020,
+            0xd503_201f,
+            0x1000_0002,
+        ] {
             assert!(round(body), "{body:#x}");
         }
         // str w0,[x1]; ldr w2,[x1]; stp; mrs; msr daifset; svc; br x2; blr x2;
@@ -224,7 +248,10 @@ mod tests {
         }
         // The first instruction must be a plain load: ldr w0,[x1,x2]; ldp; str.
         for load in [0xb862_6820u32, 0xa940_0820, 0xb900_0020] {
-            assert!(!pure(&[(0x100, load), (0x104, 0x34ff_ffe0)], 0x100, 2, 0), "{load:#x}");
+            assert!(
+                !pure(&[(0x100, load), (0x104, 0x34ff_ffe0)], 0x100, 2, 0),
+                "{load:#x}"
+            );
         }
         // The other way of a branch inside the round meets a store.
         // 0x100: ldr w0,[x1]; tbnz w0,#0,0x10c; str w0,[x1]; cbz w0,0x100
@@ -239,7 +266,12 @@ mod tests {
         let code = [(0x100, 0xb940_0020), (0x104, 0xaa02_03fe), (0x108, RET)];
         assert!(!pure(&code, 0x100, 3, 0x100));
         // The load writes X30 itself.
-        assert!(!pure(&[(0x100, 0xb940_003e), (0x104, RET)], 0x100, 2, 0x100));
+        assert!(!pure(
+            &[(0x100, 0xb940_003e), (0x104, RET)],
+            0x100,
+            2,
+            0x100
+        ));
         assert!(pure(&[(0x100, 0xb940_0020), (0x104, RET)], 0x100, 2, 0x100));
     }
 }

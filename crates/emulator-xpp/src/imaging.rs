@@ -381,7 +381,11 @@ impl Control {
                     self.byte_chip.insert((select, frame[1]), frame[2]);
                 }
                 BYTE_READ => {
-                    self.received = self.byte_chip.get(&(select, frame[1])).copied().unwrap_or(0);
+                    self.received = self
+                        .byte_chip
+                        .get(&(select, frame[1]))
+                        .copied()
+                        .unwrap_or(0);
                 }
                 _ => return cx.unsupported("Unrecognized imaging bus frame"),
             }
@@ -573,7 +577,10 @@ impl Control {
             .iter()
             .any(|(o, v)| o & 3 != 0 || *o >= WINDOW || *v == 0)
             || state.chip.iter().any(|((select, _), _)| *select > 0x1f)
-            || state.byte_chip.iter().any(|((select, _), _)| *select > 0x1f)
+            || state
+                .byte_chip
+                .iter()
+                .any(|((select, _), _)| *select > 0x1f)
             || self.readout.is_none() && (state.readout_due.is_some() || state.readout_status != 0)
             || state.readout_status & !READOUT_DONE != 0
         {

@@ -32,11 +32,14 @@ fn firmware_rom_start(firmware_id: &str) -> PyResult<Option<String>> {
     let Some(facts) = catalog.rom_start(firmware_id) else {
         return Ok(None);
     };
-    let firmware = catalog.firmware(firmware_id).ok_or_else(|| {
-        PyValueError::new_err(format!("unknown firmware identity {firmware_id}"))
-    })?;
+    let firmware = catalog
+        .firmware(firmware_id)
+        .ok_or_else(|| PyValueError::new_err(format!("unknown firmware identity {firmware_id}")))?;
     let body = catalog.body(&firmware.body_id).ok_or_else(|| {
-        PyValueError::new_err(format!("ROM start firmware has no body {}", firmware.body_id))
+        PyValueError::new_err(format!(
+            "ROM start firmware has no body {}",
+            firmware.body_id
+        ))
     })?;
     let soc = catalog.soc(&body.soc_id).ok_or_else(|| {
         PyValueError::new_err(format!("ROM start body has no processor {}", body.soc_id))

@@ -83,8 +83,7 @@ use family::*;
 /// Families the X-T5 sends whose meaning is not modeled; they answer zero
 /// unless the scenario declares a payload. No log line.
 const KNOWN_READS: &[u16] = &[
-    0x10, 0x11, 0x12, 0x13, 0x15, 0x16, 0x19, 0x2b, 0x31, 0x33, 0x3e, 0x3f, 0xc8, 0xc9,
-    0x11a,
+    0x10, 0x11, 0x12, 0x13, 0x15, 0x16, 0x19, 0x2b, 0x31, 0x33, 0x3e, 0x3f, 0xc8, 0xc9, 0x11a,
 ];
 /// Families the X-T5 sends as settings (OIS, transitions/focus mode); they
 /// echo the request payload and store it.
@@ -179,7 +178,11 @@ impl Catalog {
         self.sections
             .iter()
             .rev()
-            .find_map(|s| at.checked_sub(s.offset as usize).and_then(|i| s.bytes.get(i)).copied())
+            .find_map(|s| {
+                at.checked_sub(s.offset as usize)
+                    .and_then(|i| s.bytes.get(i))
+                    .copied()
+            })
             .unwrap_or(0)
     }
 }
@@ -222,8 +225,8 @@ pub struct Identity<'a> {
 
 /// Nominal F-numbers x 100 in 1/3 stops from F1 (index = 1/3-stop count).
 const NOMINAL_F: [u16; 31] = [
-    100, 110, 120, 140, 160, 180, 200, 220, 250, 280, 320, 360, 400, 450, 500, 560, 640, 710,
-    800, 900, 1000, 1100, 1300, 1400, 1600, 1800, 2000, 2200, 2500, 2900, 3200,
+    100, 110, 120, 140, 160, 180, 200, 220, 250, 280, 320, 360, 400, 450, 500, 560, 640, 710, 800,
+    900, 1000, 1100, 1300, 1400, 1600, 1800, 2000, 2200, 2500, 2900, 3200,
 ];
 /// The 1/3-stop index of an F-number given in 0.1 steps (nearest nominal value).
 fn thirds(f_tenths: u16) -> u8 {
@@ -331,8 +334,18 @@ impl Identity<'_> {
             }
         };
         let mut sections = vec![];
-        let mut put = |config: u32, bytes: Vec<u8>| sections.push(Section { offset: at(config), bytes });
-        let le = |values: &[u16]| values.iter().flat_map(|v| v.to_le_bytes()).collect::<Vec<u8>>();
+        let mut put = |config: u32, bytes: Vec<u8>| {
+            sections.push(Section {
+                offset: at(config),
+                bytes,
+            })
+        };
+        let le = |values: &[u16]| {
+            values
+                .iter()
+                .flat_map(|v| v.to_le_bytes())
+                .collect::<Vec<u8>>()
+        };
         // Identity, maker and model.
         put(0x720000, self.class.to_vec());
         put(0x720014, self.serial.to_vec());
@@ -350,9 +363,14 @@ impl Identity<'_> {
         let focal: Vec<u16> = zoom.iter().map(|(f, _)| *f).collect();
         put(0x722134, le(&focal));
         put(0x7221fd, le(&focal));
-        put(0x7222c8, zoom.iter().map(|(_, open)| open - open_short).collect());
+        put(
+            0x7222c8,
+            zoom.iter().map(|(_, open)| open - open_short).collect(),
+        );
         put(0x72232d, vec![(count - 1) as u8; steps]);
-        let f_numbers: Vec<u16> = (0..count).map(|c| NOMINAL_F[open_short as usize + c]).collect();
+        let f_numbers: Vec<u16> = (0..count)
+            .map(|c| NOMINAL_F[open_short as usize + c])
+            .collect();
         put(0x722530, le(&f_numbers));
         let mut index = vec![0xffu8; 31 * steps];
         let mut av = vec![0u16; 31 * steps];
@@ -379,7 +397,17 @@ impl Identity<'_> {
         // Offsets from infinity: 1/8, 1/2, 17/18, then the whole span for the extended and
         // nearest tables (each table at least as far as the one before).
         let offsets = [span / 8, span / 2, span * 17 / 18, span, span, span];
-        for (table, offset) in [0x7203e0u32, 0x7204a9, 0x720572, 0x72063b, 0x720704, 0x7207cd].iter().zip(offsets) {
+        for (table, offset) in [
+            0x7203e0u32,
+            0x7204a9,
+            0x720572,
+            0x72063b,
+            0x720704,
+            0x7207cd,
+        ]
+        .iter()
+        .zip(offsets)
+        {
             put(*table, le(&vec![offset as u16; steps]));
         }
         // Three more offset tables (0x1539ac8; the AF worker clamps the fourth scan limit
@@ -407,8 +435,22 @@ impl Identity<'_> {
         // sends the result as family 0x54, which the model takes as units per second: scans
         // at 1.5 travels per second, limits at the lens's own speed.
         let scan = (travel * 3 / 2).min(0x7ffe) as u16;
-        for table in [0x721674u32, 0x7216c4, 0x721714, 0x721764, 0x7217b4, 0x721804, 0x721854, 0x7218a4,
-                      0x7218f4, 0x721944, 0x721994, 0x7219e4, 0x721a34, 0x721a84] {
+        for table in [
+            0x721674u32,
+            0x7216c4,
+            0x721714,
+            0x721764,
+            0x7217b4,
+            0x721804,
+            0x721854,
+            0x7218a4,
+            0x7218f4,
+            0x721944,
+            0x721994,
+            0x7219e4,
+            0x721a34,
+            0x721a84,
+        ] {
             put(table, le(&vec![scan; steps]));
         }
         let fastest = (self.focus.units_per_ms as u32 * 1000).min(0x7ffe) as u16;
@@ -436,7 +478,9 @@ impl Identity<'_> {
             .flat_map(|(focal, _)| {
                 let f = f64::from(*focal) / 10.;
                 let shift_mm = f * f / (closest_mm - f).max(f);
-                let value = (shift_mm * 100_000. / near_units).round().clamp(1., 65_535.) as u16;
+                let value = (shift_mm * 100_000. / near_units)
+                    .round()
+                    .clamp(1., 65_535.) as u16;
                 [value; 11]
             })
             .collect();
@@ -457,7 +501,12 @@ impl Identity<'_> {
         // infinity to the nearest position, which makes the mapping the identity.
         let grid: Vec<u16> = (1..=6u32).map(|k| (span * k / 6) as u16).collect();
         put(0x72c000, le(&grid.repeat(steps)));
-        Catalog { selector: 6, blocks: LENS_BLOCKS + 4, marker_block: Some(LENS_BLOCKS), sections }
+        Catalog {
+            selector: 6,
+            blocks: LENS_BLOCKS + 4,
+            marker_block: Some(LENS_BLOCKS),
+            sections,
+        }
     }
     /// The blur circle of a defocus of the whole focus travel, in micrometres, wide open at the
     /// short end: the thin-lens image shift from infinity to the closest distance,
@@ -483,56 +532,98 @@ impl Spec {
     /// Named scenario lenses. Values are plausible public specifications;
     /// the identification layout and type ids are invented.
     pub fn preset(name: &str) -> Option<Self> {
-        let (model, code, class, focal, f_numbers, ois, ring, focus, aperture, closest, serial, zoom_steps) =
-            match name {
-                "xf18-55" => (
-                    "XF18-55mmF2.8-4 R LM OIS",
-                    *b"EMX1855\0",
-                    *b"XLZSA001",
-                    (180, 550),
-                    (28, 40, 220),
-                    true,
-                    true,
-                    Axis { min: 0, max: 4000, initial: 2000, units_per_ms: 40 },
-                    // Index 0 is wide open; 1/3-stop steps from F2.8 to F22.
-                    Axis { min: 0, max: 18, initial: 0, units_per_ms: 2 },
-                    30,
-                    *b"EMU1855001",
-                    8,
-                ),
-                "prime" => (
-                    "XF35mmF2 R WR",
-                    *b"EMX3520\0",
-                    *b"XLPSA001",
-                    (350, 350),
-                    (20, 20, 160),
-                    false,
-                    true,
-                    Axis { min: 0, max: 2000, initial: 1000, units_per_ms: 50 },
-                    // F2 to F16 in 1/3 stops.
-                    Axis { min: 0, max: 18, initial: 0, units_per_ms: 2 },
-                    35,
-                    *b"EMU3520001",
-                    1,
-                ),
-                // Public specification of the XF23mmF2.8 R WR (23 mm, F2.8..F16).
-                "xf23" => (
-                    "XF23mmF2.8 R WR",
-                    *b"EMX2328\0",
-                    *b"XLPSA001",
-                    (230, 230),
-                    (28, 28, 160),
-                    false,
-                    true,
-                    Axis { min: 0, max: 2000, initial: 1000, units_per_ms: 50 },
-                    // F2.8 to F16 in 1/3 stops.
-                    Axis { min: 0, max: 15, initial: 0, units_per_ms: 2 },
-                    20,
-                    *b"EMU2328001",
-                    1,
-                ),
-                _ => return None,
-            };
+        let (
+            model,
+            code,
+            class,
+            focal,
+            f_numbers,
+            ois,
+            ring,
+            focus,
+            aperture,
+            closest,
+            serial,
+            zoom_steps,
+        ) = match name {
+            "xf18-55" => (
+                "XF18-55mmF2.8-4 R LM OIS",
+                *b"EMX1855\0",
+                *b"XLZSA001",
+                (180, 550),
+                (28, 40, 220),
+                true,
+                true,
+                Axis {
+                    min: 0,
+                    max: 4000,
+                    initial: 2000,
+                    units_per_ms: 40,
+                },
+                // Index 0 is wide open; 1/3-stop steps from F2.8 to F22.
+                Axis {
+                    min: 0,
+                    max: 18,
+                    initial: 0,
+                    units_per_ms: 2,
+                },
+                30,
+                *b"EMU1855001",
+                8,
+            ),
+            "prime" => (
+                "XF35mmF2 R WR",
+                *b"EMX3520\0",
+                *b"XLPSA001",
+                (350, 350),
+                (20, 20, 160),
+                false,
+                true,
+                Axis {
+                    min: 0,
+                    max: 2000,
+                    initial: 1000,
+                    units_per_ms: 50,
+                },
+                // F2 to F16 in 1/3 stops.
+                Axis {
+                    min: 0,
+                    max: 18,
+                    initial: 0,
+                    units_per_ms: 2,
+                },
+                35,
+                *b"EMU3520001",
+                1,
+            ),
+            // Public specification of the XF23mmF2.8 R WR (23 mm, F2.8..F16).
+            "xf23" => (
+                "XF23mmF2.8 R WR",
+                *b"EMX2328\0",
+                *b"XLPSA001",
+                (230, 230),
+                (28, 28, 160),
+                false,
+                true,
+                Axis {
+                    min: 0,
+                    max: 2000,
+                    initial: 1000,
+                    units_per_ms: 50,
+                },
+                // F2.8 to F16 in 1/3 stops.
+                Axis {
+                    min: 0,
+                    max: 15,
+                    initial: 0,
+                    units_per_ms: 2,
+                },
+                20,
+                *b"EMU2328001",
+                1,
+            ),
+            _ => return None,
+        };
         let identity = Identity {
             model,
             code,
@@ -620,7 +711,12 @@ impl Spec {
     fn catalog(&self, selector: u16) -> Cow<'_, Catalog> {
         match self.catalogs.iter().find(|c| c.selector == selector) {
             Some(c) => Cow::Borrowed(c),
-            None => Cow::Owned(Catalog { selector, blocks: 1, marker_block: None, sections: vec![] }),
+            None => Cow::Owned(Catalog {
+                selector,
+                blocks: 1,
+                marker_block: None,
+                sections: vec![],
+            }),
         }
     }
     fn declared(&self, family: u16) -> Option<u16> {
@@ -666,7 +762,12 @@ struct Motion {
 }
 impl Motion {
     fn at_rest(position: u16) -> Self {
-        Self { from: position, target: position, start: 0, units_per_ms: 0 }
+        Self {
+            from: position,
+            target: position,
+            start: 0,
+            units_per_ms: 0,
+        }
     }
     fn distance(self) -> u64 {
         self.from.abs_diff(self.target) as u64
@@ -675,9 +776,10 @@ impl Motion {
         if self.units_per_ms == 0 {
             return self.start;
         }
-        let ticks = (self.distance() as u128 * ticks_per_ms as u128)
-            .div_ceil(self.units_per_ms as u128);
-        self.start.saturating_add(u64::try_from(ticks).unwrap_or(u64::MAX))
+        let ticks =
+            (self.distance() as u128 * ticks_per_ms as u128).div_ceil(self.units_per_ms as u128);
+        self.start
+            .saturating_add(u64::try_from(ticks).unwrap_or(u64::MAX))
     }
     fn position(self, now: u64, ticks_per_ms: u64) -> u16 {
         if self.units_per_ms == 0 || now >= self.end(ticks_per_ms) {
@@ -694,7 +796,12 @@ impl Motion {
     }
     fn retarget(&mut self, now: u64, ticks_per_ms: u64, target: u16, units_per_ms: u16) {
         let from = self.position(now, ticks_per_ms);
-        *self = Self { from, target, start: now, units_per_ms };
+        *self = Self {
+            from,
+            target,
+            start: now,
+            units_per_ms,
+        };
     }
 }
 
@@ -721,7 +828,11 @@ struct Message {
     #[serde(default)]
     catalog: Option<u16>,
 }
-const IDLE: Message = Message { packet: 0, sequence: 0, catalog: None };
+const IDLE: Message = Message {
+    packet: 0,
+    sequence: 0,
+    catalog: None,
+};
 /// Bulk header the lens sends after the last block, and the body's "no further block" request.
 const BULK_END: u16 = 0xffff;
 /// Bulk header with which the body ends a bulk read.
@@ -820,7 +931,8 @@ struct Unit {
 fn valid_word(word: u32) -> bool {
     let packet = Packet(word);
     word == 0
-        || (word & 1 == 0 && Packet::encode(packet.payload(), packet.family(), packet.ack()) == packet)
+        || (word & 1 == 0
+            && Packet::encode(packet.payload(), packet.family(), packet.ack()) == packet)
 }
 
 impl Unit {
@@ -828,9 +940,20 @@ impl Unit {
         spec.validate()?;
         timing.validate()?;
         let state = Self::reset_state(&spec, 0, false, Power::Off, BTreeSet::new());
-        Ok(Self { spec, timing, state, logs: vec![] })
+        Ok(Self {
+            spec,
+            timing,
+            state,
+            logs: vec![],
+        })
     }
-    fn reset_state(spec: &Spec, epoch: u32, powered: bool, power: Power, logged: BTreeSet<u32>) -> State {
+    fn reset_state(
+        spec: &Spec,
+        epoch: u32,
+        powered: bool,
+        power: Power,
+        logged: BTreeSet<u32>,
+    ) -> State {
         State {
             powered,
             power,
@@ -846,7 +969,8 @@ impl Unit {
     }
     fn log_once(&mut self, event: u32, line: impl FnOnce() -> String) {
         if self.state.logged.insert(event) {
-            self.logs.push(format!("x-mount lens ({}): {}", self.spec.name, line()));
+            self.logs
+                .push(format!("x-mount lens ({}): {}", self.spec.name, line()));
         }
     }
     fn ready_high(&self) -> bool {
@@ -878,15 +1002,19 @@ impl Unit {
                     &self.spec,
                     epoch,
                     true,
-                    Power::Starting { at: now.saturating_add(self.timing.startup_ticks) },
+                    Power::Starting {
+                        at: now.saturating_add(self.timing.startup_ticks),
+                    },
                     logged,
                 );
-                self.logs.push(format!("x-mount lens ({}): supplies on", self.spec.name));
+                self.logs
+                    .push(format!("x-mount lens ({}): supplies on", self.spec.name));
             } else {
                 let epoch = self.state.epoch.wrapping_add(1);
                 let logged = std::mem::take(&mut self.state.logged);
                 self.state = Self::reset_state(&self.spec, epoch, false, Power::Off, logged);
-                self.logs.push(format!("x-mount lens ({}): supplies off", self.spec.name));
+                self.logs
+                    .push(format!("x-mount lens ({}): supplies off", self.spec.name));
             }
         }
         self.settle(now);
@@ -895,7 +1023,9 @@ impl Unit {
         if let Power::Starting { at } = self.state.power
             && at <= now
         {
-            self.state.power = Power::Busy { until: at.saturating_add(self.timing.busy_ticks) };
+            self.state.power = Power::Busy {
+                until: at.saturating_add(self.timing.busy_ticks),
+            };
         }
         if let Power::Busy { until } = self.state.power
             && until <= now
@@ -927,7 +1057,9 @@ impl Unit {
         let from = self.state.focus.position(now, tpm);
         self.state.focus.retarget(now, tpm, target, speed);
         self.operation(now);
-        self.log_once(EVENT_FIRST_FOCUS, || format!("first focus move {from} -> {target}"));
+        self.log_once(EVENT_FIRST_FOCUS, || {
+            format!("first focus move {from} -> {target}")
+        });
         self.log_move(EVENT_FOCUS_MOVES, "focus", from, target, now);
     }
     /// Logs the first `MOVES_LOGGED` moves of an axis that change its target, with the board
@@ -936,7 +1068,9 @@ impl Unit {
         let n = self.state.logged.range(base..base + MOVES_LOGGED).count() as u32;
         if n < MOVES_LOGGED && from != target {
             let ms = now / self.timing.ticks_per_ms;
-            self.log_once(base + n, || format!("{axis} move {from} -> {target} at {ms} ms"));
+            self.log_once(base + n, || {
+                format!("{axis} move {from} -> {target} at {ms} ms")
+            });
         }
     }
     fn move_aperture(&mut self, now: u64, target: i64) {
@@ -946,7 +1080,9 @@ impl Unit {
         let from = self.state.aperture.position(now, tpm);
         self.state.aperture.retarget(now, tpm, target, speed);
         self.operation(now);
-        self.log_once(EVENT_FIRST_APERTURE, || format!("first aperture move {from} -> {target}"));
+        self.log_once(EVENT_FIRST_APERTURE, || {
+            format!("first aperture move {from} -> {target}")
+        });
         self.log_move(EVENT_APERTURE_MOVES, "aperture", from, target, now);
     }
     fn respond(&mut self, family: u16, payload: u16, now: u64) -> Option<u16> {
@@ -957,7 +1093,12 @@ impl Unit {
         let known = Spec::driven(family)
             || matches!(
                 family,
-                PARAMETERS | STATUS | DETAIL_STATUS | APERTURE_RING | FOCUS_RING | READ_CATALOG
+                PARAMETERS
+                    | STATUS
+                    | DETAIL_STATUS
+                    | APERTURE_RING
+                    | FOCUS_RING
+                    | READ_CATALOG
                     | STATE_REQUEST
             )
             || KNOWN_READS.contains(&family)
@@ -966,7 +1107,11 @@ impl Unit {
         self.log_once(family as u32, || {
             format!(
                 "first request family {family:#05x} payload {payload:#06x}{}",
-                if known { "" } else { " (unmodeled family, answered 0)" }
+                if known {
+                    ""
+                } else {
+                    " (unmodeled family, answered 0)"
+                }
             )
         });
         Some(match family {
@@ -1081,7 +1226,9 @@ impl Unit {
     fn bulk_geometry(&self, source: Source) -> (usize, u16) {
         match source {
             Source::Identification | Source::Extended => (IDENTIFICATION_BYTES, 1),
-            Source::Catalog { selector } => (CATALOG_BLOCK_BYTES, self.spec.catalog(selector).blocks),
+            Source::Catalog { selector } => {
+                (CATALOG_BLOCK_BYTES, self.spec.catalog(selector).blocks)
+            }
         }
     }
     /// Data byte `offset` of block `block`; past the last block the last one repeats.
@@ -1129,9 +1276,8 @@ impl Unit {
                 .bytes()[index];
                 self.state.link.input.push(byte);
                 if self.state.link.input.len() == 4 {
-                    let word = u32::from_be_bytes(
-                        self.state.link.input.as_slice().try_into().unwrap(),
-                    );
+                    let word =
+                        u32::from_be_bytes(self.state.link.input.as_slice().try_into().unwrap());
                     self.state.link.input.clear();
                     if !valid_word(word) {
                         self.log_once(EVENT_BAD_FRAME, || {
@@ -1144,12 +1290,17 @@ impl Unit {
                         self.log_once(EVENT_OUT_OF_PHASE, || {
                             format!("header {word:08x} in the acknowledgment phase")
                         });
-                        self.state.link.phase = Phase::Acknowledgment { received: word, sent: IDLE };
+                        self.state.link.phase = Phase::Acknowledgment {
+                            received: word,
+                            sent: IDLE,
+                        };
                     } else if let Some(source) = (sent.packet != 0)
                         .then(|| match Packet(sent.packet).family() {
                             IDENTIFICATION => Some(Source::Identification),
                             EXTENDED_IDENTIFICATION => Some(Source::Extended),
-                            READ_CATALOG => sent.catalog.map(|selector| Source::Catalog { selector }),
+                            READ_CATALOG => {
+                                sent.catalog.map(|selector| Source::Catalog { selector })
+                            }
                             _ => None,
                         })
                         .flatten()
@@ -1167,7 +1318,8 @@ impl Unit {
                 let out = self.bulk_byte(source, next, index);
                 self.state.link.input.push(byte);
                 if self.state.link.input.len() == width + 3 {
-                    let request = u16::from_be_bytes([self.state.link.input[0], self.state.link.input[1]]);
+                    let request =
+                        u16::from_be_bytes([self.state.link.input[0], self.state.link.input[1]]);
                     self.state.link.input.clear();
                     match request {
                         BULK_FINISH => {
@@ -1175,7 +1327,9 @@ impl Unit {
                             match source {
                                 Source::Identification => {
                                     self.state.link.identification_reads += 1;
-                                    self.log_once(EVENT_IDENTIFICATION, || "identification record read".into());
+                                    self.log_once(EVENT_IDENTIFICATION, || {
+                                        "identification record read".into()
+                                    });
                                 }
                                 Source::Extended => {
                                     self.state.link.extended_reads += 1;
@@ -1190,15 +1344,23 @@ impl Unit {
                             }
                         }
                         block if block < count => {
-                            self.state.link.phase = Phase::Bulk { source, next: block };
+                            self.state.link.phase = Phase::Bulk {
+                                source,
+                                next: block,
+                            };
                         }
                         other => {
                             if other != BULK_END {
                                 self.log_once(EVENT_BULK_ABORT, || {
-                                    format!("bulk request for block {other:#06x} beyond {count} blocks")
+                                    format!(
+                                        "bulk request for block {other:#06x} beyond {count} blocks"
+                                    )
                                 });
                             }
-                            self.state.link.phase = Phase::Bulk { source, next: BULK_END };
+                            self.state.link.phase = Phase::Bulk {
+                                source,
+                                next: BULK_END,
+                            };
                         }
                     }
                 }
@@ -1234,7 +1396,10 @@ impl Unit {
                     self.state.link.replies.push_front(sent);
                 }
             } else {
-                self.state.link.phase = Phase::Acknowledgment { received: word, sent };
+                self.state.link.phase = Phase::Acknowledgment {
+                    received: word,
+                    sent,
+                };
             }
         }
         out
@@ -1247,7 +1412,10 @@ impl Unit {
         if link.transmit_counter > 7
             || link.receive_counter > 7
             || link.replies.len() > REPLY_LIMIT
-            || link.replies.iter().any(|m| m.sequence > 7 || !valid_word(m.packet))
+            || link
+                .replies
+                .iter()
+                .any(|m| m.sequence > 7 || !valid_word(m.packet))
             || bad_motion(state.focus, self.spec.focus)
             || bad_motion(state.aperture, self.spec.aperture)
             || state.powered != !matches!(state.power, Power::Off)
@@ -1256,7 +1424,8 @@ impl Unit {
             return Err("invalid X-mount lens checkpoint".into());
         }
         match &link.phase {
-            Phase::Header if link.input.len() <= 3 && link.outgoing.is_some() == !link.input.is_empty() => {}
+            Phase::Header
+                if link.input.len() <= 3 && link.outgoing.is_some() == !link.input.is_empty() => {}
             Phase::Acknowledgment { received, sent }
                 if link.input.len() <= 3
                     && link.outgoing.is_none()
@@ -1348,7 +1517,11 @@ impl Wire for Port {
         let unit = self.0.lock().unwrap();
         Checkpoint::encode(
             KIND,
-            &Saved { spec: unit.spec.clone(), timing: unit.timing, state: unit.state.clone() },
+            &Saved {
+                spec: unit.spec.clone(),
+                timing: unit.timing,
+                state: unit.state.clone(),
+            },
         )
     }
     fn validate_checkpoint(&self, saved: &Checkpoint) -> Result<(), String> {
@@ -1422,7 +1595,8 @@ impl Wire for Port {
         {
             return Err("X-mount lens checkpoint differs from its declared lens".into());
         }
-        let state: State = serde_json::from_value(value["state"].clone()).map_err(|e| e.to_string())?;
+        let state: State =
+            serde_json::from_value(value["state"].clone()).map_err(|e| e.to_string())?;
         unit.validate_state(&state)?;
         unit.state = state;
         unit.logs.clear();

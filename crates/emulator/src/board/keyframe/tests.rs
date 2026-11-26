@@ -1,6 +1,6 @@
-use fujimod_catalog_configuration::RunEngine;
 use super::*;
 use crate::board::{factory::*, memory::BusMapping};
+use fujimod_catalog_configuration::RunEngine;
 use fujimod_emulator_cpu::{Model, arm};
 use fujimod_emulator_devices::{Cx, Device, checkpoint::Checkpoint};
 use serde::{Deserialize, Serialize};
@@ -58,7 +58,8 @@ pub(super) fn board_mode(mode: bus::Mode) -> Board {
     let processors = (0..2)
         .map(|core| Processor {
             model: Model::CortexR5F,
-            released: true, parked_until_sgi: false,
+            released: true,
+            parked_until_sgi: false,
             mprofile: None,
             rprofile: Some(fujimod_emulator_cpu_unicorn::rprofile::core::Options {
                 cp14_identity: 0x55aa,

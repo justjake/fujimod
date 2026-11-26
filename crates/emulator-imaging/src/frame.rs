@@ -56,7 +56,11 @@ pub enum Scene {
     /// Seven colour bars and black over the top three quarters, a grey ramp below.
     Bars,
     /// An uncompressed BMP, top row first, three bytes (R, G, B) per pixel.
-    Picture { width: usize, height: usize, rgb: Vec<u8> },
+    Picture {
+        width: usize,
+        height: usize,
+        rgb: Vec<u8>,
+    },
     /// A video device, file, URL or FIFO; colour bars until its first frame.
     Live(live::LiveFeed),
 }
@@ -64,7 +68,11 @@ pub enum Scene {
 /// What one render of a scene draws: the scene with a live feed resolved to its newest frame.
 enum View<'a> {
     Bars,
-    Nearest { width: usize, height: usize, rgb: &'a [u8] },
+    Nearest {
+        width: usize,
+        height: usize,
+        rgb: &'a [u8],
+    },
     Bilinear(live::Sampler<'a>),
 }
 
@@ -89,9 +97,18 @@ fn view<'a>(scene: &'a Scene, frame: Option<&'a live::RgbFrame>, width: usize) -
     match (scene, frame) {
         // A live frame or a defocused raster ([`snapshot`]).
         (_, Some(frame)) => View::Bilinear(live::Sampler::new(frame, width)),
-        (Scene::Picture { width: pw, height: ph, rgb }, None) => {
-            View::Nearest { width: *pw, height: *ph, rgb }
-        }
+        (
+            Scene::Picture {
+                width: pw,
+                height: ph,
+                rgb,
+            },
+            None,
+        ) => View::Nearest {
+            width: *pw,
+            height: *ph,
+            rgb,
+        },
         _ => View::Bars,
     }
 }
@@ -105,10 +122,24 @@ const DEFOCUS_WIDTH: usize = 1920;
 /// live scene's frame (`live`) or colour bars before its first frame.
 fn raster(scene: &Scene, live: Option<&live::RgbFrame>) -> live::RgbFrame {
     let (source, width, height) = match (scene, live) {
-        (_, Some(frame)) => (View::Nearest { width: frame.width, height: frame.height, rgb: &frame.rgb }, frame.width, frame.height),
-        (Scene::Picture { width, height, rgb }, None) => {
-            (View::Nearest { width: *width, height: *height, rgb }, *width, *height)
-        }
+        (_, Some(frame)) => (
+            View::Nearest {
+                width: frame.width,
+                height: frame.height,
+                rgb: &frame.rgb,
+            },
+            frame.width,
+            frame.height,
+        ),
+        (Scene::Picture { width, height, rgb }, None) => (
+            View::Nearest {
+                width: *width,
+                height: *height,
+                rgb,
+            },
+            *width,
+            *height,
+        ),
         _ => (View::Bars, 960, 640),
     };
     let (w, h) = if width > DEFOCUS_WIDTH {
@@ -118,9 +149,15 @@ fn raster(scene: &Scene, live: Option<&live::RgbFrame>) -> live::RgbFrame {
     };
     let mut rgb = vec![0u8; w * h * 3];
     for (y, row) in rgb.chunks_exact_mut(w * 3).enumerate() {
-        rgb_line(&source, y, w, h, None, |x, pixel| row[x * 3..x * 3 + 3].copy_from_slice(&pixel));
+        rgb_line(&source, y, w, h, None, |x, pixel| {
+            row[x * 3..x * 3 + 3].copy_from_slice(&pixel)
+        });
     }
-    live::RgbFrame { width: w, height: h, rgb }
+    live::RgbFrame {
+        width: w,
+        height: h,
+        rgb,
+    }
 }
 
 /// `scene` blurred by a blur circle of `blur` picture widths ([`crate::focus`]); `None` when
@@ -198,7 +235,11 @@ fn bmp(name: &str) -> Option<Scene> {
             rgb.extend_from_slice(&[b[p + 2], b[p + 1], b[p]]);
         }
     }
-    Some(Scene::Picture { width: w, height: rows, rgb })
+    Some(Scene::Picture {
+        width: w,
+        height: rows,
+        rgb,
+    })
 }
 
 /// The scene selected by the `XT5_SCENE` environment variable: `bars` for colour bars, the
@@ -289,7 +330,14 @@ pub fn render_422_row(
     row: &mut [u8],
 ) {
     let (frame, scene) = snapshot(scene);
-    row_422(&view(scene, frame.as_deref(), width), y, width, height, marker, row);
+    row_422(
+        &view(scene, frame.as_deref(), width),
+        y,
+        width,
+        height,
+        marker,
+        row,
+    );
 }
 
 /// Calls `out` with the sRGB colour of each pixel `x` of line `y` of `view` at `width` x
@@ -376,7 +424,14 @@ fn rows_422_mapped(
     Ok(())
 }
 
-fn row_422(view: &View<'_>, y: usize, width: usize, height: usize, marker: Option<usize>, row: &mut [u8]) {
+fn row_422(
+    view: &View<'_>,
+    y: usize,
+    width: usize,
+    height: usize,
+    marker: Option<usize>,
+    row: &mut [u8],
+) {
     row_422_mapped(view, y, width, height, marker, None, row);
 }
 
@@ -415,7 +470,9 @@ pub fn exposure_map(exposure: f64) -> Option<[u8; 256]> {
     if !exposure.is_finite() || exposure <= 0. || exposure == 1. {
         return None;
     }
-    Some(std::array::from_fn(|v| srgb_byte(srgb_to_linear(v as u8) * exposure)))
+    Some(std::array::from_fn(|v| {
+        srgb_byte(srgb_to_linear(v as u8) * exposure)
+    }))
 }
 
 /// Every line of `scene` at `width` x `height` as sRGB (R, G, B bytes, `width * 3` a line),
@@ -530,7 +587,10 @@ pub fn render_422(scene: &Scene, width: usize, height: usize) -> Option<Vec<u8>>
     let mut out = vec![0u8; width * height * 2];
     let mut lines = out.chunks_exact_mut(width * 2);
     rows_422(&view, width, height, None, |_, row| {
-        lines.next().expect("one output line per row").copy_from_slice(row);
+        lines
+            .next()
+            .expect("one output line per row")
+            .copy_from_slice(row);
         Ok(())
     })
     .ok()?;
@@ -572,12 +632,25 @@ const MAX_BYTES: u64 = 128 * 1024 * 1024;
 
 /// Checks a `width` x `height` output in `layout` with luma (or packed) `stride` at `address`
 /// against the modeled bounds. The error names the whole geometry.
-fn check_geometry(address: u64, width: u32, height: u32, stride: u32, layout: YuvLayout) -> Result<(), String> {
-    let sides = width != 0 && width & 1 == 0 && height != 0 && width <= MAX_SIDE && height <= MAX_SIDE;
+fn check_geometry(
+    address: u64,
+    width: u32,
+    height: u32,
+    stride: u32,
+    layout: YuvLayout,
+) -> Result<(), String> {
+    let sides =
+        width != 0 && width & 1 == 0 && height != 0 && width <= MAX_SIDE && height <= MAX_SIDE;
     let luma_bytes = u64::from(stride) * u64::from(height);
     let (fits, chroma_end) = match layout {
-        YuvLayout::Packed422 => (sides && stride >= width * 2 && luma_bytes <= MAX_BYTES, Some(0)),
-        YuvLayout::TwoPlane420 { chroma, chroma_stride } => {
+        YuvLayout::Packed422 => (
+            sides && stride >= width * 2 && luma_bytes <= MAX_BYTES,
+            Some(0),
+        ),
+        YuvLayout::TwoPlane420 {
+            chroma,
+            chroma_stride,
+        } => {
             let chroma_bytes = u64::from(chroma_stride) * u64::from(height.div_ceil(2));
             (
                 sides
@@ -591,13 +664,19 @@ fn check_geometry(address: u64, width: u32, height: u32, stride: u32, layout: Yu
     };
     let describe = || match layout {
         YuvLayout::Packed422 => format!("{width}x{height} stride {stride:#x} at {address:#x}"),
-        YuvLayout::TwoPlane420 { chroma, chroma_stride } => format!(
+        YuvLayout::TwoPlane420 {
+            chroma,
+            chroma_stride,
+        } => format!(
             "{width}x{height} two-plane 4:2:0 luma stride {stride:#x} at {address:#x}, \
              chroma stride {chroma_stride:#x} at {chroma:#x}"
         ),
     };
     if !fits {
-        return Err(format!("scene geometry exceeds modeled bounds: {}", describe()));
+        return Err(format!(
+            "scene geometry exceeds modeled bounds: {}",
+            describe()
+        ));
     }
     if address.checked_add(luma_bytes).is_none() || chroma_end.is_none() {
         return Err(format!("YUV DMA address overflow: {}", describe()));
@@ -619,8 +698,23 @@ struct TwoPlaneWriter {
     line: Vec<u8>,
 }
 impl TwoPlaneWriter {
-    fn new(address: u64, stride: u32, chroma: u64, chroma_stride: u32, width: usize, height: usize) -> Self {
-        Self { address, stride, chroma, chroma_stride, height, even: vec![0; width * 2], line: vec![0; width] }
+    fn new(
+        address: u64,
+        stride: u32,
+        chroma: u64,
+        chroma_stride: u32,
+        width: usize,
+        height: usize,
+    ) -> Self {
+        Self {
+            address,
+            stride,
+            chroma,
+            chroma_stride,
+            height,
+            even: vec![0; width * 2],
+            line: vec![0; width],
+        }
     }
     fn row(&mut self, cx: &mut Cx<'_>, y: usize, packed: &[u8]) -> Result<(), String> {
         for (pair, px) in packed.chunks_exact(4).enumerate() {
@@ -634,11 +728,19 @@ impl TwoPlaneWriter {
                 return Ok(());
             }
         }
-        for (pair, (a, b)) in self.even.chunks_exact(4).zip(packed.chunks_exact(4)).enumerate() {
+        for (pair, (a, b)) in self
+            .even
+            .chunks_exact(4)
+            .zip(packed.chunks_exact(4))
+            .enumerate()
+        {
             self.line[pair * 2] = (u16::from(a[2]) + u16::from(b[2])).div_ceil(2) as u8;
             self.line[pair * 2 + 1] = (u16::from(a[3]) + u16::from(b[3])).div_ceil(2) as u8;
         }
-        cx.ram_write(self.chroma + (y / 2) as u64 * u64::from(self.chroma_stride), &self.line)
+        cx.ram_write(
+            self.chroma + (y / 2) as u64 * u64::from(self.chroma_stride),
+            &self.line,
+        )
     }
 }
 
@@ -653,7 +755,11 @@ pub fn paint_layout(
     layout: YuvLayout,
     luma: u8,
 ) -> Result<(), String> {
-    let YuvLayout::TwoPlane420 { chroma, chroma_stride } = layout else {
+    let YuvLayout::TwoPlane420 {
+        chroma,
+        chroma_stride,
+    } = layout
+    else {
         return paint(cx, address, width, height, stride, luma);
     };
     if !(16..=235).contains(&luma) {
@@ -703,7 +809,9 @@ pub fn paint_scene_exposed(
     frame: u64,
     exposure: f64,
 ) -> Result<bool, String> {
-    let Some(scene) = host_scene() else { return Ok(false) };
+    let Some(scene) = host_scene() else {
+        return Ok(false);
+    };
     check_geometry(address, width, height, stride, layout)?;
     // Live view follows the focus motor: every frame takes the lens position of its time.
     crate::focus::sample(cx.now());
@@ -713,12 +821,19 @@ pub fn paint_scene_exposed(
     let view = view(scene, live.as_deref(), w);
     let map = exposure_map(exposure);
     match layout {
-        YuvLayout::Packed422 => rows_422_mapped(&view, w, h, Some(marker), map.as_ref(), |y, row| {
-            cx.ram_write(address + y as u64 * u64::from(stride), row)
-        })?,
-        YuvLayout::TwoPlane420 { chroma, chroma_stride } => {
+        YuvLayout::Packed422 => {
+            rows_422_mapped(&view, w, h, Some(marker), map.as_ref(), |y, row| {
+                cx.ram_write(address + y as u64 * u64::from(stride), row)
+            })?
+        }
+        YuvLayout::TwoPlane420 {
+            chroma,
+            chroma_stride,
+        } => {
             let mut writer = TwoPlaneWriter::new(address, stride, chroma, chroma_stride, w, h);
-            rows_422_mapped(&view, w, h, Some(marker), map.as_ref(), |y, row| writer.row(cx, y, row))?
+            rows_422_mapped(&view, w, h, Some(marker), map.as_ref(), |y, row| {
+                writer.row(cx, y, row)
+            })?
         }
     }
     Ok(true)
@@ -803,10 +918,17 @@ mod tests {
         assert_eq!(half[255], 188);
         let mut a = vec![0u8; 16];
         let view = View::Bars;
-        rows_422_mapped(&view, 8, 1, None, Some(&std::array::from_fn(|v| v as u8)), |_, row| {
-            a.copy_from_slice(row);
-            Ok(())
-        })
+        rows_422_mapped(
+            &view,
+            8,
+            1,
+            None,
+            Some(&std::array::from_fn(|v| v as u8)),
+            |_, row| {
+                a.copy_from_slice(row);
+                Ok(())
+            },
+        )
         .unwrap();
         let mut b = vec![0u8; 16];
         row_422(&view, 0, 8, 1, None, &mut b);
@@ -831,7 +953,11 @@ mod tests {
     #[test]
     fn reused_rows_match_rows_rendered_one_by_one() {
         let rgb: Vec<u8> = (0..5 * 3 * 3).map(|n| (n * 37 % 251) as u8).collect();
-        let picture = Scene::Picture { width: 5, height: 3, rgb };
+        let picture = Scene::Picture {
+            width: 5,
+            height: 3,
+            rgb,
+        };
         for scene in [&Scene::Bars, &picture] {
             for (width, height) in [(960, 640), (10, 7), (4, 2), (2, 1)] {
                 let view = view(scene, None, width);
@@ -876,11 +1002,24 @@ mod tests {
     /// not as packed 4:2:2, and every refusal names the geometry.
     #[test]
     fn two_plane_geometry_accepts_the_fhd_movie_output_and_names_refusals() {
-        let two_plane = YuvLayout::TwoPlane420 { chroma: 0x1_cdf0_f000, chroma_stride: 0xc00 };
-        assert_eq!(check_geometry(0x9c24_3000, 1920, 1080, 0xc00, two_plane), Ok(()));
-        let packed = check_geometry(0x9c24_3000, 1920, 1080, 0xc00, YuvLayout::Packed422).unwrap_err();
-        assert!(packed.contains("1920x1080 stride 0xc00 at 0x9c243000"), "{packed}");
-        assert_eq!(check_geometry(0x9c24_3000, 960, 640, 0x780, YuvLayout::Packed422), Ok(()));
+        let two_plane = YuvLayout::TwoPlane420 {
+            chroma: 0x1_cdf0_f000,
+            chroma_stride: 0xc00,
+        };
+        assert_eq!(
+            check_geometry(0x9c24_3000, 1920, 1080, 0xc00, two_plane),
+            Ok(())
+        );
+        let packed =
+            check_geometry(0x9c24_3000, 1920, 1080, 0xc00, YuvLayout::Packed422).unwrap_err();
+        assert!(
+            packed.contains("1920x1080 stride 0xc00 at 0x9c243000"),
+            "{packed}"
+        );
+        assert_eq!(
+            check_geometry(0x9c24_3000, 960, 640, 0x780, YuvLayout::Packed422),
+            Ok(())
+        );
         for (width, height, stride, chroma, chroma_stride) in [
             (1920, 1080, 1918, 0x1000, 0xc00),
             (1920, 1080, 0xc00, 0x1000, 1918),
@@ -889,12 +1028,25 @@ mod tests {
             (8192, 8192, 0x4000, 0x1000, 0x4000),
             (1919, 1080, 0xc00, 0x1000, 0xc00),
         ] {
-            let layout = YuvLayout::TwoPlane420 { chroma, chroma_stride };
+            let layout = YuvLayout::TwoPlane420 {
+                chroma,
+                chroma_stride,
+            };
             let error = check_geometry(0x1000, width, height, stride, layout).unwrap_err();
-            assert!(error.contains(&format!("{width}x{height} two-plane 4:2:0")), "{error}");
+            assert!(
+                error.contains(&format!("{width}x{height} two-plane 4:2:0")),
+                "{error}"
+            );
         }
-        let overflow = YuvLayout::TwoPlane420 { chroma: u64::MAX - 8, chroma_stride: 16 };
-        assert!(check_geometry(0x1000, 16, 4, 16, overflow).unwrap_err().contains("overflow"));
+        let overflow = YuvLayout::TwoPlane420 {
+            chroma: u64::MAX - 8,
+            chroma_stride: 16,
+        };
+        assert!(
+            check_geometry(0x1000, 16, 4, 16, overflow)
+                .unwrap_err()
+                .contains("overflow")
+        );
     }
 
     /// The two-plane writer gives the packed lines' Y bytes and, per pair of lines, their
@@ -905,9 +1057,17 @@ mod tests {
         const BASE: u64 = 0x1000;
         let (width, height, stride, chroma_stride) = (8usize, 5usize, 12u32, 16u32);
         let chroma = BASE + 0x100;
-        let mut host = RecordingHost { ram_base: BASE, ram: vec![0x55; 0x200], ..Default::default() };
+        let mut host = RecordingHost {
+            ram_base: BASE,
+            ram: vec![0x55; 0x200],
+            ..Default::default()
+        };
         let lines: Vec<Vec<u8>> = (0..height as u8)
-            .map(|y| (0..width as u8 / 2).flat_map(|p| [y * 10 + p, y * 10 + p + 1, 100 + y, 200 - y]).collect())
+            .map(|y| {
+                (0..width as u8 / 2)
+                    .flat_map(|p| [y * 10 + p, y * 10 + p + 1, 100 + y, 200 - y])
+                    .collect()
+            })
             .collect();
         let mut writer = TwoPlaneWriter::new(BASE, stride, chroma, chroma_stride, width, height);
         let mut cx = Cx::new(&mut host, 0, 0, 0);
@@ -918,14 +1078,30 @@ mod tests {
             let at = y * stride as usize;
             let luma: Vec<u8> = line.chunks_exact(4).flat_map(|p| [p[0], p[1]]).collect();
             assert_eq!(&host.ram[at..at + width], &luma[..], "luma line {y}");
-            assert!(host.ram[at + width..at + stride as usize].iter().all(|v| *v == 0x55));
+            assert!(
+                host.ram[at + width..at + stride as usize]
+                    .iter()
+                    .all(|v| *v == 0x55)
+            );
         }
         for (row, (cb, cr)) in [(101, 200), (103, 198), (104, 196)].into_iter().enumerate() {
             let at = 0x100 + row * chroma_stride as usize;
-            assert_eq!(&host.ram[at..at + width], &[cb, cr].repeat(width / 2)[..], "chroma line {row}");
-            assert!(host.ram[at + width..at + chroma_stride as usize].iter().all(|v| *v == 0x55));
+            assert_eq!(
+                &host.ram[at..at + width],
+                &[cb, cr].repeat(width / 2)[..],
+                "chroma line {row}"
+            );
+            assert!(
+                host.ram[at + width..at + chroma_stride as usize]
+                    .iter()
+                    .all(|v| *v == 0x55)
+            );
         }
-        assert!(host.ram[0x100 + 3 * chroma_stride as usize..].iter().all(|v| *v == 0x55));
+        assert!(
+            host.ram[0x100 + 3 * chroma_stride as usize..]
+                .iter()
+                .all(|v| *v == 0x55)
+        );
     }
 
     /// The modelled still path gives the JPEG encoder no host picture for any encode (main,
@@ -959,9 +1135,19 @@ mod tests {
     #[test]
     fn a_defocused_scene_is_its_blurred_raster() {
         let checker: Vec<u8> = (0..64 * 16)
-            .flat_map(|n| if (n % 64) / 8 % 2 == 0 { [230u8; 3] } else { [20u8; 3] })
+            .flat_map(|n| {
+                if (n % 64) / 8 % 2 == 0 {
+                    [230u8; 3]
+                } else {
+                    [20u8; 3]
+                }
+            })
             .collect();
-        let picture = Scene::Picture { width: 64, height: 16, rgb: checker };
+        let picture = Scene::Picture {
+            width: 64,
+            height: 16,
+            rgb: checker,
+        };
         for scene in [&Scene::Bars, &picture] {
             let sharp = raster(scene, None);
             let soft = defocused(scene, None, 0.04).unwrap();
@@ -981,7 +1167,11 @@ mod tests {
         assert!(matches!(view(&picture, None, 32), View::Nearest { .. }));
         assert!(matches!(view(&Scene::Bars, None, 32), View::Bars));
         // A wide picture is reduced before the blur.
-        let wide = Scene::Picture { width: 4000, height: 2, rgb: vec![9; 4000 * 2 * 3] };
+        let wide = Scene::Picture {
+            width: 4000,
+            height: 2,
+            rgb: vec![9; 4000 * 2 * 3],
+        };
         let reduced = defocused(&wide, None, 0.01).unwrap();
         assert_eq!((reduced.width, reduced.height), (DEFOCUS_WIDTH, 1));
     }

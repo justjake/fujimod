@@ -21,7 +21,13 @@ fn native_pixmap_copy_preserves_words_flips_rows_and_keeps_pitch_padding() {
         (0xc0c, 144),
         (0xc10, 1),
     ]);
-    let job = state.copy_job(&Cx::new(&mut host, 0, 0, 0), 1, PixmapReadback::RotatesChannels).unwrap();
+    let job = state
+        .copy_job(
+            &Cx::new(&mut host, 0, 0, 0),
+            1,
+            PixmapReadback::RotatesChannels,
+        )
+        .unwrap();
     assert_eq!(job.writes.len(), 1);
     let (address, bytes) = &job.writes[0];
     assert_eq!(*address, 0x3000);
@@ -94,6 +100,12 @@ fn equal_shape_copy_rotates_or_keeps_rgba8_words_as_the_processor_selects() {
             .unwrap();
         job.writes[0].1[..4].to_vec()
     };
-    assert_eq!(copy(PixmapReadback::RotatesChannels), [0xe0, 0x80, 0x20, 0x10]);
-    assert_eq!(copy(PixmapReadback::PreservesWords), [0x10, 0xe0, 0x80, 0x20]);
+    assert_eq!(
+        copy(PixmapReadback::RotatesChannels),
+        [0xe0, 0x80, 0x20, 0x10]
+    );
+    assert_eq!(
+        copy(PixmapReadback::PreservesWords),
+        [0x10, 0xe0, 0x80, 0x20]
+    );
 }

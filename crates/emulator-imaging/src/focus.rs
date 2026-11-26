@@ -47,7 +47,9 @@ impl SceneFocus {
                 .parse::<f64>()
                 .ok()
                 .filter(|v| v.is_finite())
-                .ok_or_else(|| format!("{text:?} is not a lens position (N) or a travel percentage (N%)"))
+                .ok_or_else(|| {
+                    format!("{text:?} is not a lens position (N) or a travel percentage (N%)")
+                })
         };
         match text.strip_suffix('%') {
             Some(percent) => Ok(Self::Travel(number(percent)? / 100.)),
@@ -419,7 +421,11 @@ mod tests {
         let far = optics.defocus(2000., 0., 2000.);
         assert!((far.blur - 0.015).abs() < 1e-12);
         assert!((far.phase - 0.005).abs() < 1e-12);
-        let unreachable = Optics { scene: SceneFocus::Travel(1.5), ..optics }.defocus(2000., 0., 2000.);
+        let unreachable = Optics {
+            scene: SceneFocus::Travel(1.5),
+            ..optics
+        }
+        .defocus(2000., 0., 2000.);
         assert!(!unreachable.reachable);
         assert_eq!(unreachable.units, -1000.);
     }
@@ -485,7 +491,15 @@ mod tests {
 
     /// Rows of vertical bars: `period` samples per bar, alternating 0 and 1000.
     fn bars(width: usize, height: usize, period: usize) -> Vec<f64> {
-        (0..width * height).map(|i| if (i % width) / period % 2 == 0 { 0. } else { 1000. }).collect()
+        (0..width * height)
+            .map(|i| {
+                if (i % width) / period % 2 == 0 {
+                    0.
+                } else {
+                    1000.
+                }
+            })
+            .collect()
     }
 
     #[test]
@@ -493,7 +507,9 @@ mod tests {
         let (w, h) = (512, 8);
         let levels = bars(w, h, 32);
         let total = |diameter: f64, band: usize| -> f64 {
-            contrast_grid(&levels, w, h, 8, 2, &[1, 2, 4], diameter)[band].iter().sum()
+            contrast_grid(&levels, w, h, 8, 2, &[1, 2, 4], diameter)[band]
+                .iter()
+                .sum()
         };
         // In focus: every edge gives `step * s / 2` on each side, so the bands are in ratio 1:2:4.
         let sharp = [total(0., 0), total(0., 1), total(0., 2)];
@@ -504,7 +520,10 @@ mod tests {
         for diameter in [0.25, 1., 1.5, 2., 3., 4.5, 6., 9., 14., 22.] {
             let now = [total(diameter, 0), total(diameter, 1), total(diameter, 2)];
             for band in 0..3 {
-                assert!(now[band] <= previous[band] + 1e-6, "band {band} at {diameter}");
+                assert!(
+                    now[band] <= previous[band] + 1e-6,
+                    "band {band} at {diameter}"
+                );
             }
             previous = now;
         }
@@ -512,7 +531,12 @@ mod tests {
         assert!(total(22., 2) < 0.4 * sharp[2]);
         // A flat picture has no contrast at any focus.
         let flat = vec![500.; w * h];
-        assert!(contrast_grid(&flat, w, h, 8, 2, &[1, 2, 4], 0.).iter().flatten().all(|v| *v == 0.));
+        assert!(
+            contrast_grid(&flat, w, h, 8, 2, &[1, 2, 4], 0.)
+                .iter()
+                .flatten()
+                .all(|v| *v == 0.)
+        );
     }
 
     #[test]
@@ -521,11 +545,20 @@ mod tests {
         for diameter in [0.01, 0.5, 1., 2.5, 7., 40., 123.4] {
             let kernel = defocus_kernel(diameter);
             let reach = kernel.len() / 2;
-            assert_eq!(kernel.len(), 2 * (((diameter / 2.) as f64).ceil() as usize + 1) + 1);
+            assert_eq!(
+                kernel.len(),
+                2 * (((diameter / 2.) as f64).ceil() as usize + 1) + 1
+            );
             assert!((kernel.iter().sum::<f64>() - 1.).abs() < 1e-9, "{diameter}");
             for k in 0..reach {
-                assert!((kernel[k] - kernel[2 * reach - k]).abs() < 1e-9, "{diameter} symmetric");
-                assert!(kernel[k] >= -1e-12 && kernel[k] <= kernel[k + 1] + 1e-12, "{diameter} rises to the centre");
+                assert!(
+                    (kernel[k] - kernel[2 * reach - k]).abs() < 1e-9,
+                    "{diameter} symmetric"
+                );
+                assert!(
+                    kernel[k] >= -1e-12 && kernel[k] <= kernel[k + 1] + 1e-12,
+                    "{diameter} rises to the centre"
+                );
             }
         }
         // A wide disc spreads a sample as the chord lengths of the circle: the centre weight is
@@ -539,7 +572,9 @@ mod tests {
         // A sweep through focus in steps far below one sample of blur: the fine band has one
         // strict maximum at focus, with no flat top and no second bump in any cell.
         let (w, h) = (256, 2);
-        let levels: Vec<f64> = (0..w * h).map(|i| if i % w < 128 { 0. } else { 1000. }).collect();
+        let levels: Vec<f64> = (0..w * h)
+            .map(|i| if i % w < 128 { 0. } else { 1000. })
+            .collect();
         let cells = |diameter: f64| contrast_grid(&levels, w, h, 8, 1, &[1, 2, 4, 8], diameter);
         let sharp = cells(0.)[0][4];
         let mut previous = sharp;
@@ -572,7 +607,9 @@ mod tests {
     fn contrast_lands_in_the_cell_of_the_edge() {
         let (w, h) = (64, 4);
         // One edge at x = 40: cells are 16 wide, so only column 2 of each row sees it.
-        let levels: Vec<f64> = (0..w * h).map(|i| if i % w < 40 { 0. } else { 800. }).collect();
+        let levels: Vec<f64> = (0..w * h)
+            .map(|i| if i % w < 40 { 0. } else { 800. })
+            .collect();
         let grid = &contrast_grid(&levels, w, h, 4, 2, &[1], 0.)[0];
         assert_eq!(grid.len(), 8);
         for (cell, value) in grid.iter().enumerate() {

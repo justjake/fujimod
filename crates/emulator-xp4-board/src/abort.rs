@@ -298,7 +298,12 @@ fn transfer(c: &Cluster, core: usize, pc: u32, word: u32) -> Result<Transfer, St
 /// unaligned word, halfword or doubleword access. Returns its address and
 /// access. Camera run 2026-11-10: an X-T3 hung before its LED on SD card
 /// code whose unaligned loads ran with the MMU off.
-fn mmu_off_alignment(c: &Cluster, core: usize, pc: u32, fetch: bool) -> Result<(u32, Access), String> {
+fn mmu_off_alignment(
+    c: &Cluster,
+    core: usize,
+    pc: u32,
+    fetch: bool,
+) -> Result<(u32, Access), String> {
     if fetch {
         return Err("Prefetch abort with the MMU off is unmodeled".into());
     }

@@ -18,11 +18,11 @@ open(firmware = "x70-110", boot = AutomaticBoot { card: Release })
 
 ## Boots
 
-| Boot | What runs | Internal flash | SD card | Held at power-on |
-|---|---|---|---|---|
-| `Stock` | The installed firmware | The catalog's reference camera settings | Empty, or files the caller adds | Nothing |
-| `SdCard` | FujiMod from the SD card | As `Stock` | The FujiMod SD card | The catalog's `boot.sd` controls |
-| `AutomaticBoot` | FujiMod from the SD card, started by the card's AUTOMATIC boot | As `Stock`, with the card's AUTOMATIC boot installed | The FujiMod SD card | Nothing |
+| Boot            | What runs                                                      | Internal flash                                       | SD card                         | Held at power-on                 |
+| --------------- | -------------------------------------------------------------- | ---------------------------------------------------- | ------------------------------- | -------------------------------- |
+| `Stock`         | The installed firmware                                         | The catalog's reference camera settings              | Empty, or files the caller adds | Nothing                          |
+| `SdCard`        | FujiMod from the SD card                                       | As `Stock`                                           | The FujiMod SD card             | The catalog's `boot.sd` controls |
+| `AutomaticBoot` | FujiMod from the SD card, started by the card's AUTOMATIC boot | As `Stock`, with the card's AUTOMATIC boot installed | The FujiMod SD card             | Nothing                          |
 
 The `boot.sd` controls are the body's controls document entry, the same one
 the website reads (X70: command control press and movie-record button). The

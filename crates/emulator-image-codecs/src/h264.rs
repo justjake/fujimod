@@ -27,8 +27,10 @@ impl Config {
             || !(10_000..=100_000_000).contains(&self.bitrate)
             || !(1..=51).contains(&self.max_qp)
             || !(1..=120).contains(&self.gop)
-            || ![9, 10, 11, 12, 13, 20, 21, 22, 30, 31, 32, 40, 41, 42, 50, 51, 52]
-                .contains(&self.level_idc)
+            || ![
+                9, 10, 11, 12, 13, 20, 21, 22, 30, 31, 32, 40, 41, 42, 50, 51, 52,
+            ]
+            .contains(&self.level_idc)
         {
             return Err(
                 "H.264 requires bounded progressive macroblock-aligned 8-bit 4:2:0 configuration"
@@ -275,7 +277,14 @@ pub struct Direct {
 }
 impl Direct {
     pub fn new(config: DirectConfig) -> Result<Self, String> {
-        let DirectConfig { width, height, frames_per_second, bitrate, gop, level_idc } = config;
+        let DirectConfig {
+            width,
+            height,
+            frames_per_second,
+            bitrate,
+            gop,
+            level_idc,
+        } = config;
         if !(16..=4096).contains(&width)
             || !(16..=2304).contains(&height)
             || !width.is_multiple_of(2)
@@ -284,7 +293,9 @@ impl Direct {
             || !(1..=1023).contains(&gop)
             || level_idc == 0
         {
-            return Err(format!("H.264 direct encoder settings out of range: {config:?}"));
+            return Err(format!(
+                "H.264 direct encoder settings out of range: {config:?}"
+            ));
         }
         let mut settings = rusty_h264_encoder::EncoderConfig::baseline(width, height);
         settings.level_idc = level_idc;
@@ -343,7 +354,11 @@ mod tests {
                 seed = seed.wrapping_mul(1_664_525).wrapping_add(1_013_904_223);
                 let bar = ((x + 5 * n) * 8 / width % 8) as u32 * 24;
                 let ramp = ((x + 3 * n + 2 * y) % 97) as u32;
-                let noise = if (x / 64 + y / 64) % 3 == 0 { seed >> 28 } else { 0 };
+                let noise = if (x / 64 + y / 64) % 3 == 0 {
+                    seed >> 28
+                } else {
+                    0
+                };
                 frame[y * width + x] = (16 + bar + ramp / 2 + noise).min(235) as u8;
             }
         }
@@ -407,9 +422,19 @@ mod tests {
         let mut frame = vec![128u8; 1920 * 1080 * 3 / 2];
         frame[..1920 * 1080].fill(100);
         let unit = encoder.encode_i420(&frame).unwrap();
-        let picture = super::decode::Decoder::new(&[]).unwrap().decode(&unit).unwrap();
+        let picture = super::decode::Decoder::new(&[])
+            .unwrap()
+            .decode(&unit)
+            .unwrap();
         let s = picture.sequence;
-        assert_eq!((s.width, s.height, s.coded_width, s.coded_height), (1920, 1080, 1920, 1088));
-        assert!(picture.i420[..1920 * 1080].iter().all(|y| y.abs_diff(100) < 4));
+        assert_eq!(
+            (s.width, s.height, s.coded_width, s.coded_height),
+            (1920, 1080, 1920, 1088)
+        );
+        assert!(
+            picture.i420[..1920 * 1080]
+                .iter()
+                .all(|y| y.abs_diff(100) < 4)
+        );
     }
 }

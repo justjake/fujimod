@@ -55,10 +55,10 @@ A store file is named from the first 11 uppercase hexadecimal digits of its
 SHA-256: eight digits, a dot and three more (`XXXXXXXX.YYY`). The camera's
 update layer uses the same rule; the tests pin its vectors:
 
-| Content | SHA-256 | Store name |
-| --- | --- | --- |
-| empty | `e3b0c442…b855` | `E3B0C442.98F` |
-| `abc` | `ba7816bf…15ad` | `BA7816BF.8F0` |
+| Content | SHA-256         | Store name     |
+| ------- | --------------- | -------------- |
+| empty   | `e3b0c442…b855` | `E3B0C442.98F` |
+| `abc`   | `ba7816bf…15ad` | `BA7816BF.8F0` |
 
 Two files whose store names match but whose full digests differ make the
 command fail before it writes anything, because the camera would see two

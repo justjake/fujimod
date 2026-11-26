@@ -500,14 +500,7 @@ pub enum Hook {
         data: *mut c_void,
     },
 }
-unsafe fn memory_restart_boundary_noop(
-    _: Access,
-    _: u64,
-    _: i32,
-    _: i64,
-    _: *mut c_void,
-) {
-}
+unsafe fn memory_restart_boundary_noop(_: Access, _: u64, _: i32, _: i64, _: *mut c_void) {}
 #[derive(Clone, Copy, Debug)]
 pub enum InstructionDisposition {
     Execute,

@@ -112,8 +112,7 @@ impl Device for Transfer {
 /// movw/movt r0,#0x08000000; ldr r3,[r0]; loop: str r1,[r0]; poll: ldr
 /// r2,[r0]; cmp r2,r3; beq poll; movs r3,r2; adds r4,#1; b loop
 const PROGRAM: [u16; 12] = [
-    0xf240, 0x0000, 0xf6c0, 0x0000, 0x6803, 0x6001, 0x6802, 0x429a, 0xd0fc, 0x0013, 0x3401,
-    0xe7f8,
+    0xf240, 0x0000, 0xf6c0, 0x0000, 0x6803, 0x6001, 0x6802, 0x429a, 0xd0fc, 0x0013, 0x3401, 0xe7f8,
 ];
 
 struct Outcome {
@@ -136,7 +135,15 @@ struct Outcome {
 }
 
 fn run(quantum: usize, blocks: bool, windows: &[u64]) -> Outcome {
-    run_with(quantum, blocks, windows, false, true, ExecutionPolicy::Exact, false)
+    run_with(
+        quantum,
+        blocks,
+        windows,
+        false,
+        true,
+        ExecutionPolicy::Exact,
+        false,
+    )
 }
 
 fn run_with(
@@ -149,7 +156,14 @@ fn run_with(
     publish: bool,
 ) -> Outcome {
     run_with_diagnostic(
-        quantum, blocks, windows, stable, fast_forward, policy, publish, false,
+        quantum,
+        blocks,
+        windows,
+        stable,
+        fast_forward,
+        policy,
+        publish,
+        false,
     )
 }
 
@@ -170,7 +184,8 @@ fn run_with_diagnostic(
         processors: vec![Processor {
             model: Model::CortexM4,
             registers: vec![],
-            released: true, parked_until_sgi: false,
+            released: true,
+            parked_until_sgi: false,
             rprofile: None,
             mprofile: Some(super::mprofile::Config {
                 clock_hz: 1_000_000_000,
@@ -198,7 +213,10 @@ fn run_with_diagnostic(
         }],
         instructions_per_tick: Ratio::new(1, 1).unwrap(),
     };
-    let probe = Arc::new(Mutex::new(Probe { publish, ..Probe::default() }));
+    let probe = Arc::new(Mutex::new(Probe {
+        publish,
+        ..Probe::default()
+    }));
     let mut bus = Bus::new(bus::Mode::Strict);
     bus.register(0xff910000, 4, Box::new(Transfer(probe.clone(), stable)))
         .unwrap();
@@ -217,12 +235,22 @@ fn run_with_diagnostic(
     board.set_execution_policy(policy).unwrap();
     board.set_block_execution(blocks);
     board.set_poll_loops(fast_forward);
-    let words = |words: &[u32]| words.iter().flat_map(|w| w.to_le_bytes()).collect::<Vec<_>>();
-    board.write_physical(0x10000, &words(&[0x17000, 0x10101])).unwrap();
+    let words = |words: &[u32]| {
+        words
+            .iter()
+            .flat_map(|w| w.to_le_bytes())
+            .collect::<Vec<_>>()
+    };
+    board
+        .write_physical(0x10000, &words(&[0x17000, 0x10101]))
+        .unwrap();
     board
         .write_physical(
             0x10100,
-            &PROGRAM.iter().flat_map(|w| w.to_le_bytes()).collect::<Vec<_>>(),
+            &PROGRAM
+                .iter()
+                .flat_map(|w| w.to_le_bytes())
+                .collect::<Vec<_>>(),
         )
         .unwrap();
     for &window in windows {
@@ -231,13 +259,19 @@ fn run_with_diagnostic(
     let m4 = board.cpu(0).unwrap();
     let mut registers: Vec<u64> = (0..5).map(|r| scalar(m4, arm32(r)).unwrap()).collect();
     registers.push(scalar(m4, Register::Pc).unwrap());
-    let checkpoint = board.checkpoint(None).unwrap().export().unwrap().to_bytes().unwrap();
-    let (register_access_calls, published_fast_read_hits) = board
-        .register_access_snapshot()
-        .map_or((0, 0), |snapshot| {
-            let calls = snapshot.totals.values().fold(0u64, |total, access| {
-                total.saturating_add(access.calls)
-            });
+    let checkpoint = board
+        .checkpoint(None)
+        .unwrap()
+        .export()
+        .unwrap()
+        .to_bytes()
+        .unwrap();
+    let (register_access_calls, published_fast_read_hits) =
+        board.register_access_snapshot().map_or((0, 0), |snapshot| {
+            let calls = snapshot
+                .totals
+                .values()
+                .fold(0u64, |total, access| total.saturating_add(access.calls));
             let published = snapshot
                 .published_fast_read_hits
                 .values()
@@ -273,8 +307,14 @@ fn a_status_poll_keeps_the_bookkeeping_settled_with_the_same_result() {
         for windows in [&[5000][..], &[333, 334, 2111, 5000][..]] {
             for blocks in [false, true] {
                 let got = run(quantum, blocks, windows);
-                assert_eq!(got.registers, reference.registers, "quantum {quantum} blocks {blocks}");
-                assert!(got.state == reference.state, "quantum {quantum} blocks {blocks}: board state differs");
+                assert_eq!(
+                    got.registers, reference.registers,
+                    "quantum {quantum} blocks {blocks}"
+                );
+                assert!(
+                    got.state == reference.state,
+                    "quantum {quantum} blocks {blocks}: board state differs"
+                );
                 assert_eq!(got.accesses, reference.accesses);
                 assert_eq!((got.served, got.left_out), (reference.served, 0));
                 // Almost every entry follows a status read. Without the
@@ -294,13 +334,32 @@ fn a_status_poll_keeps_the_bookkeeping_settled_with_the_same_result() {
 fn a_poll_loop_on_a_stable_register_is_fast_forwarded_with_the_same_result() {
     for quantum in [1, 7, 100] {
         let reference = run(quantum, false, &[5000]);
-        for windows in [&[5000][..], &[333, 334, 2111, 5000][..], &[1, 2, 3, 4, 5, 6, 7, 5000][..]] {
-            let got = run_with(quantum, true, windows, true, true, ExecutionPolicy::Exact, false);
+        for windows in [
+            &[5000][..],
+            &[333, 334, 2111, 5000][..],
+            &[1, 2, 3, 4, 5, 6, 7, 5000][..],
+        ] {
+            let got = run_with(
+                quantum,
+                true,
+                windows,
+                true,
+                true,
+                ExecutionPolicy::Exact,
+                false,
+            );
             assert_eq!(got.registers, reference.registers, "quantum {quantum}");
-            assert!(got.state == reference.state, "quantum {quantum}: board state differs");
+            assert!(
+                got.state == reference.state,
+                "quantum {quantum}: board state differs"
+            );
             // Every read counts as serviced; the device served a few per wait.
             assert_eq!(got.accesses, reference.accesses, "quantum {quantum}");
-            assert_eq!(got.served + got.left_out, reference.served, "quantum {quantum}");
+            assert_eq!(
+                got.served + got.left_out,
+                reference.served,
+                "quantum {quantum}"
+            );
             assert!(
                 got.left_out > 9 * got.served,
                 "quantum {quantum}: served {}, left out {}",
@@ -309,13 +368,24 @@ fn a_poll_loop_on_a_stable_register_is_fast_forwarded_with_the_same_result() {
             );
             // Switched off, or with the instruction observer, every read is served.
             for (blocks, fast_forward) in [(true, false), (false, true)] {
-                let all = run_with(quantum, blocks, windows, true, fast_forward, ExecutionPolicy::Exact, false);
+                let all = run_with(
+                    quantum,
+                    blocks,
+                    windows,
+                    true,
+                    fast_forward,
+                    ExecutionPolicy::Exact,
+                    false,
+                );
                 assert!(all.state == reference.state);
                 assert_eq!((all.served, all.left_out), (reference.served, 0));
                 // The portable checkpoint is the same bytes with and without
                 // the fast-forward.
                 if blocks {
-                    assert!(all.checkpoint == got.checkpoint, "quantum {quantum}: checkpoint differs");
+                    assert!(
+                        all.checkpoint == got.checkpoint,
+                        "quantum {quantum}: checkpoint differs"
+                    );
                 }
             }
         }
@@ -494,7 +564,8 @@ fn run_a64(quantum: usize, windows: &[u64], stable: bool, fast_forward: bool) ->
                 (Register::Pstate, 0x3c5),
                 (Register::X(19), 0x8000000),
             ],
-            released: true, parked_until_sgi: false,
+            released: true,
+            parked_until_sgi: false,
             rprofile: None,
             mprofile: None,
         }],
@@ -530,13 +601,18 @@ fn run_a64(quantum: usize, windows: &[u64], stable: bool, fast_forward: bool) ->
         )
         .unwrap();
     board.set_poll_loops(fast_forward);
-    let words = |words: &[u32]| words.iter().flat_map(|w| w.to_le_bytes()).collect::<Vec<_>>();
+    let words = |words: &[u32]| {
+        words
+            .iter()
+            .flat_map(|w| w.to_le_bytes())
+            .collect::<Vec<_>>()
+    };
     board
         .write_physical(
             0x14000,
             &words(&[
-                0xb9400274, 0xb9000261, 0xaa1303e0, 0x9400000d, 0x6b14001f, 0x54ffffa0,
-                0x2a0003f4, 0x910006b5, 0x17fffff9,
+                0xb9400274, 0xb9000261, 0xaa1303e0, 0x9400000d, 0x6b14001f, 0x54ffffa0, 0x2a0003f4,
+                0x910006b5, 0x17fffff9,
             ]),
         )
         .unwrap();
@@ -547,11 +623,23 @@ fn run_a64(quantum: usize, windows: &[u64], stable: bool, fast_forward: bool) ->
         board.run_until(window, quantum).unwrap();
     }
     let cpu = board.cpu(0).unwrap();
-    let registers = [Register::X(0), Register::X(20), Register::X(21), Register::X(30), Register::Pc]
-        .into_iter()
-        .map(|r| scalar(cpu, r).unwrap())
-        .collect();
-    let checkpoint = board.checkpoint(None).unwrap().export().unwrap().to_bytes().unwrap();
+    let registers = [
+        Register::X(0),
+        Register::X(20),
+        Register::X(21),
+        Register::X(30),
+        Register::Pc,
+    ]
+    .into_iter()
+    .map(|r| scalar(cpu, r).unwrap())
+    .collect();
+    let checkpoint = board
+        .checkpoint(None)
+        .unwrap()
+        .export()
+        .unwrap()
+        .to_bytes()
+        .unwrap();
     let s = board.state.borrow();
     let state = board.state();
     let probe = probe.lock().unwrap();
@@ -578,12 +666,23 @@ fn an_aarch64_poll_loop_through_a_read_helper_is_fast_forwarded_with_the_same_re
         assert!((25..=31).contains(&rounds), "rounds {rounds}");
         assert_eq!(reference.left_out, 0);
         assert_eq!(reference.accesses, reference.served + rounds + 1);
-        for windows in [&[9000][..], &[333, 334, 2111, 9000][..], &[1, 2, 3, 4, 5, 6, 7, 9000][..]] {
+        for windows in [
+            &[9000][..],
+            &[333, 334, 2111, 9000][..],
+            &[1, 2, 3, 4, 5, 6, 7, 9000][..],
+        ] {
             let got = run_a64(quantum, windows, true, true);
             assert_eq!(got.registers, reference.registers, "quantum {quantum}");
-            assert!(got.state == reference.state, "quantum {quantum}: board state differs");
+            assert!(
+                got.state == reference.state,
+                "quantum {quantum}: board state differs"
+            );
             assert_eq!(got.accesses, reference.accesses, "quantum {quantum}");
-            assert_eq!(got.served + got.left_out, reference.served, "quantum {quantum}");
+            assert_eq!(
+                got.served + got.left_out,
+                reference.served,
+                "quantum {quantum}"
+            );
             assert!(
                 got.left_out > 4 * got.served,
                 "quantum {quantum}: served {}, left out {}",
@@ -597,7 +696,10 @@ fn an_aarch64_poll_loop_through_a_read_helper_is_fast_forwarded_with_the_same_re
             // The portable checkpoint is the same bytes with and without the
             // fast-forward.
             let off = run_a64(quantum, windows, true, false);
-            assert!(off.checkpoint == got.checkpoint, "quantum {quantum}: checkpoint differs");
+            assert!(
+                off.checkpoint == got.checkpoint,
+                "quantum {quantum}: checkpoint differs"
+            );
         }
     }
 }

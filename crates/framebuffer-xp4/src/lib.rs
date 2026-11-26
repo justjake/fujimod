@@ -266,6 +266,9 @@ mod tests {
         assert!(pink[0] > 220 && pink[2] > 100 && pink[1] < 60, "{pink:?}");
         assert_eq!(pixel(2), gray);
         let tint = pixel(3);
-        assert!(tint[0] > gray[0] && tint[1] < gray[1] && tint[1] > gray[1] - 20, "{tint:?}");
+        assert!(
+            tint[0] > gray[0] && tint[1] < gray[1] && tint[1] > gray[1] - 20,
+            "{tint:?}"
+        );
     }
 }

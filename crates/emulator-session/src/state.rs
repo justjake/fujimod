@@ -44,7 +44,9 @@ impl SessionState {
     }
 
     /// Canonical typed encoding for clients that compare states as bytes.
-    pub fn to_checkpoint(&self) -> Result<fujimod_emulator_devices::checkpoint::Checkpoint, String> {
+    pub fn to_checkpoint(
+        &self,
+    ) -> Result<fujimod_emulator_devices::checkpoint::Checkpoint, String> {
         use fujimod_emulator_devices::checkpoint::Checkpoint;
         let mut children = vec![
             Checkpoint::encode("definition", &self.definition)?,
@@ -86,9 +88,9 @@ impl Session {
     pub fn complete_state(&self) -> Result<SessionState, String> {
         Ok(SessionState {
             definition: self.definition.clone(),
-            controls: self.controls.as_ref().map(|panel| {
-                serde_json::json!({"spec":panel.spec(),"positions":panel.positions()})
-            }),
+            controls: self.controls.as_ref().map(
+                |panel| serde_json::json!({"spec":panel.spec(),"positions":panel.positions()}),
+            ),
             contact_driver: self
                 .contact_driver
                 .as_ref()
@@ -128,7 +130,11 @@ fn diff_value(left: &Value, right: &Value, path: &str) -> Option<String> {
         }
         (Value::Array(a), Value::Array(b)) => {
             if a.len() != b.len() {
-                return Some(format!("{path}: length {} differs from {}", a.len(), b.len()));
+                return Some(format!(
+                    "{path}: length {} differs from {}",
+                    a.len(),
+                    b.len()
+                ));
             }
             for (index, (x, y)) in a.iter().zip(b).enumerate() {
                 if let Some(message) = diff_value(x, y, &format!("{path}[{index}]")) {

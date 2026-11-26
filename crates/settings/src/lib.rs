@@ -270,7 +270,9 @@ fn profile<'a>(
         Some(located) => {
             let mut header = stores.remove("header").expect("validated profile header");
             let checksum = header.len() - 1;
-            header[checksum] = header[..checksum].iter().fold(0u8, |sum, b| sum.wrapping_sub(*b));
+            header[checksum] = header[..checksum]
+                .iter()
+                .fold(0u8, |sum, b| sum.wrapping_sub(*b));
             let mut records = Vec::new();
             for (name, record) in &located.records {
                 let mut bytes = stores.remove(name.as_str()).expect("record store");

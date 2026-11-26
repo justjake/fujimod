@@ -9,13 +9,13 @@
 //! from the run.
 use std::collections::BTreeMap;
 
-use fujimod_emulator_devices::parts::{
-    pins::Pin,
-    switch_panel::{Case, Circuit, Control, Signal, Spec},
-};
 use crate::{
     keys::Key,
     ladders::{CommandDial, Ladder, Options, PositionDial, Wire},
+};
+use fujimod_emulator_devices::parts::{
+    pins::Pin,
+    switch_panel::{Case, Circuit, Control, Signal, Spec},
 };
 use fujimod_emulator_session::contact_driver::{
     self, Actuator, ControlChoice, ControlInput, Interface, Pose,
@@ -59,8 +59,13 @@ pub use fujimod_emulator_session::inputs::Panel;
 const RELEASED: &str = "released";
 const PRESSED: &str = "pressed";
 
-fn named<'a>(names: &'a BTreeMap<Key, (String, String)>, key: Key) -> Result<&'a (String, String), String> {
-    names.get(&key).ok_or_else(|| format!("{key:?} has no catalog control"))
+fn named<'a>(
+    names: &'a BTreeMap<Key, (String, String)>,
+    key: Key,
+) -> Result<&'a (String, String), String> {
+    names
+        .get(&key)
+        .ok_or_else(|| format!("{key:?} has no catalog control"))
 }
 
 fn button(id: &str, label: &str) -> Control {
@@ -81,7 +86,11 @@ fn level(ladder: &Ladder, held: &[Key], dial: Option<&DialPosition>, idle: u16) 
     }
     let contact = dial.filter(|p| p.contact).map(|p| p.label.as_str());
     if contact.is_none() && held.len() == 1 {
-        return ladder.rungs.iter().find(|r| r.key == held[0]).map(|r| r.sample);
+        return ladder
+            .rungs
+            .iter()
+            .find(|r| r.key == held[0])
+            .map(|r| r.sample);
     }
     ladder
         .sets
@@ -141,38 +150,39 @@ fn ladder_circuit(
     controls: &mut Vec<Control>,
 ) -> Result<Circuit, String> {
     let keys: Vec<Key> = ladder.rungs.iter().map(|r| r.key).collect();
-    let (dial, released, signal): (Option<&PositionDial>, u16, Box<dyn Fn(u16) -> Signal>) = match ladder.wire {
-        Wire::Adc { channel } => {
-            let idle = *idle
-                .adc
-                .get(usize::from(channel))
-                .ok_or_else(|| format!("the ADC has no channel {channel}"))?;
-            let node = nodes.adc.clone();
-            (
-                options.dials.iter().find(|d| d.channel == channel),
-                idle,
-                Box::new(move |value| Signal::Analog {
-                    node: node.clone(),
-                    channel: usize::from(channel),
-                    value,
-                }),
-            )
-        }
-        Wire::PowerControllerRegister { register, released } => {
-            let (node, route) = nodes.power.clone();
-            (
-                None,
-                released,
-                Box::new(move |value| Signal::SerialStatus {
-                    node: node.clone(),
-                    route,
-                    register,
-                    mask: REGISTER_MASK,
-                    value,
-                }),
-            )
-        }
-    };
+    let (dial, released, signal): (Option<&PositionDial>, u16, Box<dyn Fn(u16) -> Signal>) =
+        match ladder.wire {
+            Wire::Adc { channel } => {
+                let idle = *idle
+                    .adc
+                    .get(usize::from(channel))
+                    .ok_or_else(|| format!("the ADC has no channel {channel}"))?;
+                let node = nodes.adc.clone();
+                (
+                    options.dials.iter().find(|d| d.channel == channel),
+                    idle,
+                    Box::new(move |value| Signal::Analog {
+                        node: node.clone(),
+                        channel: usize::from(channel),
+                        value,
+                    }),
+                )
+            }
+            Wire::PowerControllerRegister { register, released } => {
+                let (node, route) = nodes.power.clone();
+                (
+                    None,
+                    released,
+                    Box::new(move |value| Signal::SerialStatus {
+                        node: node.clone(),
+                        route,
+                        register,
+                        mask: REGISTER_MASK,
+                        value,
+                    }),
+                )
+            }
+        };
     let mut ids = Vec::new();
     for &key in &keys {
         let (id, label) = named(&names.keys, key)?;
@@ -201,7 +211,14 @@ fn ladder_circuit(
                 continue;
             };
             let mut pose: Vec<String> = (0..keys.len())
-                .map(|i| if held_mask & (1 << i) != 0 { PRESSED } else { RELEASED }.into())
+                .map(|i| {
+                    if held_mask & (1 << i) != 0 {
+                        PRESSED
+                    } else {
+                        RELEASED
+                    }
+                    .into()
+                })
                 .collect();
             if let Some(position) = position {
                 pose.push(position.label.clone());
@@ -230,10 +247,22 @@ pub fn compile(
     let mut controls = Vec::new();
     let mut circuits = Vec::new();
     for ladder in &options.ladders {
-        circuits.push(ladder_circuit(ladder, options, names, nodes, idle, &mut controls)?);
+        circuits.push(ladder_circuit(
+            ladder,
+            options,
+            names,
+            nodes,
+            idle,
+            &mut controls,
+        )?);
     }
     for dial in &options.dials {
-        if options.ladders.iter().any(|l| l.wire == Wire::Adc { channel: dial.channel }) {
+        if options.ladders.iter().any(|l| {
+            l.wire
+                == Wire::Adc {
+                    channel: dial.channel,
+                }
+        }) {
             continue;
         }
         let sample = *idle
@@ -271,7 +300,11 @@ pub fn compile(
             label: label.clone(),
             kind: "switch".into(),
             positions: vec![switch.clear.clone(), switch.set.clone()],
-            initial: if set { switch.set.clone() } else { switch.clear.clone() },
+            initial: if set {
+                switch.set.clone()
+            } else {
+                switch.clear.clone()
+            },
             unavailable: None,
         });
         circuits.push(Circuit {
@@ -324,13 +357,17 @@ pub fn compile(
         });
         circuits.push(Circuit {
             controls: vec![id.clone()],
-            cases: [(RELEASED, true, true), ("half", false, true), ("full", false, false)]
-                .into_iter()
-                .map(|(position, half_high, full_high)| Case {
-                    positions: vec![position.into()],
-                    signals: vec![gpio(*half, half_high), gpio(*full, full_high)],
-                })
-                .collect(),
+            cases: [
+                (RELEASED, true, true),
+                ("half", false, true),
+                ("full", false, false),
+            ]
+            .into_iter()
+            .map(|(position, half_high, full_high)| Case {
+                positions: vec![position.into()],
+                signals: vec![gpio(*half, half_high), gpio(*full, full_high)],
+            })
+            .collect(),
         });
     }
     // Firmware scanner records are not located for these controls, so a
@@ -386,30 +423,31 @@ pub fn compile(
         });
     }
     let mut interfaces = Vec::new();
-    let mut rotary = |names: &Option<(String, String)>, node: Option<&String>| -> Result<(), String> {
-        let (Some((id, label)), Some(node)) = (names, node) else {
-            return Ok(());
+    let mut rotary =
+        |names: &Option<(String, String)>, node: Option<&String>| -> Result<(), String> {
+            let (Some((id, label)), Some(node)) = (names, node) else {
+                return Ok(());
+            };
+            catalog.push(ControlInput {
+                id: id.clone(),
+                label: label.clone(),
+                kind: "rotary".into(),
+                supported: true,
+                unavailable: None,
+                positions: None,
+                initial: None,
+                relative: Some(true),
+                width: None,
+                height: None,
+                stages: None,
+            });
+            interfaces.push(Interface::Rotary {
+                id: id.clone(),
+                node: node.clone(),
+                edges_per_step: 1,
+            });
+            Ok(())
         };
-        catalog.push(ControlInput {
-            id: id.clone(),
-            label: label.clone(),
-            kind: "rotary".into(),
-            supported: true,
-            unavailable: None,
-            positions: None,
-            initial: None,
-            relative: Some(true),
-            width: None,
-            height: None,
-            stages: None,
-        });
-        interfaces.push(Interface::Rotary {
-            id: id.clone(),
-            node: node.clone(),
-            edges_per_step: 1,
-        });
-        Ok(())
-    };
     match &options.rear_dial {
         Some(CommandDial::Counting(_)) => rotary(&names.rear_dial, Some(&nodes.power.0))?,
         Some(CommandDial::Quadrature(_)) => rotary(&names.rear_dial, nodes.rear_dial.as_ref())?,
@@ -458,7 +496,8 @@ pub fn connect(
             }
         }
     }
-    let (_, node, route) = power.ok_or("the XP5 board has no power controller for its ladder controls")?;
+    let (_, node, route) =
+        power.ok_or("the XP5 board has no power controller for its ladder controls")?;
     let power = (node, route);
     let nodes = Nodes {
         adc: adc.clone(),
@@ -476,9 +515,10 @@ pub fn connect(
     let route = nodes.power.1;
     let board = &session.board;
     let register = |register: u8| -> Result<u16, String> {
-        board.inspect_capability::<dyn fujimod_emulator_devices::capability::SerialStatus, _>(spi, |serial| {
-            serial.status_value(route, register)
-        })
+        board.inspect_capability::<dyn fujimod_emulator_devices::capability::SerialStatus, _>(
+            spi,
+            |serial| serial.status_value(route, register),
+        )
     };
     let panel = compile(
         &options,
@@ -526,7 +566,10 @@ mod tests {
             &options,
             &names,
             &nodes,
-            &Idle { adc: &adc, register: &|_| Ok(0) },
+            &Idle {
+                adc: &adc,
+                register: &|_| Ok(0),
+            },
             1_000_000_000,
         )
         .unwrap()
@@ -545,18 +588,44 @@ mod tests {
             value: 554,
         }));
         // MENU with BACK is a declared contact set; MENU with PLAY is on another wire.
-        let both = menu.transition("disp_back_bluetooth_button", "pressed").unwrap();
-        assert!(both.signals().unwrap().iter().any(|s| matches!(s, Signal::SerialStatus { register: 0x34, value: 499, .. })));
-        let ev = switches.transition("exposure_compensation_dial", "+1").unwrap();
-        assert!(ev.signals().unwrap().contains(&Signal::Analog { node: "adc".into(), channel: 7, value: 1627 }));
+        let both = menu
+            .transition("disp_back_bluetooth_button", "pressed")
+            .unwrap();
+        assert!(both.signals().unwrap().iter().any(|s| matches!(
+            s,
+            Signal::SerialStatus {
+                register: 0x34,
+                value: 499,
+                ..
+            }
+        )));
+        let ev = switches
+            .transition("exposure_compensation_dial", "+1")
+            .unwrap();
+        assert!(ev.signals().unwrap().contains(&Signal::Analog {
+            node: "adc".into(),
+            channel: 7,
+            value: 1627
+        }));
         assert_eq!(switches.positions()["drive_dial"], "S");
         assert_eq!(switches.positions()["power_switch"], "ON");
         let full = switches.transition("shutter_button", "full").unwrap();
-        assert!(full.signals().unwrap().contains(&Signal::Gpio { node: "gpio".into(), pin: Pin { port: 0, pin: 1 }, high: false }));
+        assert!(full.signals().unwrap().contains(&Signal::Gpio {
+            node: "gpio".into(),
+            pin: Pin { port: 0, pin: 1 },
+            high: false
+        }));
         // Two selector directions without a declared set are refused.
-        let up = switches.transition("selector_up_button", "pressed").unwrap();
+        let up = switches
+            .transition("selector_up_button", "pressed")
+            .unwrap();
         assert!(up.transition("selector_down_button", "pressed").is_err());
-        let ids: Vec<_> = panel.confirmation.interfaces.iter().map(|i| i.id().to_owned()).collect();
+        let ids: Vec<_> = panel
+            .confirmation
+            .interfaces
+            .iter()
+            .map(|i| i.id().to_owned())
+            .collect();
         assert_eq!(ids, ["rear_command_dial", "front_command_dial"]);
     }
 
@@ -638,19 +707,38 @@ mod tests {
             &options,
             &names,
             &nodes,
-            &Idle { adc: &[4095; 15], register: &|_| Ok(0) },
+            &Idle {
+                adc: &[4095; 15],
+                register: &|_| Ok(0),
+            },
             1_000_000_000,
         )
         .unwrap();
         let switches = SwitchPanel::new(panel.wiring.clone()).unwrap();
         let menu = switches.transition("menu_ok_button", "pressed").unwrap();
-        assert!(menu.signals().unwrap().contains(&Signal::Analog { node: "adc".into(), channel: 11, value: 3472 }));
+        assert!(menu.signals().unwrap().contains(&Signal::Analog {
+            node: "adc".into(),
+            channel: 11,
+            value: 3472
+        }));
         let both = menu.transition("disp_back_button", "pressed").unwrap();
-        assert!(both.signals().unwrap().contains(&Signal::Analog { node: "adc".into(), channel: 11, value: 1999 }));
+        assert!(both.signals().unwrap().contains(&Signal::Analog {
+            node: "adc".into(),
+            channel: 11,
+            value: 1999
+        }));
         let up = switches.transition("focus_stick.up", "pressed").unwrap();
-        assert!(up.signals().unwrap().contains(&Signal::Analog { node: "adc".into(), channel: 14, value: 1558 }));
+        assert!(up.signals().unwrap().contains(&Signal::Analog {
+            node: "adc".into(),
+            channel: 14,
+            value: 1558
+        }));
         let half = switches.transition("shutter_button", "half").unwrap();
-        assert!(half.signals().unwrap().contains(&Signal::Gpio { node: "gpio".into(), pin: Pin { port: 0, pin: 0 }, high: false }));
+        assert!(half.signals().unwrap().contains(&Signal::Gpio {
+            node: "gpio".into(),
+            pin: Pin { port: 0, pin: 0 },
+            high: false
+        }));
         let dials: Vec<_> = panel
             .confirmation
             .interfaces
@@ -660,6 +748,12 @@ mod tests {
                 _ => panic!("only command dials are interfaces"),
             })
             .collect();
-        assert_eq!(dials, [("rear_command_dial", "rear-dial"), ("front_command_dial", "front-dial")]);
+        assert_eq!(
+            dials,
+            [
+                ("rear_command_dial", "rear-dial"),
+                ("front_command_dial", "front-dial")
+            ]
+        );
     }
 }

@@ -45,9 +45,7 @@
         "8": 4,
         "12": 8
       },
-      "uninitialized_payload_offsets": [
-        4
-      ]
+      "uninitialized_payload_offsets": [4]
     },
     "request_conversion": {
       "source": 281,
@@ -55,11 +53,7 @@
     },
     "configuration_override": {
       "enable_key": 949,
-      "delay_keys": [
-        946,
-        947,
-        948
-      ]
+      "delay_keys": [946, 947, 948]
     },
     "clock": {
       "reader": 17415252,
@@ -73,11 +67,7 @@
         "low": 34,
         "high": 35
       },
-      "read_order": [
-        34,
-        35,
-        34
-      ],
+      "read_order": [34, 35, 34],
       "start_value": 32768,
       "stop_value": 0
     },

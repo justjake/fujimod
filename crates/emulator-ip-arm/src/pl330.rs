@@ -1550,7 +1550,9 @@ mod tests {
     }
 
     fn samples(ram: &[u8]) -> Vec<u16> {
-        ram.chunks(2).map(|b| u16::from_le_bytes([b[0], b[1]])).collect()
+        ram.chunks(2)
+            .map(|b| u16::from_le_bytes([b[0], b[1]]))
+            .collect()
     }
 
     #[test]
@@ -1576,7 +1578,9 @@ mod tests {
         program.extend(0x1000u32.to_le_bytes());
         program.extend([0xbc, 1]);
         program.extend(0x0084_c202u32.to_le_bytes());
-        let buffer = [0x30, 0, 0x20, 3, 0x30, 0, 0x25, 0, 0x25, 0, 0x08, 0x38, 7, 0x13];
+        let buffer = [
+            0x30, 0, 0x20, 3, 0x30, 0, 0x25, 0, 0x25, 0, 0x08, 0x38, 7, 0x13,
+        ];
         program.extend([0x30, 0]);
         program.extend(&buffer[2..]);
         program.extend([0x36, 1 << 3, 0x34, 0]);
@@ -1619,7 +1623,10 @@ mod tests {
         write(&mut dma, &mut h, 0x2c, 1);
         h.now = 1201;
         complete(&mut dma, &mut h, 0);
-        assert_eq!(samples(&h.ram[0x1000..0x1010]), (16..24).collect::<Vec<_>>());
+        assert_eq!(
+            samples(&h.ram[0x1000..0x1010]),
+            (16..24).collect::<Vec<_>>()
+        );
         assert_eq!(reg(&mut dma, &mut h, 0x100), 4);
         assert_eq!(h.irqs.len(), 4);
         h.now = 1500;
@@ -1741,9 +1748,16 @@ mod tests {
         let program: Vec<u8> = (0..hex.len() / 2)
             .map(|i| u8::from_str_radix(&hex[2 * i..2 * i + 2], 16).unwrap())
             .collect();
-        let timing = Throughput { setup_ticks: 1000, bytes_per_tick: 1 };
+        let timing = Throughput {
+            setup_ticks: 1000,
+            bytes_per_tick: 1,
+        };
         let mut dma = Pl330::new(BASE, (253..261).collect(), vec![Arc::new(Fifo)], timing).unwrap();
-        let mut h = TestHost { now: 0, ram: vec![0; 0x20000], ..TestHost::default() };
+        let mut h = TestHost {
+            now: 0,
+            ram: vec![0; 0x20000],
+            ..TestHost::default()
+        };
         const P: usize = 0x1000;
         h.ram[P..P + program.len()].copy_from_slice(&program);
         write(&mut dma, &mut h, 0x20, 0x11);
@@ -1768,7 +1782,11 @@ mod tests {
                     h.ram[P + end] = 0;
                     stopping = Some(interrupts);
                 } else {
-                    let patch: [u8; 4] = if half == 0 { [0x20, 1, 0x38, 0xee] } else { [0x18; 4] };
+                    let patch: [u8; 4] = if half == 0 {
+                        [0x20, 1, 0x38, 0xee]
+                    } else {
+                        [0x18; 4]
+                    };
                     h.ram[P + 0xec..P + 0xf0].copy_from_slice(&patch);
                     half ^= 1;
                 }
@@ -1776,7 +1794,9 @@ mod tests {
                 write(&mut dma, &mut h, 0xd04, 0);
                 continue;
             }
-            let Some(i) = (0..h.events.len()).min_by_key(|&i| h.events[i].0) else { break };
+            let Some(i) = (0..h.events.len()).min_by_key(|&i| h.events[i].0) else {
+                break;
+            };
             let (at, token) = h.events.remove(i);
             h.now = h.now.max(at);
             complete(&mut dma, &mut h, token);

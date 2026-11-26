@@ -280,7 +280,12 @@ impl pl330::Source for Fifo {
         Ok(())
     }
     fn transfer_ticks(&self, bytes: u64) -> Option<u64> {
-        Some(self.inner.lock().unwrap_or_else(|e| e.into_inner()).ticks(bytes))
+        Some(
+            self.inner
+                .lock()
+                .unwrap_or_else(|e| e.into_inner())
+                .ticks(bytes),
+        )
     }
 }
 
@@ -408,7 +413,9 @@ mod tests {
     }
 
     fn i16s(ram: &[u8]) -> Vec<i16> {
-        ram.chunks(2).map(|b| i16::from_le_bytes([b[0], b[1]])).collect()
+        ram.chunks(2)
+            .map(|b| i16::from_le_bytes([b[0], b[1]]))
+            .collect()
     }
 
     #[test]
@@ -449,7 +456,11 @@ mod tests {
         assert_eq!(&a[..96], &a[96..192]);
         assert_eq!(h.irqs, vec![(253, true)]);
         assert_eq!(h.events.last(), Some(&(0, 10_001_000, 0)));
-        assert!(h.ram[BUFFER_B as usize..BUFFER_B as usize + 960].iter().all(|b| *b == 0));
+        assert!(
+            h.ram[BUFFER_B as usize..BUFFER_B as usize + 960]
+                .iter()
+                .all(|b| *b == 0)
+        );
     }
 
     #[test]
@@ -513,6 +524,15 @@ mod tests {
         assert_eq!(copy.lock().state.delivered, 4);
         let other = AudioSerial::new(SERIAL, tone()).unwrap();
         assert!(other.validate_checkpoint(&saved).is_err());
-        assert!(AudioSerial::new(SERIAL, Signal { tone_hz: 24000, ..tone() }).is_err());
+        assert!(
+            AudioSerial::new(
+                SERIAL,
+                Signal {
+                    tone_hz: 24000,
+                    ..tone()
+                }
+            )
+            .is_err()
+        );
     }
 }

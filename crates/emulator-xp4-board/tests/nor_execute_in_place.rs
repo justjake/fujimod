@@ -1,7 +1,7 @@
 //! Instruction fetches from the serial-flash aperture execute the array in place, under the same gated read as loads, and
 //! a copy is dropped when the array or the controller's read state changes.
 use fujimod_emulator_xp4_board::{Definition, Session};
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 const FLASH: u64 = 0xf0000000;
 const CONTROLLER: u64 = 0xfffd8000;
 const PAD: u64 = 0xfff4108c;
@@ -13,8 +13,17 @@ fn definition(sample: u64, control: u64, strict: bool) -> Value {
 }
 fn definition_with(sample: u64, control: u64, strict: bool, write_protect: bool) -> Value {
     let registers = [
-        (1, CONTROLLER), (2, PAD), (3, FLASH + CODE_AT), (4, control), (5, 0xffff5545u64), (6, 0x13),
-        (7, 0x101003), (8, sample), (9, BAD), (11, 0x8000), (15, 0),
+        (1, CONTROLLER),
+        (2, PAD),
+        (3, FLASH + CODE_AT),
+        (4, control),
+        (5, 0xffff5545u64),
+        (6, 0x13),
+        (7, 0x101003),
+        (8, sample),
+        (9, BAD),
+        (11, 0x8000),
+        (15, 0),
     ];
     let mut definition = json!({"ram_size":65536,"cores":1,"discovery":false,"cbar":0xffff0000u32,
         "storage_jedec":0x202018,"storage_dma_routes":(32..48).collect::<Vec<_>>(),
@@ -47,18 +56,30 @@ const ARRAY_CODE: [u32; 4] = [
 fn nor(length: usize) -> Vec<u8> {
     let mut nor = vec![0xff; length];
     for (i, word) in ARRAY_CODE.iter().enumerate() {
-        nor[CODE_AT as usize + 4 * i..CODE_AT as usize + 4 * i + 4].copy_from_slice(&word.to_le_bytes());
+        nor[CODE_AT as usize + 4 * i..CODE_AT as usize + 4 * i + 4]
+            .copy_from_slice(&word.to_le_bytes());
     }
     nor
 }
 fn run(definition: Value, nor: Vec<u8>, program: &[u32]) -> (Session, [u32; 2]) {
-    let s = Session::new(serde_json::from_value::<Definition>(definition).unwrap(), Some(nor), vec![]).unwrap();
+    let s = Session::new(
+        serde_json::from_value::<Definition>(definition).unwrap(),
+        Some(nor),
+        vec![],
+    )
+    .unwrap();
     let bytes: Vec<u8> = program.iter().flat_map(|w| w.to_le_bytes()).collect();
     s.write(0, &bytes).unwrap();
     let _ = s.run(0, 200_000);
     let mut out = [0; 8];
     s.read(0x8000, &mut out).unwrap();
-    (s, [u32::from_le_bytes(out[..4].try_into().unwrap()), u32::from_le_bytes(out[4..].try_into().unwrap())])
+    (
+        s,
+        [
+            u32::from_le_bytes(out[..4].try_into().unwrap()),
+            u32::from_le_bytes(out[4..].try_into().unwrap()),
+        ],
+    )
 }
 fn once() -> Vec<u32> {
     [CONFIGURE.as_slice(), &[CALL, 0xe320f003]].concat() // wfi
@@ -66,7 +87,11 @@ fn once() -> Vec<u32> {
 #[test]
 fn code_in_the_aperture_runs_where_the_gate_reads_data() {
     let (s, marker) = run(definition(GOOD, 0x80041, false), nor(8192), &once());
-    assert!(s.state(false).failure.is_none(), "{:?}", s.state(false).failure);
+    assert!(
+        s.state(false).failure.is_none(),
+        "{:?}",
+        s.state(false).failure
+    );
     assert_eq!(marker, [0x55, 0x55]);
 }
 #[test]
@@ -78,7 +103,10 @@ fn a_fetch_outside_the_sampling_window_executes_the_miss_pattern_not_the_array()
 fn a_controller_state_no_gate_state_declares_fails_the_fetch_instead_of_mapping_the_page() {
     let (s, marker) = run(definition(GOOD, 0x7, false), nor(8192), &once());
     let failure = s.state(false).failure.expect("the fetch must fail");
-    assert!(failure.contains("no declared controller state"), "{failure}");
+    assert!(
+        failure.contains("no declared controller state"),
+        "{failure}"
+    );
     assert_eq!(marker, [0, 0]);
 }
 #[test]
@@ -89,7 +117,11 @@ fn a_page_the_image_does_not_wholly_back_is_refused_not_executed() {
     assert_eq!(marker, [0, 0]);
     // The same code with the whole page inside the image runs.
     let (s, marker) = run(definition(GOOD, 0x80041, true), nor(8192), &once());
-    assert!(s.state(false).failure.is_none(), "{:?}", s.state(false).failure);
+    assert!(
+        s.state(false).failure.is_none(),
+        "{:?}",
+        s.state(false).failure
+    );
     assert_eq!(marker, [0x55, 0x55]);
 }
 #[test]
@@ -97,8 +129,7 @@ fn a_controller_read_state_change_drops_the_copy_and_the_next_fetch_reads_again(
     let program = [
         CONFIGURE.as_slice(),
         &[
-            CALL,
-            0xe5819010, // str r9, [r1, #0x10]  a sample point outside the window
+            CALL, 0xe5819010, // str r9, [r1, #0x10]  a sample point outside the window
             0xe3a00000, // mov r0, #0
             0xe58b0000, // str r0, [r11]        clear the first marker
             CALL,       // the page is read again, now as the miss pattern
@@ -116,13 +147,16 @@ fn fetching_a_page_the_cpu_already_read_as_data_replaces_its_mapping() {
         CONFIGURE.as_slice(),
         &[
             0xe5930000, // ldr r0, [r3]   a load maps the page as aperture MMIO (a fetch then faults as protected)
-            CALL,
-            0xe320f003,
+            CALL, 0xe320f003,
         ],
     ]
     .concat();
     let (s, marker) = run(definition(GOOD, 0x80041, false), nor(8192), &program);
-    assert!(s.state(false).failure.is_none(), "{:?}", s.state(false).failure);
+    assert!(
+        s.state(false).failure.is_none(),
+        "{:?}",
+        s.state(false).failure
+    );
     assert_eq!(marker, [0x55, 0x55]);
 }
 /// `ldr r0, [pc, #offset]` at word `at`, reading the literal word at `literal`.
@@ -149,13 +183,17 @@ fn an_erase_that_completes_makes_the_next_fetch_read_the_erased_array() {
         0xe3a00000, // mov r0, #0
         0xe58b0000, // str r0, [r11]
         0xe58b0004, // str r0, [r11, #4]
-        CALL,       // the page now reads as erased: 0xffffffff is no instruction that sets the markers
+        CALL, // the page now reads as erased: 0xffffffff is no instruction that sets the markers
         0xe320f003, // wfi
     ]);
     assert!(program.len() < literals);
     program.resize(literals, 0xe320f003);
     program.extend([0x06000001, 0xf0001000, 0x210b0001]);
-    let (s, marker) = run(definition_with(GOOD, 0x80041, false, false), nor(8192), &program);
+    let (s, marker) = run(
+        definition_with(GOOD, 0x80041, false, false),
+        nor(8192),
+        &program,
+    );
     let mut first = [0; 4];
     s.read(0x8008, &mut first).unwrap();
     assert_eq!(u32::from_le_bytes(first), 0x55);

@@ -1,11 +1,11 @@
 //! Memory watch on A-profile processors: every record is decided on the
 //! physical address the processor used, so stores through any MMU alias of a
 //! watched range are recorded and stores outside it are not.
-use fujimod_catalog_configuration::RunEngine;
 use super::bus::{Bus, Mode};
 use super::factory::{Graph, MemoryMap, Options, Processor, Ram};
 use super::memory::BusMapping;
 use super::*;
+use fujimod_catalog_configuration::RunEngine;
 use fujimod_emulator_cpu::{Model, Register, arm, timeline::Ratio};
 
 const CODE: u64 = 0x1000;
@@ -18,7 +18,8 @@ fn a7_graph() -> Graph {
         processors: vec![Processor {
             model: Model::CortexA7,
             registers: vec![(Register::Pc, CODE), (Register::Pstate, 0xd3)],
-            released: true, parked_until_sgi: false,
+            released: true,
+            parked_until_sgi: false,
             mprofile: None,
             rprofile: None,
         }],
@@ -256,9 +257,16 @@ fn memory_watch_samples_per_core_ram_at_each_read() {
     code.extend(store_at(0x2000, 0x22, 0));
     code.extend([0xe300_0000, 0xe340_0010, 0xe590_1000, 0xeaff_fffe]);
     words(&board, CODE, &code);
-    let mut watch = board.memory_watch_begin_with_samples(
-        vec![WATCH], 8, board.mappings().to_vec(), vec![0x2000], vec![], None,
-    ).unwrap();
+    let mut watch = board
+        .memory_watch_begin_with_samples(
+            vec![WATCH],
+            8,
+            board.mappings().to_vec(),
+            vec![0x2000],
+            vec![],
+            None,
+        )
+        .unwrap();
     run(&mut board, code.len() as u64 - 1);
     let rows = records(&watch);
     assert_eq!(rows.len(), 2, "{rows:?}");
@@ -274,13 +282,27 @@ fn memory_watch_captures_bounded_pointer_chain_at_read() {
     words(&board, 0x2000, &[0x2100]);
     words(&board, 0x2108, &[0x2200]);
     words(&board, 0x2208, &[0x3300]);
-    words(&board, CODE, &[0xe300_0000, 0xe340_0010, 0xe590_1000, 0xeaff_fffe]);
-    let mut watch = board.memory_watch_begin_with_samples(
-        vec![WATCH], 8, board.mappings().to_vec(), vec![0x2000], vec![8, 8], Some((0x2000, 0x3000)),
-    ).unwrap();
+    words(
+        &board,
+        CODE,
+        &[0xe300_0000, 0xe340_0010, 0xe590_1000, 0xeaff_fffe],
+    );
+    let mut watch = board
+        .memory_watch_begin_with_samples(
+            vec![WATCH],
+            8,
+            board.mappings().to_vec(),
+            vec![0x2000],
+            vec![8, 8],
+            Some((0x2000, 0x3000)),
+        )
+        .unwrap();
     run(&mut board, 3);
     let rows = records(&watch);
-    assert_eq!(rows[0]["sample_path"], serde_json::json!([0x2100, 0x2200, 0x3300]));
+    assert_eq!(
+        rows[0]["sample_path"],
+        serde_json::json!([0x2100, 0x2200, 0x3300])
+    );
     board.memory_watch_end(&mut watch).unwrap();
 }
 
@@ -317,7 +339,9 @@ fn a7_watch_skips_accesses_from_excluded_program_counters() {
 #[test]
 fn memory_watch_detects_the_loss_of_its_board() {
     let board = a7_board();
-    let watch = board.memory_watch_begin(vec![WATCH], 8, board.mappings().to_vec()).unwrap();
+    let watch = board
+        .memory_watch_begin(vec![WATCH], 8, board.mappings().to_vec())
+        .unwrap();
     assert!(watch.is_live());
     drop(board);
     assert!(!watch.is_live());
@@ -478,7 +502,10 @@ fn a7_watch_is_observation_only() {
     run(&mut watched, 12);
     assert_eq!(records(&watch).len(), 2);
     watched.memory_watch_end(&mut watch).unwrap();
-    assert_eq!(plain.complete_state().unwrap(), watched.complete_state().unwrap());
+    assert_eq!(
+        plain.complete_state().unwrap(),
+        watched.complete_state().unwrap()
+    );
     assert_eq!(plain.instruction_counts(), watched.instruction_counts());
 }
 
@@ -489,7 +516,8 @@ fn r5f_board() -> Board {
         processors: vec![Processor {
             model: Model::CortexR5F,
             registers: vec![(Register::Pc, 0x10000)],
-            released: true, parked_until_sgi: false,
+            released: true,
+            parked_until_sgi: false,
             mprofile: None,
             rprofile: Some(Default::default()),
         }],
@@ -543,26 +571,43 @@ fn r_profile_watch_samples_task_context_at_instruction_execution() {
     words(&board, 0x10000, &[0xe1a0_0000, 0xeaff_fffe]);
     words(&board, 0x10100, &[0x10200]);
     words(&board, 0x10208, &[0x10300]);
-    let mut watch = board.memory_watch_begin_with_samples(
-        vec![(0x10000, 0x10004)], 8, board.mappings().to_vec(),
-        vec![0x10100], vec![8], Some((0x10000, 0x14000)),
-    ).unwrap();
+    let mut watch = board
+        .memory_watch_begin_with_samples(
+            vec![(0x10000, 0x10004)],
+            8,
+            board.mappings().to_vec(),
+            vec![0x10100],
+            vec![8],
+            Some((0x10000, 0x14000)),
+        )
+        .unwrap();
     run(&mut board, 1);
     let rows = records(&watch);
     assert_eq!(rows.len(), 1, "{rows:?}");
     assert_eq!(rows[0]["source"], "cpu-fetch");
     assert_eq!(rows[0]["pc"], 0x10000);
-    assert_eq!(rows[0]["sample_path"], serde_json::json!([0x10200, 0x10300]));
+    assert_eq!(
+        rows[0]["sample_path"],
+        serde_json::json!([0x10200, 0x10300])
+    );
     board.memory_watch_end(&mut watch).unwrap();
 }
 
 #[test]
 fn many_watch_ranges_keep_exact_filtering_after_backend_grouping() {
     let mut board = r5f_board();
-    words(&board, 0x10000, &[0xe3a0_1011, 0xe580_1000, 0xe580_1004, 0xeaff_fffe]);
+    words(
+        &board,
+        0x10000,
+        &[0xe3a0_1011, 0xe580_1000, 0xe580_1004, 0xeaff_fffe],
+    );
     board.write_register(0, arm::CORE[0], 0x10080).unwrap();
-    let ranges = (0..300).map(|i| (0x10080 + i * 16, 0x10084 + i * 16)).collect();
-    let mut watch = board.memory_watch_begin(ranges, 8, board.mappings().to_vec()).unwrap();
+    let ranges = (0..300)
+        .map(|i| (0x10080 + i * 16, 0x10084 + i * 16))
+        .collect();
+    let mut watch = board
+        .memory_watch_begin(ranges, 8, board.mappings().to_vec())
+        .unwrap();
     run(&mut board, 3);
     let rows = records(&watch);
     assert_eq!(rows.len(), 1, "{rows:?}");
@@ -669,17 +714,29 @@ fn range_digest_reports_the_hash_and_the_nonzero_page_runs_of_bus_memory() {
     expected[0x1000..0x1003].copy_from_slice(&[1, 2, 3]);
     expected[0x4000] = 0xff;
     expected[0x5fff] = 7;
-    let hex: String = Sha256::digest(&expected).iter().map(|b| format!("{b:02x}")).collect();
+    let hex: String = Sha256::digest(&expected)
+        .iter()
+        .map(|b| format!("{b:02x}"))
+        .collect();
     assert_eq!(digest["sha256"], hex);
     assert_eq!(digest["nonzero_pages_4k"], 3);
-    assert_eq!(digest["nonzero_runs"], serde_json::json!([[0x2000, 0x3000], [0x5000, 0x7000]]));
+    assert_eq!(
+        digest["nonzero_runs"],
+        serde_json::json!([[0x2000, 0x3000], [0x5000, 0x7000]])
+    );
     assert_eq!(digest["nonzero_runs_not_listed"], 0);
     // All zero reads as no pages; the digest is of the whole range.
     let zero = board.range_digest(0x100000, 0x4000);
-    assert_eq!((&zero["nonzero_pages_4k"], &zero["nonzero_runs"]), (&0.into(), &serde_json::json!([])));
+    assert_eq!(
+        (&zero["nonzero_pages_4k"], &zero["nonzero_runs"]),
+        (&0.into(), &serde_json::json!([]))
+    );
     // A range without complete backing reports the error and no hash.
     let missing = board.range_digest(0x3ff000, 0x2000);
-    assert!(missing.get("error").is_some() && missing.get("sha256").is_none(), "{missing}");
+    assert!(
+        missing.get("error").is_some() && missing.get("sha256").is_none(),
+        "{missing}"
+    );
 }
 
 /// Measurement, not a test: `cargo test -p fujimod-emulator --lib
@@ -757,11 +814,15 @@ fn a7_watch_cost_measurement() {
 
 #[test]
 fn fresh_epoch_preserves_host_time_and_instruction_totals() {
-    let mut board = a7_graph().build(
-        Options::new(RunEngine::Unicorn).with_translation_cache_size_bytes(1 << 20)
-            .with_epoch(9000, vec![321]),
-        Bus::new(Mode::Strict), None,
-    ).unwrap();
+    let mut board = a7_graph()
+        .build(
+            Options::new(RunEngine::Unicorn)
+                .with_translation_cache_size_bytes(1 << 20)
+                .with_epoch(9000, vec![321]),
+            Bus::new(Mode::Strict),
+            None,
+        )
+        .unwrap();
     assert_eq!(board.now(), 9000);
     assert_eq!(board.instruction_counts(), [321]);
     assert!(board.epoch_is_unexecuted());
@@ -774,21 +835,35 @@ fn fresh_epoch_preserves_host_time_and_instruction_totals() {
     board.restore_keyframe(&initial).unwrap();
     assert!(board.epoch_is_unexecuted());
     assert_eq!(board.instruction_counts(), [321]);
-    assert!(a7_graph().build(
-        Options::new(RunEngine::Unicorn).with_translation_cache_size_bytes(1 << 20)
-            .with_epoch(9000, vec![1, 2]),
-        Bus::new(Mode::Strict), None,
-    ).is_err());
+    assert!(
+        a7_graph()
+            .build(
+                Options::new(RunEngine::Unicorn)
+                    .with_translation_cache_size_bytes(1 << 20)
+                    .with_epoch(9000, vec![1, 2]),
+                Bus::new(Mode::Strict),
+                None,
+            )
+            .is_err()
+    );
 }
 
 #[test]
 fn supply_off_deadline_stops_execution_and_only_power_time_can_advance() {
-    struct SupplyOff { due: Option<u64> }
+    struct SupplyOff {
+        due: Option<u64>,
+    }
     impl fujimod_emulator_devices::Device for SupplyOff {
-        fn name(&self) -> &'static str { "test-supply" }
-        fn read(&mut self, _: &mut fujimod_emulator_devices::Cx<'_>, _: u64, _: u8) -> u64 { 0 }
+        fn name(&self) -> &'static str {
+            "test-supply"
+        }
+        fn read(&mut self, _: &mut fujimod_emulator_devices::Cx<'_>, _: u64, _: u8) -> u64 {
+            0
+        }
         fn write(&mut self, _: &mut fujimod_emulator_devices::Cx<'_>, _: u64, _: u8, _: u64) {}
-        fn next_deadline(&self, _: u64) -> Option<u64> { self.due }
+        fn next_deadline(&self, _: u64) -> Option<u64> {
+            self.due
+        }
         fn advance(&mut self, cx: &mut fujimod_emulator_devices::Cx<'_>) {
             if self.due.is_some_and(|due| due <= cx.now()) {
                 self.due = None;
@@ -798,21 +873,32 @@ fn supply_off_deadline_stops_execution_and_only_power_time_can_advance() {
     }
     struct LateDma;
     impl fujimod_emulator_devices::Device for LateDma {
-        fn name(&self) -> &'static str { "test-late-dma" }
-        fn read(&mut self, _: &mut fujimod_emulator_devices::Cx<'_>, _: u64, _: u8) -> u64 { 0 }
+        fn name(&self) -> &'static str {
+            "test-late-dma"
+        }
+        fn read(&mut self, _: &mut fujimod_emulator_devices::Cx<'_>, _: u64, _: u8) -> u64 {
+            0
+        }
         fn write(&mut self, _: &mut fujimod_emulator_devices::Cx<'_>, _: u64, _: u8, _: u64) {}
-        fn next_deadline(&self, _: u64) -> Option<u64> { Some(12) }
+        fn next_deadline(&self, _: u64) -> Option<u64> {
+            Some(12)
+        }
         fn advance(&mut self, cx: &mut fujimod_emulator_devices::Cx<'_>) {
-            if cx.now() >= 12 { cx.ram_write(0x2000, &[0x7f]).unwrap(); }
+            if cx.now() >= 12 {
+                cx.ram_write(0x2000, &[0x7f]).unwrap();
+            }
         }
     }
     let mut bus = Bus::new(Mode::Strict);
     bus.attach(Box::new(SupplyOff { due: Some(8) }));
     bus.attach(Box::new(LateDma));
-    let mut board = a7_graph().build(
-        Options::new(RunEngine::Unicorn).with_translation_cache_size_bytes(1 << 20),
-        bus, None,
-    ).unwrap();
+    let mut board = a7_graph()
+        .build(
+            Options::new(RunEngine::Unicorn).with_translation_cache_size_bytes(1 << 20),
+            bus,
+            None,
+        )
+        .unwrap();
     words(&board, CODE, &[0xeafffffe]);
     assert!(board.advance_unpowered(1).is_err());
     board.run_for_instructions(100, 2).unwrap();
@@ -833,16 +919,39 @@ fn supply_off_deadline_stops_execution_and_only_power_time_can_advance() {
 
 #[test]
 fn connected_clock_removes_power_at_the_guest_hold_deadline() {
-    use fujimod_emulator_devices::exr2::{clock, wake_alarm::{Supply, WakeAlarm}};
+    use fujimod_emulator_devices::exr2::{
+        clock,
+        wake_alarm::{Supply, WakeAlarm},
+    };
     use std::sync::{Arc, Mutex};
-    let power = Arc::new(Mutex::new(WakeAlarm::new(12_000_000, clock::POWER_HOLD_RELEASE_LIMIT_TICKS).unwrap()));
-    let clocks = clock::Clocks::new(clock::Options { output_settle_ticks: 2, reset_ready: true }, ()).unwrap();
+    let power = Arc::new(Mutex::new(
+        WakeAlarm::new(12_000_000, clock::POWER_HOLD_RELEASE_LIMIT_TICKS).unwrap(),
+    ));
+    let clocks = clock::Clocks::new(
+        clock::Options {
+            output_settle_ticks: 2,
+            reset_ready: true,
+        },
+        (),
+    )
+    .unwrap();
     clocks.output().attach_power(power.clone()).unwrap();
     let mut bus = Bus::new(Mode::Strict);
     bus.register(clock::BASE, 0x100, Box::new(clocks)).unwrap();
     let mut graph = a7_graph();
-    graph.peripherals.push(super::factory::Peripheral { core: 0, address: clock::BASE, physical: clock::BASE, size: 0x100 });
-    let mut board = graph.build(Options::new(RunEngine::Unicorn).with_translation_cache_size_bytes(1 << 20), bus, None).unwrap();
+    graph.peripherals.push(super::factory::Peripheral {
+        core: 0,
+        address: clock::BASE,
+        physical: clock::BASE,
+        size: 0x100,
+    });
+    let mut board = graph
+        .build(
+            Options::new(RunEngine::Unicorn).with_translation_cache_size_bytes(1 << 20),
+            bus,
+            None,
+        )
+        .unwrap();
     let mut code = store_at(clock::BASE as u32 + 0x84, 0, 0).to_vec();
     code.push(0xeafffffe);
     words(&board, CODE, &code);

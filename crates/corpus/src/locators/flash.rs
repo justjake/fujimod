@@ -357,7 +357,11 @@ fn flash_with_route<L: Lookup>(
         reader.span("flash_read"),
         request.span("flash read request"),
         dispatcher.span("flash read dispatcher"),
-        dma.span(if mixed { "mixed NOR/NAND DMA reader" } else { dma_shape.range_name() }),
+        dma.span(if mixed {
+            "mixed NOR/NAND DMA reader"
+        } else {
+            dma_shape.range_name()
+        }),
     ];
     if mapped_only {
         if nand {
@@ -512,19 +516,39 @@ fn flash_with_route<L: Lookup>(
         ranges.push(cache.span("destination cache maintenance"));
         if mixed {
             let identity = locator.named("flash_read_jedec_signature", |r| {
-                r.code.len() == 7 && r.code[0].mnemonic == "adrp"
-                    && r.code[1].mnemonic == "add" && r.code[2].mnemonic == "ldrh"
-                    && r.has("strb", "w3, [x0]") && r.has("strb", "w0, [x1]")
-                    && r.code[4].mnemonic == "ldr" && r.code[4].operands.starts_with("w0,")
+                r.code.len() == 7
+                    && r.code[0].mnemonic == "adrp"
+                    && r.code[1].mnemonic == "add"
+                    && r.code[2].mnemonic == "ldrh"
+                    && r.has("strb", "w3, [x0]")
+                    && r.has("strb", "w0, [x1]")
+                    && r.code[4].mnemonic == "ldr"
+                    && r.code[4].operands.starts_with("w0,")
                     && r.code[6].mnemonic == "ret"
             })?;
-            let address = one(loads(&identity).into_iter().map(|(_, a)| a).collect(), "installed flash identity")?;
+            let address = one(
+                loads(&identity).into_iter().map(|(_, a)| a).collect(),
+                "installed flash identity",
+            )?;
             checks.push(json!({"name":"installed NOR JEDEC identity","address":address,"size":4,"value":id}));
             ranges.push(identity.span("installed flash identity reader"));
-            let aligned = one(locator.calls(&dispatcher)?.into_iter().filter(|r| {
-                r.code.iter().any(|i| i.mnemonic == "ands" && i.operands.ends_with(", #0x3f"))
-                    && locator.calls(r).is_ok_and(|calls| calls.iter().any(|c| c.header.key.address == dma.header.key.address))
-            }).collect(), "aligned NOR dispatcher")?;
+            let aligned = one(
+                locator
+                    .calls(&dispatcher)?
+                    .into_iter()
+                    .filter(|r| {
+                        r.code
+                            .iter()
+                            .any(|i| i.mnemonic == "ands" && i.operands.ends_with(", #0x3f"))
+                            && locator.calls(r).is_ok_and(|calls| {
+                                calls
+                                    .iter()
+                                    .any(|c| c.header.key.address == dma.header.key.address)
+                            })
+                    })
+                    .collect(),
+                "aligned NOR dispatcher",
+            )?;
             ranges.push(aligned.span("aligned NOR dispatcher"));
         }
         let calls = locator.calls(if mixed { &dispatcher } else { &request })?;
@@ -612,7 +636,9 @@ fn selected_nand(has_nand_path: bool, jedec_id: Option<u32>) -> Result<bool> {
     match jedec_id {
         Some(0xefdc21) if has_nand_path => Ok(true),
         Some(id) if nor_part_name(id).is_some() => Ok(false),
-        Some(id) => Err(format!("{id:06x}: installed flash technology is not established")),
+        Some(id) => Err(format!(
+            "{id:06x}: installed flash technology is not established"
+        )),
         None => Err("installed flash identity is not established".into()),
     }
 }
@@ -914,7 +940,10 @@ fn xpp_register_table_read_mode(routine: &Routine) -> bool {
         routine.code.windows(2).any(|instructions| {
             let immediate = |instruction: &Instruction| {
                 let (register, value) = instruction.operands.split_once(", ")?;
-                Some((register.to_string(), number(value.trim_start_matches('#')).ok()?))
+                Some((
+                    register.to_string(),
+                    number(value.trim_start_matches('#')).ok()?,
+                ))
             };
             let Some((low_register, low_value)) = immediate(&instructions[0]) else {
                 return false;
@@ -1399,7 +1428,10 @@ fn verify_xp4_packet_reader(
         || arm_mov_pair_for(words[26], words[27], 3)? != state_address
         || arm_mov_pair_for(words[28], words[29], 2)? != 0x7766_6555
         || arm_branch_target(reader_address + 0x170, words[92])? != transfer_address
-        || arm_branch_target(reader_address + (prepare_word * 4) as u64, words[prepare_word])? != prepare_address
+        || arm_branch_target(
+            reader_address + (prepare_word * 4) as u64,
+            words[prepare_word],
+        )? != prepare_address
     {
         return Err("XP4 flash packet, state or transfer path changed".into());
     }
@@ -1554,9 +1586,13 @@ fn unnamed_reader<L: Lookup>(
 ) -> Result<Routine> {
     let readers = locator.small_routines(0x40, |routine| {
         is_reader(routine)
-            && locator.calls(routine).unwrap_or_default().iter().any(|request| {
-                request.has("mov", "w0, #0x6555") && request.has("movk", "w0, #0x7766, lsl #16")
-            })
+            && locator
+                .calls(routine)
+                .unwrap_or_default()
+                .iter()
+                .any(|request| {
+                    request.has("mov", "w0, #0x6555") && request.has("movk", "w0, #0x7766, lsl #16")
+                })
     });
     one(readers, "flash_read")
 }
@@ -1733,10 +1769,7 @@ mod tests {
             ("str", "w0, [sp, #0x70]"),
             ("mov", "w0, #0x400"),
         ];
-        assert_eq!(
-            DmaShape::of(&code(&queued)),
-            Some(DmaShape::QueuedCommand)
-        );
+        assert_eq!(DmaShape::of(&code(&queued)), Some(DmaShape::QueuedCommand));
         assert_eq!(DmaShape::DirectPoll.range_name(), "flash DMA read");
         assert!(
             DmaShape::QueuedCommand
@@ -1750,10 +1783,7 @@ mod tests {
             let expected = matches!(skip, 4).then_some(DmaShape::QueuedCommand);
             assert_eq!(DmaShape::of(&code(&partial)), expected, "without {skip}");
         }
-        assert_eq!(
-            DmaShape::of(&code(&[("str", "x19, [sp, #0x78]")])),
-            None
-        );
+        assert_eq!(DmaShape::of(&code(&[("str", "x19, [sp, #0x78]")])), None);
     }
 
     #[test]
@@ -1770,7 +1800,12 @@ mod tests {
         assert!(!nor_geometry_matches(&record, 0x20000, 0x1000, 0x100));
         assert!(!nor_geometry_matches(&record, 0x10000, 0x2000, 0x100));
         assert!(!nor_geometry_matches(&record, 0x10000, 0x1000, 0x200));
-        assert!(!nor_geometry_matches(&record[..0x28], 0x10000, 0x1000, 0x100));
+        assert!(!nor_geometry_matches(
+            &record[..0x28],
+            0x10000,
+            0x1000,
+            0x100
+        ));
     }
 
     #[test]

@@ -1,4 +1,5 @@
 """Read-set-bound host waits. Predicates observe; only Board.run executes."""
+
 from __future__ import annotations
 
 from collections.abc import Callable, Collection, Generator
@@ -22,39 +23,44 @@ class WaitBoard(Protocol):
     def instructions(self) -> int: ...
     @property
     def virtual_ticks(self) -> int: ...
-    def run(self, limit: int, *, pause_at_tick: int | None = None,
-            store_watches: list[tuple[int, int]] | None = None,
-            device_watches: list[str] | None = None,
-            contact_watch: bool = False) -> bool: ...
+    def run(
+        self,
+        limit: int,
+        *,
+        pause_at_tick: int | None = None,
+        store_watches: list[tuple[int, int]] | None = None,
+        device_watches: list[str] | None = None,
+        contact_watch: bool = False,
+    ) -> bool: ...
 
 
 WAIT_KINDS = (
-    'debounce',
-    'input_gate',
-    'osd_frame',
-    'rec_return',
-    'card_load',
-    'shutter',
-    'other',
+    "debounce",
+    "input_gate",
+    "osd_frame",
+    "rec_return",
+    "card_load",
+    "shutter",
+    "other",
 )
 
 
 def wait_kind(description: str) -> str:
     """Classify a wait description into the ledger's fixed categories."""
     text = description.lower()
-    if any(word in text for word in ('shutter', 'capture start')):
-        return 'shutter'
-    if any(word in text for word in ('debounce', 'physical', 'scanner', 'key level')):
-        return 'debounce'
-    if any(word in text for word in ('card', 'load', 'recipe', 'film resource')):
-        return 'card_load'
-    if any(word in text for word in ('shooting', 'rec return', 'initialized rec')):
-        return 'rec_return'
-    if any(word in text for word in ('frame', 'render', 'osd', 'display')):
-        return 'osd_frame'
-    if any(word in text for word in ('gate', 'input', 'parameter')):
-        return 'input_gate'
-    return 'other'
+    if any(word in text for word in ("shutter", "capture start")):
+        return "shutter"
+    if any(word in text for word in ("debounce", "physical", "scanner", "key level")):
+        return "debounce"
+    if any(word in text for word in ("card", "load", "recipe", "film resource")):
+        return "card_load"
+    if any(word in text for word in ("shooting", "rec return", "initialized rec")):
+        return "rec_return"
+    if any(word in text for word in ("frame", "render", "osd", "display")):
+        return "osd_frame"
+    if any(word in text for word in ("gate", "input", "parameter")):
+        return "input_gate"
+    return "other"
 
 
 @dataclass
@@ -88,18 +94,23 @@ MAX_CONTINUATION_STOP_CAUSES = 32
 
 def _continuation_stop_cause(value: object) -> ContinuationStopCause:
     if not isinstance(value, dict):
-        raise RuntimeError('Native continuation stop returned an invalid record')
-    if value.get('kind') == 'device':
-        device_id = value.get('id')
-        device = value.get('device')
-        if type(device_id) is not int or device_id < 0 or not isinstance(device, str) or not device:
-            raise RuntimeError('Native continuation stop returned an invalid device id')
-        return ContinuationStopCause('device', device_id=device_id, device=device)
-    if value.get('kind') == 'store':
-        range_index = value.get('range_index')
-        physical_range = value.get('range')
-        address = value.get('address')
-        change_confirmed = value.get('change_confirmed')
+        raise RuntimeError("Native continuation stop returned an invalid record")
+    if value.get("kind") == "device":
+        device_id = value.get("id")
+        device = value.get("device")
+        if (
+            type(device_id) is not int
+            or device_id < 0
+            or not isinstance(device, str)
+            or not device
+        ):
+            raise RuntimeError("Native continuation stop returned an invalid device id")
+        return ContinuationStopCause("device", device_id=device_id, device=device)
+    if value.get("kind") == "store":
+        range_index = value.get("range_index")
+        physical_range = value.get("range")
+        address = value.get("address")
+        change_confirmed = value.get("change_confirmed")
         if (
             type(range_index) is not int
             or range_index < 0
@@ -111,15 +122,17 @@ def _continuation_stop_cause(value: object) -> ContinuationStopCause:
             or not physical_range[0] <= address < physical_range[1]
             or type(change_confirmed) is not bool
         ):
-            raise RuntimeError('Native continuation stop returned an invalid store record')
+            raise RuntimeError(
+                "Native continuation stop returned an invalid store record"
+            )
         return ContinuationStopCause(
-            'store',
+            "store",
             range_index=range_index,
             physical_range=(physical_range[0], physical_range[1]),
             address=address,
             change_confirmed=change_confirmed,
         )
-    raise RuntimeError('Native continuation stop returned an unknown cause')
+    raise RuntimeError("Native continuation stop returned an unknown cause")
 
 
 def _record_continuation_stop(report: WaitStops, value: object) -> None:
@@ -134,17 +147,23 @@ def _record_continuation_stop(report: WaitStops, value: object) -> None:
     report.continuation_stop_overflow += 1
 
 
-T = TypeVar('T')
+T = TypeVar("T")
 
 
-def wait_steps(board: WaitBoard, predicate: Callable[[], T], description: str, *,
-               instruction_limit: int = (1 << 63), deadline: int | None = None,
-               until_tick: int | None = None,
-               max_run_instructions: int | None = None,
-               ignored_devices: Collection[str] = (),
-               after_run: Callable[[], object] | None = None,
-               stops: WaitStops | None = None,
-               profile_stops: bool = False) -> Generator[None, None, T]:
+def wait_steps(
+    board: WaitBoard,
+    predicate: Callable[[], T],
+    description: str,
+    *,
+    instruction_limit: int = (1 << 63),
+    deadline: int | None = None,
+    until_tick: int | None = None,
+    max_run_instructions: int | None = None,
+    ignored_devices: Collection[str] = (),
+    after_run: Callable[[], object] | None = None,
+    stops: WaitStops | None = None,
+    profile_stops: bool = False,
+) -> Generator[None, None, T]:
     """Yield at passive watch stops, returning the predicate's truthy result.
 
     Short-circuited reads are rediscovered on every evaluation, so pointer and
@@ -155,114 +174,173 @@ def wait_steps(board: WaitBoard, predicate: Callable[[], T], description: str, *
     causes; use stops= to retain them.
     """
     if type(instruction_limit) is not int or instruction_limit < 0:
-        raise ValueError('Wait instruction limit must be nonnegative')
+        raise ValueError("Wait instruction limit must be nonnegative")
     if until_tick is not None and (type(until_tick) is not int or until_tick < 0):
-        raise ValueError('Wait tick must be a nonnegative integer')
-    if max_run_instructions is not None and (type(max_run_instructions) is not int or max_run_instructions <= 0):
-        raise ValueError('Wait continuation ceiling must be positive')
-    if isinstance(ignored_devices, str) or any(not isinstance(name, str) or not name for name in ignored_devices):
-        raise ValueError('Ignored device names must be a collection of nonempty strings')
+        raise ValueError("Wait tick must be a nonnegative integer")
+    if max_run_instructions is not None and (
+        type(max_run_instructions) is not int or max_run_instructions <= 0
+    ):
+        raise ValueError("Wait continuation ceiling must be positive")
+    if isinstance(ignored_devices, str) or any(
+        not isinstance(name, str) or not name for name in ignored_devices
+    ):
+        raise ValueError(
+            "Ignored device names must be a collection of nonempty strings"
+        )
     if type(profile_stops) is not bool:
-        raise ValueError('Stop profiling must be enabled with a boolean')
+        raise ValueError("Stop profiling must be enabled with a boolean")
     if profile_stops and stops is None:
-        raise ValueError('Stop profiling requires stops=')
-    if profile_stops and not callable(getattr(board.native, 'continuation_stop', None)):
-        raise ValueError('Native board does not expose continuation stop observations')
+        raise ValueError("Stop profiling requires stops=")
+    if profile_stops and not callable(getattr(board.native, "continuation_stop", None)):
+        raise ValueError("Native board does not expose continuation stop observations")
     ignored_devices = frozenset(ignored_devices)
     start, tick = board.instructions, board.virtual_ticks
     report = stops if stops is not None else WaitStops()
     polls = 0
     wait_counter = perf.begin_wait(description)
     properties = dict(instructions=0, ticks=0, polls=0, continuations=0)
-    with perf.span('wait', wait_kind(description), properties, wait_counter=wait_counter):
-      try:
-        while True:
-            board.native.read_set_begin()
-            try:
-                value = predicate()
-            finally:
-                reads = json.loads(board.native.read_set_end())
-            polls += 1
-            perf.record_wait_evaluation(wait_counter)
-            if value:
-                return value
-            remaining = instruction_limit - (board.instructions - start)
-            if remaining <= 0 or (deadline is not None and board.virtual_ticks >= deadline):
-                raise TimeoutError('Native execution did not complete: ' + description)
-            stores = [(int(lo), int(hi)) for lo, hi in reads['stores']]
-            devices = [str(name) for name in reads['devices'] if name not in ignored_devices]
-            contacts = reads.get('contacts') is True
-            watched = bool(stores or devices or contacts)
-            if not watched and until_tick is None and max_run_instructions is None:
-                raise ValueError('Wait predicate reads nothing watchable; name until_tick: ' + description)
-            if not watched and until_tick is not None and board.virtual_ticks >= until_tick:
-                raise ValueError('Wait predicate is false at its named tick: ' + description)
-            boundaries = [t for t in (deadline, until_tick) if t is not None and t > board.virtual_ticks]
-            boundary = min(boundaries) if boundaries else None
-            before = board.instructions, board.virtual_ticks
-            # Only a predicate that read the contact queue names its watch, so
-            # boards without contact automation keep their run signature.
-            published = board.run(remaining if max_run_instructions is None else min(remaining, max_run_instructions), pause_at_tick=boundary,
-                                  store_watches=stores, device_watches=devices,
-                                  **({'contact_watch': True} if contacts else {}))
-            report.continuations += 1
-            if published:
-                stop = board.native.continuation_stop()
-                if stop is None:
-                    if contacts:
-                        cause = 'contact-queue'
+    with perf.span(
+        "wait", wait_kind(description), properties, wait_counter=wait_counter
+    ):
+        try:
+            while True:
+                board.native.read_set_begin()
+                try:
+                    value = predicate()
+                finally:
+                    reads = json.loads(board.native.read_set_end())
+                polls += 1
+                perf.record_wait_evaluation(wait_counter)
+                if value:
+                    return value
+                remaining = instruction_limit - (board.instructions - start)
+                if remaining <= 0 or (
+                    deadline is not None and board.virtual_ticks >= deadline
+                ):
+                    raise TimeoutError(
+                        "Native execution did not complete: " + description
+                    )
+                stores = [(int(lo), int(hi)) for lo, hi in reads["stores"]]
+                devices = [
+                    str(name)
+                    for name in reads["devices"]
+                    if name not in ignored_devices
+                ]
+                contacts = reads.get("contacts") is True
+                watched = bool(stores or devices or contacts)
+                if not watched and until_tick is None and max_run_instructions is None:
+                    raise ValueError(
+                        "Wait predicate reads nothing watchable; name until_tick: "
+                        + description
+                    )
+                if (
+                    not watched
+                    and until_tick is not None
+                    and board.virtual_ticks >= until_tick
+                ):
+                    raise ValueError(
+                        "Wait predicate is false at its named tick: " + description
+                    )
+                boundaries = [
+                    t
+                    for t in (deadline, until_tick)
+                    if t is not None and t > board.virtual_ticks
+                ]
+                boundary = min(boundaries) if boundaries else None
+                before = board.instructions, board.virtual_ticks
+                # Only a predicate that read the contact queue names its watch, so
+                # boards without contact automation keep their run signature.
+                published = board.run(
+                    remaining
+                    if max_run_instructions is None
+                    else min(remaining, max_run_instructions),
+                    pause_at_tick=boundary,
+                    store_watches=stores,
+                    device_watches=devices,
+                    **({"contact_watch": True} if contacts else {}),
+                )
+                report.continuations += 1
+                if published:
+                    stop = board.native.continuation_stop()
+                    if stop is None:
+                        if contacts:
+                            cause = "contact-queue"
+                        else:
+                            raise RuntimeError(
+                                "Native run reported a continuation stop without a cause"
+                            )
+                    elif stop.get("kind") == "device":
+                        device = stop.get("device")
+                        if not isinstance(device, str) or not device:
+                            raise RuntimeError(
+                                "Native continuation stop returned an invalid device name"
+                            )
+                        cause = "device-publication"
+                        perf.record_wait_stop(wait_counter, cause, device)
+                    elif stop.get("kind") == "store":
+                        cause = "watched-store"
                     else:
-                        raise RuntimeError('Native run reported a continuation stop without a cause')
-                elif stop.get('kind') == 'device':
-                    device = stop.get('device')
-                    if not isinstance(device, str) or not device:
-                        raise RuntimeError('Native continuation stop returned an invalid device name')
-                    cause = 'device-publication'
-                    perf.record_wait_stop(wait_counter, cause, device)
-                elif stop.get('kind') == 'store':
-                    cause = 'watched-store'
+                        cause = str(stop.get("kind", "unknown"))
+                    if not (stop is not None and stop.get("kind") == "device"):
+                        perf.record_wait_stop(wait_counter, cause)
+                    if profile_stops and stop is not None:
+                        _record_continuation_stop(report, stop)
                 else:
-                    cause = str(stop.get('kind', 'unknown'))
-                if not (stop is not None and stop.get('kind') == 'device'):
+                    if deadline is not None and board.virtual_ticks >= deadline:
+                        cause = "deadline"
+                    elif until_tick is not None and board.virtual_ticks >= until_tick:
+                        cause = "tick-limit"
+                    else:
+                        cause = "instruction-limit"
                     perf.record_wait_stop(wait_counter, cause)
-                if profile_stops and stop is not None:
-                    _record_continuation_stop(report, stop)
-            else:
-                if deadline is not None and board.virtual_ticks >= deadline:
-                    cause = 'deadline'
-                elif until_tick is not None and board.virtual_ticks >= until_tick:
-                    cause = 'tick-limit'
-                else:
-                    cause = 'instruction-limit'
-                perf.record_wait_stop(wait_counter, cause)
-            if after_run is not None:
-                after_run()
-            # A due device effect can publish at the current tick before any
-            # CPU runs. Its watch is progress too; reevaluate the predicate.
-            if not published and before == (board.instructions, board.virtual_ticks):
-                raise RuntimeError('Native execution made no progress: ' + description)
-            yield
-      finally:
-        properties.update(
-            instructions=board.instructions - start,
-            ticks=board.virtual_ticks - tick,
-            polls=polls,
-            continuations=report.continuations,
-        )
+                if after_run is not None:
+                    after_run()
+                # A due device effect can publish at the current tick before any
+                # CPU runs. Its watch is progress too; reevaluate the predicate.
+                if not published and before == (
+                    board.instructions,
+                    board.virtual_ticks,
+                ):
+                    raise RuntimeError(
+                        "Native execution made no progress: " + description
+                    )
+                yield
+        finally:
+            properties.update(
+                instructions=board.instructions - start,
+                ticks=board.virtual_ticks - tick,
+                polls=polls,
+                continuations=report.continuations,
+            )
 
 
-def wait_until(board: WaitBoard, predicate: Callable[[], T], description: str, *,
-               instruction_limit: int = (1 << 63), deadline: int | None = None,
-               until_tick: int | None = None,
-               max_run_instructions: int | None = None,
-               ignored_devices: Collection[str] = (),
-               after_run: Callable[[], object] | None = None,
-               stops: WaitStops | None = None,
-               profile_stops: bool = False) -> T:
-    steps = wait_steps(board, predicate, description, instruction_limit=instruction_limit,
-                       deadline=deadline, until_tick=until_tick, max_run_instructions=max_run_instructions,
-                       ignored_devices=ignored_devices,
-                       after_run=after_run, stops=stops, profile_stops=profile_stops)
+def wait_until(
+    board: WaitBoard,
+    predicate: Callable[[], T],
+    description: str,
+    *,
+    instruction_limit: int = (1 << 63),
+    deadline: int | None = None,
+    until_tick: int | None = None,
+    max_run_instructions: int | None = None,
+    ignored_devices: Collection[str] = (),
+    after_run: Callable[[], object] | None = None,
+    stops: WaitStops | None = None,
+    profile_stops: bool = False,
+) -> T:
+    steps = wait_steps(
+        board,
+        predicate,
+        description,
+        instruction_limit=instruction_limit,
+        deadline=deadline,
+        until_tick=until_tick,
+        max_run_instructions=max_run_instructions,
+        ignored_devices=ignored_devices,
+        after_run=after_run,
+        stops=stops,
+        profile_stops=profile_stops,
+    )
     while True:
         try:
             next(steps)

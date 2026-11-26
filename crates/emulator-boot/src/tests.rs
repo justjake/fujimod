@@ -1,6 +1,6 @@
 use super::*;
-use fujimod_catalog_controls::{ElectricalInput, InputTarget};
 use fujimod_catalog_configuration::Exr2RunScene;
+use fujimod_catalog_controls::{ElectricalInput, InputTarget};
 
 /// The reference X70's NAND sections in the catalog.
 fn reference_camera() -> PathBuf {
@@ -72,8 +72,16 @@ fn startup_presentation_uses_active_outputs_and_rejects_inactive_buffers() {
 fn display_timing_does_not_publish_an_output_hold_wire() {
     let prepared = prepare("x70-110-rec", &[]).unwrap();
     assert!(!prepared.plan.wires.contains_key("display_output_hold"));
-    assert!(prepared.devices_value["wires"].get("display_output_hold").is_none());
-    assert!(model(&prepared, "display_timing")["options"].get("output_hold").is_none());
+    assert!(
+        prepared.devices_value["wires"]
+            .get("display_output_hold")
+            .is_none()
+    );
+    assert!(
+        model(&prepared, "display_timing")["options"]
+            .get("output_hold")
+            .is_none()
+    );
 }
 
 #[test]
@@ -519,19 +527,23 @@ fn shipped_preparation_opens_the_same_board_as_selected_files() {
     };
 
     let direct = snapshot(
-        open_exr2(ResolvedConfiguration::with_overlays(CONFIGURATION, &[]).unwrap(), Options {
-            update: PathBuf::from(&update),
-            boot_rom: PathBuf::from(&boot_rom),
-            nand: None,
-            settings: None,
-            clock_seconds_2000: None,
-            preferred_languages: vec![],
-            camera: Some(reference_camera()),
-            access_point: None,
-            capability_reply: None,
-            sd_card_transfer_ticks: None,
-            card_layout: None,
-        }, Mode::Strict)
+        open_exr2(
+            ResolvedConfiguration::with_overlays(CONFIGURATION, &[]).unwrap(),
+            Options {
+                update: PathBuf::from(&update),
+                boot_rom: PathBuf::from(&boot_rom),
+                nand: None,
+                settings: None,
+                clock_seconds_2000: None,
+                preferred_languages: vec![],
+                camera: Some(reference_camera()),
+                access_point: None,
+                capability_reply: None,
+                sd_card_transfer_ticks: None,
+                card_layout: None,
+            },
+            Mode::Strict,
+        )
         .unwrap(),
     );
     assert!(direct.1.iter().sum::<u64>() >= INSTRUCTIONS);
@@ -559,39 +571,90 @@ fn restart_payload_reconstructs_the_rom_board_after_wake() {
         std::env::var_os("FUJIMOD_TEST_UPDATE"),
         std::env::var_os("FUJIMOD_TEST_BOOT_ROM"),
         std::env::var_os("FUJIMOD_TEST_RESTART_IMAGE"),
-    ) else { return };
-    let mut session = open_exr2(ResolvedConfiguration::with_overlays("x70-110-rec", &[]).unwrap(), Options {
-        update: update.into(), boot_rom: boot_rom.into(), nand: None, settings: None,
-        clock_seconds_2000: None, preferred_languages: vec![], camera: Some(reference_camera()),
-        access_point: None, capability_reply: None, sd_card_transfer_ticks: None,
-        card_layout: None,
-    }, Mode::Strict).unwrap();
-    session.run_with_limits(5_000_000, 1000, None, None).unwrap();
+    ) else {
+        return;
+    };
+    let mut session = open_exr2(
+        ResolvedConfiguration::with_overlays("x70-110-rec", &[]).unwrap(),
+        Options {
+            update: update.into(),
+            boot_rom: boot_rom.into(),
+            nand: None,
+            settings: None,
+            clock_seconds_2000: None,
+            preferred_languages: vec![],
+            camera: Some(reference_camera()),
+            access_point: None,
+            capability_reply: None,
+            sd_card_transfer_ticks: None,
+            card_layout: None,
+        },
+        Mode::Strict,
+    )
+    .unwrap();
+    session
+        .run_with_limits(5_000_000, 1000, None, None)
+        .unwrap();
     session.logic_input("usb_cable", true).unwrap();
     let image = std::fs::read(payload).unwrap();
     session.board.write_physical(0x20000, &image).unwrap();
-    session.board.write_physical(0x22000, &0xe320f003u32.to_le_bytes()).unwrap();
-    session.board.write_register(1, arm::CORE[15], 0x22000).unwrap();
-    let entry = std::env::var("FUJIMOD_TEST_RESTART_ENTRY").unwrap().parse::<u64>().unwrap();
-    session.board.write_register(0, arm::CORE[15], entry).unwrap();
-    session.board.write_register(0, arm::CORE[13], 0x2e000).unwrap();
+    session
+        .board
+        .write_physical(0x22000, &0xe320f003u32.to_le_bytes())
+        .unwrap();
+    session
+        .board
+        .write_register(1, arm::CORE[15], 0x22000)
+        .unwrap();
+    let entry = std::env::var("FUJIMOD_TEST_RESTART_ENTRY")
+        .unwrap()
+        .parse::<u64>()
+        .unwrap();
+    session
+        .board
+        .write_register(0, arm::CORE[15], entry)
+        .unwrap();
+    session
+        .board
+        .write_register(0, arm::CORE[13], 0x2e000)
+        .unwrap();
     session.run_with_limits(20_000, 1000, None, None).unwrap();
-    let alarm = session.resources.clock("clocks").unwrap().power_alarm().unwrap().unwrap();
+    let alarm = session
+        .resources
+        .clock("clocks")
+        .unwrap()
+        .power_alarm()
+        .unwrap()
+        .unwrap();
     let due = alarm.lock().unwrap().next_deadline().unwrap();
     session.run_window(u64::MAX, 1000, None, Some(due)).unwrap();
     assert!(session.board.is_powered_off());
     let wake = alarm.lock().unwrap().next_deadline().unwrap();
     let counts = session.board.instruction_counts();
-    session.run_window(u64::MAX, 1000, None, Some(wake)).unwrap();
+    session
+        .run_window(u64::MAX, 1000, None, Some(wake))
+        .unwrap();
     assert_eq!(session.board.instruction_counts(), counts);
     assert!(session.board.epoch_is_unexecuted());
     assert!(session.resources.logic_level("usb_cable").unwrap().high());
     assert_eq!(session.board.read_register(0, arm::CORE[15]).unwrap(), 0);
-    let packet = session.resources.clock("clocks").unwrap().power_alarm().unwrap().unwrap()
-        .lock().unwrap().packet().unwrap();
+    let packet = session
+        .resources
+        .clock("clocks")
+        .unwrap()
+        .power_alarm()
+        .unwrap()
+        .unwrap()
+        .lock()
+        .unwrap()
+        .packet()
+        .unwrap();
     assert_eq!(&packet[..4], &[1, 0, 0, 0]);
     assert_eq!(packet[13], 0);
-    assert_eq!(packet.iter().fold(0u8, |sum, byte| sum.wrapping_add(*byte)), 0);
+    assert_eq!(
+        packet.iter().fold(0u8, |sum, byte| sum.wrapping_add(*byte)),
+        0
+    );
     let mut memory = vec![0; image.len()];
     session.board.read_physical(0x20000, &mut memory).unwrap();
     assert_ne!(memory, image);
@@ -773,15 +836,16 @@ fn capture_chain_uses_catalog_windows_interrupts_and_sensor_phase() {
 
 #[test]
 fn sensor_sync_acquisition_uses_the_declared_part_readouts() {
-    let mut resolved = ResolvedConfiguration::with_overlays(
-        "x70-110-rec", &["x70-110-browser-camera".into()],
-    ).unwrap();
+    let mut resolved =
+        ResolvedConfiguration::with_overlays("x70-110-rec", &["x70-110-browser-camera".into()])
+            .unwrap();
     let mut sensors = 0;
     for part in &mut resolved.reference.parts {
         if let fujimod_catalog::reference::PartModel::ImageSensor {
             radiometry: Some(radiometry),
             ..
-        } = &mut part.model {
+        } = &mut part.model
+        {
             radiometry.mode_change_frames = 4;
             sensors += 1;
         }
@@ -802,12 +866,19 @@ fn iris_motor_uses_the_body_mechanical_stops_beyond_the_optical_table() {
     assert_eq!(iris["boundary"], "end_stop");
 
     let mut resolved = ResolvedConfiguration::bundled("x70-110-rec").unwrap();
-    resolved.reference.body.lens.as_mut().unwrap().iris.as_mut().unwrap()
+    resolved
+        .reference
+        .body
+        .lens
+        .as_mut()
+        .unwrap()
+        .iris
+        .as_mut()
+        .unwrap()
         .travel_limits = [0, 90];
     let changed = prepared(resolved).unwrap();
     assert_eq!(
-        model(&changed, "lens_serial")["routes"][0]["endpoint"]["options"]["motors"][1]
-            ["travel_limits"],
+        model(&changed, "lens_serial")["routes"][0]["endpoint"]["options"]["motors"][1]["travel_limits"],
         json!([0, 90])
     );
 }
@@ -841,13 +912,18 @@ fn serial_spi1_refuses_a_shift_with_both_chip_selects_low() {
     let shift = |panel_high: bool, configuration: u64, word: u64| {
         let mut document = spec.devices_value.clone();
         document["nodes"].as_array_mut().unwrap().retain(|n| {
-            ["irq0", "irq1", "clocks", "serial_gpio", "serial_spi1"].contains(&n["name"].as_str().unwrap())
+            ["irq0", "irq1", "clocks", "serial_gpio", "serial_spi1"]
+                .contains(&n["name"].as_str().unwrap())
         });
         fujimod_emulator_exr2_board::register_board_builder();
         fujimod_emulator_models::register();
         let mut built = Plan::parse(&serde_json::to_vec(&document).unwrap())
             .unwrap()
-            .build(fujimod_emulator_exr2_resources::Resources::default(), 0, &mut RefuseAdapters)
+            .build(
+                fujimod_emulator_exr2_resources::Resources::default(),
+                0,
+                &mut RefuseAdapters,
+            )
             .unwrap();
         let (gpio, spi) = (built.node_ids["serial_gpio"], built.node_ids["serial_spi1"]);
         let mut host = Clock(0);
@@ -882,10 +958,7 @@ fn serial_spi1_refuses_a_shift_with_both_chip_selects_low() {
 fn video_encoder_backend_is_selected_in_the_prepared_graph() {
     use fujimod_catalog_construction::VideoEncoderBackend;
     let base = prepare("x70-110-rec", &[]).unwrap();
-    assert_eq!(
-        model(&base, "avc_codec")["options"]["backend"],
-        "software"
-    );
+    assert_eq!(model(&base, "avc_codec")["options"]["backend"], "software");
     for (backend, name) in [
         (VideoEncoderBackend::Software, "software"),
         (VideoEncoderBackend::Videotoolbox, "videotoolbox"),
@@ -900,10 +973,7 @@ fn video_encoder_backend_is_selected_in_the_prepared_graph() {
             .video_encoder_backend = Some(backend);
         let run = prepared(resolved).unwrap();
         assert_eq!(model(&run, "avc_codec")["options"]["backend"], name);
-        assert_eq!(
-            model(&run, "avc_codec")["irq"],
-            json!({"core":0,"line":75})
-        );
+        assert_eq!(model(&run, "avc_codec")["irq"], json!({"core":0,"line":75}));
         assert_eq!(
             run.plan
                 .nodes
@@ -938,7 +1008,10 @@ fn declared_pcm_input_selects_one_duplex_audio_channel_in_the_prepared_graph() {
         model(&run, "audio_registers")["options"]["receive"]["sample_rate"],
         48000
     );
-    assert_eq!(model(&run, "audio_registers")["options"]["receive"]["sample"], 0);
+    assert_eq!(
+        model(&run, "audio_registers")["options"]["receive"]["sample"],
+        0
+    );
     assert_eq!(
         run.plan
             .nodes
@@ -997,10 +1070,7 @@ fn browser_graphs_select_portable_encoding_on_every_host() {
                 .video_encoder_backend = Some(VideoEncoderBackend::Videotoolbox);
         }
         let run = prepared(resolved).unwrap();
-        assert_eq!(
-            model(&run, "avc_codec")["options"]["backend"],
-            "software"
-        );
+        assert_eq!(model(&run, "avc_codec")["options"]["backend"], "software");
     }
 }
 
@@ -1062,9 +1132,7 @@ fn exr2_image_transfer_maps_cpu_pages_and_keeps_device_register_bounds() {
             .peripherals
             .iter()
             .find(|p| {
-                p.core == core
-                    && p.address <= 0xfff64000
-                    && p.address + p.size as u64 >= 0xfff65000
+                p.core == core && p.address <= 0xfff64000 && p.address + p.size as u64 >= 0xfff65000
             })
             .expect("both CPUs must map the image-transfer page");
         assert_eq!(aperture.address % 0x1000, 0);

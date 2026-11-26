@@ -240,8 +240,10 @@ impl std::ops::DerefMut for StateGuard<'_> {
 }
 impl Drop for StateGuard<'_> {
     fn drop(&mut self) {
-        self.pending
-            .store(self.guard.invalidations.len(), std::sync::atomic::Ordering::Release);
+        self.pending.store(
+            self.guard.invalidations.len(),
+            std::sync::atomic::Ordering::Release,
+        );
     }
 }
 impl Default for Memory {
@@ -817,7 +819,12 @@ impl Memory {
         changed
     }
     pub(crate) fn flush_pending(&self) -> bool {
-        if self.shared.pending.load(std::sync::atomic::Ordering::Acquire) == 0 {
+        if self
+            .shared
+            .pending
+            .load(std::sync::atomic::Ordering::Acquire)
+            == 0
+        {
             return false;
         }
         let local = self.local.cores.borrow();
@@ -907,9 +914,7 @@ mod tests {
         }
 
         fn invalidate_backing_page(&self, backing_page: usize) -> Result<(), String> {
-            self.invalidation_attempts
-                .borrow_mut()
-                .push(backing_page);
+            self.invalidation_attempts.borrow_mut().push(backing_page);
             if self.fail_next_invalidation.replace(false) {
                 return Err("injected backing invalidation failure".into());
             }
@@ -959,15 +964,19 @@ mod tests {
         {
             let state = shared.state.lock().unwrap();
             assert_eq!(state.invalidations.len(), 2);
+            assert!(state.invalidations.capacity() >= state.cores.len() * state.pages.len());
             assert!(
-                state.invalidations.capacity() >= state.cores.len() * state.pages.len()
+                state
+                    .invalidations
+                    .iter()
+                    .any(|entry| { entry.core == first_id && entry.backing == BACKING })
             );
-            assert!(state.invalidations.iter().any(|entry| {
-                entry.core == first_id && entry.backing == BACKING
-            }));
-            assert!(state.invalidations.iter().any(|entry| {
-                entry.core == second_id && entry.backing == BACKING
-            }));
+            assert!(
+                state
+                    .invalidations
+                    .iter()
+                    .any(|entry| { entry.core == second_id && entry.backing == BACKING })
+            );
         }
 
         first.flush().unwrap();
@@ -1004,10 +1013,7 @@ mod tests {
         }
 
         memory.flush().unwrap();
-        assert_eq!(
-            *owner.invalidation_attempts.borrow(),
-            [BACKING, BACKING]
-        );
+        assert_eq!(*owner.invalidation_attempts.borrow(), [BACKING, BACKING]);
         assert!(!memory.flush_pending());
     }
 

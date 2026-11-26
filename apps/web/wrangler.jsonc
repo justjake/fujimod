@@ -14,7 +14,7 @@
       "/api/devices/*",
       "/api/downloads",
       "/releases/*",
-      "/ota/*"
+      "/ota/*",
     ],
     "not_found_handling": "404-page",
   },

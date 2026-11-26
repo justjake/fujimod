@@ -55,11 +55,19 @@ impl Controls for Sensor {
     ) -> Result<Option<fujimod_emulator_imaging::scene::view::View>, String> {
         Ok(None)
     }
-    fn timing(&mut self, _horizontal: u32, _vertical: u32, _shutter_drive: Option<u64>) -> Result<(), String> {
+    fn timing(
+        &mut self,
+        _horizontal: u32,
+        _vertical: u32,
+        _shutter_drive: Option<u64>,
+    ) -> Result<(), String> {
         Ok(())
     }
     fn save(&self) -> serde_json::Value {
-        serde_json::to_value(Saved { registers: self.registers.clone() }).unwrap()
+        serde_json::to_value(Saved {
+            registers: self.registers.clone(),
+        })
+        .unwrap()
     }
     fn restore(&mut self, state: &serde_json::Value) -> Result<(), String> {
         let saved: Saved = serde_json::from_value(state.clone()).map_err(|e| e.to_string())?;
@@ -93,9 +101,15 @@ mod tests {
     fn stores_the_last_value_of_each_sixteen_bit_register() {
         let mut sensor = Sensor::default();
         sensor
-            .command(&[0x34, 0x07, 2, 0, 0, 0, 0, 0, 0x00, 0x23, 0xcf, 0, 0, 0, 0, 0, 0x34, 0x07, 3, 9, 9, 9, 9, 9])
+            .command(&[
+                0x34, 0x07, 2, 0, 0, 0, 0, 0, 0x00, 0x23, 0xcf, 0, 0, 0, 0, 0, 0x34, 0x07, 3, 9, 9,
+                9, 9, 9,
+            ])
             .unwrap();
-        assert_eq!(sensor.registers, BTreeMap::from([(0x0023, 0xcf), (0x3407, 3)]));
+        assert_eq!(
+            sensor.registers,
+            BTreeMap::from([(0x0023, 0xcf), (0x3407, 3)])
+        );
         assert!(sensor.command(&[0; 7]).is_err());
         let saved = sensor.save();
         let mut restored = Sensor::default();

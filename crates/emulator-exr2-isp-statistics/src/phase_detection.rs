@@ -1,12 +1,12 @@
 //! FFF24000 extractor, result curve at FFF25004. The U16 paired SAD and
 //! packed12 interleaved-aperture SAD are declared numerical laws, not optical
 //! calibration. Only register-addressed rows are read, and only IRQ33 rises.
-use fujimod_emulator_imaging::exr2_isp::{dma, due};
 use fujimod_emulator_devices::exr2::irq_routes::{Irq, IrqRoutes};
+use fujimod_emulator_devices::{Cx, Device};
 use fujimod_emulator_image_processing::analysis::sad_curve;
 use fujimod_emulator_image_processing::raw::{Packing, RawView};
-use fujimod_emulator_devices::{Cx, Device};
-use fujimod_emulator_imaging::exr2_isp::options::phase_detection::{Options, Arithmetic};
+use fujimod_emulator_imaging::exr2_isp::options::phase_detection::{Arithmetic, Options};
+use fujimod_emulator_imaging::exr2_isp::{dma, due};
 
 const BASE: u64 = 0xfff24000;
 const RESULT: u64 = 0xfff25004;

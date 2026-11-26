@@ -198,13 +198,7 @@ fn fail<T>(message: impl Into<String>) -> Result<T> {
 }
 
 impl Registers {
-    pub fn new(
-        channel: Channel,
-        base: u32,
-        modes: Vec<u32>,
-        irq: u8,
-        transfer_ticks: u64,
-    ) -> Self {
+    pub fn new(channel: Channel, base: u32, modes: Vec<u32>, irq: u8, transfer_ticks: u64) -> Self {
         Self {
             channel,
             base,

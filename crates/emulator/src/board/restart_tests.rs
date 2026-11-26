@@ -1,8 +1,8 @@
 //! A counted guest loop must finish however the board splits its instruction
 //! budget, and whichever block-accounting path the engine runs.
 use super::*;
-use fujimod_emulator_cpu::arm;
 use fujimod_emulator_cpu::Model;
+use fujimod_emulator_cpu::arm;
 use fujimod_emulator_cpu_unicorn::Library;
 
 const ITERATIONS: u32 = 20;
@@ -20,7 +20,10 @@ fn get(cpu: &dyn Cpu, register: Register) -> u32 {
 fn words(cpu: &dyn Cpu, address: u64, values: &[u32]) {
     cpu.write_memory(
         address,
-        &values.iter().flat_map(|v| v.to_le_bytes()).collect::<Vec<_>>(),
+        &values
+            .iter()
+            .flat_map(|v| v.to_le_bytes())
+            .collect::<Vec<_>>(),
     )
     .unwrap();
 }
@@ -34,11 +37,7 @@ struct Case {
 
 impl std::fmt::Debug for Case {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            "moving_store={} {:?}",
-            self.moving_store, self.policy
-        )
+        write!(f, "moving_store={} {:?}", self.moving_store, self.policy)
     }
 }
 
@@ -74,7 +73,11 @@ fn cpu_only(case: Case) -> Box<dyn Cpu> {
         &[
             0xe3a0_0000, // mov r0, #0
             0xe584_0000, // str r0, [r4]
-            if case.moving_store { 0xe284_0004 } else { 0xe1a0_0000 }, // add r4, r4, #4
+            if case.moving_store {
+                0xe284_0004
+            } else {
+                0xe1a0_0000
+            }, // add r4, r4, #4
             0xe256_6001, // subs r6, r6, #1
             0x1aff_fffb, // bne 0x10004
             0xe584_6000, // str r6, [r4]
@@ -190,6 +193,10 @@ fn the_core_alone_finishes_the_loop() {
             assert_ne!(progress, 0, "the core must make progress");
             done += progress;
         }
-        assert_eq!(get(&*cpu, arm::CORE[6]), 0, "the core alone must finish the loop");
+        assert_eq!(
+            get(&*cpu, arm::CORE[6]),
+            0,
+            "the core alone must finish the loop"
+        );
     }
 }

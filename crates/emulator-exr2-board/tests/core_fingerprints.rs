@@ -1,8 +1,8 @@
 //! Complete fingerprints retain configuration that changes future hardware
 //! behavior even when current registers and external levels are identical.
 use fujimod_emulator_devices::{Device, exr2::irq, signals::Level};
-use fujimod_emulator_exr2_system::boot;
 use fujimod_emulator_exr2_i2c::{self as i2c};
+use fujimod_emulator_exr2_system::boot;
 use serde_json::json;
 fn bus(connected: Option<bool>, bridge: bool) -> i2c::I2cController {
     let options = serde_json::from_value(

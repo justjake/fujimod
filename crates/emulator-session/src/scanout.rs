@@ -1,7 +1,7 @@
 //! Observational scanout through the native register model and physical RAM.
 use super::Session;
+use fujimod_emulator_devices::capability::ScanoutSource;
 use fujimod_framebuffer::frame::Frame;
-use fujimod_emulator_devices::capability::{ScanoutSource};
 impl Session {
     /// Reuse a presentation only after rechecking registers and every source byte.
     /// No event, guest instruction or architectural state participates in this memo.
@@ -27,12 +27,7 @@ impl Session {
                     |address, expected| self.board.physical_bytes_equal(address, expected),
                     |read| {
                         scanout
-                            .frame(
-                                instance,
-                                true,
-                                read,
-                                diagnostics,
-                            )
+                            .frame(instance, true, read, diagnostics)
                             .map(|frame| frame.map(std::sync::Arc::new))
                     },
                 )
@@ -40,7 +35,9 @@ impl Session {
     }
     pub fn scanout_state(&self, name: &str) -> Result<serde_json::Value, String> {
         self.board
-            .inspect_capability::<dyn ScanoutSource, _>(self.node(name)?, |scanout| Ok(scanout.metadata()))
+            .inspect_capability::<dyn ScanoutSource, _>(self.node(name)?, |scanout| {
+                Ok(scanout.metadata())
+            })
     }
 
     pub fn scanout(
@@ -57,12 +54,7 @@ impl Session {
                     self.board.read_physical(address, &mut bytes)?;
                     Ok(bytes)
                 };
-                scanout.frame(
-                    instance,
-                    pixels,
-                    &mut read,
-                    diagnostic_hashes,
-                )
+                scanout.frame(instance, pixels, &mut read, diagnostic_hashes)
             })
     }
     pub fn scanout_main(
@@ -79,12 +71,7 @@ impl Session {
                     self.board.read_physical(address, &mut bytes)?;
                     Ok(bytes)
                 };
-                scanout.main_frame(
-                    instance,
-                    pixels,
-                    &mut read,
-                    diagnostic_hashes,
-                )
+                scanout.main_frame(instance, pixels, &mut read, diagnostic_hashes)
             })
     }
 }

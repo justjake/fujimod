@@ -48,12 +48,17 @@ impl PcmConfig {
             || self.level_idc == 0
             || self.parameter_interval == 0
         {
-            return Err("HEVC PCM requires an even 8-bit 4:2:0 picture of 16..8192 x 16..4352".into());
+            return Err(
+                "HEVC PCM requires an even 8-bit 4:2:0 picture of 16..8192 x 16..4352".into(),
+            );
         }
         Ok(())
     }
     fn coded(self) -> (usize, usize) {
-        (self.width.next_multiple_of(CTB), self.height.next_multiple_of(CTB))
+        (
+            self.width.next_multiple_of(CTB),
+            self.height.next_multiple_of(CTB),
+        )
     }
     /// The level for the luma picture size (MaxLumaPs of Table A.8).
     pub fn level_for(width: usize, height: usize) -> u8 {
@@ -74,7 +79,10 @@ pub struct PcmEncoder {
 impl PcmEncoder {
     pub fn new(config: PcmConfig) -> Result<Self, String> {
         config.validate()?;
-        Ok(Self { config, pictures: 0 })
+        Ok(Self {
+            config,
+            pictures: 0,
+        })
     }
     pub fn config(&self) -> PcmConfig {
         self.config
@@ -92,10 +100,15 @@ impl PcmEncoder {
             return Err("HEVC PCM planar input size differs".into());
         }
         let mut out = Vec::with_capacity(frame.len() + frame.len() / 8 + 256);
-        if self.pictures.is_multiple_of(u64::from(self.config.parameter_interval)) {
-            for (kind, payload) in
-                [(NAL_VPS, self.vps()), (NAL_SPS, self.sps()), (NAL_PPS, self.pps())]
-            {
+        if self
+            .pictures
+            .is_multiple_of(u64::from(self.config.parameter_interval))
+        {
+            for (kind, payload) in [
+                (NAL_VPS, self.vps()),
+                (NAL_SPS, self.sps()),
+                (NAL_PPS, self.pps()),
+            ] {
                 push_nal(&mut out, kind, &payload);
             }
         }
@@ -336,7 +349,11 @@ impl Bits {
         }
     }
     fn se(&mut self, value: i32) {
-        self.ue(if value > 0 { value as u32 * 2 - 1 } else { (-value) as u32 * 2 });
+        self.ue(if value > 0 {
+            value as u32 * 2 - 1
+        } else {
+            (-value) as u32 * 2
+        });
     }
     fn align_zero(&mut self) {
         while self.used != 0 {
@@ -367,8 +384,20 @@ impl<'a> Cabac<'a> {
         let offset = i32::from(SPLIT_CU_INIT & 15);
         let (m, n) = (slope * 5 - 45, (offset << 3) - 16);
         let pre = (((m * SLICE_QP.clamp(0, 51)) >> 4) + n).clamp(1, 126);
-        let (state, mps) = if pre <= 63 { (63 - pre, 0) } else { (pre - 64, 1) };
-        Self { out, low: 0, range: 510, outstanding: 0, first: true, state: state as u8, mps }
+        let (state, mps) = if pre <= 63 {
+            (63 - pre, 0)
+        } else {
+            (pre - 64, 1)
+        };
+        Self {
+            out,
+            low: 0,
+            range: 510,
+            outstanding: 0,
+            first: true,
+            state: state as u8,
+            mps,
+        }
     }
     fn bits(&mut self) -> &mut Bits {
         self.out
@@ -481,7 +510,12 @@ mod tests {
 
     #[test]
     fn parameter_sets_and_one_idr_slice() {
-        let config = PcmConfig { width: 64, height: 40, level_idc: 93, parameter_interval: 2 };
+        let config = PcmConfig {
+            width: 64,
+            height: 40,
+            level_idc: 93,
+            parameter_interval: 2,
+        };
         let mut encoder = PcmEncoder::new(config).unwrap();
         let first = encoder.encode_i420(&picture(64, 40)).unwrap();
         let kinds: Vec<u8> = nal_units(&first).iter().map(|n| n[0] >> 1).collect();
@@ -496,14 +530,29 @@ mod tests {
 
     #[test]
     fn slices_hold_every_sample_and_are_deterministic() {
-        let config = PcmConfig { width: 32, height: 32, level_idc: 93, parameter_interval: 1 };
+        let config = PcmConfig {
+            width: 32,
+            height: 32,
+            level_idc: 93,
+            parameter_interval: 1,
+        };
         let frame = picture(32, 32);
-        let a = PcmEncoder::new(config).unwrap().encode_i420(&frame).unwrap();
-        let b = PcmEncoder::new(config).unwrap().encode_i420(&frame).unwrap();
+        let a = PcmEncoder::new(config)
+            .unwrap()
+            .encode_i420(&frame)
+            .unwrap();
+        let b = PcmEncoder::new(config)
+            .unwrap()
+            .encode_i420(&frame)
+            .unwrap();
         assert_eq!(a, b);
         let slice = *nal_units(&a).last().unwrap();
         // Four CTUs of 384 PCM bytes each, plus header and CABAC bits.
-        assert!(slice.len() > 4 * 384 && slice.len() < 4 * 384 + 64, "{}", slice.len());
+        assert!(
+            slice.len() > 4 * 384 && slice.len() < 4 * 384 + 64,
+            "{}",
+            slice.len()
+        );
         // The first CTU's luma row appears verbatim after the PCM alignment.
         let row: Vec<u8> = frame[..16].to_vec();
         assert!(slice.windows(16).any(|w| w == row.as_slice()));
@@ -518,9 +567,19 @@ mod tests {
 
     #[test]
     fn rejects_bad_sizes() {
-        let bad = PcmConfig { width: 15, height: 16, level_idc: 93, parameter_interval: 1 };
+        let bad = PcmConfig {
+            width: 15,
+            height: 16,
+            level_idc: 93,
+            parameter_interval: 1,
+        };
         assert!(PcmEncoder::new(bad).is_err());
-        let ok = PcmConfig { width: 64, height: 64, level_idc: 93, parameter_interval: 1 };
+        let ok = PcmConfig {
+            width: 64,
+            height: 64,
+            level_idc: 93,
+            parameter_interval: 1,
+        };
         assert!(PcmEncoder::new(ok).unwrap().encode_i420(&[0; 10]).is_err());
     }
 
@@ -531,11 +590,18 @@ mod tests {
     #[test]
     fn cropped_stream_matches_the_decoder_checked_bytes() {
         let (w, h) = (40usize, 24usize);
-        let config = PcmConfig { width: w, height: h, level_idc: 93, parameter_interval: 2 };
+        let config = PcmConfig {
+            width: w,
+            height: h,
+            level_idc: 93,
+            parameter_interval: 2,
+        };
         let mut encoder = PcmEncoder::new(config).unwrap();
         let mut stream = Vec::new();
         for f in 0..3usize {
-            let frame: Vec<u8> = (0..w * h * 3 / 2).map(|i| ((i * 37 + f * 11) % 256) as u8).collect();
+            let frame: Vec<u8> = (0..w * h * 3 / 2)
+                .map(|i| ((i * 37 + f * 11) % 256) as u8)
+                .collect();
             stream.extend(encoder.encode_i420(&frame).unwrap());
         }
         assert_eq!(stream.len(), 7117);

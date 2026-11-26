@@ -33,9 +33,21 @@ def pull_request_base(repository: Repository, branch: str) -> str:
     """The base branch of ``branch``'s open pull request, or main without one."""
     try:
         listed = subprocess.run(
-            ["gh", "pr", "list", "--head", branch, "--state", "open",
-             "--json", "baseRefName,number"],
-            cwd=repository.root, capture_output=True, text=True, check=False,
+            [
+                "gh",
+                "pr",
+                "list",
+                "--head",
+                branch,
+                "--state",
+                "open",
+                "--json",
+                "baseRefName,number",
+            ],
+            cwd=repository.root,
+            capture_output=True,
+            text=True,
+            check=False,
         )
     except FileNotFoundError:
         raise Failure("gh is not installed; pass --base BRANCH") from None
@@ -47,14 +59,20 @@ def pull_request_base(repository: Repository, branch: str) -> str:
     pulls = json.loads(listed.stdout or "[]")
     if len(pulls) > 1:
         numbers = ", ".join(f"#{pull['number']}" for pull in pulls)
-        raise Failure(f"{branch} has several open pull requests ({numbers}); pass --base BRANCH")
+        raise Failure(
+            f"{branch} has several open pull requests ({numbers}); pass --base BRANCH"
+        )
     return pulls[0]["baseRefName"] if pulls else DEFAULT_BASE
 
 
 def branch_submodules(repository: Repository) -> list[tuple[str, Repository]]:
     """Initialized submodule checkouts whose HEAD is a branch, in path order."""
     listed = repository.git(
-        "config", "-f", ".gitmodules", "--get-regexp", r"^submodule\..*\.path$",
+        "config",
+        "-f",
+        ".gitmodules",
+        "--get-regexp",
+        r"^submodule\..*\.path$",
         check=False,
     )
     if listed.returncode:
@@ -104,10 +122,14 @@ def main() -> None:
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
     )
     parser.add_argument(
-        "--repo", type=Path, action="append",
+        "--repo",
+        type=Path,
+        action="append",
         help="checkout to rebase (repeatable, in order; default: the current one)",
     )
-    parser.add_argument("--base", help="rebase onto this branch instead of the pull request's base")
+    parser.add_argument(
+        "--base", help="rebase onto this branch instead of the pull request's base"
+    )
     args = parser.parse_args()
     seen: set[Path] = set()
     pin_maps: dict[Path, dict[str, str]] = {}

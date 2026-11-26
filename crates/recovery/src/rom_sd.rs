@@ -362,10 +362,7 @@ fn exr_edits(code: &[u8], table: &Table, flash: usize, nand_free: bool) -> Resul
         .step_by(4)
         .filter(|at| call(code, *at).ok() == Some(wrappers[0]))
         .collect();
-    require(
-        callers.len() == 1,
-        "EXR table reader has ambiguous callers",
-    )?;
+    require(callers.len() == 1, "EXR table reader has ambiguous callers")?;
     let mut pairs = vec![];
     for at in (0..code.len().saturating_sub(56)).step_by(4) {
         if !sequence(code, at, &[0xe5960014, 0xe5961004])

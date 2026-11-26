@@ -124,10 +124,12 @@ async fn run() -> std::result::Result<(), Box<dyn std::error::Error>> {
     let (mount, benchmark) = (options.mount, options.benchmark);
     if options.read_only {
         let device = fujimod_camera_mount::read_only::ReadOnly(device);
-        let fs = CameraFs::new(device, regions.clone()).map_err(std::io::Error::from_raw_os_error)?;
+        let fs =
+            CameraFs::new(device, regions.clone()).map_err(std::io::Error::from_raw_os_error)?;
         serve(fs, mount, benchmark, metadata, regions, fatal).await
     } else {
-        let fs = CameraFs::new(device, regions.clone()).map_err(std::io::Error::from_raw_os_error)?;
+        let fs =
+            CameraFs::new(device, regions.clone()).map_err(std::io::Error::from_raw_os_error)?;
         serve(fs, mount, benchmark, metadata, regions, fatal).await
     }
 }
@@ -161,10 +163,7 @@ async fn serve<D: fujimod_camera_mount::Device + 'static>(
             return Err(error.into());
         }
     };
-    println!(
-        "Mounted {}. Press Ctrl+C to unmount.",
-        mount.display()
-    );
+    println!("Mounted {}. Press Ctrl+C to unmount.", mount.display());
     if benchmark {
         let mount = mount.clone();
         let result = tokio::task::spawn_blocking(move || benchmark::run(&mount, &regions)).await?;

@@ -242,10 +242,9 @@ impl Registers {
         let target = self.irq_target(routes)?;
         let binding = self.bindings(routes, target)?;
         let generation = self.generation;
-        let pending = self
-            .pending
-            .get_mut(&token)
-            .ok_or_else(|| fujimod_emulator_devices::Unsupported("Unknown control-bus completion token".into()))?;
+        let pending = self.pending.get_mut(&token).ok_or_else(|| {
+            fujimod_emulator_devices::Unsupported("Unknown control-bus completion token".into())
+        })?;
         if pending.generation != generation || pending.target != target || !self.busy {
             return super::fail(
                 "Cannot latch an inactive or differently routed control-bus transfer",
@@ -525,7 +524,9 @@ impl Registers {
                             Value::hex(
                                 p.target
                                     .ok_or_else(|| {
-                                        fujimod_emulator_devices::Unsupported("Bus1 completion has no target".into())
+                                        fujimod_emulator_devices::Unsupported(
+                                            "Bus1 completion has no target".into(),
+                                        )
                                     })?
                                     .into(),
                             ),
@@ -548,7 +549,9 @@ impl Registers {
                             Value::hex(
                                 p.target
                                     .ok_or_else(|| {
-                                        fujimod_emulator_devices::Unsupported("Bus1 completion has no target".into())
+                                        fujimod_emulator_devices::Unsupported(
+                                            "Bus1 completion has no target".into(),
+                                        )
                                     })?
                                     .into(),
                             ),
@@ -559,7 +562,9 @@ impl Registers {
                 }
                 SecondaryFinish::Prefix => {
                     let register = *p.payload.first().ok_or_else(|| {
-                        fujimod_emulator_devices::Unsupported("Bus1 completion has no prefix".into())
+                        fujimod_emulator_devices::Unsupported(
+                            "Bus1 completion has no prefix".into(),
+                        )
                     })?;
                     p.pwic_prefix = Some(register.into());
                     p.remember(parts::dict(vec![
@@ -568,7 +573,9 @@ impl Registers {
                             Value::hex(
                                 p.target
                                     .ok_or_else(|| {
-                                        fujimod_emulator_devices::Unsupported("Bus1 completion has no target".into())
+                                        fujimod_emulator_devices::Unsupported(
+                                            "Bus1 completion has no target".into(),
+                                        )
                                     })?
                                     .into(),
                             ),
@@ -584,7 +591,9 @@ impl Registers {
                             Value::hex(
                                 p.target
                                     .ok_or_else(|| {
-                                        fujimod_emulator_devices::Unsupported("Bus1 completion has no target".into())
+                                        fujimod_emulator_devices::Unsupported(
+                                            "Bus1 completion has no target".into(),
+                                        )
                                     })?
                                     .into(),
                             ),
@@ -843,7 +852,12 @@ impl Registers {
             ),
             (
                 "counts",
-                Value::List(counts.into_iter().map(|count| Value::int(i64::from(count))).collect()),
+                Value::List(
+                    counts
+                        .into_iter()
+                        .map(|count| Value::int(i64::from(count)))
+                        .collect(),
+                ),
             ),
             ("full_scale_g", Value::int([2, 4, 8][data_cfg as usize])),
             ("resolution_bits", Value::int(12)),
@@ -1018,10 +1032,11 @@ impl Registers {
             }
             if p.admitted(p.prefix_address)
                 && p.prefix_address.is_some_and(|a| byte == a << 1 | 1)
-                && (p.touch.is_some() || matches!(
-                    self.profile,
-                    Some(Profile::Heartbeat | Profile::LatchedHeartbeat)
-                ))
+                && (p.touch.is_some()
+                    || matches!(
+                        self.profile,
+                        Some(Profile::Heartbeat | Profile::LatchedHeartbeat)
+                    ))
             {
                 if let Some((register, bytes, _)) = p
                     .prefixed_registers

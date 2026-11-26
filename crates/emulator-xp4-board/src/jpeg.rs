@@ -184,7 +184,13 @@ mod tests {
         let mut e = encoder();
         let mut h = host();
         h.ram[0x1000..0x1000 + picture.len()].copy_from_slice(&picture);
-        program(&mut e, &mut h, 16 << 16 | 16, (y << 16 | x) as u32, pitch as u32);
+        program(
+            &mut e,
+            &mut h,
+            16 << 16 | 16,
+            (y << 16 | x) as u32,
+            pitch as u32,
+        );
         write(&mut e, &mut h, BASE, START);
         assert_eq!(e.next_deadline(0), Some(10));
         advance(&mut e, &mut h, 10);

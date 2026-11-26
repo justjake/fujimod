@@ -47,12 +47,12 @@ shape from the engine design notes: `bl` to a two-instruction leaf that
 returns with `bx lr`, then `subs` and `bne` — five guest instructions in
 three blocks. 1,073 samples of a 200M-instruction run, self samples:
 
-| Cost | Share |
-|---|---:|
+| Cost                                                     | Share |
+| -------------------------------------------------------- | ----: |
 | `helper_lookup_tb_ptr` (includes `cpu_get_tb_cpu_state`) | 46.9% |
-| leaf block (`add`, `bx lr`) | 24.4% |
-| caller block (`bl`) | 15.8% |
-| loop block (`subs`, `bne`) | 12.3% |
+| leaf block (`add`, `bx lr`)                              | 24.4% |
+| caller block (`bl`)                                      | 15.8% |
+| loop block (`subs`, `bne`)                               | 12.3% |
 
 Only the `bx lr` exit entered C: `bl` and `bne` are direct branches that
 use QEMU's patched `goto_tb` chain. Recomputing the block state and probing
@@ -114,13 +114,13 @@ guide passes at 11.2 camera seconds in 22.0 CPU seconds (0.51x).
 Engine time in that guide, as shares of the whole run sampled after boot (the
 remainder is Python observation, PNG decoding and live-view scene rendering):
 
-| Cost | Share |
-|---|---|
-| Stores on the slow path (`store_helper`), including state restores for MMIO inside a block | 16% |
-| Translating guest code (`tb_gen_code`) | 13% |
-| Instruction callbacks: exclusives 5%, failed loop proofs 2%, register reads that restore state | 11% |
-| Per-access exit checks (`helper_check_exit_request`) | 7% |
-| Per-block hook helper (`helper_uc_tracecode`) | 7% |
+| Cost                                                                                           | Share |
+| ---------------------------------------------------------------------------------------------- | ----- |
+| Stores on the slow path (`store_helper`), including state restores for MMIO inside a block     | 16%   |
+| Translating guest code (`tb_gen_code`)                                                         | 13%   |
+| Instruction callbacks: exclusives 5%, failed loop proofs 2%, register reads that restore state | 11%   |
+| Per-access exit checks (`helper_check_exit_request`)                                           | 7%    |
+| Per-block hook helper (`helper_uc_tracecode`)                                                  | 7%    |
 
 Core 0 left translated code 1.73M times ("check exit, no sync"), once per
 600 guest instructions: an emulated LDREX, STREX or CP14 identity read wrote
@@ -161,11 +161,11 @@ of a one-shot translation, I/O recompile, a guest store to a code page, an
 emulation exit address, the embedder's translation removal, a watchpoint, an
 embedder instruction restart, or a physical write to code.
 
-| Change | ev_dial host instructions | Boot host instructions |
-|---|---|---|
-| Before | 213.1–213.7G | 19.1–19.2G |
-| Replaced exclusives and identity reads | 207–213G | 19.1–19.2G |
-| 256 MiB translation cache | 196.1–197.6G | 18.4G |
+| Change                                 | ev_dial host instructions | Boot host instructions |
+| -------------------------------------- | ------------------------- | ---------------------- |
+| Before                                 | 213.1–213.7G              | 19.1–19.2G             |
+| Replaced exclusives and identity reads | 207–213G                  | 19.1–19.2G             |
+| 256 MiB translation cache              | 196.1–197.6G              | 18.4G                  |
 
 ev_dial host instructions are the runner's per-guide records
 (`host_instructions`); boot counts the whole process for construction and 65M

@@ -27,7 +27,8 @@ fn run_with(
             Processor {
                 model: Model::CortexM4,
                 registers: vec![],
-                released: true, parked_until_sgi: false,
+                released: true,
+                parked_until_sgi: false,
                 rprofile: None,
                 mprofile: Some(super::mprofile::Config {
                     clock_hz: 1_000_000_000,
@@ -40,7 +41,8 @@ fn run_with(
                 mprofile: None,
                 model: Model::CortexR5F,
                 registers: vec![(Register::Pc, 0x10000)],
-                released: true, parked_until_sgi: false,
+                released: true,
+                parked_until_sgi: false,
             },
         ],
         dma_mappings: vec![
@@ -123,7 +125,10 @@ fn run_with(
         .unwrap()
         .write_memory(
             0x10000,
-            &peer.into_iter().flat_map(u32::to_le_bytes).collect::<Vec<_>>(),
+            &peer
+                .into_iter()
+                .flat_map(u32::to_le_bytes)
+                .collect::<Vec<_>>(),
         )
         .unwrap();
     if let Some(at) = host_write_at {
@@ -133,7 +138,11 @@ fn run_with(
     board.run_until(400, quantum).unwrap();
     let m4 = board.cpu(0).unwrap();
     let registers = [0, if host_write_at.is_some() { 2 } else { 1 }].map(|r| {
-        scalar(m4, Register::Arm32(fujimod_emulator_cpu::arm::Register::R(r))).unwrap()
+        scalar(
+            m4,
+            Register::Arm32(fujimod_emulator_cpu::arm::Register::R(r)),
+        )
+        .unwrap()
     });
     let retained = board.state.borrow().code_shadow[0]
         .as_ref()
@@ -165,12 +174,17 @@ fn retained_translations_run_the_instructions_that_discarded_translations_run() 
 fn a_host_write_between_run_windows_reaches_retained_translations() {
     for quantum in [1, 3, 8, 64] {
         // The peer rewrites the instruction unchanged; only the host patches it.
-        let (discarded, discarded_registers, _) = run_with(quantum, false, 0x3001, Some(150), ExecutionPolicy::Exact);
-        let (kept, kept_registers, retained) = run_with(quantum, true, 0x3001, Some(150), ExecutionPolicy::Exact);
+        let (discarded, discarded_registers, _) =
+            run_with(quantum, false, 0x3001, Some(150), ExecutionPolicy::Exact);
+        let (kept, kept_registers, retained) =
+            run_with(quantum, true, 0x3001, Some(150), ExecutionPolicy::Exact);
         assert_eq!(kept_registers, discarded_registers, "quantum {quantum}");
         assert_eq!(kept, discarded, "quantum {quantum}");
         assert!(retained > 0, "quantum {quantum} never kept a translation");
-        assert!(kept_registers[0] > 0 && kept_registers[1] > 0, "quantum {quantum}");
+        assert!(
+            kept_registers[0] > 0 && kept_registers[1] > 0,
+            "quantum {quantum}"
+        );
     }
 }
 
@@ -183,8 +197,12 @@ fn the_interactive_policy_keeps_translations_with_the_same_result() {
         for (patch, host_write_at) in [(0x3101, None), (0x3001, None), (0x3001, Some(150))] {
             let (discarded, discarded_registers, _) =
                 run_with(quantum, false, patch, host_write_at, policy);
-            let (kept, kept_registers, retained) = run_with(quantum, true, patch, host_write_at, policy);
-            assert_eq!(kept_registers, discarded_registers, "quantum {quantum} patch {patch:#x}");
+            let (kept, kept_registers, retained) =
+                run_with(quantum, true, patch, host_write_at, policy);
+            assert_eq!(
+                kept_registers, discarded_registers,
+                "quantum {quantum} patch {patch:#x}"
+            );
             assert_eq!(kept, discarded, "quantum {quantum} patch {patch:#x}");
             assert!(retained > 0, "quantum {quantum} never kept a translation");
             assert!(kept_registers[1] > 0 || patch == 0x3001 && host_write_at.is_none());
@@ -195,8 +213,10 @@ fn the_interactive_policy_keeps_translations_with_the_same_result() {
 #[test]
 fn changed_pages_at_the_stop_pc_are_discarded_individually() {
     use super::code_shadow::{CodeShadow, Touch};
-    let cpu = fujimod_emulator_cpu_unicorn::Library::linked().unwrap()
-        .open(Model::CortexM4, 1 << 20).unwrap();
+    let cpu = fujimod_emulator_cpu_unicorn::Library::linked()
+        .unwrap()
+        .open(Model::CortexM4, 1 << 20)
+        .unwrap();
     cpu.map_zeroed(0, 0x4000, 7).unwrap();
     let mut shadow = CodeShadow::default();
     let checked = |address| address < 0x4000;

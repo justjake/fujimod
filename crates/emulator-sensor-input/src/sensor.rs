@@ -2,10 +2,10 @@
 //! Completion is scheduled; stock code owns its busy polls, cleanup and retries.
 use fujimod_emulator_devices::checkpoint::Checkpoint;
 use fujimod_emulator_devices::{Cx, Device};
-use serde::{Deserialize, Serialize};
-use serde_json::Value;
 use fujimod_emulator_imaging::exposure::{Exposure, ExposureHandle};
 use fujimod_emulator_imaging::xtrans;
+use serde::{Deserialize, Serialize};
+use serde_json::Value;
 use std::collections::BTreeMap;
 use std::sync::{Arc, Mutex};
 
@@ -72,7 +72,10 @@ impl SensorState {
             self.earlier_still_raws.push(previous);
         }
         self.earlier_still_raws.retain(|r| !r.overlaps(&picture));
-        let excess = self.earlier_still_raws.len().saturating_sub(EARLIER_STILL_RAWS);
+        let excess = self
+            .earlier_still_raws
+            .len()
+            .saturating_sub(EARLIER_STILL_RAWS);
         self.earlier_still_raws.drain(..excess);
         self.still_raw = Some(picture);
     }
@@ -230,7 +233,14 @@ pub struct Sensor(
 );
 impl Sensor {
     pub fn new(routes: Option<ImageRoutes>, read_gate: (u16, u8)) -> Self {
-        Self(Arc::default(), routes, read_gate, None, ExposureHandle::default(), None)
+        Self(
+            Arc::default(),
+            routes,
+            read_gate,
+            None,
+            ExposureHandle::default(),
+            None,
+        )
     }
     /// Let the frame length follow the sensor's registers in one decoded readout (see
     /// [`FrameTiming`]). Set it before the sensor is cloned into its devices.
@@ -241,7 +251,9 @@ impl Sensor {
     /// The length of the current frame in ticks: in the decoded readout ([`FrameTiming`]) the
     /// programmed frame length, otherwise `stand_in` (the device's configured period).
     pub fn frame_ticks(&self, stand_in: u64) -> u64 {
-        let Some(timing) = self.5 else { return stand_in };
+        let Some(timing) = self.5 else {
+            return stand_in;
+        };
         let s = self.0.lock().unwrap();
         let r = |a: u16| u64::from(s.registers.get(&a).copied().unwrap_or(0));
         if r(0x01) != u64::from(timing.readout) {
@@ -304,7 +316,10 @@ impl Sensor {
         } else {
             s.image.insert(offset, value);
         }
-        if self.3.is_some_and(|still| offset == [0x40, 0xc0][still.channel] + 0x10) {
+        if self
+            .3
+            .is_some_and(|still| offset == [0x40, 0xc0][still.channel] + 0x10)
+        {
             s.still_programmed = true;
         }
         let Some(routes) = self.1 else { return };
@@ -450,9 +465,8 @@ impl Sensor {
         let pitch = u64::from(reg(0x18));
         // As on the live-view channels: a pitch from 1.5 up to (not including) 2 bytes a sample
         // holds packed 12-bit lines.
-        let packed12 = reg(0x14) & 7 == 0
-            && pitch * 2 >= u64::from(width) * 3
-            && pitch < u64::from(width) * 2;
+        let packed12 =
+            reg(0x14) & 7 == 0 && pitch * 2 >= u64::from(width) * 3 && pitch < u64::from(width) * 2;
         if !packed12 && still.sixteen_bit_codes >> code & 1 == 0 {
             return Err(format!(
                 "still RAW DMA channel {}: format code {code} (+{:#x} = {format:#x}) is not decoded; \
@@ -560,8 +574,7 @@ impl Sensor {
     }
     pub fn streaming(&self) -> bool {
         let s = self.0.lock().unwrap();
-        s.writes != 0
-            && (s.no_standby_gate || s.registers.get(&0).copied().unwrap_or(1) & 1 == 0)
+        s.writes != 0 && (s.no_standby_gate || s.registers.get(&0).copied().unwrap_or(1) & 1 == 0)
     }
 }
 #[derive(Default, Serialize, Deserialize)]
@@ -672,7 +685,10 @@ pub fn analog_gain(code: u16) -> Option<f64> {
 /// 0x302e1dc), then 0xbb, 0x37 and flushes.
 pub fn gain_codes(registers: &BTreeMap<u16, u8>) -> [u16; 2] {
     let r = |a: u16| u16::from(registers.get(&a).copied().unwrap_or(0));
-    [r(0x38) | (r(0x39) & 0xf) << 8, r(0x3a) | (r(0x3b) & 0xf) << 8]
+    [
+        r(0x38) | (r(0x39) & 0xf) << 8,
+        r(0x3a) | (r(0x3b) & 0xf) << 8,
+    ]
 }
 
 /// The exposure the sensor registers select. Gain: the first code of [`gain_codes`] (a code
@@ -740,11 +756,19 @@ impl Command {
         }
         let r = |a: u16| registers.get(&a).copied().unwrap_or(0);
         let hex = |range: std::ops::RangeInclusive<u16>| {
-            range.map(|a| format!("{:02x}", r(a))).collect::<Vec<_>>().join(" ")
+            range
+                .map(|a| format!("{:02x}", r(a)))
+                .collect::<Vec<_>>()
+                .join(" ")
         };
         let apex = cx.ram_bytes(AE_APEX, 12).map_or_else(
             |_| "unreadable".to_string(),
-            |b| b.iter().map(|v| format!("{v:02x}")).collect::<Vec<_>>().join(""),
+            |b| {
+                b.iter()
+                    .map(|v| format!("{v:02x}"))
+                    .collect::<Vec<_>>()
+                    .join("")
+            },
         );
         let [first, second] = gain_codes(registers);
         let line = format!(
@@ -881,9 +905,7 @@ impl Device for Command {
         let o = address.wrapping_sub(self.base);
         // Words backed by stored state only: the image registers are read
         // through the sensor and are not covered.
-        size == 4
-            && o & 3 == 0
-            && matches!(o, 0 | 0x180..=0x1b0 | 0x200..=0x21c | 0x224..=0x240)
+        size == 4 && o & 3 == 0 && matches!(o, 0 | 0x180..=0x1b0 | 0x200..=0x21c | 0x224..=0x240)
     }
     fn write(&mut self, cx: &mut Cx<'_>, address: u64, size: u8, value: u64) {
         let o = address.wrapping_sub(self.base);
@@ -1100,20 +1122,49 @@ mod tests {
         for address in [0xbb00f6b0, 0x1_fb00f690, 0xb600f6a0] {
             sensor.0.lock().unwrap().record_still_raw(picture(address));
         }
-        assert_eq!(sensor.still_raw_at(0xbb10d1e0, 0x3d80), Some(picture(0xbb00f6b0)));
-        assert_eq!(sensor.still_raw_at(0x1_fb10d1c0, 0x3d80), Some(picture(0x1_fb00f690)));
-        assert_eq!(sensor.still_raw_at(0xb610d1d0, 0x3d80), Some(picture(0xb600f6a0)));
-        assert_eq!(sensor.still_raw_at(0x1_c34f5880, 0x3d60), Some(picture(0xb600f6a0)));
-        assert_eq!(sensor.still_raw_at(0xbb10d1e0, 0x3d60), Some(picture(0xb600f6a0)));
+        assert_eq!(
+            sensor.still_raw_at(0xbb10d1e0, 0x3d80),
+            Some(picture(0xbb00f6b0))
+        );
+        assert_eq!(
+            sensor.still_raw_at(0x1_fb10d1c0, 0x3d80),
+            Some(picture(0x1_fb00f690))
+        );
+        assert_eq!(
+            sensor.still_raw_at(0xb610d1d0, 0x3d80),
+            Some(picture(0xb600f6a0))
+        );
+        assert_eq!(
+            sensor.still_raw_at(0x1_c34f5880, 0x3d60),
+            Some(picture(0xb600f6a0))
+        );
+        assert_eq!(
+            sensor.still_raw_at(0xbb10d1e0, 0x3d60),
+            Some(picture(0xb600f6a0))
+        );
         // A picture 0x1000 bytes into the first buffer replaces it.
-        sensor.0.lock().unwrap().record_still_raw(picture(0xbb0106b0));
-        assert_eq!(sensor.0.lock().unwrap().earlier_still_raws, vec![picture(0x1_fb00f690), picture(0xb600f6a0)]);
+        sensor
+            .0
+            .lock()
+            .unwrap()
+            .record_still_raw(picture(0xbb0106b0));
+        assert_eq!(
+            sensor.0.lock().unwrap().earlier_still_raws,
+            vec![picture(0x1_fb00f690), picture(0xb600f6a0)]
+        );
         for n in 0..10 {
-            sensor.0.lock().unwrap().record_still_raw(picture(0x2_0000_0000 + n * 0x1000_0000));
+            sensor
+                .0
+                .lock()
+                .unwrap()
+                .record_still_raw(picture(0x2_0000_0000 + n * 0x1000_0000));
         }
         let state = sensor.0.lock().unwrap();
         assert_eq!(state.earlier_still_raws.len(), EARLIER_STILL_RAWS);
-        assert_eq!(state.earlier_still_raws[EARLIER_STILL_RAWS - 1], picture(0x2_8000_0000));
+        assert_eq!(
+            state.earlier_still_raws[EARLIER_STILL_RAWS - 1],
+            picture(0x2_8000_0000)
+        );
     }
     /// Gain register writes set the shared exposure (gain 4095 / (4095 - code), first code);
     /// a snapshot restore recomputes it from the registers.
@@ -1126,14 +1177,32 @@ mod tests {
             .iter()
             .flat_map(|&(r, v)| [0x81, (r >> 8) as u8, r as u8, v, 0, 0, 0, 0])
             .collect();
-        let mut host = RecordingHost { ram: packets.clone(), ram_base: 0x1000, ..Default::default() };
+        let mut host = RecordingHost {
+            ram: packets.clone(),
+            ram_base: 0x1000,
+            ..Default::default()
+        };
         assert_eq!(sensor.relative_exposure(), 1.);
-        for (offset, value) in [(0x208, 0x10404), (0x20c, 0), (0x210, 0x1000), (0x218, 8), (0x204, 1)] {
-            command.write(&mut Cx::new(&mut host, 0, 0, 0), 0xff948000 + offset, 4, value);
+        for (offset, value) in [
+            (0x208, 0x10404),
+            (0x20c, 0),
+            (0x210, 0x1000),
+            (0x218, 8),
+            (0x204, 1),
+        ] {
+            command.write(
+                &mut Cx::new(&mut host, 0, 0, 0),
+                0xff948000 + offset,
+                4,
+                value,
+            );
         }
         host.now = 1000;
         command.advance(&mut Cx::new(&mut host, 0, 0, 0));
-        assert_eq!(gain_codes(&sensor.0.lock().unwrap().registers), [0x800, 0x800]);
+        assert_eq!(
+            gain_codes(&sensor.0.lock().unwrap().registers),
+            [0x800, 0x800]
+        );
         assert!((sensor.relative_exposure() - 4095. / 2047.).abs() < 1e-9);
         assert_eq!(analog_gain(0), Some(1.));
         assert_eq!(analog_gain(4095), None);
@@ -1149,7 +1218,12 @@ mod tests {
     #[test]
     fn the_still_channel_writes_optical_black_and_latches_the_exposure() {
         let sensor = Sensor::new(
-            Some(ImageRoutes { dma: Some([162, 163]), timing: [166, 164], line_stride: true, frame_start_pulse: None }),
+            Some(ImageRoutes {
+                dma: Some([162, 163]),
+                timing: [166, 164],
+                line_stride: true,
+                frame_start_pulse: None,
+            }),
             (0x59, 4),
         )
         .with_still_channel(StillChannel {
@@ -1159,7 +1233,11 @@ mod tests {
             optical_black: (6, 6),
         });
         let (width, lines, pitch) = (24usize, 18usize, 0x40usize);
-        let mut host = RecordingHost { ram: vec![0x55; pitch * lines], ram_base: 0x2000_0000, ..Default::default() };
+        let mut host = RecordingHost {
+            ram: vec![0x55; pitch * lines],
+            ram_base: 0x2000_0000,
+            ..Default::default()
+        };
         let capture = |host: &mut RecordingHost| {
             for (offset, value) in [
                 (0xdc, 5 << 16),
@@ -1197,7 +1275,10 @@ mod tests {
         assert_eq!(sample(&host, 7, 6), lut.0[1][235]);
         assert_eq!(sensor.still_raw().unwrap().exposure, 1.);
         // Twice the exposure: twice the signal above black.
-        *sensor.exposure().lock().unwrap() = Exposure { seconds: 1. / 125., analog_gain: 2. };
+        *sensor.exposure().lock().unwrap() = Exposure {
+            seconds: 1. / 125.,
+            analog_gain: 2.,
+        };
         let before = sample(&host, 7, 6) - xtrans::BLACK;
         capture(&mut host);
         let after = sample(&host, 7, 6) - xtrans::BLACK;
@@ -1266,7 +1347,12 @@ mod tests {
             .collect();
         // +0x140 is zero: the CCDTG lines stay low, the VD pulse still fires once per start.
         assert_eq!(pulses, [true, false, true, false]);
-        assert!(host.irqs.iter().filter(|(l, _)| *l != 165).all(|(_, level)| !level));
+        assert!(
+            host.irqs
+                .iter()
+                .filter(|(l, _)| *l != 165)
+                .all(|(_, level)| !level)
+        );
         assert_eq!(sensor.image_reg(0x144), 15);
     }
     #[test]
@@ -1319,7 +1405,11 @@ mod tests {
             if packed12 {
                 for x in (0..width).step_by(2) {
                     let (a, b) = (sample(x) >> 2, sample(x + 1) >> 2);
-                    bytes.extend_from_slice(&[a as u8, (a >> 8) as u8 | (b << 4) as u8, (b >> 4) as u8]);
+                    bytes.extend_from_slice(&[
+                        a as u8,
+                        (a >> 8) as u8 | (b << 4) as u8,
+                        (b >> 4) as u8,
+                    ]);
                 }
             } else {
                 for x in 0..width {
@@ -1339,7 +1429,10 @@ mod tests {
                 let expected = reference(width, y, frame, packed12);
                 let mut line = vec![0xa5; expected.len()];
                 ramp_line(y, frame, packed12, &mut line);
-                assert_eq!(line, expected, "width {width} y {y} frame {frame} packed {packed12}");
+                assert_eq!(
+                    line, expected,
+                    "width {width} y {y} frame {frame} packed {packed12}"
+                );
             }
         }
     }
@@ -1415,7 +1508,14 @@ mod tests {
         assert!(host.irqs.rev_find(163));
         assert_eq!(
             sensor.still_raw(),
-            Some(StillRaw { address: 0x1_0000_0000, pitch: 0x30, width: 16, lines: 8, packed12: false, ..Default::default() })
+            Some(StillRaw {
+                address: 0x1_0000_0000,
+                pitch: 0x30,
+                width: 16,
+                lines: 8,
+                packed12: false,
+                ..Default::default()
+            })
         );
         // The ISR clears bit 1 by writing 2. Later frames write nothing until +0xd0 is
         // programmed again.
@@ -1448,7 +1548,14 @@ mod tests {
         assert_eq!(&host.ram[0xc0..], &[0x55; 0x140]);
         assert_eq!(
             sensor.still_raw(),
-            Some(StillRaw { address: 0x1_0000_0000, pitch: 0x18, width: 16, lines: 8, packed12: true, ..Default::default() })
+            Some(StillRaw {
+                address: 0x1_0000_0000,
+                pitch: 0x18,
+                width: 16,
+                lines: 8,
+                packed12: true,
+                ..Default::default()
+            })
         );
         // A pitch below 1.5 bytes a sample refuses.
         write(&mut host, 0xdc, 5 << 16);
@@ -1467,7 +1574,10 @@ mod tests {
     }
     impl RevFind for Vec<(u32, bool)> {
         fn rev_find(&self, irq: u32) -> bool {
-            self.iter().rev().find(|(i, _)| *i == irq).is_some_and(|(_, on)| *on)
+            self.iter()
+                .rev()
+                .find(|(i, _)| *i == irq)
+                .is_some_and(|(_, on)| *on)
         }
     }
     #[test]
@@ -1486,7 +1596,14 @@ mod tests {
             ram_base: 0x1000,
             ..Default::default()
         };
-        for (offset, value) in [(0x40, 1), (0x44, 4), (0x48, 2), (0x50, 0x1000), (0x58, 12), (0x60, 1)] {
+        for (offset, value) in [
+            (0x40, 1),
+            (0x44, 4),
+            (0x48, 2),
+            (0x50, 0x1000),
+            (0x58, 12),
+            (0x60, 1),
+        ] {
             sensor.image_write(&mut Cx::new(&mut host, 0, 0, 0), offset, value);
         }
         sensor.frame_start(0);
@@ -1579,7 +1696,12 @@ mod tests {
                 ..Default::default()
             };
             for (offset, value) in [(0x208, 0x10401), (0x210, 0x1000), (0x218, 8), (0x204, 1)] {
-                command.write(&mut Cx::new(&mut host, 0, 0, 0), 0xfff6c000 + offset, 4, value);
+                command.write(
+                    &mut Cx::new(&mut host, 0, 0, 0),
+                    0xfff6c000 + offset,
+                    4,
+                    value,
+                );
             }
             host.now = 17_000;
             let mut cx = Cx::new(&mut host, 0, 0, 0);
@@ -1770,7 +1892,12 @@ mod tests {
         for o in [0x480, 0x484, 0x4c0, 0x4c4] {
             assert_eq!(command.read(&mut cx, 0xff948000 + o, 4), 0);
         }
-        for (o, v) in [(0x480, 0x0400_0001), (0x4c0, 0x0040_0000), (0x484, 3), (0x4c4, 2)] {
+        for (o, v) in [
+            (0x480, 0x0400_0001),
+            (0x4c0, 0x0040_0000),
+            (0x484, 3),
+            (0x4c4, 2),
+        ] {
             command.write(&mut cx, 0xff948000 + o, 4, v);
             assert_eq!(command.read(&mut cx, 0xff948000 + o, 4), v);
         }
@@ -1810,7 +1937,14 @@ mod tests {
         let sensor = Sensor::new(None, (0x51, 8));
         let mut command = Command::new(0xff948000, sensor, 17).unwrap();
         let mut host = RecordingHost::default();
-        for (o, v) in [(0x400, 0x11), (0x42c, 0x22), (0x440, 0x0033_0001), (0x47c, 0x0044_0044), (0x480, 0x0400_0001), (0x4c0, 0x0010_0001)] {
+        for (o, v) in [
+            (0x400, 0x11),
+            (0x42c, 0x22),
+            (0x440, 0x0033_0001),
+            (0x47c, 0x0044_0044),
+            (0x480, 0x0400_0001),
+            (0x4c0, 0x0010_0001),
+        ] {
             let mut cx = Cx::new(&mut host, 1, 0, 0);
             command.write(&mut cx, 0xff948000 + o, 4, v);
             assert!(cx.refusal().is_none() && !cx.is_unmodeled());

@@ -66,7 +66,8 @@ impl Adc {
             return None;
         }
         let offset = address - BASE;
-        (matches!(offset, 0 | 4 | 0x40 | 0x44) || (RESULTS..RESULTS + 4 * CHANNELS as u64).contains(&offset) && offset & 3 == 0)
+        (matches!(offset, 0 | 4 | 0x40 | 0x44)
+            || (RESULTS..RESULTS + 4 * CHANNELS as u64).contains(&offset) && offset & 3 == 0)
             .then_some(offset)
     }
 }
@@ -174,8 +175,8 @@ impl Device for Adc {
         let state: State = serde_json::from_value(value["state"].clone())
             .map_err(|error| format!("invalid ADC state: {error}"))?;
         if let Some(samples) = value.get("samples") {
-            let samples: Vec<u16> =
-                serde_json::from_value(samples.clone()).map_err(|error| format!("invalid ADC samples: {error}"))?;
+            let samples: Vec<u16> = serde_json::from_value(samples.clone())
+                .map_err(|error| format!("invalid ADC samples: {error}"))?;
             self.samples.replace(&samples)?;
         }
         self.state = state;
@@ -308,7 +309,10 @@ mod start_irq_tests {
     #[test]
     fn a_plus_04_start_raises_the_declared_interrupt_after_its_delay() {
         let mut model = Adc::new(Options {
-            start_irq: Some(InterruptLine::Core { core: 0, line: 0x48 }),
+            start_irq: Some(InterruptLine::Core {
+                core: 0,
+                line: 0x48,
+            }),
             start_ticks: 10,
             inputs: [0; CHANNELS],
         })
@@ -334,7 +338,11 @@ mod result_tests {
 
     #[test]
     fn changed_inputs_are_converted_and_checkpointed() {
-        let mut adc = Adc::new(Options { inputs: [1; CHANNELS], ..Options::default() }).unwrap();
+        let mut adc = Adc::new(Options {
+            inputs: [1; CHANNELS],
+            ..Options::default()
+        })
+        .unwrap();
         let mut host = TestHost::new();
         adc.set_sample(3, 0x162).unwrap();
         assert!(adc.set_sample(3, 0x400).is_err());
@@ -348,10 +356,17 @@ mod result_tests {
     #[test]
     fn results_report_the_declared_inputs_and_are_read_only() {
         let inputs = [368, 715, 415, 63, 516, 646, 18, 839];
-        let mut model = Adc::new(Options { inputs, ..Options::default() }).unwrap();
+        let mut model = Adc::new(Options {
+            inputs,
+            ..Options::default()
+        })
+        .unwrap();
         let mut host = TestHost::new();
         for (n, level) in inputs.iter().enumerate() {
-            assert_eq!(read(&mut model, &mut host, BASE + 0x10 + 4 * n as u64), u64::from(*level));
+            assert_eq!(
+                read(&mut model, &mut host, BASE + 0x10 + 4 * n as u64),
+                u64::from(*level)
+            );
         }
         let saved = model.save();
         let mut cx = host.cx();
@@ -361,6 +376,12 @@ mod result_tests {
         let mut cx = host.cx();
         model.read(&mut cx, BASE + 0x30, 4);
         assert!(cx.is_unmodeled());
-        assert!(Adc::new(Options { inputs: [0x400, 0, 0, 0, 0, 0, 0, 0], ..Options::default() }).is_err());
+        assert!(
+            Adc::new(Options {
+                inputs: [0x400, 0, 0, 0, 0, 0, 0, 0],
+                ..Options::default()
+            })
+            .is_err()
+        );
     }
 }

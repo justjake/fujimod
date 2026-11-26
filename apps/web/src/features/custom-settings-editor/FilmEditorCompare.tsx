@@ -49,7 +49,10 @@ export function FilmEditorCompare() {
 
   const send = (key: CameraKey) => {
     sendPrototype?.(key);
-    frame?.contentWindow?.postMessage({ type: 'focal-preview-key', key: CAMERA_KEYS[key] }, window.location.origin);
+    frame?.contentWindow?.postMessage(
+      { type: 'focal-preview-key', key: CAMERA_KEYS[key] },
+      window.location.origin,
+    );
   };
 
   /* The camera's material indices, and its glass dials: LIGHTNESS 50 is the
@@ -75,7 +78,13 @@ export function FilmEditorCompare() {
 
   onSettled(() => {
     const keydown = (event: KeyboardEvent) => {
-      if (event.target instanceof HTMLInputElement || event.metaKey || event.ctrlKey || event.altKey) return;
+      if (
+        event.target instanceof HTMLInputElement ||
+        event.metaKey ||
+        event.ctrlKey ||
+        event.altKey
+      )
+        return;
       const key = KEYBOARD[event.key];
       if (!key) return;
       event.preventDefault();
@@ -100,10 +109,15 @@ export function FilmEditorCompare() {
     const clientX = box.left + x * scale;
     const clientY = box.top + y * scale;
     if (type === 'pointerdown') {
-      target = document.elementsFromPoint(clientX, clientY).find((element) => screen.contains(element)) ?? null;
+      target =
+        document.elementsFromPoint(clientX, clientY).find((element) => screen.contains(element)) ??
+        null;
       scroller = null;
       for (let node = target; node && node !== screen; node = node.parentElement)
-        if (node.scrollHeight > node.clientHeight + 1 && /(auto|scroll)/.test(getComputedStyle(node).overflowY)) {
+        if (
+          node.scrollHeight > node.clientHeight + 1 &&
+          /(auto|scroll)/.test(getComputedStyle(node).overflowY)
+        ) {
           scroller = node;
           break;
         }
@@ -112,16 +126,33 @@ export function FilmEditorCompare() {
     }
     if (!target) return;
     if (type === 'pointermove' && start && scroller) {
-      if (!vertical && Math.abs(y - start[1]) > 8 && Math.abs(y - start[1]) > Math.abs(x - start[0])) vertical = true;
+      if (
+        !vertical &&
+        Math.abs(y - start[1]) > 8 &&
+        Math.abs(y - start[1]) > Math.abs(x - start[0])
+      )
+        vertical = true;
       if (vertical) scroller.scrollTop -= y - last;
       last = y;
     }
-    const init = { bubbles: true, cancelable: true, composed: true, clientX, clientY, pointerId: 1, pointerType: 'mouse', isPrimary: true, button: 0, buttons };
+    const init = {
+      bubbles: true,
+      cancelable: true,
+      composed: true,
+      clientX,
+      clientY,
+      pointerId: 1,
+      pointerType: 'mouse',
+      isPrimary: true,
+      button: 0,
+      buttons,
+    };
     target.dispatchEvent(new PointerEvent(type, init));
     if (type === 'pointerdown') target.dispatchEvent(new MouseEvent('mousedown', init));
     if (type === 'pointerup') {
       target.dispatchEvent(new MouseEvent('mouseup', init));
-      if (start && Math.hypot(x - start[0], y - start[1]) < 8) target.dispatchEvent(new MouseEvent('click', init));
+      if (start && Math.hypot(x - start[0], y - start[1]) < 8)
+        target.dispatchEvent(new MouseEvent('click', init));
       target = null;
     }
   };
@@ -131,8 +162,16 @@ export function FilmEditorCompare() {
     const x = (event.clientX - box.left) / scale;
     const y = (event.clientY - box.top) / scale;
     if (phase === 1) start = [x, y];
-    frame?.contentWindow?.postMessage({ type: 'focal-preview-touch', phase, x, y }, window.location.origin);
-    prototypeEvent(phase === 1 ? 'pointerdown' : phase === 2 ? 'pointermove' : 'pointerup', x, y, phase === 3 ? 0 : 1);
+    frame?.contentWindow?.postMessage(
+      { type: 'focal-preview-touch', phase, x, y },
+      window.location.origin,
+    );
+    prototypeEvent(
+      phase === 1 ? 'pointerdown' : phase === 2 ? 'pointermove' : 'pointerup',
+      x,
+      y,
+      phase === 3 ? 0 : 1,
+    );
     if (phase === 3) start = null;
   };
   const surface = () => (
@@ -158,8 +197,16 @@ export function FilmEditorCompare() {
         const scale = box.width / SCREEN_WIDTH;
         const own = screen?.getBoundingClientRect();
         if (!screen || !own) return;
-        const point = document.elementsFromPoint(own.left + (event.clientX - box.left) / scale * (own.width / SCREEN_WIDTH), own.top + (event.clientY - box.top) / scale * (own.width / SCREEN_WIDTH));
-        const scroller = point.find((element) => screen.contains(element) && element.scrollHeight > element.clientHeight + 1 && getComputedStyle(element).overflowY !== 'visible');
+        const point = document.elementsFromPoint(
+          own.left + ((event.clientX - box.left) / scale) * (own.width / SCREEN_WIDTH),
+          own.top + ((event.clientY - box.top) / scale) * (own.width / SCREEN_WIDTH),
+        );
+        const scroller = point.find(
+          (element) =>
+            screen.contains(element) &&
+            element.scrollHeight > element.clientHeight + 1 &&
+            getComputedStyle(element).overflowY !== 'visible',
+        );
         scroller?.scrollBy({ top: event.deltaY });
       }}
     />
@@ -180,7 +227,14 @@ export function FilmEditorCompare() {
             <figcaption>FocalUI WebAssembly</figcaption>
             <div class="film-editor-compare-screen">
               <Fit>
-                <iframe ref={(element) => (frame = element)} src="/demo/film-editor/index.html" title="Film Editor" width={720} height={480} onLoad={sendLook} />
+                <iframe
+                  ref={(element) => (frame = element)}
+                  src="/demo/film-editor/index.html"
+                  title="Film Editor"
+                  width={720}
+                  height={480}
+                  onLoad={sendLook}
+                />
               </Fit>
               {surface()}
             </div>

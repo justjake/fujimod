@@ -1,5 +1,5 @@
 //! Plan options of the EXR II window analysis model in `fujimod-emulator-exr2-isp`.
-use serde::{Deserialize};
+use serde::Deserialize;
 
 #[derive(Clone, Copy, Debug, Deserialize)]
 #[serde(rename_all = "snake_case")]

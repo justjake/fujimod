@@ -8,10 +8,13 @@ use fujimod_emulator::board::{
     factory,
 };
 use fujimod_emulator_cpu::{Model, Register, arm, timeline::Ratio};
-use fujimod_emulator_devices::{graph::{DeviceGraph, DeviceWindow}, graphics::scanout::Frame};
-use fujimod_framebuffer::raster::PixelOrder;
+use fujimod_emulator_devices::{
+    graph::{DeviceGraph, DeviceWindow},
+    graphics::scanout::Frame,
+};
 use fujimod_emulator_xp5_board::board;
 use fujimod_emulator_xp5_display::display;
+use fujimod_framebuffer::raster::PixelOrder;
 use serde::Deserialize;
 use std::{collections::BTreeMap, rc::Rc, sync::Arc};
 
@@ -543,7 +546,11 @@ mod tests {
         let until = session.core.board.now() + 200;
         session.run(until).unwrap();
         let mut bytes = [0; 2];
-        session.core.board.read_memory(0, RESULT, &mut bytes).unwrap();
+        session
+            .core
+            .board
+            .read_memory(0, RESULT, &mut bytes)
+            .unwrap();
         u16::from_le_bytes(bytes)
     }
 

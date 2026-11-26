@@ -124,9 +124,8 @@ export function ReleasePersonalNote(props: { data?: SiteReleaseData }) {
           <ManualFeatureLink page="film-effects" row="HALATION" card="halation_strength_item">
             HALATION
           </ManualFeatureLink>
-          ; and{' '}
-          <a href="https://www.instagram.com/jody_hinterleitner">jody</a> and an anonymous tester
-          for early feedback that pushed us further.
+          ; and <a href="https://www.instagram.com/jody_hinterleitner">jody</a> and an anonymous
+          tester for early feedback that pushed us further.
         </p>
         <p>
           Next we’re maturing the platform: more cameras, and nightly releases delivered by our{' '}

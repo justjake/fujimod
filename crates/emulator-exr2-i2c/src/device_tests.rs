@@ -368,7 +368,9 @@ fn binary_profiles_preserve_variants_instead_of_reparsing_constructor_labels() {
         Profile::DeclaredSecondary,
         Profile::Other("explicit unknown".into()),
     ] {
-        let saved = fujimod_emulator_devices::checkpoint::Checkpoint::encode("i2c-profile", &original).unwrap();
+        let saved =
+            fujimod_emulator_devices::checkpoint::Checkpoint::encode("i2c-profile", &original)
+                .unwrap();
         assert_eq!(saved.decode::<Profile>("i2c-profile").unwrap(), original);
     }
 }
@@ -557,19 +559,20 @@ fn extra_register_targets_swap_in_on_addressing_and_keep_the_bridge_registers() 
     .unwrap();
     write(&mut bus, &mut host, 0xfff85050, 9).unwrap();
     write(&mut bus, &mut host, 0xfff85040, 1).unwrap();
-    let transaction = |bus: &mut I2cController, host: &mut Services, address: u64, bytes: &[u64]| {
-        write(bus, host, 0xfff85048, 0x19).unwrap();
-        finish(bus, host);
-        write(bus, host, 0xfff85048, 0xa).unwrap();
-        write(bus, host, 0xfff85044, address).unwrap();
-        finish(bus, host);
-        for &b in bytes {
-            write(bus, host, 0xfff85044, b).unwrap();
+    let transaction =
+        |bus: &mut I2cController, host: &mut Services, address: u64, bytes: &[u64]| {
+            write(bus, host, 0xfff85048, 0x19).unwrap();
             finish(bus, host);
-        }
-        write(bus, host, 0xfff85048, 0xb).unwrap();
-        finish(bus, host);
-    };
+            write(bus, host, 0xfff85048, 0xa).unwrap();
+            write(bus, host, 0xfff85044, address).unwrap();
+            finish(bus, host);
+            for &b in bytes {
+                write(bus, host, 0xfff85044, b).unwrap();
+                finish(bus, host);
+            }
+            write(bus, host, 0xfff85048, 0xb).unwrap();
+            finish(bus, host);
+        };
     transaction(&mut bus, &mut host, 10 << 1, &[1, 0x55]);
     transaction(&mut bus, &mut host, 114 << 1, &[2, 0x30]);
     transaction(&mut bus, &mut host, 10 << 1, &[3, 0x66]);

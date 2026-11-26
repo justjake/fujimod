@@ -1,10 +1,10 @@
-use fujimod_catalog_configuration::RunEngine;
 use super::*;
 use crate::board::{
     Board,
     bus::{Bus, Mode},
     factory::{Graph, MemoryMap, Options, Processor, Ram},
 };
+use fujimod_catalog_configuration::RunEngine;
 use fujimod_emulator_cpu::Model;
 use fujimod_emulator_cpu::timeline::Ratio;
 pub(super) fn board(code: &[u16], peer: &[u16]) -> Board {
@@ -16,7 +16,8 @@ pub(super) fn board_with_bus(code: &[u16], peer: &[u16], bus: Bus) -> Board {
         processors: (0..2)
             .map(|core| Processor {
                 model: Model::CortexM4,
-                released: true, parked_until_sgi: false,
+                released: true,
+                parked_until_sgi: false,
                 registers: vec![
                     (reg(0), 0x11000),
                     (reg(3), 0xaabbccdd),

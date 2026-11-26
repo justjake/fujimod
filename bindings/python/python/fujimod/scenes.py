@@ -1,4 +1,5 @@
 """Shared scene assets for native runs and the browser build."""
+
 from pathlib import Path
 import subprocess
 
@@ -17,19 +18,25 @@ def _state(asset: Path) -> tuple[int, int, int] | None:
 def default_scene_raf() -> Path:
     """Return the shared RAF, materializing missing, resized or changed files."""
     root = Path(__file__).resolve().parents[4]
-    asset = root / 'build/assets/default-scene.raf'
+    asset = root / "build/assets/default-scene.raf"
     state = _state(asset)
     if (
         state is None
         or state[0] != _DEFAULT_RAF_SIZE
         or state != _materialized.get(asset, state)
     ):
-        made = subprocess.run(['node', str(root / 'scripts/assets/default-scene.ts')],
-                              cwd=root, capture_output=True, text=True)
+        made = subprocess.run(
+            ["node", str(root / "scripts/assets/default-scene.ts")],
+            cwd=root,
+            capture_output=True,
+            text=True,
+        )
         if made.returncode:
-            raise RuntimeError('Default RAF preparation failed:\n' + made.stderr + made.stdout)
+            raise RuntimeError(
+                "Default RAF preparation failed:\n" + made.stderr + made.stdout
+            )
         state = _state(asset)
         if state is None or state[0] != _DEFAULT_RAF_SIZE:
-            raise ValueError('Default RAF is missing or has an unexpected byte count')
+            raise ValueError("Default RAF is missing or has an unexpected byte count")
     _materialized[asset] = state
     return asset

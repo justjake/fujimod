@@ -364,14 +364,27 @@ impl Codec {
 
     /// Read `length` stream bytes at `position` (bytes since the configuration):
     /// the banks are a ping-pong pair, as for the encoder.
-    fn read_stream(&self, cx: &mut Cx<'_>, position: u64, length: usize, size: u64) -> Result<Vec<u8>, String> {
+    fn read_stream(
+        &self,
+        cx: &mut Cx<'_>,
+        position: u64,
+        length: usize,
+        size: u64,
+    ) -> Result<Vec<u8>, String> {
         let mut bytes = Vec::with_capacity(length);
         let mut at = position;
         while bytes.len() < length {
-            let bank = if (at / size).is_multiple_of(2) { BADR_STR0 } else { BADR_STR1 };
+            let bank = if (at / size).is_multiple_of(2) {
+                BADR_STR0
+            } else {
+                BADR_STR1
+            };
             let base = self.high(3) | u64::from(self.word(bank));
             if base == 0 {
-                return Err(format!("the stream continues in bank {} at {at:#x}, which has no address", (at / size) % 2));
+                return Err(format!(
+                    "the stream continues in bank {} at {at:#x}, which has no address",
+                    (at / size) % 2
+                ));
             }
             let count = (length - bytes.len()).min((size - at % size) as usize);
             bytes.extend(cx.ram_bytes(base + at % size, count)?);
@@ -387,7 +400,9 @@ impl Codec {
     fn decode_unit(&self, cx: &mut Cx<'_>) -> Result<Vec<u8>, String> {
         let size = u64::from(self.word(STR_BUF_SIZE));
         if !size.is_power_of_two() || !(0x1000..=0x1000_0000).contains(&size) {
-            return Err(format!("STR_BUF_SIZE {size:#x} is not a power of two in 4 KiB..256 MiB"));
+            return Err(format!(
+                "STR_BUF_SIZE {size:#x} is not a power of two in 4 KiB..256 MiB"
+            ));
         }
         let start = self.state.stream_position;
         let mut unit: Vec<u8> = Vec::new();
@@ -417,7 +432,11 @@ impl Codec {
                 let kind = unit[scanned + 3] & 31;
                 if kind == 0 || slice {
                     // Start codes have four bytes here.
-                    let end = if scanned > 0 && unit[scanned - 1] == 0 { scanned - 1 } else { scanned };
+                    let end = if scanned > 0 && unit[scanned - 1] == 0 {
+                        scanned - 1
+                    } else {
+                        scanned
+                    };
                     unit.truncate(end);
                     return Ok(unit);
                 }
@@ -427,7 +446,11 @@ impl Codec {
         }
         Err(format!(
             "the stream at position {start:#x} has no {} in {size:#x} bytes",
-            if slice { "start code after its slice" } else { "slice" }
+            if slice {
+                "start code after its slice"
+            } else {
+                "slice"
+            }
         ))
     }
 
@@ -456,23 +479,42 @@ impl Codec {
             self.decoder = Some(Decoder::new_movie_bounded(&[], Bounds::UHD)?);
             self.state.decoded_pictures = 0;
         }
-        let picture = self.decoder.as_mut().expect("decoder").decode_movie_unit(&unit)?;
+        let picture = self
+            .decoder
+            .as_mut()
+            .expect("decoder")
+            .decode_movie_unit(&unit)?;
         let (width, height) = (picture.sequence.width, picture.sequence.height);
         // Picture n goes to bank n of set 0, then of set 1 (`IMG_WIDX` bit 5).
         let n = self.state.decoded_pictures;
         let (set, bank) = ((n / banks) % 2, n % banks);
         let index = set << 5 | bank << 1;
-        let y = self.state.images.get(&index).copied().ok_or("no luma address for the image bank")?;
-        let c = self.state.images.get(&(index | 1)).copied().ok_or("no chroma address for the image bank")?;
+        let y = self
+            .state
+            .images
+            .get(&index)
+            .copied()
+            .ok_or("no luma address for the image bank")?;
+        let c = self
+            .state
+            .images
+            .get(&(index | 1))
+            .copied()
+            .ok_or("no chroma address for the image bank")?;
         let pitch = self.word(IMG_LINE_OFS) as usize;
         if pitch < width || width % 2 != 0 || height % 2 != 0 {
-            return Err(format!("IMG_LINE_OFS {pitch} for a {width}x{height} picture"));
+            return Err(format!(
+                "IMG_LINE_OFS {pitch} for a {width}x{height} picture"
+            ));
         }
         let high = self.high(2);
         let (luma, chroma) = picture.i420.split_at(width * height);
         let (cb, cr) = chroma.split_at(width * height / 4);
         for row in 0..height {
-            cx.ram_write((high | u64::from(y)) + (row * pitch) as u64, &luma[row * width..][..width])?;
+            cx.ram_write(
+                (high | u64::from(y)) + (row * pitch) as u64,
+                &luma[row * width..][..width],
+            )?;
         }
         let (first, second) = if CB_FIRST { (cb, cr) } else { (cr, cb) };
         let half = width / 2;
@@ -493,7 +535,10 @@ impl Codec {
         self.state.decoded_pictures = n.wrapping_add(1) % (2 * banks);
         // A unit that reaches the end of a stream bank finishes that bank.
         let size = u64::from(self.word(STR_BUF_SIZE));
-        let (before, after) = (self.state.stream_position, self.state.stream_position + unit.len() as u64);
+        let (before, after) = (
+            self.state.stream_position,
+            self.state.stream_position + unit.len() as u64,
+        );
         let mut finished = 0;
         for crossed in before / size..after / size {
             finished |= 1 << (crossed % 2);
@@ -514,7 +559,10 @@ impl Codec {
         self.state.decode = false;
         self.end_decode();
         if self.recording() {
-            cx.log(&format!("xp5-codec: halt ends the recording after {} pictures", self.state.pictures));
+            cx.log(&format!(
+                "xp5-codec: halt ends the recording after {} pictures",
+                self.state.pictures
+            ));
         }
         self.encoder = None;
         self.hevc_encoder = None;
@@ -543,11 +591,23 @@ impl Codec {
         {
             return Ok(packed_to_i420(&packed, width, height));
         }
-        let y = self.state.images.get(&0).copied().ok_or("no luma address (IMG_WIDX 0)")?;
-        let c = self.state.images.get(&1).copied().ok_or("no chroma address (IMG_WIDX 1)")?;
+        let y = self
+            .state
+            .images
+            .get(&0)
+            .copied()
+            .ok_or("no luma address (IMG_WIDX 0)")?;
+        let c = self
+            .state
+            .images
+            .get(&1)
+            .copied()
+            .ok_or("no chroma address (IMG_WIDX 1)")?;
         let pitch = self.word(IMG_LINE_OFS) as usize;
         if pitch < width {
-            return Err(format!("IMG_LINE_OFS {pitch} is less than the width {width}"));
+            return Err(format!(
+                "IMG_LINE_OFS {pitch} is less than the width {width}"
+            ));
         }
         let high = self.high(2);
         let luma = cx.ram_bytes(high | u64::from(y), pitch * (height - 1) + width)?;
@@ -563,7 +623,11 @@ impl Codec {
         if self.word(STR_BUF_MODE) != 0 {
             return Err("STR_BUF_MODE 1 (no NALU table) is not modelled".into());
         }
-        if self.encoder.as_ref().is_some_and(|e| e.config() != settings) {
+        if self
+            .encoder
+            .as_ref()
+            .is_some_and(|e| e.config() != settings)
+        {
             cx.log("xp5-codec: H.264 parameters changed within a recording; new sequence");
             self.encoder = None;
         }
@@ -574,9 +638,15 @@ impl Codec {
             self.encoder = Some(encoder);
         }
         let picture = self.picture(cx, settings.width, settings.height)?;
-        let unit = self.encoder.as_mut().expect("encoder").encode_i420(&picture)?;
-        let nals: Vec<(u32, &[u8])> =
-            nal_units(&unit)?.into_iter().map(|nal| (u32::from(nal[0] & 31), nal)).collect();
+        let unit = self
+            .encoder
+            .as_mut()
+            .expect("encoder")
+            .encode_i420(&picture)?;
+        let nals: Vec<(u32, &[u8])> = nal_units(&unit)?
+            .into_iter()
+            .map(|nal| (u32::from(nal[0] & 31), nal))
+            .collect();
         self.publish(cx, &nals)
     }
 
@@ -593,19 +663,30 @@ impl Codec {
             level_idc: PcmConfig::level_for(width, height),
             parameter_interval: HEVC_PARAMETER_INTERVAL,
         };
-        if self.hevc_encoder.as_ref().is_some_and(|e| e.config() != settings) {
+        if self
+            .hevc_encoder
+            .as_ref()
+            .is_some_and(|e| e.config() != settings)
+        {
             cx.log("xp5-codec: HEVC parameters changed within a recording; new sequence");
             self.hevc_encoder = None;
         }
         if self.hevc_encoder.is_none() {
-            let encoder = PcmEncoder::new(settings).map_err(|e| format!("HEVC size {size:#x}: {e}"))?;
+            let encoder =
+                PcmEncoder::new(settings).map_err(|e| format!("HEVC size {size:#x}: {e}"))?;
             cx.log(&format!("xp5-codec: HEVC sequence {settings:?} (I_PCM)"));
             self.hevc_encoder = Some(encoder);
         }
         let picture = self.picture(cx, width, height)?;
-        let unit = self.hevc_encoder.as_mut().expect("encoder").encode_i420(&picture)?;
-        let nals: Vec<(u32, &[u8])> =
-            hevc::nal_units(&unit).into_iter().map(|nal| (u32::from(nal[0] >> 1 & 63), nal)).collect();
+        let unit = self
+            .hevc_encoder
+            .as_mut()
+            .expect("encoder")
+            .encode_i420(&picture)?;
+        let nals: Vec<(u32, &[u8])> = hevc::nal_units(&unit)
+            .into_iter()
+            .map(|nal| (u32::from(nal[0] >> 1 & 63), nal))
+            .collect();
         self.publish(cx, &nals)
     }
 
@@ -614,7 +695,9 @@ impl Codec {
     fn publish(&mut self, cx: &mut Cx<'_>, nals: &[(u32, &[u8])]) -> Result<u32, String> {
         let size = u64::from(self.word(STR_BUF_SIZE));
         if !size.is_power_of_two() || !(0x1000..=0x1000_0000).contains(&size) {
-            return Err(format!("STR_BUF_SIZE {size:#x} is not a power of two in 4 KiB..256 MiB"));
+            return Err(format!(
+                "STR_BUF_SIZE {size:#x} is not a power of two in 4 KiB..256 MiB"
+            ));
         }
         let table = self.high(3) | u64::from(self.word(BADR_NALU));
         let table_size = u64::from(self.word(NALU_BUF_SIZE));
@@ -632,7 +715,10 @@ impl Codec {
             self.write_stream(cx, &[0, 0, 0, 1], size)?;
             self.write_stream(cx, nal, size)?;
             let entry = [kind, nal.len() as u32 + 4, start as u32, 0];
-            cx.ram_write(table + first + u64::from(ENTRY) * index as u64, &words(&entry))?;
+            cx.ram_write(
+                table + first + u64::from(ENTRY) * index as u64,
+                &words(&entry),
+            )?;
         }
         let filled = std::mem::take(&mut self.filled);
         let end = first + u64::from(ENTRY) * nals.len() as u64;
@@ -647,7 +733,11 @@ impl Codec {
     fn write_stream(&mut self, cx: &mut Cx<'_>, mut bytes: &[u8], size: u64) -> Result<(), String> {
         while !bytes.is_empty() {
             let position = self.state.stream_position % size;
-            let bank = if self.state.bank == 0 { BADR_STR0 } else { BADR_STR1 };
+            let bank = if self.state.bank == 0 {
+                BADR_STR0
+            } else {
+                BADR_STR1
+            };
             let base = self.high(3) | u64::from(self.word(bank));
             let count = bytes.len().min((size - position) as usize);
             cx.ram_write(base + position, &bytes[..count])?;
@@ -726,7 +816,8 @@ impl Codec {
                 if value & HEVC_GO != 0 {
                     self.state.halted = false;
                     if self.state.due.is_some() && !self.state.hevc {
-                        return cx.fail("xp5-codec: HEVC command while an H.264 command is in flight");
+                        return cx
+                            .fail("xp5-codec: HEVC command while an H.264 command is in flight");
                     }
                     if std::mem::take(&mut self.state.hevc_image) {
                         if self.state.encode {
@@ -760,7 +851,9 @@ impl Codec {
                     if value & CMD_STOP != 0 {
                         if self.word(H264_CORESEL) == CORESEL_DECODE {
                             if self.state.decode {
-                                return cx.fail("xp5-codec: H.264 decode start while a picture is in flight");
+                                return cx.fail(
+                                    "xp5-codec: H.264 decode start while a picture is in flight",
+                                );
                             }
                             self.state.decode = true;
                         } else {
@@ -848,7 +941,13 @@ fn nal_units(stream: &[u8]) -> Result<Vec<&[u8]>, String> {
 }
 
 /// Two-plane 4:2:0 (Y, then interleaved chroma with one pitch) to tight I420.
-fn semi_planar_to_i420(luma: &[u8], chroma: &[u8], pitch: usize, width: usize, height: usize) -> Vec<u8> {
+fn semi_planar_to_i420(
+    luma: &[u8],
+    chroma: &[u8],
+    pitch: usize,
+    width: usize,
+    height: usize,
+) -> Vec<u8> {
     let y = width * height;
     let mut out = vec![0; y * 3 / 2];
     for row in 0..height {
@@ -879,7 +978,8 @@ fn packed_to_i420(packed: &[u8], width: usize, height: usize) -> Vec<u8> {
             if row % 2 == 0 {
                 let q = p + width * 2;
                 let c = row / 2 * half + col;
-                out[y + c] = (u16::from(packed[p + 2]) + u16::from(packed[q + 2])).div_ceil(2) as u8;
+                out[y + c] =
+                    (u16::from(packed[p + 2]) + u16::from(packed[q + 2])).div_ceil(2) as u8;
                 out[y + y / 4 + c] =
                     (u16::from(packed[p + 3]) + u16::from(packed[q + 3])).div_ceil(2) as u8;
             }
@@ -914,7 +1014,9 @@ impl Device for Codec {
         }
         if (ADDRESS_HIGH..ADDRESS_HIGH + ADDRESS_HIGH_SIZE).contains(&address) {
             if value > 7 {
-                return cx.fail(format!("xp5-codec: address-high word {address:#x} = {value:#x} exceeds 3 bits"));
+                return cx.fail(format!(
+                    "xp5-codec: address-high word {address:#x} = {value:#x} exceeds 3 bits"
+                ));
             }
             self.state.high[((address - ADDRESS_HIGH) / 4) as usize] = value;
             return;
@@ -928,7 +1030,11 @@ impl Device for Codec {
         self.state.due = None;
         let hevc = std::mem::take(&mut self.state.hevc);
         if std::mem::take(&mut self.state.encode) {
-            let coded = if hevc { self.encode_hevc(cx) } else { self.encode(cx) };
+            let coded = if hevc {
+                self.encode_hevc(cx)
+            } else {
+                self.encode(cx)
+            };
             let filled = match coded {
                 Ok(filled) => filled,
                 Err(error) => {
@@ -956,9 +1062,16 @@ impl Device for Codec {
             self.state.raw |= PICTURE_DECODED | finished;
         }
         if std::mem::take(&mut self.state.stop) {
-            let open = if hevc { self.hevc_encoder.take().is_some() } else { self.encoder.take().is_some() };
+            let open = if hevc {
+                self.hevc_encoder.take().is_some()
+            } else {
+                self.encoder.take().is_some()
+            };
             if open {
-                cx.log(&format!("xp5-codec: recording stopped after {} pictures", self.state.pictures));
+                cx.log(&format!(
+                    "xp5-codec: recording stopped after {} pictures",
+                    self.state.pictures
+                ));
             }
             if hevc {
                 self.state.hevc_pending |= STOP_DONE;
@@ -1040,7 +1153,10 @@ pub fn host_movie_422(width: usize, height: usize) -> Option<Vec<u8>> {
 pub fn register(bus: &mut DeviceGraph, window: &DeviceWindow) -> Result<(), String> {
     if window.base != BASE
         || window.size != SIZE
-        || window.options.keys().any(|key| !matches!(key.as_str(), "irq" | "run_ticks"))
+        || window
+            .options
+            .keys()
+            .any(|key| !matches!(key.as_str(), "irq" | "run_ticks"))
     {
         return Err("invalid XP5 codec window or options".into());
     }
@@ -1056,8 +1172,14 @@ pub fn register(bus: &mut DeviceGraph, window: &DeviceWindow) -> Result<(), Stri
     let codec = Codec::new(irq, number("run_ticks")?)?.with_scene(host_movie_422);
     bus.register_windows(
         vec![
-            Mapping { base: BASE, size: SIZE },
-            Mapping { base: ADDRESS_HIGH, size: ADDRESS_HIGH_SIZE },
+            Mapping {
+                base: BASE,
+                size: SIZE,
+            },
+            Mapping {
+                base: ADDRESS_HIGH,
+                size: ADDRESS_HIGH_SIZE,
+            },
         ],
         Box::new(codec),
     )?;
@@ -1082,7 +1204,11 @@ mod tests {
     const IRQ: u32 = 210;
 
     fn host() -> RecordingHost {
-        RecordingHost { ram: vec![0; 4 << 20], ram_base: RAM, ..RecordingHost::default() }
+        RecordingHost {
+            ram: vec![0; 4 << 20],
+            ram_base: RAM,
+            ..RecordingHost::default()
+        }
     }
     fn write(c: &mut Codec, h: &mut RecordingHost, address: u64, value: u32) {
         let mut cx = Cx::new(h, 0, 0, 0);
@@ -1159,12 +1285,16 @@ mod tests {
     /// A moving gradient frame in NV12 at Y_AT/C_AT.
     fn frame(h: &mut RecordingHost, n: usize) {
         for row in 0..H {
-            let line: Vec<u8> = (0..PITCH).map(|x| (16 + (x * 3 + row + n * 4) % 200) as u8).collect();
+            let line: Vec<u8> = (0..PITCH)
+                .map(|x| (16 + (x * 3 + row + n * 4) % 200) as u8)
+                .collect();
             let at = (Y_AT - RAM) as usize + row * PITCH;
             h.ram[at..at + PITCH].copy_from_slice(&line);
         }
         for row in 0..H / 2 {
-            let line: Vec<u8> = (0..PITCH).map(|x| if x % 2 == 0 { 90 } else { 170 }).collect();
+            let line: Vec<u8> = (0..PITCH)
+                .map(|x| if x % 2 == 0 { 90 } else { 170 })
+                .collect();
             let at = (C_AT - RAM) as usize + row * PITCH;
             h.ram[at..at + PITCH].copy_from_slice(&line);
         }
@@ -1207,8 +1337,9 @@ mod tests {
         let end = get(c, h, NALU_END) & !0xf;
         let table = h.bytes(NALU_AT, end as usize + 16).unwrap();
         let word = |i: usize| u32::from_le_bytes(table[i * 4..i * 4 + 4].try_into().unwrap());
-        let entries: Vec<[u32; 3]> =
-            (0..end as usize / 16).map(|e| [word(e * 4), word(e * 4 + 1), word(e * 4 + 2)]).collect();
+        let entries: Vec<[u32; 3]> = (0..end as usize / 16)
+            .map(|e| [word(e * 4), word(e * 4 + 1), word(e * 4 + 2)])
+            .collect();
         assert_eq!(word(end as usize / 4), NALU_TERMINATOR);
         reg(c, h, NALU_RESET, 1);
         assert_eq!(get(c, h, NALU_END), 0);
@@ -1222,7 +1353,10 @@ mod tests {
         let base = |b: u64| if b == 0 { STR0_AT } else { STR1_AT };
         let first = (u64::from(size)).min(u64::from(BANK) - position);
         let mut bytes = h.bytes(base(bank) + position, first as usize).unwrap();
-        bytes.extend(h.bytes(base(bank ^ 1), (u64::from(size) - first) as usize).unwrap());
+        bytes.extend(
+            h.bytes(base(bank ^ 1), (u64::from(size) - first) as usize)
+                .unwrap(),
+        );
         bytes
     }
 
@@ -1368,12 +1502,20 @@ mod tests {
             let end = get(&mut c, &mut h, NALU_END) as usize;
             let table = h.bytes(NALU_AT, end + 16).unwrap();
             let word = |i: usize| u32::from_le_bytes(table[i * 4..i * 4 + 4].try_into().unwrap());
-            let entries: Vec<[u32; 3]> =
-                (0..end / 16).map(|e| [word(e * 4), word(e * 4 + 1), word(e * 4 + 2)]).collect();
+            let entries: Vec<[u32; 3]> = (0..end / 16)
+                .map(|e| [word(e * 4), word(e * 4 + 1), word(e * 4 + 2)])
+                .collect();
             assert_eq!(word(end / 4), NALU_TERMINATOR);
             reg(&mut c, &mut h, NALU_RESET, 1);
             let types: Vec<u32> = entries.iter().map(|e| e[0]).collect();
-            assert_eq!(types, if n == 0 { vec![32, 33, 34, 19] } else { vec![19] });
+            assert_eq!(
+                types,
+                if n == 0 {
+                    vec![32, 33, 34, 19]
+                } else {
+                    vec![19]
+                }
+            );
             let joined: Vec<u8> = entries.iter().flat_map(|e| nal_bytes(&h, *e)).collect();
             let i420 = semi_planar_to_i420(
                 &h.bytes(Y_AT, PITCH * H).unwrap(),
@@ -1437,7 +1579,10 @@ mod tests {
         (0..count)
             .map(|n| {
                 frame(&mut h, n);
-                encode_one(&mut c, &mut h).iter().flat_map(|entry| nal_bytes(&h, *entry)).collect()
+                encode_one(&mut c, &mut h)
+                    .iter()
+                    .flat_map(|entry| nal_bytes(&h, *entry))
+                    .collect()
             })
             .collect()
     }
@@ -1478,7 +1623,12 @@ mod tests {
     /// A configure (0x13d0dbc, which starts the stream at bank 0 again) and
     /// DecStart: the unit and its end marker in the stream, H264_CMD bit 14, the
     /// deadline. Returns the refusal, if any.
-    fn decode_start(c: &mut Codec, h: &mut RecordingHost, unit: &[u8], marker: bool) -> Option<String> {
+    fn decode_start(
+        c: &mut Codec,
+        h: &mut RecordingHost,
+        unit: &[u8],
+        marker: bool,
+    ) -> Option<String> {
         reg(c, h, STR_BUF_SIZE, 0x1_0000);
         let at = (DEC_STR_AT - RAM) as usize;
         h.ram[at..at + 0x1_0000].fill(0xff);
@@ -1514,7 +1664,8 @@ mod tests {
         let mut c = Codec::new(IRQ, 1000).unwrap();
         let mut h = host();
         open_decode(&mut c, &mut h, 1);
-        c.checkpoint().expect("an open without a decoded picture is idle");
+        c.checkpoint()
+            .expect("an open without a decoded picture is idle");
         for (n, unit) in units.iter().enumerate() {
             let expected = reference.decode_movie_unit(unit).unwrap();
             assert_eq!(decode_start(&mut c, &mut h, unit, true), None);
@@ -1535,7 +1686,11 @@ mod tests {
                 .flat_map(|row| (0..W).map(move |x| (x, row)))
                 .map(|(x, row)| u32::from(luma[row * PITCH + x].abs_diff(original(x, row))))
                 .sum();
-            assert!(error / ((W * H) as u32) < 8, "mean luma error {}", error / ((W * H) as u32));
+            assert!(
+                error / ((W * H) as u32) < 8,
+                "mean luma error {}",
+                error / ((W * H) as u32)
+            );
             let chroma = h.bytes(DEC_C[0], PITCH * H / 2).unwrap();
             assert!(chroma[20].abs_diff(90) < 12 && chroma[21].abs_diff(170) < 12);
             // Bytes past the picture width are untouched.
@@ -1550,7 +1705,11 @@ mod tests {
         restored.restore_checkpoint(&saved).unwrap();
         assert_eq!(restored.checkpoint().unwrap().state(), saved.state());
         // A new session starts with an IDR again; a P picture alone has no reference.
-        assert!(decode_start(&mut c, &mut h, &units[1], true).unwrap().contains("H.264 decode failed"));
+        assert!(
+            decode_start(&mut c, &mut h, &units[1], true)
+                .unwrap()
+                .contains("H.264 decode failed")
+        );
     }
 
     /// The play session: the units follow each other in the stream, across the
@@ -1562,9 +1721,18 @@ mod tests {
     #[test]
     fn decode_follows_the_stream_across_units_and_banks() {
         let units = coded_units(16);
-        let stream: Vec<u8> = units.iter().flatten().copied().chain([0, 0, 0, 1, 0, 0, 0, 0]).collect();
+        let stream: Vec<u8> = units
+            .iter()
+            .flatten()
+            .copied()
+            .chain([0, 0, 0, 1, 0, 0, 0, 0])
+            .collect();
         let bank = 0x1000usize;
-        assert!(units[0].len() < bank && stream.len() > bank && stream.len() < 2 * bank, "{}", stream.len());
+        assert!(
+            units[0].len() < bank && stream.len() > bank && stream.len() < 2 * bank,
+            "{}",
+            stream.len()
+        );
         let mut c = Codec::new(IRQ, 1000).unwrap();
         let mut h = host();
         open_decode(&mut c, &mut h, 2);
@@ -1594,9 +1762,15 @@ mod tests {
             reg(&mut c, &mut h, H264_STATUS, status);
             assert_eq!(h.irqs.last(), Some(&(IRQ, false)));
             let n = n as u32;
-            assert_eq!(get(&mut c, &mut h, IMG_DECODED), ((n / 2) % 2) << 5 | (n % 2) << 1);
+            assert_eq!(
+                get(&mut c, &mut h, IMG_DECODED),
+                ((n / 2) % 2) << 5 | (n % 2) << 1
+            );
             assert_eq!(bank_i420(&h, n as usize % 2), expected.i420, "picture {n}");
-            assert_eq!(get(&mut c, &mut h, STR_BANK) >> 12, u32::from(position >= bank));
+            assert_eq!(
+                get(&mut c, &mut h, STR_BANK) >> 12,
+                u32::from(position >= bank)
+            );
         }
         assert_eq!(reported, 1);
         // The stream ends at the marker: a further DecStart finds no slice.
@@ -1616,7 +1790,11 @@ mod tests {
         let mut c = Codec::new(IRQ, 1000).unwrap();
         let mut h = host();
         open_decode(&mut c, &mut h, 1);
-        for (n, (unit, pad)) in units.iter().zip([[0u8, 0, 0, 0], [0, 0, 2, 0xff]]).enumerate() {
+        for (n, (unit, pad)) in units
+            .iter()
+            .zip([[0u8, 0, 0, 0], [0, 0, 2, 0xff]])
+            .enumerate()
+        {
             let expected = reference.decode_movie_unit(unit).unwrap();
             reg(&mut c, &mut h, STR_BUF_SIZE, 0x1_0000);
             let at = (DEC_STR_AT - RAM) as usize;
@@ -1641,7 +1819,10 @@ mod tests {
     #[test]
     fn a_bare_start_code_before_stale_bytes_ends_the_unit() {
         let units = coded_units(1);
-        let expected = Decoder::new_movie(&[]).unwrap().decode_movie_unit(&units[0]).unwrap();
+        let expected = Decoder::new_movie(&[])
+            .unwrap()
+            .decode_movie_unit(&units[0])
+            .unwrap();
         let mut c = Codec::new(IRQ, 1000).unwrap();
         let mut h = host();
         open_decode(&mut c, &mut h, 1);
@@ -1679,13 +1860,25 @@ mod tests {
         let mut c = Codec::new(IRQ, 1000).unwrap();
         let mut h = host();
         open_decode(&mut c, &mut h, 1);
-        assert!(decode_start(&mut c, &mut h, &units[0], false).unwrap().contains("no start code after its slice"));
+        assert!(
+            decode_start(&mut c, &mut h, &units[0], false)
+                .unwrap()
+                .contains("no start code after its slice")
+        );
         open_decode(&mut c, &mut h, 1);
         let garbage = [0, 0, 0, 1, 0x65, 0x88, 0x84, 0x00, 0x12, 0x34];
-        assert!(decode_start(&mut c, &mut h, &garbage, true).unwrap().contains("H.264 decode failed"));
+        assert!(
+            decode_start(&mut c, &mut h, &garbage, true)
+                .unwrap()
+                .contains("H.264 decode failed")
+        );
         open_decode(&mut c, &mut h, 1);
         reg(&mut c, &mut h, STR_BUF_MODE, 0);
-        assert!(decode_start(&mut c, &mut h, &units[0], true).unwrap().contains("STR_BUF_MODE"));
+        assert!(
+            decode_start(&mut c, &mut h, &units[0], true)
+                .unwrap()
+                .contains("STR_BUF_MODE")
+        );
         // In encode mode bit 14 is still the stop.
         let mut c = Codec::new(IRQ, 1000).unwrap();
         open_and_configure(&mut c, &mut h);
@@ -1739,12 +1932,18 @@ mod tests {
             "/../../catalog/firmware/xt5/4.31/xp5-boot/manifest.d/61-codec.toml"
         );
         let fragment: Fragment = toml::from_str(&std::fs::read_to_string(path).unwrap()).unwrap();
-        let window = fragment.device.iter().find(|w| w.kind == "xp5-codec").unwrap();
+        let window = fragment
+            .device
+            .iter()
+            .find(|w| w.kind == "xp5-codec")
+            .unwrap();
         let mut graph = DeviceGraph::new();
         register(&mut graph, window).unwrap();
         assert!(graph.at(0xffd1_5100).is_ok() && graph.at(0xff90_e71c).is_ok());
         let mut extra = window.clone();
-        extra.options.insert("format".into(), toml::Value::Integer(1));
+        extra
+            .options
+            .insert("format".into(), toml::Value::Integer(1));
         assert!(register(&mut DeviceGraph::new(), &extra).is_err());
     }
 }

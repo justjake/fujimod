@@ -191,7 +191,12 @@ fn declared_busy_duration_returns_ready_high_and_keeps_serving() {
     let mut restored = Port::new(configuration(), timing(240, Some(1000))).unwrap();
     restored.restore(&saved).unwrap();
     assert_eq!(restored.save(), saved);
-    assert!(Port::new(configuration(), timing(240, None)).unwrap().restore(&saved).is_err());
+    assert!(
+        Port::new(configuration(), timing(240, None))
+            .unwrap()
+            .restore(&saved)
+            .is_err()
+    );
     // Power loss returns to off; the next power-up is busy again.
     p.tick(6000, Pins::default()).unwrap();
     assert!(p.ready_high());

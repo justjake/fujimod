@@ -9,8 +9,8 @@
 use crate::host::Memory;
 use fujimod_emulator::board::Board;
 use fujimod_emulator_cpu::{Access, Model, Register, arm, arm64};
-use sha2::{Digest, Sha256};
 use serde_json::{Value, json};
+use sha2::{Digest, Sha256};
 use std::path::Path;
 
 fn sha256_hex(bytes: &[u8]) -> String {
@@ -29,8 +29,12 @@ pub(crate) fn number(v: &Value) -> Result<u64, String> {
     if let Some(n) = v.as_u64() {
         return Ok(n);
     }
-    let s = v.as_str().ok_or("mod value must be a number or 0x hex string")?;
-    let hex = s.strip_prefix("0x").ok_or_else(|| format!("{s:?} lacks a 0x prefix"))?;
+    let s = v
+        .as_str()
+        .ok_or("mod value must be a number or 0x hex string")?;
+    let hex = s
+        .strip_prefix("0x")
+        .ok_or_else(|| format!("{s:?} lacks a 0x prefix"))?;
     u64::from_str_radix(hex, 16).map_err(|e| format!("{s:?}: {e}"))
 }
 pub(crate) fn array<'a>(v: &'a Value, name: &str) -> Result<&'a [Value], String> {
@@ -51,10 +55,11 @@ pub(crate) fn extent(v: &Value) -> Result<(u64, usize), String> {
     Ok((address, size))
 }
 
-
 /// Guest memory and translation inputs, as the loader needs them.
 pub trait Machine: Memory {
-    fn arm32_core_count(&self) -> usize { 0 }
+    fn arm32_core_count(&self) -> usize {
+        0
+    }
 
     fn arm32_translate(&self, _: usize, _: u64, _: Access) -> Result<u64, String> {
         Err("ARM32 mod translation is unavailable".into())
@@ -65,7 +70,9 @@ pub trait Machine: Memory {
     }
 
     /// Stage-1 translation inputs of the AArch64 application cores.
-    fn translations(&self) -> Result<Vec<(usize, arm64::TranslationState)>, String> { Ok(Vec::new()) }
+    fn translations(&self) -> Result<Vec<(usize, arm64::TranslationState)>, String> {
+        Ok(Vec::new())
+    }
 }
 
 /// The shared board; `write_physical` tells every core's translator which code pages changed.
@@ -82,8 +89,15 @@ impl Memory for BoardMachine<'_> {
 
 impl Machine for BoardMachine<'_> {
     fn arm32_core_count(&self) -> usize {
-        self.0.instruction_counts().iter().enumerate()
-            .filter(|(core, _)| self.0.cpu(*core).is_ok_and(|cpu| matches!(cpu.model(), Model::CortexA7 | Model::CortexR5F)))
+        self.0
+            .instruction_counts()
+            .iter()
+            .enumerate()
+            .filter(|(core, _)| {
+                self.0
+                    .cpu(*core)
+                    .is_ok_and(|cpu| matches!(cpu.model(), Model::CortexA7 | Model::CortexR5F))
+            })
             .count()
     }
 
@@ -92,7 +106,15 @@ impl Machine for BoardMachine<'_> {
     }
 
     fn arm32_mmu_enabled(&self, core: usize) -> Result<bool, String> {
-        let sctlr = arm::Coprocessor { cp: 15, opc1: 0, crn: 1, crm: 0, opc2: 0, secure: 0, wide: false };
+        let sctlr = arm::Coprocessor {
+            cp: 15,
+            opc1: 0,
+            crn: 1,
+            crm: 0,
+            opc2: 0,
+            secure: 0,
+            wide: false,
+        };
         Ok(self.0.cpu(core)?.coprocessor(sctlr, None)? & 1 != 0)
     }
 
@@ -103,7 +125,11 @@ impl Machine for BoardMachine<'_> {
                 .map_err(|error| format!("core {core} {name}: {error}"))
         };
         (0..self.0.instruction_counts().len())
-            .filter(|core| self.0.cpu(*core).is_ok_and(|cpu| cpu.model() == Model::ArmV8A))
+            .filter(|core| {
+                self.0
+                    .cpu(*core)
+                    .is_ok_and(|cpu| cpu.model() == Model::ArmV8A)
+            })
             .map(|core| {
                 Ok((
                     core,
@@ -158,18 +184,20 @@ pub struct Loaded {
 
 /// Reads one built manifest: the single argument is a `manifest.json` or a directory holding one.
 pub fn prepare(
-    target: Target<'_>, specs: &[String],
+    target: Target<'_>,
+    specs: &[String],
     mut validate_original: impl FnMut(u64, u32) -> Result<(), String>,
 ) -> Result<Loaded, String> {
     if let [one] = specs {
         let path = Path::new(one);
-        let manifest = if path.is_file() && path.file_name().is_some_and(|name| name == "manifest.json") {
-            Some(path.to_path_buf())
-        } else if path.join("manifest.json").is_file() {
-            Some(path.join("manifest.json"))
-        } else {
-            None
-        };
+        let manifest =
+            if path.is_file() && path.file_name().is_some_and(|name| name == "manifest.json") {
+                Some(path.to_path_buf())
+            } else if path.join("manifest.json").is_file() {
+                Some(path.join("manifest.json"))
+            } else {
+                None
+            };
         if let Some(manifest) = manifest {
             let directory = manifest.parent().ok_or("manifest has no directory")?;
             return read_built(directory, target, &mut validate_original);
@@ -179,27 +207,43 @@ pub fn prepare(
 }
 
 fn read_built(
-    directory: &Path, target: Target<'_>,
+    directory: &Path,
+    target: Target<'_>,
     validate_original: &mut impl FnMut(u64, u32) -> Result<(), String>,
 ) -> Result<Loaded, String> {
-    let directory = directory.canonicalize().map_err(|error| error.to_string())?;
+    let directory = directory
+        .canonicalize()
+        .map_err(|error| error.to_string())?;
     let text = crate::read(&directory.join("manifest.json"), 16 << 20)?;
     let manifest: Value = serde_json::from_slice(&text).map_err(|error| error.to_string())?;
     let mut payloads = Vec::new();
     for region in array(&manifest, "regions")? {
-        let file = region["file"].as_str().ok_or("mod region lacks a file name")?;
-        let path = directory.join(file).canonicalize().map_err(|error| format!("{file}: {error}"))?;
+        let file = region["file"]
+            .as_str()
+            .ok_or("mod region lacks a file name")?;
+        let path = directory
+            .join(file)
+            .canonicalize()
+            .map_err(|error| format!("{file}: {error}"))?;
         if Path::new(file).components().count() != 1 || path.parent() != Some(directory.as_path()) {
             return Err("mod region file name must be local".into());
         }
         let (address, size) = extent(region)?;
         let bytes = crate::read(&path, (size as u64).min(64 << 20))?;
         if bytes.len() != size || region["sha256"].as_str() != Some(sha256_hex(&bytes).as_str()) {
-            return Err(format!("mod payload {file} differs from its manifest size or hash"));
+            return Err(format!(
+                "mod payload {file} differs from its manifest size or hash"
+            ));
         }
         payloads.push((address, bytes));
     }
-    Loaded::from_manifest(manifest, sha256_hex(&text), payloads, target, validate_original)
+    Loaded::from_manifest(
+        manifest,
+        sha256_hex(&text),
+        payloads,
+        target,
+        validate_original,
+    )
 }
 
 impl Loaded {
@@ -232,7 +276,9 @@ impl Loaded {
         }
         let ready = &manifest["load_ready"];
         if !ready.is_object() {
-            return Err("mod manifest lacks load_ready; hook words cannot be attached safely".into());
+            return Err(
+                "mod manifest lacks load_ready; hook words cannot be attached safely".into(),
+            );
         }
         let ready = (
             number(&ready["address"])?,
@@ -259,14 +305,18 @@ impl Loaded {
                 .iter()
                 .any(|(base, size)| *base <= *address && end <= base + *size as u64)
             {
-                return Err(format!("mod payload at {address:#x} is outside its reservations"));
+                return Err(format!(
+                    "mod payload at {address:#x} is outside its reservations"
+                ));
             }
         }
         let mut words: Vec<Word> = Vec::new();
         for word in array(&manifest, "words")? {
             let address = number(&word["address"])?;
-            let old = u32::try_from(number(&word["old"])?).map_err(|_| "mod old word exceeds u32")?;
-            let new = u32::try_from(number(&word["new"])?).map_err(|_| "mod new word exceeds u32")?;
+            let old =
+                u32::try_from(number(&word["old"])?).map_err(|_| "mod old word exceeds u32")?;
+            let new =
+                u32::try_from(number(&word["new"])?).map_err(|_| "mod new word exceeds u32")?;
             if address % 4 != 0 || words.iter().any(|known| known.address == address) {
                 return Err(format!("mod word {address:#x} is misaligned or repeated"));
             }
@@ -274,7 +324,9 @@ impl Loaded {
                 .iter()
                 .any(|(base, size)| overlaps((address, 4), (*base, *size as u64)))
             {
-                return Err(format!("mod word {address:#x} lies inside a mod reservation"));
+                return Err(format!(
+                    "mod word {address:#x} lies inside a mod reservation"
+                ));
             }
             validate_original(address, old)?;
             words.push(Word {
@@ -291,7 +343,9 @@ impl Loaded {
             .iter()
             .map(|range| {
                 let (address, size) = extent(range)?;
-                let digest = range["sha256"].as_str().ok_or("immutable range lacks sha256")?;
+                let digest = range["sha256"]
+                    .as_str()
+                    .ok_or("immutable range lacks sha256")?;
                 Ok((address, size, digest.to_owned()))
             })
             .collect::<Result<Vec<_>, String>>()?;
@@ -323,7 +377,9 @@ impl Loaded {
         for &(base, size) in &self.reservations {
             let region = (base, size as u64);
             if excluded.iter().any(|other| overlaps(region, *other)) {
-                return Err(format!("mod reservation {base:#x}+{size:#x} intersects startup memory"));
+                return Err(format!(
+                    "mod reservation {base:#x}+{size:#x} intersects startup memory"
+                ));
             }
             if !is_zero(machine, base, size)? {
                 return Err(format!("mod reservation {base:#x}+{size:#x} is occupied"));
@@ -331,7 +387,10 @@ impl Loaded {
         }
         for word in &self.words {
             if protected.contains(&word.address) {
-                return Err(format!("mod site {:#x} is a discovery callee stub", word.address));
+                return Err(format!(
+                    "mod site {:#x} is a discovery callee stub",
+                    word.address
+                ));
             }
         }
         for (address, bytes) in &self.payloads {
@@ -340,13 +399,22 @@ impl Loaded {
         self.placed = true;
         eprintln!(
             "FUJIMOD mod placed: build={} reservations={:x?} words={} attach when {:#x}=={}",
-            self.manifest["build_id"], self.reservations, self.words.len(), self.ready.0, self.ready.1
+            self.manifest["build_id"],
+            self.reservations,
+            self.words.len(),
+            self.ready.0,
+            self.ready.1
         );
         Ok(())
     }
 
     /// Delay placement until an explicitly declared guest readiness word is set.
-    pub fn advance(&mut self, machine: &dyn Machine, now: u64, protected: &[u64]) -> Result<(), String> {
+    pub fn advance(
+        &mut self,
+        machine: &dyn Machine,
+        now: u64,
+        protected: &[u64],
+    ) -> Result<(), String> {
         if !self.placed {
             if read_word(machine, self.ready.0)? != self.ready.1 {
                 return Ok(());
@@ -354,7 +422,10 @@ impl Loaded {
             self.permissions(machine)?;
             for word in &self.words {
                 if read_word(machine, word.address)? != word.old {
-                    return Err(format!("mod site {:#x} differs from its original instruction", word.address));
+                    return Err(format!(
+                        "mod site {:#x} differs from its original instruction",
+                        word.address
+                    ));
                 }
             }
             self.place(machine, &[], protected)?;
@@ -397,7 +468,11 @@ impl Loaded {
             if let Err(error) = machine.write(word.address, &word.new.to_le_bytes()) {
                 let unrestored = self.words[..index]
                     .iter()
-                    .filter(|done| machine.write(done.address, &done.old.to_le_bytes()).is_err())
+                    .filter(|done| {
+                        machine
+                            .write(done.address, &done.old.to_le_bytes())
+                            .is_err()
+                    })
                     .count();
                 return Err(format!(
                     "mod word {:#x}: {error} ({unrestored} earlier words could not be restored)",
@@ -462,7 +537,9 @@ impl Loaded {
                         let address = page.max(base);
                         for access in [Access::Fetch, Access::Write] {
                             if machine.arm32_translate(core, address, access)? != address {
-                                return Err(format!("mod reservation at {address:#x} is not identity mapped on core {core}"));
+                                return Err(format!(
+                                    "mod reservation at {address:#x} is not identity mapped on core {core}"
+                                ));
                             }
                         }
                     }
@@ -483,7 +560,9 @@ impl Loaded {
                                 machine.read(table, &mut entry)?;
                                 Ok(u64::from_le_bytes(entry))
                             })
-                            .map_err(|error| format!("mod reservation {address:#x} on core {core}: {error}"))?;
+                            .map_err(|error| {
+                                format!("mod reservation {address:#x} on core {core}: {error}")
+                            })?;
                         if physical != address {
                             return Err(format!(
                                 "mod reservation {address:#x} on core {core} maps to {physical:#x}, not itself"
@@ -509,7 +588,8 @@ impl Loaded {
             if symbol["type"] != "STT_OBJECT" || !matches!(size, 4 | 8) {
                 continue;
             }
-            if let (Some(name), Ok(address)) = (symbol["name"].as_str(), number(&symbol["address"])) {
+            if let (Some(name), Ok(address)) = (symbol["name"].as_str(), number(&symbol["address"]))
+            {
                 let mut bytes = [0u8; 8];
                 if machine.read(address, &mut bytes[..size as usize]).is_ok() {
                     counters.insert(name.to_owned(), json!(u64::from_le_bytes(bytes)));
@@ -560,12 +640,20 @@ mod tests {
     impl Mock {
         fn set(&self, address: u64, bytes: &[u8]) {
             for (index, byte) in bytes.iter().enumerate() {
-                self.memory.borrow_mut().insert(address + index as u64, *byte);
+                self.memory
+                    .borrow_mut()
+                    .insert(address + index as u64, *byte);
             }
         }
         fn get(&self, address: u64, length: usize) -> Vec<u8> {
             (0..length as u64)
-                .map(|offset| self.memory.borrow().get(&(address + offset)).copied().unwrap_or(0))
+                .map(|offset| {
+                    self.memory
+                        .borrow()
+                        .get(&(address + offset))
+                        .copied()
+                        .unwrap_or(0)
+                })
                 .collect()
         }
     }
@@ -586,7 +674,16 @@ mod tests {
 
     impl Machine for Mock {
         fn translations(&self) -> Result<Vec<(usize, arm64::TranslationState)>, String> {
-            Ok(vec![(0, arm64::TranslationState { sctlr: 0, tcr: 0, ttbr0: 0, ttbr1: 0, pstate: 5 })])
+            Ok(vec![(
+                0,
+                arm64::TranslationState {
+                    sctlr: 0,
+                    tcr: 0,
+                    ttbr0: 0,
+                    ttbr1: 0,
+                    pstate: 5,
+                },
+            )])
         }
     }
 
@@ -602,7 +699,11 @@ mod tests {
 
     fn firmware(sha: &str) -> crate::xp5::firmware::Firmware {
         let stock = |address| (address, OLD.to_le_bytes().to_vec());
-        crate::xp5::firmware::Firmware::for_tests("x100vi-131", sha, vec![stock(SITE), stock(SECOND)])
+        crate::xp5::firmware::Firmware::for_tests(
+            "x100vi-131",
+            sha,
+            vec![stock(SITE), stock(SECOND)],
+        )
     }
 
     fn manifest() -> Value {
@@ -625,9 +726,17 @@ mod tests {
 
     fn build(value: Value) -> Result<Loaded, String> {
         let firmware = firmware("ab");
-        Loaded::from_manifest(value, "digest".into(), vec![(0x20_0000, payload())],
-            Target { id: &firmware.id, sha256: &firmware.source_sha256, model: Model::ArmV8A },
-            |address, old| firmware.expect_word(address, old, "mod patch site"))
+        Loaded::from_manifest(
+            value,
+            "digest".into(),
+            vec![(0x20_0000, payload())],
+            Target {
+                id: &firmware.id,
+                sha256: &firmware.source_sha256,
+                model: Model::ArmV8A,
+            },
+            |address, old| firmware.expect_word(address, old, "mod patch site"),
+        )
     }
 
     fn loaded() -> Loaded {
@@ -636,7 +745,10 @@ mod tests {
 
     /// A placed mod and a machine whose stock words are in place and whose ready flag holds.
     fn placed(fail: Option<u64>) -> (Loaded, Mock) {
-        let machine = Mock { fail, ..Mock::default() };
+        let machine = Mock {
+            fail,
+            ..Mock::default()
+        };
         for site in [SITE, SECOND] {
             machine.set(site, &OLD.to_le_bytes());
         }
@@ -675,7 +787,11 @@ mod tests {
         // A reservation byte taken since placement: every word check passes, the arena check fails.
         let (mut m, machine) = placed(None);
         machine.set(0x20_0100, &[1]);
-        assert!(m.attach_if_ready(&machine, 1).unwrap_err().contains("occupied"));
+        assert!(
+            m.attach_if_ready(&machine, 1)
+                .unwrap_err()
+                .contains("occupied")
+        );
         assert_eq!(machine.get(SITE, 4), OLD.to_le_bytes());
         // The second word's write fails: the first goes back to stock.
         let (mut m, machine) = placed(Some(SECOND));

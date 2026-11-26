@@ -8,9 +8,9 @@
 //! clipping at 16383, so the firmware's AE and AWB see their own programming. A run-definition
 //! statistics scene ([`Device::set_scene`]) takes precedence.
 use fujimod_emulator_devices::checkpoint::Checkpoint;
+use fujimod_emulator_devices::{Cx, Device};
 use fujimod_emulator_imaging::exposure::ExposureHandle;
 use fujimod_emulator_imaging::xtrans;
-use fujimod_emulator_devices::{Cx, Device};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::sync::{Arc, Mutex};
@@ -76,7 +76,13 @@ impl FocusWindow {
 
     /// The window of the input buffer's x and y words; `None` for an unprogrammed (zero) word.
     pub fn from_words(x: u32, y: u32) -> Option<Self> {
-        let field = |word: u32| (f64::from(word >> 16), ((word >> 12) & 0xf) as usize + 1, f64::from(word & 0xfff));
+        let field = |word: u32| {
+            (
+                f64::from(word >> 16),
+                ((word >> 12) & 0xf) as usize + 1,
+                f64::from(word & 0xfff),
+            )
+        };
         let ((x0, columns, width), (y0, rows, height)) = (field(x), field(y));
         if x == 0 || y == 0 || width == 0. || height == 0. {
             return None;
@@ -168,7 +174,14 @@ impl FocusFrame {
         use fujimod_emulator_imaging::{focus, frame};
         static KEPT: Mutex<Option<((u64, u64, Option<[u64; 6]>), FocusFrame)>> = Mutex::new(None);
         let window_key = window.map(|w| {
-            [w.columns as u64, w.rows as u64, w.x.to_bits(), w.y.to_bits(), w.width.to_bits(), w.height.to_bits()]
+            [
+                w.columns as u64,
+                w.rows as u64,
+                w.x.to_bits(),
+                w.y.to_bits(),
+                w.width.to_bits(),
+                w.height.to_bits(),
+            ]
         });
         let key = (now, exposure.to_bits(), window_key);
         if let Some((kept_key, kept)) = KEPT.lock().unwrap_or_else(|e| e.into_inner()).as_ref() {
@@ -201,10 +214,17 @@ impl FocusFrame {
     fn measure(rgb: &[u8], exposure: f64, diameter: f64, window: Option<FocusWindow>) -> Self {
         static OPTIONS: std::sync::OnceLock<(f64, u32)> = std::sync::OnceLock::new();
         let (gain, aux) = *OPTIONS.get_or_init(|| {
-            (host_number("XT5_FOCUS_GAIN", FOCUS_GAIN), host_number("XT5_FOCUS_AUX", 3.) as u32)
+            (
+                host_number("XT5_FOCUS_GAIN", FOCUS_GAIN),
+                host_number("XT5_FOCUS_AUX", 3.) as u32,
+            )
         });
-        let mut frame =
-            Self { cells: vec![0; 0x2000], filters: vec![0; 0x1000], levels: vec![0; 0x400], sums: vec![0; 0x400] };
+        let mut frame = Self {
+            cells: vec![0; 0x2000],
+            filters: vec![0; 0x1000],
+            levels: vec![0; 0x400],
+            sums: vec![0; 0x400],
+        };
         if rgb.len() != FOCUS_WIDTH * FOCUS_LINES * 3 {
             return frame;
         }
@@ -241,41 +261,56 @@ impl FocusFrame {
                 *level = level.clamp(0., clip);
             }
         };
-        let (columns, rows, width, cell_lines, cell_samples, raster, scale, cell_pixels) = match window {
-            None => {
-                let mut raster = Vec::with_capacity(FOCUS_WIDTH * FOCUS_LINES);
-                for y in 0..FOCUS_LINES {
-                    line(y, 0, FOCUS_WIDTH, &mut raster);
-                }
-                (
-                    FOCUS_COLUMNS,
-                    FOCUS_ROWS,
-                    FOCUS_WIDTH,
-                    full_lines,
-                    FOCUS_WIDTH / FOCUS_COLUMNS,
-                    raster,
-                    1.,
-                    FOCUS_CELL_PIXELS,
-                )
-            }
-            Some(w) => {
-                let (columns, rows) = (w.columns.clamp(1, 16), w.rows.clamp(1, 16));
-                let cell_samples = ((w.width * FOCUS_WIDTH as f64).round() as usize).clamp(1, FOCUS_WIDTH / columns);
-                let width = columns * cell_samples;
-                let start = ((w.x * FOCUS_WIDTH as f64).round().max(0.) as usize).min(FOCUS_WIDTH - width);
-                let cell_lines = ((w.height * FOCUS_LINES as f64).round() as usize).clamp(1, full_lines);
-                let mut raster = Vec::with_capacity(width * rows * cell_lines);
-                for row in 0..rows {
-                    for j in 0..cell_lines {
-                        let y = w.y + (row as f64 + (j as f64 + 0.5) / cell_lines as f64) * w.height;
-                        let y = ((y * FOCUS_LINES as f64).floor().max(0.) as usize).min(FOCUS_LINES - 1);
-                        line(y, start, start + width, &mut raster);
+        let (columns, rows, width, cell_lines, cell_samples, raster, scale, cell_pixels) =
+            match window {
+                None => {
+                    let mut raster = Vec::with_capacity(FOCUS_WIDTH * FOCUS_LINES);
+                    for y in 0..FOCUS_LINES {
+                        line(y, 0, FOCUS_WIDTH, &mut raster);
                     }
+                    (
+                        FOCUS_COLUMNS,
+                        FOCUS_ROWS,
+                        FOCUS_WIDTH,
+                        full_lines,
+                        FOCUS_WIDTH / FOCUS_COLUMNS,
+                        raster,
+                        1.,
+                        FOCUS_CELL_PIXELS,
+                    )
                 }
-                let pixels = w.width * FOCUS_INPUT.0 * w.height * FOCUS_INPUT.1;
-                (columns, rows, width, cell_lines, cell_samples, raster, full_lines as f64 / cell_lines as f64, pixels)
-            }
-        };
+                Some(w) => {
+                    let (columns, rows) = (w.columns.clamp(1, 16), w.rows.clamp(1, 16));
+                    let cell_samples = ((w.width * FOCUS_WIDTH as f64).round() as usize)
+                        .clamp(1, FOCUS_WIDTH / columns);
+                    let width = columns * cell_samples;
+                    let start = ((w.x * FOCUS_WIDTH as f64).round().max(0.) as usize)
+                        .min(FOCUS_WIDTH - width);
+                    let cell_lines =
+                        ((w.height * FOCUS_LINES as f64).round() as usize).clamp(1, full_lines);
+                    let mut raster = Vec::with_capacity(width * rows * cell_lines);
+                    for row in 0..rows {
+                        for j in 0..cell_lines {
+                            let y = w.y
+                                + (row as f64 + (j as f64 + 0.5) / cell_lines as f64) * w.height;
+                            let y = ((y * FOCUS_LINES as f64).floor().max(0.) as usize)
+                                .min(FOCUS_LINES - 1);
+                            line(y, start, start + width, &mut raster);
+                        }
+                    }
+                    let pixels = w.width * FOCUS_INPUT.0 * w.height * FOCUS_INPUT.1;
+                    (
+                        columns,
+                        rows,
+                        width,
+                        cell_lines,
+                        cell_samples,
+                        raster,
+                        full_lines as f64 / cell_lines as f64,
+                        pixels,
+                    )
+                }
+            };
         let bands = fujimod_emulator_imaging::focus::contrast_grid(
             &raster,
             width,
@@ -289,7 +324,9 @@ impl FocusFrame {
             for column in 0..columns {
                 let cell = row * columns + column;
                 for (band, sums) in bands.iter().enumerate() {
-                    let value = ((sums[cell] * gain * scale).round().min(f64::from(u32::MAX)) as u32).to_le_bytes();
+                    let value = ((sums[cell] * gain * scale).round().min(f64::from(u32::MAX))
+                        as u32)
+                        .to_le_bytes();
                     for word in [band, band + 4] {
                         let at = row * 0x200 + column * 0x20 + word * 4;
                         frame.cells[at..at + 4].copy_from_slice(&value);
@@ -299,7 +336,8 @@ impl FocusFrame {
                 }
                 let (mut low, mut high, mut clipped) = (f64::MAX, 0f64, 0usize);
                 for y in row * cell_lines..(row + 1) * cell_lines {
-                    let line = &raster[y * width..][column * cell_samples..(column + 1) * cell_samples];
+                    let line =
+                        &raster[y * width..][column * cell_samples..(column + 1) * cell_samples];
                     for level in line {
                         low = low.min(*level);
                         high = high.max(*level);
@@ -467,7 +505,8 @@ impl Scene {
                 .map(|p| {
                     std::array::from_fn(|c| {
                         let level = xtrans::srgb_to_linear(p[c]);
-                        let signal = level * response.colour_gain[c] * response.exposure * response.white;
+                        let signal =
+                            level * response.colour_gain[c] * response.exposure * response.white;
                         signal.round().clamp(0., f64::from(u16::MAX)) as u16
                     })
                 })
@@ -482,7 +521,12 @@ impl Scene {
         let (width, height) = (columns * 8, rows * 8);
         let response = xtrans::Response::xt5(exposure);
         let Some(scene) = fujimod_emulator_imaging::frame::host_scene() else {
-            return Ok(Self::sensor(width, height, &vec![118; width * height * 3], response));
+            return Ok(Self::sensor(
+                width,
+                height,
+                &vec![118; width * height * 3],
+                response,
+            ));
         };
         let mut rgb = Vec::with_capacity(width * height * 3);
         fujimod_emulator_imaging::frame::render_rgb_lines(scene, width, height, |_, line| {
@@ -555,7 +599,10 @@ pub struct Statistics {
 impl Statistics {
     /// Statistics whose SRAM is plain guest memory rather than a device window.
     pub fn in_memory(base: u64, bank_size: usize) -> Result<Self, String> {
-        Ok(Self { in_memory: true, ..Self::new(base, bank_size)? })
+        Ok(Self {
+            in_memory: true,
+            ..Self::new(base, bank_size)?
+        })
     }
 
     pub fn new(base: u64, bank_size: usize) -> Result<Self, String> {
@@ -802,10 +849,16 @@ mod tests {
             f64::from(word(&scene.planes(16, 16, true), plane, 3, 3)) / samples
         };
         let (one, two) = (cell(1., 1), cell(2., 1));
-        assert!(((two - 1024.) / (one - 1024.) - 2.).abs() < 1e-3, "{one} -> {two}");
+        assert!(
+            ((two - 1024.) / (one - 1024.) - 2.).abs() < 1e-3,
+            "{one} -> {two}"
+        );
         // 18% grey (sRGB 118, linear 0.181) at the reference exposure: green 0.181 x 7679.5
         // above black.
-        assert!((one - 1024. - xtrans::srgb_to_linear(118) * xtrans::XT5_SCENE_WHITE).abs() < 1., "{one}");
+        assert!(
+            (one - 1024. - xtrans::srgb_to_linear(118) * xtrans::XT5_SCENE_WHITE).abs() < 1.,
+            "{one}"
+        );
         assert!(cell(1., 0) < one && cell(1., 2) < one && cell(1., 0) < cell(1., 2));
         // Four stops over: green clips; red (gain 0.47) does not yet.
         assert_eq!(cell(16., 1).round(), 16383.);
@@ -822,19 +875,39 @@ mod tests {
         use fujimod_emulator_devices::test_host::recording::RecordingHost;
         use fujimod_emulator_imaging::exposure::Exposure;
         let exposure = ExposureHandle::default();
-        let statistics = Statistics::in_memory(0x1000, 0x2000).unwrap().with_sensor_scene(exposure.clone());
-        let mut host = RecordingHost { ram: vec![0; 0x1000], ram_base: 0x1000, ..Default::default() };
+        let statistics = Statistics::in_memory(0x1000, 0x2000)
+            .unwrap()
+            .with_sensor_scene(exposure.clone());
+        let mut host = RecordingHost {
+            ram: vec![0; 0x1000],
+            ram_base: 0x1000,
+            ..Default::default()
+        };
         let mut green = || {
-            statistics.complete(&mut Cx::new(&mut host, 0, 0, 0), 0x1000, 16, 16, Planes::Ae, None).unwrap();
+            statistics
+                .complete(
+                    &mut Cx::new(&mut host, 0, 0, 0),
+                    0x1000,
+                    16,
+                    16,
+                    Planes::Ae,
+                    None,
+                )
+                .unwrap();
             word(&host.ram, 1, 5, 5)
         };
         let one = green();
-        *exposure.lock().unwrap() = Exposure { seconds: 1. / 125., analog_gain: 2. };
+        *exposure.lock().unwrap() = Exposure {
+            seconds: 1. / 125.,
+            analog_gain: 2.,
+        };
         let two = green();
         let pedestal = 1024 * (120 * 78 * 5 / 9);
         assert!(((two - pedestal) as f64 / (one - pedestal) as f64 - 2.).abs() < 1e-3);
         let mut device = statistics.clone();
-        device.set_scene(&serde_json::json!({"luma": 2048})).unwrap();
+        device
+            .set_scene(&serde_json::json!({"luma": 2048}))
+            .unwrap();
         assert_eq!(green(), 9216 * 5200);
     }
     #[test]
@@ -863,14 +936,21 @@ mod tests {
         assert!((x - 0.5).abs() < 0.01 && (y - 0.5).abs() < 0.01, "{x} {y}");
         let moved = FocusWindow::from_words(0x03c0_207a, 0x005c_200b).unwrap();
         let (x, y) = middle(moved);
-        assert!((x - 0.290).abs() < 0.01 && (y - 0.291).abs() < 0.01, "{x} {y}");
+        assert!(
+            (x - 0.290).abs() < 0.01 && (y - 0.291).abs() < 0.01,
+            "{x} {y}"
+        );
         assert_eq!(FocusWindow::from_words(0, 0x009c_200b), None);
         // Stripes only in the right half: the centre window (which spans the middle) sees them
         // in its right column, the moved window (left of the middle) sees nothing.
         let raster: Vec<u8> = (0..FOCUS_WIDTH * FOCUS_LINES)
             .flat_map(|i| {
                 let x = i % FOCUS_WIDTH;
-                if x > FOCUS_WIDTH / 2 + 8 && (x / 16) % 2 == 0 { [220u8; 3] } else { [30u8; 3] }
+                if x > FOCUS_WIDTH / 2 + 8 && (x / 16) % 2 == 0 {
+                    [220u8; 3]
+                } else {
+                    [30u8; 3]
+                }
             })
             .collect();
         let word = |frame: &FocusFrame, row: usize, column: usize| {
@@ -882,7 +962,11 @@ mod tests {
             assert_eq!(word(&frame, row, 0), 0, "row {row}");
             assert!(word(&frame, row, 2) > 0, "row {row}");
         }
-        assert_eq!(word(&frame, 0, 3), 0, "only the window's columns are written");
+        assert_eq!(
+            word(&frame, 0, 3),
+            0,
+            "only the window's columns are written"
+        );
         let frame = FocusFrame::measure(&raster, 1., 0., Some(moved));
         assert!(frame.cells.iter().all(|v| *v == 0) && frame.filters.iter().all(|v| *v == 0));
     }
@@ -890,27 +974,55 @@ mod tests {
     #[test]
     fn focus_frame_falls_with_the_blur_circle() {
         let bars: Vec<u8> = (0..FOCUS_WIDTH * FOCUS_LINES)
-            .flat_map(|i| if (i % FOCUS_WIDTH) / 64 % 2 == 0 { [30u8; 3] } else { [220u8; 3] })
+            .flat_map(|i| {
+                if (i % FOCUS_WIDTH) / 64 % 2 == 0 {
+                    [30u8; 3]
+                } else {
+                    [220u8; 3]
+                }
+            })
             .collect();
         let cell = |frame: &FocusFrame, row: usize, column: usize, word: usize| {
             let at = row * 0x200 + column * 0x20 + word * 4;
-            u64::from(u32::from_le_bytes(frame.cells[at..at + 4].try_into().unwrap()))
+            u64::from(u32::from_le_bytes(
+                frame.cells[at..at + 4].try_into().unwrap(),
+            ))
         };
         let total = |diameter: f64| -> Vec<u64> {
             let frame = FocusFrame::measure(&bars, 1., diameter, None);
             (0..4)
-                .map(|word| (0..FOCUS_ROWS).map(|r| (0..FOCUS_COLUMNS).map(|c| cell(&frame, r, c, word)).sum::<u64>()).sum())
+                .map(|word| {
+                    (0..FOCUS_ROWS)
+                        .map(|r| {
+                            (0..FOCUS_COLUMNS)
+                                .map(|c| cell(&frame, r, c, word))
+                                .sum::<u64>()
+                        })
+                        .sum()
+                })
                 .collect()
         };
         let sharp = total(0.);
-        assert!(sharp[0] > 100_000 && sharp.windows(2).all(|p| p[0] < p[1]), "{sharp:?}");
+        assert!(
+            sharp[0] > 100_000 && sharp.windows(2).all(|p| p[0] < p[1]),
+            "{sharp:?}"
+        );
         let (soft, softer) = (total(6.), total(40.));
         for band in 0..4 {
-            assert!(soft[band] < sharp[band] && softer[band] < soft[band], "band {band}");
+            assert!(
+                soft[band] < sharp[band] && softer[band] < soft[band],
+                "band {band}"
+            );
         }
-        assert!(soft[0] * sharp[3] < soft[3] * sharp[0], "the fine band falls first");
+        assert!(
+            soft[0] * sharp[3] < soft[3] * sharp[0],
+            "the fine band falls first"
+        );
         let frame = FocusFrame::measure(&bars, 1., 0., None);
-        assert_eq!((frame.cells.len(), frame.levels.len(), frame.sums.len()), (0x2000, 0x400, 0x400));
+        assert_eq!(
+            (frame.cells.len(), frame.levels.len(), frame.sums.len()),
+            (0x2000, 0x400, 0x400)
+        );
         assert_eq!(frame.filters.len(), 0x1000);
         for (row, column) in [(0, 0), (4, 6), (8, 12)] {
             assert!(cell(&frame, row, column, 0) > 0, "cell {row},{column}");
@@ -925,7 +1037,10 @@ mod tests {
             let at = row * 0x40 + column * 4;
             let levels = u32::from_le_bytes(frame.levels[at..at + 4].try_into().unwrap());
             assert!(levels >> 16 > levels & 0xffff && levels & 0xffff > 0);
-            assert_eq!(u32::from_le_bytes(frame.sums[at..at + 4].try_into().unwrap()), 0);
+            assert_eq!(
+                u32::from_le_bytes(frame.sums[at..at + 4].try_into().unwrap()),
+                0
+            );
         }
         // Columns 13..15 and rows 9..15 of the hardware grid stay empty.
         assert_eq!(cell(&frame, 0, 13, 0), 0);
@@ -936,9 +1051,17 @@ mod tests {
         // Sixteen times the exposure clips the bright bars: half of each cell's pixels.
         let clipped = FocusFrame::measure(&bars, 16., 0., None);
         let count = u32::from_le_bytes(clipped.sums[4 * 0x40 + 6 * 4..][..4].try_into().unwrap());
-        assert!((f64::from(count) / FOCUS_CELL_PIXELS - 0.5).abs() < 0.15, "{count}");
+        assert!(
+            (f64::from(count) / FOCUS_CELL_PIXELS - 0.5).abs() < 0.15,
+            "{count}"
+        );
         let flat = vec![118u8; FOCUS_WIDTH * FOCUS_LINES * 3];
-        assert!(FocusFrame::measure(&flat, 1., 0., None).cells.iter().all(|v| *v == 0));
+        assert!(
+            FocusFrame::measure(&flat, 1., 0., None)
+                .cells
+                .iter()
+                .all(|v| *v == 0)
+        );
 
         use fujimod_emulator_devices::test_host::recording::RecordingHost;
         let statistics = Statistics::in_memory(0x1000, 0x2000).unwrap();
@@ -948,8 +1071,21 @@ mod tests {
             (Planes::FocusSums, 0x400),
             (Planes::FocusFilters, 0x1000),
         ] {
-            let mut host = RecordingHost { ram: vec![0x55; 0x2100], ram_base: 0x1000, ..Default::default() };
-            statistics.complete(&mut Cx::new(&mut host, 0, 0, 0), 0x1000, 13, 9, planes, None).unwrap();
+            let mut host = RecordingHost {
+                ram: vec![0x55; 0x2100],
+                ram_base: 0x1000,
+                ..Default::default()
+            };
+            statistics
+                .complete(
+                    &mut Cx::new(&mut host, 0, 0, 0),
+                    0x1000,
+                    13,
+                    9,
+                    planes,
+                    None,
+                )
+                .unwrap();
             assert!(host.ram[..size].iter().all(|v| *v == 0));
             assert!(host.ram[size..].iter().all(|v| *v == 0x55));
         }

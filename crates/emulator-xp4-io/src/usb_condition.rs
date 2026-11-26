@@ -50,16 +50,25 @@ impl Device for UsbCondition {
         }
     }
     fn checkpoint(&self) -> Result<fujimod_emulator_devices::checkpoint::Checkpoint, String> {
-        fujimod_emulator_devices::checkpoint::Checkpoint::encode(self.name(), &(self.base, self.present.load(Ordering::SeqCst)))
+        fujimod_emulator_devices::checkpoint::Checkpoint::encode(
+            self.name(),
+            &(self.base, self.present.load(Ordering::SeqCst)),
+        )
     }
-    fn validate_checkpoint(&self, data: &fujimod_emulator_devices::checkpoint::Checkpoint) -> Result<(), String> {
+    fn validate_checkpoint(
+        &self,
+        data: &fujimod_emulator_devices::checkpoint::Checkpoint,
+    ) -> Result<(), String> {
         let (base, _): (u64, bool) = data.decode(self.name())?;
         if base != self.base {
             return Err("Invalid XP4 USB condition checkpoint".into());
         }
         Ok(())
     }
-    fn restore_checkpoint(&mut self, data: &fujimod_emulator_devices::checkpoint::Checkpoint) -> Result<(), String> {
+    fn restore_checkpoint(
+        &mut self,
+        data: &fujimod_emulator_devices::checkpoint::Checkpoint,
+    ) -> Result<(), String> {
         self.validate_checkpoint(data)?;
         let (_, present): (u64, bool) = data.decode(self.name())?;
         self.present.store(present, Ordering::SeqCst);
@@ -112,9 +121,15 @@ mod tests {
     fn reports_presence_and_refuses_other_words() {
         let mut absent = UsbCondition::new(0xfff4a300, false).unwrap();
         let mut host = NoOp;
-        assert_eq!(absent.read(&mut Cx::new(&mut host, 0, 0, 0), 0xfff4a300, 4), 0);
+        assert_eq!(
+            absent.read(&mut Cx::new(&mut host, 0, 0, 0), 0xfff4a300, 4),
+            0
+        );
         let mut present = UsbCondition::new(0xfff4a300, true).unwrap();
-        assert_eq!(present.read(&mut Cx::new(&mut host, 0, 0, 0), 0xfff4a300, 4), 1);
+        assert_eq!(
+            present.read(&mut Cx::new(&mut host, 0, 0, 0), 0xfff4a300, 4),
+            1
+        );
         let mut cx = Cx::new(&mut host, 0, 0, 0);
         present.read(&mut cx, 0xfff4a304, 4);
         assert!(cx.refusal().is_some());

@@ -21,7 +21,14 @@ fn session(value: Value) -> Session {
 }
 
 fn program(s: &Session, address: usize, words: &[u32]) {
-    s.write(address, &words.iter().flat_map(|w| w.to_le_bytes()).collect::<Vec<_>>()).unwrap();
+    s.write(
+        address,
+        &words
+            .iter()
+            .flat_map(|w| w.to_le_bytes())
+            .collect::<Vec<_>>(),
+    )
+    .unwrap();
 }
 
 fn word(s: &Session, address: usize) -> u32 {
@@ -37,17 +44,22 @@ fn state(s: &Session) -> Value {
 #[test]
 fn conditional_branch_stops_before_store_and_ordinary_run_resumes() {
     let s = Rc::new(session(input(1)));
-    program(&s, CODE, &[
-        0xe3a0_2000, // MOV r2,#0.
-        0xe352_0000, // CMP r2,#0.
-        0x0a00_0000, // BEQ CODE+16: skip the first store.
-        0xe580_1000, // STR r1,[r0].
-        0xe281_1001, // ADD r1,r1,#1.
-        0xe580_1000, // Target: STR r1,[r0].
-        0xe1a0_0000,
-    ]);
+    program(
+        &s,
+        CODE,
+        &[
+            0xe3a0_2000, // MOV r2,#0.
+            0xe352_0000, // CMP r2,#0.
+            0x0a00_0000, // BEQ CODE+16: skip the first store.
+            0xe580_1000, // STR r1,[r0].
+            0xe281_1001, // ADD r1,r1,#1.
+            0xe580_1000, // Target: STR r1,[r0].
+            0xe1a0_0000,
+        ],
+    );
     let target = (CODE + 20) as u64;
-    s.instruction_points(0, vec![(CODE + 16) as u64, target]).unwrap();
+    s.instruction_points(0, vec![(CODE + 16) as u64, target])
+        .unwrap();
     let observed = Rc::new(RefCell::new(Vec::new()));
     let seen = observed.clone();
     let weak = Rc::downgrade(&s);
@@ -60,7 +72,8 @@ fn conditional_branch_stops_before_store_and_ordinary_run_resumes() {
         }
         seen.borrow_mut().push((core, pc));
         Ok(())
-    }))).unwrap();
+    })))
+    .unwrap();
     s.run_to(0, 100, target).unwrap();
     assert_eq!(s.read_register(0, arm::PC).unwrap(), target);
     assert_eq!(s.instructions(), [4]);
@@ -118,7 +131,8 @@ fn thumb_targets_are_even_halfword_addresses_without_a_mode_bit() {
     ]]);
     let s = session(value);
     // MOVS r0,#1; ADDS r0,#1; STR r0,[r1].
-    s.write(CODE, &[0x01, 0x20, 0x01, 0x30, 0x08, 0x60]).unwrap();
+    s.write(CODE, &[0x01, 0x20, 0x01, 0x30, 0x08, 0x60])
+        .unwrap();
     s.run_to(0, 8, (CODE + 2) as u64).unwrap();
     assert_eq!(s.instructions(), [1]);
     assert_eq!(s.read_register(0, arm::PC).unwrap(), (CODE + 2) as u64);
@@ -161,18 +175,27 @@ fn wfi_and_guest_sgi_irq_yield_before_target_and_resume_through_vector() {
         {"control":1,"priority_mask":255,"binary_point":0}
     ]});
     let s = session(value);
-    program(&s, CODE, &[
-        0xf108_0080, // CPSIE i.
-        0xe320_f003, // WFI.
-        0xe3a0_402a, 0xe580_4000, // MOV r4,#42; STR r4,[r0].
-        0xe1a0_0000,
-    ]);
+    program(
+        &s,
+        CODE,
+        &[
+            0xf108_0080, // CPSIE i.
+            0xe320_f003, // WFI.
+            0xe3a0_402a,
+            0xe580_4000, // MOV r4,#42; STR r4,[r0].
+            0xe1a0_0000,
+        ],
+    );
     program(&s, 0x2000, &[0xe580_1000]); // Guest SGIR write.
-    program(&s, 0x18, &[
-        0xe596_5000, // LDR r5,[r6]: acknowledge IAR.
-        0xe587_5000, // STR r5,[r7]: matching EOI.
-        0xe25e_f004, // SUBS pc,lr,#4: architectural IRQ return.
-    ]);
+    program(
+        &s,
+        0x18,
+        &[
+            0xe596_5000, // LDR r5,[r6]: acknowledge IAR.
+            0xe587_5000, // STR r5,[r7]: matching EOI.
+            0xe25e_f004, // SUBS pc,lr,#4: architectural IRQ return.
+        ],
+    );
     let target = (CODE + 16) as u64;
     s.run_to(1, 64, target).unwrap();
     assert_eq!(s.read_register(1, arm::PC).unwrap(), (CODE + 8) as u64);
@@ -202,7 +225,9 @@ fn strict_mmio_failure_is_sticky_even_when_its_pc_is_the_next_target() {
     // ADC owns [BASE, BASE+0x48), but its aligned word at +0x44 is
     // explicitly unmodeled. Ownership maps the page before this refusal.
     value["adc"] = json!([vec![0u16; 12], 16]);
-    value["initial_registers"][0].as_array_mut().unwrap()
+    value["initial_registers"][0]
+        .as_array_mut()
+        .unwrap()
         .push(json!([{"Arm32":{"R":2}},0xfff40044u32]));
     let s = session(value);
     program(&s, CODE, &[0xe592_3000, 0xe580_1000]); // Refused LDR; unreachable store.
@@ -223,8 +248,10 @@ fn invalid_arguments_do_not_mutate_or_poison_the_session() {
     let before = state(&s);
     let devices = s.device_state_json();
     for (core, budget, target) in [
-        (1, 1, CODE as u64), (0, 0, CODE as u64),
-        (0, 1, CODE as u64 + 1), (0, 1, 1u64 << 32),
+        (1, 1, CODE as u64),
+        (0, 0, CODE as u64),
+        (0, 1, CODE as u64 + 1),
+        (0, 1, 1u64 << 32),
     ] {
         assert!(s.run_to(core, budget, target).is_err());
         assert_eq!(state(&s), before);

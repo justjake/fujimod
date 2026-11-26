@@ -1,7 +1,7 @@
-use fujimod_emulator_devices::exr2::irq_routes::Irq;
 use crate::*;
-use fujimod_emulator_devices::test_host::*;
 use fujimod_emulator_devices::Device;
+use fujimod_emulator_devices::exr2::irq_routes::Irq;
+use fujimod_emulator_devices::test_host::*;
 #[test]
 fn prefilter_deadlines_reset_ack_and_busy_refusal() {
     let mut h = TestHost::new();

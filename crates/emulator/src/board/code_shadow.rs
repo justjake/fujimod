@@ -190,9 +190,8 @@ impl CodeShadow {
         self.last = None;
     }
     pub(super) fn request_resync(&mut self, page: Option<u64>) {
-        self.resync_page = page.filter(|&address| {
-            !self.changed && address <= u64::from(u32::MAX) - PAGE
-        });
+        self.resync_page =
+            page.filter(|&address| !self.changed && address <= u64::from(u32::MAX) - PAGE);
         self.changed = true;
         self.resync = true;
     }
@@ -250,7 +249,11 @@ impl CodeShadow {
         // and `offset + 2` stays inside it; execution is serialized with
         // this read.
         Some(u16::from_le(unsafe {
-            host?.as_ptr().add(offset as usize).cast::<u16>().read_unaligned()
+            host?
+                .as_ptr()
+                .add(offset as usize)
+                .cast::<u16>()
+                .read_unaligned()
         }))
     }
     /// `len` bytes of code at `address`, read from host memory, when they lie
@@ -273,12 +276,7 @@ impl CodeShadow {
     /// `checked` reports whether a whole page is ordinary RAM of this
     /// processor, so host reads never reach a device.
     #[inline]
-    pub(super) fn touch(
-        &mut self,
-        cpu: &dyn Cpu,
-        pc: u64,
-        checked: impl Fn(u64) -> bool,
-    ) -> Touch {
+    pub(super) fn touch(&mut self, cpu: &dyn Cpu, pc: u64, checked: impl Fn(u64) -> bool) -> Touch {
         let page = pc & !(PAGE - 1);
         if self.last.is_some_and(|(last, _)| last == page) {
             return Touch::Proven;
@@ -375,7 +373,10 @@ impl CodeShadow {
     #[cold]
     fn stored_slow(&mut self, cpu: &dyn Cpu, first: u64, last: u64) {
         let epoch = self.epoch;
-        for address in [Some(first), (last != first).then_some(last)].into_iter().flatten() {
+        for address in [Some(first), (last != first).then_some(last)]
+            .into_iter()
+            .flatten()
+        {
             let Some(page) = self.pages.get_mut(&address) else {
                 continue;
             };

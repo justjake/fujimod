@@ -34,7 +34,10 @@
 //! spring-like stage: a constant coil drive holds a constant displacement.
 use fujimod_emulator_devices::bus::InterruptLine;
 use fujimod_emulator_devices::checkpoint::Checkpoint;
-use fujimod_emulator_devices::{dma::{self, Direction}, Cx, Device};
+use fujimod_emulator_devices::{
+    Cx, Device,
+    dma::{self, Direction},
+};
 use serde::{Deserialize, Serialize};
 use std::collections::VecDeque;
 use std::sync::{Arc, Mutex};
@@ -98,7 +101,9 @@ pub struct SequencerOptions {
 fn settle_limit(configured: Option<u64>) -> Option<u64> {
     static OVERRIDE: std::sync::OnceLock<Option<u64>> = std::sync::OnceLock::new();
     configured.or(*OVERRIDE.get_or_init(|| {
-        std::env::var("XT5_IBIS_SETTLE_FRAMES").ok().and_then(|value| value.parse().ok())
+        std::env::var("XT5_IBIS_SETTLE_FRAMES")
+            .ok()
+            .and_then(|value| value.parse().ok())
     }))
 }
 
@@ -107,7 +112,9 @@ impl SequencerOptions {
         if u64::from(self.channel) >= channels
             || self.latency_ns == 0
             || self.lag_shift > 15
-            || self.drive_channels.is_some_and(|c| c.iter().any(|&n| n >= 6))
+            || self
+                .drive_channels
+                .is_some_and(|c| c.iter().any(|&n| n >= 6))
             || self.drive_channels.is_none() && self.drive_gain != [0; 3]
             || self.drive_gain.iter().any(|g| g.unsigned_abs() > 0x100)
         {
@@ -163,7 +170,10 @@ impl Sequencer {
             return Err("input-capture sequencer drive needs the extended timer outputs".into());
         }
         Ok(Self {
-            state: SequencerState { position: options.rest, ..Default::default() },
+            state: SequencerState {
+                position: options.rest,
+                ..Default::default()
+            },
             options,
             pwm,
         })
@@ -218,7 +228,11 @@ impl Sequencer {
                     // One stage step per sample frame, before its first sample.
                     self.step_stage();
                     self.state.frames += 1;
-                    if self.state.last_frame.is_some_and(|at| now.saturating_sub(at) >= SETTLE_GAP_NS) {
+                    if self
+                        .state
+                        .last_frame
+                        .is_some_and(|at| now.saturating_sub(at) >= SETTLE_GAP_NS)
+                    {
                         self.state.window_frames = 0;
                     }
                     self.state.window_frames += 1;
@@ -227,7 +241,10 @@ impl Sequencer {
                 self.state.reads += 1;
                 self.state.shift = (self.state.shift << 16) | u32::from(self.sample(axis));
             }
-            0x0007 if settle_limit(self.options.settle_frames).is_some_and(|limit| self.state.window_frames > limit) => {
+            0x0007
+                if settle_limit(self.options.settle_frames)
+                    .is_some_and(|limit| self.state.window_frames > limit) =>
+            {
                 self.state.shift = 0;
             }
             0x0007 => {
@@ -237,14 +254,21 @@ impl Sequencer {
                 let due = now
                     .checked_add(self.options.latency_ns)
                     .ok_or("input-capture sequencer deadline overflow")?;
-                self.state.in_flight.push_back((due, std::mem::take(&mut self.state.shift)));
+                self.state
+                    .in_flight
+                    .push_back((due, std::mem::take(&mut self.state.shift)));
             }
             _ => {}
         }
         Ok(())
     }
     fn advance(&mut self, now: u64) {
-        while self.state.in_flight.front().is_some_and(|&(due, _)| due <= now) {
+        while self
+            .state
+            .in_flight
+            .front()
+            .is_some_and(|&(due, _)| due <= now)
+        {
             let (_, value) = self.state.in_flight.pop_front().unwrap();
             self.state.ready.push_back(value);
             self.state.captures += 1;
@@ -256,7 +280,11 @@ impl Sequencer {
     fn validate_state(&self, state: &SequencerState) -> Result<(), String> {
         if state.reads > 3
             || state.in_flight.len() + state.ready.len() > CAPTURE_DEPTH
-            || state.in_flight.iter().zip(state.in_flight.iter().skip(1)).any(|(a, b)| a.0 > b.0)
+            || state
+                .in_flight
+                .iter()
+                .zip(state.in_flight.iter().skip(1))
+                .any(|(a, b)| a.0 > b.0)
             || state.irq_published != (!state.ready.is_empty() && state.irq_published)
             || state.position.iter().any(|p| p.unsigned_abs() > 0x8000)
         {
@@ -307,7 +335,12 @@ pub struct InputCapture {
 impl InputCapture {
     pub fn new(base: u64) -> Result<Self, String> {
         let channels = Self::channel_count(base)?;
-        Ok(Self { base, channels, control: 0, sequencer: None })
+        Ok(Self {
+            base,
+            channels,
+            control: 0,
+            sequencer: None,
+        })
     }
     pub fn channel_count(base: u64) -> Result<u64, String> {
         match base {
@@ -330,7 +363,10 @@ impl InputCapture {
             channels,
             control: 0,
             sequencer: Some(Channel {
-                interrupt: InterruptLine::Core { core, line: options.companion_irq_line },
+                interrupt: InterruptLine::Core {
+                    core,
+                    line: options.companion_irq_line,
+                },
                 options,
                 engine,
             }),
@@ -339,7 +375,9 @@ impl InputCapture {
     /// The DMA transmit port of `channel`: the sequencer for its channel, otherwise a sink.
     pub fn transmit_port(&self, channel: u8) -> dma::SharedPort {
         match &self.sequencer {
-            Some(s) if s.options.channel == channel => Arc::new(Mutex::new(SequencerPort(s.engine.clone()))),
+            Some(s) if s.options.channel == channel => {
+                Arc::new(Mutex::new(SequencerPort(s.engine.clone())))
+            }
             _ => Arc::new(Mutex::new(TransmitSink)),
         }
     }
@@ -378,7 +416,10 @@ impl Device for InputCapture {
         match &self.sequencer {
             None => Checkpoint::encode(self.name(), &self.control),
             Some(s) => {
-                let e = s.engine.lock().map_err(|_| "input-capture sequencer poisoned")?;
+                let e = s
+                    .engine
+                    .lock()
+                    .map_err(|_| "input-capture sequencer poisoned")?;
                 Checkpoint::encode(self.name(), &(&s.options, &e.state, self.control))
             }
         }
@@ -393,7 +434,10 @@ impl Device for InputCapture {
                     return Err("input-capture sequencer wiring differs".into());
                 }
                 Self::validate_control(control)?;
-                s.engine.lock().map_err(|_| "input-capture sequencer poisoned")?.validate_state(&state)
+                s.engine
+                    .lock()
+                    .map_err(|_| "input-capture sequencer poisoned")?
+                    .validate_state(&state)
             }
         }
     }
@@ -404,7 +448,10 @@ impl Device for InputCapture {
             Some(s) => {
                 let (_, state, control): (SequencerOptions, SequencerState, u32) =
                     saved.decode(self.name())?;
-                s.engine.lock().map_err(|_| "input-capture sequencer poisoned")?.state = state;
+                s.engine
+                    .lock()
+                    .map_err(|_| "input-capture sequencer poisoned")?
+                    .state = state;
                 self.control = control;
             }
         }
@@ -425,7 +472,15 @@ impl Device for InputCapture {
         let value = match (self.sequencer_offset(address), &self.sequencer) {
             (Some(0xc), Some(s)) => u64::from(!s.engine.lock().unwrap().state.ready.is_empty()),
             // Reading the capture consumes it; the next one (if any) keeps the line high.
-            (Some(0x10), Some(s)) => u64::from(s.engine.lock().unwrap().state.ready.pop_front().unwrap_or(0)),
+            (Some(0x10), Some(s)) => u64::from(
+                s.engine
+                    .lock()
+                    .unwrap()
+                    .state
+                    .ready
+                    .pop_front()
+                    .unwrap_or(0),
+            ),
             _ => 0,
         };
         self.publish(cx);
@@ -453,7 +508,9 @@ impl Device for InputCapture {
         self.publish(cx);
     }
     fn next_deadline(&self, _now: u64) -> Option<u64> {
-        self.sequencer.as_ref().and_then(|s| s.engine.lock().unwrap().next())
+        self.sequencer
+            .as_ref()
+            .and_then(|s| s.engine.lock().unwrap().next())
     }
     fn pollable(&self, address: u64, size: u8) -> bool {
         self.readable(address, size) && self.sequencer_offset(address) != Some(0x10)
@@ -492,7 +549,10 @@ impl Device for InputCapture {
                 }
                 let saved: SequencerState =
                     serde_json::from_value(state["state"].clone()).map_err(|e| e.to_string())?;
-                let mut e = s.engine.lock().map_err(|_| "input-capture sequencer poisoned")?;
+                let mut e = s
+                    .engine
+                    .lock()
+                    .map_err(|_| "input-capture sequencer poisoned")?;
                 e.validate_state(&saved)?;
                 e.state = saved;
                 Ok(())
@@ -563,13 +623,22 @@ mod tests {
             restored.restore_checkpoint(&saved).unwrap();
             assert_eq!(restored.read(&mut cx, control, 4), 1);
             assert_eq!(capture.save(), serde_json::json!({ "control": 1 }));
-            restored.restore(&serde_json::json!({ "control": 0x80 })).unwrap();
+            restored
+                .restore(&serde_json::json!({ "control": 0x80 }))
+                .unwrap();
             assert_eq!(restored.read(&mut cx, control, 4), 0x80);
-            assert!(restored.restore(&serde_json::json!({ "control": 0x100 })).is_err());
+            assert!(
+                restored
+                    .restore(&serde_json::json!({ "control": 0x100 }))
+                    .is_err()
+            );
 
-            for (address, size, value) in
-                [(control, 4, 0x100), (control, 2, 1), (control + 4, 4, 0), (control - 4, 4, 0)]
-            {
+            for (address, size, value) in [
+                (control, 4, 0x100),
+                (control, 2, 1),
+                (control + 4, 4, 0),
+                (control - 4, 4, 0),
+            ] {
                 let mut cx = Cx::new(&mut host, 0, 0, 0);
                 capture.write(&mut cx, address, size, value);
                 assert!(cx.is_unmodeled(), "{address:#x}/{size}={value:#x}");
@@ -699,11 +768,17 @@ mod tests {
             sequencer.advance(tick * 10 + 1000);
             let first = sequencer.state.ready.pop_front().unwrap();
             sequencer.state.ready.pop_front().unwrap();
-            seen.push(((first >> 16) as i32 - 0x8000, (first & 0xffff) as i32 - 0x8000));
+            seen.push((
+                (first >> 16) as i32 - 0x8000,
+                (first & 0xffff) as i32 - 0x8000,
+            ));
         }
         // Samples read back as center - position and converge on the command.
         assert_eq!(seen[0], (-400, 200));
-        assert!(seen.windows(2).all(|w| w[1].0 <= w[0].0 && w[1].1 >= w[0].1));
+        assert!(
+            seen.windows(2)
+                .all(|w| w[1].0 <= w[0].0 && w[1].1 >= w[0].1)
+        );
         assert_eq!(*seen.last().unwrap(), (-800, 400));
         let _ = &mut host;
     }
@@ -733,7 +808,10 @@ mod tests {
         pwm.lock().unwrap()[2][3] = 882; // +10 counts on axis 0
         pwm.lock().unwrap()[4][3] = 862; // -10 counts on axis 1
         pwm.lock().unwrap()[0][3] = 1743;
-        assert_eq!(frame(&mut sequencer), [0x8000 - 160, 0x8000 - 80, 0x8000 - 3484]);
+        assert_eq!(
+            frame(&mut sequencer),
+            [0x8000 - 160, 0x8000 - 80, 0x8000 - 3484]
+        );
         // The observation reports the drive and the position it commands, not the lagging stage.
         assert_eq!(
             sequencer.stage(),
@@ -783,13 +861,20 @@ mod tests {
         assert_eq!(fresh.next_deadline(1000), Some(2000));
         let other = InputCapture::with_sequencer(BASE, options([1, 0, 0], 2), 4, None).unwrap();
         assert!(other.validate_checkpoint(&saved).is_err());
-        assert!(InputCapture::new(BASE).unwrap().validate_checkpoint(&saved).is_err());
+        assert!(
+            InputCapture::new(BASE)
+                .unwrap()
+                .validate_checkpoint(&saved)
+                .is_err()
+        );
     }
 
     #[test]
     fn unread_captures_and_bad_words_refuse() {
         let mut sequencer = Sequencer::new(options([0; 3], 2), 5, None).unwrap();
-        let mut port = SequencerPort(Arc::new(Mutex::new(Sequencer::new(options([0; 3], 2), 5, None).unwrap())));
+        let mut port = SequencerPort(Arc::new(Mutex::new(
+            Sequencer::new(options([0; 3], 2), 5, None).unwrap(),
+        )));
         assert!(port.transmit(0, 2, 0xc6c2).is_err());
         for _ in 0..CAPTURE_DEPTH {
             sequencer.word(0, 0x0007_0000).unwrap();
@@ -800,7 +885,25 @@ mod tests {
             reads.word(0, 0xc6c2_ffff).unwrap();
         }
         assert!(reads.word(0, 0xc6c2_ffff).is_err());
-        assert!(Sequencer::new(SequencerOptions { channel: 5, ..options([0; 3], 2) }, 5, None).is_err());
-        assert!(InputCapture::new(BASE).unwrap().transmit_port(2).lock().unwrap().transmit(0, 4, 1).is_ok());
+        assert!(
+            Sequencer::new(
+                SequencerOptions {
+                    channel: 5,
+                    ..options([0; 3], 2)
+                },
+                5,
+                None
+            )
+            .is_err()
+        );
+        assert!(
+            InputCapture::new(BASE)
+                .unwrap()
+                .transmit_port(2)
+                .lock()
+                .unwrap()
+                .transmit(0, 4, 1)
+                .is_ok()
+        );
     }
 }

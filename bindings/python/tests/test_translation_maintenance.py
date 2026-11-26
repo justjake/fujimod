@@ -135,7 +135,9 @@ def test_empty_snapshot_is_detached_and_does_not_advance_execution(cores: int) -
             assert native["next_sequence"] == 1
             assert native["pending"] == native["poison"] == 0
             assert len(native["front"]) == len(native["failed"]) == 12
-            assert set(native["front"].values()) == set(native["failed"].values()) == {0}
+            assert (
+                set(native["front"].values()) == set(native["failed"].values()) == {0}
+            )
         saved["identities"][0] = -1
         saved["native"][0]["front"]["sequence"] = -1
         fresh = cast(MaintenanceSnapshot, xp4.translation_maintenance_state())
@@ -144,7 +146,9 @@ def test_empty_snapshot_is_detached_and_does_not_advance_execution(cores: int) -
 
 
 @pytest.mark.parametrize("cores", [2, 4])
-def test_completed_delivery_preserves_source_metadata_and_peer_masks(cores: int) -> None:
+def test_completed_delivery_preserves_source_metadata_and_peer_masks(
+    cores: int,
+) -> None:
     with machine(cores) as (board, xp4):
         before = cast(MaintenanceSnapshot, xp4.translation_maintenance_state())
         xp4.run(0, 1)
@@ -199,7 +203,9 @@ def test_failed_delivery_keeps_pending_event_and_exact_error_inspectable() -> No
         assert snapshot_without_effects(board, xp4) == saved
 
 
-def test_snapshot_refuses_during_instruction_callback_and_recovers_when_stopped() -> None:
+def test_snapshot_refuses_during_instruction_callback_and_recovers_when_stopped() -> (
+    None
+):
     with machine(2, (0xE1A00000,)) as (board, xp4):
         seen: list[tuple[int, int, str]] = []
 

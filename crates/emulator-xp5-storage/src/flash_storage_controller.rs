@@ -94,8 +94,16 @@ impl Part {
             Self::Quad20bb20 => None,
             // Octal-I/O and octal-output 4-byte fast reads with 20 dummy cycles.
             Self::MicronMt35xu01g => Some(&[
-                ApertureRead { opcode: 0xfd, address_bytes: 4, dummy_cycles: 20 },
-                ApertureRead { opcode: 0xcc, address_bytes: 4, dummy_cycles: 20 },
+                ApertureRead {
+                    opcode: 0xfd,
+                    address_bytes: 4,
+                    dummy_cycles: 20,
+                },
+                ApertureRead {
+                    opcode: 0xcc,
+                    address_bytes: 4,
+                    dummy_cycles: 20,
+                },
             ]),
         }
     }
@@ -255,10 +263,18 @@ impl Controller {
                         vec![(flash_storage.session.write_enable as u8) << 1; count].into()
                     }
                     Command::Identity => (0..count)
-                        .map(|i| if i < 3 { (jedec >> (16 - i * 8)) as u8 } else { 0xff })
+                        .map(|i| {
+                            if i < 3 {
+                                (jedec >> (16 - i * 8)) as u8
+                            } else {
+                                0xff
+                            }
+                        })
                         .collect(),
                     _ => {
-                        if command == Command::FastRead && self.state.volatile_dummy_cycles.is_none() {
+                        if command == Command::FastRead
+                            && self.state.volatile_dummy_cycles.is_none()
+                        {
                             return Err(format!(
                                 "serial NOR fast read {cmd:#x} before the volatile dummy-cycle register is written"
                             ));
@@ -583,7 +599,11 @@ mod tests {
 
     /// WREN, then a one-byte volatile register write, as a device initializer
     /// issues it: opcode in `+40`, register address in `+50`, count in `+a0`.
-    fn write_dummy_cycles(controller: &mut Controller, address: u32, value: u8) -> Result<(), String> {
+    fn write_dummy_cycles(
+        controller: &mut Controller,
+        address: u32,
+        value: u8,
+    ) -> Result<(), String> {
         controller.state.regs[0] = 1;
         controller.state.regs[0x40 / 4] = 0x06;
         controller.begin()?;
@@ -600,7 +620,12 @@ mod tests {
         let (_, mut controller) = mt35xu();
         controller.state.regs[0] = 1;
         controller.state.regs[0x40 / 4] = 0xfd;
-        assert!(controller.begin().unwrap_err().contains("volatile dummy-cycle register"));
+        assert!(
+            controller
+                .begin()
+                .unwrap_err()
+                .contains("volatile dummy-cycle register")
+        );
         write_dummy_cycles(&mut controller, 1, 0x14).unwrap();
         assert_eq!(controller.state.volatile_dummy_cycles, Some(20));
         controller.state.regs[0x40 / 4] = 0xfd;
@@ -619,9 +644,15 @@ mod tests {
         assert!(!storage.lock().unwrap().session.write_enable);
         // Other registers and values, and multi-byte writes, are not modeled.
         let err = write_dummy_cycles(&mut controller, 0, 0xe7).unwrap_err();
-        assert!(err.contains("register 0x0 write 0xe7 is not modeled"), "{err}");
+        assert!(
+            err.contains("register 0x0 write 0xe7 is not modeled"),
+            "{err}"
+        );
         let err = write_dummy_cycles(&mut controller, 1, 0x08).unwrap_err();
-        assert!(err.contains("register 0x1 write 0x8 is not modeled"), "{err}");
+        assert!(
+            err.contains("register 0x1 write 0x8 is not modeled"),
+            "{err}"
+        );
         controller.state.regs[0x40 / 4] = 0x06;
         controller.begin().unwrap();
         controller.state.regs[0x40 / 4] = 0x81;
@@ -635,7 +666,12 @@ mod tests {
         let mut controller = Controller::new(storage, Part::Quad20bb20);
         controller.state.regs[0] = 1;
         controller.state.regs[0x40 / 4] = 0x81;
-        assert!(controller.begin().unwrap_err().contains("for part 0x20bb20"));
+        assert!(
+            controller
+                .begin()
+                .unwrap_err()
+                .contains("for part 0x20bb20")
+        );
     }
 
     #[test]
@@ -645,7 +681,12 @@ mod tests {
         // Three-byte read and quad-I/O read belong to the quad part only.
         for opcode in [0x03, 0xec] {
             controller.state.regs[0x40 / 4] = opcode;
-            assert!(controller.begin().unwrap_err().contains("for part 0x2c5b1b"));
+            assert!(
+                controller
+                    .begin()
+                    .unwrap_err()
+                    .contains("for part 0x2c5b1b")
+            );
         }
     }
 
@@ -666,15 +707,28 @@ mod tests {
         let (_, mut controller) = mt35xu();
         controller.state.regs[0x44 / 4] = 0xfd;
         controller.state.regs[0x74 / 4] = 20;
-        assert!(controller.check_aperture_read().unwrap_err().contains("before its volatile"));
+        assert!(
+            controller
+                .check_aperture_read()
+                .unwrap_err()
+                .contains("before its volatile")
+        );
         write_dummy_cycles(&mut controller, 1, 0x14).unwrap();
         assert!(controller.check_aperture_read().is_ok());
         controller.state.regs[0x74 / 4] = 10;
-        assert!(controller.check_aperture_read().unwrap_err().contains("0xfd with 10"));
+        assert!(
+            controller
+                .check_aperture_read()
+                .unwrap_err()
+                .contains("0xfd with 10")
+        );
         controller.state.regs[0x44 / 4] = 0xec;
         controller.state.regs[0x74 / 4] = 10;
         assert!(controller.check_aperture_read().is_err());
-        assert_eq!(Part::from_jedec(0xef4018).unwrap_err(), "unsupported serial NOR part 0xef4018");
+        assert_eq!(
+            Part::from_jedec(0xef4018).unwrap_err(),
+            "unsupported serial NOR part 0xef4018"
+        );
     }
 
     #[test]
@@ -718,7 +772,12 @@ mod tests {
         assert_eq!(cx.refusal(), None);
         assert_eq!(controller.read(&mut cx, 0xff90a074, 4), 10);
         // Reading through that setup is refused.
-        assert!(medium.read_device(0, 4).unwrap_err().contains("0xec with 10"));
+        assert!(
+            medium
+                .read_device(0, 4)
+                .unwrap_err()
+                .contains("0xec with 10")
+        );
         // Reprogramming to a setup the part answers clears the fault.
         controller.write(&mut cx, 0xff90a044, 4, 0xfd);
         controller.write(&mut cx, 0xff90a074, 4, 20);
@@ -726,7 +785,12 @@ mod tests {
         assert_eq!(medium.read_device(0, 4).unwrap(), [0, 1, 2, 3]);
         // A bad dummy count alone is also refused at read time.
         controller.write(&mut cx, 0xff90a074, 4, 10);
-        assert!(medium.read_device(0, 4).unwrap_err().contains("0xfd with 10"));
+        assert!(
+            medium
+                .read_device(0, 4)
+                .unwrap_err()
+                .contains("0xfd with 10")
+        );
     }
     #[test]
     fn the_self_clearing_resets_and_slot_registers_of_the_x_e5_loader_are_accepted() {

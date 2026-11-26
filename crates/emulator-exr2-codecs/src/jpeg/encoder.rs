@@ -5,7 +5,6 @@
 //! with status 0x20 instead of READY (0x10), count 0 and no RAM write.
 use fujimod_emulator_devices::exr2::irq_routes::Irq;
 use fujimod_emulator_devices::{Cx, Device};
-use fujimod_perf::{DeviceWorkCounter, add_work};
 use fujimod_emulator_image_codecs::jpeg::{Codec, OUTPUT_OVERFLOW};
 use fujimod_emulator_imaging::exr2_isp::{
     dma::{Transfer, physical},
@@ -13,6 +12,7 @@ use fujimod_emulator_imaging::exr2_isp::{
     stream::{State, StreamHandle},
     word,
 };
+use fujimod_perf::{DeviceWorkCounter, add_work};
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 #[derive(Deserialize)]
@@ -248,9 +248,11 @@ impl Device for Encoder {
         ; blobs: [source]
     );
     fn fingerprint(&self) -> std::result::Result<serde_json::Value, String> {
-        Ok(serde_json::json!({"r":self.r,"fifo":self.fifo,"cursor":self.cursor,"ready":self.ready,
+        Ok(
+            serde_json::json!({"r":self.r,"fifo":self.fifo,"cursor":self.cursor,"ready":self.ready,
             "dma":self.dma.fingerprint(),"pending":self.pending,
-            "source":fujimod_emulator_devices::state::bytes(&self.source)}))
+            "source":fujimod_emulator_devices::state::bytes(&self.source)}),
+        )
     }
 
     fn name(&self) -> &'static str {

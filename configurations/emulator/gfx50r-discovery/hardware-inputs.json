@@ -267,41 +267,11 @@
       }
     },
     "adc_input": {
-      "samples": [
-        333,
-        1022,
-        1023,
-        77,
-        352,
-        485,
-        540,
-        481,
-        328,
-        418,
-        512,
-        512
-      ],
+      "samples": [333, 1022, 1023, 77, 352, 485, 540, 481, 328, 418, 512, 512],
       "basis": "Measured GFX 50R 3.11 loader handoff +0x188 channels 0-9, read through the resident service; channels 10-11 are declared 512, not measured."
     },
     "gpio_input": {
-      "levels": [
-        28051,
-        4656,
-        414,
-        8719,
-        0,
-        0,
-        24,
-        15576,
-        30,
-        0,
-        5632,
-        4544,
-        195,
-        9,
-        12,
-        3
-      ],
+      "levels": [28051, 4656, 414, 8719, 0, 0, 24, 15576, 30, 0, 5632, 4544, 195, 9, 12, 3],
       "basis": "Measured: the sixteen GPIO input words in the GFX 50R 3.11 loader handoff +0x00..+0x3c (2026-10-30), read with the USB cable attached. Bank 1 bit 14 (VBUS, declared in usb_cable) is cleared from the measured 0x5230 to 0x1230 because the emulated cable is disconnected; every other word is as measured."
     },
     "sd_card": {
@@ -377,10 +347,7 @@
       "basis": "Measured from the camera at RAM 0x10e79cc (run gfx50r-gauge-block-1), register 0 only. The other words in that block are not mapped to gauge registers and stay undeclared."
     },
     "pll_input": {
-      "running": [
-        0,
-        3
-      ],
+      "running": [0, 3],
       "basis": "Declared loader-inherited PLL state for kernel-entry discovery: PLLs 0 and 3 running, like the shared XPP stage-2 configuration. This is an assumed input, not a GFX 50R measurement; ROM execution may reprogram the clock bank."
     }
   }

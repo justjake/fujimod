@@ -102,7 +102,8 @@ impl I2cController {
             _ => None,
         };
         let engine = options.build()?;
-        let mut controllers: [Option<fujimod_emulator_devices::exr2::irq::Inputs>; 2] = Default::default();
+        let mut controllers: [Option<fujimod_emulator_devices::exr2::irq::Inputs>; 2] =
+            Default::default();
         for (core, input) in wiring.controllers {
             if core >= 2 || controllers[core].replace(input).is_some() {
                 return Err("invalid I2C interrupt-controller connection".into());
@@ -178,7 +179,9 @@ impl I2cController {
         }
     }
     fn connected(&self) -> bool {
-        self.cable.as_ref().is_some_and(fujimod_emulator_devices::signals::Level::high)
+        self.cable
+            .as_ref()
+            .is_some_and(fujimod_emulator_devices::signals::Level::high)
     }
     fn read_engine(
         engine: &mut Registers,
@@ -292,10 +295,14 @@ impl Device for I2cController {
     fn gravity_input_mut(&mut self) -> Option<&mut (dyn GravityInput + 'static)> {
         self.has_gravity_sensor().then_some(self)
     }
-    fn touch_panel(&self) -> Option<&(dyn fujimod_emulator_devices::capability::TouchPanel + 'static)> {
+    fn touch_panel(
+        &self,
+    ) -> Option<&(dyn fujimod_emulator_devices::capability::TouchPanel + 'static)> {
         Some(self)
     }
-    fn touch_panel_mut(&mut self) -> Option<&mut (dyn fujimod_emulator_devices::capability::TouchPanel + 'static)> {
+    fn touch_panel_mut(
+        &mut self,
+    ) -> Option<&mut (dyn fujimod_emulator_devices::capability::TouchPanel + 'static)> {
         Some(self)
     }
     fn checkpoint(&self) -> Result<fujimod_emulator_devices::checkpoint::Checkpoint, String> {
@@ -313,18 +320,19 @@ impl Device for I2cController {
             &(
                 &self.engine,
                 &self.due,
-                self.cable.as_ref().map(fujimod_emulator_devices::signals::Level::high),
+                self.cable
+                    .as_ref()
+                    .map(fujimod_emulator_devices::signals::Level::high),
                 bridge,
             ),
         )
     }
-    fn validate_checkpoint(&self, saved: &fujimod_emulator_devices::checkpoint::Checkpoint) -> Result<(), String> {
-        let (_, _, cable, bridge): (
-            Registers,
-            BTreeMap<u64, u64>,
-            Option<bool>,
-            Option<Vec<u8>>,
-        ) = saved.decode(self.name())?;
+    fn validate_checkpoint(
+        &self,
+        saved: &fujimod_emulator_devices::checkpoint::Checkpoint,
+    ) -> Result<(), String> {
+        let (_, _, cable, bridge): (Registers, BTreeMap<u64, u64>, Option<bool>, Option<Vec<u8>>) =
+            saved.decode(self.name())?;
         if cable.is_some() != self.cable.is_some()
             || bridge.as_ref().map(Vec::len) != self.bridge.as_ref().map(|_| 4)
         {
@@ -332,7 +340,10 @@ impl Device for I2cController {
         }
         Ok(())
     }
-    fn restore_checkpoint(&mut self, saved: &fujimod_emulator_devices::checkpoint::Checkpoint) -> Result<(), String> {
+    fn restore_checkpoint(
+        &mut self,
+        saved: &fujimod_emulator_devices::checkpoint::Checkpoint,
+    ) -> Result<(), String> {
         self.validate_checkpoint(saved)?;
         let (engine, due, cable, bridge): (
             Registers,
@@ -482,10 +493,18 @@ impl fujimod_emulator_devices::capability::TouchPanel for I2cController {
     fn touch_period(&self) -> std::result::Result<u64, String> {
         I2cController::touch_period(self)
     }
-    fn admit_touch(&self, now: u64, script: &[fujimod_emulator_devices::parts::touch_input::ContactInput]) -> std::result::Result<(), String> {
+    fn admit_touch(
+        &self,
+        now: u64,
+        script: &[fujimod_emulator_devices::parts::touch_input::ContactInput],
+    ) -> std::result::Result<(), String> {
         I2cController::admit_touch(self, now, script)
     }
-    fn touch(&mut self, now: u64, script: &[fujimod_emulator_devices::parts::touch_input::ContactInput]) -> std::result::Result<(), String> {
+    fn touch(
+        &mut self,
+        now: u64,
+        script: &[fujimod_emulator_devices::parts::touch_input::ContactInput],
+    ) -> std::result::Result<(), String> {
         I2cController::touch(self, now, script)
     }
 }

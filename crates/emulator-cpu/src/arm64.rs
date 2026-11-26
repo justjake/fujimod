@@ -687,7 +687,13 @@ mod framework_tests {
     #[test]
     fn higher_exception_level_gic_registers_are_framework_instructions() {
         // MSR/MRS ICC_SRE_EL2 and ICC_IGRPEN1_EL3 with x0, and ICC_SRE_EL3 as the control.
-        for word in [0xd51cc9a0u32, 0xd53cc9a0, 0xd51ecce0, 0xd53ecce0, 0xd51ecca0] {
+        for word in [
+            0xd51cc9a0u32,
+            0xd53cc9a0,
+            0xd51ecce0,
+            0xd53ecce0,
+            0xd51ecca0,
+        ] {
             assert!(framework_instruction(word), "{word:#010x}");
         }
         // TTBR0_EL1 is not one.

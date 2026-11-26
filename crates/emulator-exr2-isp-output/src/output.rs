@@ -1,15 +1,18 @@
 //! FFF12000/FFF13000 output banks. Packed Y0,Y1,Cb,Cr, nearest-pair
 //! resampling, and completion latency are declared input laws; silicon
 //! filtering is unresolved. Each instance owns one bank.
+use fujimod_emulator_devices::exr2::irq_routes::IrqRoutes;
+use fujimod_emulator_devices::{Cx, Device};
+use fujimod_emulator_image_processing::analysis::nearest_pairs;
+use fujimod_emulator_imaging::analysis::ImageLayout;
 use fujimod_emulator_imaging::exr2_isp::memory_outputs::MemoryOutputHandle;
 use fujimod_emulator_imaging::exr2_isp::options::output::{GeometryPolicy, Options};
 use fujimod_emulator_imaging::exr2_isp::output_channels::{FrameTransfer, OutputChannels, Source};
-use fujimod_emulator_imaging::exr2_isp::{dma::{self, Raster, Transfer}, due};
-use fujimod_emulator_devices::exr2::irq_routes::IrqRoutes;
-use fujimod_emulator_image_processing::analysis::nearest_pairs;
-use fujimod_emulator_imaging::analysis::ImageLayout;
+use fujimod_emulator_imaging::exr2_isp::{
+    dma::{self, Raster, Transfer},
+    due,
+};
 use fujimod_emulator_imaging::scene::ImageFrames;
-use fujimod_emulator_devices::{Cx, Device};
 
 #[cfg(test)]
 #[path = "tests/output_work.rs"]
@@ -283,8 +286,8 @@ impl OutputChannel {
         )?;
         let result = match &frames.pixels {
             fujimod_emulator_imaging::scene::frames::Pixels::Sensor(image) => (|| {
-                let frozen =
-                    fujimod_emulator_image_formation::radiometric::Image::of(image)?.freeze(layout)?;
+                let frozen = fujimod_emulator_image_formation::radiometric::Image::of(image)?
+                    .freeze(layout)?;
                 transfer.pixels.defer_fallible(move |mut staging| {
                     staging.resize(layout.stride * layout.height, 0);
                     let result = frozen

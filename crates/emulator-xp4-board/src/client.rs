@@ -54,7 +54,12 @@ impl Session {
         self.run_board_window(limit, quantum, None)
     }
 
-    pub fn run_board_window(&self, limit: u64, quantum: usize, until: Option<u64>) -> Result<(), String> {
+    pub fn run_board_window(
+        &self,
+        limit: u64,
+        quantum: usize,
+        until: Option<u64>,
+    ) -> Result<(), String> {
         self.inner.host_mutation()?;
         if quantum == 0 {
             return Err("Board quantum must be positive".to_owned());
@@ -70,7 +75,11 @@ impl Session {
             }
             let mut remaining = target - state.instructions;
             if let Some(until) = until {
-                remaining = remaining.min(self.inner.instruction_rate.budget(state.ticks, state.tick_phase, until)?);
+                remaining = remaining.min(self.inner.instruction_rate.budget(
+                    state.ticks,
+                    state.tick_phase,
+                    until,
+                )?);
             }
             let mut runnable = 0usize;
             let mut first = None;
@@ -115,14 +124,22 @@ impl Session {
         }
         self.inner.host_mutation()?;
         let state = unsafe { &mut *self.inner.state.get() };
-        if self.inner.counted || !state.discovery.enabled || !state.callee_stubs.is_empty() || stubs.len() > 4096 {
+        if self.inner.counted
+            || !state.discovery.enabled
+            || !state.callee_stubs.is_empty()
+            || stubs.len() > 4096
+        {
             return Err("XP4 callee substitutions require a fresh exact discovery hook set".into());
         }
         let mut entries = BTreeMap::new();
         for stub in stubs {
-            if stub.core >= self.inner.cpus.len() || stub.address & 1 != 0
-                || u32::try_from(stub.address).is_err() || u32::try_from(stub.value).is_err()
-                || entries.insert((stub.core, stub.address), (stub.clone(), 0)).is_some()
+            if stub.core >= self.inner.cpus.len()
+                || stub.address & 1 != 0
+                || u32::try_from(stub.address).is_err()
+                || u32::try_from(stub.value).is_err()
+                || entries
+                    .insert((stub.core, stub.address), (stub.clone(), 0))
+                    .is_some()
             {
                 return Err("invalid or duplicate XP4 discovery callee substitution".into());
             }
@@ -140,7 +157,8 @@ impl Session {
     }
 
     pub fn set_scene(&self, scene: &serde_json::Value) -> Result<(), String> {
-        self.inner.external_devices(|devices, _| devices.set_scene(scene))
+        self.inner
+            .external_devices(|devices, _| devices.set_scene(scene))
     }
 
     /// Resolve an application processor address through its stopped MMU view.
@@ -165,14 +183,19 @@ impl Session {
         if state.pc_trace.is_some() {
             return Err("PC trace is already attached".into());
         }
-        state.pc_trace = Some(fujimod_emulator::board::observation::PcRecorder::new(limit)?);
+        state.pc_trace = Some(fujimod_emulator::board::observation::PcRecorder::new(
+            limit,
+        )?);
         Ok(())
     }
 
     pub fn take_pc_trace(&self) -> Result<fujimod_emulator::board::observation::PcEntries, String> {
         self.inner.host_mutation()?;
         let state = unsafe { &mut *self.inner.state.get() };
-        state.pc_trace.take().map(|mut trace| trace.take()).ok_or("no active PC trace".into())
+        state
+            .pc_trace
+            .take()
+            .map(|mut trace| trace.take())
+            .ok_or("no active PC trace".into())
     }
-
 }

@@ -443,7 +443,11 @@ impl ImageInput {
         ];
         let words = &bank.words;
         self.film.update(|o| words[o / 4])?;
-        let mut cfa = self.cfa.as_ref().ok_or("RAW readback has no CFA layout")?.clone();
+        let mut cfa = self
+            .cfa
+            .as_ref()
+            .ok_or("RAW readback has no CFA layout")?
+            .clone();
         // The allocation retains its captured CFA phase after sensor capture
         // is disabled for memory readback. The current mode cannot rephase
         // pixels that were already written by the RAW DMA.
@@ -455,8 +459,10 @@ impl ImageInput {
             if physical(src.address, 1)? != physical(r[0x358 / 4] as u64, 1)? {
                 return Err("RAW readback source differs from the declared RAW window".into());
             }
-            cfa = cfa.window((r[0x14 / 4] >> 16 & 0x3fff) as usize,
-                             (r[0x18 / 4] >> 16 & 0x3fff) as usize);
+            cfa = cfa.window(
+                (r[0x14 / 4] >> 16 & 0x3fff) as usize,
+                (r[0x18 / 4] >> 16 & 0x3fff) as usize,
+            );
         }
         self.source.resize(src.pitch * src.height, 0);
         cx.ram_read(src.address, &mut self.source)?;
@@ -480,17 +486,17 @@ impl ImageInput {
                     target.width * 2,
                 )?;
                 cfa.render(
-                        &raw,
-                        &self.film,
-                        0,
-                        gains,
-                        256,
-                        |_, _| 2048,
-                        [0, 0, raw.width, raw.height],
-                        target.width,
-                        target.height,
-                        &mut outputs.transfers[i].pixels,
-                    )?;
+                    &raw,
+                    &self.film,
+                    0,
+                    gains,
+                    256,
+                    |_, _| 2048,
+                    [0, 0, raw.width, raw.height],
+                    target.width,
+                    target.height,
+                    &mut outputs.transfers[i].pixels,
+                )?;
             }
             Ok::<(), String>(())
         })();

@@ -347,9 +347,7 @@ pub fn exr2_flash<L: Lookup>(
     });
     let max_pages_per_call = if page == 512 {
         32
-    } else if reader.has("and", "sl, r2, #0x3f")
-        && reader.has("rsb", "sl, sl, #0x100")
-    {
+    } else if reader.has("and", "sl, r2, #0x3f") && reader.has("rsb", "sl, sl, #0x100") {
         timer_sectors.map_or(1, |sectors| sectors / 4)
     } else {
         1

@@ -4,10 +4,10 @@
 //! clear-bit acknowledgment models only a delayed control 3-to-2 response;
 //! it does not represent an image engine, DMA transfer or interrupt.
 use fujimod_emulator_devices::{Cx, Device};
+use fujimod_emulator_imaging::exr2_isp::options::block11000::{ControlMode, Options};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::BTreeMap;
-use fujimod_emulator_imaging::exr2_isp::options::block11000::{Options, ControlMode};
 
 pub const BASE: u64 = 0xfff11000;
 const STROBE_VALUE: u32 = 0x000d0000;
@@ -187,9 +187,7 @@ impl Device for Block11000 {
         let value = value as u32;
         if matches!(offset, 0xa0 | 0xa4) {
             if value != STROBE_VALUE {
-                cx.fail(
-                    "only the declared auxiliary acknowledgment strobe is supported",
-                );
+                cx.fail("only the declared auxiliary acknowledgment strobe is supported");
             }
             return;
         }
