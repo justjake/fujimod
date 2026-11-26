@@ -300,6 +300,10 @@ pub struct ProfileRecord {
     /// (little-endian). Absent for a single copy.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub copies: Option<u8>,
+    /// Byte extent of this virtual NOR journal, including its alternate storage.
+    /// Space after the initialized records is erased (0xff).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub nor_extent_bytes: Option<u32>,
 }
 
 /// A method-4 encoded section of the installed flash image.
@@ -394,6 +398,27 @@ pub struct NamedSetting {
     pub offset: u64,
     /// Encoded bytes for each value name; all the same length.
     pub values: BTreeMap<String, Vec<u8>>,
+    /// Further writes made only when the matching value is requested.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub additional_writes: BTreeMap<String, Vec<NamedSettingWrite>>,
+}
+
+/// A further store write for one named setting value.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[serde(deny_unknown_fields)]
+#[cfg_attr(
+    all(target_arch = "wasm32", not(target_os = "emscripten")),
+    derive(tsify::Tsify),
+    tsify(hashmap_as_object, missing_as_null)
+)]
+pub struct NamedSettingWrite {
+    /// Target store, in the same application phase as the primary setting.
+    pub store: String,
+    /// Byte offset in the target store.
+    pub offset: u64,
+    /// Bytes written for the selected value.
+    pub bytes: Vec<u8>,
 }
 
 impl FirmwareSettings {
@@ -499,6 +524,17 @@ impl FirmwareSettings {
                 {
                     return fail("profile record name, defaults or parity outside the record");
                 }
+                if let Some(extent) = record.nor_extent_bytes {
+                    let occupied = record.bytes * u64::from(record.copies.unwrap_or(1));
+                    if record.managed_index.is_some()
+                        || !extent.is_multiple_of(0x10000)
+                        || u64::from(extent) < occupied
+                        || extent == 0
+                        || extent > 0x100000
+                    {
+                        return fail("invalid NOR journal extent");
+                    }
+                }
                 if record.copies.is_some_and(|copies| {
                     !(2..=8).contains(&copies)
                         || record.defaults_offset < COPY_NUMBER_BYTES
@@ -507,6 +543,24 @@ impl FirmwareSettings {
                     return fail("profile record copies overlap their copy number");
                 }
                 stores.insert(name, (record.parity_offset, BTreeSet::new()));
+            }
+            // An explicit erased tail must not cover another journal's contents.
+            for (name, record) in &profile.records {
+                let Some(extent) = record.nor_extent_bytes else {
+                    continue;
+                };
+                let start = u64::from(record.block) << 16;
+                let end = start + u64::from(extent);
+                for (other_name, other) in &profile.records {
+                    if name == other_name || other.managed_index.is_some() {
+                        continue;
+                    }
+                    let other_start = u64::from(other.block) << 16;
+                    let other_size = other.bytes * u64::from(other.copies.unwrap_or(1));
+                    if start < other_start + other_size && other_start < end {
+                        return fail("NOR journal extent overlaps another record");
+                    }
+                }
             }
         }
         let place = |stores: &mut BTreeMap<&str, (u64, BTreeSet<u64>)>,
@@ -551,6 +605,73 @@ impl FirmwareSettings {
                 || !place(&mut stores, &setting.store, setting.offset, size)
             {
                 return fail("named setting is empty, uneven, unstored or overlaps a field");
+            }
+        }
+        // Preserve the existing primary-field rules while rejecting every byte
+        // overlap involving a new additional write. Different values of the
+        // same setting are exclusive, so they may target the same bytes.
+        let mut occupied: Vec<(&str, u64, u64, Option<(&str, &str)>)> = Vec::new();
+        for field in &self.fields {
+            occupied.push((
+                "bank",
+                field.offset,
+                field.offset + field.bytes.len() as u64,
+                None,
+            ));
+        }
+        for (name, record) in profile.into_iter().flat_map(|p| &p.records) {
+            for field in &record.fields {
+                occupied.push((
+                    name,
+                    field.offset,
+                    field.offset + field.bytes.len() as u64,
+                    None,
+                ));
+            }
+        }
+        for setting in self.settings.values() {
+            let size = setting.values.values().next().map_or(0, Vec::len);
+            occupied.push((
+                &setting.store,
+                setting.offset,
+                setting.offset + size as u64,
+                None,
+            ));
+        }
+        for (name, setting) in &self.settings {
+            for (value, writes) in &setting.additional_writes {
+                if !setting.values.contains_key(value) || writes.is_empty() {
+                    return fail("additional writes need an existing value and at least one write");
+                }
+                for write in writes {
+                    let size = write.bytes.len();
+                    let end = write.offset.checked_add(size as u64);
+                    let Some((extent, _)) = stores.get(write.store.as_str()) else {
+                        return fail("additional write names an absent store");
+                    };
+                    if size == 0
+                        || size > 128
+                        || numbered(&write.store, write.offset)
+                        || end.is_none_or(|end| end > *extent)
+                        || (write.store == "bank") != (setting.store == "bank")
+                    {
+                        return fail(
+                            "additional write is empty, outside its store or in another application phase",
+                        );
+                    }
+                    let end = end.expect("checked write extent");
+                    if occupied.iter().any(|(store, start, previous_end, owner)| {
+                        *store == write.store
+                            && write.offset < *previous_end
+                            && *start < end
+                            && !owner.is_some_and(|(other_name, other_value)| {
+                                other_name == name && other_value != value
+                            })
+                    }) {
+                        return fail("additional write overlaps a field or setting");
+                    }
+                    occupied.push((&write.store, write.offset, end, Some((name, value))));
+                }
             }
         }
         for field in profile.into_iter().flat_map(|p| &p.derived_fields) {
@@ -624,3 +745,28 @@ impl FirmwareSettings {
 
 #[cfg(test)]
 mod tests;
+
+#[cfg(test)]
+mod named_setting_json_tests {
+    use super::NamedSetting;
+
+    #[test]
+    fn old_and_compound_named_settings_round_trip() {
+        let old = r#"{"store":"header","offset":4,"values":{"done":[7]}}"#;
+        let setting: NamedSetting = serde_json::from_str(old).unwrap();
+        assert!(setting.additional_writes.is_empty());
+        assert_eq!(
+            serde_json::to_value(&setting).unwrap(),
+            serde_json::from_str::<serde_json::Value>(old).unwrap()
+        );
+        let compound = r#"{"store":"header","offset":4,"values":{"done":[7]},"additional_writes":{"done":[{"store":"main","offset":14,"bytes":[1]}]}}"#;
+        let setting: NamedSetting = serde_json::from_str(compound).unwrap();
+        assert_eq!(setting.additional_writes["done"][0].offset, 14);
+        assert_eq!(
+            serde_json::to_value(&setting).unwrap(),
+            serde_json::from_str::<serde_json::Value>(compound).unwrap()
+        );
+        let unknown = r#"{"store":"header","offset":4,"values":{"done":[7]},"additional_writes":{"done":[{"store":"main","offset":14,"bytes":[1],"extra":1}]}}"#;
+        assert!(serde_json::from_str::<NamedSetting>(unknown).is_err());
+    }
+}

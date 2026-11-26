@@ -1,8 +1,8 @@
 use super::*;
 use fujimod_catalog_settings::{
-    ConfigurationWindow, NamedSetting, ProfileField, ProfileFieldSource, ProfileRecord,
-    SETTINGS_SCHEMA_URI, SectionLength, SettingsBank, SettingsField, SettingsProfile,
-    SettingsSection, SettingsSource,
+    ConfigurationWindow, NamedSetting, NamedSettingWrite, ProfileField, ProfileFieldSource,
+    ProfileRecord, SETTINGS_SCHEMA_URI, SectionLength, SettingsBank, SettingsField,
+    SettingsProfile, SettingsSection, SettingsSource,
 };
 
 /// An update holding one literal-only method-4 stream, stored inverted.
@@ -103,6 +103,7 @@ fn fixture() -> (Vec<u8>, FirmwareSettings) {
                 store: "bank".into(),
                 offset: 0xf7,
                 values: BTreeMap::from([("off".into(), vec![0]), ("on".into(), vec![1])]),
+                additional_writes: BTreeMap::new(),
             },
         )]),
     };
@@ -191,6 +192,7 @@ fn profile_fixture_marked(marker: u8) -> (Vec<u8>, FirmwareSettings) {
                     basis: "Record marker.".into(),
                 }],
                 copies: None,
+                nor_extent_bytes: None,
             },
         )]),
     });
@@ -207,6 +209,7 @@ fn profile_fixture_marked(marker: u8) -> (Vec<u8>, FirmwareSettings) {
                     .into_iter()
                     .map(|(n, v)| (n.into(), vec![v]))
                     .collect(),
+                additional_writes: BTreeMap::new(),
             },
         );
     }
@@ -278,6 +281,7 @@ fn configuration_windows_feed_derived_fields_and_place_no_bank() {
             store: "bank".into(),
             offset: 0,
             values: BTreeMap::from([("on".into(), vec![1])]),
+            additional_writes: BTreeMap::new(),
         },
     );
     assert!(banked.validate().is_err());
@@ -507,6 +511,65 @@ fn the_layout_names_the_header_marker() {
 }
 
 #[test]
+fn virtual_nor_journal_preserves_its_sealed_record_and_erases_the_spare_space() {
+    let (source, mut layout) = profile_fixture();
+    let flash = flash_image(&source, 4).unwrap();
+    let requested = BTreeMap::new();
+    let record = main_record(&mut layout);
+    record.managed_index = None;
+    let read = |layout: &FirmwareSettings| {
+        build(layout, &flash, &requested, None)
+            .unwrap()
+            .profile
+            .unwrap()
+            .records
+            .remove(0)
+            .bytes
+    };
+    let sealed = read(&layout);
+    main_record(&mut layout).nor_extent_bytes = Some(0x40000);
+    let media = read(&layout);
+    assert_eq!(media.len(), 0x40000);
+    assert_eq!(&media[..sealed.len()], &sealed);
+    assert!(media[sealed.len()..].iter().all(|&value| value == 0xff));
+    main_record(&mut layout).nor_extent_bytes = Some(0x800);
+    assert!(
+        layout
+            .validate()
+            .unwrap_err()
+            .contains("NOR journal extent")
+    );
+}
+
+#[test]
+fn an_erased_tail_cannot_overlap_the_next_nor_record() {
+    let (_, mut layout) = profile_fixture();
+    let main = main_record(&mut layout);
+    main.managed_index = None;
+    main.nor_extent_bytes = Some(0x20000);
+    let mut next = main.clone();
+    next.nor_extent_bytes = None;
+    next.block += 1;
+    let records = &mut layout.profile.as_mut().unwrap().records;
+    records.insert("next".into(), next);
+    assert!(
+        layout
+            .validate()
+            .unwrap_err()
+            .contains("overlaps another record")
+    );
+    layout
+        .profile
+        .as_mut()
+        .unwrap()
+        .records
+        .get_mut("next")
+        .unwrap()
+        .block += 1;
+    assert!(layout.validate().is_ok());
+}
+
+#[test]
 fn sixteen_byte_headers_take_eight_power_registers() {
     let (_, mut layout) = profile_fixture();
     for (register, fits) in [(48, true), (248, true), (249, false)] {
@@ -554,4 +617,129 @@ fn copied_records_number_and_seal_each_copy() {
         main_record(&mut layout).copies = Some(copies);
         assert!(layout.validate().is_err(), "{copies} copies");
     }
+}
+
+#[test]
+fn compound_named_settings_write_only_for_the_selected_value() {
+    let (source, mut layout) = profile_fixture();
+    let flash = flash_image(&source, 4).unwrap();
+    layout
+        .settings
+        .get_mut("setup")
+        .unwrap()
+        .additional_writes
+        .insert(
+            "done".into(),
+            vec![NamedSettingWrite {
+                store: "main".into(),
+                offset: 0x20,
+                bytes: vec![1],
+            }],
+        );
+    let make = |requested| {
+        build(&layout, &flash, &requested, None)
+            .unwrap()
+            .profile
+            .unwrap()
+    };
+    let untouched = make(BTreeMap::new());
+    let pending = make(BTreeMap::from([("setup".into(), "pending".into())]));
+    let done = make(BTreeMap::from([("setup".into(), "done".into())]));
+    assert_eq!(untouched.records[0].bytes[0x20], 0);
+    assert_eq!(pending.records[0].bytes[0x20], 0);
+    assert_eq!(done.records[0].bytes[0x20], 1);
+    assert_eq!(done.header[11], 7);
+    assert_eq!(done.header.iter().fold(0u8, |a, b| a.wrapping_add(*b)), 0);
+    let mut resealed = done.records[0].bytes.clone();
+    seal_journal(&mut resealed, 0xe0).unwrap();
+    assert_eq!(resealed, done.records[0].bytes);
+    assert!(
+        build(
+            &layout,
+            &flash,
+            &BTreeMap::from([("setup".into(), "unknown".into())]),
+            None
+        )
+        .is_err()
+    );
+}
+
+#[test]
+fn compound_named_settings_validate_values_stores_bounds_and_overlaps() {
+    let (_, mut layout) = profile_fixture();
+    let set = |layout: &mut FirmwareSettings, value: &str, writes: Vec<NamedSettingWrite>| {
+        layout
+            .settings
+            .get_mut("setup")
+            .unwrap()
+            .additional_writes
+            .insert(value.into(), writes);
+    };
+    let write = |store: &str, offset, bytes: Vec<u8>| NamedSettingWrite {
+        store: store.into(),
+        offset,
+        bytes,
+    };
+    set(&mut layout, "done", vec![write("main", 0x20, vec![1, 2])]);
+    assert!(layout.validate().is_ok());
+    let mut alt = layout.clone();
+    set(&mut alt, "pending", vec![write("main", 0x20, vec![3])]);
+    assert!(
+        alt.validate().is_ok(),
+        "exclusive values may share a target"
+    );
+    for (value, writes) in [
+        ("missing", vec![write("main", 0x20, vec![1])]),
+        ("done", vec![]),
+        ("done", vec![write("missing", 0, vec![1])]),
+        ("done", vec![write("main", 0x20, vec![])]),
+        ("done", vec![write("main", 0x20, vec![1; 129])]),
+        ("done", vec![write("main", 0xdf, vec![1, 2])]),
+        ("done", vec![write("main", u64::MAX, vec![1])]),
+        ("done", vec![write("header", 14, vec![1])]),
+        ("done", vec![write("bank", 0x20, vec![1])]),
+        ("done", vec![write("main", 1, vec![1, 2])]),
+        ("done", vec![write("main", 0x11, vec![1, 2])]),
+        (
+            "done",
+            vec![
+                write("main", 0x20, vec![1, 2]),
+                write("main", 0x21, vec![3]),
+            ],
+        ),
+    ] {
+        let mut invalid = layout.clone();
+        invalid
+            .settings
+            .get_mut("setup")
+            .unwrap()
+            .additional_writes
+            .clear();
+        set(&mut invalid, value, writes);
+        assert!(
+            invalid.validate().is_err(),
+            "invalid additional write accepted"
+        );
+    }
+    let mut copied = layout.clone();
+    copied
+        .profile
+        .as_mut()
+        .unwrap()
+        .records
+        .get_mut("main")
+        .unwrap()
+        .copies = Some(2);
+    // The fixture's existing record field overlaps the copy number, so clear it.
+    copied
+        .profile
+        .as_mut()
+        .unwrap()
+        .records
+        .get_mut("main")
+        .unwrap()
+        .fields
+        .clear();
+    set(&mut copied, "done", vec![write("main", 3, vec![1])]);
+    assert!(copied.validate().is_err());
 }
