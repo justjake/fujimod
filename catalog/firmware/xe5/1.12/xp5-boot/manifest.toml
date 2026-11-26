@@ -13,6 +13,21 @@ mprofile_block_execution = true
 base = 0
 size = 0x80000000
 
+# DRAM channel 2. A half-press trains channels 2 and 3, and 0.19 s after S2 the still sequence
+# reaches 0xbb00f6b0, the address the X-T5 4.31 still sequence writes after the same boost
+# (its manifest.toml). Declared as on the X-T5: 0x80000000 + 1 GiB, with the run's DRAM space
+# ending at 0xc0000000 (run.json). The X-E5 channel table is UNVERIFIED.
+[[ram]]
+base = 0x80000000
+size = 0x40000000
+
+# DRAM channel 3, as on the X-T5 (0x1c0000000 + 1 GiB; its playback opens a heap there). The first
+# 16 KiB granule stays with the discarded bus-drain read at 0x1c0000000 (64-bus-drain.toml).
+# UNVERIFIED for the X-E5.
+[[ram]]
+base = 0x1c0004000
+size = 0x3fffc000
+
 # M-core SRAM, as on the other XP5 bodies. The extent and the source of the
 # stock M-core image copy are UNVERIFIED for the X-E5.
 [[ram]]
@@ -28,6 +43,18 @@ size = 0x1a0000
 [[ram]]
 base = 0xfb400000
 size = 0x1a0000
+
+# The rest of each PHY's register file, plain memory as in the ROM start (rom-start.toml). A
+# half-press (S1) in the shooting screen reads 0xfb640032 (APB register 0x120019 of the second PHY,
+# the register the ROM start's stock setup reads first on 0xfb240032) through the halfword reader
+# 0x9edb0 (caller 0x14cd000). A store reads back; nothing is modeled.
+[[ram]]
+base = 0xfb1a4000
+size = 0x25c000
+
+[[ram]]
+base = 0xfb5a4000
+size = 0x25c000
 
 # Boot SRAM (the SoC profile's boot-sram region). The ROM start loads the setup stage here; in the
 # loader start the application's live-view path still reaches it once the shooting screen starts

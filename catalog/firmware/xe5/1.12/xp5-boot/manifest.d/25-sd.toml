@@ -37,8 +37,14 @@ protocol = "sdhc"
 transfer_ticks = 1000
 clock_ticks = 1000
 rca = 1
-ram_bytes = 0x80000000
+# DMA may target DRAM channels 0-2 (below 0xc0000000) and channel 3 (0x1c0000000 + 1 GiB), as on
+# the X-T5 (the run's DRAM space ends at 0xc0000000, run.json). UNVERIFIED for the X-E5.
+ram_bytes = 0xc0000000
+ram_banks = [[0x1c0000000, 0x40000000]]
+# XP5 DRAM channel 1 sits at 0x40000000: no XP4-style alias there.
 dram_alias = false
+# DMA address bits 34..32 of slot 0: with a card present (detect pin 11.12 low) the driver writes
+# 0 here at 0x9ed80 (caller 0x14c78ec) before a transfer, the X-T5 slot-0 register.
 address_high = 0xff90e7d8
 
 [[device]]

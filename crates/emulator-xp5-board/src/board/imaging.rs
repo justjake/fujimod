@@ -381,6 +381,15 @@ pub fn register_all(
                 None => return Err("idle_status must be a boolean".into()),
             },
         };
+        // Option `busy_status`: word 15 bit 31 reads as the engine's busy status (see `Input`).
+        let device = match w.options.get("busy_status") {
+            None => device,
+            Some(value) => match value.as_bool() {
+                Some(true) => device.with_busy_status(),
+                Some(false) => device,
+                None => return Err("busy_status must be a boolean".into()),
+            },
+        };
         bus.register(w.base, w.size, Box::new(device))?;
     }
     for w in windows.iter().filter(|w| {

@@ -16,3 +16,23 @@ size = 0x1000
 kind = "bringup-stub"
 [device.options]
 registers = [{ offset = 0x08, mode = "toggle", value = 1 }, { offset = 0x64, mode = "constant", value = 7 }]
+
+# Memory-controller pages of DRAM channels 2 and 3. A half-press (S1) in the shooting screen
+# writes 0x801 to 0xfaf27000 through the word writer 0x9ed80 (caller 0x14da4e8); the loader start
+# declared no window there and the run stopped on an unmodeled MMIO write. Declared as on the
+# X-T5 4.31 (48-ddr-phy.toml), whose S1 path writes both pages, waits for bit 0 of +0x800 to read 1
+# and for bit 0 of 0xfaf27820 to read 0. The X-E5 poll offsets are INHERITED and UNVERIFIED; these
+# are bring-up register files, not models. The ROM start merges its own registers into these pages.
+[[device]]
+base = 0xfaf27000
+size = 0x1000
+kind = "bringup-stub"
+[device.options]
+registers = [{ offset = 0x800, mode = "constant", value = 1 }, { offset = 0x820, mode = "constant", value = 0 }]
+
+[[device]]
+base = 0xfaf37000
+size = 0x1000
+kind = "bringup-stub"
+[device.options]
+registers = [{ offset = 0x800, mode = "constant", value = 1 }, { offset = 0x820, mode = "constant", value = 0 }]

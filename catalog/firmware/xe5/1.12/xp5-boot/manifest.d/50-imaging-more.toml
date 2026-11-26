@@ -10,10 +10,19 @@ base = 0xff946000
 size = 0x1000
 kind = "imaging-input"
 [device.options]
-# VERIFIED for X-E5. The inherited true forces +0x17c bit 31 high when
-# +0x140 bit 0 is clear. The firmware's stop check succeeds when both are
-# clear (0x030eb548, 0x030eb9f8, 0x034f3498, 0x034f4664, 0x034f0070).
+# VERIFIED for X-E5: +0x17c bit 31 reads as busy, the opposite of the X-T5
+# idle bit, so the inherited idle_status (bit 31 high while +0x140 bit 0 is
+# clear) does not apply. The idle check 0x034f0070 succeeds when +0x140 bit 0
+# and +0x17c bit 31 are both clear (accessors 0x030eb548, 0x030eb9f8,
+# 0x034f3498, 0x034f4664). The live-view stop check 0x034e1e60 (from 0x034a4a58,
+# called at 0x034a861c) reports stopped when +0x140 bit 0 is set or bit 31 is
+# clear, and only the not-stopped path unregisters the frame callbacks, so a
+# bit 31 that always reads 0 leaks them on every live-view stop.
 idle_status = false
+# INFERRED: bit 31 reads set while the engine is enabled (the last +0x4 write
+# had bit 0 set) and +0x140 bit 0 is clear. The firmware never writes +0x17c;
+# reading it on a body would settle the timing.
+busy_status = true
 retain_words = true
 
 # VERIFIED second reset gate base. Reset writes 0 and polls +0x0 bit 0 for

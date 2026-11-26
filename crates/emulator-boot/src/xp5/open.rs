@@ -6,7 +6,7 @@
 
 use super::{
     firmware::Firmware,
-    manifest::BootState,
+    manifest::{BootState, RamRegion},
     rom_start::{self, Entry, RomStart},
 };
 use fujimod_catalog::reference::{ProcessorModel, RegionSize, Soc};
@@ -336,6 +336,20 @@ enum RamPlan {
 
 /// Decide what a manifest `[[ram]]` region means next to the catalog's RAM (`(base, size)` pairs).
 /// The DRAM window is `dram_base..dram_limit`.
+/// Add the ROM start's RAM regions to the manifest's. A region the manifest already declares
+/// with the same base and size (the X-E5 maps the DDR PHY register files for its loader start
+/// too) is the same memory, not a second mapping. Any other overlap stays an error later.
+fn merge_rom_start_ram(ram: &mut Vec<RamRegion>, rom_start: Vec<RamRegion>) {
+    for region in rom_start {
+        if !ram
+            .iter()
+            .any(|declared| declared.base == region.base && declared.size == region.size)
+        {
+            ram.push(region);
+        }
+    }
+}
+
 fn plan_caller_ram(
     base: u64,
     size: u64,
@@ -538,7 +552,7 @@ fn rom_boot_state(state: &BootState, rom: &RomStart) -> Result<BootState, String
         }
     };
     windows.extend(fragment.device);
-    state.ram.extend(fragment.ram);
+    merge_rom_start_ram(&mut state.ram, fragment.ram);
     for window in windows {
         // A bring-up stub page the manifest already owns (the X-T5's memory-controller pages
         // 0xfaf27000 and 0xfaf37000) keeps the manifest's registers and gains the ROM-start
@@ -1371,6 +1385,29 @@ pub(crate) fn open_from(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn rom_start_ram_skips_a_region_the_manifest_declares() {
+        let region = |base, size| RamRegion { base, size };
+        let mut ram = vec![region(0xfb1a_4000, 0x25c000)];
+        merge_rom_start_ram(
+            &mut ram,
+            vec![
+                region(0xfb1a_4000, 0x25c000),
+                region(0xfb5a_4000, 0x25c000),
+                region(0xfb1a_4000, 0x1000),
+            ],
+        );
+        let extents: Vec<(u64, u64)> = ram.iter().map(|r| (r.base, r.size)).collect();
+        assert_eq!(
+            extents,
+            [
+                (0xfb1a_4000, 0x25c000),
+                (0xfb5a_4000, 0x25c000),
+                (0xfb1a_4000, 0x1000),
+            ]
+        );
+    }
 
     const DRAM: (u64, u64) = (0, 0x8000_0000);
 
