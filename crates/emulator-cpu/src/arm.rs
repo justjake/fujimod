@@ -69,6 +69,16 @@ impl SystemRegister {
             op2: (value & 7) as u8,
         }
     }
+    /// Register fields in an AArch64 trapped MRS or MSR syndrome.
+    pub const fn from_trap_syndrome(syndrome: u64) -> Self {
+        Self {
+            op0: ((syndrome >> 20) & 3) as u8,
+            op1: ((syndrome >> 14) & 7) as u8,
+            crn: ((syndrome >> 10) & 15) as u8,
+            crm: ((syndrome >> 1) & 15) as u8,
+            op2: ((syndrome >> 17) & 7) as u8,
+        }
+    }
     pub fn encoding(self) -> Result<u16, String> {
         if self.op0 > 3 || self.op1 > 7 || self.crn > 15 || self.crm > 15 || self.op2 > 7 {
             return Err("ARM64 system-register field exceeds its architectural width".into());

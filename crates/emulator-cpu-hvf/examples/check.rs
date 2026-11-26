@@ -204,6 +204,115 @@ fn main() -> Result<(), String> {
                 }
             }
         }
+        // The board owns PMU writes and republishes the resulting state.
+        // Hold the test clock at a known tick during each interactive read.
+        {
+            let config = aprofile::Config {
+                clock: Clock {
+                    // Apple Silicon answers CNTFRQ natively at 24 MHz.
+                    counter_hz: 24_000_000,
+                    ticks_per_second: 24_000_000,
+                },
+                physical_irq: 30,
+                virtual_irq: 27,
+                pmu_hz: 24_000_000,
+                implementation: None,
+            };
+            let mut board = graph(vec![Processor {
+                model: Model::ArmV8A,
+                released: true,
+                parked_until_sgi: false,
+                rprofile: None,
+                mprofile: None,
+                registers: vec![(Register::Pstate, 0x3c5), (Register::Pc, 0x10000)],
+            }])
+            .build(
+                options(),
+                Bus::new(Mode::Strict),
+                Some(InterruptMap {
+                    gic: Box::new(Gic::new(vec![0], 512, SecurityStates::One)?),
+                    registers: fujimod_emulator::board::InterruptRegisters::GicV3 {
+                        distributor: 0xfa000000,
+                        redistributor: 0xfa080000,
+                        stride: 0x20000,
+                    },
+                    cores: 1,
+                }),
+            )?;
+            board.configure_aprofile(0, config)?;
+            let mut reference = aprofile::Profile::new(config)?;
+            #[derive(Debug)]
+            enum Change {
+                None,
+                Write(u16, u64),
+                Restore,
+            }
+            let mut saved = None;
+            for change in [
+                Change::None,
+                Change::Write(0xdce0, 1),
+                Change::Write(0xdce1, 0x8000_0000),
+                Change::Write(0xdce8, u64::MAX - 10),
+                Change::Write(0xdce2, 0x8000_0000),
+                Change::Write(0xdce0, 0xd), // enable, reset and divide by 64
+                Change::Write(0xdce1, 0x8000_0000),
+                Change::Restore,
+            ] {
+                match change {
+                    Change::None => (),
+                    Change::Restore => {
+                        let (keyframe, profile) = saved.take().unwrap();
+                        board.restore_keyframe(&keyframe)?;
+                        reference = profile;
+                    }
+                    Change::Write(register, value) => {
+                        let cpu = board.cpu(0)?;
+                        code(cpu, 0x10000, &[0xd5000000 | (u32::from(register) << 5)]);
+                        cpu.invalidate_code(Some((0x10000, 0x10004)))?;
+                        set(cpu, Register::Pc, 0x10000);
+                        set(cpu, Register::X(0), value);
+                        board.run_for_instructions(1, 64)?;
+                        reference.access(register, board.now(), Some(value))?;
+                        if register == 0xdce1 && saved.is_none() {
+                            saved = Some((board.checkpoint(None)?, reference.clone()));
+                        }
+                    }
+                }
+
+                let tick = board.now() + 192;
+                let cpu = board.cpu(0)?;
+                let registers = [0xdf00u16, 0xdf01, 0xdce8];
+                let mut program = Vec::new();
+                for (rt, register) in registers.into_iter().enumerate() {
+                    let mrs = 0xd5200000 | (u32::from(register) << 5);
+                    program.extend([mrs | rt as u32, mrs | 31]);
+                }
+                program.push(0xd503207f);
+                code(cpu, 0x10040, &program);
+                cpu.invalidate_code(Some((0x10040, 0x10040 + program.len() as u64 * 4)))?;
+                cpu.set_guest_clock(fujimod_emulator_cpu::Clock {
+                    now: tick,
+                    phase: 0,
+                    ratio: timeline::Ratio::new(1_000_000_000, 1)?,
+                })?;
+                cpu.set_execution_policy(ExecutionPolicy::Interactive)?;
+                match run(cpu, 0x10040, 20_000_000).map_err(|e| e.to_string())? {
+                    Exit::Hint(Hint::WaitForInterrupt) => (),
+                    other => panic!("architectural counter read left the worker: {other:?}"),
+                }
+                for (rt, register) in registers.into_iter().enumerate() {
+                    assert_eq!(
+                        get(cpu, Register::X(rt as u8)),
+                        reference.access(register, tick, None)?.unwrap(),
+                        "counter {register:#06x} after {change:?}",
+                    );
+                }
+                cpu.set_execution_policy(ExecutionPolicy::Exact)?;
+            }
+        }
+        println!(
+            "PASS: interactive architectural counter reads follow board PMU writes and restore"
+        );
         // SEVL is consumed by the first WFE; SEV completes the second WFE.
         // The same peer event must leave a WFI-only processor waiting.
         for quantum in [1, 64] {

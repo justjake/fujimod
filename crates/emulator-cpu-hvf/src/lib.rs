@@ -569,6 +569,17 @@ impl Cpu for Core {
             .unwrap_or_else(std::sync::PoisonError::into_inner) = Some(clock);
         Ok(())
     }
+    fn set_fast_counters(&self, counters: Option<FastCounters>) -> Result<(), String> {
+        if self.running.get() {
+            return Err("fast counters require a stopped processor".into());
+        }
+        *self
+            .shared
+            .fast_counters
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) = counters;
+        Ok(())
+    }
     fn exclusive_domain(&self) -> Option<fujimod_emulator_cpu::exclusive::Shared> {
         Some(self.machine.monitors.clone())
     }
@@ -581,8 +592,6 @@ impl Cpu for Core {
     fn features(&self) -> Features {
         Features {
             asynchronous_runs: true,
-            // The anchor clocks device-published reads only; guest counters
-            // keep using the host's native virtual counter.
             guest_clock: true,
             instruction_limit: true,
             shared_physical_maps: true,

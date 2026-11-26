@@ -145,6 +145,31 @@ fn decode_mmio_from_esr(trap: &Trap) -> Option<IsvMmio> {
     })
 }
 
+fn fast_counter_read(
+    syndrome: u64,
+    clock: Clock,
+    progress: u64,
+    counters: FastCounters,
+) -> Option<(u32, u64)> {
+    if syndrome >> 26 != 0x18 || syndrome & 1 == 0 {
+        return None;
+    }
+    let register = arm::SystemRegister::from_trap_syndrome(syndrome)
+        .encoding()
+        .ok()?;
+    let now = || clock.after(progress).ok().map(|clock| clock.now);
+    let value = match register {
+        0xdf00 => counters.counter_hz,
+        0xdf01 => {
+            architectural_counter_count(now()?, counters.counter_hz, counters.ticks_per_second)
+                .ok()?
+        }
+        0xdce8 => counters.pmu_raw(now()?).ok()? as u64,
+        _ => return None,
+    };
+    Some((((syndrome >> 5) & 31) as u32, value))
+}
+
 pub fn base_register(r: u8) -> Register {
     if r == 31 {
         Register::Sp
@@ -201,6 +226,7 @@ pub struct Shared {
     /// The owner's guest-clock anchor for the next run. Interactive runs
     /// evaluate clocked device reads at anchor + executed time.
     pub guest_clock: Mutex<Option<Clock>>,
+    pub fast_counters: Mutex<Option<FastCounters>>,
     /// PC and PSTATE as the worker hands control to its owner: before each
     /// event, run completion and command reply. They stay exact until the
     /// owner lets the vCPU execute again, so the owner reads them without a
@@ -278,6 +304,7 @@ impl Default for Shared {
             budget_timer_kqueue: AtomicI32::new(-1),
             budget_lock: Mutex::new(()),
             guest_clock: Mutex::new(None),
+            fast_counters: Mutex::new(None),
             parked_pc: AtomicU64::new(0),
             parked_pstate: AtomicU64::new(0),
             parked_valid: AtomicBool::new(false),
@@ -1303,6 +1330,23 @@ impl Processor {
         Ok(())
     }
 
+    fn fast_sysreg_read(
+        &self,
+        syndrome: u64,
+        clock: Clock,
+        progress: u64,
+        counters: FastCounters,
+    ) -> Result<bool, ExecutionError> {
+        let Some((rt, value)) = fast_counter_read(syndrome, clock, progress, counters) else {
+            return Ok(false);
+        };
+        if rt != 31 {
+            self.set_reg(rt, value)?;
+        }
+        self.set_reg(ffi::PC, self.reg(ffi::PC)?.wrapping_add(4))?;
+        Ok(true)
+    }
+
     /// Report an architectural trap; data aborts carry their decoded access.
     fn trap_event(&self, trap: Trap) -> Event {
         if matches!(trap.syndrome >> 26, 0x24 | 0x25) {
@@ -1584,6 +1628,11 @@ impl Processor {
             .guest_clock
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let counters = *self
+            .shared
+            .fast_counters
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         let _budget = BudgetRun::start(self.shared.clone()).map_err(ExecutionError::Backend)?;
         self.disable_single_step()?;
         loop {
@@ -1631,6 +1680,12 @@ impl Processor {
                         virtual_address: exit.exception.virtual_address,
                         physical_address: exit.exception.physical_address,
                     };
+                    if ec == 0x18
+                        && let (Some(clock), Some(counters)) = (clock, counters)
+                        && self.fast_sysreg_read(trap.syndrome, clock, progress, counters)?
+                    {
+                        continue;
+                    }
                     let event = if matches!(ec, 0x24 | 0x25) {
                         let tick = clock
                             .and_then(|clock| clock.after(progress).ok())
@@ -1762,6 +1817,54 @@ pub fn serve(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn counter_reads_use_the_guest_clock_and_decline_writes() {
+        fn syndrome(encoding: u16, rt: u64) -> u64 {
+            let r = arm::SystemRegister::from_encoding(encoding);
+            (0x18 << 26)
+                | (1 << 25)
+                | (u64::from(r.op0) << 20)
+                | (u64::from(r.op2) << 17)
+                | (u64::from(r.op1) << 14)
+                | (u64::from(r.crn) << 10)
+                | (rt << 5)
+                | (u64::from(r.crm) << 1)
+                | 1
+        }
+        let clock = Clock {
+            now: 48,
+            phase: 0,
+            ratio: timeline::Ratio::new(2, 1).unwrap(),
+        };
+        let counters = FastCounters {
+            counter_hz: 8,
+            ticks_per_second: 4,
+            pmu_hz: 32,
+            pmu_control: 9,
+            pmu_enabled: true,
+            pmu_offset: 10,
+            pmu_anchor: 40,
+        };
+        for (register, value) in [(0xdf00, 8), (0xdf01, 120), (0xdce8, 12)] {
+            for rt in [0, 31] {
+                let read = syndrome(register, rt);
+                assert_eq!(
+                    fast_counter_read(read, clock, 24, counters),
+                    Some((rt as u32, value))
+                );
+                assert_eq!(fast_counter_read(read & !1, clock, 24, counters), None);
+            }
+        }
+        assert_eq!(
+            fast_counter_read(syndrome(0xdf11, 0), clock, 0, counters),
+            None
+        );
+        assert_eq!(
+            fast_counter_read(syndrome(0xdce8, 0), Clock { now: 10, ..clock }, 0, counters),
+            None
+        );
+    }
 
     #[test]
     fn isv_accepts_scalar_transfers_and_declines_incomplete_syndromes() {
