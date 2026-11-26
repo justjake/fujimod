@@ -60,7 +60,7 @@ impl Board {
         run_to_rec=true, sd_card_present=true, sd_card_write_protected=false, sd_card_transfer_ticks=None,
         card_layout=None, start="rom", image=None, image_sha256=None, update=None, boot_rom=None,
         flash=None, combination=None, sd_card_files=None, image_bytes=None, nand=None,
-        face_result_profile=None))]
+        face_result_profile=None, overlays=None, sd_card_initialization_fault=None))]
     #[allow(clippy::too_many_arguments)]
     fn open_camera(
         firmware: String,
@@ -84,6 +84,8 @@ impl Board {
         image_bytes: Option<Vec<u8>>,
         nand: Option<Vec<u8>>,
         face_result_profile: Option<String>,
+        overlays: Option<Vec<String>>,
+        sd_card_initialization_fault: Option<&str>,
     ) -> PyResult<Self> {
         let files = match (update, boot_rom) {
             (None, None) => emulator::FirmwareInput::Library,
@@ -137,6 +139,13 @@ impl Board {
         } else {
             fujimod_camera::BootCache::Bypass
         };
+        let initialization_fault = match sd_card_initialization_fault {
+            None => None,
+            Some(text) => Some(serde_json::from_str::<serde_json::Value>(text).map_err(|failure| {
+                PyValueError::new_err(format!("sd_card_initialization_fault: {failure}"))
+            })?),
+        };
+        let overlays = overlays.unwrap_or_default();
         let card_contents = match sd_card_files {
             None => None,
             Some(files) => {
@@ -197,6 +206,7 @@ impl Board {
                 emulator::Request {
                     firmware,
                     files,
+                    overlays,
                     start,
                     flash,
                     card: emulator::CardInputs {
@@ -205,6 +215,7 @@ impl Board {
                         protected: sd_card_write_protected,
                         transfer_ticks: sd_card_transfer_ticks,
                         layout,
+                        initialization_fault: initialization_fault.clone(),
                     },
                     policy,
                     engine: None,
@@ -234,6 +245,7 @@ impl Board {
             fujimod_camera::Request {
                 firmware,
                 files,
+                overlays,
                 preset,
                 sd_card: match (sd_card, card_contents) {
                     (Some(directory), _) => Some(CardSource::Directory(directory)),
@@ -251,6 +263,7 @@ impl Board {
                     protected: sd_card_write_protected,
                     transfer_ticks: sd_card_transfer_ticks,
                     layout,
+                    initialization_fault,
                 },
             },
         )

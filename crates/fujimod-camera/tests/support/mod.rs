@@ -37,6 +37,7 @@ pub fn request(
     Request {
         firmware: firmware.into(),
         files: FirmwareInput::Library,
+        overlays: Vec::new(),
         preset,
         sd_card,
         policy: ExecutionPolicy::Interactive,

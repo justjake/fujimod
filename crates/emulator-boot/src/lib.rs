@@ -77,6 +77,9 @@ pub struct Options {
     pub sd_card_transfer_ticks: Option<u64>,
     /// FAT geometry for the SD card, in place of the run's catalog layout.
     pub card_layout: Option<CardLayout>,
+    /// The modeled SD host's initialization fault, as the catalog device
+    /// model names it, in place of none.
+    pub card_initialization_fault: Option<serde_json::Value>,
 }
 
 /// A declared FAT card geometry for a stock SD card.
@@ -903,6 +906,8 @@ pub struct Request {
     pub sd_card_transfer_ticks: Option<u64>,
     /// FAT geometry for the SD card, in place of the run's catalog layout.
     pub card_layout: Option<CardLayout>,
+    /// The modeled SD host's initialization fault, in place of none.
+    pub card_initialization_fault: Option<serde_json::Value>,
 }
 
 /// Open any configuration `open` supports from a host's files.
@@ -932,6 +937,7 @@ pub fn open_request(resolved: ResolvedConfiguration, request: Request) -> Result
                 capability_reply: None,
                 sd_card_transfer_ticks: request.sd_card_transfer_ticks,
                 card_layout: request.card_layout.clone(),
+                card_initialization_fault: request.card_initialization_fault.clone(),
             },
             mode: {
                 card_after_open = request.card_files;
@@ -1120,6 +1126,9 @@ fn open_exr2(
     if let Some(layout) = &options.card_layout {
         prepared.set_card_layout(layout)?;
     }
+    if let Some(fault) = &options.card_initialization_fault {
+        prepared.set_card_initialization_fault(fault)?;
+    }
     let update = checked(&options.update, &prepared.update)?;
     let boot_rom = checked(&options.boot_rom, &prepared.boot_rom.content)?;
     let inputs = InputBytes {
@@ -1202,6 +1211,26 @@ impl Prepared {
             return Err("run SD card host has a measured timing model, not transfer ticks".into());
         }
         options.insert("transfer_ticks".into(), json!(ticks));
+        Ok(())
+    }
+    /// Model the SD host's initialization fault, as the catalog device model
+    /// names it: an object such as
+    /// {"reject_standby_cmd3_and_cmd8_once_after": 2}, or "reject_cmd8".
+    fn set_card_initialization_fault(&mut self, fault: &Value) -> Result<(), String> {
+        let nodes = self
+            .devices_value
+            .get_mut("nodes")
+            .and_then(Value::as_array_mut)
+            .ok_or("prepared devices have no node list")?;
+        let sd = nodes
+            .iter_mut()
+            .find(|node| node.get("name").and_then(Value::as_str) == Some("sd"))
+            .ok_or("run has no modeled SD card host")?;
+        let options = sd
+            .pointer_mut("/model/options")
+            .and_then(Value::as_object_mut)
+            .ok_or("run SD card host has no options")?;
+        options.insert("initialization_fault".into(), fault.clone());
         Ok(())
     }
     fn set_mt5931(

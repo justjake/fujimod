@@ -61,6 +61,7 @@ pub fn request(boot: Boot, image: Option<LoaderImage>, cache: BootCache) -> Requ
     Request {
         firmware: FIRMWARE.into(),
         files: FirmwareInput::Library,
+        overlays: Vec::new(),
         start,
         flash: Flash::Stock,
         card: CardInputs {

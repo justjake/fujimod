@@ -108,6 +108,9 @@ pub struct CardOptions {
     pub transfer_ticks: Option<u64>,
     /// FAT geometry for a stock card.
     pub layout: Option<CardLayout>,
+    /// The modeled SD host's initialization fault, as the device model names
+    /// it.
+    pub initialization_fault: Option<serde_json::Value>,
 }
 
 impl Default for CardOptions {
@@ -117,6 +120,7 @@ impl Default for CardOptions {
             protected: false,
             transfer_ticks: None,
             layout: None,
+            initialization_fault: None,
         }
     }
 }
@@ -129,6 +133,9 @@ pub struct Request {
     /// The firmware's update and boot ROM: the library's files, or two named
     /// files.
     pub files: FirmwareInput,
+    /// Further catalog overlays that resolve the camera's run, after the
+    /// library profile's own.
+    pub overlays: Vec<String>,
     pub preset: Preset,
     /// The SD card. A stock preset adds these files to an otherwise empty card;
     /// the card presets use it as the FujiMod SD card, or the release when none
@@ -329,6 +336,7 @@ fn emulator_request(
         EmulatorRequest {
             firmware: request.firmware.clone(),
             files: request.files.clone(),
+            overlays: request.overlays.clone(),
             start,
             flash,
             card: CardInputs {
@@ -337,6 +345,7 @@ fn emulator_request(
                 protected: request.card.protected,
                 transfer_ticks: request.card.transfer_ticks,
                 layout: request.card.layout.clone(),
+                initialization_fault: request.card.initialization_fault.clone(),
             },
             policy: request.policy,
             engine: request.engine,

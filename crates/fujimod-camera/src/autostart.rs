@@ -619,6 +619,7 @@ fn install_flash(
         fujimod_emulator_camera::Request {
             firmware: request.firmware.clone(),
             files: request.files.clone(),
+            overlays: request.overlays.clone(),
             start: fujimod_emulator_camera::Start::Held {
                 combination: "sd".into(),
             },

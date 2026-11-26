@@ -25,6 +25,7 @@ fn request(preset: Preset) -> Request {
     Request {
         firmware: "x70-110".into(),
         files: fujimod_camera::FirmwareInput::Library,
+        overlays: Vec::new(),
         preset,
         sd_card: None,
         policy: ExecutionPolicy::Interactive,

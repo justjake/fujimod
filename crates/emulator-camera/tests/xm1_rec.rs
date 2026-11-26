@@ -28,6 +28,7 @@ fn request() -> Request {
     Request {
         firmware: FIRMWARE.into(),
         files: FirmwareInput::Library,
+        overlays: Vec::new(),
         start: Start::Rom,
         flash: Flash::Stock,
         card: CardInputs::default(),

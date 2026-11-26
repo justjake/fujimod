@@ -303,6 +303,10 @@ fn identity(request: &Request, resolved: &ResolvedConfiguration) -> Result<Strin
             .as_bytes(),
     );
     part(resolved.configuration.id.as_bytes());
+    for overlay in &request.overlays {
+        part(b"overlay");
+        part(overlay.as_bytes());
+    }
     part(request.policy.name().as_bytes());
     part(engine_name(resolved).as_bytes());
     match &request.face_result_profile {
@@ -355,6 +359,13 @@ fn identity(request: &Request, resolved: &ResolvedConfiguration) -> Result<Strin
         part(b"card-layout");
         let bytes = serde_json::to_vec(layout)
             .map_err(|failure| OpenError::at(Stage::BootRom, format!("card layout: {failure}")))?;
+        part(&bytes);
+    }
+    if let Some(fault) = &request.card.initialization_fault {
+        part(b"card-initialization-fault");
+        let bytes = serde_json::to_vec(fault).map_err(|failure| {
+            OpenError::at(Stage::BootRom, format!("card initialization fault: {failure}"))
+        })?;
         part(&bytes);
     }
     let card: BTreeMap<&str, &[u8]> = request

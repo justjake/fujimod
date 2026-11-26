@@ -370,7 +370,7 @@ class Board:
             )
         native = _native.Board.from_inputs(
             configuration_id=configuration_id,
-            overlays=selected_overlays,
+            overlays=overlays,
             update=update,
             boot_rom=boot_rom,
             card_image=card_image,
@@ -429,6 +429,8 @@ class Board:
         boot_rom: str | PathLike[str] | None = None,
         flash: str | PathLike[str] | None = None,
         combination: str | None = None,
+        overlays: Sequence[str] = (),
+        sd_card_initialization_fault: Mapping[str, object] | str | None = None,
     ) -> Self:
         """Open a camera through the shared builder and return it at REC.
 
@@ -453,10 +455,10 @@ class Board:
         `sd_card_present` false models an empty slot, and
         `sd_card_write_protected` asserts the card's write-protect contact.
         `sd_card_transfer_ticks` replaces the catalog's guest ticks per SD
-        data transfer. `card_layout` declares the FAT geometry of a stock
-        SD card in place of the catalog's layout: `sectors`, `label`,
-        `partition_start` and `sectors_per_cluster`; it applies only to a
-        stock boot with the card present. `start="loader"` places a
+        data transfer. `card_layout` declares the FAT geometry of the SD
+        card in place of the catalog's layout: `sectors`, `label`,
+        `partition_start` and `sectors_per_cluster`; it needs the card
+        present. `start="loader"` places a
         caller-verified RAM image at address zero and starts the first core at
         the native loader before any instruction runs; `image` is the image's
         path, with `image_sha256`, or its bytes. The boot ROM never runs for
@@ -466,6 +468,11 @@ class Board:
         one of `empty`, `box64x20` or `box172x120`: external detector
         results the guest's own start consumes in place of the passive face
         bank.
+        `overlays` resolves the camera's run with those catalog overlays after
+        the library profile's own. `sd_card_initialization_fault`
+        models an SD host initialization fault as the device model names it,
+        such as `"reject_cmd8"` or
+        `{"reject_standby_cmd3_and_cmd8_once_after": 2}`.
         """
         firmware = cls._identifier(firmware, "firmware")
         if boot not in ("stock", "sd-card", "autostart"):
@@ -505,8 +512,6 @@ class Board:
                     raise TypeError(f"card_layout {key} must be an integer")
             if type(selected_layout["label"]) is not str:
                 raise TypeError("card_layout label must be a string")
-            if boot != "stock":
-                raise ValueError("card_layout applies only to a stock SD card boot")
             if not sd_card_present:
                 raise ValueError("card_layout needs the card present")
             layout_text = json.dumps(selected_layout)
@@ -535,6 +540,21 @@ class Board:
             type(image_sha256) is not str or len(image_sha256) != 64
         ):
             raise ValueError("image_sha256 must be 64 hexadecimal characters")
+        if isinstance(overlays, (str, bytes)) or not isinstance(overlays, Sequence):
+            raise TypeError("overlays must be a sequence of catalog overlay IDs")
+        selected_overlays = list(overlays)
+        if any(type(overlay) is not str or not overlay for overlay in selected_overlays):
+            raise TypeError("overlays must be nonempty strings")
+        fault_text = None
+        if sd_card_initialization_fault is not None:
+            if isinstance(sd_card_initialization_fault, str):
+                fault_text = sd_card_initialization_fault
+            elif isinstance(sd_card_initialization_fault, Mapping):
+                fault_text = json.dumps(dict(sd_card_initialization_fault))
+            else:
+                raise TypeError(
+                    "sd_card_initialization_fault must be a mapping or JSON text"
+                )
         card = None if sd_card is None else cls._input_path(sd_card, "sd_card")
         if card is not None and sd_card_files is not None:
             raise ValueError(
@@ -585,6 +605,8 @@ class Board:
             boot_rom=boot_rom_path,
             flash=flash_path,
             combination=combination,
+            overlays=selected_overlays,
+            sd_card_initialization_fault=fault_text,
         )
         quantum = native.boot_quantum
         if type(quantum) is not int or quantum < 1:

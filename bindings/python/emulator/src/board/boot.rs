@@ -176,6 +176,36 @@ impl Board {
     fn power_on_ram_fill(&self) -> PyResult<Option<u8>> {
         Ok(declared_power_on_ram_fill(&self.session()?.definition))
     }
+    /// The catalog run configuration this board was prepared from.
+    #[getter]
+    fn configuration_id(&self) -> PyResult<Option<String>> {
+        Ok(self
+            .session()?
+            .definition
+            .get("configuration_id")
+            .and_then(serde_json::Value::as_str)
+            .map(str::to_owned))
+    }
+    /// The catalog overlays this board was prepared with.
+    #[getter]
+    fn overlays(&self) -> PyResult<Option<Vec<String>>> {
+        let Some(overlays) = self.session()?.definition.get("overlays") else {
+            return Ok(None);
+        };
+        let Some(overlays) = overlays.as_array() else {
+            return Err(error("board overlays are not a list".into()));
+        };
+        overlays
+            .iter()
+            .map(|overlay| {
+                overlay
+                    .as_str()
+                    .map(str::to_owned)
+                    .ok_or_else(|| error("board overlay is not a string".into()))
+            })
+            .collect::<PyResult<Vec<_>>>()
+            .map(Some)
+    }
     #[pyo3(signature=(instruction_limit=2_000_000_000))]
     fn boot_to_rec(&mut self, py: Python<'_>, instruction_limit: u64) -> PyResult<String> {
         if self.driver.is_some() || !self.instruction_points.is_empty() {

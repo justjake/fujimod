@@ -188,23 +188,21 @@ fn a_declared_card_layout_formats_the_stock_card() {
 }
 
 #[test]
-fn a_declared_card_layout_is_refused_outside_a_stock_boot() {
+fn a_declared_card_layout_formats_a_held_card_boot() {
     let Some(library) = library() else {
         eprintln!("skipped: set FUJIMOD_FIRMWARE_LIBRARY");
         return;
     };
+    let layout = layout();
     let mut request = request(Boot::SdCard(CardSource::Files(Vec::new())));
-    request.card.layout = Some(layout());
-    let error = match open(&library, request) {
-        Err(error) => error,
-        Ok(_) => panic!("a card boot accepted a card layout"),
-    };
-    assert_eq!(error.stage, Stage::BootRom);
-    assert!(
-        error.detail.contains("nothing held"),
-        "unexpected refusal: {}",
-        error.detail
-    );
+    request.card.layout = Some(layout.clone());
+    request.run_to_rec = false;
+    let opened = open(&library, request).expect("card boot with a declared layout");
+    assert_eq!(opened.stage, Stage::BootRom);
+    let state = opened.session().card_state("sd").expect("card state");
+    assert_eq!(state.capacity_bytes, u64::from(layout.sectors) * 512);
+    let node = sd_node(&opened);
+    assert_eq!(node["model"]["card"]["options"]["sectors"], layout.sectors);
 }
 
 #[test]

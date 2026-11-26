@@ -164,33 +164,21 @@ impl Library {
         })
     }
 
+    /// The firmware's layout profile record, when it declares one.
+    fn profile(&self, firmware_id: &str) -> Option<&fujimod_catalog::firmware::FirmwareProfile> {
+        self.catalog
+            .firmware(firmware_id)
+            .and_then(|firmware| firmware.layouts.as_ref())
+            .and_then(|layouts| layouts.profiles.get(firmware_id))
+    }
+
     /// The firmware's registered native camera run configuration, or its
     /// browser configuration and overlay when it declares no camera one.
     pub fn resolved(&self, firmware_id: &str) -> Result<ResolvedConfiguration, LibraryError> {
-        let firmware = self.firmware(firmware_id)?;
-        let profile = firmware
-            .layouts
-            .as_ref()
-            .and_then(|layouts| layouts.profiles.get(firmware_id));
-        let (configuration_id, resolved) = if let Some(configuration_id) =
-            profile.and_then(|profile| profile.camera_configuration_id.clone())
-        {
-            let resolved = ResolvedConfiguration::with_overlays(&configuration_id, &[])
-                .map_err(LibraryError::Catalog)?;
-            (configuration_id, resolved)
-        } else {
-            let overlay_id = profile
-                .and_then(|profile| profile.browser_configuration_id.clone())
-                .ok_or_else(|| LibraryError::UnregisteredFirmware(firmware_id.into()))?;
-            let overlay = RunOverlay::bundled(&overlay_id).map_err(LibraryError::Catalog)?;
-            let configuration_id = overlay.configuration_id.clone();
-            let resolved = ResolvedConfiguration::with_overlays(
-                &configuration_id,
-                std::slice::from_ref(&overlay_id),
-            )
+        let configuration_id = self.camera_configuration_id(firmware_id)?;
+        let overlays = self.camera_overlays(firmware_id)?;
+        let resolved = ResolvedConfiguration::with_overlays(&configuration_id, &overlays)
             .map_err(LibraryError::Catalog)?;
-            (configuration_id, resolved)
-        };
         if resolved.configuration.firmware_id != firmware_id {
             return Err(LibraryError::Missing(format!(
                 "run configuration {configuration_id} names firmware {}, not {firmware_id}",
@@ -198,6 +186,38 @@ impl Library {
             )));
         }
         Ok(resolved)
+    }
+
+    /// The overlays the camera run resolves with by default: the firmware's
+    /// browser overlay when it declares a browser configuration, else none.
+    pub fn camera_overlays(&self, firmware_id: &str) -> Result<Vec<String>, LibraryError> {
+        let profile = self.profile(firmware_id);
+        if profile.is_some_and(|profile| profile.camera_configuration_id.is_some()) {
+            return Ok(Vec::new());
+        }
+        Ok(vec![profile
+            .and_then(|profile| profile.browser_configuration_id.clone())
+            .ok_or_else(|| LibraryError::UnregisteredFirmware(firmware_id.into()))?])
+    }
+
+    /// The catalog run configuration the firmware's camera opens with.
+    ///
+    /// A firmware with a registered native camera run names it directly. The
+    /// others name a browser overlay, whose configuration it applies.
+    pub fn camera_configuration_id(&self, firmware_id: &str) -> Result<String, LibraryError> {
+        let profile = self.profile(firmware_id);
+        if let Some(configuration_id) = profile
+            .and_then(|profile| profile.camera_configuration_id.clone())
+        {
+            return Ok(configuration_id);
+        }
+        let overlay_id = profile
+            .and_then(|profile| profile.browser_configuration_id.clone())
+            .ok_or_else(|| LibraryError::UnregisteredFirmware(firmware_id.into()))?;
+        Ok(RunOverlay::bundled(&overlay_id)
+            .map_err(LibraryError::Catalog)?
+            .configuration_id
+            .clone())
     }
 
     /// The firmware's located NAND bootloader facts.

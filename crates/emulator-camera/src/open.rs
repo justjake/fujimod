@@ -108,6 +108,9 @@ pub struct CardInputs {
     pub transfer_ticks: Option<u64>,
     /// FAT geometry for a stock card, in place of the run's catalog layout.
     pub layout: Option<CardLayout>,
+    /// The modeled SD host's initialization fault, as the device model names
+    /// it; none otherwise.
+    pub initialization_fault: Option<serde_json::Value>,
 }
 
 impl Default for CardInputs {
@@ -118,6 +121,7 @@ impl Default for CardInputs {
             protected: false,
             transfer_ticks: None,
             layout: None,
+            initialization_fault: None,
         }
     }
 }
@@ -129,6 +133,9 @@ pub struct Request {
     pub firmware: String,
     /// Where the firmware's update and boot ROM come from.
     pub files: FirmwareInput,
+    /// Catalog overlays to resolve the camera's run with, in place of the
+    /// library profile's default overlay.
+    pub overlays: Vec<String>,
     /// How the camera starts.
     pub start: Start,
     /// The internal flash it starts with.
@@ -388,12 +395,6 @@ pub fn open(library: &Library, state: &StateDir, request: Request) -> Result<Ope
             "a RAM image starts at the loader from the catalog's flash",
         ));
     }
-    if request.card.layout.is_some() && matches!(request.start, Start::Held { .. }) {
-        return Err(OpenError::at(
-            Stage::BootRom,
-            "a card layout applies only to a start with nothing held",
-        ));
-    }
     if request.card.layout.is_some() && !request.card.present {
         return Err(OpenError::at(
             Stage::BootRom,
@@ -435,7 +436,15 @@ fn open_held(
 fn resolve(library: &Library, request: &Request) -> Result<ResolvedConfiguration, OpenError> {
     fujimod_emulator_exr2_board::register_board_builder();
     fujimod_emulator_models::register();
-    let mut resolved = library.resolved(&request.firmware)?;
+    let mut resolved = if request.overlays.is_empty() {
+        library.resolved(&request.firmware)?
+    } else {
+        let configuration_id = library.camera_configuration_id(&request.firmware)?;
+        let mut overlays = library.camera_overlays(&request.firmware)?;
+        overlays.extend(request.overlays.iter().cloned());
+        ResolvedConfiguration::with_overlays(&configuration_id, &overlays)
+            .map_err(|error| OpenError::at(Stage::BootRom, error))?
+    };
     if let Some(engine) = request.engine {
         resolved
             .override_engine(engine)
@@ -529,6 +538,7 @@ pub(crate) fn construct(
     let Request {
         firmware,
         files,
+        overlays: _,
         start,
         flash,
         card,
@@ -565,6 +575,7 @@ pub(crate) fn construct(
             discovery: false,
             sd_card_transfer_ticks: card.transfer_ticks,
             card_layout: card.layout.clone(),
+            card_initialization_fault: card.initialization_fault.clone(),
         },
     )
     .map_err(|error| OpenError::at(Stage::BootRom, error))?;

@@ -95,6 +95,12 @@ class emulator:
             boot_rom: str | PathLike[str] | None = ...,
             flash: str | PathLike[str] | None = ...,
             combination: str | None = ...,
+            sd_card_files: Mapping[str, bytes] | None = ...,
+            image_bytes: bytes | None = ...,
+            nand: bytes | None = ...,
+            face_result_profile: str | None = ...,
+            overlays: Sequence[str] | None = ...,
+            sd_card_initialization_fault: str | None = ...,
         ) -> emulator.Board: ...
         def release_holds(self, /) -> None: ...
         def power_on(

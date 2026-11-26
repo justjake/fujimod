@@ -25,6 +25,7 @@ fn request(firmware: &str, files: Vec<(String, Vec<u8>)>) -> Request {
     Request {
         firmware: firmware.into(),
         files: FirmwareInput::Library,
+        overlays: Vec::new(),
         preset: Preset::SdCard,
         sd_card: Some(CardSource::Files(files)),
         policy: ExecutionPolicy::Interactive,
