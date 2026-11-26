@@ -92,6 +92,9 @@ pub struct PowerSerial {
     /// Declarations for one explicit bank. A bank without an entry here still
     /// reads the flat map, so an undeclared bank stays bank-blind.
     bank_inputs: BTreeMap<(bool, u8), u16>,
+    /// Flat inputs moved mid-run by `set_input`; they read before `inputs`,
+    /// which keep their declared values.
+    moved: BTreeMap<u8, u16>,
     /// Opt-in to the eye-sensor commit word at register 38 bit 15, the same
     /// word X-T3 treats as the RTC alarm interrupt.
     eye_commit: bool,
@@ -158,6 +161,7 @@ impl PowerSerial {
             idle,
             inputs,
             bank_inputs: BTreeMap::new(),
+            moved: BTreeMap::new(),
             eye_commit: false,
             registers: BTreeMap::new(),
             edge: 0,
@@ -198,7 +202,12 @@ impl PowerSerial {
         self.bank_inputs
             .get(&(bank, register))
             .copied()
-            .or_else(|| self.inputs.get(&register).copied())
+            .or_else(|| {
+                self.moved
+                    .get(&register)
+                    .or_else(|| self.inputs.get(&register))
+                    .copied()
+            })
     }
     fn output_header(&self, header: u8) -> bool {
         header & 1 != 0
@@ -224,6 +233,12 @@ impl PowerSerial {
         } else {
             Self::writable(register) || self.declared_input(bank, register).is_some()
         }
+    }
+    /// A declared flat input the firmware does not write, ADC words within 10 bits.
+    fn movable(&self, register: u8, value: u16) -> bool {
+        !Self::writable(register)
+            && self.inputs.contains_key(&register)
+            && !((3..=6).contains(&register) && value > 1023)
     }
     fn writable(register: u8) -> bool {
         matches!(
@@ -251,6 +266,8 @@ struct PowerState {
     bank_inputs: Vec<(bool, u8, u16)>,
     #[serde(default)]
     eye_commit: bool,
+    #[serde(default)]
+    moved: BTreeMap<u8, u16>,
     registers: Vec<(bool, u8, u16)>,
     phase: u8,
     header: u8,
@@ -275,6 +292,7 @@ impl PowerSerial {
                 .map(|(&(bank, register), &value)| (bank, register, value))
                 .collect(),
             eye_commit: self.eye_commit,
+            moved: self.moved.clone(),
             registers: self
                 .registers
                 .iter()
@@ -318,6 +336,10 @@ impl PowerSerial {
             || state.bank_inputs.len() != bank_inputs.len()
             || bank_inputs != self.bank_inputs
             || state.eye_commit != self.eye_commit
+            || state
+                .moved
+                .iter()
+                .any(|(&register, &value)| !self.movable(register, value))
             || state.rtc.0.ticks_per_second != self.rtc.0.ticks_per_second
             || state.phase > 2
             || registers.len() != state.registers.len()
@@ -334,6 +356,7 @@ impl PowerSerial {
         let registers = self.validate(&state)?;
         self.accepted_output = state.accepted_output;
         self.registers = registers;
+        self.moved = state.moved;
         self.phase = state.phase;
         self.header = state.header;
         self.high = state.high;
@@ -459,7 +482,7 @@ impl Input for PowerSerial {
         json!({"kind":"power-registers","port":self.port,"pin":self.pin,"active_high":self.active_high,
         "idle":self.idle,"inputs":self.inputs,
         "bank_inputs":self.bank_inputs.iter().map(|(&(b,r),&v)|(b,r,v)).collect::<Vec<_>>(),
-        "eye_commit":self.eye_commit,
+        "eye_commit":self.eye_commit,"moved":self.moved,
         "registers":self.registers.iter().map(|(&(b,r),&v)|(b,r,v)).collect::<Vec<_>>(),
         "command_output":self.command_output,"accepted_output":self.accepted_output,
         "phase":self.phase,"header":self.header,"high":self.high,"response":self.response,"edge":self.edge,"rtc":self.rtc})
@@ -476,6 +499,14 @@ impl Input for PowerSerial {
     }
     fn restore(&mut self, value: &Value) -> Result<(), String> {
         self.apply(serde_json::from_value(value.clone()).map_err(|error| error.to_string())?)
+    }
+    /// X-T3 5.11: word 0 is key group 0, and bit 10 the power switch (`0x8080` on, `0x8480` off).
+    fn set_input(&mut self, register: u8, value: u16) -> Result<bool, String> {
+        if !self.movable(register, value) {
+            return Err(format!("Power SPI input {register} cannot change mid-run"));
+        }
+        self.moved.insert(register, value);
+        Ok(true)
     }
 }
 
@@ -1032,6 +1063,77 @@ mod tests {
                 .is_err()
         );
         assert!(make().with_bank_inputs(vec![(true, 3, 1024)]).is_err());
+    }
+
+    #[test]
+    fn the_power_switch_word_moves_mid_run_and_survives_a_checkpoint() {
+        let pins = Pins::new([0; 16]);
+        let mut gpio = Gpio::new(BASE, pins.clone()).unwrap();
+        gpio.write(
+            &mut Cx::new(&mut Clock, 0, 0, 0),
+            BASE + 12 * 64,
+            4,
+            (1 << 21) | (1 << 5),
+        );
+        let make = || {
+            PowerSerial::new(
+                pins.clone(),
+                12,
+                5,
+                true,
+                false,
+                [
+                    (0, 0x8080),
+                    (1, 0),
+                    (2, 0),
+                    (3, 512),
+                    (32, 0),
+                    (34, 0),
+                    (35, 0),
+                ]
+                .into(),
+                54_000_000,
+                None,
+            )
+            .unwrap()
+        };
+        let read = |peer: &mut PowerSerial, register: u8| {
+            peer.exchange(8, u16::from(register) << 2, 0).unwrap();
+            let high = peer.exchange(8, 0, 0).unwrap();
+            (high << 8) | peer.exchange(8, 0, 0).unwrap()
+        };
+        let mut peer = make();
+        let declared = peer.save();
+        assert_eq!(read(&mut peer, 0), 0x8080);
+        // X-T3 5.11: bit 10 of key group 0 is the power switch.
+        assert_eq!(peer.set_input(0, 0x8480), Ok(true));
+        assert_eq!(read(&mut peer, 0), 0x8480);
+        assert_eq!(
+            peer.save()["inputs"],
+            declared["inputs"],
+            "the declared inputs stay as declared"
+        );
+        // Firmware-written, undeclared and out-of-range ADC words are refused.
+        assert!(peer.set_input(2, 1).is_err());
+        assert!(peer.set_input(5, 1).is_err());
+        assert!(peer.set_input(3, 1024).is_err());
+        let mut resumed = make();
+        resumed.restore(&peer.save()).unwrap();
+        assert_eq!(read(&mut resumed, 0), 0x8480);
+        let mut checkpointed = make();
+        checkpointed
+            .restore_checkpoint(&peer.checkpoint().unwrap())
+            .unwrap();
+        assert_eq!(read(&mut checkpointed, 0), 0x8480);
+        // A state saved before inputs could move still restores.
+        let mut older = declared.clone();
+        older.as_object_mut().unwrap().remove("moved");
+        let mut restored = make();
+        restored.restore(&older).unwrap();
+        assert_eq!(read(&mut restored, 0), 0x8080);
+        let mut forged = peer.save();
+        forged["moved"] = json!({"2": 1});
+        assert!(make().restore(&forged).is_err());
     }
 
     #[test]

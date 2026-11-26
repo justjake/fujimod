@@ -496,6 +496,41 @@ pub fn nor_medium(session: &fujimod_emulator_session::Session) -> Result<Vec<u8>
         })?
 }
 
+/// Move a declared input word of the XP4 serial part that owns it mid-run, as
+/// a user moves a switch (X-T3 5.11: power-peer word 0, bit 10 is the power
+/// switch); a word no serial part declares refuses.
+pub fn set_power_input(
+    session: &mut fujimod_emulator_session::Session,
+    register: u8,
+    value: u16,
+) -> Result<(), String> {
+    let mut spis: Vec<usize> = session
+        .nodes
+        .iter()
+        .filter(|(name, _)| name.starts_with("xp4-spi"))
+        .map(|(_, &id)| id)
+        .collect();
+    spis.sort_unstable();
+    spis.dedup();
+    for node in spis {
+        let moved = session
+            .board
+            .with_device_inputs::<Connected<fujimod_emulator_xp4_io::spi::Spi>, _>(
+                node,
+                |spi, _| {
+                    spi.0
+                        .lock()
+                        .map_err(|_| "XP4 SPI lock poisoned")?
+                        .set_input(register, value)
+                },
+            )?;
+        if moved {
+            return Ok(());
+        }
+    }
+    Err(format!("No XP4 serial part declares input word {register}"))
+}
+
 /// Reset NOR program observation, refusing unsettled commands.
 pub fn reset_nor_program_coverage(
     session: &mut fujimod_emulator_session::Session,

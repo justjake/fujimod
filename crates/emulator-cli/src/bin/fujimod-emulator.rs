@@ -50,6 +50,9 @@ Application-profile startup: --application-plan FILE. Its --keys and --press dri
 for a key read as one ADC band, the middle of that band; configuration bounds come from the block the firmware has loaded.\n\
 A press of a command dial's step key (X-T3: CMD_RIGHT/CMD_LEFT rear, CMD2_R/CMD2_L front) turns that dial one edge.\n\
 Session observations: --load-snapshot FILE, --save-snapshot FILE, --pc-trace FILE [--pc-trace-limit N].\n\
+XP4 application-profile runs: --power-input TIME_MS:REGISTER=VALUE[,...] moves a declared input word of the\n\
+power peer MS guest milliseconds after the run starts (X-T3 5.11: word 0 = 0x8480 turns the power switch off);\n\
+--save-nor FILE writes the NOR as the run left it.\n\
 Native GUI: --gui opens the desktop window connected to this session.\n\
 Prints a JSON boot report; exits 0 at REC (EXR II) or at the end of the run (XP5), 2 at a stopped frontier.\n\
 \n\
@@ -70,7 +73,7 @@ open boots to REC, prints a JSON report of the firmware, boot, stage and engine,
 --gui opens the desktop window on the opened session before the report.\n";
 
 /// Options that take a value, in help order; `--discovery` and `--gui` are flags.
-const VALUED: [&str; 42] = [
+const VALUED: [&str; 44] = [
     "--configuration",
     "--overlay",
     "--engine",
@@ -113,6 +116,8 @@ const VALUED: [&str; 42] = [
     "--camera-settings",
     "--load-snapshot",
     "--save-snapshot",
+    "--power-input",
+    "--save-nor",
 ];
 
 /// The options of one `boot` command, before the processor generation is known.
@@ -531,6 +536,8 @@ fn run_exr2(
             "--watch-pcs",
             "--dump",
             "--hash",
+            "--power-input",
+            "--save-nor",
         ],
     )?;
     let mut loaded_mod = prepare_mod(
@@ -722,6 +729,8 @@ fn run_xp5(mut boot_options: Boot, resolved: ResolvedConfiguration) -> Result<Ou
             "--settings",
             "--camera",
             "--clock-seconds-2000",
+            "--power-input",
+            "--save-nor",
         ],
     )?;
     if !boot_options.preferred_languages.is_empty() {
@@ -827,6 +836,15 @@ fn run_application(mut options: Boot, resolved: ResolvedConfiguration) -> Result
     let status = options.duration("--status-every")?;
     let load_snapshot = options.path("--load-snapshot");
     let save_snapshot = options.path("--save-snapshot");
+    let save_nor = options.path("--save-nor");
+    let mut power_inputs = std::collections::VecDeque::from(
+        options
+            .text("--power-input")?
+            .as_deref()
+            .map(boot::host::parse_power_inputs)
+            .transpose()?
+            .unwrap_or_default(),
+    );
     let trace_output = options.pc_trace()?;
     let policy = options.execution_policy(trace_output.is_some())?;
     let mut patches = boot::patch::Schedule::from_path(options.path("--patch").as_deref(), &[])?;
@@ -856,6 +874,9 @@ fn run_application(mut options: Boot, resolved: ResolvedConfiguration) -> Result
             "application-profile runtime needs supported options and media in its startup plan"
                 .into(),
         );
+    }
+    if resolved.reference.soc.id != "xp4" && (!power_inputs.is_empty() || save_nor.is_some()) {
+        return Err("--power-input and --save-nor need an XP4 application-profile board".into());
     }
     let mut started = boot::application::open(&resolved, request)?;
     let stubs = options
@@ -911,6 +932,16 @@ fn run_application(mut options: Boot, resolved: ResolvedConfiguration) -> Result
             board.board.key_input(wire, *pressed)?;
             keys.pop_front();
         }
+        let mut next_power = None;
+        while let Some(input) = power_inputs.front() {
+            let at = deadline(input.delay);
+            if at > now {
+                next_power = Some(at);
+                break;
+            }
+            board.board.power_input(input.register, input.value)?;
+            power_inputs.pop_front();
+        }
         let next_patch = patches.advance(&board.board, now, start, board.ticks_per_second)?;
         if let Some(loaded) = &mut loaded_mod {
             loaded.advance(&board.board, now, &stubbed)?;
@@ -937,6 +968,7 @@ fn run_application(mut options: Boot, resolved: ResolvedConfiguration) -> Result
             .chain(next_frame)
             .chain(next_patch)
             .chain(next_key)
+            .chain(next_power)
             .min())
     })?;
     if let Some(directory) = &output {
@@ -953,6 +985,10 @@ fn run_application(mut options: Boot, resolved: ResolvedConfiguration) -> Result
     started.write_back_card()?;
     if let Some(path) = save_snapshot {
         started.save_snapshot(&path)?;
+    }
+    if let Some(path) = save_nor {
+        std::fs::write(&path, started.board.nor_medium()?)
+            .map_err(|error| format!("{}: {error}", path.display()))?;
     }
     if let Some(path) = screenshot {
         let shown = started.display_frames();
@@ -1408,6 +1444,30 @@ mod tests {
                 .contains("does not apply to XP5")
         );
         assert!(boot.refuse("XP5", &["--settings"]).is_ok());
+    }
+
+    #[test]
+    fn power_options_take_one_value_each() {
+        let mut boot = parse(args(&[
+            "boot",
+            "--power-input",
+            "22300:0=0x8480",
+            "--save-nor",
+            "nor.bin",
+        ]))
+        .unwrap()
+        .unwrap();
+        assert!(
+            boot.refuse("XP5", &["--power-input"])
+                .unwrap_err()
+                .contains("does not apply to XP5")
+        );
+        assert_eq!(
+            boot.text("--power-input").unwrap().as_deref(),
+            Some("22300:0=0x8480")
+        );
+        assert_eq!(boot.path("--save-nor"), Some(PathBuf::from("nor.bin")));
+        assert!(parse(args(&["boot", "--save-nor"])).is_err());
     }
 
     #[test]

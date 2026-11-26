@@ -402,6 +402,75 @@ pub fn parse_timed_poke(spec: &str) -> Result<(Option<u64>, u64, u32), String> {
     }
 }
 
+/// One `--power-input` entry: a declared input word of an XP4 serial part, moved `delay` after
+/// the run starts (after a snapshot load, like `--press`).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct PowerInput {
+    pub delay: Duration,
+    pub register: u8,
+    pub value: u16,
+}
+
+/// `TIME_MS:REGISTER=VALUE[,...]`, in time order; entries at the same time keep their order.
+pub fn parse_power_inputs(spec: &str) -> Result<Vec<PowerInput>, String> {
+    const FORM: &str = "--power-input needs TIME_MS:REGISTER=VALUE[,...]";
+    let mut inputs = spec
+        .split(',')
+        .map(str::trim)
+        .filter(|entry| !entry.is_empty())
+        .map(|entry| {
+            let (time, word) = entry.split_once(':').ok_or(FORM)?;
+            let (register, value) = word.split_once('=').ok_or(FORM)?;
+            Ok(PowerInput {
+                delay: Duration::from_millis(parse_number(time.trim())?),
+                register: u8::try_from(parse_number(register.trim())?)
+                    .map_err(|_| "--power-input register exceeds u8")?,
+                value: u16::try_from(parse_number(value.trim())?)
+                    .map_err(|_| "--power-input value exceeds u16")?,
+            })
+        })
+        .collect::<Result<Vec<_>, String>>()?;
+    if inputs.is_empty() {
+        return Err(FORM.into());
+    }
+    inputs.sort_by_key(|input| input.delay);
+    Ok(inputs)
+}
+
+#[cfg(test)]
+mod power_input_tests {
+    use super::*;
+
+    #[test]
+    fn power_inputs_take_time_register_and_value_in_time_order() {
+        let input = |ms, register, value| PowerInput {
+            delay: Duration::from_millis(ms),
+            register,
+            value,
+        };
+        assert_eq!(
+            parse_power_inputs("22300:0=0x8480, 9000:0=32896,9000:7=1").unwrap(),
+            vec![
+                input(9000, 0, 0x8080),
+                input(9000, 7, 1),
+                input(22300, 0, 0x8480)
+            ]
+        );
+        for bad in [
+            "",
+            " , ",
+            "22300",
+            "22300:0",
+            "x:0=1",
+            "1:256=0",
+            "1:0=0x10000",
+            "1:0=-1",
+        ] {
+            assert!(parse_power_inputs(bad).is_err(), "{bad}");
+        }
+    }
+}
+
 #[cfg(test)]
 mod poke_tests {
     use super::*;
