@@ -3,6 +3,26 @@
   "schema": 1,
   "id": "xe3-controls",
   "body_id": "xe3",
+  "boot": {
+    "sd": {
+      "usb": false,
+      "hold": [
+        {
+          "id": "rear_command_dial.press"
+        },
+        {
+          "id": "fn1_button"
+        }
+      ]
+    },
+    "firmware_update": {
+      "hold": [
+        {
+          "id": "disp_back_button"
+        }
+      ]
+    }
+  },
   "manual": {
     "url": "https://fujifilm-dsc.com/en/manual/x-e3/x-e3_omw_en_s_f.pdf",
     "title": "FUJIFILM X-E3 Owner’s Manual",
