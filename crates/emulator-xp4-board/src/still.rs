@@ -85,8 +85,16 @@
 //! plane (driver 0x109a248). 2636 source lines then fill 1318 rows at
 //! pitch 0x9000 and 2160 output lines exactly the 1080 rows of the encoder
 //! ring at pitch 0x5600. An odd output height repeats its last line; a
-//! Y0L2 block takes the chroma of its upper left pixel. Formats 1 and 2
-//! refuse.
+//! Y0L2 block takes the chroma of its upper left pixel.
+//!
+//! A format 1 source is 10-bit 4:2:2 lines: the firmware's line length
+//! 0x11563bc gives 8n/3 bytes for n pixels of format 0x80402 (RESZ code 1,
+//! 0x1e74404) and its alignment 0x1e891e0 six pixels, so six pixels fill
+//! 16 bytes, four little-endian words of three 10-bit samples. The order of
+//! the samples in those words is not read; it is declared as the usual
+//! one, Cb0 Y0 Cr0, Y1 Cb2 Y2, Cr2 Y3 Cb4, Y4 Cr4 Y5 at bits 0, 10 and 20.
+//! A line takes ceil(width / 6) x 16 bytes. Format 1 outputs and format 2
+//! on either side refuse.
 //!
 //! # RECC output (opt-in)
 //!
@@ -727,6 +735,20 @@ struct State {
     corrected: Option<[u64; 3]>,
 }
 
+/// Y, Cb and Cr of pixel `x` of a format 1 line: 10-bit 4:2:2, six pixels
+/// in four little-endian words of three 10-bit samples (bits 0, 10, 20),
+/// in the declared order Cb0 Y0 Cr0, Y1 Cb2 Y2, Cr2 Y3 Cb4, Y4 Cr4 Y5; a
+/// pixel takes its pair's chroma.
+fn packed10_sample(line: &[u8], x: usize) -> [u16; 3] {
+    let group = &line[x / 6 * 16..][..16];
+    let at = |i: usize| {
+        let word = u32::from_le_bytes(group[i / 3 * 4..][..4].try_into().expect("4 bytes"));
+        (word >> (10 * (i % 3)) & 0x3ff) as u16
+    };
+    let (i, pair) = (x % 6, x % 6 / 2);
+    [at(2 * i + 1), at(4 * pair), at(4 * pair + 2)]
+}
+
 pub struct Engine {
     kind: Kind,
     base: u64,
@@ -1035,7 +1057,14 @@ impl Engine {
             3 => Some(YcLayout::Y0l2),
             _ => None,
         };
-        let (Some(input), Some(layout_out)) = (layout(format & 3), layout(format >> 4 & 3)) else {
+        // A format 1 source is 10-bit 4:2:2 lines, six pixels in 16 bytes.
+        let packed10 = format & 3 == 1;
+        let input = if packed10 {
+            Some(YcLayout::Lines)
+        } else {
+            layout(format & 3)
+        };
+        let (Some(input), Some(layout_out)) = (input, layout(format >> 4 & 3)) else {
             return Err(format!("{name} format {format:#x} is not modeled"));
         };
         let ((sh, sw), (oh, ow)) = (size(self.word(0x00c)), size(self.word(0x018)));
@@ -1045,7 +1074,12 @@ impl Engine {
         let address = |high, low| u64::from(self.word(high) & 3) << 32 | u64::from(self.word(low));
         let (source, spitch) = (address(0x0c0, 0x0c4), self.word(0x0d0) as usize);
         let (output, opitch) = (address(0x0d4, 0x0d8), self.word(0x0e4) as usize);
-        let (sline, oline) = (sw * 2 * input.lines(), ow * 2 * layout_out.lines());
+        let sline = if packed10 {
+            sw.div_ceil(6) * 16
+        } else {
+            sw * 2 * input.lines()
+        };
+        let oline = ow * 2 * layout_out.lines();
         if sw % 2 != 0 || ow % 2 != 0 || sline > spitch || oline > opitch {
             return Err(format!(
                 "{name} {sw}x{sh} pitch {spitch} -> {ow}x{oh} pitch {opitch}"
@@ -1056,6 +1090,7 @@ impl Engine {
         // 10-bit Y, Cb and Cr of a source pixel; a packed pixel takes its
         // pair's chroma.
         let sample = |x: usize, y: usize| match input {
+            _ if packed10 => packed10_sample(&pixels[y * spitch..], x),
             YcLayout::Y0l2 => y0l2_sample(&pixels[y / 2 * spitch..], x, y % 2),
             YcLayout::Lines => {
                 let row = &pixels[y * spitch + x / 2 * 4..];
@@ -1687,8 +1722,8 @@ mod tests {
         }
     }
 
-    /// Formats 1 and 2 (+0x08 bits 1..0 or 5..4), odd widths, a pitch
-    /// shorter than a line and a zero step refuse when the job ends.
+    /// Format 2 (+0x08 bits 1..0 or 5..4), a format 1 output, odd widths,
+    /// a pitch shorter than a line and a zero step refuse when the job ends.
     #[test]
     fn a_job_outside_the_modeled_layout_refuses() {
         let base = job(
@@ -1704,7 +1739,8 @@ mod tests {
             words
         };
         for (words, expected) in [
-            (with(0x008, 0x101), "format 0x101 is not modeled"),
+            (with(0x008, 0x102), "format 0x102 is not modeled"),
+            (with(0x008, 0x110), "format 0x110 is not modeled"),
             (with(0x008, 0x120), "format 0x120 is not modeled"),
             (with(0x00c, 0x0001_0002), "3x2"),
             (with(0x0d0, 6), "pitch 6"),
@@ -2100,6 +2136,98 @@ mod tests {
             assert_eq!(y0l2_sample(row, x, 1)[0], y0l2_sample(row, x, 0)[0]);
             assert_eq!(y0l2_sample(row, x, 1)[0], (20 + x + 1) as u16);
         }
+    }
+
+    /// A 12 x 2 picture of 10-bit 4:2:2 lines (format 1, pitch 32: two
+    /// groups of six pixels a line): luma 100y + 37x + 3, Cb 600 + pair,
+    /// Cr 800 + line.
+    fn packed10_picture() -> Vec<u8> {
+        let mut bytes = vec![0; 2 * 32];
+        for y in 0..2 {
+            for group in 0..2 {
+                let luma = |i: usize| (100 * y + 37 * (group * 6 + i) + 3) as u32;
+                let cb = |pair: usize| (600 + group * 3 + pair) as u32;
+                let cr = 800 + y as u32;
+                let samples = [
+                    cb(0),
+                    luma(0),
+                    cr,
+                    luma(1),
+                    cb(1),
+                    luma(2),
+                    cr,
+                    luma(3),
+                    cb(2),
+                    luma(4),
+                    cr,
+                    luma(5),
+                ];
+                for (k, word) in samples.chunks(3).enumerate() {
+                    let word = word[0] | word[1] << 10 | word[2] << 20;
+                    bytes[y * 32 + group * 16 + k * 4..][..4].copy_from_slice(&word.to_le_bytes());
+                }
+            }
+        }
+        bytes
+    }
+
+    /// A format 1 source: to packed 8-bit lines (0x101, samples >> 2) and
+    /// to Y0L2 (0x131, the 10 bits kept); a pitch shorter than its
+    /// ceil(width / 6) x 16 bytes refuses.
+    #[test]
+    fn format_1_reads_10_bit_4_2_2_lines() {
+        let mut h = RecordingHost {
+            ram: vec![0; 0x1000],
+            ..Default::default()
+        };
+        h.ram[..64].copy_from_slice(&packed10_picture());
+        let mut e = Engine::new(Kind::Resz, RESZ, RESZ_IRQ, 20)
+            .unwrap()
+            .computing()
+            .unwrap();
+        let mut run = |h: &mut RecordingHost, format: u32, spitch: u32, output: u32| {
+            let mut words = job(
+                (0x0001_000b, 0x0001_000b),
+                (0x1000, 0x1000),
+                (0, spitch),
+                (output, 64),
+            );
+            words[0] = (0x008, format);
+            let refusal = resize_job(&mut e, h, &words);
+            let mut cx = Cx::new(h, 0, 0, 0);
+            e.write(&mut cx, RESZ + 0x10c, 4, 1);
+            refusal
+        };
+        let luma = |x: usize, y: usize| (100 * y + 37 * x + 3) as u16;
+        // 0x101: packed lines, each sample narrowed by >> 2.
+        assert_eq!(run(&mut h, 0x101, 32, 0x400), None);
+        for y in 0..2 {
+            let line = &h.ram[0x400 + y * 64..][..24];
+            for x in 0..12 {
+                assert_eq!(u16::from(line[x / 2 * 4 + x % 2]), luma(x, y) >> 2);
+            }
+            for pair in 0..6 {
+                assert_eq!(
+                    line[pair * 4 + 2..][..2],
+                    [((600 + pair) >> 2) as u8, ((800 + y) >> 2) as u8]
+                );
+            }
+        }
+        // 0x131: one Y0L2 row, every luma and the blocks' chroma kept.
+        assert_eq!(run(&mut h, 0x131, 32, 0x800), None);
+        for x in 0..12 {
+            for y in 0..2 {
+                let [l, cb, cr] = y0l2_sample(&h.ram[0x800..], x, y);
+                assert_eq!(l, luma(x, y));
+                assert_eq!((cb, cr), (600 + x as u16 / 2, 800));
+            }
+        }
+        // 12 pixels need 32 bytes a line.
+        let refusal = run(&mut h, 0x101, 24, 0xc00);
+        assert!(
+            refusal.as_deref().is_some_and(|r| r.contains("pitch 24")),
+            "{refusal:?}"
+        );
     }
 
     /// A 4K movie band: 6 lines of 6 pixels from 8 RAW samples a line (the
