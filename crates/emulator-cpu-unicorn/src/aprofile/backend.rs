@@ -54,11 +54,7 @@ impl Cpu for Core {
         e.memory.require_stopped()?;
         if e.policy.get() != policy {
             e.cpu.set_execution_policy(policy)?;
-            if !e.a32 {
-                if e.pause_requested.is_some() {
-                    e.cpu
-                        .set_parallel_cpus(policy == ExecutionPolicy::Interactive)?;
-                }
+            if !e.a32 && e.pause_requested.is_none() {
                 e.cpu
                     .set_entry_exits(policy == ExecutionPolicy::Interactive)?;
             }
@@ -276,7 +272,12 @@ impl Cpu for Core {
         if e.active.get() {
             return Err("nested A-profile execution is refused".into());
         }
-        let _guest_tick = crate::GuestClockTickScope::new(e.policy.get());
+        let mmio_policy = if e.fast_path() {
+            ExecutionPolicy::Interactive
+        } else {
+            ExecutionPolicy::Exact
+        };
+        let _guest_tick = crate::GuestClockTickScope::new(mmio_policy);
         e.prove_loops.set(
             e.loop_window.replace(false)
                 && e.can_prove_loops()
@@ -305,7 +306,7 @@ impl Cpu for Core {
         }
         let _reservation =
             e.memory
-                .reserve_run(e.id.get(), e.policy.get(), e.pause_requested.is_some())?;
+                .reserve_run(e.id.get(), e.policy.get(), e.parallel_run.get())?;
         if e.memory.flush_pending() {
             e.memory.flush()?;
         }

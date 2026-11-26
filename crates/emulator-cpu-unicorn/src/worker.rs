@@ -46,6 +46,7 @@ pub struct CpuWorker {
     model: Model,
     owner_accounting: bool,
     execution_policy: Cell<ExecutionPolicy>,
+    guest_clock: Cell<Option<Clock>>,
     features: Features,
     thumb_accounting: Option<NonNull<ThumbBlockAccounting>>,
     thumb_recovery: Option<NonNull<ThumbBlockRecoveryAccounting>>,
@@ -185,7 +186,18 @@ impl Engine {
         }
     }
 
-    fn run(&self, request: Run) -> Result<Exit, ExecutionError> {
+    fn run(
+        &self,
+        request: Run,
+        concurrent: bool,
+        guest_clock: Option<Clock>,
+    ) -> Result<Exit, ExecutionError> {
+        if let Self::Aprofile(cpu) = self {
+            cpu.set_parallel_run(concurrent)?;
+            if let Some(clock) = guest_clock {
+                cpu.set_guest_clock(clock)?;
+            }
+        }
         if let Self::Mprofile {
             raw,
             owner_accounting: false,
@@ -266,6 +278,7 @@ fn spawn_engine(
                 model,
                 owner_accounting,
                 execution_policy: Cell::new(ExecutionPolicy::Exact),
+                guest_clock: Cell::new(None),
                 features,
                 memory,
                 pause_requested: ready.pause_requested,
@@ -308,6 +321,8 @@ enum Message {
     Run {
         id: u64,
         request: Run,
+        concurrent: bool,
+        guest_clock: Option<Clock>,
     },
     CallbackResponse {
         id: u64,
@@ -1097,9 +1112,14 @@ fn serve(
             Message::Request { operation, reply } => {
                 let _ = reply.send(dispatch(&context, &engine, operation));
             }
-            Message::Run { id, request } => {
+            Message::Run {
+                id,
+                request,
+                concurrent,
+                guest_clock,
+            } => {
                 context.callback_error.borrow_mut().take();
-                let mut result = engine.run(request);
+                let mut result = engine.run(request, concurrent, guest_clock);
                 if let Some(error) = context.callback_error.borrow_mut().take() {
                     result = Err(ExecutionError::Backend(error));
                 }
@@ -1784,7 +1804,17 @@ impl Cpu for CpuWorker {
         self.features
     }
     fn set_guest_clock(&self, clock: Clock) -> Result<(), String> {
-        self.unit(Operation::SetGuestClock(clock))
+        if self.model != Model::ArmV8A {
+            return self.unit(Operation::SetGuestClock(clock));
+        }
+        if self.running.get() {
+            return Err("guest clock anchor requires a stopped processor".into());
+        }
+        clock.after(0)?;
+        // The A-profile clock anchors the next run. Send it with that run
+        // instead of waking idle owners for a second round trip.
+        self.guest_clock.set(Some(clock));
+        Ok(())
     }
     fn read_register(&self, register: Register, out: &mut [u8]) -> Result<usize, String> {
         let pc_width = if self.model == Model::ArmV8A { 8 } else { 4 };
@@ -1987,7 +2017,16 @@ impl Cpu for CpuWorker {
         self.loop_window.set(None);
         self.pending_callback.borrow_mut().take();
         self.run_result.borrow_mut().take();
-        if self.commands.send(Message::Run { id, request }).is_err() {
+        if self
+            .commands
+            .send(Message::Run {
+                id,
+                request,
+                concurrent: !self.ordered_run.get(),
+                guest_clock: self.guest_clock.get(),
+            })
+            .is_err()
+        {
             return Err(ExecutionError::Backend(
                 "Unicorn CPU worker disconnected".into(),
             ));
@@ -2536,6 +2575,19 @@ mod architecture_tests {
         assert_eq!(read_scalar(&cpu, Register::Pc), Some(address + 4));
         assert_eq!(read_scalar(&cpu, Register::X(0)), Some(555));
         assert_eq!(tick.load(Ordering::Acquire), 555);
+
+        tick.store(0, Ordering::Release);
+        assert!(matches!(
+            cpu.run(Run {
+                begin: address,
+                until: None,
+                watchdog_us: 0,
+                instructions: Some(1),
+            }),
+            Ok(Exit::Stopped)
+        ));
+        assert_eq!(read_scalar(&cpu, Register::X(0)), Some(0xdead));
+        assert_eq!(tick.load(Ordering::Acquire), 0);
     }
 }
 

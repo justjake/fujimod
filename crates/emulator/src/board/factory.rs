@@ -170,6 +170,7 @@ pub(super) struct Engines {
     unicorn: Option<Library>,
     #[cfg(not(target_os = "emscripten"))]
     unicorn_workers: bool,
+    ordered_without_mprofile: bool,
     #[cfg(all(target_os = "macos", target_arch = "aarch64"))]
     hypervisor: Option<fujimod_emulator_cpu_hvf::Vm>,
 }
@@ -202,20 +203,26 @@ impl Engines {
         if need_hvf {
             return Err("Hypervisor engine requires macOS ARM64".into());
         }
+        let mixed_profiles = graph
+            .processors
+            .iter()
+            .filter(|p| p.model == Model::CortexM4)
+            .count()
+            == 1
+            && graph.processors.iter().any(|p| p.model == Model::ArmV8A);
         Ok(Self {
             unicorn,
             #[cfg(not(target_os = "emscripten"))]
-            unicorn_workers: graph
-                .processors
-                .iter()
-                .filter(|p| p.model == Model::CortexM4)
-                .count()
-                == 1
-                && graph.processors.iter().any(|p| p.model == Model::ArmV8A),
+            unicorn_workers: mixed_profiles,
+            ordered_without_mprofile: mixed_profiles && options.engine == RunEngine::Unicorn,
             #[cfg(all(target_os = "macos", target_arch = "aarch64"))]
             hypervisor,
         })
     }
+    pub(super) fn ordered_without_mprofile(&self) -> bool {
+        self.ordered_without_mprofile
+    }
+
     fn cpu(
         &self,
         processor: &Processor,

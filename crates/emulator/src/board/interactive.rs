@@ -130,6 +130,24 @@ impl State {
 }
 
 impl Board {
+    pub(super) fn ordered_without_mprofile(&self) -> bool {
+        self.retained_engines
+            .as_ref()
+            .is_some_and(|engines| engines.ordered_without_mprofile())
+    }
+
+    pub(super) fn use_concurrent_window(&self, state: &State, cores: &[usize]) -> bool {
+        // Parallel TCG handles A-profile atomics through native slow exits.
+        // Keep the ordered schedule while only the A-profile side of this
+        // mixed Unicorn board is runnable.
+        cores.len() > 1
+            && cores
+                .iter()
+                .all(|&core| self.cpus[core].features().asynchronous_runs)
+            && (!self.ordered_without_mprofile()
+                || cores.iter().any(|&core| state.mprofile[core].is_some()))
+    }
+
     /// Every return joins started runs, including failures. A pending callback
     /// is a parked CPU, not permission to touch devices while a peer executes.
     pub(super) fn interactive_window(
@@ -156,7 +174,12 @@ impl Board {
             ));
             state.code_run = RunCode::Unknown;
         }
-        let result = self.interactive_cohort(cores, quantum);
+        let result = (|| {
+            for &core in cores {
+                self.sync_store_hook(core)?;
+            }
+            self.interactive_cohort(cores, quantum)
+        })();
         let mut state = self.state.borrow_mut();
         state.active_slice = None;
         state.parallel = None;

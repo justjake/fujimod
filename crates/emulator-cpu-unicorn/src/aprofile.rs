@@ -45,6 +45,7 @@ struct Execution {
     record: NonNull<BlockAccounting>,
     policy: Cell<ExecutionPolicy>,
     pause_requested: Option<Arc<AtomicU32>>,
+    parallel_run: Cell<bool>,
     clock: Cell<Option<Clock>>,
     loop_mode: Cell<loops::LoopMode>,
     loop_window: Cell<bool>,
@@ -124,6 +125,18 @@ impl Core {
     }
 
     #[cfg(not(target_os = "emscripten"))]
+    pub(crate) fn set_parallel_run(&self, concurrent: bool) -> Result<(), String> {
+        let e = &self.execution;
+        let parallel = concurrent && e.policy.get() == ExecutionPolicy::Interactive;
+        if e.parallel_run.get() != parallel {
+            e.cpu.set_parallel_cpus(parallel)?;
+            e.cpu.set_entry_exits(parallel)?;
+            e.parallel_run.set(parallel);
+        }
+        Ok(())
+    }
+
+    #[cfg(not(target_os = "emscripten"))]
     pub(crate) fn owner_callback_parked(&self, parked: bool) -> Result<(), String> {
         let execution = &self.execution;
         if execution.active.get() {
@@ -162,6 +175,7 @@ impl Core {
             record,
             policy: Cell::new(ExecutionPolicy::Exact),
             pause_requested,
+            parallel_run: Cell::new(false),
             clock: Cell::new(None),
             loop_mode: Cell::default(),
             loop_window: Cell::new(false),
@@ -383,12 +397,17 @@ impl Execution {
     fn accounting(&self) -> Accounting {
         unsafe { Accounting::from_raw(self.record) }
     }
+    fn fast_path(&self) -> bool {
+        self.policy.get() == ExecutionPolicy::Interactive
+            && (self.pause_requested.is_none() || self.parallel_run.get())
+    }
     fn coarse(&self) -> bool {
-        !self.a32
-            && self.policy.get() == ExecutionPolicy::Interactive
-            && self.trace.borrow().is_none()
+        !self.a32 && self.fast_path() && self.trace.borrow().is_none()
     }
     fn update_guest_tick(&self) -> Result<(), String> {
+        if !self.fast_path() {
+            return Ok(());
+        }
         crate::GuestClockTickScope::publish(
             self.clock
                 .get()
@@ -597,7 +616,7 @@ impl Execution {
         // A worker's hooked memory access may park while a peer requests
         // a pause. End its block before the native engine has to restart
         // the access dynamically under parallel TCG.
-        let worker_memory_boundary = coarse && may_access_memory && self.pause_requested.is_some();
+        let worker_memory_boundary = coarse && may_access_memory && self.parallel_run.get();
         let instruction = if framework {
             InstructionDisposition::Replace
         } else if wide_exact
@@ -955,7 +974,7 @@ unsafe fn written(access: Access, address: u64, size: i32, value: i64, data: *mu
     let e = unsafe { &*data.cast::<Execution>() };
     e.guarded(|| {
         store_histogram::count(e.id.get(), address);
-        if e.pause_requested.is_some() && e.policy.get() == ExecutionPolicy::Interactive {
+        if e.parallel_run.get() {
             let observers = e.index.borrow().synchronization.clone();
             for (_, hook) in observers {
                 if let Hook::Synchronization { callback, data } = hook {

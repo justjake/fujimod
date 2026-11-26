@@ -799,6 +799,27 @@ fn five_unicorn_cores_share_ram_and_service_the_same_deadline_as_exact() {
     );
 }
 
+#[test]
+fn mixed_unicorn_keeps_a53_only_windows_ordered() {
+    let mut board = mixed_board(
+        ExecutionPolicy::Interactive,
+        Bus::new(bus::Mode::Strict),
+        &[],
+    );
+    board.state.borrow_mut().released[M4] = false;
+    for core in 0..M4 {
+        a64_code(&board, core, &[0xd503_201f, 0xd503_207f]); // nop; wfi
+    }
+    board.run_until(100, 64).unwrap();
+    assert_eq!(board.state.borrow().instructions, vec![2, 2, 2, 2, 0]);
+    assert_eq!(board.interactive_windows.get(), 0);
+    assert!(
+        board.store_hooks_on_demand[..M4]
+            .iter()
+            .all(|hook| *hook == Some(None))
+    );
+}
+
 struct MprofileDoorbell;
 impl Device for MprofileDoorbell {
     fn name(&self) -> &'static str {
