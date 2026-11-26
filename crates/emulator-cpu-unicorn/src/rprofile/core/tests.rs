@@ -943,9 +943,7 @@ fn exact_block_budgets_ring_wrap_pause_and_thumb_resume() {
 fn repeated_thumb_blocks_publish_clock_on_the_common_path() {
     unsafe fn observe_tick(_: u64, _: u32, data: *mut c_void) {
         let ticks = unsafe { &*data.cast::<RefCell<Vec<Option<u64>>>>() };
-        ticks
-            .borrow_mut()
-            .push(crate::rprofile::approximate_guest_tick());
+        ticks.borrow_mut().push(crate::approximate_guest_tick());
     }
 
     let cpu = processor(&Memory::default());

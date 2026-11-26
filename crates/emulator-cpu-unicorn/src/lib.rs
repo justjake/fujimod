@@ -377,11 +377,12 @@ struct MmioMapping {
     offset: u64,
 }
 thread_local! {
+    static GUEST_CLOCK_TICK: Cell<Option<u64>> = const { Cell::new(None) };
     static FAST_MMIO_READS: Cell<Option<bool>> = const { Cell::new(None) };
 }
 
 pub(crate) fn approximate_guest_tick() -> Option<u64> {
-    rprofile::approximate_guest_tick()
+    GUEST_CLOCK_TICK.get()
 }
 
 pub(crate) struct GuestClockTickScope {
@@ -389,17 +390,18 @@ pub(crate) struct GuestClockTickScope {
     previous_fast_reads: Option<bool>,
 }
 impl GuestClockTickScope {
-    pub(crate) fn new(fast_reads: bool) -> Self {
+    pub(crate) fn new(policy: ExecutionPolicy) -> Self {
         let previous_tick = approximate_guest_tick();
         Self::publish(None);
         Self {
             previous_tick,
-            previous_fast_reads: FAST_MMIO_READS.replace(Some(fast_reads)),
+            previous_fast_reads: FAST_MMIO_READS
+                .replace(Some(policy == ExecutionPolicy::Interactive)),
         }
     }
 
     pub(crate) fn publish(tick: Option<u64>) {
-        rprofile::publish_guest_tick(tick);
+        GUEST_CLOCK_TICK.set(tick);
     }
 }
 impl Drop for GuestClockTickScope {
