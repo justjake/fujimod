@@ -41,6 +41,8 @@ focus=S|C|M, mode=STILL|MOVIE, power=ON|OFF).\n\
 XP5 --camera-settings NAME=VALUE[,...] boots the loader start from the user profile the firmware's settings\n\
 layout locates, built from the update at run time (X-T5: setup=done, language=en). X-T5 --press keys also include AEL, AFON, STICK_UL/UR/DL/DR,\n\
 REAR_PUSH, FRONT_PUSH and one detent of REAR+, REAR-, FRONT+, FRONT-.\n\
+XP4 application-profile --camera-settings NAME=VALUE[,...] writes the values into the newest sealed copy of each\n\
+journal record of the plan's NOR and seals it again (a record with no copy takes the one built from the update).\n\
 XP5 --watch-writes logs each CPU store, DMA and host write into the physical ranges to stderr (needs --engine unicorn).\n\
 XP5 --poke also takes ADDR=U32@MS: the word is written MS guest milliseconds after the run starts.\n\
 Application-profile startup: --application-plan FILE.\n\
@@ -829,13 +831,14 @@ fn run_xp5(mut boot_options: Boot, resolved: ResolvedConfiguration) -> Result<Ou
 }
 
 fn run_application(mut options: Boot, resolved: ResolvedConfiguration) -> Result<Outcome, String> {
-    options.refuse("application-profile", &["--set", "--camera-settings"])?;
+    options.refuse("application-profile", &["--set"])?;
     options.refuse_second_card("application-profile")?;
     let request = boot::application::Startup {
         update: options.required("--update")?.into(),
         plan: options.required("--application-plan")?.into(),
         card_image: options.path("--card-image"),
         card_files: options.sd_files()?,
+        camera_settings: camera_settings(options.text("--camera-settings")?.as_deref())?,
         discovery: options.discovery,
         quantum: options
             .text("--quantum")?
@@ -999,6 +1002,9 @@ fn run_application(mut options: Boot, resolved: ResolvedConfiguration) -> Result
     }
     if let Some(loaded) = loaded_mod {
         state["mod"] = loaded.report(&started.board);
+    }
+    if !started.camera_settings.is_null() {
+        state["camera_settings"] = started.camera_settings.clone();
     }
     let report = serde_json::to_string_pretty(&state).map_err(|error| error.to_string())?;
     if let Some(output) = output {

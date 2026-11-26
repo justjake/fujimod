@@ -6,6 +6,7 @@
 pub mod application;
 mod first_start;
 pub mod host;
+mod journal_settings;
 #[cfg(all(feature = "xp5-startup", not(target_arch = "wasm32")))]
 pub mod media;
 #[cfg(all(feature = "xp5-startup", not(target_arch = "wasm32")))]
@@ -970,6 +971,7 @@ pub fn open_request(resolved: ResolvedConfiguration, request: Request) -> Result
                     quantum: None,
                     card_image: None,
                     card_files: request.card_files,
+                    camera_settings: Default::default(),
                 })
             }
             _ => {

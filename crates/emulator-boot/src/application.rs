@@ -23,6 +23,8 @@ pub struct Startup {
     pub quantum: Option<usize>,
     pub card_image: Option<PathBuf>,
     pub card_files: Vec<(String, PathBuf)>,
+    /// Settings to place in the plan's NOR journal before boot (XP4); empty places nothing.
+    pub camera_settings: BTreeMap<String, String>,
 }
 
 /// Application startup facts. File references are relative to the plan's directory.
@@ -153,6 +155,8 @@ pub struct Started {
     pub quantum: usize,
     pub ticks_per_second: u64,
     pub engine: RunEngine,
+    /// The journal copies the requested camera settings changed; null without a request.
+    pub camera_settings: Value,
     snapshot_identity: Option<String>,
 }
 
@@ -313,11 +317,22 @@ pub fn open(resolved: &ResolvedConfiguration, startup: Startup) -> Result<Starte
         return Err("application startup plan selects another run configuration".into());
     }
     let directory = startup.plan.parent().unwrap_or_else(|| Path::new(""));
-    let flash = document
+    let mut flash = document
         .flash
         .as_deref()
         .map(|path| bytes(directory, path))
         .transpose()?;
+    let camera_settings = if startup.camera_settings.is_empty() {
+        Value::Null
+    } else {
+        if resolved.reference.soc.id != "xp4" {
+            return Err("camera settings need an XP4 application-profile plan".into());
+        }
+        let nor = flash
+            .as_mut()
+            .ok_or("camera settings need the plan's flash")?;
+        crate::journal_settings::place(resolved, nor, &startup.camera_settings)?
+    };
     let mut files = named(directory, document.card_files)?;
     for (name, bytes) in crate::media::read_files(&startup.card_files)? {
         if files.insert(name.clone(), bytes).is_some() {
@@ -489,6 +504,7 @@ pub fn open(resolved: &ResolvedConfiguration, startup: Startup) -> Result<Starte
         quantum,
         ticks_per_second,
         engine,
+        camera_settings,
         snapshot_identity,
     })
 }
