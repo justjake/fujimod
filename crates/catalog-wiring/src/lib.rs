@@ -1042,9 +1042,122 @@ pub fn analog_key(selection: &ResolvedSelection, name: &str) -> Result<Option<An
     }))
 }
 
+/// One step of a command dial whose count input is a countdown-timer channel.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+pub struct DialStep {
+    /// The physical control id, which also names the dial on the board.
+    pub control: String,
+    /// The countdown-timer channel the dial's quadrature phases drive.
+    pub channel: u8,
+    /// 1 for the dial's increase step, -1 for its decrease step.
+    pub direction: i8,
+}
+
+/// The dial step a debug key name stands for, when the key is the increase or
+/// decrease step of a stepped dial wired to one countdown-timer channel.
+pub fn dial_step(selection: &ResolvedSelection, name: &str) -> Result<Option<DialStep>, String> {
+    let Some(physical) = selection.physical_controls.as_ref() else {
+        return Ok(None);
+    };
+    let physical: PhysicalControls = decode(physical, "physical controls")?;
+    let named = |binding: &Option<InputBinding>| match binding {
+        Some(InputBinding::DebugKey { name: key }) => key.eq_ignore_ascii_case(name),
+        _ => false,
+    };
+    for (id, control) in &physical.controls {
+        let Some(ControlBehavior::Dial {
+            motion: ControlMotion::Steps { decrease, increase },
+            ..
+        }) = &control.behavior
+        else {
+            continue;
+        };
+        let direction = if named(increase) {
+            1
+        } else if named(decrease) {
+            -1
+        } else {
+            continue;
+        };
+        let mut channels = control
+            .connection_ids
+            .iter()
+            .filter_map(|connection| {
+                selection
+                    .body
+                    .connections
+                    .iter()
+                    .find(|wire| &wire.id == connection)
+            })
+            .flat_map(|wire| &wire.signals)
+            .filter_map(|signal| match signal {
+                ConnectionSignal::CountdownTimer { channel, .. } => Some(*channel),
+                _ => None,
+            });
+        return match (channels.next(), channels.next()) {
+            (Some(channel), None) => Ok(Some(DialStep {
+                control: id.clone(),
+                channel,
+                direction,
+            })),
+            (None, _) => Err(format!(
+                "{name} steps {id}, whose body connections declare no countdown-timer channel"
+            )),
+            _ => Err(format!(
+                "{name} steps {id}, which drives several countdown-timer channels"
+            )),
+        };
+    }
+    Ok(None)
+}
+
 #[cfg(test)]
 mod tests {
     use fujimod_catalog::reference::ReferenceCatalog;
+
+    #[test]
+    fn xt3_command_dial_steps_resolve_to_their_countdown_channels() {
+        let selection = ReferenceCatalog::bundled()
+            .unwrap()
+            .resolve_firmware("xt3-511")
+            .unwrap();
+        let step = |name| super::dial_step(&selection, name).unwrap();
+        let expect = |control: &str, channel, direction| {
+            Some(super::DialStep {
+                control: control.into(),
+                channel,
+                direction,
+            })
+        };
+        assert_eq!(step("CMD_RIGHT"), expect("rear_command_dial", 2, 1));
+        assert_eq!(step("CMD_LEFT"), expect("rear_command_dial", 2, -1));
+        assert_eq!(step("CMD2_R"), expect("front_command_dial", 4, 1));
+        assert_eq!(step("CMD2_L"), expect("front_command_dial", 4, -1));
+        // A dial's press, an ordinary key and an unknown name are not steps.
+        assert_eq!(step("CMD_PUSH"), None);
+        assert_eq!(step("DOWN"), None);
+        assert_eq!(step("CMD_NOWHERE"), None);
+    }
+
+    #[test]
+    fn a_dial_step_without_a_countdown_channel_is_refused() {
+        let mut selection = ReferenceCatalog::bundled()
+            .unwrap()
+            .resolve_firmware("xt3-511")
+            .unwrap();
+        for connection in &mut selection.body.connections {
+            if connection.id == "xt3-rear-dial-count" {
+                connection.signals.clear();
+            }
+        }
+        let error = super::dial_step(&selection, "CMD_RIGHT").unwrap_err();
+        assert_eq!(
+            error,
+            "CMD_RIGHT steps rear_command_dial, whose body connections declare no countdown-timer channel"
+        );
+        // The other dial still resolves.
+        assert!(super::dial_step(&selection, "CMD2_R").unwrap().is_some());
+    }
 
     #[test]
     fn every_firmware_with_located_inputs_resolves_its_controls() {
