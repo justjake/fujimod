@@ -96,7 +96,9 @@ impl Payload {
             "XP4 payload image identity or capacity differs",
         )?;
         require(
-            valid_hash(&self.firmware_sha256) && valid_hash(&self.control_sha256),
+            valid_hash(&self.firmware_sha256)
+                && valid_hash(&self.control_sha256)
+                && self.control_sha256 == flash.control.sha256,
             "XP4 payload hash fields differ",
         )?;
         let chunk = self.chunk_capacity();
@@ -133,6 +135,7 @@ impl Payload {
         )?;
         require(
             in_image(self.entry, 4)
+                && self.entry.is_multiple_of(4)
                 && !mutable(self.entry, 4)
                 && in_image(self.request, REQUEST_BYTES)
                 && mutable(self.request, REQUEST_BYTES)
