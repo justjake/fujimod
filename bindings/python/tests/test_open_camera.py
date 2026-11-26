@@ -193,8 +193,18 @@ def test_a_declared_card_layout_formats_the_stock_card() -> None:
         assert board.status()["status"] == "rec"
         state = board.session.card_state("sd")
         assert state["capacity_bytes"] == layout["sectors"] * 512
-    with pytest.raises(ValueError, match="only to a stock"):
-        Board.open_camera(firmware="x70-110", boot="sd-card", card_layout=layout)
+    card = release_card()
+    with Board.open_camera(
+        firmware="x70-110",
+        boot="sd-card",
+        sd_card=card,
+        execution_policy="interactive",
+        boot_cache=False,
+        card_layout=layout,
+    ) as board:
+        assert board.status()["status"] == "rec"
+        state = board.session.card_state("sd")
+        assert state["capacity_bytes"] == layout["sectors"] * 512
     with pytest.raises(ValueError, match="sectors_per_cluster"):
         Board.open_camera(firmware="x70-110", card_layout={"sectors": 8_388_608})
     with pytest.raises(TypeError, match="integer"):
