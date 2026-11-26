@@ -92,7 +92,9 @@ impl crate::host::Memory for Board {
 impl crate::mod_loader::Machine for Board {
     fn arm32_core_count(&self) -> usize {
         match self {
-            Self::Shared(session) => crate::mod_loader::BoardMachine(&session.board).arm32_core_count(),
+            Self::Shared(session) => {
+                crate::mod_loader::BoardMachine(&session.board).arm32_core_count()
+            }
         }
     }
 
@@ -103,13 +105,16 @@ impl crate::mod_loader::Machine for Board {
         access: fujimod_emulator_cpu::Access,
     ) -> Result<u64, String> {
         match self {
-            Self::Shared(session) => crate::mod_loader::BoardMachine(&session.board).arm32_translate(core, address, access),
+            Self::Shared(session) => crate::mod_loader::BoardMachine(&session.board)
+                .arm32_translate(core, address, access),
         }
     }
 
     fn arm32_mmu_enabled(&self, core: usize) -> Result<bool, String> {
         match self {
-            Self::Shared(session) => crate::mod_loader::BoardMachine(&session.board).arm32_mmu_enabled(core),
+            Self::Shared(session) => {
+                crate::mod_loader::BoardMachine(&session.board).arm32_mmu_enabled(core)
+            }
         }
     }
 }
@@ -171,13 +176,26 @@ impl Calibration for LoadedConfiguration<'_> {
 impl Board {
     pub fn gpio_input(&mut self, port: u8, pin: u8, high: bool) -> Result<(), String> {
         match self {
-            Self::Shared(session) => fujimod_emulator_xpp::board::gpio_input(session, port, pin, high),
+            Self::Shared(session) => {
+                fujimod_emulator_xpp::board::gpio_input(session, port, pin, high)
+            }
         }
     }
 
     pub fn adc_input(&mut self, channel: u8, sample: u16) -> Result<(), String> {
         match self {
-            Self::Shared(session) => xp4::shared::set_adc_input(session, usize::from(channel), sample),
+            Self::Shared(session) => {
+                use fujimod_emulator_devices::capability::AnalogInputs;
+                let node = session
+                    .node("xp4-adc")
+                    .or_else(|_| session.node("xpp-adc"))
+                    .map_err(|_| "XP4 ADC inputs are not wired")?;
+                session
+                    .board
+                    .edit_capability::<dyn AnalogInputs, _>(node, |adc| {
+                        adc.set_sample(usize::from(channel), sample)
+                    })
+            }
         }
     }
 
@@ -390,15 +408,37 @@ pub fn open(resolved: &ResolvedConfiguration, startup: Startup) -> Result<Starte
     let body = &resolved.reference;
     let board = match (body.soc.id.as_str(), document.board) {
         ("xp4", Plan::Xp4 { registers, labels }) => {
-            fujimod_emulator::board::factory::validate_engine(engine, [fujimod_emulator_cpu::Model::CortexA7])?;
+            fujimod_emulator::board::factory::validate_engine(
+                engine,
+                [fujimod_emulator_cpu::Model::CortexA7],
+            )?;
             let files = files.into_iter().collect::<Vec<_>>();
             let (card_files, media) = match &card_image {
-                Some(image) => (Vec::new(), vec![(0, fujimod_emulator_session::card::merge_files(image.original.clone(), &files)?)]),
+                Some(image) => (
+                    Vec::new(),
+                    vec![(
+                        0,
+                        fujimod_emulator_session::card::merge_files(
+                            image.original.clone(),
+                            &files,
+                        )?,
+                    )],
+                ),
                 None => (files, Vec::new()),
             };
-            Board::Shared(Box::new(xp4_session(resolved, Xp4Inputs {
-                registers, labels: &labels, flash, card_files, media, mode, engine, quantum,
-            })?))
+            Board::Shared(Box::new(xp4_session(
+                resolved,
+                Xp4Inputs {
+                    registers,
+                    labels: &labels,
+                    flash,
+                    card_files,
+                    media,
+                    mode,
+                    engine,
+                    quantum,
+                },
+            )?))
         }
         (
             "xpp",
@@ -497,7 +537,14 @@ pub fn open(resolved: &ResolvedConfiguration, startup: Startup) -> Result<Starte
         Some(RunInputs::Xp4(inputs)) => inputs.ticks_per_second,
         _ => 54_000_000,
     };
-    Ok(Started { board, card_image, quantum, ticks_per_second, engine, camera_settings })
+    Ok(Started {
+        board,
+        card_image,
+        quantum,
+        ticks_per_second,
+        engine,
+        camera_settings,
+    })
 }
 
 /// The caller-owned inputs of an XP4 board: firmware-side reset state,
@@ -520,11 +567,16 @@ fn xp4_session(resolved: &ResolvedConfiguration, inputs: Xp4Inputs<'_>) -> Resul
     if inputs.registers.len() != processors.len() {
         return Err("XP4 startup plan core count differs from the selected SoC".into());
     }
-    let starts: Vec<ProcessorStart> = processors.iter().zip(&inputs.registers)
+    let starts: Vec<ProcessorStart> = processors
+        .iter()
+        .zip(&inputs.registers)
         .map(|(processor, registers)| ProcessorStart {
-            processor_id: processor.id.clone(), released: true, parked_until_sgi: false,
+            processor_id: processor.id.clone(),
+            released: true,
+            parked_until_sgi: false,
             registers: registers.clone(),
-        }).collect();
+        })
+        .collect();
     let definition = xp4::catalog::definition(resolved, inputs.registers, inputs.labels)?;
     let rate: (u64, u64) = serde_json::from_value(definition["instructions_per_tick"].clone())
         .map_err(|error| format!("XP4 instruction rate: {error}"))?;
@@ -533,7 +585,11 @@ fn xp4_session(resolved: &ResolvedConfiguration, inputs: Xp4Inputs<'_>) -> Resul
         denominator: rate.1,
     };
     let execution = crate::graph::assemble_with_starts(
-        &resolved.reference, resolved.dram_address_space_limit_bytes()?, rate, None, &starts,
+        &resolved.reference,
+        resolved.dram_address_space_limit_bytes()?,
+        rate,
+        None,
+        &starts,
     )?;
     let record = json!({
         "configuration_id": resolved.configuration.id,
@@ -544,10 +600,20 @@ fn xp4_session(resolved: &ResolvedConfiguration, inputs: Xp4Inputs<'_>) -> Resul
         "execution": crate::graph::value(&resolved.reference, &execution, rate),
         "devices": &definition,
     });
-    let definition = serde_json::from_value(definition).map_err(|error| format!("XP4 board definition: {error}"))?;
-    xp4::shared::build(execution, definition, inputs.flash, inputs.card_files, inputs.media,
-        inputs.mode, inputs.engine, record, xp4::shared::DeviceSpace::Declared)
-        .map(|(session, _)| session)
+    let definition = serde_json::from_value(definition)
+        .map_err(|error| format!("XP4 board definition: {error}"))?;
+    xp4::shared::build(
+        execution,
+        definition,
+        inputs.flash,
+        inputs.card_files,
+        inputs.media,
+        inputs.mode,
+        inputs.engine,
+        record,
+        xp4::shared::DeviceSpace::Declared,
+    )
+    .map(|(session, _)| session)
 }
 
 /// A `--card-image` file and the medium read from it, before the caller's files were merged.
@@ -567,7 +633,10 @@ impl CardImage {
         self.write_back_medium(&current)
     }
 
-    fn write_back_medium(&self, current: &fujimod_emulator_devices::parts::sd_card::Card) -> Result<usize, String> {
+    fn write_back_medium(
+        &self,
+        current: &fujimod_emulator_devices::parts::sd_card::Card,
+    ) -> Result<usize, String> {
         let written = crate::media::write_back(&self.path, &self.original, current)?;
         eprintln!(
             "FUJIMOD card image {}: {written} changed sectors written back",
@@ -675,40 +744,84 @@ mod shared_board_tests {
     /// instruction budget. Skipped without a plan; plans hold firmware bytes.
     #[test]
     fn xp4_plan_runs_on_the_shared_board() {
-        let Ok(path) = std::env::var("FUJIMOD_XP4_PLAN") else { return };
-        let count: u64 = std::env::var("FUJIMOD_XP4_INSTRUCTIONS").ok().and_then(|n| n.parse().ok()).unwrap_or(1_000_000);
+        let Ok(path) = std::env::var("FUJIMOD_XP4_PLAN") else {
+            return;
+        };
+        let count: u64 = std::env::var("FUJIMOD_XP4_INSTRUCTIONS")
+            .ok()
+            .and_then(|n| n.parse().ok())
+            .unwrap_or(1_000_000);
         let plan = PathBuf::from(path);
         let document: Document = serde_json::from_slice(&std::fs::read(&plan).unwrap()).unwrap();
         let directory = plan.parent().unwrap();
         let resolved = ResolvedConfiguration::bundled(&document.configuration_id).unwrap();
-        let Plan::Xp4 { registers, labels } = document.board else { panic!("not an XP4 plan") };
-        let flash = document.flash.as_deref().map(|path| bytes(directory, path)).transpose().unwrap();
-        let session = xp4_session(&resolved, Xp4Inputs {
-            registers, labels: &labels, flash, card_files: Vec::new(), media: Vec::new(),
-            mode: Mode::Strict, engine: RunEngine::Unicorn, quantum: 1000,
-        }).unwrap();
+        let Plan::Xp4 { registers, labels } = document.board else {
+            panic!("not an XP4 plan")
+        };
+        let flash = document
+            .flash
+            .as_deref()
+            .map(|path| bytes(directory, path))
+            .transpose()
+            .unwrap();
+        let session = xp4_session(
+            &resolved,
+            Xp4Inputs {
+                registers,
+                labels: &labels,
+                flash,
+                card_files: Vec::new(),
+                media: Vec::new(),
+                mode: Mode::Strict,
+                engine: RunEngine::Unicorn,
+                quantum: 1000,
+            },
+        )
+        .unwrap();
         let mut board = session.board;
         let cores = board.instruction_counts().len();
         for image in &document.images {
-            board.write_physical(image.address, &bytes(directory, &image.file).unwrap()).unwrap();
+            board
+                .write_physical(image.address, &bytes(directory, &image.file).unwrap())
+                .unwrap();
         }
         let result = board.run_for_instructions(count, 1000);
         let pcs: Vec<String> = (0..cores)
-            .map(|core| format!("{:#x}", board.read_register(core, Register::Pc).unwrap_or(0))).collect();
-        eprintln!("FUJIMOD shared XP4 {}: {:?} instructions {:?} now {} pcs {:?}",
-            document.configuration_id, result, board.instruction_counts(), board.now(), pcs);
+            .map(|core| {
+                format!(
+                    "{:#x}",
+                    board.read_register(core, Register::Pc).unwrap_or(0)
+                )
+            })
+            .collect();
+        eprintln!(
+            "FUJIMOD shared XP4 {}: {:?} instructions {:?} now {} pcs {:?}",
+            document.configuration_id,
+            result,
+            board.instruction_counts(),
+            board.now(),
+            pcs
+        );
         if let Ok(range) = std::env::var("FUJIMOD_XP4_DUMP") {
             let (address, length) = range.split_once(':').unwrap();
             let address = u64::from_str_radix(address.trim_start_matches("0x"), 16).unwrap();
             let mut bytes = vec![0; length.parse().unwrap()];
             board.read_physical(address, &mut bytes).unwrap();
-            let words: Vec<String> = bytes.chunks(4).map(|w| format!("{:08x}", u32::from_le_bytes(w.try_into().unwrap()))).collect();
+            let words: Vec<String> = bytes
+                .chunks(4)
+                .map(|w| format!("{:08x}", u32::from_le_bytes(w.try_into().unwrap())))
+                .collect();
             eprintln!("FUJIMOD shared XP4 dump {address:#x}: {}", words.join(" "));
         }
         if let Some(directory) = std::env::var_os("FUJIMOD_XP4_FRAMES") {
             for frame in board.display_frames() {
-                let png = crate::png_writer::rgba_png(frame.width, frame.height, &frame.rgba).unwrap();
-                std::fs::write(Path::new(&directory).join(format!("output{}.png", frame.output)), png).unwrap();
+                let png =
+                    crate::png_writer::rgba_png(frame.width, frame.height, &frame.rgba).unwrap();
+                std::fs::write(
+                    Path::new(&directory).join(format!("output{}.png", frame.output)),
+                    png,
+                )
+                .unwrap();
             }
         }
         if std::env::var_os("FUJIMOD_XP4_STATE").is_some() {
