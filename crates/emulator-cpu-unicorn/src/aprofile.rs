@@ -46,6 +46,10 @@ struct Execution {
     synced: Cell<i64>,
     settled_head: Cell<u64>,
     manual: Cell<Option<Span>>,
+    // The one Thumb instruction admitted at this address, and the address
+    // whose block was last retranslated to a single Thumb instruction.
+    thumb: Cell<Option<u64>>,
+    thumb_retry: Cell<Option<u64>>,
     active: Cell<bool>,
     at_block: Cell<bool>,
     at_instruction: Cell<bool>,
@@ -131,6 +135,8 @@ impl Core {
             synced: Cell::new(0),
             settled_head: Cell::new(0),
             manual: Cell::new(None),
+            thumb: Cell::new(None),
+            thumb_retry: Cell::new(None),
             active: Cell::new(false),
             at_block: Cell::new(false),
             at_instruction: Cell::new(false),
@@ -337,9 +343,13 @@ impl Execution {
         self.accounting().reset();
         self.synced.set(0);
         self.manual.set(None);
+        self.thumb.set(None);
         self.settled_head.set(self.accounting().counters().1);
     }
     fn tail(&self, pc: u64, entered: bool) -> u64 {
+        if let Some(address) = self.thumb.get() {
+            return u64::from(pc == address && !entered);
+        }
         self.accounting()
             .newest_since(self.settled_head.get())
             .or(self.manual.get())
@@ -359,6 +369,7 @@ impl Execution {
         self.synced.set(p.budget);
         self.settled_head.set(self.accounting().counters().1);
         self.manual.set(None);
+        self.thumb.set(None);
         Ok(())
     }
     /// Appends the entries one settlement counted: every span admitted since
@@ -404,6 +415,7 @@ impl Execution {
         if (complete && total != instructions)
             || (newest.len() as u64) < wanted
             || self.manual.get().is_some()
+            || self.thumb.get().is_some()
         {
             trace.lost = true;
             return;
@@ -528,12 +540,27 @@ impl Execution {
             self.reset();
             return self.cpu.stop();
         }
-        // The translation filter and the 4-byte span ring cover ARM state only.
+        // The translation filter and the 4-byte span ring cover ARM state
+        // only. Thumb code runs one instruction per block: the block is
+        // retranslated to a single instruction, which is debited on entry and
+        // given back if it does not complete, as a high-address span is.
         if self.a32
             && b.thumb
                 .map_or_else(|| Ok::<_, String>(self.scalar(arm::CPSR)? & 0x20 != 0), Ok)?
         {
-            return Err("Thumb execution is unsupported by the counted ARMv7-A backend".into());
+            if self.thumb_retry.get() != Some(b.address) {
+                self.thumb_retry.set(Some(b.address));
+                self.reset();
+                return self.cpu.retry_block(1);
+            }
+            self.thumb_retry.set(None);
+            unsafe {
+                (*self.record.as_ptr()).enabled = 0;
+                (*self.record.as_ptr()).budget = (room - 1) as i64
+            };
+            self.synced.set(room as i64);
+            self.thumb.set(Some(b.address));
+            return Ok(());
         }
         if b.bytes == 0 || !b.bytes.is_multiple_of(4) {
             return Err("invalid A-profile block span".into());

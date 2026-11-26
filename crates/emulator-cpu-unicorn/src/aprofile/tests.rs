@@ -565,3 +565,34 @@ fn code_rewritten_again_while_a_peer_has_not_flushed_runs_the_new_code() {
         assert_eq!(value(&cpu, arm::CORE[0]), u64::from(n));
     }
 }
+
+#[test]
+fn a32_thumb_code_runs_one_counted_instruction_per_block() {
+    // ARM: add r0, pc, #1; bx r0. Thumb at 8: movs r1, #41; movs r2, #1; adds r1, r1, r2;
+    // movw r3, #5 (a 32-bit Thumb-2 instruction). Every budget stops after exactly that
+    // many instructions.
+    let halfwords: [u16; 5] = [0x2129, 0x2201, 0x1889, 0xf240, 0x0305];
+    let pcs = [0x4, 0x8, 0xa, 0xc, 0xe, 0x12];
+    for (budget, pc) in (1..).zip(pcs) {
+        let raw = crate::test_support::library()
+            .open(Model::CortexA7, 1 << 20)
+            .unwrap();
+        let cpu = Core::new(raw, Memory::default()).unwrap();
+        cpu.map_zeroed(0, 0x1000, 7).unwrap();
+        cpu.write_register(arm::CPSR, &0xd3u64.to_le_bytes())
+            .unwrap();
+        let mut bytes: Vec<u8> = [0xe28f0001u32, 0xe12fff10]
+            .iter()
+            .flat_map(|w| w.to_le_bytes())
+            .collect();
+        bytes.extend(halfwords.iter().flat_map(|h| h.to_le_bytes()));
+        cpu.write_memory(0, &bytes).unwrap();
+        run(&cpu, 0, budget);
+        assert_eq!(value(&cpu, Register::Pc) & !1, pc, "budget {budget}");
+        assert_eq!(cpu.instruction_progress(), Some(budget as u64), "budget {budget}");
+        if budget >= 5 {
+            assert_eq!(value(&cpu, arm::CORE[1]), 42);
+        }
+        assert_eq!(value(&cpu, arm::CORE[3]), if budget == 6 { 5 } else { 0 });
+    }
+}
