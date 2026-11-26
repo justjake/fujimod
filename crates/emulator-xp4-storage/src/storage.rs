@@ -1396,6 +1396,9 @@ pub struct DmaController {
     /// Per-channel request words at `0xfff4a800 + n*8` (+0 control, +4 selector).
     request: BTreeMap<u64, u32>,
     audio: Option<AudioPacing>,
+    /// Declared storage channels that follow a linked descriptor list (see
+    /// [`DmaController::with_linked`]).
+    linked: Vec<usize>,
     /// Frames the test microphone has delivered (see [`TestMicrophone`]).
     microphone_frames: u64,
 }
@@ -1413,6 +1416,7 @@ impl DmaController {
             mux_changed: [0; 16],
             request: BTreeMap::new(),
             audio: None,
+            linked: Vec::new(),
             microphone_frames: 0,
         }
     }
@@ -1441,6 +1445,26 @@ impl DmaController {
             }
         }
         self.audio = audio;
+        Ok(self)
+    }
+    /// Declares storage channels that follow a linked descriptor list, as an
+    /// audio channel does (`+0x24` bits 31..4 the next descriptor's address,
+    /// bit 0 set, bits 1..3 clear; at the end of each block the channel loads
+    /// `+0x10..+0x24` from the six words there and keeps running). Only the
+    /// end of the list raises the channel IRQ and `+0x30` bit 0. An empty list
+    /// keeps every channel unchanged; an audio channel already links.
+    ///
+    /// X-T3 5.11 RAW conversion copies a RAW frame line by line through
+    /// channel 1 (GIC 208): one descriptor a line of `0x31e0` bytes, each
+    /// `0x20` bytes after the last, then develops the copy.
+    pub fn with_linked(mut self, channels: Vec<usize>) -> Result<Self, String> {
+        let unique: std::collections::BTreeSet<_> = channels.iter().collect();
+        if unique.len() != channels.len()
+            || channels.iter().any(|&n| n >= 16 || self.audio(n).is_some())
+        {
+            return Err("Invalid XP4 DMA linked channels".into());
+        }
+        self.linked = channels;
         Ok(self)
     }
     fn microphone(&self) -> Option<&TestMicrophone> {
@@ -1518,6 +1542,7 @@ impl DmaController {
             mux_changed: [0; 16],
             request: BTreeMap::new(),
             audio: None,
+            linked: Vec::new(),
             microphone_frames: 0,
         })
     }
@@ -1950,7 +1975,8 @@ impl DmaController {
                 );
             }
         }
-        let audio = self.audio(n).is_some();
+        // An audio or declared linked channel follows its list.
+        let links = self.audio(n).is_some() || self.linked.contains(&n);
         if !write && matches!(o, 0x14 | 0x18) && self.channels[n].submitted && self.paced(n) {
             // A paced block moves continuously: its incremented address reads
             // where the transfer has got to (X-T3 5.11 0x107b63c reads +0x30,
@@ -1974,11 +2000,12 @@ impl DmaController {
                         return Err("XP4 DMA channel start while busy".into());
                     }
                     let count = u64::from(c.regs[0x10 / 4]) + 1;
-                    // An audio channel may link its next descriptor: +0x24
-                    // bits 31..4 address, bit 0 linked (0x107ba50 writes
-                    // (x << 4) | 1); bits 1..3 are not modeled.
+                    // An audio or declared linked channel may link its next
+                    // descriptor: +0x24 bits 31..4 address, bit 0 linked
+                    // (0x107ba50 writes (x << 4) | 1); bits 1..3 are not
+                    // modeled.
                     let next = c.regs[0x24 / 4];
-                    if count > FLASH_SIZE || if audio { next & 0xe != 0 } else { next != 0 } {
+                    if count > FLASH_SIZE || if links { next & 0xe != 0 } else { next != 0 } {
                         return Err("Unsupported XP4 DMA extent/repeat".into());
                     }
                     c.regs[0x30 / 4] = 0x10000;
@@ -1991,9 +2018,9 @@ impl DmaController {
                 }
             }
             0x30 => {
-                // A running linked audio channel acknowledges one block and
+                // A running linked channel acknowledges one block and
                 // keeps running.
-                c.regs[o / 4] = if audio && c.submitted { 0x10000 } else { 0 };
+                c.regs[o / 4] = if links && c.submitted { 0x10000 } else { 0 };
                 cx.set_irq(self.routes[n], false);
             }
             _ => {
@@ -2008,6 +2035,7 @@ impl DmaController {
     fn complete(&mut self, cx: &mut Cx<'_>, n: usize) -> Result<(), String> {
         let microphone = self.microphone_block(n)?;
         let audio = self.audio(n).map(|a| a.irq_at_end);
+        let listed = self.linked.contains(&n);
         let paced = self.paced(n);
         let c = &mut self.channels[n];
         let src = u64::from(c.regs[0x14 / 4]);
@@ -2127,8 +2155,8 @@ impl DmaController {
             c.regs[0x18 / 4] = c.regs[0x18 / 4].wrapping_add(size as u32);
         }
         let next = c.regs[0x24 / 4];
-        let linked = audio.is_some() && next & 1 != 0;
-        let quiet = linked && audio == Some(true);
+        let linked = (audio.is_some() || listed) && next & 1 != 0;
+        let quiet = linked && (audio == Some(true) || listed);
         if linked {
             // Linked list (0x107c028): the next descriptor holds the new
             // +0x10..+0x24 (size - 1, source, destination, source and
@@ -2519,6 +2547,82 @@ mod tests {
             cx.refusal()
                 .is_some_and(|e| e.contains("linked descriptor"))
         );
+    }
+
+    /// X-T3 5.11 RAW conversion: a declared storage channel copies RAM to RAM
+    /// through a linked list, block after block, and raises its IRQ at the
+    /// end of the list only. An undeclared channel still refuses the list.
+    #[test]
+    fn a_declared_linked_channel_copies_its_list_and_raises_its_irq_at_the_end() {
+        let mut dma = audio_dma(None).unwrap().with_linked(vec![1]).unwrap();
+        let mut h = TestHost {
+            now: 100,
+            ram: (0..0x400).map(|i| i as u8).collect(),
+            irqs: vec![],
+            events: vec![],
+            records: vec![],
+        };
+        // Three 16-byte blocks: 0x100 -> 0x200, then two descriptors 0x20
+        // apart, the last one ending the list.
+        descriptor(&mut h, 0x300, [15, 0x110, 0x210, 0x30700, 0x30700, 0x321]);
+        descriptor(&mut h, 0x320, [15, 0x120, 0x220, 0x30700, 0x30700, 0]);
+        let expected = h.ram[0x100..0x130].to_vec();
+        let start = |dma: &mut DmaController, h: &mut TestHost, n: u64| {
+            let ch = DMA + n * 0x1000;
+            for (o, v) in [
+                (0x10, 15),
+                (0x14, 0x100),
+                (0x18, 0x200),
+                (0x1c, 0x30700),
+                (0x20, 0x30700),
+                (0x24, 0x301),
+            ] {
+                write(dma, h, 0, ch + o, v, 0);
+            }
+            let mut cx = Cx::new(h, 3, 0, 0);
+            dma.write(&mut cx, ch + 0x28, 4, 0x11100001);
+            cx.refusal().map(str::to_owned)
+        };
+        assert_eq!(start(&mut dma, &mut h, 1), None);
+        for block in 1..=3 {
+            advance(&mut dma, &mut h);
+            h.now = dma.next_deadline(h.now).unwrap();
+            event(&mut dma, &mut h, 0, 1);
+            assert_eq!(dma.channels[1].completed, block);
+            assert_eq!(dma.channels[1].submitted, block < 3, "block {block}");
+            if block < 3 {
+                assert!(h.irqs.is_empty(), "block {block}");
+                assert_eq!(dma.channels[1].regs[0x30 / 4], 0x10000);
+            }
+        }
+        assert_eq!(h.ram[0x200..0x230], expected[..]);
+        assert_eq!(h.ram[0x230], 0x30);
+        assert_eq!(h.irqs, vec![(208, true)]);
+        assert_eq!(dma.channels[1].regs[0x30 / 4], 1);
+        // An undeclared channel keeps the refusal.
+        assert!(
+            start(&mut dma, &mut h, 2).is_some_and(|e| e.contains("extent/repeat")),
+            "channel 2"
+        );
+        // Declarations are checked: duplicates, out of range, audio channels.
+        for channels in [vec![1, 1], vec![16]] {
+            assert!(audio_dma(None).unwrap().with_linked(channels).is_err());
+        }
+        let audio = audio_dma(Some(movie_audio(vec![4], false))).unwrap();
+        assert!(audio.with_linked(vec![4]).is_err());
+        // A declared channel whose fixed side is a serial controller keeps the
+        // SPI refusal of a linked descriptor.
+        let (links, _) = spi_links();
+        let mut spi = audio_dma(None)
+            .unwrap()
+            .with_linked(vec![5])
+            .unwrap()
+            .with_serial_links(links);
+        let mut host = ram_host();
+        spi_channel(&mut spi, &mut host, 5, false, 4, 0x400);
+        write(&mut spi, &mut host, 0, DMA + 0x5024, 0x201, 0);
+        let error = start_spi_channel(&mut spi, &mut host, 5).unwrap();
+        assert!(error.contains("cannot link a next descriptor"), "{error}");
     }
 
     #[test]

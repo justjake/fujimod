@@ -37,6 +37,7 @@ pub(crate) fn build(
         storage_geometry,
         storage_irq,
         storage_dma_audio,
+        storage_dma_linked,
         xpp_storage,
         xpp_serial,
         xpp_sub_cpu,
@@ -138,6 +139,9 @@ pub(crate) fn build(
     if storage_dma_audio.is_some() && storage_jedec.is_none() {
         return Err("XP4 DMA audio channels require the XP4 storage controller".into());
     }
+    if !storage_dma_linked.is_empty() && storage_jedec.is_none() {
+        return Err("XP4 DMA linked channels require the XP4 storage controller".into());
+    }
     if storage_jedec.is_some() && xpp_storage.is_some() {
         return Err("XP4 and X-Processor Pro storage cannot be selected together".to_owned());
     }
@@ -192,6 +196,7 @@ pub(crate) fn build(
             storage_strict_backing,
             storage_erased_ranges,
             storage_dma_audio,
+            storage_dma_linked,
         )?;
         Some(devices)
     } else if let Some(storage) = xpp_storage {
