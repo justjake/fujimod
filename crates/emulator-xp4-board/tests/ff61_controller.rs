@@ -40,8 +40,12 @@ fn session(value: Value) -> Result<support::Board, String> {
     support::open(definition)
 }
 
-fn run(board: &support::Board, code: usize, program: &[u32],
-       registers: &[(usize, u32)]) -> Result<(), String> {
+fn run(
+    board: &support::Board,
+    code: usize,
+    program: &[u32],
+    registers: &[(usize, u32)],
+) -> Result<(), String> {
     // Each program gets its own address: the board caches translations, so
     // overwriting one entry point would re-run the previous body.
     let bytes: Vec<u8> = program.iter().flat_map(|w| w.to_le_bytes()).collect();
@@ -259,6 +263,11 @@ fn an_unmodeled_block_is_refused_rather_than_ready() {
     let mut value = input(json!([]));
     value["xpp_register_blocks"] = json!([]);
     let board = session(value).unwrap();
-    let result = run(&board, CODE, &COPY, &[(0, LOCK), (1, 0x30000), (3, RESULT as u32)]);
+    let result = run(
+        &board,
+        CODE,
+        &COPY,
+        &[(0, LOCK), (1, 0x30000), (3, RESULT as u32)],
+    );
     assert!(result.is_err() || board.failure().is_some());
 }

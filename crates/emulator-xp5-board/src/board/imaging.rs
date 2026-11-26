@@ -501,8 +501,17 @@ mod tests {
     #[test]
     fn the_xt5_filter_scaler_window_registers() {
         let windows = crate::boot::xt5_windows(&["imaging-filter-scaler"]);
-        assert_eq!(windows.iter().map(|w| w.base).collect::<Vec<_>>(), [0xff983000]);
-        assert_eq!(windows[0].options.get("irq").and_then(toml::Value::as_integer), Some(204));
+        assert_eq!(
+            windows.iter().map(|w| w.base).collect::<Vec<_>>(),
+            [0xff983000]
+        );
+        assert_eq!(
+            windows[0]
+                .options
+                .get("irq")
+                .and_then(toml::Value::as_integer),
+            Some(204)
+        );
         let pins = fujimod_emulator_devices::xp5::pins::Pins::shared();
         register_all(&mut DeviceGraph::new(), &windows, &pins).unwrap();
         let mut moved = windows[0].clone();

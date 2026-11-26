@@ -202,7 +202,8 @@ pub(crate) fn register() {
 /// The device windows a default XP5 boot of `configuration_id` builds from the catalog, as JSON.
 #[pyo3::pyfunction]
 pub(crate) fn xp5_device_windows(configuration_id: &str) -> pyo3::PyResult<String> {
-    boot::xp5::device_windows_json(configuration_id).map_err(pyo3::exceptions::PyValueError::new_err)
+    boot::xp5::device_windows_json(configuration_id)
+        .map_err(pyo3::exceptions::PyValueError::new_err)
 }
 
 /// X-Processor Pro execution and device graphs of a bundled run configuration, as JSON.

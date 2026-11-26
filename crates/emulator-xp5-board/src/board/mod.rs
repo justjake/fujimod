@@ -1010,4 +1010,3 @@ pub fn register_all(
     }
     Ok(())
 }
-

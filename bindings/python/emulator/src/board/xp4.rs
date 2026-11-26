@@ -18,7 +18,9 @@ impl Xp4 {
 impl Xp4 {
     /// A copy of the medium in the `host`th SD card slot (SD host declaration order).
     fn card_medium(&self, py: Python<'_>, host: usize) -> PyResult<CardMedium> {
-        self.with(py, |o| o.inputs.card_medium(&o.session, host).map(CardMedium))
+        self.with(py, |o| {
+            o.inputs.card_medium(&o.session, host).map(CardMedium)
+        })
     }
     /// Reset only program observation; unsettled NOR commands are refused.
     fn reset_nor_program_coverage(&self, py: Python<'_>) -> PyResult<()> {
@@ -26,22 +28,32 @@ impl Xp4 {
     }
     /// A copy of the backed NOR medium after completed writes.
     fn nor_medium<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyBytes>> {
-        self.with(py, |o| o.inputs.nor_medium(&o.session).map(|bytes| PyBytes::new(py, &bytes)))
+        self.with(py, |o| {
+            o.inputs
+                .nor_medium(&o.session)
+                .map(|bytes| PyBytes::new(py, &bytes))
+        })
     }
     fn __traverse__(&self, visit: PyVisit<'_>) -> Result<(), PyTraverseError> {
         visit.call(&self.owner)
     }
     fn set_adc_input(&self, py: Python<'_>, channel: usize, sample: u16) -> PyResult<()> {
-        self.with(py, |o| o.inputs.set_adc_input(&mut o.session, channel, sample))
+        self.with(py, |o| {
+            o.inputs.set_adc_input(&mut o.session, channel, sample)
+        })
     }
     fn set_gpio_input(&self, py: Python<'_>, port: usize, pin: usize, high: bool) -> PyResult<()> {
-        self.with(py, |o| o.inputs.set_gpio_input(&mut o.session, port, pin, high))
+        self.with(py, |o| {
+            o.inputs.set_gpio_input(&mut o.session, port, pin, high)
+        })
     }
     fn turn_dial(&self, py: Python<'_>, name: &str, edges: i32) -> PyResult<()> {
         self.with(py, |o| o.inputs.turn_dial(&mut o.session, name, edges))
     }
     fn set_usb_connected(&self, py: Python<'_>, connected: bool) -> PyResult<()> {
-        self.with(py, |o| o.inputs.set_usb_connected(&mut o.session, connected))
+        self.with(py, |o| {
+            o.inputs.set_usb_connected(&mut o.session, connected)
+        })
     }
     fn usb_bus_reset(&self, py: Python<'_>) -> PyResult<()> {
         self.with(py, |o| o.inputs.usb_bus_reset(&mut o.session))
@@ -54,7 +66,10 @@ impl Xp4 {
         setup: bool,
         out: Option<Vec<u8>>,
     ) -> PyResult<u64> {
-        self.with(py, |o| o.inputs.usb_transaction(&mut o.session, physical_endpoint, setup, out))
+        self.with(py, |o| {
+            o.inputs
+                .usb_transaction(&mut o.session, physical_endpoint, setup, out)
+        })
     }
     fn usb_reply_json(&self, py: Python<'_>, id: u64) -> PyResult<Option<String>> {
         self.with(py, |o| o.inputs.usb_reply_json(&o.session, id))

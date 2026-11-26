@@ -240,7 +240,9 @@ impl Library {
                 &mut key,
                 0x70,
                 (record_unmapped as *const ()).cast_mut().cast(),
-                (&*core.unmapped as *const Cell<Option<u64>>).cast_mut().cast(),
+                (&*core.unmapped as *const Cell<Option<u64>>)
+                    .cast_mut()
+                    .cast(),
                 1,
                 0,
             )
@@ -1786,14 +1788,7 @@ unsafe extern "C" fn memory(
         }
     }
 }
-unsafe fn memory_restart_boundary_noop(
-    _: Access,
-    _: u64,
-    _: i32,
-    _: i64,
-    _: *mut c_void,
-) {
-}
+unsafe fn memory_restart_boundary_noop(_: Access, _: u64, _: i32, _: i64, _: *mut c_void) {}
 unsafe extern "C" fn record_unmapped(
     _raw: ffi::Engine,
     _kind: i32,

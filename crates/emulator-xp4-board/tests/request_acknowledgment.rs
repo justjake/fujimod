@@ -47,7 +47,10 @@ fn strict_defaults_and_adjacent_words_remain_unmapped() {
             ticks.is_some()
         );
         program(&session, address, &[0xe590_2000]); // LDR r2,[r0]
-        assert!(session.run(0, 1).is_err(), "unexpected access at {address:#x}");
+        assert!(
+            session.run(0, 1).is_err(),
+            "unexpected access at {address:#x}"
+        );
     }
 }
 

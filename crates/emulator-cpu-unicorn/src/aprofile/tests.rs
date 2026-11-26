@@ -589,7 +589,11 @@ fn a32_thumb_code_runs_one_counted_instruction_per_block() {
         cpu.write_memory(0, &bytes).unwrap();
         run(&cpu, 0, budget);
         assert_eq!(value(&cpu, Register::Pc) & !1, pc, "budget {budget}");
-        assert_eq!(cpu.instruction_progress(), Some(budget as u64), "budget {budget}");
+        assert_eq!(
+            cpu.instruction_progress(),
+            Some(budget as u64),
+            "budget {budget}"
+        );
         if budget >= 5 {
             assert_eq!(value(&cpu, arm::CORE[1]), 42);
         }

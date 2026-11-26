@@ -3,7 +3,7 @@
 //! state fails the run.
 mod support;
 use fujimod_emulator_xp4_board::Definition;
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 const FLASH: u64 = 0xf0000000;
 const CONTROLLER: u64 = 0xfffd8000;
 const PAD: u64 = 0xfff4108c;
@@ -48,7 +48,13 @@ const PROGRAM: [u32; 11] = [
 fn run(pad: u32, sample: u32) -> (support::Board, [u32; 2]) {
     let mut nor = vec![0xff; 8192];
     nor[0x100..0x104].copy_from_slice(&0x12345678u32.to_le_bytes());
-    let s = support::open_with(serde_json::from_value::<Definition>(definition(pad, sample)).unwrap(), Some(nor), Vec::new(), Vec::new()).unwrap();
+    let s = support::open_with(
+        serde_json::from_value::<Definition>(definition(pad, sample)).unwrap(),
+        Some(nor),
+        Vec::new(),
+        Vec::new(),
+    )
+    .unwrap();
     let program: Vec<u8> = PROGRAM.iter().flat_map(|w| w.to_le_bytes()).collect();
     s.write(0, &program).unwrap();
     let _ = s.run(0, PROGRAM.len());
@@ -83,7 +89,15 @@ fn a_missing_pad_function_fails_the_run() {
 fn a_gate_with_an_immutable_prefix_or_without_a_nor_is_refused() {
     let mut d = definition(0, 9);
     d["storage_immutable_prefix"] = json!({"bytes":4096});
-    assert!(support::open_with(serde_json::from_value::<Definition>(d).unwrap(), Some(vec![0xff; 8192]), Vec::new(), Vec::new()).is_err());
+    assert!(
+        support::open_with(
+            serde_json::from_value::<Definition>(d).unwrap(),
+            Some(vec![0xff; 8192]),
+            Vec::new(),
+            Vec::new()
+        )
+        .is_err()
+    );
     let mut d = definition(0, 9);
     for key in [
         "storage_jedec",

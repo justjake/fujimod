@@ -269,9 +269,11 @@ impl Board {
     pub(crate) fn xp4_opened(&mut self) -> PyResult<&mut xp4_backend::Opened> {
         match self.backend.as_mut() {
             Some(Backend::Xp4(opened)) => Ok(opened),
-            Some(Backend::Graph(_) | Backend::Camera(_) | Backend::Xp5(_)) => Err(PyRuntimeError::new_err(
-                "Selected graph system does not support this XP4 operation",
-            )),
+            Some(Backend::Graph(_) | Backend::Camera(_) | Backend::Xp5(_)) => {
+                Err(PyRuntimeError::new_err(
+                    "Selected graph system does not support this XP4 operation",
+                ))
+            }
             None => Err(PyRuntimeError::new_err("runtime is closed")),
         }
     }
@@ -1920,7 +1922,15 @@ impl Board {
             .board()?
             .display_frames()
             .into_iter()
-            .map(|f| (f.output, f.sequence, f.width, f.height, PyBytes::new(py, &f.rgba)))
+            .map(|f| {
+                (
+                    f.output,
+                    f.sequence,
+                    f.width,
+                    f.height,
+                    PyBytes::new(py, &f.rgba),
+                )
+            })
             .collect())
     }
     /// Latest scanout frame per output since the previous call, as

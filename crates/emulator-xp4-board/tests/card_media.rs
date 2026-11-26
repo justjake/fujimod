@@ -12,10 +12,17 @@ fn definition(sectors: u32) -> Value {
             "card":{"sectors":sectors,"max_dirty_sectors":65536,"partition_start":8192,
                 "sectors_per_cluster":64,"label":"CAMERA"}}]})
 }
-fn open(v: Value, files: Vec<(String, Vec<u8>)>, media: Vec<(usize, fujimod_emulator_devices::parts::sd_card::Card)>)
-    -> Result<support::Board, String>
-{
-    support::open_with(serde_json::from_value::<Definition>(v).unwrap(), None, files, media)
+fn open(
+    v: Value,
+    files: Vec<(String, Vec<u8>)>,
+    media: Vec<(usize, fujimod_emulator_devices::parts::sd_card::Card)>,
+) -> Result<support::Board, String> {
+    support::open_with(
+        serde_json::from_value::<Definition>(v).unwrap(),
+        None,
+        files,
+        media,
+    )
 }
 
 #[test]

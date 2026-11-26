@@ -10,7 +10,13 @@ use std::sync::OnceLock;
 pub trait Xp4Inputs {
     fn turn_dial(&self, session: &mut Session, name: &str, edges: i32) -> PyResult<()>;
     fn set_adc_input(&self, session: &mut Session, channel: usize, sample: u16) -> PyResult<()>;
-    fn set_gpio_input(&self, session: &mut Session, port: usize, pin: usize, high: bool) -> PyResult<()>;
+    fn set_gpio_input(
+        &self,
+        session: &mut Session,
+        port: usize,
+        pin: usize,
+        high: bool,
+    ) -> PyResult<()>;
     fn set_usb_connected(&self, session: &mut Session, connected: bool) -> PyResult<()>;
     fn usb_bus_reset(&self, session: &mut Session) -> PyResult<()>;
     fn usb_transaction(
@@ -40,12 +46,8 @@ pub struct Opened {
 /// Builds an XP4 session from its definition JSON, optional storage image,
 /// SD card files and existing SD card media (SD host index, medium) that
 /// replace the formatted SD card of those hosts.
-pub type Xp4Factory = fn(
-    &str,
-    Option<Vec<u8>>,
-    Vec<(String, Vec<u8>)>,
-    Vec<(usize, Card)>,
-) -> PyResult<Opened>;
+pub type Xp4Factory =
+    fn(&str, Option<Vec<u8>>, Vec<(String, Vec<u8>)>, Vec<(usize, Card)>) -> PyResult<Opened>;
 static FACTORY: OnceLock<Xp4Factory> = OnceLock::new();
 
 /// Set the factory `Board.from_xp4` uses; later calls are ignored.

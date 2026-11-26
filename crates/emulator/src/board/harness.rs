@@ -122,9 +122,11 @@ pub struct DeviceGuard {
     model_writes: Vec<(u64, u64)>,
 }
 fn within(spans: &[Span], address: u64, size: u64) -> bool {
-    address
-        .checked_add(size)
-        .is_some_and(|end| spans.iter().any(|&(low, high)| low <= address && end <= high))
+    address.checked_add(size).is_some_and(|end| {
+        spans
+            .iter()
+            .any(|&(low, high)| low <= address && end <= high)
+    })
 }
 impl DeviceGuard {
     fn new(policy: &arm32::DevicePolicy, limit: usize) -> Result<Self, String> {
@@ -144,7 +146,11 @@ impl DeviceGuard {
             return Err("Device policy MMIO entries must be aligned, disjoint, readable or writable 1-, 2- or 4-byte spans".into());
         }
         for spans in [&policy.model_readable, &policy.model_writable] {
-            if spans.len() > 4096 || spans.iter().any(|&(low, high)| low >= high || high > 1 << 32) {
+            if spans.len() > 4096
+                || spans
+                    .iter()
+                    .any(|&(low, high)| low >= high || high > 1 << 32)
+            {
                 return Err("Device policy model spans must be nonempty 32-bit spans".into());
             }
         }
@@ -182,12 +188,16 @@ impl DeviceGuard {
         if within(&self.model_readable, address, size) {
             Ok(())
         } else {
-            Err(format!("Device policy refuses a {size}-byte model read at {address:#x}"))
+            Err(format!(
+                "Device policy refuses a {size}-byte model read at {address:#x}"
+            ))
         }
     }
     pub(super) fn model_write(&mut self, address: u64, size: u64) -> Result<(), String> {
         if !within(&self.model_writable, address, size) {
-            return Err(format!("Device policy refuses a {size}-byte model write at {address:#x}"));
+            return Err(format!(
+                "Device policy refuses a {size}-byte model write at {address:#x}"
+            ));
         }
         if self.model_writes.len() >= self.limit {
             return Err("Device policy model-write record limit reached".into());
@@ -436,7 +446,9 @@ impl Session {
             let word = u32::from_le_bytes(bytes);
             if guarded_coprocessor(word) {
                 drop(o);
-                let message = format!("Driver guard unsupported coprocessor/system instruction {word:#010x} at {pc:#x}");
+                let message = format!(
+                    "Driver guard unsupported coprocessor/system instruction {word:#010x} at {pc:#x}"
+                );
                 self.stop(&*cpu, json!({"kind":"failure","message":message}), true);
                 return Ok(());
             }
@@ -824,7 +836,11 @@ impl Board {
         }
         let (released, waiting, waiting_event) = {
             let s = self.state.borrow();
-            (s.released.clone(), s.waiting.clone(), s.waiting_event.clone())
+            (
+                s.released.clone(),
+                s.waiting.clone(),
+                s.waiting_event.clone(),
+            )
         };
         {
             let mut s = self.state.borrow_mut();

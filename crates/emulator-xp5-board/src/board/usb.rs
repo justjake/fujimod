@@ -106,7 +106,12 @@ mod tests {
 
     /// The X-T5 4.31 windows of these devices.
     fn xt5_windows() -> Vec<DeviceWindow> {
-        let mut windows = crate::boot::xt5_windows(&["usb-device-controller", "usb-phy", "bringup-stub", "completion-stub"]);
+        let mut windows = crate::boot::xt5_windows(&[
+            "usb-device-controller",
+            "usb-phy",
+            "bringup-stub",
+            "completion-stub",
+        ]);
         windows.retain(|window| (0xffc0_0000..0xffd0_0000).contains(&window.base));
         windows
     }

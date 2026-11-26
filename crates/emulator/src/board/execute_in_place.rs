@@ -72,7 +72,15 @@ impl Board {
                 .map_err(|e| format!("Map execute-in-place page {virtual_page:#x}: {e}"))?;
                 maps.push((owner, virtual_page));
             }
-            self.xip.borrow_mut().insert(physical, XipPage { data, device, epoch, maps });
+            self.xip.borrow_mut().insert(
+                physical,
+                XipPage {
+                    data,
+                    device,
+                    epoch,
+                    maps,
+                },
+            );
             return Ok(true);
         }
         Ok(false)
@@ -88,7 +96,9 @@ impl Board {
             self.xip
                 .borrow()
                 .iter()
-                .filter(|(_, page)| state.bus.execute_in_place_epoch(page.device) != Some(page.epoch))
+                .filter(|(_, page)| {
+                    state.bus.execute_in_place_epoch(page.device) != Some(page.epoch)
+                })
                 .map(|(&physical, _)| physical)
                 .collect()
         };
@@ -132,7 +142,9 @@ impl Board {
             let data = (&**binding as *const Binding).cast_mut().cast();
             // SAFETY: the binding lives in `xip_bindings` as long as the board.
             unsafe { cpu.map_mmio(virtual_page, PAGE as usize, Mmio { read, write, data }) }
-                .map_err(|e| format!("Return execute-in-place page {virtual_page:#x} to its device: {e}"))?;
+                .map_err(|e| {
+                    format!("Return execute-in-place page {virtual_page:#x} to its device: {e}")
+                })?;
         }
         drop(page.data);
         Ok(())
@@ -140,9 +152,13 @@ impl Board {
 
     /// The physical address `core` maps as device MMIO at `virtual_page`.
     fn mmio_physical(&self, core: usize, virtual_page: u64) -> Option<u64> {
-        self.mmio.iter().find_map(|&(owner, base, bytes, physical)| {
-            (owner == core && virtual_page >= base && virtual_page + PAGE <= base + bytes as u64)
-                .then(|| physical + (virtual_page - base))
-        })
+        self.mmio
+            .iter()
+            .find_map(|&(owner, base, bytes, physical)| {
+                (owner == core
+                    && virtual_page >= base
+                    && virtual_page + PAGE <= base + bytes as u64)
+                    .then(|| physical + (virtual_page - base))
+            })
     }
 }

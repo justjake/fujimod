@@ -149,9 +149,7 @@ impl BootState {
     pub fn for_firmware(firmware: &str, manifest: Option<&Path>) -> Result<Self, String> {
         let state = match manifest {
             Some(path) => Self::load(path)?,
-            None => {
-                Self::parse(bundled(firmware)?.manifest)?
-            }
+            None => Self::parse(bundled(firmware)?.manifest)?,
         };
         if state.firmware != firmware {
             return Err(format!(
@@ -210,10 +208,18 @@ impl BootState {
                 .device
                 .iter_mut()
                 .find(|window| window.base == options.base)
-                .ok_or_else(|| format!("the manifest sets options on absent window {:#x}", options.base))?;
+                .ok_or_else(|| {
+                    format!(
+                        "the manifest sets options on absent window {:#x}",
+                        options.base
+                    )
+                })?;
             for key in &options.unset {
                 window.options.remove(key).ok_or_else(|| {
-                    format!("the manifest removes absent option {key} of window {:#x}", options.base)
+                    format!(
+                        "the manifest removes absent option {key} of window {:#x}",
+                        options.base
+                    )
                 })?;
             }
             window.options.extend(options.set.clone());

@@ -429,7 +429,12 @@ pub fn device_windows(
         return windows_from_blocks(resolved, resolved.dram_address_space_limit_bytes()?);
     };
     let mut moved = resolved.clone();
-    let drains = moved.reference.body.hardware.as_mut().map(|hardware| &mut hardware.bus_drain);
+    let drains = moved
+        .reference
+        .body
+        .hardware
+        .as_mut()
+        .map(|hardware| &mut hardware.bus_drain);
     let Some([drain]) = drains.map(|drains| drains.as_mut_slice()) else {
         return Err("a DRAM override moves a bus drain the body does not declare once".into());
     };
@@ -487,14 +492,18 @@ pub fn windows_from_blocks(
         })
         .unwrap_or_default();
     let presented_jedec = inputs.iter().find_map(|input| match input {
-        ApplicationBlockInput::Flash { presented_jedec_id, .. } => *presented_jedec_id,
+        ApplicationBlockInput::Flash {
+            presented_jedec_id, ..
+        } => *presented_jedec_id,
         _ => None,
     });
     let samples = inputs.iter().find_map(|input| match input {
         ApplicationBlockInput::Adc { samples, .. } => Some(samples.clone()),
         _ => None,
     });
-    let levels = inputs.iter().find(|input| matches!(input, ApplicationBlockInput::Gpio { .. }));
+    let levels = inputs
+        .iter()
+        .find(|input| matches!(input, ApplicationBlockInput::Gpio { .. }));
     let profile = resolved
         .configuration
         .preset
@@ -512,11 +521,12 @@ pub fn windows_from_blocks(
     let ticks_per_second = emulation
         .board_ticks_per_second
         .ok_or("XP5 processor emulation declares no board time base")?;
-    for id in emulation
-        .retained_word_blocks
-        .iter()
-        .chain(emulation.completion_latencies.iter().map(|latency| &latency.block_id))
-    {
+    for id in emulation.retained_word_blocks.iter().chain(
+        emulation
+            .completion_latencies
+            .iter()
+            .map(|latency| &latency.block_id),
+    ) {
         if !selection.soc.blocks.iter().any(|block| &block.id == id) {
             return Err(format!("XP5 processor emulation names unknown block {id}"));
         }
@@ -527,35 +537,71 @@ pub fn windows_from_blocks(
             continue;
         };
         if let Some((kind, options)) = block_window(
-            block, device, selection, flash_input, flash_image, samples.as_deref(), levels,
-            &resolved.configuration, ticks_per_second, presented_jedec, part_inputs,
+            block,
+            device,
+            selection,
+            flash_input,
+            flash_image,
+            samples.as_deref(),
+            levels,
+            &resolved.configuration,
+            ticks_per_second,
+            presented_jedec,
+            part_inputs,
         )? {
             let mut options = options;
-            if !options.contains_key("registers") && block.registers.iter().any(|register| register.reads.is_some()) {
+            if !options.contains_key("registers")
+                && block
+                    .registers
+                    .iter()
+                    .any(|register| register.reads.is_some())
+            {
                 options.insert("registers".into(), stub_registers(block));
             }
             if emulation.retained_word_blocks.contains(&block.id) {
                 options.insert("retain_words".into(), toml::Value::Boolean(true));
             }
-            if let Some(latency) = emulation.completion_latencies.iter().find(|latency| latency.block_id == block.id) {
+            if let Some(latency) = emulation
+                .completion_latencies
+                .iter()
+                .find(|latency| latency.block_id == block.id)
+            {
                 let option = match kind {
-                    "completion-stub" | "imaging-tnr" | "imaging-fcnv" | "imaging-filter-scaler"
-                    | "imaging-rzl2" | "imaging-resz" => "delay_us",
+                    "completion-stub"
+                    | "imaging-tnr"
+                    | "imaging-fcnv"
+                    | "imaging-filter-scaler"
+                    | "imaging-rzl2"
+                    | "imaging-resz" => "delay_us",
                     "imaging-rifp-io" => "queue_completion_us",
                     "imaging-buffer" => "completion_us",
                     "xp5-codec" => "run_ticks",
-                    _ => return Err(format!("block {}: {kind} takes no completion latency", block.id)),
+                    _ => {
+                        return Err(format!(
+                            "block {}: {kind} takes no completion latency",
+                            block.id
+                        ));
+                    }
                 };
                 let value = if option == "run_ticks" {
                     u128::from(latency.ticks)
                 } else {
                     let micros = u128::from(latency.ticks) * 1_000_000;
                     if micros % u128::from(ticks_per_second) != 0 {
-                        return Err(format!("block {}: latency is not a whole number of microseconds", block.id));
+                        return Err(format!(
+                            "block {}: latency is not a whole number of microseconds",
+                            block.id
+                        ));
                     }
                     micros / u128::from(ticks_per_second)
                 };
-                options.insert(option.into(), toml::Value::Integer(i64::try_from(value).map_err(|_| format!("block {}: latency overflows", block.id))?));
+                options.insert(
+                    option.into(),
+                    toml::Value::Integer(
+                        i64::try_from(value)
+                            .map_err(|_| format!("block {}: latency overflows", block.id))?,
+                    ),
+                );
             }
             devices.push(DeviceWindow {
                 base: block.base,
@@ -567,7 +613,10 @@ pub fn windows_from_blocks(
     }
     // The firmware drains the bus by reading one word of each port and discarding it; a port
     // the run's DRAM covers is RAM instead.
-    let ports = selection.soc.blocks.iter()
+    let ports = selection
+        .soc
+        .blocks
+        .iter()
         .filter(|block| matches!(block.device, Some(BlockDevice::UnmodeledBusDrain { .. })))
         .map(|block| block.base)
         .chain(drains.iter().map(|drain| drain.address))
@@ -584,25 +633,37 @@ pub fn windows_from_blocks(
     Ok(devices)
 }
 
-type FlashInput<'a> = (&'a str, &'a Option<u8>, &'a Vec<fujimod_catalog_configuration::application_inputs::FlashSeed>);
+type FlashInput<'a> = (
+    &'a str,
+    &'a Option<u8>,
+    &'a Vec<fujimod_catalog_configuration::application_inputs::FlashSeed>,
+);
 
 /// The bring-up register file answers of a block's registers that do not read back their last write.
 fn stub_registers(block: &fujimod_catalog::reference::SocBlock) -> toml::Value {
     use fujimod_catalog::ip::RegisterReads;
     let integer = |value: u64| toml::Value::Integer(value as i64);
-    toml::Value::Array(block.registers.iter().filter_map(|register| {
-        let (mode, value) = match register.reads? {
-            RegisterReads::Fixed { value } => ("constant", value),
-            RegisterReads::Alternates { value } => ("toggle", value),
-            RegisterReads::SelfClearing => ("command", 0),
-            RegisterReads::AfterWrite { value } => ("after_write", value),
-        };
-        let mut row = toml::Table::new();
-        row.insert("offset".into(), integer(register.offset));
-        row.insert("mode".into(), toml::Value::String(mode.into()));
-        if !matches!(register.reads, Some(RegisterReads::SelfClearing)) { row.insert("value".into(), integer(value)); }
-        Some(toml::Value::Table(row))
-    }).collect())
+    toml::Value::Array(
+        block
+            .registers
+            .iter()
+            .filter_map(|register| {
+                let (mode, value) = match register.reads? {
+                    RegisterReads::Fixed { value } => ("constant", value),
+                    RegisterReads::Alternates { value } => ("toggle", value),
+                    RegisterReads::SelfClearing => ("command", 0),
+                    RegisterReads::AfterWrite { value } => ("after_write", value),
+                };
+                let mut row = toml::Table::new();
+                row.insert("offset".into(), integer(register.offset));
+                row.insert("mode".into(), toml::Value::String(mode.into()));
+                if !matches!(register.reads, Some(RegisterReads::SelfClearing)) {
+                    row.insert("value".into(), integer(value));
+                }
+                Some(toml::Value::Table(row))
+            })
+            .collect(),
+    )
 }
 
 /// The completion-stub options of a start, completion and acknowledgement handshake.
@@ -615,60 +676,119 @@ fn handshake_options(
 ) {
     let integer = |value: u64| toml::Value::Integer(i64::try_from(value).unwrap_or(i64::MAX));
     if !starts.is_empty() {
-    options.insert("starts".into(), toml::Value::Array(starts.iter().map(|start| {
-        let mut row = toml::Table::new();
-        row.insert("offset".into(), integer(start.offset));
-        row.insert("mask".into(), integer(u64::from(start.mask)));
-        toml::Value::Table(row)
-    }).collect()));
+        options.insert(
+            "starts".into(),
+            toml::Value::Array(
+                starts
+                    .iter()
+                    .map(|start| {
+                        let mut row = toml::Table::new();
+                        row.insert("offset".into(), integer(start.offset));
+                        row.insert("mask".into(), integer(u64::from(start.mask)));
+                        toml::Value::Table(row)
+                    })
+                    .collect(),
+            ),
+        );
     }
     if !completion.is_empty() {
-    options.insert("completion".into(), toml::Value::Array(completion.iter().map(|write| {
-        let mut row = toml::Table::new();
-        row.insert("offset".into(), integer(write.offset));
-        if let Some(set) = write.set { row.insert("set".into(), integer(u64::from(set))); }
-        if let Some(clear) = write.clear { row.insert("clear".into(), integer(u64::from(clear))); }
-        toml::Value::Table(row)
-    }).collect()));
+        options.insert(
+            "completion".into(),
+            toml::Value::Array(
+                completion
+                    .iter()
+                    .map(|write| {
+                        let mut row = toml::Table::new();
+                        row.insert("offset".into(), integer(write.offset));
+                        if let Some(set) = write.set {
+                            row.insert("set".into(), integer(u64::from(set)));
+                        }
+                        if let Some(clear) = write.clear {
+                            row.insert("clear".into(), integer(u64::from(clear)));
+                        }
+                        toml::Value::Table(row)
+                    })
+                    .collect(),
+            ),
+        );
     }
     if let Some(ack) = ack {
-    let mut row = toml::Table::new();
-    row.insert("offset".into(), integer(ack.offset));
-    row.insert("mode".into(), toml::Value::String("w1c".into()));
-    if let Some(offset) = ack.status_offset { row.insert("status_offset".into(), integer(offset)); }
-    if let Some(bits) = ack.bits { row.insert("bits".into(), integer(u64::from(bits))); }
-    options.insert("ack".into(), toml::Value::Table(row));
+        let mut row = toml::Table::new();
+        row.insert("offset".into(), integer(ack.offset));
+        row.insert("mode".into(), toml::Value::String("w1c".into()));
+        if let Some(offset) = ack.status_offset {
+            row.insert("status_offset".into(), integer(offset));
+        }
+        if let Some(bits) = ack.bits {
+            row.insert("bits".into(), integer(u64::from(bits)));
+        }
+        options.insert("ack".into(), toml::Value::Table(row));
     }
     if let Some(mask) = irq_mask {
-    options.insert("irq_mask_offset".into(), integer(mask.offset));
-    options.insert("irq_mask_bit".into(), integer(u64::from(mask.bit)));
-    options.insert("irq_mask_set_masks".into(), toml::Value::Boolean(mask.set_masks));
+        options.insert("irq_mask_offset".into(), integer(mask.offset));
+        options.insert("irq_mask_bit".into(), integer(u64::from(mask.bit)));
+        options.insert(
+            "irq_mask_set_masks".into(),
+            toml::Value::Boolean(mask.set_masks),
+        );
     }
 }
 
 /// A stage's handshake and interrupt line as completion-stub options.
-fn stage_handshake(options: &mut toml::Table, handshake: Option<&fujimod_catalog::soc::CompletionHandshake>, irq: Option<u32>) {
+fn stage_handshake(
+    options: &mut toml::Table,
+    handshake: Option<&fujimod_catalog::soc::CompletionHandshake>,
+    irq: Option<u32>,
+) {
     if let Some(handshake) = handshake {
-        handshake_options(options, &handshake.starts, &handshake.completion, handshake.ack.as_ref(), handshake.irq_mask.as_ref());
+        handshake_options(
+            options,
+            &handshake.starts,
+            &handshake.completion,
+            handshake.ack.as_ref(),
+            handshake.irq_mask.as_ref(),
+        );
     }
-    if let Some(line) = irq { options.insert("irq".into(), toml::Value::Integer(i64::from(line))); }
+    if let Some(line) = irq {
+        options.insert("irq".into(), toml::Value::Integer(i64::from(line)));
+    }
 }
 
 /// The device a serial port is emulated as when its one wired part is a whole-port output.
 /// The chip-select pad of a display panel the body attaches to `block`.
-fn panel_select(selection: &ResolvedSelection, block: &fujimod_catalog::reference::SocBlock) -> Result<Option<(u8, u8)>, String> {
-    let attachments = selection.body.hardware.iter().flat_map(|hardware| &hardware.serial_attachments);
+fn panel_select(
+    selection: &ResolvedSelection,
+    block: &fujimod_catalog::reference::SocBlock,
+) -> Result<Option<(u8, u8)>, String> {
+    let attachments = selection
+        .body
+        .hardware
+        .iter()
+        .flat_map(|hardware| &hardware.serial_attachments);
     for attachment in attachments.filter(|attachment| attachment.controller_id == block.id) {
-        let panel = selection.parts.iter().any(|part| part.id == attachment.part_id && matches!(
-            &part.model,
-            fujimod_catalog::reference::PartModel::Peripheral { interface: fujimod_catalog::assembly::PeripheralPart::DisplayPanelSerial }
-        ));
+        let panel = selection.parts.iter().any(|part| {
+            part.id == attachment.part_id
+                && matches!(
+                    &part.model,
+                    fujimod_catalog::reference::PartModel::Peripheral {
+                        interface: fujimod_catalog::assembly::PeripheralPart::DisplayPanelSerial
+                    }
+                )
+        });
         if !panel {
             continue;
         }
-        let select = attachment.select_connection_id.as_ref()
-            .ok_or_else(|| format!("display panel on {} has no chip-select connection", block.id))?;
-        let connection = selection.body.connections.iter().find(|connection| &connection.id == select)
+        let select = attachment.select_connection_id.as_ref().ok_or_else(|| {
+            format!(
+                "display panel on {} has no chip-select connection",
+                block.id
+            )
+        })?;
+        let connection = selection
+            .body
+            .connections
+            .iter()
+            .find(|connection| &connection.id == select)
             .ok_or_else(|| format!("display panel on {}: no connection {select}", block.id))?;
         let [ConnectionSignal::Gpio { port, pin, .. }] = connection.signals.as_slice() else {
             return Err(format!("connection {select} is not one GPIO line"));
@@ -678,28 +798,50 @@ fn panel_select(selection: &ResolvedSelection, block: &fujimod_catalog::referenc
     Ok(None)
 }
 
-fn port_device(selection: &ResolvedSelection, block: &fujimod_catalog::reference::SocBlock) -> Result<Option<&'static str>, String> {
+fn port_device(
+    selection: &ResolvedSelection,
+    block: &fujimod_catalog::reference::SocBlock,
+) -> Result<Option<&'static str>, String> {
     use fujimod_catalog::assembly::PeripheralPart;
-    let mut kinds = selection.body.wiring.iter()
-        .filter(|wire| wire.source_id == block.id && wire.signal == fujimod_catalog::reference::WireSignal::SerialData)
+    let mut kinds = selection
+        .body
+        .wiring
+        .iter()
+        .filter(|wire| {
+            wire.source_id == block.id
+                && wire.signal == fujimod_catalog::reference::WireSignal::SerialData
+        })
         .map(|wire| {
-            let part = selection.parts.iter().find(|part| part.id == wire.target_id)
-                .ok_or_else(|| format!("wire {} -> {}: no such part", wire.source_id, wire.target_id))?;
+            let part = selection
+                .parts
+                .iter()
+                .find(|part| part.id == wire.target_id)
+                .ok_or_else(|| {
+                    format!(
+                        "wire {} -> {}: no such part",
+                        wire.source_id, wire.target_id
+                    )
+                })?;
             Ok(match &part.model {
-                fujimod_catalog::reference::PartModel::Peripheral { interface } => match interface {
-                    PeripheralPart::FocusActuator => Some("focus-actuator"),
-                    PeripheralPart::IrisActuator => Some("iris-actuator"),
-                    PeripheralPart::AudioSerialOutput => Some("audio-spi-sink"),
-                    PeripheralPart::ImagingSerialOutput => Some("imaging-serial-sink"),
-                    _ => None,
-                },
+                fujimod_catalog::reference::PartModel::Peripheral { interface } => {
+                    match interface {
+                        PeripheralPart::FocusActuator => Some("focus-actuator"),
+                        PeripheralPart::IrisActuator => Some("iris-actuator"),
+                        PeripheralPart::AudioSerialOutput => Some("audio-spi-sink"),
+                        PeripheralPart::ImagingSerialOutput => Some("imaging-serial-sink"),
+                        _ => None,
+                    }
+                }
                 _ => None,
             })
         })
         .collect::<Result<Vec<_>, String>>()?;
     match kinds.as_slice() {
         [Some(_)] => Ok(kinds.pop().flatten()),
-        many if many.iter().any(Option::is_some) => Err(format!("block {}: a whole-port output shares its port", block.id)),
+        many if many.iter().any(Option::is_some) => Err(format!(
+            "block {}: a whole-port output shares its port",
+            block.id
+        )),
         _ => Ok(None),
     }
 }
@@ -710,14 +852,29 @@ fn dedicated_wire(
     block: &fujimod_catalog::reference::SocBlock,
 ) -> Result<Option<toml::Table>, String> {
     use fujimod_catalog::assembly::PeripheralPart;
-    let attachments: Vec<_> = selection.body.hardware.iter()
+    let attachments: Vec<_> = selection
+        .body
+        .hardware
+        .iter()
         .flat_map(|hardware| &hardware.serial_attachments)
-        .filter(|attachment| attachment.controller_id == block.id && attachment.select_connection_id.is_none())
+        .filter(|attachment| {
+            attachment.controller_id == block.id && attachment.select_connection_id.is_none()
+        })
         .collect();
     let [attachment] = attachments.as_slice() else {
-        return if attachments.is_empty() { Ok(None) } else { Err(format!("block {}: several parts share a port without chip selects", block.id)) };
+        return if attachments.is_empty() {
+            Ok(None)
+        } else {
+            Err(format!(
+                "block {}: several parts share a port without chip selects",
+                block.id
+            ))
+        };
     };
-    let part = selection.parts.iter().find(|part| part.id == attachment.part_id)
+    let part = selection
+        .parts
+        .iter()
+        .find(|part| part.id == attachment.part_id)
         .ok_or_else(|| format!("serial attachment {}: no such part", attachment.part_id))?;
     let fujimod_catalog::reference::PartModel::Peripheral { interface } = &part.model else {
         return Err(format!("part {} is not a serial peripheral", part.id));
@@ -727,8 +884,14 @@ fn dedicated_wire(
         PeripheralPart::FramedCommandPeer { initial_frame } => {
             wire.insert("kind".into(), toml::Value::String("dedicated".into()));
             let mut peer = toml::Table::new();
-            peer.insert("kind".into(), toml::Value::String("framed-command-peer".into()));
-            peer.insert("initial_frame".into(), toml::Value::Integer(i64::from(*initial_frame)));
+            peer.insert(
+                "kind".into(),
+                toml::Value::String("framed-command-peer".into()),
+            );
+            peer.insert(
+                "initial_frame".into(),
+                toml::Value::Integer(i64::from(*initial_frame)),
+            );
             wire.insert("part".into(), toml::Value::Table(peer));
         }
         // A driver that never answers leaves its input at the idle level.
@@ -737,8 +900,10 @@ fn dedicated_wire(
             wire.insert("high".into(), toml::Value::Boolean(*miso_high));
         }
         // Whole-port outputs are their own windows.
-        PeripheralPart::FocusActuator | PeripheralPart::IrisActuator
-        | PeripheralPart::AudioSerialOutput | PeripheralPart::ImagingSerialOutput => return Ok(None),
+        PeripheralPart::FocusActuator
+        | PeripheralPart::IrisActuator
+        | PeripheralPart::AudioSerialOutput
+        | PeripheralPart::ImagingSerialOutput => return Ok(None),
         other => return Err(format!("part {}: {other:?} cannot own a port", part.id)),
     }
     Ok(Some(wire))
@@ -749,46 +914,108 @@ fn lens_wire(
     selection: &ResolvedSelection,
     block: &fujimod_catalog::reference::SocBlock,
 ) -> Result<Option<toml::Table>, String> {
-    let Some(mount) = selection.body.hardware.as_ref().and_then(|hardware| hardware.lens_mount.as_ref()) else {
+    let Some(mount) = selection
+        .body
+        .hardware
+        .as_ref()
+        .and_then(|hardware| hardware.lens_mount.as_ref())
+    else {
         return Ok(None);
     };
     if mount.controller_id != block.id {
         return Ok(None);
     }
     let pin = |id: &str| -> Result<toml::Value, String> {
-        let connection = selection.body.connections.iter().find(|connection| connection.id == id)
+        let connection = selection
+            .body
+            .connections
+            .iter()
+            .find(|connection| connection.id == id)
             .ok_or_else(|| format!("lens mount: no connection {id}"))?;
-        connection.signals.iter().find_map(|signal| match signal {
-            ConnectionSignal::Gpio { port, pin, .. } => {
-                let mut row = toml::Table::new();
-                row.insert("port".into(), toml::Value::Integer(i64::from(*port)));
-                row.insert("pin".into(), toml::Value::Integer(i64::from(*pin)));
-                Some(toml::Value::Table(row))
-            }
-            _ => None,
-        }).ok_or_else(|| format!("lens mount connection {id} carries no GPIO pad"))
+        connection
+            .signals
+            .iter()
+            .find_map(|signal| match signal {
+                ConnectionSignal::Gpio { port, pin, .. } => {
+                    let mut row = toml::Table::new();
+                    row.insert("port".into(), toml::Value::Integer(i64::from(*port)));
+                    row.insert("pin".into(), toml::Value::Integer(i64::from(*pin)));
+                    Some(toml::Value::Table(row))
+                }
+                _ => None,
+            })
+            .ok_or_else(|| format!("lens mount connection {id} carries no GPIO pad"))
     };
     let integer = |value: u64| toml::Value::Integer(i64::try_from(value).unwrap_or(i64::MAX));
     let mut wire = toml::Table::new();
     wire.insert("kind".into(), toml::Value::String("x-mount-lens".into()));
     wire.insert("detect".into(), pin(&mount.detect_connection_id)?);
-    wire.insert("sense".into(), toml::Value::Array(mount.sense_connection_ids.iter().map(|id| pin(id)).collect::<Result<_, _>>()?));
-    wire.insert("supplies".into(), toml::Value::Array(mount.supply_connection_ids.iter().map(|id| pin(id)).collect::<Result<_, _>>()?));
+    wire.insert(
+        "sense".into(),
+        toml::Value::Array(
+            mount
+                .sense_connection_ids
+                .iter()
+                .map(|id| pin(id))
+                .collect::<Result<_, _>>()?,
+        ),
+    );
+    wire.insert(
+        "supplies".into(),
+        toml::Value::Array(
+            mount
+                .supply_connection_ids
+                .iter()
+                .map(|id| pin(id))
+                .collect::<Result<_, _>>()?,
+        ),
+    );
     wire.insert("ready".into(), pin(&mount.ready_connection_id)?);
-    if let Some(function) = mount.ready_function { wire.insert("ready_mux".into(), integer(u64::from(function))); }
-    wire.insert("ready_low_line".into(), integer(u64::from(mount.ready_low_line)));
-    wire.insert("ready_high_line".into(), integer(u64::from(mount.ready_high_line)));
+    if let Some(function) = mount.ready_function {
+        wire.insert("ready_mux".into(), integer(u64::from(function)));
+    }
+    wire.insert(
+        "ready_low_line".into(),
+        integer(u64::from(mount.ready_low_line)),
+    );
+    wire.insert(
+        "ready_high_line".into(),
+        integer(u64::from(mount.ready_high_line)),
+    );
     let Some(lens_id) = &mount.lens_part_id else {
-        return Err(format!("body {}: an empty lens mount is unmodeled", selection.body.id));
+        return Err(format!(
+            "body {}: an empty lens mount is unmodeled",
+            selection.body.id
+        ));
     };
-    let lens = selection.parts.iter().find(|part| &part.id == lens_id).ok_or_else(|| format!("no lens part {lens_id}"))?;
+    let lens = selection
+        .parts
+        .iter()
+        .find(|part| &part.id == lens_id)
+        .ok_or_else(|| format!("no lens part {lens_id}"))?;
     let fujimod_catalog::reference::PartModel::Peripheral {
-        interface: fujimod_catalog::assembly::PeripheralPart::XMountLens { preset, sense_unpowered, startup_us, busy_us, operation_us },
-    } = &lens.model else {
+        interface:
+            fujimod_catalog::assembly::PeripheralPart::XMountLens {
+                preset,
+                sense_unpowered,
+                startup_us,
+                busy_us,
+                operation_us,
+            },
+    } = &lens.model
+    else {
         return Err(format!("part {lens_id} is not an X-mount lens"));
     };
     wire.insert("lens".into(), toml::Value::String(preset.clone()));
-    wire.insert("sense_unpowered".into(), toml::Value::Array(sense_unpowered.iter().map(|level| toml::Value::Boolean(*level)).collect()));
+    wire.insert(
+        "sense_unpowered".into(),
+        toml::Value::Array(
+            sense_unpowered
+                .iter()
+                .map(|level| toml::Value::Boolean(*level))
+                .collect(),
+        ),
+    );
     wire.insert("startup_us".into(), integer(*startup_us));
     wire.insert("busy_us".into(), integer(*busy_us));
     wire.insert("operation_us".into(), integer(*operation_us));
@@ -805,97 +1032,197 @@ fn serial_endpoints(
     use fujimod_catalog_configuration::application_inputs::ApplicationPartInput as Input;
     let integer = |value: i64| toml::Value::Integer(value);
     let mut endpoints = Vec::new();
-    let attachments = selection.body.hardware.iter().flat_map(|hardware| &hardware.serial_attachments);
+    let attachments = selection
+        .body
+        .hardware
+        .iter()
+        .flat_map(|hardware| &hardware.serial_attachments);
     for attachment in attachments.filter(|attachment| {
         attachment.controller_id == block.id && attachment.select_connection_id.is_some()
     }) {
-        if selection.parts.iter().any(|part| part.id == attachment.part_id && matches!(
-            &part.model,
-            fujimod_catalog::reference::PartModel::Peripheral { interface: PeripheralPart::DisplayPanelSerial }
-        )) {
+        if selection.parts.iter().any(|part| {
+            part.id == attachment.part_id
+                && matches!(
+                    &part.model,
+                    fujimod_catalog::reference::PartModel::Peripheral {
+                        interface: PeripheralPart::DisplayPanelSerial
+                    }
+                )
+        }) {
             continue;
         }
         let Some(select_id) = &attachment.select_connection_id else {
-            return Err(format!("serial attachment {} on {} has no chip-select connection", attachment.part_id, block.id));
+            return Err(format!(
+                "serial attachment {} on {} has no chip-select connection",
+                attachment.part_id, block.id
+            ));
         };
-        let connection = selection.body.connections.iter().find(|connection| &connection.id == select_id)
-            .ok_or_else(|| format!("serial attachment {}: no connection {select_id}", attachment.part_id))?;
-        let [ConnectionSignal::Gpio { port, pin, active_level }] = connection.signals.as_slice() else {
+        let connection = selection
+            .body
+            .connections
+            .iter()
+            .find(|connection| &connection.id == select_id)
+            .ok_or_else(|| {
+                format!(
+                    "serial attachment {}: no connection {select_id}",
+                    attachment.part_id
+                )
+            })?;
+        let [
+            ConnectionSignal::Gpio {
+                port,
+                pin,
+                active_level,
+            },
+        ] = connection.signals.as_slice()
+        else {
             return Err(format!("connection {select_id} is not one GPIO line"));
         };
-        let part = selection.parts.iter().find(|part| part.id == attachment.part_id)
+        let part = selection
+            .parts
+            .iter()
+            .find(|part| part.id == attachment.part_id)
             .ok_or_else(|| format!("serial attachment {}: no such part", attachment.part_id))?;
         let fujimod_catalog::reference::PartModel::Peripheral { interface } = &part.model else {
             return Err(format!("part {} is not a serial peripheral", part.id));
         };
-        let inputs: Vec<_> = part_inputs.iter().filter(|input| input.part_id() == part.id).collect();
+        let inputs: Vec<_> = part_inputs
+            .iter()
+            .filter(|input| input.part_id() == part.id)
+            .collect();
         let missing = |what: &str| format!("part {}: the run supplies no {what}", part.id);
         let mut row = toml::Table::new();
-        let kind = |row: &mut toml::Table, kind: &str| { row.insert("kind".into(), toml::Value::String(kind.into())); };
+        let kind = |row: &mut toml::Table, kind: &str| {
+            row.insert("kind".into(), toml::Value::String(kind.into()));
+        };
         match interface {
             PeripheralPart::PowerController { .. } => {
                 kind(&mut row, "power-controller");
-                let Some(Input::Clock { seconds, valid, registers, .. }) =
-                    inputs.iter().find(|input| matches!(input, Input::Clock { .. })).copied()
+                let Some(Input::Clock {
+                    seconds,
+                    valid,
+                    registers,
+                    ..
+                }) = inputs
+                    .iter()
+                    .find(|input| matches!(input, Input::Clock { .. }))
+                    .copied()
                 else {
                     return Err(missing("clock"));
                 };
                 row.insert("rtc_seconds".into(), integer(i64::from(*seconds)));
                 row.insert("rtc_valid".into(), toml::Value::Boolean(*valid));
                 if !registers.is_empty() {
-                    row.insert("registers".into(), toml::Value::Table(registers.iter().map(|word| {
-                        (format!("{:x}", word.register), integer(i64::from(word.value)))
-                    }).collect()));
+                    row.insert(
+                        "registers".into(),
+                        toml::Value::Table(
+                            registers
+                                .iter()
+                                .map(|word| {
+                                    (
+                                        format!("{:x}", word.register),
+                                        integer(i64::from(word.value)),
+                                    )
+                                })
+                                .collect(),
+                        ),
+                    );
                 }
             }
             PeripheralPart::SerialCalibrationRegisters => {
                 kind(&mut row, "serial-calibration-registers");
-                let high = inputs.iter().find_map(|input| match input {
-                    Input::IdleLevel { high, .. } => Some(*high),
-                    _ => None,
-                }).ok_or_else(|| missing("idle level"))?;
+                let high = inputs
+                    .iter()
+                    .find_map(|input| match input {
+                        Input::IdleLevel { high, .. } => Some(*high),
+                        _ => None,
+                    })
+                    .ok_or_else(|| missing("idle level"))?;
                 row.insert("miso_high".into(), toml::Value::Boolean(high));
             }
             PeripheralPart::BisConfigurationRegisters => {
                 kind(&mut row, "bis-configuration-registers");
-                let Some(Input::BisRevision { revision, samples, block, idle_high, .. }) =
-                    inputs.iter().find(|input| matches!(input, Input::BisRevision { .. })).copied()
+                let Some(Input::BisRevision {
+                    revision,
+                    samples,
+                    block,
+                    idle_high,
+                    ..
+                }) = inputs
+                    .iter()
+                    .find(|input| matches!(input, Input::BisRevision { .. }))
+                    .copied()
                 else {
                     return Err(missing("BIS revision"));
                 };
-                let array = |values: Vec<i64>| toml::Value::Array(values.into_iter().map(integer).collect());
-                row.insert("revision".into(), array(revision.iter().map(|v| i64::from(*v)).collect()));
-                row.insert("samples".into(), array(samples.iter().map(|v| i64::from(*v)).collect()));
+                let array = |values: Vec<i64>| {
+                    toml::Value::Array(values.into_iter().map(integer).collect())
+                };
+                row.insert(
+                    "revision".into(),
+                    array(revision.iter().map(|v| i64::from(*v)).collect()),
+                );
+                row.insert(
+                    "samples".into(),
+                    array(samples.iter().map(|v| i64::from(*v)).collect()),
+                );
                 row.insert("idle_high".into(), toml::Value::Boolean(*idle_high));
-                row.insert("block".into(), array(block.iter().map(|v| i64::from(*v)).collect()));
+                row.insert(
+                    "block".into(),
+                    array(block.iter().map(|v| i64::from(*v)).collect()),
+                );
             }
             PeripheralPart::Lsm6dsConfigurationRegisters => {
                 kind(&mut row, "lsm6ds-configuration-registers");
-                let Some(Input::Motion { temperature, angular_rate, acceleration, .. }) =
-                    inputs.iter().find(|input| matches!(input, Input::Motion { .. })).copied()
+                let Some(Input::Motion {
+                    temperature,
+                    angular_rate,
+                    acceleration,
+                    ..
+                }) = inputs
+                    .iter()
+                    .find(|input| matches!(input, Input::Motion { .. }))
+                    .copied()
                 else {
                     return Err(missing("motion"));
                 };
-                let array = |values: &[i16; 3]| toml::Value::Array(values.iter().map(|v| integer(i64::from(*v))).collect());
+                let array = |values: &[i16; 3]| {
+                    toml::Value::Array(values.iter().map(|v| integer(i64::from(*v))).collect())
+                };
                 row.insert("temperature".into(), integer(i64::from(*temperature)));
                 let mut motion = toml::Table::new();
                 motion.insert("angular_rate".into(), array(angular_rate));
                 motion.insert("acceleration".into(), array(acceleration));
                 row.insert("motion".into(), toml::Value::Table(motion));
             }
-            PeripheralPart::SerialCommandRegisters { bits, mode, read_flag, data_words, miso_high } => {
+            PeripheralPart::SerialCommandRegisters {
+                bits,
+                mode,
+                read_flag,
+                data_words,
+                miso_high,
+            } => {
                 kind(&mut row, "serial-command-registers");
                 row.insert("bits".into(), integer(i64::from(*bits)));
                 row.insert("mode".into(), integer(i64::from(*mode)));
-                if let Some(flag) = read_flag { row.insert("read_flag".into(), integer(i64::from(*flag))); }
-                if let Some(words) = data_words { row.insert("data_words".into(), integer(i64::from(*words))); }
+                if let Some(flag) = read_flag {
+                    row.insert("read_flag".into(), integer(i64::from(*flag)));
+                }
+                if let Some(words) = data_words {
+                    row.insert("data_words".into(), integer(i64::from(*words)));
+                }
                 row.insert("miso_high".into(), toml::Value::Boolean(*miso_high));
             }
             PeripheralPart::UnidentifiedSerialDevice { miso_high } => {
                 kind(&mut row, "generic-sink");
                 row.insert("miso_high".into(), toml::Value::Boolean(*miso_high));
             }
-            other => return Err(format!("part {}: {other:?} is not a chip-selected serial endpoint", part.id)),
+            other => {
+                return Err(format!(
+                    "part {}: {other:?} is not a chip-selected serial endpoint",
+                    part.id
+                ));
+            }
         }
         let mut select = toml::Table::new();
         select.insert("port".into(), integer(i64::from(*port)));
@@ -924,32 +1251,65 @@ fn block_window(
 ) -> Result<Option<(&'static str, toml::Table)>, String> {
     let mut options = toml::Table::new();
     let integer = |value: u64| toml::Value::Integer(i64::try_from(value).unwrap_or(i64::MAX));
-    let irq = |name: &str| block.interrupts.iter().find(|row| row.output == name).map(|row| row.line);
+    let irq = |name: &str| {
+        block
+            .interrupts
+            .iter()
+            .find(|row| row.output == name)
+            .map(|row| row.line)
+    };
     let kind = match device {
         BlockDevice::Xp5Timer { focus_capture, .. } => {
-            if *focus_capture { "timer-focus-capture" } else { "timer" }
+            if *focus_capture {
+                "timer-focus-capture"
+            } else {
+                "timer"
+            }
         }
         BlockDevice::Xp5TimerExtended { .. } => "timer-extended",
         BlockDevice::SerialFlashAperture { .. } => {
-            options.insert("dat_origin".into(), integer(flash_image.map(|image| image.dat_origin).unwrap_or(0)));
-            options.insert("xor".into(), integer(flash_image.map(|image| u64::from(image.xor)).unwrap_or(255)));
-            options.insert("erased_tail".into(), integer(flash.and_then(|item| *item.1).map(u64::from).unwrap_or(255)));
+            options.insert(
+                "dat_origin".into(),
+                integer(flash_image.map(|image| image.dat_origin).unwrap_or(0)),
+            );
+            options.insert(
+                "xor".into(),
+                integer(flash_image.map(|image| u64::from(image.xor)).unwrap_or(255)),
+            );
+            options.insert(
+                "erased_tail".into(),
+                integer(flash.and_then(|item| *item.1).map(u64::from).unwrap_or(255)),
+            );
             if let Some((part_id, _, seeds)) = flash {
                 let part = selection.parts.iter().find(|part| part.id == part_id);
                 if let Some(part) = part {
-                    if let fujimod_catalog::reference::PartModel::Peripheral { interface } = &part.model {
-                        if matches!(interface, fujimod_catalog::assembly::PeripheralPart::SerialNandFlash { .. }) {
-                            options.insert("medium".into(), toml::Value::String("serial-nand".into()));
+                    if let fujimod_catalog::reference::PartModel::Peripheral { interface } =
+                        &part.model
+                    {
+                        if matches!(
+                            interface,
+                            fujimod_catalog::assembly::PeripheralPart::SerialNandFlash { .. }
+                        ) {
+                            options
+                                .insert("medium".into(), toml::Value::String("serial-nand".into()));
                         }
                     }
                 }
                 if !seeds.is_empty() {
-                    options.insert("seed".into(), toml::Value::Array(seeds.iter().map(|seed| {
-                        let mut row = toml::Table::new();
-                        row.insert("offset".into(), integer(seed.offset));
-                        row.insert("value".into(), integer(u64::from(seed.value)));
-                        toml::Value::Table(row)
-                    }).collect()));
+                    options.insert(
+                        "seed".into(),
+                        toml::Value::Array(
+                            seeds
+                                .iter()
+                                .map(|seed| {
+                                    let mut row = toml::Table::new();
+                                    row.insert("offset".into(), integer(seed.offset));
+                                    row.insert("value".into(), integer(u64::from(seed.value)));
+                                    toml::Value::Table(row)
+                                })
+                                .collect(),
+                        ),
+                    );
                 }
             }
             "flash-storage"
@@ -969,47 +1329,97 @@ fn block_window(
             "flash-storage-controller"
         }
         BlockDevice::FlashStorageDma { .. } => "flash-storage-dma",
-        BlockDevice::Gates { configuration_word, .. } => {
+        BlockDevice::Gates {
+            configuration_word, ..
+        } => {
             if let Some(word) = configuration_word {
                 options.insert("configuration_word".into(), integer(*word));
             }
-            if block.id == "clock-gates" { "clock-gates" } else { "power-gates" }
+            if block.id == "clock-gates" {
+                "clock-gates"
+            } else {
+                "power-gates"
+            }
         }
         BlockDevice::ClockBanks { .. } => "clock-banks",
         BlockDevice::PanelPll { .. } => "panel-pll",
-        BlockDevice::GeneralDma { companion_irq_base, a53_irq_base, .. } => {
-            if let Some(base) = companion_irq_base { options.insert("companion_irq_base".into(), integer(u64::from(*base))); }
-            if let Some(base) = a53_irq_base { options.insert("a53_irq_base".into(), integer(u64::from(*base))); }
+        BlockDevice::GeneralDma {
+            companion_irq_base,
+            a53_irq_base,
+            ..
+        } => {
+            if let Some(base) = companion_irq_base {
+                options.insert("companion_irq_base".into(), integer(u64::from(*base)));
+            }
+            if let Some(base) = a53_irq_base {
+                options.insert("a53_irq_base".into(), integer(u64::from(*base)));
+            }
             "general-dma"
         }
-        BlockDevice::AudioDma { setup_ticks, bytes_per_tick, .. } => {
-            options.insert("irq_base".into(), integer(u64::from(irq("irq").unwrap_or(0))));
+        BlockDevice::AudioDma {
+            setup_ticks,
+            bytes_per_tick,
+            ..
+        } => {
+            options.insert(
+                "irq_base".into(),
+                integer(u64::from(irq("irq").unwrap_or(0))),
+            );
             options.insert("setup_ticks".into(), integer(*setup_ticks));
             options.insert("bytes_per_tick".into(), integer(*bytes_per_tick));
             "audio-dma"
         }
-        BlockDevice::Xp5Gpio { port: None, pad_model, .. } => {
+        BlockDevice::Xp5Gpio {
+            port: None,
+            pad_model,
+            ..
+        } => {
             use fujimod_catalog_configuration::application_inputs::ApplicationBlockInput;
             let table = |pairs: Vec<(&str, toml::Value)>| {
-                toml::Value::Table(pairs.into_iter().map(|(key, value)| (key.to_string(), value)).collect())
+                toml::Value::Table(
+                    pairs
+                        .into_iter()
+                        .map(|(key, value)| (key.to_string(), value))
+                        .collect(),
+                )
             };
             if let Some(fujimod_catalog::soc::GpioPadModel::DataLatch) = pad_model {
                 options.insert("pad_model".into(), toml::Value::String("data-latch".into()));
             }
             // A pin's interrupt is wired when the body connects something to that pin; the
             // companion core (core4) takes its pins on its own controller.
-            let mut irqs = [("input_irqs", Vec::new()), ("companion_input_irqs", Vec::new())];
+            let mut irqs = [
+                ("input_irqs", Vec::new()),
+                ("companion_input_irqs", Vec::new()),
+            ];
             for interrupt in &block.interrupts {
-                let Some((port, pin)) = interrupt.output.strip_prefix("port").and_then(|rest| rest.split_once("-pin")) else {
+                let Some((port, pin)) = interrupt
+                    .output
+                    .strip_prefix("port")
+                    .and_then(|rest| rest.split_once("-pin"))
+                else {
                     continue;
                 };
                 let (Ok(port), Ok(pin)) = (port.parse::<u8>(), pin.parse::<u8>()) else {
-                    return Err(format!("block {}: interrupt output {} is not a pin", block.id, interrupt.output));
+                    return Err(format!(
+                        "block {}: interrupt output {} is not a pin",
+                        block.id, interrupt.output
+                    ));
                 };
-                let Some(active) = selection.body.connections.iter().flat_map(|connection| &connection.signals).find_map(|signal| match signal {
-                    ConnectionSignal::Gpio { port: p, pin: n, active_level } if *p == port && *n == pin => Some(*active_level),
-                    _ => None,
-                }) else {
+                let Some(active) = selection
+                    .body
+                    .connections
+                    .iter()
+                    .flat_map(|connection| &connection.signals)
+                    .find_map(|signal| match signal {
+                        ConnectionSignal::Gpio {
+                            port: p,
+                            pin: n,
+                            active_level,
+                        } if *p == port && *n == pin => Some(*active_level),
+                        _ => None,
+                    })
+                else {
                     continue;
                 };
                 let slot = usize::from(interrupt.core.as_deref() == Some("core4"));
@@ -1021,60 +1431,127 @@ fn block_window(
                 ]));
             }
             for (key, rows) in irqs {
-                if !rows.is_empty() { options.insert(key.into(), toml::Value::Array(rows)); }
+                if !rows.is_empty() {
+                    options.insert(key.into(), toml::Value::Array(rows));
+                }
             }
             let feedback = gpio_feedback(selection, Some(ticks_per_second))?;
             if !feedback.is_empty() {
-                options.insert("feedback".into(), toml::Value::try_from(feedback).map_err(|error| error.to_string())?);
+                options.insert(
+                    "feedback".into(),
+                    toml::Value::try_from(feedback).map_err(|error| error.to_string())?,
+                );
             }
-            if let Some(ApplicationBlockInput::Gpio { outputs, pins, registers, .. }) = gpio_input {
+            if let Some(ApplicationBlockInput::Gpio {
+                outputs,
+                pins,
+                registers,
+                ..
+            }) = gpio_input
+            {
                 if !outputs.is_empty() {
-                    options.insert("initial_outputs".into(), toml::Value::Array(outputs.iter().map(|word| table(vec![
-                        ("port", integer(u64::from(word.port))),
-                        ("levels", integer(u64::from(word.levels))),
-                    ])).collect()));
+                    options.insert(
+                        "initial_outputs".into(),
+                        toml::Value::Array(
+                            outputs
+                                .iter()
+                                .map(|word| {
+                                    table(vec![
+                                        ("port", integer(u64::from(word.port))),
+                                        ("levels", integer(u64::from(word.levels))),
+                                    ])
+                                })
+                                .collect(),
+                        ),
+                    );
                 }
                 if !pins.is_empty() {
-                    options.insert("initial_inputs".into(), toml::Value::Array(pins.iter().map(|level| table(vec![
-                        ("port", integer(u64::from(level.port))),
-                        ("pin", integer(u64::from(level.pin))),
-                        ("high", toml::Value::Boolean(level.high)),
-                    ])).collect()));
+                    options.insert(
+                        "initial_inputs".into(),
+                        toml::Value::Array(
+                            pins.iter()
+                                .map(|level| {
+                                    table(vec![
+                                        ("port", integer(u64::from(level.port))),
+                                        ("pin", integer(u64::from(level.pin))),
+                                        ("high", toml::Value::Boolean(level.high)),
+                                    ])
+                                })
+                                .collect(),
+                        ),
+                    );
                 }
                 if !registers.is_empty() {
-                    options.insert("initial_registers".into(), toml::Value::Array(registers.iter().map(|word| table(vec![
-                        ("port", integer(u64::from(word.port))),
-                        ("register", integer(u64::from(word.register))),
-                        ("value", integer(u64::from(word.value))),
-                    ])).collect()));
+                    options.insert(
+                        "initial_registers".into(),
+                        toml::Value::Array(
+                            registers
+                                .iter()
+                                .map(|word| {
+                                    table(vec![
+                                        ("port", integer(u64::from(word.port))),
+                                        ("register", integer(u64::from(word.register))),
+                                        ("value", integer(u64::from(word.value))),
+                                    ])
+                                })
+                                .collect(),
+                        ),
+                    );
                 }
             }
             "gpio"
         }
         BlockDevice::Xp5Gpio { port: Some(3), .. } => "gpio-port3",
-        BlockDevice::Xp5Gpio { port: Some(port), .. } => return Err(format!("block {}: no XP5 single-port GPIO view of port {port}", block.id)),
-        BlockDevice::CableStatus { connected_level, .. } => match block.kind {
+        BlockDevice::Xp5Gpio {
+            port: Some(port), ..
+        } => {
+            return Err(format!(
+                "block {}: no XP5 single-port GPIO view of port {port}",
+                block.id
+            ));
+        }
+        BlockDevice::CableStatus {
+            connected_level, ..
+        } => match block.kind {
             SocBlockKind::UsbController if *connected_level == 1 => "usb-connection-status",
             SocBlockKind::DisplayController => {
-                options.insert("connected_level".into(), integer(u64::from(*connected_level)));
+                options.insert(
+                    "connected_level".into(),
+                    integer(u64::from(*connected_level)),
+                );
                 "hdmi-hot-plug-status"
             }
             _ => return Err(format!("block {}: no XP5 cable status model", block.id)),
         },
         BlockDevice::Xp5Adc { .. } => {
             if let Some(samples) = samples {
-                options.insert("samples".into(), toml::Value::Array(samples.iter().map(|value| integer(u64::from(*value))).collect()));
+                options.insert(
+                    "samples".into(),
+                    toml::Value::Array(
+                        samples
+                            .iter()
+                            .map(|value| integer(u64::from(*value)))
+                            .collect(),
+                    ),
+                );
             }
             "adc"
         }
         BlockDevice::Temperature { .. } => "soc-temperature",
         BlockDevice::InterprocessorMailbox { .. } => "interprocessor-mailbox",
         BlockDevice::AudioSerial { reset_offset, .. } => {
-            match run.audio_signals.iter().find(|signal| signal.block_id == block.id) {
+            match run
+                .audio_signals
+                .iter()
+                .find(|signal| signal.block_id == block.id)
+            {
                 Some(signal) => {
                     options.insert("sample_rate_hz".into(), integer(signal.sample_rate_hz));
                     options.insert("tone_hz".into(), integer(signal.tone_hz));
-                    options.insert("tone_amplitude".into(), toml::Value::Float(f64::from(signal.tone_amplitude_thousandths) / 1000.0));
+                    options.insert(
+                        "tone_amplitude".into(),
+                        toml::Value::Float(f64::from(signal.tone_amplitude_thousandths) / 1000.0),
+                    );
                     "audio-serial"
                 }
                 None => {
@@ -1087,7 +1564,10 @@ fn block_window(
             options.insert("commit_ticks".into(), integer(*commit_ticks));
             "memory-configuration"
         }
-        BlockDevice::DdrPhy { .. } => { options.insert("registers".into(), stub_registers(block)); "bringup-stub" }
+        BlockDevice::DdrPhy { .. } => {
+            options.insert("registers".into(), stub_registers(block));
+            "bringup-stub"
+        }
         BlockDevice::SdInterface { .. } => "sd-interface",
         BlockDevice::SdhciUhs2 { clock_ticks, .. } => {
             options.insert("slot".into(), integer(block.base.saturating_sub(0x2000)));
@@ -1109,7 +1589,9 @@ fn block_window(
             "imaging-resize"
         }
         BlockDevice::ImagingPaf { .. } => "imaging-paf",
-        BlockDevice::ImagingPreview { focus_statistics, .. } => {
+        BlockDevice::ImagingPreview {
+            focus_statistics, ..
+        } => {
             if *focus_statistics {
                 options.insert("focus_filters".into(), toml::Value::Boolean(true));
                 options.insert("focus_window".into(), toml::Value::Boolean(true));
@@ -1141,40 +1623,86 @@ fn block_window(
             stage_handshake(&mut options, handshake.as_ref(), irq("irq"));
             "imaging-resz"
         }
-        BlockDevice::InputCapture { transmit_requests, .. } => {
+        BlockDevice::InputCapture {
+            transmit_requests, ..
+        } => {
             if !transmit_requests.is_empty() {
-                options.insert("dma_transmit".into(), toml::Value::Array(transmit_requests.iter().map(|wire| {
-                    let mut row = toml::Table::new();
-                    row.insert("channel".into(), integer(u64::from(wire.channel)));
-                    row.insert("request".into(), integer(u64::from(wire.request)));
-                    toml::Value::Table(row)
-                }).collect()));
+                options.insert(
+                    "dma_transmit".into(),
+                    toml::Value::Array(
+                        transmit_requests
+                            .iter()
+                            .map(|wire| {
+                                let mut row = toml::Table::new();
+                                row.insert("channel".into(), integer(u64::from(wire.channel)));
+                                row.insert("request".into(), integer(u64::from(wire.request)));
+                                toml::Value::Table(row)
+                            })
+                            .collect(),
+                    ),
+                );
             }
-            if let Some(stage) = selection.body.hardware.as_ref().and_then(|hardware| hardware.stabilizer.as_ref())
+            if let Some(stage) = selection
+                .body
+                .hardware
+                .as_ref()
+                .and_then(|hardware| hardware.stabilizer.as_ref())
                 .filter(|stage| stage.capture_block_id == block.id)
             {
-                let part = selection.parts.iter().find(|part| part.id == stage.part_id)
+                let part = selection
+                    .parts
+                    .iter()
+                    .find(|part| part.id == stage.part_id)
                     .ok_or_else(|| format!("no stabilizer part {}", stage.part_id))?;
                 let fujimod_catalog::reference::PartModel::Peripheral {
-                    interface: fujimod_catalog::assembly::PeripheralPart::StabilizerStage { latency_ns, center, rest, lag_shift, drive_gain },
-                } = &part.model else {
+                    interface:
+                        fujimod_catalog::assembly::PeripheralPart::StabilizerStage {
+                            latency_ns,
+                            center,
+                            rest,
+                            lag_shift,
+                            drive_gain,
+                        },
+                } = &part.model
+                else {
                     return Err(format!("part {} is not a stabilizer stage", part.id));
                 };
                 let output = format!("channel{}", stage.capture_channel);
-                let line = block.interrupts.iter()
+                let line = block
+                    .interrupts
+                    .iter()
                     .find(|row| row.output == output && row.core.as_deref() == Some("core4"))
                     .map(|row| row.line)
-                    .ok_or_else(|| format!("block {}: capture {output} has no companion interrupt", block.id))?;
-                let array = |values: Vec<i64>| toml::Value::Array(values.into_iter().map(toml::Value::Integer).collect());
+                    .ok_or_else(|| {
+                        format!(
+                            "block {}: capture {output} has no companion interrupt",
+                            block.id
+                        )
+                    })?;
+                let array = |values: Vec<i64>| {
+                    toml::Value::Array(values.into_iter().map(toml::Value::Integer).collect())
+                };
                 let mut sequencer = toml::Table::new();
                 sequencer.insert("channel".into(), integer(u64::from(stage.capture_channel)));
                 sequencer.insert("companion_irq_line".into(), integer(u64::from(line)));
                 sequencer.insert("latency_ns".into(), integer(*latency_ns));
-                sequencer.insert("center".into(), array(center.iter().map(|v| i64::from(*v)).collect()));
-                sequencer.insert("rest".into(), array(rest.iter().map(|v| i64::from(*v)).collect()));
+                sequencer.insert(
+                    "center".into(),
+                    array(center.iter().map(|v| i64::from(*v)).collect()),
+                );
+                sequencer.insert(
+                    "rest".into(),
+                    array(rest.iter().map(|v| i64::from(*v)).collect()),
+                );
                 sequencer.insert("lag_shift".into(), integer(u64::from(*lag_shift)));
-                sequencer.insert("drive_channels".into(), array(stage.drive_channels.iter().map(|v| i64::from(*v)).collect()));
-                sequencer.insert("drive_gain".into(), array(drive_gain.iter().map(|v| i64::from(*v)).collect()));
+                sequencer.insert(
+                    "drive_channels".into(),
+                    array(stage.drive_channels.iter().map(|v| i64::from(*v)).collect()),
+                );
+                sequencer.insert(
+                    "drive_gain".into(),
+                    array(drive_gain.iter().map(|v| i64::from(*v)).collect()),
+                );
                 options.insert("sequencer".into(), toml::Value::Table(sequencer));
             }
             "input-capture"
@@ -1199,18 +1727,38 @@ fn block_window(
         BlockDevice::Pl022 { source_hz, .. } if run.polled_serial_blocks.contains(&block.id) => {
             options.insert("source_hz".into(), integer(*source_hz));
             let endpoints = serial_endpoints(selection, block, part_inputs)?;
-            if !endpoints.is_empty() { options.insert("endpoints".into(), toml::Value::Array(endpoints)); }
+            if !endpoints.is_empty() {
+                options.insert("endpoints".into(), toml::Value::Array(endpoints));
+            }
             "spi-controller"
         }
-        BlockDevice::Pl022 { source_hz, ticks_per_second, receive_request, transmit_request, companion_irq_line, .. } => {
+        BlockDevice::Pl022 {
+            source_hz,
+            ticks_per_second,
+            receive_request,
+            transmit_request,
+            companion_irq_line,
+            ..
+        } => {
             options.insert("source_hz".into(), integer(*source_hz));
             options.insert("ticks_per_second".into(), integer(*ticks_per_second));
-            if let Some(value) = receive_request { options.insert("receive_request".into(), integer(u64::from(*value))); }
-            if let Some(value) = transmit_request { options.insert("transmit_request".into(), integer(u64::from(*value))); }
-            if let Some(value) = companion_irq_line { options.insert("companion_irq_line".into(), integer(u64::from(*value))); }
-            if let Some(line) = irq("irq") { options.insert("gic_line".into(), integer(u64::from(line))); }
+            if let Some(value) = receive_request {
+                options.insert("receive_request".into(), integer(u64::from(*value)));
+            }
+            if let Some(value) = transmit_request {
+                options.insert("transmit_request".into(), integer(u64::from(*value)));
+            }
+            if let Some(value) = companion_irq_line {
+                options.insert("companion_irq_line".into(), integer(u64::from(*value)));
+            }
+            if let Some(line) = irq("irq") {
+                options.insert("gic_line".into(), integer(u64::from(line)));
+            }
             if run.unobserved_interrupt_blocks.contains(&block.id) {
-                options.insert("companion_irq_unconnected".into(), toml::Value::Boolean(true));
+                options.insert(
+                    "companion_irq_unconnected".into(),
+                    toml::Value::Boolean(true),
+                );
             }
             let endpoints = serial_endpoints(selection, block, part_inputs)?;
             let mut wire = match lens_wire(selection, block)? {
@@ -1219,7 +1767,10 @@ fn block_window(
             };
             if !endpoints.is_empty() {
                 if !wire.is_empty() {
-                    return Err(format!("block {}: a lens mount shares its port with chip-selected endpoints", block.id));
+                    return Err(format!(
+                        "block {}: a lens mount shares its port with chip-selected endpoints",
+                        block.id
+                    ));
                 }
                 wire.insert("kind".into(), toml::Value::String("gpio-selected".into()));
                 wire.insert("endpoints".into(), toml::Value::Array(endpoints));
@@ -1231,30 +1782,65 @@ fn block_window(
             options.insert("wire".into(), toml::Value::Table(wire));
             "pl022"
         }
-        BlockDevice::Completion { fixed_words, starts, completion, ack, irq_mask, delay_ticks, .. } => {
+        BlockDevice::Completion {
+            fixed_words,
+            starts,
+            completion,
+            ack,
+            irq_mask,
+            delay_ticks,
+            ..
+        } => {
             if !fixed_words.is_empty() {
-                options.insert("registers".into(), toml::Value::Array(fixed_words.iter().map(|word| {
-                    let mut row = toml::Table::new();
-                    row.insert("offset".into(), integer(word.offset));
-                    row.insert("mode".into(), toml::Value::String("constant".into()));
-                    row.insert("value".into(), integer(u64::from(word.value)));
-                    toml::Value::Table(row)
-                }).collect()));
+                options.insert(
+                    "registers".into(),
+                    toml::Value::Array(
+                        fixed_words
+                            .iter()
+                            .map(|word| {
+                                let mut row = toml::Table::new();
+                                row.insert("offset".into(), integer(word.offset));
+                                row.insert("mode".into(), toml::Value::String("constant".into()));
+                                row.insert("value".into(), integer(u64::from(word.value)));
+                                toml::Value::Table(row)
+                            })
+                            .collect(),
+                    ),
+                );
             }
-            handshake_options(&mut options, starts, completion, ack.as_ref(), irq_mask.as_ref());
+            handshake_options(
+                &mut options,
+                starts,
+                completion,
+                ack.as_ref(),
+                irq_mask.as_ref(),
+            );
             options.insert("delay_us".into(), integer(delay_ticks / 1000));
-            if let Some(line) = irq("irq") { options.insert("irq".into(), integer(u64::from(line))); }
+            if let Some(line) = irq("irq") {
+                options.insert("irq".into(), integer(u64::from(line)));
+            }
             "completion-stub"
         }
         BlockDevice::VideoCodec { .. } => {
-            options.insert("irq".into(), integer(u64::from(irq("irq").ok_or_else(|| format!("block {} declares no interrupt", block.id))?)));
+            options.insert(
+                "irq".into(),
+                integer(u64::from(irq("irq").ok_or_else(|| {
+                    format!("block {} declares no interrupt", block.id)
+                })?)),
+            );
             "xp5-codec"
         }
         BlockDevice::ImagingBuffer { .. } => "imaging-buffer",
         BlockDevice::Xp5ImagingStatistics { .. } => "imaging-statistics",
         // A loader start is the direct-flash boot; a ROM start replaces the straps with its own.
-        BlockDevice::BootControl { direct_flash_straps, .. } => {
-            options.insert("source_straps".into(), integer(u64::from(*direct_flash_straps)));
+        BlockDevice::BootControl {
+            direct_flash_straps,
+            ..
+        } => {
+            options.insert(
+                "source_straps".into(),
+                integer(u64::from(*direct_flash_straps)),
+            );
             options.insert("initial_control".into(), integer(0));
             options.insert("initial_primary_control".into(), integer(0));
             "boot-control"
@@ -1263,24 +1849,52 @@ fn block_window(
             stage_handshake(&mut options, handshake.as_ref(), irq("irq"));
             "completion-stub"
         }
-        BlockDevice::RegisterBlock { idle_bits, fixed_words, reads_back, .. } => {
+        BlockDevice::RegisterBlock {
+            idle_bits,
+            fixed_words,
+            reads_back,
+            ..
+        } => {
             if !idle_bits.is_empty() || !fixed_words.is_empty() {
-                options.insert("registers".into(), toml::Value::Array(fixed_words.iter().map(|word| {
-                    let mut row = toml::Table::new();
-                    row.insert("offset".into(), integer(word.offset));
-                    row.insert("mode".into(), toml::Value::String("constant".into()));
-                    row.insert("value".into(), integer(u64::from(word.value)));
-                    toml::Value::Table(row)
-                }).collect()));
+                options.insert(
+                    "registers".into(),
+                    toml::Value::Array(
+                        fixed_words
+                            .iter()
+                            .map(|word| {
+                                let mut row = toml::Table::new();
+                                row.insert("offset".into(), integer(word.offset));
+                                row.insert("mode".into(), toml::Value::String("constant".into()));
+                                row.insert("value".into(), integer(u64::from(word.value)));
+                                toml::Value::Table(row)
+                            })
+                            .collect(),
+                    ),
+                );
             }
-            if block.id == "dma-routes" { "dma-request-routing" }
-            else if block.id == "dma-address-high" { "dma-address-high" }
-            else if *reads_back || block.registers.iter().any(|register| register.reads.is_some()) {
+            if block.id == "dma-routes" {
+                "dma-request-routing"
+            } else if block.id == "dma-address-high" {
+                "dma-address-high"
+            } else if *reads_back
+                || block
+                    .registers
+                    .iter()
+                    .any(|register| register.reads.is_some())
+            {
                 options.insert("registers".into(), stub_registers(block));
                 "bringup-stub"
-            } else { "write-only-registers" }
+            } else {
+                "write-only-registers"
+            }
         }
-        BlockDevice::SdHost { transfer_ticks, clock_ticks, dma_windows, address_high, .. } => {
+        BlockDevice::SdHost {
+            transfer_ticks,
+            clock_ticks,
+            dma_windows,
+            address_high,
+            ..
+        } => {
             let mut controller = toml::Table::new();
             controller.insert("base".into(), integer(block.base));
             controller.insert("protocol".into(), toml::Value::String("sdhc".into()));
@@ -1288,23 +1902,44 @@ fn block_window(
             controller.insert("clock_ticks".into(), integer(*clock_ticks));
             controller.insert("rca".into(), integer(1));
             if !dma_windows.is_empty() {
-                let (low, banks): (Vec<&fujimod_catalog::soc::SdDmaWindow>, Vec<_>) = dma_windows.iter().partition(|window| window.base == 0);
+                let (low, banks): (Vec<&fujimod_catalog::soc::SdDmaWindow>, Vec<_>) =
+                    dma_windows.iter().partition(|window| window.base == 0);
                 let [low] = low.as_slice() else {
-                    return Err(format!("block {}: SD DMA needs one range from address 0", block.id));
+                    return Err(format!(
+                        "block {}: SD DMA needs one range from address 0",
+                        block.id
+                    ));
                 };
                 controller.insert("ram_bytes".into(), integer(low.size));
                 if !banks.is_empty() {
-                    controller.insert("ram_banks".into(), toml::Value::Array(banks.iter().map(|bank| {
-                        toml::Value::Array(vec![integer(bank.base), integer(bank.size)])
-                    }).collect()));
+                    controller.insert(
+                        "ram_banks".into(),
+                        toml::Value::Array(
+                            banks
+                                .iter()
+                                .map(|bank| {
+                                    toml::Value::Array(vec![integer(bank.base), integer(bank.size)])
+                                })
+                                .collect(),
+                        ),
+                    );
                 }
                 controller.insert("dram_alias".into(), toml::Value::Boolean(false));
             }
-            if let Some(address) = address_high { controller.insert("address_high".into(), integer(*address)); }
-            if let Some(steps) = run.sd_clock_steps.iter().find(|steps| steps.block_id == block.id) {
+            if let Some(address) = address_high {
+                controller.insert("address_high".into(), integer(*address));
+            }
+            if let Some(steps) = run
+                .sd_clock_steps
+                .iter()
+                .find(|steps| steps.block_id == block.id)
+            {
                 let mut dividers = toml::Table::new();
                 dividers.insert("interface".into(), integer(u64::from(steps.interface)));
-                dividers.insert("default_speed".into(), integer(u64::from(steps.default_speed)));
+                dividers.insert(
+                    "default_speed".into(),
+                    integer(u64::from(steps.default_speed)),
+                );
                 dividers.insert("high_speed".into(), integer(u64::from(steps.high_speed)));
                 controller.insert("speed_dividers".into(), toml::Value::Table(dividers));
             }
@@ -1312,70 +1947,128 @@ fn block_window(
             "sdhci"
         }
         BlockDevice::Decompressor { .. } => "lz",
-        BlockDevice::Movdc { .. } => {
-            "movdc"
-        }
+        BlockDevice::Movdc { .. } => "movdc",
         BlockDevice::SensorCommand { .. } => {
             options.insert("command_latency_us".into(), integer(1));
-            let sensors: Vec<_> = selection.parts.iter().filter_map(|part| match &part.model {
-                fujimod_catalog::reference::PartModel::Peripheral {
-                    interface: fujimod_catalog::assembly::PeripheralPart::TimedReadoutSensor { fast_readout, line_ns },
-                } => Some((*fast_readout, *line_ns)),
-                _ => None,
-            }).collect();
+            let sensors: Vec<_> = selection
+                .parts
+                .iter()
+                .filter_map(|part| match &part.model {
+                    fujimod_catalog::reference::PartModel::Peripheral {
+                        interface:
+                            fujimod_catalog::assembly::PeripheralPart::TimedReadoutSensor {
+                                fast_readout,
+                                line_ns,
+                            },
+                    } => Some((*fast_readout, *line_ns)),
+                    _ => None,
+                })
+                .collect();
             match sensors.as_slice() {
                 [] => {}
                 [(readout, line_ns)] => {
                     options.insert("frame_timing_readout".into(), integer(u64::from(*readout)));
                     options.insert("frame_timing_line_ns".into(), integer(*line_ns));
                 }
-                _ => return Err(format!("body {} installs more than one timed-readout sensor", selection.body.id)),
+                _ => {
+                    return Err(format!(
+                        "body {} installs more than one timed-readout sensor",
+                        selection.body.id
+                    ));
+                }
             }
             "imaging-sensor"
         }
-        BlockDevice::ImagingReceiver { .. } => {
-            "imaging-receiver"
-        }
+        BlockDevice::ImagingReceiver { .. } => "imaging-receiver",
         BlockDevice::Display { .. } => "display",
         BlockDevice::IoGroups { .. } => "pin-control",
         BlockDevice::Usb { .. } => {
-            options.insert("interrupt".into(), integer(u64::from(irq("irq").unwrap_or(0))));
+            options.insert(
+                "interrupt".into(),
+                integer(u64::from(irq("irq").unwrap_or(0))),
+            );
             options.insert("speed".into(), integer(0));
             options.insert("command_ticks".into(), integer(1000));
             options.insert("transaction_ticks".into(), integer(125000));
             "usb-device-controller"
         }
         BlockDevice::UsbPhy { .. } => "usb-phy",
-        BlockDevice::JpegCodec { run_ticks, direction, .. } => {
-            let line = irq("irq").ok_or_else(|| format!("block {}: JPEG codec has no interrupt", block.id))?;
+        BlockDevice::JpegCodec {
+            run_ticks,
+            direction,
+            ..
+        } => {
+            let line = irq("irq")
+                .ok_or_else(|| format!("block {}: JPEG codec has no interrupt", block.id))?;
             options.insert("irq".into(), integer(u64::from(line)));
             options.insert("run_ticks".into(), integer(*run_ticks));
             match direction {
                 Some(fujimod_catalog::soc::JpegDirection::Decode) => "jpeg-decoder",
                 Some(fujimod_catalog::soc::JpegDirection::Encode) => "jpeg-encoder",
-                None => return Err(format!("block {}: XP5 JPEG blocks declare a direction", block.id)),
+                None => {
+                    return Err(format!(
+                        "block {}: XP5 JPEG blocks declare a direction",
+                        block.id
+                    ));
+                }
             }
         }
-        BlockDevice::I2c { fifo_depth, clock_hz, tick_hz, .. } => {
+        BlockDevice::I2c {
+            fifo_depth,
+            clock_hz,
+            tick_hz,
+            ..
+        } => {
             let _ = (fifo_depth, clock_hz, tick_hz);
-            if let Some(line) = irq("interrupt") { options.insert("interrupt".into(), integer(u64::from(line))); }
+            if let Some(line) = irq("interrupt") {
+                options.insert("interrupt".into(), integer(u64::from(line)));
+            }
             let mut targets = Vec::new();
-            for wire in selection.body.wiring.iter().filter(|wire| wire.source_id == block.id) {
-                let address = wire.address.ok_or_else(|| format!("wire {} -> {} has no bus address", wire.source_id, wire.target_id))?;
-                let part = selection.parts.iter().find(|part| part.id == wire.target_id)
-                    .ok_or_else(|| format!("wire {} -> {}: no such part", wire.source_id, wire.target_id))?;
-                let fujimod_catalog::reference::PartModel::Peripheral { interface } = &part.model else {
+            for wire in selection
+                .body
+                .wiring
+                .iter()
+                .filter(|wire| wire.source_id == block.id)
+            {
+                let address = wire.address.ok_or_else(|| {
+                    format!(
+                        "wire {} -> {} has no bus address",
+                        wire.source_id, wire.target_id
+                    )
+                })?;
+                let part = selection
+                    .parts
+                    .iter()
+                    .find(|part| part.id == wire.target_id)
+                    .ok_or_else(|| {
+                        format!(
+                            "wire {} -> {}: no such part",
+                            wire.source_id, wire.target_id
+                        )
+                    })?;
+                let fujimod_catalog::reference::PartModel::Peripheral { interface } = &part.model
+                else {
                     return Err(format!("part {} is not a control-bus peripheral", part.id));
                 };
-                let interface = toml::Value::try_from(interface).map_err(|error| error.to_string())?;
+                let interface =
+                    toml::Value::try_from(interface).map_err(|error| error.to_string())?;
                 let mut row = toml::Table::new();
                 row.insert("address".into(), integer(u64::from(address)));
                 row.insert("part".into(), interface);
                 targets.push(toml::Value::Table(row));
             }
-            if !targets.is_empty() { options.insert("targets".into(), toml::Value::Array(targets)); }
-            if let Some(time) = run.bus_byte_times.iter().find(|time| time.block_id == block.id) {
-                options.insert("byte_ns".into(), integer(time.ticks * 1_000_000_000 / ticks_per_second));
+            if !targets.is_empty() {
+                options.insert("targets".into(), toml::Value::Array(targets));
+            }
+            if let Some(time) = run
+                .bus_byte_times
+                .iter()
+                .find(|time| time.block_id == block.id)
+            {
+                options.insert(
+                    "byte_ns".into(),
+                    integer(time.ticks * 1_000_000_000 / ticks_per_second),
+                );
             }
             "i2c-controller"
         }
@@ -1383,14 +2076,22 @@ fn block_window(
         BlockDevice::GicV2 { .. } | BlockDevice::GicV3 { .. } => return Ok(None),
         BlockDevice::UnmodeledBusDrain { .. } => return Ok(None),
         BlockDevice::DramController { .. } => return Ok(None),
-        other => return Err(format!("block {} has no XP5 emulator window for {other:?}", block.id)),
+        other => {
+            return Err(format!(
+                "block {} has no XP5 emulator window for {other:?}",
+                block.id
+            ));
+        }
     };
     Ok(Some((kind, options)))
 }
 
 /// The body's GPIO feedback wires: each drives an input pad from the output
 /// latch bit of the same pin number (register 0, the port's drive field).
-fn gpio_feedback(selection: &ResolvedSelection, ticks_per_second: Option<u64>) -> Result<Vec<Feedback>, String> {
+fn gpio_feedback(
+    selection: &ResolvedSelection,
+    ticks_per_second: Option<u64>,
+) -> Result<Vec<Feedback>, String> {
     let body = &selection.body;
     let Some(hardware) = body.hardware.as_ref() else {
         return Ok(vec![]);
@@ -1434,11 +2135,26 @@ fn gpio_feedback(selection: &ResolvedSelection, ticks_per_second: Option<u64>) -
             }
             let rise_delay = match (wire.rise_ns, ticks_per_second) {
                 (None, _) => 0,
-                (Some(ns), Some(rate)) => u64::try_from(u128::from(ns) * u128::from(rate) / 1_000_000_000)
-                    .map_err(|_| format!("body {} feedback rise time overflows", body.id))?,
-                (Some(_), None) => return Err(format!("body {} delayed GPIO feedback needs a run tick rate", body.id)),
+                (Some(ns), Some(rate)) => {
+                    u64::try_from(u128::from(ns) * u128::from(rate) / 1_000_000_000)
+                        .map_err(|_| format!("body {} feedback rise time overflows", body.id))?
+                }
+                (Some(_), None) => {
+                    return Err(format!(
+                        "body {} delayed GPIO feedback needs a run tick rate",
+                        body.id
+                    ));
+                }
             };
-            Ok(Feedback { port, register: 0, bit, input_port, input_pin, rise_delay, latch_high: wire.latch_high })
+            Ok(Feedback {
+                port,
+                register: 0,
+                bit,
+                input_port,
+                input_pin,
+                rise_delay,
+                latch_high: wire.latch_high,
+            })
         })
         .collect()
 }
@@ -1717,9 +2433,22 @@ mod bus_drain_tests {
         let hardware = resolved.reference.body.hardware.as_mut().unwrap();
         hardware.bus_drain.truncate(1);
         let moved = device_windows(&resolved, Some((0xc000_0000, 0xc000_0000))).unwrap();
-        assert!(moved.iter().any(|window| window.base == 0xc000_0000 && window.kind == "discarded-read"));
-        resolved.reference.body.hardware.as_mut().unwrap().bus_drain.clear();
-        let error = device_windows(&resolved, Some((0xc000_0000, 0xc000_0000))).err().unwrap();
+        assert!(
+            moved
+                .iter()
+                .any(|window| window.base == 0xc000_0000 && window.kind == "discarded-read")
+        );
+        resolved
+            .reference
+            .body
+            .hardware
+            .as_mut()
+            .unwrap()
+            .bus_drain
+            .clear();
+        let error = device_windows(&resolved, Some((0xc000_0000, 0xc000_0000)))
+            .err()
+            .unwrap();
         assert!(error.contains("does not declare once"), "{error}");
     }
 }
@@ -1745,7 +2474,13 @@ mod gpio_feedback_tests {
         for firmware in ["x100vi-131", "xt5-431"] {
             let wire = &feedback(&resolved(firmware)).unwrap()[0];
             assert_eq!(
-                (&wire["port"], &wire["register"], &wire["bit"], &wire["input_port"], &wire["input_pin"]),
+                (
+                    &wire["port"],
+                    &wire["register"],
+                    &wire["bit"],
+                    &wire["input_port"],
+                    &wire["input_pin"]
+                ),
                 (&4.into(), &0.into(), &4.into(), &4.into(), &4.into()),
                 "{firmware}"
             );
@@ -1755,24 +2490,56 @@ mod gpio_feedback_tests {
     #[test]
     fn a_body_without_feedback_leaves_the_gpio_window_unchanged() {
         let mut resolved = resolved("xt5-431");
-        resolved.reference.body.hardware.as_mut().unwrap().gpio_feedback.clear();
+        resolved
+            .reference
+            .body
+            .hardware
+            .as_mut()
+            .unwrap()
+            .gpio_feedback
+            .clear();
         assert_eq!(feedback(&resolved).unwrap(), serde_json::Value::Null);
     }
 
     #[test]
     fn inverting_and_non_gpio_feedback_wires_are_refused() {
         let mut inverted = resolved("xt5-431");
-        let input = inverted.reference.body.hardware.as_ref().unwrap().gpio_feedback[0]
+        let input = inverted
+            .reference
+            .body
+            .hardware
+            .as_ref()
+            .unwrap()
+            .gpio_feedback[0]
             .input_connection_id
             .clone();
-        let connection = inverted.reference.body.connections.iter_mut().find(|c| c.id == input).unwrap();
-        connection.signals = vec![ConnectionSignal::Gpio { port: 4, pin: 4, active_level: false }];
+        let connection = inverted
+            .reference
+            .body
+            .connections
+            .iter_mut()
+            .find(|c| c.id == input)
+            .unwrap();
+        connection.signals = vec![ConnectionSignal::Gpio {
+            port: 4,
+            pin: 4,
+            active_level: false,
+        }];
         let error = feedback(&inverted).err().unwrap();
         assert!(error.contains("inverting GPIO feedback"), "{error}");
 
         let mut analog = resolved("xt5-431");
-        let connection = analog.reference.body.connections.iter_mut().find(|c| c.id == input).unwrap();
-        connection.signals = vec![ConnectionSignal::Adc { channel: 0, threshold: None }];
+        let connection = analog
+            .reference
+            .body
+            .connections
+            .iter_mut()
+            .find(|c| c.id == input)
+            .unwrap();
+        connection.signals = vec![ConnectionSignal::Adc {
+            channel: 0,
+            threshold: None,
+        }];
         let error = feedback(&analog).err().unwrap();
         assert!(error.contains("exactly one GPIO pin"), "{error}");
     }

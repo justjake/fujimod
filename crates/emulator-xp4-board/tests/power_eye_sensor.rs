@@ -83,16 +83,22 @@ fn eye_bank_inputs_and_commit_reach_the_power_peer() {
     );
     // The eye commit is a bank-zero register 38 bit-15 write. Dropping the
     // option makes the peer refuse the low byte instead of accepting it.
-    assert_eq!([
-        word(&session, 38 << 2 | 1),
-        word(&session, 0x80),
-        word(&session, 0),
-    ], [0, 0, 0]);
-    assert_eq!([
-        word(&session, 38 << 2),
-        word(&session, 0),
-        word(&session, 0),
-    ], [0, 0x80, 0]);
+    assert_eq!(
+        [
+            word(&session, 38 << 2 | 1),
+            word(&session, 0x80),
+            word(&session, 0),
+        ],
+        [0, 0, 0]
+    );
+    assert_eq!(
+        [
+            word(&session, 38 << 2),
+            word(&session, 0),
+            word(&session, 0),
+        ],
+        [0, 0x80, 0]
+    );
     assert!(session.failure().is_none());
 }
 

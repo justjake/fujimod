@@ -209,15 +209,23 @@ impl Device for Adc {
             self.arm(cx, false);
         }
     }
-    fn analog_inputs(&self) -> Option<&(dyn fujimod_emulator_devices::capability::AnalogInputs + 'static)> {
+    fn analog_inputs(
+        &self,
+    ) -> Option<&(dyn fujimod_emulator_devices::capability::AnalogInputs + 'static)> {
         Some(self)
     }
-    fn analog_inputs_mut(&mut self) -> Option<&mut (dyn fujimod_emulator_devices::capability::AnalogInputs + 'static)> {
+    fn analog_inputs_mut(
+        &mut self,
+    ) -> Option<&mut (dyn fujimod_emulator_devices::capability::AnalogInputs + 'static)> {
         Some(self)
     }
 
     fn next_deadline(&self, now: u64) -> Option<u64> {
-        if self.state.rearm { Some(now) } else { self.state.deadline }
+        if self.state.rearm {
+            Some(now)
+        } else {
+            self.state.deadline
+        }
     }
     fn save(&self) -> Value {
         serde_json::json!({"inputs":self.inputs,"sample_ticks":self.sample_ticks,"adc":self.state})

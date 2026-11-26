@@ -1,13 +1,17 @@
 //! XP4 on the shared board: the caller's execution graph (processors, RAM,
 //! memory windows and maps), a GICv2 at the processors' configuration base,
 //! and every device the definition selects.
-use super::{definition::TimerLayout, device_build, devices::Connected, memory, Definition};
-use fujimod_emulator_xp4_storage::storage::SerialFlashController;
+use super::{Definition, definition::TimerLayout, device_build, devices::Connected, memory};
 use fujimod_catalog_configuration::RunEngine;
-use fujimod_emulator::board::{InterruptMap, InterruptRegisters, armv7a, bus::{Bus, Mode}, factory};
+use fujimod_emulator::board::{
+    InterruptMap, InterruptRegisters, armv7a,
+    bus::{Bus, Mode},
+    factory,
+};
 use fujimod_emulator_devices::{Cx, Device, checkpoint::Checkpoint};
 use fujimod_emulator_ip_arm::gicv2;
 use fujimod_emulator_xp4_io::interval_timers::IntervalTimers;
+use fujimod_emulator_xp4_storage::storage::SerialFlashController;
 use fujimod_emulator_xpp::timer::{self as xpp_timer, TickTimers};
 
 /// GIC lines the XP4 board wires.
@@ -36,34 +40,72 @@ pub fn build(
     if cores != definition.cores || !(1..=4).contains(&cores) {
         return Err("XP4 processor wiring differs from its definition".into());
     }
-    let cbar = definition.cbar.ok_or("XP4 requires an explicit configuration base")?;
+    let cbar = definition
+        .cbar
+        .ok_or("XP4 requires an explicit configuration base")?;
     let gic_initial = definition.gic_initial.take();
-    let memory = memory::allocate(std::mem::take(&mut definition.memory_regions), definition.ram_size)?;
-    let timer: Option<(u64, u64, Box<dyn Device>)> = match (definition.timer_base, definition.timer_layout.take()) {
-        (Some(base), Some(TimerLayout::Xp4)) => {
-            if definition.timer_routes.iter().any(|&(channel, _)| channel >= 8) {
-                return Err("Invalid XP4 interval-timer route".into());
+    let memory = memory::allocate(
+        std::mem::take(&mut definition.memory_regions),
+        definition.ram_size,
+    )?;
+    let timer: Option<(u64, u64, Box<dyn Device>)> =
+        match (definition.timer_base, definition.timer_layout.take()) {
+            (Some(base), Some(TimerLayout::Xp4)) => {
+                if definition
+                    .timer_routes
+                    .iter()
+                    .any(|&(channel, _)| channel >= 8)
+                {
+                    return Err("Invalid XP4 interval-timer route".into());
+                }
+                let base = u64::from(base);
+                let model = IntervalTimers::new(&definition.timer_routes);
+                Some((
+                    base,
+                    TIMER_WINDOW,
+                    Box::new(Timers {
+                        base,
+                        model,
+                        scheduled: None,
+                    }),
+                ))
             }
-            let base = u64::from(base);
-            let model = IntervalTimers::new(&definition.timer_routes);
-            Some((base, TIMER_WINDOW, Box::new(Timers { base, model, scheduled: None })))
-        }
-        (Some(base), Some(TimerLayout::Xpp)) => {
-            let base = u64::from(base);
-            let model = TickTimers::new(&definition.timer_routes)?;
-            Some((base, u64::from(xpp_timer::WINDOW), Box::new(Timers { base, model, scheduled: None })))
-        }
-        (None, None) => None,
-        _ => return Err("the XP4 board needs an interval timer with its window and layout".into()),
-    };
+            (Some(base), Some(TimerLayout::Xpp)) => {
+                let base = u64::from(base);
+                let model = TickTimers::new(&definition.timer_routes)?;
+                Some((
+                    base,
+                    u64::from(xpp_timer::WINDOW),
+                    Box::new(Timers {
+                        base,
+                        model,
+                        scheduled: None,
+                    }),
+                ))
+            }
+            (None, None) => None,
+            _ => {
+                return Err(
+                    "the XP4 board needs an interval timer with its window and layout".into(),
+                );
+            }
+        };
     let cache_sizes = definition.cache_sizes.map(|(d, i, l2)| (d, i, l2));
-    let dials = definition.countdown_dials.iter().map(|dial| (dial.name.clone(), dial.channel)).collect();
+    let dials = definition
+        .countdown_dials
+        .iter()
+        .map(|dial| (dial.name.clone(), dial.channel))
+        .collect();
     let built = device_build::build(definition, &memory, storage_image, card_files, card_media)?;
     // Serial-flash execution is served by the controller's execute-in-place
     // pages, so the views the old engine mapped are not needed here.
     // The XP4 physical map is the identity on every core: each device
     // window, the timer and the GIC's distributor and CPU interface.
-    let mut windows = built.devices.as_ref().map(|devices| devices.guard_windows()).unwrap_or_default();
+    let mut windows = built
+        .devices
+        .as_ref()
+        .map(|devices| devices.guard_windows())
+        .unwrap_or_default();
     let mut fixed = vec![(u64::from(cbar) + 0x1000, u64::from(cbar) + 0x3000)];
     if let Some((base, size, _)) = &timer {
         fixed.push((*base, base + size));
@@ -76,12 +118,21 @@ pub fn build(
         !windows.iter().any(|&(lo, hi)| lo <= ram.base && end <= hi)
     });
     // Every remaining memory window is on the physical bus, for host and DMA access.
-    graph.dma_mappings =
-        graph.ram.iter().map(|ram| fujimod_emulator::board::memory::BusMapping::ram(ram.base, ram.size)).collect();
-    let memory_ranges = graph.ram.iter().map(|ram| (ram.base, ram.base + ram.size as u64));
+    graph.dma_mappings = graph
+        .ram
+        .iter()
+        .map(|ram| fujimod_emulator::board::memory::BusMapping::ram(ram.base, ram.size))
+        .collect();
+    let memory_ranges = graph
+        .ram
+        .iter()
+        .map(|ram| (ram.base, ram.base + ram.size as u64));
     let taken: Vec<(u64, u64)> = memory_ranges.chain(fixed.iter().copied()).collect();
     if let Some((lo, hi, a, b)) = windows.iter().find_map(|&(lo, hi)| {
-        taken.iter().find(|&&(a, b)| lo < b && a < hi).map(|&(a, b)| (lo, hi, a, b))
+        taken
+            .iter()
+            .find(|&&(a, b)| lo < b && a < hi)
+            .map(|&(a, b)| (lo, hi, a, b))
     }) {
         return Err(format!(
             "Overlapping XP4 device window {lo:#x}..{hi:#x} and memory or interrupt controller {a:#x}..{b:#x}"
@@ -111,8 +162,14 @@ pub fn build(
     }
     for core in 0..cores {
         for &(lo, hi) in &windows {
-            let size = usize::try_from(hi - lo).map_err(|_| "XP4 device window exceeds the host")?;
-            graph.peripherals.push(factory::Peripheral { core, address: lo, physical: lo, size });
+            let size =
+                usize::try_from(hi - lo).map_err(|_| "XP4 device window exceeds the host")?;
+            graph.peripherals.push(factory::Peripheral {
+                core,
+                address: lo,
+                physical: lo,
+                size,
+            });
         }
     }
     let (mut devices, mut nodes) = match built.devices {
@@ -140,14 +197,21 @@ pub fn build(
             cpu_interface: u64::from(cbar) + 0x2000,
         },
     };
-    let mut board = graph.build(factory::Options::new(engine), Bus::from_graph(mode, devices)?, Some(interrupts))?;
+    let mut board = graph.build(
+        factory::Options::new(engine),
+        Bus::from_graph(mode, devices)?,
+        Some(interrupts),
+    )?;
     for core in 0..cores {
-        board.configure_armv7a(core, armv7a::Config {
-            mpidr: 0x8000_0000 | core as u32,
-            configuration_base: cbar,
-            cycles_per_tick: CYCLES_PER_TICK,
-            cache_sizes,
-        })?;
+        board.configure_armv7a(
+            core,
+            armv7a::Config {
+                mpidr: 0x8000_0000 | core as u32,
+                configuration_base: cbar,
+                cycles_per_tick: CYCLES_PER_TICK,
+                cache_sizes,
+            },
+        )?;
     }
     let session = fujimod_emulator_session::Session {
         definition: record,
@@ -180,30 +244,44 @@ pub fn from_definition(
         return Err("XP4 initial registers name more cores than the definition".into());
     }
     let mut memory = vec![(0, definition.ram_size, 7)];
-    memory.extend(definition.memory_regions.iter().map(|r| (r.base, r.size, r.permissions)));
+    memory.extend(
+        definition
+            .memory_regions
+            .iter()
+            .map(|r| (r.base, r.size, r.permissions)),
+    );
     let graph = factory::Graph {
         processors: (0..cores)
             .map(|core| factory::Processor {
                 model: fujimod_emulator_cpu::Model::CortexA7,
-                registers: definition.initial_registers.get(core).cloned().unwrap_or_default(),
+                registers: definition
+                    .initial_registers
+                    .get(core)
+                    .cloned()
+                    .unwrap_or_default(),
                 released: true,
                 parked_until_sgi: false,
                 mprofile: None,
                 rprofile: None,
             })
             .collect(),
-        ram: memory.iter().map(|&(base, size, _)| factory::Ram { base, size }).collect(),
+        ram: memory
+            .iter()
+            .map(|&(base, size, _)| factory::Ram { base, size })
+            .collect(),
         dma_mappings: Vec::new(),
         decoders: Vec::new(),
         mappings: (0..cores)
             .flat_map(|core| {
-                memory.iter().map(move |&(address, size, permissions)| factory::MemoryMap {
-                    core,
-                    address,
-                    physical: address,
-                    size,
-                    permissions,
-                })
+                memory
+                    .iter()
+                    .map(move |&(address, size, permissions)| factory::MemoryMap {
+                        core,
+                        address,
+                        physical: address,
+                        size,
+                        permissions,
+                    })
             })
             .collect(),
         peripherals: Vec::new(),
@@ -212,9 +290,24 @@ pub fn from_definition(
             definition.instructions_per_tick.1,
         )?,
     };
-    let mode = if definition.discovery { Mode::Discovery } else { Mode::Strict };
-    let record = serde_json::json!({"cores": cores, "ram_size": definition.ram_size, "mode": mode.name()});
-    build(graph, definition, storage_image, card_files, card_media, mode, engine, record, DeviceSpace::Undeclared)
+    let mode = if definition.discovery {
+        Mode::Discovery
+    } else {
+        Mode::Strict
+    };
+    let record =
+        serde_json::json!({"cores": cores, "ram_size": definition.ram_size, "mode": mode.name()});
+    build(
+        graph,
+        definition,
+        storage_image,
+        card_files,
+        card_media,
+        mode,
+        engine,
+        record,
+        DeviceSpace::Undeclared,
+    )
 }
 
 /// Whether the board's processor blocks are declared. A bare definition
@@ -230,7 +323,14 @@ pub enum DeviceSpace {
 /// tick timer. Each channel pulses its routed line.
 trait TimerModel: Clone + serde::Serialize + serde::de::DeserializeOwned + Send + 'static {
     const NAME: &'static str;
-    fn access(&mut self, now: u64, offset: u32, size: u32, write: bool, value: u32) -> Result<u32, String>;
+    fn access(
+        &mut self,
+        now: u64,
+        offset: u32,
+        size: u32,
+        write: bool,
+        value: u32,
+    ) -> Result<u32, String>;
     fn tick(&mut self, now: u64) -> Vec<usize>;
     fn next_event_tick(&self, now: u64) -> Option<u64>;
     fn save(&self) -> serde_json::Value;
@@ -238,7 +338,14 @@ trait TimerModel: Clone + serde::Serialize + serde::de::DeserializeOwned + Send 
 }
 impl TimerModel for IntervalTimers {
     const NAME: &'static str = "xp4-interval-timers";
-    fn access(&mut self, now: u64, offset: u32, size: u32, write: bool, value: u32) -> Result<u32, String> {
+    fn access(
+        &mut self,
+        now: u64,
+        offset: u32,
+        size: u32,
+        write: bool,
+        value: u32,
+    ) -> Result<u32, String> {
         IntervalTimers::access(self, now, offset, size, write, value)
     }
     fn tick(&mut self, now: u64) -> Vec<usize> {
@@ -256,7 +363,14 @@ impl TimerModel for IntervalTimers {
 }
 impl TimerModel for TickTimers {
     const NAME: &'static str = "xpp-tick-timers";
-    fn access(&mut self, now: u64, offset: u32, size: u32, write: bool, value: u32) -> Result<u32, String> {
+    fn access(
+        &mut self,
+        now: u64,
+        offset: u32,
+        size: u32,
+        write: bool,
+        value: u32,
+    ) -> Result<u32, String> {
         TickTimers::access(self, now, offset, size, write, value)
     }
     fn tick(&mut self, now: u64) -> Vec<usize> {
@@ -294,7 +408,13 @@ impl<M: TimerModel> Timers<M> {
     }
     fn access(&mut self, cx: &mut Cx<'_>, address: u64, size: u8, write: bool, value: u64) -> u64 {
         self.advance(cx);
-        let result = self.model.access(cx.now(), (address - self.base) as u32, size.into(), write, value as u32);
+        let result = self.model.access(
+            cx.now(),
+            (address - self.base) as u32,
+            size.into(),
+            write,
+            value as u32,
+        );
         if write {
             self.schedule(cx);
         }
@@ -358,22 +478,38 @@ impl<M: TimerModel> Device for Timers<M> {
 
 /// The node of the board's serial-flash controller.
 fn serial_flash(session: &fujimod_emulator_session::Session) -> Result<usize, String> {
-    session.node("xp4-serial-flash").map_err(|_| "Board has no XP4 NOR".to_string())
+    session
+        .node("xp4-serial-flash")
+        .map_err(|_| "Board has no XP4 NOR".to_string())
 }
 
 /// Completed NOR contents, without controller or processor state.
 pub fn nor_medium(session: &fujimod_emulator_session::Session) -> Result<Vec<u8>, String> {
-    session.board.with_device::<Connected<SerialFlashController>, _>(serial_flash(session)?, |flash| {
-        flash.0.lock().map_err(|_| "NOR controller lock poisoned")?.nor_medium()
-    })?
+    session
+        .board
+        .with_device::<Connected<SerialFlashController>, _>(serial_flash(session)?, |flash| {
+            flash
+                .0
+                .lock()
+                .map_err(|_| "NOR controller lock poisoned")?
+                .nor_medium()
+        })?
 }
 
 /// Reset NOR program observation, refusing unsettled commands.
-pub fn reset_nor_program_coverage(session: &mut fujimod_emulator_session::Session) -> Result<(), String> {
+pub fn reset_nor_program_coverage(
+    session: &mut fujimod_emulator_session::Session,
+) -> Result<(), String> {
     let node = serial_flash(session)?;
-    session.board.edit_device::<Connected<SerialFlashController>, _>(node, |flash| {
-        flash.0.lock().map_err(|_| "NOR controller lock poisoned")?.reset_nor_program_coverage()
-    })
+    session
+        .board
+        .edit_device::<Connected<SerialFlashController>, _>(node, |flash| {
+            flash
+                .0
+                .lock()
+                .map_err(|_| "NOR controller lock poisoned")?
+                .reset_nor_program_coverage()
+        })
 }
 
 /// A copy of the medium in the `host`th SD card slot, in node order.
@@ -407,33 +543,63 @@ impl Inputs {
     /// Queue `edges` detent edges on a named command dial.
     pub fn turn_dial(&self, session: &mut Session, name: &str, edges: i32) -> Result<(), String> {
         use fujimod_emulator_xp4_io::countdown_timers::CountdownTimers;
-        let channel = *self.dials.get(name).ok_or_else(|| format!("No XP4 command dial named {name}"))?;
+        let channel = *self
+            .dials
+            .get(name)
+            .ok_or_else(|| format!("No XP4 command dial named {name}"))?;
         let node = session.node("xp4-countdown-timers")?;
-        session.board.with_device_inputs::<CountdownTimers, _>(node, |timers, now| {
-            timers.dial_input(channel).ok_or("Unwired XP4 countdown dial")?.queue_edges(now, edges)
-        })
+        session
+            .board
+            .with_device_inputs::<CountdownTimers, _>(node, |timers, now| {
+                timers
+                    .dial_input(channel)
+                    .ok_or("Unwired XP4 countdown dial")?
+                    .queue_edges(now, edges)
+            })
     }
     /// Set one external ADC channel (XP4 ADC or X-Processor Pro converter).
-    pub fn set_adc_input(&self, session: &mut Session, channel: usize, sample: u16) -> Result<(), String> {
+    pub fn set_adc_input(
+        &self,
+        session: &mut Session,
+        channel: usize,
+        sample: u16,
+    ) -> Result<(), String> {
         use fujimod_emulator_devices::capability::AnalogInputs;
-        let node = session.node("xp4-adc").or_else(|_| session.node("xpp-adc")).map_err(|_| "XP4 ADC inputs are not wired")?;
-        session.board.edit_capability::<dyn AnalogInputs, _>(node, |adc| adc.set_sample(channel, sample))
+        let node = session
+            .node("xp4-adc")
+            .or_else(|_| session.node("xpp-adc"))
+            .map_err(|_| "XP4 ADC inputs are not wired")?;
+        session
+            .board
+            .edit_capability::<dyn AnalogInputs, _>(node, |adc| adc.set_sample(channel, sample))
     }
     /// Drive one external GPIO pin.
-    pub fn set_gpio_input(&self, session: &mut Session, port: usize, pin: usize, high: bool) -> Result<(), String> {
+    pub fn set_gpio_input(
+        &self,
+        session: &mut Session,
+        port: usize,
+        pin: usize,
+        high: bool,
+    ) -> Result<(), String> {
         use fujimod_emulator_ip::socionext::gpio::Gpio;
         let node = session.node("gpio")?;
-        session.board.with_device_inputs::<Gpio, _>(node, |gpio, _| gpio.set_input(port, pin, high))
+        session
+            .board
+            .with_device_inputs::<Gpio, _>(node, |gpio, _| gpio.set_input(port, pin, high))
     }
     /// Plug or unplug the USB cable: the condition strap the stock USB task
     /// reads and the DWC3 data lines change together.
     pub fn set_usb_connected(&self, session: &mut Session, connected: bool) -> Result<(), String> {
         use fujimod_emulator_xp4_io::usb_condition::UsbCondition;
         if let Ok(node) = session.node("xp4-usb-condition") {
-            session.board.with_device_inputs::<UsbCondition, _>(node, |strap, _| {
-                strap.presence().store(connected, std::sync::atomic::Ordering::SeqCst);
-                Ok(())
-            })?;
+            session
+                .board
+                .with_device_inputs::<UsbCondition, _>(node, |strap, _| {
+                    strap
+                        .presence()
+                        .store(connected, std::sync::atomic::Ordering::SeqCst);
+                    Ok(())
+                })?;
         }
         self.with_usb(session, |usb, now| usb.link(now, connected))
     }
@@ -448,11 +614,19 @@ impl Inputs {
         setup: bool,
         out: Option<Vec<u8>>,
     ) -> Result<u64, String> {
-        self.with_usb(session, |usb, now| usb.transaction(now, endpoint, setup, out))
+        self.with_usb(session, |usb, now| {
+            usb.transaction(now, endpoint, setup, out)
+        })
     }
-    pub fn usb_reply(&self, session: &Session, id: u64) -> Result<Option<fujimod_emulator_ip::usb::dwc3::Reply>, String> {
+    pub fn usb_reply(
+        &self,
+        session: &Session,
+        id: u64,
+    ) -> Result<Option<fujimod_emulator_ip::usb::dwc3::Reply>, String> {
         let node = session.node("dwc3").map_err(|_| "DWC3 is not wired")?;
-        session.board.with_device::<Dwc3, _>(node, |usb| usb.0.lock().unwrap().reply(id).cloned())
+        session
+            .board
+            .with_device::<Dwc3, _>(node, |usb| usb.0.lock().unwrap().reply(id).cloned())
     }
     pub fn usb_consume_reply(&self, session: &mut Session, id: u64) -> Result<(), String> {
         self.with_usb(session, |usb, _| usb.consume_reply(id))
@@ -463,6 +637,8 @@ impl Inputs {
         f: impl FnOnce(&mut fujimod_emulator_ip::usb::dwc3::Dwc3, u64) -> Result<R, String>,
     ) -> Result<R, String> {
         let node = session.node("dwc3").map_err(|_| "DWC3 is not wired")?;
-        session.board.with_device_inputs::<Dwc3, _>(node, |usb, now| f(&mut usb.0.lock().unwrap(), now))
+        session
+            .board
+            .with_device_inputs::<Dwc3, _>(node, |usb, now| f(&mut usb.0.lock().unwrap(), now))
     }
 }

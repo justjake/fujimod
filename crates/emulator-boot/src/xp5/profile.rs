@@ -264,8 +264,12 @@ mod tests {
             return;
         };
         let resolved = ResolvedConfiguration::with_overlays("xt5-431", &[]).unwrap();
-        let firmware = Firmware::from_update("xt5-431", std::fs::read(path).unwrap(), true).unwrap();
-        let mut state = BootState::for_firmware("xt5-431", None).unwrap().with_catalog_windows(&resolved).unwrap();
+        let firmware =
+            Firmware::from_update("xt5-431", std::fs::read(path).unwrap(), true).unwrap();
+        let mut state = BootState::for_firmware("xt5-431", None)
+            .unwrap()
+            .with_catalog_windows(&resolved)
+            .unwrap();
         let before = state.preload.len();
         let requested = BTreeMap::from([
             ("setup".to_owned(), "done".to_owned()),

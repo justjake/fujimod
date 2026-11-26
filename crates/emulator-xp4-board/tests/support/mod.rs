@@ -23,8 +23,14 @@ pub fn open_with(
     card_files: Vec<(String, Vec<u8>)>,
     card_media: Vec<(usize, fujimod_emulator_devices::parts::sd_card::Card)>,
 ) -> Result<Board, String> {
-    shared::from_definition(definition, storage_image, card_files, card_media, RunEngine::Unicorn)
-        .map(|(session, _)| Board(RefCell::new(session)))
+    shared::from_definition(
+        definition,
+        storage_image,
+        card_files,
+        card_media,
+        RunEngine::Unicorn,
+    )
+    .map(|(session, _)| Board(RefCell::new(session)))
 }
 
 /// The session a definition JSON builds.
@@ -49,7 +55,12 @@ impl Board {
         self.read(address, &mut bytes).unwrap();
         u32::from_le_bytes(bytes)
     }
-    pub fn write_register(&self, core: usize, register: Register, value: u64) -> Result<(), String> {
+    pub fn write_register(
+        &self,
+        core: usize,
+        register: Register,
+        value: u64,
+    ) -> Result<(), String> {
         self.0.borrow().board.write_register(core, register, value)
     }
     pub fn read_register(&self, core: usize, register: Register) -> Result<u64, String> {
@@ -102,7 +113,10 @@ impl Board {
         self.0.borrow().board.failure().unwrap()
     }
     /// A copy of the medium in the `host`th SD card slot.
-    pub fn card_medium(&self, host: usize) -> Result<fujimod_emulator_devices::parts::sd_card::Card, String> {
+    pub fn card_medium(
+        &self,
+        host: usize,
+    ) -> Result<fujimod_emulator_devices::parts::sd_card::Card, String> {
         shared::card_medium(&self.0.borrow(), host)
     }
     /// Completed NOR contents.
@@ -119,7 +133,10 @@ impl Board {
                 let (kind, n) = name
                     .split_once('#')
                     .map_or((name.as_str(), 0), |(kind, n)| (kind, n.parse().unwrap()));
-                self.states(kind).get(n).cloned().map(|state| (name.clone(), state))
+                self.states(kind)
+                    .get(n)
+                    .cloned()
+                    .map(|state| (name.clone(), state))
             })
             .collect()
     }
@@ -143,7 +160,9 @@ impl Board {
     /// The GIC's pending shared lines as distributor words.
     pub fn interrupt_state(&self) -> Result<Vec<Interrupts>, String> {
         let gic = self.0.borrow().board.gic_state()?;
-        let lines = gic["pending"][0].as_array().ok_or("GIC state has no pending lines")?;
+        let lines = gic["pending"][0]
+            .as_array()
+            .ok_or("GIC state has no pending lines")?;
         let mut pending = vec![0u32; lines.len().div_ceil(32)];
         for (line, value) in lines.iter().enumerate() {
             if value == true {

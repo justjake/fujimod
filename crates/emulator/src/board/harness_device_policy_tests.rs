@@ -29,21 +29,36 @@ fn board(reads: Arc<AtomicU64>) -> Board {
         fujimod_emulator_cpu_unicorn::rprofile::core::Core::new(
             raw,
             fujimod_emulator_cpu_unicorn::rprofile::core::Options::default(),
-            fujimod_emulator_cpu_unicorn::rprofile::core::Wiring { memory: Default::default() },
+            fujimod_emulator_cpu_unicorn::rprofile::core::Wiring {
+                memory: Default::default(),
+            },
         )
         .unwrap(),
     );
     cpu.map_zeroed(0x10000, 0x1000, 7).unwrap();
     // ldr r0, [r5]; ldr r1, [r5, #4]; b .
     let code = [0xe595_0000u32, 0xe595_1004, 0xeaff_fffe];
-    cpu.write_memory(0x10000, &code.map(u32::to_le_bytes).concat()).unwrap();
-    for (register, value) in [(arm::CORE[5], DEVICE as u32), (arm::CPSR, 0xd3), (Register::Pc, 0x10000)] {
+    cpu.write_memory(0x10000, &code.map(u32::to_le_bytes).concat())
+        .unwrap();
+    for (register, value) in [
+        (arm::CORE[5], DEVICE as u32),
+        (arm::CPSR, 0xd3),
+        (Register::Pc, 0x10000),
+    ] {
         cpu.write_register(register, &value.to_le_bytes()).unwrap();
     }
     let mut bus = Bus::new(bus::Mode::Strict);
-    bus.register(DEVICE, 0x1000, Box::new(Counter(reads))).unwrap();
-    let mut board = Board::new(vec![cpu], bus, Ratio::new(1, 1).unwrap(), None, vec![true], memory::Memory::default())
+    bus.register(DEVICE, 0x1000, Box::new(Counter(reads)))
         .unwrap();
+    let mut board = Board::new(
+        vec![cpu],
+        bus,
+        Ratio::new(1, 1).unwrap(),
+        None,
+        vec![true],
+        memory::Memory::default(),
+    )
+    .unwrap();
     board.map_mmio(0, DEVICE, 0x1000, DEVICE).unwrap();
     board.set_execution_policy(ExecutionPolicy::Exact).unwrap();
     board
@@ -67,14 +82,29 @@ fn an_unnamed_register_access_refuses_before_the_device() {
     let reads = Arc::new(AtomicU64::new(0));
     let mut board = board(reads.clone());
     let mut session = board
-        .harness_begin(options(json!([{"start": DEVICE, "end": DEVICE + 4, "width": 4, "read": true, "write": false}])))
+        .harness_begin(options(
+            json!([{"start": DEVICE, "end": DEVICE + 4, "width": 4, "read": true, "write": false}]),
+        ))
         .unwrap();
     let error = board.run_for_instructions(10, 10).unwrap_err();
-    assert!(error.contains("Device policy refuses a 4-byte MMIO read at 0x8000004"), "{error}");
-    assert_eq!(reads.load(Ordering::SeqCst), 1, "the refused read never reached the device");
-    assert_eq!(session.state()["devices"]["mmio"], json!([[DEVICE, 4, false]]));
+    assert!(
+        error.contains("Device policy refuses a 4-byte MMIO read at 0x8000004"),
+        "{error}"
+    );
+    assert_eq!(
+        reads.load(Ordering::SeqCst),
+        1,
+        "the refused read never reached the device"
+    );
+    assert_eq!(
+        session.state()["devices"]["mmio"],
+        json!([[DEVICE, 4, false]])
+    );
     board.harness_end(&mut session).unwrap();
-    assert_eq!(session.state()["devices"]["mmio"], json!([[DEVICE, 4, false]]));
+    assert_eq!(
+        session.state()["devices"]["mmio"],
+        json!([[DEVICE, 4, false]])
+    );
 }
 
 #[test]
@@ -82,7 +112,9 @@ fn named_register_accesses_run() {
     let reads = Arc::new(AtomicU64::new(0));
     let mut board = board(reads.clone());
     let mut session = board
-        .harness_begin(options(json!([{"start": DEVICE, "end": DEVICE + 8, "width": 4, "read": true, "write": false}])))
+        .harness_begin(options(
+            json!([{"start": DEVICE, "end": DEVICE + 8, "width": 4, "read": true, "write": false}]),
+        ))
         .unwrap();
     board.run_for_instructions(10, 10).unwrap();
     assert_eq!(reads.load(Ordering::SeqCst), 2);

@@ -698,10 +698,18 @@ pub struct GicCpuInitial {
 }
 
 impl GicInitial {
-    pub(super) fn apply(self, gic: &mut fujimod_emulator_ip_arm::gicv2::Gic, cores: usize) -> Result<(), String> {
-        if self.distributor_control > 1 || self.cpu_interfaces.len() != cores
-            || self.cpu_interfaces.iter().any(|cpu| cpu.control > 1
-                || cpu.priority_mask > 255 || cpu.binary_point > 7) {
+    pub(super) fn apply(
+        self,
+        gic: &mut fujimod_emulator_ip_arm::gicv2::Gic,
+        cores: usize,
+    ) -> Result<(), String> {
+        if self.distributor_control > 1
+            || self.cpu_interfaces.len() != cores
+            || self
+                .cpu_interfaces
+                .iter()
+                .any(|cpu| cpu.control > 1 || cpu.priority_mask > 255 || cpu.binary_point > 7)
+        {
             return Err("Invalid initial GIC registers or CPU interface count".into());
         }
         gic.access(0, true, 0, 4, true, self.distributor_control)?;

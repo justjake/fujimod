@@ -6,8 +6,8 @@
 //! (active high) reports.
 use fujimod_emulator_cpu::arm;
 mod support;
-use support::Board;
 use serde_json::{Value, json};
+use support::Board;
 const SPI2: u32 = 0xfff3_4000;
 const DATA: u32 = SPI2 + 8;
 const BANK: u32 = 0xfff4_1000;
@@ -49,12 +49,9 @@ fn step(session: &Board, instruction: u32, address: u32, value: u32) -> u32 {
     session
         .write_register(0, arm::CORE[1], value.into())
         .unwrap();
-    session.run(0, 1).unwrap_or_else(|error| {
-        panic!(
-            "{address:#x}: {}",
-            session.failure().unwrap_or(error)
-        )
-    });
+    session
+        .run(0, 1)
+        .unwrap_or_else(|error| panic!("{address:#x}: {}", session.failure().unwrap_or(error)));
     session.read_register(0, arm::CORE[1]).unwrap() as u32
 }
 fn ww(session: &Board, address: u32, value: u32) {

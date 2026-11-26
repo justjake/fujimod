@@ -1033,7 +1033,13 @@ impl Board {
     /// Device deadlines may still wake a processor in a later run.
     /// The earliest tick a device has scheduled work for.
     pub fn next_device_deadline(&self) -> Option<u64> {
-        self.state.borrow().deadlines.iter().flatten().copied().min()
+        self.state
+            .borrow()
+            .deadlines
+            .iter()
+            .flatten()
+            .copied()
+            .min()
     }
     pub fn quiescent(&self) -> bool {
         let state = self.state.borrow();
@@ -1874,72 +1880,78 @@ impl Board {
             // PC. Resume the same slice at once: the stop is not a scheduling
             // boundary, so nothing else may run in between.
             loop {
-            while result.is_ok() {
-                let resync = self.code_resync(core)?;
-                let mut s = self.state.borrow_mut();
-                let resume = s.blocks[core]
-                    .as_mut()
-                    .is_some_and(|blocks| std::mem::take(&mut blocks.resume));
-                if !(resync || resume) || s.error.is_some() {
-                    break;
-                }
-                if !blocks {
-                    // The engine counted every entry that reached the
-                    // observer, the stopped one too; that one runs again.
-                    let consumed = s.run_entries[core].saturating_sub(1);
-                    limit = limit.saturating_sub(consumed as usize);
-                    s.run_entries[core] = 0;
-                    if limit == 0 {
+                while result.is_ok() {
+                    let resync = self.code_resync(core)?;
+                    let mut s = self.state.borrow_mut();
+                    let resume = s.blocks[core]
+                        .as_mut()
+                        .is_some_and(|blocks| std::mem::take(&mut blocks.resume));
+                    if !(resync || resume) || s.error.is_some() {
                         break;
                     }
+                    if !blocks {
+                        // The engine counted every entry that reached the
+                        // observer, the stopped one too; that one runs again.
+                        let consumed = s.run_entries[core].saturating_sub(1);
+                        limit = limit.saturating_sub(consumed as usize);
+                        s.run_entries[core] = 0;
+                        if limit == 0 {
+                            break;
+                        }
+                    }
+                    drop(s);
+                    result = cpu.run(Run {
+                        begin: scalar(&**cpu, Register::Pc)? | 1,
+                        until: None,
+                        watchdog_us: 0,
+                        instructions: (!blocks).then_some(limit),
+                    });
                 }
-                drop(s);
+                // A fetch from a device page that offers execution: map its copy
+                // and resume the same slice.
+                let fetch = matches!(
+                    &result,
+                    Err(fujimod_emulator_cpu::ExecutionError::Memory {
+                        fault: fujimod_emulator_cpu::Fault::FetchProtected
+                            | fujimod_emulator_cpu::Fault::FetchUnmapped,
+                        ..
+                    })
+                );
+                if !fetch || !self.execute_in_place(core, scalar(&**cpu, Register::Pc)?)? {
+                    break;
+                }
+                // The engine counts each run from zero: account the faulted run
+                // before resuming, and resume with what is left of the budget.
+                {
+                    let mut s = self.state.borrow_mut();
+                    let consumed = cpu
+                        .instruction_progress()
+                        .unwrap_or(0)
+                        .saturating_sub(s.accounted[core]);
+                    s.sync(&**cpu, core)?;
+                    s.accounted[core] = 0;
+                    s.run_entries[core] = 0;
+                    if !blocks {
+                        limit = limit.saturating_sub(consumed as usize);
+                        if limit == 0 {
+                            result = Ok(fujimod_emulator_cpu::Exit::Stopped);
+                            break;
+                        }
+                    }
+                }
+                let resume = scalar(&**cpu, Register::Pc)?;
                 result = cpu.run(Run {
-                    begin: scalar(&**cpu, Register::Pc)? | 1,
+                    begin: if cpu.model() == fujimod_emulator_cpu::Model::CortexM4
+                        || scalar(&**cpu, Register::Pstate)? & 0x20 != 0
+                    {
+                        resume | 1
+                    } else {
+                        resume
+                    },
                     until: None,
                     watchdog_us: 0,
                     instructions: (!blocks).then_some(limit),
                 });
-            }
-            // A fetch from a device page that offers execution: map its copy
-            // and resume the same slice.
-            let fetch = matches!(&result, Err(fujimod_emulator_cpu::ExecutionError::Memory {
-                fault: fujimod_emulator_cpu::Fault::FetchProtected
-                    | fujimod_emulator_cpu::Fault::FetchUnmapped,
-                ..
-            }));
-            if !fetch || !self.execute_in_place(core, scalar(&**cpu, Register::Pc)?)? {
-                break;
-            }
-            // The engine counts each run from zero: account the faulted run
-            // before resuming, and resume with what is left of the budget.
-            {
-                let mut s = self.state.borrow_mut();
-                let consumed = cpu.instruction_progress().unwrap_or(0).saturating_sub(s.accounted[core]);
-                s.sync(&**cpu, core)?;
-                s.accounted[core] = 0;
-                s.run_entries[core] = 0;
-                if !blocks {
-                    limit = limit.saturating_sub(consumed as usize);
-                    if limit == 0 {
-                        result = Ok(fujimod_emulator_cpu::Exit::Stopped);
-                        break;
-                    }
-                }
-            }
-            let resume = scalar(&**cpu, Register::Pc)?;
-            result = cpu.run(Run {
-                begin: if cpu.model() == fujimod_emulator_cpu::Model::CortexM4
-                    || scalar(&**cpu, Register::Pstate)? & 0x20 != 0
-                {
-                    resume | 1
-                } else {
-                    resume
-                },
-                until: None,
-                watchdog_us: 0,
-                instructions: (!blocks).then_some(limit),
-            });
             }
             engine_guard.stop();
             engine_guard.set_instructions(cpu.instruction_progress().unwrap_or(0));
@@ -4014,11 +4026,15 @@ impl Host for Services<'_> {
         if let Some(guard) = self.device_guard.as_mut() {
             guard.model_write(address, bytes.len() as u64)?;
         }
-        self.memory
-            .watch_transfer(write_watch::WriteSource::Dma, address, bytes, self.timeline.now());
-        let owner = self.active_core.filter(|&core| {
-            self.code_run.keeps_shadow(core) && self.mprofile[core].is_some()
-        });
+        self.memory.watch_transfer(
+            write_watch::WriteSource::Dma,
+            address,
+            bytes,
+            self.timeline.now(),
+        );
+        let owner = self
+            .active_core
+            .filter(|&core| self.code_run.keeps_shadow(core) && self.mprofile[core].is_some());
         // Exact execution can complete its existing slice for a foreign write.
         // Classify the decoded physical chunks under the same mapping as the copy.
         let profile = owner
@@ -4149,11 +4165,15 @@ unsafe fn before(pc: u64, _: u32, data: *mut c_void) {
         }
         // Architectural counters follow the core's own position.
         let now = s.timeline.processor_clock(b.core)?.now;
-        if s.aarch64_before(cpu, b.core, pc)? { return Ok(()); }
+        if s.aarch64_before(cpu, b.core, pc)? {
+            return Ok(());
+        }
         let st = &mut *s;
         if let Some(p) = &mut st.armv7a[b.core] {
             let entry = p.before(cpu, pc, now, &st.exclusive)?;
-            if let armv7a::Entry::Hint(hint) = entry { st.hint(b.core, hint); }
+            if let armv7a::Entry::Hint(hint) = entry {
+                st.hint(b.core, hint);
+            }
         }
         // The page just proven is mapped host memory: read the instruction
         // there instead of through the engine.

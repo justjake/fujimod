@@ -75,8 +75,11 @@ fn fixture(executable: bool) -> Fixture {
     );
     cpu.map_zeroed(0x10000, 0x1000, 7).unwrap();
     // blx r5; b .
-    cpu.write_memory(0x10000, &[0xe12f_ff35u32, 0xeaff_fffe].map(u32::to_le_bytes).concat())
-        .unwrap();
+    cpu.write_memory(
+        0x10000,
+        &[0xe12f_ff35u32, 0xeaff_fffe].map(u32::to_le_bytes).concat(),
+    )
+    .unwrap();
     let mut words = vec![0u32; 1024];
     words[0] = ADD_ONE;
     words[1] = RETURN;
@@ -87,7 +90,12 @@ fn fixture(executable: bool) -> Fixture {
     bus.register(
         FLASH,
         0x1000,
-        Box::new(Flash { words: words.clone(), epoch: epoch.clone(), reads: reads.clone(), executable }),
+        Box::new(Flash {
+            words: words.clone(),
+            epoch: epoch.clone(),
+            reads: reads.clone(),
+            executable,
+        }),
     )
     .unwrap();
     let mut board = Board::new(
@@ -101,7 +109,12 @@ fn fixture(executable: bool) -> Fixture {
     .unwrap();
     board.map_mmio(0, FLASH, 0x1000, FLASH).unwrap();
     board.set_execution_policy(ExecutionPolicy::Exact).unwrap();
-    Fixture { board, words, epoch, reads }
+    Fixture {
+        board,
+        words,
+        epoch,
+        reads,
+    }
 }
 
 fn call(board: &mut Board) -> Result<(), String> {
@@ -122,7 +135,11 @@ fn a_fetched_page_is_read_once_and_executes() {
     assert_eq!(f.reads.load(Ordering::SeqCst), 1024);
     call(&mut f.board).unwrap();
     assert_eq!(get(f.board.cpu(0).unwrap(), arm::CORE[6]), 2);
-    assert_eq!(f.reads.load(Ordering::SeqCst), 1024, "the copy holds while the epoch stands");
+    assert_eq!(
+        f.reads.load(Ordering::SeqCst),
+        1024,
+        "the copy holds while the epoch stands"
+    );
 }
 
 #[test]

@@ -34,7 +34,10 @@ impl<'a> Block<'a> {
             .and_then(|row| row["line"].as_u64())
     }
     pub fn lines(&self) -> Vec<u64> {
-        self.interrupts().iter().filter_map(|row| row["line"].as_u64()).collect()
+        self.interrupts()
+            .iter()
+            .filter_map(|row| row["line"].as_u64())
+            .collect()
     }
     pub fn field(&self, name: &str) -> Result<&'a Value, String> {
         self.device
@@ -67,7 +70,13 @@ impl Catalog {
             .as_ref()
             .and_then(|preset| preset.hardware_selection.as_ref())
             .and_then(|machine| {
-                resolved.reference.body.hardware.as_ref()?.profiles.get(&machine.body_profile_id)
+                resolved
+                    .reference
+                    .body
+                    .hardware
+                    .as_ref()?
+                    .profiles
+                    .get(&machine.body_profile_id)
             });
         let mut board = match profile {
             Some(profile) => serde_json::to_value(profile).map_err(|e| e.to_string())?,
@@ -76,26 +85,36 @@ impl Catalog {
         // The run's reset inputs join the body profile, as the Python builder merges them.
         if let Some(inputs) = resolved.hardware_inputs()? {
             let inputs = serde_json::to_value(inputs).map_err(|e| e.to_string())?;
-            if let (Some(board), Some(reset)) = (board.as_object_mut(), inputs["reset"].as_object()) {
+            if let (Some(board), Some(reset)) = (board.as_object_mut(), inputs["reset"].as_object())
+            {
                 board.extend(reset.clone());
             }
         }
         let mut replacements = Map::new();
         for row in board["block_overrides"].as_array().into_iter().flatten() {
-            let id = row["block_id"].as_str().ok_or("a block override names no block")?;
+            let id = row["block_id"]
+                .as_str()
+                .ok_or("a block override names no block")?;
             replacements.insert(id.into(), row["device"].clone());
         }
-        let blocks = soc["blocks"].as_array().ok_or("the processor record has no blocks")?;
+        let blocks = soc["blocks"]
+            .as_array()
+            .ok_or("the processor record has no blocks")?;
         for id in replacements.keys() {
             if !blocks.iter().any(|row| row["id"] == id.as_str()) {
-                return Err(format!("body override names an absent processor block: {id}"));
+                return Err(format!(
+                    "body override names an absent processor block: {id}"
+                ));
             }
         }
         let rows: Vec<(Value, Value)> = blocks
             .iter()
             .map(|row| {
                 let id = row["id"].as_str().unwrap_or_default();
-                let device = replacements.get(id).cloned().unwrap_or_else(|| row["device"].clone());
+                let device = replacements
+                    .get(id)
+                    .cloned()
+                    .unwrap_or_else(|| row["device"].clone());
                 (row.clone(), device)
             })
             .collect();
@@ -104,21 +123,36 @@ impl Catalog {
         for (row, _) in &rows {
             if let Some(id) = row["ip"].as_str() {
                 if let Some(ip) = reference.ip(id) {
-                    ips.insert(id.into(), serde_json::to_value(ip).map_err(|e| e.to_string())?);
+                    ips.insert(
+                        id.into(),
+                        serde_json::to_value(ip).map_err(|e| e.to_string())?,
+                    );
                 }
             }
         }
         let body = serde_json::to_value(&resolved.reference.body).map_err(|e| e.to_string())?;
-        let firmware = serde_json::to_value(&resolved.reference.firmware).map_err(|e| e.to_string())?;
-        let configuration = serde_json::to_value(&resolved.configuration).map_err(|e| e.to_string())?;
-        Ok(Self { soc, rows, ips, body, firmware, configuration, board })
+        let firmware =
+            serde_json::to_value(&resolved.reference.firmware).map_err(|e| e.to_string())?;
+        let configuration =
+            serde_json::to_value(&resolved.configuration).map_err(|e| e.to_string())?;
+        Ok(Self {
+            soc,
+            rows,
+            ips,
+            body,
+            firmware,
+            configuration,
+            board,
+        })
     }
     pub fn blocks(&self) -> impl Iterator<Item = Block<'_>> {
         self.rows.iter().map(|(raw, device)| Block { raw, device })
     }
     /// Blocks whose selected device has `model`, in record order.
     pub fn with_device(&self, model: &str) -> Vec<Block<'_>> {
-        self.blocks().filter(|b| b.device["model"] == model).collect()
+        self.blocks()
+            .filter(|b| b.device["model"] == model)
+            .collect()
     }
     /// The first block carrying `model`.
     pub fn device(&self, model: &str) -> Option<Block<'_>> {
@@ -128,7 +162,9 @@ impl Catalog {
         let mut matches = self.blocks().filter(|b| b.id() == id);
         match (matches.next(), matches.next()) {
             (Some(block), None) => Ok(block),
-            _ => Err(format!("the processor must declare block {id} exactly once")),
+            _ => Err(format!(
+                "the processor must declare block {id} exactly once"
+            )),
         }
     }
     pub fn soc(&self) -> &Value {
@@ -146,7 +182,11 @@ impl Catalog {
         if caches.is_object() {
             out.insert(
                 "cache_sizes".into(),
-                json!([caches["l1_data_bytes"], caches["l1_instruction_bytes"], caches["l2_bytes"]]),
+                json!([
+                    caches["l1_data_bytes"],
+                    caches["l1_instruction_bytes"],
+                    caches["l2_bytes"]
+                ]),
             );
         }
         if let Some(timer) = self.device("interval_timer") {
@@ -173,7 +213,10 @@ impl Catalog {
             }
         }
         if let Some(block) = self.device("decompressor") {
-            out.insert("decompressor".into(), json!([block.base(), block.interrupt(None)]));
+            out.insert(
+                "decompressor".into(),
+                json!([block.base(), block.interrupt(None)]),
+            );
         }
         if let Some(block) = self.device("dmp") {
             out.insert("dmp".into(), json!([block.base(), block.interrupt(None)]));
@@ -183,8 +226,18 @@ impl Catalog {
         }
         let requests = self
             .blocks()
-            .filter(|b| matches!(b.device["model"].as_str(), Some("control_request" | "control_group")))
-            .map(|b| Ok(json!([b.base() + b.number("request_offset")?, b.number("ack_ticks")?])))
+            .filter(|b| {
+                matches!(
+                    b.device["model"].as_str(),
+                    Some("control_request" | "control_group")
+                )
+            })
+            .map(|b| {
+                Ok(json!([
+                    b.base() + b.number("request_offset")?,
+                    b.number("ack_ticks")?
+                ]))
+            })
             .collect::<Result<Vec<_>, String>>()?;
         out.insert("control_requests".into(), json!(requests));
         self.output_fields(&mut out)?;
@@ -196,7 +249,10 @@ impl Catalog {
             .flatten()
             .find(|row| row["id"] == "boot-sram")
         {
-            out.insert("boot_sram".into(), json!([sram["base"], sram["size"]["bytes"]]));
+            out.insert(
+                "boot_sram".into(),
+                json!([sram["base"], sram["size"]["bytes"]]),
+            );
         }
         if self.soc["id"] == "xp4" {
             self.xp4_fields(&mut out)?;
@@ -227,19 +283,36 @@ impl Catalog {
         let declared = &self.soc["instructions_per_tick"];
         let rate = match &board["execution_clock"]["instructions_per_tick"] {
             Value::Array(rate) => rate.clone(),
-            _ if declared.is_object() => vec![declared["numerator"].clone(), declared["denominator"].clone()],
+            _ if declared.is_object() => vec![
+                declared["numerator"].clone(),
+                declared["denominator"].clone(),
+            ],
             _ => vec![json!(1), json!(1)],
         };
-        let (n, d) = (rate.first().and_then(Value::as_u64), rate.get(1).and_then(Value::as_u64));
-        if rate.len() != 2 || !matches!((n, d), (Some(n), Some(d)) if d >= 1 && n >= d && n <= 1 << 32) {
-            return Err("A7 instruction throughput requires a positive ratio of at least one".into());
+        let (n, d) = (
+            rate.first().and_then(Value::as_u64),
+            rate.get(1).and_then(Value::as_u64),
+        );
+        if rate.len() != 2
+            || !matches!((n, d), (Some(n), Some(d)) if d >= 1 && n >= d && n <= 1 << 32)
+        {
+            return Err(
+                "A7 instruction throughput requires a positive ratio of at least one".into(),
+            );
         }
         out.insert("instructions_per_tick".into(), json!(rate));
         let chip = &board["serial_flash"];
         if chip.is_object() {
             let g = &chip["geometry"];
-            out.insert("storage_geometry".into(),
-                json!([g["erase_bytes"], g["page_bytes"], g["erase_ticks"], g["page_ticks"]]));
+            out.insert(
+                "storage_geometry".into(),
+                json!([
+                    g["erase_bytes"],
+                    g["page_bytes"],
+                    g["erase_ticks"],
+                    g["page_ticks"]
+                ]),
+            );
             out.insert("storage_jedec".into(), chip["jedec_id"].clone());
         }
         if let Some(adc) = self.device("adc").filter(|b| b.id() != "temperature") {
@@ -247,16 +320,31 @@ impl Catalog {
             if !input.is_object() {
                 return Err("XP4 ADC controller requires its explicit external inputs".into());
             }
-            out.insert("adc".into(), json!([input["samples"], adc.number("sample_ticks")?]));
+            out.insert(
+                "adc".into(),
+                json!([input["samples"], adc.number("sample_ticks")?]),
+            );
         }
-        if let Some(temperature) = self.with_device("adc").into_iter().find(|b| b.id() == "temperature") {
-            out.insert("temperature".into(), json!([board["temperature_input"]["millicelsius"],
-                temperature.number("sample_ticks")?]));
+        if let Some(temperature) = self
+            .with_device("adc")
+            .into_iter()
+            .find(|b| b.id() == "temperature")
+        {
+            out.insert(
+                "temperature".into(),
+                json!([
+                    board["temperature_input"]["millicelsius"],
+                    temperature.number("sample_ticks")?
+                ]),
+            );
         }
         if self.device("gpio").is_some() {
             out.insert("gpio".into(), board["gpio_input"]["levels"].clone());
         }
-        let routes = board["gpio_interrupts"]["routes"].as_array().cloned().unwrap_or_default();
+        let routes = board["gpio_interrupts"]["routes"]
+            .as_array()
+            .cloned()
+            .unwrap_or_default();
         out.insert("gpio_interrupts".into(), json!(routes.iter().map(|r| json!({
             "port": r["port"], "pin": r["pin"], "line": r["line"], "active_high": r["active_high"]})).collect::<Vec<_>>()));
         let spi: Vec<(String, Block<'_>)> = self
@@ -270,7 +358,9 @@ impl Catalog {
         let mut declared: Vec<&String> = inputs.keys().collect();
         declared.sort();
         if ports != declared {
-            return Err("XP4 SPI controller and explicit MISO input must be selected together".into());
+            return Err(
+                "XP4 SPI controller and explicit MISO input must be selected together".into(),
+            );
         }
         let mut plain = Vec::new();
         for (port, block) in &spi {
@@ -278,15 +368,40 @@ impl Catalog {
             let high = pin["level"] == "high";
             if let Some(power) = pin.get("power_registers") {
                 let cs = &power["chip_select"];
-                out.insert("power_spi".into(), json!([block.base(), high, cs["port"], cs["pin"], cs["active_high"],
-                    power["inputs"], power["rtc_ticks_per_second"]]));
+                out.insert(
+                    "power_spi".into(),
+                    json!([
+                        block.base(),
+                        high,
+                        cs["port"],
+                        cs["pin"],
+                        cs["active_high"],
+                        power["inputs"],
+                        power["rtc_ticks_per_second"]
+                    ]),
+                );
             } else if let Some(power) = pin.get("power_checksum_registers") {
                 let cs = &power["chip_select"];
-                let writes: Vec<Value> = power["disable_writes"].as_array().into_iter().flatten()
-                    .map(|r| json!([r["register"], r["value"]])).collect();
-                out.insert("checksum_power_spi".into(), json!([block.base(), high, cs["port"], cs["pin"],
-                    cs["active_high"], power["inputs"], writes, power.get("rtc").cloned().unwrap_or(Value::Null),
-                    power["retained_registers"]]));
+                let writes: Vec<Value> = power["disable_writes"]
+                    .as_array()
+                    .into_iter()
+                    .flatten()
+                    .map(|r| json!([r["register"], r["value"]]))
+                    .collect();
+                out.insert(
+                    "checksum_power_spi".into(),
+                    json!([
+                        block.base(),
+                        high,
+                        cs["port"],
+                        cs["pin"],
+                        cs["active_high"],
+                        power["inputs"],
+                        writes,
+                        power.get("rtc").cloned().unwrap_or(Value::Null),
+                        power["retained_registers"]
+                    ]),
+                );
             } else {
                 plain.push(json!([block.base(), high]));
             }
@@ -294,7 +409,9 @@ impl Catalog {
         out.insert("spi_inputs".into(), json!(plain));
         let mut hosts = Vec::new();
         for card in board["sd_cards"].as_array().into_iter().flatten() {
-            let base = card["host_base"].as_u64().ok_or("an SD card names no host")?;
+            let base = card["host_base"]
+                .as_u64()
+                .ok_or("an SD card names no host")?;
             let host = self
                 .with_device("sd_host")
                 .into_iter()
@@ -315,31 +432,63 @@ impl Catalog {
         }
         out.insert("sd_hosts".into(), json!(hosts));
         if let Some(command) = self.device("sensor_command") {
-            let receiver = self.device("imaging_receiver").ok_or("the sensor command block needs a receiver")?;
+            let receiver = self
+                .device("imaging_receiver")
+                .ok_or("the sensor command block needs a receiver")?;
             let sensor = &board["sensor_input"];
             let lines = |block: Block<'_>, prefix: &str| -> Vec<Value> {
-                block.interrupts().iter()
-                    .filter(|row| row["output"].as_str().is_some_and(|o| o.starts_with(prefix)))
-                    .map(|row| row["line"].clone()).collect()
+                block
+                    .interrupts()
+                    .iter()
+                    .filter(|row| {
+                        row["output"]
+                            .as_str()
+                            .is_some_and(|o| o.starts_with(prefix))
+                    })
+                    .map(|row| row["line"].clone())
+                    .collect()
             };
             let buffer = match self.device("imaging_input_buffer") {
                 None => Value::Null,
                 Some(buffer) => {
                     let region = buffer.field("sram_region_id")?;
-                    let sram = self.soc["memory_regions"].as_array().into_iter().flatten()
+                    let sram = self.soc["memory_regions"]
+                        .as_array()
+                        .into_iter()
+                        .flatten()
                         .find(|row| &row["id"] == region)
                         .ok_or("the input buffer names an absent memory region")?;
-                    json!([buffer.base(), buffer.interrupt(None), buffer.number("reset_ticks")?, sram["base"],
-                        buffer.number("bank_bytes")?, sensor["statistics_scene"]])
+                    json!([
+                        buffer.base(),
+                        buffer.interrupt(None),
+                        buffer.number("reset_ticks")?,
+                        sram["base"],
+                        buffer.number("bank_bytes")?,
+                        sensor["statistics_scene"]
+                    ])
                 }
             };
-            out.insert("imaging".into(), json!([
-                [command.base(), receiver.base(), lines(receiver, "normal"), lines(receiver, "error"),
-                 lines(command, "timing"), lines(receiver, "raw-dma")],
-                [sensor["frame_period_ticks"], sensor["frame_active_ticks"],
-                 command.number("command_ticks")?, command.number("reset_ticks")?],
-                [sensor["read_gate"]["register"], sensor["read_gate"]["mask"]],
-                buffer]));
+            out.insert(
+                "imaging".into(),
+                json!([
+                    [
+                        command.base(),
+                        receiver.base(),
+                        lines(receiver, "normal"),
+                        lines(receiver, "error"),
+                        lines(command, "timing"),
+                        lines(receiver, "raw-dma")
+                    ],
+                    [
+                        sensor["frame_period_ticks"],
+                        sensor["frame_active_ticks"],
+                        command.number("command_ticks")?,
+                        command.number("reset_ticks")?
+                    ],
+                    [sensor["read_gate"]["register"], sensor["read_gate"]["mask"]],
+                    buffer
+                ]),
+            );
         }
         let usb_input = &board["usb_input"];
         if let Some(usb) = self.device("usb").filter(|_| usb_input.is_object()) {
@@ -348,8 +497,16 @@ impl Catalog {
                 Some("super") => 4,
                 other => return Err(format!("unknown USB speed {other:?}")),
             };
-            out.insert("usb".into(), json!([usb.base(), usb.interrupt(None), usb.number("command_ticks")?,
-                usb.number("transaction_ticks")?, speed]));
+            out.insert(
+                "usb".into(),
+                json!([
+                    usb.base(),
+                    usb.interrupt(None),
+                    usb.number("command_ticks")?,
+                    usb.number("transaction_ticks")?,
+                    speed
+                ]),
+            );
         }
         if let Some(dials) = board["countdown_dials"]["dials"].as_array() {
             out.insert("countdown_dials".into(), json!(dials.iter().map(|d| json!({"name": d["control"],
@@ -363,7 +520,12 @@ impl Catalog {
     /// first in that order, the rest in record order.
     fn register_blocks(&self) -> Result<Vec<Value>, String> {
         let mut blocks = self.with_device("register_block");
-        blocks.sort_by_key(|b| (b.device["order"].is_null(), b.device["order"].as_u64().unwrap_or(0)));
+        blocks.sort_by_key(|b| {
+            (
+                b.device["order"].is_null(),
+                b.device["order"].as_u64().unwrap_or(0),
+            )
+        });
         let bits = |b: &Value| json!([b["offset"], b["mask"]]);
         let optional = |b: &Value| if b.is_null() { Value::Null } else { bits(b) };
         let period = |declared: &Value| match &self.board["imaging_frames"]["period_ticks"] {
@@ -449,7 +611,10 @@ impl Catalog {
                         if hi <= a || b <= lo {
                             vec![(a, b)]
                         } else {
-                            [(a, lo.max(a)), (hi.min(b), b)].into_iter().filter(|(x, y)| x < y).collect()
+                            [(a, lo.max(a)), (hi.min(b), b)]
+                                .into_iter()
+                                .filter(|(x, y)| x < y)
+                                .collect()
                         }
                     })
                     .collect();
@@ -461,7 +626,9 @@ impl Catalog {
 
     /// The offset of `register` in the design `block` instantiates.
     fn register_offset(&self, block: Block<'_>, register: &str) -> Result<u64, String> {
-        let ip = block.raw["ip"].as_str().ok_or_else(|| format!("block {} names no design", block.id()))?;
+        let ip = block.raw["ip"]
+            .as_str()
+            .ok_or_else(|| format!("block {} names no design", block.id()))?;
         self.ips
             .get(ip)
             .and_then(|design| design["registers"].as_array())
@@ -479,7 +646,12 @@ impl Catalog {
             .map(|b| {
                 let mut row = vec![json!(b.base()), b.device["pixel_clock_ticks"].clone()];
                 row.extend(b.lines().into_iter().map(Value::from));
-                row.push(b.device.get("picture_layout").cloned().unwrap_or(Value::Null));
+                row.push(
+                    b.device
+                        .get("picture_layout")
+                        .cloned()
+                        .unwrap_or(Value::Null),
+                );
                 row.push(b.device.get("video_layout").cloned().unwrap_or(Value::Null));
                 Ok(Value::Array(row))
             })
@@ -492,13 +664,23 @@ impl Catalog {
         }
         let movdc = movdc
             .into_iter()
-            .map(|b| Ok(json!([b.base(), b.interrupt(None), b.number("reset_ticks")?,
-                frames["frame_period_ticks"], frames["luma"]])))
+            .map(|b| {
+                Ok(json!([
+                    b.base(),
+                    b.interrupt(None),
+                    b.number("reset_ticks")?,
+                    frames["frame_period_ticks"],
+                    frames["luma"]
+                ]))
+            })
             .collect::<Result<Vec<_>, String>>()?;
         out.insert("movdc".into(), json!(movdc));
         if let Some(phy) = self.device("usb_phy") {
             let input = &self.board["usb_phy_input"];
-            out.insert("usb_phy".into(), json!([phy.base(), input["registers"], input["parallel"]]));
+            out.insert(
+                "usb_phy".into(),
+                json!([phy.base(), input["registers"], input["parallel"]]),
+            );
         }
         let cable = &self.board["usb_cable"];
         if let Some(usb) = self.device("xpp_usb").filter(|_| cable.is_object()) {
@@ -507,8 +689,16 @@ impl Catalog {
                 Some("super") => 4,
                 other => return Err(format!("unknown USB cable speed {other:?}")),
             };
-            out.insert("xpp_usb".into(), json!([usb.base(), usb.interrupt(None),
-                usb.number("command_ticks")?, usb.number("transaction_ticks")?, speed]));
+            out.insert(
+                "xpp_usb".into(),
+                json!([
+                    usb.base(),
+                    usb.interrupt(None),
+                    usb.number("command_ticks")?,
+                    usb.number("transaction_ticks")?,
+                    speed
+                ]),
+            );
         }
         if let Some(gpio) = self.device("gpio") {
             out.insert("gpio_base".into(), json!(gpio.base()));
@@ -534,7 +724,10 @@ impl Catalog {
             .collect::<Result<Vec<_>, String>>()?;
         let hosts = self.with_device("sd_host");
         if let Some(&first) = hosts.first() {
-            let mut settles = hosts.iter().map(|h| h.number("clock_ticks")).collect::<Result<Vec<_>, _>>()?;
+            let mut settles = hosts
+                .iter()
+                .map(|h| h.number("clock_ticks"))
+                .collect::<Result<Vec<_>, _>>()?;
             settles.dedup();
             if settles.len() != 1 {
                 return Err("XP4 SD hosts declare different clock settle times".into());
@@ -557,32 +750,60 @@ impl Catalog {
             .into_iter()
             .find(|b| !b.id().contains("decoder"))
             .ok_or("XP4 requires a declared JPEG encoder block")?;
-        let memory_type = self.block(jpeg.field("memory_type_block_id")?.as_str().unwrap_or_default())?;
-        out.insert("jpeg_encoder".into(), json!({"base": jpeg.base(), "irq": jpeg.interrupt(None),
-            "run_ticks": jpeg.number("run_ticks")?, "memory_type": memory_type.base()}));
+        let memory_type = self.block(
+            jpeg.field("memory_type_block_id")?
+                .as_str()
+                .unwrap_or_default(),
+        )?;
+        out.insert(
+            "jpeg_encoder".into(),
+            json!({"base": jpeg.base(), "irq": jpeg.interrupt(None),
+            "run_ticks": jpeg.number("run_ticks")?, "memory_type": memory_type.base()}),
+        );
         let engines = self
             .with_device("still_engine")
             .into_iter()
-            .map(|b| Ok(json!({"engine": b.field("engine")?, "base": b.base(), "irq": b.interrupt(None),
-                "run_ticks": b.number("run_ticks")?})))
+            .map(|b| {
+                Ok(
+                    json!({"engine": b.field("engine")?, "base": b.base(), "irq": b.interrupt(None),
+                "run_ticks": b.number("run_ticks")?}),
+                )
+            })
             .collect::<Result<Vec<_>, String>>()?;
         out.insert("still_engines".into(), json!(engines));
         let dsp = required("dsp")?;
-        out.insert("dsp".into(), json!({"irq": dsp.interrupt(None), "run_ticks": dsp.number("run_ticks")?}));
+        out.insert(
+            "dsp".into(),
+            json!({"irq": dsp.interrupt(None), "run_ticks": dsp.number("run_ticks")?}),
+        );
         let face = required("face_detection")?;
-        out.insert("face_detector".into(), json!({"base": face.base(), "irq": face.interrupt(None),
-            "run_ticks": face.number("run_ticks")?}));
+        out.insert(
+            "face_detector".into(),
+            json!({"base": face.base(), "irq": face.interrupt(None),
+            "run_ticks": face.number("run_ticks")?}),
+        );
         let filter = required("filter_engine")?;
-        let types = self.block(filter.field("memory_types_block_id")?.as_str().unwrap_or_default())?;
-        out.insert("filter_engine".into(), json!({"base": filter.base(), "memory_types": types.base(),
-            "irq": filter.interrupt(None), "run_ticks": filter.number("run_ticks")?}));
+        let types = self.block(
+            filter
+                .field("memory_types_block_id")?
+                .as_str()
+                .unwrap_or_default(),
+        )?;
+        out.insert(
+            "filter_engine".into(),
+            json!({"base": filter.base(), "memory_types": types.base(),
+            "irq": filter.interrupt(None), "run_ticks": filter.number("run_ticks")?}),
+        );
         let countdown = required("countdown_timer")?;
         let routes = countdown
             .interrupts()
             .iter()
             .map(|row| {
-                let channel = row["output"].as_str().and_then(|n| n.strip_prefix("channel"))
-                    .and_then(|n| n.parse::<u64>().ok()).ok_or("a countdown output is not a channel")?;
+                let channel = row["output"]
+                    .as_str()
+                    .and_then(|n| n.strip_prefix("channel"))
+                    .and_then(|n| n.parse::<u64>().ok())
+                    .ok_or("a countdown output is not a channel")?;
                 Ok((channel, row["line"].clone()))
             })
             .collect::<Result<Vec<_>, String>>()?;
@@ -591,8 +812,16 @@ impl Catalog {
         if channels != (0..countdown.number("channels")?).collect::<Vec<_>>() {
             return Err("the countdown timer block must route every channel once".into());
         }
-        out.insert("countdown_timers".into(), json!([countdown.base(),
-            routes.iter().map(|(c, l)| json!([c, l])).collect::<Vec<_>>()]));
+        out.insert(
+            "countdown_timers".into(),
+            json!([
+                countdown.base(),
+                routes
+                    .iter()
+                    .map(|(c, l)| json!([c, l]))
+                    .collect::<Vec<_>>()
+            ]),
+        );
         let usb = required("usb_condition")?;
         out.insert("usb_condition".into(), json!([usb.base(), false]));
         Ok(())
@@ -610,7 +839,8 @@ pub fn definition(
     let catalog = Catalog::new(resolved)?;
     let mut fields = catalog.processor_fields()?;
     fields.extend(catalog.body_fields()?);
-    let mut labels: Vec<u64> = serde_json::from_value(fields["labels"].take()).map_err(|e| e.to_string())?;
+    let mut labels: Vec<u64> =
+        serde_json::from_value(fields["labels"].take()).map_err(|e| e.to_string())?;
     labels.extend(image_labels);
     labels.sort_unstable();
     labels.dedup();
@@ -624,10 +854,16 @@ pub fn definition(
     if registers.len() != fields["cores"].as_u64().unwrap_or(0) as usize {
         return Err("XP4 reset registers must name every processor".into());
     }
-    fields.insert("initial_registers".into(), serde_json::to_value(registers).map_err(|e| e.to_string())?);
+    fields.insert(
+        "initial_registers".into(),
+        serde_json::to_value(registers).map_err(|e| e.to_string())?,
+    );
     fields.insert("discovery".into(), json!(false));
     // The definition carries the statistics scene as its JSON text.
-    if let Some(scene) = fields.get_mut("imaging").and_then(|imaging| imaging.pointer_mut("/3/5")) {
+    if let Some(scene) = fields
+        .get_mut("imaging")
+        .and_then(|imaging| imaging.pointer_mut("/3/5"))
+    {
         if !scene.is_string() && !scene.is_null() {
             *scene = json!(scene.to_string());
         }
@@ -653,9 +889,17 @@ mod tests {
         for id in ["xt3-511", "xt30-201-boot", "xe4-201-handoff"] {
             let catalog = Catalog::new(&ResolvedConfiguration::bundled(id).unwrap()).unwrap();
             let mut fields = catalog.processor_fields().unwrap();
-            fields.extend(catalog.body_fields().unwrap_or_else(|e| panic!("{id}: {e}")));
+            fields.extend(
+                catalog
+                    .body_fields()
+                    .unwrap_or_else(|e| panic!("{id}: {e}")),
+            );
             if let Ok(dir) = std::env::var("FUJIMOD_XP4_CATALOG_DIR") {
-                std::fs::write(format!("{dir}/{id}.json"), serde_json::to_string_pretty(&fields).unwrap()).unwrap();
+                std::fs::write(
+                    format!("{dir}/{id}.json"),
+                    serde_json::to_string_pretty(&fields).unwrap(),
+                )
+                .unwrap();
             }
         }
     }

@@ -11,15 +11,19 @@ fn a_refused_store_fails_the_call_and_its_bytes_are_restored() {
         fujimod_emulator_cpu_unicorn::rprofile::core::Core::new(
             raw,
             fujimod_emulator_cpu_unicorn::rprofile::core::Options::default(),
-            fujimod_emulator_cpu_unicorn::rprofile::core::Wiring { memory: Default::default() },
+            fujimod_emulator_cpu_unicorn::rprofile::core::Wiring {
+                memory: Default::default(),
+            },
         )
         .unwrap(),
     );
     cpu.map_zeroed(0x10000, 0x1000, 7).unwrap();
     // str r0, [r6]; b .
     let code = [0xe586_0000u32, 0xeaff_fffe];
-    cpu.write_memory(0x10000, &code.map(u32::to_le_bytes).concat()).unwrap();
-    cpu.write_memory(0x10900, &[0x11, 0x22, 0x33, 0x44]).unwrap();
+    cpu.write_memory(0x10000, &code.map(u32::to_le_bytes).concat())
+        .unwrap();
+    cpu.write_memory(0x10900, &[0x11, 0x22, 0x33, 0x44])
+        .unwrap();
     for (register, value) in [
         (arm::CORE[0], 0xdead_beef_u32),
         (arm::CORE[6], 0x10900),
@@ -53,11 +57,18 @@ fn a_refused_store_fails_the_call_and_its_bytes_are_restored() {
     let event = session.state()["event"].clone();
     assert_eq!(event["kind"], "failure", "{event}");
     assert!(
-        event["message"].as_str().unwrap().contains("Store outside allowed ranges at 0x10900"),
+        event["message"]
+            .as_str()
+            .unwrap()
+            .contains("Store outside allowed ranges at 0x10900"),
         "{event}"
     );
     let mut bytes = [0; 4];
-    board.cpu(0).unwrap().read_memory(0x10900, &mut bytes).unwrap();
+    board
+        .cpu(0)
+        .unwrap()
+        .read_memory(0x10900, &mut bytes)
+        .unwrap();
     assert_eq!(bytes, [0x11, 0x22, 0x33, 0x44]);
     board.harness_end(&mut session).unwrap();
 }

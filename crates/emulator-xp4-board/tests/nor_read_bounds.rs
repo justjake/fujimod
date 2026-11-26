@@ -19,7 +19,13 @@ fn definition(strict: bool) -> Value {
 }
 
 fn session(strict: bool, bytes: Vec<u8>) -> support::Board {
-    support::open_with(serde_json::from_value::<Definition>(definition(strict)).unwrap(), Some(bytes), Vec::new(), Vec::new()).unwrap()
+    support::open_with(
+        serde_json::from_value::<Definition>(definition(strict)).unwrap(),
+        Some(bytes),
+        Vec::new(),
+        Vec::new(),
+    )
+    .unwrap()
 }
 
 fn mov32(code: &mut Vec<u32>, register: u32, value: u32) {
@@ -70,7 +76,12 @@ fn ordinary_cpu_reads_refuse_crossing_the_asset_and_default_to_erased_bytes_when
                 assert_eq!(&actual[4..], &[0xa5; 4]);
             }
             None => {
-                assert!(session.failure().unwrap().contains("outside supplied backing"));
+                assert!(
+                    session
+                        .failure()
+                        .unwrap()
+                        .contains("outside supplied backing")
+                );
                 assert_eq!(actual, [0xa5; 8]);
             }
         }
@@ -116,7 +127,12 @@ fn ordinary_dma_read_checks_entire_source_before_destination_copy() {
             assert_eq!(channel["completed"], 1);
             assert_eq!(channel["submitted"], false);
         } else {
-            assert!(session.failure().unwrap().contains("outside supplied backing"));
+            assert!(
+                session
+                    .failure()
+                    .unwrap()
+                    .contains("outside supplied backing")
+            );
             assert_eq!(actual, [0xa5; 64]);
             assert_eq!(channel["completed"], 0);
             assert!(serial["stream"].is_null());
@@ -127,10 +143,20 @@ fn ordinary_dma_read_checks_entire_source_before_destination_copy() {
 
 #[test]
 fn strict_backing_requires_explicit_contents_and_a_nor_owner() {
-    assert!(support::open(serde_json::from_value::<Definition>(definition(true)).unwrap()).is_err());
+    assert!(
+        support::open(serde_json::from_value::<Definition>(definition(true)).unwrap()).is_err()
+    );
     let mut no_owner = definition(true);
     no_owner["storage_jedec"] = Value::Null;
-    assert!(support::open_with(serde_json::from_value::<Definition>(no_owner).unwrap(), Some(vec![]), Vec::new(), Vec::new()).is_err());
+    assert!(
+        support::open_with(
+            serde_json::from_value::<Definition>(no_owner).unwrap(),
+            Some(vec![]),
+            Vec::new(),
+            Vec::new()
+        )
+        .is_err()
+    );
     // An explicit empty source is valid for identity/status-only callers.
     let session = session(true, vec![]);
     let mut code = vec![];
@@ -157,10 +183,21 @@ fn erased_definition() -> Value {
 
 #[test]
 fn explicit_erased_ranges_admit_cpu_reads_and_keep_holes_inaccessible() {
-    for (offset, expected) in [(28, Some([28, 29, 255, 255])),
-                                (32, None), (92, None),
-                                (96, Some([255; 4])), (124, Some([255; 4])), (128, None)] {
-        let session = support::open_with(serde_json::from_value(erased_definition()).unwrap(), Some((0..30).collect()), Vec::new(), Vec::new()).unwrap();
+    for (offset, expected) in [
+        (28, Some([28, 29, 255, 255])),
+        (32, None),
+        (92, None),
+        (96, Some([255; 4])),
+        (124, Some([255; 4])),
+        (128, None),
+    ] {
+        let session = support::open_with(
+            serde_json::from_value(erased_definition()).unwrap(),
+            Some((0..30).collect()),
+            Vec::new(),
+            Vec::new(),
+        )
+        .unwrap();
         session.write(OUTPUT, &[0xa5; 8]).unwrap();
         let mut code = vec![];
         mov32(&mut code, 0, (FLASH + offset) as u32);
@@ -174,7 +211,12 @@ fn explicit_erased_ranges_admit_cpu_reads_and_keep_holes_inaccessible() {
             assert!(session.failure().is_none());
             assert_eq!(&actual[..4], &bytes);
         } else {
-            assert!(session.failure().unwrap().contains("outside supplied backing"));
+            assert!(
+                session
+                    .failure()
+                    .unwrap()
+                    .contains("outside supplied backing")
+            );
             assert_eq!(&actual[..4], &[0xa5; 4]);
         }
         assert_eq!(&actual[4..], &[0xa5; 4]);
@@ -188,7 +230,13 @@ fn explicit_erased_ranges_admit_cpu_reads_and_keep_holes_inaccessible() {
 #[test]
 fn declared_erased_input_is_copied_by_original_dma_routing_without_filling_gaps() {
     for (offset, success) in [(96, true), (16, false)] {
-        let session = support::open_with(serde_json::from_value(erased_definition()).unwrap(), Some((0..30).collect()), Vec::new(), Vec::new()).unwrap();
+        let session = support::open_with(
+            serde_json::from_value(erased_definition()).unwrap(),
+            Some((0..30).collect()),
+            Vec::new(),
+            Vec::new(),
+        )
+        .unwrap();
         session.write(OUTPUT, &[0xa5; 64]).unwrap();
         let mut code = vec![];
         for (address, value) in [
@@ -217,7 +265,12 @@ fn declared_erased_input_is_copied_by_original_dma_routing_without_filling_gaps(
             assert_eq!(&actual[..32], &[255; 32]);
             assert_eq!(&actual[32..], &[0xa5; 32]);
         } else {
-            assert!(session.failure().unwrap().contains("outside supplied backing"));
+            assert!(
+                session
+                    .failure()
+                    .unwrap()
+                    .contains("outside supplied backing")
+            );
             assert_eq!(actual, [0xa5; 64]);
             assert!(device(&session, "xp4-serial-flash")["stream"].is_null());
         }
@@ -228,16 +281,37 @@ fn declared_erased_input_is_copied_by_original_dma_routing_without_filling_gaps(
 fn erased_input_requires_strict_explicit_nor_contents_and_valid_ranges() {
     let selected = erased_definition();
     assert!(support::open(serde_json::from_value(selected.clone()).unwrap()).is_err());
-    for (field, value) in [("storage_strict_backing", json!(false)),
-                           ("storage_jedec", Value::Null),
-                           ("storage_erased_ranges", json!([{"offset":29,"length":1}])),
-                           ("storage_erased_ranges", json!([{"offset":32,"length":0}])),
-                           ("storage_erased_ranges", json!([{"offset":0x8000000,"length":1}]))] {
+    for (field, value) in [
+        ("storage_strict_backing", json!(false)),
+        ("storage_jedec", Value::Null),
+        ("storage_erased_ranges", json!([{"offset":29,"length":1}])),
+        ("storage_erased_ranges", json!([{"offset":32,"length":0}])),
+        (
+            "storage_erased_ranges",
+            json!([{"offset":0x8000000,"length":1}]),
+        ),
+    ] {
         let mut bad = selected.clone();
         bad[field] = value;
-        assert!(support::open_with(serde_json::from_value(bad).unwrap(), Some(vec![0;30]), Vec::new(), Vec::new()).is_err());
+        assert!(
+            support::open_with(
+                serde_json::from_value(bad).unwrap(),
+                Some(vec![0; 30]),
+                Vec::new(),
+                Vec::new()
+            )
+            .is_err()
+        );
     }
     let mut empty = definition(false);
     empty["storage_erased_ranges"] = json!([]);
-    assert!(support::open_with(serde_json::from_value(empty).unwrap(), Some(vec![0;30]), Vec::new(), Vec::new()).is_ok());
+    assert!(
+        support::open_with(
+            serde_json::from_value(empty).unwrap(),
+            Some(vec![0; 30]),
+            Vec::new(),
+            Vec::new()
+        )
+        .is_ok()
+    );
 }

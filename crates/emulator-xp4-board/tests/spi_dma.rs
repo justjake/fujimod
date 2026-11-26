@@ -7,8 +7,8 @@
 //! when the last word has shifted.
 use fujimod_emulator_cpu::arm;
 mod support;
-use support::Board;
 use serde_json::{Value, json};
+use support::Board;
 const SPI2: u32 = 0xfff3_4000;
 const DATA: u32 = SPI2 + 8;
 const CBAR: u32 = 0xffff_0000;
@@ -76,7 +76,9 @@ fn records(session: &Board, name: &str) -> Vec<Value> {
         .collect()
 }
 fn field(record: &Value, key: &str) -> u64 {
-    record[key].as_u64().unwrap_or_else(|| panic!("{key}: {record}"))
+    record[key]
+        .as_u64()
+        .unwrap_or_else(|| panic!("{key}: {record}"))
 }
 
 /// The observed open: 8-bit words, master, divider 0x24, both DMA requests,

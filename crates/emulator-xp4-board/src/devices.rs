@@ -46,69 +46,163 @@ pub(crate) struct Connected<T>(pub(crate) Arc<Mutex<T>>);
 /// The shared model's execute-in-place epoch, read through its lock.
 impl<T: Device> fujimod_emulator_devices::capability::ExecuteInPlace for Connected<T> {
     fn epoch(&self) -> u64 {
-        self.0.lock().unwrap().execute_in_place().map_or(u64::MAX, |model| model.epoch())
+        self.0
+            .lock()
+            .unwrap()
+            .execute_in_place()
+            .map_or(u64::MAX, |model| model.epoch())
     }
 }
 /// The shared model's analog inputs, through its lock.
 impl<T: Device> fujimod_emulator_devices::capability::AnalogInputs for Connected<T> {
     fn samples(&self) -> Vec<u16> {
-        self.0.lock().unwrap().analog_inputs().map(|adc| adc.samples()).unwrap_or_default()
+        self.0
+            .lock()
+            .unwrap()
+            .analog_inputs()
+            .map(|adc| adc.samples())
+            .unwrap_or_default()
     }
     fn set_sample(&mut self, channel: usize, value: u16) -> Result<(), String> {
-        self.0.lock().unwrap().analog_inputs_mut().ok_or("not an analog input")?.set_sample(channel, value)
+        self.0
+            .lock()
+            .unwrap()
+            .analog_inputs_mut()
+            .ok_or("not an analog input")?
+            .set_sample(channel, value)
     }
 }
 /// The shared model's USB port, through its lock.
 impl<T: Device> fujimod_emulator_devices::capability::UsbPort for Connected<T> {
     fn cable_connected(&self) -> bool {
-        self.0.lock().unwrap().usb_port().is_some_and(|port| port.cable_connected())
+        self.0
+            .lock()
+            .unwrap()
+            .usb_port()
+            .is_some_and(|port| port.cable_connected())
     }
     fn bus_status(&self) -> Result<serde_json::Value, String> {
-        self.0.lock().unwrap().usb_port().ok_or("not a USB port")?.bus_status()
+        self.0
+            .lock()
+            .unwrap()
+            .usb_port()
+            .ok_or("not a USB port")?
+            .bus_status()
     }
     fn host_reset(&mut self, cx: &mut Cx<'_>) -> Result<(), String> {
-        self.0.lock().unwrap().usb_port_mut().ok_or("not a USB port")?.host_reset(cx)
+        self.0
+            .lock()
+            .unwrap()
+            .usb_port_mut()
+            .ok_or("not a USB port")?
+            .host_reset(cx)
     }
     fn host_setup(&mut self, cx: &mut Cx<'_>, packet: &[u8]) -> Result<(), String> {
-        self.0.lock().unwrap().usb_port_mut().ok_or("not a USB port")?.host_setup(cx, packet)
+        self.0
+            .lock()
+            .unwrap()
+            .usb_port_mut()
+            .ok_or("not a USB port")?
+            .host_setup(cx, packet)
     }
     fn host_out(&mut self, cx: &mut Cx<'_>, endpoint: u8, packet: &[u8]) -> Result<(), String> {
-        self.0.lock().unwrap().usb_port_mut().ok_or("not a USB port")?.host_out(cx, endpoint, packet)
+        self.0
+            .lock()
+            .unwrap()
+            .usb_port_mut()
+            .ok_or("not a USB port")?
+            .host_out(cx, endpoint, packet)
     }
     fn host_in(&mut self, cx: &mut Cx<'_>, endpoint: u8, size: usize) -> Result<Vec<u8>, String> {
-        self.0.lock().unwrap().usb_port_mut().ok_or("not a USB port")?.host_in(cx, endpoint, size)
+        self.0
+            .lock()
+            .unwrap()
+            .usb_port_mut()
+            .ok_or("not a USB port")?
+            .host_in(cx, endpoint, size)
     }
     fn host_in_token(&mut self, cx: &mut Cx<'_>, endpoint: u8) -> Result<(), String> {
-        self.0.lock().unwrap().usb_port_mut().ok_or("not a USB port")?.host_in_token(cx, endpoint)
+        self.0
+            .lock()
+            .unwrap()
+            .usb_port_mut()
+            .ok_or("not a USB port")?
+            .host_in_token(cx, endpoint)
     }
-    fn host_ready(&self, wait: fujimod_emulator_devices::capability::UsbHostWait) -> Result<bool, String> {
-        self.0.lock().unwrap().usb_port().ok_or("not a USB port")?.host_ready(wait)
+    fn host_ready(
+        &self,
+        wait: fujimod_emulator_devices::capability::UsbHostWait,
+    ) -> Result<bool, String> {
+        self.0
+            .lock()
+            .unwrap()
+            .usb_port()
+            .ok_or("not a USB port")?
+            .host_ready(wait)
     }
     fn host_in_wants_token(&self, endpoint: u8) -> Result<bool, String> {
-        self.0.lock().unwrap().usb_port().ok_or("not a USB port")?.host_in_wants_token(endpoint)
+        self.0
+            .lock()
+            .unwrap()
+            .usb_port()
+            .ok_or("not a USB port")?
+            .host_in_wants_token(endpoint)
     }
     fn packet_bytes(&self) -> Result<usize, String> {
-        self.0.lock().unwrap().usb_port().ok_or("not a USB port")?.packet_bytes()
+        self.0
+            .lock()
+            .unwrap()
+            .usb_port()
+            .ok_or("not a USB port")?
+            .packet_bytes()
     }
 }
 impl<T: Device> Device for Connected<T> {
     fn name(&self) -> &'static str {
         self.0.lock().unwrap().name()
     }
-    fn analog_inputs(&self) -> Option<&(dyn fujimod_emulator_devices::capability::AnalogInputs + 'static)> {
-        if self.0.lock().unwrap().analog_inputs().is_some() { Some(self) } else { None }
+    fn analog_inputs(
+        &self,
+    ) -> Option<&(dyn fujimod_emulator_devices::capability::AnalogInputs + 'static)> {
+        if self.0.lock().unwrap().analog_inputs().is_some() {
+            Some(self)
+        } else {
+            None
+        }
     }
-    fn analog_inputs_mut(&mut self) -> Option<&mut (dyn fujimod_emulator_devices::capability::AnalogInputs + 'static)> {
-        if self.0.lock().unwrap().analog_inputs().is_some() { Some(self) } else { None }
+    fn analog_inputs_mut(
+        &mut self,
+    ) -> Option<&mut (dyn fujimod_emulator_devices::capability::AnalogInputs + 'static)> {
+        if self.0.lock().unwrap().analog_inputs().is_some() {
+            Some(self)
+        } else {
+            None
+        }
     }
     fn usb_port(&self) -> Option<&(dyn fujimod_emulator_devices::capability::UsbPort + 'static)> {
-        if self.0.lock().unwrap().usb_port().is_some() { Some(self) } else { None }
+        if self.0.lock().unwrap().usb_port().is_some() {
+            Some(self)
+        } else {
+            None
+        }
     }
-    fn usb_port_mut(&mut self) -> Option<&mut (dyn fujimod_emulator_devices::capability::UsbPort + 'static)> {
-        if self.0.lock().unwrap().usb_port().is_some() { Some(self) } else { None }
+    fn usb_port_mut(
+        &mut self,
+    ) -> Option<&mut (dyn fujimod_emulator_devices::capability::UsbPort + 'static)> {
+        if self.0.lock().unwrap().usb_port().is_some() {
+            Some(self)
+        } else {
+            None
+        }
     }
-    fn execute_in_place(&self) -> Option<&(dyn fujimod_emulator_devices::capability::ExecuteInPlace + 'static)> {
-        if self.0.lock().unwrap().execute_in_place().is_some() { Some(self) } else { None }
+    fn execute_in_place(
+        &self,
+    ) -> Option<&(dyn fujimod_emulator_devices::capability::ExecuteInPlace + 'static)> {
+        if self.0.lock().unwrap().execute_in_place().is_some() {
+            Some(self)
+        } else {
+            None
+        }
     }
     fn read(&mut self, cx: &mut Cx<'_>, address: u64, size: u8) -> u64 {
         self.0.lock().unwrap().read(cx, address, size)
@@ -178,7 +272,6 @@ pub struct Devices {
     /// whichever of the two is declared first.
     serial_links: SerialLinks,
 }
-
 
 impl Devices {
     pub fn byte_i2c(&mut self, input: super::definition::ByteI2c) -> Result<(), String> {
@@ -965,7 +1058,13 @@ impl Devices {
     /// model of a name takes its node index as a suffix).
     pub fn into_graph(
         self,
-    ) -> Result<(fujimod_emulator_devices::graph::DeviceGraph, BTreeMap<String, usize>), String> {
+    ) -> Result<
+        (
+            fujimod_emulator_devices::graph::DeviceGraph,
+            BTreeMap<String, usize>,
+        ),
+        String,
+    > {
         use fujimod_emulator_devices::graph::{DeviceGraph, Mapping};
         let mut graph = DeviceGraph::new();
         let mut names = BTreeMap::new();
@@ -1002,12 +1101,18 @@ impl Devices {
                 holes.sort_unstable();
                 for (a, b) in holes {
                     if start < a {
-                        mappings.push(Mapping { base: start, size: a - start });
+                        mappings.push(Mapping {
+                            base: start,
+                            size: a - start,
+                        });
                     }
                     start = b;
                 }
                 if start < hi {
-                    mappings.push(Mapping { base: start, size: hi - start });
+                    mappings.push(Mapping {
+                        base: start,
+                        size: hi - start,
+                    });
                 }
             }
             if mappings.is_empty() {
@@ -1021,7 +1126,10 @@ impl Devices {
         // board re-checks every model's deadline after any device access.
         let count = graph.nodes.len();
         for device in 0..count {
-            graph.depend_on(device, (0..count).filter(|&source| source != device).collect())?;
+            graph.depend_on(
+                device,
+                (0..count).filter(|&source| source != device).collect(),
+            )?;
         }
         Ok((graph, names))
     }
@@ -1184,12 +1292,24 @@ impl Devices {
                 page_ticks: geometry.3,
             },
         )?;
-        if let Some(prefix) = prefix { nor = nor.with_immutable_prefix(prefix)?; }
-        if let Some(range) = executable { nor = nor.with_executable_range(range)?; }
-        if write_protect { nor = nor.with_write_protect(); }
-        if strict_backing { nor = nor.with_strict_backing(); }
-        if !erased_ranges.is_empty() { nor = nor.with_erased_ranges(erased_ranges)?; }
-        if !write_ranges.is_empty() { nor = nor.with_write_ranges(write_ranges)?; }
+        if let Some(prefix) = prefix {
+            nor = nor.with_immutable_prefix(prefix)?;
+        }
+        if let Some(range) = executable {
+            nor = nor.with_executable_range(range)?;
+        }
+        if write_protect {
+            nor = nor.with_write_protect();
+        }
+        if strict_backing {
+            nor = nor.with_strict_backing();
+        }
+        if !erased_ranges.is_empty() {
+            nor = nor.with_erased_ranges(erased_ranges)?;
+        }
+        if !write_ranges.is_empty() {
+            nor = nor.with_write_ranges(write_ranges)?;
+        }
         let port = storage::try_port_from_nor(nor)?;
         let serial_links = SerialLinks::default();
         let mut dma = DmaController::new(port.clone(), routes)
@@ -1215,10 +1335,7 @@ impl Devices {
         let pad = controller.pad_register();
         let controller = Arc::new(Mutex::new(controller));
         let mut devices = Self {
-            models: vec![
-                Some(Box::new(Connected(controller))),
-                Some(Box::new(dma)),
-            ],
+            models: vec![Some(Box::new(Connected(controller))), Some(Box::new(dma))],
             pins: None,
             dials: BTreeMap::new(),
             adc: None,
@@ -1887,24 +2004,22 @@ impl Devices {
     pub fn guard_windows(&self) -> Vec<(u64, u64)> {
         self.windows.iter().map(|&(lo, hi, _)| (lo, hi)).collect()
     }
-
 }
-
 
 #[cfg(test)]
 mod io_group_admission_tests {
     use super::*;
     #[test]
     fn overflow_and_duplicate_windows_refuse_before_mutating_devices() {
-        let mut devices=Devices::empty();
-        let before=(devices.models.len(),devices.windows.clone());
-        assert!(devices.io_groups(u64::MAX-0x9f).is_err());
-        assert_eq!((devices.models.len(),devices.windows.clone()),before);
+        let mut devices = Devices::empty();
+        let before = (devices.models.len(), devices.windows.clone());
+        assert!(devices.io_groups(u64::MAX - 0x9f).is_err());
+        assert_eq!((devices.models.len(), devices.windows.clone()), before);
         devices.io_groups(0xfff42000).unwrap();
-        let before=(devices.models.len(),devices.windows.clone());
-        for base in [0xfff42000,0xfff41fff,0xfff4209f] {
+        let before = (devices.models.len(), devices.windows.clone());
+        for base in [0xfff42000, 0xfff41fff, 0xfff4209f] {
             assert!(devices.io_groups(base).is_err());
-            assert_eq!((devices.models.len(),devices.windows.clone()),before);
+            assert_eq!((devices.models.len(), devices.windows.clone()), before);
         }
     }
 }
@@ -1914,15 +2029,15 @@ mod decompressor_admission_tests {
     use super::*;
     #[test]
     fn overflow_and_overlap_refuse_before_mutation() {
-        let mut devices=Devices::empty();
-        let before=(devices.models.len(),devices.windows.clone());
-        assert!(devices.decompressor(u64::MAX-0x6b,128).is_err());
-        assert_eq!((devices.models.len(),devices.windows.clone()),before);
-        devices.decompressor(0xfff79000,128).unwrap();
-        let before=(devices.models.len(),devices.windows.clone());
-        for base in [0xfff79000,0xfff78fff,0xfff7906b] {
-            assert!(devices.decompressor(base,128).is_err());
-            assert_eq!((devices.models.len(),devices.windows.clone()),before);
+        let mut devices = Devices::empty();
+        let before = (devices.models.len(), devices.windows.clone());
+        assert!(devices.decompressor(u64::MAX - 0x6b, 128).is_err());
+        assert_eq!((devices.models.len(), devices.windows.clone()), before);
+        devices.decompressor(0xfff79000, 128).unwrap();
+        let before = (devices.models.len(), devices.windows.clone());
+        for base in [0xfff79000, 0xfff78fff, 0xfff7906b] {
+            assert!(devices.decompressor(base, 128).is_err());
+            assert_eq!((devices.models.len(), devices.windows.clone()), before);
         }
     }
 }

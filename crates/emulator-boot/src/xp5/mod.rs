@@ -88,7 +88,10 @@ pub(super) fn open_startup(
     let firmware_id = configuration.configuration.firmware_id.clone();
     let mut state = manifest::BootState::for_firmware(&firmware_id, manifest.as_deref())?
         .with_catalog_windows(configuration)?;
-    let preloads = configuration.configuration.preset.as_ref()
+    let preloads = configuration
+        .configuration
+        .preset
+        .as_ref()
         .and_then(|preset| preset.firmware_profile_id.as_ref())
         .and_then(|id| {
             configuration

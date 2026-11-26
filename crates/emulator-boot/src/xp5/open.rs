@@ -487,7 +487,11 @@ fn rom_boot_state(state: &BootState, rom: &RomStart) -> Result<BootState, String
     state.preload.clear();
     // Stage one configures the serial flash itself.
     if state.flash.take().is_some() {
-        for window in state.device.iter_mut().filter(|window| window.kind == "flash-storage-controller") {
+        for window in state
+            .device
+            .iter_mut()
+            .filter(|window| window.kind == "flash-storage-controller")
+        {
             window.options.remove("inherited_dummy_cycles");
         }
     }

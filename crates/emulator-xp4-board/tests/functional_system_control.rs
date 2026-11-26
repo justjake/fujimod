@@ -11,22 +11,34 @@ fn config() -> Value {
 }
 #[test]
 fn absent_input_keeps_device_disconnected_and_explicit_input_connects() {
-    let strict: Definition=serde_json::from_value(input()).unwrap();
-    let strict=support::open(strict).unwrap();
-    assert!(!strict.device_state_json().contains_key("xp4-functional-system-control"));
-    let mut v=input(); v["xp4_functional_system_control"]=config();
-    let functional=support::open(serde_json::from_value(v).unwrap()).unwrap();
-    assert!(functional.device_state_json().contains_key("xp4-functional-system-control"));
+    let strict: Definition = serde_json::from_value(input()).unwrap();
+    let strict = support::open(strict).unwrap();
+    assert!(
+        !strict
+            .device_state_json()
+            .contains_key("xp4-functional-system-control")
+    );
+    let mut v = input();
+    v["xp4_functional_system_control"] = config();
+    let functional = support::open(serde_json::from_value(v).unwrap()).unwrap();
+    assert!(
+        functional
+            .device_state_json()
+            .contains_key("xp4-functional-system-control")
+    );
 }
 #[test]
 fn typed_inputs_reject_missing_reset_and_overlapping_request_owner() {
     let mut v = input();
     v["xp4_functional_system_control"] = json!({"profile":"experimental-source-functional-v1"});
     assert!(serde_json::from_value::<Definition>(v).is_err());
-    let mut v=input(); v["xp4_functional_system_control"]=config();
-    v["control_requests"]=json!([[0xff70f03cu64,2]]);
-    let error=support::open(serde_json::from_value(v).unwrap()).err().unwrap();
-    assert!(error.contains("Overlapping"),"{error}");
+    let mut v = input();
+    v["xp4_functional_system_control"] = config();
+    v["control_requests"] = json!([[0xff70f03cu64, 2]]);
+    let error = support::open(serde_json::from_value(v).unwrap())
+        .err()
+        .unwrap();
+    assert!(error.contains("Overlapping"), "{error}");
 }
 
 fn banks() -> Value {
@@ -36,8 +48,10 @@ fn banks() -> Value {
 }
 #[test]
 fn exact_bank_definition_connects_and_rejects_each_duplicate_owner() {
-    let mut cfg = config(); cfg["retained_request_banks"] = banks();
-    let mut v = input(); v["xp4_functional_system_control"] = cfg.clone();
+    let mut cfg = config();
+    cfg["retained_request_banks"] = banks();
+    let mut v = input();
+    v["xp4_functional_system_control"] = cfg.clone();
     let session = support::open(serde_json::from_value(v.clone()).unwrap()).unwrap();
     let state: Value = session.device_state_json()["xp4-functional-system-control"].clone();
     assert_eq!(state["retained_banks"]["a"].as_array().unwrap().len(), 15);
@@ -45,11 +59,15 @@ fn exact_bank_definition_connects_and_rejects_each_duplicate_owner() {
         .into_iter()
         .chain(fujimod_emulator_xp4_system::system_control::B_WORDS)
     {
-        let mut conflict = v.clone(); conflict["control_requests"] = json!([[address, 2], [address, 2]]);
-        let error = support::open(serde_json::from_value(conflict).unwrap()).err().unwrap();
+        let mut conflict = v.clone();
+        conflict["control_requests"] = json!([[address, 2], [address, 2]]);
+        let error = support::open(serde_json::from_value(conflict).unwrap())
+            .err()
+            .unwrap();
         assert!(error.contains("Overlapping"), "{error}");
     }
-    let mut partial = v.clone(); partial["control_requests"] = json!([[0xfff48609u64, 2]]);
+    let mut partial = v.clone();
+    partial["control_requests"] = json!([[0xfff48609u64, 2]]);
     assert!(support::open(serde_json::from_value(partial).unwrap()).is_err());
     cfg["retained_request_banks"]["a_reset"][15] = json!(1);
     v["xp4_functional_system_control"] = cfg;
@@ -59,8 +77,10 @@ fn exact_bank_definition_connects_and_rejects_each_duplicate_owner() {
 #[test]
 fn configuration_family_has_one_owner_and_preserves_absent_graphics_semantics() {
     let mut cfg = config();
-    cfg["configuration_requests"] = json!({"initial_values": vec![0; 52], "completion_ticks": vec![8; 20]});
-    let mut v = input(); v["xp4_functional_system_control"] = cfg.clone();
+    cfg["configuration_requests"] =
+        json!({"initial_values": vec![0; 52], "completion_ticks": vec![8; 20]});
+    let mut v = input();
+    v["xp4_functional_system_control"] = cfg.clone();
     let session = support::open(serde_json::from_value(v.clone()).unwrap()).unwrap();
     let state: Value = session.device_state_json()["xp4-functional-system-control"].clone();
     assert!(state["configuration_state"].is_object());
@@ -73,27 +93,37 @@ fn configuration_family_has_one_owner_and_preserves_absent_graphics_semantics() 
                 .map(|base| base + 0x80),
         )
     {
-        let mut conflict = v.clone(); conflict["control_requests"] = json!([[address, 8]]);
-        let error = support::open(serde_json::from_value(conflict).unwrap()).err().unwrap();
+        let mut conflict = v.clone();
+        conflict["control_requests"] = json!([[address, 8]]);
+        let error = support::open(serde_json::from_value(conflict).unwrap())
+            .err()
+            .unwrap();
         assert!(error.contains("Overlapping"), "{error}");
     }
     cfg["graphics"] = json!({"initial_value": 0, "completion_ticks": 8});
     v["xp4_functional_system_control"] = cfg;
-    let error = support::open(serde_json::from_value(v).unwrap()).err().unwrap();
+    let error = support::open(serde_json::from_value(v).unwrap())
+        .err()
+        .unwrap();
     assert!(error.contains("overlap"), "{error}");
 }
 
 #[test]
 fn selection_special_owns_exactly_three_words_and_leaves_b14_to_its_existing_owner() {
     let mut cfg = config();
-    cfg["selection_special"] = json!({"selection_reset": 0, "special52_reset": 2, "special53_reset": 0});
-    let mut v = input(); v["xp4_functional_system_control"] = cfg.clone();
+    cfg["selection_special"] =
+        json!({"selection_reset": 0, "special52_reset": 2, "special53_reset": 0});
+    let mut v = input();
+    v["xp4_functional_system_control"] = cfg.clone();
     let session = support::open(serde_json::from_value(v.clone()).unwrap()).unwrap();
     let state: Value = session.device_state_json()["xp4-functional-system-control"].clone();
     assert!(state["selection_state"].is_object());
     for address in [0xfff48600u64, 0xfff48604, 0xfff4860c] {
-        let mut bad = v.clone(); bad["control_requests"] = json!([[address, 8]]);
-        let error = support::open(serde_json::from_value(bad).unwrap()).err().unwrap();
+        let mut bad = v.clone();
+        bad["control_requests"] = json!([[address, 8]]);
+        let error = support::open(serde_json::from_value(bad).unwrap())
+            .err()
+            .unwrap();
         assert!(error.contains("Overlapping"), "{error}");
     }
     v["control_requests"] = json!([[0xfff48690u64, 8]]);
@@ -109,14 +139,18 @@ fn base_parameter_family_reuses_request_ownership_and_rejects_all_added_window_o
     cfg["configuration_requests"] = json!({"initial_values": vec![0; 52], "completion_ticks": vec![8; 20],
         "base_parameters": {"initial_pairs": vec![[0, 0]; 13], "initial_status": vec![1; 13],
             "request_ticks": vec![8; 13], "settle_ticks": vec![32; 13]}});
-    let mut v = input(); v["xp4_functional_system_control"] = cfg.clone();
+    let mut v = input();
+    v["xp4_functional_system_control"] = cfg.clone();
     let session = support::open(serde_json::from_value(v.clone()).unwrap()).unwrap();
     let state: Value = session.device_state_json()["xp4-functional-system-control"].clone();
     assert!(state["configuration_state"]["base_state"].is_object());
     for base in fujimod_emulator_xp4_system::base_parameter::BASES {
         for address in [base, base + 8, base + 0x80, base + 0xf0] {
-            let mut bad = v.clone(); bad["control_requests"] = json!([[address, 8]]);
-            let error = support::open(serde_json::from_value(bad).unwrap()).err().unwrap();
+            let mut bad = v.clone();
+            bad["control_requests"] = json!([[address, 8]]);
+            let error = support::open(serde_json::from_value(bad).unwrap())
+                .err()
+                .unwrap();
             assert!(error.contains("Overlapping"), "{error}");
         }
     }
@@ -136,7 +170,9 @@ fn boolean_write_port_is_optional_exact_and_separate_from_dma_mux() {
     v["control_requests"] = json!([[0xfff4a400u64, 8]]);
     assert!(support::open(serde_json::from_value(v.clone()).unwrap()).is_ok());
     v["xp4_functional_system_control"]["boolean_write_fff4a400"] = json!({"enabled": true});
-    let error = support::open(serde_json::from_value(v.clone()).unwrap()).err().unwrap();
+    let error = support::open(serde_json::from_value(v.clone()).unwrap())
+        .err()
+        .unwrap();
     assert!(error.contains("Overlapping"), "{error}");
     for address in [0xfff4a380u64, 0xfff4a484] {
         v["control_requests"] = json!([[address, 8]]);
@@ -147,7 +183,13 @@ fn boolean_write_port_is_optional_exact_and_separate_from_dma_mux() {
     v["storage_geometry"] = json!([65536, 256, 100, 10]);
     v["storage_irq"] = json!(37);
     v["storage_dma_routes"] = json!((207u32..223).collect::<Vec<_>>());
-    let session = support::open_with(serde_json::from_value(v.clone()).unwrap(), Some(vec![]), Vec::new(), Vec::new()).unwrap();
+    let session = support::open_with(
+        serde_json::from_value(v.clone()).unwrap(),
+        Some(vec![]),
+        Vec::new(),
+        Vec::new(),
+    )
+    .unwrap();
     let state: Value = session.device_state_json()["xp4-functional-system-control"].clone();
     assert_eq!(state["boolean_write_state"], json!({"last_write": null}));
     assert!(session.device_state_json().contains_key("xp4-dma"));
@@ -162,7 +204,9 @@ fn serial_clock_port_owns_only_its_explicit_word_and_rejects_overlap() {
     v["control_requests"] = json!([[0xfff48700u64, 8]]);
     assert!(support::open(serde_json::from_value(v.clone()).unwrap()).is_ok());
     v["xp4_functional_system_control"]["serial_clock_select_fff48700"] = json!({"enabled":true});
-    let error = support::open(serde_json::from_value(v.clone()).unwrap()).err().unwrap();
+    let error = support::open(serde_json::from_value(v.clone()).unwrap())
+        .err()
+        .unwrap();
     assert!(error.contains("Overlapping"), "{error}");
     for address in [0xfff48680u64, 0xfff48784] {
         v["control_requests"] = json!([[address, 8]]);

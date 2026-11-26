@@ -1092,7 +1092,8 @@ impl TraceOutput {
         trace: fujimod_emulator::board::observation::PcTrace,
     ) -> Result<(), String> {
         let entries = trace.take();
-        let file = File::create(&self.path).map_err(|error| format!("{}: {error}", self.path.display()))?;
+        let file = File::create(&self.path)
+            .map_err(|error| format!("{}: {error}", self.path.display()))?;
         let mut writer = std::io::BufWriter::new(file);
         serde_json::to_writer(&mut writer, &entries).map_err(|error| error.to_string())?;
         std::io::Write::flush(&mut writer).map_err(|error| error.to_string())

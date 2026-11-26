@@ -151,7 +151,15 @@ impl Profile {
         }
         // MRC p15: opc1 at 23:21, CRn at 19:16, CRm at 3:0, opc2 at 7:5.
         let identity = if body & 0x0f10_0f10 == 0x0e10_0f10 {
-            self.identity(cpu, cp((body >> 21) & 7, (body >> 16) & 15, body & 15, (body >> 5) & 7))?
+            self.identity(
+                cpu,
+                cp(
+                    (body >> 21) & 7,
+                    (body >> 16) & 15,
+                    body & 15,
+                    (body >> 5) & 7,
+                ),
+            )?
         } else {
             None
         };
@@ -185,7 +193,9 @@ impl Profile {
         cpsr: u32,
         monitors: &exclusive::Shared,
     ) -> Result<(), String> {
-        let owner = self.owner.ok_or("ARMv7-A exclusive without a monitor owner")?;
+        let owner = self
+            .owner
+            .ok_or("ARMv7-A exclusive without a monitor owner")?;
         let mut monitors = monitors.lock().map_err(|_| "exclusive monitors poisoned")?;
         if word == CLREX {
             monitors.clear(owner);
@@ -208,7 +218,8 @@ impl Profile {
         if rn == 15
             || rd == 15
             || (load && pair(rd))
-            || (!load && (rt == 15 || rd == rn || rd == rt || pair(rt) || (size == 8 && rd == rt + 1)))
+            || (!load
+                && (rt == 15 || rd == rn || rd == rt || pair(rt) || (size == 8 && rd == rt + 1)))
         {
             return Err(format!("unpredictable ARMv7-A exclusive {word:#010x}"));
         }
@@ -248,20 +259,25 @@ impl Profile {
         if register.cp != 15 || register.wide {
             return Ok(None);
         }
-        Ok(match (register.opc1, register.crn, register.crm, register.opc2) {
-            (0, 0, 0, 5) => Some(self.config.mpidr),
-            (4, 15, 0, 0) => Some(self.config.configuration_base),
-            (1, 0, 0, 0) => match self.config.cache_ids() {
-                Some(ids) => {
-                    let selector = cpu.coprocessor(cp(2, 0, 0, 0), None)? as usize;
-                    Some(*ids.get(selector).ok_or("Reserved Cortex-A7 cache selector")?)
-                }
-                // The backend's own value, read for the guest so the selector
-                // it uses is the core's current CSSELR.
-                None => Some(cpu.coprocessor(register, None)? as u32),
+        Ok(
+            match (register.opc1, register.crn, register.crm, register.opc2) {
+                (0, 0, 0, 5) => Some(self.config.mpidr),
+                (4, 15, 0, 0) => Some(self.config.configuration_base),
+                (1, 0, 0, 0) => match self.config.cache_ids() {
+                    Some(ids) => {
+                        let selector = cpu.coprocessor(cp(2, 0, 0, 0), None)? as usize;
+                        Some(
+                            *ids.get(selector)
+                                .ok_or("Reserved Cortex-A7 cache selector")?,
+                        )
+                    }
+                    // The backend's own value, read for the guest so the selector
+                    // it uses is the core's current CSSELR.
+                    None => Some(cpu.coprocessor(register, None)? as u32),
+                },
+                _ => None,
             },
-            _ => None,
-        })
+        )
     }
     pub(super) fn enter_irq(&self, cpu: &dyn Cpu) -> Result<bool, String> {
         if !fujimod_emulator_cpu::armv7a::enter_irq(cpu)? {
@@ -277,7 +293,15 @@ fn exclusive_word(word: u32) -> bool {
     word & 0x0f90_0fff == 0x0190_0f9f || word & 0x0f90_0ff0 == 0x0180_0f90 || word == CLREX
 }
 fn cp(opc1: u32, crn: u32, crm: u32, opc2: u32) -> arm::Coprocessor {
-    arm::Coprocessor { cp: 15, opc1, crn, crm, opc2, secure: 0, wide: false }
+    arm::Coprocessor {
+        cp: 15,
+        opc1,
+        crn,
+        crm,
+        opc2,
+        secure: 0,
+        wide: false,
+    }
 }
 impl Board {
     /// Read or write a coprocessor register from the host; identity reads
@@ -290,7 +314,12 @@ impl Board {
     ) -> Result<u64, String> {
         let cpu = self.cpu(core)?;
         if value.is_none()
-            && let Some(profile) = self.state.borrow().armv7a.get(core).and_then(Option::as_ref)
+            && let Some(profile) = self
+                .state
+                .borrow()
+                .armv7a
+                .get(core)
+                .and_then(Option::as_ref)
             && let Some(answer) = profile.identity(&*cpu, register)?
         {
             return Ok(answer.into());
@@ -478,17 +507,31 @@ mod tests {
                     )
                     .unwrap();
             }
-            let code = |words: &[u32]| words.iter().flat_map(|w| w.to_le_bytes()).collect::<Vec<_>>();
+            let code = |words: &[u32]| {
+                words
+                    .iter()
+                    .flat_map(|w| w.to_le_bytes())
+                    .collect::<Vec<_>>()
+            };
             board
-                .write_physical(0x1000, &code(&[0xe1920f9f | bits << 21, 0xe1824f90 | bits << 21]))
+                .write_physical(
+                    0x1000,
+                    &code(&[0xe1920f9f | bits << 21, 0xe1824f90 | bits << 21]),
+                )
                 .unwrap();
             board.write_physical(0x2000, &code(&[0xe5c20000])).unwrap();
-            board.write_physical(0x3000, &[0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88]).unwrap();
+            board
+                .write_physical(0x3000, &[0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88])
+                .unwrap();
             let reg = |board: &Board, core: usize, r: usize| {
                 scalar(board.cpu(core).unwrap(), arm::CORE[r]).unwrap()
             };
             board.run_core(0, 1, 10).unwrap();
-            assert_eq!(reg(&board, 0, 0), u64::from_le_bytes([0x11, 0x22, 0x33, 0x44, 0, 0, 0, 0]) & (u64::MAX >> (64 - 8 * size.min(4))));
+            assert_eq!(
+                reg(&board, 0, 0),
+                u64::from_le_bytes([0x11, 0x22, 0x33, 0x44, 0, 0, 0, 0])
+                    & (u64::MAX >> (64 - 8 * size.min(4)))
+            );
             set(board.cpu(1).unwrap(), arm::CORE[0], 0x11).unwrap();
             board.run_core(1, 1, 10).unwrap();
             board.run_core(0, 1, 10).unwrap();
