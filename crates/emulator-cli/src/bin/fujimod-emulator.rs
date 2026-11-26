@@ -8,7 +8,7 @@ use fujimod_emulator_cpu::ExecutionPolicy;
 use std::{
     collections::BTreeMap,
     ffi::OsString,
-    path::{Path, PathBuf},
+    path::PathBuf,
     process::ExitCode,
     time::{Duration, Instant},
 };
@@ -337,37 +337,6 @@ fn parse_open(args: impl Iterator<Item = OsString>) -> Result<Option<Open>, Stri
         boot_cache,
         gui,
     }))
-}
-
-fn card_directory_files(directory: &Path) -> Result<Vec<(String, PathBuf)>, String> {
-    let mut files = Vec::new();
-    let mut pending = vec![directory.to_owned()];
-    while let Some(next) = pending.pop() {
-        let entries =
-            std::fs::read_dir(&next).map_err(|error| format!("{}: {error}", next.display()))?;
-        for entry in entries {
-            let path = entry.map_err(|error| error.to_string())?.path();
-            if path.is_dir() {
-                pending.push(path);
-            } else {
-                let name = path
-                    .strip_prefix(directory)
-                    .map_err(|error| error.to_string())?
-                    .to_str()
-                    .ok_or("SD card file name is not UTF-8")?
-                    .replace('\\', "/");
-                files.push((name, path));
-            }
-        }
-    }
-    files.sort();
-    if files.is_empty() {
-        return Err(format!(
-            "SD card directory {} is empty",
-            directory.display()
-        ));
-    }
-    Ok(files)
 }
 
 impl Boot {
@@ -1322,7 +1291,7 @@ mod tests {
         assert_eq!(request.preset, camera::Preset::SdCard);
         assert!(matches!(
             request.sd_card,
-            Some(camera::CardSource::Directory(ref path)) if path == Path::new("card")
+            Some(camera::CardSource::Directory(ref path)) if path == std::path::Path::new("card")
         ));
         assert_eq!(request.policy, ExecutionPolicy::Interactive);
         let request = parse_open(args(&[
@@ -1354,7 +1323,7 @@ mod tests {
         assert_eq!(request.preset, camera::Preset::Autostart);
         assert!(matches!(
             request.sd_card,
-            Some(camera::CardSource::Directory(ref path)) if path == Path::new("card")
+            Some(camera::CardSource::Directory(ref path)) if path == std::path::Path::new("card")
         ));
         let request = parse_open(args(&[
             "open",
