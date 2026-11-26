@@ -39,6 +39,8 @@ struct Execution {
     a32: bool,
     id: Cell<usize>,
     record: NonNull<BlockAccounting>,
+    policy: Cell<ExecutionPolicy>,
+    clock: Cell<Option<Clock>>,
     ring: UnsafeCell<Box<[u64; 64]>>,
     owned: RefCell<Vec<fujimod_emulator_cpu::memory::Backing>>,
     count: Cell<u64>,
@@ -124,6 +126,8 @@ impl Core {
             a32,
             id: Cell::new(usize::MAX),
             record,
+            policy: Cell::new(ExecutionPolicy::Exact),
+            clock: Cell::new(None),
             ring: UnsafeCell::new(Box::new([0; 64])),
             owned: RefCell::new(vec![]),
             count: Cell::new(0),
@@ -297,6 +301,11 @@ impl Core {
         if capacity > 32 {
             return Err("entry trace keeps at most 32 entries".into());
         }
+        if e.policy.get() == ExecutionPolicy::Interactive
+            && e.trace.borrow().is_some() != (capacity != 0)
+        {
+            e.cpu.invalidate_code(None)?;
+        }
         *e.trace.borrow_mut() = (capacity != 0).then(|| EntryTrace {
             capacity,
             entries: VecDeque::new(),
@@ -332,6 +341,20 @@ impl Execution {
     }
     fn accounting(&self) -> Accounting {
         unsafe { Accounting::from_raw(self.record) }
+    }
+    fn coarse(&self) -> bool {
+        !self.a32
+            && self.policy.get() == ExecutionPolicy::Interactive
+            && self.trace.borrow().is_none()
+    }
+    fn update_guest_tick(&self) -> Result<(), String> {
+        crate::GuestClockTickScope::publish(
+            self.clock
+                .get()
+                .map(|clock| clock.after(self.count.get()).map(|clock| clock.now))
+                .transpose()?,
+        );
+        Ok(())
     }
     fn reset(&self) {
         self.accounting().reset();
@@ -438,8 +461,9 @@ impl Execution {
     }
     fn classify(&self, address: u64, word: u32) -> Result<Translation, String> {
         let physical = self.cpu.translate(address, Access::Fetch)?;
-        self.memory.note_code(self.id.get(), physical, 4)?;
-        self.memory.apply_watches()?;
+        if self.memory.note_code(self.id.get(), physical, 4)? {
+            self.memory.apply_watches()?;
+        }
         let framework = self.framework(word);
         let boundary = if self.a32 {
             armv7a::block_boundary(word) && !(self.owner_mpidr.get() && armv7a::mpidr_read(word))
@@ -449,22 +473,32 @@ impl Execution {
                 || word & 0xfffffc1f == 0xd69f0000
                 || word & 0xff000000 == 0xd4000000
         };
+        let coarse = self.coarse();
+        let wide_exact = address > u32::MAX as u64 && !coarse;
+        let instruction = if framework {
+            InstructionDisposition::Replace
+        } else if wide_exact
+            || boundary
+            || (self.is_coherent()
+                && (coherent_cpu::maintenance(word).is_some()
+                    || coherent_cpu::translation_change(word)))
+            || !self.index.borrow().stores.is_empty()
+            || !self.index.borrow().instructions.at(address).is_empty()
+        {
+            InstructionDisposition::ObserveAndEndBlock
+        } else {
+            InstructionDisposition::Execute
+        };
+        // Loads and stores can fault, restart or enter an MMIO callback before
+        // the end of the block. In coarse mode keep the full-width span for
+        // those blocks so each such exit can settle only its entered prefix.
+        let may_access_memory = word & 0x0a00_0000 == 0x0800_0000;
         Ok(Translation {
-            instruction: if framework {
-                InstructionDisposition::Replace
-            } else if address > u32::MAX as u64
-                || boundary
-                || (self.is_coherent()
-                    && (coherent_cpu::maintenance(word).is_some()
-                        || coherent_cpu::translation_change(word)))
-                || !self.index.borrow().stores.is_empty()
-                || !self.index.borrow().instructions.at(address).is_empty()
-            {
-                InstructionDisposition::ObserveAndEndBlock
-            } else {
-                InstructionDisposition::Execute
-            },
-            observe_block: address > u32::MAX as u64
+            instruction,
+            observe_block: wide_exact
+                || coarse
+                    && (may_access_memory
+                        || !matches!(instruction, InstructionDisposition::Execute))
                 || !self.index.borrow().blocks.at(address).is_empty(),
         })
     }
@@ -489,6 +523,7 @@ impl Execution {
     }
     fn block(&self, b: Block) -> Result<(), String> {
         self.settle(0, true)?;
+        self.update_guest_tick()?;
         self.publish()?;
         self.at_block.set(true);
         let result = self.enter(b);
@@ -547,17 +582,19 @@ impl Execution {
             address: b.address,
             instructions: n,
         };
-        if b.address
-            .checked_add(n * 4)
-            .is_some_and(|end| end <= 1 << 32)
+        let coarse = self.coarse();
+        if !coarse
+            && b.address
+                .checked_add(n * 4)
+                .is_some_and(|end| end <= 1 << 32)
         {
             unsafe { (*self.record.as_ptr()).enabled = 1 };
             self.synced.set(self.accounting().admit(span, room)?);
         } else {
-            // High virtual addresses retain exact entries through single-
-            // instruction observations; the packed span ring stays 32-bit.
+            // The packed ring only holds 32-bit addresses. A manually
+            // admitted block can retain its entire address and skip the ring.
             unsafe {
-                (*self.record.as_ptr()).enabled = 0;
+                (*self.record.as_ptr()).enabled = if coarse { 2 } else { 0 };
                 (*self.record.as_ptr()).budget = (room - n) as i64
             };
             self.synced.set(room as i64);
@@ -810,4 +847,123 @@ unsafe fn written(access: Access, address: u64, size: i32, value: i64, data: *mu
         }
         Ok(())
     })
+}
+
+#[cfg(test)]
+mod interactive_tests {
+    use super::*;
+    use std::sync::{Arc, atomic::AtomicU32};
+
+    fn core() -> Core {
+        let raw = crate::test_support::library()
+            .open(Model::ArmV8A, 1 << 20)
+            .unwrap();
+        let cpu = Core::new(raw, Memory::default()).unwrap();
+        set(&cpu, Register::Pstate, 0x3cd);
+        cpu
+    }
+
+    fn set(cpu: &Core, register: Register, value: u64) {
+        cpu.write_register(register, &value.to_le_bytes()).unwrap();
+    }
+
+    fn value(cpu: &Core, register: Register) -> u64 {
+        cpu.execution.scalar(register).unwrap()
+    }
+
+    fn run(cpu: &Core, begin: u64, instructions: usize) {
+        assert!(matches!(
+            cpu.run(Run {
+                begin,
+                until: None,
+                watchdog_us: 0,
+                instructions: Some(instructions),
+            }),
+            Ok(Exit::Stopped)
+        ));
+    }
+
+    #[test]
+    fn coarse_blocks_keep_exact_budgets_without_ring_writes() {
+        for address in [0x1000, 0x1_0000_0000] {
+            let cpu = core();
+            cpu.map_zeroed(address, 0x4000, 7).unwrap();
+            let code = [0x9100_0400u32, 0x9100_0400, 0x17ff_fffe];
+            let bytes: Vec<_> = code.into_iter().flat_map(u32::to_le_bytes).collect();
+            cpu.write_memory(address, &bytes).unwrap();
+            cpu.set_execution_policy(ExecutionPolicy::Interactive)
+                .unwrap();
+            for budget in [1, 2, 3, 4, 196, 197, 198] {
+                set(&cpu, Register::X(0), 0);
+                run(&cpu, address, budget);
+                assert_eq!(cpu.instruction_progress(), Some(budget as u64));
+                assert_eq!(value(&cpu, Register::Pc), address + (budget % 3) as u64 * 4);
+                assert_eq!(value(&cpu, Register::X(0)), (budget - budget / 3) as u64);
+                assert_eq!(cpu.execution.accounting().counters().1, 0);
+                assert_eq!(unsafe { cpu.execution.record.as_ref() }.enabled, 2);
+            }
+            assert!(matches!(
+                cpu.execution
+                    .classify(address, code[0])
+                    .unwrap()
+                    .instruction,
+                InstructionDisposition::Execute
+            ));
+        }
+    }
+
+    unsafe fn read(_: u64, _: u32, data: *mut c_void) -> u64 {
+        let reads = unsafe { &*data.cast::<Cell<u32>>() };
+        reads.set(reads.get() + 1);
+        42
+    }
+
+    unsafe fn write(_: u64, _: u32, _: u64, _: *mut c_void) {}
+
+    #[test]
+    fn fast_reads_use_interactive_clock_and_exact_reads_use_device() {
+        let cpu = core();
+        cpu.map_zeroed(0x1000, 0x4000, 7).unwrap();
+        let code = [0xb940_0020u32, 0xb940_0422]; // ldr w0,[x1]; ldr w2,[x1,#4]
+        let bytes: Vec<_> = code.into_iter().flat_map(u32::to_le_bytes).collect();
+        cpu.write_memory(0x1000, &bytes).unwrap();
+        set(&cpu, Register::X(1), 0x8000);
+        let reads = Cell::new(0u32);
+        unsafe {
+            cpu.map_mmio_fast(
+                0x8000,
+                0x1000,
+                Mmio {
+                    read,
+                    write,
+                    data: (&raw const reads).cast_mut().cast(),
+                },
+                vec![
+                    FastMmioRead::atomic_u32(0, Arc::new(AtomicU32::new(123))),
+                    FastMmioRead::clocked_u32(4, Arc::new(|tick| u32::try_from(tick).ok())),
+                ],
+            )
+        }
+        .unwrap();
+        cpu.set_guest_clock(Clock {
+            now: 100,
+            phase: 0,
+            ratio: timeline::Ratio::new(1, 1).unwrap(),
+        })
+        .unwrap();
+
+        cpu.set_execution_policy(ExecutionPolicy::Interactive)
+            .unwrap();
+        run(&cpu, 0x1000, 2);
+        assert_eq!(reads.get(), 0);
+        assert_eq!(value(&cpu, Register::X(0)), 123);
+        assert_eq!(value(&cpu, Register::X(2)), 101);
+        assert_eq!(crate::approximate_guest_tick(), None);
+
+        cpu.set_execution_policy(ExecutionPolicy::Exact).unwrap();
+        run(&cpu, 0x1000, 2);
+        assert_eq!(reads.get(), 2);
+        assert_eq!(value(&cpu, Register::X(0)), 42);
+        assert_eq!(value(&cpu, Register::X(2)), 42);
+    }
 }
