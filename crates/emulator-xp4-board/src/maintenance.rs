@@ -59,6 +59,15 @@ pub(super) struct Maintenance {
 }
 
 impl Maintenance {
+    pub fn dummy(identities: Vec<Identity>) -> Self {
+        Self {
+            owners: Vec::new(),
+            tokens: Vec::new(),
+            identities,
+            state: RefCell::new(State::default()),
+        }
+    }
+
     pub fn new(cpus: &[impl Borrow<Core>]) -> Result<Self, String> {
         let mut owners = Vec::with_capacity(cpus.len());
         let mut tokens = Vec::with_capacity(cpus.len());
@@ -109,6 +118,9 @@ impl Maintenance {
     }
 
     pub fn ready(&self, cpus: &[impl Borrow<Core>]) -> Result<(), String> {
+        if self.owners.is_empty() {
+            return Ok(());
+        }
         let state = self.state.borrow();
         if let Some(error) = &state.failure {
             return Err(error.clone());
@@ -127,6 +139,19 @@ impl Maintenance {
     }
 
     pub fn snapshot(&self, cpus: &[impl Borrow<Core>]) -> Result<Snapshot, String> {
+        if self.owners.is_empty() {
+            return Ok(Snapshot {
+                identities: self.identities.clone(),
+                native: Vec::new(),
+                completed: 0,
+                delivered_peers: 0,
+                dropped: 0,
+                records: Vec::new(),
+                pending: None,
+                failure: None,
+                last_raw_error: None,
+            });
+        }
         let native = self.statuses(cpus)?;
         let state = self.state.borrow();
         Ok(Snapshot {
@@ -143,6 +168,9 @@ impl Maintenance {
     }
 
     pub fn portable(&self, cpus: &[impl Borrow<Core>]) -> Result<Vec<Vec<u8>>, String> {
+        if self.owners.is_empty() {
+            return Ok(Vec::new());
+        }
         self.ready(cpus)?;
         cpus.iter().zip(&self.owners)
             .map(|(cpu, owner)| cpu.borrow().owned_snapshot(owner)).collect()
@@ -151,6 +179,9 @@ impl Maintenance {
     pub fn import_portable(&self, cpus: &[impl Borrow<Core>], data: &[std::sync::Arc<[u8]>])
         -> Result<Vec<Box<dyn fujimod_emulator_cpu::Snapshot>>, String>
     {
+        if self.owners.is_empty() {
+            return Ok(Vec::new());
+        }
         self.ready(cpus)?;
         if data.len() != cpus.len() {
             return Err("XP4 snapshot processor count differs".into());
@@ -160,6 +191,9 @@ impl Maintenance {
     }
 
     pub fn restore_portable(&self, cpus: &[impl Borrow<Core>], state: &[Box<dyn fujimod_emulator_cpu::Snapshot>]) -> Result<(), String> {
+        if self.owners.is_empty() {
+            return Ok(());
+        }
         for ((cpu, owner), saved) in cpus.iter().zip(&self.owners).zip(state) {
             cpu.borrow().restore_owned_snapshot(owner, saved.as_ref())?;
         }
@@ -172,6 +206,9 @@ impl Maintenance {
         source: usize,
         raw_error: Option<&str>,
     ) -> Result<(), String> {
+        if self.owners.is_empty() {
+            return Ok(());
+        }
         if let Some(error) = raw_error {
             self.state.borrow_mut().last_raw_error = Some(error.to_owned());
         }

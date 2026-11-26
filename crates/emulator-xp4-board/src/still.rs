@@ -950,20 +950,24 @@ impl Engine {
         let (source, spitch) = (address(0x0c0, 0x0c4), self.word(0x0d0) as usize);
         let (output, opitch) = (address(0x0d4, 0x0d8), self.word(0x0e4) as usize);
         let (sline, oline) = (sw * 2 * input.lines(), ow * 2 * layout_out.lines());
-        if sw % 2 != 0 || ow % 2 != 0 || sline > spitch || oline > opitch {
+        let sw_fit = (spitch / (2 * input.lines())) & !1;
+        if sw % 2 != 0 || ow % 2 != 0 || sw_fit == 0 || oline > opitch {
             return Err(format!(
                 "{name} {sw}x{sh} pitch {spitch} -> {ow}x{oh} pitch {opitch}"
             ));
         }
         let rows = sh.div_ceil(input.lines());
-        let pixels = cx.ram_bytes(source, spitch * (rows - 1) + sline)?;
+        let pixels = cx.ram_bytes(source, spitch * (rows - 1) + sline.min(spitch))?;
         // 10-bit Y, Cb and Cr of a source pixel; a packed pixel takes its
         // pair's chroma.
-        let sample = |x: usize, y: usize| match input {
-            YcLayout::Y0l2 => y0l2_sample(&pixels[y / 2 * spitch..], x, y % 2),
-            YcLayout::Lines => {
-                let row = &pixels[y * spitch + x / 2 * 4..];
-                [row[x % 2], row[2], row[3]].map(|b| u16::from(b) << 2)
+        let sample = |x: usize, y: usize| {
+            let x = x.min(sw_fit - 1);
+            match input {
+                YcLayout::Y0l2 => y0l2_sample(&pixels[y / 2 * spitch..], x, y % 2),
+                YcLayout::Lines => {
+                    let row = &pixels[y * spitch + x / 2 * 4..];
+                    [row[x % 2], row[2], row[3]].map(|b| u16::from(b) << 2)
+                }
             }
         };
         // The steps are dyadic, so the products are exact.

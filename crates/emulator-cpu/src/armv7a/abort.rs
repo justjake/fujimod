@@ -397,8 +397,8 @@ pub fn enter(cpu: &dyn Cpu, fetch: bool) -> Result<(), String> {
     )?;
     c.write_cp(6, if fetch { 2 } else { 0 }, address)?;
     let old = c.reg(core, arm::CPSR)?;
-    if old & 0x20 != 0 || sctlr & ((1 << 30) | (1 << 25)) != 0 {
-        return Err("Unsupported Thumb/big-endian ARMv7-A exception entry".into());
+    if sctlr & ((1 << 30) | (1 << 25)) != 0 {
+        return Err("Unsupported Thumb-vector/big-endian ARMv7-A exception entry".into());
     }
     let base = if sctlr & (1 << 13) != 0 {
         0xffff0000

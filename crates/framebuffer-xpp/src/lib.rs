@@ -182,14 +182,14 @@ impl Capture {
     pub fn render(&self) -> Result<Vec<u8>, ()> {
         let (width, height) = self.extent();
         let mut rgba = vec![0; width as usize * height as usize * 4];
-        for pixel in rgba.as_chunks_mut::<4>().0 {
-            pixel[3] = 255;
+        let full_video = self.video.as_ref().is_some_and(|v| v.covers(width, height));
+        if !full_video {
+            for pixel in rgba.as_chunks_mut::<4>().0 {
+                pixel[3] = 255;
+            }
         }
         if let Some(video) = &self.video {
-            raster::composite_snapshot(video, width, height, &mut rgba).map_err(|_| ())?;
-            for pixel in rgba.as_chunks_mut::<4>().0 {
-                pixel.swap(0, 2);
-            }
+            raster::composite_snapshot_bgra(video, width, height, &mut rgba).map_err(|_| ())?;
         }
         for Layer {
             width: stride,
@@ -225,7 +225,8 @@ fn blend_osd(output: &mut [[u8; 4]], source: &[[u8; 4]]) {
         }
         let keep = 255 - u32::from(src[3]);
         for n in 0..3 {
-            let value = u32::from(src[n]) + (u32::from(out[n]) * keep + 127) / 255;
+            let x = u32::from(out[n]) * keep + 128;
+            let value = u32::from(src[n]) + ((x + (x >> 8)) >> 8);
             out[n] = value.min(255) as u8;
         }
     }

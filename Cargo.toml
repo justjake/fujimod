@@ -55,6 +55,7 @@ members = [
   "crates/mcp-camera",
   "crates/mcp",
   "crates/emulator-cpu",
+  "crates/emulator-cpu-dynarmic",
   "crates/emulator-cpu-hvf",
   "crates/emulator-cpu-unicorn",
   "crates/emulator-cpu-unicorn/sys",
@@ -241,6 +242,7 @@ fujimod-emulator-exr2-plan = { path = "crates/emulator-exr2-plan", version = "0.
 fujimod-emulator-exr2-resources = { path = "crates/emulator-exr2-resources", version = "0.1.0" }
 fujimod-emulator-exr2-images = { path = "crates/emulator-exr2-images", version = "0.1.0" }
 fujimod-emulator-cpu = { path = "crates/emulator-cpu", version = "0.1.0" }
+fujimod-emulator-cpu-dynarmic = { path = "crates/emulator-cpu-dynarmic", version = "0.1.0" }
 fujimod-emulator-cpu-unicorn = { path = "crates/emulator-cpu-unicorn", version = "0.1.0" }
 fujimod-runtime-install = { path = "crates/runtime-install", version = "0.1.0" }
 fujimod-recovery = { path = "crates/recovery", version = "0.1.0" }

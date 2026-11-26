@@ -1,7 +1,6 @@
 //! Construction-only Cortex-A7 security inputs. These select a declared
 //! post-reset execution state; they do not model a ROM or grant guest writes.
 use fujimod_emulator_cpu::{Cpu, Model, Register, arm};
-use fujimod_emulator_cpu_unicorn::Core;
 use serde::Deserialize;
 
 const SCR_NS: u32 = 1;
@@ -61,7 +60,7 @@ impl InitialSecurity {
         Ok(())
     }
 
-    fn check(self, cpu: &Core, scr: u32, cpsr: u32) -> Result<(), String> {
+    fn check(self, cpu: &dyn Cpu, scr: u32, cpsr: u32) -> Result<(), String> {
         let mut bytes = [0; 4];
         if cpu.read_register(arm::CPSR, &mut bytes)? != bytes.len()
             || u32::from_le_bytes(bytes) != cpsr
@@ -73,7 +72,7 @@ impl InitialSecurity {
         Ok(())
     }
 
-    pub(crate) fn apply(self, cpu: &Core) -> Result<(), String> {
+    pub(crate) fn apply(self, cpu: &dyn Cpu) -> Result<(), String> {
         if cpu.model() != Model::CortexA7 {
             return Err("Initial security state requires Cortex-A7".into());
         }
@@ -93,7 +92,7 @@ impl InitialSecurity {
         self.verify(cpu, 0xd3)
     }
 
-    pub(crate) fn verify(self, cpu: &Core, cpsr: u32) -> Result<(), String> {
+    pub(crate) fn verify(self, cpu: &dyn Cpu, cpsr: u32) -> Result<(), String> {
         self.validate_cpsr(cpsr)?;
         // Check each requested CPSR write as well as the final state. This
         // rejects a backend-refused mode change before a later register write

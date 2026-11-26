@@ -260,6 +260,7 @@ pub struct Output {
     scanout: Option<Scanout>,
     capture: Capture,
     last: Option<RenderedFrame>,
+    last_published: Option<(usize, u64)>,
     handshake_ticks: Option<u64>,
     handshake: Handshake,
 }
@@ -305,6 +306,7 @@ impl Output {
             handshake_ticks: None,
             handshake: Handshake::default(),
             last: None,
+            last_published: None,
             capture: Capture {
                 next: scanout.map_or(0, |s| s.period),
                 ..Capture::default()
@@ -371,6 +373,10 @@ impl Output {
             },
         });
         let delivered = cx.output_status(scanout.output, status).and_then(|()| {
+            if self.last_published == Some((scanout.output, sequence)) {
+                return Ok(());
+            }
+            self.last_published = Some((scanout.output, sequence));
             cx.scanout(Frame {
                 output: scanout.output,
                 sequence,
@@ -465,6 +471,9 @@ impl Device for Output {
             .into_iter()
             .chain(self.handshake.due)
             .min()
+    }
+    fn read_stable(&self, _address: u64, size: u8) -> bool {
+        size == 4
     }
     fn save(&self) -> Value {
         let words = self

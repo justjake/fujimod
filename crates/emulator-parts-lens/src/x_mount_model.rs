@@ -339,6 +339,17 @@ impl Identity<'_> {
         put(0x720038, b"FUJIFILM".to_vec());
         let name = self.model.as_bytes();
         put(0x72004a, name[..name.len().min(63)].to_vec());
+        // Supported X-mount command family bitmap (0x7200bf..0x7200ff, read by body at 0x010b738c
+        // and ANDed with body bitmap 0x4001..0x4040 into 0x019235ae..0x019235ed).
+        put(
+            0x7200bf,
+            vec![
+                0x01, 0x80, 0x7c, 0x83, 0xd7, 0x01, 0x07, 0x80, 0x01, 0x00, 0x71, 0x01, 0x07, 0x00,
+                0x25, 0x01, 0x07, 0x00, 0x00, 0x00, 0x03, 0x03, 0x00, 0x00, 0x01, 0x03, 0x00, 0x00,
+                0x00, 0x00, 0x00, 0x80, 0x00, 0x00, 0xff, 0x07, 0x3f, 0x00, 0x00, 0x00, 0x00, 0x00,
+                0x1f, 0x00, 0x01, 0x00, 0x38, 0x00, 0xff, 0x03,
+            ],
+        );
         // Zoom steps and apertures.
         let steps = self.zoom_steps.clamp(1, 100) as usize;
         let open_short = thirds(self.f_numbers.0);
@@ -531,6 +542,22 @@ impl Spec {
                     *b"EMU2328001",
                     1,
                 ),
+                // XF16-80mmF4 R OIS WR with exact physical hardware capture from live camera
+                "xf16-80" => (
+                    "XF16-80mmF4 R OIS WR",
+                    *b"LX230A\0\0",
+                    *b"FLZGW032",
+                    (160, 800),
+                    (40, 40, 220),
+                    true,
+                    true,
+                    Axis { min: 0, max: 4000, initial: 2000, units_per_ms: 40 },
+                    // F4.0 to F22 in 1/3 stops (15 steps).
+                    Axis { min: 0, max: 15, initial: 0, units_per_ms: 2 },
+                    35,
+                    *b"9DA11314\0\0",
+                    16,
+                ),
                 _ => return None,
             };
         let identity = Identity {
@@ -547,9 +574,28 @@ impl Spec {
             serial,
             zoom_steps,
         };
+        let mut identification = identity.record();
+        if name == "xf16-80" {
+            // Real physical hardware capture from live XF 16-80mm F4 R OIS WR on XT-3 (104 bytes)
+            const CAPTURE: &[u8] = &[
+                0x4c, 0x58, 0x32, 0x33, 0x30, 0x41, 0x00, 0x00,
+                0x46, 0x4c, 0x5a, 0x47, 0x57, 0x30, 0x33, 0x32,
+                0x58, 0x46, 0x31, 0x36, 0x2d, 0x38, 0x30, 0x6d, 0x6d, 0x46, 0x34, 0x20, 0x52, 0x20, 0x4f, 0x49,
+                0x53, 0x20, 0x57, 0x52, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+                0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+                0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+                0x39, 0x44, 0x41, 0x31, 0x31, 0x33, 0x31, 0x34, 0x00, 0x00, 0x01, 0x48, 0x01, 0x21, 0x02, 0x70,
+                0x02, 0x71, 0x02, 0x71, 0x89, 0x01, 0x22, 0x00,
+            ];
+            identification[..CAPTURE.len()].copy_from_slice(CAPTURE);
+            let sum = identification[..IDENTIFICATION_BYTES - 1]
+                .iter()
+                .fold(0u8, |s, b| s.wrapping_add(*b));
+            identification[IDENTIFICATION_BYTES - 1] = sum.wrapping_neg();
+        }
         Some(Self {
             name: model.into(),
-            identification: identity.record(),
+            identification,
             extended: identity.extended_record(),
             // EXR II steady status and detail words (x_mount_link tests); their
             // meaning for the X-T5 is not established.
@@ -787,6 +833,12 @@ struct State {
     operation_until: Option<u64>,
     /// Last payload of every setting family, for echo and inspection.
     settings: BTreeMap<u16, u16>,
+    /// Current aperture ring position (0 = Auto, 1.. = manual stop index + 1).
+    #[serde(default)]
+    aperture_ring: u16,
+    /// Set when the aperture ring moves; reported via STATUS bit 4 until APERTURE_RING is read.
+    #[serde(default)]
+    aperture_ring_changed: bool,
     /// Families (and protocol events above 0xffff) already logged.
     logged: BTreeSet<u32>,
 }
@@ -841,6 +893,8 @@ impl Unit {
             aperture: Motion::at_rest(spec.aperture.initial),
             operation_until: None,
             settings: BTreeMap::new(),
+            aperture_ring: spec.aperture_ring,
+            aperture_ring_changed: false,
             logged,
         }
     }
@@ -1037,15 +1091,24 @@ impl Unit {
             }
             f if self.spec.declared(f).is_some() => self.spec.declared(f).unwrap(),
             PARAMETERS => payload,
-            STATUS => self.spec.status,
+            STATUS => {
+                if self.state.aperture_ring_changed {
+                    self.spec.status | 0x0010
+                } else {
+                    self.spec.status
+                }
+            }
             DETAIL_STATUS => self.spec.detail_status,
-            APERTURE_RING => self.spec.aperture_ring,
+            APERTURE_RING => {
+                self.state.aperture_ring_changed = false;
+                self.state.aperture_ring
+            }
             FOCUS_RING => self.spec.focus_ring,
             // The block count; the bulk read follows the reply.
             READ_CATALOG => self.spec.catalog(payload & 0xf).blocks,
             // Echo and store it, and hold the ready line busy like an operation.
-            STATE_REQUEST => {
-                self.state.settings.insert(STATE_REQUEST, payload);
+            STATE_REQUEST | 0xa0 => {
+                self.state.settings.insert(family, payload);
                 self.operation(now);
                 payload
             }
@@ -1319,6 +1382,16 @@ impl Port {
         let unit = self.0.lock().unwrap();
         let s = unit.state.aperture;
         (s.position(now, unit.timing.ticks_per_ms), s.target)
+    }
+    pub fn set_aperture_ring(&self, ring: u16) {
+        let mut unit = self.0.lock().unwrap();
+        if unit.state.aperture_ring != ring {
+            unit.state.aperture_ring = ring;
+            unit.state.aperture_ring_changed = true;
+        }
+    }
+    pub fn aperture_ring(&self) -> u16 {
+        self.0.lock().unwrap().state.aperture_ring
     }
     pub fn identification_reads(&self) -> u64 {
         self.0.lock().unwrap().state.link.identification_reads

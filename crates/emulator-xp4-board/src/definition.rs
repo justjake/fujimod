@@ -249,6 +249,11 @@ pub struct Definition {
     /// Requires GPIO wiring.
     #[serde(default)]
     pub stabilizer_link: Option<fujimod_emulator_xp4_io::stabilizer_link::Config>,
+    /// The X-mount lens behind an SPI controller: its input peer, which also
+    /// follows the GPIO outputs it is wired to and drives its ready pad.
+    /// Requires GPIO wiring.
+    #[serde(default)]
+    pub xp4_lens_link: Option<fujimod_emulator_xp4_io::lens_link::Config>,
     #[serde(default)]
     pub checksum_power_spi: Option<(
         u64,

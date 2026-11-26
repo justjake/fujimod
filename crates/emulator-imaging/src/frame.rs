@@ -710,8 +710,41 @@ pub fn paint_scene_exposed(
     let (w, h) = (width as usize, height as usize);
     let marker = (frame % w as u64) as usize * 8 % w;
     let (live, scene) = snapshot(scene);
-    let view = view(scene, live.as_deref(), w);
     let map = exposure_map(exposure);
+    if matches!(layout, YuvLayout::Packed422)
+        && live.is_none()
+        && map.is_none()
+        && let Scene::Picture { width: _sw, height: _sh, rgb } = scene
+    {
+        use std::sync::Mutex;
+        struct Cached422 {
+            ptr: usize,
+            w: usize,
+            h: usize,
+            stride: u32,
+            bytes: Vec<u8>,
+        }
+        static CACHE: Mutex<Option<Cached422>> = Mutex::new(None);
+        let ptr = rgb.as_ptr() as usize;
+        let mut guard = CACHE.lock().unwrap();
+        let hit = guard
+            .as_ref()
+            .is_some_and(|c| c.ptr == ptr && c.w == w && c.h == h && c.stride == stride);
+        if !hit {
+            let v = view(scene, None, w);
+            let row_bytes = w * 2;
+            let stride_usize = stride as usize;
+            let mut buf = vec![0u8; stride_usize * h];
+            rows_422_mapped(&v, w, h, None, None, |y, row| {
+                buf[y * stride_usize..y * stride_usize + row_bytes].copy_from_slice(row);
+                Ok(())
+            })?;
+            *guard = Some(Cached422 { ptr, w, h, stride, bytes: buf });
+        }
+        let cached = guard.as_ref().unwrap();
+        return cx.ram_write(address, &cached.bytes).map(|()| true);
+    }
+    let view = view(scene, live.as_deref(), w);
     match layout {
         YuvLayout::Packed422 => rows_422_mapped(&view, w, h, Some(marker), map.as_ref(), |y, row| {
             cx.ram_write(address + y as u64 * u64::from(stride), row)

@@ -111,7 +111,7 @@ impl Pins {
     }
     pub fn output(&self, port: usize, pin: usize) -> (bool, u64) {
         (
-            self.regs[port][0] & (1 << pin) != 0,
+            (self.regs[port][0] | self.regs[port][1]) & (1 << pin) != 0,
             self.changes[port][pin],
         )
     }
@@ -265,7 +265,7 @@ impl Device for Gpio {
             let mask = v >> 16;
             (old & !mask) | (v & mask)
         };
-        if r == 0 {
+        if r == 0 || r == 1 {
             let new = pins.regs[p][r];
             for bit in 0..16 {
                 if (old ^ new) & (1 << bit) != 0 {
@@ -277,12 +277,13 @@ impl Device for Gpio {
             if !pins.watchers.is_empty() && (old ^ new) & 0xffff != 0 {
                 let watchers = pins.watchers.clone();
                 for bit in (0..16).filter(|bit| (old ^ new) & (1 << bit) != 0) {
+                    let level = (pins.regs[p][0] | pins.regs[p][1]) & (1 << bit) != 0;
                     for watcher in &watchers {
                         watcher.lock().unwrap().output_changed(
                             &mut pins,
                             p,
                             bit,
-                            new & (1 << bit) != 0,
+                            level,
                             cx.now(),
                         );
                     }

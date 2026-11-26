@@ -181,6 +181,9 @@ impl Xp4 {
     fn set_gpio_input(&self, py: Python<'_>, port: usize, pin: usize, high: bool) -> PyResult<()> {
         self.with(py, |s| s.set_gpio_input(port, pin, high))
     }
+    fn set_lens_aperture_ring(&self, py: Python<'_>, ring: u16) -> PyResult<()> {
+        self.with(py, |s| s.set_lens_aperture_ring(ring))
+    }
     fn turn_dial(&self, py: Python<'_>, name: &str, edges: i32) -> PyResult<()> {
         self.with(py, |s| s.turn_dial(name, edges))
     }

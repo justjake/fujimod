@@ -96,14 +96,24 @@ impl Movdc {
         if address == 0 || address & 7 != 0 {
             return Err("XP4 MOVDC needs a nonzero aligned DMA destination".into());
         }
-        frame::paint(
+        if !frame::paint_scene(
             cx,
             address,
             width,
             (size >> 16) + 1,
             self.r(0xd0),
-            self.luma,
-        )?;
+            frame::YuvLayout::Packed422,
+            self.state.frames,
+        )? {
+            frame::paint(
+                cx,
+                address,
+                width,
+                (size >> 16) + 1,
+                self.r(0xd0),
+                self.luma,
+            )?;
+        }
         self.state.frames += 1;
         self.state.pending = true;
         self.irq(cx);

@@ -114,7 +114,11 @@ impl Lcdc {
         let source=top.address;
         let format=if top.order==PixelOrder::YyCbCr{"yycbcr422"}else{"abgr8888-straight"};
         let rgba=output.render(|a,n|cx.ram_bytes(a,n))?;
-        if self.state.last_image.as_ref() != Some(&(width, height, rgba.clone())) {
+        let changed = match self.state.last_image.as_ref() {
+            Some((w, h, prev)) => *w != width || *h != height || *prev != rgba,
+            None => true,
+        };
+        if changed {
             self.state.sequence += 1;
             self.state.last_image = Some((width, height, rgba.clone()));
         }
@@ -293,6 +297,9 @@ impl Device for Lcdc {
     }
     fn next_deadline(&self, _: u64) -> Option<u64> {
         self.state.deadline
+    }
+    fn read_stable(&self, address: u64, size: u8) -> bool {
+        size == 4 && Self::register(address.wrapping_sub(self.base))
     }
     fn checkpoint(&self) -> Result<fujimod_emulator_devices::checkpoint::Checkpoint, String> {
         let image = self.state.last_image.as_ref();

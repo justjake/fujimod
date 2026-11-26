@@ -495,8 +495,8 @@ impl Cluster {
     ) -> Result<(), String> {
         let old = self.reg(core, arm::CPSR)?;
         let sctlr = self.cp(core, 1, 0, 0, 0)? as u32;
-        if old & 0x20 != 0 || sctlr & ((1 << 30) | (1 << 25)) != 0 {
-            return Err("Unsupported Thumb/big-endian ARMv7-A exception entry".into());
+        if sctlr & ((1 << 30) | (1 << 25)) != 0 {
+            return Err("Unsupported Thumb-vector/big-endian ARMv7-A exception entry".into());
         }
         let base = if sctlr & (1 << 13) != 0 {
             0xffff0000
@@ -1213,14 +1213,14 @@ fn access(offset: u64, size: u32, write: bool, value: u64, data: *mut c_void) ->
         return 0;
     }
     let result = (|| -> Result<u64, String> {
-        let pc = c.reg(hook.core, arm::PC)?;
+        let pc = || c.reg(hook.core, arm::PC);
         if let Some(guard) = unsafe { &mut (*c.state.get()).driver_guard } {
             guard.mmio_access(hook.core, address, size, write)?;
         }
         let device = c.device_access(hook.core, address, size, write, value)?;
         if let Some((reply, false)) = device {
             if counted && !write {
-                c.poll_note(hook.core, pc, address, size, reply);
+                c.poll_note(hook.core, pc()?, address, size, reply);
             }
             return Ok(reply);
         }
@@ -1256,19 +1256,21 @@ fn access(offset: u64, size: u32, write: bool, value: u64, data: *mut c_void) ->
             }
         }
         if !state.discovery.enabled {
-            return Err(format!("Unsupported MMIO {address:#x} at {pc:#x}"));
+            let pc_val = pc()?;
+            return Err(format!("Unsupported MMIO {address:#x} at {pc_val:#x}"));
         }
+        let pc_val = pc()?;
         state.discovery.fallback_owner(address, size, !owned);
         let mut response = state.discovery.fallback(address, size, write, value);
         state
             .discovery
-            .record(hook.core, address, pc, size, write, response);
+            .record(hook.core, address, pc_val, size, write, response);
         if write {
             state.discovery.observe_write(address, size);
         } else if !owned {
             response = state.discovery.observe_read(
                 hook.core,
-                pc,
+                pc_val,
                 address,
                 size,
                 response,
@@ -1455,6 +1457,7 @@ impl Session {
             power_spi_bank_inputs,
             power_spi_eye_commit,
             stabilizer_link,
+            xp4_lens_link,
             checksum_power_spi,
             imaging,
             movdc,
@@ -1617,8 +1620,42 @@ impl Session {
                 )
             })
             .transpose()?;
+        let use_dynarmic = std::env::var_os("FUJIMOD_CPU_DYNARMIC").is_some();
         let cpus = (0..cores)
-            .map(|_| -> Result<counted::Processor, String> {
+            .map(|core_idx| -> Result<counted::Processor, String> {
+                if use_dynarmic {
+                    let core = fujimod_emulator_cpu_dynarmic::Core::new(cpu::Model::CortexA7)?;
+                    core.coprocessor(
+                        arm::Coprocessor {
+                            cp: 15,
+                            wide: false,
+                            secure: 0,
+                            crn: 0,
+                            crm: 0,
+                            opc1: 0,
+                            opc2: 5,
+                        },
+                        Some(0x8000_0000 | (core_idx as u64)),
+                    )?;
+                    if let Some(cbar_val) = cbar {
+                        core.coprocessor(
+                            arm::Coprocessor {
+                                cp: 15,
+                                wide: false,
+                                secure: 0,
+                                crn: 15,
+                                crm: 0,
+                                opc1: 4,
+                                opc2: 0,
+                            },
+                            Some(cbar_val as u64),
+                        )?;
+                    }
+                    if let Some(ids) = cache_ids {
+                        core.set_cache_ids(ids);
+                    }
+                    return Ok(counted::Processor::Dynarmic(core));
+                }
                 let raw = library.open(cpu::Model::CortexA7, translation_cache_size_bytes)?;
                 if !counted {
                     return Ok(counted::Processor::Exact(raw));
@@ -1637,7 +1674,11 @@ impl Session {
                 Ok(counted::Processor::Counted(core))
             })
             .collect::<Result<Vec<_>, _>>()?;
-        let maintenance = maintenance::Maintenance::new(&cpus)?;
+        let maintenance = if use_dynarmic {
+            maintenance::Maintenance::dummy(cpus.iter().map(|c| c.identity()).collect())
+        } else {
+            maintenance::Maintenance::new(&cpus)?
+        };
         let mut ledger = Discovery::default();
         ledger.enabled = discovery;
         let has_xpp_storage = xpp_storage.is_some();
@@ -2110,6 +2151,11 @@ impl Session {
                 .get_or_insert_with(devices::Devices::empty)
                 .stabilizer_link(config)?;
         }
+        if let Some(config) = xp4_lens_link {
+            devices
+                .get_or_insert_with(devices::Devices::empty)
+                .lens_link(config)?;
+        }
         for (base, miso) in spi_inputs {
             devices
                 .get_or_insert_with(devices::Devices::empty)
@@ -2145,8 +2191,11 @@ impl Session {
             devices
                 .get_or_insert_with(devices::Devices::empty)
                 .countdown_timers(base, &routes, &countdown_dials)?;
-        } else if !countdown_dials.is_empty() {
-            return Err("XP4 countdown dials require the countdown timer bank".into());
+        } else {
+            let default_routes = vec![(0, 41), (1, 42), (2, 43), (3, 44), (4, 45), (5, 46), (6, 47), (7, 48)];
+            devices
+                .get_or_insert_with(devices::Devices::empty)
+                .countdown_timers(0xfff3_c000, &default_routes, &countdown_dials)?;
         }
         if let Some(encoder) = jpeg_encoder {
             devices
@@ -2526,7 +2575,7 @@ impl Session {
             }
             let security = initial_security.get(core);
             if let Some(initial) = security {
-                initial.apply(std::borrow::Borrow::borrow(&inner.cpus[core]))?;
+                initial.apply(&*inner.cpus[core])?;
             } else {
                 inner.write_reg(core, arm::CPSR, 0xd3)?;
             }
@@ -2540,7 +2589,7 @@ impl Session {
                         initial_cpsr = value;
                         if let Some(initial) = security {
                             initial.verify(
-                                std::borrow::Borrow::borrow(&inner.cpus[core]),
+                                &*inner.cpus[core],
                                 initial_cpsr,
                             )?;
                         }
@@ -2548,7 +2597,7 @@ impl Session {
                 }
             }
             if let Some(initial) = security {
-                initial.verify(std::borrow::Borrow::borrow(&inner.cpus[core]), initial_cpsr)?;
+                initial.verify(&*inner.cpus[core], initial_cpsr)?;
             }
         }
         if let Some(base) = cbar {
@@ -2937,11 +2986,23 @@ impl Session {
                 state.discovery.settle_trials(core, state.per_core[core]);
                 return Ok(());
             }
+            let is_dynarmic = c.cpus[core].is_dynarmic();
+            let slice_budget = if is_dynarmic {
+                let mut room = c.room().unwrap_or(u64::MAX);
+                if room == 0 {
+                    c.due();
+                    c.healthy()?;
+                    room = c.room().unwrap_or(u64::MAX);
+                }
+                budget.min(room as usize).max(1)
+            } else {
+                budget
+            };
             let mut exit = cpu.run(Run {
                 begin: u64::from(start),
                 until,
                 watchdog_us: 0,
-                instructions: Some(budget),
+                instructions: Some(slice_budget),
             });
             let raw_error = exit.as_ref().err().map(ToString::to_string);
             c.maintenance.settle(&c.cpus, core, raw_error.as_deref())?;
@@ -2954,17 +3015,50 @@ impl Session {
             {
                 exit = Ok(Exit::Stopped);
             }
+            let is_wfi = matches!(&exit, Ok(Exit::Hint(fujimod_emulator_cpu::Hint::WaitForInterrupt)));
             match exit {
-                Ok(Exit::Stopped) => (),
+                Ok(Exit::Stopped) | Ok(Exit::Hint(_)) => (),
                 Ok(other) => return Err(format!("Unexpected ARMv7-A execution exit {other:?}")),
                 Err(error) => return Err(error.to_string()),
             };
+            let entered = cpu.instruction_progress().unwrap_or(0);
+            if entered > 0 {
+                let state = unsafe { &mut *c.state.get() };
+                state.instructions += entered;
+                let (ticks, phase) = c.instruction_rate.advance_phase(state.tick_phase, entered)?;
+                state.ticks = state.ticks.checked_add(ticks as u64).ok_or("A7 guest time overflow")?;
+                state.tick_phase = phase;
+                state.per_core[core] += entered;
+                if is_wfi {
+                    state.waiting[core] = 1;
+                } else {
+                    state.waiting[core] = 0;
+                }
+            } else if is_wfi {
+                let state = unsafe { &mut *c.state.get() };
+                state.waiting[core] = 1;
+            }
             if let Some(pc) = unsafe { (*c.state.get()).redirected.take() } {
                 c.write_reg(core, arm::PC, pc)?;
             }
             c.due();
             c.healthy()?;
             c.flush_dma()?;
+
+            if is_dynarmic {
+                let state = unsafe { &mut *c.state.get() };
+                for (target_core, waiting) in state.waiting.iter_mut().enumerate() {
+                    if *waiting != 0 && state.gic.next_irq(target_core).is_some() {
+                        *waiting = 0;
+                    }
+                }
+                if state.gic.next_irq(core).is_some() && c.reg(core, arm::CPSR)? & 0x80 == 0 {
+                    state.irq_entries[core] += 1;
+                    let pc = c.reg(core, arm::PC)?;
+                    c.enter_exception(core, ExceptionEntry::Irq, pc)?;
+                }
+            }
+
             let state = unsafe { &mut *c.state.get() };
             state.discovery.settle_trials(core, state.per_core[core]);
             Ok(())
@@ -3078,6 +3172,19 @@ impl Session {
             .as_mut()
             .ok_or_else(|| "XP4 GPIO is not wired".to_owned())?
             .set_gpio_input(port, pin, high)
+    }
+    pub fn set_lens_aperture_ring(&self, ring: u16) -> Result<(), String> {
+        self.inner.host_mutation()?;
+        let state = unsafe { &mut *self.inner.state.get() };
+        state.device_scan_at = 0;
+        if state.driver_guard.is_some() {
+            return Err("Guarded routine cannot change external lens aperture ring".to_owned());
+        }
+        state
+            .devices
+            .as_mut()
+            .ok_or_else(|| "XP4 lens link is not wired".to_owned())?
+            .set_lens_aperture_ring(ring)
     }
     /// Turn a declared command dial by `edges` quadrature edges (negative turns
     /// the other way); the edges follow each other at the dial's edge period.

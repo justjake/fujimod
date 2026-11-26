@@ -41,6 +41,7 @@ use fujimod_emulator_cpu_unicorn::aprofile;
 pub(super) enum Processor {
     Exact(Core),
     Counted(aprofile::Core),
+    Dynarmic(fujimod_emulator_cpu_dynarmic::Core),
 }
 impl std::ops::Deref for Processor {
     type Target = dyn Cpu;
@@ -48,6 +49,7 @@ impl std::ops::Deref for Processor {
         match self {
             Self::Exact(core) => core,
             Self::Counted(core) => core,
+            Self::Dynarmic(core) => core,
         }
     }
 }
@@ -56,13 +58,17 @@ impl std::borrow::Borrow<Core> for Processor {
         match self {
             Self::Exact(core) => core,
             Self::Counted(core) => core.raw(),
+            Self::Dynarmic(_) => panic!("borrow::<Core>() cannot be called on Dynarmic core"),
         }
     }
 }
 impl Processor {
+    pub(super) fn is_dynarmic(&self) -> bool {
+        matches!(self, Self::Dynarmic(_))
+    }
     pub(super) fn counted(&self) -> Option<&aprofile::Core> {
         match self {
-            Self::Exact(_) => None,
+            Self::Exact(_) | Self::Dynarmic(_) => None,
             Self::Counted(core) => Some(core),
         }
     }
@@ -447,10 +453,10 @@ impl Cluster {
             {
                 exit = Ok(Exit::Stopped);
             }
-            let stopped = matches!(exit, Ok(Exit::Stopped));
+            let stopped = matches!(exit, Ok(Exit::Stopped) | Ok(Exit::Hint(_)));
             match exit {
                 Ok(Exit::BeforeInstruction(word)) => exit_word = Some(word),
-                Ok(Exit::Stopped) => {}
+                Ok(Exit::Stopped) | Ok(Exit::Hint(_)) => {}
                 Ok(other) => return Err(format!("Unexpected counted ARMv7-A exit {other:?}")),
                 Err(error) => return Err(self.thumb_refusal(core, error.to_string())),
             }

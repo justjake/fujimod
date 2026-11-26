@@ -311,6 +311,9 @@ impl ByteI2c {
             return Ok(None);
         }
         if s.pending.as_ref().is_some_and(|p| p.operation==Operation::Stop) {
+            if control & MSS == 0 {
+                return Ok(None);
+            }
             return Err("I2C STOP already pending".into());
         }
         if control & MSS == 0 {

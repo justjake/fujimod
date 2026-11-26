@@ -100,6 +100,7 @@ pub struct Devices {
     windows: Vec<(u64, u64, usize)>,
     /// Address-sorted copy of `windows` when none overlap, as of its length.
     owner_index: std::cell::RefCell<(usize, Option<Vec<(u64, u64, usize)>>)>,
+    last_owner: std::cell::Cell<(usize, u64, u64, usize)>,
     pub log: Vec<Record>,
     prior_records: usize,
     pins: Option<fujimod_emulator_ip::socionext::gpio::SharedPins>,
@@ -121,6 +122,7 @@ pub struct Devices {
     /// Declared SPI controllers the XP4 DMA engine can move words through,
     /// whichever of the two is declared first.
     serial_links: SerialLinks,
+    lens_link: Option<fujimod_emulator_xp4_io::lens_link::LensLink>,
 }
 const CHECKPOINT_KIND: &str = "xp4-devices-v1";
 
@@ -1159,6 +1161,7 @@ impl Devices {
             events: Default::default(),
             windows: vec![],
             owner_index: Default::default(),
+            last_owner: Default::default(),
             log: vec![],
             prior_records: 0,
             pins: None,
@@ -1174,6 +1177,7 @@ impl Devices {
             last_read_stable: false,
             nor_epoch: None,
             serial_links: SerialLinks::default(),
+            lens_link: None,
         }
     }
     pub fn io_groups(&mut self, base: u64) -> Result<(), String> {
@@ -1216,6 +1220,28 @@ impl Devices {
         let base = config.base;
         let link = fujimod_emulator_xp4_io::stabilizer_link::StabilizerLink::new(pins, config)?;
         self.spi_input(base, Box::new(link))
+    }
+    /// The X-mount lens behind an SPI controller: its input peer, which also
+    /// follows the GPIO outputs it is wired to and drives its ready pad.
+    pub fn lens_link(
+        &mut self,
+        config: fujimod_emulator_xp4_io::lens_link::Config,
+    ) -> Result<(), String> {
+        let pins = self
+            .pins
+            .as_ref()
+            .ok_or("The lens link requires physical GPIO wiring")?
+            .clone();
+        let base = config.base;
+        let link = fujimod_emulator_xp4_io::lens_link::LensLink::new(pins, config)?;
+        self.lens_link = Some(link.clone());
+        self.spi_input(base, Box::new(link))
+    }
+    pub fn set_lens_aperture_ring(&mut self, ring: u16) -> Result<(), String> {
+        self.lens_link
+            .as_ref()
+            .ok_or("XP4 lens link is not wired")?
+            .set_aperture_ring(ring)
     }
     pub fn spi(&mut self, base: u64, miso: bool) -> Result<(), String> {
         self.spi_input(base, Box::new(fujimod_emulator_xp4_io::spi::FixedPin(miso)))
@@ -1360,6 +1386,7 @@ impl Devices {
             frames: BTreeMap::new(),
             outputs: BTreeMap::new(),
             owner_index: Default::default(),
+            last_owner: Default::default(),
             windows: vec![
                 (storage::CONTROLLER, storage::CONTROLLER + 0x100, 0),
                 (storage::FLASH, storage::FLASH + storage::FLASH_SIZE, 0),
@@ -1372,6 +1399,7 @@ impl Devices {
             last_read_stable: false,
             nor_epoch: Some(port.lock().unwrap().epoch()),
             serial_links,
+            lens_link: None,
         };
         if let Some(pad) = pad {
             if devices.windows.iter().any(|&(lo, hi, _)| pad < hi && lo < pad + 4) {
@@ -2020,6 +2048,10 @@ impl Devices {
     }
     fn owner(&self, address: u64, size: u32) -> Option<usize> {
         let end = address + u64::from(size);
+        let (cached_len, lo, hi, id) = self.last_owner.get();
+        if cached_len == self.windows.len() && lo <= address && end <= hi && hi > lo {
+            return Some(id);
+        }
         let mut index = self.owner_index.borrow_mut();
         if index.0 != self.windows.len() {
             // Windows only grow. Without overlaps the window holding an
@@ -2035,7 +2067,10 @@ impl Devices {
                 at.checked_sub(1)
                     .map(|at| sorted[at])
                     .filter(|&(_, hi, _)| end <= hi)
-                    .map(|x| x.2)
+                    .map(|(lo, hi, id)| {
+                        self.last_owner.set((self.windows.len(), lo, hi, id));
+                        id
+                    })
             }
             None => self
                 .windows

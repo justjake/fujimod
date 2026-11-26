@@ -2466,6 +2466,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "fujimod-emulator-cpu-dynarmic"
+version = "0.1.0"
+dependencies = [
+ "cc",
+ "fujimod-emulator-cpu",
+ "libc",
+]
+
+[[package]]
 name = "fujimod-emulator-cpu-hvf"
 version = "0.1.0"
 dependencies = [
@@ -3221,6 +3230,7 @@ version = "0.1.0"
 dependencies = [
  "fujimod-emulator",
  "fujimod-emulator-cpu",
+ "fujimod-emulator-cpu-dynarmic",
  "fujimod-emulator-cpu-unicorn",
  "fujimod-emulator-devices",
  "fujimod-emulator-image-codecs",
@@ -3264,6 +3274,8 @@ dependencies = [
  "fujimod-emulator-devices",
  "fujimod-emulator-ip",
  "fujimod-emulator-parts-controls",
+ "fujimod-emulator-parts-io",
+ "fujimod-emulator-parts-lens",
  "fujimod-workspace-hack",
  "parking_lot",
  "serde",

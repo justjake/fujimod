@@ -16,6 +16,7 @@ doctest = false
 fujimod-framebuffer-xp4.workspace = true
 fujimod-emulator.workspace = true
 fujimod-emulator-cpu.workspace = true
+fujimod-emulator-cpu-dynarmic.workspace = true
 fujimod-emulator-cpu-unicorn.workspace = true
 fujimod-emulator-devices.workspace = true
 fujimod-emulator-ip.workspace = true

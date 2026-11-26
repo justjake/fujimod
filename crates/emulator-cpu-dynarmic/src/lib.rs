@@ -1,0 +1,737 @@
+pub mod ffi;
+
+use fujimod_emulator_cpu::*;
+use std::any::Any;
+use std::cell::{Cell, RefCell, UnsafeCell};
+use std::collections::BTreeMap;
+use std::ffi::c_void;
+use std::ptr::NonNull;
+
+enum Mapping {
+    Backing {
+        bytes: usize,
+        permissions: u32,
+        ptr: NonNull<u8>,
+    },
+    Mmio {
+        bytes: usize,
+        callbacks: Mmio,
+    },
+}
+
+struct FaultHook {
+    id: usize,
+    callback: unsafe fn(Fault, u64, i32, i64, *mut c_void) -> bool,
+    data: *mut c_void,
+}
+
+struct CoreShared {
+    mappings: RefCell<BTreeMap<u64, Mapping>>,
+    mmio_l1: UnsafeCell<Vec<Option<Box<[Option<(u64, Mmio)>; 1024]>>>>,
+    fault_hooks: RefCell<Vec<FaultHook>>,
+    next_hook_id: Cell<usize>,
+    inst: Cell<*mut ffi::DynarmicInstance>,
+}
+
+impl CoreShared {
+    #[inline(always)]
+    fn find_mmio(&self, vaddr: u32) -> Option<(u64, Mmio)> {
+        let page = (vaddr >> 12) as usize;
+        let l1 = unsafe { &*self.mmio_l1.get() };
+        if let Some(l2) = &l1[page >> 10] {
+            if let Some(entry) = l2[page & 0x3ff] {
+                return Some(entry);
+            }
+        }
+        self.find_mmio_slow(vaddr)
+    }
+
+    fn find_mmio_slow(&self, vaddr: u32) -> Option<(u64, Mmio)> {
+        let mappings = self.mappings.borrow();
+        let (&base, mapping) = mappings.range(..=u64::from(vaddr)).next_back()?;
+        match mapping {
+            Mapping::Mmio { bytes, callbacks } => {
+                if u64::from(vaddr) < base + (*bytes as u64) {
+                    Some((base, *callbacks))
+                } else {
+                    None
+                }
+            }
+            Mapping::Backing { .. } => None,
+        }
+    }
+
+    fn set_mmio_pages(&self, address: u64, bytes: usize, callbacks: Option<Mmio>) {
+        if address >= (1u64 << 32) || bytes == 0 {
+            return;
+        }
+        let start_page = ((address + 4095) >> 12) as usize;
+        let end_addr = address.saturating_add(bytes as u64).min(1u64 << 32);
+        let end_page = (end_addr >> 12) as usize;
+        let l1 = unsafe { &mut *self.mmio_l1.get() };
+        for page in start_page..end_page {
+            let l1_idx = page >> 10;
+            let l2_idx = page & 0x3ff;
+            if let Some(cb) = callbacks {
+                let l2 = l1[l1_idx].get_or_insert_with(|| Box::new([None; 1024]));
+                l2[l2_idx] = Some((address, cb));
+            } else if let Some(l2) = &mut l1[l1_idx] {
+                l2[l2_idx] = None;
+            }
+        }
+    }
+
+    fn resolve_mmio(&self, vaddr: u32, fault: Fault, size: i32, value: i64) -> Option<(u64, Mmio)> {
+        if let Some(found) = self.find_mmio(vaddr) {
+            return Some(found);
+        }
+        let hooks: Vec<_> = self
+            .fault_hooks
+            .borrow()
+            .iter()
+            .map(|h| (h.callback, h.data))
+            .collect();
+        let mut handled = false;
+        for (callback, data) in hooks {
+            if unsafe { callback(fault, u64::from(vaddr), size, value, data) } {
+                handled = true;
+            }
+        }
+        if handled {
+            if let Some(found) = self.find_mmio(vaddr) {
+                return Some(found);
+            }
+        }
+        let inst = self.inst.get();
+        if !inst.is_null() {
+            unsafe { ffi::dynarmic_stop(inst) };
+        }
+        None
+    }
+}
+
+pub struct Core {
+    inst: *mut ffi::DynarmicInstance,
+    identity: Identity,
+    model: Model,
+    shared: Box<CoreShared>,
+    memory_regions: RefCell<Vec<MemoryRegion>>,
+    last_progress: Cell<u64>,
+    cp15: RefCell<Vec<(arm::Coprocessor, u64)>>,
+}
+
+impl Core {
+    pub fn new(model: Model) -> Result<Self, String> {
+        let shared = Box::new(CoreShared {
+            mappings: RefCell::new(BTreeMap::new()),
+            mmio_l1: UnsafeCell::new(vec![None; 1024]),
+            fault_hooks: RefCell::new(Vec::new()),
+            next_hook_id: Cell::new(0),
+            inst: Cell::new(std::ptr::null_mut()),
+        });
+        let user_data = (&*shared as *const CoreShared as *mut CoreShared).cast();
+
+        let cb = ffi::DynarmicCallbacks {
+            user_data,
+            read_code: None,
+            read_8: Self::mmio_read_8,
+            read_16: Self::mmio_read_16,
+            read_32: Self::mmio_read_32,
+            read_64: Self::mmio_read_64,
+            write_8: Self::mmio_write_8,
+            write_16: Self::mmio_write_16,
+            write_32: Self::mmio_write_32,
+            write_64: Self::mmio_write_64,
+            call_svc: None,
+            exception_raised: None,
+            cp15_read: None,
+            cp15_write: None,
+        };
+
+        let inst = unsafe { ffi::dynarmic_create(&cb) };
+        if inst.is_null() {
+            return Err("failed to create Dynarmic JIT instance".into());
+        }
+        shared.inst.set(inst);
+
+        let core = Self {
+            inst,
+            identity: Identity::allocate(),
+            model,
+            shared,
+            memory_regions: RefCell::new(Vec::new()),
+            last_progress: Cell::new(0),
+            cp15: RefCell::new(Vec::new()),
+        };
+
+        Ok(core)
+    }
+
+    pub fn set_cache_ids(&self, ids: [u32; 3]) {
+        unsafe {
+            ffi::dynarmic_set_cache_ids(self.inst, ids[0], ids[1], ids[2]);
+        }
+    }
+
+    unsafe extern "C" fn mmio_read_8(user_data: *mut c_void, vaddr: u32) -> u8 {
+        let shared = &*user_data.cast::<CoreShared>();
+        if let Some((base, mmio)) = shared.resolve_mmio(vaddr, Fault::ReadUnmapped, 1, 0) {
+            let offset = u64::from(vaddr) - base;
+            (mmio.read)(offset, 1, mmio.data) as u8
+        } else {
+            0
+        }
+    }
+
+    unsafe extern "C" fn mmio_read_16(user_data: *mut c_void, vaddr: u32) -> u16 {
+        let shared = &*user_data.cast::<CoreShared>();
+        if let Some((base, mmio)) = shared.resolve_mmio(vaddr, Fault::ReadUnmapped, 2, 0) {
+            let offset = u64::from(vaddr) - base;
+            (mmio.read)(offset, 2, mmio.data) as u16
+        } else {
+            0
+        }
+    }
+
+    unsafe extern "C" fn mmio_read_32(user_data: *mut c_void, vaddr: u32) -> u32 {
+        let shared = &*user_data.cast::<CoreShared>();
+        if let Some((base, mmio)) = shared.resolve_mmio(vaddr, Fault::ReadUnmapped, 4, 0) {
+            let offset = u64::from(vaddr) - base;
+            (mmio.read)(offset, 4, mmio.data) as u32
+        } else {
+            0
+        }
+    }
+
+    unsafe extern "C" fn mmio_read_64(user_data: *mut c_void, vaddr: u32) -> u64 {
+        let shared = &*user_data.cast::<CoreShared>();
+        if let Some((base, mmio)) = shared.resolve_mmio(vaddr, Fault::ReadUnmapped, 8, 0) {
+            let offset = u64::from(vaddr) - base;
+            (mmio.read)(offset, 8, mmio.data)
+        } else {
+            0
+        }
+    }
+
+    unsafe extern "C" fn mmio_write_8(user_data: *mut c_void, vaddr: u32, val: u8) {
+        let shared = &*user_data.cast::<CoreShared>();
+        if let Some((base, mmio)) = shared.resolve_mmio(vaddr, Fault::WriteUnmapped, 1, i64::from(val)) {
+            let offset = u64::from(vaddr) - base;
+            (mmio.write)(offset, 1, u64::from(val), mmio.data);
+        }
+    }
+
+    unsafe extern "C" fn mmio_write_16(user_data: *mut c_void, vaddr: u32, val: u16) {
+        let shared = &*user_data.cast::<CoreShared>();
+        if let Some((base, mmio)) = shared.resolve_mmio(vaddr, Fault::WriteUnmapped, 2, i64::from(val)) {
+            let offset = u64::from(vaddr) - base;
+            (mmio.write)(offset, 2, u64::from(val), mmio.data);
+        }
+    }
+
+    unsafe extern "C" fn mmio_write_32(user_data: *mut c_void, vaddr: u32, val: u32) {
+        let shared = &*user_data.cast::<CoreShared>();
+        if let Some((base, mmio)) = shared.resolve_mmio(vaddr, Fault::WriteUnmapped, 4, i64::from(val)) {
+            let offset = u64::from(vaddr) - base;
+            (mmio.write)(offset, 4, u64::from(val), mmio.data);
+        }
+    }
+
+    unsafe extern "C" fn mmio_write_64(user_data: *mut c_void, vaddr: u32, val: u64) {
+        let shared = &*user_data.cast::<CoreShared>();
+        if let Some((base, mmio)) = shared.resolve_mmio(vaddr, Fault::WriteUnmapped, 8, val as i64) {
+            let offset = u64::from(vaddr) - base;
+            (mmio.write)(offset, 8, val, mmio.data);
+        }
+    }
+}
+
+impl Drop for Core {
+    fn drop(&mut self) {
+        if !self.inst.is_null() {
+            unsafe { ffi::dynarmic_destroy(self.inst) };
+        }
+    }
+}
+
+pub struct SnapshotData {
+    owner: Identity,
+    regs: [u32; 16],
+    cpsr: u32,
+    fpscr: u32,
+}
+
+impl Snapshot for SnapshotData {
+    fn owner(&self) -> Identity {
+        self.owner
+    }
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+}
+
+impl Cpu for Core {
+    fn identity(&self) -> Identity {
+        self.identity
+    }
+
+    fn model(&self) -> Model {
+        self.model
+    }
+
+    fn features(&self) -> Features {
+        Features {
+            instruction_limit: true,
+            instruction_progress: true,
+            ..Default::default()
+        }
+    }
+
+    fn read_register(&self, register: Register, out: &mut [u8]) -> Result<usize, String> {
+        let val = match register {
+            Register::Pc => unsafe { ffi::dynarmic_get_reg(self.inst, 15) },
+            Register::Sp => unsafe { ffi::dynarmic_get_reg(self.inst, 13) },
+            Register::Arm32(arm::Register::R(n @ 0..=15)) => unsafe {
+                ffi::dynarmic_get_reg(self.inst, u32::from(n))
+            },
+            Register::Arm32(arm::Register::Cpsr) | Register::Pstate => unsafe {
+                ffi::dynarmic_get_cpsr(self.inst)
+            },
+            Register::Arm32(arm::Register::Spsr) => unsafe {
+                ffi::dynarmic_get_spsr(self.inst)
+            },
+            Register::Arm32(arm::Register::Fpscr) => unsafe { ffi::dynarmic_get_fpscr(self.inst) },
+            Register::Arm32(arm::Register::Fpexc) => 0x4000_0000,
+            _ => return Err(format!("unsupported register {register:?}")),
+        };
+        let bytes = val.to_le_bytes();
+        let len = bytes.len().min(out.len());
+        out[..len].copy_from_slice(&bytes[..len]);
+        Ok(len)
+    }
+
+    fn write_register(&self, register: Register, bytes: &[u8]) -> Result<(), String> {
+        if bytes.len() < 4 {
+            return Err("register write requires at least 4 bytes".into());
+        }
+        let val = u32::from_le_bytes(bytes[..4].try_into().unwrap());
+        match register {
+            Register::Pc => unsafe { ffi::dynarmic_set_reg(self.inst, 15, val) },
+            Register::Sp => unsafe { ffi::dynarmic_set_reg(self.inst, 13, val) },
+            Register::Arm32(arm::Register::R(n @ 0..=15)) => unsafe {
+                ffi::dynarmic_set_reg(self.inst, u32::from(n), val)
+            },
+            Register::Arm32(arm::Register::Cpsr) | Register::Pstate => unsafe {
+                ffi::dynarmic_set_cpsr(self.inst, val)
+            },
+            Register::Arm32(arm::Register::Spsr) => unsafe {
+                ffi::dynarmic_set_spsr(self.inst, val)
+            },
+            Register::Arm32(arm::Register::Fpscr) => unsafe {
+                ffi::dynarmic_set_fpscr(self.inst, val)
+            },
+            Register::Arm32(arm::Register::Fpexc) => (),
+            _ => return Err(format!("unsupported register {register:?}")),
+        }
+        Ok(())
+    }
+
+    fn coprocessor(&self, register: arm::Coprocessor, value: Option<u64>) -> Result<u64, String> {
+        let mut cp15 = self.cp15.borrow_mut();
+        if let Some(val) = value {
+            if let Some(slot) = cp15.iter_mut().find(|(k, _)| *k == register) {
+                slot.1 = val;
+            } else {
+                cp15.push((register, val));
+            }
+            unsafe {
+                ffi::dynarmic_set_cp15(
+                    self.inst,
+                    register.opc1,
+                    register.crn,
+                    register.crm,
+                    register.opc2,
+                    val as u32,
+                );
+            }
+            Ok(val)
+        } else {
+            let val = unsafe {
+                ffi::dynarmic_get_cp15(
+                    self.inst,
+                    register.opc1,
+                    register.crn,
+                    register.crm,
+                    register.opc2,
+                )
+            };
+            Ok(val as u64)
+        }
+    }
+
+    fn read_memory(&self, address: u64, bytes: &mut [u8]) -> Result<(), String> {
+        let mappings = self.shared.mappings.borrow();
+        if let Some((&base, mapping)) = mappings.range(..=address).next_back() {
+            match mapping {
+                Mapping::Backing {
+                    bytes: m_bytes,
+                    ptr,
+                    ..
+                } => {
+                    let offset = (address - base) as usize;
+                    if offset + bytes.len() <= *m_bytes {
+                        unsafe {
+                            std::ptr::copy_nonoverlapping(
+                                ptr.as_ptr().add(offset),
+                                bytes.as_mut_ptr(),
+                                bytes.len(),
+                            );
+                        }
+                        return Ok(());
+                    }
+                }
+                Mapping::Mmio { bytes: m_bytes, callbacks } => {
+                    let offset = address - base;
+                    if offset + (bytes.len() as u64) <= *m_bytes as u64 {
+                        for (i, b) in bytes.iter_mut().enumerate() {
+                            *b = unsafe { (callbacks.read)(offset + (i as u64), 1, callbacks.data) as u8 };
+                        }
+                        return Ok(());
+                    }
+                }
+            }
+        }
+        Err(format!("unmapped read at {address:#x}"))
+    }
+
+    fn translate(&self, address: u64, _access: Access) -> Result<u64, String> {
+        Ok(address)
+    }
+
+    fn read_virtual(&self, address: u64, access: Access, bytes: &mut [u8]) -> Result<(), String> {
+        let translated = self.translate(address, access)?;
+        self.read_memory(translated, bytes)
+    }
+
+    fn write_memory(&self, address: u64, bytes: &[u8]) -> Result<(), String> {
+        let mappings = self.shared.mappings.borrow();
+        if let Some((&base, mapping)) = mappings.range(..=address).next_back() {
+            match mapping {
+                Mapping::Backing {
+                    bytes: m_bytes,
+                    ptr,
+                    ..
+                } => {
+                    let offset = (address - base) as usize;
+                    if offset + bytes.len() <= *m_bytes {
+                        unsafe {
+                            std::ptr::copy_nonoverlapping(
+                                bytes.as_ptr(),
+                                ptr.as_ptr().add(offset),
+                                bytes.len(),
+                            );
+                            ffi::dynarmic_invalidate_cache(self.inst, address as u32, bytes.len());
+                        }
+                        return Ok(());
+                    }
+                }
+                Mapping::Mmio { bytes: m_bytes, callbacks } => {
+                    let offset = address - base;
+                    if offset + (bytes.len() as u64) <= *m_bytes as u64 {
+                        for (i, &b) in bytes.iter().enumerate() {
+                            unsafe { (callbacks.write)(offset + (i as u64), 1, u64::from(b), callbacks.data) };
+                        }
+                        return Ok(());
+                    }
+                }
+            }
+        }
+        Err(format!("unmapped write at {address:#x}"))
+    }
+
+    fn memory_regions(&self) -> Result<Vec<MemoryRegion>, String> {
+        Ok(self.memory_regions.borrow().clone())
+    }
+
+    unsafe fn map_backing(
+        &self,
+        address: u64,
+        bytes: usize,
+        permissions: u32,
+        backing: NonNull<u8>,
+    ) -> Result<(), String> {
+        let page_size = 4096;
+        let num_pages = (bytes + page_size - 1) / page_size;
+        let start_page = (address / page_size as u64) as u32;
+
+        unsafe {
+            ffi::dynarmic_map_pages(self.inst, start_page, num_pages as u32, backing.as_ptr());
+        }
+
+        self.shared.mappings.borrow_mut().insert(
+            address,
+            Mapping::Backing {
+                bytes,
+                permissions,
+                ptr: backing,
+            },
+        );
+
+        self.memory_regions.borrow_mut().push(MemoryRegion {
+            begin: address,
+            end: address + (bytes as u64) - 1,
+            permissions,
+        });
+
+        Ok(())
+    }
+
+    fn map_zeroed(&self, address: u64, bytes: usize, permissions: u32) -> Result<(), String> {
+        let mut vec = vec![0u8; bytes];
+        let ptr = NonNull::new(vec.as_mut_ptr()).unwrap();
+        std::mem::forget(vec);
+        unsafe { self.map_backing(address, bytes, permissions, ptr) }
+    }
+
+    unsafe fn map_mmio(&self, address: u64, bytes: usize, callbacks: Mmio) -> Result<(), String> {
+        self.shared
+            .mappings
+            .borrow_mut()
+            .insert(address, Mapping::Mmio { bytes, callbacks });
+        self.shared.set_mmio_pages(address, bytes, Some(callbacks));
+        self.memory_regions.borrow_mut().push(MemoryRegion {
+            begin: address,
+            end: address + (bytes as u64) - 1,
+            permissions: 3,
+        });
+        Ok(())
+    }
+
+    fn unmap(&self, address: u64, bytes: usize) -> Result<(), String> {
+        let page_size = 4096;
+        let num_pages = (bytes + page_size - 1) / page_size;
+        let start_page = (address / page_size as u64) as u32;
+
+        unsafe {
+            ffi::dynarmic_unmap_pages(self.inst, start_page, num_pages as u32);
+        }
+
+        self.shared.set_mmio_pages(address, bytes, None);
+        self.shared.mappings.borrow_mut().remove(&address);
+        self.memory_regions
+            .borrow_mut()
+            .retain(|r| r.begin != address);
+        Ok(())
+    }
+
+    fn protect(&self, _address: u64, _bytes: usize, _permissions: u32) -> Result<(), String> {
+        Ok(())
+    }
+
+    unsafe fn backing_written(
+        &self,
+        physical: u64,
+        _backing: NonNull<u8>,
+        bytes: usize,
+    ) -> Result<(), String> {
+        unsafe { ffi::dynarmic_invalidate_cache(self.inst, physical as u32, bytes) };
+        Ok(())
+    }
+
+    fn invalidate_code(&self, range: Option<(u64, u64)>) -> Result<(), String> {
+        if let Some((begin, end)) = range {
+            unsafe {
+                ffi::dynarmic_invalidate_cache(
+                    self.inst,
+                    begin as u32,
+                    (end.saturating_sub(begin)) as usize,
+                );
+            }
+        } else {
+            unsafe { ffi::dynarmic_clear_cache(self.inst) };
+        }
+        Ok(())
+    }
+
+    fn run(&self, request: Run) -> Result<Exit, ExecutionError> {
+        unsafe { ffi::dynarmic_set_reg(self.inst, 15, request.begin as u32) };
+
+        let budget = request.instructions.unwrap_or(usize::MAX) as u64;
+        let mut executed = 0u64;
+
+        let status = unsafe { ffi::dynarmic_run(self.inst, budget, &mut executed) };
+        self.last_progress.set(executed);
+
+        match status {
+            ffi::DynarmicExitReason::Timeout
+            | ffi::DynarmicExitReason::Stopped => Ok(Exit::Stopped),
+            ffi::DynarmicExitReason::Wfi => {
+                Ok(Exit::Hint(fujimod_emulator_cpu::Hint::WaitForInterrupt))
+            }
+            ffi::DynarmicExitReason::Wfe => {
+                Ok(Exit::Hint(fujimod_emulator_cpu::Hint::WaitForEvent))
+            }
+            ffi::DynarmicExitReason::Sev => {
+                Ok(Exit::Hint(fujimod_emulator_cpu::Hint::SendEvent))
+            }
+            ffi::DynarmicExitReason::Svc => Ok(Exit::BeforeInstruction(0)),
+            ffi::DynarmicExitReason::Undefined => {
+                Err(ExecutionError::InvalidInstruction("undefined instruction".into()))
+            }
+            ffi::DynarmicExitReason::NoExecute => Err(ExecutionError::Memory {
+                fault: Fault::FetchUnmapped,
+                message: "execution fault on unmapped code page".into(),
+            }),
+            ffi::DynarmicExitReason::Breakpoint => Ok(Exit::Stopped),
+            ffi::DynarmicExitReason::Error => Err(ExecutionError::Backend("dynarmic execution error".into())),
+        }
+    }
+
+    fn instruction_progress(&self) -> Option<u64> {
+        Some(self.last_progress.get())
+    }
+
+    fn stop(&self) -> Result<(), String> {
+        unsafe { ffi::dynarmic_stop(self.inst) };
+        Ok(())
+    }
+
+    fn snapshot(&self, _previous: Option<&dyn Snapshot>) -> Result<Box<dyn Snapshot>, String> {
+        let mut regs = [0u32; 16];
+        for i in 0..16 {
+            regs[i] = unsafe { ffi::dynarmic_get_reg(self.inst, i as u32) };
+        }
+        let cpsr = unsafe { ffi::dynarmic_get_cpsr(self.inst) };
+        let fpscr = unsafe { ffi::dynarmic_get_fpscr(self.inst) };
+        Ok(Box::new(SnapshotData {
+            owner: self.identity,
+            regs,
+            cpsr,
+            fpscr,
+        }))
+    }
+
+    fn restore(&self, snapshot: &dyn Snapshot) -> Result<(), String> {
+        let state = snapshot
+            .as_any()
+            .downcast_ref::<SnapshotData>()
+            .ok_or("invalid snapshot type")?;
+        for (i, &val) in state.regs.iter().enumerate() {
+            unsafe { ffi::dynarmic_set_reg(self.inst, i as u32, val) };
+        }
+        unsafe {
+            ffi::dynarmic_set_cpsr(self.inst, state.cpsr);
+            ffi::dynarmic_set_fpscr(self.inst, state.fpscr);
+        }
+        Ok(())
+    }
+
+    unsafe fn install_hook(&self, hook: Hook) -> Result<HookId, String> {
+        let key = self.shared.next_hook_id.get() + 1;
+        self.shared.next_hook_id.set(key);
+        if let Hook::Fault { callback, data } = hook {
+            self.shared.fault_hooks.borrow_mut().push(FaultHook {
+                id: key,
+                callback,
+                data,
+            });
+        }
+        Ok(HookId {
+            owner: self.identity,
+            key,
+        })
+    }
+
+    fn remove_hook(&self, hook: HookId) -> Result<(), String> {
+        if hook.owner == self.identity {
+            self.shared
+                .fault_hooks
+                .borrow_mut()
+                .retain(|h| h.id != hook.key);
+        }
+        Ok(())
+    }
+
+    unsafe fn translation_hooks(&self, _hooks: Option<TranslationHooks>) -> Result<(), String> {
+        Ok(())
+    }
+
+    fn retry_block(&self, _instructions: u32) -> Result<(), String> {
+        Ok(())
+    }
+
+    fn request_restart(&self) -> Result<(), String> {
+        Ok(())
+    }
+
+    fn accounting(&self) -> Option<NonNull<BlockAccounting>> {
+        None
+    }
+
+    unsafe fn observe_backings(&self, _ranges: &[BackingObserver]) -> Result<(), String> {
+        Ok(())
+    }
+
+    fn watch_stores(&self, _address: u64, _bytes: u64) -> Result<(), String> {
+        Ok(())
+    }
+
+    fn hook_watched(&self, _hook: HookId, _watched: bool) -> Result<(), String> {
+        Ok(())
+    }
+
+    fn precise_store_pc(&self, _on: bool) -> Result<(), String> {
+        Ok(())
+    }
+
+    fn exit_counters(&self) -> Result<std::collections::BTreeMap<&'static str, u64>, String> {
+        Ok(std::collections::BTreeMap::new())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_dynarmic_execution() {
+        let core = Core::new(Model::CortexA7).expect("create dynarmic core");
+        let mut ram = vec![0u8; 0x10000];
+        let ptr = NonNull::new(ram.as_mut_ptr()).unwrap();
+        unsafe {
+            core.map_backing(0x40000000, 0x10000, 7, ptr).expect("map backing");
+        }
+
+        // ARM32 code:
+        // mov r0, #42       (0xe3a0002a)
+        // add r0, r0, #8    (0xe2800008)
+        // wfi               (0xe320f003)
+        let code: [u32; 3] = [
+            0xe3a0002a,
+            0xe2800008,
+            0xe320f003,
+        ];
+        let mut code_bytes = Vec::new();
+        for &w in &code {
+            code_bytes.extend_from_slice(&w.to_le_bytes());
+        }
+        core.write_memory(0x40000000, &code_bytes).expect("write code");
+
+        let exit = core.run(Run {
+            begin: 0x40000000,
+            until: None,
+            watchdog_us: 0,
+            instructions: Some(10),
+        }).expect("run");
+
+        match exit {
+            Exit::Hint(Hint::WaitForInterrupt) | Exit::Stopped => {}
+            other => panic!("unexpected exit: {other:?}"),
+        }
+
+        let mut out = [0u8; 4];
+        core.read_register(Register::Arm32(arm::Register::R(0)), &mut out).expect("read r0");
+        let r0 = u32::from_le_bytes(out);
+        assert_eq!(r0, 50, "r0 should be 42 + 8 = 50");
+    }
+}

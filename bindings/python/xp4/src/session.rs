@@ -194,6 +194,7 @@ impl Xp4Session {
     }
     forward!(set_adc_input(channel: usize, sample: u16) -> ());
     forward!(set_gpio_input(port: usize, pin: usize, high: bool) -> ());
+    forward!(set_lens_aperture_ring(ring: u16) -> ());
     forward!(turn_dial(name: &str, edges: i32) -> ());
     forward!(touch_period() -> u64);
     forward!(touch(phase: &str, x: u16, y: u16) -> ());
@@ -339,6 +340,9 @@ impl fujimod_python_base::xp4_backend::Xp4Backend for Xp4Session {
     }
     fn set_gpio_input(&self, port: usize, pin: usize, high: bool) -> PyResult<()> {
         Xp4Session::set_gpio_input(self, port, pin, high)
+    }
+    fn set_lens_aperture_ring(&self, ring: u16) -> PyResult<()> {
+        Xp4Session::set_lens_aperture_ring(self, ring)
     }
     fn turn_dial(&self, name: &str, edges: i32) -> PyResult<()> {
         Xp4Session::turn_dial(self, name, edges)
