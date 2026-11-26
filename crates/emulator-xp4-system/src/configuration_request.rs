@@ -1143,8 +1143,10 @@ mod tests {
         for ticks in [1, 8, 256] {
             for base in COMMAND5_BASES {
                 let mut model = ConfigurationRequests::new(command5_inputs([ticks; 3])).unwrap();
-                let mut clock = Clock::default();
-                clock.now = 10;
+                let mut clock = Clock {
+                    now: 10,
+                    ..Default::default()
+                };
                 let original = model.save();
                 let group = ConfigurationRequests::group(base);
                 write(&mut model, &mut clock, base + 0x80, 4, 5).unwrap();

@@ -201,7 +201,7 @@ impl Device for FaceDetector {
                     self.state.words.insert(o, value);
                 }
             }
-            _ => return cx.unmodeled(),
+            _ => cx.unmodeled(),
         }
     }
     fn advance(&mut self, cx: &mut Cx<'_>) {

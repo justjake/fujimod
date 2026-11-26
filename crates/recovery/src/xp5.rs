@@ -8,6 +8,8 @@ mod card_boot;
 pub use card_boot::CardBoot;
 pub mod handoff_result;
 pub use handoff_result::HandoffRange;
+/// The other loader build sees these offsets unused, as with the internal-flash build below.
+#[allow(dead_code)]
 mod template {
     include!(concat!(env!("OUT_DIR"), "/xp5_sd_loader.rs"));
 }
@@ -699,7 +701,7 @@ fn bind_internal_flash(
         require(
             seconds <= MAX_FALLBACK_WAIT_SECONDS
                 && setup.reset_copy_size > 0
-                && setup.reset_copy_size % 8 == 0
+                && setup.reset_copy_size.is_multiple_of(8)
                 && restore_offset % 8 == 0
                 && (restore_offset as u64)
                     .checked_add(setup.reset_copy_size as u64)
@@ -1879,7 +1881,7 @@ mod tests {
         let field = |raw: &[u8], n: usize| {
             u64::from_le_bytes(raw[at + 8 * n..at + 8 * n + 8].try_into().unwrap())
         };
-        let gate = (s.gate_offset - 0x800) as usize;
+        let gate = s.gate_offset - 0x800;
         let address = s.base + 0xc000;
         for wait in [None, Some(7), Some(0), Some(MAX_FALLBACK_WAIT_SECONDS)] {
             let files = package_internal_flash(&data, &setup, ram.clone(), 0, wait).unwrap();

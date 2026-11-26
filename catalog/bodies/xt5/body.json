@@ -25,18 +25,11 @@
         "input_connection_id": "sensor-power-sense"
       }
     ],
-    "thermal_connection_ids": [
-      "thermal-0"
-    ],
+    "thermal_connection_ids": ["thermal-0"],
     "bus_drain": [
       {
         "address": 1610612736,
-        "processor_ids": [
-          "core0",
-          "core1",
-          "core2",
-          "core3"
-        ],
+        "processor_ids": ["core0", "core1", "core2", "core3"],
         "basis": "The stock firmware drains the bus with a discarded read of the first address past its DRAM map (Linux 256 MiB plus shared arenas, from the supplied Linux device tree and the firmware memory map)."
       }
     ]
@@ -273,10 +266,7 @@
       ]
     }
   ],
-  "parts": [
-    "power-controller",
-    "xt5-serial-nor"
-  ],
+  "parts": ["power-controller", "xt5-serial-nor"],
   "wiring": [
     {
       "source_id": "spi8",

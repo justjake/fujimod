@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
+import json
 from collections.abc import Callable, Collection, Generator
 from dataclasses import dataclass, field
-import json
-from typing import Protocol, TypeVar
+from typing import Protocol, cast
 
 from .. import perf
 
@@ -147,10 +147,27 @@ def _record_continuation_stop(report: WaitStops, value: object) -> None:
     report.continuation_stop_overflow += 1
 
 
-T = TypeVar("T")
+class _WaitSteps[T]:
+    """Drive one wait: each ``next`` runs to the next passive stop."""
+
+    def __init__(self) -> None:
+        self.value: T | None = None
+        self._steps: Generator[None] | None = None
+
+    def __iter__(self) -> _WaitSteps[T]:
+        return self
+
+    def __next__(self) -> None:
+        assert self._steps is not None
+        return next(self._steps)
+
+    def close(self) -> None:
+        if self._steps is not None:
+            self._steps.close()
 
 
-def wait_steps(
+def _run_wait[T](
+    steps: _WaitSteps[T],
     board: WaitBoard,
     predicate: Callable[[], T],
     description: str,
@@ -163,16 +180,7 @@ def wait_steps(
     after_run: Callable[[], object] | None = None,
     stops: WaitStops | None = None,
     profile_stops: bool = False,
-) -> Generator[None, None, T]:
-    """Yield at passive watch stops, returning the predicate's truthy result.
-
-    Short-circuited reads are rediscovered on every evaluation, so pointer and
-    state-dependent predicates follow their current dependencies. A pure clock
-    wait must supply until_tick; deadline is a failure ceiling, not a poll clock.
-    instruction_limit is relative to this call and never replenished on a wake.
-    profile_stops records stop causes in stops, with a fixed bound on distinct
-    causes; use stops= to retain them.
-    """
+) -> Generator[None]:
     if type(instruction_limit) is not int or instruction_limit < 0:
         raise ValueError("Wait instruction limit must be nonnegative")
     if until_tick is not None and (type(until_tick) is not int or until_tick < 0):
@@ -212,7 +220,8 @@ def wait_steps(
                 polls += 1
                 perf.record_wait_evaluation(wait_counter)
                 if value:
-                    return value
+                    steps.value = value
+                    return
                 remaining = instruction_limit - (board.instructions - start)
                 if remaining <= 0 or (
                     deadline is not None and board.virtual_ticks >= deadline
@@ -314,7 +323,48 @@ def wait_steps(
             )
 
 
-def wait_until(
+def wait_steps[T](
+    board: WaitBoard,
+    predicate: Callable[[], T],
+    description: str,
+    *,
+    instruction_limit: int = (1 << 63),
+    deadline: int | None = None,
+    until_tick: int | None = None,
+    max_run_instructions: int | None = None,
+    ignored_devices: Collection[str] = (),
+    after_run: Callable[[], object] | None = None,
+    stops: WaitStops | None = None,
+    profile_stops: bool = False,
+) -> _WaitSteps[T]:
+    """Yield at passive watch stops, returning the predicate's truthy result.
+
+    Short-circuited reads are rediscovered on every evaluation, so pointer and
+    state-dependent predicates follow their current dependencies. A pure clock
+    wait must supply until_tick; deadline is a failure ceiling, not a poll clock.
+    instruction_limit is relative to this call and never replenished on a wake.
+    profile_stops records stop causes in stops, with a fixed bound on distinct
+    causes; use stops= to retain them.
+    """
+    steps: _WaitSteps[T] = _WaitSteps()
+    steps._steps = _run_wait(
+        steps,
+        board,
+        predicate,
+        description,
+        instruction_limit=instruction_limit,
+        deadline=deadline,
+        until_tick=until_tick,
+        max_run_instructions=max_run_instructions,
+        ignored_devices=ignored_devices,
+        after_run=after_run,
+        stops=stops,
+        profile_stops=profile_stops,
+    )
+    return steps
+
+
+def wait_until[T](
     board: WaitBoard,
     predicate: Callable[[], T],
     description: str,
@@ -341,8 +391,6 @@ def wait_until(
         stops=stops,
         profile_stops=profile_stops,
     )
-    while True:
-        try:
-            next(steps)
-        except StopIteration as done:
-            return done.value
+    for _ in steps:
+        pass
+    return cast(T, steps.value)

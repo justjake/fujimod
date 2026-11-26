@@ -267,9 +267,9 @@ impl Device for Gpio {
         };
         if r == 0 {
             let new = pins.regs[p][r];
-            for bit in 0..16 {
+            for (bit, changes) in pins.changes[p].iter_mut().enumerate() {
                 if (old ^ new) & (1 << bit) != 0 {
-                    pins.changes[p][bit] += 1;
+                    *changes += 1;
                 }
             }
             // Watching peers follow each changed output at this tick; the

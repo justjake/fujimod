@@ -16,9 +16,7 @@
   "evidence": [
     {
       "kind": "located",
-      "firmware_ids": [
-        "x100v-301"
-      ],
+      "firmware_ids": ["x100v-301"],
       "addresses": [
         {
           "firmware_id": "x100v-301",

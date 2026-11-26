@@ -67,10 +67,10 @@ impl Dram {
     /// Refuse an override that the run could not honor. `run_sets_limit` is whether the run
     /// configuration also sets `dram_address_space`: two sources for one limit.
     pub fn validate(&self, run_sets_limit: bool) -> Result<(), String> {
-        if self.limit == 0 || self.limit % 4096 != 0 {
+        if self.limit == 0 || !self.limit.is_multiple_of(4096) {
             return Err("manifest DRAM limit must be page-aligned".into());
         }
-        if self.bus_drain % 4 != 0 {
+        if !self.bus_drain.is_multiple_of(4) {
             return Err(format!(
                 "manifest DRAM bus_drain {:#x} must be four-byte aligned",
                 self.bus_drain
@@ -225,10 +225,10 @@ pub(crate) fn preload_bytes(
         }
         bytes.extend_from_slice(&word.to_le_bytes()[..width as usize]);
     }
-    if let Some(hash) = &preload.sha256 {
-        if super::firmware::sha256_hex(&bytes) != *hash {
-            return Err("preload hash mismatch".into());
-        }
+    if let Some(hash) = &preload.sha256
+        && super::firmware::sha256_hex(&bytes) != *hash
+    {
+        return Err("preload hash mismatch".into());
     }
     Ok(bytes)
 }

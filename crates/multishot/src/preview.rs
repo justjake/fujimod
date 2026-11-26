@@ -18,7 +18,9 @@ fn srgb(v: f32) -> u8 {
 /// Gain that maps the 99.5th percentile of white-balanced green to 0.9.
 pub fn auto_gain(rgb: &[f32], wb: [f32; 3]) -> f32 {
     let mut g: Vec<f32> = rgb
-        .chunks_exact(3)
+        .as_chunks::<3>()
+        .0
+        .iter()
         .step_by(7)
         .map(|p| p[1] * wb[1])
         .collect();
@@ -41,7 +43,7 @@ pub fn write_png(
     gain: f32,
 ) -> io::Result<()> {
     let mut bytes = Vec::with_capacity(width * height * 3);
-    for p in rgb.chunks_exact(3) {
+    for p in rgb.as_chunks::<3>().0.iter() {
         for c in 0..3 {
             bytes.push(srgb(p[c] * wb[c] * gain));
         }

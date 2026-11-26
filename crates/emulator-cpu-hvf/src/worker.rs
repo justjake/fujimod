@@ -19,7 +19,7 @@ pub enum Op {
     Write(Register, Vec<u8>),
     Translate(u64, Access),
     Snapshot,
-    Restore(Registers),
+    Restore(Box<Registers>),
     Interrupt(Interrupt, bool),
     Run(Run, ExecutionPolicy, bool),
     RunToNativeExit,
@@ -97,7 +97,7 @@ pub enum Value {
     Empty,
     Bytes(Vec<u8>),
     Address(u64),
-    Registers(Registers),
+    Registers(Box<Registers>),
     NativeExit(NativeExit),
 }
 pub enum Event {
@@ -1569,9 +1569,9 @@ impl Processor {
             }
             Op::Translate(a, k) => Ok(Value::Address(self.translate(a, k)?)),
             Op::RunToNativeExit => Ok(Value::NativeExit(self.run_to_native_exit()?)),
-            Op::Snapshot => Ok(Value::Registers(self.snapshot()?)),
+            Op::Snapshot => Ok(Value::Registers(Box::new(self.snapshot()?))),
             Op::Restore(s) => {
-                self.restore(s)?;
+                self.restore(*s)?;
                 Ok(Value::Empty)
             }
             Op::Interrupt(line, level) => {

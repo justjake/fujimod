@@ -112,7 +112,7 @@ pub(crate) fn list_roots(card: &Card) -> Result<Listing, String> {
         let label = format!(
             "MBR entry {} type {kind:#04x} start LBA {start} ({} MiB) sectors {count}",
             index + 1,
-            u64::from(start) * 512 >> 20
+            (u64::from(start) * 512) >> 20
         );
         volume(card, u64::from(start), &label, &mut listing)?;
     }
@@ -213,7 +213,7 @@ fn fat32(
 /// 8.3 and long names of a FAT directory image. A long name is kept next to its short alias.
 fn fat_names(directory: &[u8], names: &mut Vec<String>) {
     let mut long: Vec<(u8, Vec<u16>)> = Vec::new();
-    for entry in directory.chunks_exact(32) {
+    for entry in directory.as_chunks::<32>().0.iter() {
         match entry[0] {
             0x00 => break,
             0xe5 => {
@@ -227,7 +227,9 @@ fn fat_names(directory: &[u8], names: &mut Vec<String>) {
             for range in [1..11, 14..26, 28..32] {
                 units.extend(
                     entry[range]
-                        .chunks_exact(2)
+                        .as_chunks::<2>()
+                        .0
+                        .iter()
                         .map(|pair| u16::from_le_bytes([pair[0], pair[1]])),
                 );
             }
@@ -322,7 +324,7 @@ fn exfat(
         start + fat_offset,
         start + heap
     ));
-    let entries: Vec<&[u8]> = directory.chunks_exact(32).collect();
+    let entries: Vec<&[u8; 32]> = directory.as_chunks::<32>().0.iter().collect();
     let mut index = 0;
     while index < entries.len() {
         let entry = entries[index];
@@ -338,7 +340,9 @@ fn exfat(
                         0xc0 => length = next[3] as usize,
                         0xc1 => units.extend(
                             next[2..32]
-                                .chunks_exact(2)
+                                .as_chunks::<2>()
+                                .0
+                                .iter()
                                 .map(|pair| u16::from_le_bytes([pair[0], pair[1]])),
                         ),
                         _ => {}

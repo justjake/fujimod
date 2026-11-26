@@ -6,29 +6,7 @@
   "manual": {
     "url": "https://dl.fujifilm-x.com/support/manual/x/fujifilm_xpro1_manual_en.pdf",
     "title": "FUJIFILM X-Pro1 Owner's Manual",
-    "pages": [
-      2,
-      3,
-      4,
-      5,
-      11,
-      17,
-      19,
-      20,
-      21,
-      25,
-      29,
-      30,
-      34,
-      43,
-      45,
-      47,
-      48,
-      49,
-      50,
-      56,
-      72
-    ]
+    "pages": [2, 3, 4, 5, 11, 17, 19, 20, 21, 25, 29, 30, 34, 43, 45, 47, 48, 49, 50, 56, 72]
   },
   "controls": {
     "ae_button": {

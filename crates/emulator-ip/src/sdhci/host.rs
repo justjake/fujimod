@@ -2022,6 +2022,10 @@ impl fujimod_emulator_devices::capability::CardSlot for SdHost {
     }
 }
 
+fn vendor_clear(vendor: &[u32; 8]) -> bool {
+    vendor.iter().all(|&word| word == 0)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -3239,8 +3243,4 @@ mod tests {
         assert!(h.effects.contains(&Effect::Write(0x40001000, 512)));
         assert_eq!(&h.bytes[0x1000..0x1200], &[0x7b; 512]);
     }
-}
-
-fn vendor_clear(vendor: &[u32; 8]) -> bool {
-    vendor.iter().all(|&word| word == 0)
 }

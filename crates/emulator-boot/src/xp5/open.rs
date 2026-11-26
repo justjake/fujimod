@@ -739,9 +739,9 @@ pub(crate) fn open_from(
             cpu.sysregs.icc_igrpen0_el1 = u32::from(parked).into();
             cpu.sysregs.icc_igrpen1_el1 = u32::from(parked).into();
         }
-        xp5_boot::startup_from_profile(&resolved, &profile, ticks_per_second)?
+        xp5_boot::startup_from_profile(resolved, &profile, ticks_per_second)?
     } else {
-        xp5_boot::startup_from_profile(&resolved, firmware_profile, ticks_per_second)?
+        xp5_boot::startup_from_profile(resolved, firmware_profile, ticks_per_second)?
     };
     if let Some(rom) = rom {
         let mpidr = Register::Arm64System(arm64::system_register("MPIDR_EL1")?);
@@ -992,13 +992,12 @@ pub(crate) fn open_from(
             {
                 occupied.push((mapping.address, mapping.size as u64));
             }
-            let planned =
-                plan_aperture(window.base, window.size as u64, &occupied).map_err(|error| {
-                    format!(
-                        "device window {} at {:#x}: {error}",
-                        window.kind, window.base
-                    )
-                })?;
+            let planned = plan_aperture(window.base, window.size, &occupied).map_err(|error| {
+                format!(
+                    "device window {} at {:#x}: {error}",
+                    window.kind, window.base
+                )
+            })?;
             if let Some((start, size)) = planned {
                 execution.peripherals.push(board::factory::Peripheral {
                     core,
@@ -1107,12 +1106,12 @@ pub(crate) fn open_from(
     {
         return Err("controls come from the body's catalog ladders, not the boot manifest".into());
     }
-    let ladders = fujimod_emulator_xp5_board::ladder_controls::ladders(&resolved)?;
+    let ladders = fujimod_emulator_xp5_board::ladder_controls::ladders(resolved)?;
     let panel = ladders
         .map(|options| -> Result<_, String> {
             Ok((
                 options,
-                fujimod_emulator_xp5_board::ladder_controls::panel_names(&resolved)?,
+                fujimod_emulator_xp5_board::ladder_controls::panel_names(resolved)?,
             ))
         })
         .transpose()?;
@@ -1121,7 +1120,7 @@ pub(crate) fn open_from(
         _ => return Err("X100VI run configuration has no XP5 scene".into()),
     };
     let mut windows = state.device.clone();
-    xp5_boot::apply_run_scene(&resolved, &mut windows, run_scene, ticks_per_second)?;
+    xp5_boot::apply_run_scene(resolved, &mut windows, run_scene, ticks_per_second)?;
     let outputs = crate::output::Outputs::default();
     let (windows, resources) = devices_and_resources(
         state,

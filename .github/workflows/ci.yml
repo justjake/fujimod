@@ -54,6 +54,8 @@ jobs:
           ref: ${{ inputs.ref || github.sha }}
           persist-credentials: false
       - uses: ./.github/actions/setup
+        with:
+          desktop: 'true'
       - name: Install JPEG development headers
         run: |
           sudo apt-get update
@@ -84,6 +86,7 @@ jobs:
       - run: pnpm run check:types
       - run: pnpm --filter fujimod run build
       - run: mise run javascript-lint
+      - run: pnpm --filter fujimod-web exec -- playwright install --with-deps chromium
       - if: ${{ !cancelled() }}
         run: mise run web-check
       - if: ${{ !cancelled() }}
@@ -100,7 +103,9 @@ jobs:
           persist-credentials: false
           submodules: recursive
       - uses: ./.github/actions/setup
-      - name: Install media tools
+        with:
+          desktop: 'true'
+      - name: Install coverage and media tools
         run: |
           sudo apt-get update
           sudo apt-get install -y libjpeg-dev

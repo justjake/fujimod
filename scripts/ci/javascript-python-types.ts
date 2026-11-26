@@ -94,6 +94,7 @@ function python(type: ts.Type, hint: string): string {
     if (type.aliasSymbol) return nameFor(type, hint);
     return [...new Set(type.types.map((part) => python(part, hint)))].join(' | ');
   }
+  if (type.isIntersection()) return nameFor(type, hint);
   const symbol = type.getSymbol()?.getName();
   const args = checker.getTypeArguments(type as ts.TypeReference);
   if (symbol === 'Promise') return `Awaitable[${python(args[0], `${hint}Result`)}]`;
@@ -133,12 +134,23 @@ function methods(method: string, signatures: readonly ts.Signature[], hint: stri
   ]);
 }
 
-const registrations = exports
+const registrations: string[] = exports
   .filter((symbol) => ['usb', 'catalog', 'valueSchemas'].includes(symbol.getName()))
   .map((symbol) => {
     const type = checker.getTypeOfSymbolAtLocation(symbol, symbol.valueDeclaration ?? file);
     return `${symbol.getName()}: ${python(type, symbol.getName())}`;
   });
+// The registered module also exposes this named import, which is not re-exported.
+for (const statement of file.statements) {
+  if (!ts.isImportDeclaration(statement)) continue;
+  const bindings = statement.importClause?.namedBindings;
+  if (!bindings || !ts.isNamedImports(bindings)) continue;
+  for (const element of bindings.elements) {
+    if (element.name.text !== 'valueSchemas') continue;
+    const type = checker.getTypeAtLocation(element);
+    registrations.push(`valueSchemas: ${python(type, 'valueSchemas')}`);
+  }
+}
 for (const symbol of exports.filter((item) =>
   ['UsbError', 'DefinitionError', 'ServiceCommandError'].includes(item.getName()),
 )) {

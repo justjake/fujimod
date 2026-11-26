@@ -178,7 +178,7 @@ mod tests {
         let error = read_files_within(&files, (5 << 20) - 1).unwrap_err();
         assert_eq!(error, "SD card files exceed 4 MiB total");
         // An X-Processor 5 update file (about 105 MiB) fits the shipped bound.
-        assert!(MAX_FILE_BYTES >= 128 << 20);
+        const _: () = assert!(MAX_FILE_BYTES >= 128 << 20);
         std::fs::remove_dir_all(&directory).unwrap();
     }
 

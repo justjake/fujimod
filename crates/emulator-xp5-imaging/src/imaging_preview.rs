@@ -104,7 +104,7 @@ impl Io {
             return false;
         }
         trace(|| format!("queue {count} entries at {address:#x} t={}", cx.now()));
-        for entry in entries.chunks_exact(8) {
+        for entry in entries.as_chunks::<8>().0.iter() {
             let value = u32::from_le_bytes(entry[..4].try_into().unwrap());
             let target = u32::from_le_bytes(entry[4..].try_into().unwrap());
             trace(|| format!("Q {target:08x} {value:08x}"));

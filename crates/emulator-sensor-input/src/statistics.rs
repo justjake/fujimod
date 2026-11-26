@@ -96,18 +96,6 @@ impl FocusWindow {
             height: height / Self::Y.1,
         })
     }
-
-    /// The full-frame grid of [`FOCUS_COLUMNS`] x [`FOCUS_ROWS`] cells.
-    fn full() -> Self {
-        Self {
-            columns: FOCUS_COLUMNS,
-            rows: FOCUS_ROWS,
-            x: 0.,
-            y: 0.,
-            width: 1. / FOCUS_COLUMNS as f64,
-            height: 1. / FOCUS_ROWS as f64,
-        }
-    }
 }
 
 /// The focus (contrast AF) statistics of the X-T5 preview input buffer for one frame.
@@ -184,10 +172,10 @@ impl FocusFrame {
             ]
         });
         let key = (now, exposure.to_bits(), window_key);
-        if let Some((kept_key, kept)) = KEPT.lock().unwrap_or_else(|e| e.into_inner()).as_ref() {
-            if *kept_key == key {
-                return Ok(kept.clone());
-            }
+        if let Some((kept_key, kept)) = KEPT.lock().unwrap_or_else(|e| e.into_inner()).as_ref()
+            && *kept_key == key
+        {
+            return Ok(kept.clone());
         }
         let defocus = focus::sample(now).unwrap_or_default();
         let made = match frame::host_scene() {
@@ -946,7 +934,7 @@ mod tests {
         let raster: Vec<u8> = (0..FOCUS_WIDTH * FOCUS_LINES)
             .flat_map(|i| {
                 let x = i % FOCUS_WIDTH;
-                if x > FOCUS_WIDTH / 2 + 8 && (x / 16) % 2 == 0 {
+                if x > FOCUS_WIDTH / 2 + 8 && (x / 16).is_multiple_of(2) {
                     [220u8; 3]
                 } else {
                     [30u8; 3]
@@ -975,7 +963,7 @@ mod tests {
     fn focus_frame_falls_with_the_blur_circle() {
         let bars: Vec<u8> = (0..FOCUS_WIDTH * FOCUS_LINES)
             .flat_map(|i| {
-                if (i % FOCUS_WIDTH) / 64 % 2 == 0 {
+                if ((i % FOCUS_WIDTH) / 64).is_multiple_of(2) {
                     [30u8; 3]
                 } else {
                     [220u8; 3]

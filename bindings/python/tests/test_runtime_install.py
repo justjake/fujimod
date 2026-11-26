@@ -11,7 +11,7 @@ from fujimod.usb import memory, research, testing
 LIMITS = usb.FirmwareLimits(memory_read=64, memory_write=64, configuration=1, console=1)
 
 
-def image():
+def image() -> usb.RuntimeImage:
     data = bytearray(256)
     struct.pack_into("<2I", data, 64, 0x12345678, 7)
     return usb.RuntimeImage(
@@ -60,25 +60,31 @@ def image():
     )
 
 
+def lease(installer: Installer) -> dict[str, object]:
+    value = installer.lease
+    assert value is not None
+    return value
+
+
 class Peer:
-    def __init__(self):
+    def __init__(self) -> None:
         self.ram = {0x3000: 1}
         self.pending = b""
         self.operation = 0
         self.replay = False
 
-    def get(self, address, size):
+    def get(self, address: int, size: int) -> bytes:
         return bytes(self.ram.get(address + i, 0) for i in range(size))
 
-    def put(self, address, data):
+    def put(self, address: int, data: bytes) -> None:
         self.ram.update((address + i, value) for i, value in enumerate(data))
 
-    def control(self, envelope):
+    def control(self, envelope: bytes) -> None:
         self.operation = envelope[0]
         if self.operation == 0xC0:
             self.pending = b"\x2a\0\0\0\0\0\0\x40"
 
-    def write(self, raw):
+    def write(self, raw: bytes) -> None:
         (code,) = struct.unpack_from("<I", raw)
         if code == 0x200001:
             function, _, _, address, size = struct.unpack_from("<5I", raw, 16)
@@ -116,52 +122,52 @@ class Peer:
         else:
             raise AssertionError(code)
 
-    def read(self, maximum):
+    def read(self, maximum: int) -> bytes:
         assert len(self.pending) <= maximum
         return self.pending
 
 
 class Body:
-    def __init__(self, session):
+    def __init__(self, session: usb.Session) -> None:
         self.session = session
         self.events = []
         self.failure = None
 
-    async def allocate(self, size, align):
+    async def allocate(self, size: int, align: int) -> int:
         self.events.append("allocate")
         assert size == 256 and align == 32
         return 0x2000
 
-    async def free(self, base):
+    async def free(self, base: int) -> None:
         self.events.append("free")
         assert base == 0x2000
 
-    async def placed(self, image, lease):
+    async def placed(self, image: usb.RuntimeImage, lease: dict[str, object]) -> None:
         self.events.append("placed")
         assert lease["base"] == 0x2000
 
-    async def read(self, address, size):
+    async def read(self, address: int, size: int) -> bytes:
         return await memory.read_range(self.session, address, size)
 
-    async def write(self, address, data):
+    async def write(self, address: int, data: bytes) -> None:
         if self.failure == "write":
             raise ValueError("upload failed")
         await memory.write_range(self.session, address, data)
 
-    async def read_many(self, ranges):
+    async def read_many(self, ranges: list[tuple[int, int]]) -> list[bytes]:
         return [await self.read(address, size) for address, size in ranges]
 
-    async def write_many(self, writes):
+    async def write_many(self, writes: list[tuple[int, bytes]]) -> None:
         for address, data in writes:
             await self.write(address, data)
 
-    async def synchronize(self, address, size):
+    async def synchronize(self, address: int, size: int) -> None:
         self.events.append("synchronize")
 
-    async def protect(self, address, size):
+    async def protect(self, address: int, size: int) -> None:
         self.events.append("protect")
 
-    async def control(self, entry, operation):
+    async def control(self, entry: int, operation: int) -> None:
         self.events.append("control")
         if self.failure == "control":
             raise ValueError("control failed")
@@ -181,7 +187,7 @@ class Body:
 
 
 @pytest.mark.parametrize("failure", [None, "write", "control"])
-async def test_install_and_failure_retention(failure):
+async def test_install_and_failure_retention(failure: str | None) -> None:
     peer = Peer()
     session = await testing.peer_session(peer, LIMITS, ep_in=0x82, ep_out=1)
     body = Body(session)
@@ -192,24 +198,24 @@ async def test_install_and_failure_retention(failure):
             with pytest.raises(RuntimeInstallError, match="failed"):
                 await installer.install(11)
             assert ("free" in body.events) == (failure == "write")
-            assert installer.lease["publication_attempted"] == (failure == "control")
+            assert lease(installer)["publication_attempted"] == (failure == "control")
         else:
             await installer.install(11)
-            assert installer.lease["installed"]
+            assert lease(installer)["installed"]
             await installer.status(13)
             await installer.set(0x20C0, b"data")
             assert await installer.read(0x20C0, 4) == b"data"
             await installer.rollback(14)
-            assert not installer.lease["installed"]
+            assert not lease(installer)["installed"]
             assert (
-                installer.lease["publication_attempted"] and "free" not in body.events
+                lease(installer)["publication_attempted"] and "free" not in body.events
             )
             assert peer.get(0x400, 4) == bytes(4)
     finally:
         session.abandon()
 
 
-async def test_stale_mailbox_keeps_publication_lease():
+async def test_stale_mailbox_keeps_publication_lease() -> None:
     peer = Peer()
     peer.replay = True
     session = await testing.peer_session(peer, LIMITS, ep_in=0x82, ep_out=1)
@@ -218,12 +224,12 @@ async def test_stale_mailbox_keeps_publication_lease():
     try:
         with pytest.raises(RuntimeInstallError, match="mailbox"):
             await installer.install(11)
-        assert installer.lease["publication_attempted"] and "free" not in body.events
+        assert lease(installer)["publication_attempted"] and "free" not in body.events
     finally:
         session.abandon()
 
 
-async def test_preparation_upload_and_readback_use_script():
+async def test_preparation_upload_and_readback_use_script() -> None:
     from .test_usb_callback import command, control, read
 
     E = testing.Exchange
@@ -244,19 +250,19 @@ async def test_preparation_upload_and_readback_use_script():
     try:
         await installer.prepare()
         assert script.remaining == 0
-        assert not installer.lease["publication_attempted"]
+        assert not lease(installer)["publication_attempted"]
         assert body.events == ["allocate", "placed", "synchronize", "protect"]
     finally:
         session.abandon()
 
 
 @pytest.mark.parametrize("fail", [False, True])
-async def test_python_relink_callback_receives_allocated_base(fail):
+async def test_python_relink_callback_receives_allocated_base(fail: bool) -> None:
     peer = Peer()
     session = await testing.peer_session(peer, LIMITS, ep_in=0x82, ep_out=1)
     bases = []
 
-    def rebuild(base):
+    def rebuild(base: int) -> usb.RuntimeImage:
         bases.append(base)
         if fail:
             raise ValueError("relink failed")
@@ -268,10 +274,10 @@ async def test_python_relink_callback_receives_allocated_base(fail):
         if fail:
             with pytest.raises(RuntimeInstallError, match="relink failed"):
                 await installer.install(11)
-            assert "free" in body.events and installer.lease["freed"]
+            assert "free" in body.events and lease(installer)["freed"]
         else:
             await installer.install(11)
-            assert installer.lease["installed"]
+            assert lease(installer)["installed"]
         assert bases == [0x2000]
     finally:
         session.abandon()

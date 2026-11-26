@@ -17,10 +17,7 @@
   "evidence": [
     {
       "kind": "located",
-      "firmware_ids": [
-        "xh2-530",
-        "xh2s-730"
-      ]
+      "firmware_ids": ["xh2-530", "xh2s-730"]
     }
   ]
 }

@@ -17,9 +17,7 @@
   "evidence": [
     {
       "kind": "located",
-      "firmware_ids": [
-        "xt3-511"
-      ]
+      "firmware_ids": ["xt3-511"]
     }
   ]
 }

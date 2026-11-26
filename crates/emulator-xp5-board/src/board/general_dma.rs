@@ -274,7 +274,7 @@ pub fn register_all(
         // GIC SPIs start at INTID 32 and the architecture ends them at 1019.
         if wiring
             .a53_irq_base
-            .is_some_and(|base| base < 32 || base > 1019 - 15)
+            .is_some_and(|base| !(32..=1019 - 15).contains(&base))
         {
             return Err("general-DMA A53 IRQ base must leave 16 SPIs in 32..1019".into());
         }

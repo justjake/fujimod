@@ -22,11 +22,7 @@
               "type": "string"
             }
           },
-          "required": [
-            "kind",
-            "configuration_base",
-            "caches"
-          ],
+          "required": ["kind", "configuration_base", "caches"],
           "type": "object"
         },
         {
@@ -103,11 +99,7 @@
           "description": "Initially selected target IDs."
         }
       },
-      "required": [
-        "id",
-        "initial",
-        "choices"
-      ],
+      "required": ["id", "initial", "choices"],
       "type": "object"
     },
     "AddressMapping": {
@@ -146,14 +138,7 @@
           "description": "Mapping extent, including a body DRAM reference when applicable."
         }
       },
-      "required": [
-        "id",
-        "core",
-        "address",
-        "physical",
-        "size",
-        "permissions"
-      ],
+      "required": ["id", "core", "address", "physical", "size", "permissions"],
       "type": "object"
     },
     "BlockDevice": {
@@ -165,10 +150,7 @@
           "properties": {
             "basis": {
               "description": "Declared basis.",
-              "type": [
-                "string",
-                "null"
-              ]
+              "type": ["string", "null"]
             },
             "channels": {
               "description": "Number of DMA channels.",
@@ -193,17 +175,10 @@
             },
             "timing": {
               "description": "Declared transfer timing.",
-              "type": [
-                "string",
-                "null"
-              ]
+              "type": ["string", "null"]
             }
           },
-          "required": [
-            "model",
-            "channels",
-            "request_mux_block_id"
-          ],
+          "required": ["model", "channels", "request_mux_block_id"],
           "type": "object"
         },
         {
@@ -218,17 +193,11 @@
               "description": "Aperture bytes used by the device model, when it differs from the block size.",
               "format": "uint64",
               "minimum": 0,
-              "type": [
-                "integer",
-                "null"
-              ]
+              "type": ["integer", "null"]
             },
             "basis": {
               "description": "Declared basis.",
-              "type": [
-                "string",
-                "null"
-              ]
+              "type": ["string", "null"]
             },
             "model": {
               "const": "serial_flash",
@@ -243,16 +212,10 @@
             },
             "timing": {
               "description": "Declared command timing.",
-              "type": [
-                "string",
-                "null"
-              ]
+              "type": ["string", "null"]
             }
           },
-          "required": [
-            "model",
-            "aperture_block_id"
-          ],
+          "required": ["model", "aperture_block_id"],
           "type": "object"
         },
         {
@@ -267,10 +230,7 @@
             },
             "basis": {
               "description": "Declared basis.",
-              "type": [
-                "string",
-                "null"
-              ]
+              "type": ["string", "null"]
             },
             "model": {
               "const": "imaging_input_buffer",
@@ -280,21 +240,14 @@
               "description": "Ticks for the input buffer reset.",
               "format": "uint64",
               "minimum": 0,
-              "type": [
-                "integer",
-                "null"
-              ]
+              "type": ["integer", "null"]
             },
             "sram_region_id": {
               "description": "SRAM memory-region identity.",
               "type": "string"
             }
           },
-          "required": [
-            "model",
-            "sram_region_id",
-            "bank_bytes"
-          ],
+          "required": ["model", "sram_region_id", "bank_bytes"],
           "type": "object"
         },
         {
@@ -303,10 +256,7 @@
           "properties": {
             "basis": {
               "description": "Declared basis.",
-              "type": [
-                "string",
-                "null"
-              ]
+              "type": ["string", "null"]
             },
             "clear_bits": {
               "description": "Bits a completed output request leaves clear.",
@@ -317,19 +267,13 @@
             },
             "frame_basis": {
               "description": "Frame-law basis, kept separately from the output basis.",
-              "type": [
-                "string",
-                "null"
-              ]
+              "type": ["string", "null"]
             },
             "handshake_ticks": {
               "description": "Delay of the bit-16 request handshake.",
               "format": "uint64",
               "minimum": 0,
-              "type": [
-                "integer",
-                "null"
-              ]
+              "type": ["integer", "null"]
             },
             "model": {
               "const": "display",
@@ -339,19 +283,13 @@
               "description": "Position of this window in the declared display-output order.",
               "format": "uint32",
               "minimum": 0,
-              "type": [
-                "integer",
-                "null"
-              ]
+              "type": ["integer", "null"]
             },
             "period_ticks": {
               "description": "Frame period in device ticks, when the block declares the frame law.",
               "format": "uint64",
               "minimum": 0,
-              "type": [
-                "integer",
-                "null"
-              ]
+              "type": ["integer", "null"]
             },
             "picture_layout": {
               "anyOf": [
@@ -369,10 +307,7 @@
               "description": "Pixel-clock ticks per pixel, when declared.",
               "format": "uint64",
               "minimum": 0,
-              "type": [
-                "integer",
-                "null"
-              ]
+              "type": ["integer", "null"]
             },
             "scanout": {
               "anyOf": [
@@ -416,9 +351,7 @@
               "description": "Video-plane packing, when specified."
             }
           },
-          "required": [
-            "model"
-          ],
+          "required": ["model"],
           "type": "object"
         },
         {
@@ -442,11 +375,7 @@
               "type": "integer"
             }
           },
-          "required": [
-            "model",
-            "receive_request",
-            "transmit_request"
-          ],
+          "required": ["model", "receive_request", "transmit_request"],
           "type": "object"
         },
         {
@@ -464,10 +393,7 @@
               "type": "string"
             }
           },
-          "required": [
-            "model",
-            "companion_irq_base"
-          ],
+          "required": ["model", "companion_irq_base"],
           "type": "object"
         },
         {
@@ -476,10 +402,7 @@
           "properties": {
             "basis": {
               "description": "Declared basis.",
-              "type": [
-                "string",
-                "null"
-              ]
+              "type": ["string", "null"]
             },
             "cpu_interface_block_id": {
               "description": "CPU-interface register block identity.",
@@ -496,11 +419,7 @@
               "type": "string"
             }
           },
-          "required": [
-            "model",
-            "cpu_interface_block_id",
-            "lines"
-          ],
+          "required": ["model", "cpu_interface_block_id", "lines"],
           "type": "object"
         },
         {
@@ -509,10 +428,7 @@
           "properties": {
             "basis": {
               "description": "Declared basis.",
-              "type": [
-                "string",
-                "null"
-              ]
+              "type": ["string", "null"]
             },
             "lines": {
               "description": "Number of implemented interrupt lines.",
@@ -535,12 +451,7 @@
               "type": "integer"
             }
           },
-          "required": [
-            "model",
-            "redistributor_block_id",
-            "redistributor_stride",
-            "lines"
-          ],
+          "required": ["model", "redistributor_block_id", "redistributor_stride", "lines"],
           "type": "object"
         },
         {
@@ -565,17 +476,10 @@
               "description": "Ticks for the sensor command window reset.",
               "format": "uint64",
               "minimum": 0,
-              "type": [
-                "integer",
-                "null"
-              ]
+              "type": ["integer", "null"]
             }
           },
-          "required": [
-            "model",
-            "command_ticks",
-            "basis"
-          ],
+          "required": ["model", "command_ticks", "basis"],
           "type": "object"
         },
         {
@@ -591,10 +495,7 @@
               "type": "string"
             }
           },
-          "required": [
-            "model",
-            "basis"
-          ],
+          "required": ["model", "basis"],
           "type": "object"
         },
         {
@@ -624,11 +525,7 @@
               "type": "array"
             }
           },
-          "required": [
-            "model",
-            "offsets",
-            "modes"
-          ],
+          "required": ["model", "offsets", "modes"],
           "type": "object"
         },
         {
@@ -640,9 +537,7 @@
               "type": "string"
             }
           },
-          "required": [
-            "model"
-          ],
+          "required": ["model"],
           "type": "object"
         },
         {
@@ -654,9 +549,7 @@
               "type": "string"
             }
           },
-          "required": [
-            "model"
-          ],
+          "required": ["model"],
           "type": "object"
         },
         {
@@ -668,9 +561,7 @@
               "type": "string"
             }
           },
-          "required": [
-            "model"
-          ],
+          "required": ["model"],
           "type": "object"
         },
         {
@@ -679,19 +570,14 @@
           "properties": {
             "basis": {
               "description": "Declared basis.",
-              "type": [
-                "string",
-                "null"
-              ]
+              "type": ["string", "null"]
             },
             "model": {
               "const": "decompressor",
               "type": "string"
             }
           },
-          "required": [
-            "model"
-          ],
+          "required": ["model"],
           "type": "object"
         },
         {
@@ -700,19 +586,14 @@
           "properties": {
             "basis": {
               "description": "Declared basis.",
-              "type": [
-                "string",
-                "null"
-              ]
+              "type": ["string", "null"]
             },
             "model": {
               "const": "usb",
               "type": "string"
             }
           },
-          "required": [
-            "model"
-          ],
+          "required": ["model"],
           "type": "object"
         },
         {
@@ -721,19 +602,14 @@
           "properties": {
             "basis": {
               "description": "Declared basis.",
-              "type": [
-                "string",
-                "null"
-              ]
+              "type": ["string", "null"]
             },
             "model": {
               "const": "usb_phy",
               "type": "string"
             }
           },
-          "required": [
-            "model"
-          ],
+          "required": ["model"],
           "type": "object"
         },
         {
@@ -755,11 +631,7 @@
               "type": "integer"
             }
           },
-          "required": [
-            "model",
-            "settle_ticks",
-            "basis"
-          ],
+          "required": ["model", "settle_ticks", "basis"],
           "type": "object"
         },
         {
@@ -775,10 +647,7 @@
               "type": "string"
             }
           },
-          "required": [
-            "model",
-            "basis"
-          ],
+          "required": ["model", "basis"],
           "type": "object"
         },
         {
@@ -800,11 +669,7 @@
               "type": "integer"
             }
           },
-          "required": [
-            "model",
-            "sample_ticks",
-            "basis"
-          ],
+          "required": ["model", "sample_ticks", "basis"],
           "type": "object"
         },
         {
@@ -820,10 +685,7 @@
               "type": "string"
             }
           },
-          "required": [
-            "model",
-            "basis"
-          ],
+          "required": ["model", "basis"],
           "type": "object"
         },
         {
@@ -832,10 +694,7 @@
           "properties": {
             "basis": {
               "description": "Declared basis.",
-              "type": [
-                "string",
-                "null"
-              ]
+              "type": ["string", "null"]
             },
             "model": {
               "const": "movdc",
@@ -848,10 +707,7 @@
               "type": "integer"
             }
           },
-          "required": [
-            "model",
-            "reset_ticks"
-          ],
+          "required": ["model", "reset_ticks"],
           "type": "object"
         },
         {
@@ -879,12 +735,7 @@
               "type": "integer"
             }
           },
-          "required": [
-            "model",
-            "ack_ticks",
-            "request_offset",
-            "basis"
-          ],
+          "required": ["model", "ack_ticks", "request_offset", "basis"],
           "type": "object"
         },
         {
@@ -912,12 +763,7 @@
               "type": "integer"
             }
           },
-          "required": [
-            "model",
-            "ack_ticks",
-            "request_offset",
-            "basis"
-          ],
+          "required": ["model", "ack_ticks", "request_offset", "basis"],
           "type": "object"
         },
         {
@@ -933,10 +779,7 @@
               "type": "string"
             }
           },
-          "required": [
-            "model",
-            "basis"
-          ],
+          "required": ["model", "basis"],
           "type": "object"
         },
         {
@@ -958,11 +801,7 @@
               "type": "integer"
             }
           },
-          "required": [
-            "model",
-            "parent_clock_ticks",
-            "basis"
-          ],
+          "required": ["model", "parent_clock_ticks", "basis"],
           "type": "object"
         },
         {
@@ -986,12 +825,7 @@
               "type": "string"
             }
           },
-          "required": [
-            "model",
-            "layout",
-            "clock",
-            "basis"
-          ],
+          "required": ["model", "layout", "clock", "basis"],
           "type": "object"
         },
         {
@@ -1053,17 +887,10 @@
               "description": "Position in the declared register-block order.",
               "format": "uint32",
               "minimum": 0,
-              "type": [
-                "integer",
-                "null"
-              ]
+              "type": ["integer", "null"]
             }
           },
-          "required": [
-            "model",
-            "idle_bits",
-            "basis"
-          ],
+          "required": ["model", "idle_bits", "basis"],
           "type": "object"
         },
         {
@@ -1095,13 +922,7 @@
               "type": "string"
             }
           },
-          "required": [
-            "model",
-            "setup_ticks",
-            "bytes_per_tick",
-            "timing",
-            "basis"
-          ],
+          "required": ["model", "setup_ticks", "bytes_per_tick", "timing", "basis"],
           "type": "object"
         },
         {
@@ -1117,10 +938,7 @@
               "type": "string"
             }
           },
-          "required": [
-            "model",
-            "basis"
-          ],
+          "required": ["model", "basis"],
           "type": "object"
         },
         {
@@ -1133,10 +951,7 @@
             },
             "memory_type_block_id": {
               "description": "Block holding the encoder's memory type word, when declared.",
-              "type": [
-                "string",
-                "null"
-              ]
+              "type": ["string", "null"]
             },
             "model": {
               "const": "jpeg_codec",
@@ -1149,11 +964,7 @@
               "type": "integer"
             }
           },
-          "required": [
-            "model",
-            "run_ticks",
-            "basis"
-          ],
+          "required": ["model", "run_ticks", "basis"],
           "type": "object"
         },
         {
@@ -1175,11 +986,7 @@
               "type": "integer"
             }
           },
-          "required": [
-            "model",
-            "run_ticks",
-            "basis"
-          ],
+          "required": ["model", "run_ticks", "basis"],
           "type": "object"
         },
         {
@@ -1270,12 +1077,7 @@
               "type": "integer"
             }
           },
-          "required": [
-            "model",
-            "command_ticks",
-            "transaction_ticks",
-            "basis"
-          ],
+          "required": ["model", "command_ticks", "transaction_ticks", "basis"],
           "type": "object"
         },
         {
@@ -1297,10 +1099,7 @@
               "description": "Delay of the bit-16 request handshake.",
               "format": "uint64",
               "minimum": 0,
-              "type": [
-                "integer",
-                "null"
-              ]
+              "type": ["integer", "null"]
             },
             "model": {
               "const": "display_output",
@@ -1310,10 +1109,7 @@
               "description": "Position of this window in the declared display-output order.",
               "format": "uint32",
               "minimum": 0,
-              "type": [
-                "integer",
-                "null"
-              ]
+              "type": ["integer", "null"]
             },
             "scanout": {
               "anyOf": [
@@ -1334,12 +1130,7 @@
               "type": "array"
             }
           },
-          "required": [
-            "model",
-            "set_bits",
-            "clear_bits",
-            "basis"
-          ],
+          "required": ["model", "set_bits", "clear_bits", "basis"],
           "type": "object"
         },
         {
@@ -1361,11 +1152,7 @@
               "type": "string"
             }
           },
-          "required": [
-            "model",
-            "lock_ticks",
-            "basis"
-          ],
+          "required": ["model", "lock_ticks", "basis"],
           "type": "object"
         },
         {
@@ -1392,10 +1179,7 @@
               "description": "Sensor read-out law, when declared."
             }
           },
-          "required": [
-            "model",
-            "basis"
-          ],
+          "required": ["model", "basis"],
           "type": "object"
         },
         {
@@ -1417,11 +1201,7 @@
               "type": "integer"
             }
           },
-          "required": [
-            "model",
-            "period_ticks",
-            "basis"
-          ],
+          "required": ["model", "period_ticks", "basis"],
           "type": "object"
         },
         {
@@ -1437,10 +1217,7 @@
               "type": "string"
             }
           },
-          "required": [
-            "model",
-            "basis"
-          ],
+          "required": ["model", "basis"],
           "type": "object"
         },
         {
@@ -1479,13 +1256,7 @@
               "type": "array"
             }
           },
-          "required": [
-            "model",
-            "interrupts",
-            "period_ticks",
-            "sources",
-            "basis"
-          ],
+          "required": ["model", "interrupts", "period_ticks", "sources", "basis"],
           "type": "object"
         },
         {
@@ -1501,10 +1272,7 @@
               "type": "string"
             }
           },
-          "required": [
-            "model",
-            "basis"
-          ],
+          "required": ["model", "basis"],
           "type": "object"
         },
         {
@@ -1520,10 +1288,7 @@
               "type": "string"
             }
           },
-          "required": [
-            "model",
-            "basis"
-          ],
+          "required": ["model", "basis"],
           "type": "object"
         },
         {
@@ -1539,10 +1304,7 @@
               "type": "string"
             }
           },
-          "required": [
-            "model",
-            "basis"
-          ],
+          "required": ["model", "basis"],
           "type": "object"
         },
         {
@@ -1564,11 +1326,7 @@
               "type": "string"
             }
           },
-          "required": [
-            "model",
-            "byte_ticks",
-            "basis"
-          ],
+          "required": ["model", "byte_ticks", "basis"],
           "type": "object"
         },
         {
@@ -1602,13 +1360,7 @@
               "type": "integer"
             }
           },
-          "required": [
-            "model",
-            "fifo_depth",
-            "clock_hz",
-            "tick_hz",
-            "basis"
-          ],
+          "required": ["model", "fifo_depth", "clock_hz", "tick_hz", "basis"],
           "type": "object"
         },
         {
@@ -1684,11 +1436,7 @@
               "type": "integer"
             }
           },
-          "required": [
-            "model",
-            "run_ticks",
-            "basis"
-          ],
+          "required": ["model", "run_ticks", "basis"],
           "type": "object"
         },
         {
@@ -1697,10 +1445,7 @@
           "properties": {
             "basis": {
               "description": "Declared basis.",
-              "type": [
-                "string",
-                "null"
-              ]
+              "type": ["string", "null"]
             },
             "engine": {
               "$ref": "#/$defs/StillEngineKind",
@@ -1724,11 +1469,7 @@
               "type": "integer"
             }
           },
-          "required": [
-            "model",
-            "engine",
-            "run_ticks"
-          ],
+          "required": ["model", "engine", "run_ticks"],
           "type": "object"
         },
         {
@@ -1737,10 +1478,7 @@
           "properties": {
             "basis": {
               "description": "Declared basis.",
-              "type": [
-                "string",
-                "null"
-              ]
+              "type": ["string", "null"]
             },
             "evidence": {
               "description": "Evidence for the declared timing, when it is a stand-in.",
@@ -1764,11 +1502,7 @@
               "type": "integer"
             }
           },
-          "required": [
-            "model",
-            "run_ticks",
-            "memory_types_block_id"
-          ],
+          "required": ["model", "run_ticks", "memory_types_block_id"],
           "type": "object"
         },
         {
@@ -1777,10 +1511,7 @@
           "properties": {
             "basis": {
               "description": "Declared basis.",
-              "type": [
-                "string",
-                "null"
-              ]
+              "type": ["string", "null"]
             },
             "evidence": {
               "description": "Evidence for the declared timing, when it is a stand-in.",
@@ -1800,10 +1531,7 @@
               "type": "integer"
             }
           },
-          "required": [
-            "model",
-            "run_ticks"
-          ],
+          "required": ["model", "run_ticks"],
           "type": "object"
         },
         {
@@ -1812,10 +1540,7 @@
           "properties": {
             "basis": {
               "description": "Declared basis.",
-              "type": [
-                "string",
-                "null"
-              ]
+              "type": ["string", "null"]
             },
             "channels": {
               "description": "Number of channels.",
@@ -1832,11 +1557,7 @@
               "type": "string"
             }
           },
-          "required": [
-            "model",
-            "channels",
-            "counter_block_id"
-          ],
+          "required": ["model", "channels", "counter_block_id"],
           "type": "object"
         },
         {
@@ -1845,19 +1566,14 @@
           "properties": {
             "basis": {
               "description": "Declared basis.",
-              "type": [
-                "string",
-                "null"
-              ]
+              "type": ["string", "null"]
             },
             "model": {
               "const": "usb_condition",
               "type": "string"
             }
           },
-          "required": [
-            "model"
-          ],
+          "required": ["model"],
           "type": "object"
         },
         {
@@ -1877,11 +1593,7 @@
               "type": "string"
             }
           },
-          "required": [
-            "model",
-            "focus_capture",
-            "basis"
-          ],
+          "required": ["model", "focus_capture", "basis"],
           "type": "object"
         },
         {
@@ -1897,10 +1609,7 @@
               "type": "string"
             }
           },
-          "required": [
-            "model",
-            "basis"
-          ],
+          "required": ["model", "basis"],
           "type": "object"
         },
         {
@@ -1916,10 +1625,7 @@
               "type": "string"
             }
           },
-          "required": [
-            "model",
-            "basis"
-          ],
+          "required": ["model", "basis"],
           "type": "object"
         },
         {
@@ -1935,10 +1641,7 @@
               "type": "string"
             }
           },
-          "required": [
-            "model",
-            "basis"
-          ],
+          "required": ["model", "basis"],
           "type": "object"
         },
         {
@@ -1954,10 +1657,7 @@
               "type": "string"
             }
           },
-          "required": [
-            "model",
-            "basis"
-          ],
+          "required": ["model", "basis"],
           "type": "object"
         },
         {
@@ -1972,20 +1672,14 @@
               "description": "Initial configuration word, when the driver writes one.",
               "format": "uint64",
               "minimum": 0,
-              "type": [
-                "integer",
-                "null"
-              ]
+              "type": ["integer", "null"]
             },
             "model": {
               "const": "gates",
               "type": "string"
             }
           },
-          "required": [
-            "model",
-            "basis"
-          ],
+          "required": ["model", "basis"],
           "type": "object"
         },
         {
@@ -2001,10 +1695,7 @@
               "type": "string"
             }
           },
-          "required": [
-            "model",
-            "basis"
-          ],
+          "required": ["model", "basis"],
           "type": "object"
         },
         {
@@ -2020,10 +1711,7 @@
               "type": "string"
             }
           },
-          "required": [
-            "model",
-            "basis"
-          ],
+          "required": ["model", "basis"],
           "type": "object"
         },
         {
@@ -2034,10 +1722,7 @@
               "description": "First interrupt line presented to the application cores, when declared.",
               "format": "uint32",
               "minimum": 0,
-              "type": [
-                "integer",
-                "null"
-              ]
+              "type": ["integer", "null"]
             },
             "basis": {
               "description": "Declared basis.",
@@ -2047,20 +1732,14 @@
               "description": "First interrupt line presented to the companion core, when declared.",
               "format": "uint32",
               "minimum": 0,
-              "type": [
-                "integer",
-                "null"
-              ]
+              "type": ["integer", "null"]
             },
             "model": {
               "const": "general_dma",
               "type": "string"
             }
           },
-          "required": [
-            "model",
-            "basis"
-          ],
+          "required": ["model", "basis"],
           "type": "object"
         },
         {
@@ -2088,12 +1767,7 @@
               "type": "integer"
             }
           },
-          "required": [
-            "model",
-            "setup_ticks",
-            "bytes_per_tick",
-            "basis"
-          ],
+          "required": ["model", "setup_ticks", "bytes_per_tick", "basis"],
           "type": "object"
         },
         {
@@ -2109,10 +1783,7 @@
               "type": "string"
             }
           },
-          "required": [
-            "model",
-            "basis"
-          ],
+          "required": ["model", "basis"],
           "type": "object"
         },
         {
@@ -2128,10 +1799,7 @@
               "type": "string"
             }
           },
-          "required": [
-            "model",
-            "basis"
-          ],
+          "required": ["model", "basis"],
           "type": "object"
         },
         {
@@ -2147,10 +1815,7 @@
               "type": "string"
             }
           },
-          "required": [
-            "model",
-            "basis"
-          ],
+          "required": ["model", "basis"],
           "type": "object"
         },
         {
@@ -2166,10 +1831,7 @@
               "type": "string"
             }
           },
-          "required": [
-            "model",
-            "basis"
-          ],
+          "required": ["model", "basis"],
           "type": "object"
         },
         {
@@ -2185,10 +1847,7 @@
               "type": "string"
             }
           },
-          "required": [
-            "model",
-            "basis"
-          ],
+          "required": ["model", "basis"],
           "type": "object"
         },
         {
@@ -2210,11 +1869,7 @@
               "type": "string"
             }
           },
-          "required": [
-            "model",
-            "commit_ticks",
-            "basis"
-          ],
+          "required": ["model", "commit_ticks", "basis"],
           "type": "object"
         },
         {
@@ -2230,10 +1885,7 @@
               "type": "string"
             }
           },
-          "required": [
-            "model",
-            "basis"
-          ],
+          "required": ["model", "basis"],
           "type": "object"
         },
         {
@@ -2249,10 +1901,7 @@
               "type": "string"
             }
           },
-          "required": [
-            "model",
-            "basis"
-          ],
+          "required": ["model", "basis"],
           "type": "object"
         },
         {
@@ -2274,11 +1923,7 @@
               "type": "string"
             }
           },
-          "required": [
-            "model",
-            "clock_ticks",
-            "basis"
-          ],
+          "required": ["model", "clock_ticks", "basis"],
           "type": "object"
         },
         {
@@ -2294,10 +1939,7 @@
               "type": "string"
             }
           },
-          "required": [
-            "model",
-            "basis"
-          ],
+          "required": ["model", "basis"],
           "type": "object"
         },
         {
@@ -2313,10 +1955,7 @@
               "type": "string"
             }
           },
-          "required": [
-            "model",
-            "basis"
-          ],
+          "required": ["model", "basis"],
           "type": "object"
         },
         {
@@ -2332,10 +1971,7 @@
               "type": "string"
             }
           },
-          "required": [
-            "model",
-            "basis"
-          ],
+          "required": ["model", "basis"],
           "type": "object"
         },
         {
@@ -2351,10 +1987,7 @@
               "type": "string"
             }
           },
-          "required": [
-            "model",
-            "basis"
-          ],
+          "required": ["model", "basis"],
           "type": "object"
         },
         {
@@ -2370,10 +2003,7 @@
               "type": "string"
             }
           },
-          "required": [
-            "model",
-            "basis"
-          ],
+          "required": ["model", "basis"],
           "type": "object"
         },
         {
@@ -2389,10 +2019,7 @@
               "type": "string"
             }
           },
-          "required": [
-            "model",
-            "basis"
-          ],
+          "required": ["model", "basis"],
           "type": "object"
         },
         {
@@ -2408,10 +2035,7 @@
               "type": "string"
             }
           },
-          "required": [
-            "model",
-            "basis"
-          ],
+          "required": ["model", "basis"],
           "type": "object"
         },
         {
@@ -2427,10 +2051,7 @@
               "type": "string"
             }
           },
-          "required": [
-            "model",
-            "basis"
-          ],
+          "required": ["model", "basis"],
           "type": "object"
         },
         {
@@ -2446,10 +2067,7 @@
               "type": "string"
             }
           },
-          "required": [
-            "model",
-            "basis"
-          ],
+          "required": ["model", "basis"],
           "type": "object"
         },
         {
@@ -2465,10 +2083,7 @@
               "type": "string"
             }
           },
-          "required": [
-            "model",
-            "basis"
-          ],
+          "required": ["model", "basis"],
           "type": "object"
         },
         {
@@ -2484,10 +2099,7 @@
               "type": "string"
             }
           },
-          "required": [
-            "model",
-            "basis"
-          ],
+          "required": ["model", "basis"],
           "type": "object"
         },
         {
@@ -2503,10 +2115,7 @@
               "type": "string"
             }
           },
-          "required": [
-            "model",
-            "basis"
-          ],
+          "required": ["model", "basis"],
           "type": "object"
         },
         {
@@ -2522,10 +2131,7 @@
               "type": "string"
             }
           },
-          "required": [
-            "model",
-            "basis"
-          ],
+          "required": ["model", "basis"],
           "type": "object"
         },
         {
@@ -2541,10 +2147,7 @@
               "type": "string"
             }
           },
-          "required": [
-            "model",
-            "basis"
-          ],
+          "required": ["model", "basis"],
           "type": "object"
         },
         {
@@ -2560,10 +2163,7 @@
               "type": "string"
             }
           },
-          "required": [
-            "model",
-            "basis"
-          ],
+          "required": ["model", "basis"],
           "type": "object"
         },
         {
@@ -2579,10 +2179,7 @@
               "type": "string"
             }
           },
-          "required": [
-            "model",
-            "basis"
-          ],
+          "required": ["model", "basis"],
           "type": "object"
         },
         {
@@ -2597,10 +2194,7 @@
               "description": "Companion interrupt line, when connected.",
               "format": "uint32",
               "minimum": 0,
-              "type": [
-                "integer",
-                "null"
-              ]
+              "type": ["integer", "null"]
             },
             "model": {
               "const": "pl022",
@@ -2610,10 +2204,7 @@
               "description": "DMA receive request line, when declared.",
               "format": "uint32",
               "minimum": 0,
-              "type": [
-                "integer",
-                "null"
-              ]
+              "type": ["integer", "null"]
             },
             "source_hz": {
               "description": "Source clock in hertz.",
@@ -2631,18 +2222,10 @@
               "description": "DMA transmit request line, when declared.",
               "format": "uint32",
               "minimum": 0,
-              "type": [
-                "integer",
-                "null"
-              ]
+              "type": ["integer", "null"]
             }
           },
-          "required": [
-            "model",
-            "source_hz",
-            "ticks_per_second",
-            "basis"
-          ],
+          "required": ["model", "source_hz", "ticks_per_second", "basis"],
           "type": "object"
         },
         {
@@ -2707,11 +2290,7 @@
               "type": "array"
             }
           },
-          "required": [
-            "model",
-            "delay_ticks",
-            "basis"
-          ],
+          "required": ["model", "delay_ticks", "basis"],
           "type": "object"
         },
         {
@@ -2727,10 +2306,7 @@
               "type": "string"
             }
           },
-          "required": [
-            "model",
-            "basis"
-          ],
+          "required": ["model", "basis"],
           "type": "object"
         },
         {
@@ -2746,10 +2322,7 @@
               "type": "string"
             }
           },
-          "required": [
-            "model",
-            "basis"
-          ],
+          "required": ["model", "basis"],
           "type": "object"
         },
         {
@@ -2765,10 +2338,7 @@
               "type": "string"
             }
           },
-          "required": [
-            "model",
-            "basis"
-          ],
+          "required": ["model", "basis"],
           "type": "object"
         }
       ]
@@ -2784,9 +2354,7 @@
           "type": "integer"
         }
       },
-      "required": [
-        "status_bit"
-      ],
+      "required": ["status_bit"],
       "type": "object"
     },
     "BlockRegister": {
@@ -2818,10 +2386,7 @@
           "description": "Value the register holds after reset, when known.",
           "format": "uint64",
           "minimum": 0,
-          "type": [
-            "integer",
-            "null"
-          ]
+          "type": ["integer", "null"]
         },
         "width_bytes": {
           "description": "Register width in bytes.",
@@ -2834,18 +2399,10 @@
           "description": "Bits a write may set, when the register accepts only some of them.",
           "format": "uint64",
           "minimum": 0,
-          "type": [
-            "integer",
-            "null"
-          ]
+          "type": ["integer", "null"]
         }
       },
-      "required": [
-        "name",
-        "offset",
-        "width_bytes",
-        "access"
-      ],
+      "required": ["name", "offset", "width_bytes", "access"],
       "type": "object"
     },
     "BlockRegisterBlockFrames": {
@@ -2867,11 +2424,7 @@
           "description": "Bit that reads set while stopped."
         }
       },
-      "required": [
-        "start",
-        "stopped",
-        "period_ticks"
-      ],
+      "required": ["start", "stopped", "period_ticks"],
       "type": "object"
     },
     "BlockRegisterBlockJob": {
@@ -2911,10 +2464,7 @@
           "type": "integer"
         }
       },
-      "required": [
-        "start",
-        "ticks"
-      ],
+      "required": ["start", "ticks"],
       "type": "object"
     },
     "BlockSensorReadout": {
@@ -2942,11 +2492,7 @@
           "type": "integer"
         }
       },
-      "required": [
-        "basis",
-        "offset",
-        "ticks"
-      ],
+      "required": ["basis", "offset", "ticks"],
       "type": "object"
     },
     "CacheGeometry": {
@@ -2972,11 +2518,7 @@
           "type": "integer"
         }
       },
-      "required": [
-        "l1_data_bytes",
-        "l1_instruction_bytes",
-        "l2_bytes"
-      ],
+      "required": ["l1_data_bytes", "l1_instruction_bytes", "l2_bytes"],
       "type": "object"
     },
     "ClockDomain": {
@@ -2987,10 +2529,7 @@
           "description": "Clock frequency in hertz, when known.",
           "format": "uint64",
           "minimum": 0,
-          "type": [
-            "integer",
-            "null"
-          ]
+          "type": ["integer", "null"]
         },
         "id": {
           "description": "Clock-domain identity.",
@@ -2998,15 +2537,10 @@
         },
         "parent_id": {
           "description": "Parent clock-domain identity, when present.",
-          "type": [
-            "string",
-            "null"
-          ]
+          "type": ["string", "null"]
         }
       },
-      "required": [
-        "id"
-      ],
+      "required": ["id"],
       "type": "object"
     },
     "CompletionAck": {
@@ -3017,10 +2551,7 @@
           "description": "Bits the acknowledgement covers.",
           "format": "uint32",
           "minimum": 0,
-          "type": [
-            "integer",
-            "null"
-          ]
+          "type": ["integer", "null"]
         },
         "mode": {
           "$ref": "#/$defs/CompletionAckMode",
@@ -3036,16 +2567,10 @@
           "description": "Offset of the status word an acknowledgement clears, when different.",
           "format": "uint64",
           "minimum": 0,
-          "type": [
-            "integer",
-            "null"
-          ]
+          "type": ["integer", "null"]
         }
       },
-      "required": [
-        "offset",
-        "mode"
-      ],
+      "required": ["offset", "mode"],
       "type": "object"
     },
     "CompletionAckMode": {
@@ -3080,10 +2605,7 @@
           "type": "boolean"
         }
       },
-      "required": [
-        "offset",
-        "bit"
-      ],
+      "required": ["offset", "bit"],
       "type": "object"
     },
     "CompletionStart": {
@@ -3103,10 +2625,7 @@
           "type": "integer"
         }
       },
-      "required": [
-        "offset",
-        "mask"
-      ],
+      "required": ["offset", "mask"],
       "type": "object"
     },
     "CompletionWrite": {
@@ -3117,10 +2636,7 @@
           "description": "Bits the write clears, when set.",
           "format": "uint32",
           "minimum": 0,
-          "type": [
-            "integer",
-            "null"
-          ]
+          "type": ["integer", "null"]
         },
         "offset": {
           "description": "Offset of the word inside the block.",
@@ -3132,15 +2648,10 @@
           "description": "Bits the write sets, when set.",
           "format": "uint32",
           "minimum": 0,
-          "type": [
-            "integer",
-            "null"
-          ]
+          "type": ["integer", "null"]
         }
       },
-      "required": [
-        "offset"
-      ],
+      "required": ["offset"],
       "type": "object"
     },
     "CoprocessorWrite": {
@@ -3204,17 +2715,7 @@
           "type": "boolean"
         }
       },
-      "required": [
-        "core",
-        "cp",
-        "wide",
-        "secure",
-        "crn",
-        "crm",
-        "opc1",
-        "opc2",
-        "set_bits"
-      ],
+      "required": ["core", "cp", "wide", "secure", "crn", "crm", "opc1", "opc2", "set_bits"],
       "type": "object"
     },
     "CoreRelease": {
@@ -3246,12 +2747,7 @@
           "type": "integer"
         }
       },
-      "required": [
-        "register",
-        "mask",
-        "source",
-        "target"
-      ],
+      "required": ["register", "mask", "source", "target"],
       "type": "object"
     },
     "DataCacheGeometry": {
@@ -3277,11 +2773,7 @@
           "type": "integer"
         }
       },
-      "required": [
-        "line_bytes",
-        "sets",
-        "ways"
-      ],
+      "required": ["line_bytes", "sets", "ways"],
       "type": "object"
     },
     "DecoderChoice": {
@@ -3297,10 +2789,7 @@
           "description": "Routes enabled by this choice."
         }
       },
-      "required": [
-        "id",
-        "selection"
-      ],
+      "required": ["id", "selection"],
       "type": "object"
     },
     "DecoderSelection": {
@@ -3322,10 +2811,7 @@
           "type": "array"
         }
       },
-      "required": [
-        "processors",
-        "dma_mappings"
-      ],
+      "required": ["processors", "dma_mappings"],
       "type": "object"
     },
     "DmaMapping": {
@@ -3360,13 +2846,7 @@
           "description": "Mapping extent, including a body DRAM reference when applicable."
         }
       },
-      "required": [
-        "id",
-        "address",
-        "physical",
-        "size",
-        "permissions"
-      ],
+      "required": ["id", "address", "physical", "size", "permissions"],
       "type": "object"
     },
     "Evidence": {
@@ -3392,9 +2872,7 @@
           "description": "How the fact was established."
         }
       },
-      "required": [
-        "kind"
-      ],
+      "required": ["kind"],
       "type": "object"
     },
     "EvidenceAddress": {
@@ -3416,11 +2894,7 @@
           "description": "Whether the address selects code or data."
         }
       },
-      "required": [
-        "firmware_id",
-        "address",
-        "space"
-      ],
+      "required": ["firmware_id", "address", "space"],
       "type": "object"
     },
     "EvidenceKind": {
@@ -3471,100 +2945,67 @@
           "description": "Declared virtual time from an I2C byte command to its completion.",
           "format": "uint64",
           "minimum": 0,
-          "type": [
-            "integer",
-            "null"
-          ]
+          "type": ["integer", "null"]
         },
         "command_latency_us": {
           "description": "Declared command latency us.",
           "format": "uint64",
           "minimum": 0,
-          "type": [
-            "integer",
-            "null"
-          ]
+          "type": ["integer", "null"]
         },
         "commit_ticks": {
           "description": "Declared memory-configuration commit latency in guest ticks.",
           "format": "uint64",
           "minimum": 0,
-          "type": [
-            "integer",
-            "null"
-          ]
+          "type": ["integer", "null"]
         },
         "companion_irq_base": {
           "description": "Declared companion irq base.",
           "format": "uint64",
           "minimum": 0,
-          "type": [
-            "integer",
-            "null"
-          ]
+          "type": ["integer", "null"]
         },
         "configuration_word": {
           "description": "Declared read-only clock configuration input.",
           "format": "uint32",
           "minimum": 0,
-          "type": [
-            "integer",
-            "null"
-          ]
+          "type": ["integer", "null"]
         },
         "interrupt": {
           "description": "Declared interrupt line of the block.",
           "format": "uint32",
           "minimum": 0,
-          "type": [
-            "integer",
-            "null"
-          ]
+          "type": ["integer", "null"]
         },
         "receive_request": {
           "description": "Declared receive request.",
           "format": "uint64",
           "minimum": 0,
-          "type": [
-            "integer",
-            "null"
-          ]
+          "type": ["integer", "null"]
         },
         "source_hz": {
           "description": "Declared source hz.",
           "format": "uint64",
           "minimum": 0,
-          "type": [
-            "integer",
-            "null"
-          ]
+          "type": ["integer", "null"]
         },
         "ticks_per_second": {
           "description": "Declared ticks per second.",
           "format": "uint64",
           "minimum": 0,
-          "type": [
-            "integer",
-            "null"
-          ]
+          "type": ["integer", "null"]
         },
         "transmit_request": {
           "description": "Declared transmit request.",
           "format": "uint64",
           "minimum": 0,
-          "type": [
-            "integer",
-            "null"
-          ]
+          "type": ["integer", "null"]
         },
         "trigger_offset": {
           "description": "Declared self-clearing reset-request offset.",
           "format": "uint64",
           "minimum": 0,
-          "type": [
-            "integer",
-            "null"
-          ]
+          "type": ["integer", "null"]
         }
       },
       "type": "object"
@@ -3586,10 +3027,7 @@
           "type": "integer"
         }
       },
-      "required": [
-        "output",
-        "period_ticks"
-      ],
+      "required": ["output", "period_ticks"],
       "type": "object"
     },
     "HardwareDisplayStatusBits": {
@@ -3609,10 +3047,7 @@
           "type": "integer"
         }
       },
-      "required": [
-        "offset",
-        "mask"
-      ],
+      "required": ["offset", "mask"],
       "type": "object"
     },
     "HardwareDisplayTimingBanks": {
@@ -3637,10 +3072,7 @@
           "type": "integer"
         }
       },
-      "required": [
-        "bases",
-        "stop_ticks"
-      ],
+      "required": ["bases", "stop_ticks"],
       "type": "object"
     },
     "HardwareRegisterBlockCommand": {
@@ -3678,13 +3110,7 @@
           "type": "integer"
         }
       },
-      "required": [
-        "mask",
-        "state",
-        "status",
-        "value",
-        "word"
-      ],
+      "required": ["mask", "state", "status", "value", "word"],
       "type": "object"
     },
     "HardwareRegisterFixedWord": {
@@ -3704,10 +3130,7 @@
           "type": "integer"
         }
       },
-      "required": [
-        "offset",
-        "value"
-      ],
+      "required": ["offset", "value"],
       "type": "object"
     },
     "HardwareRegisterIdleBits": {
@@ -3727,10 +3150,7 @@
           "type": "integer"
         }
       },
-      "required": [
-        "mask",
-        "offset"
-      ],
+      "required": ["mask", "offset"],
       "type": "object"
     },
     "HardwareRegisterWindow": {
@@ -3739,10 +3159,7 @@
       "properties": {
         "attachment": {
           "description": "Declared attachment.",
-          "type": [
-            "string",
-            "null"
-          ]
+          "type": ["string", "null"]
         },
         "base": {
           "description": "Declared base.",
@@ -3752,10 +3169,7 @@
         },
         "kind": {
           "description": "Declared kind.",
-          "type": [
-            "string",
-            "null"
-          ]
+          "type": ["string", "null"]
         },
         "name": {
           "description": "Declared name.",
@@ -3779,11 +3193,7 @@
           "type": "integer"
         }
       },
-      "required": [
-        "base",
-        "name",
-        "size"
-      ],
+      "required": ["base", "name", "size"],
       "type": "object"
     },
     "HardwareTimerLayout": {
@@ -3809,10 +3219,7 @@
           "description": "CPUID register value presented by the processor, when known.",
           "format": "uint32",
           "minimum": 0,
-          "type": [
-            "integer",
-            "null"
-          ]
+          "type": ["integer", "null"]
         },
         "vector_base": {
           "description": "Vector-table address after reset.",
@@ -3821,9 +3228,7 @@
           "type": "integer"
         }
       },
-      "required": [
-        "vector_base"
-      ],
+      "required": ["vector_base"],
       "type": "object"
     },
     "MemoryKind": {
@@ -3892,12 +3297,7 @@
           "description": "Region capacity or a reference to body DRAM capacity."
         }
       },
-      "required": [
-        "id",
-        "base",
-        "size",
-        "kind"
-      ],
+      "required": ["id", "base", "size", "kind"],
       "type": "object"
     },
     "PictureLayout": {
@@ -3926,10 +3326,7 @@
           "description": "How the byte was established."
         }
       },
-      "required": [
-        "byte",
-        "evidence"
-      ],
+      "required": ["byte", "evidence"],
       "type": "object"
     },
     "ProcessorArchitecture": {
@@ -3964,10 +3361,7 @@
         },
         "clock_id": {
           "description": "Clock domain supplying this core, when specified.",
-          "type": [
-            "string",
-            "null"
-          ]
+          "type": ["string", "null"]
         },
         "evidence": {
           "description": "How this core's facts not recorded elsewhere were established.",
@@ -4004,10 +3398,7 @@
         },
         "released": {
           "description": "Whether this core leaves reset when the SoC starts, when known.",
-          "type": [
-            "boolean",
-            "null"
-          ]
+          "type": ["boolean", "null"]
         },
         "rprofile": {
           "anyOf": [
@@ -4021,10 +3412,7 @@
           "description": "Optional R-profile hardware state."
         }
       },
-      "required": [
-        "id",
-        "model"
-      ],
+      "required": ["id", "model"],
       "type": "object"
     },
     "ProcessorModel": {
@@ -4107,11 +3495,7 @@
           "description": "Private, non-coherent write-back L1 data cache, as CCSIDR reports it."
         }
       },
-      "required": [
-        "cp14_identity",
-        "atcm",
-        "btcm"
-      ],
+      "required": ["cp14_identity", "atcm", "btcm"],
       "type": "object"
     },
     "RegionSize": {
@@ -4131,10 +3515,7 @@
               "type": "string"
             }
           },
-          "required": [
-            "kind",
-            "bytes"
-          ],
+          "required": ["kind", "bytes"],
           "type": "object"
         },
         {
@@ -4146,9 +3527,7 @@
               "type": "string"
             }
           },
-          "required": [
-            "kind"
-          ],
+          "required": ["kind"],
           "type": "object"
         }
       ]
@@ -4203,11 +3582,7 @@
           "type": "integer"
         }
       },
-      "required": [
-        "name",
-        "bit",
-        "width_bits"
-      ],
+      "required": ["name", "bit", "width_bits"],
       "type": "object"
     },
     "RegisterFieldValue": {
@@ -4225,10 +3600,7 @@
           "type": "integer"
         }
       },
-      "required": [
-        "name",
-        "value"
-      ],
+      "required": ["name", "value"],
       "type": "object"
     },
     "RegisterValue": {
@@ -4246,10 +3618,7 @@
           "type": "integer"
         }
       },
-      "required": [
-        "register",
-        "value"
-      ],
+      "required": ["register", "value"],
       "type": "object"
     },
     "SocBlock": {
@@ -4264,10 +3633,7 @@
         },
         "clock_id": {
           "description": "Clock domain supplying this block, when specified.",
-          "type": [
-            "string",
-            "null"
-          ]
+          "type": ["string", "null"]
         },
         "device": {
           "anyOf": [
@@ -4300,10 +3666,7 @@
         },
         "ip": {
           "description": "IP record this block instantiates, when the design is shared.",
-          "type": [
-            "string",
-            "null"
-          ]
+          "type": ["string", "null"]
         },
         "kind": {
           "$ref": "#/$defs/SocBlockKind",
@@ -4311,17 +3674,11 @@
         },
         "parent_block_id": {
           "description": "Containing block, when this block is nested in a larger controller.",
-          "type": [
-            "string",
-            "null"
-          ]
+          "type": ["string", "null"]
         },
         "processor_core_id": {
           "description": "Processor core directly served by this block, for per-core interrupt controllers.",
-          "type": [
-            "string",
-            "null"
-          ]
+          "type": ["string", "null"]
         },
         "registers": {
           "description": "Register layout of a block with no IP record.",
@@ -4344,12 +3701,7 @@
           "type": "array"
         }
       },
-      "required": [
-        "id",
-        "base",
-        "size",
-        "kind"
-      ],
+      "required": ["id", "base", "size", "kind"],
       "type": "object"
     },
     "SocBlockInterrupt": {
@@ -4358,10 +3710,7 @@
       "properties": {
         "core": {
           "description": "Processor core receiving a fixed route; absent when the controller selects it.",
-          "type": [
-            "string",
-            "null"
-          ]
+          "type": ["string", "null"]
         },
         "line": {
           "description": "Interrupt-controller line raised by the output.",
@@ -4374,10 +3723,7 @@
           "type": "string"
         }
       },
-      "required": [
-        "output",
-        "line"
-      ],
+      "required": ["output", "line"],
       "type": "object"
     },
     "SocBlockKind": {
@@ -4488,16 +3834,10 @@
           "description": "Offset in the block for a subwindow, when nonzero.",
           "format": "uint64",
           "minimum": 0,
-          "type": [
-            "integer",
-            "null"
-          ]
+          "type": ["integer", "null"]
         }
       },
-      "required": [
-        "core",
-        "address"
-      ],
+      "required": ["core", "address"],
       "type": "object"
     },
     "SocHardware": {
@@ -4520,20 +3860,14 @@
       "properties": {
         "cache_basis": {
           "description": "Qualification of the declared processor cache capacities.",
-          "type": [
-            "string",
-            "null"
-          ]
+          "type": ["string", "null"]
         },
         "windows": {
           "description": "Declared windows.",
           "items": {
             "$ref": "#/$defs/HardwareRegisterWindow"
           },
-          "type": [
-            "array",
-            "null"
-          ]
+          "type": ["array", "null"]
         }
       },
       "type": "object"
@@ -4615,10 +3949,7 @@
           "type": "integer"
         }
       },
-      "required": [
-        "bytes",
-        "reset_address"
-      ],
+      "required": ["bytes", "reset_address"],
       "type": "object"
     },
     "VideoLayout": {
@@ -4714,15 +4045,7 @@
       "type": "integer"
     }
   },
-  "required": [
-    "$schema",
-    "schema",
-    "id",
-    "architecture",
-    "processors",
-    "memory_regions",
-    "reset"
-  ],
+  "required": ["$schema", "schema", "id", "architecture", "processors", "memory_regions", "reset"],
   "title": "Soc",
   "type": "object"
 }

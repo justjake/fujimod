@@ -12,9 +12,7 @@
           "role": "boot-reason",
           "evidence": {
             "kind": "inferred",
-            "firmware_ids": [
-              "xt3-511"
-            ]
+            "firmware_ids": ["xt3-511"]
           }
         },
         {
@@ -22,9 +20,7 @@
           "role": "accessory-command",
           "evidence": {
             "kind": "inferred",
-            "firmware_ids": [
-              "xt3-511"
-            ]
+            "firmware_ids": ["xt3-511"]
           }
         },
         {
@@ -32,9 +28,7 @@
           "role": "accessory-status",
           "evidence": {
             "kind": "inferred",
-            "firmware_ids": [
-              "xt3-511"
-            ]
+            "firmware_ids": ["xt3-511"]
           }
         },
         {
@@ -42,9 +36,7 @@
           "role": "battery-sample",
           "evidence": {
             "kind": "inferred",
-            "firmware_ids": [
-              "xt3-511"
-            ]
+            "firmware_ids": ["xt3-511"]
           }
         },
         {
@@ -52,9 +44,7 @@
           "role": "rtc-control",
           "evidence": {
             "kind": "located",
-            "firmware_ids": [
-              "xt3-511"
-            ],
+            "firmware_ids": ["xt3-511"],
             "addresses": [
               {
                 "firmware_id": "xt3-511",
@@ -74,9 +64,7 @@
           "role": "rtc-seconds-low",
           "evidence": {
             "kind": "located",
-            "firmware_ids": [
-              "xt3-511"
-            ],
+            "firmware_ids": ["xt3-511"],
             "addresses": [
               {
                 "firmware_id": "xt3-511",
@@ -96,9 +84,7 @@
           "role": "rtc-seconds-high",
           "evidence": {
             "kind": "located",
-            "firmware_ids": [
-              "xt3-511"
-            ],
+            "firmware_ids": ["xt3-511"],
             "addresses": [
               {
                 "firmware_id": "xt3-511",
@@ -119,9 +105,7 @@
           "role": "settings-header",
           "evidence": {
             "kind": "inferred",
-            "firmware_ids": [
-              "xt3-511"
-            ]
+            "firmware_ids": ["xt3-511"]
           }
         }
       ],

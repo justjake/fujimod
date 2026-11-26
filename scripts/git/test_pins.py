@@ -2,6 +2,7 @@
 
 import subprocess
 from pathlib import Path
+from typing import TypedDict
 
 import pytest
 from commit import Failure, Repository
@@ -25,7 +26,19 @@ def head_of(path: Path) -> str:
     return run("git", "rev-parse", "HEAD", cwd=path).strip()
 
 
-def pin_repositories(tmp_path: Path) -> dict[str, object]:
+class PinRepositories(TypedDict):
+    shared: Path
+    rebased: str
+    main: str
+    pinned: str
+    pin_commit: str
+    work_commit: str
+    new_base: str
+    base_commit: str
+    base: str
+
+
+def pin_repositories(tmp_path: Path) -> PinRepositories:
     """A superproject pinning a submodule whose topic commit has a rebased twin."""
     library = tmp_path / "library.git"
     run("git", "init", "-q", "--bare", "-b", "main", str(library), cwd=tmp_path)

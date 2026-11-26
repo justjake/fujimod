@@ -54,6 +54,7 @@ for (const [name, testing] of [
   if (!run('node', ['scripts/build.ts', ...(testing ? ['--testing'] : [])], 'bindings/javascript'))
     continue;
   if (!run('npm', ['exec', '--', 'tsc'], 'bindings/javascript')) continue;
+  run('npm', ['exec', '--', 'tsc', '-p', 'tsconfig.emulator.json'], 'bindings/javascript');
   run('npm', ['exec', '--', 'tsc', '-p', 'tsconfig.types.json'], 'bindings/javascript');
   if (!run('npm', ['exec', '--', 'tsc', '-p', 'tsconfig.scripts.json'], 'bindings/javascript'))
     continue;

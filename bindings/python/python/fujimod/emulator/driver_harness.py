@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import json
 from collections.abc import Callable, Iterable, Mapping, Sequence
-from typing import TYPE_CHECKING, Literal, TypedDict, TypeGuard
+from typing import TYPE_CHECKING, Literal, TypedDict, TypeGuard, overload
 
 from . import registers as regs
 from .harness_inputs import HarnessInputs
@@ -245,6 +245,28 @@ class DriverHarness:
     not inherit this ARM32 register, exception or instrumentation policy.
     """
 
+    @overload
+    def __new__(
+        cls,
+        inputs: HarnessInputs,
+        *,
+        ram_fixture: Iterable[Span] | None = None,
+        patches: Iterable[Span] = (),
+        quantum: int = 1000,
+        interrupts: Mapping[str, object] | None = None,
+        **kwargs: object,
+    ) -> DriverHarness: ...
+    @overload
+    def __new__(
+        cls,
+        inputs: Aarch64Inputs,
+        *,
+        ram_fixture: Iterable[Span],
+        patches: Iterable[Span] = (),
+        quantum: int = 1000,
+        interrupts: Mapping[str, object] | None = None,
+        **kwargs: object,
+    ) -> Aarch64DriverHarness: ...
     def __new__(
         cls,
         inputs: HarnessInputs | Aarch64Inputs | None = None,

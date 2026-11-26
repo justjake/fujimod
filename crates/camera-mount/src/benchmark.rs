@@ -70,7 +70,7 @@ pub fn run(mount: &Path, regions: &[Region]) -> io::Result<Value> {
     for size in [128 << 10, 1 << 20, 8 << 20, 64 << 20] {
         let result = read(
             &mount.join("memory"),
-            u64::from(region.address) + (16 << 20),
+            region.address + (16 << 20),
             64 << 20,
             size,
         )?;

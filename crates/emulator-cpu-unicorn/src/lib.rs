@@ -2019,7 +2019,7 @@ mod tests {
         .unwrap();
         assert_eq!(reg(&cpu, arm::CORE[0]), 0x1234);
         assert_eq!(reg(&cpu, Register::Pc), 0x1004);
-        let cpsr = reg(&cpu, Register::Arm32(arm::Register::Cpsr)) as u32;
+        let cpsr = reg(&cpu, Register::Arm32(arm::Register::Cpsr));
         let itstate = ((cpsr >> 25) & 3) | ((cpsr >> 8) & 0xfc);
         assert_eq!(itstate, 0);
         let counters = cpu.exit_counters().unwrap();
@@ -2083,7 +2083,7 @@ mod tests {
             assert_eq!(reg(&cpu, Register::Pc), expected_pc);
         }
         assert_eq!(reg(&cpu, arm::CORE[0]), 0x1234);
-        let cpsr = reg(&cpu, Register::Arm32(arm::Register::Cpsr)) as u32;
+        let cpsr = reg(&cpu, Register::Arm32(arm::Register::Cpsr));
         assert_eq!(((cpsr >> 25) & 3) | ((cpsr >> 8) & 0xfc), 0);
         assert_eq!(unsafe { (*accounting_ptr).accounting.budget }, 2);
         assert_eq!(it_probe.seen[..2], [(0x1000, 0xbf08), (0x1002, 0x4608)]);

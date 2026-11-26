@@ -124,13 +124,13 @@ pub fn read_header(stream: &[u8]) -> Result<StreamHeader, Refusal> {
         )));
     }
     let consistent = h.height >= 6
-        && h.height % 6 == 0
+        && h.height.is_multiple_of(6)
         && h.groups == h.height / 6
         && h.strip_width >= 6
-        && h.strip_width % 6 == 0
+        && h.strip_width.is_multiple_of(6)
         && h.width > 0
-        && h.width % 6 == 0
-        && h.rounded_width % h.strip_width == 0
+        && h.width.is_multiple_of(6)
+        && h.rounded_width.is_multiple_of(h.strip_width)
         && h.rounded_width >= h.width
         && h.rounded_width - h.width < h.strip_width
         && h.strips == h.rounded_width / h.strip_width;

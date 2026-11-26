@@ -45,7 +45,7 @@ impl Writer {
                             directory.join(format!("latest-bank{bank}.png")),
                         )
                         .map_err(|e| e.to_string())?;
-                        let nonblack = frame.rgba.chunks_exact(4).any(|p| p[..3] != [0, 0, 0]);
+                        let nonblack = frame.rgba.as_chunks::<4>().0.iter().any(|p| p[..3] != [0, 0, 0]);
                         let publication = serde_json::json!({"frames":frame.number,"sequence":frame.sequence,"width":frame.width,"height":frame.height,"nonblack":nonblack});
                         let temporary = directory.join(format!(".bank{bank}-publication.tmp"));
                         std::fs::write(&temporary, publication.to_string()).map_err(|e| e.to_string())?;

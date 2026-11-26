@@ -162,7 +162,9 @@ fn handoff_block(resolved: &ResolvedConfiguration) -> Result<u64, String> {
 /// The header as 16-bit power-controller registers from `first`, little-endian.
 fn power_words(first: u8, header: &[u8; 8]) -> Vec<(u8, u16)> {
     header
-        .chunks_exact(2)
+        .as_chunks::<2>()
+        .0
+        .iter()
         .zip(first..)
         .map(|(pair, register)| (register, u16::from_le_bytes([pair[0], pair[1]])))
         .collect()
@@ -291,8 +293,8 @@ mod tests {
         }
         assert_eq!(&record[0x7bf8..0x7bfa], &[4, 0x31]);
         let mut checksum = 0u32;
-        for (index, word) in record[..0x7bfc].chunks_exact(4).enumerate() {
-            let word = u32::from_le_bytes(word.try_into().unwrap());
+        for (index, word) in record[..0x7bfc].as_chunks::<4>().0.iter().enumerate() {
+            let word = u32::from_le_bytes(*word);
             checksum ^= word;
             assert_eq!(
                 (record[0x7bfc + index / 8] >> (index % 8)) & 1,

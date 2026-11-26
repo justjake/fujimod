@@ -14,6 +14,7 @@
 //!   translation refill reaches, a superset of what is read or written) hold
 //!   the same bytes before and after it;
 //! - no label or return observer ran in it.
+//!
 //! The fixed point stays valid for later slices while the registers, those
 //! pages, the polled value and the translation context are unchanged and no
 //! translation maintenance was accepted; the iterations it covers stop at the

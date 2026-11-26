@@ -15,6 +15,7 @@ class UsbError(RuntimeError):
     reserved: int
     partial: bytes
     transfer_error: UsbError
+    restoration_error: UsbError | None
 
 
 class TransferError(UsbError):

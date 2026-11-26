@@ -148,7 +148,7 @@ impl Device for Input {
             0xc => u64::from(self.word_0c),
             0x48 => u64::from(self.acknowledge),
             0x17c if self.idle_status => u64::from(self.configuration[0] & 1 == 0) << 31,
-            0x140..=0x17c if offset % 4 == 0 => {
+            0x140..=0x17c if offset.is_multiple_of(4) => {
                 u64::from(self.configuration[((offset - 0x140) / 4) as usize])
             }
             0x10c => u64::from(self.pending),
@@ -188,7 +188,7 @@ impl Device for Input {
             self.word_0c = value as u32 & 0x1ffff;
         } else if size == 4 && offset == 0x48 {
             self.acknowledge = value & 1 != 0;
-        } else if size == 4 && (0x140..=0x17c).contains(&offset) && offset % 4 == 0 {
+        } else if size == 4 && (0x140..=0x17c).contains(&offset) && offset.is_multiple_of(4) {
             self.configuration[((offset - 0x140) / 4) as usize] = value as u32;
         } else if size == 4 && offset == 0x10c {
             // 318bc5c clears every pending cause by writing sixteen zero flags.

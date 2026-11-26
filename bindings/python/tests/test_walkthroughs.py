@@ -8,6 +8,7 @@ import unittest
 from collections.abc import Callable
 from io import BytesIO
 from pathlib import Path
+from typing import cast
 
 from fujimod.recording import Frame
 from fujimod.walkthroughs import Guide, discover
@@ -32,8 +33,8 @@ class Camera:
     def __init__(self) -> None:
         self.frame = Frame.from_png(png())
 
-    def start_recording(self, guide: Guide[Camera]) -> None:
-        self.guide = guide
+    def start_recording[C: Camera](self, guide: Guide[C]) -> None:
+        self.guide = cast(Guide[Camera], guide)
         guide.frame(self.frame, 0)
 
     def stop_recording(self) -> None:
@@ -427,7 +428,9 @@ class WalkthroughTests(unittest.TestCase):
             "from fujimod.walkthroughs import open_menu\n"
             'page = open_menu("item", title="Item settings")\n'
         )
-        visit = discover(source)[0].function
+        visit = cast(
+            Callable[[Camera, Guide[Camera]], None], discover(source)[0].function
+        )
 
         def make_camera() -> Camera:
             camera = Camera()

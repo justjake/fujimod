@@ -120,7 +120,9 @@ pub fn edge_raggedness(
 
 /// White-balanced luma of an interleaved RGB image.
 pub fn luma(rgb: &[f32], wb: [f32; 3]) -> Vec<f32> {
-    rgb.chunks_exact(3)
+    rgb.as_chunks::<3>()
+        .0
+        .iter()
         .map(|p| 0.2126 * p[0] * wb[0] + 0.7152 * p[1] * wb[1] + 0.0722 * p[2] * wb[2])
         .collect()
 }
@@ -216,10 +218,15 @@ pub fn slanted_edge(image: &[f32], width: usize, height: usize) -> Result<EdgeMt
             continue;
         };
         let (mut s, mut sx) = (0f64, 0f64);
-        for x in peak.saturating_sub(4)..(peak + 5).min(w) {
-            if d[x] > 0.0 {
-                s += d[x];
-                sx += d[x] * x as f64;
+        for (x, &value) in d
+            .iter()
+            .enumerate()
+            .take((peak + 5).min(w))
+            .skip(peak.saturating_sub(4))
+        {
+            if value > 0.0 {
+                s += value;
+                sx += value * x as f64;
             }
         }
         if s > 0.0 {
@@ -247,8 +254,7 @@ pub fn slanted_edge(image: &[f32], width: usize, height: usize) -> Result<EdgeMt
         }
         line = fit_line(&kept).ok_or("no edge found")?;
     }
-    let line = Some(line);
-    let (a, b) = line.unwrap();
+    let (a, b) = line;
     let angle = b.atan();
     if b.abs() * (h as f64) < 4.0 {
         return Err(format!(
@@ -397,7 +403,7 @@ pub fn patch_noise(rgb: &[f32], width: usize, wb: [f32; 3]) -> PatchNoise {
     let mut mean = [0f64; 3];
     let mut std = [0f64; 3];
     for c in 0..3 {
-        let v: Vec<f64> = rgb.chunks_exact(3).map(|p| p[c] as f64).collect();
+        let v: Vec<f64> = rgb.as_chunks::<3>().0.iter().map(|p| p[c] as f64).collect();
         mean[c] = v.iter().sum::<f64>() / n;
         std[c] = rms(&detrend(&v, width));
     }

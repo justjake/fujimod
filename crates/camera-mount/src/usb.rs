@@ -216,13 +216,10 @@ impl<F: Sessions> Client<F> {
         let read_bytes = match &op {
             Operation::Memory(_, size) if *size >= 65536 => u64::from(*size),
             Operation::Card(requests)
-                if requests.iter().all(|r| matches!(r, Request::ReadAt { .. })) =>
+                if requests.iter().all(|r| matches!(r, Request::ReadAt { .. }))
+                    && card_read_bytes >= 65536 =>
             {
-                if card_read_bytes >= 65536 {
-                    card_read_bytes
-                } else {
-                    0
-                }
+                card_read_bytes
             }
             _ => 0,
         };

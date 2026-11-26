@@ -6,26 +6,7 @@
   "manual": {
     "url": "https://fujifilm-dsc.com/en/manual/x-a3/x-a3_omw_en_s_f.pdf",
     "title": "FUJIFILM X-A3 Owner’s Manual",
-    "pages": [
-      2,
-      3,
-      4,
-      5,
-      13,
-      14,
-      21,
-      24,
-      25,
-      29,
-      31,
-      36,
-      38,
-      40,
-      41,
-      55,
-      75,
-      79
-    ]
+    "pages": [2, 3, 4, 5, 13, 14, 21, 24, 25, 29, 31, 36, 38, 40, 41, 55, 75, 79]
   },
   "controls": {
     "battery_chamber_cover_latch": {

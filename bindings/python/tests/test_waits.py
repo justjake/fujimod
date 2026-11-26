@@ -1,11 +1,12 @@
 """Read-set waits follow dependencies and preserve hard execution ceilings."""
 
-from contextlib import contextmanager
 import json
+from collections.abc import Callable, Generator
+from contextlib import contextmanager
+from typing import Never
 from unittest.mock import patch
 
 import pytest
-
 from fujimod.emulator import waits
 from fujimod.emulator.waits import (
     MAX_CONTINUATION_STOP_CAUSES,
@@ -19,11 +20,18 @@ from fujimod.emulator.waits import (
 
 
 @contextmanager
-def observed_spans(records):
+def observed_spans(
+    records: list[tuple[str, str | None, dict[str, int], int | None]],
+) -> Generator[None]:
     """Capture the span category and final properties without a native build."""
 
     @contextmanager
-    def span(kind, wait=None, properties=None, wait_counter=None):
+    def span(
+        kind: str,
+        wait: str | None = None,
+        properties: dict[str, int] | None = None,
+        wait_counter: int | None = None,
+    ) -> Generator[None]:
         try:
             yield
         finally:
@@ -34,48 +42,63 @@ def observed_spans(records):
 
 
 class Reads:
-    def __init__(self):
+    def __init__(self) -> None:
         self.active = False
         self.stores = []
         self.devices = []
-        self.stop = None
+        self.stop: dict[str, object] | None = None
         self.stop_calls = 0
 
-    def read_set_begin(self):
+    def read_set_begin(self) -> None:
         assert not self.active
         self.active = True
         self.stores, self.devices = [], []
 
-    def read_set_end(self):
+    def read_set_end(self) -> str:
         assert self.active
         self.active = False
         return json.dumps(dict(stores=self.stores, devices=self.devices))
 
-    def continuation_stop(self):
+    def continuation_stop(self) -> dict[str, object] | None:
         self.stop_calls += 1
         return self.stop
 
 
 class Board:
-    def __init__(self):
+    def __init__(self) -> None:
         self.native = Reads()
         self.instructions = self.virtual_ticks = 0
         self.calls = []
         self.stop_events = []
+        self.run_impl: Callable[..., bool] | None = None
 
-    def read(self, address):
+    def read(self, address: int) -> int:
         if self.native.active:
             self.native.stores.append((address, address + 4))
         return self.instructions
 
-    def device(self, name):
+    def device(self, name: str) -> int:
         if self.native.active:
             self.native.devices.append(name)
         return self.instructions
 
     def run(
-        self, limit, *, pause_at_tick=None, store_watches=None, device_watches=None
-    ):
+        self,
+        limit: int,
+        *,
+        pause_at_tick: int | None = None,
+        store_watches: list[tuple[int, int]] | None = None,
+        device_watches: list[str] | None = None,
+        contact_watch: bool = False,
+    ) -> bool:
+        if self.run_impl is not None:
+            return self.run_impl(
+                limit,
+                pause_at_tick=pause_at_tick,
+                store_watches=store_watches,
+                device_watches=device_watches,
+                contact_watch=contact_watch,
+            )
         self.calls.append((limit, pause_at_tick, store_watches, device_watches))
         count = min(limit, 3 if store_watches or device_watches else limit)
         if pause_at_tick is not None:
@@ -86,17 +109,19 @@ class Board:
         return self.native.stop is not None
 
 
-def test_read_set_changes_after_short_circuit_and_tracks_device_reads():
+def test_read_set_changes_after_short_circuit_and_tracks_device_reads() -> None:
     board = Board()
     records = []
-    with patch.object(waits.perf, "begin_wait", return_value=42) as begin_wait:
-        with observed_spans(records):
-            assert wait_until(
-                board,
-                lambda: board.read(8) >= 3 and board.device("timer") >= 6,
-                "dependent",
-                instruction_limit=20,
-            )
+    with (
+        patch.object(waits.perf, "begin_wait", return_value=42) as begin_wait,
+        observed_spans(records),
+    ):
+        assert wait_until(
+            board,
+            lambda: board.read(8) >= 3 and board.device("timer") >= 6,
+            "dependent",
+            instruction_limit=20,
+        )
     begin_wait.assert_called_once_with("dependent")
     assert board.calls == [(20, None, [(8, 12)], []), (17, None, [(8, 12)], ["timer"])]
     assert records == [
@@ -105,7 +130,7 @@ def test_read_set_changes_after_short_circuit_and_tracks_device_reads():
     assert board.native.stop_calls == 0
 
 
-def test_wait_categories_are_the_ledger_vocabulary():
+def test_wait_categories_are_the_ledger_vocabulary() -> None:
     assert [
         wait_kind(description)
         for description in (
@@ -128,7 +153,7 @@ def test_wait_categories_are_the_ledger_vocabulary():
     ]
 
 
-def test_already_ready_never_runs_and_unwatchable_false_predicate_refuses():
+def test_already_ready_never_runs_and_unwatchable_false_predicate_refuses() -> None:
     board = Board()
     assert wait_until(board, lambda: "ready", "ready") == "ready"
     with pytest.raises(ValueError, match="nothing watchable"):
@@ -136,7 +161,7 @@ def test_already_ready_never_runs_and_unwatchable_false_predicate_refuses():
     assert board.calls == []
 
 
-def test_pure_tick_wait_uses_its_named_tick_and_hard_deadline():
+def test_pure_tick_wait_uses_its_named_tick_and_hard_deadline() -> None:
     board = Board()
     wait_until(
         board, lambda: board.virtual_ticks >= 8, "tick", until_tick=8, deadline=10
@@ -150,7 +175,7 @@ def test_pure_tick_wait_uses_its_named_tick_and_hard_deadline():
     assert board.virtual_ticks == 10
 
 
-def test_watch_wakes_do_not_replenish_the_instruction_allowance():
+def test_watch_wakes_do_not_replenish_the_instruction_allowance() -> None:
     board = Board()
     with pytest.raises(TimeoutError):
         wait_until(board, lambda: board.read(4) >= 30, "late", instruction_limit=8)
@@ -158,10 +183,10 @@ def test_watch_wakes_do_not_replenish_the_instruction_allowance():
     assert [row[0] for row in board.calls] == [8, 5, 2]
 
 
-def test_exception_closes_read_tracking_and_generator_close_cancels():
+def test_exception_closes_read_tracking_and_generator_close_cancels() -> None:
     board = Board()
 
-    def broken():
+    def broken() -> Never:
         board.read(4)
         raise LookupError("predicate error")
 
@@ -175,38 +200,48 @@ def test_exception_closes_read_tracking_and_generator_close_cancels():
     assert not board.native.active
 
 
-def test_quiescent_false_wait_refuses_instead_of_spinning():
+def test_quiescent_false_wait_refuses_instead_of_spinning() -> None:
     board = Board()
-    board.run = lambda *args, **kwargs: None
+
+    def quiet(*args: object, **kwargs: object) -> bool:
+        return False
+
+    board.run_impl = quiet
     with pytest.raises(RuntimeError, match="no progress"):
         wait_until(board, lambda: board.read(4) > 10, "quiescent")
 
 
-def test_device_publications_at_the_current_tick_are_progress():
+def test_device_publications_at_the_current_tick_are_progress() -> None:
     board = Board()
     publications = 0
 
-    def publish(*args, **kwargs):
+    def publish(*args: object, **kwargs: object) -> bool:
         nonlocal publications
         publications += 1
         board.native.stop = {"kind": "device", "id": 0, "device": "sink"}
         return True
 
-    def ready():
+    def ready() -> bool:
         board.device("sink")
         return publications == 2
 
-    board.run = publish
+    board.run_impl = publish
     assert wait_until(board, ready, "sink", instruction_limit=1, deadline=1)
     assert publications == 2
     assert (board.instructions, board.virtual_ticks) == (0, 0)
     # A previous publication must not hide a subsequent quiescent return.
-    board.run = lambda *args, **kwargs: False
+
+    def quiet(*args: object, **kwargs: object) -> bool:
+        return False
+
+    board.run_impl = quiet
     with pytest.raises(RuntimeError, match="no progress"):
         wait_until(board, lambda: board.device("sink"), "quiescent sink")
 
 
-def test_an_explicit_continuation_ceiling_does_not_replace_the_total_allowance():
+def test_an_explicit_continuation_ceiling_does_not_replace_the_total_allowance() -> (
+    None
+):
     board = Board()
     wait_until(
         board,
@@ -221,7 +256,7 @@ def test_an_explicit_continuation_ceiling_does_not_replace_the_total_allowance()
         wait_until(board, lambda: False, "invalid", max_run_instructions=0)
 
 
-def test_ignored_device_wakes_require_and_use_bounded_continuations():
+def test_ignored_device_wakes_require_and_use_bounded_continuations() -> None:
     board = Board()
     assert wait_until(
         board,
@@ -235,7 +270,7 @@ def test_ignored_device_wakes_require_and_use_bounded_continuations():
         wait_until(Board(), lambda: False, "unbounded", ignored_devices=("sd-host",))
 
 
-def test_stop_profile_aggregates_causes_per_wait():
+def test_stop_profile_aggregates_causes_per_wait() -> None:
     board = Board()
     store_stop = {
         "kind": "store",
@@ -279,7 +314,7 @@ def test_stop_profile_aggregates_causes_per_wait():
     assert board.native.stop_calls == 3
 
 
-def test_stop_profile_bounds_distinct_causes_and_counts_overflow():
+def test_stop_profile_bounds_distinct_causes_and_counts_overflow() -> None:
     board = Board()
     event_count = MAX_CONTINUATION_STOP_CAUSES + 3
     board.stop_events = [
@@ -310,7 +345,7 @@ def test_stop_profile_bounds_distinct_causes_and_counts_overflow():
     )
 
 
-def test_profiled_wait_metrics_are_json_serializable():
+def test_profiled_wait_metrics_are_json_serializable() -> None:
     board = Board()
     board.stop_events = [{"kind": "device", "id": 4, "device": "timer"}]
     report = WaitStops()
@@ -350,20 +385,25 @@ def test_profiled_wait_metrics_are_json_serializable():
     assert decoded["continuation_stop_overflow"] == 0
 
 
-def test_stop_profile_requires_a_report_and_native_observation_api():
+def test_stop_profile_requires_a_report_and_native_observation_api() -> None:
     board = Board()
     with pytest.raises(ValueError, match="requires stops"):
         wait_until(board, lambda: "ready", "missing report", profile_stops=True)
-    board.native.continuation_stop = None
+    # Shadow the class method so the wait engine sees no observation API.
+    board.native.__dict__["continuation_stop"] = None
     with pytest.raises(ValueError, match="does not expose"):
         wait_until(
             board, lambda: "ready", "missing API", stops=WaitStops(), profile_stops=True
         )
 
 
-def test_stop_profile_rejects_a_missing_cause_for_a_published_continuation():
+def test_stop_profile_rejects_a_missing_cause_for_a_published_continuation() -> None:
     board = Board()
-    board.run = lambda *args, **kwargs: True
+
+    def publishing(*args: object, **kwargs: object) -> bool:
+        return True
+
+    board.run_impl = publishing
     with pytest.raises(RuntimeError, match="without a cause"):
         wait_until(
             board,

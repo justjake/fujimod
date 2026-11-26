@@ -297,10 +297,7 @@
   "evidence": [
     {
       "kind": "inferred",
-      "firmware_ids": [
-        "xt3-511",
-        "x100v-301"
-      ]
+      "firmware_ids": ["xt3-511", "x100v-301"]
     }
   ]
 }

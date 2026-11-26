@@ -11,6 +11,7 @@
 //!   on an SDHCI host;
 //! - after a write the card may start internal garbage collection
 //!   (`gc_permille`, `gc_us`): the next data command waits until it ends.
+//!
 //! Ranges are inclusive [min, max] microseconds, drawn uniformly. The model
 //! state (random stream, busy deadline, statistics) is not checkpointed; a
 //! restored run restarts the stream from `seed`.

@@ -78,7 +78,7 @@ impl Machine {
             .any(|&(a, b)| a < end && b > address)
     }
     pub fn range(address: u64, size: usize) -> Result<u64, String> {
-        if size == 0 || address % PAGE as u64 != 0 || size % PAGE != 0 {
+        if size == 0 || !address.is_multiple_of(PAGE as u64) || !size.is_multiple_of(PAGE) {
             return Err(format!(
                 "HVF mappings require nonempty {PAGE:#x}-aligned ranges"
             ));
@@ -116,14 +116,16 @@ impl Machine {
         if self.device_overlap(address, end) {
             return Err("RAM mapping overlaps a device on another CPU".into());
         }
-        if pointer == 0 || pointer % PAGE != 0 {
+        if pointer == 0 || !pointer.is_multiple_of(PAGE) {
             return Err("HVF backing must be 16 KiB aligned".into());
         }
         let mut maps = self.maps.lock().map_err(|_| "HVF maps poisoned")?;
-        if let Some(m) = maps.get(&address) {
-            if m.end == end && m.pointer == pointer && m.permissions == permissions {
-                return Ok(());
-            }
+        if let Some(m) = maps.get(&address)
+            && m.end == end
+            && m.pointer == pointer
+            && m.permissions == permissions
+        {
+            return Ok(());
         }
         if maps
             .range(..end)

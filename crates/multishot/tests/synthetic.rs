@@ -551,7 +551,7 @@ fn local_alignment_corrects_residual_shift() {
         f.to_frame = Some(*t);
     }
     let mut shifted = aligned.clone();
-    let mut errors = vec![0.0; 8];
+    let mut errors = [0.0; 8];
     for (k, f) in shifted.frames.iter_mut().enumerate().skip(1) {
         let dx = if k % 2 == 0 { 0.4 } else { -0.4 };
         errors[k] = dx;
@@ -650,7 +650,12 @@ fn bracket_merge_extends_range() {
     };
     let mean_truth = |grid: &OutputGrid| {
         let t = scene.truth(grid, 0);
-        t.chunks_exact(3).map(|p| p[1] as f64).sum::<f64>() / (t.len() / 3) as f64
+        t.as_chunks::<3>()
+            .0
+            .iter()
+            .map(|p| p[1] as f64)
+            .sum::<f64>()
+            / (t.len() / 3) as f64
     };
 
     // Shadows: the merge against the inverse-variance combination of the

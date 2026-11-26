@@ -13,14 +13,20 @@ base = 0xfb1a0000
 size = 0x1000
 kind = "bringup-stub"
 [device.options]
-registers = [{ offset = 0x08, mode = "toggle", value = 1 }, { offset = 0x64, mode = "constant", value = 7 }]
+registers = [
+  { offset = 0x08, mode = "toggle", value = 1 },
+  { offset = 0x64, mode = "constant", value = 7 },
+]
 
 [[device]]
 base = 0xfb5a0000
 size = 0x1000
 kind = "bringup-stub"
 [device.options]
-registers = [{ offset = 0x08, mode = "toggle", value = 1 }, { offset = 0x64, mode = "constant", value = 7 }]
+registers = [
+  { offset = 0x08, mode = "toggle", value = 1 },
+  { offset = 0x64, mode = "constant", value = 7 },
+]
 
 # Controller pages of channels 2 and 3. 0x13b1a44 (0x13afe24) writes both pages through
 # 0x13bd5bc (0x13bb99c), whose channel bases come from the table 0x18ff430; the unbounded poll
@@ -32,11 +38,17 @@ base = 0xfaf27000
 size = 0x1000
 kind = "bringup-stub"
 [device.options]
-registers = [{ offset = 0x800, mode = "constant", value = 1 }, { offset = 0x820, mode = "constant", value = 0 }]
+registers = [
+  { offset = 0x800, mode = "constant", value = 1 },
+  { offset = 0x820, mode = "constant", value = 0 },
+]
 
 [[device]]
 base = 0xfaf37000
 size = 0x1000
 kind = "bringup-stub"
 [device.options]
-registers = [{ offset = 0x800, mode = "constant", value = 1 }, { offset = 0x820, mode = "constant", value = 0 }]
+registers = [
+  { offset = 0x800, mode = "constant", value = 1 },
+  { offset = 0x820, mode = "constant", value = 0 },
+]

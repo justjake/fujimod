@@ -720,7 +720,7 @@ fn dma_still_requires_companion_and_both_views() {
     assert!(
         register_all(
             &mut DeviceGraph::new(),
-            &[dma.clone()],
+            std::slice::from_ref(&dma),
             None,
             Pins::shared(),
             Default::default(),

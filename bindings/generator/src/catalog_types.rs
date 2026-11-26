@@ -213,11 +213,59 @@ fn python_union(types: impl IntoIterator<Item = Result<String, String>>) -> Resu
             rendered.push(ty);
         }
     }
+    let mut members = Vec::new();
+    let mut branches = Vec::new();
+    for ty in rendered {
+        if let Some(inner) = ty
+            .strip_prefix("Literal[")
+            .and_then(|rest| rest.strip_suffix(']'))
+        {
+            for member in literal_members(inner) {
+                if !members.contains(&member) {
+                    members.push(member);
+                }
+            }
+        } else {
+            branches.push(ty);
+        }
+    }
+    if !members.is_empty() {
+        rendered = vec![format!("Literal[{}]", members.join(", "))];
+        rendered.extend(branches);
+    } else {
+        rendered = branches;
+    }
     match rendered.len() {
         0 => Ok("never".into()),
         1 => Ok(rendered.remove(0)),
         _ => Ok(rendered.join(" | ")),
     }
+}
+
+fn literal_members(inner: &str) -> Vec<String> {
+    let mut members = Vec::new();
+    let mut start = 0;
+    let mut quote = None;
+    let mut escaped = false;
+    for (index, character) in inner.char_indices() {
+        if let Some(active) = quote {
+            if escaped {
+                escaped = false;
+            } else if character == '\\' {
+                escaped = true;
+            } else if character == active {
+                quote = None;
+            }
+        } else if character == '\'' || character == '"' {
+            quote = Some(character);
+        } else if character == ',' {
+            members.push(inner[start..index].trim().to_string());
+            start = index + character.len_utf8();
+        }
+    }
+    members.push(inner[start..].trim().to_string());
+    members.retain(|member| !member.is_empty());
+    members
 }
 
 fn python_enum(values: &[Value]) -> Result<String, String> {
@@ -589,7 +637,7 @@ fn python(definitions: &Definitions) -> Result<String, String> {
         ""
     };
     Ok(format!(
-        "# Generated from the Rust catalog schemas.\nfrom __future__ import annotations\n\nfrom typing import Literal, {never_import}NotRequired, Required, TypedDict\n\n\n{}\n",
+        "# Generated from the Rust catalog schemas.\nfrom __future__ import annotations\n\nfrom typing import Literal, {never_import}NotRequired, Required, TypedDict\n\n{}\n",
         output.trim_end()
     ))
 }

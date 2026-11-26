@@ -1332,7 +1332,7 @@ mod tests {
         }
         assert_eq!(r(&mut e, &mut h, 0x88), 1 << 24 | 0x1234);
         let mut cx = Cx::new(&mut h, 0, 0, 0);
-        e.write(&mut cx, RECC + 0x00, 4, 1);
+        e.write(&mut cx, RECC, 4, 1);
         assert!(cx.refusal().is_some());
     }
 

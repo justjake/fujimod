@@ -46,7 +46,9 @@ export function cargoComponents(root: string, builds: CargoTarget[]): Component[
       const source = 'source' in pkg && typeof pkg.source === 'string' ? pkg.source : undefined;
       return { name: pkg.name, version: pkg.version, source };
     });
-    const common = ['--locked', '--offline', '--manifest-path', manifest];
+    // CI sets CARGO_TERM_COLOR=always; colored deduplication markers would
+    // hide the package version from the tree parser.
+    const common = ['--locked', '--offline', '--manifest-path', manifest, '--color', 'never'];
     const cargo = (args: string[]) =>
       execFileSync('cargo', args, { cwd: root, encoding: 'utf8', maxBuffer: 32 * 1024 * 1024 });
     const tree = cargo([

@@ -7,56 +7,9 @@
     "url": "https://fujifilm-dsc.com/en/manual/x-t10/x-t10_omw_en_s_f_02.pdf",
     "title": "FUJIFILM X-T10 Owner’s Manual",
     "pages": [
-      2,
-      3,
-      4,
-      5,
-      6,
-      7,
-      11,
-      12,
-      13,
-      16,
-      22,
-      25,
-      26,
-      27,
-      31,
-      32,
-      36,
-      37,
-      40,
-      41,
-      42,
-      43,
-      44,
-      45,
-      46,
-      47,
-      49,
-      50,
-      51,
-      52,
-      53,
-      54,
-      62,
-      64,
-      65,
-      66,
-      67,
-      68,
-      69,
-      71,
-      72,
-      73,
-      78,
-      81,
-      99,
-      110,
-      117,
-      118,
-      146,
-      147
+      2, 3, 4, 5, 6, 7, 11, 12, 13, 16, 22, 25, 26, 27, 31, 32, 36, 37, 40, 41, 42, 43, 44, 45, 46,
+      47, 49, 50, 51, 52, 53, 54, 62, 64, 65, 66, 67, 68, 69, 71, 72, 73, 78, 81, 99, 110, 117, 118,
+      146, 147
     ]
   },
   "analog_levels": 1024,
@@ -119,9 +72,7 @@
       "location": "top",
       "manual_page": 5,
       "short_name": "AUTO",
-      "connection_ids": [
-        "controls-adc-9"
-      ],
+      "connection_ids": ["controls-adc-9"],
       "assignable": false,
       "pushable": false,
       "positions": [
@@ -183,9 +134,7 @@
       "location": "rear",
       "manual_page": 36,
       "icon": "delete",
-      "connection_ids": [
-        "controls-gpio-0-11"
-      ],
+      "connection_ids": ["controls-gpio-0-11"],
       "assignable": false,
       "pushable": true,
       "default_function": "Deletes pictures in playback mode.",
@@ -212,9 +161,7 @@
       "location": "rear",
       "manual_page": 27,
       "face": "DISP/BACK",
-      "connection_ids": [
-        "controls-adc-8"
-      ],
+      "connection_ids": ["controls-adc-8"],
       "assignable": false,
       "pushable": true,
       "default_function": "Changes display indicators and backs out of menus; press and hold to choose function-button roles.",
@@ -272,9 +219,7 @@
       "location": "front",
       "manual_page": 71,
       "short_name": "FOCUS",
-      "connection_ids": [
-        "controls-adc-7"
-      ],
+      "connection_ids": ["controls-adc-7"],
       "assignable": false,
       "pushable": false,
       "positions": [
@@ -347,9 +292,7 @@
       "location": "rear",
       "manual_page": 4,
       "face": "MENU/OK",
-      "connection_ids": [
-        "controls-adc-8"
-      ],
+      "connection_ids": ["controls-adc-8"],
       "assignable": false,
       "pushable": true,
       "default_function": "Selects highlighted items; press and hold to toggle control lock.",
@@ -384,9 +327,7 @@
       "location": "rear",
       "manual_page": 32,
       "icon": "playback",
-      "connection_ids": [
-        "controls-gpio-2-9"
-      ],
+      "connection_ids": ["controls-gpio-2-9"],
       "assignable": false,
       "pushable": true,
       "default_function": "Starts playback.",
@@ -445,9 +386,7 @@
       "location": "rear",
       "manual_page": 40,
       "face": "Q",
-      "connection_ids": [
-        "controls-adc-8"
-      ],
+      "connection_ids": ["controls-adc-8"],
       "assignable": false,
       "pushable": true,
       "default_function": "Displays the quick menu; press and hold to edit quick-menu items.",
@@ -465,9 +404,7 @@
       "location": "rear",
       "manual_page": 6,
       "short_name": "REAR DIAL",
-      "connection_ids": [
-        "controls-gpio-0-10"
-      ],
+      "connection_ids": ["controls-gpio-0-10"],
       "assignable": true,
       "pushable": true,
       "default_function": "Rotation adjusts aperture, selects quick-menu options, changes focus-frame size, zooms in or out in playback, or selects a scene in auto mode; pressing the center zooms the selected focus area or active playback focus point, and holding it in manual focus selects a focus display.",
@@ -497,9 +434,7 @@
       "location": "rear",
       "manual_page": 4,
       "short_name": "SELECTOR",
-      "connection_ids": [
-        "controls-adc-8"
-      ],
+      "connection_ids": ["controls-adc-8"],
       "assignable": true,
       "pushable": false,
       "default_function": "Directions highlight items; by default up/right/down/left are Fn3/Fn4/Fn5/Fn6 for bracketing, film simulation, flash mode, and focus-frame selection. Selector buttons can instead position the focus area.",
@@ -531,10 +466,7 @@
       "location": "top",
       "manual_page": 31,
       "short_name": "SHUTTER",
-      "connection_ids": [
-        "controls-gpio-0-2",
-        "controls-gpio-0-3"
-      ],
+      "connection_ids": ["controls-gpio-0-2", "controls-gpio-0-3"],
       "assignable": false,
       "pushable": true,
       "default_function": "Half-press to lock focus and exposure; press all the way down to take a picture.",
@@ -576,9 +508,7 @@
       "location": "rear",
       "manual_page": 25,
       "face": "VIEW",
-      "connection_ids": [
-        "controls-gpio-3-10"
-      ],
+      "connection_ids": ["controls-gpio-3-10"],
       "assignable": false,
       "pushable": true,
       "default_function": "Cycles through EVF and LCD display modes.",

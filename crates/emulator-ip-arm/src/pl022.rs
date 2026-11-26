@@ -359,7 +359,7 @@ impl Controller {
             || state
                 .requests
                 .iter()
-                .zip(Engine::request_levels(&state))
+                .zip(Engine::request_levels(state))
                 .any(|(r, level)| r.since().is_some() != level)
         {
             return Err("invalid PL022 checkpoint state or wiring".into());

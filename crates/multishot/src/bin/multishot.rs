@@ -595,7 +595,7 @@ fn measure_cmd(args: &Args) -> Result<(), String> {
         }
         // Green alone: the densest CFA color, so its MTF separates
         // registration from red/blue sampling density.
-        let g: Vec<f32> = v.rgb.chunks_exact(3).map(|p| p[1]).collect();
+        let g: Vec<f32> = v.rgb.as_chunks::<3>().0.iter().map(|p| p[1]).collect();
         if let Ok(m) = slanted_edge(&g, grid.width, grid.height) {
             println!(
                 "  {:<20} {:>12} {:>14.4}  (green)",

@@ -22,6 +22,7 @@ import json
 import subprocess
 import sys
 from pathlib import Path
+from typing import cast
 
 from repository import Failure, Repository
 from sync import follows_superproject, rebase_and_report
@@ -57,12 +58,20 @@ def pull_request_base(repository: Repository, branch: str) -> str:
             + listed.stderr.strip()
         )
     pulls = json.loads(listed.stdout or "[]")
+    if not isinstance(pulls, list):
+        raise Failure("GitHub returned an unexpected pull request list")
     if len(pulls) > 1:
-        numbers = ", ".join(f"#{pull['number']}" for pull in pulls)
+        numbers = ", ".join(
+            f"#{cast(dict[str, object], pull)['number']}" for pull in pulls
+        )
         raise Failure(
             f"{branch} has several open pull requests ({numbers}); pass --base BRANCH"
         )
-    return pulls[0]["baseRefName"] if pulls else DEFAULT_BASE
+    return (
+        cast(str, cast(dict[str, object], pulls[0])["baseRefName"])
+        if pulls
+        else DEFAULT_BASE
+    )
 
 
 def branch_submodules(repository: Repository) -> list[tuple[str, Repository]]:

@@ -112,10 +112,10 @@ impl Endpoint for Peer {
         if frame.bits != 8 || frame.mode != 3 || frame.word > 255 {
             return Err("framed command link requires 8-bit mode 3 bytes".into());
         }
-        if self.state.shifted == 3 {
-            if let Some(refusal) = self.refusal(self.state.received << 8 | u32::from(frame.word)) {
-                return Err(refusal);
-            }
+        if self.state.shifted == 3
+            && let Some(refusal) = self.refusal(self.state.received << 8 | u32::from(frame.word))
+        {
+            return Err(refusal);
         }
         Ok(())
     }

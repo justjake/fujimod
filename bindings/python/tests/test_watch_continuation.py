@@ -4,11 +4,11 @@ import json
 import struct
 
 import pytest
-from fujimod.emulator import Asset, Definition, Image, make_board
+from fujimod.emulator import Asset, Board, Definition, Image, make_board
 from fujimod.emulator.waits import wait_until
 
 
-def board(quantum, *, interrupt_controller=False):
+def board(quantum: int, *, interrupt_controller: bool = False) -> Board:
     # add r0,r0,#1; str r0,[r1]; b loop
     program = struct.pack("<3I", 0xE2800001, 0xE5810000, 0xEAFFFFFC)
     asset = Asset("program", len(program))
@@ -44,22 +44,18 @@ def board(quantum, *, interrupt_controller=False):
         ),
         instructions_per_tick=[1, 1],
     )
-    plan = dict(
-        schema=1,
-        boot_entry="loader",
-        wires={},
-        nodes=[
-            dict(
-                name="idle",
-                boot_entries=["rom", "loader"],
-                windows=[dict(base=0xFFF86000, size=12)],
-                dependencies=[],
-                model=dict(kind="block86000", options={}),
-            )
-        ],
-    )
+    nodes: list[dict[str, object]] = [
+        dict(
+            name="idle",
+            boot_entries=["rom", "loader"],
+            windows=[dict(base=0xFFF86000, size=12)],
+            dependencies=[],
+            model=dict(kind="block86000", options={}),
+        )
+    ]
+    plan = dict(schema=1, boot_entry="loader", wires={}, nodes=nodes)
     if interrupt_controller:
-        plan["nodes"].append(
+        nodes.append(
             dict(
                 name="irq0",
                 boot_entries=["rom", "loader"],
@@ -90,7 +86,9 @@ def board(quantum, *, interrupt_controller=False):
 
 
 @pytest.mark.parametrize("quantum", [1, 7, 64])
-def test_native_store_stop_finishes_the_store_before_the_next_instruction(quantum):
+def test_native_store_stop_finishes_the_store_before_the_next_instruction(
+    quantum: int,
+) -> None:
     with board(quantum) as machine:
         assert machine.run(20, store_watches=[(0x12000, 0x12004)])
         assert machine.native.continuation_stop() == {
@@ -114,13 +112,13 @@ def test_native_store_stop_finishes_the_store_before_the_next_instruction(quantu
         assert machine.instructions == 11
 
 
-def test_native_continuation_stop_is_none_when_no_watch_fires():
+def test_native_continuation_stop_is_none_when_no_watch_fires() -> None:
     with board(1) as machine:
         assert not machine.run(1, store_watches=[(0x12000, 0x12004)])
         assert machine.native.continuation_stop() is None
 
 
-def test_native_failure_read_does_not_watch_devices_or_memory():
+def test_native_failure_read_does_not_watch_devices_or_memory() -> None:
     with board(1, interrupt_controller=True) as machine:
         machine.native.read_set_begin()
         assert machine.native.failure() == "null"
@@ -148,7 +146,7 @@ def test_native_failure_read_does_not_watch_devices_or_memory():
         assert failure == json.loads(machine.native.observation())["failure"]
 
 
-def test_inspection_observation_matches_tracked_without_watching_devices():
+def test_inspection_observation_matches_tracked_without_watching_devices() -> None:
     with board(7, interrupt_controller=True) as machine:
         machine.run(23)
 
@@ -172,7 +170,7 @@ def test_inspection_observation_matches_tracked_without_watching_devices():
 
 
 @pytest.mark.parametrize("quantum", [1, 7, 64])
-def test_native_watches_preserve_counts_ticks_and_complete_state(quantum):
+def test_native_watches_preserve_counts_ticks_and_complete_state(quantum: int) -> None:
     with board(quantum) as machine:
         saved = machine.checkpoint()
         results = []
@@ -196,7 +194,7 @@ def test_native_watches_preserve_counts_ticks_and_complete_state(quantum):
         )
 
 
-def test_native_device_publication_stops_and_read_sets_resolve_graph_names():
+def test_native_device_publication_stops_and_read_sets_resolve_graph_names() -> None:
     with board(7) as machine:
         machine.native.read_set_begin()
         machine.native.device_states("exr2-block-86000")

@@ -188,7 +188,7 @@ impl Device for FilterEngine {
                     }
                     self.state.due = cx.now().checked_add(self.ticks);
                     if self.state.due.is_none() {
-                        return cx.fail("XP4 filter engine deadline overflow");
+                        cx.fail("XP4 filter engine deadline overflow")
                     }
                 }
             }

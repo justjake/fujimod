@@ -6,26 +6,7 @@
   "manual": {
     "url": "https://fujifilm-dsc.com/en/manual/x-hf1/x-hf1_manual_en_s_f.pdf",
     "title": "FUJIFILM X half Owner’s Manual (X-HF1, FF240003)",
-    "pages": [
-      2,
-      3,
-      4,
-      5,
-      6,
-      12,
-      36,
-      44,
-      45,
-      46,
-      48,
-      54,
-      61,
-      63,
-      66,
-      70,
-      76,
-      139
-    ]
+    "pages": [2, 3, 4, 5, 6, 12, 36, 44, 45, 46, 48, 54, 61, 63, 66, 70, 76, 139]
   },
   "controls": {
     "aperture_ring": {

@@ -33,7 +33,7 @@ fn main() -> Result<(), String> {
         let (w, h) = (640usize, 426usize);
         let yuv = host_still_422(w, h).ok_or("no still")?;
         let mut ppm = format!("P6\n{w} {h}\n255\n").into_bytes();
-        for group in yuv.chunks_exact(4) {
+        for group in yuv.as_chunks::<4>().0.iter() {
             let (cb, cr) = (f64::from(group[2]) - 128.0, f64::from(group[3]) - 128.0);
             for &y in &group[..2] {
                 let y = (f64::from(y) - 16.0) * 255.0 / 219.0;

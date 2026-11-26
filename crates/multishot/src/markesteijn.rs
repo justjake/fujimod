@@ -66,7 +66,7 @@ fn hexagons(cfa: &XTrans) -> Hexagons {
                         let (a, b) = (PATT[g][c * 2], PATT[g][c * 2 + 1]);
                         let v = ORTH[d] * a + ORTH[d + 1] * b;
                         let h = ORTH[d + 2] * a + ORTH[d + 3] * b;
-                        hex[row as usize][col as usize][c ^ (g * 2 & d)] = (v, h);
+                        hex[row as usize][col as usize][c ^ ((g * 2) & d)] = (v, h);
                     }
                 }
             }
@@ -222,9 +222,8 @@ pub fn demosaic(
                     }
                     let hex = hex_of(x, y);
                     let s = (row_phase(y) == 0) as usize;
-                    for d in 3..6 {
+                    for (d, o) in hex.iter().enumerate().skip(3) {
                         let k = base + ((d - 2) ^ s);
-                        let o = hex[d];
                         let a = rgb[k][at(x - 2 * o.1, y - 2 * o.0)];
                         let b = rgb[k][at(x + o.1, y + o.0)];
                         let val = a[1] + 2.0 * b[1] - a[f] - 2.0 * b[f] + 3.0 * rgb[k][p][f];

@@ -161,7 +161,7 @@ fn refine_tile(
         let (a, b, c) = (ata[0][0], ata[0][1], ata[1][1]);
         let disc = (0.25 * (a - c) * (a - c) + b * b).sqrt();
         let (l1, l2) = (0.5 * (a + c) + disc, 0.5 * (a + c) - disc);
-        if !(l1 > 0.0) || l2 < params.min_isotropy * l1 {
+        if l1.is_nan() || l1 <= 0.0 || l2 < params.min_isotropy * l1 {
             return None;
         }
         let step = solve(ata, atb)?;

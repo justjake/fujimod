@@ -28,6 +28,7 @@ const bindings = resolve(root, 'bindings/javascript');
 // Check its tests while those generated declarations are available.
 run(['scripts/build.ts', '--testing'], bindings);
 run([compiler], bindings);
+run([compiler, '-p', 'tsconfig.emulator.json'], bindings);
 check('crates/usb-proxy/web/tsconfig.tests.json');
 check('apps/usb-sharing/tsconfig.tests.json');
 check('apps/usb-sharing/tsconfig.browser.json');
@@ -35,6 +36,7 @@ for (const config of ['tsconfig.types.json', 'tsconfig.scripts.json', 'tsconfig.
   check(`bindings/javascript/${config}`);
 run(['scripts/build.ts'], bindings);
 run([compiler], bindings);
+run([compiler, '-p', 'tsconfig.emulator.json'], bindings);
 check('bindings/javascript/tsconfig.types.json');
 check('bindings/javascript/tsconfig.scripts.json');
 check('packages/emulator-ui/tsconfig.json');

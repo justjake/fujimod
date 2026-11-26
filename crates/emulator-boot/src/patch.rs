@@ -39,7 +39,7 @@ fn bytes(text: &str) -> Result<Vec<u8>, String> {
     if !digits.is_ascii() {
         return Err(format!("non-ASCII hex string {text:?}"));
     }
-    if digits.len() % 2 != 0 {
+    if !digits.len().is_multiple_of(2) {
         return Err(format!("odd hex string {text:?}"));
     }
     (0..digits.len())

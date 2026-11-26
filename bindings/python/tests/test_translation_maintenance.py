@@ -2,13 +2,12 @@
 
 import json
 import struct
-from collections.abc import Iterator
+from collections.abc import Generator
 from contextlib import contextmanager
 from typing import TypedDict, cast
 
 import pytest
 from fujimod._native import emulator as native
-from fujimod._native.emulator import NativeError
 from fujimod.emulator import Asset, Board, Image, Xp4Definition, make_board
 
 
@@ -64,7 +63,7 @@ class MaintenanceSnapshot(TypedDict):
 @contextmanager
 def machine(
     cores: int, words: tuple[int, ...] = (0xEE080F13, 0xE1A00000)
-) -> Iterator[tuple[Board, native.Xp4]]:
+) -> Generator[tuple[Board, native.Xp4]]:
     program = struct.pack("<" + "I" * len(words), *words)
     asset = Asset("program", len(program))
     board = make_board(
@@ -183,7 +182,9 @@ def test_completed_delivery_preserves_source_metadata_and_peer_masks(
 def test_failed_delivery_keeps_pending_event_and_exact_error_inspectable() -> None:
     with machine(4) as (board, xp4):
         board.cpus[2].cpr_write(15, 0, 1, 0, 1, 1, False, 0xE040)
-        with pytest.raises(NativeError, match="unsupported ACTLR.DDVM") as refused:
+        with pytest.raises(
+            native.NativeError, match="unsupported ACTLR.DDVM"
+        ) as refused:
             xp4.run(0, 1)
         saved = snapshot_without_effects(board, xp4)
         assert saved["failure"] == str(refused.value)
@@ -197,7 +198,7 @@ def test_failed_delivery_keeps_pending_event_and_exact_error_inspectable() -> No
         assert pending["applied"] == 0
         assert pending["acknowledged"] is False
         assert pending["peer_actlr"] == [0x6040, 0x6040, 0xE040, 0x6040]
-        with pytest.raises(NativeError) as repeated:
+        with pytest.raises(native.NativeError) as repeated:
             xp4.run(1, 1)
         assert str(repeated.value) == str(refused.value)
         assert snapshot_without_effects(board, xp4) == saved
@@ -210,7 +211,7 @@ def test_snapshot_refuses_during_instruction_callback_and_recovers_when_stopped(
         seen: list[tuple[int, int, str]] = []
 
         def callback(core: int, address: int) -> None:
-            with pytest.raises(NativeError) as refused:
+            with pytest.raises(native.NativeError) as refused:
                 xp4.translation_maintenance_state()
             seen.append((core, address, str(refused.value)))
 
@@ -227,7 +228,7 @@ def test_snapshot_refuses_during_instruction_callback_and_recovers_when_stopped(
 def test_native_failure_keeps_accepted_event_and_raw_error_diagnostics() -> None:
     with machine(2, (0xEE080F13, 0xE5901000)) as (board, xp4):
         board.cpus[0].reg_write({"Arm32": {"R": 0}}, 0x10000000)
-        with pytest.raises(NativeError):
+        with pytest.raises(native.NativeError):
             xp4.run(0, 2)
         saved = snapshot_without_effects(board, xp4)
         assert saved["completed"] == saved["delivered_peers"] == 1

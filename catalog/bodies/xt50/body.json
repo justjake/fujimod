@@ -18,9 +18,7 @@
         "select_connection_id": "power-controller-select"
       }
     ],
-    "thermal_connection_ids": [
-      "thermal-0"
-    ]
+    "thermal_connection_ids": ["thermal-0"]
   },
   "connections": [
     {
@@ -50,9 +48,7 @@
       ]
     }
   ],
-  "parts": [
-    "power-controller"
-  ],
+  "parts": ["power-controller"],
   "wiring": [
     {
       "source_id": "spi8",

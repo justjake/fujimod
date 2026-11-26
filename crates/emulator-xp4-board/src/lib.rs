@@ -68,7 +68,9 @@ struct MmioHook {
     base: u64,
 }
 struct XipPage {
-    data: Box<[u8; 4096]>,
+    /// Backs the CPU mapping installed for this page; the allocation must
+    /// outlive that mapping.
+    _data: Box<[u8; 4096]>,
     epoch: u64,
 }
 struct RunState {
@@ -616,7 +618,7 @@ impl Cluster {
             .map_err(|e| format!("Map execute-in-place page {page:#x}: {e}"))?;
         }
         let state = unsafe { &mut *self.state.get() };
-        state.xip.insert(page, XipPage { data, epoch });
+        state.xip.insert(page, XipPage { _data: data, epoch });
         Ok(())
     }
     /// Once the storage epoch moved, return every execute-in-place page read before it to the gated aperture: the next

@@ -20,11 +20,7 @@
         "select_connection_id": "xt30-boot-power-select"
       }
     ],
-    "thermal_connection_ids": [
-      "xt30-thermal-2",
-      "xt30-thermal-4",
-      "xt30-thermal-10"
-    ]
+    "thermal_connection_ids": ["xt30-thermal-2", "xt30-thermal-4", "xt30-thermal-10"]
   },
   "connections": [
     {
@@ -234,11 +230,7 @@
       ]
     }
   ],
-  "parts": [
-    "xt30-boot-nor",
-    "xt30-boot-power",
-    "xt30-boot-sensor"
-  ],
+  "parts": ["xt30-boot-nor", "xt30-boot-power", "xt30-boot-sensor"],
   "wiring": [
     {
       "source_id": "serial-flash",

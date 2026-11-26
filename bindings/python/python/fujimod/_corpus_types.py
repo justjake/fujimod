@@ -46,7 +46,7 @@ class FunctionDetail(TypedDict):
     signature: list[int]
     instructions: int
     calls: list[list[int]]
-    references: list["Reference"]
+    references: list[Reference]
     constants: list[int]
     strings: list[str]
     ngrams: list[int]

@@ -290,8 +290,8 @@ pub fn fit(
     let mut rng = Lcg(0x9e3779b97f4a7c15);
     for _ in 0..1024 {
         let mut idx = [0usize; 3];
-        for k in 0..needed {
-            idx[k] = rng.next(n);
+        for slot in &mut idx[..needed] {
+            *slot = rng.next(n);
         }
         if idx[..needed]
             .iter()

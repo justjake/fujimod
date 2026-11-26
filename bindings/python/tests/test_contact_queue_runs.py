@@ -2,21 +2,24 @@
 
 import json
 import struct
+from typing import cast
 
 import pytest
-from fujimod.emulator import Asset, Definition, Image, make_board
+from fujimod.emulator import Asset, Board, Definition, Image, make_board
 
 from .test_emulator import _execution_graph
 
 
-def contact_board(quantum):
+def contact_board(quantum: int) -> Board:
     # Acknowledge press, then release, through guest stores to the same byte.
     program = struct.pack(
         "<5I", 0xE3A00001, 0xE5C10000, 0xE2800001, 0xE5C10000, 0xEAFFFFFE
     )
     asset = Asset("program", len(program))
     graph = _execution_graph()
-    graph["processors"][0]["registers"].append(["Pstate", 0xD3])
+    processors = cast(list[dict[str, object]], graph["processors"])
+    registers = cast(list[list[object]], processors[0]["registers"])
+    registers.append(["Pstate", 0xD3])
     graph["dma_mappings"] = [
         dict(address=0x10000, physical=0x10000, size=0x4000, permissions=3)
     ]
@@ -122,7 +125,9 @@ def contact_board(quantum):
 @pytest.mark.parametrize(
     "frontend", ["budget", "window", "instructions", "tick", "soft_pause"]
 )
-def test_one_native_run_completes_queued_press_and_release(quantum, frontend):
+def test_one_native_run_completes_queued_press_and_release(
+    quantum: int, frontend: str
+) -> None:
     with contact_board(quantum) as machine:
         if frontend == "budget":
             machine.run(40)
@@ -151,7 +156,7 @@ def test_one_native_run_completes_queued_press_and_release(quantum, frontend):
         assert machine.virtual_ticks == expected
 
 
-def test_queued_contact_polling_preserves_passive_store_stops():
+def test_queued_contact_polling_preserves_passive_store_stops() -> None:
     with contact_board(7) as machine:
         assert machine.run(40, store_watches=[(0x12000, 0x12001)])
         assert machine.instructions == 2

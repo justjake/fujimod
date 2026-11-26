@@ -97,10 +97,10 @@ impl Device for ForeignDma {
         0
     }
     fn write(&mut self, cx: &mut Cx<'_>, _: u64, _: u8, _: u64) {
-        if self.0 {
-            if let Err(error) = cx.ram_write(0x11000, &[0x5a]) {
-                cx.fail(error);
-            }
+        if self.0
+            && let Err(error) = cx.ram_write(0x11000, &[0x5a])
+        {
+            cx.fail(error);
         }
     }
 }

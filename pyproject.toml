@@ -31,6 +31,7 @@ extra-paths = [
   "target/python-types",
   "typings",
   "bindings/python/python",
+  "bindings/python",
   "bindings/python/tests",
   "scripts/ci",
   "scripts/git",

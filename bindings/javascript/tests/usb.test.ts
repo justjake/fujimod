@@ -364,9 +364,10 @@ await test('invalid enum choices and address types fail before reserving or disp
     new Float32Array([1]),
     null,
   ] as const) {
-    // @ts-expect-error Runtime boundary deliberately exercises invalid JavaScript input.
     assert.throws(
-      () => session.writeSinglePacket(0x1000, bytes),
+      () =>
+        // @ts-expect-error Runtime boundary deliberately exercises invalid JavaScript input.
+        session.writeSinglePacket(0x1000, bytes),
       kind(usb.ErrorKind.InvalidArgument),
     );
   }

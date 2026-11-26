@@ -80,9 +80,7 @@ base = 0xff000000
 size = 0x402000
 kind = "completion-stub"
 [device.options]
-registers = [
-  { offset = 0x400604, mode = "constant", value = 0x11fff },
-]
+registers = [{ offset = 0x400604, mode = "constant", value = 0x11fff }]
 irq = 221
 starts = [{ offset = 0x1c, mask = 0xffffffff }]
 delay_us = 2000

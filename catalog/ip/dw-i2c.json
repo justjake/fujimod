@@ -434,18 +434,11 @@
       "access": "read-write"
     }
   ],
-  "parameters": [
-    "fifo_depth",
-    "clock_hz",
-    "tick_hz"
-  ],
+  "parameters": ["fifo_depth", "clock_hz", "tick_hz"],
   "evidence": [
     {
       "kind": "inferred",
-      "firmware_ids": [
-        "xt5-431",
-        "x100vi-131"
-      ]
+      "firmware_ids": ["xt5-431", "x100vi-131"]
     }
   ]
 }

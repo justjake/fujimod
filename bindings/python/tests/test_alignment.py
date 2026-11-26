@@ -7,7 +7,7 @@ import unittest
 from fujimod.corpus import align_sequences
 
 
-def reference(left, right):
+def reference(left: list[str], right: list[str]) -> list[tuple[int | None, int | None]]:
     result = []
     for _, i, end_i, j, end_j in difflib.SequenceMatcher(
         None, left, right, autojunk=False
@@ -23,7 +23,7 @@ def reference(left, right):
 
 
 class AlignmentTests(unittest.TestCase):
-    def test_repeated_and_unequal_instruction_sequences(self):
+    def test_repeated_and_unequal_instruction_sequences(self) -> None:
         rng = random.Random(7131)
         for _ in range(500):
             left = [
@@ -36,7 +36,7 @@ class AlignmentTests(unittest.TestCase):
             ]
             self.assertEqual(align_sequences(left, right), reference(left, right))
 
-    def test_common_instructions_are_never_treated_as_junk(self):
+    def test_common_instructions_are_never_treated_as_junk(self) -> None:
         left = ["load"] * 300 + ["branch", "return"]
         right = ["store"] + ["load"] * 300 + ["return"]
         self.assertEqual(align_sequences(left, right), reference(left, right))

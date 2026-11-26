@@ -4,12 +4,11 @@ import math
 import struct
 
 import pytest
-
 from fujimod import scenes
 from fujimod._native import emulator
 
 
-def test_default_scene_is_sized_and_reused():
+def test_default_scene_is_sized_and_reused() -> None:
     asset = scenes.default_scene_raf()
     assert asset.stat().st_size == scenes._DEFAULT_RAF_SIZE
     modified = asset.stat().st_mtime_ns
@@ -17,7 +16,7 @@ def test_default_scene_is_sized_and_reused():
     assert asset.stat().st_mtime_ns == modified
 
 
-def test_default_raf_retains_linear_color_in_its_visible_sensor_crop():
+def test_default_raf_retains_linear_color_in_its_visible_sensor_crop() -> None:
     width, height, data = emulator.raf_radiance_rgb(
         scenes.default_scene_raf().read_bytes()
     )

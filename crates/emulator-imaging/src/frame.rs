@@ -85,10 +85,10 @@ fn snapshot(scene: &Scene) -> (Option<std::sync::Arc<live::RgbFrame>>, &Scene) {
         _ => None,
     };
     let blur = crate::focus::blur();
-    if blur > 0. {
-        if let Some(blurred) = defocused(scene, frame.as_deref(), blur) {
-            return (Some(blurred), scene);
-        }
+    if blur > 0.
+        && let Some(blurred) = defocused(scene, frame.as_deref(), blur)
+    {
+        return (Some(blurred), scene);
     }
     (frame, scene)
 }
@@ -190,12 +190,11 @@ fn defocused(
         return None;
     }
     let key = identity.map(|(storage, w)| (storage, w, diameter));
-    if let Some(key) = key {
-        if let Some((kept, frame)) = KEPT.lock().unwrap_or_else(|e| e.into_inner()).as_ref() {
-            if *kept == key {
-                return Some(frame.clone());
-            }
-        }
+    if let Some(key) = key
+        && let Some((kept, frame)) = KEPT.lock().unwrap_or_else(|e| e.into_inner()).as_ref()
+        && *kept == key
+    {
+        return Some(frame.clone());
     }
     let mut frame = raster(scene, live);
     crate::focus::blur_rgb(&mut frame.rgb, frame.width, frame.height, diameter as f64);
@@ -717,7 +716,7 @@ impl TwoPlaneWriter {
         }
     }
     fn row(&mut self, cx: &mut Cx<'_>, y: usize, packed: &[u8]) -> Result<(), String> {
-        for (pair, px) in packed.chunks_exact(4).enumerate() {
+        for (pair, px) in packed.as_chunks::<4>().0.iter().enumerate() {
             self.line[pair * 2] = px[0];
             self.line[pair * 2 + 1] = px[1];
         }
@@ -730,8 +729,10 @@ impl TwoPlaneWriter {
         }
         for (pair, (a, b)) in self
             .even
-            .chunks_exact(4)
-            .zip(packed.chunks_exact(4))
+            .as_chunks::<4>()
+            .0
+            .iter()
+            .zip(packed.as_chunks::<4>().0.iter())
             .enumerate()
         {
             self.line[pair * 2] = (u16::from(a[2]) + u16::from(b[2])).div_ceil(2) as u8;
@@ -1076,7 +1077,12 @@ mod tests {
         }
         for (y, line) in lines.iter().enumerate() {
             let at = y * stride as usize;
-            let luma: Vec<u8> = line.chunks_exact(4).flat_map(|p| [p[0], p[1]]).collect();
+            let luma: Vec<u8> = line
+                .as_chunks::<4>()
+                .0
+                .iter()
+                .flat_map(|p| [p[0], p[1]])
+                .collect();
             assert_eq!(&host.ram[at..at + width], &luma[..], "luma line {y}");
             assert!(
                 host.ram[at + width..at + stride as usize]

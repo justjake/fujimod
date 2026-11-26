@@ -13,3 +13,8 @@ platforms = [
   "wasm32-unknown-unknown",
   "wasm32-unknown-emscripten",
 ]
+
+# The desktop app's Tauri stack only builds on native hosts. Unifying it into
+# the hack would put GTK, WebView and their helpers in every Wasm build.
+[traversal-excludes]
+workspace-members = ["fujimod-emulator-gui-app"]

@@ -521,7 +521,7 @@ impl RunHost {
                 .saturating_add(crate::host::duration_ticks(status_every, ticks_per_second)),
             status_every,
             next_wall_status: Instant::now() + WALL_STATUS_EVERY,
-            slice: ((ticks_per_second / 1_000).max(1)).min(100_000_000),
+            slice: (ticks_per_second / 1_000).clamp(1, 100_000_000),
             patches,
             fujimod,
             interrupted,

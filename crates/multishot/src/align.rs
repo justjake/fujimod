@@ -497,8 +497,8 @@ pub fn refine_affine(
         report.pixels = current.4;
         report.residual_rms = (current.3 / current.4.max(1) as f64).sqrt();
         let mut a = current.0;
-        for i in 0..8 {
-            a[i][i] *= 1.0 + 1e-6;
+        for (i, row) in a.iter_mut().enumerate() {
+            row[i] *= 1.0 + 1e-6;
         }
         let Some(d) = crate::fit::solve(a, current.1) else {
             break;
@@ -653,7 +653,7 @@ pub fn shortest_exposure(frames: &[&dyn FrameSource]) -> Option<usize> {
     let (lo, hi) = values
         .iter()
         .fold((f64::MAX, f64::MIN), |(lo, hi), &v| (lo.min(v), hi.max(v)));
-    if !(lo > 0.0) || (hi / lo).log2() <= 1.0 / 6.0 {
+    if lo.is_nan() || lo <= 0.0 || (hi / lo).log2() <= 1.0 / 6.0 {
         return None;
     }
     values.iter().position(|&v| v == lo)

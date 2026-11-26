@@ -87,11 +87,7 @@
   "evidence": [
     {
       "kind": "located",
-      "firmware_ids": [
-        "xe5-112",
-        "xm5-130",
-        "xt5-431"
-      ]
+      "firmware_ids": ["xe5-112", "xm5-130", "xt5-431"]
     }
   ]
 }

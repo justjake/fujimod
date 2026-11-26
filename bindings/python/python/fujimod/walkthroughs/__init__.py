@@ -139,6 +139,7 @@ class Report(TypedDict):
     passed: bool
     media: str
     recording_metrics: NotRequired[dict[str, object]]
+    performance: NotRequired[dict[str, object]]
     role: str | None
     feature: str | None
     video_clean: NotRequired[str]

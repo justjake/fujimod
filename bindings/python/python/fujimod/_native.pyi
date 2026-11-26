@@ -1,4 +1,4 @@
-from collections.abc import Callable, Iterator, Mapping, Sequence
+from collections.abc import Buffer, Callable, Iterator, Mapping, Sequence
 from os import PathLike
 from typing import Final, Self, SupportsFloat, SupportsIndex, final
 
@@ -10,6 +10,9 @@ from . import usb as usb
 from .emulator.binding_types import MemoryReader
 
 class corpus:
+    def align_sequences(
+        left: Sequence[str], right: Sequence[str]
+    ) -> list[tuple[int | None, int | None]]: ...
     class CorpusIndex:
         def __init__(self) -> None: ...
         @classmethod
@@ -26,6 +29,7 @@ class corpus:
 
 class emulator:
     def arm64_register(name: str) -> str: ...
+    def prepare_host_gpu() -> None: ...
     class NativeError(RuntimeError): ...
     class DeviceRefusal(Exception): ...
     PYO3_VERSION: Final = "0.30.1"
@@ -60,6 +64,11 @@ class emulator:
             overlays: Sequence[str] = ...,
             update: str | PathLike[str],
             boot_rom: str | PathLike[str] | None = None,
+            card_image: str | PathLike[str] | None = None,
+            card_files: Sequence[tuple[str, str | PathLike[str]]] = ...,
+            second_card_image: str | PathLike[str] | None = None,
+            second_card_files: Sequence[tuple[str, str | PathLike[str]]] = ...,
+            scene: str | PathLike[str] | None = None,
             nand: str | PathLike[str] | None = None,
             settings: str | PathLike[str] | None = None,
             clock_seconds_2000: int | None = None,
@@ -253,6 +262,10 @@ class emulator:
             state_limit: SupportsIndex = ...,
             return_sites: SupportsGetItem[int, SupportsIndex] | None = None,
             quota_per_edge: bool = False,
+            instruction_ranges: SupportsGetItem[
+                int, tuple[SupportsIndex, SupportsIndex]
+            ]
+            | None = None,
         ) -> None: ...
         def function_watch_end(self, /) -> None: ...
         def function_watch_state(self, /) -> dict[str, object] | None: ...
@@ -359,7 +372,7 @@ class emulator:
             store_watches: list[tuple[int, int]] | None = None,
             device_watches: list[str] | None = None,
             contact_watch: bool = False,
-        ) -> None: ...
+        ) -> bool: ...
         def run_for_instructions(
             self, /, count: SupportsIndex, quantum: SupportsIndex
         ) -> None: ...
@@ -374,7 +387,7 @@ class emulator:
             store_watches: list[tuple[int, int]] | None = None,
             device_watches: list[str] | None = None,
             contact_watch: bool = False,
-        ) -> None: ...
+        ) -> bool: ...
         def scanout(
             self,
             /,
@@ -407,6 +420,14 @@ class emulator:
             name: str,
             raf: bytes,
         ) -> None: ...
+        def sensor_raw16(
+            self,
+            /,
+            name: str,
+            width: SupportsIndex,
+            height: SupportsIndex,
+            raw16: bytes,
+        ) -> None: ...
         def serial_state(self, /, node: str) -> str: ...
         def serial_status_input(
             self,
@@ -419,6 +440,8 @@ class emulator:
         def set_adc_samples(
             self, /, node: str, samples: SupportsGetItem[int, SupportsIndex]
         ) -> None: ...
+        def gravity_g(self, /, node: str) -> list[float]: ...
+        def set_gravity_g(self, /, node: str, gravity: Sequence[float]) -> None: ...
         def set_position(self, /, id: str, position: str) -> None: ...
         def start_guest_profile(self, /) -> None: ...
         def state(self, /) -> str: ...
@@ -696,6 +719,10 @@ class emulator:
             state_limit: SupportsIndex = ...,
             return_sites: SupportsGetItem[int, SupportsIndex] | None = None,
             quota_per_edge: bool = False,
+            instruction_ranges: SupportsGetItem[
+                int, tuple[SupportsIndex, SupportsIndex]
+            ]
+            | None = None,
         ) -> None: ...
         def function_watch_end(self, /) -> None: ...
         def function_watch_state(self, /) -> dict[str, object] | None: ...
@@ -984,3 +1011,121 @@ class perf:
     def add_bytes(counter: str, bytes: int) -> None: ...
     @staticmethod
     def write_chrome_trace(path: str | PathLike[str]) -> None: ...
+
+class remote:
+    def facts_from_selection(selection: str, manifest: str) -> str: ...
+
+    @final
+    class Task:
+        def poll(self, wake: Callable[[], None]) -> bool: ...
+        def blocking(self) -> object: ...
+        def result(self) -> object: ...
+        def cancel(self) -> None: ...
+
+    @final
+    class Camera:
+        @staticmethod
+        def from_board(
+            board: object,
+            facts: str,
+            options: str,
+            observer: Callable[[], str] | None = ...,
+        ) -> remote.Camera: ...
+        @staticmethod
+        def from_ff80(
+            session: object,
+            facts: str,
+            read_bytes: int,
+            write_bytes: int,
+            event_bytes: int,
+            poll_seconds: float,
+            output: str,
+        ) -> remote.Camera: ...
+        @staticmethod
+        def synthetic_ff80(
+            session: object, poll_seconds: float = ...
+        ) -> remote.Camera: ...
+        @staticmethod
+        def synthetic() -> remote.Camera: ...
+        @property
+        def now(self) -> int: ...
+        def close(self) -> None: ...
+        def operation(
+            self, action: str, reference: str, deadline: int, steps: int
+        ) -> remote.Task: ...
+        def wait_until(
+            self, reference: str, predicate: Callable[..., bool], deadline: int
+        ) -> remote.Task: ...
+        def wait_until_memory(
+            self,
+            ranges: str,
+            predicate: Callable[..., bool],
+            deadline: int,
+            condition: str,
+        ) -> remote.Task: ...
+        def wait_until_stable_memory_task(
+            self,
+            ranges: str,
+            stable_spans: str,
+            equals: str,
+            stable_comparisons: int,
+            deadline: int,
+            condition: str,
+        ) -> remote.Task: ...
+        def wait_reads(self, reads: str, deadline: int) -> remote.Task: ...
+        def set_input(
+            self, reference: str, state: str, deadline: int
+        ) -> remote.Task: ...
+        def touch_gesture(
+            self, reference: str, points: str, deadline: int
+        ) -> remote.Task: ...
+
+class recovery:
+    @final
+    class RamImage:
+        def __init__(self, data: Buffer, manifest: dict[str, object]) -> None: ...
+        @property
+        def data(self) -> bytes: ...
+        @property
+        def manifest(self) -> dict[str, object]: ...
+
+    def transform(inverted: Buffer, plan: dict[str, object]) -> recovery.RamImage: ...
+    def startup_indicator(
+        firmware_id: str, source: Buffer, result: recovery.RamImage
+    ) -> recovery.RamImage: ...
+    def boot_header(packaging: dict[str, object], inverted: Buffer) -> bytes: ...
+    def package(
+        result: recovery.RamImage,
+        packaging: dict[str, object] | None,
+        inverted: Buffer,
+    ) -> tuple[dict[str, bytes], str | None]: ...
+    def availability(firmware_id: str) -> object: ...
+    def build(
+        firmware_id: str,
+        source: Buffer,
+        *,
+        startup: bool = ...,
+        sd_card_read: str = ...,
+    ) -> dict[str, bytes]: ...
+    def cold_worker(firmware_id: str, source: Buffer) -> object: ...
+    def cold_plan(firmware_id: str, source: Buffer) -> object: ...
+    def recipe(firmware_id: str) -> object: ...
+    def bind_sd_card_packed_stage(
+        firmware_id: str,
+        ffinit: Buffer,
+        *,
+        address: int,
+        header: int,
+        records: int,
+        size: int,
+    ) -> bytes: ...
+    def compile_ffinit(
+        firmware_id: str,
+        source: Buffer,
+        payload: Buffer,
+        base: int,
+        api: dict[str, object],
+        workspace: int,
+        *,
+        sd_card_read: str = ...,
+    ) -> tuple[bytes, object]: ...
