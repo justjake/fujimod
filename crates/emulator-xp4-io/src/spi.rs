@@ -19,6 +19,11 @@ pub trait Input: Send {
     fn restore_checkpoint(&mut self, data: &Checkpoint) -> Result<(), String>;
     fn save(&self) -> Value;
     fn restore(&mut self, value: &Value) -> Result<(), String>;
+    /// Move a word the outside world drives (a switch the user moves).
+    /// `Ok(false)`: this part has no such word.
+    fn set_input(&mut self, _register: u8, _value: u16) -> Result<bool, String> {
+        Ok(false)
+    }
 }
 pub struct FixedPin(pub bool);
 impl Input for FixedPin {
@@ -75,6 +80,10 @@ pub struct Spi {
     exchange: Option<(u64, u64)>,
 }
 impl Spi {
+    /// Forward `Input::set_input` to the part behind this controller.
+    pub fn set_input(&mut self, register: u8, value: u16) -> Result<bool, String> {
+        self.input.set_input(register, value)
+    }
     pub fn new(base: u64, input: Box<dyn Input>) -> Self {
         Self {
             base,

@@ -414,6 +414,22 @@ impl Devices {
             .unwrap()
             .set_input(&mut Cx::new(&mut host, 0, 0, *id), channel, sample)
     }
+    /// Move a declared input word of the serial part that owns it (X-T3 5.11:
+    /// power-peer word 0, bit 10 is the power switch).
+    pub fn set_power_input(&mut self, register: u8, value: u16) -> Result<(), String> {
+        for model in self.models.iter_mut().flatten() {
+            let model: &mut dyn std::any::Any = model.as_mut();
+            if let Some(Connected(spi)) = model.downcast_mut::<Connected<Spi>>()
+                && spi
+                    .lock()
+                    .map_err(|_| "XP4 SPI lock poisoned")?
+                    .set_input(register, value)?
+            {
+                return Ok(());
+            }
+        }
+        Err(format!("No XP4 serial part declares input word {register}"))
+    }
     /// Queue a contact script on the touch panel of the byte I2C bus.
     pub fn touch(
         &mut self,

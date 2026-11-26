@@ -257,6 +257,10 @@ fn invalid_external_arguments_do_not_poison_a_healthy_board() {
         );
     }
     assert!(session.set_usb_connected(true).is_err());
+    assert_eq!(
+        session.set_power_input(0, 0x8480).unwrap_err(),
+        "No XP4 serial part declares input word 0"
+    );
     assert_eq!(state(&session), before);
     assert_eq!(session.device_state_json(), devices);
     session.set_adc_input(0, 4095).unwrap();

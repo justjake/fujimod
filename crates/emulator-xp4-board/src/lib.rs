@@ -3157,6 +3157,23 @@ impl Session {
         }
         result
     }
+    /// Move a declared input word of a serial part mid-run, as a user moves a switch.
+    pub fn set_power_input(&self, register: u8, value: u16) -> Result<(), String> {
+        let c = &self.inner;
+        c.host_mutation()?;
+        if unsafe { (*c.state.get()).driver_guard.is_some() } {
+            return Err("Guarded routine cannot change external power inputs".to_owned());
+        }
+        c.devices_due().map_err(|error| c.retain_failure(error))?;
+        let mut devices = unsafe { (*c.state.get()).devices.take() }
+            .ok_or_else(|| "XP4 power inputs are not wired".to_owned())?;
+        let result = devices.set_power_input(register, value);
+        unsafe {
+            (*c.state.get()).devices = Some(devices);
+            (*c.state.get()).device_scan_at = 0;
+        }
+        result
+    }
     /// Ticks between touch reports on the board's touch panel.
     pub fn touch_period(&self) -> Result<u64, String> {
         let state = unsafe { &*self.inner.state.get() };

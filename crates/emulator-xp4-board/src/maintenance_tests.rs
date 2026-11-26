@@ -128,6 +128,7 @@ fn assert_failed_session_is_frozen(session: &Session, error: &str) {
     assert_eq!(session.function_watch_end().unwrap_err(), error);
     assert_eq!(session.set_gpio_input(0, 0, true).unwrap_err(), error);
     assert_eq!(session.set_adc_input(0, 0).unwrap_err(), error);
+    assert_eq!(session.set_power_input(0, 0x8480).unwrap_err(), error);
     assert_eq!(session.set_usb_connected(true).unwrap_err(), error);
 
     assert_eq!(

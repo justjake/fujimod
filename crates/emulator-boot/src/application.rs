@@ -146,6 +146,22 @@ impl Board {
             Self::Xpp(session) => session.board.set_scene(scene),
         }
     }
+
+    /// Move a declared input word of an XP4 serial part, as a user moves a switch.
+    pub fn power_input(&mut self, register: u8, value: u16) -> Result<(), String> {
+        match self {
+            Self::Xp4(board) => board.set_power_input(register, value),
+            Self::Xpp(_) => Err("XPP boards do not wire external power inputs".into()),
+        }
+    }
+
+    /// The XP4 NOR medium as the run has left it.
+    pub fn nor_medium(&self) -> Result<Vec<u8>, String> {
+        match self {
+            Self::Xp4(board) => board.nor_medium(),
+            Self::Xpp(_) => Err("XPP boards have no XP4 NOR".into()),
+        }
+    }
 }
 
 pub struct Started {
