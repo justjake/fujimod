@@ -1,0 +1,126 @@
+{
+  "$schema": "https://fujimod.com/schemas/restart.generated.schema.json",
+  "schema": 2,
+  "id": "gfx100rf-114-restart",
+  "firmware_id": "gfx100rf-114",
+  "product": "GFX100RF",
+  "internal_version": "1.59",
+  "code_alias": 0,
+  "code_checks": [
+    {
+      "name": "power_off_sender",
+      "address": 49637176,
+      "size": 248,
+      "sha256": "2f575f7e63070755947ca236ba60939d66ef6ecb03e4522a5bd215b7a2b9db7c"
+    },
+    {
+      "name": "power_off",
+      "address": 51069564,
+      "size": 328,
+      "sha256": "69c87c8ef020e8e4cb13676419ecdabcfe335cd42af45dbd186647a45cb6ec01"
+    },
+    {
+      "name": "power_cut",
+      "address": 21430800,
+      "size": 600,
+      "sha256": "2f37ef6e9ea6794d6efa5b33080efa4b696f258c98c833c56f4e57ba8bf36742"
+    },
+    {
+      "name": "console_handler",
+      "address": 21122996,
+      "size": 300,
+      "sha256": "c0e8592809994b048b1d2086b711becf5bac00f09292d31e1c4fdf109c53ad47"
+    },
+    {
+      "name": "console_callback",
+      "address": 49135004,
+      "size": 768,
+      "sha256": "57e9017fd0d1b023c13d6a98bf4473caabec578ebe969ecbfc2bfb9329ed4946"
+    },
+    {
+      "name": "data_cache_clean",
+      "address": 22743240,
+      "size": 264,
+      "sha256": "0f0a5afc2188cbca410439d993c1c9b34cacb75c74e1432af36673d7cda6bafa"
+    },
+    {
+      "name": "instruction_cache_sync",
+      "address": 641144,
+      "size": 380,
+      "sha256": "da344f492ec3bd2a4a75c92be95d1a1e36b0977a233f63c12163047201bfedcf"
+    }
+  ],
+  "mechanism": {
+    "transport": {
+      "kind": "console_callback",
+      "slot": 34372000,
+      "stock_callback": 49135004,
+      "stub_area": 2162624,
+      "stub_bytes": 64,
+      "translation": [
+        {
+          "address": 978584,
+          "size": 8,
+          "value": 1081344
+        },
+        {
+          "address": 1081344,
+          "size": 8,
+          "value": 1093635
+        },
+        {
+          "address": 1093640,
+          "size": 8,
+          "value": 2098697
+        }
+      ],
+      "ready_words": [
+        {
+          "address": 30265672,
+          "size": 4,
+          "value": 1
+        },
+        {
+          "address": 30265676,
+          "size": 4,
+          "value": 15
+        },
+        {
+          "address": 36977504,
+          "size": 4,
+          "value": 655361
+        }
+      ],
+      "data_cache_clean": 22743460,
+      "instruction_cache_sync": 641168
+    },
+    "sender": 49637176,
+    "request": 135,
+    "request_offset": 0,
+    "deadline_offset": 4,
+    "parameter_bytes": 12,
+    "ui": {
+      "mode_address": 42527656,
+      "mode_size": 4,
+      "rec_mode": 3,
+      "pending_mode_address": null,
+      "menu_active_address": null
+    },
+    "power_off": {
+      "entry": 51069564,
+      "halt": 51069888,
+      "power_cut": 21430800,
+      "request_deadline_offset": 8,
+      "alarm": {
+        "seconds": [
+          37
+        ],
+        "enable": 18,
+        "enable_value": 257
+      },
+      "deadline_parameter": null,
+      "rollover_parameter": 5,
+      "fixed_interval": null
+    }
+  }
+}
