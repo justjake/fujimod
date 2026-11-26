@@ -12,12 +12,19 @@ fn main() {
 
     // The XP5 SD loaders are prebuilt binary assets; their layouts become constants. The default
     // build is the card-resident loader; the internal-flash build serves a startup that keeps
-    // the installed flash attached.
+    // the installed flash attached. The compact build fits the X-E5 extension.
     loader(
         &root,
         &out,
         "sd-boot-v1-xp5-loader",
         "xp5_sd_loader.rs",
+        &[],
+    );
+    loader(
+        &root,
+        &out,
+        "sd-boot-v1-xp5-xe5-loader",
+        "xp5_xe5_loader.rs",
         &[],
     );
     loader(

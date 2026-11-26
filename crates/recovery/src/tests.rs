@@ -236,6 +236,18 @@ fn only_gfx100rf_114_declares_a_stock_stack_inside_its_copied_setup() {
 }
 
 #[test]
+fn xe5_has_a_bundled_startup_recipe() {
+    let recipe = Recipe::bundled("xe5-112").unwrap().unwrap();
+    assert!(recipe.missing_facts().is_empty());
+    assert!(recipe.plan.is_some());
+    assert!(recipe.updater.is_some());
+    let setup = recipe.xp5.unwrap();
+    assert_eq!(setup.card_loader, xp5::CardLoader::Xe5);
+    assert_eq!(setup.extension_alignment, xp5::ExtensionAlignment::Page4KiB);
+    assert!(setup.card_boot.is_none());
+}
+
+#[test]
 fn recipes_match_catalog_identities_and_generation() {
     let catalog = fujimod_catalog::ReferenceCatalog::bundled().unwrap();
     for id in catalog.firmware_ids() {
