@@ -195,6 +195,7 @@ fn board(released: Vec<bool>) -> (Board, Readings) {
         processors: released
             .into_iter()
             .map(|released| Processor {
+                cpu_backend: Default::default(),
                 model: Model::CortexR5F,
                 released,
                 parked_until_sgi: false,

@@ -32,6 +32,7 @@ fn board(alias: bool) -> Board {
 fn mapped_board(mappings: Vec<MemoryMap>, decoders: Vec<decoder::Decoder>) -> Board {
     Graph {
         processors: vec![Processor {
+            cpu_backend: Default::default(),
             model: Model::CortexR5F,
             registers: vec![(Register::Pc, 0x10000)],
             released: true,
@@ -61,6 +62,7 @@ pub(super) fn two_core_board() -> Board {
     Graph {
         processors: vec![
             Processor {
+                cpu_backend: Default::default(),
                 model: Model::CortexR5F,
                 registers: vec![(Register::Pc, 0x10000)],
                 released: true,
@@ -69,6 +71,7 @@ pub(super) fn two_core_board() -> Board {
                 rprofile: Some(Default::default()),
             },
             Processor {
+                cpu_backend: Default::default(),
                 model: Model::CortexR5F,
                 registers: vec![(Register::Pc, 0x10000)],
                 released: true,

@@ -215,6 +215,7 @@ fn factory_owns_alias_backing_and_maps_peripherals_to_physical_bus_addresses() {
     let graph = || Graph {
         decoders: vec![],
         processors: vec![Processor {
+            cpu_backend: Default::default(),
             rprofile: Some(Default::default()),
             mprofile: None,
             model: Model::CortexR5F,
@@ -395,6 +396,7 @@ fn pausing_inside_a_quantum_preserves_multicore_interleaving() {
             decoders: vec![],
             processors: (0..2)
                 .map(|_| Processor {
+                    cpu_backend: Default::default(),
                     rprofile: Some(Default::default()),
                     mprofile: None,
                     model: Model::CortexR5F,
@@ -467,6 +469,7 @@ fn mprofile_systick_wakes_wfi_and_executes_a_real_exception_handler() {
         let graph = Graph {
             decoders: vec![],
             processors: vec![Processor {
+                cpu_backend: Default::default(),
                 model: Model::CortexM4,
                 registers: vec![],
                 released: true,
@@ -563,6 +566,7 @@ fn device_reset_cancels_a_released_mprofile_timer_deadline() {
     let graph = Graph {
         decoders: vec![],
         processors: vec![Processor {
+            cpu_backend: Default::default(),
             model: Model::CortexM4,
             registers: vec![],
             released: true,

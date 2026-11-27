@@ -199,6 +199,7 @@ fn native_software_interrupt_wiring_releases_the_declared_entry_at_the_existing_
         let graph = Graph {
             processors: (0..2)
                 .map(|core| Processor {
+                    cpu_backend: Default::default(),
                     model: Model::CortexR5F,
                     mprofile: None,
                     rprofile: Some(Default::default()),

@@ -632,6 +632,7 @@ mod peripheral_page_tests {
     fn graph() -> Graph {
         Graph {
             processors: vec![Processor {
+                cpu_backend: Default::default(),
                 model: Model::ArmV8A,
                 registers: vec![],
                 released: true,

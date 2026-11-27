@@ -25,6 +25,7 @@ fn run_with(
         decoders: vec![],
         processors: vec![
             Processor {
+                cpu_backend: Default::default(),
                 model: Model::CortexM4,
                 registers: vec![],
                 released: true,
@@ -37,6 +38,7 @@ fn run_with(
                 }),
             },
             Processor {
+                cpu_backend: Default::default(),
                 rprofile: Some(Default::default()),
                 mprofile: None,
                 model: Model::CortexR5F,

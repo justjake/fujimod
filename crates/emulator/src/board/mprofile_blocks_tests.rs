@@ -47,6 +47,7 @@ fn board(blocks: bool) -> Board {
         decoders: vec![],
         processors: vec![
             Processor {
+                cpu_backend: Default::default(),
                 model: Model::CortexM4,
                 registers: vec![],
                 released: true,
@@ -59,6 +60,7 @@ fn board(blocks: bool) -> Board {
                 }),
             },
             Processor {
+                cpu_backend: Default::default(),
                 rprofile: Some(Default::default()),
                 mprofile: None,
                 model: Model::CortexR5F,
@@ -699,6 +701,7 @@ fn run_pair(quantum: usize, blocks: bool) -> (Value, Vec<u64>, bool) {
         processors: [0x10000, 0x11000]
             .into_iter()
             .map(|vector_base| Processor {
+                cpu_backend: Default::default(),
                 model: Model::CortexM4,
                 registers: vec![],
                 released: true,
@@ -823,6 +826,7 @@ fn bench_block_execution() {
             decoders: vec![],
             processors: vec![
                 Processor {
+                    cpu_backend: Default::default(),
                     model: Model::CortexM4,
                     registers: vec![],
                     released: true,
@@ -835,6 +839,7 @@ fn bench_block_execution() {
                     }),
                 },
                 Processor {
+                    cpu_backend: Default::default(),
                     rprofile: Some(Default::default()),
                     mprofile: None,
                     model: Model::CortexR5F,

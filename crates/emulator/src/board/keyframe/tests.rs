@@ -57,6 +57,7 @@ pub(super) fn board() -> Board {
 pub(super) fn board_mode(mode: bus::Mode) -> Board {
     let processors = (0..2)
         .map(|core| Processor {
+            cpu_backend: Default::default(),
             model: Model::CortexR5F,
             released: true,
             parked_until_sgi: false,
