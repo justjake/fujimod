@@ -185,12 +185,6 @@ impl Gpu {
         let adapter = block_on(instance.request_adapter(&wgpu::RequestAdapterOptions::default()))
             .map_err(|error| format!("PICA differential-test adapter: {error}"))?;
         let info = adapter.get_info();
-        if info.device_type == wgpu::DeviceType::Cpu {
-            return Err(format!(
-                "PICA differential tests require a GPU adapter, got {:?}: {}",
-                info.backend, info.name
-            ));
-        }
         let (device, queue) = block_on(adapter.request_device(&wgpu::DeviceDescriptor::default()))
             .map_err(|error| format!("PICA differential-test device: {error}"))?;
         Ok(Self {
@@ -791,6 +785,14 @@ fn nonfinite_output_program(raw: u32) -> ProgramCase {
     case
 }
 
+/// WGSL §15.7.2, "Differences from IEEE-754": "Implementations may ignore the
+/// sign field of a floating point zero value. That is, a zero with a positive
+/// sign may behave like a zero with a negative sign, and vice versa." Accept
+/// that one difference; every other bit pattern must match exactly.
+fn components_match(gpu: u32, interpreter: u32) -> bool {
+    gpu == interpreter || (gpu & 0x7fff_ffff == 0 && interpreter & 0x7fff_ffff == 0)
+}
+
 fn assert_gpu_matches(gpu: &Gpu, case: &ProgramCase) {
     let expected = reference(case).unwrap_or_else(|error| {
         panic!(
@@ -808,11 +810,19 @@ fn assert_gpu_matches(gpu: &Gpu, case: &ProgramCase) {
             "{}: translated shader refused vertex {vertex}",
             case.name
         );
-        assert_eq!(
-            outputs, expected,
-            "{}: vertex {vertex}; words={:08x?}, descriptors={:08x?}",
-            case.name, case.words, case.descriptors
-        );
+        for slot in 0..OUTPUTS {
+            for channel in 0..4 {
+                assert!(
+                    components_match(outputs[slot][channel], expected[slot][channel]),
+                    "{}: vertex {vertex} output {slot} channel {channel}: GPU {:#010x}, interpreter {:#010x}; words={:08x?}, descriptors={:08x?}",
+                    case.name,
+                    outputs[slot][channel],
+                    expected[slot][channel],
+                    case.words,
+                    case.descriptors,
+                );
+            }
+        }
     }
 }
 
