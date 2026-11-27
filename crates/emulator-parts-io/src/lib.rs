@@ -4,6 +4,7 @@ pub mod bis_configuration;
 pub mod command_data_output;
 pub mod framed_command_peer;
 pub mod i2c;
+pub mod icm42688;
 pub mod lsm6ds;
 pub mod lsm6ds_i2c;
 pub mod power_controller;
