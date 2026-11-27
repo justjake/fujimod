@@ -38,7 +38,7 @@ impl Xp4 {
     fn set_pc_handler(&self, py: Python<'_>, callback: Option<Py<PyAny>>) -> PyResult<()> {
         self.with(py, |s| s.set_pc_handler(callback))
     }
-    #[pyo3(signature=(executable, readable, writable, return_address, store_limit=1<<20, core=0, device_policy=None))]
+    #[pyo3(signature=(executable, readable, writable, return_address, store_limit=1<<20, core=0, device_policy=None, record_stores=true))]
     fn driver_guard_begin(
         &self,
         py: Python<'_>,
@@ -49,6 +49,7 @@ impl Xp4 {
         store_limit: usize,
         core: usize,
         device_policy: Option<String>,
+        record_stores: bool,
     ) -> PyResult<()> {
         self.with(py, |s| {
             s.driver_guard_begin(
@@ -59,6 +60,7 @@ impl Xp4 {
                 store_limit,
                 core,
                 device_policy,
+                record_stores,
             )
         })
     }

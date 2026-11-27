@@ -47,6 +47,7 @@ fn program(session: &Session, code: &[u32], policy: Value) {
             4096,
             0,
             Some(policy.to_string()),
+            true,
         )
         .unwrap();
 }
@@ -134,6 +135,7 @@ fn halfword_exclusive_writes_are_recorded_only_on_success_and_respect_the_bound(
                 limit,
                 0,
                 Some(policy(&[], false, vec![]).to_string()),
+                true,
             )
             .unwrap();
         run(&session);
@@ -233,6 +235,7 @@ fn modeled_register_access_requires_explicit_policy_and_checks_before_dispatch()
                     32,
                     0,
                     Some(policy(&[SERIAL + 0x68], false, vec![]).to_string()),
+                    true,
                 )
                 .unwrap();
             session.run(0, 16).unwrap();
@@ -249,7 +252,16 @@ fn modeled_register_access_requires_explicit_policy_and_checks_before_dispatch()
     let session = session();
     assert!(
         session
-            .driver_guard_begin(vec![(0x1000, 0x1004)], vec![], vec![], 0x8000, 32, 0, None)
+            .driver_guard_begin(
+                vec![(0x1000, 0x1004)],
+                vec![],
+                vec![],
+                0x8000,
+                32,
+                0,
+                None,
+                true,
+            )
             .unwrap_err()
             .contains("without devices")
     );
@@ -268,7 +280,8 @@ fn native_admission_rejects_unmodeled_and_ram_device_policies() {
                     0x8000,
                     32,
                     0,
-                    Some(policy(&[address], true, vec![]).to_string())
+                    Some(policy(&[address], true, vec![]).to_string()),
+                    true
                 )
                 .is_err()
         );

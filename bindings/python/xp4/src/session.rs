@@ -110,6 +110,7 @@ impl Xp4Session {
             store_limit: usize,
             core: usize,
             device_policy: Option<String>,
+            record_stores: bool,
         ) -> ()
     );
     forward!(driver_guard_end() -> ());
@@ -294,6 +295,7 @@ impl fujimod_python_base::xp4_backend::Xp4Backend for Xp4Session {
         store_limit: usize,
         core: usize,
         device_policy: Option<String>,
+        record_stores: bool,
     ) -> PyResult<()> {
         Xp4Session::driver_guard_begin(
             self,
@@ -304,6 +306,7 @@ impl fujimod_python_base::xp4_backend::Xp4Backend for Xp4Session {
             store_limit,
             core,
             device_policy,
+            record_stores,
         )
     }
     fn instruction_points(&self, core: usize, addresses: Vec<u64>) -> PyResult<()> {

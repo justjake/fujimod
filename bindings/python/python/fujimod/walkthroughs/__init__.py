@@ -726,9 +726,15 @@ class Guide[C: RecordingCamera]:
                 if self.input_badges is not None
                 else None,
             )
-            self.report["performance"] = perf.end_guide(
-                getattr(self.camera, "board", None)
-            )
+            try:
+                self.report["performance"] = perf.end_guide(
+                    getattr(self.camera, "board", None)
+                )
+            except BaseException as caught:
+                if error is None:
+                    error = caught
+                    self.report["error"] = f"{type(caught).__name__}: {caught}"
+                    self.report["passed"] = False
             self.save()
         if error is not None:
             raise error

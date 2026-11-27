@@ -108,7 +108,16 @@ fn assert_failed_session_is_frozen(session: &Session, error: &str) {
     assert_eq!(session.set_instruction_observer(None).unwrap_err(), error);
     assert_eq!(
         session
-            .driver_guard_begin(vec![(ENTRY, ENTRY + 4)], vec![], vec![], 0x2000, 8, 0, None,)
+            .driver_guard_begin(
+                vec![(ENTRY, ENTRY + 4)],
+                vec![],
+                vec![],
+                0x2000,
+                8,
+                0,
+                None,
+                true
+            )
             .unwrap_err(),
         error
     );
