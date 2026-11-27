@@ -1049,6 +1049,12 @@ pub trait Cpu {
     fn thumb_recovery_accounting(&self) -> Option<NonNull<ThumbBlockRecoveryAccounting>> {
         None
     }
+    /// Optional controller-owned IPSR for translated Thumb recovery mode.
+    /// The CPU owns this slot. Its stopped or serialized owner may write zero
+    /// to use engine state, or the active exception number plus one.
+    fn thumb_exception_status(&self) -> Option<NonNull<u32>> {
+        None
+    }
     /// # Safety
     /// The bitmap is writable and covers every backing page; both buffers
     /// outlive observation and are accessed only under the owner's CPU rules.

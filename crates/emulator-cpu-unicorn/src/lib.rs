@@ -1636,6 +1636,12 @@ impl Cpu for Core {
         })?;
         Some(record.cast())
     }
+    fn thumb_exception_status(&self) -> Option<NonNull<u32>> {
+        if !self.features().thumb_block_recovery || self.model() != Model::CortexM4 {
+            return None;
+        }
+        NonNull::new(unsafe { (self.api.extensions.thumb_exception_status)(self.raw) })
+    }
     unsafe fn observe_backings(&self, ranges: &[BackingObserver]) -> Result<(), String> {
         self.check_tlbi_mutation()?;
         let observe = self

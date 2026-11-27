@@ -321,7 +321,7 @@ impl Board {
         // All device/DMA and guest MMIO callbacks pause the cohort.
         state.settled.pass = true;
         state.arm_settled()?;
-        let in_thread_mode = state.mprofile[core].as_ref().unwrap().in_thread_mode();
+        let active_exception = state.mprofile[core].as_ref().unwrap().active_exception();
         let interrupt_ready = state.mprofile[core].as_mut().unwrap().pending();
         if !interrupt_ready {
             state.settled.idle = Some(core);
@@ -335,7 +335,7 @@ impl Board {
                 let blocks = state.blocks[core].as_mut().unwrap();
                 blocks
                     .inline
-                    .arm(pc, room, in_thread_mode, blocks.code_stores_notified);
+                    .arm(pc, room, active_exception, blocks.code_stores_notified);
             }
         }
         Ok((blocks, Some(thumb_slice)))

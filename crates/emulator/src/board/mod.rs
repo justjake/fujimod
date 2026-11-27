@@ -2146,7 +2146,9 @@ impl Board {
                     // a hooked store or device access as a block of its own.
                     // In Thumb accounting mode it also classifies register-only blocks.
                     cpu.translation_hooks(Some(fujimod_emulator_cpu::TranslationHooks {
-                        classify: if cpu.thumb_recovery_accounting().is_some() {
+                        classify: if cpu.thumb_exception_status().is_some() {
+                            block_classify_with_exception_status
+                        } else if cpu.thumb_recovery_accounting().is_some() {
                             block_classify_transfers
                         } else {
                             block_classify
@@ -4185,6 +4187,20 @@ unsafe fn block_classify_transfers(
     }
     classification
 }
+/// Mode 4 can read the controller's IPSR together with the live APSR flags.
+unsafe fn block_classify_with_exception_status(
+    data: *mut c_void,
+    pc: u64,
+    word: u32,
+) -> fujimod_emulator_cpu::Translation {
+    if mprofile_blocks::is_exception_status_read(word) {
+        return fujimod_emulator_cpu::Translation {
+            instruction: fujimod_emulator_cpu::InstructionDisposition::ExecuteItSafe,
+            observe_block: false,
+        };
+    }
+    unsafe { block_classify_transfers(data, pc, word) }
+}
 /// A guest store covered bytes a translation was made from, and the engine has
 /// retired that translation. This is the only store that can have rewritten
 /// code, so it is the one the code watch reacts to: the copy of each stored
@@ -4380,7 +4396,7 @@ unsafe fn block_entered(block: fujimod_emulator_cpu::Block, data: *mut c_void) {
             .ok_or("block execution without an M-profile controller")?;
         let entry = p.before(cpu, pc, fetched, idle)?;
         let ready = p.ready();
-        let in_thread_mode = p.in_thread_mode();
+        let active_exception = p.active_exception();
         // An exclusive instruction stops the engine as a scheduling boundary;
         // other emulated instructions only move the PC.
         let stopped = p.take_stopped();
@@ -4460,7 +4476,7 @@ unsafe fn block_entered(block: fujimod_emulator_cpu::Block, data: *mut c_void) {
             blocks.inline.arm(
                 pc,
                 window_room - entries,
-                in_thread_mode,
+                active_exception,
                 blocks.code_stores_notified,
             );
         }

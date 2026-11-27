@@ -8,6 +8,7 @@ use std::ptr::NonNull;
 pub(super) struct Window {
     record: Option<NonNull<ThumbBlockAccounting>>,
     recovery: Option<NonNull<ThumbBlockRecoveryAccounting>>,
+    exception_status: Option<NonNull<u32>>,
     granted: i64,
     pub entries: u64,
 }
@@ -42,6 +43,7 @@ impl Window {
         } else {
             None
         };
+        self.exception_status = self.recovery.and_then(|_| cpu.thumb_exception_status());
         self.clear_pages();
         let mut pointer = self.record?;
         // The board owns this thread-affine CPU. Both this call and the
@@ -55,6 +57,9 @@ impl Window {
     /// Clear all armed Thumb pages (low-1 MiB bitmap and single-page fallback)
     /// at the start of a slice or on code-coherence flushes.
     pub fn clear_pages(&mut self) {
+        if let Some(mut status) = self.exception_status {
+            unsafe { *status.as_mut() = 0 };
+        }
         if let Some(mut recovery) = self.recovery {
             let record = unsafe { recovery.as_mut() };
             record.thumb_page_bitmap = [0; 16];
@@ -70,13 +75,16 @@ impl Window {
         &mut self,
         pc: u64,
         remaining: u64,
-        in_thread_mode: bool,
+        active_exception: u16,
         watches_translated_bytes: bool,
     ) {
         if let Some(mut recovery) = self.recovery {
             self.granted = remaining.min(i64::MAX as u64) as i64;
             let record = unsafe { recovery.as_mut() };
-            record.thumb_handler_mode = u64::from(!in_thread_mode);
+            record.thumb_handler_mode = u64::from(active_exception != 0);
+            if let Some(mut status) = self.exception_status {
+                unsafe { *status.as_mut() = u32::from(active_exception) + 1 };
+            }
             record.thumb_accounting.thumb_page = pc & !0x3ff;
             let page = pc >> 10;
             if page < 1024 {
@@ -92,7 +100,7 @@ impl Window {
                 record.thumb_page_bitmap[(page >> 6) as usize] |= bits;
             }
             record.thumb_accounting.accounting.budget = self.granted;
-        } else if let Some(mut pointer) = self.record.filter(|_| in_thread_mode) {
+        } else if let Some(mut pointer) = self.record.filter(|_| active_exception == 0) {
             self.granted = remaining.min(i64::MAX as u64) as i64;
             let record = unsafe { pointer.as_mut() };
             record.thumb_page = pc & !0x3ff;
@@ -135,6 +143,9 @@ impl Window {
 
     #[inline]
     pub fn take(&mut self) -> Result<u64, String> {
+        if let Some(mut status) = self.exception_status {
+            unsafe { *status.as_mut() = 0 };
+        }
         if self.granted == 0 {
             return Ok(0);
         }
@@ -187,13 +198,14 @@ mod tests {
         let mut window = Window {
             record: Some(recovery.cast()),
             recovery: Some(recovery),
+            exception_status: None,
             granted: 0,
             entries: 0,
         };
 
         // Arm 1 KiB pages including boundary bits 0, 63, 64, and 1023.
         for pc in [0x0000_0004u64, 0x0000_fc10, 0x0001_0004, 0x000f_fffe] {
-            window.arm(pc, 100, true, false);
+            window.arm(pc, 100, 0, false);
         }
         assert_eq!(raw.thumb_page_bitmap[0], (1u64 << 0) | (1u64 << 63));
         assert_eq!(raw.thumb_page_bitmap[1], 1u64 << 0);
@@ -205,7 +217,7 @@ mod tests {
         assert_eq!(raw.thumb_accounting.accounting.budget, 100);
 
         // Addresses at or above 1 MiB update thumb_page (1 KiB aligned) without touching the bitmap.
-        window.arm(0x0010_04bc, 50, false, false);
+        window.arm(0x0010_04bc, 50, 11, false);
         assert_eq!(raw.thumb_handler_mode, 1);
         assert_eq!(raw.thumb_accounting.thumb_page, 0x0010_0400);
         assert_eq!(raw.thumb_page_bitmap[0], (1u64 << 0) | (1u64 << 63));
@@ -224,12 +236,13 @@ mod tests {
         let mut window = Window {
             record: Some(recovery.cast()),
             recovery: Some(recovery),
+            exception_status: None,
             granted: 0,
             entries: 0,
         };
 
-        window.arm(0x000f_f811, 100, true, true);
-        window.arm(0x0000_0100, 99, true, true);
+        window.arm(0x000f_f811, 100, 0, true);
+        window.arm(0x0000_0100, 99, 0, true);
         assert_eq!(raw.thumb_page_bitmap[0], 0xf);
         assert_eq!(raw.thumb_page_bitmap[15], 0xf << 60);
         assert!(raw.thumb_page_bitmap[1..15].iter().all(|&word| word == 0));

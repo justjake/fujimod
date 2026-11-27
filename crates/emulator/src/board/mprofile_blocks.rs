@@ -537,6 +537,14 @@ pub(super) fn dual_transfer(word: u32) -> bool {
         && !(writeback && (rn == rt || rn == rt2))
 }
 
+/// A status read that includes IPSR and can use the controller's exception
+/// number when the backend supports publishing it.
+pub(super) fn is_exception_status_read(word: u32) -> bool {
+    word >> 16 == 0xf3ef
+        && matches!(word & 0xf0ff, 0x8001 | 0x8003 | 0x8005 | 0x8007)
+        && (word >> 8) & 15 <= 12
+}
+
 /// Whether a Thumb instruction is safe to execute without an observation.
 /// A 16-bit instruction is zero-extended; for 32-bit instructions, the first
 /// halfword is in bits 31..16. Accepted operations use general registers,

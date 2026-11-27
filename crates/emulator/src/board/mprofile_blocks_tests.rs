@@ -192,6 +192,113 @@ fn handler_blocks_run_inline_and_return_through_the_exception_controller() {
 }
 
 #[test]
+fn cached_status_reads_match_the_observer_across_exception_entry_and_return() {
+    fn run_status_reads(blocks: bool) -> Outcome {
+        let mut board = single_m4_board(blocks, &[], 0x17000);
+        board.set_execution_policy(ExecutionPolicy::Interactive).unwrap();
+        board.set_poll_loops(false);
+        board.state.borrow_mut().settled.verify = 0;
+        board
+            .write_physical(0x10000 + 11 * 4, &0x101b9u32.to_le_bytes())
+            .unwrap();
+        let code = |words: &[u16]| words.iter().flat_map(|w| w.to_le_bytes()).collect::<Vec<_>>();
+        // Thread and SVC both branch into the identical status-read loop.
+        board
+            .write_physical(
+                0x10100,
+                &code(&[
+                    0xf242, 0x0500, // MOVW r5,#0x2000
+                    0xf2c0, 0x0501, // MOVT r5,#1
+                    0x2040, // MOVS r0,#64
+                    0x2600, // MOVS r6,#0
+                    0xe008, // B Loop
+                ]),
+            )
+            .unwrap();
+        board
+            .write_physical(
+                0x10120,
+                &code(&[
+                    0x2e00, // Loop: CMP r6,#0
+                    0xf3ef, 0x8105, // MRS r1,IPSR
+                    0xf3ef, 0x8203, // MRS r2,xPSR
+                    0xf3ef, 0x8301, // MRS r3,IAPSR
+                    0xbf18, // IT NE
+                    0xf3ef, 0x8407, // MRSNE r4,IEPSR
+                    0x3801, // SUBS r0,#1
+                    0xd1f3, // BNE Loop
+                    0x2e00, // CMP r6,#0
+                    0xd103, // BNE Handler Done
+                    0xdf00, // SVC #0
+                    0xf3ef, 0x8705, // MRS r7,IPSR
+                    0xbf30, // WFI
+                    0x6029, // Handler Done: STR r1,[r5]
+                    0x606a, // STR r2,[r5,#4]
+                    0x60ab, // STR r3,[r5,#8]
+                    0x60ec, // STR r4,[r5,#12]
+                    0x4770, // BX LR
+                ]),
+            )
+            .unwrap();
+        board
+            .write_physical(
+                0x101b8,
+                &code(&[
+                    0x2040, // MOVS r0,#64
+                    0x2601, // MOVS r6,#1
+                    0xe7b0, // B Loop
+                ]),
+            )
+            .unwrap();
+        // Preempt the SVC loop with external IRQ 0. Both handlers must read
+        // their own exception number, including after returning to the SVC.
+        board
+            .write_physical(0x10000 + 16 * 4, &0x101d1u32.to_le_bytes())
+            .unwrap();
+        board
+            .write_physical(
+                0x101d0,
+                &code(&[
+                    0x2010, // MOVS r0,#16
+                    0xf3ef, 0x8205, // Loop: MRS r2,IPSR
+                    0x3801, // SUBS r0,#1
+                    0xd1fb, // BNE Loop
+                    0x612a, // STR r2,[r5,#16]
+                    0x4770, // BX LR
+                ]),
+            )
+            .unwrap();
+        board.run_until(600, 128).unwrap();
+        {
+            let mut state = board.state.borrow_mut();
+            let nvic = &mut state.mprofile[0].as_mut().unwrap().nvic;
+            assert_eq!(nvic.active, [11]);
+            nvic.priority[11] = 0x80;
+            nvic.enabled[0] = 1;
+            nvic.pend(0);
+        }
+        board.run_until(1300, 128).unwrap();
+        let result = outcome(&board);
+        assert_eq!(&result.registers[1..5], &[0, 0x6000_0000, 0x6000_0000, 11]);
+        assert_eq!(result.registers[7], 0);
+        let stored: Vec<_> = result.memory[..20]
+            .chunks_exact(4)
+            .map(|word| u32::from_le_bytes(word.try_into().unwrap()))
+            .collect();
+        assert_eq!(stored, [11, 0x2000_000b, 0x2000_000b, 11, 16]);
+        if blocks {
+            assert!(board.state.borrow().blocks[0].as_ref().unwrap().inline.entries > 500);
+        }
+        result
+    }
+    let observer = run_status_reads(false);
+    let translated = run_status_reads(true);
+    assert_eq!(translated.registers, observer.registers);
+    assert_eq!(translated.state, observer.state);
+    assert_eq!(translated.memory, observer.memory);
+}
+
+#[test]
 fn block_execution_equals_the_instruction_observer() {
     for quantum in [1, 2, 3, 7, 16, 64, 100] {
         for (until, windows) in [(2500, &[][..]), (4000, &[211, 212, 900, 2333][..])] {

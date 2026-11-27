@@ -115,6 +115,7 @@ pub struct Extensions {
     pub features: u32,
     // uc_embedder_accounting (features bit 2): the engine's accounting record.
     pub accounting: Option<unsafe extern "C" fn(Engine) -> *mut Accounting>,
+    pub thumb_exception_status: unsafe extern "C" fn(Engine) -> *mut u32,
     pub exit_counters: Option<unsafe extern "C" fn(Engine) -> *const u64>,
     pub translation_repeat_counters: Option<unsafe extern "C" fn(Engine, *mut usize) -> *const u64>,
     pub translation_generation_counters:
@@ -370,6 +371,7 @@ mod linked {
         fn uc_embedder_reset_instruction_counter(engine: Engine) -> Error;
         fn uc_embedder_instruction_counter(engine: Engine) -> u64;
         fn uc_embedder_accounting(engine: Engine) -> *mut Accounting;
+        fn uc_embedder_thumb_exception_status(engine: Engine) -> *mut u32;
         fn uc_embedder_exit_counters(engine: Engine) -> *const u64;
         fn uc_embedder_translation_repeat_counters(engine: Engine, count: *mut usize)
         -> *const u64;
@@ -402,6 +404,7 @@ mod linked {
             reset_instruction_counter: Some(uc_embedder_reset_instruction_counter),
             instruction_counter: Some(uc_embedder_instruction_counter),
             accounting: Some(uc_embedder_accounting),
+            thumb_exception_status: uc_embedder_thumb_exception_status,
             exit_counters: Some(uc_embedder_exit_counters),
             translation_repeat_counters: Some(uc_embedder_translation_repeat_counters),
             translation_generation_counters: Some(
