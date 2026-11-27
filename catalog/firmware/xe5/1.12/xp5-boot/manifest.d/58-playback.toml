@@ -1,0 +1,14 @@
+# X-E5 1.12 playback: JPEG decoder, taken from the X-T5 4.31 fragment of the same name (the SoC
+# profile's imaging windows are shared by the XP5 bodies). OBSERVED for the X-E5: after PLAY the
+# firmware reads the picture from the card (fs_file_read 0x011e2b90, 0x40000 bytes to 0x3ec00000)
+# and its first decoder access is the initialise store +0x118 = 1 (CPU0, LR 0x14e1c30), as in the
+# X-T5 driver. The interrupt (INTID 208), register layout and run_ticks are INHERITED and
+# UNVERIFIED for the X-E5.
+[[device]]
+base = 0xffd11000
+size = 0x1000
+kind = "jpeg-decoder"
+
+[device.options]
+irq = 208
+run_ticks = 1000
