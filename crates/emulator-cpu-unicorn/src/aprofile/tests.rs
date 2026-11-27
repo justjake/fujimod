@@ -92,6 +92,65 @@ fn armv7a_exact_budget_survives_entry_trace_changes() {
 }
 
 #[test]
+fn armv7a_predicated_arithmetic_preserves_flags_at_each_stop() {
+    let raw = crate::test_support::library()
+        .open(Model::CortexA7, 1 << 20)
+        .unwrap();
+    let cpu = Core::new(raw, Memory::default()).unwrap();
+    cpu.map_zeroed(0x1000, 0x4000, 7).unwrap();
+    code(
+        &cpu,
+        &[
+            0xe150_0001, // cmp r0, r1
+            0x2040_0001, // subhs r0, r0, r1
+            0x2382_2080, // orrhs r2, r2, #128
+            0x31a0_3221, // movlo r3, r1, lsr #4
+            0xa3a0_402a, // movge r4, #42
+            0xeaff_fffe, // b .
+        ],
+    );
+
+    for (left, right) in [
+        (0u32, 1u32),
+        (1, 1),
+        (0x7fff_ffff, u32::MAX),
+        (0x8000_0000, 1),
+        (u32::MAX, 0),
+    ] {
+        let result = left.wrapping_sub(right);
+        let carry = left >= right;
+        let signed_ge = (left as i32) >= (right as i32);
+        let overflow = ((left ^ right) & (left ^ result) & 0x8000_0000) != 0;
+        let flags = (result & 0x8000_0000)
+            | u32::from(result == 0) << 30
+            | u32::from(carry) << 29
+            | u32::from(overflow) << 28;
+
+        for budget in 1..=8 {
+            cpu.write_register(arm::CPSR, &0xd3u32.to_le_bytes()).unwrap();
+            for (register, initial) in arm::CORE.into_iter().zip([left, right, 1, 2, 3]) {
+                cpu.write_register(register, &initial.to_le_bytes()).unwrap();
+            }
+
+            assert!(matches!(run(&cpu, 0x1000, budget), Exit::Stopped));
+            assert_eq!(cpu.instruction_progress(), Some(budget as u64));
+            assert_eq!(value(&cpu, Register::Pc), 0x1000 + budget.min(5) as u64 * 4);
+            assert_eq!(value(&cpu, arm::CPSR) & 0xf000_0000, u64::from(flags));
+            let expected = [
+                if budget >= 2 && carry { result } else { left },
+                right,
+                if budget >= 3 && carry { 129 } else { 1 },
+                if budget >= 4 && !carry { right >> 4 } else { 2 },
+                if budget >= 5 && signed_ge { 42 } else { 3 },
+            ];
+            for (register, expected) in arm::CORE.into_iter().zip(expected) {
+                assert_eq!(value(&cpu, register), u64::from(expected));
+            }
+        }
+    }
+}
+
+#[test]
 fn framework_exit_precedes_entry_and_preserves_exact_budget() {
     let cpu = cpu();
     code(&cpu, &[0x91000400, 0x91000400, 0xd53be040, 0x91000400]); // MRS x0,CNTVCT_EL0
