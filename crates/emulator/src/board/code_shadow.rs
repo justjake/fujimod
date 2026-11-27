@@ -22,7 +22,7 @@ use fujimod_emulator_cpu::Cpu;
 use std::collections::HashMap;
 use std::ptr::NonNull;
 
-const PAGE: u64 = 4096;
+pub(super) const PAGE: u64 = 4096;
 type Bytes = [u8; PAGE as usize];
 const FILTER_WORDS: usize = 16;
 fn filter_bit(page: u64) -> (usize, u64) {

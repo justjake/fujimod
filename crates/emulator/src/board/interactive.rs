@@ -332,11 +332,10 @@ impl Board {
                     .and_then(|shadow| shadow.fetch(pc))
                     .is_some()
             {
-                state.blocks[core]
-                    .as_mut()
-                    .unwrap()
+                let blocks = state.blocks[core].as_mut().unwrap();
+                blocks
                     .inline
-                    .arm(pc, room, in_thread_mode);
+                    .arm(pc, room, in_thread_mode, blocks.code_stores_notified);
             }
         }
         Ok((blocks, Some(thumb_slice)))

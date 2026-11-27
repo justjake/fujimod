@@ -4457,7 +4457,12 @@ unsafe fn block_entered(block: fujimod_emulator_cpu::Block, data: *mut c_void) {
         blocks.room -= entries - 1;
         blocks.pending = Some((pc, bytes, entries, pc + last));
         if inline {
-            blocks.inline.arm(pc, window_room - entries, in_thread_mode);
+            blocks.inline.arm(
+                pc,
+                window_room - entries,
+                in_thread_mode,
+                blocks.code_stores_notified,
+            );
         }
         Ok::<(), String>(())
     })();

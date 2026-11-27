@@ -1,5 +1,6 @@
 //! An ordered M-profile run lends its remaining instruction budget to the
 //! translated block guard. Every callback first takes back the unused entries.
+use super::code_shadow;
 use fujimod_emulator_cpu::{Cpu, ThumbBlockAccounting, ThumbBlockRecoveryAccounting};
 use std::ptr::NonNull;
 
@@ -65,7 +66,13 @@ impl Window {
     }
 
     #[inline]
-    pub fn arm(&mut self, pc: u64, remaining: u64, in_thread_mode: bool) {
+    pub fn arm(
+        &mut self,
+        pc: u64,
+        remaining: u64,
+        in_thread_mode: bool,
+        watches_translated_bytes: bool,
+    ) {
         if let Some(mut recovery) = self.recovery {
             self.granted = remaining.min(i64::MAX as u64) as i64;
             let record = unsafe { recovery.as_mut() };
@@ -73,7 +80,16 @@ impl Window {
             record.thumb_accounting.thumb_page = pc & !0x3ff;
             let page = pc >> 10;
             if page < 1024 {
-                record.thumb_page_bitmap[(page >> 6) as usize] |= 1u64 << (page & 63);
+                // The shadow proved this entire host page. Reuse that proof
+                // across its Thumb subpages only when stores to previously
+                // translated bytes are reported without address watches.
+                const SHADOW_SUBPAGES: u64 = code_shadow::PAGE >> 10;
+                let bits = if watches_translated_bytes {
+                    ((1 << SHADOW_SUBPAGES) - 1) << ((page & 63) & !(SHADOW_SUBPAGES - 1))
+                } else {
+                    1 << (page & 63)
+                };
+                record.thumb_page_bitmap[(page >> 6) as usize] |= bits;
             }
             record.thumb_accounting.accounting.budget = self.granted;
         } else if let Some(mut pointer) = self.record.filter(|_| in_thread_mode) {
@@ -177,7 +193,7 @@ mod tests {
 
         // Arm 1 KiB pages including boundary bits 0, 63, 64, and 1023.
         for pc in [0x0000_0004u64, 0x0000_fc10, 0x0001_0004, 0x000f_fffe] {
-            window.arm(pc, 100, true);
+            window.arm(pc, 100, true, false);
         }
         assert_eq!(raw.thumb_page_bitmap[0], (1u64 << 0) | (1u64 << 63));
         assert_eq!(raw.thumb_page_bitmap[1], 1u64 << 0);
@@ -189,7 +205,7 @@ mod tests {
         assert_eq!(raw.thumb_accounting.accounting.budget, 100);
 
         // Addresses at or above 1 MiB update thumb_page (1 KiB aligned) without touching the bitmap.
-        window.arm(0x0010_04bc, 50, false);
+        window.arm(0x0010_04bc, 50, false, false);
         assert_eq!(raw.thumb_handler_mode, 1);
         assert_eq!(raw.thumb_accounting.thumb_page, 0x0010_0400);
         assert_eq!(raw.thumb_page_bitmap[0], (1u64 << 0) | (1u64 << 63));
@@ -200,4 +216,26 @@ mod tests {
         assert_eq!(raw.thumb_page_bitmap, [0; 16]);
         assert_eq!(raw.thumb_accounting.thumb_page, u64::MAX);
     }
+
+    #[test]
+    fn code_store_notifications_admit_the_verified_shadow_page_only() {
+        let mut raw = zeroed_recovery();
+        let recovery = NonNull::from(&mut raw);
+        let mut window = Window {
+            record: Some(recovery.cast()),
+            recovery: Some(recovery),
+            granted: 0,
+            entries: 0,
+        };
+
+        window.arm(0x000f_f811, 100, true, true);
+        window.arm(0x0000_0100, 99, true, true);
+        assert_eq!(raw.thumb_page_bitmap[0], 0xf);
+        assert_eq!(raw.thumb_page_bitmap[15], 0xf << 60);
+        assert!(raw.thumb_page_bitmap[1..15].iter().all(|&word| word == 0));
+
+        window.clear_pages();
+        assert_eq!(raw.thumb_page_bitmap, [0; 16]);
+    }
+
 }
