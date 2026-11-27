@@ -901,6 +901,8 @@ pub trait Cpu {
     /// Callback data must remain valid until the hook is removed or the CPU
     /// is destroyed; callbacks must not unwind and must obey the owner's
     /// bounded reentrancy rules.
+    unsafe fn install_hook(&self, hook: Hook) -> Result<HookId, String>;
+
     /// Install the execution owner's instruction-boundary callback. The owner
     /// supplies the run budget and stable window; unlike guest observers, its
     /// callback need not see individual instructions inside a proven window.
@@ -920,8 +922,6 @@ pub trait Cpu {
             })
         }
     }
-
-    unsafe fn install_hook(&self, hook: Hook) -> Result<HookId, String>;
     /// Install a mapped memory boundary that ends translated blocks before
     /// the selected accesses. Backends with native restart-only hooks can
     /// avoid a host callback; other backends use an inert memory hook.
