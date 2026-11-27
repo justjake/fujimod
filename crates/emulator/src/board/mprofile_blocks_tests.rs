@@ -1478,3 +1478,141 @@ fn multi_access_classifier_matches_what_the_scan_admits() {
         );
     }
 }
+
+/// A multi-access load that is still admitted inline -- a stack POP -- must
+/// not replay a device read. Its first access can be a FIFO pop or a
+/// clear-on-read register, and a later access inside the same instruction
+/// restarts the translation. The engine restarts before it services a device
+/// access: load_helper calls embedder_restart_insn ahead of io_readx, so the
+/// redo begins before the first read rather than after it. The device here
+/// counts its reads and their offsets, so any replay is visible.
+#[test]
+fn inline_pop_never_replays_a_device_read() {
+    use crate::board::factory::*;
+    use std::sync::{Arc, Mutex};
+    #[derive(Default, Debug, PartialEq, Eq)]
+    struct Counts {
+        offsets: Vec<u64>,
+    }
+    struct Fifo(Arc<Mutex<Counts>>);
+    impl fujimod_emulator_devices::Device for Fifo {
+        fn name(&self) -> &'static str {
+            "pop-fifo"
+        }
+        fn read(
+            &mut self,
+            _: &mut fujimod_emulator_devices::bus::Cx<'_>,
+            offset: u64,
+            _: u8,
+        ) -> u64 {
+            // Each read pops an entry: repeating one loses a value.
+            self.0.lock().unwrap().offsets.push(offset);
+            offset
+        }
+        fn write(&mut self, _: &mut fujimod_emulator_devices::bus::Cx<'_>, _: u64, _: u8, _: u64) {}
+    }
+    // `window` sizes the device's mapped window, and `sp_offset` places MSP
+    // inside it, so the caller chooses whether the POP's second access stays
+    // in the device or runs past its end.
+    fn board(blocks: bool, counts: Arc<Mutex<Counts>>, window: u64, sp_offset: u64) -> Board {
+        let graph = Graph {
+            decoders: vec![],
+            processors: vec![Processor {
+                model: Model::CortexM4,
+                registers: vec![],
+                released: true,
+                parked_until_sgi: false,
+                rprofile: None,
+                mprofile: Some(super::mprofile::Config {
+                    clock_hz: 1_000_000_000,
+                    board_ticks_per_second: 1_000_000_000,
+                    vector_base: 0x10000,
+                }),
+            }],
+            dma_mappings: vec![crate::board::memory::BusMapping::ram(0x10000, 0x8000)],
+            ram: vec![Ram {
+                base: 0x10000,
+                size: 0x8000,
+            }],
+            mappings: vec![MemoryMap {
+                core: 0,
+                address: 0x10000,
+                physical: 0x10000,
+                size: 0x8000,
+                permissions: 7,
+            }],
+            peripherals: vec![Peripheral {
+                core: 0,
+                address: 0x08000000,
+                physical: 0xff910000,
+                size: window as usize,
+            }],
+            instructions_per_tick: Ratio::new(1, 1).unwrap(),
+        };
+        let mut bus = Bus::new(bus::Mode::Strict);
+        bus.register(0xff910000, window, Box::new(Fifo(counts)))
+            .unwrap();
+        let board = graph
+            .build(
+                Options::new(RunEngine::Unicorn).with_translation_cache_size_bytes(1024 * 1024),
+                bus,
+                None,
+            )
+            .unwrap();
+        board.set_block_execution(blocks);
+        // MSP points into the device window at `sp_offset`.
+        let vectors = [0x0800_0000u32 + sp_offset as u32, 0x10101]
+            .into_iter()
+            .flat_map(u32::to_le_bytes)
+            .collect::<Vec<_>>();
+        board.write_physical(0x10000, &vectors).unwrap();
+        // adds r0,#1; b .; pop.w {r4,r5}; b .
+        let code = [0x3001u16, 0xe7ff, 0xe8bd, 0x0030, 0xe7fe];
+        let bytes: Vec<u8> = code.iter().flat_map(|w| w.to_le_bytes()).collect();
+        board.write_physical(0x10100, &bytes).unwrap();
+        board
+    }
+    // The first access reads the device; the second either reads it again or
+    // faults past the window, and that restart is where a redo could repeat
+    // the first read. Each case must read the device exactly as often, and at
+    // the same offsets, as the instruction observer does.
+    for (window, sp_offset, reads, name) in [
+        (
+            0x2000u64,
+            0x1000u64,
+            2,
+            "both words inside the device window",
+        ),
+        (
+            0x1000,
+            0xffc,
+            1,
+            "the second word faults just past the window",
+        ),
+    ] {
+        let observer_counts = Arc::new(Mutex::new(Counts::default()));
+        let translated_counts = Arc::new(Mutex::new(Counts::default()));
+        let mut observer = board(false, observer_counts.clone(), window, sp_offset);
+        let mut translated = board(true, translated_counts.clone(), window, sp_offset);
+        for b in [&mut observer, &mut translated] {
+            b.set_execution_policy(ExecutionPolicy::Interactive)
+                .unwrap();
+            b.state.borrow_mut().settled.verify = 0;
+        }
+        let a = observer.run_until(200, 8);
+        let b = translated.run_until(200, 8);
+        assert_eq!(a.is_err(), b.is_err(), "{name}: {a:?} / {b:?}");
+        let expected = observer_counts.lock().unwrap().offsets.clone();
+        let actual = translated_counts.lock().unwrap().offsets.clone();
+        assert_eq!(expected.len(), reads, "{name}: observer reads {expected:?}");
+        assert_eq!(
+            actual, expected,
+            "{name}: translated mode replayed a device read"
+        );
+        assert_eq!(
+            translated.state(),
+            observer.state(),
+            "{name}: board state after the device reads"
+        );
+    }
+}
