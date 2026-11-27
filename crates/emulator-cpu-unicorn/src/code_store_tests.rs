@@ -87,3 +87,62 @@ fn a32_store_over_translated_code_runs_the_new_code() {
 fn a32_store_over_translated_code_runs_the_new_code_under_instruction_and_store_hooks() {
     store_over_translated_code(true);
 }
+
+#[test]
+fn mprofile_shared_ram_stores_report_only_translated_guest_bytes() {
+    #[repr(align(4096))]
+    struct Ram([u8; 8192]);
+
+    unsafe fn record(data: *mut c_void, address: u64, bytes: usize) {
+        unsafe { &mut *data.cast::<Vec<(u64, usize)>>() }.push((address, bytes));
+    }
+
+    let mut ram = Box::new(Ram([0; 8192]));
+    let mut notifications: Vec<(u64, usize)> = Vec::new();
+    let cpu = test_support::library().open(Model::CortexM4, 1 << 20).unwrap();
+    // Guest mapping is deliberately unrelated to Unicorn's backing offset.
+    unsafe {
+        cpu.map_backing(
+            0x10000,
+            ram.0.len(),
+            7,
+            std::ptr::NonNull::from(&mut ram.0[0]),
+        )
+        .unwrap();
+        cpu.observe_code_stores(
+            Some(record),
+            std::ptr::from_mut(&mut notifications).cast(),
+        )
+        .unwrap();
+    }
+    // STRH R0,[R1].
+    cpu.write_memory(0x10000, &0x8008u16.to_le_bytes()).unwrap();
+    cpu.write_memory(0x10002, &0xe7feu16.to_le_bytes()).unwrap();
+    cpu.write_memory(0x11002, &0xe7feu16.to_le_bytes()).unwrap();
+    let step = |address: u64| {
+        cpu.run(Run {
+            begin: address | 1,
+            until: None,
+            watchdog_us: 1_000_000,
+            instructions: Some(1),
+        })
+        .unwrap();
+    };
+    let store = |address: u32, value: u32| {
+        cpu.write_register(arm::CORE[0], &value.to_le_bytes()).unwrap();
+        cpu.write_register(arm::CORE[1], &address.to_le_bytes()).unwrap();
+        step(0x10000);
+    };
+
+    // Fill the write TLB as data, then execute the destination and protect it.
+    store(0x11000, 0x2001);
+    step(0x11000);
+    // The first store sharing that page must leave the live translation alone.
+    store(0x11004, 0x42);
+    store(0x11000, 0x2002);
+    assert_eq!(notifications, [(0x11000, 2)]);
+    step(0x11000);
+    let mut result = [0; 4];
+    cpu.read_register(arm::CORE[0], &mut result).unwrap();
+    assert_eq!(u32::from_le_bytes(result), 2);
+}

@@ -326,14 +326,17 @@ impl Board {
         if !interrupt_ready {
             state.settled.idle = Some(core);
             let pc = scalar(cpu, Register::Pc)? & !1;
-            if in_thread_mode
-                && !state.enter_code(cpu, core, pc, 4)?
+            if !state.enter_code(cpu, core, pc, 4)?
                 && state.code_shadow[core]
                     .as_ref()
                     .and_then(|shadow| shadow.fetch(pc))
                     .is_some()
             {
-                state.blocks[core].as_mut().unwrap().inline.arm(pc, room);
+                state.blocks[core]
+                    .as_mut()
+                    .unwrap()
+                    .inline
+                    .arm(pc, room, in_thread_mode);
             }
         }
         Ok((blocks, Some(thumb_slice)))

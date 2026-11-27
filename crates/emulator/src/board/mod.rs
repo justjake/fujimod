@@ -1338,7 +1338,8 @@ impl Board {
         core: usize,
         config: aprofile::Config,
     ) -> Result<(), String> {
-        if self.cpu(core)?.model() != fujimod_emulator_cpu::Model::ArmV8A {
+        let cpu = self.cpu(core)?;
+        if cpu.model() != fujimod_emulator_cpu::Model::ArmV8A {
             return Err("A-profile controller requires an AArch64 processor".into());
         }
         let mut state = self.state.borrow_mut();
@@ -1348,7 +1349,9 @@ impl Board {
         if state.interrupts.as_ref().is_none_or(|g| core >= g.cores) {
             return Err("A-profile timers require this core's interrupt controller".into());
         }
-        state.aprofile[core] = Some(aprofile::Profile::new(config)?);
+        let profile = aprofile::Profile::new(config)?;
+        cpu.set_fast_counters(Some(profile.fast_counters()))?;
+        state.aprofile[core] = Some(profile);
         state.refresh_processors()
     }
     pub fn map_mmio(
@@ -2123,7 +2126,7 @@ impl Board {
         };
         // Whether this engine can report the stores that cover translated
         // bytes: those are the only stores that can rewrite code.
-        let code_stores = self.cpus[core].features().code_store_observation;
+        let code_stores = wanted && self.cpus[core].features().code_store_observation;
         let was_code_stores = self.state.borrow().blocks[core]
             .as_ref()
             .unwrap()
@@ -2234,7 +2237,7 @@ impl Board {
             let hook = self.store_hooks[core].ok_or("M-profile store hook is missing")?;
             self.cpus[core].hook_watched(hook, fast)?;
             let watching = self.state.borrow().blocks[core].as_ref().unwrap().watching;
-            if fast && !watching {
+            if fast && !watching && !code_stores {
                 // The first store watches on this engine: every translation
                 // must pass an observer again, so that the page it came from
                 // is watched before it runs. Later, entered pages stay
@@ -2254,14 +2257,8 @@ impl Board {
         blocks.active = wanted;
         blocks.store_hook = self.store_hooks[core];
         blocks.fast_stores = fast;
-        blocks.watching |= fast;
-        if code_stores {
-            // The engine now reports every store that covers translated bytes,
-            // so no page watch is needed; drop the ones earlier slices made.
-            blocks.watching = false;
-            blocks.code_stores_notified = true;
-            blocks.last_watched = None;
-        }
+        blocks.watching |= fast && !code_stores;
+        blocks.code_stores_notified = code_stores;
         if flushed {
             blocks.last_watched = None;
         }
@@ -3720,14 +3717,8 @@ impl State {
     fn system_register(&mut self, cpu: &dyn Cpu, core: usize, syndrome: u64) -> Result<(), String> {
         self.settled.clear();
         self.polls.last[core] = None;
-        let r = fujimod_emulator_cpu::arm::SystemRegister {
-            op0: ((syndrome >> 20) & 3) as u8,
-            op1: ((syndrome >> 14) & 7) as u8,
-            crn: ((syndrome >> 10) & 15) as u8,
-            crm: ((syndrome >> 1) & 15) as u8,
-            op2: ((syndrome >> 17) & 7) as u8,
-        }
-        .encoding()?;
+        let r =
+            fujimod_emulator_cpu::arm::SystemRegister::from_trap_syndrome(syndrome).encoding()?;
         let rt = ((syndrome >> 5) & 31) as u8;
         let read = syndrome & 1 != 0;
         let value = if read || rt == 31 {
@@ -3754,8 +3745,13 @@ impl State {
                     .system(core, r, write)?,
             )
         } else if let Some(p) = self.aprofile[core].as_mut() {
-            p.access(r, self.timeline.now(), write)?
-                .or(p.implementation_access(&mut self.implementation_cluster, r, write)?)
+            let result = p
+                .access(r, self.timeline.now(), write)?
+                .or(p.implementation_access(&mut self.implementation_cluster, r, write)?);
+            if write.is_some() && aprofile::is_pmu_register(r) {
+                cpu.set_fast_counters(Some(p.fast_counters()))?;
+            }
+            result
         } else {
             None
         };
@@ -4179,11 +4175,13 @@ unsafe fn block_classify_transfers(
     {
         classification.instruction = fujimod_emulator_cpu::InstructionDisposition::ExecuteAndEndBlock;
         classification.observe_block = false;
+    } else if mprofile_blocks::is_pc_pop(word) || mprofile_blocks::is_bx_lr(word) {
+        classification.instruction =
+            fujimod_emulator_cpu::InstructionDisposition::ExecuteThumbThreadOnly;
+        classification.observe_block = false;
     } else {
         classification.observe_block &= !(mprofile_blocks::is_single_transfer(word)
-            || mprofile_blocks::is_non_pc_pop(word)
-            || mprofile_blocks::is_pc_pop(word)
-            || mprofile_blocks::is_bx_lr(word));
+            || mprofile_blocks::is_non_pc_pop(word));
     }
     classification
 }
@@ -4389,8 +4387,15 @@ unsafe fn block_entered(block: fujimod_emulator_cpu::Block, data: *mut c_void) {
         if p.take_alias_write() {
             s.code_run = RunCode::Unknown;
         }
-        s.sync_mprofile_fast_stores(cpu, core)?;
         let execute = matches!(entry, mprofile::Entry::Execute);
+        // In an ordered slice no peer can acquire a reservation between
+        // entries. This core only acquires one in an emulated instruction.
+        if !execute
+            || s.parallel.is_some()
+            || !s.blocks[core].as_ref().unwrap().fast_stores
+        {
+            s.sync_mprofile_fast_stores(cpu, core)?;
+        }
         if !execute {
             s.settled.clear();
             s.blocks[core].as_mut().unwrap().poll = None;
@@ -4432,12 +4437,11 @@ unsafe fn block_entered(block: fujimod_emulator_cpu::Block, data: *mut c_void) {
             return cpu.stop();
         }
         // The translated guard admits subsequent eligible blocks on this
-        // checked page in Thread Mode. Handler Mode keeps inline disarmed so
-        // EXC_RETURN reaches the controller via `block_entered`.
-        let inline = in_thread_mode
-            && s.blocks[core]
-                .as_ref()
-                .is_some_and(|blocks| blocks.fast_stores)
+        // checked page. Handler Mode sends blocks that can return from an
+        // exception through the controller.
+        let inline = s.blocks[core]
+            .as_ref()
+            .is_some_and(|blocks| blocks.fast_stores)
             && settled
             && s.settled.armed
             && !ready
@@ -4453,7 +4457,7 @@ unsafe fn block_entered(block: fujimod_emulator_cpu::Block, data: *mut c_void) {
         blocks.room -= entries - 1;
         blocks.pending = Some((pc, bytes, entries, pc + last));
         if inline {
-            blocks.inline.arm(pc, window_room - entries);
+            blocks.inline.arm(pc, window_room - entries, in_thread_mode);
         }
         Ok::<(), String>(())
     })();

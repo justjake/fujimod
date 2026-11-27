@@ -963,7 +963,8 @@ impl Cpu for Core {
             thumb_block_accounting,
             thumb_block_recovery: thumb_block_accounting
                 && e.features & ffi::FEATURE_THUMB_BLOCK_RECOVERY != 0
-                && e.features & ffi::FEATURE_THUMB_PAGE_BITMAP != 0,
+                && e.features & ffi::FEATURE_THUMB_PAGE_BITMAP != 0
+                && e.features & ffi::FEATURE_THUMB_HANDLER_ACCOUNTING != 0,
             watched_stores: e.hook_watched.is_some() && e.watch.is_some(),
             backing_observation: e.observe_backings.is_some(),
             store_pc_control: e.write_hook_pc_sync.is_some(),
@@ -1936,6 +1937,7 @@ unsafe extern "C" fn classify(data: *mut c_void, address: u64, word: u32) -> i32
     let action = match decision.instruction {
         InstructionDisposition::Execute => 0,
         InstructionDisposition::ExecuteItSafe => 0,
+        InstructionDisposition::ExecuteThumbThreadOnly => 32,
         InstructionDisposition::Observe => 1,
         InstructionDisposition::ObserveAndEndBlock => 2,
         InstructionDisposition::ExecuteAndEndBlock if context.native_execute_end => 8,
@@ -2543,6 +2545,112 @@ mod tests {
         assert_eq!(reg(&cpu, arm::CORE[0]), 7);
     }
     #[test]
+    fn m4_owned_ram_becomes_write_protected_for_translation_after_data_stores() {
+        let cpu = library().open(Model::CortexM4, 4 * 1024 * 1024).unwrap();
+        cpu.map_zeroed(0x1000, 0x2000, 7).unwrap();
+        // STRH R0,[R1], with a separate executable page initially used as data.
+        cpu.write_memory(0x1000, &0x8008u16.to_le_bytes()).unwrap();
+        cpu.write_register(arm::CORE[1], &0x2000u32.to_le_bytes())
+            .unwrap();
+        let store = |instruction: u32| {
+            cpu.write_register(arm::CORE[0], &instruction.to_le_bytes())
+                .unwrap();
+            cpu.run(Run {
+                begin: 0x1001,
+                until: Some(0x1002),
+                watchdog_us: 1_000_000,
+                instructions: None,
+            })
+            .unwrap();
+        };
+        let read_code = || {
+            cpu.run(Run {
+                begin: 0x2001,
+                until: Some(0x2002),
+                watchdog_us: 1_000_000,
+                instructions: None,
+            })
+            .unwrap();
+            reg(&cpu, arm::CORE[0])
+        };
+        store(0x2001); // MOVS R0,#1, filling the data TLB before translation.
+        assert_eq!(read_code(), 1);
+        store(0x2002); // The existing store TLB entry must invalidate MOVS #1.
+        assert_eq!(read_code(), 2);
+    }
+
+    #[test]
+    fn m4_owned_ram_still_copies_writes_after_a_memory_snapshot() {
+        let cpu = library().open(Model::CortexM4, 4 * 1024 * 1024).unwrap();
+        cpu.map_zeroed(0x1000, 0x2000, 7).unwrap();
+        cpu.write_memory(0x1000, &0x8008u16.to_le_bytes()).unwrap();
+        cpu.write_register(arm::CORE[1], &0x2000u32.to_le_bytes())
+            .unwrap();
+        let store = |value: u32| {
+            cpu.write_register(arm::CORE[0], &value.to_le_bytes()).unwrap();
+            cpu.run(Run {
+                begin: 0x1001,
+                until: Some(0x1002),
+                watchdog_us: 1_000_000,
+                instructions: None,
+            })
+            .unwrap();
+        };
+        let data = || {
+            let mut bytes = [0; 2];
+            cpu.read_memory(0x2000, &mut bytes).unwrap();
+            u16::from_le_bytes(bytes)
+        };
+        store(5);
+        // UC_CTL_CONTEXT_MODE with UC_CTL_CONTEXT_CPU | UC_CTL_CONTEXT_MEMORY.
+        cpu.check(unsafe { (cpu.api.uc_ctl)(cpu.raw, ffi::ctl(14, 1, 1), 3i32) })
+            .unwrap();
+        let snapshot = cpu.snapshot(None).unwrap();
+        store(9);
+        assert_eq!(data(), 9);
+        cpu.restore(snapshot.as_ref()).unwrap();
+        assert_eq!(data(), 5);
+    }
+
+    #[test]
+    fn unobserved_thumb_budget_stops_at_each_entry_of_a_mixed_width_it_block() {
+        let cpu = library().open(Model::CortexM4, 4 * 1024 * 1024).unwrap();
+        cpu.map_zeroed(0x1000, 0x1000, 7).unwrap();
+        // MOVS R0,#0; IT EQ; MOVWEQ R1,#0x1234; ADDS R0,#1; B .
+        cpu.write_memory(
+            0x1000,
+            &[0x00, 0x20, 0x08, 0xbf, 0x41, 0xf2, 0x34, 0x21, 0x01, 0x30, 0xfe, 0xe7],
+        )
+        .unwrap();
+        cpu.run(Run {
+            begin: 0x1001,
+            until: Some(0x100a),
+            watchdog_us: 1_000_000,
+            instructions: None,
+        })
+        .unwrap();
+        cpu.write_register(arm::CORE[1], &0u32.to_le_bytes())
+            .unwrap();
+        for (begin, pc, r0, r1) in [
+            (0x1001, 0x1002, 0, 0),
+            (0x1003, 0x1004, 0, 0),
+            (0x1005, 0x1008, 0, 0x1234),
+            (0x1009, 0x100a, 1, 0x1234),
+        ] {
+            cpu.run(Run {
+                begin,
+                until: None,
+                watchdog_us: 1_000_000,
+                instructions: Some(1),
+            })
+            .unwrap();
+            assert_eq!(reg(&cpu, arm::PC), pc);
+            assert_eq!(reg(&cpu, arm::CORE[0]), r0);
+            assert_eq!(reg(&cpu, arm::CORE[1]), r1);
+        }
+    }
+
+    #[test]
     fn thumb_coarse_guard_reuses_cached_mixed_width_block_only_on_its_page() {
         let cpu = library().open(Model::CortexM4, 4 * 1024 * 1024).unwrap();
         cpu.set_guard_diagnostics(true).unwrap();
@@ -2876,6 +2984,44 @@ mod tests {
         probe.accesses.push((Access::Write, offset, bytes, value));
     }
     #[test]
+    fn unobserved_thumb_budget_charges_a_restarted_mmio_load_once() {
+        let mut probe = MmioProbe::default();
+        let cpu = library().open(Model::CortexM4, 4 * 1024 * 1024).unwrap();
+        cpu.map_zeroed(0x1000, 0x1000, 7).unwrap();
+        // MOVS R2,#7; MOVW R3,#0x1234; LDR R0,[R1]; ADDS R2,#1; B .
+        cpu.write_memory(
+            0x1000,
+            &[0x07, 0x22, 0x41, 0xf2, 0x34, 0x23, 0x08, 0x68, 0x01, 0x32, 0xfe, 0xe7],
+        )
+        .unwrap();
+        unsafe {
+            cpu.map_mmio(
+                0x8000,
+                0x1000,
+                Mmio {
+                    read: device_read,
+                    write: device_write,
+                    data: (&mut probe as *mut MmioProbe).cast(),
+                },
+            )
+            .unwrap();
+        }
+        cpu.write_register(arm::CORE[1], &0x8000u32.to_le_bytes())
+            .unwrap();
+        cpu.run(Run {
+            begin: 0x1001,
+            until: None,
+            watchdog_us: 1_000_000,
+            instructions: Some(3),
+        })
+        .unwrap();
+        assert_eq!(reg(&cpu, arm::PC), 0x1008);
+        assert_eq!(reg(&cpu, arm::CORE[0]), 0x12345678);
+        assert_eq!(reg(&cpu, arm::CORE[2]), 7);
+        assert_eq!(probe.accesses, [(Access::Read, 0, 4, 0)]);
+    }
+
+    #[test]
     fn typed_mmio_preserves_offsets_after_partial_unmap_and_refuses_host_reads() {
         let library = library();
         let mut probe = Box::<MmioProbe>::default();
@@ -2978,6 +3124,75 @@ mod tests {
                 (Access::Write, 0x801024, 4, 0x12345678)
             ]
         );
+    }
+
+    #[test]
+    fn cached_thumb_return_block_checks_the_current_handler_mode() {
+        unsafe fn classify_return(_: *mut c_void, _: u64, word: u32) -> Translation {
+            Translation {
+                instruction: if word == 0x4770 {
+                    InstructionDisposition::ExecuteThumbThreadOnly
+                } else {
+                    InstructionDisposition::Execute
+                },
+                observe_block: false,
+            }
+        }
+        unsafe fn stop_on_block(_: Block, data: *mut c_void) {
+            unsafe { &*data.cast::<Core>() }.stop().unwrap();
+        }
+
+        let cpu = library().open(Model::CortexM4, 4 * 1024 * 1024).unwrap();
+        cpu.map_zeroed(0x1000, 0x1000, 7).unwrap();
+        // ADDS R0,#1; BX LR, or ADDS R1,#1; B back to ADDS.
+        cpu.write_memory(0x1000, &[1, 0x30, 0x70, 0x47, 1, 0x31, 0xfd, 0xe7])
+            .unwrap();
+        cpu.write_register(arm::CORE[14], &0x1001u32.to_le_bytes())
+            .unwrap();
+        unsafe {
+            cpu.translation_hooks(Some(TranslationHooks {
+                classify: classify_return,
+                restart: thumb_restart,
+                data: std::ptr::null_mut(),
+            }))
+            .unwrap();
+            cpu.install_hook(Hook::Block {
+                callback: stop_on_block,
+                data: (&cpu as *const Core).cast_mut().cast(),
+                range: HookRange::All,
+            })
+            .unwrap();
+        }
+
+        let accounting = cpu.thumb_recovery_accounting().unwrap().as_ptr();
+        unsafe {
+            (*accounting).thumb_accounting.accounting.enabled = 4;
+            (*accounting).thumb_page_bitmap[0] = 1 << 4;
+        }
+        for (begin, handler, expected_budget) in [
+            (0x1001, false, 0),
+            (0x1001, true, 2),
+            (0x1005, true, 0),
+            (0x1001, false, 0),
+        ] {
+            unsafe {
+                (*accounting).thumb_handler_mode = u64::from(handler);
+                (*accounting).thumb_accounting.accounting.budget = 2;
+            }
+            cpu.run(Run {
+                begin,
+                until: None,
+                watchdog_us: 0,
+                instructions: None,
+            })
+            .unwrap();
+            assert_eq!(
+                unsafe { (*accounting).thumb_accounting.accounting.budget },
+                expected_budget
+            );
+        }
+        assert_eq!(reg(&cpu, arm::CORE[0]), 2);
+        assert_eq!(reg(&cpu, arm::CORE[1]), 1);
     }
 
     #[test]

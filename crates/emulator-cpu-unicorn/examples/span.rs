@@ -1,7 +1,7 @@
 //! Measure a caller-supplied CPU span, checking bounded/unbounded end states.
 use fujimod_emulator_cpu::{
     Cpu, Hook, HookRange, InstructionDisposition, Model, Register, Run, Translation,
-    TranslationHooks,
+    TranslationHooks, arm,
 };
 use fujimod_emulator_cpu_unicorn::Library;
 use serde::Deserialize;
@@ -13,6 +13,8 @@ use std::{ffi::c_void, time::Instant};
 struct Input {
     model: Model,
     memory: Vec<(u64, usize)>,
+    #[serde(default)]
+    protect: Vec<(u64, usize, u32)>,
     images: Vec<(u64, String, String)>,
     registers: Vec<(Register, u64)>,
     begin: u64,
@@ -35,9 +37,37 @@ unsafe fn restart(_: *mut c_void, _: u64) {}
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let path = std::env::args().nth(1).ok_or("expected input JSON path")?;
     let input: Input = serde_json::from_slice(&std::fs::read(path)?)?;
-    if input.model != Model::ArmV8A || input.repeats == 0 {
-        return Err("expected armv8a and at least one repeat".into());
+    if input.repeats == 0 {
+        return Err("expected at least one repeat".into());
     }
+    let (pc_register, registers): (_, Vec<_>) = match input.model {
+        Model::ArmV8A => (
+            Register::Pc,
+            (0..31)
+                .map(Register::X)
+                .chain([Register::Pc, Register::Sp, Register::Pstate])
+                .collect(),
+        ),
+        Model::CortexM4 => (
+            arm::PC,
+            arm::CORE
+                .into_iter()
+                .chain(
+                    [
+                        arm::Register::Xpsr,
+                        arm::Register::Msp,
+                        arm::Register::Psp,
+                        arm::Register::Control,
+                        arm::Register::Primask,
+                        arm::Register::Basepri,
+                        arm::Register::Faultmask,
+                    ]
+                    .map(Register::Arm32),
+                )
+                .collect(),
+        ),
+        _ => return Err("expected armv8a or cortex-m4".into()),
+    };
     let library = Library::linked()?;
     let images = input
         .images
@@ -67,6 +97,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             for (base, data) in &images {
                 cpu.write_memory(*base, data)?;
             }
+            for &(base, size, permissions) in &input.protect {
+                cpu.protect(base, size, permissions)?;
+            }
             for &(register, value) in &input.registers {
                 let bytes = value.to_le_bytes();
                 cpu.write_register(register, &bytes)?;
@@ -89,29 +122,26 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     }))?;
                 }
             }
+            let budgeted = mode.ends_with("budgeted");
             let start = Instant::now();
             cpu.run(Run {
                 begin: input.begin,
-                until: Some(input.until),
-                instructions: mode.ends_with("budgeted").then_some(instructions),
+                // Each stop mechanism must reach the same state on its own.
+                until: (!budgeted).then_some(input.until),
+                instructions: budgeted.then_some(instructions),
                 watchdog_us: 1_000_000,
             })
             .map_err(|e| {
                 let mut pc = [0; 8];
-                let _ = cpu.read_register(Register::Pc, &mut pc);
+                let _ = cpu.read_register(pc_register, &mut pc);
                 format!("{e:?} at {:#x}", u64::from_le_bytes(pc))
             })?;
             samples[index].push(start.elapsed().as_secs_f64());
             let mut digest = Sha256::new();
-            for n in 0..31 {
-                let mut bytes = [0; 8];
-                cpu.read_register(Register::X(n), &mut bytes)?;
-                digest.update(bytes);
-            }
-            for register in [Register::Pc, Register::Sp, Register::Pstate] {
+            for &register in &registers {
                 let mut bytes = [0; 8];
                 cpu.read_register(register, &mut bytes)?;
-                if register == Register::Pc {
+                if register == pc_register {
                     assert_eq!(u64::from_le_bytes(bytes), input.until);
                 }
                 digest.update(bytes);

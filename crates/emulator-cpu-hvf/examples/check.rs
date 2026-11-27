@@ -471,6 +471,9 @@ fn main() -> Result<(), String> {
     set(&cpu, Register::X(3), 0);
     set(&cpu, Register::Pc, 0x10104);
     cpu.set_interrupt(Interrupt::Irq, true)?;
+    let pending_irq = cpu.snapshot(None)?.export()?;
+    cpu.set_interrupt(Interrupt::Irq, false)?;
+    cpu.restore(cpu.import_snapshot(&pending_irq)?.as_ref())?;
     run(&cpu, 0x10104, 1).unwrap();
     assert_eq!(get(&cpu, Register::Pc), 0x20484);
     assert_eq!(get(&cpu, sys(0xc201)), 0x10104);
@@ -1141,6 +1144,40 @@ fn main() -> Result<(), String> {
         "PASS: Interactive native loop at scale {expected_scale} took {wall:?}; estimated {:.1}M instructions/s; {progress}ns for {INTERACTIVE_BUDGET_NS}ns guest budget",
         estimated_rate / 1_000_000.0
     );
+
+    // The loop makes no guest exits. Tighten a queued run and a run whose
+    // timer started without a deadline. Both should stop before the watchdog.
+    for (initial_limit, delay_ms) in [(Some(2_000_000_000), 0), (None, 12)] {
+        let run = cpu
+            .start_run(Run {
+                begin: 0x10900,
+                until: None,
+                watchdog_us: 500_000,
+                instructions: initial_limit,
+            })
+            .map_err(|e| e.to_string())?;
+        if delay_ms != 0 {
+            thread::sleep(std::time::Duration::from_millis(delay_ms));
+        }
+        let deadline = 50_000_000 * expected_scale;
+        cpu.tighten_instruction_limit(deadline)?;
+        loop {
+            match cpu.poll_run(run).map_err(|e| e.to_string())? {
+                RunStatus::Running => thread::yield_now(),
+                RunStatus::CallbackPending => panic!("native loop unexpectedly called the owner"),
+                RunStatus::Complete(result) => {
+                    assert!(matches!(result.map_err(|e| e.to_string())?, Exit::Stopped));
+                    break;
+                }
+            }
+        }
+        let progress = cpu.instruction_progress().expect("native run was measured");
+        assert!(
+            (deadline..200_000_000 * expected_scale).contains(&progress),
+            "tightened native loop from {initial_limit:?} reached {progress} guest ns"
+        );
+    }
+    println!("PASS: queued and running native loops honor tightened budgets");
 
     set(&cpu, Register::X(0), 0);
     let stop_barrier = std::sync::Arc::new(std::sync::Barrier::new(2));
