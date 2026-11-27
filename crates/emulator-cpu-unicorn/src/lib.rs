@@ -2545,6 +2545,74 @@ mod tests {
         assert_eq!(reg(&cpu, arm::CORE[0]), 7);
     }
     #[test]
+    fn m4_owned_ram_becomes_write_protected_for_translation_after_data_stores() {
+        let cpu = library().open(Model::CortexM4, 4 * 1024 * 1024).unwrap();
+        cpu.map_zeroed(0x1000, 0x2000, 7).unwrap();
+        // STRH R0,[R1], with a separate executable page initially used as data.
+        cpu.write_memory(0x1000, &0x8008u16.to_le_bytes()).unwrap();
+        cpu.write_register(arm::CORE[1], &0x2000u32.to_le_bytes())
+            .unwrap();
+        let store = |instruction: u32| {
+            cpu.write_register(arm::CORE[0], &instruction.to_le_bytes())
+                .unwrap();
+            cpu.run(Run {
+                begin: 0x1001,
+                until: Some(0x1002),
+                watchdog_us: 1_000_000,
+                instructions: None,
+            })
+            .unwrap();
+        };
+        let read_code = || {
+            cpu.run(Run {
+                begin: 0x2001,
+                until: Some(0x2002),
+                watchdog_us: 1_000_000,
+                instructions: None,
+            })
+            .unwrap();
+            reg(&cpu, arm::CORE[0])
+        };
+        store(0x2001); // MOVS R0,#1, filling the data TLB before translation.
+        assert_eq!(read_code(), 1);
+        store(0x2002); // The existing store TLB entry must invalidate MOVS #1.
+        assert_eq!(read_code(), 2);
+    }
+
+    #[test]
+    fn m4_owned_ram_still_copies_writes_after_a_memory_snapshot() {
+        let cpu = library().open(Model::CortexM4, 4 * 1024 * 1024).unwrap();
+        cpu.map_zeroed(0x1000, 0x2000, 7).unwrap();
+        cpu.write_memory(0x1000, &0x8008u16.to_le_bytes()).unwrap();
+        cpu.write_register(arm::CORE[1], &0x2000u32.to_le_bytes())
+            .unwrap();
+        let store = |value: u32| {
+            cpu.write_register(arm::CORE[0], &value.to_le_bytes()).unwrap();
+            cpu.run(Run {
+                begin: 0x1001,
+                until: Some(0x1002),
+                watchdog_us: 1_000_000,
+                instructions: None,
+            })
+            .unwrap();
+        };
+        let data = || {
+            let mut bytes = [0; 2];
+            cpu.read_memory(0x2000, &mut bytes).unwrap();
+            u16::from_le_bytes(bytes)
+        };
+        store(5);
+        // UC_CTL_CONTEXT_MODE with UC_CTL_CONTEXT_CPU | UC_CTL_CONTEXT_MEMORY.
+        cpu.check(unsafe { (cpu.api.uc_ctl)(cpu.raw, ffi::ctl(14, 1, 1), 3i32) })
+            .unwrap();
+        let snapshot = cpu.snapshot(None).unwrap();
+        store(9);
+        assert_eq!(data(), 9);
+        cpu.restore(snapshot.as_ref()).unwrap();
+        assert_eq!(data(), 5);
+    }
+
+    #[test]
     fn unobserved_thumb_budget_stops_at_each_entry_of_a_mixed_width_it_block() {
         let cpu = library().open(Model::CortexM4, 4 * 1024 * 1024).unwrap();
         cpu.map_zeroed(0x1000, 0x1000, 7).unwrap();
