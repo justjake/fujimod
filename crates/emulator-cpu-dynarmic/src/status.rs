@@ -1,6 +1,6 @@
 //! Privileged ARM state kept outside Dynarmic's application register file.
 use super::{Core, ffi};
-use fujimod_emulator_cpu::arm;
+use fujimod_emulator_cpu::{Access, Cpu, arm};
 
 const MODE: u32 = 0x1f;
 const USER: u32 = 0x10;
@@ -215,16 +215,66 @@ impl Core {
             return Ok(Some(target & if status & 0x20 == 0 { !3 } else { !1 }));
         }
         if word & 0x0e40_0000 == 0x0840_0000 {
-            return Err("Dynarmic does not implement ARM banked multiple transfers".into());
+            if word & 0x0010_8000 == 0x0010_8000 {
+                return self.load_exception_frame(word).map(Some);
+            }
+            return Err("Dynarmic does not implement ARM user-bank multiple transfers".into());
         }
         Ok(None)
+    }
+
+    fn load_exception_frame(&self, word: u32) -> Result<u32, String> {
+        let status = self.spsr()?;
+        bank(status)?;
+        let registers = word & 0xffff;
+        let rn = (word >> 16) & 15;
+        let writeback = word & (1 << 21) != 0;
+        if rn == 15 || (writeback && registers & (1 << rn) != 0) {
+            return Err("unpredictable ARM LDM exception return operands".into());
+        }
+        let base = self.reg(rn);
+        if !base.is_multiple_of(4) || self.cpsr() & 0x200 != 0 {
+            return Err(
+                "Dynarmic LDM exception return requires an aligned little-endian frame".into(),
+            );
+        }
+        let bytes = registers.count_ones() * 4;
+        let before = word & (1 << 24) != 0;
+        let (mut address, updated_base) = if word & (1 << 23) != 0 {
+            (
+                base.wrapping_add(u32::from(before) * 4),
+                base.wrapping_add(bytes),
+            )
+        } else {
+            let updated = base.wrapping_sub(bytes);
+            (updated.wrapping_add(u32::from(!before) * 4), updated)
+        };
+        let mut values = [0; 16];
+        for (index, value) in values.iter_mut().enumerate() {
+            if registers & (1 << index) != 0 {
+                let mut bytes = [0; 4];
+                self.read_virtual(address.into(), Access::Read, &mut bytes)?;
+                *value = u32::from_le_bytes(bytes);
+                address = address.wrapping_add(4);
+            }
+        }
+        for (index, value) in values[..15].iter().enumerate() {
+            if registers & (1 << index) != 0 {
+                self.set_reg(index as u32, *value);
+            }
+        }
+        if writeback {
+            self.set_reg(rn, updated_base);
+        }
+        self.set_cpsr(status)?;
+        Ok(values[15] & if status & 0x20 == 0 { !3 } else { !1 })
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use fujimod_emulator_cpu::{Cpu, Model};
+    use fujimod_emulator_cpu::Model;
 
     #[test]
     fn arm_status_instructions_switch_banks_and_return_from_irq() {
@@ -257,5 +307,26 @@ mod tests {
             .unwrap();
         assert_eq!(cpu.reg(13), 0x3000);
         assert_eq!(cpu.spsr().unwrap(), 0xd3);
+    }
+
+    #[test]
+    fn ldm_return_restores_flags_and_writes_back_the_exception_stack() {
+        let cpu = Core::new(Model::CortexA7).unwrap();
+        cpu.map_zeroed(0x1000, 0x1000, 7).unwrap();
+        cpu.set_reg(13, 0x1100);
+        cpu.set_spsr(0x6000_005f).unwrap();
+        cpu.write_memory(0x1100, &0x1234_u32.to_le_bytes()).unwrap();
+        cpu.write_memory(0x1104, &0x4200_u32.to_le_bytes()).unwrap();
+
+        // ldmia sp!, {r0, pc}^
+        assert_eq!(
+            cpu.status_instruction(0x2000, 0xe8fd_8001).unwrap(),
+            Some(0x4200)
+        );
+        assert_eq!(cpu.cpsr(), 0x6000_005f);
+        assert_eq!(cpu.reg(0), 0x1234);
+        assert_eq!(cpu.reg(13), 0);
+        cpu.set_cpsr(0xd3).unwrap();
+        assert_eq!(cpu.reg(13), 0x1108);
     }
 }
