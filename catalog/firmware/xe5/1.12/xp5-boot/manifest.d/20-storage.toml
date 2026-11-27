@@ -21,6 +21,10 @@ size = 0x1000
 kind = "flash-storage-controller"
 [device.options]
 jedec_id = 0x2c5b1b
+# The loader start reaches its first aperture read (0xcc, 20 dummy cycles) with no write to the
+# part's volatile dummy-cycle register, which an earlier boot stage leaves selecting 20 cycles, as
+# on the X-H2 5.30. INFERRED for the X-E5 from that read; the setup start programs it itself.
+inherited_dummy_cycles = 20
 
 [[device]]
 base = 0xff939000
