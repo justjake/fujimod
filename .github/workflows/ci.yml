@@ -96,8 +96,10 @@ jobs:
       - if: ${{ !cancelled() }}
         run: mise run javascript-format-check
 
-  native-tests:
-    name: Rust and Python tests
+  # The Rust tests compile once, then run in parallel shards. Doc tests run
+  # in the build job because nextest cannot archive them.
+  rust-test-build:
+    name: Rust test build
     runs-on: ubuntu-latest
     timeout-minutes: 60
     steps:
@@ -110,16 +112,60 @@ jobs:
       - uses: ./.github/actions/setup
         with:
           desktop: 'true'
-      - name: Install coverage and media tools
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y libjpeg-dev
+      - run: sudo apt-get install -y libjpeg-dev
       - name: Build the emulator GUI frontend the desktop crate embeds
         run: pnpm --filter @fujimod/emulator-gui run build
-      - run: mise run rust-test
-      - name: Python tests
+      - run: mise run rust-test-archive
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: rust-tests
+          path: target/nextest/rust-tests.tar.zst
+          retention-days: 1
+          compression-level: 0
+      - name: Doc tests
         if: ${{ !cancelled() }}
-        run: mise run python-test
+        run: mise run rust-doc-test
+
+  rust-tests:
+    name: Rust tests ${{ matrix.shard }}/3
+    needs: rust-test-build
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ inputs.ref || github.sha }}
+          persist-credentials: false
+          submodules: recursive
+          lfs: true
+      - uses: ./.github/actions/setup
+        with:
+          desktop: 'true'
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: rust-tests
+          path: target/nextest
+      - run: mise run rust-test-shard -- ${{ matrix.shard }}/3
+
+  python-tests:
+    name: Python tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ inputs.ref || github.sha }}
+          persist-credentials: false
+          submodules: recursive
+          lfs: true
+      - uses: ./.github/actions/setup
+        with:
+          desktop: 'true'
+      - run: mise run python-test
 
   javascript-tests:
     name: JavaScript and Wasm tests
@@ -151,7 +197,7 @@ jobs:
   required:
     name: CI required
     if: always()
-    needs: [python-quality, rust-quality, javascript-quality, native-tests, javascript-tests]
+    needs: [python-quality, rust-quality, javascript-quality, rust-test-build, rust-tests, python-tests, javascript-tests]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
@@ -159,4 +205,4 @@ jobs:
         env:
           RESULTS: ${{ join(needs.*.result, ',') }}
         run: |
-          test "$RESULTS" = 'success,success,success,success,success'
+          test "$RESULTS" = 'success,success,success,success,success,success,success'

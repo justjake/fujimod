@@ -2,8 +2,11 @@
 
 [CI](.github/workflows/ci.yml) runs on every push to `main`, when started by
 hand, and for pull requests through [PR CI](.github/workflows/pr-ci.yml), without
-path filters. Its five jobs check Python, JavaScript/TypeScript and Rust
-independently and run the native and browser suites.
+path filters. Its jobs check Python, JavaScript/TypeScript and Rust
+independently and run the native and browser suites. The Rust tests build once
+with the `ci` profile (no incremental state, no debug info in dependencies)
+into a [nextest](https://nexte.st) archive, which three jobs download and run in
+parallel shards; the build job also runs the doc tests.
 
 ## Pull requests
 
@@ -27,7 +30,7 @@ read-only token.
 Every run restores and saves caches: Rust compiles through sccache, downloaded
 crates, mise tools, and uv and pnpm packages keyed on their lockfiles. GitHub
 evicts the least recently used entries beyond the repository's 10 GB.
-Pull request runs upload no artifacts.
+Runs share only the Rust test archive between their own jobs, kept for a day.
 
 ## Planned structure
 

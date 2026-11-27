@@ -55,7 +55,7 @@ is doing from its code, addresses or state.
 External EXR II board composers can consume `fujimod_emulator_exr2_boot_serial::BootSerialBlocks::devices()` into their device graph. Register each `Some(Mapping)` window and attach each `None` entry as an unmapped event device; the returned devices share one serial state and coordinator.
 
 ```sh
-cargo test --workspace --all-features
+mise run rust-test   # cargo nextest run, then the doc tests
 cargo clippy --workspace --all-targets --all-features -- -D warnings
 ```
 
@@ -68,11 +68,11 @@ CI fails when the crate is out of date. `fujimod-unicorn-sys` compiles the
 Unicorn C archive with no features, so every feature set, test and binary of
 the CPU backend shares one archive per profile.
 
-Development uses two profiles: `cargo test` builds the default debug profile,
+Development uses two profiles: `cargo nextest run` and `cargo test` build the default debug profile,
 and every optimized local build (`--release`, `scripts/python_extension.py`,
 the emulator worker) shares `release`, which rebuilds in seconds: FujiMod
 crates at opt-level 2 without LTO, incremental, with dependencies fully
-optimized. `--profile release-web` adds ThinLTO for the web emulator and web wheels; it runs about 5% faster and links for about 40 seconds longer.
+optimized. `--profile release-web` adds ThinLTO for the web emulator and web wheels; it runs about 5% faster and links for about 40 seconds longer. CI builds its tests with `ci`, which differs from the debug profile only in debug info and incremental state.
 
 The core also builds for WebUSB. See the USB crate's
 [Wasm checks](crates/usb/README.md#wasm-core-checks) for the JS-runtime tests;

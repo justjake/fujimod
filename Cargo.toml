@@ -307,6 +307,17 @@ futures-channel = "0.3"
 # opt-level 3. A device edit rebuilds the X70 boot binary in about 9 CPU
 # seconds; ThinLTO would add about 40 seconds of linking to each build for a
 # boot about 5% faster.
+# CI test builds: no incremental state, line tables for backtraces in our
+# crates, no debug info in dependencies. Debug info dominates link time and the
+# size of the test binaries CI archives and hands to its test shards.
+[profile.ci]
+inherits = "dev"
+debug = "line-tables-only"
+incremental = false
+
+[profile.ci.package."*"]
+debug = false
+
 [profile.release]
 opt-level = 2
 lto = "off"
