@@ -544,9 +544,6 @@ impl Execution {
     /// and RAM the owner declared stable takes part: no firmware address,
     /// function identity or RTOS structure.
     fn advance_proven_loop(&self, address: u64, word: u32) -> Result<bool, String> {
-        if std::env::var_os("FUJIMOD_TRACE_PROOF").is_some() {
-            eprintln!("proof: address={address:#x} word={word:#08x} a32={} prove={} callbacks={}", self.a32, self.prove_loops.get(), self.proofs.candidate_entries.get());
-        }
         if self.a32 || !self.proving() {
             return Ok(false);
         }
@@ -1196,6 +1193,96 @@ mod interactive_tests {
                 );
             }
         }
+    }
+
+    /// Run a loop for a budget both with and without the prover, and compare
+    /// every architectural register, PSTATE and the entry count. The two runs
+    /// must be indistinguishable.
+    fn parity(code: &[u32], set_up: impl Fn(&Core), budget: usize) {
+        let run_both = |mode| {
+            let cpu = core();
+            cpu.map_zeroed(0x1000, 0x4000, 7).unwrap();
+            // A `b .` after the loop is where it lands when it leaves.
+            let mut words = code.to_vec();
+            words.push(0x1400_0000);
+            cpu.write_memory(
+                0x1000,
+                &words.iter().flat_map(|word| word.to_le_bytes()).collect::<Vec<_>>(),
+            )
+            .unwrap();
+            set_up(&cpu);
+            cpu.set_execution_policy(ExecutionPolicy::Interactive)
+                .unwrap();
+            cpu.set_loop_mode(mode).unwrap();
+            cpu.set_loop_window(true).unwrap();
+            let result = cpu.run(Run {
+                begin: 0x1000,
+                until: None,
+                watchdog_us: 0,
+                instructions: Some(budget),
+            });
+            assert!(
+                result.is_ok(),
+                "{result:?} code={code:08x?} budget={budget} pc={:#x}",
+                cpu.execution.scalar(Register::Pc).unwrap()
+            );
+            let mut state = Vec::new();
+            for index in 0..=30 {
+                state.push(value(&cpu, Register::X(index)));
+            }
+            state.push(value(&cpu, Register::Sp));
+            state.push(value(&cpu, Register::Pc));
+            state.push(value(&cpu, Register::Pstate) & 0xf000_0000);
+            (state, cpu.instruction_progress())
+        };
+        assert_eq!(
+            run_both(loops::LoopMode::Disabled),
+            run_both(loops::LoopMode::Accelerate),
+            "code={code:08x?} budget={budget}"
+        );
+    }
+
+    #[test]
+    fn every_proven_loop_class_matches_plain_execution() {
+        // subs w1,w1,#1 ; b.ne back (a register countdown).
+        let countdown = [0x7100_0421u32, b_ne(1)];
+        // subs x3,x3,#4 ; cmp x3,#0 ; b.ne back (a wide countdown).
+        let wide = [0xf100_1063u32, 0xf100_007f, b_ne(2)];
+        // ldr w0,[x4] ; cmp w0,#1 ; b.ne back (a stable RAM flag poll).
+        // The flag word lives past the code in the same page.
+        let poll = [0xb940_0080u32, 0x7100_041f, b_ne(2)];
+        // mrs x5,cntfrq_el0 ; ldr w0,[x4] ; cmp w0,#1 ; b.ne back.
+        let clock = [
+            0xd50b_7e25u32,
+            0xb940_0080,
+            0x7100_041f,
+            b_ne(3),
+        ];
+        let flag = |cpu: &Core| {
+            cpu.write_memory(0x2000, &1u32.to_le_bytes()).unwrap();
+            set_x(cpu, 4, 0x2000);
+        };
+        let cases: [(&[u32], fn(&Core)); 4] = [
+            (&countdown, |cpu| set_x(cpu, 1, 7)),
+            (&wide, |cpu| set_x(cpu, 3, 20)),
+            (&poll, flag),
+            (&clock, flag),
+        ];
+        for (code, set_up) in cases {
+            for budget in [3, 4, 5, 7, 12, 40, 513] {
+                parity(code, set_up, budget);
+            }
+        }
+    }
+
+    fn set_x(cpu: &Core, register: u8, value: u64) {
+        set(cpu, Register::X(register), value)
+    }
+
+    /// `b.ne` back to the head from `count` instructions later.
+    fn b_ne(count: u32) -> u32 {
+        let offset = -i64::from(count);
+        0x5400_0001 | ((((offset as u64) & 0x7ffff) as u32) << 5)
     }
 
     unsafe fn observe_store(_: Access, _: u64, _: i32, _: i64, data: *mut c_void) {
