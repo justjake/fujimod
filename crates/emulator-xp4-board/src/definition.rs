@@ -43,6 +43,13 @@ pub struct Definition {
     /// definition that keeps the per-instruction hook.
     #[serde(default)]
     pub coherent_ranges: Option<CoherentRanges>,
+    /// Run this definition in counted execution (translated blocks with the
+    /// per-instruction hook's accounting done inline) without the
+    /// `FUJIMOD_XP4_COUNTED` environment variable. Refused for a definition
+    /// that keeps the per-instruction hook; the variable alone only ignores
+    /// that case.
+    #[serde(default)]
+    pub counted_execution: bool,
     #[serde(default)]
     pub discovery_tx_receiver: Option<DiscoveryTxReceiver>,
     /// Explicit byte I2C controllers and their declared external peers.
