@@ -1605,6 +1605,12 @@ fn inline_pop_never_replays_a_device_read() {
         let expected = observer_counts.lock().unwrap().offsets.clone();
         let actual = translated_counts.lock().unwrap().offsets.clone();
         assert_eq!(expected.len(), reads, "{name}: observer reads {expected:?}");
+        // The observer never restarts; translated mode must have restarted the
+        // instruction, or this case proves nothing about a redo.
+        let restarts = translated.state.borrow().blocks[0]
+            .as_ref()
+            .map_or(0, |blocks| blocks.restart_callbacks);
+        assert!(restarts > 0, "{name}: no restart exercised the redo path");
         assert_eq!(
             actual, expected,
             "{name}: translated mode replayed a device read"
