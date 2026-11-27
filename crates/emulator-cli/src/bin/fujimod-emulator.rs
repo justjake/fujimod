@@ -943,10 +943,10 @@ fn run_application(mut options: Boot, resolved: ResolvedConfiguration) -> Result
         frames.capture(directory, started.display_frames(), &mut sequences)?;
         frames.finish()?;
     }
-    if let Some(output) = trace_output {
-        if let Some(trace) = trace {
-            output.write(trace)?;
-        }
+    if let Some(output) = trace_output
+        && let Some(trace) = trace
+    {
+        output.write(trace)?;
     }
     let boot::application::Board::Shared(session) = &started.board;
     session.board.check_discovery_callee_stubs()?;

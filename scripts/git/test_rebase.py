@@ -45,6 +45,14 @@ def test_an_unanswered_question_refuses_instead_of_guessing(
         pull_request_base(Repository(tmp_path), "someone/topic")
 
 
+@pytest.fixture(autouse=True)
+def git_identity(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Commits in every clone and submodule, on hosts without a global identity."""
+    for role in ("AUTHOR", "COMMITTER"):
+        monkeypatch.setenv(f"GIT_{role}_NAME", "Test")
+        monkeypatch.setenv(f"GIT_{role}_EMAIL", "test@example.invalid")
+
+
 def command(*arguments: str, cwd: Path) -> str:
     return subprocess.run(
         arguments, cwd=cwd, check=True, capture_output=True, text=True

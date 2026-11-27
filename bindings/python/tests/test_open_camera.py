@@ -30,9 +30,9 @@ def library() -> Path:
 def x70_files(root: Path) -> tuple[Path, Path]:
     """The X70 update and boot ROM the source record names."""
     record = json.loads((root / "firmware/x70/1.10/firmware.json").read_text())
-    update = root / record["source"]["path"]
+    update = root / str(record["source"]["path"])
     rom = record.get("boot_rom")
-    boot_rom = root / (rom["source"]["path"] if rom else record["paths"]["boot_rom"])
+    boot_rom = root / str(rom["source"]["path"] if rom else record["paths"]["boot_rom"])
     if not update.is_file() or not boot_rom.is_file():
         pytest.skip("the X70 source record's files are absent")
     return update, boot_rom

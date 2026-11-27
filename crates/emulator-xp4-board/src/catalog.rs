@@ -121,13 +121,13 @@ impl Catalog {
         let reference = fujimod_catalog::reference::ReferenceCatalog::bundled()?;
         let mut ips = Map::new();
         for (row, _) in &rows {
-            if let Some(id) = row["ip"].as_str() {
-                if let Some(ip) = reference.ip(id) {
-                    ips.insert(
-                        id.into(),
-                        serde_json::to_value(ip).map_err(|e| e.to_string())?,
-                    );
-                }
+            if let Some(id) = row["ip"].as_str()
+                && let Some(ip) = reference.ip(id)
+            {
+                ips.insert(
+                    id.into(),
+                    serde_json::to_value(ip).map_err(|e| e.to_string())?,
+                );
             }
         }
         let body = serde_json::to_value(&resolved.reference.body).map_err(|e| e.to_string())?;
@@ -863,10 +863,10 @@ pub fn definition(
     if let Some(scene) = fields
         .get_mut("imaging")
         .and_then(|imaging| imaging.pointer_mut("/3/5"))
+        && !scene.is_string()
+        && !scene.is_null()
     {
-        if !scene.is_string() && !scene.is_null() {
-            *scene = json!(scene.to_string());
-        }
+        *scene = json!(scene.to_string());
     }
     let definition = Value::Object(fields);
     serde_json::from_value::<crate::Definition>(definition.clone())

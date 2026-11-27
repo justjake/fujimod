@@ -169,7 +169,7 @@ impl DeviceGuard {
             e.width == width
                 && e.start <= address
                 && address + u64::from(width) <= e.end
-                && address % u64::from(width) == 0
+                && address.is_multiple_of(u64::from(width))
                 && if write { e.write } else { e.read }
         });
         if !allowed {

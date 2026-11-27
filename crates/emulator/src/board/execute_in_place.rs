@@ -39,7 +39,7 @@ impl Board {
                 let mut state = self.state.borrow_mut();
                 let cpus = self.cpus.clone();
                 state.with_host(&cpus, |bus, host| {
-                    for (index, word) in data.chunks_exact_mut(4).enumerate() {
+                    for (index, word) in data.as_chunks_mut::<4>().0.iter_mut().enumerate() {
                         let value = bus
                             .access(host, core, pc, physical + 4 * index as u64, 4, None)
                             .map_err(|error| {

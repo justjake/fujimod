@@ -331,11 +331,15 @@ def rebased_pin(
     if submodule.git("cat-file", "-e", f"{pinned}^{{commit}}", check=False).returncode:
         # A pin from a merged and deleted branch: fetch it to find its twin.
         submodule.git("fetch", "-q", "origin", pinned, check=False)
-    if submodule.git("cat-file", "-e", f"{pinned}^{{commit}}", check=False).returncode == 0:
-        if submodule.git(
+    if (
+        submodule.git("cat-file", "-e", f"{pinned}^{{commit}}", check=False).returncode
+        == 0
+        and submodule.git(
             "merge-base", "--is-ancestor", pinned, "HEAD", check=False
-        ).returncode == 0:
-            found = pinned
+        ).returncode
+        == 0
+    ):
+        found = pinned
     if found is None:
         wanted = patch_id(submodule, pinned)
         if wanted is not None:
@@ -359,7 +363,8 @@ def rebased_pin(
                 identity = "%an%x00%ae%x00%at%x00%s"
                 original = submodule.output("log", "-1", f"--format={identity}", pinned)
                 twins = [
-                    candidate for candidate in candidates
+                    candidate
+                    for candidate in candidates
                     if submodule.output("log", "-1", f"--format={identity}", candidate)
                     == original
                 ]

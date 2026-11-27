@@ -76,38 +76,17 @@
       {
         "kind": "bis_revision",
         "part_id": "bis-configuration",
-        "revision": [
-          0,
-          0
-        ],
+        "revision": [0, 0],
         "idle_high": false,
-        "samples": [
-          0,
-          0
-        ],
-        "block": [
-          0,
-          0,
-          0,
-          0,
-          0,
-          0
-        ]
+        "samples": [0, 0],
+        "block": [0, 0, 0, 0, 0, 0]
       },
       {
         "kind": "motion",
         "part_id": "lsm6ds",
         "temperature": 0,
-        "angular_rate": [
-          0,
-          0,
-          0
-        ],
-        "acceleration": [
-          0,
-          0,
-          0
-        ]
+        "angular_rate": [0, 0, 0],
+        "acceleration": [0, 0, 0]
       }
     ],
     "timings": [
@@ -198,7 +177,5 @@
     },
     "firmware_profile_id": "x100vi-131"
   },
-  "polled_serial_blocks": [
-    "spi0"
-  ]
+  "polled_serial_blocks": ["spi0"]
 }

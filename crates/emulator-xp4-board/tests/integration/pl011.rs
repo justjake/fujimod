@@ -73,7 +73,7 @@ fn a_guest_opens_port_0_and_its_transmit_interrupt_reaches_the_declared_line() {
         {"base": PORT + 0x1000},
         {"base": PORT + 0x2000},
     ]);
-    let mut board = session(selected).unwrap();
+    let board = session(selected).unwrap();
 
     // The driver's open: CR = 0, the baud rate divisors, a read-modify-write
     // of LCR_H; then enable the port, unmask the transmit interrupt, send one
@@ -129,7 +129,7 @@ fn a_guest_opens_port_0_and_its_transmit_interrupt_reaches_the_declared_line() {
 fn declared_rl78_peer_replies_to_a_guest_uart_exchange() {
     let mut selected = input();
     selected["pl011_uarts"] = json!([{"base": PORT, "irq": IRQ, "rl78": {"flash_bytes": 49152}}]);
-    let mut board = session(selected).unwrap();
+    let board = session(selected).unwrap();
     let mut program = Vec::new();
     for byte in [1u32, 3, 0x9a, 0, 0x21, 0x42, 3] {
         program.extend([0xe3a0_2000 | byte, 0xe5c0_2000]); // MOV r2, byte; STRB r2, [r0]

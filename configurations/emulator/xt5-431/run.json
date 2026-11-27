@@ -65,38 +65,17 @@
       {
         "kind": "bis_revision",
         "part_id": "bis-configuration",
-        "revision": [
-          0,
-          0
-        ],
-        "samples": [
-          0,
-          0
-        ],
-        "block": [
-          0,
-          0,
-          0,
-          0,
-          0,
-          0
-        ],
+        "revision": [0, 0],
+        "samples": [0, 0],
+        "block": [0, 0, 0, 0, 0, 0],
         "idle_high": false
       },
       {
         "kind": "motion",
         "part_id": "lsm6ds",
         "temperature": 0,
-        "angular_rate": [
-          0,
-          0,
-          0
-        ],
-        "acceleration": [
-          0,
-          0,
-          0
-        ]
+        "angular_rate": [0, 0, 0],
+        "acceleration": [0, 0, 0]
       }
     ],
     "timings": [],
@@ -123,49 +102,37 @@
     "kind": "xp5",
     "frames": [
       {
-        "block_ids": [
-          "receiver0"
-        ],
+        "block_ids": ["receiver0"],
         "period_ticks": 33333000,
         "active_ticks": 10000000,
         "luma": null
       },
       {
-        "block_ids": [
-          "receiver1"
-        ],
+        "block_ids": ["receiver1"],
         "period_ticks": 33333000,
         "active_ticks": null,
         "luma": null
       },
       {
-        "block_ids": [
-          "movdc0"
-        ],
+        "block_ids": ["movdc0"],
         "period_ticks": 33333000,
         "active_ticks": null,
         "luma": 128
       },
       {
-        "block_ids": [
-          "movdc1"
-        ],
+        "block_ids": ["movdc1"],
         "period_ticks": 33333000,
         "active_ticks": null,
         "luma": 128
       },
       {
-        "block_ids": [
-          "movdc2"
-        ],
+        "block_ids": ["movdc2"],
         "period_ticks": 33333000,
         "active_ticks": null,
         "luma": 128
       },
       {
-        "block_ids": [
-          "preview"
-        ],
+        "block_ids": ["preview"],
         "period_ticks": 33333000,
         "active_ticks": null,
         "luma": 128
@@ -174,9 +141,7 @@
     "statistics": [],
     "command_images": [
       {
-        "block_ids": [
-          "rifp"
-        ],
+        "block_ids": ["rifp"],
         "luma": 128
       }
     ]
@@ -200,12 +165,7 @@
     },
     "firmware_profile_id": "xt5-431"
   },
-  "polled_serial_blocks": [
-    "spi3",
-    "spi4",
-    "spi5",
-    "spi8"
-  ],
+  "polled_serial_blocks": ["spi3", "spi4", "spi5", "spi8"],
   "audio_signals": [
     {
       "block_id": "audio-serial-0",
@@ -220,9 +180,7 @@
       "tone_amplitude_thousandths": 250
     }
   ],
-  "idle_status_blocks": [
-    "input"
-  ],
+  "idle_status_blocks": ["input"],
   "sd_clock_steps": [
     {
       "block_id": "sd-host-0",

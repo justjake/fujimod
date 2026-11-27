@@ -320,7 +320,7 @@ impl Board {
                 .armv7a
                 .get(core)
                 .and_then(Option::as_ref)
-            && let Some(answer) = profile.identity(&*cpu, register)?
+            && let Some(answer) = profile.identity(cpu, register)?
         {
             return Ok(answer.into());
         }
