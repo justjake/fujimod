@@ -74,11 +74,12 @@ NATIVE_EXPORTS = frozenset({
     "STATISTICS_PROFILE",
     "settings_header",
     "settings_profile",
+    "xp5_device_windows",
 })
 
 
 def test_emulator_is_a_nested_native_module_with_complete_exports() -> None:
-    assert len(NATIVE_EXPORTS) == 52
+    assert len(NATIVE_EXPORTS) == 53
     importlib.import_module("fujimod")
     assert importlib.import_module("fujimod.catalog") is catalog
     assert importlib.import_module("fujimod.usb") is usb

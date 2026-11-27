@@ -542,20 +542,11 @@ type Session = fujimod_emulator_session::Session;
 impl Inputs {
     /// Queue `edges` detent edges on a named command dial.
     pub fn turn_dial(&self, session: &mut Session, name: &str, edges: i32) -> Result<(), String> {
-        use fujimod_emulator_xp4_io::countdown_timers::CountdownTimers;
         let channel = *self
             .dials
             .get(name)
             .ok_or_else(|| format!("No XP4 command dial named {name}"))?;
-        let node = session.node("xp4-countdown-timers")?;
-        session
-            .board
-            .with_device_inputs::<CountdownTimers, _>(node, |timers, now| {
-                timers
-                    .dial_input(channel)
-                    .ok_or("Unwired XP4 countdown dial")?
-                    .queue_edges(now, edges)
-            })
+        turn_countdown_dial(session, channel, edges)
     }
     /// Set one external ADC channel (XP4 ADC or X-Processor Pro converter).
     pub fn set_adc_input(
@@ -641,4 +632,23 @@ impl Inputs {
             .board
             .with_device_inputs::<Dwc3, _>(node, |usb, now| f(&mut usb.0.lock().unwrap(), now))
     }
+}
+
+/// Queue `edges` detent edges on the command dial wired to a countdown-timer
+/// channel.
+pub fn turn_countdown_dial(
+    session: &mut Session,
+    channel: usize,
+    edges: i32,
+) -> Result<(), String> {
+    use fujimod_emulator_xp4_io::countdown_timers::CountdownTimers;
+    let node = session.node("xp4-countdown-timers")?;
+    session
+        .board
+        .with_device_inputs::<CountdownTimers, _>(node, |timers, now| {
+            timers
+                .dial_input(channel)
+                .ok_or("Unwired XP4 countdown dial")?
+                .queue_edges(now, edges)
+        })
 }

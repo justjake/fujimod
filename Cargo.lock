@@ -2393,7 +2393,6 @@ dependencies = [
  "fujimod-emulator-preparation",
  "fujimod-emulator-session",
  "fujimod-emulator-xp4-board",
- "fujimod-emulator-xp4-io",
  "fujimod-emulator-xp5-board",
  "fujimod-emulator-xp5-display",
  "fujimod-emulator-xp5-io",
