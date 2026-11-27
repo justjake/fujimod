@@ -950,7 +950,6 @@ fn run_pause_stress() {
 }
 
 #[test]
-#[ignore = "still strands a window: one A53 worker spins in its engine loop; see worker::tests::a_pause_raised_around_run_start_is_never_lost"]
 fn interactive_windows_close_while_every_core_is_parked_in_a_callback() {
     if std::env::var_os(STRESS_CHILD).is_some() {
         run_pause_stress();
