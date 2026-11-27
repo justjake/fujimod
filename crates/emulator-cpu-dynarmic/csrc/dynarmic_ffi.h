@@ -50,6 +50,7 @@ void dynarmic_stop(DynarmicInstance* inst);
 void dynarmic_clear_cache(DynarmicInstance* inst);
 void dynarmic_invalidate_cache(DynarmicInstance* inst, uint32_t vaddr, size_t length);
 
+void dynarmic_read_gprs(DynarmicInstance* inst, uint32_t* values);
 uint32_t dynarmic_get_reg(DynarmicInstance* inst, uint32_t reg);
 void dynarmic_set_reg(DynarmicInstance* inst, uint32_t reg, uint32_t val);
 

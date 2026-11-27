@@ -314,6 +314,11 @@ void dynarmic_invalidate_cache(DynarmicInstance* inst, uint32_t vaddr, size_t le
     }
 }
 
+void dynarmic_read_gprs(DynarmicInstance* inst, uint32_t* values) {
+    const auto& registers = inst->jit->Regs();
+    std::memcpy(values, registers.data(), 15 * sizeof(uint32_t));
+}
+
 uint32_t dynarmic_get_reg(DynarmicInstance* inst, uint32_t reg) {
     if (!inst || reg > 15) return 0;
     return inst->jit->Regs()[reg];
