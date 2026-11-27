@@ -1398,12 +1398,9 @@ fn newly_admitted_encodings_match_the_instruction_observer() {
     );
 }
 
-/// A multi-access load cannot be redone: a restart or a fault between its
-/// accesses restores only the PC, so a retried instruction would repeat an
-/// access that already completed, including a device read. The classifier
-/// leaves every LDM and LDRD observed, and a faulting one recovers exactly.
+/// A failed whole-span guard isolates the load before any memory access.
 #[test]
-fn multi_access_loads_stay_observed_so_a_redo_cannot_replay_a_device_read() {
+fn guarded_multi_access_loads_preserve_partial_faults() {
     // Each program loads the base from a literal, then runs one transfer at
     // 0x17ffc so its second access falls past the end of mapped RAM.
     fn program(transfer: [u16; 2], base: u32) -> Vec<u8> {
@@ -1413,8 +1410,7 @@ fn multi_access_loads_stay_observed_so_a_redo_cannot_replay_a_device_read() {
         bytes.extend_from_slice(&base.to_le_bytes());
         bytes
     }
-    // The encoding rules the run below depends on: every `LDRD` and `LDM` is
-    // refused, and `STRD`/`STM` are terminal.
+    // Loads are guarded, while stores use terminal execution.
     assert!(!super::mprofile_blocks::dual_transfer(0xe9d0_0200), "ldrd r0,r2,[r0]");
     assert!(!super::mprofile_blocks::dual_transfer(0xe9d0_0100), "ldrd r0,r1,[r0]");
     assert!(!super::mprofile_blocks::dual_transfer(0xe9d0_1200), "ldrd r1,r2,[r0]");
@@ -1459,28 +1455,55 @@ fn multi_access_loads_stay_observed_so_a_redo_cannot_replay_a_device_read() {
             reference.state.borrow().instructions,
             "{name}: instruction count"
         );
-        // The load takes its own observation, so the board sees every block
-        // entry and nothing entered translated accounting.
-        let blocks = translated.state.borrow();
-        assert_eq!(
-            blocks.blocks[0].as_ref().unwrap().observed,
-            1,
-            "{name}: the load was not observed"
-        );
-        assert_eq!(
-            blocks.blocks[0].as_ref().unwrap().inline.entries,
-            0,
-            "{name}: a refused load entered translated accounting"
-        );
+        let state = translated.state.borrow();
+        let blocks = state.blocks[0].as_ref().unwrap();
+        assert!(blocks.restart_callbacks > 0, "{name}: no isolated retry");
     }
 }
 
-/// A multi-access load that reaches a device is refused, so a device read can
-/// never be repeated: a later access inside the same instruction restarts the
-/// translation, and the restart replays the instruction from its first
-/// access. The device here counts its reads, so a replay is visible.
 #[test]
-fn refused_multi_load_reads_a_device_exactly_once_in_both_modes() {
+fn guarded_multi_access_loads_chain_over_direct_ram_with_writeback() {
+    for base in [0x12000u32, 0x123fc] {
+        let mut observer = single_m4_board(false, &[], 0x13000);
+        let mut translated = single_m4_board(true, &[], 0x13000);
+        for board in [&mut observer, &mut translated] {
+            board.set_execution_policy(ExecutionPolicy::Interactive).unwrap();
+            board.state.borrow_mut().settled.verify = 0;
+            let code = [
+                0x4805u16, // LDR r0,literal
+                0xbf00, // NOP
+                0xe8f0, 0x1202, // Loop: LDRD r1,r2,[r0],#8
+                0xe8b0, 0x0018, // LDMIA r0!,{r3,r4}
+                0x3810, // SUBS r0,#16
+                0x3701, // ADDS r7,#1
+                0xe7f8, // B Loop
+                0xbf00, 0xbf00, 0xbf00, // Pad the literal to 0x10118.
+                base as u16, (base >> 16) as u16,
+            ];
+            board.write_physical(
+                0x10100, &code.iter().flat_map(|word| word.to_le_bytes()).collect::<Vec<_>>(),
+            ).unwrap();
+            let data: Vec<_> = [1u32, 2, 3, 4].into_iter().flat_map(u32::to_le_bytes).collect();
+            board.write_physical(u64::from(base), &data).unwrap();
+            board.run_until(1001, 128).unwrap();
+        }
+        let a = outcome(&observer);
+        let b = outcome(&translated);
+        assert_eq!(b.registers, a.registers);
+        assert_eq!(&b.registers[1..5], &[1, 2, 3, 4]);
+        assert_eq!(b.memory, a.memory);
+        assert_eq!(b.state, a.state);
+        let state = translated.state.borrow();
+        let blocks = state.blocks[0].as_ref().unwrap();
+        assert!(blocks.inline.entries > 800, "base {base:#x}: RAM load did not chain");
+        assert_eq!(blocks.restart_callbacks, 0, "base {base:#x}: RAM load restarted");
+    }
+}
+
+/// A rejected span must restart before the first transfer, including when
+/// only the second word is MMIO. The device counts its side-effecting reads.
+#[test]
+fn guarded_multi_load_reads_a_device_exactly_once_in_both_modes() {
     use crate::board::factory::*;
     use std::sync::{Arc, Mutex};
     #[derive(Default)]
@@ -1509,7 +1532,7 @@ fn refused_multi_load_reads_a_device_exactly_once_in_both_modes() {
     }
     // ldr r0,literal (device base); ldrd r1,r2,[r0] then a park: the `LDRD`
     // reads twice from the device, and a replay would read again.
-    fn board(blocks: bool, counts: Arc<Mutex<Counts>>) -> Board {
+    fn board(blocks: bool, counts: Arc<Mutex<Counts>>, base: u32) -> Board {
         let graph = Graph {
             decoders: vec![],
             processors: vec![Processor {
@@ -1538,14 +1561,14 @@ fn refused_multi_load_reads_a_device_exactly_once_in_both_modes() {
             }],
             peripherals: vec![Peripheral {
                 core: 0,
-                address: 0x08000000,
+                address: 0x18000,
                 physical: 0xff910000,
                 size: 0x1000,
             }],
             instructions_per_tick: Ratio::new(1, 1).unwrap(),
         };
         let mut bus = Bus::new(bus::Mode::Strict);
-        // The device answers one window at 0x08000000; the core's own memory
+        // The device answers one window at 0x18000; the core's own memory
         // view reaches it through the `peripherals` mapping above.
         bus.register(0xff910000, 0x1000, Box::new(Fifo(counts)))
             .unwrap();
@@ -1562,36 +1585,32 @@ fn refused_multi_load_reads_a_device_exactly_once_in_both_modes() {
             .flat_map(u32::to_le_bytes)
             .collect::<Vec<_>>();
         board.write_physical(0x10000, &vectors).unwrap();
-        // ldr r0,literal; ldrd r1,r2,[r0]; b .; literal 0x08000000.
+        // ldr r0,literal; ldrd r1,r2,[r0]; b .; literal 0x18000.
         // `ldr r0,[pc,#4]` at 0x10100 reads the literal at 0x10108.
-        let code = [0x4801u16, 0xe9d0, 0x1200, 0xe7fe, 0x0000, 0x0800];
+        let code = [0x4801u16, 0xe9d0, 0x1200, 0xe7fe, base as u16, (base >> 16) as u16];
         let bytes: Vec<u8> = code.iter().flat_map(|w| w.to_le_bytes()).collect();
         board.write_physical(0x10100, &bytes).unwrap();
         board
     }
-    let counts = Arc::new(Mutex::new(Counts::default()));
-    let reference = board(false, counts.clone());
-    let translated_counts = Arc::new(Mutex::new(Counts::default()));
-    let translated = board(true, translated_counts.clone());
-    for (name, mut b) in [("observer", reference), ("translated", translated)] {
-        b.set_execution_policy(ExecutionPolicy::Interactive).unwrap();
-        b.state.borrow_mut().settled.verify = 0;
-        b.run_until(64, 8).unwrap();
+    for (base, expected_reads) in [(0x18000, 2), (0x17ffc, 1)] {
+        for blocks in [false, true] {
+            let counts = Arc::new(Mutex::new(Counts::default()));
+            let mut board = board(blocks, counts.clone(), base);
+            board.set_execution_policy(ExecutionPolicy::Interactive).unwrap();
+            board.state.borrow_mut().settled.verify = 0;
+            board.write_physical(0x17ffc, &7u32.to_le_bytes()).unwrap();
+            board.run_until(64, 8).unwrap();
+            assert_eq!(counts.lock().unwrap().reads, expected_reads);
+            let result = outcome(&board);
+            let expected = if base == 0x18000 { [1, 2] } else { [7, 1] };
+            assert_eq!(&result.registers[1..3], &expected);
+        }
     }
-    let observer = counts.lock().unwrap().reads;
-    let replayed = translated_counts.lock().unwrap().reads;
-    assert_eq!(observer, 2, "the observer read the device twice (one LDRD)");
-    assert_eq!(replayed, 2, "translated mode replayed the device read");
 }
 
-/// The classifier and the admission scan must agree on the exact set of
-/// multi-access loads, so no change in one can silently admit a form whose
-/// redo would repeat a device read. Every encoding the assembler produces for
-/// the refused and admitted memory forms is checked here.
+/// Loads require the whole-span guard, while stores use the terminal path.
 #[test]
-fn multi_access_classifier_matches_what_the_scan_admits() {
-    // `ldrd r1,r2,[r0,#8]` and `ldmia r0,{r1,r2}`: ordinary-base loads, now
-    // refused; `strd`/`stmia` and the single transfers below are not loads.
+fn multiple_access_classifier_requires_guarded_loads_and_terminal_stores() {
     for word in [
         0xe9d0_1202u32, // ldrd r1,r2,[r0,#8]
         0xe9d0_0200,    // ldrd r0,r2,[r0] (base in pair)
@@ -1601,12 +1620,20 @@ fn multi_access_classifier_matches_what_the_scan_admits() {
         0xe8b0_0006,    // ldmia r0!,{r1,r2}
         0xe910_0006,    // ldmdb r0,{r1,r2}
     ] {
+        assert!(super::mprofile_blocks::is_guarded_multi_load(word), "{word:#010x}");
         assert!(!super::mprofile_blocks::dual_transfer(word), "{word:#010x}");
         assert!(!super::mprofile_blocks::multiple_store(word), "{word:#010x}");
         assert!(
             !super::mprofile_blocks::can_run_inline(word),
             "{word:#010x}"
         );
+    }
+    for word in [
+        0xe8b0_8006, // LDM with PC.
+        0xe8b0_0003, // LDM with the writeback base in the list.
+        0xe9d0_2200, // LDRD with two identical targets.
+    ] {
+        assert!(!super::mprofile_blocks::is_guarded_multi_load(word), "{word:#010x}");
     }
     for word in [
         0xe9c0_1202u32, // strd r1,r2,[r0,#8]

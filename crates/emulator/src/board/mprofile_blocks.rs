@@ -398,11 +398,8 @@ pub(super) fn is_terminal_push(word: u32) -> bool {
 /// operation (`STM`, `0xe880`/`0xe8a0`/`0xe900`/`0xe920` with `L=0`), for
 /// which this returns `true` so the caller keeps it terminal like a PUSH.
 ///
-/// `LDM` is refused. Only the PC is restored when a translation restarts or a
-/// memory access faults (`restore_state_to_opc`), and a block holds hundreds
-/// of instructions, so a device or watched access between two of its loads
-/// always restarts the instruction: its earlier registers would be rewritten
-/// twice. A store replays identically, as PUSH already does.
+/// A store replays identically, as PUSH already does. Multi-register loads
+/// need an explicit whole-span check before the first transfer.
 pub(super) fn multiple_store(word: u32) -> bool {
     if word <= u32::from(u16::MAX) {
         return false;
@@ -504,12 +501,11 @@ pub(super) fn is_bitfield(word: u32) -> bool {
 /// the caller keeps it terminal like a PUSH. The pair must be two ordinary
 /// registers other than the base, which is the encoding's predictability
 /// rule.
-///
-/// `LDRD` is refused for the same reason as `LDM` in [`multiple_store`]: a
-/// later access that restarts the translation replays the earlier one, and a
-/// replayed device read (`io_readx` services it before the block ends) is not
-/// idempotent.
 pub(super) fn dual_transfer(word: u32) -> bool {
+    dual_word_transfer(word, false)
+}
+
+fn dual_word_transfer(word: u32, is_load: bool) -> bool {
     if word <= u32::from(u16::MAX) {
         return false;
     }
@@ -528,13 +524,34 @@ pub(super) fn dual_transfer(word: u32) -> bool {
     let load = first & 0x0010 != 0;
     // `Rt2 = 15` is the exclusive space sharing this prefix, and P=0,W=0 is
     // reserved; a writeback base that is also a target is unpredictable.
-    !load
+    load == is_load
         && rn <= 14
         && rt <= 12
         && rt2 <= 12
         && rt != rt2
         && (pre_index || writeback)
         && !(writeback && (rn == rt || rn == rt2))
+}
+
+/// LDRD and multiple-register LDM forms without control-state writes.
+pub(super) fn is_guarded_multi_load(word: u32) -> bool {
+    if word <= u32::from(u16::MAX) {
+        return word & 0xf800 == 0xc800 && (word & 0xff).count_ones() >= 2;
+    }
+    if dual_word_transfer(word, true) {
+        return true;
+    }
+    let first = (word >> 16) as u16;
+    let list = word as u16;
+    let base = first & 15;
+    let writeback = first & 0x20 != 0;
+    first & 0xfe50 == 0xe810
+        && matches!(first & 0x0180, 0x0080 | 0x0100)
+        && base < 15
+        && !is_non_pc_pop(word)
+        && list & 0xa000 == 0
+        && list.count_ones() >= 2
+        && !(writeback && list & (1 << base) != 0)
 }
 
 /// A status read that includes IPSR and can use the controller's exception

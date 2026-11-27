@@ -4177,6 +4177,10 @@ unsafe fn block_classify_transfers(
     {
         classification.instruction = fujimod_emulator_cpu::InstructionDisposition::ExecuteAndEndBlock;
         classification.observe_block = false;
+    } else if mprofile_blocks::is_guarded_multi_load(word) {
+        classification.instruction =
+            fujimod_emulator_cpu::InstructionDisposition::ExecuteThumbRamLoad;
+        classification.observe_block = false;
     } else if mprofile_blocks::is_pc_pop(word) || mprofile_blocks::is_bx_lr(word) {
         classification.instruction =
             fujimod_emulator_cpu::InstructionDisposition::ExecuteThumbThreadOnly;
@@ -4463,12 +4467,9 @@ unsafe fn block_entered(block: fujimod_emulator_cpu::Block, data: *mut c_void) {
             && !ready
             && fetched.is_some()
             && s.code_run.is_running(core);
-        // Admit the block: its first entry is already debited. A block with a
-        // multi-access load cannot be admitted at all: a later access that
-        // restarts the translation would replay the earlier one, and a
-        // replayed device read is not idempotent (`io_readx` serviced it
-        // already). The classifier refuses those encodings; this keeps the
-        // guarantee if one is reached through a different path.
+        // Admit the block: its first entry is already debited. The native
+        // multi-load guard can restart before the first transfer, so a
+        // device read is never replayed by a later transfer.
         let blocks = s.blocks[core].as_mut().unwrap();
         blocks.room -= entries - 1;
         blocks.pending = Some((pc, bytes, entries, pc + last));

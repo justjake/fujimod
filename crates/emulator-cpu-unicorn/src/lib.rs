@@ -1944,6 +1944,7 @@ unsafe extern "C" fn classify(data: *mut c_void, address: u64, word: u32) -> i32
         InstructionDisposition::Execute => 0,
         InstructionDisposition::ExecuteItSafe => 0,
         InstructionDisposition::ExecuteThumbThreadOnly => 32,
+        InstructionDisposition::ExecuteThumbRamLoad => 64,
         InstructionDisposition::Observe => 1,
         InstructionDisposition::ObserveAndEndBlock => 2,
         InstructionDisposition::ExecuteAndEndBlock if context.native_execute_end => 8,

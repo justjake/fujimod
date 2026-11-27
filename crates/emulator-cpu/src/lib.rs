@@ -571,6 +571,9 @@ pub enum InstructionDisposition {
     ExecuteItSafe,
     /// Execute normally, and observe the translated block in Handler Mode.
     ExecuteThumbThreadOnly,
+    /// Execute a multiple Thumb load only after checking its entire span
+    /// for direct, unobserved RAM. Other spans use isolated execution.
+    ExecuteThumbRamLoad,
     Observe,
     ObserveAndEndBlock,
     /// Execute the instruction in translated code, then end its translated
