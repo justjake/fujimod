@@ -50,6 +50,7 @@ unsafe extern "C" {
     pub fn dynarmic_stop(inst: *mut DynarmicInstance);
     pub fn dynarmic_clear_cache(inst: *mut DynarmicInstance);
     pub fn dynarmic_invalidate_cache(inst: *mut DynarmicInstance, vaddr: u32, length: usize);
+    pub fn dynarmic_read_gprs(inst: *mut DynarmicInstance, values: *mut u32);
     pub fn dynarmic_get_reg(inst: *mut DynarmicInstance, reg: u32) -> u32;
     pub fn dynarmic_set_reg(inst: *mut DynarmicInstance, reg: u32, val: u32);
     pub fn dynarmic_get_cpsr(inst: *mut DynarmicInstance) -> u32;

@@ -908,6 +908,7 @@ impl Cpu for Core {
                 break ffi::DynarmicExitReason::Stopped;
             }
             if stable
+                && word & 0x0f80_0000 == 0x0a80_0000
                 && request.until.is_none()
                 && self.advance_loop(pc, cpsr, word, remaining())?
             {
@@ -1256,5 +1257,33 @@ mod tests {
         })
         .unwrap();
         assert_eq!(unsafe { ffi::dynarmic_get_reg(cpu.inst, 0) }, 0x7856_3412);
+    }
+
+    #[test]
+    fn cached_loop_proof_checks_changed_instructions() {
+        let cpu = Core::new(Model::CortexA7).unwrap();
+        cpu.map_zeroed(0x1000, 4096, 7).unwrap();
+        cpu.write_memory(0x1004, &0xe250_0001u32.to_le_bytes())
+            .unwrap(); // subs r0, r0, #1
+        cpu.write_memory(0x1008, &0xaaff_fffcu32.to_le_bytes())
+            .unwrap(); // bge 0x1000
+        for value in [1u32, 1, 2] {
+            cpu.write_memory(0x1000, &(0xe3a0_1000u32 | value).to_le_bytes())
+                .unwrap();
+            cpu.write_register(arm::CORE[0], &5u32.to_le_bytes())
+                .unwrap();
+            cpu.set_loop_window(true).unwrap();
+            let skipped = cpu.loops.skipped.get();
+            cpu.run(Run {
+                begin: 0x1000,
+                until: None,
+                watchdog_us: 0,
+                instructions: Some(18),
+            })
+            .unwrap();
+            assert_eq!(cpu.instruction_progress(), Some(18));
+            assert_eq!(unsafe { ffi::dynarmic_get_reg(cpu.inst, 1) }, value);
+            assert!(cpu.loops.skipped.get() > skipped);
+        }
     }
 }
