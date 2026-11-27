@@ -50,13 +50,16 @@ pub(super) fn prepare() -> Result<()> {
 }
 
 fn backend() -> Result<PaintBackend> {
-    if cpu_requested() {
-        return Ok(PaintBackend::Cpu);
-    }
-    backend_for(kernel_state().map(|_| ()))
+    select_backend(cpu_requested(), kernel_state().map(|_| ()))
 }
 
-fn backend_for(kernel: std::result::Result<(), &KernelError>) -> Result<PaintBackend> {
+fn select_backend(
+    cpu: bool,
+    kernel: std::result::Result<(), &KernelError>,
+) -> Result<PaintBackend> {
+    if cpu {
+        return Ok(PaintBackend::Cpu);
+    }
     match kernel {
         Ok(()) => Ok(PaintBackend::HostGpu),
         Err(KernelError::Unavailable(_)) => Ok(PaintBackend::Cpu),
@@ -263,19 +266,6 @@ fn parameter_float(params: &[u32], index: usize) -> f32 {
     f32::from_bits(params[index])
 }
 
-fn transform_color(params: &[u32], color: [f32; 4]) -> [f32; 4] {
-    if params[30] == 0 {
-        return color;
-    }
-    let mut result = [0.0f32; 4];
-    for channel in 0..4 {
-        let scale = parameter_float(params, 31 + channel);
-        let bias = parameter_float(params, 35 + channel);
-        result[channel] = (color[channel] * scale + bias).clamp(0.0, 1.0);
-    }
-    result
-}
-
 fn packed_rgba(word: u32) -> [f32; 4] {
     [
         (word & 255) as f32 / 255.0,
@@ -304,88 +294,205 @@ fn morton_index(width: u32, x: u32, y: u32) -> u32 {
     ((y >> 3) * (width >> 3) + (x >> 3)) * 64 + local
 }
 
-fn gradient_color(params: &[u32], data: &[u32], x: f32, y: f32, radial: bool) -> [f32; 4] {
-    let a = parameter_float(params, 21);
-    let c = parameter_float(params, 22);
-    let e = parameter_float(params, 23);
-    let f = parameter_float(params, 24);
-    let mut amount = a * x + c + e * y + f;
-    if radial {
-        let u = a * x + c;
-        let v = e * y + f;
-        let flags = params[29];
-        let cross = if flags & 3 == 0 { 2.0 * u * v } else { 0.0 };
-        let root =
-            (parameter_float(params, 27) * u * u + parameter_float(params, 28) * v * v + cross)
-                .max(0.0)
-                .sqrt();
-        let mut linear = 0.0f32;
-        if flags & 1 == 0 {
-            linear += u;
-        }
-        if flags & 2 == 0 {
-            linear += v;
-        }
-        amount = if flags & 4 != 0 {
-            linear - root
-        } else {
-            linear + root
-        };
-    }
-    if params[25] == 0 {
-        amount = amount.clamp(0.0, 1.0);
-    } else if params[25] == 1 {
-        amount -= amount.floor();
-    } else {
-        let remainder = amount - (amount / 2.0).floor() * 2.0;
-        amount = 1.0 - (remainder - 1.0).abs();
-    }
-    let position = (amount * 127.0 + 0.5).clamp(0.0, 127.0);
-    let low = position.floor() as usize;
-    let high = (low + 1).min(127);
-    let fraction = position - low as f32;
-    let first = packed_rgba(data[low]);
-    let second = packed_rgba(data[high]);
-    let mut color = [0.0f32; 4];
-    for channel in 0..4 {
-        color[channel] = first[channel] * (1.0 - fraction) + second[channel] * fraction;
-    }
-    if params[26] != 0 {
-        if color[3] != 0.0 {
-            for channel in 0..3 {
-                color[channel] /= color[3];
-            }
-        } else {
-            color = [0.0; 4];
-        }
-    }
-    transform_color(params, color)
+/// The shader's per-draw inputs, with the loop-invariant parameter loads and
+/// branch conditions resolved once. Every float expression keeps the WGSL
+/// operand order, so the values match the shader bit for bit.
+struct PaintOp<'a> {
+    params: &'a [u32],
+    data: &'a [u32],
+    mode: u32,
+    gradient: [f32; 4],
+    /// The radial root's quadratics and its zero/negative flags, for mode 3.
+    radial: Option<([f32; 2], u32)>,
+    spread: u32,
+    premultiplied: bool,
+    texture: [f32; 6],
+    texture_extent: [i32; 4],
+    solid: [f32; 4],
+    color_transform: Option<[f32; 8]>,
+    packed: bool,
+    swapped: bool,
+    blend: bool,
 }
 
-fn source_color(params: &[u32], data: &[u32], x: f32, y: f32) -> [f32; 4] {
-    match params[10] {
-        2 => gradient_color(params, data, x, y, false),
-        3 => gradient_color(params, data, x, y, true),
-        1 => {
-            let a = parameter_float(params, 15);
-            let b = parameter_float(params, 16);
-            let c = parameter_float(params, 17);
-            let d = parameter_float(params, 18);
-            let e = parameter_float(params, 19);
-            let f = parameter_float(params, 20);
-            let u = (a * x + b * y + c).floor() as i32;
-            let v = (d * x + e * y + f).floor() as i32;
-            let valid = u >= 0 && v >= 0 && u < params[13] as i32 && v < params[14] as i32;
-            let source_x = u.clamp(0, params[11] as i32 - 1) as u32;
-            let source_y = v.clamp(0, params[12] as i32 - 1) as u32;
-            let index = morton_index(params[11], source_x, source_y) as usize;
-            let mut color = texture_rgba(data[index]);
-            if !valid {
+impl<'a> PaintOp<'a> {
+    fn new(params: &'a [u32], data: &'a [u32]) -> Self {
+        let transform = (params[30] != 0).then(|| {
+            let mut values = [0.0f32; 8];
+            for (index, value) in values.iter_mut().enumerate() {
+                *value = parameter_float(params, 31 + index);
+            }
+            values
+        });
+        Self {
+            params,
+            data,
+            mode: params[10],
+            gradient: [
+                parameter_float(params, 21),
+                parameter_float(params, 22),
+                parameter_float(params, 23),
+                parameter_float(params, 24),
+            ],
+            radial: (params[10] == 3).then(|| {
+                (
+                    [parameter_float(params, 27), parameter_float(params, 28)],
+                    params[29],
+                )
+            }),
+            spread: params[25],
+            premultiplied: params[26] != 0,
+            texture: [
+                parameter_float(params, 15),
+                parameter_float(params, 16),
+                parameter_float(params, 17),
+                parameter_float(params, 18),
+                parameter_float(params, 19),
+                parameter_float(params, 20),
+            ],
+            texture_extent: [
+                params[11] as i32,
+                params[12] as i32,
+                params[13] as i32,
+                params[14] as i32,
+            ],
+            solid: packed_rgba(params[39]),
+            color_transform: transform,
+            packed: params[40] == 3,
+            swapped: params[8] != 0,
+            blend: params[9] != 0,
+        }
+    }
+
+    fn transform(&self, color: [f32; 4]) -> [f32; 4] {
+        let Some(transform) = self.color_transform else {
+            return color;
+        };
+        let mut result = [0.0f32; 4];
+        for channel in 0..4 {
+            result[channel] =
+                (color[channel] * transform[channel] + transform[4 + channel]).clamp(0.0, 1.0);
+        }
+        result
+    }
+
+    /// The gradient's `t = a x + c + e y + f`, in the shader's operand order.
+    fn gradient_amount(&self, x: f32, y: f32) -> f32 {
+        let [a, c, e, f] = self.gradient;
+        let mut amount = a * x + c + e * y + f;
+        if let Some(([qx, qy], flags)) = self.radial {
+            let u = a * x + c;
+            let v = e * y + f;
+            let cross = if flags & 3 == 0 { 2.0 * u * v } else { 0.0 };
+            let root = (qx * u * u + qy * v * v + cross).max(0.0).sqrt();
+            let mut linear = 0.0f32;
+            if flags & 1 == 0 {
+                linear += u;
+            }
+            if flags & 2 == 0 {
+                linear += v;
+            }
+            amount = if flags & 4 != 0 {
+                linear - root
+            } else {
+                linear + root
+            };
+        }
+        if self.spread == 0 {
+            amount = amount.clamp(0.0, 1.0);
+        } else if self.spread == 1 {
+            amount -= amount.floor();
+        } else {
+            let remainder = amount - (amount / 2.0).floor() * 2.0;
+            amount = 1.0 - (remainder - 1.0).abs();
+        }
+        amount
+    }
+
+    fn gradient_color(&self, x: f32, y: f32) -> [f32; 4] {
+        let amount = self.gradient_amount(x, y);
+        let position = (amount * 127.0 + 0.5).clamp(0.0, 127.0);
+        let low = position.floor() as usize;
+        let high = (low + 1).min(127);
+        let fraction = position - low as f32;
+        let first = packed_rgba(self.data[low]);
+        let second = packed_rgba(self.data[high]);
+        let mut color = [0.0f32; 4];
+        for channel in 0..4 {
+            color[channel] = first[channel] * (1.0 - fraction) + second[channel] * fraction;
+        }
+        if self.premultiplied {
+            if color[3] != 0.0 {
+                for channel in 0..3 {
+                    color[channel] /= color[3];
+                }
+            } else {
                 color = [0.0; 4];
             }
-            transform_color(params, color)
         }
-        _ => transform_color(params, packed_rgba(params[39])),
+        self.transform(color)
+    }
+
+    fn texture_color(&self, x: f32, y: f32) -> [f32; 4] {
+        let [a, b, c, d, e, f] = self.texture;
+        let u = (a * x + b * y + c).floor() as i32;
+        let v = (d * x + e * y + f).floor() as i32;
+        let [width, height, valid_width, valid_height] = self.texture_extent;
+        let valid = u >= 0 && v >= 0 && u < valid_width && v < valid_height;
+        let source_x = u.clamp(0, width - 1) as u32;
+        let source_y = v.clamp(0, height - 1) as u32;
+        let index = morton_index(width as u32, source_x, source_y) as usize;
+        let mut color = texture_rgba(self.data[index]);
+        if !valid {
+            color = [0.0; 4];
+        }
+        self.transform(color)
+    }
+
+    fn color(&self, x: f32, y: f32) -> [f32; 4] {
+        match self.mode {
+            2 => self.gradient_color(x, y),
+            3 => self.gradient_color(x, y),
+            1 => self.texture_color(x, y),
+            _ => self.transform(self.solid),
+        }
+    }
+
+    fn destination(&self, word: u32) -> [f32; 4] {
+        if self.packed {
+            let mut color = [
+                ((word >> 12) & 15) as f32 / 15.0,
+                ((word >> 8) & 15) as f32 / 15.0,
+                ((word >> 4) & 15) as f32 / 15.0,
+                (word & 15) as f32 / 15.0,
+            ];
+            if self.swapped {
+                color = [color[1], color[2], color[3], color[0]];
+            }
+            color
+        } else {
+            let color = packed_rgba(word);
+            if self.swapped {
+                [color[2], color[1], color[0], color[3]]
+            } else {
+                [color[3], color[2], color[1], color[0]]
+            }
+        }
+    }
+
+    fn pack(&self, rgba: [u32; 4]) -> u32 {
+        if self.packed {
+            let nibble = rgba.map(|value| value >> 4);
+            if self.swapped {
+                nibble[3] << 12 | nibble[0] << 8 | nibble[1] << 4 | nibble[2]
+            } else {
+                nibble[0] << 12 | nibble[1] << 8 | nibble[2] << 4 | nibble[3]
+            }
+        } else if self.swapped {
+            rgba[3] << 24 | rgba[0] << 16 | rgba[1] << 8 | rgba[2]
+        } else {
+            rgba[0] << 24 | rgba[1] << 16 | rgba[2] << 8 | rgba[3]
+        }
     }
 }
 
@@ -394,46 +501,18 @@ fn quantize(value: f32) -> u32 {
 }
 
 /// Paint one covered pixel with the shader's straight SRC/SRC_OVER blend.
-fn paint_pixel(
-    params: &[u32],
-    data: &[u32],
-    target: &mut CpuTarget,
-    x: i64,
-    y: i64,
-    coverage_fraction: f32,
-) {
+fn paint_pixel(op: &PaintOp<'_>, target: &mut CpuTarget, x: i64, y: i64, coverage_fraction: f32) {
     let offset = target.pixel_offset(x, y);
-    let packed_format = params[40] == 3;
     let width = target.bytes_per_pixel().min(4);
     let mut lanes = [0u8; 4];
     lanes[..width].copy_from_slice(&target.bytes[offset..offset + width]);
-    let word = u32::from_le_bytes(lanes);
-    let destination = if packed_format {
-        let mut color = [
-            ((word >> 12) & 15) as f32 / 15.0,
-            ((word >> 8) & 15) as f32 / 15.0,
-            ((word >> 4) & 15) as f32 / 15.0,
-            (word & 15) as f32 / 15.0,
-        ];
-        if params[8] != 0 {
-            color = [color[1], color[2], color[3], color[0]];
-        }
-        color
-    } else {
-        let mut color = packed_rgba(word);
-        color = if params[8] == 0 {
-            [color[3], color[2], color[1], color[0]]
-        } else {
-            [color[2], color[1], color[0], color[3]]
-        };
-        color
-    };
-    let source = source_color(params, data, x as f32 + 0.5, y as f32 + 0.5);
+    let destination = op.destination(u32::from_le_bytes(lanes));
+    let source = op.color(x as f32 + 0.5, y as f32 + 0.5);
     let alpha = source[3] * coverage_fraction;
-    if params[9] != 0 && alpha == 0.0 {
+    if op.blend && alpha == 0.0 {
         return;
     }
-    let retained = if params[9] != 0 {
+    let retained = if op.blend {
         1.0 - alpha
     } else {
         1.0 - coverage_fraction
@@ -453,18 +532,7 @@ fn paint_pixel(
         quantize(output_rgb[2]),
         quantize(output_alpha),
     ];
-    let packed = if packed_format {
-        let nibble = rgba.map(|value| value >> 4);
-        if params[8] != 0 {
-            nibble[3] << 12 | nibble[0] << 8 | nibble[1] << 4 | nibble[2]
-        } else {
-            nibble[0] << 12 | nibble[1] << 8 | nibble[2] << 4 | nibble[3]
-        }
-    } else if params[8] == 0 {
-        rgba[0] << 24 | rgba[1] << 16 | rgba[2] << 8 | rgba[3]
-    } else {
-        rgba[3] << 24 | rgba[0] << 16 | rgba[1] << 8 | rgba[2]
-    };
+    let packed = op.pack(rgba);
     for lane in 0..width {
         target.bytes[offset + lane] = (packed >> (8 * lane)) as u8;
     }
@@ -504,6 +572,7 @@ fn render_cpu(draws: &[batch::Draw], snapshots: Snapshots) -> Result<RenderedBat
             .and_then(|texture| textures.get(&image_key(texture)))
             .map(Vec::as_slice);
         let data = paint_data(draw, image)?;
+        let op = PaintOp::new(&params, &data);
         let target_index = *target_slots
             .get(&draw.target.0)
             .ok_or_else(|| Unsupported("Graphics UI target lookup failed".into()))?;
@@ -525,7 +594,7 @@ fn render_cpu(draws: &[batch::Draw], snapshots: Snapshots) -> Result<RenderedBat
             }
             let x = plan.x0 + (pixel % plan.width) as i64;
             let y = plan.y0 + (pixel / plan.width) as i64;
-            paint_pixel(&params, &data, target, x, y, coverage_byte as f32 / 255.0);
+            paint_pixel(&op, target, x, y, coverage_byte as f32 / 255.0);
         }
     }
     let output = targets
@@ -1446,13 +1515,128 @@ mod tests {
     #[test]
     fn missing_host_adapter_selects_the_cpu_backend() {
         let unavailable = KernelError::Unavailable("host GPU adapter: No suitable adapter".into());
-        assert_eq!(backend_for(Err(&unavailable)).unwrap(), PaintBackend::Cpu);
-        assert_eq!(backend_for(Ok(())).unwrap(), PaintBackend::HostGpu);
+        assert_eq!(
+            select_backend(false, Err(&unavailable)).unwrap(),
+            PaintBackend::Cpu
+        );
+        assert_eq!(
+            select_backend(false, Ok(())).unwrap(),
+            PaintBackend::HostGpu
+        );
+        assert_eq!(select_backend(true, Ok(())).unwrap(), PaintBackend::Cpu);
         let failed = KernelError::Failed("host GPU device: lost".into());
-        let error = backend_for(Err(&failed)).unwrap_err();
+        let error = select_backend(false, Err(&failed)).unwrap_err();
         assert!(matches!(error, Unsupported(message) if message.contains("host GPU device: lost")));
         assert!(cpu_requested_from(Some("1")));
         assert!(!cpu_requested_from(Some("0")));
         assert!(!cpu_requested_from(None));
+    }
+
+    /// A gradient whose parameters vary with the case index, so the matrix
+    /// covers every shader branch of the ramp.
+    fn gradient_case(index: u32) -> Gradient {
+        let radial = match index % 8 {
+            0 => None,
+            flags => Some(batch::RadialGradient {
+                quadratics: [0.75, 1.5],
+                zero_x: flags & 1 != 0,
+                zero_y: flags & 2 != 0,
+                negative_denominator: flags & 4 != 0,
+            }),
+        };
+        Gradient {
+            coefficients: (0.0625, 0.109375, 0.046875, -0.15625),
+            radial,
+            colors: (0..128)
+                .map(|i: usize| {
+                    [
+                        (i.wrapping_mul(13).wrapping_add(index as usize * 7)) as u8,
+                        (255u8).wrapping_sub((i * 5) as u8),
+                        (i.wrapping_mul(29).wrapping_add(3)) as u8,
+                        (32 + i.wrapping_mul(3) % 224) as u8,
+                    ]
+                })
+                .collect(),
+            spread: index % 3,
+            premultiplied: index % 2 == 1,
+        }
+    }
+
+    #[test]
+    fn cpu_backend_covers_every_shader_operation_bit_for_bit() {
+        let texture_bytes: Vec<u8> = (0..8 * 8 * 4).map(|index| (index * 23 + 5) as u8).collect();
+        let mut cases = 0u32;
+        for format in [batch::TargetFormat::Rgba8, batch::TargetFormat::Rgba4444] {
+            for order in [0u32, 1, 2, 5] {
+                for blend in [0u32, 1] {
+                    for index in 0..12u32 {
+                        let address = 0x300000 + u64::from(index) * 0x10000;
+                        let texture_address = address + 0x1000;
+                        let bytes = 8 * 8 * format.bytes_per_pixel() as usize;
+                        let target: Vec<u8> = (0..bytes)
+                            .map(|i| (i * 41 + 17 + index as usize) as u8)
+                            .collect();
+                        let mut ramp = draw(
+                            address,
+                            order,
+                            [0.3, 0.6, 7.4, 6.9],
+                            [1u32, 2, 4][index as usize % 3],
+                            blend,
+                            [0, 0, 0, 0],
+                        );
+                        ramp.gradient = Some(gradient_case(index));
+                        if index % 3 == 0 {
+                            ramp.color_transform = Some(ColorTransform {
+                                scale: [0.9375, 1.0625, 0.8125, 1.0],
+                                bias: [0.015625, 0.0, 0.03125, -0.0078125],
+                            });
+                        }
+                        let mut sampled =
+                            draw(address, order, [1.1, 2.2, 6.8, 7.3], 4, blend, [0, 0, 0, 0]);
+                        sampled.texture = Some(Texture {
+                            source: texture_address,
+                            width: 8,
+                            height: 8,
+                            valid_width: 6,
+                            valid_height: 7,
+                            matrix: [1.0, 0.125, 0.25, 0.0, 0.875, -0.5],
+                        });
+                        let mut solid = draw(
+                            address,
+                            order,
+                            [2.5, 1.5, 7.9, 7.6],
+                            2,
+                            blend,
+                            [31, 67, 103, 139],
+                        );
+                        if index % 4 == 0 {
+                            solid.color = [31, 67, 103, 255];
+                        }
+                        for draw in [&mut ramp, &mut sampled, &mut solid] {
+                            draw.target_format = format;
+                        }
+                        let draws = [ramp, sampled, solid];
+                        let regions = HashMap::from([
+                            (address, target.clone()),
+                            (texture_address, texture_bytes.clone()),
+                        ]);
+                        let actual = render_cpu_batch(&draws, &regions);
+                        let expected = reference_batch(
+                            &draws,
+                            &HashMap::from([(address, target)]),
+                            &HashMap::from([((texture_address, 8, 8), texture_bytes.clone())]),
+                        );
+                        assert_eq!(actual.1, expected.1, "touched bytes for case {index}");
+                        assert_eq!(
+                            actual.0[0].1.as_slice(),
+                            expected.0[0].1.as_slice(),
+                            "pixels for format {format:?} order {order} blend {blend} case {index}"
+                        );
+                        cases += 1;
+                    }
+                }
+            }
+        }
+        assert_eq!(cases, 2 * 4 * 2 * 12);
     }
 }
