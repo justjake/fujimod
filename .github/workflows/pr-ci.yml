@@ -20,7 +20,7 @@ concurrency:
   # A request or a push replaces the pull request's run in progress; any other
   # label gets a group of its own, so it cancels nothing.
   group: >-
-    pr-ci-${{ github.event.pull_request.number }}-${{
+    pr-checks-${{ github.event.pull_request.number }}-${{
       github.event.action == 'labeled' && github.event.label.name != 'ci:run' && github.run_id || 'request' }}
   cancel-in-progress: true
 
