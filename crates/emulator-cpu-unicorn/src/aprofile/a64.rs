@@ -13,6 +13,25 @@
 //! round one bounded search finds. The execution owner supplies the inputs
 //! and bounds the window at every event and peer boundary. No firmware
 //! address, function identity or software structure takes part.
+//!
+//! The loop classes this proves are the AArch64 counterparts of the ones the
+//! A32 prover (`rprofile::core::loops`), the M-profile prover
+//! (`loop_proof`) and the AArch64 poll fast-forward (`board::poll_loops`)
+//! handle:
+//!
+//! - a register countdown on any `W`/`X` register: `SUB`/`SUBS` (or
+//!   `ADD`/`ADDS`) of an immediate or a register, with `B.NE`, `B.HI`,
+//!   `B.GT`, `B.PL` or the zero test of `CBZ`/`CBNZ`/`TBZ`/`TBNZ`;
+//! - a counted body with pure work between the update and the branch, as
+//!   long as no other register or flag changes;
+//! - a RAM flag poll: a plain load re-read every round whose value does not
+//!   change, or changes and repeats, inside the window;
+//! - a constant rate read (`CNTFRQ_EL0`), which the owner supplies.
+//!
+//! A body that reads the architectural counter (`CNTVCT_EL0`) advances every
+//! round, and a device status register is answered by a device rather than by
+//! RAM, so neither is a fixed point; both are refused here and left to
+//! ordinary execution.
 
 use std::cell::{Cell, RefCell};
 use std::collections::BTreeMap;
