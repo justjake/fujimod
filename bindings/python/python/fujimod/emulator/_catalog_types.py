@@ -4024,9 +4024,16 @@ class NamedRange(TypedDict, total=False):
 
 
 class NamedSetting(TypedDict, total=False):
+    additional_writes: NotRequired[dict[str, list[NamedSettingWrite]]]
     offset: Required[int]
     store: Required[str]
     values: Required[dict[str, list[int]]]
+
+
+class NamedSettingWrite(TypedDict, total=False):
+    bytes: Required[list[int]]
+    offset: Required[int]
+    store: Required[str]
 
 
 class NandGeometry(TypedDict, total=False):
@@ -4775,6 +4782,7 @@ class ProfileRecord(TypedDict, total=False):
     defaults_offset: Required[int]
     fields: Required[list[SettingsField]]
     managed_index: NotRequired[int | None]
+    nor_extent_bytes: NotRequired[int | None]
     parity_offset: Required[int]
 
 
