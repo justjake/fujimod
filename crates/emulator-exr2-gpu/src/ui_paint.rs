@@ -661,21 +661,22 @@ fn render_cpu(draws: &[batch::Draw], snapshots: Snapshots) -> Result<RenderedBat
     Ok((output, touched_halfwords * 2))
 }
 
-/// The per-draw bounds the GPU kernel relies on, shared by both backends.
+/// The per-draw bounds both backends rely on: the shader's storage limits and
+/// the CPU path's integer coverage arithmetic share them.
 fn check_plan(plan: &render::CoveragePlan) -> Result<()> {
     if !matches!(plan.samples, 1 | 2 | 4) {
         return fail("Graphics UI uses an unsupported coverage sample grid");
     }
     let bounds = plan.bounds();
     if bounds[1] > 2048 || bounds[3] > 2048 {
-        return fail("Graphics UI coverage exceeds the GPU bounds");
+        return fail("Graphics UI coverage exceeds the 2048 pixel bound");
     }
     if plan.edges.iter().any(|&(start, end)| {
         [start.0, start.1, end.0, end.1]
             .iter()
             .any(|v| v.abs() > 16_777_216.0)
     }) {
-        return fail("Graphics UI fill edge exceeds the GPU coordinate range");
+        return fail("Graphics UI fill edge exceeds the paint coordinate range");
     }
     Ok(())
 }
