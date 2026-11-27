@@ -2005,6 +2005,10 @@ impl Cpu for CpuWorker {
         self.validate_run(run)?;
         if self.running.get() {
             self.pause_requested.store(1, Ordering::Release);
+            // The accounting flag is only sampled by the hook and at a block
+            // entry. A core looping through translated blocks notices the
+            // engine's own wakeup instead, which every block entry tests.
+            Library::request_pause(self.identity).map_err(ExecutionError::Backend)?;
         }
         Ok(())
     }
@@ -4407,5 +4411,53 @@ mod tests {
             cpu.instruction_progress().unwrap() < budget as u64,
             "pause waited for the whole budget"
         );
+    }
+
+    /// The owner raises the pause from another thread while the worker is
+    /// starting its run, which is the window where a request used to be lost:
+    /// the run cleared its stop flag just after the request arrived.
+    #[test]
+    fn a_pause_raised_around_run_start_is_never_lost() {
+        let cpu = spawn_aprofile(1 << 20, SharedMemory::default()).unwrap();
+        cpu.set_execution_policy(ExecutionPolicy::Interactive)
+            .unwrap();
+        let address = 0x1000u64;
+        cpu.map_zeroed(address, 0x4000, 7).unwrap();
+        let code = [0x9100_0400u32, 0x9100_0400, 0x17ff_fffe]; // add; add; b .
+        let bytes: Vec<_> = code.into_iter().flat_map(u32::to_le_bytes).collect();
+        cpu.write_memory(address, &bytes).unwrap();
+        for iteration in 0..10_000 {
+            let run = cpu
+                .start_run(Run {
+                    begin: address,
+                    until: None,
+                    watchdog_us: 0,
+                    instructions: Some(100_000_000),
+                })
+                .unwrap();
+            // Racy by design: the request may land before, during or after the
+            // run's own entry.
+            cpu.request_pause(run).unwrap();
+            let deadline = std::time::Instant::now() + std::time::Duration::from_secs(30);
+            loop {
+                match cpu.poll_run(run).unwrap() {
+                    RunStatus::Running => {
+                        assert!(
+                            std::time::Instant::now() < deadline,
+                            "iteration {iteration} never observed the pause"
+                        );
+                        std::thread::yield_now();
+                    }
+                    RunStatus::CallbackPending => cpu.service_pending_callback(run).unwrap(),
+                    RunStatus::Complete(result) => {
+                        assert!(
+                            matches!(result.unwrap(), Exit::Stopped),
+                            "iteration {iteration} ended without stopping"
+                        );
+                        break;
+                    }
+                }
+            }
+        }
     }
 }

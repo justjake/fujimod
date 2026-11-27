@@ -150,6 +150,11 @@ impl Library {
     pub fn linked() -> Result<Self, String> {
         Self::checked(ffi::Api::linked()?)
     }
+    /// Ask a live engine to pause, from any thread. The engine stays owned by
+    /// its creating thread for every other operation.
+    pub fn request_pause(identity: Identity) -> Result<(), String> {
+        frozen::request_pause(identity)
+    }
     fn checked(api: ffi::Api) -> Result<Self, String> {
         let api = Rc::new(api);
         let (mut major, mut minor) = (0, 0);
@@ -198,6 +203,7 @@ impl Library {
             mmio: RefCell::new(BTreeMap::new()),
             mmio_contexts: RefCell::new(Vec::new()),
         };
+        frozen::register_engine(core.identity, raw as usize);
         check(&core.api, unsafe {
             (core.api.uc_ctl)(raw, ffi::ctl(7, 1, 1), id)
         })?;
@@ -323,6 +329,17 @@ impl Core {
             .set_entry_exits
             .ok_or("CPU backend has no entry-exit control")?;
         check(&self.api, unsafe { set(self.raw, enabled) })
+    }
+    /// Request a pause of the engine's current or next run. This is safe from
+    /// another thread: the request outlives the run it was raised in, and it
+    /// wakes a run that is already executing.
+    pub(crate) fn request_pause(&self) -> Result<(), String> {
+        let request = self
+            .api
+            .extensions
+            .request_pause
+            .ok_or("CPU backend has no cross-thread pause request")?;
+        check(&self.api, unsafe { request(self.raw) })
     }
     #[cfg(test)]
     fn set_guard_diagnostics(&self, enabled: bool) -> Result<(), String> {

@@ -94,6 +94,9 @@ pub struct Extensions {
     /// Test exit requests inline at block entry and after memory accesses.
     pub set_block_exits: Option<unsafe extern "C" fn(Engine, bool) -> Error>,
     pub set_entry_exits: Option<unsafe extern "C" fn(Engine, bool) -> Error>,
+    /// Request a pause from another thread. The request survives into the
+    /// next run and wakes a run that is already executing.
+    pub request_pause: Option<unsafe extern "C" fn(Engine) -> Error>,
     pub set_instruction_counter: Option<unsafe extern "C" fn(Engine, bool) -> Error>,
     pub set_guard_diagnostics: Option<unsafe extern "C" fn(Engine, bool) -> Error>,
     pub add_restart_boundary: Option<unsafe extern "C" fn(Engine, *mut usize, u64, u64) -> Error>,
@@ -153,6 +156,7 @@ impl Extensions {
                 self.set_entry_exits.is_some(),
                 "uc_embedder_set_entry_exits",
             ),
+            (self.request_pause.is_some(), "uc_emu_request_pause"),
             (
                 self.set_instruction_counter.is_some()
                     && self.reset_instruction_counter.is_some()
@@ -336,6 +340,7 @@ mod linked {
         fn uc_embedder_set_parallel_cpus(engine: Engine, enabled: bool) -> Error;
         fn uc_embedder_set_block_exits(engine: Engine, enabled: bool) -> Error;
         fn uc_embedder_set_entry_exits(engine: Engine, enabled: bool) -> Error;
+        fn uc_emu_request_pause(engine: Engine) -> Error;
         fn uc_embedder_set_instruction_counter(engine: Engine, enabled: bool) -> Error;
         fn uc_embedder_set_guard_diagnostics(engine: Engine, enabled: bool) -> Error;
         fn uc_embedder_add_restart_boundary(
@@ -371,6 +376,7 @@ mod linked {
             set_parallel_cpus: Some(uc_embedder_set_parallel_cpus),
             set_block_exits: Some(uc_embedder_set_block_exits),
             set_entry_exits: Some(uc_embedder_set_entry_exits),
+            request_pause: Some(uc_emu_request_pause),
             set_instruction_counter: Some(uc_embedder_set_instruction_counter),
             set_guard_diagnostics: Some(uc_embedder_set_guard_diagnostics),
             add_restart_boundary: Some(uc_embedder_add_restart_boundary),
