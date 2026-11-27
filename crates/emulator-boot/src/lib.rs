@@ -1047,7 +1047,7 @@ pub fn open(resolved: ResolvedConfiguration, inputs: StartupInputs) -> Result<Ca
             let started = application::open(&resolved, inputs)?;
             let quantum = started.quantum;
             let ticks_per_second = started.ticks_per_second;
-            let application::Board::Shared(session) = started.board;
+            let application::Board::Shared { session, .. } = started.board;
             let read_limit = graph_read_limit(&session)?;
             Ok(Camera {
                 session: *session,
