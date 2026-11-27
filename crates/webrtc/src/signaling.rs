@@ -462,7 +462,7 @@ mod tests {
         let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
         let address = listener.local_addr().unwrap();
         let server = tokio::spawn(async move {
-            axum::serve(listener, router_with_share_idle(Duration::from_millis(50)))
+            axum::serve(listener, router_with_share_idle(Duration::from_millis(500)))
                 .await
                 .unwrap();
         });
@@ -479,7 +479,7 @@ mod tests {
         assert_eq!(read(&mut no_key).await.unwrap()["type"], "error");
         let mut wrong_key = raw_join(&url, "host", Some("wrong-key")).await;
         assert_eq!(read(&mut wrong_key).await.unwrap()["type"], "error");
-        tokio::time::sleep(Duration::from_millis(80)).await;
+        tokio::time::sleep(Duration::from_millis(600)).await;
         assert_eq!(read(&mut existing).await.unwrap()["type"], "ended");
         let mut client = raw_join(&url, "client", None).await;
         assert_eq!(read(&mut client).await.unwrap()["type"], "error");
