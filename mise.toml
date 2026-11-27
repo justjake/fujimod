@@ -84,7 +84,7 @@ run = "cargo nextest run --cargo-profile ci --profile ci -p fujimod-emulator-gui
 
 [tasks.rust-test-shard]
 description = "CI: run one shard (N/COUNT) of the archived Rust tests"
-run = "cargo nextest run --profile ci --archive-file target/nextest/rust-tests.tar.zst --workspace-remap . --extract-to . --extract-overwrite --target-dir-remap target --partition hash:{{arg(name='shard')}}"
+run = "cargo nextest run --profile ci --archive-file target/nextest/rust-tests.tar.zst --workspace-remap . --extract-to . --extract-overwrite --partition hash:{{arg(name='shard')}}"
 
 [tasks.rust-check]
 run = "cargo clippy --workspace --all-targets --all-features -- -D warnings"
