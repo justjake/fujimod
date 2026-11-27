@@ -17,39 +17,94 @@ struct PaintKernel {
     pipeline: wgpu::ComputePipeline,
 }
 
+/// Why the host GPU paint kernel cannot run a batch.
+enum KernelError {
+    /// No usable host adapter or storage format. The batch paints on the CPU.
+    Unavailable(String),
+    /// The adapter exists, but the paint pipeline failed to build.
+    Failed(String),
+}
+
 fn fail<T>(message: impl Into<String>) -> Result<T> {
     Err(Unsupported(message.into()))
 }
 
+/// Where a vector batch's pixels are painted.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum PaintBackend {
+    HostGpu,
+    Cpu,
+}
+
+fn cpu_requested_from(value: Option<&str>) -> bool {
+    matches!(value, Some("1"))
+}
+
+/// `FUJIMOD_EXR2_CPU_GPU=1` forces the CPU paint path for testing.
+fn cpu_requested() -> bool {
+    cpu_requested_from(std::env::var("FUJIMOD_EXR2_CPU_GPU").ok().as_deref())
+}
+
 pub(super) fn prepare() -> Result<()> {
-    kernel().map(|_| ())
+    backend().map(|_| ())
+}
+
+fn backend() -> Result<PaintBackend> {
+    if cpu_requested() {
+        return Ok(PaintBackend::Cpu);
+    }
+    backend_for(kernel_state().map(|_| ()))
+}
+
+fn backend_for(kernel: std::result::Result<(), &KernelError>) -> Result<PaintBackend> {
+    match kernel {
+        Ok(()) => Ok(PaintBackend::HostGpu),
+        Err(KernelError::Unavailable(_)) => Ok(PaintBackend::Cpu),
+        Err(KernelError::Failed(message)) => fail(format!("Graphics UI GPU paint {message}")),
+    }
 }
 
 fn kernel() -> Result<&'static PaintKernel> {
-    static KERNEL: OnceLock<std::result::Result<PaintKernel, String>> = OnceLock::new();
-    match KERNEL.get_or_init(|| {
-        let context = fujimod_emulator_gpu::context()?;
-        if !context.supports_read_write_r32uint_storage() {
-            return Err("host GPU lacks native R32Uint read/write storage support".into());
-        }
-        let device = context.device();
-        let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
-            label: Some("EXR2 vector GPU paint"),
-            source: wgpu::ShaderSource::Wgsl(include_str!("ui_paint.wgsl").into()),
-        });
-        let pipeline = device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
-            label: Some("EXR2 vector GPU paint"),
-            layout: None,
-            module: &shader,
-            entry_point: Some("main"),
-            compilation_options: Default::default(),
-            cache: None,
-        });
-        Ok(PaintKernel { pipeline })
-    }) {
+    match kernel_state() {
         Ok(kernel) => Ok(kernel),
-        Err(error) => fail(format!("Graphics UI GPU paint {error}")),
+        Err(KernelError::Unavailable(message) | KernelError::Failed(message)) => {
+            fail(format!("Graphics UI GPU paint {message}"))
+        }
     }
+}
+
+fn kernel_state() -> std::result::Result<&'static PaintKernel, &'static KernelError> {
+    static KERNEL: OnceLock<std::result::Result<PaintKernel, KernelError>> = OnceLock::new();
+    KERNEL.get_or_init(create_kernel).as_ref()
+}
+
+fn create_kernel() -> std::result::Result<PaintKernel, KernelError> {
+    let context = fujimod_emulator_gpu::context().map_err(|error| {
+        if error.starts_with("host GPU adapter:") || error.starts_with("host GPU device:") {
+            KernelError::Unavailable(error)
+        } else {
+            KernelError::Failed(error)
+        }
+    })?;
+    if !context.supports_read_write_r32uint_storage() {
+        return Err(KernelError::Unavailable(
+            "host GPU lacks native R32Uint read/write storage support".into(),
+        ));
+    }
+    let device = context.device();
+    let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
+        label: Some("EXR2 vector GPU paint"),
+        source: wgpu::ShaderSource::Wgsl(include_str!("ui_paint.wgsl").into()),
+    });
+    let pipeline = device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
+        label: Some("EXR2 vector GPU paint"),
+        layout: None,
+        module: &shader,
+        entry_point: Some("main"),
+        compilation_options: Default::default(),
+        cache: None,
+    });
+    Ok(PaintKernel { pipeline })
 }
 
 fn image_key(texture: &batch::Texture) -> (u64, u32, u32) {
@@ -187,6 +242,318 @@ fn paint_data(draw: &batch::Draw, image: Option<&[u8]>) -> Result<Vec<u32>> {
     Ok(vec![0])
 }
 
+/// A guest target being painted on the CPU, in its Morton guest layout.
+struct CpuTarget {
+    key: SurfaceKey,
+    bytes: Vec<u8>,
+}
+
+impl CpuTarget {
+    fn bytes_per_pixel(&self) -> usize {
+        self.key.format.bytes_per_pixel() as usize
+    }
+
+    fn pixel_offset(&self, x: i64, y: i64) -> usize {
+        let width = self.key.extent.width as usize;
+        render::morton(width, x as usize, y as usize) * self.bytes_per_pixel()
+    }
+}
+
+fn parameter_float(params: &[u32], index: usize) -> f32 {
+    f32::from_bits(params[index])
+}
+
+fn transform_color(params: &[u32], color: [f32; 4]) -> [f32; 4] {
+    if params[30] == 0 {
+        return color;
+    }
+    let mut result = [0.0f32; 4];
+    for channel in 0..4 {
+        let scale = parameter_float(params, 31 + channel);
+        let bias = parameter_float(params, 35 + channel);
+        result[channel] = (color[channel] * scale + bias).clamp(0.0, 1.0);
+    }
+    result
+}
+
+fn packed_rgba(word: u32) -> [f32; 4] {
+    [
+        (word & 255) as f32 / 255.0,
+        ((word >> 8) & 255) as f32 / 255.0,
+        ((word >> 16) & 255) as f32 / 255.0,
+        (word >> 24) as f32 / 255.0,
+    ]
+}
+
+fn texture_rgba(word: u32) -> [f32; 4] {
+    [
+        ((word >> 24) & 255) as f32 / 255.0,
+        ((word >> 16) & 255) as f32 / 255.0,
+        ((word >> 8) & 255) as f32 / 255.0,
+        (word & 255) as f32 / 255.0,
+    ]
+}
+
+fn morton_index(width: u32, x: u32, y: u32) -> u32 {
+    let local = (x & 1)
+        | ((y & 1) << 1)
+        | ((x & 2) << 1)
+        | ((y & 2) << 2)
+        | ((x & 4) << 2)
+        | ((y & 4) << 3);
+    ((y >> 3) * (width >> 3) + (x >> 3)) * 64 + local
+}
+
+fn gradient_color(params: &[u32], data: &[u32], x: f32, y: f32, radial: bool) -> [f32; 4] {
+    let a = parameter_float(params, 21);
+    let c = parameter_float(params, 22);
+    let e = parameter_float(params, 23);
+    let f = parameter_float(params, 24);
+    let mut amount = a * x + c + e * y + f;
+    if radial {
+        let u = a * x + c;
+        let v = e * y + f;
+        let flags = params[29];
+        let cross = if flags & 3 == 0 { 2.0 * u * v } else { 0.0 };
+        let root =
+            (parameter_float(params, 27) * u * u + parameter_float(params, 28) * v * v + cross)
+                .max(0.0)
+                .sqrt();
+        let mut linear = 0.0f32;
+        if flags & 1 == 0 {
+            linear += u;
+        }
+        if flags & 2 == 0 {
+            linear += v;
+        }
+        amount = if flags & 4 != 0 {
+            linear - root
+        } else {
+            linear + root
+        };
+    }
+    if params[25] == 0 {
+        amount = amount.clamp(0.0, 1.0);
+    } else if params[25] == 1 {
+        amount -= amount.floor();
+    } else {
+        let remainder = amount - (amount / 2.0).floor() * 2.0;
+        amount = 1.0 - (remainder - 1.0).abs();
+    }
+    let position = (amount * 127.0 + 0.5).clamp(0.0, 127.0);
+    let low = position.floor() as usize;
+    let high = (low + 1).min(127);
+    let fraction = position - low as f32;
+    let first = packed_rgba(data[low]);
+    let second = packed_rgba(data[high]);
+    let mut color = [0.0f32; 4];
+    for channel in 0..4 {
+        color[channel] = first[channel] * (1.0 - fraction) + second[channel] * fraction;
+    }
+    if params[26] != 0 {
+        if color[3] != 0.0 {
+            for channel in 0..3 {
+                color[channel] /= color[3];
+            }
+        } else {
+            color = [0.0; 4];
+        }
+    }
+    transform_color(params, color)
+}
+
+fn source_color(params: &[u32], data: &[u32], x: f32, y: f32) -> [f32; 4] {
+    match params[10] {
+        2 => gradient_color(params, data, x, y, false),
+        3 => gradient_color(params, data, x, y, true),
+        1 => {
+            let a = parameter_float(params, 15);
+            let b = parameter_float(params, 16);
+            let c = parameter_float(params, 17);
+            let d = parameter_float(params, 18);
+            let e = parameter_float(params, 19);
+            let f = parameter_float(params, 20);
+            let u = (a * x + b * y + c).floor() as i32;
+            let v = (d * x + e * y + f).floor() as i32;
+            let valid = u >= 0 && v >= 0 && u < params[13] as i32 && v < params[14] as i32;
+            let source_x = u.clamp(0, params[11] as i32 - 1) as u32;
+            let source_y = v.clamp(0, params[12] as i32 - 1) as u32;
+            let index = morton_index(params[11], source_x, source_y) as usize;
+            let mut color = texture_rgba(data[index]);
+            if !valid {
+                color = [0.0; 4];
+            }
+            transform_color(params, color)
+        }
+        _ => transform_color(params, packed_rgba(params[39])),
+    }
+}
+
+fn quantize(value: f32) -> u32 {
+    (value.clamp(0.0, 1.0) * 255.0 + 0.5).floor() as u32
+}
+
+/// Paint one covered pixel with the shader's straight SRC/SRC_OVER blend.
+fn paint_pixel(
+    params: &[u32],
+    data: &[u32],
+    target: &mut CpuTarget,
+    x: i64,
+    y: i64,
+    coverage_fraction: f32,
+) {
+    let offset = target.pixel_offset(x, y);
+    let packed_format = params[40] == 3;
+    let width = target.bytes_per_pixel().min(4);
+    let mut lanes = [0u8; 4];
+    lanes[..width].copy_from_slice(&target.bytes[offset..offset + width]);
+    let word = u32::from_le_bytes(lanes);
+    let destination = if packed_format {
+        let mut color = [
+            ((word >> 12) & 15) as f32 / 15.0,
+            ((word >> 8) & 15) as f32 / 15.0,
+            ((word >> 4) & 15) as f32 / 15.0,
+            (word & 15) as f32 / 15.0,
+        ];
+        if params[8] != 0 {
+            color = [color[1], color[2], color[3], color[0]];
+        }
+        color
+    } else {
+        let mut color = packed_rgba(word);
+        color = if params[8] == 0 {
+            [color[3], color[2], color[1], color[0]]
+        } else {
+            [color[2], color[1], color[0], color[3]]
+        };
+        color
+    };
+    let source = source_color(params, data, x as f32 + 0.5, y as f32 + 0.5);
+    let alpha = source[3] * coverage_fraction;
+    if params[9] != 0 && alpha == 0.0 {
+        return;
+    }
+    let retained = if params[9] != 0 {
+        1.0 - alpha
+    } else {
+        1.0 - coverage_fraction
+    };
+    let output_alpha = alpha + destination[3] * retained;
+    let mut output_rgb = [0.0f32; 3];
+    if output_alpha != 0.0 {
+        for channel in 0..3 {
+            output_rgb[channel] = (source[channel] * alpha
+                + destination[channel] * destination[3] * retained)
+                / output_alpha;
+        }
+    }
+    let rgba = [
+        quantize(output_rgb[0]),
+        quantize(output_rgb[1]),
+        quantize(output_rgb[2]),
+        quantize(output_alpha),
+    ];
+    let packed = if packed_format {
+        let nibble = rgba.map(|value| value >> 4);
+        if params[8] != 0 {
+            nibble[3] << 12 | nibble[0] << 8 | nibble[1] << 4 | nibble[2]
+        } else {
+            nibble[0] << 12 | nibble[1] << 8 | nibble[2] << 4 | nibble[3]
+        }
+    } else if params[8] == 0 {
+        rgba[0] << 24 | rgba[1] << 16 | rgba[2] << 8 | rgba[3]
+    } else {
+        rgba[3] << 24 | rgba[0] << 16 | rgba[1] << 8 | rgba[2]
+    };
+    for lane in 0..width {
+        target.bytes[offset + lane] = (packed >> (8 * lane)) as u8;
+    }
+}
+
+/// Paint a whole batch on the CPU, mirroring `ui_paint.wgsl` per pixel.
+fn render_cpu(draws: &[batch::Draw], snapshots: Snapshots) -> Result<RenderedBatch> {
+    let Snapshots {
+        targets,
+        target_slots,
+        textures,
+    } = snapshots;
+    let mut targets: Vec<CpuTarget> = targets
+        .into_iter()
+        .map(|(key, bytes)| CpuTarget { key, bytes })
+        .collect();
+    let mut touched_halfwords = 0u64;
+    for draw in draws {
+        let plan = render::coverage_plan(draw)?;
+        check_plan(&plan)?;
+        if plan.is_empty() {
+            continue;
+        }
+        let counts = render::fill_counts(
+            &plan.edges,
+            plan.nonzero,
+            plan.x0,
+            plan.y0,
+            i64::from(plan.samples),
+            plan.width,
+            plan.height,
+        )?;
+        let params = paint_parameters(draw, &plan, 0)?;
+        let image = draw
+            .texture
+            .as_ref()
+            .and_then(|texture| textures.get(&image_key(texture)))
+            .map(Vec::as_slice);
+        let data = paint_data(draw, image)?;
+        let target_index = *target_slots
+            .get(&draw.target.0)
+            .ok_or_else(|| Unsupported("Graphics UI target lookup failed".into()))?;
+        let target = &mut targets[target_index];
+        let maximum = plan.samples * plan.samples;
+        let halfwords = if draw.target_format == batch::TargetFormat::Rgba8 {
+            2
+        } else {
+            1
+        };
+        for (pixel, (&count, &inside)) in counts.iter().zip(plan.clip_mask()).enumerate() {
+            if count == 0 || !inside {
+                continue;
+            }
+            touched_halfwords += halfwords;
+            let coverage_byte = u32::from(count) * 255 / maximum;
+            if coverage_byte == 0 {
+                continue;
+            }
+            let x = plan.x0 + (pixel % plan.width) as i64;
+            let y = plan.y0 + (pixel / plan.width) as i64;
+            paint_pixel(&params, &data, target, x, y, coverage_byte as f32 / 255.0);
+        }
+    }
+    let output = targets
+        .into_iter()
+        .map(|target| (target.key.guest_address, Arc::new(target.bytes)))
+        .collect();
+    Ok((output, touched_halfwords * 2))
+}
+
+/// The per-draw bounds the GPU kernel relies on, shared by both backends.
+fn check_plan(plan: &render::CoveragePlan) -> Result<()> {
+    if !matches!(plan.samples, 1 | 2 | 4) {
+        return fail("Graphics UI uses an unsupported coverage sample grid");
+    }
+    let bounds = plan.bounds();
+    if bounds[1] > 2048 || bounds[3] > 2048 {
+        return fail("Graphics UI coverage exceeds the GPU bounds");
+    }
+    if plan.edges.iter().any(|&(start, end)| {
+        [start.0, start.1, end.0, end.1]
+            .iter()
+            .any(|v| v.abs() > 16_777_216.0)
+    }) {
+        return fail("Graphics UI fill edge exceeds the GPU coordinate range");
+    }
+    Ok(())
+}
+
 /// Paint a complete EXR2 vector batch, keeping coverage and pixels on the GPU.
 #[cfg(not(target_arch = "wasm32"))]
 pub(super) fn render(
@@ -197,18 +564,18 @@ pub(super) fn render(
     block_on(render_async(draws, cpu, host))
 }
 
-/// Paint a complete EXR2 vector batch without blocking WebGPU readback.
-// The submission guard is held across the readback awaits on purpose: it keeps
-// GPU paints serialized until their results are mapped back.
-#[allow(clippy::await_holding_lock)]
-pub(super) async fn render_async(
-    draws: &[batch::Draw],
-    cpu: i64,
-    host: &mut dyn Inputs,
-) -> Result<RenderedBatch> {
-    let mut target_bytes = Vec::<(SurfaceKey, Vec<u8>)>::new();
+/// Host-side target and image snapshots for one batch, in first-use order.
+struct Snapshots {
+    targets: Vec<(SurfaceKey, Vec<u8>)>,
+    target_slots: HashMap<u64, usize>,
+    textures: HashMap<(u64, u32, u32), Vec<u8>>,
+}
+
+/// Read each target and image once, before any draw of the batch writes it.
+fn snapshots(draws: &[batch::Draw], cpu: i64, host: &mut dyn Inputs) -> Result<Snapshots> {
+    let mut targets = Vec::<(SurfaceKey, Vec<u8>)>::new();
     let mut target_slots = HashMap::<u64, usize>::new();
-    let mut texture_bytes = HashMap::<(u64, u32, u32), Vec<u8>>::new();
+    let mut textures = HashMap::<(u64, u32, u32), Vec<u8>>::new();
     for draw in draws {
         let (address, width, height, _) = draw.target;
         if let std::collections::hash_map::Entry::Vacant(entry) = target_slots.entry(address) {
@@ -229,12 +596,12 @@ pub(super) async fn render_async(
                 extent: SurfaceExtent { width, height },
                 layout: SurfaceLayout::Morton8x8,
             };
-            entry.insert(target_bytes.len());
-            target_bytes.push((key, bytes));
+            entry.insert(targets.len());
+            targets.push((key, bytes));
         }
         if let Some(texture) = &draw.texture {
             let key = image_key(texture);
-            if let std::collections::hash_map::Entry::Vacant(entry) = texture_bytes.entry(key) {
+            if let std::collections::hash_map::Entry::Vacant(entry) = textures.entry(key) {
                 let length = (texture.width as u64)
                     .checked_mul(texture.height as u64)
                     .and_then(|count| count.checked_mul(4))
@@ -249,7 +616,35 @@ pub(super) async fn render_async(
             }
         }
     }
+    Ok(Snapshots {
+        targets,
+        target_slots,
+        textures,
+    })
+}
 
+/// Paint a complete EXR2 vector batch without blocking WebGPU readback.
+pub(super) async fn render_async(
+    draws: &[batch::Draw],
+    cpu: i64,
+    host: &mut dyn Inputs,
+) -> Result<RenderedBatch> {
+    let snapshots = snapshots(draws, cpu, host)?;
+    if backend()? == PaintBackend::Cpu {
+        return render_cpu(draws, snapshots);
+    }
+    render_gpu(draws, snapshots).await
+}
+
+// The submission guard is held across the readback awaits on purpose: it keeps
+// GPU paints serialized until their results are mapped back.
+#[allow(clippy::await_holding_lock)]
+async fn render_gpu(draws: &[batch::Draw], snapshots: Snapshots) -> Result<RenderedBatch> {
+    let Snapshots {
+        targets: target_bytes,
+        target_slots,
+        textures: texture_bytes,
+    } = snapshots;
     let context = fujimod_emulator_gpu::context()
         .map_err(|error| Unsupported(format!("Graphics UI GPU paint {error}")))?;
     let _submission = context
@@ -271,20 +666,7 @@ pub(super) async fn render_async(
     let mut counts = Vec::<u32>::new();
     let mut rasters = Vec::with_capacity(plans.len());
     for plan in &plans {
-        if !matches!(plan.samples, 1 | 2 | 4) {
-            return fail("Graphics UI uses an unsupported coverage sample grid");
-        }
-        let bounds = plan.bounds();
-        if bounds[1] > 2048 || bounds[3] > 2048 {
-            return fail("Graphics UI coverage exceeds the GPU bounds");
-        }
-        if plan.edges.iter().any(|&(start, end)| {
-            [start.0, start.1, end.0, end.1]
-                .iter()
-                .any(|v| v.abs() > 16_777_216.0)
-        }) {
-            return fail("Graphics UI fill edge exceeds the GPU coordinate range");
-        }
+        check_plan(plan)?;
         let length = plan
             .width
             .checked_mul(plan.height)
@@ -890,5 +1272,187 @@ mod tests {
         assert_eq!(output[0].1.as_slice(), [0x57, 0x13].repeat(64));
         assert_eq!(output[1].0, 0x1c1000);
         assert_eq!(output[1].1.as_slice(), [0x78, 0x56, 0x34, 0x12].repeat(64));
+    }
+
+    /// Paint the same batch through the shader-mirroring CPU backend.
+    fn render_cpu_batch(draws: &[batch::Draw], regions: &HashMap<u64, Vec<u8>>) -> RenderedBatch {
+        let mut host = TestInputs {
+            regions: regions.clone(),
+        };
+        let snapshots = snapshots(draws, 0, &mut host).expect("CPU paint snapshots should read");
+        render_cpu(draws, snapshots).expect("CPU paint should render")
+    }
+
+    fn reference_batch(
+        draws: &[batch::Draw],
+        targets: &HashMap<u64, Vec<u8>>,
+        textures: &HashMap<(u64, u32, u32), Vec<u8>>,
+    ) -> RenderedBatch {
+        let mut coverage = cpu_coverage;
+        let (output, touched) = super::render::render(draws, targets, textures, &mut coverage)
+            .expect("CPU paint reference should render");
+        let output = output
+            .into_iter()
+            .map(|(address, bytes)| (address, Arc::new(bytes)))
+            .collect();
+        (output, touched)
+    }
+
+    #[test]
+    fn cpu_backend_paints_its_own_linear_ramp_and_radial_ramp() {
+        let address = 0x1d0000;
+        let mut gradient_draw = draw(address, 0, [0., 0., 8., 8.], 1, 0, [0, 0, 0, 0]);
+        gradient_draw.gradient = Some(Gradient {
+            coefficients: (0.125, 0.0, 0.0, 0.0),
+            radial: None,
+            colors: (0..128)
+                .map(|index| [index as u8, 255 - index as u8, 64, 255])
+                .collect(),
+            spread: 0,
+            premultiplied: false,
+        });
+        let mut radial_draw = draw(address + 0x10000, 0, [0., 0., 8., 8.], 2, 1, [0, 0, 0, 0]);
+        radial_draw.gradient = Some(Gradient {
+            coefficients: (0.08, -0.32, 0.08, -0.32),
+            radial: Some(batch::RadialGradient {
+                quadratics: [1.0, 1.0],
+                zero_x: false,
+                zero_y: false,
+                negative_denominator: false,
+            }),
+            colors: (0..128)
+                .map(|index| [255, index as u8, 255 - index as u8, 200])
+                .collect(),
+            spread: 2,
+            premultiplied: true,
+        });
+        radial_draw.color_transform = Some(ColorTransform {
+            scale: [1.0, 0.5, 1.0, 1.0],
+            bias: [0.0, 0.125, 0.0, 0.0],
+        });
+        let regions = HashMap::from([
+            (address, vec![0; 8 * 8 * 4]),
+            (address + 0x10000, vec![0; 8 * 8 * 4]),
+        ]);
+        let draws = [gradient_draw, radial_draw];
+        let (output, touched) = render_cpu_batch(&draws, &regions);
+        assert_eq!(touched, 2 * 8 * 8 * 4);
+        assert_eq!(output.len(), 2);
+        assert_eq!(output[0].1.as_slice(), output[0].1.as_slice());
+        let distinct: std::collections::HashSet<_> = output[0]
+            .1
+            .as_chunks::<4>()
+            .0
+            .iter()
+            .map(|pixel| pixel.to_vec())
+            .collect();
+        assert!(distinct.len() > 2, "linear ramp should vary across pixels");
+    }
+
+    #[test]
+    fn cpu_backend_matches_the_reference_for_src_and_src_over() {
+        for format in [batch::TargetFormat::Rgba8, batch::TargetFormat::Rgba4444] {
+            for blend in [0u32, 1] {
+                let address = 0x1e0000 + u64::from(blend) * 0x20000 + format as u64 * 0x10000;
+                let mut solid = draw(
+                    address,
+                    0,
+                    [0.5, 0.25, 7.5, 6.75],
+                    4,
+                    blend,
+                    [19, 79, 137, 211],
+                );
+                solid.target_format = format;
+                let mut over = draw(
+                    address,
+                    0,
+                    [1.25, 0.7, 6.6, 6.1],
+                    2,
+                    blend,
+                    [223, 57, 91, 149],
+                );
+                over.target_format = format;
+                let bytes = 8 * 8 * format.bytes_per_pixel() as usize;
+                let target: Vec<u8> = (0..bytes).map(|index| (index * 37 + 11) as u8).collect();
+                let draws = [solid, over];
+                let regions = HashMap::from([(address, target.clone())]);
+                let actual = render_cpu_batch(&draws, &regions);
+                let expected =
+                    reference_batch(&draws, &HashMap::from([(address, target)]), &HashMap::new());
+                assert_eq!(actual.1, expected.1);
+                assert_eq!(actual.0[0].1.as_slice(), expected.0[0].1.as_slice());
+            }
+        }
+    }
+
+    #[test]
+    fn cpu_backend_matches_the_reference_for_texture_and_gradients() {
+        for format in [batch::TargetFormat::Rgba8, batch::TargetFormat::Rgba4444] {
+            let address = 0x200000 + format as u64 * 0x10000;
+            let texture_address = address + 0x1000;
+            let bytes = 8 * 8 * format.bytes_per_pixel() as usize;
+            let target: Vec<u8> = (0..bytes).map(|index| (index * 37 + 11) as u8).collect();
+            let texture_bytes: Vec<u8> =
+                (0..8 * 8 * 4).map(|index| (index * 19 + 7) as u8).collect();
+            let mut linear = draw(address, 1, [0.4, 1.2, 7.6, 7.1], 2, 1, [0, 0, 0, 0]);
+            linear.gradient = Some(Gradient {
+                coefficients: (0.047, 0.11, 0.029, 0.17),
+                radial: None,
+                colors: (0..128)
+                    .map(|index| {
+                        [
+                            (index * 17 % 256) as u8,
+                            (index * 41 % 256) as u8,
+                            (255 - index * 13 % 256) as u8,
+                            (64 + index * 7 % 192) as u8,
+                        ]
+                    })
+                    .collect(),
+                spread: 1,
+                premultiplied: false,
+            });
+            linear.color_transform = Some(ColorTransform {
+                scale: [0.875, 1.125, 0.75, 1.0],
+                bias: [0.03125, 0.0, 0.015625, -0.015625],
+            });
+            let mut sampled = draw(address, 1, [2.1, 0.3, 7.4, 5.8], 4, 0, [0, 0, 0, 0]);
+            sampled.texture = Some(Texture {
+                source: texture_address,
+                width: 8,
+                height: 8,
+                valid_width: 7,
+                valid_height: 6,
+                matrix: [1.0, 0.0, 0.25, 0.0, 1.0, -0.5],
+            });
+            for draw in [&mut linear, &mut sampled] {
+                draw.target_format = format;
+            }
+            let draws = [linear, sampled];
+            let regions = HashMap::from([
+                (address, target.clone()),
+                (texture_address, texture_bytes.clone()),
+            ]);
+            let actual = render_cpu_batch(&draws, &regions);
+            let expected = reference_batch(
+                &draws,
+                &HashMap::from([(address, target)]),
+                &HashMap::from([((texture_address, 8, 8), texture_bytes)]),
+            );
+            assert_eq!(actual.1, expected.1);
+            assert_eq!(actual.0[0].1.as_slice(), expected.0[0].1.as_slice());
+        }
+    }
+
+    #[test]
+    fn missing_host_adapter_selects_the_cpu_backend() {
+        let unavailable = KernelError::Unavailable("host GPU adapter: No suitable adapter".into());
+        assert_eq!(backend_for(Err(&unavailable)).unwrap(), PaintBackend::Cpu);
+        assert_eq!(backend_for(Ok(())).unwrap(), PaintBackend::HostGpu);
+        let failed = KernelError::Failed("host GPU device: lost".into());
+        let error = backend_for(Err(&failed)).unwrap_err();
+        assert!(matches!(error, Unsupported(message) if message.contains("host GPU device: lost")));
+        assert!(cpu_requested_from(Some("1")));
+        assert!(!cpu_requested_from(Some("0")));
+        assert!(!cpu_requested_from(None));
     }
 }
