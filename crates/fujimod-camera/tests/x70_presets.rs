@@ -2,17 +2,18 @@
 //! card is downloaded once into the state directory, an SD card boot reaches
 //! REC with the release, and autostart installs its flash once.
 //!
-//! Set \`FUJIMOD_FIRMWARE_LIBRARY\` to a library laid out by name. The state
+//! Set \`FUJIMOD_FIRMWARE_LIBRARY\` to a firmware library. The state
 //! directory is a scratch directory under \`/tmp\`.
 use fujimod_camera::{BootCache, ExecutionPolicy, Library, Preset, Request, Stage, StateDir, open};
 use std::time::{Duration, Instant};
 
 fn library() -> Option<Library> {
-    match Library::from_env() {
-        Ok(library) => Some(library),
-        Err(fujimod_camera::LibraryError::Environment) => None,
-        Err(error) => panic!("firmware library: {error}"),
-    }
+    let library = Library::from_env().unwrap_or_else(|error| panic!("firmware library: {error}"));
+    library
+        .firmwares()
+        .iter()
+        .any(|firmware| firmware.id == "x70-110")
+        .then_some(library)
 }
 
 fn state() -> StateDir {

@@ -173,34 +173,34 @@ pub(crate) struct RomStart {
 }
 
 impl RomStart {
-    /// Read and verify the boot ROM at `rom_path` (plain or zstd-compressed), then build the start.
+    /// Read and verify a boot ROM input (plain or zstd-compressed), then build the start.
     pub fn load(
-        rom_path: &Path,
+        rom: crate::FirmwareFile,
         dials_held: bool,
         card_files: Vec<(String, PathBuf)>,
         card_present: bool,
     ) -> Result<Self, String> {
-        let packed = std::fs::read(rom_path).map_err(|e| format!("{}: {e}", rom_path.display()))?;
-        let rom = if rom_path.extension().is_some_and(|ext| ext == "zst") {
-            zstd::stream::decode_all(packed.as_slice())
-                .map_err(|e| format!("{}: {e}", rom_path.display()))?
-        } else {
-            packed
-        };
-        if rom.len() != ROM_SIZE {
+        let captured = rom.read(crate::firmware_file::MAX_BYTES)?;
+        if captured.len() < ROM_SIZE {
             return Err(format!(
-                "boot ROM is {} bytes, expected {ROM_SIZE}",
-                rom.len()
+                "boot ROM is {} bytes, expected at least {ROM_SIZE}",
+                captured.len()
             ));
         }
-        let digest: String = Sha256::digest(&rom)
+        let rom = &captured[..ROM_SIZE];
+        let digest: String = Sha256::digest(rom)
             .iter()
             .map(|b| format!("{b:02x}"))
             .collect();
         if digest != ROM_SHA256 {
             return Err(format!("boot ROM SHA-256 {digest} is not the captured ROM"));
         }
-        Self::with_media(Entry::MaskRom(rom), dials_held, card_files, card_present)
+        Self::with_media(
+            Entry::MaskRom(rom.to_vec()),
+            dials_held,
+            card_files,
+            card_present,
+        )
     }
 
     pub fn from_setup_handoff(handoff: SetupHandoff) -> Result<Self, String> {
@@ -535,7 +535,9 @@ mod tests {
         std::fs::create_dir_all(&directory).unwrap();
         let path = directory.join("rom.bin");
         std::fs::write(&path, vec![0u8; ROM_SIZE]).unwrap();
-        let error = RomStart::load(&path, true, vec![], true).err().unwrap();
+        let error = RomStart::load(path.into(), true, vec![], true)
+            .err()
+            .unwrap();
         assert!(error.contains("not the captured ROM"), "{error}");
         std::fs::remove_dir_all(&directory).ok();
     }

@@ -20,7 +20,7 @@ use std::{
 
 /// A checked emulation plan and explicit update file.
 pub struct Startup {
-    pub update: PathBuf,
+    pub update: crate::FirmwareFile,
     pub plan: PathBuf,
     pub discovery: bool,
     pub quantum: Option<usize>,
@@ -393,7 +393,7 @@ fn named(
 }
 
 pub fn open(resolved: &ResolvedConfiguration, startup: Startup) -> Result<Started, String> {
-    let update = bytes(Path::new(""), &startup.update)?;
+    let update = startup.update.read(crate::firmware_file::MAX_BYTES)?;
     let identity = resolved
         .reference
         .firmware

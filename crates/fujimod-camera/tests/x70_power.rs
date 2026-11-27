@@ -1,6 +1,6 @@
 //! X70 tests for powering a camera off and on again with its media kept.
 //!
-//! Set `FUJIMOD_FIRMWARE_LIBRARY` to a library laid out by name. Without it the
+//! Set `FUJIMOD_FIRMWARE_LIBRARY` to a firmware library. Without it the
 //! test returns without opening a camera. The SD card is the published release
 //! card, downloaded once into the state directory.
 mod support;

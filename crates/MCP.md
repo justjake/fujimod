@@ -218,10 +218,12 @@ firmware identity and one of its boots:
   saves nothing.
 - `name`: the camera id later calls use.
 
-The FujiMod layer finds the firmware update and boot ROM by name in the
-directory named by `FUJIMOD_FIRMWARE_LIBRARY` (`<firmware-id>/FPUPDATE.DAT`
-and `<body-id>/boot-rom.bin`), keeps downloads, autostart flash and the boot
-cache under `FUJIMOD_STATE_DIR` (default `/tmp/fujimod`), and resolves
+The FujiMod layer reads the firmware's source record under the directory named
+by `FUJIMOD_FIRMWARE_LIBRARY`, or the current directory when it is unset.
+Records live at `firmware/<model>/<version>/firmware.json`, and their update
+and boot ROM paths are relative to that root. A zstd frame is decoded in
+memory by its magic number. The layer keeps downloads, autostart flash and the
+boot cache under `FUJIMOD_STATE_DIR` (default `/tmp/fujimod`), and resolves
 the firmware's registered run configuration, and owns the boot holds, card
 media and control connection. Callers never name a configuration,
 overlays, update files, boot ROMs, NAND images, GPIO levels or key

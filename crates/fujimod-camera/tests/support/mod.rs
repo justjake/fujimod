@@ -1,24 +1,24 @@
 //! Inputs the FujiMod camera tests share.
 //!
-//! Set `FUJIMOD_FIRMWARE_LIBRARY` to a library laid out by name. A test
+//! Set `FUJIMOD_FIRMWARE_LIBRARY` to a firmware library. A test
 //! returns without opening a camera when it is absent. Every test uses a
 //! scratch state directory under `/tmp`.
 #![allow(dead_code)]
 
 use fujimod_camera::{
-    BootCache, CardSource, ExecutionPolicy, FirmwareInput, Library, LibraryError, Preset, Request,
-    StateDir,
+    BootCache, CardSource, ExecutionPolicy, FirmwareInput, Library, Preset, Request, StateDir,
 };
 use fujimod_recovery::Recipe;
 
 pub const FIRMWARE: &str = "x70-110";
 
 pub fn library() -> Option<Library> {
-    match Library::from_env() {
-        Ok(library) => Some(library),
-        Err(LibraryError::Environment) => None,
-        Err(error) => panic!("firmware library: {error}"),
-    }
+    let library = Library::from_env().unwrap_or_else(|error| panic!("firmware library: {error}"));
+    library
+        .firmwares()
+        .iter()
+        .any(|firmware| firmware.id == FIRMWARE)
+        .then_some(library)
 }
 
 /// A scratch state directory for this test process.
@@ -97,13 +97,10 @@ pub fn built_card(library: &Library, firmware: &str) -> Vec<(String, Vec<u8>)> {
     let recipe = Recipe::bundled(firmware)
         .unwrap_or_else(|error| panic!("{firmware}: recipe: {error}"))
         .unwrap_or_else(|| panic!("{firmware}: no SD card recipe"));
-    let update = std::fs::read(
-        library
-            .files(firmware)
-            .unwrap_or_else(|error| panic!("{firmware}: library files: {error}"))
-            .update,
-    )
-    .expect("read stock update");
+    let update = library
+        .files(firmware)
+        .unwrap_or_else(|error| panic!("{firmware}: library files: {error}"))
+        .update;
     let mut files: Vec<(String, Vec<u8>)> = recipe
         .build_ota_startup(&update)
         .expect("build the SD card entry")

@@ -41,9 +41,10 @@ impl Board {
     /// Open a camera.
     ///
     /// `boot` is `stock`, `sd-card` or `autostart`; the firmware's update, boot
-    /// ROM and reference camera come from the directory named by
-    /// `FUJIMOD_FIRMWARE_LIBRARY`. Give `update` and `boot_rom` to name the
-    /// two files instead. `sd_card` names a directory of SD card files and
+    /// ROM and reference camera come from its source record under
+    /// `FUJIMOD_FIRMWARE_LIBRARY`, or the current directory when it is unset.
+    /// Give `update` and `boot_rom` to name the two files instead. `sd_card`
+    /// names a directory of SD card files and
     /// `sd_card_files` their bytes, for a caller without a filesystem tree.
     /// `flash` starts from a saved internal-flash image and `combination`
     /// holds a catalog power-on combination (`sd`, `firmware_update` or

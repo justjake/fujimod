@@ -1,45 +1,47 @@
-//! Firmware files found by name, and the catalog resolution that names the run
+//! Firmware source records, and the catalog resolution that names the run
 //! configuration for a firmware.
 //!
-//! A firmware library is a directory laid out by name:
+//! A firmware library is a directory of source records:
 //!
 //! ```text
-//! <firmware-id>/FPUPDATE.DAT
-//! <body-id>/boot-rom.bin
+//! firmware/<model>/<version>/firmware.json
 //! ```
 //!
-//! The library is never scanned for files and never written. Each file is
-//! found by its name and hashed once to confirm it matches the catalog's
-//! entry for the firmware.
-use fujimod_catalog::ReferenceCatalog;
+//! The root is `FUJIMOD_FIRMWARE_LIBRARY`, or the current directory when it is
+//! unset. Paths in a record are relative to that root. The library never writes;
+//! it reads a record's sources once and decodes zstd in memory.
+use fujimod_catalog::{ReferenceCatalog, reference::ContentIdentity};
 use fujimod_catalog_configuration::RunOverlay;
 use fujimod_catalog_resolution::ResolvedConfiguration;
+use fujimod_emulator_boot::firmware_file;
+use serde::Deserialize;
 use sha2::{Digest, Sha256};
 use std::{
     collections::BTreeMap,
     fs,
-    path::{Path, PathBuf},
-    sync::Mutex,
+    path::{Component, Path, PathBuf},
 };
 
 /// The environment variable naming the firmware library directory.
 pub const LIBRARY_ENV: &str = "FUJIMOD_FIRMWARE_LIBRARY";
-/// The stock update file name inside a `<firmware-id>` directory.
-pub const UPDATE_FILE: &str = "FPUPDATE.DAT";
-/// The boot ROM file name inside a `<body-id>` directory.
-pub const BOOT_ROM_FILE: &str = "boot-rom.bin";
+/// The directory under a library root that holds source records.
+pub const RECORD_DIRECTORY: &str = "firmware";
+/// The source record's file name in a `<model>/<version>` directory.
+pub const RECORD_FILE: &str = "firmware.json";
 
 /// A firmware library could not be read or did not hold the catalog's files.
 #[derive(Debug, thiserror::Error)]
 pub enum LibraryError {
-    #[error("{LIBRARY_ENV} is not set")]
-    Environment,
     #[error("{path}: {source}")]
     Read {
         path: PathBuf,
         #[source]
         source: std::io::Error,
     },
+    #[error("{path}: {message}")]
+    Record { path: PathBuf, message: String },
+    #[error("{path}: {message}")]
+    Input { path: PathBuf, message: String },
     #[error("catalog: {0}")]
     Catalog(String),
     #[error("{path}: sha256 {sha256} is not the catalog's {kind} for {firmware}")]
@@ -57,12 +59,12 @@ pub enum LibraryError {
     Missing(String),
 }
 
-/// A directory of firmware files named by catalog identity.
+/// A directory of firmware source records named by catalog identity.
 pub struct Library {
     root: PathBuf,
     catalog: ReferenceCatalog,
-    /// SHA-256 of each file this library already read, by path.
-    hashed: Mutex<BTreeMap<PathBuf, String>>,
+    /// Records by firmware identity, read once when the library is made.
+    records: BTreeMap<String, Record>,
 }
 
 /// A catalog firmware whose update and boot ROM this library holds.
@@ -73,41 +75,103 @@ pub struct LibraryFirmware {
     pub version: String,
 }
 
-/// The catalog-named files of one firmware.
+/// The catalog-named files of one firmware, decoded in memory.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct FirmwareFiles {
-    pub update: PathBuf,
+    pub update: Vec<u8>,
     /// SHA-256 of `update`.
     pub update_sha256: String,
-    pub boot_rom: PathBuf,
+    pub boot_rom: Vec<u8>,
     /// SHA-256 of `boot_rom`.
     pub boot_rom_sha256: String,
 }
 
+/// One `firmware/<model>/<version>/firmware.json` record.
+#[derive(Debug)]
+struct Record {
+    path: PathBuf,
+    source: Option<Source>,
+    boot_rom: Option<BootRom>,
+}
+
+/// A stored file and the bytes it holds.
+#[derive(Clone, Debug, Deserialize)]
+struct Source {
+    path: String,
+    size: u64,
+    sha256: String,
+    #[serde(default)]
+    compression: Option<String>,
+    #[serde(default)]
+    original: Option<Identity>,
+}
+
+#[derive(Clone, Debug, Deserialize)]
+struct Identity {
+    size: u64,
+    sha256: String,
+}
+
+#[derive(Clone, Debug, Deserialize)]
+struct BootRom {
+    content: Identity,
+    source: Source,
+}
+
+#[derive(Deserialize)]
+struct Document {
+    id: String,
+    #[serde(default)]
+    source: Option<Source>,
+    #[serde(default)]
+    boot_rom: Option<BootRom>,
+}
+
+impl Source {
+    /// The bytes a reader of the record sees: the decoded original when the
+    /// file is compressed, else the stored file itself.
+    fn identity(&self) -> Identity {
+        self.original.clone().unwrap_or_else(|| Identity {
+            size: self.size,
+            sha256: self.sha256.clone(),
+        })
+    }
+}
+
 impl Library {
-    /// Read the directory named by the library environment variable.
+    /// Read the directory named by `FUJIMOD_FIRMWARE_LIBRARY`, or the current
+    /// directory when it is unset.
     pub fn from_env() -> Result<Self, LibraryError> {
-        let path = std::env::var_os(LIBRARY_ENV).ok_or(LibraryError::Environment)?;
-        Self::new(PathBuf::from(path))
+        let path = std::env::var_os(LIBRARY_ENV)
+            .map(PathBuf::from)
+            .or_else(|| std::env::current_dir().ok())
+            .unwrap_or_else(|| PathBuf::from("."));
+        Self::new(path)
     }
 
-    /// Read a library directory. No file is read until a firmware is opened.
+    /// Read a library directory and its source records. No firmware file is
+    /// read until a firmware is opened.
     pub fn new(path: impl Into<PathBuf>) -> Result<Self, LibraryError> {
         let root = path.into();
         let catalog = ReferenceCatalog::bundled().map_err(LibraryError::Catalog)?;
+        let records = scan(&root)?;
         Ok(Self {
             root,
             catalog,
-            hashed: Mutex::new(BTreeMap::new()),
+            records,
         })
     }
 
     /// The catalog's records without a directory of firmware files.
     ///
-    /// An open that names its update and boot ROM reads no file through the
-    /// library, but still needs the catalog's hashes and run configuration.
+    /// An open that names its update and boot ROM reads no record, but still
+    /// needs the catalog's hashes and run configuration.
     pub fn without_directory() -> Result<Self, LibraryError> {
-        Self::new(PathBuf::new())
+        Ok(Self {
+            root: PathBuf::new(),
+            catalog: ReferenceCatalog::bundled().map_err(LibraryError::Catalog)?,
+            records: BTreeMap::new(),
+        })
     }
 
     /// The firmware library directory.
@@ -129,11 +193,21 @@ impl Library {
             .firmware_ids()
             .filter_map(|id| {
                 let firmware = self.catalog.firmware(id)?;
-                firmware.update.as_ref()?;
-                firmware.boot_rom.as_ref()?;
-                // Listing confirms each file against the catalog, once per
-                // library; the launcher then shows only files it can open.
-                self.files(id).ok()?;
+                let update = firmware.update.as_ref()?;
+                let rom = firmware.boot_rom.as_ref()?;
+                let record = self.records.get(id)?;
+                let source = record.source.as_ref()?;
+                let identity = source.identity();
+                if identity.size != update.size || identity.sha256 != update.sha256 {
+                    return None;
+                }
+                if !self.source_present(record, source) {
+                    return None;
+                }
+                let rom_record = self.boot_rom_record(&rom.content.sha256)?;
+                if !self.source_present(rom_record, &rom_record.boot_rom.as_ref()?.source) {
+                    return None;
+                }
                 self.resolved(id).ok()?;
                 Some(LibraryFirmware {
                     id: firmware.id.clone(),
@@ -144,22 +218,78 @@ impl Library {
             .collect()
     }
 
-    /// The firmware's catalog-named update and boot ROM, each hashed once.
+    /// The firmware's catalog-named update and boot ROM, decoded in memory.
     pub fn files(&self, firmware_id: &str) -> Result<FirmwareFiles, LibraryError> {
-        self.firmware(firmware_id)?;
-        if self.root.as_os_str().is_empty() {
-            return Err(LibraryError::Missing(format!(
-                "no firmware library directory names {firmware_id}'s files"
-            )));
-        }
-        let update = self.update_path(firmware_id);
-        let boot_rom = self.boot_rom_path(firmware_id);
-        let update_sha256 = self.hash(&update, firmware_id, "stock update")?;
-        let boot_rom_sha256 = self.hash(&boot_rom, firmware_id, "boot ROM")?;
+        let firmware = self.firmware(firmware_id)?;
+        let update_identity = firmware.update.as_ref().ok_or_else(|| {
+            LibraryError::Missing(format!("firmware {firmware_id} has no update identity"))
+        })?;
+        let boot_identity = firmware.boot_rom.as_ref().ok_or_else(|| {
+            LibraryError::Missing(format!("firmware {firmware_id} has no boot ROM identity"))
+        })?;
+        let record = self.records.get(firmware_id).ok_or_else(|| {
+            LibraryError::Missing(format!(
+                "no {RECORD_FILE} record for {firmware_id} under {}",
+                self.root.join(RECORD_DIRECTORY).display()
+            ))
+        })?;
+        let source = record.source.as_ref().ok_or_else(|| {
+            LibraryError::Missing(format!(
+                "{}: firmware {firmware_id} record has no update source",
+                record.path.display()
+            ))
+        })?;
+        let (update, update_sha256) = self.update(record, source, update_identity, firmware_id)?;
+        let (boot_rom, boot_rom_sha256) = self.boot_rom(firmware_id, &boot_identity.content)?;
         Ok(FirmwareFiles {
             update,
             update_sha256,
             boot_rom,
+            boot_rom_sha256,
+        })
+    }
+
+    /// Read two caller-named files, which must match the catalog's entry for
+    /// the firmware. zstd frames are decoded by their magic number.
+    pub fn files_from(
+        &self,
+        firmware_id: &str,
+        update: &Path,
+        boot_rom: &Path,
+    ) -> Result<FirmwareFiles, LibraryError> {
+        let firmware = self.firmware(firmware_id)?;
+        let update_identity = firmware.update.as_ref().ok_or_else(|| {
+            LibraryError::Missing(format!("firmware {firmware_id} has no update identity"))
+        })?;
+        let boot_identity = firmware.boot_rom.as_ref().ok_or_else(|| {
+            LibraryError::Missing(format!("firmware {firmware_id} has no boot ROM identity"))
+        })?;
+        let update_bytes = read_input(update)?;
+        let update_sha256 = digest(&update_bytes);
+        if update_bytes.len() as u64 != update_identity.size
+            || update_sha256 != update_identity.sha256
+        {
+            return Err(LibraryError::Mismatch {
+                path: update.to_owned(),
+                sha256: update_sha256,
+                kind: "stock update",
+                firmware: firmware_id.into(),
+            });
+        }
+        let captured = read_input(boot_rom)?;
+        let content = &boot_identity.content;
+        let bytes = capture(
+            &captured,
+            content.size,
+            &content.sha256,
+            boot_rom,
+            firmware_id,
+        )?;
+        let boot_rom_sha256 = digest(bytes);
+        Ok(FirmwareFiles {
+            update: update_bytes,
+            update_sha256,
+            boot_rom: bytes.to_vec(),
             boot_rom_sha256,
         })
     }
@@ -241,73 +371,298 @@ impl Library {
         })
     }
 
-    /// `<root>/<firmware-id>/FPUPDATE.DAT`.
-    fn update_path(&self, firmware_id: &str) -> PathBuf {
-        self.root.join(firmware_id).join(UPDATE_FILE)
-    }
-
-    /// `<root>/<body-id>/boot-rom.bin`.
-    fn boot_rom_path(&self, firmware_id: &str) -> PathBuf {
-        let body = self
-            .catalog
-            .firmware(firmware_id)
-            .map(|firmware| firmware.body_id.as_str())
-            .unwrap_or(firmware_id);
-        self.root.join(body).join(BOOT_ROM_FILE)
-    }
-
-    /// Read a file once and confirm it is the catalog's `kind` for the firmware.
-    fn hash(
-        &self,
-        path: &Path,
-        firmware_id: &str,
-        kind: &'static str,
-    ) -> Result<String, LibraryError> {
-        let catalog = self.firmware(firmware_id)?;
-        let expected = match kind {
-            "stock update" => catalog.update.as_ref().map(|update| update.sha256.as_str()),
-            _ => catalog
+    /// The first record whose boot ROM content has `sha256`.
+    fn boot_rom_record(&self, sha256: &str) -> Option<&Record> {
+        self.records.values().find(|record| {
+            record
                 .boot_rom
                 .as_ref()
-                .map(|rom| rom.content.sha256.as_str()),
-        }
-        .ok_or_else(|| {
-            LibraryError::Missing(format!("firmware {firmware_id} has no {kind} identity"))
-        })?;
-        if let Some(sha256) = self
-            .hashed
-            .lock()
+                .is_some_and(|rom| rom.content.sha256 == sha256)
+        })
+    }
+
+    /// Whether a source names a readable regular file of its declared size.
+    fn source_present(&self, record: &Record, source: &Source) -> bool {
+        self.source_path(record, source)
             .ok()
-            .and_then(|hashed| hashed.get(path).cloned())
-        {
-            if sha256 != expected {
-                return Err(LibraryError::Mismatch {
-                    path: path.to_owned(),
-                    sha256,
-                    kind,
-                    firmware: firmware_id.into(),
-                });
-            }
-            return Ok(sha256);
-        }
-        let bytes = fs::read(path).map_err(|source| LibraryError::Read {
-            path: path.to_owned(),
-            source,
-        })?;
-        let sha256 = format!("{:x}", Sha256::digest(&bytes));
-        if let Ok(mut hashed) = self.hashed.lock() {
-            hashed.insert(path.to_owned(), sha256.clone());
-        }
-        if sha256 != expected {
+            .and_then(|path| fs::metadata(path).ok())
+            .is_some_and(|metadata| metadata.is_file() && metadata.len() == source.size)
+    }
+
+    /// Read the record's update and confirm it is the catalog's.
+    fn update(
+        &self,
+        record: &Record,
+        source: &Source,
+        catalog: &ContentIdentity,
+        firmware: &str,
+    ) -> Result<(Vec<u8>, String), LibraryError> {
+        let (path, bytes) = self.read_source(record, source, "stock update", firmware)?;
+        let sha256 = digest(&bytes);
+        if bytes.len() as u64 != catalog.size || sha256 != catalog.sha256 {
             return Err(LibraryError::Mismatch {
-                path: path.to_owned(),
+                path,
                 sha256,
-                kind,
-                firmware: firmware_id.into(),
+                kind: "stock update",
+                firmware: firmware.into(),
             });
         }
-        Ok(sha256)
+        Ok((bytes, sha256))
     }
+
+    /// Read the boot ROM any record holds for the catalog's content hash.
+    fn boot_rom(
+        &self,
+        firmware: &str,
+        catalog: &ContentIdentity,
+    ) -> Result<(Vec<u8>, String), LibraryError> {
+        let record = self.boot_rom_record(&catalog.sha256).ok_or_else(|| {
+            LibraryError::Missing(format!(
+                "no {RECORD_FILE} under {} holds the boot ROM {}",
+                self.root.join(RECORD_DIRECTORY).display(),
+                catalog.sha256
+            ))
+        })?;
+        let rom = record.boot_rom.as_ref().expect("selected boot ROM record");
+        let (path, captured) = self.read_source(record, &rom.source, "boot ROM", firmware)?;
+        let bytes = capture(
+            &captured,
+            rom.content.size,
+            &rom.content.sha256,
+            &path,
+            firmware,
+        )?;
+        if rom.content.size != catalog.size || rom.content.sha256 != catalog.sha256 {
+            return Err(LibraryError::Mismatch {
+                path,
+                sha256: rom.content.sha256.clone(),
+                kind: "boot ROM",
+                firmware: firmware.into(),
+            });
+        }
+        Ok((bytes.to_vec(), rom.content.sha256.clone()))
+    }
+
+    /// Read a source once, confirming the stored file and, when compressed,
+    /// the decoded original.
+    fn read_source(
+        &self,
+        record: &Record,
+        source: &Source,
+        kind: &'static str,
+        firmware: &str,
+    ) -> Result<(PathBuf, Vec<u8>), LibraryError> {
+        let path = self.source_path(record, source)?;
+        let bytes = firmware_file::read_encoded(&path, source.size).map_err(|message| {
+            LibraryError::Input {
+                path: path.clone(),
+                message,
+            }
+        })?;
+        let stored = digest(&bytes);
+        if bytes.len() as u64 != source.size || stored != source.sha256 {
+            return Err(LibraryError::Mismatch {
+                path,
+                sha256: stored,
+                kind,
+                firmware: firmware.into(),
+            });
+        }
+        match (&source.compression, &source.original) {
+            (None, None) => Ok((path, bytes)),
+            (Some(method), Some(original)) if method == "zstd" => {
+                let decoded =
+                    firmware_file::decode(bytes).map_err(|message| LibraryError::Input {
+                        path: path.clone(),
+                        message,
+                    })?;
+                let sha256 = digest(&decoded);
+                if decoded.len() as u64 != original.size || sha256 != original.sha256 {
+                    return Err(LibraryError::Mismatch {
+                        path,
+                        sha256,
+                        kind,
+                        firmware: firmware.into(),
+                    });
+                }
+                Ok((path, decoded))
+            }
+            (Some(method), _) => Err(LibraryError::Record {
+                path: record.path.clone(),
+                message: format!("unsupported source compression {method:?}"),
+            }),
+            (None, Some(_)) => Err(LibraryError::Record {
+                path: record.path.clone(),
+                message: "a source with an original identity must name zstd compression".into(),
+            }),
+        }
+    }
+
+    /// Resolve a record's relative source path under the library root.
+    fn source_path(&self, record: &Record, source: &Source) -> Result<PathBuf, LibraryError> {
+        let relative = Path::new(&source.path);
+        if self.root.as_os_str().is_empty()
+            || relative.as_os_str().is_empty()
+            || relative.is_absolute()
+            || relative.to_string_lossy().contains('\\')
+            || relative
+                .components()
+                .any(|component| !matches!(component, Component::Normal(_)))
+        {
+            return Err(LibraryError::Record {
+                path: record.path.clone(),
+                message: format!(
+                    "source path {:?} must be relative to the library root",
+                    source.path
+                ),
+            });
+        }
+        let path = self.root.join(relative);
+        if path.as_os_str().is_empty() {
+            return Err(LibraryError::Record {
+                path: record.path.clone(),
+                message: "source path names no file".into(),
+            });
+        }
+        Ok(path)
+    }
+}
+
+fn digest(bytes: &[u8]) -> String {
+    format!("{:x}", Sha256::digest(bytes))
+}
+
+/// The ROM a capture holds: its first `content.size` bytes.
+fn capture<'a>(
+    bytes: &'a [u8],
+    size: u64,
+    expected: &str,
+    path: &Path,
+    firmware: &str,
+) -> Result<&'a [u8], LibraryError> {
+    let size = usize::try_from(size).map_err(|_| {
+        LibraryError::Missing(format!(
+            "{}: boot ROM content size does not fit in memory",
+            path.display()
+        ))
+    })?;
+    let rom = bytes.get(..size).ok_or_else(|| {
+        LibraryError::Missing(format!(
+            "{}: boot ROM capture is {} bytes, shorter than the {} the record names",
+            path.display(),
+            bytes.len(),
+            size
+        ))
+    })?;
+    let sha256 = digest(rom);
+    if sha256 != expected {
+        return Err(LibraryError::Mismatch {
+            path: path.to_owned(),
+            sha256,
+            kind: "boot ROM",
+            firmware: firmware.into(),
+        });
+    }
+    Ok(rom)
+}
+
+fn read_input(path: &Path) -> Result<Vec<u8>, LibraryError> {
+    firmware_file::read(path, firmware_file::MAX_BYTES).map_err(|message| LibraryError::Input {
+        path: path.to_owned(),
+        message,
+    })
+}
+
+/// Read every `firmware/<model>/<version>/firmware.json` record under `root`.
+fn scan(root: &Path) -> Result<BTreeMap<String, Record>, LibraryError> {
+    let directory = root.join(RECORD_DIRECTORY);
+    let models = match fs::read_dir(&directory) {
+        Ok(models) => models,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+            return Ok(BTreeMap::new());
+        }
+        Err(source) => {
+            return Err(LibraryError::Read {
+                path: directory,
+                source,
+            });
+        }
+    };
+    let mut paths = Vec::new();
+    for model in models {
+        let model = model.map_err(|source| LibraryError::Read {
+            path: directory.clone(),
+            source,
+        })?;
+        if !model
+            .file_type()
+            .map_err(|source| LibraryError::Read {
+                path: model.path(),
+                source,
+            })?
+            .is_dir()
+        {
+            continue;
+        }
+        let versions = fs::read_dir(model.path()).map_err(|source| LibraryError::Read {
+            path: model.path(),
+            source,
+        })?;
+        for version in versions {
+            let version = version.map_err(|source| LibraryError::Read {
+                path: model.path(),
+                source,
+            })?;
+            if !version
+                .file_type()
+                .map_err(|source| LibraryError::Read {
+                    path: version.path(),
+                    source,
+                })?
+                .is_dir()
+            {
+                continue;
+            }
+            let record = version.path().join(RECORD_FILE);
+            if record.is_file() {
+                paths.push(record);
+            }
+        }
+    }
+    paths.sort();
+    let mut records = BTreeMap::new();
+    for path in paths {
+        let bytes = fs::read(&path).map_err(|source| LibraryError::Read {
+            path: path.clone(),
+            source,
+        })?;
+        let document: Document =
+            serde_json::from_slice(&bytes).map_err(|error| LibraryError::Record {
+                path: path.clone(),
+                message: error.to_string(),
+            })?;
+        if document.id.is_empty() {
+            return Err(LibraryError::Record {
+                path,
+                message: "record has no firmware identity".into(),
+            });
+        }
+        if records.contains_key(&document.id) {
+            return Err(LibraryError::Record {
+                path,
+                message: format!("duplicate firmware identity {}", document.id),
+            });
+        }
+        records.insert(
+            document.id,
+            Record {
+                path,
+                source: document.source,
+                boot_rom: document.boot_rom,
+            },
+        );
+    }
+    Ok(records)
 }
 
 /// The catalog's checked reference camera sections.
@@ -332,14 +687,58 @@ mod tests {
         ))
     }
 
+    fn write_record(directory: &Path, id: &str, record: serde_json::Value) {
+        write_record_at(directory, "x70", "1.10", id, record);
+    }
+
+    fn write_record_at(
+        directory: &Path,
+        model: &str,
+        version: &str,
+        id: &str,
+        record: serde_json::Value,
+    ) {
+        let path = directory.join(format!("firmware/{model}/{version}"));
+        fs::create_dir_all(&path).unwrap();
+        fs::write(path.join(RECORD_FILE), serde_json::to_vec(&record).unwrap()).unwrap();
+        assert_eq!(record["id"], id);
+    }
+
     #[test]
-    fn a_firmware_is_found_by_name_and_must_match_the_catalog() {
-        let directory = temporary("byname");
+    fn a_firmware_without_a_record_is_missing() {
+        let directory = temporary("missing-record");
         let _ = fs::remove_dir_all(&directory);
-        fs::create_dir_all(directory.join("x70-110")).unwrap();
-        fs::create_dir_all(directory.join("x70")).unwrap();
-        fs::write(directory.join("x70-110/FPUPDATE.DAT"), b"not the update").unwrap();
-        fs::write(directory.join("x70/boot-rom.bin"), b"not the rom").unwrap();
+        fs::create_dir_all(&directory).unwrap();
+        let library = Library::new(&directory).unwrap();
+        let error = library.files("x70-110").unwrap_err();
+        assert!(matches!(error, LibraryError::Missing(_)), "{error}");
+        assert!(error.to_string().contains("no firmware.json record"));
+        assert!(library.firmwares().is_empty());
+        fs::remove_dir_all(&directory).unwrap();
+    }
+
+    #[test]
+    fn a_compressed_update_is_decoded_before_it_is_compared() {
+        let directory = temporary("zstd-update");
+        let _ = fs::remove_dir_all(&directory);
+        fs::create_dir_all(&directory).unwrap();
+        let original = b"a decoded update, not the catalog's";
+        let packed = zstd::stream::encode_all(original.as_slice(), 1).unwrap();
+        fs::write(directory.join("update.dat.zst"), &packed).unwrap();
+        write_record(
+            &directory,
+            "x70-110",
+            serde_json::json!({
+                "id": "x70-110",
+                "source": {
+                    "path": "update.dat.zst",
+                    "size": packed.len(),
+                    "sha256": digest(&packed),
+                    "compression": "zstd",
+                    "original": { "size": original.len(), "sha256": digest(original) }
+                }
+            }),
+        );
         let library = Library::new(&directory).unwrap();
         let error = library.files("x70-110").unwrap_err();
         assert!(
@@ -352,19 +751,110 @@ mod tests {
             ),
             "{error}"
         );
-        assert!(library.firmwares().is_empty());
+        assert!(error.to_string().contains(&digest(original)), "{error}");
         fs::remove_dir_all(&directory).unwrap();
     }
 
     #[test]
-    fn a_missing_file_names_the_firmware_and_kind() {
-        let directory = temporary("missing");
+    fn a_source_path_must_stay_under_the_library_root() {
+        let directory = temporary("escape");
         let _ = fs::remove_dir_all(&directory);
         fs::create_dir_all(&directory).unwrap();
+        write_record(
+            &directory,
+            "x70-110",
+            serde_json::json!({
+                "id": "x70-110",
+                "source": { "path": "../outside.dat", "size": 1, "sha256": "0".repeat(64) }
+            }),
+        );
         let library = Library::new(&directory).unwrap();
         let error = library.files("x70-110").unwrap_err();
-        assert!(matches!(error, LibraryError::Read { .. }), "{error}");
-        assert!(error.to_string().contains("x70-110/FPUPDATE.DAT"));
+        assert!(matches!(error, LibraryError::Record { .. }), "{error}");
+        fs::remove_dir_all(&directory).unwrap();
+    }
+
+    #[test]
+    fn a_boot_rom_comes_from_any_record_with_the_catalog_content_hash() {
+        let directory = temporary("shared-rom");
+        let _ = fs::remove_dir_all(&directory);
+        fs::create_dir_all(&directory).unwrap();
+        let rom = b"the first bytes are the ROM and the rest is capture";
+        let packed = zstd::stream::encode_all(rom.as_slice(), 1).unwrap();
+        fs::write(directory.join("rom.zst"), &packed).unwrap();
+        write_record(
+            &directory,
+            "x70-110",
+            serde_json::json!({ "id": "x70-110" }),
+        );
+        write_record_at(
+            &directory,
+            "x-e3",
+            "1.32",
+            "xe3-132",
+            serde_json::json!({
+                "id": "xe3-132",
+                "boot_rom": {
+                    "content": { "size": 10, "sha256": digest(&rom[..10]) },
+                    "source": {
+                        "path": "rom.zst",
+                        "size": packed.len(),
+                        "sha256": digest(&packed),
+                        "compression": "zstd",
+                        "original": { "size": rom.len(), "sha256": digest(rom) }
+                    }
+                }
+            }),
+        );
+        let library = Library::new(&directory).unwrap();
+        let content = ContentIdentity {
+            size: 10,
+            sha256: digest(&rom[..10]),
+        };
+        let (bytes, sha256) = library.boot_rom("x70-110", &content).unwrap();
+        assert_eq!(bytes, rom[..10]);
+        assert_eq!(sha256, content.sha256);
+        fs::remove_dir_all(&directory).unwrap();
+    }
+
+    #[test]
+    fn a_boot_rom_whose_record_names_another_content_is_refused() {
+        let directory = temporary("wrong-rom-content");
+        let _ = fs::remove_dir_all(&directory);
+        fs::create_dir_all(&directory).unwrap();
+        let rom = b"the boot rom";
+        fs::write(directory.join("rom.bin"), rom).unwrap();
+        write_record(
+            &directory,
+            "x70-110",
+            serde_json::json!({
+                "id": "x70-110",
+                "boot_rom": {
+                    "content": { "size": rom.len(), "sha256": "0".repeat(64) },
+                    "source": {
+                        "path": "rom.bin",
+                        "size": rom.len(),
+                        "sha256": digest(rom)
+                    }
+                }
+            }),
+        );
+        let library = Library::new(&directory).unwrap();
+        let content = ContentIdentity {
+            size: rom.len() as u64,
+            sha256: "0".repeat(64),
+        };
+        let error = library.boot_rom("x70-110", &content).unwrap_err();
+        assert!(
+            matches!(
+                error,
+                LibraryError::Mismatch {
+                    kind: "boot ROM",
+                    ..
+                }
+            ),
+            "{error}"
+        );
         fs::remove_dir_all(&directory).unwrap();
     }
 

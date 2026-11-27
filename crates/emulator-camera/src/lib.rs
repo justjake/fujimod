@@ -19,7 +19,8 @@ mod state;
 
 pub use flash::{read as read_flash, write as write_flash};
 pub use library::{
-    BOOT_ROM_FILE, FirmwareFiles, LIBRARY_ENV, Library, LibraryError, LibraryFirmware, UPDATE_FILE,
+    FirmwareFiles, LIBRARY_ENV, Library, LibraryError, LibraryFirmware, RECORD_DIRECTORY,
+    RECORD_FILE,
 };
 pub use open::{
     BootCache, BootHolds, CardInputs, FirmwareInput, Flash, KeptMedia, LoaderImage, OpenError,

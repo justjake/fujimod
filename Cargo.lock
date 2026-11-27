@@ -2405,6 +2405,7 @@ dependencies = [
  "fujimod-settings",
  "fujimod-workspace-hack",
  "regex",
+ "ruzstd",
  "serde",
  "serde-wasm-bindgen",
  "serde_json",

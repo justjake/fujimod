@@ -1,6 +1,6 @@
 //! Open the installed EXR II bodies' stock firmware from its ROM boot.
 //!
-//! Set `FUJIMOD_FIRMWARE_LIBRARY` to a library laid out by name. Without it
+//! Set `FUJIMOD_FIRMWARE_LIBRARY` to a firmware library. Without it
 //! each test returns without opening a camera.
 mod support;
 use support::{library, state};

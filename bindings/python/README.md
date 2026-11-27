@@ -79,8 +79,10 @@ plus an optional failure message.
 
 `Board.open_camera` opens a camera through the shared builder and returns it
 at REC or first-start setup. The firmware's update, boot ROM and reference
-camera come from the directory named by `FUJIMOD_FIRMWARE_LIBRARY`, so the
-caller names only the firmware:
+camera come from the source record at
+`firmware/<model>/<version>/firmware.json` under `FUJIMOD_FIRMWARE_LIBRARY`,
+or the current directory when it is unset, so the caller names only the
+firmware:
 
 ```python
 with Board.open_camera(firmware="x70-110", boot="sd-card") as board:

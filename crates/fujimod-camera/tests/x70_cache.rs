@@ -1,7 +1,7 @@
 //! The boot cache: an open saves its compressed checkpoint and a later open
 //! with the same inputs restores it instead of booting.
 //!
-//! Set `FUJIMOD_FIRMWARE_LIBRARY` to a library laid out by name. Without it a
+//! Set `FUJIMOD_FIRMWARE_LIBRARY` to a firmware library. Without it a
 //! test returns without opening a camera. The SD card is the published release
 //! card, downloaded once into the state directory.
 mod support;

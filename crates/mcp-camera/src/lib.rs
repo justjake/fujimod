@@ -154,7 +154,8 @@ pub struct OpenParams {
     /// Name to address this camera by in later calls. Defaults to camera-N.
     pub name: Option<String>,
     /// Catalog firmware identity, for example `x70-110`. Its update, boot ROM
-    /// and reference camera are found in `FUJIMOD_FIRMWARE_LIBRARY`.
+    /// and reference camera are found in `FUJIMOD_FIRMWARE_LIBRARY`, or the
+    /// current directory when it is unset.
     pub firmware: String,
     /// `stock` boots the installed firmware; `sd-card` boots FujiMod from
     /// `sd_card`, or from the current release card when it is omitted;

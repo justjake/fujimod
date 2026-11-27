@@ -1,11 +1,11 @@
 //! Open the installed X-M1 firmware from its stock boot.
 //!
-//! Set `FUJIMOD_FIRMWARE_LIBRARY` to a library laid out by name. Without it,
+//! Set `FUJIMOD_FIRMWARE_LIBRARY` to a firmware library. Without it,
 //! the test returns without opening a camera.
 use fujimod_emulator_boot as boot;
 use fujimod_emulator_camera::{
-    BootCache, CardInputs, ExecutionPolicy, FirmwareInput, Flash, Library, LibraryError, Request,
-    Stage, Start, open_unbooted,
+    BootCache, CardInputs, ExecutionPolicy, FirmwareInput, Flash, Library, Request, Stage, Start,
+    open_unbooted,
 };
 
 const FIRMWARE: &str = "xm1-150";
@@ -17,11 +17,12 @@ const REC_SYSTEM_MODE: u32 = 1;
 const ROM_HEAD: [u8; 4] = [0x08, 0x00, 0x00, 0xea];
 
 fn library() -> Option<Library> {
-    match Library::from_env() {
-        Ok(library) => Some(library),
-        Err(LibraryError::Environment) => None,
-        Err(error) => panic!("firmware library: {error}"),
-    }
+    let library = Library::from_env().unwrap_or_else(|error| panic!("firmware library: {error}"));
+    library
+        .firmwares()
+        .iter()
+        .any(|firmware| firmware.id == FIRMWARE)
+        .then_some(library)
 }
 
 fn request() -> Request {

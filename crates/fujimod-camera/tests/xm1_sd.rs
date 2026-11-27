@@ -1,6 +1,6 @@
 //! Boot the installed X-M1 firmware from its catalog SD card combination.
 //!
-//! Set `FUJIMOD_FIRMWARE_LIBRARY` to a library laid out by name. Without it the
+//! Set `FUJIMOD_FIRMWARE_LIBRARY` to a firmware library. Without it the
 //! test returns without opening a camera.
 mod support;
 use support::{built_card, library, state};

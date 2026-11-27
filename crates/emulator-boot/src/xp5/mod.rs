@@ -24,9 +24,9 @@ use std::{collections::BTreeMap, path::PathBuf};
 
 /// Explicit files and settings needed to construct an XP5 session.
 pub struct Startup {
-    pub update: PathBuf,
+    pub update: crate::FirmwareFile,
     pub manifest: Option<PathBuf>,
-    pub boot_rom: Option<PathBuf>,
+    pub boot_rom: Option<crate::FirmwareFile>,
     pub card_image: Option<PathBuf>,
     pub card_files: Vec<(String, PathBuf)>,
     /// The loader start's card in SD slot 2: a raw image, or files for an in-memory volume.
@@ -96,7 +96,7 @@ pub(super) fn open_startup(
         .and_then(|profile| profile.preload.as_deref())
         .unwrap_or_default();
     state.preload.splice(..0, preloads.iter().cloned());
-    let update_bytes = std::fs::read(&update).map_err(|e| format!("{}: {e}", update.display()))?;
+    let update_bytes = update.read(crate::firmware_file::MAX_BYTES)?;
     let firmware = firmware::Firmware::from_update(&firmware_id, update_bytes, true)?;
     if let Some(directory) = &run_directory {
         std::fs::create_dir_all(directory).map_err(|error| error.to_string())?;
@@ -106,13 +106,13 @@ pub(super) fn open_startup(
         if second_card_image.is_some() || !second_card_files.is_empty() {
             return Err("a card in SD slot 2 needs the loader start".into());
         }
-        let start = match (rom_path.as_deref(), start) {
+        let start = match (rom_path, start) {
             (None, RunStart::Setup) => {
                 let handoff = rom_start::SetupHandoff::for_firmware(&firmware_id)
                     .ok_or("this firmware declares no setup-stage start")??;
                 rom_start::RomStart::from_setup_handoff(handoff)?
             }
-            (Some(path), _) => rom_start::RomStart::load(path, true, card_files, true)?
+            (Some(rom), _) => rom_start::RomStart::load(rom, true, card_files, true)?
                 .with_setup_windows_of(&firmware_id)?,
             (None, RunStart::SdCard) => {
                 let handoff = rom_start::Handoff::for_firmware(&firmware_id)

@@ -52,9 +52,11 @@ Session observations: --load-snapshot FILE, --save-snapshot FILE, --pc-trace FIL
 Native GUI: --gui opens the desktop window connected to this session.\n\
 Prints a JSON boot report; exits 0 at REC (EXR II) or at the end of the run (XP5), 2 at a stopped frontier.\n\
 \n\
-open names a catalog firmware whose update and boot ROM are found by name in\n\
-FUJIMOD_FIRMWARE_LIBRARY (<firmware-id>/FPUPDATE.DAT and <body-id>/boot-rom.bin), each\n\
-checked once against the catalog. --boot stock starts the installed firmware; --boot\n\
+open names a catalog firmware whose source record is found at\n\
+firmware/<model>/<version>/firmware.json under FUJIMOD_FIRMWARE_LIBRARY (or the current\n\
+directory when it is unset). The record's update and boot ROM are read once and checked\n\
+against the catalog; zstd files are decoded in memory by their magic number. --boot stock\n\
+starts the installed firmware; --boot\n\
 sd-card starts FujiMod from --sd-card, or from the current release SD card downloaded\n\
 into FUJIMOD_STATE_DIR when --sd-card is omitted; --boot autostart starts the loader\n\
 that card carries from internal flash, which the first open installs and keeps in the\n\
@@ -570,8 +572,8 @@ fn run_exr2(
         })
         .transpose()?;
     let options = Options {
-        update: boot_options.required("--update")?.into(),
-        boot_rom: boot_options.required("--boot-rom")?.into(),
+        update: PathBuf::from(boot_options.required("--update")?).into(),
+        boot_rom: PathBuf::from(boot_options.required("--boot-rom")?).into(),
         nand: boot_options.path("--nand"),
         settings: boot_options.path("--settings"),
         clock_seconds_2000,
@@ -805,7 +807,7 @@ fn run_application(mut options: Boot, resolved: ResolvedConfiguration) -> Result
     options.refuse("application-profile", &["--set"])?;
     options.refuse_second_card("application-profile")?;
     let request = boot::application::Startup {
-        update: options.required("--update")?.into(),
+        update: PathBuf::from(options.required("--update")?).into(),
         plan: options.required("--application-plan")?.into(),
         card_image: options.path("--card-image"),
         card_files: options.sd_files()?,
@@ -988,8 +990,8 @@ fn run_application(mut options: Boot, resolved: ResolvedConfiguration) -> Result
 /// Open any camera from its files and run it live in the desktop window.
 fn run_window(mut options: Boot, resolved: ResolvedConfiguration) -> Result<Outcome, String> {
     let request = boot::Request {
-        update: options.required("--update")?.into(),
-        boot_rom: options.path("--boot-rom"),
+        update: PathBuf::from(options.required("--update")?).into(),
+        boot_rom: options.path("--boot-rom").map(Into::into),
         nand: options.path("--nand"),
         settings: options.path("--settings"),
         camera: options.path("--camera"),

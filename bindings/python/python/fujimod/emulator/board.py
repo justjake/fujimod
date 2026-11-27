@@ -434,9 +434,10 @@ class Board:
     ) -> Self:
         """Open a camera through the shared builder and return it at REC.
 
-        The firmware's update, boot ROM and reference camera come from the
-        directory named by FUJIMOD_FIRMWARE_LIBRARY, so the caller names only
-        the firmware. `boot` is `stock`, `sd-card` or `autostart`. `sd_card`
+        The firmware's update, boot ROM and reference camera come from its
+        source record under FUJIMOD_FIRMWARE_LIBRARY, or the current directory
+        when that is unset, so the caller names only the firmware. `boot` is
+        `stock`, `sd-card` or `autostart`. `sd_card`
         names an SD card directory, or is the current release card when it is
         omitted for the two card boots, or the extra files of an otherwise
         empty card for a stock boot. `sd_card_files` gives the same files as a

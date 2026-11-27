@@ -1,6 +1,7 @@
 """The camera builder's open through the Python bindings."""
 
 import hashlib
+import json
 import os
 from pathlib import Path
 
@@ -10,11 +11,31 @@ from fujimod.emulator import Board
 PNG = b"\x89PNG\r\n\x1a\n"
 
 
+def root() -> Path:
+    root = Path(os.environ.get("FUJIMOD_FIRMWARE_LIBRARY", "."))
+    record = root / "firmware/x70/1.10/firmware.json"
+    if not record.is_file():
+        pytest.skip("the library holds no x70-110 source record")
+    return root
+
+
 def library() -> Path:
-    root = os.environ.get("FUJIMOD_FIRMWARE_LIBRARY")
-    if not root:
-        pytest.skip("set FUJIMOD_FIRMWARE_LIBRARY to a firmware library")
-    return Path(root)
+    directory = root()
+    record = directory / "firmware/x70/1.10/firmware.json"
+    if "boot_rom" not in json.loads(record.read_text()):
+        pytest.skip("the x70-110 record has no boot ROM")
+    return directory
+
+
+def x70_files(root: Path) -> tuple[Path, Path]:
+    """The X70 update and boot ROM the source record names."""
+    record = json.loads((root / "firmware/x70/1.10/firmware.json").read_text())
+    update = root / record["source"]["path"]
+    rom = record.get("boot_rom")
+    boot_rom = root / (rom["source"]["path"] if rom else record["paths"]["boot_rom"])
+    if not update.is_file() or not boot_rom.is_file():
+        pytest.skip("the X70 source record's files are absent")
+    return update, boot_rom
 
 
 def release_card() -> Path:
@@ -287,34 +308,36 @@ def test_a_verified_image_starts_at_the_loader(tmp_path: Path) -> None:
 
 
 def test_a_camera_opens_from_named_files_and_card_bytes() -> None:
-    root = library()
+    directory = root()
+    update, boot_rom = x70_files(directory)
     with Board.open_camera(
         firmware="x70-110",
         boot="stock",
         execution_policy="interactive",
         boot_cache=False,
-        update=root / "x70-110" / "FPUPDATE.DAT",
-        boot_rom=root / "x70" / "boot-rom.bin",
+        update=update,
+        boot_rom=boot_rom,
         sd_card_files={"NOTE.TXT": b"written from memory"},
     ) as board:
         assert board.status()["status"] == "rec"
     with pytest.raises(ValueError, match="not both"):
         Board.open_camera(
-            firmware="x70-110", sd_card=root, sd_card_files={"NOTE.TXT": b"x"}
+            firmware="x70-110", sd_card=directory, sd_card_files={"NOTE.TXT": b"x"}
         )
 
 
 def test_a_camera_opened_from_named_files_powers_on_from_them(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    root = library()
+    directory = root()
+    update, boot_rom = x70_files(directory)
     with Board.open_camera(
         firmware="x70-110",
         boot="stock",
         execution_policy="interactive",
         boot_cache=False,
-        update=root / "x70-110" / "FPUPDATE.DAT",
-        boot_rom=root / "x70" / "boot-rom.bin",
+        update=update,
+        boot_rom=boot_rom,
     ) as board:
         monkeypatch.delenv("FUJIMOD_FIRMWARE_LIBRARY")
         board.power_on()

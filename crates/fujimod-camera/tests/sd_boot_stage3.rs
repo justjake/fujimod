@@ -1,6 +1,6 @@
 //! Boot a body's catalog SD card combination to real stage 3.
 //!
-//! Set `FUJIMOD_FIRMWARE_LIBRARY` to a library laid out by name. Without it
+//! Set `FUJIMOD_FIRMWARE_LIBRARY` to a firmware library. Without it
 //! each test returns without opening a camera.
 //!
 //! The card is the one `sd-boot-v2-sd-card` builds, plus a one-entry release

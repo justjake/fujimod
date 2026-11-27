@@ -627,6 +627,11 @@ mod tests {
     use super::*;
     use std::path::Path;
 
+    fn x70_is_openable() -> bool {
+        Library::from_env()
+            .is_ok_and(|library| library.firmwares().iter().any(|row| row.id == "x70-110"))
+    }
+
     fn request(boot: OpenBoot, sd_card: Option<PathBuf>) -> OpenRequest {
         OpenRequest {
             firmware: "x70-110".into(),
@@ -711,8 +716,8 @@ mod tests {
 
     #[test]
     fn a_camera_opens_and_restores_through_the_builder() {
-        if std::env::var_os("FUJIMOD_FIRMWARE_LIBRARY").is_none() {
-            eprintln!("skipped: set FUJIMOD_FIRMWARE_LIBRARY");
+        if !x70_is_openable() {
+            eprintln!("skipped: the library holds no openable x70-110");
             return;
         }
         let started = std::time::Instant::now();
@@ -742,8 +747,8 @@ mod tests {
 
     #[test]
     fn the_x70_aperture_ring_confirms_the_position_it_moves_to() {
-        if std::env::var_os("FUJIMOD_FIRMWARE_LIBRARY").is_none() {
-            eprintln!("skipped: set FUJIMOD_FIRMWARE_LIBRARY");
+        if !x70_is_openable() {
+            eprintln!("skipped: the library holds no openable x70-110");
             return;
         }
         let (mut camera, _) = Camera::open(request(OpenBoot::Stock, None)).unwrap();

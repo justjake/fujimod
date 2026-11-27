@@ -1,13 +1,13 @@
 //! Inputs the camera-layer integration tests share.
 //!
-//! Set \`FUJIMOD_FIRMWARE_LIBRARY\` to a library laid out by name. A test whose
+//! Set \`FUJIMOD_FIRMWARE_LIBRARY\` to a firmware library. A test whose
 //! inputs are absent returns without opening a camera. Every test uses a
 //! scratch state directory under \`/tmp\`.
 #![allow(dead_code)]
 
 use fujimod_emulator_camera::{
-    BootCache, CardInputs, ExecutionPolicy, FirmwareInput, Flash, Library, LibraryError,
-    LoaderImage, Request, Start, StateDir, directory_files,
+    BootCache, CardInputs, ExecutionPolicy, FirmwareInput, Flash, Library, LoaderImage, Request,
+    Start, StateDir, directory_files,
 };
 use std::path::{Path, PathBuf};
 
@@ -26,11 +26,12 @@ pub enum CardSource {
 }
 
 pub fn library() -> Option<Library> {
-    match Library::from_env() {
-        Ok(library) => Some(library),
-        Err(LibraryError::Environment) => None,
-        Err(error) => panic!("firmware library: {error}"),
-    }
+    let library = Library::from_env().unwrap_or_else(|error| panic!("firmware library: {error}"));
+    library
+        .firmwares()
+        .iter()
+        .any(|firmware| firmware.id == FIRMWARE)
+        .then_some(library)
 }
 
 /// A scratch state directory, deleted when the test's process exits.

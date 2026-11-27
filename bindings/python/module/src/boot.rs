@@ -60,7 +60,7 @@ impl Boot for CatalogBoot {
                 .application_plan
                 .ok_or("application startup needs an application plan")?;
             let startup = boot::application::Startup {
-                update: inputs.update,
+                update: inputs.update.into(),
                 plan,
                 discovery: inputs.discovery,
                 quantum: inputs.quantum,
@@ -116,9 +116,9 @@ impl Boot for CatalogBoot {
             let mut camera = boot::open(
                 resolved,
                 boot::StartupInputs::Xp5(boot::xp5::Startup {
-                    update: inputs.update,
+                    update: inputs.update.into(),
                     manifest: inputs.manifest,
-                    boot_rom: inputs.boot_rom,
+                    boot_rom: inputs.boot_rom.map(Into::into),
                     card_image: inputs.card_image,
                     card_files: inputs.card_files,
                     second_card_image: inputs.second_card_image,
@@ -177,8 +177,8 @@ impl Boot for CatalogBoot {
             })
             .transpose()?;
         let options = boot::Options {
-            update: inputs.update,
-            boot_rom: inputs.boot_rom.ok_or("EXR II requires a boot ROM")?,
+            update: inputs.update.into(),
+            boot_rom: inputs.boot_rom.ok_or("EXR II requires a boot ROM")?.into(),
             nand: inputs.nand,
             settings: inputs.settings,
             clock_seconds_2000: inputs.clock_seconds_2000,

@@ -362,9 +362,9 @@ impl RunHost {
         }
         timed_pokes.sort_by_key(|(at_ms, _)| *at_ms);
         let request = Startup {
-            update,
+            update: update.into(),
             manifest,
-            boot_rom: rom_path,
+            boot_rom: rom_path.map(Into::into),
             card_image: sd_image,
             card_files,
             second_card_image,

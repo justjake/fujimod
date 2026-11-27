@@ -28,7 +28,7 @@ const INSTRUCTION_LIMIT: u64 = 2_000_000_000;
 /// Where a request's firmware files come from.
 #[derive(Clone, Debug)]
 pub enum FirmwareInput {
-    /// `<firmware-id>/FPUPDATE.DAT` and `<body-id>/boot-rom.bin` in the library.
+    /// The library's records for the firmware.
     Library,
     /// The two files, which must match the catalog's entry for the firmware.
     Files { update: PathBuf, boot_rom: PathBuf },
@@ -567,8 +567,8 @@ pub(crate) fn construct(
     let mut camera = boot::open_request(
         resolved.clone(),
         boot::Request {
-            update: files.update,
-            boot_rom: Some(files.boot_rom),
+            update: boot::FirmwareFile::Bytes(files.update),
+            boot_rom: Some(boot::FirmwareFile::Bytes(files.boot_rom)),
             nand: None,
             settings: None,
             camera: camera_directory,
@@ -641,52 +641,9 @@ fn firmware_files(
     match input {
         FirmwareInput::Library => Ok(library.files(firmware)?),
         FirmwareInput::Files { update, boot_rom } => {
-            let catalog = library.firmware(firmware)?;
-            let update_sha256 = confirm(update, firmware, "stock update", catalog)?;
-            let boot_rom_sha256 = confirm(boot_rom, firmware, "boot ROM", catalog)?;
-            Ok(FirmwareFiles {
-                update: update.clone(),
-                update_sha256,
-                boot_rom: boot_rom.clone(),
-                boot_rom_sha256,
-            })
+            Ok(library.files_from(firmware, update, boot_rom)?)
         }
     }
-}
-
-/// Read one explicit file and confirm it is the catalog's entry.
-fn confirm(
-    path: &Path,
-    firmware: &str,
-    kind: &'static str,
-    catalog: &fujimod_catalog::Firmware,
-) -> Result<String, OpenError> {
-    let expected = match kind {
-        "stock update" => catalog.update.as_ref().map(|update| update.sha256.as_str()),
-        _ => catalog
-            .boot_rom
-            .as_ref()
-            .map(|rom| rom.content.sha256.as_str()),
-    }
-    .ok_or_else(|| {
-        OpenError::at(
-            Stage::BootRom,
-            format!("firmware {firmware} has no {kind} identity"),
-        )
-    })?;
-    let bytes = fs::read(path)
-        .map_err(|error| OpenError::at(Stage::BootRom, format!("{}: {error}", path.display())))?;
-    let sha256 = format!("{:x}", Sha256::digest(&bytes));
-    if sha256 != expected {
-        return Err(OpenError::at(
-            Stage::BootRom,
-            format!(
-                "{}: sha256 {sha256} is not the catalog's {kind} for {firmware}",
-                path.display()
-            ),
-        ));
-    }
-    Ok(sha256)
 }
 
 /// Restore the media a power-on keeps: internal flash and the SD card medium.

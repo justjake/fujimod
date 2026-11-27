@@ -4,6 +4,7 @@
 //! first-start acceptance drives the ordinary ADC input on the guest timeline.
 #[cfg(all(feature = "xp5-startup", not(target_arch = "wasm32")))]
 pub mod application;
+pub mod firmware_file;
 mod first_start;
 pub mod host;
 mod journal_settings;
@@ -25,6 +26,7 @@ mod x70;
 pub mod xp5;
 pub mod xpp;
 
+pub use firmware_file::FirmwareFile;
 use fujimod_catalog::reference::PartModel;
 use fujimod_catalog_assets::Content;
 use fujimod_catalog_configuration::{
@@ -51,8 +53,8 @@ use std::{
 /// Every binary input location is supplied by the embedding program.
 #[derive(Clone, Debug)]
 pub struct Options {
-    pub update: PathBuf,
-    pub boot_rom: PathBuf,
+    pub update: FirmwareFile,
+    pub boot_rom: FirmwareFile,
     /// Committed NAND image, or a main-area image: exactly the geometry's main bytes,
     /// optionally followed by a managed-spare trailer (`FJNANDS1`, a big-endian count,
     /// then big-endian page row and 16-byte tag entries) for the spare areas it declares.
@@ -596,11 +598,29 @@ fn read(path: &Path, max_bytes: u64) -> Result<Vec<u8>, String> {
     }
     Ok(bytes)
 }
-fn checked(path: &Path, content: &Content) -> Result<Vec<u8>, String> {
-    let bytes = read(path, content.size)?;
+/// Read an update file, decoding zstd in memory by its magic number.
+fn checked_update(input: FirmwareFile, content: &Content) -> Result<Vec<u8>, String> {
+    let bytes = input.read(firmware_file::MAX_BYTES)?;
     content
         .check(&bytes)
-        .map_err(|e| format!("{}: {e}", path.display()))?;
+        .map_err(|error| format!("update: {error}"))?;
+    Ok(bytes)
+}
+
+/// Read a boot ROM capture, decoding zstd and keeping the ROM's first bytes.
+fn checked_boot_rom(input: FirmwareFile, content: &Content) -> Result<Vec<u8>, String> {
+    let bytes = input.read(firmware_file::MAX_BYTES)?;
+    if bytes.len() < content.size as usize {
+        return Err(format!(
+            "boot ROM capture is {} bytes, shorter than the {} the catalog names",
+            bytes.len(),
+            content.size
+        ));
+    }
+    let bytes = bytes[..content.size as usize].to_vec();
+    content
+        .check(&bytes)
+        .map_err(|error| format!("boot ROM: {error}"))?;
     Ok(bytes)
 }
 fn packet(bytes: &[u8]) -> Result<(), String> {
@@ -892,8 +912,8 @@ fn session_quantum(session: &Session) -> Result<usize, String> {
 #[cfg(all(feature = "xp5-startup", not(target_arch = "wasm32")))]
 #[derive(Clone, Default)]
 pub struct Request {
-    pub update: std::path::PathBuf,
-    pub boot_rom: Option<std::path::PathBuf>,
+    pub update: FirmwareFile,
+    pub boot_rom: Option<FirmwareFile>,
     pub nand: Option<std::path::PathBuf>,
     pub settings: Option<std::path::PathBuf>,
     /// Directory of the camera's NAND sections, for a run whose settings name a camera.
@@ -1131,8 +1151,8 @@ fn open_exr2(
     if let Some(fault) = &options.card_initialization_fault {
         prepared.set_card_initialization_fault(fault)?;
     }
-    let update = checked(&options.update, &prepared.update)?;
-    let boot_rom = checked(&options.boot_rom, &prepared.boot_rom.content)?;
+    let update = checked_update(options.update, &prepared.update)?;
+    let boot_rom = checked_boot_rom(options.boot_rom, &prepared.boot_rom.content)?;
     let inputs = InputBytes {
         update,
         boot_rom,

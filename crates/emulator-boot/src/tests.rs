@@ -287,11 +287,46 @@ fn settings_validate_marker_checksum_and_route_extent() {
 fn selected_files_are_bounded_and_size_checked() {
     let path = std::env::temp_dir().join(format!("fujimod-boot-input-{}", std::process::id()));
     std::fs::write(&path, b"abc").unwrap();
-    assert_eq!(checked(&path, &Content::identify(b"abc")).unwrap(), b"abc");
+    assert_eq!(
+        checked_update(path.clone().into(), &Content::identify(b"abc")).unwrap(),
+        b"abc"
+    );
     assert!(read(&path, 2).is_err());
     // Loading checks the declared byte count; the digest is a build/cache key.
-    assert_eq!(checked(&path, &Content::identify(b"abd")).unwrap(), b"abc");
+    assert_eq!(
+        checked_update(path.clone().into(), &Content::identify(b"abd")).unwrap(),
+        b"abc"
+    );
     std::fs::remove_file(path).unwrap();
+}
+
+#[test]
+fn zstd_update_and_boot_rom_inputs_are_decoded_by_their_magic_number() {
+    let directory = std::env::temp_dir().join(format!("fujimod-boot-zstd-{}", std::process::id()));
+    std::fs::create_dir_all(&directory).unwrap();
+    let update = directory.join("update.DAT.zst");
+    let boot_rom = directory.join("rom.bin.zst");
+    let update_bytes = b"the update payload";
+    let rom_bytes = b"a boot ROM capture, longer than the ROM itself";
+    std::fs::write(
+        &update,
+        zstd::stream::encode_all(update_bytes.as_slice(), 1).unwrap(),
+    )
+    .unwrap();
+    std::fs::write(
+        &boot_rom,
+        zstd::stream::encode_all(rom_bytes.as_slice(), 1).unwrap(),
+    )
+    .unwrap();
+    assert_eq!(
+        checked_update(update.into(), &Content::identify(update_bytes)).unwrap(),
+        update_bytes
+    );
+    assert_eq!(
+        checked_boot_rom(boot_rom.into(), &Content::identify(&rom_bytes[..14])).unwrap(),
+        &rom_bytes[..14]
+    );
+    std::fs::remove_dir_all(directory).unwrap();
 }
 
 #[test]
@@ -532,8 +567,8 @@ fn shipped_preparation_opens_the_same_board_as_selected_files() {
         open_exr2(
             ResolvedConfiguration::with_overlays(CONFIGURATION, &[]).unwrap(),
             Options {
-                update: PathBuf::from(&update),
-                boot_rom: PathBuf::from(&boot_rom),
+                update: PathBuf::from(&update).into(),
+                boot_rom: PathBuf::from(&boot_rom).into(),
                 nand: None,
                 settings: None,
                 clock_seconds_2000: None,
@@ -580,8 +615,8 @@ fn restart_payload_reconstructs_the_rom_board_after_wake() {
     let mut session = open_exr2(
         ResolvedConfiguration::with_overlays("x70-110-rec", &[]).unwrap(),
         Options {
-            update: update.into(),
-            boot_rom: boot_rom.into(),
+            update: PathBuf::from(update).into(),
+            boot_rom: PathBuf::from(boot_rom).into(),
             nand: None,
             settings: None,
             clock_seconds_2000: None,
@@ -1158,7 +1193,7 @@ fn exr2_image_transfer_maps_cpu_pages_and_keeps_device_register_bounds() {
 fn common_open_checks_generation_before_loading_startup_files() {
     let resolved = ResolvedConfiguration::with_overlays("x70-110-rec", &[]).unwrap();
     let inputs = StartupInputs::Xp5(xp5::Startup {
-        update: "unavailable.dat".into(),
+        update: std::path::PathBuf::from("unavailable.dat").into(),
         manifest: None,
         boot_rom: None,
         card_image: None,

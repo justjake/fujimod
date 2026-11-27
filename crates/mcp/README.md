@@ -28,8 +28,9 @@ install a software Vulkan driver (Mesa's lavapipe).
 ## Camera module
 
 `camera_open` takes a catalog firmware id and a boot. The firmware update,
-boot ROM and reference camera sections come from the directory named by
-`FUJIMOD_FIRMWARE_LIBRARY`. It restores the library's saved boot for the same
+boot ROM and reference camera sections come from its source record under
+`FUJIMOD_FIRMWARE_LIBRARY`, or the current directory when it is unset. It
+restores the library's saved boot for the same
 inputs when it holds one, boots to REC otherwise, or restores a checkpoint
 file written by a camera built from the same inputs. `boot_cache: false` boots
 from scratch and saves nothing.
