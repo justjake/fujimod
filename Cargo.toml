@@ -314,6 +314,8 @@ futures-channel = "0.3"
 inherits = "dev"
 debug = "line-tables-only"
 incremental = false
+# The standard library ships its own debug info in every test binary.
+strip = "debuginfo"
 
 [profile.ci.package."*"]
 debug = false
