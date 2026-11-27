@@ -80,7 +80,7 @@ run = "mkdir -p target/nextest && cargo nextest archive --cargo-profile ci --wor
 
 [tasks.rust-test-shard]
 description = "CI: run one shard (N/COUNT) of the archived Rust tests"
-run = "cargo nextest run --profile ci --archive-file target/nextest/rust-tests.tar.zst --workspace-remap . --partition hash:{{arg(name='shard')}}"
+run = "cargo nextest run --profile ci --archive-file target/nextest/rust-tests.tar.zst --workspace-remap . --extract-to . --extract-overwrite --target-dir-remap target --partition hash:{{arg(name='shard')}}"
 
 [tasks.rust-check]
 run = "cargo clippy --workspace --all-targets --all-features -- -D warnings"
