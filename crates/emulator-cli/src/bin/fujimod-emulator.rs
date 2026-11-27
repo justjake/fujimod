@@ -867,7 +867,7 @@ fn run_application(mut options: Boot, resolved: ResolvedConfiguration) -> Result
     if let Some(path) = load_snapshot {
         started.load_snapshot(&path)?;
     }
-    let boot::application::Board::Shared(session) = &mut started.board;
+    let boot::application::Board::Shared { session, .. } = &mut started.board;
     session.board.set_execution_policy(policy)?;
     session.board.install_discovery_callee_stubs(&stubs)?;
     let trace = trace_output
@@ -948,7 +948,7 @@ fn run_application(mut options: Boot, resolved: ResolvedConfiguration) -> Result
             output.write(trace)?;
         }
     }
-    let boot::application::Board::Shared(session) = &started.board;
+    let boot::application::Board::Shared { session, .. } = &started.board;
     session.board.check_discovery_callee_stubs()?;
     started.write_back_card()?;
     if let Some(path) = save_snapshot {

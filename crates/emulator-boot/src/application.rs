@@ -72,19 +72,22 @@ enum Plan {
 
 /// An application-profile board: a shared session for every processor.
 pub enum Board {
-    Shared(Box<Session>),
+    Shared {
+        session: Box<Session>,
+        xp4_inputs: Option<xp4::shared::Inputs>,
+    },
 }
 
 impl crate::host::Memory for Board {
     fn read(&self, address: u64, bytes: &mut [u8]) -> Result<(), String> {
         match self {
-            Self::Shared(session) => session.board.inspect_physical(address, bytes),
+            Self::Shared { session, .. } => session.board.inspect_physical(address, bytes),
         }
     }
 
     fn write(&self, address: u64, bytes: &[u8]) -> Result<(), String> {
         match self {
-            Self::Shared(session) => session.board.write_physical(address, bytes),
+            Self::Shared { session, .. } => session.board.write_physical(address, bytes),
         }
     }
 }
@@ -92,7 +95,7 @@ impl crate::host::Memory for Board {
 impl crate::mod_loader::Machine for Board {
     fn arm32_core_count(&self) -> usize {
         match self {
-            Self::Shared(session) => {
+            Self::Shared { session, .. } => {
                 crate::mod_loader::BoardMachine(&session.board).arm32_core_count()
             }
         }
@@ -105,14 +108,14 @@ impl crate::mod_loader::Machine for Board {
         access: fujimod_emulator_cpu::Access,
     ) -> Result<u64, String> {
         match self {
-            Self::Shared(session) => crate::mod_loader::BoardMachine(&session.board)
+            Self::Shared { session, .. } => crate::mod_loader::BoardMachine(&session.board)
                 .arm32_translate(core, address, access),
         }
     }
 
     fn arm32_mmu_enabled(&self, core: usize) -> Result<bool, String> {
         match self {
-            Self::Shared(session) => {
+            Self::Shared { session, .. } => {
                 crate::mod_loader::BoardMachine(&session.board).arm32_mmu_enabled(core)
             }
         }
@@ -182,7 +185,7 @@ impl Calibration for LoadedConfiguration<'_> {
 impl Board {
     pub fn gpio_input(&mut self, port: u8, pin: u8, high: bool) -> Result<(), String> {
         match self {
-            Self::Shared(session) => {
+            Self::Shared { session, .. } => {
                 fujimod_emulator_xpp::board::gpio_input(session, port, pin, high)
             }
         }
@@ -190,7 +193,7 @@ impl Board {
 
     pub fn adc_input(&mut self, channel: u8, sample: u16) -> Result<(), String> {
         match self {
-            Self::Shared(session) => {
+            Self::Shared { session, .. } => {
                 use fujimod_emulator_devices::capability::AnalogInputs;
                 let node = session
                     .node("xp4-adc")
@@ -208,8 +211,13 @@ impl Board {
     /// Turn a command dial the board declares by `edges` quadrature edges.
     pub fn turn_dial(&mut self, name: &str, edges: i32) -> Result<(), String> {
         match self {
-            Self::Xp4(board) => board.turn_dial(name, edges),
-            Self::Xpp(_) => Err("X-Processor Pro command dials are not wired".into()),
+            Self::Shared {
+                session,
+                xp4_inputs,
+            } => xp4_inputs
+                .as_ref()
+                .ok_or("X-Processor Pro command dials are not wired")?
+                .turn_dial(session, name, edges),
         }
     }
 
@@ -239,7 +247,7 @@ impl Board {
 
     pub fn set_scene(&mut self, scene: &Value) -> Result<(), String> {
         match self {
-            Self::Shared(session) => session.board.set_scene(scene),
+            Self::Shared { session, .. } => session.board.set_scene(scene),
         }
     }
 }
@@ -268,7 +276,7 @@ impl crate::host::Execution for Started {
         until: Option<u64>,
     ) -> Result<(), String> {
         match &mut self.board {
-            Board::Shared(session) => session.run_window(end, quantum, pause_after, until),
+            Board::Shared { session, .. } => session.run_window(end, quantum, pause_after, until),
         }
     }
 }
@@ -276,19 +284,21 @@ impl crate::host::Execution for Started {
 impl Started {
     pub fn progress(&self) -> (Vec<u64>, u64) {
         match &self.board {
-            Board::Shared(session) => (session.board.instruction_counts(), session.board.now()),
+            Board::Shared { session, .. } => {
+                (session.board.instruction_counts(), session.board.now())
+            }
         }
     }
 
     pub fn load_snapshot(&mut self, path: &Path) -> Result<(), String> {
         match &mut self.board {
-            Board::Shared(session) => crate::load_snapshot(session, path),
+            Board::Shared { session, .. } => crate::load_snapshot(session, path),
         }
     }
 
     pub fn save_snapshot(&self, path: &Path) -> Result<(), String> {
         match &self.board {
-            Board::Shared(session) => crate::save_snapshot(session, path),
+            Board::Shared { session, .. } => crate::save_snapshot(session, path),
         }
     }
 
@@ -303,7 +313,7 @@ impl Started {
 
     pub fn display_frames(&self) -> Vec<Frame> {
         match &self.board {
-            Board::Shared(session) => session.board.display_frames(),
+            Board::Shared { session, .. } => session.board.display_frames(),
         }
     }
 
@@ -327,10 +337,10 @@ impl Started {
         )?;
         let (instructions, now) = self.progress();
         let state = match &self.board {
-            Board::Shared(session) => session.board.state(),
+            Board::Shared { session, .. } => session.board.state(),
         };
         let stubs = match &self.board {
-            Board::Shared(session) => session.board.discovery_callee_stubs(),
+            Board::Shared { session, .. } => session.board.discovery_callee_stubs(),
         };
         Ok(
             json!({"engine":self.engine,"instructions":instructions,"now":now,"state":state,"discovery_callee_stubs":stubs}),
@@ -445,7 +455,7 @@ pub fn open(resolved: &ResolvedConfiguration, startup: Startup) -> Result<Starte
                 ),
                 None => (files, Vec::new()),
             };
-            Board::Shared(Box::new(xp4_session(
+            let (session, xp4_inputs) = xp4_session(
                 resolved,
                 Xp4Inputs {
                     registers,
@@ -457,7 +467,11 @@ pub fn open(resolved: &ResolvedConfiguration, startup: Startup) -> Result<Starte
                     engine,
                     quantum,
                 },
-            )?))
+            )?;
+            Board::Shared {
+                session: Box::new(session),
+                xp4_inputs: Some(xp4_inputs),
+            }
         }
         (
             "xpp",
@@ -536,7 +550,10 @@ pub fn open(resolved: &ResolvedConfiguration, startup: Startup) -> Result<Starte
                     .ok_or("board has no modeled SD card slot")?;
                 board.install_card_files(&slot, Some(image.original.clone()), &files)?;
             }
-            Board::Shared(Box::new(board))
+            Board::Shared {
+                session: Box::new(board),
+                xp4_inputs: None,
+            }
         }
         _ => return Err("application startup plan does not match the selected processor".into()),
     };
@@ -549,7 +566,7 @@ pub fn open(resolved: &ResolvedConfiguration, startup: Startup) -> Result<Starte
             ));
         }
         match &board {
-            Board::Shared(session) => session.board.write_memory(0, image.address, &data)?,
+            Board::Shared { session, .. } => session.board.write_memory(0, image.address, &data)?,
         }
     }
     let ticks_per_second = match resolved.configuration.inputs.as_ref() {
@@ -581,7 +598,10 @@ struct Xp4Inputs<'a> {
 
 /// An XP4 run on the shared board. The board comes from the catalog; the
 /// declared instruction rate is each core's.
-fn xp4_session(resolved: &ResolvedConfiguration, inputs: Xp4Inputs<'_>) -> Result<Session, String> {
+fn xp4_session(
+    resolved: &ResolvedConfiguration,
+    inputs: Xp4Inputs<'_>,
+) -> Result<(Session, xp4::shared::Inputs), String> {
     let processors = &resolved.reference.soc.processors;
     if inputs.registers.len() != processors.len() {
         return Err("XP4 startup plan core count differs from the selected SoC".into());
@@ -632,7 +652,6 @@ fn xp4_session(resolved: &ResolvedConfiguration, inputs: Xp4Inputs<'_>) -> Resul
         record,
         xp4::shared::DeviceSpace::Declared,
     )
-    .map(|(session, _)| session)
 }
 
 /// A `--card-image` file and the medium read from it, before the caller's files were merged.
@@ -644,7 +663,7 @@ struct CardImage {
 impl CardImage {
     fn write_back(&self, board: &Board) -> Result<usize, String> {
         let current = match board {
-            Board::Shared(session) => match session.contacts.keys().next() {
+            Board::Shared { session, .. } => match session.contacts.keys().next() {
                 Some(name) => session.card_medium(name)?,
                 None => xp4::shared::card_medium(session, 0)?,
             },
@@ -788,6 +807,42 @@ mod tests {
             "CMD_NOWHERE has no declared GPIO contact, ADC band or dial step"
         );
     }
+
+    #[test]
+    fn command_dial_step_schedules_a_shared_xp4_countdown_edge() {
+        let definition = serde_json::from_value(json!({
+            "ram_size": 65536,
+            "cores": 1,
+            "cbar": 0x2000_0000,
+            "countdown_timers": [0xfffc_1000u32, []],
+            "countdown_dials": [{
+                "name": "rear_command_dial",
+                "channel": 2,
+                "phase_ticks": 10,
+                "rest_phase": 0
+            }]
+        }))
+        .unwrap();
+        let (session, inputs) = xp4::shared::from_definition(
+            definition,
+            None,
+            Vec::new(),
+            Vec::new(),
+            RunEngine::Unicorn,
+        )
+        .unwrap();
+        let mut board = Board::Shared {
+            session: Box::new(session),
+            xp4_inputs: Some(inputs),
+        };
+        let wire = KeyWire::resolve(&selection("xt3-511"), "CMD_RIGHT").unwrap();
+        board.key_input(&wire, false).unwrap();
+        let Board::Shared { session, .. } = &board;
+        assert_eq!(session.board.next_device_deadline(), None);
+        board.key_input(&wire, true).unwrap();
+        let Board::Shared { session, .. } = &board;
+        assert_eq!(session.board.next_device_deadline(), Some(10));
+    }
 }
 
 #[cfg(test)]
@@ -819,7 +874,7 @@ mod shared_board_tests {
             .map(|path| bytes(directory, path))
             .transpose()
             .unwrap();
-        let session = xp4_session(
+        let (session, _) = xp4_session(
             &resolved,
             Xp4Inputs {
                 registers,
