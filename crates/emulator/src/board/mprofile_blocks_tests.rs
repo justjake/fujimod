@@ -1248,15 +1248,10 @@ fn newly_admitted_encodings_match_the_instruction_observer() {
     );
 }
 
-/// A table branch reads one or two bytes and leaves its block. Translated
-/// execution must reach the same target, and a read past the end of mapped
-/// RAM must fault in both paths rather than resume somewhere else.
-#[test]
-/// A multi-access load whose own base register it also writes cannot be
-/// redone: a restart or a fault between its accesses restores only the PC, so
-/// the retried instruction would read from the value the first access loaded.
-/// The classifier must leave those forms observed. The same instruction with
-/// an ordinary base stays admitted, and its fault must still recover exactly.
+/// A multi-access load cannot be redone: a restart or a fault between its
+/// accesses restores only the PC, so a retried instruction would repeat an
+/// access that already completed, including a device read. The classifier
+/// leaves every LDM and LDRD observed, and a faulting one recovers exactly.
 #[test]
 fn multi_access_loads_stay_observed_so_a_redo_cannot_replay_a_device_read() {
     // Each program loads the base from a literal, then runs one transfer at
