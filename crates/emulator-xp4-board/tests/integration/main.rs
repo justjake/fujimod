@@ -1,0 +1,28 @@
+//! Every integration test of this crate, linked into one test binary.
+
+mod byte_i2c;
+mod card_media;
+mod decompressor;
+mod ff61_controller;
+mod functional_system_control;
+mod io_groups;
+mod jpeg_decoder;
+mod mali_v61;
+mod movie_audio;
+mod nor_read_bounds;
+mod nor_read_gate;
+mod pl011;
+mod power_accessory_status;
+mod power_battery_sample;
+mod power_command_output;
+mod power_eye_sensor;
+mod register_blocks;
+mod request_acknowledgment;
+mod spi3_controller;
+mod spi_dma;
+mod stabilizer_link;
+mod standalone_dma;
+mod still_develop;
+mod still_resize;
+mod support;
+mod write_ranges;
