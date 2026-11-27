@@ -1,7 +1,15 @@
 {
+  "gfx100rf-112": {
+    "name": "gfx100rf",
+    "description": "Fujifilm GFX100RF (X-Processor 5)"
+  },
   "gfx100rf-113": {
     "name": "gfx100rf",
     "description": "Fujifilm GFX100RF"
+  },
+  "gfx100rf-114": {
+    "name": "gfx100rf",
+    "description": "Fujifilm GFX100RF (X-Processor 5)"
   },
   "gfx100s-213": {
     "name": "gfx100s",
