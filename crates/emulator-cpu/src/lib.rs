@@ -478,6 +478,9 @@ pub struct Features {
     pub watched_stores: bool,
     pub backing_observation: bool,
     pub store_pc_control: bool,
+    /// The backend reports each store that covers translated bytes
+    /// (`observe_code_stores`), before retiring that translation.
+    pub code_store_observation: bool,
 }
 #[derive(Clone, Copy, Debug)]
 pub enum HookRange {
@@ -1013,6 +1016,20 @@ pub trait Cpu {
     /// # Safety
     /// The callback context must outlive installation, as for install_hook.
     unsafe fn translation_hooks(&self, hooks: Option<TranslationHooks>) -> Result<(), String>;
+    /// Report each store that covers bytes a translation was made from, with
+    /// the physical first byte and width, before that translation is retired.
+    /// None removes the observer. A store on a code page that covers no
+    /// translated byte never reports.
+    ///
+    /// # Safety
+    /// The callback context must outlive installation, as for install_hook.
+    unsafe fn observe_code_stores(
+        &self,
+        _callback: Option<unsafe fn(*mut c_void, u64, usize)>,
+        _data: *mut c_void,
+    ) -> Result<(), String> {
+        Err("CPU backend has no code-store observer".into())
+    }
     fn retry_block(&self, instructions: u32) -> Result<(), String>;
     fn request_restart(&self) -> Result<(), String>;
     fn accounting(&self) -> Option<NonNull<BlockAccounting>>;

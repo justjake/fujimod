@@ -49,6 +49,12 @@ pub(super) struct Blocks {
     /// detects stores into translated code only on watched pages, so every
     /// page code is entered from must be watched, in every mode.
     pub watching: bool,
+    /// The engine reports a store only when it covers translated bytes
+    /// (`code_store_observation`). From then on the store hook can see every
+    /// store, so a data store needs no page watch to be proven harmless.
+    pub code_stores_notified: bool,
+    /// Host-only counter: code-overlap store notifications received.
+    pub code_store_notifications: u64,
     pub watched: std::collections::HashSet<u64>,
     pub last_watched: Option<u64>,
     /// The observer changed the PC: the run stopped and must resume at once.
