@@ -963,7 +963,8 @@ impl Cpu for Core {
             thumb_block_accounting,
             thumb_block_recovery: thumb_block_accounting
                 && e.features & ffi::FEATURE_THUMB_BLOCK_RECOVERY != 0
-                && e.features & ffi::FEATURE_THUMB_PAGE_BITMAP != 0,
+                && e.features & ffi::FEATURE_THUMB_PAGE_BITMAP != 0
+                && e.features & ffi::FEATURE_THUMB_HANDLER_ACCOUNTING != 0,
             watched_stores: e.hook_watched.is_some() && e.watch.is_some(),
             backing_observation: e.observe_backings.is_some(),
             store_pc_control: e.write_hook_pc_sync.is_some(),
@@ -1936,6 +1937,7 @@ unsafe extern "C" fn classify(data: *mut c_void, address: u64, word: u32) -> i32
     let action = match decision.instruction {
         InstructionDisposition::Execute => 0,
         InstructionDisposition::ExecuteItSafe => 0,
+        InstructionDisposition::ExecuteThumbThreadOnly => 32,
         InstructionDisposition::Observe => 1,
         InstructionDisposition::ObserveAndEndBlock => 2,
         InstructionDisposition::ExecuteAndEndBlock if context.native_execute_end => 8,
@@ -2978,6 +2980,75 @@ mod tests {
                 (Access::Write, 0x801024, 4, 0x12345678)
             ]
         );
+    }
+
+    #[test]
+    fn cached_thumb_return_block_checks_the_current_handler_mode() {
+        unsafe fn classify_return(_: *mut c_void, _: u64, word: u32) -> Translation {
+            Translation {
+                instruction: if word == 0x4770 {
+                    InstructionDisposition::ExecuteThumbThreadOnly
+                } else {
+                    InstructionDisposition::Execute
+                },
+                observe_block: false,
+            }
+        }
+        unsafe fn stop_on_block(_: Block, data: *mut c_void) {
+            unsafe { &*data.cast::<Core>() }.stop().unwrap();
+        }
+
+        let cpu = library().open(Model::CortexM4, 4 * 1024 * 1024).unwrap();
+        cpu.map_zeroed(0x1000, 0x1000, 7).unwrap();
+        // ADDS R0,#1; BX LR, or ADDS R1,#1; B back to ADDS.
+        cpu.write_memory(0x1000, &[1, 0x30, 0x70, 0x47, 1, 0x31, 0xfd, 0xe7])
+            .unwrap();
+        cpu.write_register(arm::CORE[14], &0x1001u32.to_le_bytes())
+            .unwrap();
+        unsafe {
+            cpu.translation_hooks(Some(TranslationHooks {
+                classify: classify_return,
+                restart: thumb_restart,
+                data: std::ptr::null_mut(),
+            }))
+            .unwrap();
+            cpu.install_hook(Hook::Block {
+                callback: stop_on_block,
+                data: (&cpu as *const Core).cast_mut().cast(),
+                range: HookRange::All,
+            })
+            .unwrap();
+        }
+
+        let accounting = cpu.thumb_recovery_accounting().unwrap().as_ptr();
+        unsafe {
+            (*accounting).thumb_accounting.accounting.enabled = 4;
+            (*accounting).thumb_page_bitmap[0] = 1 << 4;
+        }
+        for (begin, handler, expected_budget) in [
+            (0x1001, false, 0),
+            (0x1001, true, 2),
+            (0x1005, true, 0),
+            (0x1001, false, 0),
+        ] {
+            unsafe {
+                (*accounting).thumb_handler_mode = u64::from(handler);
+                (*accounting).thumb_accounting.accounting.budget = 2;
+            }
+            cpu.run(Run {
+                begin,
+                until: None,
+                watchdog_us: 0,
+                instructions: None,
+            })
+            .unwrap();
+            assert_eq!(
+                unsafe { (*accounting).thumb_accounting.accounting.budget },
+                expected_budget
+            );
+        }
+        assert_eq!(reg(&cpu, arm::CORE[0]), 2);
+        assert_eq!(reg(&cpu, arm::CORE[1]), 1);
     }
 
     #[test]

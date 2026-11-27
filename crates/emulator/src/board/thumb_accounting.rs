@@ -65,17 +65,18 @@ impl Window {
     }
 
     #[inline]
-    pub fn arm(&mut self, pc: u64, remaining: u64) {
+    pub fn arm(&mut self, pc: u64, remaining: u64, in_thread_mode: bool) {
         if let Some(mut recovery) = self.recovery {
             self.granted = remaining.min(i64::MAX as u64) as i64;
             let record = unsafe { recovery.as_mut() };
+            record.thumb_handler_mode = u64::from(!in_thread_mode);
             record.thumb_accounting.thumb_page = pc & !0x3ff;
             let page = pc >> 10;
             if page < 1024 {
                 record.thumb_page_bitmap[(page >> 6) as usize] |= 1u64 << (page & 63);
             }
             record.thumb_accounting.accounting.budget = self.granted;
-        } else if let Some(mut pointer) = self.record {
+        } else if let Some(mut pointer) = self.record.filter(|_| in_thread_mode) {
             self.granted = remaining.min(i64::MAX as u64) as i64;
             let record = unsafe { pointer.as_mut() };
             record.thumb_page = pc & !0x3ff;
@@ -159,6 +160,7 @@ mod tests {
             last_block_bytes: 0,
             last_block_icount: 0,
             thumb_page_bitmap: [0; 16],
+            thumb_handler_mode: 0,
         }
     }
 
@@ -175,7 +177,7 @@ mod tests {
 
         // Arm 1 KiB pages including boundary bits 0, 63, 64, and 1023.
         for pc in [0x0000_0004u64, 0x0000_fc10, 0x0001_0004, 0x000f_fffe] {
-            window.arm(pc, 100);
+            window.arm(pc, 100, true);
         }
         assert_eq!(raw.thumb_page_bitmap[0], (1u64 << 0) | (1u64 << 63));
         assert_eq!(raw.thumb_page_bitmap[1], 1u64 << 0);
@@ -187,7 +189,8 @@ mod tests {
         assert_eq!(raw.thumb_accounting.accounting.budget, 100);
 
         // Addresses at or above 1 MiB update thumb_page (1 KiB aligned) without touching the bitmap.
-        window.arm(0x0010_04bc, 50);
+        window.arm(0x0010_04bc, 50, false);
+        assert_eq!(raw.thumb_handler_mode, 1);
         assert_eq!(raw.thumb_accounting.thumb_page, 0x0010_0400);
         assert_eq!(raw.thumb_page_bitmap[0], (1u64 << 0) | (1u64 << 63));
         assert_eq!(raw.thumb_page_bitmap[1], 1u64 << 0);

@@ -147,6 +147,51 @@ fn outcome(board: &Board) -> Outcome {
 }
 
 #[test]
+fn handler_blocks_run_inline_and_return_through_the_exception_controller() {
+    fn run_handler(blocks: bool) -> Outcome {
+        let mut board = board(blocks);
+        board.set_execution_policy(ExecutionPolicy::Interactive).unwrap();
+        board.set_poll_loops(false);
+        board.state.borrow_mut().settled.verify = 0;
+        board
+            .write_physical(0x10000 + 11 * 4, &0x101b9u32.to_le_bytes())
+            .unwrap();
+        // Thread: SVC #0; WFI. Handler: MOVS r0,#60; SUBS r0,#1; BNE; BX LR.
+        board
+            .write_physical(0x10100, &[0x00, 0xdf, 0x30, 0xbf])
+            .unwrap();
+        board
+            .write_physical(0x101b8, &[0x3c, 0x20, 0x01, 0x38, 0xfd, 0xd1, 0x70, 0x47])
+            .unwrap();
+        board.run_until(32, 32).unwrap();
+        let middle = outcome(&board);
+        assert!(
+            (1..60).contains(&middle.registers[0]),
+            "expected to stop inside the handler"
+        );
+        if blocks {
+            assert!(
+                board.state.borrow().blocks[0]
+                    .as_ref()
+                    .unwrap()
+                    .inline
+                    .entries
+                    > 0
+            );
+        }
+        board.run_until(240, 32).unwrap();
+        let end = outcome(&board);
+        assert_eq!(end.registers[0], 0, "exception return did not restore R0");
+        end
+    }
+    let reference = run_handler(false);
+    let inline = run_handler(true);
+    assert_eq!(inline.registers, reference.registers);
+    assert_eq!(inline.memory, reference.memory);
+    assert_eq!(inline.state, reference.state);
+}
+
+#[test]
 fn block_execution_equals_the_instruction_observer() {
     for quantum in [1, 2, 3, 7, 16, 64, 100] {
         for (until, windows) in [(2500, &[][..]), (4000, &[211, 212, 900, 2333][..])] {

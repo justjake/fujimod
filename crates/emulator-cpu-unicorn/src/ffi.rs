@@ -24,6 +24,7 @@ pub const FEATURE_TRANSLATION_TIMING_COUNTERS: u32 = 1 << 27;
 pub const FEATURE_M4_CLASSIFIER_HISTOGRAM: u32 = 1 << 28;
 pub const FEATURE_TRANSLATION_REPEAT_DETAILS: u32 = 1 << 29;
 pub const FEATURE_THUMB_PAGE_BITMAP: u32 = 1 << 30;
+pub const FEATURE_THUMB_HANDLER_ACCOUNTING: u32 = 1 << 31;
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct TlbiEvent {
@@ -184,6 +185,10 @@ impl Extensions {
                 self.features & FEATURE_THUMB_PAGE_BITMAP != 0,
                 "uc_embedder_features (Thumb proven-page bitmap)",
             ),
+            (
+                self.features & FEATURE_THUMB_HANDLER_ACCOUNTING != 0,
+                "uc_embedder_features (Thumb Handler Mode accounting)",
+            ),
         ]
         .into_iter()
         .filter_map(|(present, name)| (!present).then_some(name))
@@ -218,7 +223,7 @@ pub struct ThumbAccounting {
 }
 /// Recovery extension to the Thumb accounting layout. Read only when the
 /// linked library reports `FEATURE_THUMB_BLOCK_RECOVERY` and
-/// `FEATURE_THUMB_PAGE_BITMAP`.
+/// `FEATURE_THUMB_PAGE_BITMAP` and `FEATURE_THUMB_HANDLER_ACCOUNTING`.
 #[repr(C)]
 pub struct ThumbRecoveryAccounting {
     pub thumb_accounting: ThumbAccounting,
@@ -227,18 +232,20 @@ pub struct ThumbRecoveryAccounting {
     pub last_block_bytes: u32,
     pub last_block_icount: u32,
     pub thumb_page_bitmap: [u64; 16],
+    pub thumb_handler_mode: u64,
 }
 const _: () = {
     assert!(std::mem::size_of::<Accounting>() == 48);
     assert!(std::mem::offset_of!(Accounting, pause_requested) == 40);
     assert!(std::mem::size_of::<ThumbAccounting>() == 56);
     assert!(std::mem::offset_of!(ThumbAccounting, thumb_page) == 48);
-    assert!(std::mem::size_of::<ThumbRecoveryAccounting>() == 208);
+    assert!(std::mem::size_of::<ThumbRecoveryAccounting>() == 216);
     assert!(std::mem::offset_of!(ThumbRecoveryAccounting, last_block_start) == 56);
     assert!(std::mem::offset_of!(ThumbRecoveryAccounting, last_block_remaining_budget) == 64);
     assert!(std::mem::offset_of!(ThumbRecoveryAccounting, last_block_bytes) == 72);
     assert!(std::mem::offset_of!(ThumbRecoveryAccounting, last_block_icount) == 76);
     assert!(std::mem::offset_of!(ThumbRecoveryAccounting, thumb_page_bitmap) == 80);
+    assert!(std::mem::offset_of!(ThumbRecoveryAccounting, thumb_handler_mode) == 208);
     assert!(
         std::mem::size_of::<ThumbRecoveryAccounting>()
             == std::mem::size_of::<fujimod_emulator_cpu::ThumbBlockRecoveryAccounting>()

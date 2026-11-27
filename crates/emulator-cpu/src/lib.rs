@@ -567,6 +567,8 @@ pub enum InstructionDisposition {
     /// Execute normally, and permit native mode-4 accounting while ITSTATE
     /// is active. The instruction must be pure register/flag computation.
     ExecuteItSafe,
+    /// Execute normally, and observe the translated block in Handler Mode.
+    ExecuteThumbThreadOnly,
     Observe,
     ObserveAndEndBlock,
     /// Execute the instruction in translated code, then end its translated
@@ -625,12 +627,13 @@ pub struct ThumbBlockRecoveryAccounting {
     pub last_block_bytes: u32,
     pub last_block_icount: u32,
     pub thumb_page_bitmap: [u64; 16],
+    pub thumb_handler_mode: u64,
 }
 const _: () = {
     assert!(std::mem::size_of::<BlockAccounting>() == 48);
     assert!(std::mem::size_of::<ThumbBlockAccounting>() == 56);
     assert!(std::mem::offset_of!(ThumbBlockAccounting, thumb_page) == 48);
-    assert!(std::mem::size_of::<ThumbBlockRecoveryAccounting>() == 208);
+    assert!(std::mem::size_of::<ThumbBlockRecoveryAccounting>() == 216);
     assert!(std::mem::offset_of!(ThumbBlockRecoveryAccounting, last_block_start) == 56);
     assert!(
         std::mem::offset_of!(ThumbBlockRecoveryAccounting, last_block_remaining_budget) == 64
@@ -638,6 +641,7 @@ const _: () = {
     assert!(std::mem::offset_of!(ThumbBlockRecoveryAccounting, last_block_bytes) == 72);
     assert!(std::mem::offset_of!(ThumbBlockRecoveryAccounting, last_block_icount) == 76);
     assert!(std::mem::offset_of!(ThumbBlockRecoveryAccounting, thumb_page_bitmap) == 80);
+    assert!(std::mem::offset_of!(ThumbBlockRecoveryAccounting, thumb_handler_mode) == 208);
 };
 /// A checkpoint associated with an owning processor. Durable export carries
 /// data only; `Cpu::import_snapshot` binds that data to a receiving processor.

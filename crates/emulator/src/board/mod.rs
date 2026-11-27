@@ -4179,11 +4179,13 @@ unsafe fn block_classify_transfers(
     {
         classification.instruction = fujimod_emulator_cpu::InstructionDisposition::ExecuteAndEndBlock;
         classification.observe_block = false;
+    } else if mprofile_blocks::is_pc_pop(word) || mprofile_blocks::is_bx_lr(word) {
+        classification.instruction =
+            fujimod_emulator_cpu::InstructionDisposition::ExecuteThumbThreadOnly;
+        classification.observe_block = false;
     } else {
         classification.observe_block &= !(mprofile_blocks::is_single_transfer(word)
-            || mprofile_blocks::is_non_pc_pop(word)
-            || mprofile_blocks::is_pc_pop(word)
-            || mprofile_blocks::is_bx_lr(word));
+            || mprofile_blocks::is_non_pc_pop(word));
     }
     classification
 }
@@ -4432,12 +4434,11 @@ unsafe fn block_entered(block: fujimod_emulator_cpu::Block, data: *mut c_void) {
             return cpu.stop();
         }
         // The translated guard admits subsequent eligible blocks on this
-        // checked page in Thread Mode. Handler Mode keeps inline disarmed so
-        // EXC_RETURN reaches the controller via `block_entered`.
-        let inline = in_thread_mode
-            && s.blocks[core]
-                .as_ref()
-                .is_some_and(|blocks| blocks.fast_stores)
+        // checked page. Handler Mode sends blocks that can return from an
+        // exception through the controller.
+        let inline = s.blocks[core]
+            .as_ref()
+            .is_some_and(|blocks| blocks.fast_stores)
             && settled
             && s.settled.armed
             && !ready
@@ -4453,7 +4454,7 @@ unsafe fn block_entered(block: fujimod_emulator_cpu::Block, data: *mut c_void) {
         blocks.room -= entries - 1;
         blocks.pending = Some((pc, bytes, entries, pc + last));
         if inline {
-            blocks.inline.arm(pc, window_room - entries);
+            blocks.inline.arm(pc, window_room - entries, in_thread_mode);
         }
         Ok::<(), String>(())
     })();
