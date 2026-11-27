@@ -388,15 +388,18 @@ pub(super) fn is_terminal_push(word: u32) -> bool {
     first == 0xe92d && second & 0xa000 == 0 && second.count_ones() >= 2
 }
 
-/// Whether a Thumb instruction is a multiple transfer that is not a stack
-/// operation (`LDM`/`STM`, the `0xe880`/`0xe8a0`.. forms where bits 9:7 select
-/// increment/decrement). `Some(true)` for a store, whose independent writes
-/// make it terminal like a PUSH; `Some(false)` for a load that names no PC,
-/// which may fault and be redone. `None` for anything else, including a load
-/// that writes PC (an exception return the controller performs).
-pub(super) fn multiple_transfer(word: u32) -> Option<bool> {
+/// Whether a Thumb instruction is a multiple store that is not a stack
+/// operation (`STM`, `0xe880`/`0xe8a0`/`0xe900`/`0xe920` with `L=0`), for
+/// which this returns `true` so the caller keeps it terminal like a PUSH.
+///
+/// `LDM` is refused. Only the PC is restored when a translation restarts or a
+/// memory access faults (`restore_state_to_opc`), and a block holds hundreds
+/// of instructions, so a device or watched access between two of its loads
+/// always restarts the instruction: its earlier registers would be rewritten
+/// twice. A store replays identically, as PUSH already does.
+pub(super) fn multiple_store(word: u32) -> bool {
     if word <= u32::from(u16::MAX) {
-        return None;
+        return false;
     }
     let first = (word >> 16) as u16;
     let second = word as u16;
@@ -405,30 +408,12 @@ pub(super) fn multiple_transfer(word: u32) -> Option<bool> {
     // after and 10 for decrement before, bit 5 is the writeback and bit 4 the
     // load.
     if first & 0xfe40 != 0xe800 || !matches!(first & 0x0180, 0x0080 | 0x0100) {
-        return None;
+        return false;
     }
     let rn = first & 15;
     let writeback = first & 0x0020 != 0;
     let load = first & 0x0010 != 0;
-    if rn > 12 || second == 0 || (writeback && second & (1 << rn) != 0) {
-        return None;
-    }
-    if load {
-        // A load that also writes its own base cannot be redone: a restart
-        // or a fault between its accesses restores only the PC, so the
-        // retried instruction would read from the value the first access
-        // already loaded.
-        if second & (1 << rn) != 0 {
-            return None;
-        }
-        // A PC load is an exception return; SP cannot be written by a
-        // multiple load alongside other registers.
-        if second & 0xa000 != 0 {
-            return None;
-        }
-        return Some(false);
-    }
-    Some(true)
+    rn <= 12 && second != 0 && !load && !(writeback && second & (1 << rn) != 0)
 }
 
 /// Whether a Thumb instruction is a legal stack POP (16-bit or 32-bit) that
@@ -508,21 +493,26 @@ pub(super) fn is_bitfield(word: u32) -> bool {
     }
 }
 
-/// Whether a Thumb instruction is a dual-register transfer (`LDRD`/`STRD`,
-/// the `P`/`U`/`W` forms of `0xe900..0xe9ff`). The pair must be two ordinary
+/// Whether a Thumb instruction is a dual-register store (`STRD`, the
+/// `P`/`U`/`W` forms of `0xe900..0xe9ff`), for which this returns `true` so
+/// the caller keeps it terminal like a PUSH. The pair must be two ordinary
 /// registers other than the base, which is the encoding's predictability
-/// rule. Returns `Some(true)` for a store, whose two independent writes make
-/// it terminal the same way a PUSH is.
-pub(super) fn dual_transfer(word: u32) -> Option<bool> {
+/// rule.
+///
+/// `LDRD` is refused for the same reason as `LDM` in [`multiple_store`]: a
+/// later access that restarts the translation replays the earlier one, and a
+/// replayed device read (`io_readx` services it before the block ends) is not
+/// idempotent.
+pub(super) fn dual_transfer(word: u32) -> bool {
     if word <= u32::from(u16::MAX) {
-        return None;
+        return false;
     }
     let first = (word >> 16) as u16;
     let second = word as u16;
     // `1110_100 P U 1 W L Rn`: bit 6 is set for `LDRD`/`STRD`, and clear for
     // the load/store-multiple forms that share the prefix.
     if first & 0xfe40 != 0xe840 {
-        return None;
+        return false;
     }
     let rn = first & 15;
     let rt = (second >> 12) & 15;
@@ -530,24 +520,15 @@ pub(super) fn dual_transfer(word: u32) -> Option<bool> {
     let pre_index = first & 0x0100 != 0;
     let writeback = first & 0x0020 != 0;
     let load = first & 0x0010 != 0;
-    // A load that writes its own base cannot be redone: a restart or a fault
-    // between its two accesses restores only the PC, so the retried
-    // instruction would read from the value the first access loaded.
-    if load && (rn == rt || rn == rt2) {
-        return None;
-    }
     // `Rt2 = 15` is the exclusive space sharing this prefix, and P=0,W=0 is
     // reserved; a writeback base that is also a target is unpredictable.
-    if !(rn <= 14
+    !load
+        && rn <= 14
         && rt <= 12
         && rt2 <= 12
         && rt != rt2
         && (pre_index || writeback)
-        && !(writeback && (rn == rt || rn == rt2)))
-    {
-        return None;
-    }
-    Some(!load)
+        && !(writeback && (rn == rt || rn == rt2))
 }
 
 /// Whether a Thumb instruction is safe to execute without an observation.
@@ -601,12 +582,6 @@ pub(super) fn can_run_inline(word: u32) -> bool {
     let first = (word >> 16) as u16;
     let second = word as u16;
     let rd = (second >> 8) & 15;
-    // Dual-register and multiple loads perform ordinary single accesses and
-    // may fault on the new path only to be redone; their stores are terminal
-    // (`dual_transfer`, `multiple_transfer`) and the caller decides them.
-    if dual_transfer(word) == Some(false) || multiple_transfer(word) == Some(false) {
-        return true;
-    }
     // Data-synchronization barriers order this processor's own accesses; they
     // store nothing, change no register and cannot fault.
     if word >> 16 == 0xf3bf && matches!(word as u16 & 0xfff0, 0x8f40 | 0x8f50 | 0x8f60) {

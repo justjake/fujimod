@@ -1179,7 +1179,7 @@ fn non_pc_pop_runs_inline_and_matches_observer_in_ram_and_on_fault() {
 fn newly_admitted_encodings_match_the_instruction_observer() {
     // The data base comes from the literal after the backward branch; the
     // loop drives every newly admitted encoding over it.
-    let program: [u16; 49] = [
+    let program: [u16; 47] = [
         0x2001, // movs r0,#1
         0x2103, // movs r1,#3
         0x227f, // movs r2,#0x7f
@@ -1197,8 +1197,7 @@ fn newly_admitted_encodings_match_the_instruction_observer() {
         0xe9c0, 0x1204, // strd r1,r2,[r0,#16]
         0xe8f0, 0x1202, // ldrd r1,r2,[r0],#8
         0xe9e0, 0x1204, // strd r1,r2,[r0,#16]!
-        0xe892, 0x0003, // ldmia r2,{r0,r1}
-        0xe882, 0x0003, // stmia r2,{r0,r1}
+        0xe882, 0x0003, // stmia r2,{r0,r1}  (LDM stays observed)
         0xf3bf, 0x8f4f, // dsb sy
         0xf3bf, 0x8f5f, // dmb sy
         0xf3bf, 0x8f6f, // isb sy
@@ -1259,7 +1258,7 @@ fn newly_admitted_encodings_match_the_instruction_observer() {
 /// The classifier must leave those forms observed. The same instruction with
 /// an ordinary base stays admitted, and its fault must still recover exactly.
 #[test]
-fn multi_access_loads_that_clobber_their_base_stay_observed() {
+fn multi_access_loads_stay_observed_so_a_redo_cannot_replay_a_device_read() {
     // Each program loads the base from a literal, then runs one transfer at
     // 0x17ffc so its second access falls past the end of mapped RAM.
     fn program(transfer: [u16; 2], base: u32) -> Vec<u8> {
@@ -1269,20 +1268,22 @@ fn multi_access_loads_that_clobber_their_base_stay_observed() {
         bytes.extend_from_slice(&base.to_le_bytes());
         bytes
     }
-    // The encoding rules the run below depends on: the two base-clobbering
-    // forms are refused, and the ordinary-base forms are not.
-    assert_eq!(super::mprofile_blocks::dual_transfer(0xe9d0_0200), None, "ldrd r0,r2,[r0]");
-    assert_eq!(super::mprofile_blocks::dual_transfer(0xe9d0_0100), None, "ldrd r0,r1,[r0]");
-    assert_eq!(super::mprofile_blocks::dual_transfer(0xe9d0_1200), Some(false), "ldrd r1,r2,[r0]");
-    assert_eq!(super::mprofile_blocks::multiple_transfer(0xe890_0006), Some(false), "ldmia r0, (r1,r2)");
-    // The 16-bit multiple form is a separate encoding the classifier has
-    // never admitted; only the wide form shares `multiple_transfer`.
-    assert_eq!(super::mprofile_blocks::multiple_transfer(0xc803), None, "ldmia r0, (r0,r1)");
-    for (name, transfer, clobbers_base) in [
-        ("ldrd base in pair", [0xe9d0u16, 0x0200], true),
-        ("ldm base in list", [0xe890u16, 0x0003], true),
-        ("ldrd ordinary base", [0xe9d0, 0x1200], false),
-        ("ldm ordinary base", [0xe890, 0x0006], false),
+    // The encoding rules the run below depends on: every `LDRD` and `LDM` is
+    // refused, and `STRD`/`STM` are terminal.
+    assert!(!super::mprofile_blocks::dual_transfer(0xe9d0_0200), "ldrd r0,r2,[r0]");
+    assert!(!super::mprofile_blocks::dual_transfer(0xe9d0_0100), "ldrd r0,r1,[r0]");
+    assert!(!super::mprofile_blocks::dual_transfer(0xe9d0_1200), "ldrd r1,r2,[r0]");
+    assert!(super::mprofile_blocks::dual_transfer(0xe9c0_1200), "strd r1,r2,[r0]");
+    assert!(!super::mprofile_blocks::multiple_store(0xe890_0006), "ldmia r0, (r1,r2)");
+    assert!(!super::mprofile_blocks::multiple_store(0xc803), "ldmia r0, (r0,r1)");
+    assert!(super::mprofile_blocks::multiple_store(0xe880_0006), "stmia r0, (r1,r2)");
+    for (name, transfer) in [
+        ("ldrd base in pair", [0xe9d0u16, 0x0200]),
+        ("ldrd base in pair 2", [0xe9d0, 0x0102]),
+        ("ldrd ordinary base", [0xe9d0, 0x1200]),
+        ("ldm base in list", [0xe890, 0x0003]),
+        ("ldm ordinary base", [0xe890, 0x0006]),
+        ("ldm writeback base", [0xe8b0, 0x0006]),
     ] {
         let (mut reference, mut translated) = (
             single_m4_board(false, &[], 0x13000),
@@ -1313,18 +1314,167 @@ fn multi_access_loads_that_clobber_their_base_stay_observed() {
             reference.state.borrow().instructions,
             "{name}: instruction count"
         );
-        // A base-clobbering load takes the observation, so the board sees its
-        // block entry; an ordinary base is admitted and only the faulting
-        // restart reaches the board.
+        // The load takes its own observation, so the board sees every block
+        // entry and nothing entered translated accounting.
         let blocks = translated.state.borrow();
-        let observed = blocks.blocks[0].as_ref().unwrap().observed;
-        if clobbers_base {
-            assert_eq!(observed, 1, "{name}: the load was not observed");
-            assert_eq!(
-                blocks.blocks[0].as_ref().unwrap().inline.entries,
-                0,
-                "{name}: a base-clobbering load entered translated accounting"
-            );
+        assert_eq!(
+            blocks.blocks[0].as_ref().unwrap().observed,
+            1,
+            "{name}: the load was not observed"
+        );
+        assert_eq!(
+            blocks.blocks[0].as_ref().unwrap().inline.entries,
+            0,
+            "{name}: a refused load entered translated accounting"
+        );
+    }
+}
+
+/// A multi-access load that reaches a device is refused, so a device read can
+/// never be repeated: a later access inside the same instruction restarts the
+/// translation, and the restart replays the instruction from its first
+/// access. The device here counts its reads, so a replay is visible.
+#[test]
+fn refused_multi_load_reads_a_device_exactly_once_in_both_modes() {
+    use crate::board::factory::*;
+    use std::sync::{Arc, Mutex};
+    #[derive(Default)]
+    struct Counts {
+        reads: u64,
+    }
+    struct Fifo(Arc<Mutex<Counts>>);
+    impl fujimod_emulator_devices::Device for Fifo {
+        fn name(&self) -> &'static str {
+            "read-pop-fifo"
         }
+        fn read(&mut self, _: &mut fujimod_emulator_devices::bus::Cx<'_>, _: u64, _: u8) -> u64 {
+            // Each read pops an entry, so repeating it loses one.
+            let mut counts = self.0.lock().unwrap();
+            counts.reads += 1;
+            counts.reads
+        }
+        fn write(
+            &mut self,
+            _: &mut fujimod_emulator_devices::bus::Cx<'_>,
+            _: u64,
+            _: u8,
+            _: u64,
+        ) {
+        }
+    }
+    // ldr r0,literal (device base); ldrd r1,r2,[r0] then a park: the `LDRD`
+    // reads twice from the device, and a replay would read again.
+    fn board(blocks: bool, counts: Arc<Mutex<Counts>>) -> Board {
+        let graph = Graph {
+            decoders: vec![],
+            processors: vec![Processor {
+                model: Model::CortexM4,
+                registers: vec![],
+                released: true,
+                parked_until_sgi: false,
+                rprofile: None,
+                mprofile: Some(super::mprofile::Config {
+                    clock_hz: 1_000_000_000,
+                    board_ticks_per_second: 1_000_000_000,
+                    vector_base: 0x10000,
+                }),
+            }],
+            dma_mappings: vec![crate::board::memory::BusMapping::ram(0x10000, 0x8000)],
+            ram: vec![Ram {
+                base: 0x10000,
+                size: 0x8000,
+            }],
+            mappings: vec![MemoryMap {
+                core: 0,
+                address: 0x10000,
+                physical: 0x10000,
+                size: 0x8000,
+                permissions: 7,
+            }],
+            peripherals: vec![Peripheral {
+                core: 0,
+                address: 0x08000000,
+                physical: 0xff910000,
+                size: 0x1000,
+            }],
+            instructions_per_tick: Ratio::new(1, 1).unwrap(),
+        };
+        let mut bus = Bus::new(bus::Mode::Strict);
+        // The device answers one window at 0x08000000; the core's own memory
+        // view reaches it through the `peripherals` mapping above.
+        bus.register(0xff910000, 0x1000, Box::new(Fifo(counts)))
+            .unwrap();
+        let board = graph
+            .build(
+                Options::new(RunEngine::Unicorn).with_translation_cache_size_bytes(1024 * 1024),
+                bus,
+                None,
+            )
+            .unwrap();
+        board.set_block_execution(blocks);
+        let vectors = [0x13000u32, 0x10101]
+            .into_iter()
+            .flat_map(u32::to_le_bytes)
+            .collect::<Vec<_>>();
+        board.write_physical(0x10000, &vectors).unwrap();
+        // ldr r0,literal; ldrd r1,r2,[r0]; b .; literal 0x08000000.
+        // `ldr r0,[pc,#4]` at 0x10100 reads the literal at 0x10108.
+        let code = [0x4801u16, 0xe9d0, 0x1200, 0xe7fe, 0x0000, 0x0800];
+        let bytes: Vec<u8> = code.iter().flat_map(|w| w.to_le_bytes()).collect();
+        board.write_physical(0x10100, &bytes).unwrap();
+        board
+    }
+    let counts = Arc::new(Mutex::new(Counts::default()));
+    let reference = board(false, counts.clone());
+    let translated_counts = Arc::new(Mutex::new(Counts::default()));
+    let translated = board(true, translated_counts.clone());
+    for (name, mut b) in [("observer", reference), ("translated", translated)] {
+        b.set_execution_policy(ExecutionPolicy::Interactive).unwrap();
+        b.state.borrow_mut().settled.verify = 0;
+        b.run_until(64, 8).unwrap();
+    }
+    let observer = counts.lock().unwrap().reads;
+    let replayed = translated_counts.lock().unwrap().reads;
+    assert_eq!(observer, 2, "the observer read the device twice (one LDRD)");
+    assert_eq!(replayed, 2, "translated mode replayed the device read");
+}
+
+/// The classifier and the admission scan must agree on the exact set of
+/// multi-access loads, so no change in one can silently admit a form whose
+/// redo would repeat a device read. Every encoding the assembler produces for
+/// the refused and admitted memory forms is checked here.
+#[test]
+fn multi_access_classifier_matches_what_the_scan_admits() {
+    // `ldrd r1,r2,[r0,#8]` and `ldmia r0,{r1,r2}`: ordinary-base loads, now
+    // refused; `strd`/`stmia` and the single transfers below are not loads.
+    for word in [
+        0xe9d0_1202u32, // ldrd r1,r2,[r0,#8]
+        0xe9d0_0200,    // ldrd r0,r2,[r0] (base in pair)
+        0xe8f0_1202,    // ldrd r1,r2,[r0],#8
+        0xe9f0_1202,    // ldrd r1,r2,[r0,#8]!
+        0xe890_0006,    // ldmia r0,{r1,r2}
+        0xe8b0_0006,    // ldmia r0!,{r1,r2}
+        0xe910_0006,    // ldmdb r0,{r1,r2}
+    ] {
+        assert!(!super::mprofile_blocks::dual_transfer(word), "{word:#010x}");
+        assert!(!super::mprofile_blocks::multiple_store(word), "{word:#010x}");
+        assert!(
+            !super::mprofile_blocks::can_run_inline(word),
+            "{word:#010x}"
+        );
+    }
+    for word in [
+        0xe9c0_1202u32, // strd r1,r2,[r0,#8]
+        0xe8e0_1202,    // strd r1,r2,[r0],#8
+        0xe9e0_1202,    // strd r1,r2,[r0,#8]!
+        0xe880_0006,    // stmia r0,{r1,r2}
+        0xe8a0_0006,    // stmia r0!,{r1,r2}
+        0xe900_0006,    // stmdb r0,{r1,r2}
+    ] {
+        assert!(
+            super::mprofile_blocks::dual_transfer(word)
+                || super::mprofile_blocks::multiple_store(word),
+            "{word:#010x}"
+        );
     }
 }

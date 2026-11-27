@@ -4134,8 +4134,8 @@ unsafe fn block_classify_transfers(
     // last lets each MMIO or watched store complete without restarting an
     // earlier write.
     if mprofile_blocks::is_terminal_push(word)
-        || mprofile_blocks::dual_transfer(word) == Some(true)
-        || mprofile_blocks::multiple_transfer(word) == Some(true)
+        || mprofile_blocks::dual_transfer(word)
+        || mprofile_blocks::multiple_store(word)
     {
         classification.instruction = fujimod_emulator_cpu::InstructionDisposition::ExecuteAndEndBlock;
         classification.observe_block = false;
@@ -4373,7 +4373,12 @@ unsafe fn block_entered(block: fujimod_emulator_cpu::Block, data: *mut c_void) {
             && !ready
             && fetched.is_some()
             && s.code_run.is_running(core);
-        // Admit the block: its first entry is already debited.
+        // Admit the block: its first entry is already debited. A block with a
+        // multi-access load cannot be admitted at all: a later access that
+        // restarts the translation would replay the earlier one, and a
+        // replayed device read is not idempotent (`io_readx` serviced it
+        // already). The classifier refuses those encodings; this keeps the
+        // guarantee if one is reached through a different path.
         let blocks = s.blocks[core].as_mut().unwrap();
         blocks.room -= entries - 1;
         blocks.pending = Some((pc, bytes, entries, pc + last));
