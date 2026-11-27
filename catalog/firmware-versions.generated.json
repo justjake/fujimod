@@ -123,7 +123,14 @@
       "version": "1.31",
       "internal_version": "1.79",
       "update_sha256": "0d48d2ae26ac7ebab9b0e4cac56324807ec1ea8ae30df06b0b9e79066dc0a14a",
-      "download_url": "https://www.fujifilm-x.com/global/support/download/firmware/cameras/x100vi/"
+      "download_url": "https://www.fujifilm-x.com/global/support/download/firmware/cameras/x100vi/",
+      "boot_rom": {
+        "content": {
+          "size": 65536,
+          "sha256": "41d68e8cf37b5fb6ba14238fe678eb106cf7c471075ec8e71e8d838afab859eb"
+        },
+        "address": 4293918720
+      }
     },
     {
       "firmware_id": "x20-103",
@@ -311,6 +318,14 @@
       "version": "5.30",
       "internal_version": "3.51",
       "update_sha256": "be47168cb075ef726e67cb4bb08175a896047a3b0de2bcb6e65333b22cfcb203",
+      "download_url": "https://www.fujifilm-x.com/global/support/download/firmware/cameras/x-h2/"
+    },
+    {
+      "firmware_id": "xh2-533",
+      "product": "X-H2",
+      "version": "5.33",
+      "internal_version": "3.55",
+      "update_sha256": "6f9d3d86e5a93ffc3666712e31c9bb83cb798bfaec581fa27fc5a21882546d58",
       "download_url": "https://www.fujifilm-x.com/global/support/download/firmware/cameras/x-h2/"
     },
     {
