@@ -11,6 +11,7 @@ mod tests;
 pub(super) struct Epoch {
     clock: Clock,
     limit: u64,
+    segment_limit: u64,
     boundary: fujimod_perf::EngineEndReason,
     progress: Vec<u64>,
     advanced: u64,
@@ -25,6 +26,7 @@ impl Epoch {
         Self {
             clock,
             limit,
+            segment_limit: limit,
             boundary,
             progress: vec![0; cores],
             advanced: 0,
@@ -66,8 +68,22 @@ impl Epoch {
         self.limit = self.limit.min(event_budget.min(until_budget));
         Ok(())
     }
+    /// Limit the next segment against the least advanced runnable member.
+    /// A member already at this limit stays parked until its peers catch up.
+    fn bound_segment(&mut self, cores: &[usize], lead: std::num::NonZeroU64) {
+        self.segment_limit = self.least_progress(cores).saturating_add(lead.get());
+    }
+    fn least_progress(&self, cores: &[usize]) -> u64 {
+        cores
+            .iter()
+            .map(|&core| self.progress[core])
+            .min()
+            .unwrap_or(0)
+    }
     pub(super) fn room(&self, core: usize) -> u64 {
-        self.limit.saturating_sub(self.progress[core])
+        self.limit
+            .min(self.segment_limit)
+            .saturating_sub(self.progress[core])
     }
     /// Whether the cohort runs another segment. It ends when its first core
     /// reaches the limit: a peer that executed less does not run on alone,
@@ -78,7 +94,7 @@ impl Epoch {
     /// cache maintenance does. The shortfall is forfeited, as by a slower
     /// core; the next epoch starts every core together at the frontier.
     pub(super) fn open(&self, cores: &[usize]) -> bool {
-        cores.iter().all(|&core| self.room(core) > 0)
+        cores.iter().all(|&core| self.progress[core] < self.limit)
     }
     fn clock(&self, core: usize) -> Result<Clock, String> {
         self.clock.after(self.progress[core])
@@ -199,10 +215,16 @@ impl Board {
                 {
                     return Ok(());
                 }
-                if !state.parallel.as_ref().unwrap().open(cores) {
+                let epoch = state.parallel.as_mut().unwrap();
+                if !epoch.open(cores) {
                     return Ok(());
                 }
+                if let Some(lead) = self.cohort_lead {
+                    epoch.bound_segment(cores, lead);
+                }
             }
+            let mprofile = mprofile
+                .filter(|&core| self.state.borrow().parallel.as_ref().unwrap().room(core) > 0);
             let (blocks, _thumb_slice) = if let Some(core) = mprofile {
                 let room = self.state.borrow().parallel.as_ref().unwrap().room(core);
                 self.prepare_mprofile_segment(core, room)?
@@ -214,6 +236,9 @@ impl Board {
                 for &core in cores {
                     let epoch = state.parallel.as_ref().unwrap();
                     let room = epoch.room(core);
+                    if room == 0 {
+                        continue;
+                    }
                     let cpu = &self.cpus[core];
                     if cpu.features().guest_clock {
                         cpu.set_guest_clock(epoch.clock(core)?)?;
@@ -248,7 +273,16 @@ impl Board {
                     ));
                 }
             }
+            let withheld = cores.len() - prepared.len();
             let result = self.interactive_segment(prepared, quantum, mprofile);
+            if let Some(lead) = self.cohort_lead {
+                let state = self.state.borrow();
+                let epoch = state.parallel.as_ref().unwrap();
+                self.bounded_segments += 1;
+                self.withheld_lane_grants += withheld as u64;
+                let reported_lead = epoch.advanced.saturating_sub(epoch.least_progress(cores));
+                self.segments_over_lead += u64::from(reported_lead > lead.get());
+            }
             if let Some(core) = mprofile {
                 let mut state = self.state.borrow_mut();
                 state.end_code_slice(&*self.cpus[core], core);

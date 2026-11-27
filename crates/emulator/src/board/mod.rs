@@ -501,6 +501,11 @@ pub struct Board {
     m4_engine_reads: Vec<fujimod_emulator_cpu::FastMmioRead>,
     mmio_callback_counts: Rc<RefCell<Vec<u64>>>,
     interactive_windows: Cell<u64>,
+    /// Optional diagnostic limit on issued grants within a concurrent window.
+    cohort_lead: Option<std::num::NonZeroU64>,
+    bounded_segments: u64,
+    withheld_lane_grants: u64,
+    segments_over_lead: u64,
     interactive_host_duration_ns: Cell<u128>,
     next_core: Cell<usize>,
     slice_left: Cell<usize>,
@@ -793,6 +798,13 @@ impl Board {
             m4_engine_reads: vec![],
             mmio_callback_counts,
             interactive_windows: Cell::new(0),
+            cohort_lead: std::env::var("FUJIMOD_COHORT_LEAD")
+                .ok()
+                .map(|value| value.parse().map_err(|_| "FUJIMOD_COHORT_LEAD must be a positive count"))
+                .transpose()?,
+            bounded_segments: 0,
+            withheld_lane_grants: 0,
+            segments_over_lead: 0,
             interactive_host_duration_ns: Cell::new(0),
             next_core: Cell::new(0),
             slice_left: Cell::new(0),

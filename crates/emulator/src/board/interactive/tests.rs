@@ -496,8 +496,16 @@ fn rendezvous_board() -> Board {
 /// that responder spins forever on a flag it already set. Whether that
 /// happens depends only on how far one core may run while another does not.
 /// Returns the rounds each responder completed and the three PCs.
-fn rendezvous_rounds(quantum: usize, instructions: u64) -> ([u32; 2], [u64; 3]) {
+fn rendezvous_rounds(
+    quantum: usize,
+    instructions: u64,
+    lead: Option<std::num::NonZeroU64>,
+) -> ([u32; 2], [u64; 3]) {
     let mut board = rendezvous_board();
+    if let Some(lead) = lead {
+        board.set_execution_policy(ExecutionPolicy::Interactive).unwrap();
+        board.cohort_lead = Some(lead);
+    }
     let initiator = [
         0xe3a04a04u32, // mov r4, #0x4000: flags 0..2, round at +16
         0xe3a00000,    // round: mov r0, #0
@@ -561,6 +569,10 @@ fn rendezvous_rounds(quantum: usize, instructions: u64) -> ([u32; 2], [u64; 3]) 
     board.write_memory(0, 0x1000, &bytes(&initiator)).unwrap();
     board.write_memory(0, 0x2000, &bytes(&responder)).unwrap();
     board.run_for_instructions(instructions, quantum).unwrap();
+    if lead.is_some() {
+        assert!(board.bounded_segments > 0);
+        assert!(board.withheld_lane_grants > 0);
+    }
     let completed = |core: u64| {
         let mut word = [0; 4];
         board.read_memory(0, 0x4020 + 4 * core, &mut word).unwrap();
@@ -574,8 +586,8 @@ fn rendezvous_rounds(quantum: usize, instructions: u64) -> ([u32; 2], [u64; 3]) 
 fn flag_rendezvous_continues_with_short_turns_and_livelocks_when_one_core_runs_a_round_ahead() {
     // Turns shorter than the initiator's path from its wait to the next
     // clear (about 40 instructions): every responder reads the last flag.
-    let (early, _) = rendezvous_rounds(8, 100_000);
-    let (later, _) = rendezvous_rounds(8, 200_000);
+    let (early, _) = rendezvous_rounds(8, 100_000, None);
+    let (later, _) = rendezvous_rounds(8, 200_000, None);
     assert!(
         early.iter().all(|&rounds| rounds > 50) && later[0] > early[0] && later[1] > early[1],
         "{early:?} then {later:?}"
@@ -585,8 +597,8 @@ fn flag_rendezvous_continues_with_short_turns_and_livelocks_when_one_core_runs_a
     // 2) is followed by the initiator, which leaves, clears the flags and
     // starts the next round before core 1 runs again. Core 1 never completes
     // that round; every core then waits in its flag loop.
-    let (stalled, pcs) = rendezvous_rounds(1000, 100_000);
-    let (still, _) = rendezvous_rounds(1000, 200_000);
+    let (stalled, pcs) = rendezvous_rounds(1000, 100_000, None);
+    let (still, _) = rendezvous_rounds(1000, 200_000, None);
     assert_eq!(
         stalled, still,
         "rounds continued with a 1000-instruction quantum"
@@ -597,6 +609,44 @@ fn flag_rendezvous_continues_with_short_turns_and_livelocks_when_one_core_runs_a
         pcs[1..].iter().all(|pc| (0x202c..=0x204c).contains(pc)),
         "{pcs:x?}"
     );
+}
+
+#[test]
+fn bounded_concurrent_grants_keep_a_shared_flag_rendezvous_moving() {
+    let lead = std::num::NonZeroU64::new(8);
+    let (early, _) = rendezvous_rounds(1000, 10_000, lead);
+    let (later, _) = rendezvous_rounds(1000, 20_000, lead);
+    assert!(early.iter().all(|&rounds| rounds > 5), "{early:?}");
+    assert!(
+        later.iter().zip(early).all(|(&later, early)| later > early),
+        "{early:?} then {later:?}"
+    );
+}
+
+#[test]
+fn leading_lanes_wait_for_a_delayed_runnable_peer() {
+    let clock = fujimod_emulator_cpu::Clock {
+        now: 1000,
+        phase: 0,
+        ratio: Ratio::new(1, 1).unwrap(),
+    };
+    let mut epoch = super::Epoch::new(4, clock, 31, fujimod_perf::EngineEndReason::OtherExit);
+    let cohort = [0, 1, 2];
+    let lead = std::num::NonZeroU64::new(8).unwrap();
+    epoch.bound_segment(&cohort, lead);
+    assert_eq!(epoch.room(0), 8);
+    epoch.advance(0, 8).unwrap();
+    epoch.advance(1, 8).unwrap();
+    assert!(epoch.open(&cohort));
+    epoch.bound_segment(&cohort, lead);
+    assert_eq!((epoch.room(0), epoch.room(1), epoch.room(2)), (0, 0, 8));
+
+    epoch.advance(2, 4).unwrap();
+    epoch.bound_segment(&cohort, lead);
+    assert_eq!((epoch.room(0), epoch.room(1), epoch.room(2)), (4, 4, 8));
+    assert_eq!(epoch.clock(2).unwrap().now, 1004);
+    epoch.limit = 10;
+    assert_eq!((epoch.room(0), epoch.room(1), epoch.room(2)), (2, 2, 6));
 }
 
 #[test]

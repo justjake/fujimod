@@ -76,6 +76,9 @@ impl Board {
         json!({
             "interactive_host_duration_ns": self.interactive_host_duration_ns.get(),
             "settled_mmio_reuses": state.settled.mmio_reuses,
+            "bounded_cohort_segments": self.bounded_segments,
+            "withheld_lane_grants": self.withheld_lane_grants,
+            "segments_reported_over_lead": self.segments_over_lead,
             "cortex_m4_by_core": cortex_m4_by_core,
         })
     }
