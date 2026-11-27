@@ -503,6 +503,7 @@ impl Execution {
         }
         let _ = self.cpu.stop();
     }
+    const SELF_BRANCH: u32 = 0x1400_0000;
     const NZCV: u64 = 0xf000_0000;
 
     /// Whether this processor proves loops at all: coarse accounting in
@@ -517,14 +518,15 @@ impl Execution {
         self.prove_loops.get() && !self.irq.get() && !self.fiq.get() && !self.memory.flush_pending()
     }
 
-    /// Whether a loop branch at `address` could be proven, so translation
-    /// must end the block there and let the instruction observer look at it.
-    fn loop_candidate(&self, word: u32) -> bool {
-        a64::head(0, word).is_some()
+    /// Whether a loop branch at `address` could be proven. Only a backward
+    /// conditional branch qualifies: an unconditional `B` back cannot leave
+    /// its loop, so its run already ends at the budget and ending its block
+    /// would only cost a callback. `B #0` has its own proof below.
+    fn loop_candidate(&self, address: u64, word: u32) -> bool {
+        word & 0x7c00_0000 != 0x1400_0000 && a64::head(address, word).is_some()
     }
 
-    /// The bytes of the loop that closes at `address`, or `None` when they
-    /// cannot be read or are a device mapping.
+    /// The bytes of the loop that closes at `address`.
     fn loop_bytes(&self, head: u64, branch: u64) -> Option<Vec<u8>> {
         let bytes = usize::try_from(branch - head).ok()?.checked_add(4)?;
         let mut code = vec![0; bytes];
@@ -532,30 +534,36 @@ impl Execution {
         Some(code)
     }
 
-    /// Fast-forward a proven AArch64 loop that closes at `address`, whose
-    /// branch instruction is `word`. On success the processor stops at the
-    /// branch with the skipped instructions charged to its entry count.
+    /// Fast-forward a proven AArch64 loop whose branch instruction, at
+    /// `address`, is `word`. Each proven round is one execution of that
+    /// branch and the body after it, so the owner charges `rounds * length`
+    /// entries and leaves the branch to execute once more, exactly where
+    /// ordinary execution would be at that count.
     ///
-    /// Nothing but the instruction bytes, the architectural registers, the
-    /// guest clock and RAM the owner declared stable takes part: no firmware
-    /// address, function identity or RTOS structure.
+    /// Nothing but the loop's instruction bytes, the architectural registers
+    /// and RAM the owner declared stable takes part: no firmware address,
+    /// function identity or RTOS structure.
     fn advance_proven_loop(&self, address: u64, word: u32) -> Result<bool, String> {
-        if !self.proving() || self.a32 {
+        if std::env::var_os("FUJIMOD_TRACE_PROOF").is_some() {
+            eprintln!("proof: address={address:#x} word={word:#08x} a32={} prove={} callbacks={}", self.a32, self.prove_loops.get(), self.proofs.candidate_entries.get());
+        }
+        if self.a32 || !self.proving() {
             return Ok(false);
         }
+        if word == Self::SELF_BRANCH {
+            // Every iteration from here leaves the same architectural state
+            // at the same boundary: retire the whole budget.
+            self.count.set(self.cap.get());
+            self.cpu.stop()?;
+            return Ok(true);
+        }
+        let proofs = &self.proofs;
         let Some(head) = a64::head(address, word) else {
             return Ok(false);
         };
-        let proofs = &self.proofs;
         proofs.count(&proofs.candidate_entries, 1);
-        if !self.can_prove_loops() {
-            proofs.count(&proofs.failed_window_inactive, 1);
-            return Ok(false);
-        }
-        if proofs.bypass.take() == Some(address) {
-            return Ok(false);
-        }
-        // Instruction and block observers on the loop must see every round.
+        // Instruction, block and store observers on the loop must see every
+        // round.
         let observers = self.index.borrow();
         if observers.instructions.any_in(head, address)
             || observers.blocks.any_in(head, address)
@@ -575,6 +583,7 @@ impl Execution {
             .get(&address)
             .is_some_and(|cached| *cached == bytes)
         {
+            proofs.count(&proofs.failed_cache, 1);
             return Ok(false);
         }
         proofs.count(&proofs.proofs_attempted, 1);
@@ -583,10 +592,8 @@ impl Execution {
             proofs.failures.borrow_mut().insert(address, bytes);
             return Ok(false);
         };
-        // A read observer cannot fire in a register-only loop, and a loop
-        // that reads RAM must not skip a page the owner is watching.
-        let state_reads = self.index.borrow().reads.is_empty();
-        if proof.reads() && !state_reads {
+        // A loop that reads RAM must not skip a page the owner is watching.
+        if proof.reads() && !self.index.borrow().reads.is_empty() {
             proofs.count(&proofs.failed_observer, 1);
             return Ok(false);
         }
@@ -598,11 +605,24 @@ impl Execution {
                 self.scalar(Register::X(index as u8))?
             };
         }
-        // The proof keeps the NZCV flags it models; every other PSTATE bit
-        // stays as the processor has it.
+        // The proof keeps only the NZCV flags it models.
         state.flags = self.scalar(Register::Pstate)? as u32 & Self::NZCV as u32;
+        // The branch entry is already counted. The rounds begin after it and
+        // end one entry before the budget, so the branch itself always has its
+        // entry left to run.
         let room = self.cap.get().saturating_sub(self.count.get());
-        let advanced = proof.advance(state, (room / proof.length).max(1), |address, bits| {
+        let rounds = room.saturating_sub(1) / proof.length;
+        if rounds == 0 {
+            proofs.count(&proofs.failed_budget, 1);
+            return Ok(false);
+        }
+        // The clock rate a loop may read is the guest clock's own ratio, so a
+        // window that reads it reads a value no round changes.
+        let frequency = self
+            .clock
+            .get()
+            .and_then(|clock| clock.ratio.parts().0.checked_div(clock.ratio.parts().1));
+        let advanced = proof.advance(state, rounds, frequency, |address, bits| {
             let width = usize::from(u8::try_from(bits / 8).ok()?);
             let mut bytes = [0; 8];
             // Permission-checked and observational; a device page refuses.
@@ -622,7 +642,13 @@ impl Execution {
                 return Ok(false);
             }
             Err(a64::Failure::Model) => {
-                proofs.failures.borrow_mut().insert(address, bytes);
+                // A body with no load is refused for its shape, which the
+                // bytes alone decide, so the refusal is cached. A poll of
+                // RAM changes with its input, so it is retried: the value
+                // that ended this window may hold for the next one.
+                if !proof.reads() {
+                    proofs.failures.borrow_mut().insert(address, bytes);
+                }
                 proofs.count(&proofs.failed_model, 1);
                 return Ok(false);
             }
@@ -656,11 +682,9 @@ impl Execution {
                 .write_register(Register::Pstate, &next.to_le_bytes())?;
         }
         self.count.set(self.count.get() + skipped);
-        proofs.bypass.set(Some(proof.branch));
-        // The branch itself now runs normally, exactly as it would have.
-        proofs.resume.set(self.count.get() < self.cap.get());
-        self.cpu.stop()?;
-        Ok(true)
+        // The branch runs normally next; the run then ends at that entry, so
+        // the owner sees the same state a full-speed run would have reached.
+        Ok(false)
     }
 
     fn classify(&self, address: u64, word: u32) -> Result<Translation, String> {
@@ -682,7 +706,7 @@ impl Execution {
         let instruction = if framework {
             InstructionDisposition::Replace
         } else if wide_exact
-            || self.can_prove_loops() && !self.a32 && self.loop_candidate(word)
+            || self.can_prove_loops() && !self.a32 && self.loop_candidate(address, word)
             || boundary
             || (self.is_coherent()
                 && (coherent_cpu::maintenance(word).is_some()

@@ -142,6 +142,8 @@ enum Op {
         src: usize,
         amount: u32,
     },
+    /// `MRS Rt, CNTFRQ_EL0`: the clock rate, which no round changes.
+    Frequency { dst: usize },
     /// `LDR` of a byte, halfword or word at an unsigned offset from a base.
     Load {
         bits: u32,
@@ -209,14 +211,12 @@ fn width_of(word: u32) -> Width {
     }
 }
 
-/// The head of the short backward branch at `address`, if `word` is one.
-/// `None` for anything that is not a direct branch, does not go backwards,
-/// or reaches further than [`SPAN`].
-pub(super) fn head(address: u64, word: u32) -> Option<u64> {
+/// The direct target of the branch at `address`, backwards or forwards.
+fn target_of(address: u64, word: u32) -> Option<u64> {
     let target = if word & 0x7c00_0000 == 0x1400_0000 {
         // B, not BL.
         branch_target(address, u64::from(word & 0x03ff_ffff), 26)?
-    } else if word & 0xff00_0010 == 0x5400_0000 {
+    } else if word & 0xff00_0000 == 0x5400_0000 {
         branch_target(address, u64::from((word >> 5) & 0x7ffff), 19)?
     } else if word & 0x7e00_0000 == 0x3400_0000 {
         // CBZ/CBNZ.
@@ -227,6 +227,13 @@ pub(super) fn head(address: u64, word: u32) -> Option<u64> {
     } else {
         return None;
     };
+    Some(target)
+}
+
+/// The head of a short backward branch at `address`, or `None` when `word`
+/// does not go back within [`SPAN`].
+pub(super) fn head(address: u64, word: u32) -> Option<u64> {
+    let target = target_of(address, word)?;
     (target <= address && address - target <= SPAN).then_some(target)
 }
 
@@ -234,7 +241,7 @@ fn branch_condition(word: u32) -> Option<(Condition, Option<(usize, u64)>)> {
     if word & 0x7c00_0000 == 0x1400_0000 {
         return Some((Condition::Always, None));
     }
-    if word & 0xff00_0010 == 0x5400_0000 {
+    if word & 0xff00_0000 == 0x5400_0000 {
         return Some((condition_of(word)?, None));
     }
     let taken_on_set = word & (1 << 24) != 0;
@@ -382,6 +389,14 @@ fn decode(word: u32) -> Option<Op> {
             src,
             amount,
         });
+    }
+    // MRS Rt, CNTFRQ_EL0: the clock rate, the same on every round.
+    if word & 0xffff_ffe0 == 0xd50b_7e20 {
+        let dst = (word & 31) as usize;
+        if dst == 31 {
+            return None;
+        }
+        return Some(Op::Frequency { dst });
     }
     // LDR (unsigned offset) of a byte, halfword or word: no sign extension,
     // no SIMD and no address writeback.
@@ -540,6 +555,10 @@ fn apply(
             };
             state.registers[dst] = word & mask;
         }
+        Op::Frequency { dst } => {
+            // A constant the owner supplies: the clock rate.
+            state.registers[dst] = input(index, 0, 0).ok_or(Failure::Input)?;
+        }
     }
     Ok(state)
 }
@@ -581,7 +600,8 @@ impl Proof {
         }
         let (&last, body) = words.split_last()?;
         let branch_word = u32::from_le_bytes(last);
-        if super::a64::head(branch, branch_word)? != head {
+        let target = super::a64::target_of(branch, branch_word)?;
+        if target != head {
             return None;
         }
         let (condition, test) = branch_condition(branch_word)?;
@@ -783,18 +803,18 @@ impl Proof {
         &self,
         state: State,
         iterations: u64,
+        frequency: Option<u64>,
         mut read: impl FnMut(u64, u32) -> Option<u64>,
     ) -> Result<Advance, Failure> {
         if iterations == 0 {
             return Err(Failure::Model);
         }
         let reads = self.reads();
-        let mut input = |index: usize, address: u64, bits: u32| {
-            if reads && matches!(self.ops[index], Op::Load { .. }) {
-                read(address, bits)
-            } else {
-                None
-            }
+        let mut input = |index: usize, address: u64, bits: u32| match self.ops[index] {
+            Op::Load { .. } if reads => read(address, bits),
+            // The clock's rate, which the owner reads once per window.
+            Op::Frequency { .. } => frequency,
+            _ => None,
         };
         if !self.taken(state) {
             return Err(Failure::Leaving);
@@ -804,6 +824,46 @@ impl Proof {
             // Every further round is this round: the whole window retires.
             return Ok(Advance {
                 state,
+                iterations,
+                counted: false,
+            });
+        }
+        // A poll that returns to a state it already had repeats from there
+        // for as long as its inputs stay the same, so the window ends at the
+        // state the round index lands on. Only states the body actually
+        // reaches are compared, so a loop whose inputs change each round
+        // finds no repeat and is refused below.
+        let mut walked = vec![state];
+        let mut cycle = None;
+        while (walked.len() as u64) <= iterations.min(64) {
+            let next = self.step(*walked.last().expect("a state"), &mut input)?;
+            if let Some(index) = walked.iter().position(|seen| *seen == next) {
+                cycle = Some((index, walked.len()));
+                break;
+            }
+            if !self.taken(next) {
+                break;
+            }
+            walked.push(next);
+        }
+        // The walk covered the whole window before repeating: every round was
+        // taken, so the window retires exactly that many.
+        if cycle.is_none() && walked.len() as u64 > iterations {
+            return Ok(Advance {
+                state: walked[iterations as usize],
+                iterations,
+                counted: false,
+            });
+        }
+        if let Some((start, end)) = cycle {
+            let period = (end - start) as u64;
+            let last = if iterations < end as u64 {
+                walked[iterations as usize]
+            } else {
+                walked[start + ((iterations - start as u64) % period) as usize]
+            };
+            return Ok(Advance {
+                state: last,
                 iterations,
                 counted: false,
             });
@@ -872,6 +932,7 @@ pub(super) struct Proofs {
     pub failed_structural: Cell<u64>,
     pub failed_window_inactive: Cell<u64>,
     pub failed_observer: Cell<u64>,
+    pub failed_cache: Cell<u64>,
     pub failed_read_unavailable: Cell<u64>,
     pub failed_leaving: Cell<u64>,
     pub failed_model: Cell<u64>,
@@ -879,17 +940,31 @@ pub(super) struct Proofs {
     /// Bytes that failed structurally or have no iteration model, by branch
     /// address. Code invalidation clears them.
     pub failures: RefCell<BTreeMap<u64, Vec<u8>>>,
-    /// The branch a window stopped at, so it executes once normally next.
-    pub bypass: Cell<Option<u64>>,
-    /// The run a window stopped before its counted end, so the board resumes
-    /// the remainder before applying its clock limit.
-    pub resume: Cell<bool>,
 }
 
 impl Proofs {
     pub(super) fn count(&self, counter: &Cell<u64>, n: u64) {
         counter.set(counter.get().saturating_add(n));
     }
+    /// Host diagnostic: with `FUJIMOD_LOOP_MODEL_FAILURES` set, print the
+    /// branch and words of every loop the prover cached a refusal for.
+    pub fn report(&self) {
+        if std::env::var_os("FUJIMOD_LOOP_MODEL_FAILURES").is_none() {
+            return;
+        }
+        let failures = self.failures.borrow();
+        eprintln!("AArch64 loop refusals: {} addresses", failures.len());
+        for (address, bytes) in failures.iter().take(24) {
+            let words: Vec<String> = bytes
+                .as_chunks::<4>()
+                .0
+                .iter()
+                .map(|word| format!("{:08x}", u32::from_le_bytes(*word)))
+                .collect();
+            eprintln!("  branch={address:#x} words={}", words.join(" "));
+        }
+    }
+
     pub(super) fn invalidate(&self) {
         self.failures.borrow_mut().clear();
     }
@@ -901,8 +976,15 @@ mod tests {
 
     /// `b.ne` back to `head` from a branch `count` instructions later.
     fn b_ne(count: u32) -> u32 {
-        let offset = -i32::try_from(count).unwrap();
-        0x5400_0001 | (((offset as u32) & 0x7ffff) << 5)
+        let offset = -i64::from(count);
+        0x5400_0001 | ((((offset as u64) & 0x7ffff) as u32) << 5)
+    }
+
+    /// `cbz`/`cbnz w<n>`, back to `head` from `count` instructions later.
+    fn cbz(count: u32, register: u32, nonzero: bool) -> u32 {
+        let offset = -i64::from(count);
+        let flags = if nonzero { 1 << 24 } else { 0 };
+        0x3400_0000 | flags | (register & 31) | ((((offset as u64) & 0x7ffff) as u32) << 5)
     }
     const B_SELF: u32 = 0x1400_0000;
 
@@ -930,7 +1012,7 @@ mod tests {
         let p = proof(0x1000, &[B_SELF]);
         assert_eq!(p.length, 1);
         let state = State::default();
-        let advanced = p.advance(state, 500, |_, _| None).unwrap();
+        let advanced = p.advance(state, 500, None, |_, _| None).unwrap();
         assert_eq!(advanced.iterations, 500);
         assert!(!advanced.counted);
         assert_eq!(advanced.state, state);
@@ -942,7 +1024,7 @@ mod tests {
         let p = pair(0x1000, 0x7100_0400);
         let mut state = State::default();
         state.registers[0] = 3;
-        let advanced = p.advance(state, 100, |_, _| None).unwrap();
+        let advanced = p.advance(state, 100, None, |_, _| None).unwrap();
         assert_eq!(advanced.iterations, 3);
         assert!(advanced.counted);
         assert_eq!(advanced.state.registers[0], 0);
@@ -957,7 +1039,7 @@ mod tests {
         let mut state = State::default();
         state.registers[0] = 20;
         state.registers[1] = 7;
-        let advanced = p.advance(state, 100, |_, _| None).unwrap();
+        let advanced = p.advance(state, 100, None, |_, _| None).unwrap();
         assert_eq!(advanced.iterations, 13);
         assert_eq!(advanced.state.registers[0], 7);
     }
@@ -965,12 +1047,12 @@ mod tests {
     #[test]
     fn a_stable_ram_poll_is_a_fixed_point() {
         // ldr w0,[x1] ; cbz w0,0x1000
-        let p = proof(0x1000, &[0xb940_0020, 0x34ff_ffe0]);
+        let p = proof(0x1000, &[0xb940_0020, cbz(1, 0, false)]);
         assert!(p.reads());
         let mut state = State::default();
         state.registers[1] = 0x4000;
         let advanced = p
-            .advance(state, 200, |address, bits| {
+            .advance(state, 200, None, |address, bits| {
                 assert_eq!((address, bits), (0x4000, 32));
                 Some(0)
             })
@@ -982,11 +1064,11 @@ mod tests {
     #[test]
     fn a_poll_whose_value_changes_is_refused() {
         // ldr w0,[x1] ; add x2,x2,#1 ; cbz w0,0x1000
-        let p = proof(0x1000, &[0xb940_0020, 0x9100_0442, 0x34ff_ffc0]);
+        let p = proof(0x1000, &[0xb940_0020, 0x9100_0442, cbz(2, 0, false)]);
         let mut state = State::default();
         state.registers[1] = 0x4000;
         let mut reads = 0;
-        let refused = p.advance(state, 10, |_, _| {
+        let refused = p.advance(state, 10, None, |_, _| {
             reads += 1;
             Some(reads)
         });
@@ -1052,7 +1134,7 @@ mod tests {
             let mut state = State::default();
             state.registers[0] = start;
             let advanced = p
-                .advance(state, 1_000, |_, _| None)
+                .advance(state, 1_000, None, |_, _| None)
                 .unwrap_or_else(|failure| panic!("{word:#010x}: {failure:?}"));
             assert_eq!(advanced.state.registers[0], 0, "{word:#010x}");
             // One round is the body and its branch.
@@ -1068,12 +1150,12 @@ mod tests {
         state.registers[0] = 5;
         // An odd value steps over zero forever, so every round is identical
         // in effect and the window retires its whole budget exactly.
-        let advanced = p.advance(state, 100, |_, _| None).unwrap();
+        let advanced = p.advance(state, 100, None, |_, _| None).unwrap();
         assert_eq!(advanced.iterations, 100);
         assert_eq!(advanced.state.registers[0], 5u64.wrapping_sub(200) & u64::from(u32::MAX));
         // A stride that does divide retires exactly to the bound.
         state.registers[0] = 6;
-        let advanced = p.advance(state, 100, |_, _| None).unwrap();
+        let advanced = p.advance(state, 100, None, |_, _| None).unwrap();
         assert_eq!(advanced.iterations, 3);
         assert_eq!(advanced.state.registers[0], 0);
     }
@@ -1083,7 +1165,7 @@ mod tests {
         let p = pair(0x1000, 0x7100_0400);
         let mut state = State::default();
         state.registers[0] = 1_000_000;
-        let advanced = p.advance(state, 10, |_, _| None).unwrap();
+        let advanced = p.advance(state, 10, None, |_, _| None).unwrap();
         assert_eq!(advanced.iterations, 10);
         assert_eq!(advanced.state.registers[0], 999_990);
     }
@@ -1095,12 +1177,14 @@ mod tests {
         let mut state = State::default();
         state.flags = 1 << 30;
         assert_eq!(
-            p.advance(state, 10, |_, _| None).err(),
+            p.advance(state, 10, None, |_, _| None).err(),
             Some(Failure::Leaving)
         );
-        // At the bound with the branch still taken: the window cannot retire.
+        // At the bound with the branch still taken, the register wraps and
+        // the loop becomes a cycle, so the window retires its budget.
         state.flags = 0;
-        assert_eq!(p.advance(state, 10, |_, _| None).err(), Some(Failure::Model));
+        let advanced = p.advance(state, 10, None, |_, _| None).unwrap();
+        assert_eq!(advanced.iterations, 10);
     }
 
     #[test]
@@ -1109,16 +1193,20 @@ mod tests {
         let p = proof(0x1000, &[0x7100_0400, 0x1100_0442, b_ne(2)]);
         let mut state = State::default();
         state.registers[0] = 9;
-        assert_eq!(p.advance(state, 10, |_, _| None).err(), Some(Failure::Model));
+        assert_eq!(p.advance(state, 10, None, |_, _| None).err(), Some(Failure::Model));
     }
 
     #[test]
-    fn a_countdown_whose_flags_nobody_sets_has_no_model() {
-        // sub w0,w0,#1 (no S) ; b.ne 0x1000: the branch reads stale flags.
+    fn a_countdown_whose_flags_nobody_sets_walks_as_a_cycle() {
+        // sub w0,w0,#1 (no S) ; b.ne 0x1000: the branch reads stale flags,
+        // which no round of the body changes, so every round is taken and
+        // the window retires its budget exactly.
         let p = pair(0x1000, 0x5100_0400);
         let mut state = State::default();
         state.registers[0] = 3;
-        assert_eq!(p.advance(state, 10, |_, _| None).err(), Some(Failure::Model));
+        let advanced = p.advance(state, 10, None, |_, _| None).unwrap();
+        assert_eq!(advanced.iterations, 10);
+        assert!(!advanced.counted);
     }
 
     #[test]
@@ -1128,7 +1216,7 @@ mod tests {
         let mut state = State::default();
         for start in [5u64, 9, 30, 1001] {
             state.registers[0] = start;
-            let advanced = p.advance(state, 10_000, |_, _| None).unwrap();
+            let advanced = p.advance(state, 10_000, None, |_, _| None).unwrap();
             // Walk it with the body itself: the count must reproduce it.
             let mut walked = state;
             let mut n = 0;
@@ -1143,13 +1231,54 @@ mod tests {
     }
 
     #[test]
+    fn a_ram_poll_whose_first_round_differs_repeats_after_it() {
+        // ldr w0,[x1] ; cmp w0,#0 ; b.eq 0x1000. The first round changes the
+        // flags; the second reproduces the first, so the loop is a 1-round
+        // cycle from there and its window covers every budget exactly.
+        let p = proof(0x1000, &[0xb940_0020, 0x7100_001f, cbz(2, 0, false)]);
+        let mut state = State::default();
+        state.registers[1] = 0x4000;
+        state.flags = 1 << 30;
+        for budget in [1, 2, 3, 5, 99, 1000] {
+            let advanced = p
+                .advance(state, budget, None, |_, bits| {
+                    assert_eq!(bits, 32);
+                    Some(0)
+                })
+                .unwrap();
+            assert_eq!(advanced.iterations, budget);
+        }
+    }
+
+    #[test]
+    fn a_clock_rate_loop_counts_against_its_constant() {
+        // mrs x4,cntfrq_el0 ; ldr w0,[x1] ; cmp w0,#0 ; b.eq 0x1000.
+        let p = proof(
+            0x1000,
+            &[0xd50b_7e24, 0xb940_0020, 0x7100_001f, cbz(3, 0, false)],
+        );
+        let mut state = State::default();
+        state.registers[1] = 0x4000;
+        let advanced = p
+            .advance(state, 40, Some(24_000_000), |_, _| Some(0))
+            .unwrap();
+        assert_eq!(advanced.iterations, 40);
+        assert_eq!(advanced.state.registers[4], 24_000_000);
+        // Without the owner's rate the round's input is missing.
+        assert_eq!(
+            p.advance(state, 40, None, |_, _| Some(0)).err(),
+            Some(Failure::Input)
+        );
+    }
+
+    #[test]
     fn a_window_inside_the_approach_ends_with_the_branch_still_taken() {
         // subs w0,w0,#1 from 1000 with room for 100 rounds: the branch is
         // taken after all of them, exactly as ordinary execution would have.
         let p = pair(0x1000, 0x7100_0400);
         let mut state = State::default();
         state.registers[0] = 1000;
-        let advanced = p.advance(state, 100, |_, _| None).unwrap();
+        let advanced = p.advance(state, 100, None, |_, _| None).unwrap();
         assert_eq!(advanced.iterations, 100);
         assert!(p.taken(advanced.state));
         assert_eq!(advanced.state.registers[0], 900);

@@ -565,6 +565,7 @@ impl Cpu for Core {
     fn exit_counters(&self) -> Result<BTreeMap<&'static str, u64>, String> {
         let mut counters = self.execution.cpu.exit_counters()?;
         let p = &self.execution.proofs;
+        p.report();
         if !self.execution.a32 {
             counters.insert("loop_candidate_entries", p.candidate_entries.get());
             counters.insert("loop_proofs_attempted", p.proofs_attempted.get());
@@ -580,6 +581,7 @@ impl Cpu for Core {
                 p.failed_window_inactive.get(),
             );
             counters.insert("loop_proofs_failed_observer", p.failed_observer.get());
+            counters.insert("loop_proofs_failed_cache", p.failed_cache.get());
             counters.insert(
                 "loop_proofs_failed_loop_bytes_unavailable",
                 p.failed_read_unavailable.get(),
