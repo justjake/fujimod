@@ -19,6 +19,7 @@ use std::{
         atomic::{AtomicU32, Ordering},
     },
 };
+mod a64;
 mod backend;
 pub mod coherence;
 mod coherent_cpu;
@@ -49,6 +50,7 @@ struct Execution {
     loop_mode: Cell<loops::LoopMode>,
     loop_window: Cell<bool>,
     prove_loops: Cell<bool>,
+    proofs: a64::Proofs,
     ring: UnsafeCell<Box<[u64; 64]>>,
     owned: RefCell<Vec<fujimod_emulator_cpu::memory::Backing>>,
     count: Cell<u64>,
@@ -166,6 +168,7 @@ impl Core {
             loop_mode: Cell::default(),
             loop_window: Cell::new(false),
             prove_loops: Cell::new(false),
+            proofs: a64::Proofs::default(),
             ring: UnsafeCell::new(Box::new([0; 64])),
             owned: RefCell::new(vec![]),
             count: Cell::new(0),
@@ -500,81 +503,164 @@ impl Execution {
         }
         let _ = self.cpu.stop();
     }
-    const SELF_BRANCH: u32 = 0x1400_0000;
-    const COUNTED_BRANCH: u32 = 0x54ff_ffe1; // b.ne to the preceding instruction
     const NZCV: u64 = 0xf000_0000;
-    const Z: u64 = 1 << 30;
 
+    /// Whether this processor proves loops at all: coarse accounting in
+    /// Interactive mode with the mode's permission. Whether the current run
+    /// is in a stable window is `prove_loops`, fixed when the run begins.
     fn can_prove_loops(&self) -> bool {
         self.coarse() && self.loop_mode.get() == loops::LoopMode::Accelerate
     }
 
+    /// Whether the running window may fast-forward a loop right now.
+    fn proving(&self) -> bool {
+        self.prove_loops.get() && !self.irq.get() && !self.fiq.get() && !self.memory.flush_pending()
+    }
+
+    /// Whether a loop branch at `address` could be proven, so translation
+    /// must end the block there and let the instruction observer look at it.
+    fn loop_candidate(&self, word: u32) -> bool {
+        a64::head(0, word).is_some()
+    }
+
+    /// The bytes of the loop that closes at `address`, or `None` when they
+    /// cannot be read or are a device mapping.
+    fn loop_bytes(&self, head: u64, branch: u64) -> Option<Vec<u8>> {
+        let bytes = usize::try_from(branch - head).ok()?.checked_add(4)?;
+        let mut code = vec![0; bytes];
+        self.cpu.read_virtual(head, Access::Fetch, &mut code).ok()?;
+        Some(code)
+    }
+
+    /// Fast-forward a proven AArch64 loop that closes at `address`, whose
+    /// branch instruction is `word`. On success the processor stops at the
+    /// branch with the skipped instructions charged to its entry count.
+    ///
+    /// Nothing but the instruction bytes, the architectural registers, the
+    /// guest clock and RAM the owner declared stable takes part: no firmware
+    /// address, function identity or RTOS structure.
     fn advance_proven_loop(&self, address: u64, word: u32) -> Result<bool, String> {
-        if !self.prove_loops.get()
-            || self.irq.get()
-            || self.fiq.get()
-            || !matches!(word, Self::SELF_BRANCH | Self::COUNTED_BRANCH)
-        {
+        if !self.proving() || self.a32 {
             return Ok(false);
         }
-        let observers = self.index.borrow();
-        if !observers.blocks.is_empty()
-            || !observers.instructions.is_empty()
-            || !observers.stores.is_empty()
-        {
-            return Ok(false);
-        }
-        if word == Self::SELF_BRANCH {
-            // Each taken B #0 leaves the same architectural state at the
-            // same instruction boundary. Retire the whole budget here.
-            self.count.set(self.cap.get());
-            return Ok(true);
-        }
-        let Some(head) = address.checked_sub(4) else {
+        let Some(head) = a64::head(address, word) else {
             return Ok(false);
         };
-        let mut bytes = [0; 4];
-        if self
-            .cpu
-            .read_virtual(head, Access::Fetch, &mut bytes)
-            .is_err()
+        let proofs = &self.proofs;
+        proofs.count(&proofs.candidate_entries, 1);
+        if !self.can_prove_loops() {
+            proofs.count(&proofs.failed_window_inactive, 1);
+            return Ok(false);
+        }
+        if proofs.bypass.take() == Some(address) {
+            return Ok(false);
+        }
+        // Instruction and block observers on the loop must see every round.
+        let observers = self.index.borrow();
+        if observers.instructions.any_in(head, address)
+            || observers.blocks.any_in(head, address)
+            || !observers.stores.is_empty()
+        {
+            proofs.count(&proofs.failed_observer, 1);
+            return Ok(false);
+        }
+        drop(observers);
+        let Some(bytes) = self.loop_bytes(head, address) else {
+            proofs.count(&proofs.failed_read_unavailable, 1);
+            return Ok(false);
+        };
+        if proofs
+            .failures
+            .borrow()
+            .get(&address)
+            .is_some_and(|cached| *cached == bytes)
         {
             return Ok(false);
         }
-        let subtract = u32::from_le_bytes(bytes);
-        let reg = (subtract & 31) as u8;
-        if subtract & 0x7f80_0000 != 0x7100_0000
-            || reg == 31
-            || u32::from(reg) != (subtract >> 5) & 31
-        {
+        proofs.count(&proofs.proofs_attempted, 1);
+        let Some(proof) = a64::Proof::decode(head, address, &bytes) else {
+            proofs.count(&proofs.failed_structural, 1);
+            proofs.failures.borrow_mut().insert(address, bytes);
+            return Ok(false);
+        };
+        // A read observer cannot fire in a register-only loop, and a loop
+        // that reads RAM must not skip a page the owner is watching.
+        let state_reads = self.index.borrow().reads.is_empty();
+        if proof.reads() && !state_reads {
+            proofs.count(&proofs.failed_observer, 1);
             return Ok(false);
         }
-        let step = u64::from((subtract >> 10) & 0xfff) << (12 * ((subtract >> 22) & 1));
-        let pstate = self.scalar(Register::Pstate)?;
-        if step == 0 || pstate & Self::Z != 0 {
-            return Ok(false);
+        let mut state = a64::State::default();
+        for (index, slot) in state.registers.iter_mut().enumerate() {
+            *slot = if index == 31 {
+                self.scalar(Register::Sp)?
+            } else {
+                self.scalar(Register::X(index as u8))?
+            };
         }
-        let wide = subtract & (1 << 31) != 0;
-        let sign = if wide { 1 << 63 } else { 1 << 31 };
-        let register = Register::X(reg);
-        let value = self.scalar(register)? & if wide { u64::MAX } else { u64::from(u32::MAX) };
+        // The proof keeps the NZCV flags it models; every other PSTATE bit
+        // stays as the processor has it.
+        state.flags = self.scalar(Register::Pstate)? as u32 & Self::NZCV as u32;
         let room = self.cap.get().saturating_sub(self.count.get());
-        // Each round starts with the taken branch, then subtracts. Exclude
-        // the zero/borrow boundary so the original branch can still execute.
-        let rounds = (room / 2).min(value.saturating_sub(1) / step);
-        if rounds == 0 {
+        let advanced = proof.advance(state, (room / proof.length).max(1), |address, bits| {
+            let width = usize::from(u8::try_from(bits / 8).ok()?);
+            let mut bytes = [0; 8];
+            // Permission-checked and observational; a device page refuses.
+            self.cpu
+                .read_virtual(address, Access::Read, &mut bytes[..width])
+                .ok()?;
+            Some(u64::from_le_bytes(bytes))
+        });
+        let advance = match advanced {
+            Ok(advance) => advance,
+            Err(a64::Failure::Leaving) => {
+                proofs.count(&proofs.failed_leaving, 1);
+                return Ok(false);
+            }
+            Err(a64::Failure::Input) => {
+                proofs.count(&proofs.failed_read_unavailable, 1);
+                return Ok(false);
+            }
+            Err(a64::Failure::Model) => {
+                proofs.failures.borrow_mut().insert(address, bytes);
+                proofs.count(&proofs.failed_model, 1);
+                return Ok(false);
+            }
+        };
+        let skipped = advance.iterations * proof.length;
+        if skipped == 0 || skipped > room {
+            proofs.count(&proofs.failed_budget, 1);
             return Ok(false);
         }
-        let after = value - rounds * step;
-        let before = after + step;
-        let overflow = ((before ^ step) & (before ^ after) & sign) != 0;
-        let nzcv = (u64::from(after & sign != 0) << 31) | (1 << 29) | (u64::from(overflow) << 28);
-        self.cpu.write_register(register, &after.to_le_bytes())?;
-        let next = ((pstate & !Self::NZCV) | nzcv) as u32;
-        self.cpu
-            .write_register(Register::Pstate, &next.to_le_bytes())?;
-        self.count.set(self.count.get() + rounds * 2);
-        Ok(false)
+        let counter = if advance.counted {
+            &proofs.counted_instructions
+        } else {
+            &proofs.poll_instructions
+        };
+        proofs.count(counter, skipped);
+        proofs.count(&proofs.accelerated_instructions, skipped);
+        for (index, value) in advance.state.registers.iter().enumerate() {
+            if *value != state.registers[index] {
+                let register = if index == 31 {
+                    Register::Sp
+                } else {
+                    Register::X(index as u8)
+                };
+                self.cpu.write_register(register, &value.to_le_bytes())?;
+            }
+        }
+        if advance.state.flags != state.flags {
+            let pstate = self.scalar(Register::Pstate)?;
+            let next = (pstate & !Self::NZCV) | u64::from(advance.state.flags & Self::NZCV as u32);
+            self.cpu
+                .write_register(Register::Pstate, &next.to_le_bytes())?;
+        }
+        self.count.set(self.count.get() + skipped);
+        proofs.bypass.set(Some(proof.branch));
+        // The branch itself now runs normally, exactly as it would have.
+        proofs.resume.set(self.count.get() < self.cap.get());
+        self.cpu.stop()?;
+        Ok(true)
     }
 
     fn classify(&self, address: u64, word: u32) -> Result<Translation, String> {
@@ -596,7 +682,7 @@ impl Execution {
         let instruction = if framework {
             InstructionDisposition::Replace
         } else if wide_exact
-            || self.can_prove_loops() && matches!(word, Self::SELF_BRANCH | Self::COUNTED_BRANCH)
+            || self.can_prove_loops() && !self.a32 && self.loop_candidate(word)
             || boundary
             || (self.is_coherent()
                 && (coherent_cpu::maintenance(word).is_some()
@@ -1032,7 +1118,7 @@ mod interactive_tests {
         let cpu = core();
         set(&cpu, Register::Pstate, 0x3c5);
         cpu.map_zeroed(0x1000, 0x4000, 7).unwrap();
-        cpu.write_memory(0x1000, &Execution::SELF_BRANCH.to_le_bytes())
+        cpu.write_memory(0x1000, &0x1400_0000u32.to_le_bytes())
             .unwrap();
         cpu.set_execution_policy(ExecutionPolicy::Interactive)
             .unwrap();
@@ -1063,7 +1149,7 @@ mod interactive_tests {
             (0xf100_0400, (1u64 << 63) + 1),
             (0xf100_0c00, 9),
         ] {
-            let words = [subtract, Execution::COUNTED_BRANCH, Execution::SELF_BRANCH];
+            let words = [subtract, 0x54ff_ffe1u32, 0x1400_0000];
             let bytes: Vec<_> = words.into_iter().flat_map(u32::to_le_bytes).collect();
             cpu.write_memory(address, &bytes).unwrap();
             for budget in [4, 5, 6, 7, 99] {

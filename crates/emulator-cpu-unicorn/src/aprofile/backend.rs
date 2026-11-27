@@ -563,6 +563,37 @@ impl Cpu for Core {
         self.execution.cpu.precise_store_pc(on)
     }
     fn exit_counters(&self) -> Result<BTreeMap<&'static str, u64>, String> {
-        self.execution.cpu.exit_counters()
+        let mut counters = self.execution.cpu.exit_counters()?;
+        let p = &self.execution.proofs;
+        if !self.execution.a32 {
+            counters.insert("loop_candidate_entries", p.candidate_entries.get());
+            counters.insert("loop_proofs_attempted", p.proofs_attempted.get());
+            counters.insert("loop_poll_instructions", p.poll_instructions.get());
+            counters.insert("loop_counted_instructions", p.counted_instructions.get());
+            counters.insert(
+                "loop_accelerated_instructions",
+                p.accelerated_instructions.get(),
+            );
+            counters.insert("loop_proofs_failed_structural", p.failed_structural.get());
+            counters.insert(
+                "loop_proofs_failed_window_inactive",
+                p.failed_window_inactive.get(),
+            );
+            counters.insert("loop_proofs_failed_observer", p.failed_observer.get());
+            counters.insert(
+                "loop_proofs_failed_loop_bytes_unavailable",
+                p.failed_read_unavailable.get(),
+            );
+            counters.insert(
+                "loop_proofs_failed_loop_condition_not_taken",
+                p.failed_leaving.get(),
+            );
+            counters.insert(
+                "loop_proofs_failed_iteration_model_unsupported",
+                p.failed_model.get(),
+            );
+            counters.insert("loop_proofs_failed_budget_room", p.failed_budget.get());
+        }
+        Ok(counters)
     }
 }
