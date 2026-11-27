@@ -61,6 +61,36 @@ fn every_budget_boundary_matches_instruction_entries() {
         assert_eq!(value(&cpu, Register::X(0)), (n - n / 5) as u64);
     }
 }
+
+#[test]
+fn armv7a_exact_budget_survives_entry_trace_changes() {
+    let raw = crate::test_support::library()
+        .open(Model::CortexA7, 1 << 20)
+        .unwrap();
+    let cpu = Core::new(raw, Memory::default()).unwrap();
+    cpu.map_zeroed(0x1000, 0x4000, 7).unwrap();
+    cpu.write_register(Register::Pstate, &0xd3u32.to_le_bytes())
+        .unwrap();
+    code(&cpu, &[0xe280_0001, 0xe280_0001, 0xe280_0001, 0xeaff_fffb]);
+    let r0 = Register::Arm32(arm::Register::R(0));
+    for trace in [0, 12, 0] {
+        cpu.set_entry_trace(trace).unwrap();
+        for count in 1..=23 {
+            cpu.write_register(r0, &0u32.to_le_bytes()).unwrap();
+            run(&cpu, 0x1000, count);
+            assert_eq!(cpu.instruction_progress(), Some(count as u64));
+            assert_eq!(value(&cpu, Register::Pc), 0x1000 + (count % 4) as u64 * 4);
+            assert_eq!(value(&cpu, r0), (count - count / 4) as u64);
+            if trace != 0 {
+                let expected = (count.saturating_sub(trace)..count)
+                    .map(|i| 0x1000 + (i % 4) as u64 * 4)
+                    .collect::<Vec<_>>();
+                assert_eq!(cpu.take_entries().unwrap(), expected);
+            }
+        }
+    }
+}
+
 #[test]
 fn framework_exit_precedes_entry_and_preserves_exact_budget() {
     let cpu = cpu();

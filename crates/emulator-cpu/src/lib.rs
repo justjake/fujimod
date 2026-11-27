@@ -534,7 +534,8 @@ pub struct TranslationHooks {
 /// `enabled` selects exact ring accounting (1), coarse interactive accounting
 /// without ring writes (2), or disabled accounting (0). Thumb coarse mode (3)
 /// is available through [`ThumbBlockAccounting`] when the backend advertises
-/// that capability.
+/// that capability. Exact latest-span mode (5) uses `head` for the packed
+/// newest ARM block; its owner clears this field after settling a span.
 #[repr(C)]
 pub struct BlockAccounting {
     pub budget: i64,

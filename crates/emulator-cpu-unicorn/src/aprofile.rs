@@ -3,7 +3,7 @@
 //! values remain with the owner.
 use crate::{
     Core as RawCore,
-    accounting::{Accounting, Span},
+    accounting::{Accounting, EXACT_LATEST, Span},
     memory::{CodeOwner, Memory},
     observers,
 };
@@ -37,6 +37,7 @@ struct Execution {
     memory: Memory,
     // ARMv7-A in ARM state; otherwise AArch64.
     a32: bool,
+    latest_span: bool,
     id: Cell<usize>,
     record: NonNull<BlockAccounting>,
     ring: UnsafeCell<Box<[u64; 64]>>,
@@ -118,10 +119,14 @@ impl Core {
         let record = cpu
             .accounting()
             .ok_or("counted A-profile requires block accounting")?;
+        let latest_span = a32
+            && cfg!(target_arch = "aarch64")
+            && cpu.api.extensions.features & crate::ffi::FEATURE_EXACT_LATEST_SPAN != 0;
         let e = Rc::new(Execution {
             cpu: Rc::new(cpu),
             memory,
             a32,
+            latest_span,
             id: Cell::new(usize::MAX),
             record,
             ring: UnsafeCell::new(Box::new([0; 64])),
@@ -167,7 +172,7 @@ impl Core {
             let r = &mut *record.as_ptr();
             r.ring = (*e.ring.get()).as_mut_ptr();
             r.mask = 63;
-            r.enabled = 1;
+            r.enabled = if e.latest_span { EXACT_LATEST } else { 1 };
             if a32 {
                 // A device access ends its block and every other stop raised
                 // from a callback takes effect at the next block entry, so
@@ -296,6 +301,16 @@ impl Core {
         }
         if capacity > 32 {
             return Err("entry trace keeps at most 32 entries".into());
+        }
+        if e.latest_span {
+            let mode = if capacity == 0 { EXACT_LATEST } else { 1 };
+            if unsafe { (*e.record.as_ptr()).enabled } != mode {
+                e.cpu.invalidate_code(None)?;
+                let record = unsafe { &mut *e.record.as_ptr() };
+                record.enabled = mode;
+                record.head = 0;
+                e.settled_head.set(0);
+            }
         }
         *e.trace.borrow_mut() = (capacity != 0).then(|| EntryTrace {
             capacity,
@@ -551,7 +566,14 @@ impl Execution {
             .checked_add(n * 4)
             .is_some_and(|end| end <= 1 << 32)
         {
-            unsafe { (*self.record.as_ptr()).enabled = 1 };
+            unsafe {
+                (*self.record.as_ptr()).enabled = if self.latest_span && self.trace.borrow().is_none()
+                {
+                    EXACT_LATEST
+                } else {
+                    1
+                };
+            };
             self.synced.set(self.accounting().admit(span, room)?);
         } else {
             // High virtual addresses retain exact entries through single-
