@@ -639,24 +639,29 @@ fn render_cpu(draws: &[batch::Draw], snapshots: Snapshots) -> Result<RenderedBat
         } else {
             1
         };
-        for (pixel, (&count, &inside)) in counts.iter().zip(plan.clip_mask()).enumerate() {
-            if count == 0 || !inside {
-                continue;
+        for row in 0..plan.height {
+            let y = plan.y0 + row as i64;
+            let start = row * plan.width;
+            let span = &counts[start..start + plan.width];
+            let inside = &plan.clip_mask()[start..start + plan.width];
+            for (column, (&count, &inside)) in span.iter().zip(inside).enumerate() {
+                if count == 0 || !inside {
+                    continue;
+                }
+                touched_halfwords += halfwords;
+                let coverage_byte = u32::from(count) * 255 / maximum;
+                if coverage_byte == 0 {
+                    continue;
+                }
+                let x = plan.x0 + column as i64;
+                if coverage_byte == 255
+                    && let Some(word) = opaque_solid
+                {
+                    target.store(x, y, word);
+                    continue;
+                }
+                paint_pixel(&op, target, x, y, coverage_byte as f32 / 255.0);
             }
-            touched_halfwords += halfwords;
-            let coverage_byte = u32::from(count) * 255 / maximum;
-            if coverage_byte == 0 {
-                continue;
-            }
-            let x = plan.x0 + (pixel % plan.width) as i64;
-            let y = plan.y0 + (pixel / plan.width) as i64;
-            if coverage_byte == 255
-                && let Some(word) = opaque_solid
-            {
-                target.store(x, y, word);
-                continue;
-            }
-            paint_pixel(&op, target, x, y, coverage_byte as f32 / 255.0);
         }
     }
     let output = targets
