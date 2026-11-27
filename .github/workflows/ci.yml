@@ -16,7 +16,7 @@ permissions:
   contents: read
 concurrency:
   # A call from PR CI runs in main's context, so the group names the tested commit.
-  group: ci-${{ github.workflow }}-${{ inputs.ref || github.ref }}
+  group: ci-${{ github.workflow }}-${{ github.event_name }}-${{ inputs.ref || github.ref }}
   cancel-in-progress: ${{ github.event_name != 'push' }}
 defaults:
   run:
