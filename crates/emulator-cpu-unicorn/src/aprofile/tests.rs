@@ -61,6 +61,95 @@ fn every_budget_boundary_matches_instruction_entries() {
         assert_eq!(value(&cpu, Register::X(0)), (n - n / 5) as u64);
     }
 }
+
+#[test]
+fn armv7a_exact_budget_survives_entry_trace_changes() {
+    let raw = crate::test_support::library()
+        .open(Model::CortexA7, 1 << 20)
+        .unwrap();
+    let cpu = Core::new(raw, Memory::default()).unwrap();
+    cpu.map_zeroed(0x1000, 0x4000, 7).unwrap();
+    cpu.write_register(Register::Pstate, &0xd3u32.to_le_bytes())
+        .unwrap();
+    code(&cpu, &[0xe280_0001, 0xe280_0001, 0xe280_0001, 0xeaff_fffb]);
+    let r0 = Register::Arm32(arm::Register::R(0));
+    for trace in [0, 12, 0] {
+        cpu.set_entry_trace(trace).unwrap();
+        for count in 1..=23 {
+            cpu.write_register(r0, &0u32.to_le_bytes()).unwrap();
+            run(&cpu, 0x1000, count);
+            assert_eq!(cpu.instruction_progress(), Some(count as u64));
+            assert_eq!(value(&cpu, Register::Pc), 0x1000 + (count % 4) as u64 * 4);
+            assert_eq!(value(&cpu, r0), (count - count / 4) as u64);
+            if trace != 0 {
+                let expected = (count.saturating_sub(trace)..count)
+                    .map(|i| 0x1000 + (i % 4) as u64 * 4)
+                    .collect::<Vec<_>>();
+                assert_eq!(cpu.take_entries().unwrap(), expected);
+            }
+        }
+    }
+}
+
+#[test]
+fn armv7a_predicated_arithmetic_preserves_flags_at_each_stop() {
+    let raw = crate::test_support::library()
+        .open(Model::CortexA7, 1 << 20)
+        .unwrap();
+    let cpu = Core::new(raw, Memory::default()).unwrap();
+    cpu.map_zeroed(0x1000, 0x4000, 7).unwrap();
+    code(
+        &cpu,
+        &[
+            0xe150_0001, // cmp r0, r1
+            0x2040_0001, // subhs r0, r0, r1
+            0x2382_2080, // orrhs r2, r2, #128
+            0x31a0_3221, // movlo r3, r1, lsr #4
+            0xa3a0_402a, // movge r4, #42
+            0xeaff_fffe, // b .
+        ],
+    );
+
+    for (left, right) in [
+        (0u32, 1u32),
+        (1, 1),
+        (0x7fff_ffff, u32::MAX),
+        (0x8000_0000, 1),
+        (u32::MAX, 0),
+    ] {
+        let result = left.wrapping_sub(right);
+        let carry = left >= right;
+        let signed_ge = (left as i32) >= (right as i32);
+        let overflow = ((left ^ right) & (left ^ result) & 0x8000_0000) != 0;
+        let flags = (result & 0x8000_0000)
+            | u32::from(result == 0) << 30
+            | u32::from(carry) << 29
+            | u32::from(overflow) << 28;
+
+        for budget in 1..=8 {
+            cpu.write_register(arm::CPSR, &0xd3u32.to_le_bytes()).unwrap();
+            for (register, initial) in arm::CORE.into_iter().zip([left, right, 1, 2, 3]) {
+                cpu.write_register(register, &initial.to_le_bytes()).unwrap();
+            }
+
+            assert!(matches!(run(&cpu, 0x1000, budget), Exit::Stopped));
+            assert_eq!(cpu.instruction_progress(), Some(budget as u64));
+            assert_eq!(value(&cpu, Register::Pc), 0x1000 + budget.min(5) as u64 * 4);
+            assert_eq!(value(&cpu, arm::CPSR) & 0xf000_0000, u64::from(flags));
+            let expected = [
+                if budget >= 2 && carry { result } else { left },
+                right,
+                if budget >= 3 && carry { 129 } else { 1 },
+                if budget >= 4 && !carry { right >> 4 } else { 2 },
+                if budget >= 5 && signed_ge { 42 } else { 3 },
+            ];
+            for (register, expected) in arm::CORE.into_iter().zip(expected) {
+                assert_eq!(value(&cpu, register), u64::from(expected));
+            }
+        }
+    }
+}
+
 #[test]
 fn framework_exit_precedes_entry_and_preserves_exact_budget() {
     let cpu = cpu();
@@ -73,6 +162,59 @@ fn framework_exit_precedes_entry_and_preserves_exact_budget() {
     ));
     assert_eq!(cpu.instruction_progress(), Some(2));
     assert_eq!(value(&cpu, Register::Pc), 0x1008);
+}
+
+#[test]
+fn armv7a_indirect_targets_follow_local_tlbi_and_code_replacement() {
+    let raw = crate::test_support::library()
+        .open(Model::CortexA7, 1 << 20)
+        .unwrap();
+    let cpu = Core::new(raw, Memory::default()).unwrap();
+    cpu.map_zeroed(0, 0x40_0000, 7).unwrap();
+    cpu.write_register(arm::CPSR, &0xd3u32.to_le_bytes())
+        .unwrap();
+    cpu.write_register(arm::CORE[3], &0x20_2000u32.to_le_bytes())
+        .unwrap();
+    cpu.write_register(arm::CORE[4], &0x1000u32.to_le_bytes())
+        .unwrap();
+    let write = |at, words: &[u32]| {
+        let bytes: Vec<_> = words.iter().flat_map(|word| word.to_le_bytes()).collect();
+        cpu.write_memory(at, &bytes).unwrap();
+    };
+
+    write(0x4000, &[0x0000_0c02, 0, 0x0010_0c02]);
+    write(0x1000, &[0xe12f_ff13]); // bx r3
+    write(
+        0x1800,
+        &[0xee08_3f37, 0xf57f_f04f, 0xf57f_f06f, 0xe12f_ff14], // TLBIMVA, DSB, ISB, bx r4
+    );
+    write(0x10_2000, &[0xe280_0001, 0xe12f_ff14]); // add r0, r0, #1; bx r4
+    write(0x30_2000, &[0xe280_0003, 0xe12f_ff14]); // add r0, r0, #3; bx r4
+    let cp = |crn| arm::Coprocessor {
+        cp: 15,
+        opc1: 0,
+        crn,
+        crm: 0,
+        opc2: 0,
+        secure: 0,
+        wide: false,
+    };
+    cpu.coprocessor(cp(2), Some(0x4000)).unwrap(); // TTBR0
+    cpu.coprocessor(cp(3), Some(0xffff_ffff)).unwrap(); // DACR
+    let sctlr = cpu.coprocessor(cp(1), None).unwrap();
+    cpu.coprocessor(cp(1), Some(sctlr | 1)).unwrap();
+
+    let verify = |begin, budget, result| {
+        assert!(matches!(run(&cpu, begin, budget), Exit::Stopped));
+        assert_eq!(cpu.instruction_progress(), Some(budget as u64));
+        assert_eq!(value(&cpu, Register::Pc), 0x1000);
+        assert_eq!(value(&cpu, arm::CORE[0]), result);
+    };
+    verify(0x1000, 600, 200);
+    write(0x4008, &[0x0030_0c02]);
+    verify(0x1800, 604, 800);
+    write(0x30_2000, &[0xe280_0002]);
+    verify(0x1000, 600, 1200);
 }
 
 struct Device<'a> {
@@ -137,6 +279,51 @@ fn mmio_entries_and_tightened_deadlines_are_exact() {
         );
     }
 }
+#[test]
+fn armv7a_mmio_tightening_settles_the_restarted_block() {
+    let raw = crate::test_support::library()
+        .open(Model::CortexA7, 1 << 20)
+        .unwrap();
+    let cpu = Core::new(raw, Memory::default()).unwrap();
+    cpu.map_zeroed(0x1000, 0x4000, 7).unwrap();
+    cpu.write_register(Register::Pstate, &0xd3u32.to_le_bytes())
+        .unwrap();
+    cpu.write_register(arm::CORE[1], &0x8000u32.to_le_bytes())
+        .unwrap();
+    code(&cpu, &[0xe282_2001, 0xe282_2001, 0xe591_0000, 0xe282_2001, 0xe581_0000]);
+    let mut device = Device {
+        cpu: &cpu,
+        reads: vec![],
+        writes: vec![],
+        tighten: true,
+    };
+    unsafe {
+        cpu.map_mmio(
+            0x8000,
+            0x1000,
+            Mmio {
+                read,
+                write,
+                data: (&mut device as *mut Device<'_>).cast(),
+            },
+        )
+        .unwrap();
+    }
+    run(&cpu, 0x1000, 5);
+    assert_eq!(device.reads, [3]);
+    assert!(device.writes.is_empty());
+    assert_eq!(cpu.instruction_progress(), Some(3));
+    assert_eq!(value(&cpu, Register::Pc), 0x100c);
+    assert_eq!(value(&cpu, arm::CORE[0]), 42);
+    assert_eq!(value(&cpu, arm::CORE[2]), 2);
+
+    run(&cpu, 0x100c, 2);
+    assert_eq!(device.writes, [2]);
+    assert_eq!(cpu.instruction_progress(), Some(2));
+    assert_eq!(value(&cpu, Register::Pc), 0x1014);
+    assert_eq!(value(&cpu, arm::CORE[2]), 3);
+}
+
 struct HighAddressDevice {
     reads: Vec<(u64, u32)>,
 }

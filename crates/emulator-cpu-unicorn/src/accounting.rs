@@ -5,6 +5,8 @@
 use fujimod_emulator_cpu::BlockAccounting;
 use std::ptr::NonNull;
 
+pub(crate) const EXACT_LATEST: u64 = 5;
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Span {
     pub address: u64,
@@ -61,13 +63,22 @@ impl Accounting {
     }
     #[inline]
     pub fn newest_since(&self, traced: u64) -> Option<Span> {
-        let head = self.counters().1;
-        (head != 0 && head != traced).then(|| self.span(head - 1))
+        let r = unsafe { self.record.as_ref() };
+        if r.enabled == EXACT_LATEST {
+            return (r.head != 0).then_some(Span {
+                address: r.head >> 32,
+                instructions: r.head & 0xffff_ffff,
+            });
+        }
+        (r.head != 0 && r.head != traced).then(|| self.span(r.head - 1))
     }
+
     #[inline]
     pub fn reset(&mut self) {
-        unsafe {
-            self.record.as_mut().budget = 0;
+        let r = unsafe { self.record.as_mut() };
+        r.budget = 0;
+        if r.enabled == EXACT_LATEST {
+            r.head = 0;
         }
     }
 
@@ -82,6 +93,9 @@ impl Accounting {
             .ok_or_else(|| "budgeted instruction accounting went negative".to_string())?;
         if give_back {
             r.budget = r.budget.checked_add(tail).ok_or("block budget overflow")?;
+        }
+        if r.enabled == EXACT_LATEST {
+            r.head = 0;
         }
         Ok(Progress {
             instructions: instructions as u64,
@@ -124,7 +138,9 @@ impl Accounting {
         }
         let room = room.min(i64::MAX as u64 / 2) as i64;
         let r = unsafe { self.record.as_mut() };
-        if record {
+        if record && r.enabled == EXACT_LATEST {
+            r.head = span.address << 32 | span.instructions;
+        } else if record {
             let head = r
                 .head
                 .checked_add(1)
