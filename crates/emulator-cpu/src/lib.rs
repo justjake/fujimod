@@ -616,6 +616,11 @@ pub trait Cpu {
     fn select_armv7a_affinity_policy(&self, _policy: ExecutionPolicy) -> Result<(), String> {
         Ok(())
     }
+    /// The ordered run starts with every ARMv7-A event latch set and no
+    /// processor waiting for an event. A wait-for-event returns to the owner.
+    fn run_with_latched_armv7a_events(&self, request: Run) -> Result<Exit, ExecutionError> {
+        self.run(request)
+    }
     /// Configure instruction-proven loops; statistics remain observational.
     fn set_loop_mode(&self, mode: loops::LoopMode) -> Result<(), String> {
         if mode == loops::LoopMode::Disabled {

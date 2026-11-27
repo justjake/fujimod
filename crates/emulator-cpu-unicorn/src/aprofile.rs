@@ -76,6 +76,7 @@ struct Execution {
     exclusive_exits: Cell<bool>,
     owner_mpidr: Cell<bool>,
     board_mpidr: Cell<bool>,
+    armv7a_events_latched: Cell<bool>,
     owner_interrupts: Cell<bool>,
     owner_aborts: Cell<bool>,
     // Newest entered instruction addresses, oldest first, while an owner
@@ -156,6 +157,7 @@ impl Core {
             exclusive_exits: Cell::new(false),
             owner_mpidr: Cell::new(false),
             board_mpidr: Cell::new(false),
+            armv7a_events_latched: Cell::new(false),
             owner_interrupts: Cell::new(false),
             owner_aborts: Cell::new(false),
             trace: RefCell::new(None),
@@ -584,7 +586,10 @@ impl Execution {
             let mut bytes = [0; 4];
             self.cpu.read_virtual(address, Access::Fetch, &mut bytes)?;
             let word = u32::from_le_bytes(bytes);
-            if self.framework(word) {
+            // The replacement hook can retire an unconditional SEV whose
+            // event latches are already set. The TB advances past the hint.
+            let redundant_sev = word == 0xe320_f004 && self.armv7a_events_latched.get();
+            if self.framework(word) && !redundant_sev {
                 self.count.set(self.count.get() - 1);
                 self.exit.set(Some(word));
                 self.cpu.stop()?;

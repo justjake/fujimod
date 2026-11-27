@@ -225,13 +225,12 @@ mod tests {
     use fujimod_catalog_configuration::RunEngine;
     use serde_json::json;
 
-    #[test]
-    fn relocated_a7_code_observes_each_core_identity_cache_ids_and_guest_time_then_waits() {
+    fn two_core_board(pcs: [u32; 2]) -> Board {
         let processors: Vec<_> = (0..2)
             .map(|core| {
                 json!({
                     "model":"cortex-a7", "released":true, "mprofile":null, "rprofile":null,
-                    "registers":[["Pc",0x1000],["Pstate",0xd3],[{"Arm32":{"R":1}},0x2000+core*16]]
+                    "registers":[["Pc",pcs[core]],["Pstate",0xd3],[{"Arm32":{"R":1}},0x2000+core*16]]
                 })
             })
             .collect();
@@ -263,6 +262,12 @@ mod tests {
                 )
                 .unwrap();
         }
+        board
+    }
+
+    #[test]
+    fn relocated_a7_code_observes_each_core_identity_cache_ids_and_guest_time_then_waits() {
+        let mut board = two_core_board([0x1000, 0x1000]);
         // MPIDR, CBAR, PMU cycle counter, then CSSELR = L2 and its CCSIDR.
         let words: [u32; 15] = [
             0xee100fb0, 0xe5810000, 0xee9f0f10, 0xe5810004, 0xe3a00007, 0xee090f1c, 0xe3a00102,
@@ -313,6 +318,26 @@ mod tests {
                 .is_err()
         );
     }
+
+    #[test]
+    fn armv7a_send_event_wakes_a_waiting_peer_after_redundant_sends() {
+        let mut board = two_core_board([0x1000, 0x1100]);
+        const SEV: u32 = 0xe320_f004;
+        const WFE: u32 = 0xe320_f002;
+        const WFI: u32 = 0xe320_f003;
+        let waiter = [SEV, SEV, SEV, WFE, WFE, 0xe3a0_002a, 0xe581_0000, WFI];
+        let sender = [SEV, SEV, WFI];
+        for (pc, words) in [(0x1000, waiter.as_slice()), (0x1100, sender.as_slice())] {
+            let bytes: Vec<_> = words.iter().flat_map(|word| word.to_le_bytes()).collect();
+            board.write_physical(pc, &bytes).unwrap();
+        }
+        board.run_for_instructions(100, 64).unwrap();
+        let mut result = [0; 4];
+        board.read_physical(0x2000, &mut result).unwrap();
+        assert_eq!(u32::from_le_bytes(result), 42);
+        assert_eq!(board.instruction_counts(), [8, 3]);
+    }
+
     #[test]
     fn disabled_vfp_enters_the_undefined_vector_and_the_handler_retries_it() {
         let graph: factory::Graph = serde_json::from_value(json!({

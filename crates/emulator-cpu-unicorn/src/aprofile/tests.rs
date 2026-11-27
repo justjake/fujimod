@@ -75,6 +75,56 @@ fn framework_exit_precedes_entry_and_preserves_exact_budget() {
     assert_eq!(value(&cpu, Register::Pc), 0x1008);
 }
 
+#[test]
+fn redundant_armv7a_sev_retires_without_hiding_wfe_or_a_required_sev() {
+    let raw = crate::test_support::library()
+        .open(Model::CortexA7, 1 << 20)
+        .unwrap();
+    let cpu = Core::new(raw, Memory::default()).unwrap();
+    cpu.map_zeroed(0x1000, 0x4000, 7).unwrap();
+    cpu.write_register(Register::Pstate, &0xd3u32.to_le_bytes())
+        .unwrap();
+    const SEV: u32 = 0xe320_f004;
+    const WFE: u32 = 0xe320_f002;
+    code(&cpu, &[SEV, SEV, 0xe280_0001, WFE]);
+    let latched = |begin, budget| {
+        cpu.run_with_latched_armv7a_events(Run {
+            begin,
+            until: None,
+            instructions: Some(budget),
+            watchdog_us: 0,
+        })
+        .unwrap()
+    };
+
+    assert!(matches!(run(&cpu, 0x1000, 4), Exit::BeforeInstruction(SEV)));
+    assert_eq!(cpu.instruction_progress(), Some(0));
+    assert!(matches!(latched(0x1000, 1), Exit::Stopped));
+    assert_eq!(cpu.instruction_progress(), Some(1));
+    assert_eq!(value(&cpu, Register::Pc), 0x1004);
+    assert!(matches!(latched(0x1004, 4), Exit::BeforeInstruction(WFE)));
+    assert_eq!(cpu.instruction_progress(), Some(2));
+    assert_eq!(value(&cpu, arm::CORE[0]), 1);
+    assert_eq!(value(&cpu, Register::Pc), 0x100c);
+
+    assert!(matches!(run(&cpu, 0x1000, 4), Exit::BeforeInstruction(SEV)));
+    assert_eq!(cpu.instruction_progress(), Some(0));
+    unsafe {
+        cpu.install_hook(Hook::Instruction {
+            range: HookRange::Inclusive {
+                begin: 0x1000,
+                end: 0x1000,
+            },
+            callback: intercept,
+            data: (&cpu as *const Core).cast_mut().cast(),
+        })
+        .unwrap();
+    }
+    assert!(matches!(latched(0x1000, 4), Exit::Stopped));
+    assert_eq!(cpu.instruction_progress(), Some(0));
+    assert_eq!(value(&cpu, Register::Pc), 0x1000);
+}
+
 struct Device<'a> {
     cpu: &'a Core,
     reads: Vec<u64>,
