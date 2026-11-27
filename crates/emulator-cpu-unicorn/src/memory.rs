@@ -19,7 +19,9 @@ use std::hash::{BuildHasherDefault, Hasher};
 pub(crate) struct IntegerHasher(u64);
 impl Hasher for IntegerHasher {
     fn finish(&self) -> u64 {
-        self.0
+        // The multiply leaves the low bits of a 4 KiB-aligned key zero, and
+        // the table indexes buckets by the low bits: rotate high bits down.
+        self.0.rotate_left(26)
     }
     fn write(&mut self, bytes: &[u8]) {
         for &byte in bytes {
