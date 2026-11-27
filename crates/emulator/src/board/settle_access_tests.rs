@@ -121,6 +121,7 @@ struct Outcome {
     /// Observer entries that skipped, and that ran, the bookkeeping.
     skips: u64,
     full: u64,
+    mmio_reuses: u64,
     /// Device accesses the board counts, reads the device served, and reads
     /// a fast-forward left out.
     accesses: u64,
@@ -286,6 +287,7 @@ fn run_with_diagnostic(
         registers,
         skips: s.settled.skips,
         full: s.settled.full,
+        mmio_reuses: s.settled.mmio_reuses,
         accesses: board.mmio_callback_counts.borrow()[0],
         served: probe.count,
         read_ticks: probe.read_ticks.clone(),
@@ -390,6 +392,21 @@ fn a_poll_loop_on_a_stable_register_is_fast_forwarded_with_the_same_result() {
             }
         }
     }
+}
+
+#[test]
+fn interactive_mmio_reuses_bookkeeping_only_between_device_deadlines() {
+    let windows = &[333, 334, 2111, 5000];
+    let mut exact = run_with(100, true, windows, false, false, ExecutionPolicy::Exact, false);
+    let interactive = run_with(100, true, windows, false, false, ExecutionPolicy::Interactive, false);
+    exact.state["execution_policy"] = interactive.state["execution_policy"].clone();
+
+    assert_eq!(exact.mmio_reuses, 0);
+    assert!(interactive.mmio_reuses > 0);
+    assert!(interactive.mmio_reuses < interactive.accesses);
+    assert_eq!(interactive.read_ticks, exact.read_ticks);
+    assert_eq!(interactive.registers, exact.registers);
+    assert_eq!(interactive.state, exact.state);
 }
 
 #[test]
@@ -648,6 +665,7 @@ fn run_a64(quantum: usize, windows: &[u64], stable: bool, fast_forward: bool) ->
         registers,
         skips: s.settled.skips,
         full: s.settled.full,
+        mmio_reuses: s.settled.mmio_reuses,
         accesses: board.mmio_callback_counts.borrow()[0],
         served: probe.count,
         read_ticks: probe.read_ticks.clone(),

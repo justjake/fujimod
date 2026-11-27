@@ -75,6 +75,7 @@ impl Board {
             .collect::<Vec<_>>();
         json!({
             "interactive_host_duration_ns": self.interactive_host_duration_ns.get(),
+            "settled_mmio_reuses": state.settled.mmio_reuses,
             "cortex_m4_by_core": cortex_m4_by_core,
         })
     }

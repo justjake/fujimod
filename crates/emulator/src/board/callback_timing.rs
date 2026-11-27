@@ -34,6 +34,10 @@ struct Totals {
     sequence: u64,
     samples: u64,
     sampled_service_ns: u64,
+    dispatch_samples: u64,
+    sampled_before_dispatch_ns: u64,
+    sampled_dispatch_ns: u64,
+    sampled_after_dispatch_ns: u64,
 }
 
 pub(super) struct Statistics {
@@ -65,15 +69,45 @@ pub(super) struct SampledCallback {
     core: usize,
     kind: CallbackKind,
     started: Instant,
+    dispatch: Option<(Instant, Option<Instant>)>,
+}
+
+impl SampledCallback {
+    pub fn begin_dispatch(&mut self) {
+        self.dispatch = Some((Instant::now(), None));
+    }
+    pub fn end_dispatch(&mut self) {
+        if let Some((_, end)) = &mut self.dispatch {
+            *end = Some(Instant::now());
+        }
+    }
+}
+
+fn elapsed_ns(from: Instant, to: Instant) -> u64 {
+    u64::try_from(to.duration_since(from).as_nanos()).unwrap_or(u64::MAX)
 }
 
 impl Drop for SampledCallback {
     fn drop(&mut self) {
-        let elapsed_ns = u64::try_from(self.started.elapsed().as_nanos()).unwrap_or(u64::MAX);
+        let finished = Instant::now();
         let mut statistics = self.statistics.borrow_mut();
         let totals = &mut statistics.by_core[self.core][self.kind.index()];
         totals.samples = totals.samples.saturating_add(1);
-        totals.sampled_service_ns = totals.sampled_service_ns.saturating_add(elapsed_ns);
+        totals.sampled_service_ns = totals
+            .sampled_service_ns
+            .saturating_add(elapsed_ns(self.started, finished));
+        if let Some((begin, Some(end))) = self.dispatch {
+            totals.dispatch_samples = totals.dispatch_samples.saturating_add(1);
+            totals.sampled_before_dispatch_ns = totals
+                .sampled_before_dispatch_ns
+                .saturating_add(elapsed_ns(self.started, begin));
+            totals.sampled_dispatch_ns = totals
+                .sampled_dispatch_ns
+                .saturating_add(elapsed_ns(begin, end));
+            totals.sampled_after_dispatch_ns = totals
+                .sampled_after_dispatch_ns
+                .saturating_add(elapsed_ns(end, finished));
+        }
     }
 }
 
@@ -115,6 +149,7 @@ pub(super) fn count(
         core,
         kind,
         started: Instant::now(),
+        dispatch: None,
     })
 }
 
@@ -132,13 +167,17 @@ pub(super) fn json(statistics: &SharedStatistics, core: usize) -> Value {
         .expect("timing metrics are a JSON object");
     for kind in [CallbackKind::Block, CallbackKind::Store, CallbackKind::Mmio] {
         let metrics = by_kind[kind.index()];
-        object.insert(
-            kind.name().into(),
-            json!({
-                "samples": metrics.samples,
-                "sampled_service_ns": metrics.sampled_service_ns,
-            }),
-        );
+        let mut entry = json!({
+            "samples": metrics.samples,
+            "sampled_service_ns": metrics.sampled_service_ns,
+        });
+        if matches!(kind, CallbackKind::Mmio) {
+            entry["dispatch_samples"] = json!(metrics.dispatch_samples);
+            entry["sampled_before_dispatch_ns"] = json!(metrics.sampled_before_dispatch_ns);
+            entry["sampled_dispatch_ns"] = json!(metrics.sampled_dispatch_ns);
+            entry["sampled_after_dispatch_ns"] = json!(metrics.sampled_after_dispatch_ns);
+        }
+        object.insert(kind.name().into(), entry);
     }
     value
 }
@@ -150,14 +189,25 @@ mod tests {
     #[test]
     fn sampled_callback_durations_are_cumulative_by_kind() {
         let statistics = new_for_test(1);
-        for kind in [CallbackKind::Block, CallbackKind::Store, CallbackKind::Mmio] {
+        for kind in [CallbackKind::Block, CallbackKind::Store] {
             drop(count(&statistics, 0, kind));
         }
+        let mut sample = count(&statistics, 0, CallbackKind::Mmio).unwrap();
+        sample.begin_dispatch();
+        sample.end_dispatch();
+        drop(sample);
         let snapshot = json(&statistics, 0);
         assert_eq!(snapshot["sampling_probability"]["denominator"], 1024);
         for name in ["block", "store", "mmio"] {
             assert_eq!(snapshot[name]["samples"], 1);
             assert!(snapshot[name]["sampled_service_ns"].as_u64().is_some());
         }
+        let mmio = &snapshot["mmio"];
+        assert_eq!(mmio["dispatch_samples"], 1);
+        let sum = ["sampled_before_dispatch_ns", "sampled_dispatch_ns", "sampled_after_dispatch_ns"]
+            .iter()
+            .map(|key| mmio[key].as_u64().unwrap())
+            .sum::<u64>();
+        assert_eq!(mmio["sampled_service_ns"], sum);
     }
 }

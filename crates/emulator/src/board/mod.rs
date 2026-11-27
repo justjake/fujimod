@@ -356,6 +356,7 @@ struct State {
 /// performs, or guest time reaching a generic timer compare. Every such
 /// change clears this record; while it stands, both calls would recompute the
 /// values already stored, so the observer skips them.
+#[derive(Clone, Copy)]
 struct Settled {
     /// The last full pin push left every value as it found it, so repeating
     /// it at the same timer outputs changes nothing.
@@ -374,6 +375,7 @@ struct Settled {
     /// Observer entries that skipped, and that ran, the bookkeeping.
     skips: u64,
     full: u64,
+    mmio_reuses: u64,
 }
 impl Settled {
     fn new() -> Self {
@@ -389,6 +391,7 @@ impl Settled {
             skipped: 0,
             skips: 0,
             full: 0,
+            mmio_reuses: 0,
         }
     }
     #[inline]
@@ -3044,10 +3047,15 @@ impl State {
         self.timeline.park(|c| released[c] && !waiting[c]);
     }
     fn refresh_deadlines(&mut self) -> Result<(), String> {
+        self.update_device_deadlines().map(|_| ())
+    }
+    fn update_device_deadlines(&mut self) -> Result<bool, String> {
+        let mut changed = false;
         for (id, at) in self.bus.changed_deadlines(self.timeline.now()) {
             if at == self.deadlines[id] {
                 continue;
             }
+            changed = true;
             self.generations[id] = self.generations[id]
                 .checked_add(1)
                 .ok_or("device deadline generation exhausted")?;
@@ -3060,7 +3068,7 @@ impl State {
                     .schedule(Target::DeviceDeadline(id), at, self.generations[id])?;
             }
         }
-        Ok(())
+        Ok(changed)
     }
     fn refresh_processors(&mut self) -> Result<(), String> {
         for core in 0..self.mprofile.len() {
@@ -3211,6 +3219,7 @@ impl State {
             decoders,
             active_core: active_slice.map(|s| s.core),
             memory_access: *memory_access,
+            affects_execution: false,
         };
         let result = f(bus, &mut host);
         if self::continuation::fired(&self.continuation)
@@ -3423,12 +3432,12 @@ impl State {
         address: u64,
         size: u8,
         value: Option<u64>,
+        mut sample: Option<&mut callback_timing::SampledCallback>,
     ) -> Result<u64, String> {
         let core = binding.core;
         if self.decoders.pending() {
             return Err("MMIO requires committed memory decoding".into());
         }
-        self.settled.clear();
         // Block execution: a device access is the last instruction of its
         // block, so the whole block has been entered.
         self.settle_block(core, None)?;
@@ -3442,10 +3451,17 @@ impl State {
         let _access_sample = self.access_histogram.as_ref().and_then(|histogram| {
             access_histogram::count(histogram, core, address, pc, value.is_some())
         });
+        if let Some(sample) = sample.as_deref_mut() {
+            sample.begin_dispatch();
+        }
         if let Some(p) = &mut self.mprofile[core]
             && (0xe0000000..0xe0100000).contains(&address)
         {
+            self.settled.clear();
             let result = p.access(&*cpus[core], address, size, value, self.timeline.now())?;
+            if let Some(sample) = sample {
+                sample.end_dispatch();
+            }
             self.refresh_processors()?;
             self.push_pins(cpus)?;
             self.settle_after_pin_push(core)?;
@@ -3454,11 +3470,23 @@ impl State {
         }
         if let Some(g) = &mut self.interrupts
             && let Some(result) = g.access(core, address, size, value) {
+            self.settled.clear();
             let result = result?;
+            if let Some(sample) = sample {
+                sample.end_dispatch();
+            }
             self.push_pins(cpus)?;
             self.tighten(&*cpus[core], core)?;
             return Ok(result);
         }
+        let previous = (self.execution_policy == ExecutionPolicy::Interactive
+            && self.parallel.is_none()
+            && self.bus.loop_window()
+            && self.settled()
+            && self.settled.idle == Some(core)
+            && self.code_run.is_running(core)
+            && !self.release_state_changed)
+            .then_some(self.settled);
         self.memory_access = value.is_some();
         self.timeline.synchronize(core)?;
         let use_publication = value.is_none()
@@ -3474,18 +3502,41 @@ impl State {
                 {
                     bus.finish_published_read(host, address, size)?;
                     binding.published_hits.set(binding.published_hits.get() + 1);
-                    return Ok(word);
+                    return Ok((word, host.affects_execution));
                 }
             }
-            bus.access(host, core, pc, address, size, value)
+            let word = bus.access(host, core, pc, address, size, value)?;
+            Ok((word, host.affects_execution))
         });
         self.memory_access = false;
-        let result = result?;
-        self.refresh_deadlines()?;
-        self.refresh_processors()?;
-        self.due(cpus)?;
-        self.push_pins(cpus)?;
-        self.settle_after_pin_push(core)?;
+        if let Some(sample) = sample {
+            sample.end_dispatch();
+        }
+        let (result, affects_execution) = result?;
+        let deadline_changed = self.update_device_deadlines()?;
+        let previous = previous.filter(|_| {
+            !affects_execution
+                && !deadline_changed
+                && self.timeline.next_event().is_none_or(|event| event.at > self.timeline.now())
+        });
+        if let Some(previous) = previous {
+            // The bus synchronized the issuing core without advancing the
+            // frontier. Device and processor deadlines and pin inputs are
+            // still the ones covered by the saved allowance.
+            self.settled = previous;
+            self.settled.mmio_reuses += 1;
+            if self.settled.verifies() {
+                self.verify_settled(cpus, true)?;
+                self.verify_settled(cpus, false)?;
+                self.verify_idle(core, true)?;
+                self.settled.pass = previous.pass;
+            }
+        } else {
+            self.refresh_processors()?;
+            self.due(cpus)?;
+            self.push_pins(cpus)?;
+            self.settle_after_pin_push(core)?;
+        }
         if value.is_none() {
             self.poll_round(&*cpus[core], core, pc & !1, address, size, result, poll)?;
             self.poll_round_a64(&*cpus[core], core, pc, address, size, result, poll64)?;
@@ -3814,6 +3865,9 @@ struct Services<'a> {
     decoders: &'a mut decoder::Decoders,
     active_core: Option<usize>,
     memory_access: bool,
+    // The host received an operation that can invalidate a processor grant.
+    // Record the request even when a signal or mapping ultimately holds.
+    affects_execution: bool,
 }
 impl Services<'_> {
     fn remember(&mut self, result: Result<(), String>) {
@@ -3829,6 +3883,7 @@ impl Host for Services<'_> {
         device_workers(self.execution_policy, self.device_workers)
     }
     fn select_memory(&mut self, decoder: usize, choice: usize) -> Result<(), String> {
+        self.affects_execution = true;
         self.decoders.select(
             decoder,
             choice,
@@ -3857,6 +3912,7 @@ impl Host for Services<'_> {
         self.timeline.now()
     }
     fn request_pause(&mut self) -> Result<(), String> {
+        self.affects_execution = true;
         let core = self
             .active_core
             .ok_or("host request pause requires an active guest instruction")?;
@@ -3869,18 +3925,21 @@ impl Host for Services<'_> {
         Ok(())
     }
     fn power_off(&mut self) -> Result<(), String> {
+        self.affects_execution = true;
         if self.active_core.is_some() { self.request_pause()?; }
         self.host_pause.set(true);
         *self.power_off = true;
         Ok(())
     }
     fn schedule(&mut self, device: usize, at: u64, token: u64) {
+        self.affects_execution = true;
         let r = self
             .timeline
             .schedule(Target::DeviceEvent(device), at, token);
         self.remember(r);
     }
     fn set_irq(&mut self, line: u32, level: bool) {
+        self.affects_execution = true;
         let r = self
             .interrupts
             .as_mut()
@@ -3889,6 +3948,7 @@ impl Host for Services<'_> {
         self.remember(r);
     }
     fn raise_irq(&mut self, cpu: usize, line: u32) -> Result<(), String> {
+        self.affects_execution = true;
         if let Some(Some(controller)) = self.core_interrupts.get(cpu) {
             controller.inputs.pulse(line)?;
             if let Some((limit, rows)) = self.irq_observations.as_mut()
@@ -3905,6 +3965,7 @@ impl Host for Services<'_> {
         self.set_core_irq(cpu, line, true)
     }
     fn set_core_irq(&mut self, cpu: usize, line: u32, level: bool) -> Result<(), String> {
+        self.affects_execution = true;
         if let Some(Some(controller)) = self.core_interrupts.get(cpu) {
             controller.inputs.level(line, level)?;
             if let Some((limit, rows)) = self.irq_observations.as_mut()
@@ -3925,6 +3986,7 @@ impl Host for Services<'_> {
             .set_ppi(cpu, line as usize, level)
     }
     fn reset_core(&mut self, cpu: usize, asserted: bool) -> Result<(), String> {
+        self.affects_execution = true;
         let r = self
             .released
             .get_mut(cpu)
@@ -3956,6 +4018,7 @@ impl Host for Services<'_> {
         self.memory.read_dma(address, out)
     }
     fn ram_write(&mut self, address: u64, bytes: &[u8]) -> Result<(), String> {
+        self.affects_execution = true;
         if self.decoders.pending() {
             return Err("DMA requires committed memory decoding".into());
         }
@@ -4687,7 +4750,7 @@ unsafe fn access(data: *mut c_void, offset: u64, size: u32, value: Option<u64>) 
     let Some(cpus) = b.cpus.upgrade() else {
         return 0;
     };
-    let _callback_sample = callback_service_sample(b, &cpus, callback_timing::CallbackKind::Mmio);
+    let mut sample = callback_service_sample(b, &cpus, callback_timing::CallbackKind::Mmio);
     let result = (|| {
         let address = b.base.checked_add(offset).ok_or("MMIO address overflow")?;
         let size = u8::try_from(size).map_err(|_| "MMIO width overflow")?;
@@ -4698,7 +4761,7 @@ unsafe fn access(data: *mut c_void, offset: u64, size: u32, value: Option<u64>) 
         if let Some(blocks) = state.blocks[b.core].as_mut() {
             blocks.mmio_callbacks += 1;
         }
-        let result = state.access(&cpus, b, address, size, value);
+        let result = state.access(&cpus, b, address, size, value, sample.as_mut());
         // Reads a poll loop fast-forward left out count as serviced.
         let skipped = std::mem::take(&mut state.polls.skipped_reads)
             + state.blocks[b.core]
