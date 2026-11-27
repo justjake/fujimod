@@ -13,6 +13,8 @@ use std::{ffi::c_void, time::Instant};
 struct Input {
     model: Model,
     memory: Vec<(u64, usize)>,
+    #[serde(default)]
+    protect: Vec<(u64, usize, u32)>,
     images: Vec<(u64, String, String)>,
     registers: Vec<(Register, u64)>,
     begin: u64,
@@ -95,6 +97,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             for (base, data) in &images {
                 cpu.write_memory(*base, data)?;
             }
+            for &(base, size, permissions) in &input.protect {
+                cpu.protect(base, size, permissions)?;
+            }
             for &(register, value) in &input.registers {
                 let bytes = value.to_le_bytes();
                 cpu.write_register(register, &bytes)?;
@@ -117,11 +122,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     }))?;
                 }
             }
+            let budgeted = mode.ends_with("budgeted");
             let start = Instant::now();
             cpu.run(Run {
                 begin: input.begin,
-                until: Some(input.until),
-                instructions: mode.ends_with("budgeted").then_some(instructions),
+                // Each stop mechanism must reach the same state on its own.
+                until: (!budgeted).then_some(input.until),
+                instructions: budgeted.then_some(instructions),
                 watchdog_us: 1_000_000,
             })
             .map_err(|e| {

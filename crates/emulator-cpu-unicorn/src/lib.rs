@@ -2545,6 +2545,44 @@ mod tests {
         assert_eq!(reg(&cpu, arm::CORE[0]), 7);
     }
     #[test]
+    fn unobserved_thumb_budget_stops_at_each_entry_of_a_mixed_width_it_block() {
+        let cpu = library().open(Model::CortexM4, 4 * 1024 * 1024).unwrap();
+        cpu.map_zeroed(0x1000, 0x1000, 7).unwrap();
+        // MOVS R0,#0; IT EQ; MOVWEQ R1,#0x1234; ADDS R0,#1; B .
+        cpu.write_memory(
+            0x1000,
+            &[0x00, 0x20, 0x08, 0xbf, 0x41, 0xf2, 0x34, 0x21, 0x01, 0x30, 0xfe, 0xe7],
+        )
+        .unwrap();
+        cpu.run(Run {
+            begin: 0x1001,
+            until: Some(0x100a),
+            watchdog_us: 1_000_000,
+            instructions: None,
+        })
+        .unwrap();
+        cpu.write_register(arm::CORE[1], &0u32.to_le_bytes())
+            .unwrap();
+        for (begin, pc, r0, r1) in [
+            (0x1001, 0x1002, 0, 0),
+            (0x1003, 0x1004, 0, 0),
+            (0x1005, 0x1008, 0, 0x1234),
+            (0x1009, 0x100a, 1, 0x1234),
+        ] {
+            cpu.run(Run {
+                begin,
+                until: None,
+                watchdog_us: 1_000_000,
+                instructions: Some(1),
+            })
+            .unwrap();
+            assert_eq!(reg(&cpu, arm::PC), pc);
+            assert_eq!(reg(&cpu, arm::CORE[0]), r0);
+            assert_eq!(reg(&cpu, arm::CORE[1]), r1);
+        }
+    }
+
+    #[test]
     fn thumb_coarse_guard_reuses_cached_mixed_width_block_only_on_its_page() {
         let cpu = library().open(Model::CortexM4, 4 * 1024 * 1024).unwrap();
         cpu.set_guard_diagnostics(true).unwrap();
@@ -2877,6 +2915,44 @@ mod tests {
         let probe = unsafe { &mut *data.cast::<MmioProbe>() };
         probe.accesses.push((Access::Write, offset, bytes, value));
     }
+    #[test]
+    fn unobserved_thumb_budget_charges_a_restarted_mmio_load_once() {
+        let mut probe = MmioProbe::default();
+        let cpu = library().open(Model::CortexM4, 4 * 1024 * 1024).unwrap();
+        cpu.map_zeroed(0x1000, 0x1000, 7).unwrap();
+        // MOVS R2,#7; MOVW R3,#0x1234; LDR R0,[R1]; ADDS R2,#1; B .
+        cpu.write_memory(
+            0x1000,
+            &[0x07, 0x22, 0x41, 0xf2, 0x34, 0x23, 0x08, 0x68, 0x01, 0x32, 0xfe, 0xe7],
+        )
+        .unwrap();
+        unsafe {
+            cpu.map_mmio(
+                0x8000,
+                0x1000,
+                Mmio {
+                    read: device_read,
+                    write: device_write,
+                    data: (&mut probe as *mut MmioProbe).cast(),
+                },
+            )
+            .unwrap();
+        }
+        cpu.write_register(arm::CORE[1], &0x8000u32.to_le_bytes())
+            .unwrap();
+        cpu.run(Run {
+            begin: 0x1001,
+            until: None,
+            watchdog_us: 1_000_000,
+            instructions: Some(3),
+        })
+        .unwrap();
+        assert_eq!(reg(&cpu, arm::PC), 0x1008);
+        assert_eq!(reg(&cpu, arm::CORE[0]), 0x12345678);
+        assert_eq!(reg(&cpu, arm::CORE[2]), 7);
+        assert_eq!(probe.accesses, [(Access::Read, 0, 4, 0)]);
+    }
+
     #[test]
     fn typed_mmio_preserves_offsets_after_partial_unmap_and_refuses_host_reads() {
         let library = library();
