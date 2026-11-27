@@ -182,6 +182,7 @@ fn run_with_diagnostic(
     let graph = Graph {
         decoders: vec![],
         processors: vec![Processor {
+            cpu_backend: Default::default(),
             model: Model::CortexM4,
             registers: vec![],
             released: true,
@@ -474,6 +475,7 @@ fn store_observer_counts_explicit_write_watch_hits_at_the_m4_store_hook() {
     let graph = Graph {
         decoders: vec![],
         processors: vec![Processor {
+            cpu_backend: Default::default(),
             model: Model::CortexM4,
             registers: vec![],
             released: true,
@@ -558,6 +560,7 @@ fn run_a64(quantum: usize, windows: &[u64], stable: bool, fast_forward: bool) ->
     let graph = Graph {
         decoders: vec![],
         processors: vec![Processor {
+            cpu_backend: Default::default(),
             model: Model::ArmV8A,
             registers: vec![
                 (Register::Pc, 0x14000),

@@ -16,6 +16,7 @@ const WATCH: (u64, u64) = (PAGE, PAGE + 4);
 fn a7_graph() -> Graph {
     Graph {
         processors: vec![Processor {
+            cpu_backend: Default::default(),
             model: Model::CortexA7,
             registers: vec![(Register::Pc, CODE), (Register::Pstate, 0xd3)],
             released: true,
@@ -514,6 +515,7 @@ fn a7_watch_is_observation_only() {
 fn r5f_board() -> Board {
     Graph {
         processors: vec![Processor {
+            cpu_backend: Default::default(),
             model: Model::CortexR5F,
             registers: vec![(Register::Pc, 0x10000)],
             released: true,
@@ -641,6 +643,7 @@ fn a53_write_watch_ignores_read_spin_and_bounds_matching_stores() {
     graph.processors[0].model = Model::ArmV8A;
     graph.processors[0].registers = vec![(Register::Pc, CODE), (Register::Pstate, 0x3c5)];
     graph.processors.push(Processor {
+        cpu_backend: Default::default(),
         model: Model::CortexM4,
         registers: vec![],
         released: false,

@@ -472,6 +472,7 @@ fn m4_board_with(device: Box<dyn Device>, code: &[u16], mode: LoopMode) -> Board
     let graph = Graph {
         decoders: vec![],
         processors: vec![Processor {
+            cpu_backend: Default::default(),
             model: Model::CortexM4,
             registers: vec![],
             released: true,
@@ -709,6 +710,7 @@ fn m4_pair(mode: LoopMode) -> Board {
     use crate::board::factory::{Graph, MemoryMap, Options, Processor, Ram};
     use fujimod_catalog_configuration::RunEngine;
     let processor = |vector_base| Processor {
+        cpu_backend: Default::default(),
         model: Model::CortexM4,
         registers: vec![],
         released: true,
@@ -870,6 +872,7 @@ fn m4_ssp(mode: LoopMode, peer: bool) -> Board {
     use fujimod_catalog_configuration::RunEngine;
     use fujimod_emulator_ip_arm::pl022::{Clock, Controller};
     let processor = |vector_base| Processor {
+        cpu_backend: Default::default(),
         model: Model::CortexM4,
         registers: vec![],
         released: true,

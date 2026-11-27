@@ -15,6 +15,7 @@ pub(super) fn board_with_bus(code: &[u16], peer: &[u16], bus: Bus) -> Board {
         decoders: vec![],
         processors: (0..2)
             .map(|core| Processor {
+                cpu_backend: Default::default(),
                 model: Model::CortexM4,
                 released: true,
                 parked_until_sgi: false,

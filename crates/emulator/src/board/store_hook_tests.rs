@@ -22,6 +22,7 @@ fn run_watching(quantum: usize, watched: &[u64]) -> (u64, u32, u64, Vec<(u64, u6
         decoders: vec![],
         processors: vec![
             Processor {
+                cpu_backend: Default::default(),
                 model: Model::CortexM4,
                 registers: vec![(arm32(0), 0x11000), (arm32(3), 0xaabbccdd)],
                 released: true,
@@ -34,6 +35,7 @@ fn run_watching(quantum: usize, watched: &[u64]) -> (u64, u32, u64, Vec<(u64, u6
                 }),
             },
             Processor {
+                cpu_backend: Default::default(),
                 model: Model::ArmV8A,
                 registers: vec![
                     (Register::Pc, 0x14000),

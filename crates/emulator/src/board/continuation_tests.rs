@@ -34,6 +34,7 @@ fn two_view_board() -> (super::super::Board, Vec<factory::MemoryMap>) {
     ];
     let graph = Graph {
         processors: vec![Processor {
+            cpu_backend: Default::default(),
             model: Model::CortexR5F,
             released: true,
             parked_until_sgi: false,
@@ -114,6 +115,7 @@ fn two_core_store_board() -> (super::super::Board, Vec<factory::MemoryMap>) {
     let graph = Graph {
         processors: (0..2)
             .map(|_| Processor {
+                cpu_backend: Default::default(),
                 model: Model::CortexR5F,
                 released: true,
                 parked_until_sgi: false,

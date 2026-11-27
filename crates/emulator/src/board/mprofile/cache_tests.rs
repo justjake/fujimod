@@ -115,6 +115,7 @@ fn run_foreign_dma(
         .unwrap();
     let graph = Graph {
         processors: vec![Processor {
+            cpu_backend: Default::default(),
             model: Model::CortexM4,
             registers: vec![(reg(0), 0), (reg(1), 0x50000)],
             released: true,

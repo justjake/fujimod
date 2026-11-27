@@ -51,6 +51,7 @@ fn graph(private_peer: bool) -> Graph {
     Graph {
         processors: (0..2)
             .map(|core| Processor {
+                cpu_backend: Default::default(),
                 model: Model::CortexR5F,
                 mprofile: None,
                 released: true,
