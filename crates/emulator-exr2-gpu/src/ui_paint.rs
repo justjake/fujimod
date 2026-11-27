@@ -128,6 +128,19 @@ fn paint_parameters(
     plan: &render::CoveragePlan,
     raster_offset: u32,
 ) -> Result<Vec<u32>> {
+    let mut words = Vec::with_capacity(41);
+    write_paint_parameters(draw, plan, raster_offset, &mut words)?;
+    Ok(words)
+}
+
+/// Fill `words` with the shader's 41 parameters, reusing its allocation.
+fn write_paint_parameters(
+    draw: &batch::Draw,
+    plan: &render::CoveragePlan,
+    raster_offset: u32,
+    words: &mut Vec<u32>,
+) -> Result<()> {
+    words.clear();
     let (target_width, target_height, order) = (draw.target.1, draw.target.2, draw.target.3);
     let mode = if let Some(gradient) = &draw.gradient {
         if gradient.radial.is_some() { 3 } else { 2 }
@@ -146,7 +159,6 @@ fn paint_parameters(
         .as_ref()
         .map(|texture| [texture.valid_width, texture.valid_height])
         .unwrap_or([0; 2]);
-    let mut words = Vec::with_capacity(41);
     words.extend([
         plan.x0 as u32,
         plan.y0 as u32,
@@ -166,7 +178,7 @@ fn paint_parameters(
     ]);
     if let Some(texture) = &draw.texture {
         for value in texture.matrix {
-            push_f32(&mut words, value)?;
+            push_f32(words, value)?;
         }
     } else {
         words.extend([0; 6]);
@@ -174,7 +186,7 @@ fn paint_parameters(
     if let Some(gradient) = &draw.gradient {
         let (a, c, e, f) = gradient.coefficients;
         for value in [a, c, e, f] {
-            push_f32(&mut words, value)?;
+            push_f32(words, value)?;
         }
         words.extend([gradient.spread, u32::from(gradient.premultiplied)]);
     } else {
@@ -185,8 +197,8 @@ fn paint_parameters(
         .as_ref()
         .and_then(|gradient| gradient.radial.as_ref())
     {
-        push_f32(&mut words, radial.quadratics[0])?;
-        push_f32(&mut words, radial.quadratics[1])?;
+        push_f32(words, radial.quadratics[0])?;
+        push_f32(words, radial.quadratics[1])?;
         words.push(
             u32::from(radial.zero_x)
                 | (u32::from(radial.zero_y) << 1)
@@ -198,7 +210,7 @@ fn paint_parameters(
     words.push(u32::from(draw.color_transform.is_some()));
     if let Some(transform) = &draw.color_transform {
         for value in transform.scale.into_iter().chain(transform.bias) {
-            push_f32(&mut words, value)?;
+            push_f32(words, value)?;
         }
     } else {
         words.extend([0; 8]);
@@ -208,24 +220,30 @@ fn paint_parameters(
     if words.len() != 41 {
         return fail("Graphics UI GPU paint parameters have an invalid extent");
     }
-    Ok(words)
+    Ok(())
 }
 
 fn paint_data(draw: &batch::Draw, image: Option<&[u8]>) -> Result<Vec<u32>> {
+    let mut words = Vec::new();
+    write_paint_data(draw, image, &mut words)?;
+    Ok(words)
+}
+
+/// Fill `words` with the shader's ramp table or sampled image, reusing its
+/// allocation.
+fn write_paint_data(draw: &batch::Draw, image: Option<&[u8]>, words: &mut Vec<u32>) -> Result<()> {
+    words.clear();
     if let Some(gradient) = &draw.gradient {
         if gradient.colors.len() != 128 {
             return fail("Graphics UI gradient paint does not contain 128 RGBA entries");
         }
-        return Ok(gradient
-            .colors
-            .iter()
-            .map(|rgba| {
-                u32::from(rgba[0])
-                    | (u32::from(rgba[1]) << 8)
-                    | (u32::from(rgba[2]) << 16)
-                    | (u32::from(rgba[3]) << 24)
-            })
-            .collect());
+        words.extend(gradient.colors.iter().map(|rgba| {
+            u32::from(rgba[0])
+                | (u32::from(rgba[1]) << 8)
+                | (u32::from(rgba[2]) << 16)
+                | (u32::from(rgba[3]) << 24)
+        }));
+        return Ok(());
     }
     if let Some(texture) = &draw.texture {
         let bytes =
@@ -234,15 +252,17 @@ fn paint_data(draw: &batch::Draw, image: Option<&[u8]>) -> Result<Vec<u32>> {
         if bytes.len() != expected {
             return fail("Graphics UI texture paint snapshot is incomplete");
         }
-        let words = bytes
-            .as_chunks::<4>()
-            .0
-            .iter()
-            .map(|pixel| u32::from_le_bytes(*pixel))
-            .collect();
-        return Ok(words);
+        words.extend(
+            bytes
+                .as_chunks::<4>()
+                .0
+                .iter()
+                .map(|pixel| u32::from_le_bytes(*pixel)),
+        );
+        return Ok(());
     }
-    Ok(vec![0])
+    words.push(0);
+    Ok(())
 }
 
 /// A guest target being painted on the CPU, in its Morton guest layout.
@@ -578,6 +598,8 @@ fn render_cpu(draws: &[batch::Draw], snapshots: Snapshots) -> Result<RenderedBat
         .map(|(key, bytes)| CpuTarget { key, bytes })
         .collect();
     let mut touched_halfwords = 0u64;
+    let mut params = Vec::with_capacity(41);
+    let mut data = Vec::new();
     for draw in draws {
         let plan = render::coverage_plan(draw)?;
         check_plan(&plan)?;
@@ -593,13 +615,13 @@ fn render_cpu(draws: &[batch::Draw], snapshots: Snapshots) -> Result<RenderedBat
             plan.width,
             plan.height,
         )?;
-        let params = paint_parameters(draw, &plan, 0)?;
+        write_paint_parameters(draw, &plan, 0, &mut params)?;
         let image = draw
             .texture
             .as_ref()
             .and_then(|texture| textures.get(&image_key(texture)))
             .map(Vec::as_slice);
-        let data = paint_data(draw, image)?;
+        write_paint_data(draw, image, &mut data)?;
         let op = PaintOp::new(&params, &data);
         let opaque_solid = op.opaque_solid_word();
         let target_index = *target_slots
