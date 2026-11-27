@@ -1855,7 +1855,9 @@ impl Board {
             // or runnable-peer turn; those boundaries end the stable window.
             let stable = {
                 let state = self.state.borrow();
-                state.loop_window() && state.entry_points[core].is_empty()
+                state.loop_window()
+                    && state.entry_points[core].is_empty()
+                    && !state.memory.watching_writes()
             };
             cpu.set_loop_window(stable)?;
             let pc = scalar(&**cpu, Register::Pc)?;

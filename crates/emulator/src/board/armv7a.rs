@@ -2,6 +2,7 @@
 //! These inputs are processor wiring, independent of any guest program.
 use super::{Board, scalar, set};
 use fujimod_emulator_cpu::ExecutionPolicy;
+use fujimod_emulator_cpu::armv7a::{CLREX, exclusive_instruction};
 use fujimod_emulator_cpu::{Access, Cpu, Hint, Model, Register, arm, exclusive};
 
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
@@ -102,7 +103,7 @@ impl Profile {
         if word >> 28 != 15 && !arm::condition_passes(word >> 28, cpsr) {
             return Ok(Entry::Execute);
         }
-        if cpsr & 0x20 == 0 && exclusive_word(word) {
+        if cpsr & 0x20 == 0 && exclusive_instruction(word) {
             self.exclusive(cpu, word, cpsr, monitors)?;
             set(cpu, Register::Pc, pc.wrapping_add(4))?;
             cpu.stop()?;
@@ -286,11 +287,6 @@ impl Profile {
         cpu.stop()?;
         Ok(true)
     }
-}
-const CLREX: u32 = 0xf57f_f01f;
-/// ARM-state LDREX/STREX (any width) and CLREX.
-fn exclusive_word(word: u32) -> bool {
-    word & 0x0f90_0fff == 0x0190_0f9f || word & 0x0f90_0ff0 == 0x0180_0f90 || word == CLREX
 }
 fn cp(opc1: u32, crn: u32, crm: u32, opc2: u32) -> arm::Coprocessor {
     arm::Coprocessor {

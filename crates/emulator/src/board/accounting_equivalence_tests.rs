@@ -241,3 +241,84 @@ fn translated_accounting_lands_on_the_expected_state() {
         assert_eq!(device, case.probe, "{:?}: timer device", case.policy);
     }
 }
+
+#[cfg(all(
+    feature = "dynarmic",
+    any(target_arch = "aarch64", target_arch = "x86_64"),
+    any(target_os = "linux", target_os = "macos")
+))]
+#[test]
+fn dynarmic_scheduler_window_matches_instruction_observation() {
+    let run = |observe: bool| {
+        let cpu = Box::new(fujimod_emulator_cpu_dynarmic::Core::new(Model::CortexA7).unwrap());
+        cpu.map_zeroed(0x10000, 0x1000, 7).unwrap();
+        words(
+            &*cpu,
+            0x10000,
+            &[
+                0xe3a0_0029, // mov r0, #41
+                0xe280_0001, // add r0, r0, #1
+                0xe585_0000, // str r0, [r5] (arms the deadline)
+                0xe595_1000, // ldr r1, [r5] (before deadline)
+                0xe284_4001, // add r4, r4, #1
+                0xe284_4001,
+                0xe284_4001,
+                0xe284_4001,
+                0xe284_4001,
+                0xe284_4001,
+                0xe595_2000, // ldr r2, [r5] (after deadline)
+                0xee10_3fb0, // mrc p15, 0, r3, c0, c0, 5 (board MPIDR)
+                0xe284_4001, // add r4, r4, #1
+                0xeaff_fffe, // b .
+            ],
+        );
+        set(&*cpu, Register::Pc, 0x10000);
+        set(&*cpu, arm::CORE[5], 0x8000000);
+        set(&*cpu, arm::CPSR, 0xd3);
+        let probe = Arc::new(Mutex::new(Probe::default()));
+        let mut bus = Bus::new(bus::Mode::Strict);
+        bus.register(0x8000000, 4, Box::new(Timer(probe.clone())))
+            .unwrap();
+        let mut board = Board::new(
+            vec![cpu],
+            bus,
+            Ratio::new(1, 1).unwrap(),
+            None,
+            vec![true],
+            memory::Memory::default(),
+        )
+        .unwrap();
+        board.set_execution_policy(ExecutionPolicy::Exact).unwrap();
+        board.map_mmio(0, 0x8000000, 0x1000, 0x8000000).unwrap();
+        board
+            .configure_armv7a(
+                0,
+                armv7a::Config {
+                    mpidr: 0x8000_0003,
+                    configuration_base: 0xffff_0000,
+                    cycles_per_tick: 1,
+                    cache_sizes: None,
+                },
+            )
+            .unwrap();
+        let points = observe.then(|| board.instruction_points_begin(0, vec![0x10100]).unwrap());
+        board.run_for_instructions(48, 32).unwrap();
+        assert!(points.is_none_or(|points| points.event().is_none()));
+        let results = [
+            arm::CORE[1],
+            arm::CORE[2],
+            arm::CORE[3],
+            arm::CORE[4],
+            Register::Pc,
+        ]
+        .map(|register| board.read_register(0, register).unwrap());
+        let accesses = probe.lock().unwrap().calls.clone();
+        (board.instruction_counts(), board.now(), results, accesses)
+    };
+    let window = run(false);
+    assert_eq!(window, run(true));
+    assert_eq!(window.0, [48]);
+    assert_eq!(window.1, 48);
+    assert_eq!(window.2, [42, 43, 0x8000_0003, 7, 0x10034]);
+    assert_eq!(window.3, [(3, 0x8000000), (9, 0), (10, 0x8000000)]);
+}

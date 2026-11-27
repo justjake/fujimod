@@ -48,6 +48,14 @@ pub fn framework_instruction(word: u32) -> bool {
         || matches!(body, 0x0320_f002..=0x0320_f004)
 }
 
+/// ARM-state CLREX instruction.
+pub const CLREX: u32 = 0xf57f_f01f;
+
+/// ARM-state LDREX/STREX (any width) and CLREX.
+pub fn exclusive_instruction(word: u32) -> bool {
+    word & 0x0f90_0fff == 0x0190_0f9f || word & 0x0f90_0ff0 == 0x0180_0f90 || word == CLREX
+}
+
 /// Data cache invalidate, clean, or clean-and-invalidate by set/way.
 pub fn data_cache_set_way(word: u32) -> bool {
     word >> 28 != 15
