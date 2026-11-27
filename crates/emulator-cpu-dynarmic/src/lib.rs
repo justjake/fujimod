@@ -113,6 +113,71 @@ impl CoreShared {
         unsafe { ffi::dynarmic_abort_access(self.inst.get()) };
     }
 
+    fn walk_for_guest(&self, address: u32, access: Access, protected: Fault) -> Option<u64> {
+        match self.walk(address, access) {
+            Ok(Ok(physical)) => Some(physical),
+            Ok(Err(status)) => {
+                self.abort.set(Some((address, status, access)));
+                unsafe { ffi::dynarmic_abort_access(self.inst.get()) };
+                None
+            }
+            Err(message) => {
+                self.fail(protected, message);
+                None
+            }
+        }
+    }
+
+    fn cross_page_ram(
+        &self,
+        address: u32,
+        size: usize,
+        split: usize,
+        access: Access,
+        protected: Fault,
+        output: Option<u64>,
+    ) -> u64 {
+        let pieces = [
+            (address, split),
+            (address.wrapping_add(split as u32), size - split),
+        ];
+        let mut pointers = [std::ptr::null_mut(); 2];
+        let needed = if output.is_some() { 2 } else { 1 };
+        for (index, &(virtual_address, count)) in pieces.iter().enumerate() {
+            let Some(physical) = self.walk_for_guest(virtual_address, access, protected) else {
+                return 0;
+            };
+            let Some((Mapping::Backing { ptr, permissions, .. }, offset)) = self.mapping(physical, count)
+                .filter(|(mapping, _)| matches!(mapping, Mapping::Backing { permissions, .. } if permissions & needed != 0))
+            else {
+                self.fail(protected, format!("Dynarmic cross-page {access:?} requires RAM at {virtual_address:#010x}"));
+                return 0;
+            };
+            debug_assert!(permissions & needed != 0);
+            pointers[index] = unsafe { ptr.as_ptr().add(offset) };
+        }
+        let mut bytes = output.unwrap_or(0).to_le_bytes();
+        let (first, second) = bytes.split_at_mut(split);
+        for ((&(virtual_address, count), pointer), piece) in
+            pieces.iter().zip(pointers).zip([first, second])
+        {
+            let mut value = [0; 8];
+            value[..count].copy_from_slice(&piece[..count]);
+            self.observe_memory(
+                access,
+                virtual_address,
+                count as i32,
+                i64::from_le_bytes(value),
+            );
+            if output.is_some() {
+                unsafe { std::ptr::copy_nonoverlapping(piece.as_ptr(), pointer, count) };
+            } else {
+                unsafe { std::ptr::copy_nonoverlapping(pointer, piece.as_mut_ptr(), count) };
+            }
+        }
+        u64::from_le_bytes(bytes)
+    }
+
     fn access(&self, address: u32, size: usize, output: Option<u64>) -> u64 {
         if self.fault.borrow().is_some() || self.abort.get().is_some() {
             return 0;
@@ -122,25 +187,13 @@ impl CoreShared {
         } else {
             (Access::Read, Fault::ReadUnmapped, Fault::ReadProtected)
         };
-        let physical = match self.walk(address, access) {
-            Ok(Ok(physical)) => physical,
-            Ok(Err(status)) => {
-                self.abort.set(Some((address, status, access)));
-                unsafe { ffi::dynarmic_abort_access(self.inst.get()) };
-                return 0;
-            }
-            Err(message) => {
-                self.fail(protected, message);
-                return 0;
-            }
-        };
-        if (address as usize & 4095) + size > 4096 {
-            self.fail(
-                protected,
-                format!("Dynarmic cross-page access at {address:#010x}"),
-            );
-            return 0;
+        let room = 4096 - (address as usize & 4095);
+        if size > room {
+            return self.cross_page_ram(address, size, room, access, protected, output);
         }
+        let Some(physical) = self.walk_for_guest(address, access, protected) else {
+            return 0;
+        };
         let mut mapped = self.mapping(physical, size);
         if mapped.is_none() {
             let hooks: Vec<_> = self
@@ -489,40 +542,40 @@ impl Cpu for Core {
     }
 
     fn read_virtual(&self, address: u64, access: Access, bytes: &mut [u8]) -> Result<(), String> {
-        let translated = self.translate(address, access)?;
-        let mappings = self.shared.mappings.borrow();
-        let Some((
-            &base,
-            Mapping::Backing {
-                bytes: size,
-                permissions,
-                ptr,
-            },
-        )) = mappings.range(..=translated).next_back()
-        else {
-            return Err(format!(
-                "Dynarmic virtual inspection requires RAM at {address:#x}"
-            ));
-        };
-        let offset = (translated - base) as usize;
+        let mut address = address;
+        let mut bytes = bytes;
         let required = match access {
             Access::Read => 1,
             Access::Write => 2,
             Access::Fetch => 4,
         };
-        if permissions & required == 0
-            || offset
-                .checked_add(bytes.len())
-                .is_none_or(|end| end > *size)
-        {
-            return Err(format!("Dynarmic virtual access denied at {address:#x}"));
-        }
-        unsafe {
-            std::ptr::copy_nonoverlapping(
-                ptr.as_ptr().add(offset),
-                bytes.as_mut_ptr(),
-                bytes.len(),
-            );
+        while !bytes.is_empty() {
+            let translated = self.translate(address, access)?;
+            let room = 4096 - (address as usize & 4095);
+            let (chunk, remaining) = bytes.split_at_mut(room.min(bytes.len()));
+            let Some((
+                Mapping::Backing {
+                    ptr, permissions, ..
+                },
+                offset,
+            )) = self.shared.mapping(translated, chunk.len())
+            else {
+                return Err(format!(
+                    "Dynarmic virtual inspection requires RAM at {address:#x}"
+                ));
+            };
+            if permissions & required == 0 {
+                return Err(format!("Dynarmic virtual access denied at {address:#x}"));
+            }
+            unsafe {
+                std::ptr::copy_nonoverlapping(
+                    ptr.as_ptr().add(offset),
+                    chunk.as_mut_ptr(),
+                    chunk.len(),
+                );
+            }
+            address += chunk.len() as u64;
+            bytes = remaining;
         }
         Ok(())
     }
@@ -1001,5 +1054,42 @@ mod tests {
         assert_eq!(cpu.spsr().unwrap(), 0xd3);
         assert_eq!(cpu.coprocessor(cp(5), None).unwrap(), 5);
         assert_eq!(cpu.coprocessor(cp(6), None).unwrap(), 0x0200_0000);
+    }
+
+    #[test]
+    fn an_unaligned_load_reads_both_translated_pages() {
+        let cpu = Core::new(Model::CortexA7).unwrap();
+        cpu.map_zeroed(0, 0x8000, 7).unwrap();
+        cpu.write_memory(0x4000, &0x6001u32.to_le_bytes()).unwrap(); // coarse table
+        for (index, physical) in [(1, 0x1000u32), (2, 0x2000), (3, 0x5000)] {
+            cpu.write_memory(0x6000 + index * 4, &(physical | 0x32).to_le_bytes())
+                .unwrap();
+        }
+        cpu.write_memory(0x1000, &0xe591_0000u32.to_le_bytes())
+            .unwrap(); // ldr r0, [r1]
+        cpu.write_memory(0x2ffe, &[0x12, 0x34]).unwrap();
+        cpu.write_memory(0x5000, &[0x56, 0x78]).unwrap();
+        cpu.write_register(arm::CORE[1], &0x2ffeu32.to_le_bytes())
+            .unwrap();
+        let cp = |crn| arm::Coprocessor {
+            cp: 15,
+            crn,
+            crm: 0,
+            opc1: 0,
+            opc2: 0,
+            secure: 0,
+            wide: false,
+        };
+        cpu.coprocessor(cp(2), Some(0x4000)).unwrap();
+        cpu.coprocessor(cp(3), Some(1)).unwrap();
+        cpu.coprocessor(cp(1), Some(0x0080_0001)).unwrap();
+        cpu.run(Run {
+            begin: 0x1000,
+            until: None,
+            watchdog_us: 0,
+            instructions: Some(1),
+        })
+        .unwrap();
+        assert_eq!(unsafe { ffi::dynarmic_get_reg(cpu.inst, 0) }, 0x7856_3412);
     }
 }
