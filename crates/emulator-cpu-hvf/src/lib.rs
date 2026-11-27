@@ -1033,7 +1033,13 @@ impl Cpu for Core {
         self.stop()
     }
     fn set_interrupt(&self, line: Interrupt, asserted: bool) -> Result<(), String> {
-        self.rpc(Op::Interrupt(line, asserted))?;
+        if !self.running.get() || self.parked.get() {
+            // A stopped or parked worker cannot consume the line until the
+            // owner starts or resumes it. Publish the level before that handoff.
+            self.shared.set_interrupt(line, asserted);
+        } else {
+            self.rpc(Op::Interrupt(line, asserted))?;
+        }
         Ok(())
     }
     fn snapshot(&self, _previous: Option<&dyn Snapshot>) -> Result<Box<dyn Snapshot>, String> {

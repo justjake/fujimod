@@ -471,6 +471,9 @@ fn main() -> Result<(), String> {
     set(&cpu, Register::X(3), 0);
     set(&cpu, Register::Pc, 0x10104);
     cpu.set_interrupt(Interrupt::Irq, true)?;
+    let pending_irq = cpu.snapshot(None)?.export()?;
+    cpu.set_interrupt(Interrupt::Irq, false)?;
+    cpu.restore(cpu.import_snapshot(&pending_irq)?.as_ref())?;
     run(&cpu, 0x10104, 1).unwrap();
     assert_eq!(get(&cpu, Register::Pc), 0x20484);
     assert_eq!(get(&cpu, sys(0xc201)), 0x10104);

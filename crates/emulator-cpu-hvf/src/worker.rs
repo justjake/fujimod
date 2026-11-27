@@ -4,7 +4,7 @@ use super::{NativeExit, ffi, machine::Machine};
 use fujimod_emulator_cpu::{arm64::TranslationState, *};
 use std::sync::{
     Arc, Mutex,
-    atomic::{AtomicBool, AtomicI32, AtomicU64, Ordering},
+    atomic::{AtomicBool, AtomicI32, AtomicU8, AtomicU64, Ordering},
     mpsc,
 };
 use std::thread::{self, JoinHandle};
@@ -227,6 +227,7 @@ pub struct Shared {
     /// evaluate clocked device reads at anchor + executed time.
     pub guest_clock: Mutex<Option<Clock>>,
     pub fast_counters: Mutex<Option<FastCounters>>,
+    interrupt_pins: AtomicU8,
     /// PC and PSTATE as the worker hands control to its owner: before each
     /// event, run completion and command reply. They stay exact until the
     /// owner lets the vCPU execute again, so the owner reads them without a
@@ -312,6 +313,7 @@ impl Default for Shared {
             budget_lock: Mutex::new(()),
             guest_clock: Mutex::new(None),
             fast_counters: Mutex::new(None),
+            interrupt_pins: AtomicU8::new(0),
             parked_pc: AtomicU64::new(0),
             parked_pstate: AtomicU64::new(0),
             parked_valid: AtomicBool::new(false),
@@ -320,6 +322,18 @@ impl Default for Shared {
     }
 }
 impl Shared {
+    const IRQ: u8 = 1;
+    const FIQ: u8 = 2;
+
+    pub(super) fn set_interrupt(&self, line: Interrupt, asserted: bool) {
+        let mask = if line == Interrupt::Fiq { Self::FIQ } else { Self::IRQ };
+        if asserted {
+            self.interrupt_pins.fetch_or(mask, Ordering::Release);
+        } else {
+            self.interrupt_pins.fetch_and(!mask, Ordering::Release);
+        }
+    }
+
     pub fn notify_budget_change(&self) -> Result<(), String> {
         let queue = self.budget_timer_kqueue.load(Ordering::Acquire);
         if queue < 0 {
@@ -685,7 +699,6 @@ struct Processor {
     exit: *const ffi::Exit,
     vm: Arc<Machine>,
     shared: Arc<Shared>,
-    interrupts: [bool; 2],
     fast_windows: Vec<FastWindow>,
     timebase: ffi::MachTimebaseInfo,
     /// Upper bound on the count a guest could have read in a previous run.
@@ -731,7 +744,6 @@ impl Processor {
             exit,
             vm,
             shared,
-            interrupts: [false; 2],
             fast_windows: Vec::new(),
             timebase,
             virtual_counter_floor: 0,
@@ -1054,11 +1066,12 @@ impl Processor {
         Ok(())
     }
     fn snapshot(&self) -> Result<Registers, String> {
+        let pins = self.shared.interrupt_pins.load(Ordering::Acquire);
         let mut out = Registers {
             core: [0; 35],
             vectors: [[0; 16]; 32],
             system: Vec::new(),
-            interrupts: self.interrupts,
+            interrupts: [pins & Shared::IRQ != 0, pins & Shared::FIQ != 0],
             exclusive: self.vm.save_exclusive(self.monitor),
         };
         for (r, v) in out.core.iter_mut().enumerate() {
@@ -1093,18 +1106,21 @@ impl Processor {
         for (r, v) in state.system {
             self.set_sys(r, v)?;
         }
-        self.interrupts = state.interrupts;
+        let [irq, fiq] = state.interrupts;
+        let pins = (u8::from(irq) * Shared::IRQ) | (u8::from(fiq) * Shared::FIQ);
+        self.shared.interrupt_pins.store(pins, Ordering::Release);
         self.virtual_counter_floor = 0;
         self.vm.restore_exclusive(self.monitor, state.exclusive);
         Ok(())
     }
     fn deliver_interrupt(&self) -> Result<(), String> {
-        if self.interrupts == [false; 2] {
+        let pins = self.shared.interrupt_pins.load(Ordering::Acquire);
+        if pins == 0 {
             return Ok(());
         }
         let pstate = self.reg(ffi::PSTATE)? & !(1 << 21);
-        let fiq = self.interrupts[1] && pstate & (1 << 6) == 0;
-        let irq = self.interrupts[0] && pstate & (1 << 7) == 0;
+        let fiq = pins & Shared::FIQ != 0 && pstate & (1 << 6) == 0;
+        let irq = pins & Shared::IRQ != 0 && pstate & (1 << 7) == 0;
         if !fiq && !irq {
             return Ok(());
         }
@@ -1806,7 +1822,7 @@ impl Processor {
                 Ok(Value::Empty)
             }
             Op::Interrupt(line, level) => {
-                self.interrupts[usize::from(line == Interrupt::Fiq)] = level;
+                self.shared.set_interrupt(line, level);
                 Ok(Value::Empty)
             }
             Op::FastWindows(windows) => {
