@@ -967,7 +967,7 @@ impl Cpu for Core {
             watched_stores: e.hook_watched.is_some() && e.watch.is_some(),
             backing_observation: e.observe_backings.is_some(),
             store_pc_control: e.write_hook_pc_sync.is_some(),
-            code_store_observation: std::env::var_os("FUJIMOD_CODE_STORES").is_none(),
+            code_store_observation: e.set_code_store.is_some(),
         }
     }
     fn set_execution_policy(&self, _policy: ExecutionPolicy) -> Result<(), String> {
@@ -1961,7 +1961,7 @@ unsafe extern "C" fn classify(data: *mut c_void, address: u64, word: u32) -> i32
             0
         }
 }
-unsafe extern "C" fn code_store(data: *mut c_void, address: u64, size: i32) {
+pub(crate) unsafe extern "C" fn code_store(data: *mut c_void, address: u64, size: i32) {
     let context = unsafe { &*data.cast::<InstalledCodeStore>() };
     unsafe {
         (context.callback)(context.data, address, size.max(0) as usize);

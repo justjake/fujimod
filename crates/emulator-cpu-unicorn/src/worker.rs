@@ -50,6 +50,8 @@ pub struct CpuWorker {
     thumb_accounting: Option<NonNull<ThumbBlockAccounting>>,
     thumb_recovery: Option<NonNull<ThumbBlockRecoveryAccounting>>,
     translation_callback: Cell<Option<usize>>,
+    /// Context of the installed code-store observer, kept while it is installed.
+    code_store: RefCell<Option<Box<InstalledCodeStore>>>,
     memory: SharedMemory,
     pause_requested: Arc<AtomicU32>,
     callbacks: RefCell<BTreeMap<usize, CallbackEntry>>,
@@ -85,10 +87,26 @@ struct RemoteHook {
     callback: usize,
 }
 
+/// A callback context pointer carried to the engine thread. The worker owns
+/// the boxed context for as long as the observer is installed, as the engine's
+/// hook contract requires.
+#[derive(Clone, Copy)]
+struct CodeStoreContext(*mut c_void);
+unsafe impl Send for CodeStoreContext {}
+
+/// One installed code-store observer forwarded to the engine thread.
+struct InstalledCodeStore {
+    callback: unsafe fn(*mut c_void, u64, usize),
+    data: *mut c_void,
+}
 enum CallbackEntry {
     Mmio(Mmio),
     Hook(Hook),
     Translation(TranslationHooks),
+    CodeStore {
+        callback: unsafe fn(*mut c_void, u64, usize),
+        data: *mut c_void,
+    },
 }
 
 struct RemoteSnapshot {
@@ -274,6 +292,7 @@ fn spawn_engine(
                     .and_then(|p| NonNull::new(p as *mut _)),
                 thumb_recovery: ready.thumb_recovery.and_then(|p| NonNull::new(p as *mut _)),
                 translation_callback: Cell::new(None),
+            code_store: RefCell::new(None),
                 callbacks: RefCell::new(BTreeMap::new()),
                 hooks: RefCell::new(BTreeMap::new()),
                 next_callback: Cell::new(1),
@@ -360,6 +379,10 @@ enum CallbackCall {
         word: u32,
     },
     Restart(u64),
+    CodeStore {
+        address: u64,
+        size: usize,
+    },
     Memory {
         access: Access,
         address: u64,
@@ -387,7 +410,8 @@ enum WorkerCallbackCounter {
     Fault,
     Classify,
     Restart,
-}
+
+    CodeStore,}
 
 impl WorkerCallbackCounter {
     const COUNT: usize = Self::Restart as usize + 1;
@@ -414,6 +438,7 @@ impl WorkerCallbackCounter {
             CallbackCall::Synchronization => Self::Synchronization,
             CallbackCall::Classify { .. } => Self::Classify,
             CallbackCall::Restart(_) => Self::Restart,
+            CallbackCall::CodeStore { .. } => Self::CodeStore,
             CallbackCall::Memory { .. } => Self::Memory,
             CallbackCall::Fault { .. } => Self::Fault,
         }
@@ -431,6 +456,7 @@ impl WorkerCallbackCounter {
             Self::Fault => "worker_callback_fault",
             Self::Classify => "worker_callback_classify",
             Self::Restart => "worker_callback_restart",
+            Self::CodeStore => "worker_callback_code_store",
         }
     }
 }
@@ -487,6 +513,7 @@ enum Operation {
     BackingPointer(u64, usize),
     MemoryRestartBoundary(HookRange),
     TranslationHooks(Option<usize>),
+    CodeStore(Option<CodeStoreContext>),
     RetryBlock(u32),
     Restart,
     StopOnEl3Transitions,
@@ -666,6 +693,7 @@ impl Operation {
             Self::BackingPointer(_, _)
             | Self::MemoryRestartBoundary(_)
             | Self::TranslationHooks(_)
+            | Self::CodeStore(_)
             | Self::RetryBlock(_)
             | Self::Restart
             | Self::StopOnEl3Transitions
@@ -723,6 +751,8 @@ struct WorkerLoop {
     core: Cell<*const Engine>,
     pause_requested: Arc<AtomicU32>,
     translation_callback: Cell<Option<usize>>,
+    /// Context of the installed code-store observer, kept while it is installed.
+    code_store: RefCell<Option<Box<InstalledCodeStore>>>,
     virtual_hooks: RefCell<std::collections::BTreeSet<usize>>,
     snapshots: RefCell<HashMap<u64, Box<dyn Snapshot>>>,
     callback_contexts: RefCell<BTreeMap<usize, Box<CallbackContext>>>,
@@ -1026,6 +1056,7 @@ fn serve(
         callback_error: RefCell::new(None),
         wakeup: RefCell::new(None),
         shutdown: Cell::new(false),
+            code_store: RefCell::new(None),
     });
     let engine = (|| -> Result<Engine, String> {
         let raw = Library::linked()?.open(model, cache_bytes)?;
@@ -1445,6 +1476,17 @@ fn dispatch(context: &WorkerLoop, engine: &Engine, operation: Operation) -> Resu
             }
             Value::Unit
         }
+        Operation::CodeStore(installed) => {
+            match installed {
+                Some(context) => unsafe {
+                    cpu.observe_code_stores(Some(|data: *mut c_void, address: u64, size: usize| {
+                        unsafe { crate::code_store(data, address, size as i32) }
+                    }), context.0)?;
+                },
+                None => unsafe { cpu.observe_code_stores(None, std::ptr::null_mut())? },
+            }
+            Value::Unit
+        }
         Operation::RetryBlock(instructions) => {
             cpu.retry_block(instructions)?;
             Value::Unit
@@ -1505,6 +1547,10 @@ impl CpuWorker {
                 CallbackEntry::Mmio(mmio) => CallbackEntry::Mmio(*mmio),
                 CallbackEntry::Hook(hook) => CallbackEntry::Hook(*hook),
                 CallbackEntry::Translation(hooks) => CallbackEntry::Translation(*hooks),
+                CallbackEntry::CodeStore { callback, data } => CallbackEntry::CodeStore {
+                    callback: *callback,
+                    data: *data,
+                },
             });
         let Some(entry) = entry else {
             return CallbackResult::Error;
@@ -1609,6 +1655,13 @@ impl CpuWorker {
                 }
                 (CallbackEntry::Translation(hooks), CallbackCall::Restart(pc)) => {
                     (hooks.restart)(hooks.data, pc);
+                    CallbackResult::Unit
+                }
+                (
+                    CallbackEntry::CodeStore { callback, data },
+                    CallbackCall::CodeStore { address, size },
+                ) => {
+                    callback(data, address, size);
                     CallbackResult::Unit
                 }
                 _ => CallbackResult::Error,
@@ -2344,6 +2397,28 @@ impl Cpu for CpuWorker {
         }
         Ok(())
     }
+    unsafe fn observe_code_stores(
+        &self,
+        callback: Option<unsafe fn(*mut c_void, u64, usize)>,
+        data: *mut c_void,
+    ) -> Result<(), String> {
+        // The engine holds the pointer until the observer is removed, so the
+        // worker keeps the context alive for exactly that long.
+        let installed = callback.map(|callback| {
+            *self.code_store.borrow_mut() = Some(Box::new(InstalledCodeStore { callback, data }));
+            let context = self
+                .code_store
+                .borrow_mut()
+                .as_mut()
+                .map(|c| (&mut **c as *mut InstalledCodeStore).cast::<c_void>());
+            context.unwrap()
+        });
+        let result = self.unit(Operation::CodeStore(installed.map(CodeStoreContext)));
+        if installed.is_none() {
+            *self.code_store.borrow_mut() = None;
+        }
+        result
+    }
     fn retry_block(&self, instructions: u32) -> Result<(), String> {
         self.unit(Operation::RetryBlock(instructions))?;
         self.retried_block.set(true);
@@ -2455,6 +2530,27 @@ mod architecture_tests {
             RunStatus::Complete(Ok(Exit::Stopped))
         ));
         assert!((1..100_000_000).contains(&cpu.instruction_progress().unwrap()));
+    }
+
+    #[test]
+    fn worker_forwards_the_code_store_observer() {
+        // A worker advertises `code_store_observation` only because it forwards
+        // the observer; the board installs it whenever block execution starts.
+        // Without the forwarding the backend reports a capability it refuses,
+        // and block mode fails with "no code-store observer".
+        let cpu = spawn_mprofile(1 << 20, false).unwrap();
+        assert_eq!(cpu.model(), Model::CortexM4);
+        assert!(cpu.features().code_store_observation);
+
+        let seen = Arc::new(AtomicU32::new(0));
+        let counter = seen.clone();
+        unsafe fn record(_: *mut c_void, _: u64, _: usize) {}
+        unsafe {
+            cpu.observe_code_stores(Some(record), std::ptr::null_mut())
+                .unwrap();
+            cpu.observe_code_stores(None, std::ptr::null_mut()).unwrap();
+        }
+        assert_eq!(counter.load(Ordering::Acquire), 0);
     }
 
     #[test]
