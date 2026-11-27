@@ -252,6 +252,7 @@ pub(super) fn observed(word: u16) -> bool {
         || matches!(word & 0xfff0, 0xe850 | 0xe840 | 0xe8d0 | 0xe8c0)
 }
 
+
 /// Whether an instruction with this first halfword can change which
 /// exceptions are masked: CPS and MSR (PRIMASK, FAULTMASK, BASEPRI,
 /// CONTROL). A pending exception may become ready after it, so it ends its
@@ -385,6 +386,42 @@ pub(super) fn is_terminal_push(word: u32) -> bool {
     let first = (word >> 16) as u16;
     let second = word as u16;
     first == 0xe92d && second & 0xa000 == 0 && second.count_ones() >= 2
+}
+
+/// Whether a Thumb instruction is a multiple transfer that is not a stack
+/// operation (`LDM`/`STM`, the `0xe880`/`0xe8a0`.. forms where bits 9:7 select
+/// increment/decrement). `Some(true)` for a store, whose independent writes
+/// make it terminal like a PUSH; `Some(false)` for a load that names no PC,
+/// which may fault and be redone. `None` for anything else, including a load
+/// that writes PC (an exception return the controller performs).
+pub(super) fn multiple_transfer(word: u32) -> Option<bool> {
+    if word <= u32::from(u16::MAX) {
+        return None;
+    }
+    let first = (word >> 16) as u16;
+    let second = word as u16;
+    // `1110 1000/1001 (01|10) W L Rn`: bit 6 clear selects the multiple
+    // forms (the dual and table forms set it), bits 8:7 are 01 for increment
+    // after and 10 for decrement before, bit 5 is the writeback and bit 4 the
+    // load.
+    if first & 0xfe40 != 0xe800 || !matches!(first & 0x0180, 0x0080 | 0x0100) {
+        return None;
+    }
+    let rn = first & 15;
+    let writeback = first & 0x0020 != 0;
+    let load = first & 0x0010 != 0;
+    if rn > 12 || second == 0 || (writeback && second & (1 << rn) != 0) {
+        return None;
+    }
+    if load {
+        // A PC load is an exception return; SP cannot be written by a
+        // multiple load alongside other registers.
+        if second & 0xa000 != 0 {
+            return None;
+        }
+        return Some(false);
+    }
+    Some(true)
 }
 
 /// Whether a Thumb instruction is a legal stack POP (16-bit or 32-bit) that
@@ -551,11 +588,16 @@ pub(super) fn can_run_inline(word: u32) -> bool {
     let first = (word >> 16) as u16;
     let second = word as u16;
     let rd = (second >> 8) & 15;
-    // Dual-register loads perform ordinary single accesses at the base plus
-    // an immediate and may fault on the new path only to be redone; their
-    // stores are terminal (`dual_transfer`) and are decided by the caller.
-    if dual_transfer(word) == Some(false) {
+    // Dual-register and multiple loads perform ordinary single accesses and
+    // may fault on the new path only to be redone; their stores are terminal
+    // (`dual_transfer`, `multiple_transfer`) and the caller decides them.
+    if dual_transfer(word) == Some(false) || multiple_transfer(word) == Some(false) {
         return true;
+    }
+    // Data-synchronization barriers order this processor's own accesses; they
+    // store nothing, change no register and cannot fault.
+    if word >> 16 == 0xf3bf && matches!(word as u16 & 0xfff0, 0x8f40 | 0x8f50 | 0x8f60) {
+        return word as u16 & 0x000f == 0x000f;
     }
     // Register-only bitfield operations. `BFC` clears bits with Rn=15.
     if is_bitfield(word) {
@@ -671,6 +713,9 @@ pub(super) fn can_run_inline(word: u32) -> bool {
         // ADC/ADCS and SBC/SBCS use APSR.C as an input and may update APSR
         // flags, but have no control-state effects with ordinary registers.
         10 | 11 => rn <= 12 && rd <= 12,
+        // RSB with an immediate computes `imm - Rn` in one register. Like
+        // SUB, its flag-only alias (`Rd=15` with S) is CMP-with-negation.
+        14 => rn <= 12 && (rd <= 12 || set_flags && rd == 15),
         _ => false,
     }
 }

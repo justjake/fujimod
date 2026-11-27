@@ -4130,10 +4130,12 @@ unsafe fn block_classify_transfers(
             fujimod_emulator_cpu::InstructionDisposition::ExecuteAndEndBlock;
         classification.observe_block = false;
     }
-    // PUSH and STRD can make several independent writes. Keeping them last
-    // lets each MMIO or watched store complete without restarting an earlier
-    // write.
-    if mprofile_blocks::is_terminal_push(word) || mprofile_blocks::dual_transfer(word) == Some(true)
+    // PUSH, STRD and STM can make several independent writes. Keeping them
+    // last lets each MMIO or watched store complete without restarting an
+    // earlier write.
+    if mprofile_blocks::is_terminal_push(word)
+        || mprofile_blocks::dual_transfer(word) == Some(true)
+        || mprofile_blocks::multiple_transfer(word) == Some(true)
     {
         classification.instruction = fujimod_emulator_cpu::InstructionDisposition::ExecuteAndEndBlock;
         classification.observe_block = false;

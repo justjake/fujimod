@@ -1179,7 +1179,7 @@ fn non_pc_pop_runs_inline_and_matches_observer_in_ram_and_on_fault() {
 fn newly_admitted_encodings_match_the_instruction_observer() {
     // The data base comes from the literal after the backward branch; the
     // loop drives every newly admitted encoding over it.
-    let program: [u16; 37] = [
+    let program: [u16; 49] = [
         0x2001, // movs r0,#1
         0x2103, // movs r1,#3
         0x227f, // movs r2,#0x7f
@@ -1197,6 +1197,12 @@ fn newly_admitted_encodings_match_the_instruction_observer() {
         0xe9c0, 0x1204, // strd r1,r2,[r0,#16]
         0xe8f0, 0x1202, // ldrd r1,r2,[r0],#8
         0xe9e0, 0x1204, // strd r1,r2,[r0,#16]!
+        0xe892, 0x0003, // ldmia r2,{r0,r1}
+        0xe882, 0x0003, // stmia r2,{r0,r1}
+        0xf3bf, 0x8f4f, // dsb sy
+        0xf3bf, 0x8f5f, // dmb sy
+        0xf3bf, 0x8f6f, // isb sy
+        0xf1d1, 0x0001, // rsbs r0,r1,#1
         0xf380, 0x8811, // msr basepri,r0
         0xf380, 0x8810, // msr primask,r0
         0xb672, // cpsid i
@@ -1205,7 +1211,7 @@ fn newly_admitted_encodings_match_the_instruction_observer() {
         0xb671, // cpsid f
         0x3001, // adds r0,#1
         0x3001, // adds r0,#1
-        0xe7cc, // b loop (back to the first data transfer)
+        0xe7c2, // b loop (back to the first data transfer)
     ];
     let mut bytes: Vec<u8> = program.iter().flat_map(|w| w.to_le_bytes()).collect();
     // The literal is the last word, word-aligned after the program.
