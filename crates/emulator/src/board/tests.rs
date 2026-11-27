@@ -723,6 +723,7 @@ fn per_core_irq_board_with_backend(counted: bool) -> (Board, Arc<Mutex<Vec<u64>>
         decoders: vec![],
         processors: (0..2)
             .map(|core| factory::Processor {
+                cpu_backend: Default::default(),
                 model: Model::CortexR5F,
                 rprofile: Some(Default::default()),
                 mprofile: None,

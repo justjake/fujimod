@@ -1,7 +1,7 @@
 //! Native boot command; every binary input is selected by path, for every processor generation.
 use boot::host::Memory;
 use fujimod_camera::{self as camera, Library, StateDir};
-use fujimod_catalog_configuration::{RunEngine, RunInputs};
+use fujimod_catalog_configuration::{RunCpuBackend, RunEngine, RunInputs};
 use fujimod_catalog_resolution::ResolvedConfiguration;
 use fujimod_emulator_boot::{self as boot, Options, xp5};
 use fujimod_emulator_cpu::ExecutionPolicy;
@@ -13,7 +13,7 @@ use std::{
     time::{Duration, Instant},
 };
 
-const HELP: &str = "Usage: fujimod-emulator boot --configuration ID --update UPDATE.DAT [--boot-rom ROM.BIN] [--gui] \\\n  [--overlay ID]... [--engine unicorn|hypervisor] [--screenshot LCD.PNG] [--instruction-limit COUNT] [--execution-policy interactive|exact]\n\
+const HELP: &str = "Usage: fujimod-emulator boot --configuration ID --update UPDATE.DAT [--boot-rom ROM.BIN] [--gui] \\\n  [--overlay ID]... [--engine unicorn|hypervisor] [--cpu-backend unicorn|dynarmic] [--screenshot LCD.PNG] [--instruction-limit COUNT] [--execution-policy interactive|exact]\n\
   fujimod-emulator open --firmware ID --boot stock|sd-card|autostart [--sd-card DIR] [--execution-policy interactive|exact] [--no-boot-cache] [--gui]\n\n\
 The run configuration selects the camera, its firmware and how the run starts; the processor\n\
 generation only decides which of these options apply.\n\n\
@@ -73,10 +73,11 @@ open boots to REC, prints a JSON report of the firmware, boot, stage and engine,
 --gui opens the desktop window on the opened session before the report.\n";
 
 /// Options that take a value, in help order; `--discovery` and `--gui` are flags.
-const VALUED: [&str; 44] = [
+const VALUED: [&str; 45] = [
     "--configuration",
     "--overlay",
     "--engine",
+    "--cpu-backend",
     "--language",
     "--update",
     "--boot-rom",
@@ -389,6 +390,24 @@ impl Boot {
         let mut resolved = ResolvedConfiguration::with_overlays(configuration_id, &self.overlays)?;
         if let Some(engine) = engine {
             resolved.override_engine(engine)?;
+        }
+        if let Some(backend) = self.text("--cpu-backend")? {
+            let backend = match backend.as_str() {
+                "unicorn" => RunCpuBackend::Unicorn,
+                "dynarmic" => RunCpuBackend::Dynarmic,
+                _ => return Err("--cpu-backend must be unicorn or dynarmic".into()),
+            };
+            resolved
+                .configuration
+                .preset
+                .as_mut()
+                .ok_or("--cpu-backend requires a run configuration with factory options")?
+                .factory_options
+                .cpu_backend = Some(backend);
+            fujimod_catalog_resolution::validate_selection(
+                &resolved.configuration,
+                &resolved.reference,
+            )?;
         }
         Ok(resolved)
     }

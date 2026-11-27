@@ -1763,6 +1763,14 @@
       ],
       "type": "string"
     },
+    "RunCpuBackend": {
+      "description": "Execution backend for Cortex-A7 processors.",
+      "enum": [
+        "unicorn",
+        "dynarmic"
+      ],
+      "type": "string"
+    },
     "RunDramAddressSpace": {
       "additionalProperties": false,
       "description": "Run-specific software-visible DRAM mapping extent and its evidence basis.",
@@ -2023,6 +2031,17 @@
             }
           ],
           "description": "Selected counter input profile. Absence preserves the base selection."
+        },
+        "cpu_backend": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/RunCpuBackend"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "CPU backend for Cortex-A7 processors. Absence selects Unicorn."
         },
         "display_frame_ticks": {
           "description": "Selected display frame ticks. Absence preserves the base selection.",

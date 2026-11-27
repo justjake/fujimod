@@ -253,6 +253,7 @@ pub fn from_definition(
     let graph = factory::Graph {
         processors: (0..cores)
             .map(|core| factory::Processor {
+                cpu_backend: Default::default(),
                 model: fujimod_emulator_cpu::Model::CortexA7,
                 registers: definition
                     .initial_registers

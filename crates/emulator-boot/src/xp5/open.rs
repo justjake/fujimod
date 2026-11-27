@@ -922,6 +922,7 @@ pub(crate) fn open_from(
         dram_limit,
         run.instructions_per_tick,
         Some(ticks_per_second),
+        resolved.configuration.cpu_backend(),
         &startup.processors,
     )?;
     // The XP5 catalog currently declares the companion's translated views;

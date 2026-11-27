@@ -5290,6 +5290,9 @@ type RunCopyProfile = Literal["vg-32bpp-untile-unrotated"]
 type RunCounterInputProfile = Literal["declared-lens-step-feedback-unmeasured"]
 
 
+type RunCpuBackend = Literal["unicorn", "dynarmic"]
+
+
 class RunDramAddressSpace(TypedDict, total=False):
     basis: Required[str]
     limit_bytes: Required[int]
@@ -5344,6 +5347,7 @@ class RunFactoryOptions(TypedDict, total=False):
     control_bus_profile: NotRequired[RunControlBusProfile | None]
     copy_profile: NotRequired[RunCopyProfile | None]
     counter_input_profile: NotRequired[RunCounterInputProfile | None]
+    cpu_backend: NotRequired[RunCpuBackend | None]
     display_frame_ticks: NotRequired[int | None]
     entry: NotRequired[RunEntry | None]
     face_register_mode: NotRequired[RunFaceRegisterMode | None]

@@ -764,6 +764,14 @@
       ],
       "type": "string"
     },
+    "RunCpuBackend": {
+      "description": "Execution backend for Cortex-A7 processors.",
+      "enum": [
+        "unicorn",
+        "dynarmic"
+      ],
+      "type": "string"
+    },
     "RunEngine": {
       "description": "A supported processor execution backend.",
       "oneOf": [
@@ -981,6 +989,17 @@
             }
           ],
           "description": "Selected counter input profile. Absence preserves the base selection."
+        },
+        "cpu_backend": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/RunCpuBackend"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "CPU backend for Cortex-A7 processors. Absence selects Unicorn."
         },
         "display_frame_ticks": {
           "description": "Selected display frame ticks. Absence preserves the base selection.",

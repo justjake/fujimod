@@ -24,6 +24,9 @@ pub struct RunFactoryOptions {
     /// Explicit H.264 backend; absence selects the local platform default.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub video_encoder_backend: Option<fujimod_catalog_construction::VideoEncoderBackend>,
+    /// CPU backend for Cortex-A7 processors. Absence selects Unicorn.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub cpu_backend: Option<RunCpuBackend>,
     /// Selected auxiliary control profile. Absence preserves the base selection.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub auxiliary_control_profile: Option<RunAuxiliaryControlProfile>,
@@ -194,6 +197,21 @@ pub struct RunFactoryOptions {
     /// Synthetic HDMI sink input, including the identity of its external EDID.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub hdmi_sink: Option<RunHdmiSink>,
+}
+
+/// Execution backend for Cortex-A7 processors.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+#[cfg_attr(
+    all(target_arch = "wasm32", not(target_os = "emscripten")),
+    derive(tsify::Tsify),
+    tsify(hashmap_as_object, missing_as_null)
+)]
+#[serde(rename_all = "snake_case")]
+pub enum RunCpuBackend {
+    #[default]
+    Unicorn,
+    Dynarmic,
 }
 
 /// Synthetic FAT card formatting parameters.

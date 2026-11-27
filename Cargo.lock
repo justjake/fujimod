@@ -2334,6 +2334,7 @@ version = "0.1.0"
 dependencies = [
  "fujimod-catalog-configuration",
  "fujimod-emulator-cpu",
+ "fujimod-emulator-cpu-dynarmic",
  "fujimod-emulator-cpu-hvf",
  "fujimod-emulator-cpu-unicorn",
  "fujimod-emulator-devices",
@@ -2484,6 +2485,15 @@ dependencies = [
  "fujimod-workspace-hack",
  "serde",
  "serde_json",
+]
+
+[[package]]
+name = "fujimod-emulator-cpu-dynarmic"
+version = "0.1.0"
+dependencies = [
+ "cmake",
+ "fujimod-emulator-cpu",
+ "fujimod-workspace-hack",
 ]
 
 [[package]]

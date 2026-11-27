@@ -28,7 +28,7 @@ runs:
       env:
         DESKTOP: ${{ inputs.desktop }}
       run: |
-        packages=(protobuf-compiler mesa-vulkan-drivers libjpeg-dev)
+        packages=(protobuf-compiler mesa-vulkan-drivers libjpeg-dev libboost-dev)
         if [ "$DESKTOP" = true ]; then
           packages+=(libglib2.0-dev libgtk-3-dev libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev libxdo-dev)
         fi

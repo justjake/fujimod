@@ -121,6 +121,7 @@ mod tests {
     fn board_with(security_states: SecurityStates) -> Board {
         let graph = factory::Graph {
             processors: vec![factory::Processor {
+                cpu_backend: Default::default(),
                 model: Model::ArmV8A,
                 registers: vec![(Register::Pc, 0x1000), (Register::Pstate, 0x3cd)],
                 released: true,
@@ -330,6 +331,7 @@ mod tests {
             let mut graph = factory::Graph {
                 processors: (0..4)
                     .map(|core| factory::Processor {
+                        cpu_backend: Default::default(),
                         model: Model::ArmV8A,
                         released: true,
                         parked_until_sgi: false,
@@ -364,6 +366,7 @@ mod tests {
             };
             if companion {
                 graph.processors.push(factory::Processor {
+                    cpu_backend: Default::default(),
                     model: Model::CortexM4,
                     released: false,
                     parked_until_sgi: false,

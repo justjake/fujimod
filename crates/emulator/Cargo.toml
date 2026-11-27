@@ -12,6 +12,7 @@ name = "fujimod_emulator"
 crate-type = ["rlib"]
 
 [features]
+dynarmic = ["dep:fujimod-emulator-cpu-dynarmic", "fujimod-emulator-cpu-dynarmic/jit"]
 perf = ["fujimod-perf/perf"]
 
 [dependencies]
@@ -43,6 +44,9 @@ sha2 = { version = "0.10", features = ["asm-aarch64"] }
 
 [target.'cfg(all(target_os = "macos", target_arch = "aarch64"))'.dependencies]
 fujimod-emulator-cpu-hvf = { path = "../emulator-cpu-hvf" }
+
+[target.'cfg(all(any(target_arch = "aarch64", target_arch = "x86_64"), any(target_os = "linux", target_os = "macos")))'.dependencies]
+fujimod-emulator-cpu-dynarmic = { workspace = true, optional = true }
 
 [target.'cfg(unix)'.dependencies]
 libc = "0.2"

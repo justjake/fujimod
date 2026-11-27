@@ -320,6 +320,7 @@ fn prepared(resolved: ResolvedConfiguration) -> Result<Prepared, String> {
         dram_address_space_limit_bytes,
         execution_policy.instructions_per_tick,
         board_ticks_per_second,
+        configuration.cpu_backend(),
     )?;
     let execution_value = graph::value(
         &resolved.reference,

@@ -3120,6 +3120,7 @@ mod firmware_entry_tests {
         let start = startup.processors.into_iter().next().unwrap();
         let graph = factory::Graph {
             processors: vec![factory::Processor {
+                cpu_backend: Default::default(),
                 model: fujimod_emulator_cpu::Model::ArmV8A,
                 registers: start.registers,
                 released: true,
