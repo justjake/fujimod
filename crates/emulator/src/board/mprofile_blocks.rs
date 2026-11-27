@@ -421,6 +421,85 @@ pub(super) fn is_bx_lr(word: u32) -> bool {
     word == 0x4770
 }
 
+/// Whether a Thumb instruction writes a mask or CONTROL register with `MSR`
+/// (`0xf380..0xf38f`, `second & 0xff00 == 0x8800`). The engine executes the
+/// write itself; it only has to end its block so the next entry rescans the
+/// exception masks. `unmasks` already ends the block after it.
+pub(super) fn is_mask_msr(word: u32) -> bool {
+    word > u32::from(u16::MAX)
+        && (word >> 16) as u16 & 0xfff0 == 0xf380
+        && word as u16 & 0xff00 == 0x8800
+}
+
+/// Whether a Thumb instruction is `CPS` (`0xb660..0xb66f` without the
+/// reserved bits). It changes PRIMASK, FAULTMASK or CONTROL, so it must end
+/// its block; the engine executes the change itself.
+pub(super) fn is_cps(word: u32) -> bool {
+    word <= u32::from(u16::MAX) && (word as u16) & 0xffe8 == 0xb660
+}
+
+/// Whether a Thumb instruction is a register-only bitfield operation
+/// (`SBFX`, `BFI`, `BFC`, `UBFX`). Each writes one ordinary register from
+/// another and no flags, so it cannot fault or change control state.
+/// `BFC` names `Rn=15`; every other field must be an ordinary register.
+pub(super) fn is_bitfield(word: u32) -> bool {
+    if word <= u32::from(u16::MAX) {
+        return false;
+    }
+    let first = (word >> 16) as u16;
+    let second = word as u16;
+    let rn = first & 15;
+    let rd = (second >> 8) & 15;
+    // The three prefixes are `SBFX` (`0xf340`), `BFI`/`BFC` (`0xf360`, whose
+    // `Rn=15` is the cleared-source alias) and `UBFX` (`0xf3c0`). Bit 15 and
+    // bit 5 of the second halfword are reserved and must be zero.
+    if second & 0x8020 != 0 || rd > 12 {
+        return false;
+    }
+    match first & 0xfff0 {
+        // `BFI` from R0-R12, or `BFC` (the `Rn=15` cleared-source alias).
+        0xf360 => rn <= 12 || rn == 15,
+        0xf340 | 0xf3c0 => rn <= 12,
+        _ => false,
+    }
+}
+
+/// Whether a Thumb instruction is a dual-register transfer (`LDRD`/`STRD`,
+/// the `P`/`U`/`W` forms of `0xe900..0xe9ff`). The pair must be two ordinary
+/// registers other than the base, which is the encoding's predictability
+/// rule. Returns `Some(true)` for a store, whose two independent writes make
+/// it terminal the same way a PUSH is.
+pub(super) fn dual_transfer(word: u32) -> Option<bool> {
+    if word <= u32::from(u16::MAX) {
+        return None;
+    }
+    let first = (word >> 16) as u16;
+    let second = word as u16;
+    // `1110_100 P U 1 W L Rn`: bit 6 is set for `LDRD`/`STRD`, and clear for
+    // the load/store-multiple forms that share the prefix.
+    if first & 0xfe40 != 0xe840 {
+        return None;
+    }
+    let rn = first & 15;
+    let rt = (second >> 12) & 15;
+    let rt2 = (second >> 8) & 15;
+    let pre_index = first & 0x0100 != 0;
+    let writeback = first & 0x0020 != 0;
+    // `Rt2 = 15` is the exclusive space sharing this prefix, and P=0,W=0 is
+    // reserved; a writeback base that is also a target is unpredictable.
+    if !(rn <= 14
+        && rt <= 12
+        && rt2 <= 12
+        && rt != rt2
+        && (pre_index || writeback)
+        && !(writeback && (rn == rt || rn == rt2)))
+    {
+        return None;
+    }
+    // Bit 20 is `L`: clear for `STRD`.
+    Some(first & 0x0010 == 0)
+}
+
 /// Whether a Thumb instruction is safe to execute without an observation.
 /// A 16-bit instruction is zero-extended; for 32-bit instructions, the first
 /// halfword is in bits 31..16. Accepted operations use general registers,
@@ -430,6 +509,12 @@ pub(super) fn can_run_inline(word: u32) -> bool {
     if word <= u32::from(u16::MAX) {
         let instruction = word as u16;
         return matches!(instruction, 0x0000..=0x43ff | 0xb200..=0xb2ff)
+            // The fixed-register REV family: a byte/halfword permute of two
+            // ordinary low registers, no flags and no memory.
+            || matches!(instruction & 0xffc0, 0xba00 | 0xba40 | 0xbac0)
+            // NOP and YIELD execute without touching state; WFE, WFI, SEV,
+            // SEVL, DBG and the reserved hints stay observed.
+            || matches!(instruction, 0xbf00 | 0xbf10)
             // High-register ADD, CMP and MOV, provided neither operand or
             // destination is SP or PC. BX/BLX (operation 3) are excluded.
             || (instruction & 0xfc00 == 0x4400
@@ -466,6 +551,16 @@ pub(super) fn can_run_inline(word: u32) -> bool {
     let first = (word >> 16) as u16;
     let second = word as u16;
     let rd = (second >> 8) & 15;
+    // Dual-register loads perform ordinary single accesses at the base plus
+    // an immediate and may fault on the new path only to be redone; their
+    // stores are terminal (`dual_transfer`) and are decided by the caller.
+    if dual_transfer(word) == Some(false) {
+        return true;
+    }
+    // Register-only bitfield operations. `BFC` clears bits with Rn=15.
+    if is_bitfield(word) {
+        return true;
+    }
     // Native MRS reads mask state from Unicorn's M-profile architectural
     // helper. The controller emulates xPSR-family selectors 1/3/5/7; permit
     // only the exact PRIMASK, BASEPRI, and FAULTMASK selectors here.
@@ -677,7 +772,7 @@ mod tests {
             assert!(can_run_inline(instruction), "{instruction:#06x}");
         }
         for instruction in [
-            0x4485, 0x4478, 0x4501, 0x4700, 0x4770, 0xb400, 0xbe00, 0xbf00, 0xde00, 0xdf00, 0xe800,
+            0x4485, 0x4478, 0x4501, 0x4700, 0x4770, 0xb400, 0xbe00, 0xbf30, 0xde00, 0xdf00, 0xe800,
         ] {
             assert!(!can_run_inline(instruction), "{instruction:#06x}");
         }
@@ -816,6 +911,78 @@ mod tests {
             0xf8d0_0004,
         ] {
             assert!(!can_run_in_it(word), "{word:#x}");
+        }
+    }
+
+    #[test]
+    fn new_inline_classes_accept_only_their_pure_or_recoverable_forms() {
+        // REV, REV16, REVSH permute two low registers; the hints NOP and
+        // YIELD touch no state. The observed hints stay refused.
+        for word in [0xba11, 0xba63, 0xbaf5, 0xbf00, 0xbf10, 0xb251, 0xb29d] {
+            assert!(can_run_inline(word), "{word:#06x}");
+        }
+        for word in [0xbf20, 0xbf30, 0xbf40, 0xbf50, 0xbf60, 0xbf70, 0xbf80, 0xbfb0] {
+            assert!(!can_run_inline(word), "{word:#06x}");
+        }
+        // SBFX, BFI, BFC, UBFX write one ordinary register from another and
+        // set no flags; SP, PC and the reserved field stay refused.
+        for word in [0xf366_0305, 0xf36f_0385, 0xf3c1_0000, 0xf341_0041] {
+            assert!(is_bitfield(word), "{word:#010x}");
+            assert!(can_run_inline(word), "{word:#010x}");
+        }
+        for word in [
+            0xf366_0d05, // BFI destination SP
+            0xf366_0f05, // BFI destination PC
+            0xf36f_0f85, // BFC destination PC
+            0xf3c1_0d00, // UBFX destination SP
+            0xf3c0_0020, // reserved bit 5
+            0xf3c1_8000, // reserved bit 15
+        ] {
+            assert!(!is_bitfield(word), "{word:#010x}");
+            assert!(!can_run_inline(word), "{word:#010x}");
+        }
+        // LDRD/STRD pre-index, post-index and negative forms. A load is
+        // inline; a store is terminal so each write completes on its own.
+        for (word, store) in [
+            (0xe9d2_0102u32, false),
+            (0xe952_0102, false),
+            (0xe8f2_0102, false),
+            (0xe9f2_0102, false),
+            (0xe9c2_0102, true),
+            (0xe942_0102, true),
+            (0xe8e2_0102, true),
+            (0xe9e2_0102, true),
+        ] {
+            assert_eq!(dual_transfer(word), Some(store), "{word:#010x}");
+            assert_eq!(can_run_inline(word), !store, "{word:#010x}");
+        }
+        for word in [
+            0xe9d2_0f02, // Rt2 = PC: the exclusive prefix
+            0xe9d2_0d02, // Rt2 = SP
+            0xe9d2_1102, // repeated pair register
+            0xe9d2_0d02, // pair (Rt2) names SP
+            0xe9f5_5102, // writeback base equals Rt2
+            0xe9e2_2102, // writeback base equals the first target
+            0xe8d2_0102, // P=0,W=0 reserved
+        ] {
+            assert_eq!(dual_transfer(word), None, "{word:#010x}");
+            assert!(!can_run_inline(word), "{word:#010x}");
+        }
+        // MSR to a mask register and CPS end their block; both are decided
+        // from the encoding alone and execute in the engine.
+        for word in [0xf380_8810u32, 0xf38c_8813, 0xf381_8811] {
+            assert!(is_mask_msr(word), "{word:#010x}");
+        }
+        for word in [0xf380_8010u32, 0xf3ef_8810, 0xf380_9800] {
+            assert!(!is_mask_msr(word), "{word:#010x}");
+        }
+        for word in [0xb660u32, 0xb661, 0xb662, 0xb671, 0xb672] {
+            assert!(is_cps(word), "{word:#06x}");
+        }
+        // Bit 4 is reserved and selects the A-profile-only `cps` form; `b670`
+        // is `cpsid i`/`cpsie i` with both the A and I bits set.
+        for word in [0xb660u32 | 0x0008, 0xb661_0000] {
+            assert!(!is_cps(word), "{word:#06x}");
         }
     }
 

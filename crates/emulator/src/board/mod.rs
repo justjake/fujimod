@@ -4121,9 +4121,20 @@ unsafe fn block_classify_transfers(
         classification.instruction = fujimod_emulator_cpu::InstructionDisposition::ExecuteItSafe;
         classification.observe_block = false;
     }
-    // PUSH can make several independent writes. Keeping it last lets each
-    // MMIO or watched store complete without restarting an earlier write.
-    if mprofile_blocks::is_terminal_push(word) {
+    // A mask or CONTROL write and CPS change which exceptions are ready. The
+    // engine performs the write itself; ending the block here lets the next
+    // entry rescan them, exactly as `unmasks` does for the observer it is
+    // already applied to.
+    if mprofile_blocks::is_mask_msr(word) || mprofile_blocks::is_cps(word) {
+        classification.instruction =
+            fujimod_emulator_cpu::InstructionDisposition::ExecuteAndEndBlock;
+        classification.observe_block = false;
+    }
+    // PUSH and STRD can make several independent writes. Keeping them last
+    // lets each MMIO or watched store complete without restarting an earlier
+    // write.
+    if mprofile_blocks::is_terminal_push(word) || mprofile_blocks::dual_transfer(word) == Some(true)
+    {
         classification.instruction = fujimod_emulator_cpu::InstructionDisposition::ExecuteAndEndBlock;
         classification.observe_block = false;
     } else {

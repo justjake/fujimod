@@ -1169,3 +1169,76 @@ fn non_pc_pop_runs_inline_and_matches_observer_in_ram_and_on_fault() {
     }
 }
 
+
+/// Every encoding the classifier newly admits: REV/REV16/REVSH, NOP and
+/// YIELD, SBFX/BFI/BFC/UBFX, LDRD and STRD, CPS and MSR of a mask register.
+/// The loop runs them over a RAM buffer and a code page it also writes, so a
+/// translated run must reach the same registers, RAM, code page, instruction
+/// count and board clock as the instruction observer.
+#[test]
+fn newly_admitted_encodings_match_the_instruction_observer() {
+    // The data base comes from the literal after the backward branch; the
+    // loop drives every newly admitted encoding over it.
+    let program: [u16; 37] = [
+        0x2001, // movs r0,#1
+        0x2103, // movs r1,#3
+        0x227f, // movs r2,#0x7f
+        0xba13, // rev r3,r2
+        0xba54, // rev16 r4,r2
+        0xbaf7, // revsh r7,r6
+        0xbf00, // nop
+        0xbf10, // yield
+        0xf361, 0x0005, // bfi r0,r1,#0,#6
+        0xf36f, 0x0185, // bfc r1,#2,#4
+        0xf3c2, 0x0300, // ubfx r3,r2,#0,#1
+        0xf342, 0x0441, // sbfx r4,r2,#1,#2
+        0x4809, // ldr r0,literal (data base)
+        0xe9d0, 0x1202, // ldrd r1,r2,[r0,#8]
+        0xe9c0, 0x1204, // strd r1,r2,[r0,#16]
+        0xe8f0, 0x1202, // ldrd r1,r2,[r0],#8
+        0xe9e0, 0x1204, // strd r1,r2,[r0,#16]!
+        0xf380, 0x8811, // msr basepri,r0
+        0xf380, 0x8810, // msr primask,r0
+        0xb672, // cpsid i
+        0xb662, // cpsie i
+        0xf380, 0x8813, // msr faultmask,r0
+        0xb671, // cpsid f
+        0x3001, // adds r0,#1
+        0x3001, // adds r0,#1
+        0xe7cc, // b loop (back to the first data transfer)
+    ];
+    let mut bytes: Vec<u8> = program.iter().flat_map(|w| w.to_le_bytes()).collect();
+    // The literal is the last word, word-aligned after the program.
+    bytes.extend_from_slice(&0x12000u32.to_le_bytes());
+    let (mut reference, mut translated) = (single_m4_board(false, &[], 0x13000), single_m4_board(true, &[], 0x13000));
+    for b in [&mut reference, &mut translated] {
+        b.set_execution_policy(ExecutionPolicy::Interactive).unwrap();
+        b.state.borrow_mut().settled.verify = 0;
+        b.write_physical(0x10100, &bytes).unwrap();
+        b.write_physical(0x12000, &[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32]).unwrap();
+        b.write_physical(0x10101, &[0x00]).unwrap();
+    }
+    for stop in [37, 53, 101, 211, 509] {
+        let a = reference.run_until(stop, 16);
+        let b = translated.run_until(stop, 16);
+        assert_eq!(a.is_err(), b.is_err(), "at {stop}");
+        let expected = outcome(&reference);
+        let actual = outcome(&translated);
+        assert_eq!(actual.registers, expected.registers, "registers at {stop}");
+        assert_eq!(actual.memory, expected.memory, "RAM at {stop}");
+        assert_eq!(actual.state, expected.state, "board at {stop}");
+    }
+    // The same run also proves admission: the classifier now accepts the
+    // REV, bitfield, LDRD and hint encodings, so a pure register block that
+    // contains them runs without an observation. A `strd` still ends its
+    // block, and the store's restart accounts the prefix it entered.
+    let counters = translated.cpu(0).unwrap().exit_counters().unwrap();
+    assert_eq!(
+        counters["guard_classifier_slow_callbacks"], 0,
+        "a newly admitted encoding was refused by the classifier"
+    );
+    assert!(
+        translated.state.borrow().blocks[0].as_ref().unwrap().admitted > 0,
+        "the translated run admitted no instruction"
+    );
+}
