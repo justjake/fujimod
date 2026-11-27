@@ -387,6 +387,11 @@ async fn read_chunk(
 }
 
 /// Send the stock `0x450006` 32-byte query and require its magic field.
+///
+/// The stock handler serializes the word the callback stores through its
+/// `r2` argument at reply byte 20, which `DiagnosticReply` decodes as
+/// `fields[1]`. On an X-T3 5.11 a helper that stored `MAGIC` there replied
+/// with fields `[0, MAGIC, 0, 0]`.
 async fn query(access: &mut bulk::Access<'_>, tag: u32) -> bulk::Result<()> {
     let reply = access
         .session
@@ -396,7 +401,7 @@ async fn query(access: &mut bulk::Access<'_>, tag: u32) -> bulk::Result<()> {
         reply.status == CommandStatus::Success,
         "XP4 query callback returned an error",
     )?;
-    require(reply.fields[0] == MAGIC, "XP4 query reply magic differs")?;
+    require(reply.fields[1] == MAGIC, "XP4 query reply magic differs")?;
     Ok(())
 }
 
