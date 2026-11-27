@@ -75,6 +75,59 @@ fn framework_exit_precedes_entry_and_preserves_exact_budget() {
     assert_eq!(value(&cpu, Register::Pc), 0x1008);
 }
 
+#[test]
+fn armv7a_indirect_targets_follow_local_tlbi_and_code_replacement() {
+    let raw = crate::test_support::library()
+        .open(Model::CortexA7, 1 << 20)
+        .unwrap();
+    let cpu = Core::new(raw, Memory::default()).unwrap();
+    cpu.map_zeroed(0, 0x40_0000, 7).unwrap();
+    cpu.write_register(arm::CPSR, &0xd3u32.to_le_bytes())
+        .unwrap();
+    cpu.write_register(arm::CORE[3], &0x20_2000u32.to_le_bytes())
+        .unwrap();
+    cpu.write_register(arm::CORE[4], &0x1000u32.to_le_bytes())
+        .unwrap();
+    let write = |at, words: &[u32]| {
+        let bytes: Vec<_> = words.iter().flat_map(|word| word.to_le_bytes()).collect();
+        cpu.write_memory(at, &bytes).unwrap();
+    };
+
+    write(0x4000, &[0x0000_0c02, 0, 0x0010_0c02]);
+    write(0x1000, &[0xe12f_ff13]); // bx r3
+    write(
+        0x1800,
+        &[0xee08_3f37, 0xf57f_f04f, 0xf57f_f06f, 0xe12f_ff14], // TLBIMVA, DSB, ISB, bx r4
+    );
+    write(0x10_2000, &[0xe280_0001, 0xe12f_ff14]); // add r0, r0, #1; bx r4
+    write(0x30_2000, &[0xe280_0003, 0xe12f_ff14]); // add r0, r0, #3; bx r4
+    let cp = |crn| arm::Coprocessor {
+        cp: 15,
+        opc1: 0,
+        crn,
+        crm: 0,
+        opc2: 0,
+        secure: 0,
+        wide: false,
+    };
+    cpu.coprocessor(cp(2), Some(0x4000)).unwrap(); // TTBR0
+    cpu.coprocessor(cp(3), Some(0xffff_ffff)).unwrap(); // DACR
+    let sctlr = cpu.coprocessor(cp(1), None).unwrap();
+    cpu.coprocessor(cp(1), Some(sctlr | 1)).unwrap();
+
+    let verify = |begin, budget, result| {
+        assert!(matches!(run(&cpu, begin, budget), Exit::Stopped));
+        assert_eq!(cpu.instruction_progress(), Some(budget as u64));
+        assert_eq!(value(&cpu, Register::Pc), 0x1000);
+        assert_eq!(value(&cpu, arm::CORE[0]), result);
+    };
+    verify(0x1000, 600, 200);
+    write(0x4008, &[0x0030_0c02]);
+    verify(0x1800, 604, 800);
+    write(0x30_2000, &[0xe280_0002]);
+    verify(0x1000, 600, 1200);
+}
+
 struct Device<'a> {
     cpu: &'a Core,
     reads: Vec<u64>,
