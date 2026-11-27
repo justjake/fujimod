@@ -108,6 +108,7 @@ impl Iterator for Chunks<'_> {
         None
     }
 }
+const BACKING_PAGE_SHIFT: usize = 12;
 // Unicorn's store-watch bitmap uses 1 KiB regions, independent of the
 // 4 KiB backing pages used for code invalidation.
 const WATCH_BYTES: usize = 1024;
@@ -127,6 +128,7 @@ struct State {
     cores: Vec<bool>,
     views: Vec<View>,
     bindings: Vec<View>,
+    // Page numbers distribute aligned addresses across hash buckets.
     pages: HashMap<usize, Page>,
     watches: Vec<(usize, u64)>,
     invalidations: Vec<Invalidation>,
@@ -492,8 +494,8 @@ impl Memory {
         };
         // A newly mapped alias must watch code already translated elsewhere.
         let State { pages, watches, .. } = &mut *s;
-        for (&base, page) in pages.iter() {
-            Self::watch_aliases(&[view], base, page.watches, watches);
+        for (&number, page) in pages.iter() {
+            Self::watch_aliases(&[view], number << BACKING_PAGE_SHIFT, page.watches, watches);
         }
         s.views.push(view);
         let capacity = s.views.len() * 4;
@@ -619,7 +621,7 @@ impl Memory {
             let (pointer, length) = chunk.ok()?;
             let mut host = pointer & !4095;
             while host < pointer + length {
-                if s.pages.contains_key(&host) {
+                if s.pages.contains_key(&(host >> BACKING_PAGE_SHIFT)) {
                     let low = guest + (host.max(pointer) - pointer) as u64;
                     let high = guest + ((host + 4096).min(pointer + length) - pointer) as u64;
                     pages.extend(((low & !4095)..high).step_by(4096));
@@ -658,10 +660,12 @@ impl Memory {
                 let begin_offset = cursor - base;
                 let end_offset = page_end - base;
                 let page_count = pages.len();
-                let page = pages.entry(base).or_insert_with(|| Page {
-                    bits: Box::new([0; 64]),
-                    watches: 0,
-                });
+                let page = pages
+                    .entry(base >> BACKING_PAGE_SHIFT)
+                    .or_insert_with(|| Page {
+                        bits: Box::new([0; 64]),
+                        watches: 0,
+                    });
                 Self::mark_code_range(page.bits.as_mut(), begin_offset, end_offset);
                 let first = begin_offset / WATCH_BYTES;
                 let last = (end_offset - 1) / WATCH_BYTES;
@@ -799,16 +803,27 @@ impl Memory {
     ) -> bool {
         let mut changed = false;
         for base in ((pointer & !4095)..=((pointer + bytes - 1) & !4095)).step_by(4096) {
-            let Some(page) = pages.get_mut(&base) else {
+            let Some(page) = pages.get_mut(&(base >> BACKING_PAGE_SHIFT)) else {
                 continue;
             };
             // Cleared bits mark code invalidated by an earlier write. Bits set
             // again come from a later translation, which this write must
             // invalidate even while a peer's earlier invalidation is queued.
-            let touched = (pointer.max(base)..(pointer + bytes).min(base + 4096)).any(|p| {
-                let offset = p & 4095;
-                page.bits[offset / 64] & (1 << (offset % 64)) != 0
-            });
+            let first = pointer.max(base) - base;
+            let last = (pointer + bytes).min(base + 4096) - base - 1;
+            let first_word = first / 64;
+            let last_word = last / 64;
+            let first_mask = u64::MAX << (first % 64);
+            let last_mask = u64::MAX >> (63 - last % 64);
+            let touched = if first_word == last_word {
+                page.bits[first_word] & first_mask & last_mask != 0
+            } else {
+                page.bits[first_word] & first_mask != 0
+                    || page.bits[last_word] & last_mask != 0
+                    || page.bits[first_word + 1..last_word]
+                        .iter()
+                        .any(|&word| word != 0)
+            };
             if !touched {
                 continue;
             }
@@ -1032,6 +1047,26 @@ mod tests {
         assert!(!memory.written(1, 0x8c00, 4).unwrap());
         assert!(memory.written(1, 0x8800, 1).unwrap());
         assert!(!memory.note_code(0, 0x13fe, 4).unwrap());
+    }
+
+    #[test]
+    fn backing_write_checks_exact_bytes_across_bitmap_words_and_pages() {
+        let memory = Memory::default();
+        let backing = 0x10_0000;
+        memory.map(0, 0x1000, backing, 8192, None);
+        memory.note_code(0, 0x1040, 4).unwrap();
+        assert!(!memory.written(0, 0x103f, 1).unwrap());
+        assert!(!memory.written(0, 0x1044, 4).unwrap());
+        assert!(memory.written(0, 0x103f, 2).unwrap());
+        assert!(!memory.written(0, 0x1040, 4).unwrap());
+
+        memory.note_code(0, 0x1080, 4).unwrap();
+        assert!(memory.written(0, 0x1020, 192).unwrap());
+
+        memory.note_code(0, 0x2000, 4).unwrap();
+        assert!(!memory.written(0, 0x1fff, 1).unwrap());
+        assert!(memory.written(0, 0x1fff, 2).unwrap());
+        assert!(!memory.written(0, 0x2000, 4).unwrap());
     }
 
     #[test]
