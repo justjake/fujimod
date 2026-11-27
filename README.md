@@ -59,6 +59,12 @@ mise run rust-test   # cargo nextest run, then the doc tests
 cargo clippy --workspace --all-targets --all-features -- -D warnings
 ```
 
+Cargo links every file directly under a crate's `tests/` into its own test
+binary, so a crate keeps its integration tests as modules of one
+`tests/integration/` binary. A test that changes process-wide state, such as
+an environment variable, goes in a separate binary with the tests that share
+that state.
+
 Every member depends on `fujimod-workspace-hack`, which
 [cargo-hakari](https://docs.rs/cargo-hakari) generates so that any package
 selection builds third-party crates with the same features and reuses one
