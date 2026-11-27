@@ -26,6 +26,7 @@ ninja = "1.13.2"
 "conda:protobuf" = "7.36.2"
 "cargo:cargo-hakari" = "0.9.39"
 "cargo:cargo-sweep" = "0.8.0"
+"github:nextest-rs/nextest" = { version = "cargo-nextest-0.9.152", bin = "cargo-nextest" }
 
 [tasks.commit]
 description = "Commit chosen paths or hunks to the checked-out branch and push"
@@ -68,7 +69,21 @@ dir = "{{config_root}}/apps/web"
 run = "pnpm run preview -- --mode local-preview --port 5190 --strictPort"
 
 [tasks.rust-test]
-run = "cargo test --workspace --all-features --locked"
+run = [
+  "cargo nextest run --workspace --all-features --locked",
+  "mise run rust-doc-test",
+]
+
+[tasks.rust-doc-test]
+run = "cargo test --doc --workspace --all-features --locked"
+
+[tasks.rust-test-archive]
+description = "CI: build the Rust tests once with the ci profile into an archive the shards run"
+run = "cargo nextest archive --cargo-profile ci --workspace --all-features --locked --archive-file target/nextest/rust-tests.tar.zst"
+
+[tasks.rust-test-shard]
+description = "CI: run one shard (N/COUNT) of the archived Rust tests"
+run = "cargo nextest run --profile ci --archive-file target/nextest/rust-tests.tar.zst --workspace-remap . --partition hash:{{arg(name='shard')}}"
 
 [tasks.rust-check]
 run = "cargo clippy --workspace --all-targets --all-features -- -D warnings"
