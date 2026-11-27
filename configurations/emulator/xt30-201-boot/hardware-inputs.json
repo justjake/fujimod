@@ -116,8 +116,8 @@
       "basis": "Declared virtual startup inputs for a bounded application-boot scenario."
     },
     "gpio_input": {
-      "levels": [18435, 0, 0, 0, 0, 0, 0, 0, 96, 0, 16, 0, 0, 0, 0, 0],
-      "basis": "Declared virtual startup inputs for a bounded application-boot scenario."
+      "levels": [18435, 0, 0, 0, 0, 0, 0, 0, 96, 0, 20, 0, 0, 0, 0, 0],
+      "basis": "Declared virtual startup levels (not measured on hardware). Bank 10 reads 20 (16 | 4): bit 2 sets the focal-plane shutter home sensor input high at power-on."
     },
     "temperature_input": {
       "millicelsius": 25000,
@@ -176,11 +176,47 @@
       }
     ],
     "execution_clock": {
-      "basis": "Estimated, not measured, for each core: a Cortex-A7 at roughly 1.2 GHz against the 54 MHz device tick gives about 22 instructions per tick at one instruction per cycle; the boots run 6, a quarter of that. At 24 per core the X-T3 5.11 boot reads the pointer at 0x18181ec before another core sets it (at 0x33bd548) and halts in the exception reporter; at 6 it reaches the first-start language menu.",
-      "instructions_per_tick": [
-        6,
-        1
-      ]
+      "basis": "Estimated, not measured; borrowed from the X-T3 profile (24 instructions per 54 MHz device tick). At 1:1 the strict X-T30 2.01 boot hits a Core 3 audio timing failure around 373.6M instructions; at 24:1 it continues into REC.",
+      "instructions_per_tick": [24, 1]
+    },
+    "shutter": {
+      "basis": "X-T30 2.01 GPIO source table at 0x0146aeb0 maps shutter sensors 0x22 and 0x23 to bank 0 bit 3 and bank 10 bit 2, and motor outputs 0x1d and 0x1e to bank 1 pins 0 and 1 (read through 0x0118c484 -> 0x0106bb44 and checked in 0x01ff61b8). Mode latch [1, 3], interrupt line 3, positions [(0,1), (1,1), (0,0)], and 48000/1440000 tick timings are borrowed from the X-T2 profile (not measured on an X-T30); with these inputs the strict boot avoids ERR_FOCAL_PLANE_SHUTTER_ERROR (0x9031).",
+      "line": 3,
+      "mode": [1, 3],
+      "motor": [0, 1],
+      "poll_ticks": 48000,
+      "positions": [
+        [false, true],
+        [true, true],
+        [false, false]
+      ],
+      "sensors": [
+        [0, 3],
+        [10, 2]
+      ],
+      "step_ticks": 1440000
+    },
+    "byte_i2c_inputs": {
+      "2": {
+        "basis": "Declared byte-I2C bus 2 (0xfff3f000, interrupt 0x43) peer for X-T30 2.01 boot; other physical peers, if any, are not modeled.",
+        "touch_chip": {
+          "address": 85,
+          "report_register": 0,
+          "heartbeat_register": 7174,
+          "mode_register": 7168,
+          "restart_register": 7177,
+          "restart_value": 193,
+          "writable_registers": [
+            7170, 7171, 7175, 7177, 7179, 7195, 7196, 7197, 7198, 7199, 7203, 7204, 7209, 7214,
+            7215, 7218, 7219, 7224, 7228, 7229, 7230, 7231, 7321, 7360, 7361, 7362, 7363, 7364,
+            7365, 7376, 7168, 7176
+          ],
+          "contact_ids": [1, 2],
+          "input_ready_irq": 153,
+          "ticks_per_second": 54000000,
+          "basis": "X-T30 2.01 touch controller on I2C bus 2 at 7-bit address 0x55 with 16-bit register addresses (mode 0x1c00, heartbeat 0x1c06, restart 0x1c09 = 0xc1, input-ready IRQ 153). Report layout, 32 writable startup registers, contact IDs [1, 2], and 54 MHz virtual timebase are borrowed from the X-T3 profile (not measured on an X-T30)."
+        }
+      }
     }
   }
 }
