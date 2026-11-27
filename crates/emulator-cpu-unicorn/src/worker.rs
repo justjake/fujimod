@@ -475,6 +475,8 @@ enum Operation {
     SetGuestClock(Clock),
     ReadRegister(Register, usize),
     WriteRegister(Register, Vec<u8>),
+    ReadRegisters32(Vec<Register>),
+    WriteRegisters32(Vec<(Register, u32)>),
     Coprocessor(arm::Coprocessor, Option<u64>),
     ReadMemory(u64, usize),
     Translate(u64, Access),
@@ -654,8 +656,8 @@ impl Operation {
             Self::SetExecutionPolicy(_) => WorkerRpcCounter::SetExecutionPolicy,
             Self::CheckpointBackings => WorkerRpcCounter::CheckpointBackings,
             Self::SetGuestClock(_) => WorkerRpcCounter::SetGuestClock,
-            Self::ReadRegister(_, _) => WorkerRpcCounter::ReadRegister,
-            Self::WriteRegister(_, _) => WorkerRpcCounter::WriteRegister,
+            Self::ReadRegister(_, _) | Self::ReadRegisters32(_) => WorkerRpcCounter::ReadRegister,
+            Self::WriteRegister(_, _) | Self::WriteRegisters32(_) => WorkerRpcCounter::WriteRegister,
             Self::Coprocessor(_, _) => WorkerRpcCounter::Coprocessor,
             Self::ReadMemory(_, _) => WorkerRpcCounter::ReadMemory,
             Self::Translate(_, _) => WorkerRpcCounter::Translate,
@@ -730,6 +732,7 @@ enum Value {
     U64(u64),
     OptionalU64(Option<u64>),
     Bytes(Vec<u8>),
+    Registers32(Vec<u32>),
     Backings(Vec<(usize, usize)>),
     MemoryRegions(Vec<MemoryRegion>),
     Hooks(Vec<HookId>),
@@ -1206,6 +1209,15 @@ fn dispatch(context: &WorkerLoop, engine: &Engine, operation: Operation) -> Resu
             cpu.write_register(register, &bytes)?;
             Value::Unit
         }
+        Operation::ReadRegisters32(registers) => {
+            let mut values = vec![0; registers.len()];
+            cpu.read_registers32(&registers, &mut values)?;
+            Value::Registers32(values)
+        }
+        Operation::WriteRegisters32(registers) => {
+            cpu.write_registers32(&registers)?;
+            Value::Unit
+        }
         Operation::Coprocessor(register, value) => Value::U64(cpu.coprocessor(register, value)?),
         Operation::ReadMemory(address, bytes) => {
             let mut out = vec![0; bytes];
@@ -1520,6 +1532,15 @@ fn dispatch(context: &WorkerLoop, engine: &Engine, operation: Operation) -> Resu
 }
 
 impl CpuWorker {
+    fn invalidate_register_snapshot(&self, register: Register) {
+        if matches!(register, Register::Pc | arm::PC) {
+            self.stopped_pc.set(None);
+        }
+        if matches!(register, Register::Pc | arm::PC | Register::Pstate | arm::CPSR) {
+            self.stopped_pstate.set(None);
+        }
+    }
+
     fn accounting_accessible(&self) -> bool {
         !self.running.get()
             || self.callback_depth.get() != 0
@@ -1893,14 +1914,26 @@ impl Cpu for CpuWorker {
         }
     }
     fn write_register(&self, register: Register, bytes: &[u8]) -> Result<(), String> {
-        if matches!(register, Register::Pc | arm::PC) {
-            self.stopped_pc.set(None);
-            self.stopped_pstate.set(None);
-        }
-        if matches!(register, Register::Pstate | arm::CPSR) {
-            self.stopped_pstate.set(None);
-        }
+        self.invalidate_register_snapshot(register);
         self.unit(Operation::WriteRegister(register, bytes.to_vec()))
+    }
+    fn read_registers32(&self, registers: &[Register], values: &mut [u32]) -> Result<(), String> {
+        if registers.len() != values.len() {
+            return Err("register batch output length mismatch".into());
+        }
+        match self.rpc(Operation::ReadRegisters32(registers.to_vec()))? {
+            Value::Registers32(result) if result.len() == values.len() => {
+                values.copy_from_slice(&result);
+                Ok(())
+            }
+            _ => Err("Unicorn CPU worker returned unexpected registers".into()),
+        }
+    }
+    fn write_registers32(&self, registers: &[(Register, u32)]) -> Result<(), String> {
+        for &(register, _) in registers {
+            self.invalidate_register_snapshot(register);
+        }
+        self.unit(Operation::WriteRegisters32(registers.to_vec()))
     }
     fn coprocessor(&self, register: arm::Coprocessor, value: Option<u64>) -> Result<u64, String> {
         match self.rpc(Operation::Coprocessor(register, value))? {
@@ -3110,6 +3143,22 @@ mod tests {
                 "{policy:?}"
             );
         }
+    }
+
+    #[test]
+    fn stopped_register_batches_use_one_round_trip_in_each_direction() {
+        let cpu = spawn_mprofile(1024 * 1024, false).unwrap();
+        let registers = [arm::CORE[0], arm::CORE[1], Register::Pc];
+        let before = cpu.rpc_calls.get();
+        cpu.write_registers32(&[(registers[0], 123), (registers[1], 456), (registers[2], 0x1001)])
+            .unwrap();
+        assert_eq!(cpu.rpc_calls.get() - before, 1);
+        let mut values = [0; 3];
+        cpu.read_registers32(&registers, &mut values).unwrap();
+        assert_eq!(values, [123, 456, 0x1000]);
+        assert_eq!(cpu.rpc_calls.get() - before, 2);
+        assert!(cpu.read_registers32(&registers, &mut values[..2]).is_err());
+        assert_eq!(cpu.rpc_calls.get() - before, 2);
     }
 
     #[test]

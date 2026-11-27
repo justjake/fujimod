@@ -786,6 +786,28 @@ pub trait Cpu {
     }
     fn read_register(&self, register: Register, out: &mut [u8]) -> Result<usize, String>;
     fn write_register(&self, register: Register, bytes: &[u8]) -> Result<(), String>;
+    /// Read one stopped processor's 32-bit registers in argument order.
+    fn read_registers32(&self, registers: &[Register], values: &mut [u32]) -> Result<(), String> {
+        if registers.len() != values.len() {
+            return Err("register batch output length mismatch".into());
+        }
+        for (&register, value) in registers.iter().zip(values) {
+            let mut bytes = [0; 4];
+            if self.read_register(register, &mut bytes)? != bytes.len() {
+                return Err("register is not 32 bits".into());
+            }
+            *value = u32::from_le_bytes(bytes);
+        }
+        Ok(())
+    }
+    /// Apply ordered 32-bit writes to a stopped processor. On failure,
+    /// preceding writes have already taken effect.
+    fn write_registers32(&self, registers: &[(Register, u32)]) -> Result<(), String> {
+        for &(register, value) in registers {
+            self.write_register(register, &value.to_le_bytes())?;
+        }
+        Ok(())
+    }
     fn coprocessor(&self, register: arm::Coprocessor, value: Option<u64>) -> Result<u64, String>;
     fn read_memory(&self, address: u64, bytes: &mut [u8]) -> Result<(), String>;
     /// Translate using this CPU's architectural MMU and access permissions.

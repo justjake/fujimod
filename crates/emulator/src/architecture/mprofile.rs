@@ -17,9 +17,6 @@ fn get(cpu: &dyn Cpu, register: Register) -> Result<u32, String> {
     }
     Ok(u32::from_le_bytes(bytes))
 }
-fn set(cpu: &dyn Cpu, register: Register, value: u32) -> Result<(), String> {
-    cpu.write_register(register, &value.to_le_bytes())
-}
 pub fn exception_status(cpu: &dyn Cpu, nvic: &Nvic) -> Result<u32, String> {
     Ok((get(cpu, special(arm::Register::Cpsr))? & 0xfe0ffc00)
         | (1 << 24)
@@ -55,38 +52,27 @@ pub fn enter(cpu: &dyn Cpu, nvic: &mut Nvic, exception: u16, pc: u32) -> Result<
     let sp = get(cpu, stack)?;
     let align = sp & 4 != 0 && nvic.regs.get(&0xd14).copied().unwrap_or(0) & 0x200 != 0;
     let base = sp.checked_sub(32).ok_or("exception stack underflow")? & if align { !7 } else { !3 };
-    let frame = [
-        get(cpu, r(0))?,
-        get(cpu, r(1))?,
-        get(cpu, r(2))?,
-        get(cpu, r(3))?,
-        get(cpu, r(12))?,
-        get(cpu, r(14))?,
-        pc,
-        exception_status(cpu, nvic)? | ((align as u32) << 9),
-    ];
+    let mut frame = [0; 8];
+    cpu.read_registers32(&[r(0), r(1), r(2), r(3), r(12), r(14)], &mut frame[..6])?;
+    frame[6] = pc;
+    frame[7] = exception_status(cpu, nvic)? | ((align as u32) << 9);
     let bytes: Vec<_> = frame.into_iter().flat_map(u32::to_le_bytes).collect();
     cpu.write_memory(base as u64, &bytes)?;
-    set(cpu, stack, base)?;
-    set(
-        cpu,
-        special(arm::Register::Cpsr),
-        get(cpu, special(arm::Register::Cpsr))? & !0x0600fc00,
-    )?;
-    set(cpu, special(arm::Register::Control), control & !2)?;
-    set(cpu, r(13), get(cpu, special(arm::Register::Msp))?)?;
-    set(
-        cpu,
-        r(14),
-        if !thread {
-            0xfffffff1
-        } else if psp {
-            0xfffffffd
-        } else {
-            0xfffffff9
-        },
-    )?;
-    set(cpu, Register::Pc, vector)?;
+    let cpsr = get(cpu, special(arm::Register::Cpsr))?;
+    cpu.write_registers32(&[
+        (stack, base),
+        (special(arm::Register::Cpsr), cpsr & !0x0600fc00),
+        (special(arm::Register::Control), control & !2),
+    ])?;
+    let msp = get(cpu, special(arm::Register::Msp))?;
+    let lr = if !thread {
+        0xfffffff1
+    } else if psp {
+        0xfffffffd
+    } else {
+        0xfffffff9
+    };
+    cpu.write_registers32(&[(r(13), msp), (r(14), lr), (Register::Pc, vector)])?;
     nvic.enter(exception);
     Ok(())
 }
@@ -123,23 +109,23 @@ pub fn exception_return(cpu: &dyn Cpu, nvic: &mut Nvic, ret: u32) -> Result<(), 
     let next_sp = sp
         .checked_add(32 + if frame[7] & 0x200 != 0 { 4 } else { 0 })
         .ok_or("exception return stack overflow")?;
-    for (reg, value) in [0, 1, 2, 3, 12, 14].into_iter().zip(frame) {
-        set(cpu, r(reg), value)?;
-    }
-    let cpsr = get(cpu, special(arm::Register::Cpsr))?;
-    set(
-        cpu,
-        special(arm::Register::Cpsr),
-        (cpsr & !0xfe0ffc00) | (frame[7] & 0xfe0ffc00) | 0x20,
-    )?;
-    set(cpu, stack, next_sp)?;
-    let control = get(cpu, special(arm::Register::Control))?;
-    set(
-        cpu,
-        special(arm::Register::Control),
-        (control & !2) | if ret & 4 != 0 { 2 } else { 0 },
-    )?;
-    set(cpu, Register::Pc, frame[6] | 1)?;
+    let cpsr = special(arm::Register::Cpsr);
+    let control = special(arm::Register::Control);
+    let mut saved = [0; 2];
+    cpu.read_registers32(&[cpsr, control], &mut saved)?;
+    let [old_cpsr, old_control] = saved;
+    cpu.write_registers32(&[
+        (r(0), frame[0]),
+        (r(1), frame[1]),
+        (r(2), frame[2]),
+        (r(3), frame[3]),
+        (r(12), frame[4]),
+        (r(14), frame[5]),
+        (cpsr, (old_cpsr & !0xfe0ffc00) | (frame[7] & 0xfe0ffc00) | 0x20),
+        (stack, next_sp),
+        (control, (old_control & !2) | if ret & 4 != 0 { 2 } else { 0 }),
+        (Register::Pc, frame[6] | 1),
+    ])?;
     nvic.active.pop();
     Ok(())
 }
@@ -149,12 +135,28 @@ mod tests {
     use super::*;
     use fujimod_emulator_cpu::{Model, Run};
     use fujimod_emulator_cpu_unicorn::Library;
+
+    fn set(cpu: &dyn Cpu, register: Register, value: u32) -> Result<(), String> {
+        cpu.write_register(register, &value.to_le_bytes())
+    }
     fn library() -> Library {
         Library::linked().unwrap()
     }
     #[test]
     fn real_m4_executes_handler_and_restores_aligned_psp_and_nested_msp_frames() {
         let cpu = library().open(Model::CortexM4, 1024 * 1024).unwrap();
+        check_nested_exception_frames(&cpu);
+    }
+
+    #[cfg(not(target_os = "emscripten"))]
+    #[test]
+    fn worker_m4_restores_aligned_psp_and_nested_msp_frames() {
+        let cpu = fujimod_emulator_cpu_unicorn::worker::spawn_mprofile(1024 * 1024, false)
+            .unwrap();
+        check_nested_exception_frames(&cpu);
+    }
+
+    fn check_nested_exception_frames(cpu: &dyn Cpu) {
         cpu.map_zeroed(0, 0x4000, 7).unwrap();
         cpu.write_memory(71 * 4, &0x301u32.to_le_bytes()).unwrap();
         cpu.write_memory(74 * 4, &0x401u32.to_le_bytes()).unwrap();
@@ -173,12 +175,12 @@ mod tests {
             (special(arm::Register::Control), 2),
             (special(arm::Register::Cpsr), 0xa8000020),
         ] {
-            set(&cpu, reg, value).unwrap();
+            set(cpu, reg, value).unwrap();
         }
-        enter(&cpu, &mut nvic, 71, 0x1234).unwrap();
-        assert_eq!(get(&cpu, r(14)).unwrap(), 0xfffffffd);
-        assert_eq!(get(&cpu, special(arm::Register::Psp)).unwrap(), 0x1fe0);
-        assert_eq!(get(&cpu, Register::Sp).unwrap(), 0x3000);
+        enter(cpu, &mut nvic, 71, 0x1234).unwrap();
+        assert_eq!(get(cpu, r(14)).unwrap(), 0xfffffffd);
+        assert_eq!(get(cpu, special(arm::Register::Psp)).unwrap(), 0x1fe0);
+        assert_eq!(get(cpu, Register::Sp).unwrap(), 0x3000);
         let mut frame = [0; 32];
         cpu.read_memory(0x1fe0, &mut frame).unwrap();
         assert_eq!(
@@ -196,24 +198,24 @@ mod tests {
             instructions: Some(1),
         })
         .unwrap();
-        assert_eq!(get(&cpu, r(0)).unwrap(), 12);
-        enter(&cpu, &mut nvic, 74, 0x302).unwrap();
-        assert_eq!(get(&cpu, r(14)).unwrap(), 0xfffffff1);
+        assert_eq!(get(cpu, r(0)).unwrap(), 12);
+        enter(cpu, &mut nvic, 74, 0x302).unwrap();
+        assert_eq!(get(cpu, r(14)).unwrap(), 0xfffffff1);
         assert_eq!(nvic.active, vec![71, 74]);
-        assert_eq!(exception_status(&cpu, &nvic).unwrap() & 511, 74);
-        exception_return(&cpu, &mut nvic, 0xfffffff1).unwrap();
+        assert_eq!(exception_status(cpu, &nvic).unwrap() & 511, 74);
+        exception_return(cpu, &mut nvic, 0xfffffff1).unwrap();
         assert_eq!(nvic.active, vec![71]);
-        assert_eq!(get(&cpu, Register::Pc).unwrap(), 0x302);
-        assert_eq!(get(&cpu, special(arm::Register::Msp)).unwrap(), 0x3000);
-        assert_eq!(get(&cpu, r(14)).unwrap(), 0xfffffffd);
-        exception_return(&cpu, &mut nvic, 0xfffffffd).unwrap();
+        assert_eq!(get(cpu, Register::Pc).unwrap(), 0x302);
+        assert_eq!(get(cpu, special(arm::Register::Msp)).unwrap(), 0x3000);
+        assert_eq!(get(cpu, r(14)).unwrap(), 0xfffffffd);
+        exception_return(cpu, &mut nvic, 0xfffffffd).unwrap();
         assert!(nvic.active.is_empty());
-        assert_eq!(get(&cpu, Register::Pc).unwrap(), 0x1234);
-        assert_eq!(get(&cpu, r(0)).unwrap(), 11);
-        assert_eq!(get(&cpu, special(arm::Register::Psp)).unwrap(), 0x2004);
-        assert_eq!(get(&cpu, Register::Sp).unwrap(), 0x2004);
+        assert_eq!(get(cpu, Register::Pc).unwrap(), 0x1234);
+        assert_eq!(get(cpu, r(0)).unwrap(), 11);
+        assert_eq!(get(cpu, special(arm::Register::Psp)).unwrap(), 0x2004);
+        assert_eq!(get(cpu, Register::Sp).unwrap(), 0x2004);
         assert_eq!(
-            exception_status(&cpu, &nvic).unwrap() & 0xf8000000,
+            exception_status(cpu, &nvic).unwrap() & 0xf8000000,
             0xa8000000
         );
     }
