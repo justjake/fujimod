@@ -510,5 +510,69 @@
         "kind": "touch"
       }
     }
-  }
+  },
+  "ladders": [
+    {
+      "wire": {
+        "kind": "adc",
+        "channel": 13
+      },
+      "levels": 4096,
+      "basis": "The firmware caches ADC channel 13 at 0x2069a08 + 2 * channel (observed in an emulator run with a distinct sample on every channel), and the scanner's kind-1 predicate 0x1408834 compares that 12-bit value with the row's band. No released level is established here: it is the run's ADC sample for this channel.",
+      "rungs": [
+        {
+          "control_id": "menu_ok_button",
+          "band_low": 0,
+          "band_high": 961,
+          "sample": 480,
+          "basis": "Band 0..961, halfwords of the factory configuration page read through the stock tag reader 0x1494794 (tags 0x3847 low, 0x3845 high); scanner row 24 of table 0x1c44990 (kind 1, source 13) for KEY_OK. The sample is the band midpoint."
+        },
+        {
+          "control_id": "disp_back_button",
+          "band_low": 962,
+          "band_high": 2393,
+          "sample": 1677,
+          "basis": "Band 962..2393, halfwords of the factory configuration page read through the stock tag reader 0x1494794 (tags 0x3843 low, 0x3841 high); scanner row 23 of table 0x1c44990 (kind 1, source 13) for KEY_DISPBACK. The sample is the band midpoint."
+        }
+      ]
+    },
+    {
+      "wire": {
+        "kind": "adc",
+        "channel": 14
+      },
+      "levels": 4096,
+      "basis": "The firmware caches ADC channel 14 at 0x2069a08 + 2 * channel (observed in an emulator run with a distinct sample on every channel), and the scanner's kind-1 predicate 0x1408834 compares that 12-bit value with the row's band. No released level is established here: it is the run's ADC sample for this channel.",
+      "rungs": [
+        {
+          "control_id": "focus_stick.up",
+          "band_low": 1450,
+          "band_high": 1689,
+          "sample": 1569,
+          "basis": "Band 1450..1689, halfwords of the factory configuration page read through the stock tag reader 0x1494794 (tags 0x389f low, 0x389d high); scanner row 30 of table 0x1c44990 (kind 1, source 14) for KEY_8DIR_UP. The sample is the band midpoint."
+        },
+        {
+          "control_id": "focus_stick.right",
+          "band_low": 1931,
+          "band_high": 2220,
+          "sample": 2075,
+          "basis": "Band 1931..2220, halfwords of the factory configuration page read through the stock tag reader 0x1494794 (tags 0x3897 low, 0x3895 high); scanner row 28 of table 0x1c44990 (kind 1, source 14) for KEY_8DIR_RIGHT. The sample is the band midpoint."
+        },
+        {
+          "control_id": "focus_stick.left",
+          "band_low": 2606,
+          "band_high": 3040,
+          "sample": 2823,
+          "basis": "Band 2606..3040, halfwords of the factory configuration page read through the stock tag reader 0x1494794 (tags 0x388f low, 0x388d high); scanner row 26 of table 0x1c44990 (kind 1, source 14) for KEY_8DIR_LEFT. The sample is the band midpoint."
+        },
+        {
+          "control_id": "focus_stick.down",
+          "band_low": 3041,
+          "band_high": 3685,
+          "sample": 3363,
+          "basis": "Band 3041..3685, halfwords of the factory configuration page read through the stock tag reader 0x1494794 (tags 0x388b low, 0x3889 high); scanner row 25 of table 0x1c44990 (kind 1, source 14) for KEY_8DIR_DOWN. The sample is the band midpoint."
+        }
+      ]
+    }
+  ]
 }

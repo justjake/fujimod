@@ -1,9 +1,9 @@
-# X-T5 physical keys are ladders on ADC channels 1, 2 and 14 and on SPI8
-# "Physical controls"). The key model is built from the body's catalog ladders
-# (fujimod/catalog/bodies/xt5/controls.json) and the run configuration's
-# key-free values (fujimod/configurations/emulator/xt5-431/run.json: the ADC
-# block samples and `inputs.ladders`, registers released at 1023), not from
-# this manifest. Keys without a rung are refused.
+# X-S20 physical keys: MENU/OK and DISP/BACK are bands on ADC channel 13 and the
+# focus-stick directions are bands on ADC channel 14 (kind-1 rows of scanner table
+# 0x1c44990). The key model is built from the body's catalog ladders
+# (fujimod/catalog/bodies/xs20/controls.json) and the run configuration's key-free
+# values (fujimod/configurations/emulator/xs20-330/run.json: the ADC block samples),
+# not from this manifest. Keys without a rung are refused.
 [[device]]
 base = 0xff904000
 size = 0x1000
@@ -19,11 +19,11 @@ base = 0xff906000
 size = 0x1000
 kind = "adc"
 [device.options]
-# Channel 0 is the thermistor: 2713 reads 24.9 C through 0x14a8240
-# full scale. Under the default-configuration bands, 4095 holds no key
-# on channels 1, 2 and 14, puts the focus-mode switch on channel 11 at C
-# (0x1406a98, 3751..4095), and is one position of the position switches on
-# channels 3, 7, 12 and 13 (hvf-board.md, "Physical controls").
+# The firmware caches channel n at 0x2069a08 + 2 * n. Channel 0: 2713 is the X-T5
+# thermistor reading (24.9 C there); the X-S20 conversion is UNVERIFIED. 4095 is above
+# every key band on channels 13 and 14 (MENU/OK 0..961, DISP/BACK 962..2393, focus
+# stick up to 3685), so no key is held, and puts the mode dial on channel 8 at P
+# (band 3579..4095). The other channels' meaning at 4095 is UNVERIFIED.
 samples = [2713, 4095, 4095, 4095, 4095, 4095, 4095, 4095, 4095, 4095, 4095, 4095, 4095, 4095, 4095]
 
 [[device]]
