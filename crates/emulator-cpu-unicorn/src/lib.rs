@@ -189,6 +189,7 @@ impl Library {
             hooks: RefCell::new(BTreeMap::new()),
             next_hook: Cell::new(1),
             translation: RefCell::new(None),
+            code_store: RefCell::new(None),
             thumb_metadata: Rc::new(Cell::new(false)),
             instruction_active: Rc::new(Cell::new(false)),
             callback_error: Rc::new(RefCell::new(None)),
@@ -259,6 +260,7 @@ pub struct Core {
     hooks: RefCell<BTreeMap<usize, StoredHook>>,
     next_hook: Cell<usize>,
     translation: RefCell<Option<Box<InstalledTranslationHooks>>>,
+    code_store: RefCell<Option<Box<InstalledCodeStore>>>,
     thumb_metadata: Rc<Cell<bool>>,
     instruction_active: Rc<Cell<bool>>,
     callback_error: Rc<RefCell<Option<String>>>,
@@ -277,6 +279,11 @@ pub struct Core {
     mmio: RefCell<BTreeMap<u64, MmioMapping>>,
 }
 
+/// One installed code-store observer: the Rust callback and its context.
+struct InstalledCodeStore {
+    callback: unsafe fn(*mut c_void, u64, usize),
+    data: *mut c_void,
+}
 struct InstalledTranslationHooks {
     hooks: TranslationHooks,
     native_execute_end: bool,
@@ -960,6 +967,7 @@ impl Cpu for Core {
             watched_stores: e.hook_watched.is_some() && e.watch.is_some(),
             backing_observation: e.observe_backings.is_some(),
             store_pc_control: e.write_hook_pc_sync.is_some(),
+            code_store_observation: std::env::var_os("FUJIMOD_CODE_STORES").is_none(),
         }
     }
     fn set_execution_policy(&self, _policy: ExecutionPolicy) -> Result<(), String> {
@@ -1559,6 +1567,32 @@ impl Cpu for Core {
             .set(on && self.api.extensions.features & 1 != 0);
         Ok(())
     }
+    unsafe fn observe_code_stores(
+        &self,
+        callback: Option<unsafe fn(*mut c_void, u64, usize)>,
+        data: *mut c_void,
+    ) -> Result<(), String> {
+        self.check_tlbi_mutation()?;
+        let install = self
+            .api
+            .extensions
+            .set_code_store
+            .ok_or("CPU backend has no code-store observer")?;
+        // The engine calls the C trampoline with a context this core owns, so
+        // the pointer stays valid for as long as the observer is installed.
+        let mut context = callback.map(|callback| {
+            Box::new(InstalledCodeStore {
+                callback,
+                data,
+            })
+        });
+        let user = context.as_mut().map_or(std::ptr::null_mut(), |c| {
+            (&mut **c as *mut InstalledCodeStore).cast()
+        });
+        self.check(unsafe { install(self.raw, context.is_some().then_some(code_store), user) })?;
+        *self.code_store.borrow_mut() = context;
+        Ok(())
+    }
     fn retry_block(&self, instructions: u32) -> Result<(), String> {
         self.check_tlbi_mutation()?;
         let retry = self
@@ -1926,6 +1960,12 @@ unsafe extern "C" fn classify(data: *mut c_void, address: u64, word: u32) -> i32
         } else {
             0
         }
+}
+unsafe extern "C" fn code_store(data: *mut c_void, address: u64, size: i32) {
+    let context = unsafe { &*data.cast::<InstalledCodeStore>() };
+    unsafe {
+        (context.callback)(context.data, address, size.max(0) as usize);
+    }
 }
 unsafe extern "C" fn restart(data: *mut c_void, pc: u64) {
     let context = unsafe { &*data.cast::<InstalledTranslationHooks>() };

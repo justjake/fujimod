@@ -100,6 +100,10 @@ pub struct Extensions {
     pub set_instruction_counter: Option<unsafe extern "C" fn(Engine, bool) -> Error>,
     pub set_guard_diagnostics: Option<unsafe extern "C" fn(Engine, bool) -> Error>,
     pub add_restart_boundary: Option<unsafe extern "C" fn(Engine, *mut usize, u64, u64) -> Error>,
+    /// Report a guest store that covered bytes a translation was made from,
+    /// before that translation is retired (physical first byte, width).
+    pub set_code_store:
+        Option<unsafe extern "C" fn(Engine, Option<CodeStore>, *mut c_void) -> Error>,
     pub reset_instruction_counter: Option<unsafe extern "C" fn(Engine) -> Error>,
     pub instruction_counter: Option<unsafe extern "C" fn(Engine) -> u64>,
     // uc_embedder_features bits (0 without the export): 1 = block hook size bit 31
@@ -253,6 +257,8 @@ const _: () = {
 };
 pub type InsnFilter = unsafe extern "C" fn(*mut c_void, u64, u32) -> c_int;
 pub type Restart = unsafe extern "C" fn(*mut c_void, u64);
+/// A guest store covered translated bytes: physical first byte and width.
+pub type CodeStore = unsafe extern "C" fn(*mut c_void, u64, i32);
 macro_rules! api {
     ($($field:ident : unsafe extern "C" fn($($args:tt)*) -> $result:ty),+ $(,)?) => {
         pub struct Api {
@@ -349,6 +355,11 @@ mod linked {
             begin: u64,
             end: u64,
         ) -> Error;
+        fn uc_embedder_set_code_store(
+            engine: Engine,
+            callback: Option<CodeStore>,
+            user: *mut c_void,
+        ) -> Error;
         fn uc_embedder_reset_instruction_counter(engine: Engine) -> Error;
         fn uc_embedder_instruction_counter(engine: Engine) -> u64;
         fn uc_embedder_accounting(engine: Engine) -> *mut Accounting;
@@ -380,6 +391,7 @@ mod linked {
             set_instruction_counter: Some(uc_embedder_set_instruction_counter),
             set_guard_diagnostics: Some(uc_embedder_set_guard_diagnostics),
             add_restart_boundary: Some(uc_embedder_add_restart_boundary),
+            set_code_store: Some(uc_embedder_set_code_store),
             reset_instruction_counter: Some(uc_embedder_reset_instruction_counter),
             instruction_counter: Some(uc_embedder_instruction_counter),
             accounting: Some(uc_embedder_accounting),
