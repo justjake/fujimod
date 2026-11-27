@@ -134,7 +134,7 @@ fn outcome(board: &Board) -> Outcome {
     let (observed, watching, fast_stores) = board.state.borrow().blocks[0]
         .as_ref()
         .map_or((0, false, false), |blocks| {
-            (blocks.observed, blocks.watching, blocks.fast_stores)
+            (blocks.observed, blocks.code_stores_notified, blocks.fast_stores)
         });
     Outcome {
         state: board.state(),
@@ -154,7 +154,10 @@ fn block_execution_equals_the_instruction_observer() {
             let blocks = run(quantum, true, until, windows, ExecutionPolicy::Exact);
             assert_eq!(reference.observed, 0);
             assert!(blocks.observed > 0, "quantum {quantum}: block execution never ran");
-            assert!(blocks.watching, "quantum {quantum}: the store hook stayed on every store");
+            assert!(
+                blocks.watching,
+                "quantum {quantum}: the store hook stayed on every store"
+            );
             let reserved = !blocks.state["mprofile"][0]["exclusive"].is_null();
             assert_eq!(
                 blocks.fast_stores, !reserved,
@@ -258,12 +261,12 @@ fn translated_transfers_match_at_watched_stores_and_data_faults() {
             assert!(translated.state.borrow().blocks[0].as_ref().unwrap().inline.entries > 500);
         }
         if address == 0x10300 {
-            // Only the first nonterminal store at this site needs a retry.
-            // Other cached block shapes may encounter it before retranslation.
-            let counters = translated.cpu(0).unwrap().exit_counters().unwrap();
-            assert_eq!(counters["watched_store_sites"], 1);
-            assert!(counters["restart_requests"] < 16, "{counters:?}");
-            assert_eq!(counters["watched_store_cap_misses"], 0);
+            // The store covers translated bytes, so the engine reports it and
+            // restarts it as a block of its own instead of learning its site.
+            let blocks = translated.state.borrow();
+            let blocks = blocks.blocks[0].as_ref().unwrap();
+            assert!(blocks.code_store_notifications > 0);
+            assert_eq!(blocks.store_callbacks, 0);
         }
         if advance {
             assert!(reference.state.borrow().timeline.now() < 2031, "loop never reached unmapped memory");
@@ -516,7 +519,12 @@ fn indexed_stores_match_on_watched_code_pages() {
     assert_eq!(&actual[4..], &0xdead_beefu32.to_le_bytes());
     let blocks = translated.state.borrow();
     let blocks = blocks.blocks[0].as_ref().unwrap();
-    assert!(blocks.restart_callbacks > 0, "watched stores were not restarted");
+    // The store covers the instruction that follows it, which the engine
+    // retires before it can run; the rewritten word is what executes next, as
+    // the RAM comparison above proves. No restart is needed and none of the
+    // processor's own data stores reaches a callback.
+    assert_eq!(blocks.store_callbacks, 0, "a data store reached a callback");
+    assert!(blocks.code_store_notifications > 0, "no code store was reported");
     assert!(blocks.fast_stores);
 }
 
@@ -651,7 +659,7 @@ fn run_pair(quantum: usize, blocks: bool) -> (Value, Vec<u64>, bool) {
         .to_vec();
     let fast = board.state.borrow().blocks[1]
         .as_ref()
-        .is_some_and(|blocks| blocks.watching);
+        .is_some_and(|blocks| blocks.code_stores_notified);
     (board.state(), registers, fast)
 }
 
@@ -660,7 +668,7 @@ fn a_peer_m_profile_store_reaches_a_live_reservation_in_block_execution() {
     for quantum in [1, 2, 3, 5, 64] {
         let (reference, reference_registers, _) = run_pair(quantum, false);
         let (blocks, registers, watched) = run_pair(quantum, true);
-        assert!(watched, "quantum {quantum}: the peer never ran with watched stores");
+        assert!(watched, "quantum {quantum}: the peer never observed code stores");
         assert_eq!(registers, reference_registers, "quantum {quantum}");
         assert_eq!(blocks, reference, "quantum {quantum}");
         if quantum < 5 {
@@ -822,12 +830,11 @@ fn terminal_pushes_match_observer_on_watched_ram_and_partial_fault() {
         );
         let blocks = translated.state.borrow();
         let stats = blocks.blocks[0].as_ref().unwrap();
-        assert!(stats.watching, "wide={wide}");
-        assert!(stats.watched.contains(&0x10000), "wide={wide}");
+        assert!(stats.code_stores_notified, "wide={wide}");
         assert!(
-            stats.store_callbacks >= 2,
+            stats.code_store_notifications >= 2,
             "wide={wide}: {}",
-            stats.store_callbacks
+            stats.code_store_notifications
         );
         assert_eq!(stats.restart_callbacks, 0, "wide={wide}");
 
@@ -951,7 +958,7 @@ fn ldrex_strex_does_not_permanently_watch_data_page_and_normal_store_still_inval
 
         let s = translated.state.borrow();
         let blocks = s.blocks[0].as_ref().unwrap();
-        assert!(blocks.watching, "{policy:?}");
+        assert!(blocks.code_stores_notified, "{policy:?}");
         assert!(blocks.fast_stores, "{policy:?}");
         assert!(
             !blocks.watched.contains(&0x12000),
@@ -996,7 +1003,7 @@ fn ldrex_strex_does_not_permanently_watch_data_page_and_normal_store_still_inval
 
         let s = translated.state.borrow();
         let blocks = s.blocks[0].as_ref().unwrap();
-        assert!(blocks.watching, "{policy:?}");
+        assert!(blocks.code_stores_notified, "{policy:?}");
         assert!(blocks.fast_stores, "{policy:?}");
         assert!(!blocks.watched.contains(&0x12000), "{policy:?}");
         assert_eq!(
@@ -1023,7 +1030,7 @@ fn external_reservation_outside_m4_ram_keeps_m4_fast_stores() {
     {
         let s = board.state.borrow();
         let blocks = s.blocks[0].as_ref().unwrap();
-        assert!(blocks.watching);
+        assert!(blocks.code_stores_notified);
         assert!(blocks.fast_stores);
         assert_eq!(blocks.store_callbacks, 0);
     }
@@ -1066,14 +1073,14 @@ fn one_kib_watch_code_does_not_watch_adjacent_data_in_same_4k_page() {
 
         let s = board.state.borrow();
         let blocks = s.blocks[0].as_ref().unwrap();
-        assert!(blocks.watching, "{policy:?}");
+        assert!(blocks.code_stores_notified, "{policy:?}");
         assert!(blocks.fast_stores, "{policy:?}");
-        assert!(blocks.watched.contains(&0x10000), "{policy:?}");
-        assert!(!blocks.watched.contains(&0x10400), "{policy:?}");
-        assert!(!blocks.watched.contains(&0x10800), "{policy:?}");
+        // The engine reports only stores that cover translated bytes, so a
+        // data store proves harmless without watching any page of its own.
+        assert!(blocks.watched.is_empty(), "{policy:?}");
         assert_eq!(
             blocks.store_callbacks, 0,
-            "adjacent 1 KiB data region in the same 4 KiB page must not be watched: {policy:?}"
+            "a data store in a page holding code must reach no callback: {policy:?}"
         );
     }
 }
@@ -1615,5 +1622,48 @@ fn inline_pop_never_replays_a_device_read() {
             observer.state(),
             "{name}: board state after the device reads"
         );
+    }
+}
+
+/// A store into a page that holds code, but not into the bytes of any
+/// translation, must not reach the board at all. Only the bytes an
+/// instruction was translated from can rewrite code, so the engine reports
+/// those alone. This is the property that removes the watched-store volume:
+/// the page watch that used to forward every store in the page is gone.
+#[test]
+fn a_data_store_in_a_code_page_reaches_no_callback() {
+    // The instructions are at 0x10100..0x10112, inside the 1 KiB page
+    // 0x10000..0x10400. The loop writes eight words at 0x10200 in that same
+    // 1 KiB page: under a page watch every one of these stores reached the
+    // board, and none of them can have changed an instruction.
+    // The same loop shape the neighbouring tests use, with its base moved to
+    // 0x10200: movw r0,#0x0200; movt r0,#1; movs r3,#8; loop: adds r1,#1;
+    // str r1,[r0]; subs r3,#1; bne loop; wfi.
+    const PROGRAM: [u16; 10] = [
+        0xf242, 0x0000, 0xf2c0, 0x0001, 0x2308, 0x3101, 0x6001, 0x3b01, 0xd1fb, 0xbf30,
+    ];
+    for policy in [ExecutionPolicy::Exact, ExecutionPolicy::Interactive] {
+        let mut board = single_m4_board(true, &PROGRAM, 0x17000);
+        board.set_execution_policy(policy).unwrap();
+        board.run_until(100, 64).unwrap();
+
+        eprintln!("DBG r0={:#x} r1={:#x} r3={:#x}", scalar(board.cpu(0).unwrap(), Register::Arm32(fujimod_emulator_cpu::arm::Register::R(0))).unwrap(), scalar(board.cpu(0).unwrap(), Register::Arm32(fujimod_emulator_cpu::arm::Register::R(1))).unwrap(), scalar(board.cpu(0).unwrap(), Register::Arm32(fujimod_emulator_cpu::arm::Register::R(3))).unwrap());
+        let mut word = [0; 4];
+        board.read_physical(0x1021c, &mut word).unwrap();
+        assert_eq!(u32::from_le_bytes(word), 8, "{policy:?}");
+
+        let s = board.state.borrow();
+        let blocks = s.blocks[0].as_ref().unwrap();
+        assert!(blocks.code_stores_notified, "{policy:?}");
+        assert!(blocks.fast_stores, "{policy:?}");
+        assert_eq!(
+            blocks.store_callbacks, 0,
+            "a data store in a page holding code reached the board: {policy:?}"
+        );
+        assert_eq!(
+            blocks.code_store_notifications, 0,
+            "a data store was reported as code: {policy:?}"
+        );
+        assert!(blocks.watched.is_empty(), "{policy:?}");
     }
 }
