@@ -216,6 +216,10 @@
       "length_flags": 0,
       "base": 4286578688,
       "stack": 4286707200,
+      "stock_stack": {
+        "offset": 112128,
+        "size": 16384
+      },
       "bootstrap_offset": 2128,
       "initialize_offset": 2184,
       "continuation": 4026734032,

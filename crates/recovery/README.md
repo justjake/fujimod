@@ -232,6 +232,17 @@ core. An earlier build of this startup, which ran the recipe's board operations 
 divider 1, left an X-T5 body black with the same image; which of the two it was is not separated.
 The `marble_init.bin` this builder writes has run in the emulator only.
 
+The packager places its loader above the stock stack, and the stock stack has to lie above the
+setup that the boot header copies to SRAM: a stack inside the copy is refused. A recipe whose
+body's header copies past its stack declares the stack's extent in the copy (`xp5.stock_stack`,
+`xp5::StockStack`: offset and size). The packager then requires that extent to be the one the
+stock bootstrap loads its stack pointer from (`adr x1, <start>; add x1, x1, #<size>; mov sp, x1`)
+and to hold nothing of the setup that the startup runs or changes (the entry word, the bootstrap,
+the initializer and delay routines, the bank accessor edits); the loader then starts at the end
+of the copy. Only GFX100RF 1.14 declares one: its header copies 0x20000 bytes and its bootstrap
+puts the 0x4000-byte stack at 0x1b600 of them. A recipe with card-resident setup cannot declare
+one.
+
 `sd-boot-v1-ram-startup FIRMWARE DAT NEW_DIRECTORY [--fallback-wait-seconds N]` (XP5) writes only
 the two files the boot ROM and the loader read, `marble_init.bin` and `ffboot.bin`, and never the
 update. The installed flash stays attached: the prelude initializes and scans it as

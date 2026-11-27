@@ -203,6 +203,38 @@ fn xt5_431_startup_is_the_stock_selector_startup() {
     }
 }
 
+/// The GFX100RF 1.14 boot header copies 0x20000 bytes and its bootstrap puts the stock stack's
+/// 0x4000 bytes at 0x1b600 of them, so its recipe declares that extent. Every other XP5 recipe
+/// has the stack above the copied setup and declares nothing.
+#[test]
+fn only_gfx100rf_114_declares_a_stock_stack_inside_its_copied_setup() {
+    let catalog = fujimod_catalog::ReferenceCatalog::bundled().unwrap();
+    let mut declaring = vec![];
+    for id in catalog.firmware_ids() {
+        let Some(setup) = Recipe::bundled(id).unwrap().and_then(|recipe| recipe.xp5) else {
+            continue;
+        };
+        let copied_end = setup.base + setup.low_length as u64;
+        match &setup.stock_stack {
+            None => assert!(copied_end < setup.stack, "{id}"),
+            Some(declared) => {
+                assert!(setup.stack <= copied_end, "{id}");
+                declaring.push((id.to_string(), declared.offset, declared.size));
+            }
+        }
+    }
+    assert_eq!(declaring, [("gfx100rf-114".to_string(), 0x1b600, 0x4000)]);
+    let setup = Recipe::bundled("gfx100rf-114")
+        .unwrap()
+        .unwrap()
+        .xp5
+        .unwrap();
+    assert_eq!(
+        (setup.base, setup.low_length, setup.stack),
+        (0xff80_0000, 0x20000, 0xff81_f600)
+    );
+}
+
 #[test]
 fn recipes_match_catalog_identities_and_generation() {
     let catalog = fujimod_catalog::ReferenceCatalog::bundled().unwrap();
