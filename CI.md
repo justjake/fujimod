@@ -6,7 +6,7 @@ path filters. Its jobs check Python, JavaScript/TypeScript and Rust
 independently and run the native and browser suites. The Rust tests build once
 with the `ci` profile (no incremental state, no debug info in dependencies)
 into a [nextest](https://nexte.st) archive, which three jobs download and run in
-parallel shards; the build job also runs the doc tests.
+parallel shards; doc tests and the desktop app run in jobs of their own.
 
 ## Pull requests
 
@@ -33,11 +33,24 @@ auto-merge on once its tested commit passes, using the `PR_CI_MERGE_TOKEN`
 secret of the `pr-ci-merge` environment, which only `main` may deploy to.
 Admins may bypass both rules when merging by hand.
 
-GitHub runs `main`'s copy of PR CI, so a pull request cannot change when it is
-tested or what status it gets. The checks run the pull request's code with a
-read-only token.
+Three workflows keep a pull request's code away from write access:
 
-Every run restores and saves caches: Rust compiles through sccache, downloaded
+- [PR CI](.github/workflows/pr-ci.yml) runs the checks as a `pull_request` run
+  from the pull request's own workflow files: a read-only token, no secrets,
+  and cache entries it saves only its own pull request's runs can read. It
+  reads `main`'s caches. GitHub asks an admin to approve a first-time
+  contributor's run.
+- [PR CI requests](.github/workflows/pr-ci-requests.yml) runs `main`'s copy on
+  `pull_request_target` without checking out any code: it posts the pending
+  status and removes the `ci:run` label.
+- [PR CI result](.github/workflows/pr-ci-result.yml) runs `main`'s copy when PR
+  CI finishes, without checking out any code: it posts `CI required` for the
+  tested commit and runs the Merge job.
+
+A pull request can change its own checks, so a reviewer reads workflow changes
+before approving.
+
+Every run restores caches and saves its own: Rust compiles through sccache, downloaded
 crates, mise tools, and uv and pnpm packages keyed on their lockfiles. GitHub
 evicts the least recently used entries beyond the repository's 10 GB.
 Runs share only the Rust test archive between their own jobs, kept for a day.

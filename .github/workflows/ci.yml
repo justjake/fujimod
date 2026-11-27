@@ -35,9 +35,6 @@ jobs:
         with:
           ref: ${{ inputs.ref || github.sha }}
           persist-credentials: false
-          # PR CI checks out fork pull requests from pull_request_target; these
-          # jobs hold a read-only token and no secrets.
-          allow-unsafe-pr-checkout: true
       - uses: ./.github/actions/setup
         with:
           javascript: 'true'
@@ -56,9 +53,6 @@ jobs:
         with:
           ref: ${{ inputs.ref || github.sha }}
           persist-credentials: false
-          # PR CI checks out fork pull requests from pull_request_target; these
-          # jobs hold a read-only token and no secrets.
-          allow-unsafe-pr-checkout: true
           submodules: recursive
           lfs: true
       - uses: ./.github/actions/setup
@@ -85,9 +79,6 @@ jobs:
         with:
           ref: ${{ inputs.ref || github.sha }}
           persist-credentials: false
-          # PR CI checks out fork pull requests from pull_request_target; these
-          # jobs hold a read-only token and no secrets.
-          allow-unsafe-pr-checkout: true
       - uses: ./.github/actions/setup
         with:
           javascript: 'true'
@@ -112,9 +103,6 @@ jobs:
         with:
           ref: ${{ inputs.ref || github.sha }}
           persist-credentials: false
-          # PR CI checks out fork pull requests from pull_request_target; these
-          # jobs hold a read-only token and no secrets.
-          allow-unsafe-pr-checkout: true
           submodules: recursive
           lfs: true
       - uses: ./.github/actions/setup
@@ -135,9 +123,6 @@ jobs:
         with:
           ref: ${{ inputs.ref || github.sha }}
           persist-credentials: false
-          # PR CI checks out fork pull requests from pull_request_target; these
-          # jobs hold a read-only token and no secrets.
-          allow-unsafe-pr-checkout: true
           submodules: recursive
           lfs: true
       - uses: ./.github/actions/setup
@@ -157,9 +142,6 @@ jobs:
         with:
           ref: ${{ inputs.ref || github.sha }}
           persist-credentials: false
-          # PR CI checks out fork pull requests from pull_request_target; these
-          # jobs hold a read-only token and no secrets.
-          allow-unsafe-pr-checkout: true
           submodules: recursive
           lfs: true
       - uses: ./.github/actions/setup
@@ -180,9 +162,6 @@ jobs:
         with:
           ref: ${{ inputs.ref || github.sha }}
           persist-credentials: false
-          # PR CI checks out fork pull requests from pull_request_target; these
-          # jobs hold a read-only token and no secrets.
-          allow-unsafe-pr-checkout: true
           submodules: recursive
           lfs: true
       - uses: ./.github/actions/setup
@@ -201,9 +180,6 @@ jobs:
         with:
           ref: ${{ inputs.ref || github.sha }}
           persist-credentials: false
-          # PR CI checks out fork pull requests from pull_request_target; these
-          # jobs hold a read-only token and no secrets.
-          allow-unsafe-pr-checkout: true
           submodules: recursive
           lfs: true
       - uses: ./.github/actions/setup
@@ -219,9 +195,6 @@ jobs:
           ref: ${{ inputs.ref || github.sha }}
           lfs: true
           persist-credentials: false
-          # PR CI checks out fork pull requests from pull_request_target; these
-          # jobs hold a read-only token and no secrets.
-          allow-unsafe-pr-checkout: true
       - uses: ./.github/actions/setup
         with:
           javascript: 'true'

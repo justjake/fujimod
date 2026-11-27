@@ -5,13 +5,12 @@ run-name: >-
       github.event.action == 'synchronize' && 'new commits' ||
       github.event.action == 'ready_for_review' && 'marked ready' || github.event.action }}
 
-# GitHub runs main's copy of this file for every pull request into main, so a
-# branch cannot change when its commits are tested or what status they get.
-# Only the checks run the pull request's code, with a read-only token, and they
-# share main's caches (.github/actions/setup). Any author's pull request runs
-# when it is opened ready or marked ready for review.
+# The checks run the pull request's own code and workflow files as an
+# untrusted pull_request run: a read-only token, no secrets, and cache writes
+# scoped to the pull request. PR CI requests posts the pending status and
+# handles the ci:run label; PR CI result posts the outcome and merges.
 on:
-  pull_request_target:
+  pull_request:
     types: [opened, ready_for_review, synchronize, labeled]
     branches: [main]
 
@@ -26,119 +25,16 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  request:
-    name: Check the request
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-    permissions:
-      pull-requests: write
-      statuses: write
-    outputs:
-      run: ${{ steps.decide.outputs.run }}
-    steps:
-      - id: decide
-        env:
-          GH_TOKEN: ${{ github.token }}
-          REPO: ${{ github.repository }}
-          ACTION: ${{ github.event.action }}
-          LABEL: ${{ github.event.label.name }}
-          DRAFT: ${{ github.event.pull_request.draft }}
-          NUMBER: ${{ github.event.pull_request.number }}
-          SHA: ${{ github.event.pull_request.head.sha }}
-          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-        run: |
-          status() {
-            gh api -X POST "repos/$REPO/statuses/$SHA" -f context='CI required' \
-              -f state="$1" -f description="$2" -f target_url="$RUN_URL" > /dev/null
-          }
-          run=false
-          if [ "$ACTION" = labeled ]; then
-            if [ "$LABEL" = ci:run ]; then
-              gh api -X DELETE "repos/$REPO/issues/$NUMBER/labels/ci:run" > /dev/null || true
-              if [ "$DRAFT" = true ]; then status pending 'Mark the pull request ready to test it'
-              else run=true; fi
-            fi
-          elif [ "$DRAFT" != true ]; then
-            if [ "$ACTION" = synchronize ]; then
-              status pending 'Not tested yet: add the ci:run label'
-            else
-              run=true
-            fi
-          fi
-          if [ "$run" = true ]; then status pending 'Running'; fi
-          echo "run=$run" >> "$GITHUB_OUTPUT"
-
   checks:
     name: Checks
-    needs: request
-    if: needs.request.outputs.run == 'true'
+    # The rule PR CI requests applies: a ready pull request runs when opened
+    # or marked ready, and on the ci:run label; a push waits for the label.
+    if: >-
+      !github.event.pull_request.draft && (
+        github.event.action == 'opened' || github.event.action == 'ready_for_review' ||
+        (github.event.action == 'labeled' && github.event.label.name == 'ci:run'))
     permissions:
       contents: read
     uses: ./.github/workflows/ci.yml
     with:
       ref: ${{ github.event.pull_request.head.sha }}
-
-  result:
-    name: Post result
-    needs: [request, checks]
-    # A replaced or canceled run posts nothing: its replacement owns the status.
-    if: ${{ !cancelled() && needs.request.outputs.run == 'true' }}
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-    permissions:
-      statuses: write
-      pull-requests: read
-    outputs:
-      land: ${{ steps.post.outputs.land }}
-    steps:
-      - id: post
-        env:
-          GH_TOKEN: ${{ github.token }}
-          REPO: ${{ github.repository }}
-          SHA: ${{ github.event.pull_request.head.sha }}
-          RESULT: ${{ needs.checks.result }}
-          NUMBER: ${{ github.event.pull_request.number }}
-          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-        run: |
-          case "$RESULT" in
-            success) state=success description='Passed' ;;
-            cancelled) state=error description='Canceled: add the ci:run label to test again' ;;
-            *) state=failure description='Failed: see the run' ;;
-          esac
-          gh api -X POST "repos/$REPO/statuses/$SHA" -f context='CI required' \
-            -f state="$state" -f description="$description" -f target_url="$RUN_URL" > /dev/null
-          # GitHub's auto-merge waits for a code owner's approval, which an admin
-          # cannot give their own pull request. An admin's open pull request with
-          # auto-merge on lands once this exact commit passes.
-          land=false
-          if [ "$state" = success ]; then
-            pull=$(gh api "repos/$REPO/pulls/$NUMBER")
-            author=$(jq -r .user.login <<< "$pull")
-            if [ "$(jq -r '.state + " " + .head.sha + " " + (.auto_merge != null | tostring)' <<< "$pull")" = "open $SHA true" ] &&
-              [ "$(gh api "repos/$REPO/collaborators/$author/permission" --jq .permission)" = admin ]; then
-              land=true
-            fi
-          fi
-          echo "land=$land" >> "$GITHUB_OUTPUT"
-
-  merge:
-    name: Merge
-    needs: result
-    if: needs.result.outputs.land == 'true'
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-    # Only main may deploy to this environment, so a branch's workflow cannot
-    # read its merge key: a fine-grained token for this repository alone, with
-    # contents and pull requests write, from an account that bypasses the
-    # approval rule.
-    environment: pr-ci-merge
-    permissions: {}
-    steps:
-      - env:
-          GH_TOKEN: ${{ secrets.PR_CI_MERGE_TOKEN }}
-          REPO: ${{ github.repository }}
-          NUMBER: ${{ github.event.pull_request.number }}
-          SHA: ${{ github.event.pull_request.head.sha }}
-        run: |
-          gh api -X PUT "repos/$REPO/pulls/$NUMBER/merge" -f merge_method=rebase -f sha="$SHA" > /dev/null
-          echo "Merged #$NUMBER into main by rebase." >> "$GITHUB_STEP_SUMMARY"
