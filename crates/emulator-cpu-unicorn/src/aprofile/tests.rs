@@ -220,6 +220,51 @@ fn mmio_entries_and_tightened_deadlines_are_exact() {
         );
     }
 }
+#[test]
+fn armv7a_mmio_tightening_settles_the_restarted_block() {
+    let raw = crate::test_support::library()
+        .open(Model::CortexA7, 1 << 20)
+        .unwrap();
+    let cpu = Core::new(raw, Memory::default()).unwrap();
+    cpu.map_zeroed(0x1000, 0x4000, 7).unwrap();
+    cpu.write_register(Register::Pstate, &0xd3u32.to_le_bytes())
+        .unwrap();
+    cpu.write_register(arm::CORE[1], &0x8000u32.to_le_bytes())
+        .unwrap();
+    code(&cpu, &[0xe282_2001, 0xe282_2001, 0xe591_0000, 0xe282_2001, 0xe581_0000]);
+    let mut device = Device {
+        cpu: &cpu,
+        reads: vec![],
+        writes: vec![],
+        tighten: true,
+    };
+    unsafe {
+        cpu.map_mmio(
+            0x8000,
+            0x1000,
+            Mmio {
+                read,
+                write,
+                data: (&mut device as *mut Device<'_>).cast(),
+            },
+        )
+        .unwrap();
+    }
+    run(&cpu, 0x1000, 5);
+    assert_eq!(device.reads, [3]);
+    assert!(device.writes.is_empty());
+    assert_eq!(cpu.instruction_progress(), Some(3));
+    assert_eq!(value(&cpu, Register::Pc), 0x100c);
+    assert_eq!(value(&cpu, arm::CORE[0]), 42);
+    assert_eq!(value(&cpu, arm::CORE[2]), 2);
+
+    run(&cpu, 0x100c, 2);
+    assert_eq!(device.writes, [2]);
+    assert_eq!(cpu.instruction_progress(), Some(2));
+    assert_eq!(value(&cpu, Register::Pc), 0x1014);
+    assert_eq!(value(&cpu, arm::CORE[2]), 3);
+}
+
 struct HighAddressDevice {
     reads: Vec<(u64, u32)>,
 }
