@@ -18414,6 +18414,16 @@
       "additionalProperties": false,
       "description": "A setting a run requests by name, such as `debug` or `language`.",
       "properties": {
+        "additional_writes": {
+          "additionalProperties": {
+            "items": {
+              "$ref": "#/$defs/NamedSettingWrite"
+            },
+            "type": "array"
+          },
+          "description": "Further writes made only when the matching value is requested.",
+          "type": "object"
+        },
         "offset": {
           "description": "Byte offset in that store.",
           "format": "uint64",
@@ -18442,6 +18452,38 @@
         "store",
         "offset",
         "values"
+      ],
+      "type": "object"
+    },
+    "NamedSettingWrite": {
+      "additionalProperties": false,
+      "description": "A further store write for one named setting value.",
+      "properties": {
+        "bytes": {
+          "description": "Bytes written for the selected value.",
+          "items": {
+            "format": "uint8",
+            "maximum": 255,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "type": "array"
+        },
+        "offset": {
+          "description": "Byte offset in the target store.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "store": {
+          "description": "Target store, in the same application phase as the primary setting.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "store",
+        "offset",
+        "bytes"
       ],
       "type": "object"
     },
@@ -21203,6 +21245,15 @@
           "description": "Managed logical index of that block; NOR arrays have none.",
           "format": "uint16",
           "maximum": 65535,
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "nor_extent_bytes": {
+          "description": "Byte extent of this virtual NOR journal, including its alternate storage.\nSpace after the initialized records is erased (0xff).",
+          "format": "uint32",
           "minimum": 0,
           "type": [
             "integer",
