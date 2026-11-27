@@ -151,7 +151,13 @@ jobs:
         with:
           name: rust-tests
           path: target/nextest
+      - name: Show the runner's CPU
+        run: grep -m1 'model name' /proc/cpuinfo; grep -m1 -o 'avx512[a-z]*' /proc/cpuinfo || echo 'no AVX-512'
       - run: mise run rust-test-shard -- ${{ matrix.shard }}/3
+        env:
+          # On some runner CPUs lavapipe's wide-vector code paints the GPU blend
+          # comparisons differently from the CPU reference, on every retry.
+          LP_NATIVE_VECTOR_WIDTH: '128'
 
   desktop-app:
     name: Desktop app tests
