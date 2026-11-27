@@ -209,6 +209,24 @@ pub struct StockSelector {
     /// running firmware loads from the installed flash itself.
     pub cleared: Vec<Cleared>,
 }
+/// The stock stack's extent, for a body whose boot header copies past it.
+///
+/// The builder requires the stock stack above the copied setup and refuses any other layout
+/// unless the recipe declares this. The stock bootstrap loads its stack pointer with
+/// `adr x1, <extent start>; add x1, x1, #<size>; mov sp, x1`. The GFX100RF 1.14 header copies
+/// 0x20000 bytes to 0xff800000 and its bootstrap puts the 0x4000-byte stack at 0xff81b600,
+/// inside that copy.
+///
+/// A declared extent is checked against those three instructions and against every part of the
+/// copied setup that the startup runs or changes, so the stack cannot run over them.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct StockStack {
+    /// Offset of the stack's lowest byte in the copied setup.
+    pub offset: usize,
+    /// Its size. The stack pointer starts at `offset + size`.
+    pub size: usize,
+}
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Setup {
@@ -217,6 +235,10 @@ pub struct Setup {
     pub length_flags: u32,
     pub base: u64,
     pub stack: u64,
+    /// Where the stock stack lies inside the copied setup. Without it the stack has to lie
+    /// above the copied setup.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub stock_stack: Option<StockStack>,
     pub bootstrap_offset: usize,
     pub initialize_offset: usize,
     pub gate_offset: usize,
@@ -410,6 +432,72 @@ impl Setup {
             "XP5 initializer binding differs",
         )?;
         Ok(prefix)
+    }
+}
+impl Setup {
+    /// Check a declared stock stack inside the copied setup: it is the extent the stock
+    /// bootstrap loads its stack pointer from, and nothing of the copied setup that the startup
+    /// runs or changes lies in it.
+    fn verify_stock_stack(&self, declared: &StockStack, prefix: &[u8]) -> Result<()> {
+        let end = declared.offset.checked_add(declared.size);
+        require(
+            declared.size > 0
+                && end.is_some_and(|end| {
+                    end <= self.low_length && self.base + end as u64 == self.stack
+                }),
+            "XP5 stock stack declaration is not an extent of the copied setup below the stack",
+        )?;
+        let end = declared.offset + declared.size;
+        // adr x1, <label>; add x1, x1, #<size>[, lsl #12]; mov sp, x1, before the initializer
+        // call at +36.
+        let at = self.bootstrap_offset + 24;
+        let (adr, add, mov) = (
+            word(prefix, at)?,
+            word(prefix, at + 4)?,
+            word(prefix, at + 8)?,
+        );
+        let displacement =
+            (i64::from((((adr >> 5) & 0x7ffff) << 2) | ((adr >> 29) & 3)) ^ 0x100000) - 0x100000;
+        let size = u64::from((add >> 10) & 0xfff) << if add & 0x400000 == 0 { 0 } else { 12 };
+        require(
+            adr & 0x9f00001f == 0x10000001
+                && add & 0xff8003ff == 0x91000021
+                && mov == 0x9100003f
+                && (at - 0x800) as i64 + displacement == declared.offset as i64
+                && size == declared.size as u64,
+            "XP5 stock stack declaration differs from the bootstrap",
+        )?;
+        require(
+            self.card_boot.is_none(),
+            "A stock stack inside the copied setup is not checked against card-resident setup",
+        )?;
+        let code = |proof: &CodeProof| {
+            let start = (proof.address as u64).saturating_sub(self.base) as usize;
+            start..start.saturating_add(proof.size)
+        };
+        // The entry word and the bootstrap through its gate, which the builder rewrites, the
+        // two stock routines the loader calls, and the bank accessor words it edits.
+        let bootstrap = self.bootstrap_offset - 0x800;
+        let used = [
+            0..4,
+            bootstrap..bootstrap + 52,
+            code(&self.initializer),
+            code(&self.delay),
+        ]
+        .into_iter()
+        .chain(
+            self.banks
+                .edits
+                .iter()
+                .map(|edit| edit.address..edit.address.saturating_add(4)),
+        );
+        for extent in used {
+            require(
+                extent.end <= declared.offset || end <= extent.start,
+                "XP5 stock stack overlaps setup the startup runs or changes",
+            )?;
+        }
+        Ok(())
     }
 }
 /// Card entry replays its checked header without probing installed flash.
@@ -763,11 +851,17 @@ fn package_inner(
     let workspace = setup.base + 0x38800;
     let address = (copied_end.max(setup.stack + 0x100) + 0x3fff) & !0x3fff;
     let capacity = workspace.saturating_sub(address);
-    // The stock stack is above the copied setup on most bodies. A body whose header copies
-    // more than its code needs (GFX100RF: 0x20000 bytes, stack 0xff81f600) has the stack in
-    // the copied extent, as on its own flash boot; the extension then starts at the copy's end.
+    // The stock stack is above the copied setup unless the recipe declares where it lies in
+    // the copy (`StockStack`); the extension then starts at the copy's end.
+    match &setup.stock_stack {
+        None => require(
+            copied_end < setup.stack,
+            "No XP5 extension above the stock stack and below boot workspace",
+        )?,
+        Some(declared) => setup.verify_stock_stack(declared, &prefix)?,
+    }
     require(
-        setup.base < setup.stack && setup.stack < workspace && capacity >= 0x4000,
+        setup.stack < workspace && capacity >= 0x4000,
         "No XP5 extension above the stock stack and below boot workspace",
     )?;
     let count = word(&prefix, 0x14)? as usize;
@@ -1253,6 +1347,7 @@ mod tests {
             length_flags: 0,
             base,
             stack: base + 0x8000,
+            stock_stack: None,
             bootstrap_offset: 0x900,
             initialize_offset: 0xa00,
             gate_offset: 0x928,
@@ -2154,6 +2249,190 @@ mod tests {
         let mut changed = s.clone();
         changed.stack = s.base + 0x38000;
         assert!(package(&data, &changed, None, 0, StartupStop::Continue, false).is_err());
+    }
+
+    /// The fixture with its bootstrap loading the stack pointer as the stock one does,
+    /// `adr x1, <offset>; add x1, x1, #<size>; mov sp, x1`, and the stack at `offset + size` of
+    /// the setup.
+    fn stack_fixture(offset: usize, size: usize) -> (Vec<u8>, Setup, Vec<u8>) {
+        let (mut data, mut setup, ram) = fixture();
+        let at = setup.bootstrap_offset + 24;
+        let displacement = (offset as i64 - (at - 0x800) as i64) as u32;
+        let add = if size.is_multiple_of(0x1000) {
+            0x91400021 | ((size >> 12) as u32) << 10
+        } else {
+            0x91000021 | (size as u32) << 10
+        };
+        for (n, value) in [
+            0x10000001 | (displacement & 3) << 29 | ((displacement >> 2) & 0x7ffff) << 5,
+            add,
+            0x9100003f,
+        ]
+        .into_iter()
+        .enumerate()
+        {
+            put(&mut data, at + n * 4, value).unwrap();
+        }
+        setup.stack = setup.base + (offset + size) as u64;
+        rehash(&data, &mut setup);
+        (data, setup, ram)
+    }
+    fn rehash(data: &[u8], setup: &mut Setup) {
+        setup.prefix = source(&data[..0x40000]);
+        setup.proofs[0].source = setup.prefix.clone();
+    }
+    fn refusal(data: &[u8], setup: &Setup, ram: &[u8]) -> String {
+        package(
+            data,
+            setup,
+            Some(ram.to_vec()),
+            0,
+            StartupStop::Continue,
+            false,
+        )
+        .expect_err("refused")
+        .to_string()
+    }
+    const NOT_ABOVE: &str = "No XP5 extension above the stock stack and below boot workspace";
+
+    #[test]
+    fn a_stock_stack_inside_the_copied_setup_is_refused_without_the_recipes_declaration() {
+        // The setup copies 0x4000 bytes; the bootstrap puts a 0x1000-byte stack at 0x2000 of
+        // them. Whatever startup is built, the layout is refused.
+        let (data, setup, ram) = stack_fixture(0x2000, 0x1000);
+        assert!(setup.stock_stack.is_none());
+        assert_eq!(refusal(&data, &setup, &ram), NOT_ABOVE);
+        let stage_one = package(&data, &setup, None, 0, StartupStop::Continue, false);
+        assert_eq!(stage_one.err().unwrap().to_string(), NOT_ABOVE);
+        // A stack that ends exactly where the copy ends is inside it too.
+        let (data, setup, ram) = stack_fixture(0x3000, 0x1000);
+        assert_eq!(refusal(&data, &setup, &ram), NOT_ABOVE);
+        // Above the copy nothing is declared and nothing is asked, as before.
+        let (data, setup, ram) = fixture();
+        assert!(setup.stock_stack.is_none() && setup.stack > setup.base + 0x4000);
+        assert!(package(&data, &setup, Some(ram), 0, StartupStop::Continue, false).is_ok());
+        assert!(
+            serde_json::to_value(&setup)
+                .unwrap()
+                .get("stock_stack")
+                .is_none()
+        );
+    }
+
+    #[test]
+    fn a_declared_stock_stack_inside_the_copied_setup_builds() {
+        let (data, mut setup, ram) = stack_fixture(0x2000, 0x1000);
+        setup.stock_stack = Some(StockStack {
+            offset: 0x2000,
+            size: 0x1000,
+        });
+        let build = |setup: &Setup, ram: Option<Vec<u8>>| {
+            package(&data, setup, ram, 0, StartupStop::Continue, false).unwrap()
+        };
+        // The extension starts at the end of the copy: the entry word jumps there.
+        let extension = setup.base + 0x4000;
+        for files in [build(&setup, Some(ram.clone())), build(&setup, None)] {
+            assert_eq!(files[0].name, "marble_init.bin");
+            assert_eq!(
+                word(&files[0].bytes, 0).unwrap(),
+                branch(setup.base, extension + CARD.setup_entry as u64, false).unwrap()
+            );
+        }
+        // The declaration reads back from a recipe.
+        let json = serde_json::to_value(&setup).unwrap();
+        assert_eq!(
+            json["stock_stack"],
+            serde_json::json!({"offset": 0x2000, "size": 0x1000})
+        );
+        let read: Setup = serde_json::from_value(json).unwrap();
+        assert_eq!(read.stock_stack, setup.stock_stack);
+        // A stack that ends where the copy ends, with a size the bootstrap adds unshifted.
+        let (data, mut setup, ram) = stack_fixture(0x3800, 0x800);
+        setup.stock_stack = Some(StockStack {
+            offset: 0x3800,
+            size: 0x800,
+        });
+        assert!(package(&data, &setup, Some(ram), 0, StartupStop::Continue, false).is_ok());
+    }
+
+    #[test]
+    fn a_declared_stock_stack_is_checked_against_the_bootstrap_and_the_setup_in_use() {
+        const EXTENT: &str =
+            "XP5 stock stack declaration is not an extent of the copied setup below the stack";
+        const BOOTSTRAP: &str = "XP5 stock stack declaration differs from the bootstrap";
+        const OVERLAP: &str = "XP5 stock stack overlaps setup the startup runs or changes";
+        let declare = |setup: &Setup, offset, size| {
+            let mut declared = setup.clone();
+            declared.stock_stack = Some(StockStack { offset, size });
+            declared
+        };
+        let (data, setup, ram) = stack_fixture(0x2000, 0x1000);
+        // The extent has to end at the stack, inside the copy, and hold something.
+        for (offset, size) in [(0x2000, 0x800), (0x2800, 0x1000), (0x3000, 0)] {
+            assert_eq!(refusal(&data, &declare(&setup, offset, size), &ram), EXTENT);
+        }
+        // It has to be the extent the bootstrap adds up, not another one with the same end.
+        assert_eq!(
+            refusal(&data, &declare(&setup, 0x1000, 0x2000), &ram),
+            BOOTSTRAP
+        );
+        // Each of the three instructions is required.
+        let declared = declare(&setup, 0x2000, 0x1000);
+        for (n, value) in [(0, 0x10000002u32), (1, 0x91401022), (2, 0xd503201f)] {
+            let mut changed = data.clone();
+            put(&mut changed, setup.bootstrap_offset + 24 + n * 4, value).unwrap();
+            let mut declared = declared.clone();
+            rehash(&changed, &mut declared);
+            assert_eq!(
+                refusal(&changed, &declared, &ram),
+                BOOTSTRAP,
+                "instruction {n}"
+            );
+        }
+        // A stack above the copy takes no declaration.
+        let (above, setup, above_ram) = fixture();
+        assert_eq!(
+            refusal(&above, &declare(&setup, 0x7000, 0x1000), &above_ram),
+            EXTENT
+        );
+        // The card-resident setup is not checked against a stack inside the copy.
+        assert_eq!(
+            refusal(&data, &with_frames(declared.clone()), &ram),
+            "A stock stack inside the copied setup is not checked against card-resident setup"
+        );
+        // Nothing the startup runs or changes may lie in the stack: the entry word, the
+        // bootstrap, the initializer, the delay routine and a bank accessor edit.
+        for (offset, size, what) in [
+            (0, 0x10, "entry word"),
+            (0x120, 0x10, "bootstrap"),
+            (0x1f0, 0x20, "initializer"),
+            (0x2f0, 0x20, "delay"),
+            (0xff0, 0x20, "bank edit"),
+            (0, 0x1000, "all of them"),
+        ] {
+            let (data, mut setup, ram) = stack_fixture(offset, size);
+            setup.banks.edits.push(image::Edit {
+                address: 0x1000,
+                old: 0xffff_ffff,
+                new: 0,
+                what: "accessor".into(),
+            });
+            assert_eq!(
+                refusal(&data, &declare(&setup, offset, size), &ram),
+                OVERLAP,
+                "{what}"
+            );
+        }
+        // The same bank edit beside the stack is no obstacle.
+        let (data, mut setup, ram) = stack_fixture(0x2000, 0x1000);
+        setup.banks.edits.push(image::Edit {
+            address: 0x1000,
+            old: 0xffff_ffff,
+            new: 0,
+            what: "accessor".into(),
+        });
+        let declared = declare(&setup, 0x2000, 0x1000);
+        assert!(package(&data, &declared, Some(ram), 0, StartupStop::Continue, false).is_ok());
     }
 
     #[test]
