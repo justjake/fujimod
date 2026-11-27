@@ -1805,6 +1805,7 @@ unsafe extern "C" fn classify(data: *mut c_void, address: u64, word: u32) -> i32
         InstructionDisposition::ExecuteAndEndBlock if context.native_execute_end => 8,
         InstructionDisposition::ExecuteAndEndBlock => 2,
         InstructionDisposition::Replace => 3,
+        InstructionDisposition::ReplaceWithArmv7aCbar => 3 | 64,
     };
     action
         | if matches!(decision.instruction, InstructionDisposition::ExecuteItSafe)

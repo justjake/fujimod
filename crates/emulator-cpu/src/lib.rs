@@ -516,6 +516,8 @@ pub enum InstructionDisposition {
     /// condition's no-op, and leaves the PC at the instruction only to stop
     /// before it. The backend translates no body and ends the block after it.
     Replace,
+    /// Execute a wired Cortex-A7 CBAR read when the owner supports it.
+    ReplaceWithArmv7aCbar,
 }
 #[derive(Clone, Copy, Debug)]
 pub struct Translation {
@@ -611,6 +613,10 @@ pub trait Cpu {
     /// Set the wired affinity for a backend that implements MPIDR reads.
     /// The board supplies these reads for backends that use its instruction observer.
     fn set_armv7a_affinity(&self, _mpidr: u32) -> Result<(), String> {
+        Ok(())
+    }
+    /// Install the board's wired Cortex-A7 configuration base.
+    fn set_armv7a_cbar(&self, _base: u32) -> Result<(), String> {
         Ok(())
     }
     /// Select the board's MPIDR execution path before a scheduler run.

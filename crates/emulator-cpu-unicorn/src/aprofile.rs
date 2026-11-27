@@ -77,6 +77,8 @@ struct Execution {
     exclusive_exits: Cell<bool>,
     owner_mpidr: Cell<bool>,
     board_mpidr: Cell<bool>,
+    native_cbar_wired: Cell<bool>,
+    owner_cbar: Cell<bool>,
     owner_interrupts: Cell<bool>,
     owner_aborts: Cell<bool>,
     // Newest entered instruction addresses, oldest first, while an owner
@@ -161,6 +163,8 @@ impl Core {
             exclusive_exits: Cell::new(false),
             owner_mpidr: Cell::new(false),
             board_mpidr: Cell::new(false),
+            native_cbar_wired: Cell::new(false),
+            owner_cbar: Cell::new(false),
             owner_interrupts: Cell::new(false),
             owner_aborts: Cell::new(false),
             trace: RefCell::new(None),
@@ -465,7 +469,15 @@ impl Execution {
                 || word & 0xff000000 == 0xd4000000
         };
         Ok(Translation {
-            instruction: if framework {
+            instruction: if framework
+                && self.owner_cbar.get()
+                && word & 0xffff_0fff == 0xee9f_0f10
+                && (word >> 12) & 15 != 15
+                && self.index.borrow().instructions.at(address).is_empty()
+                && self.index.borrow().stores.is_empty()
+            {
+                InstructionDisposition::ReplaceWithArmv7aCbar
+            } else if framework {
                 InstructionDisposition::Replace
             } else if address > u32::MAX as u64
                 || boundary

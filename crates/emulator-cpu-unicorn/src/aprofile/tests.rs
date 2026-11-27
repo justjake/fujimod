@@ -151,6 +151,59 @@ fn armv7a_predicated_arithmetic_preserves_flags_at_each_stop() {
 }
 
 #[test]
+fn armv7a_native_cbar_preserves_exact_limits_and_observers() {
+    let raw = crate::test_support::library()
+        .open(Model::CortexA7, 1 << 20)
+        .unwrap();
+    let cpu = Core::new(raw, Memory::default()).unwrap();
+    cpu.map_zeroed(0x1000, 0x4000, 7).unwrap();
+    cpu.write_register(arm::CPSR, &0xd3u32.to_le_bytes()).unwrap();
+    const CBAR: u32 = 0xee9f_1f10;
+    const CONDITIONAL: u32 = 0x0e9f_2f10;
+    const BASE: u32 = 0x1200_0000;
+    code(&cpu, &[CBAR, 0xe280_0001, CONDITIONAL]);
+    cpu.set_armv7a_cbar(BASE).unwrap();
+    cpu.select_armv7a_affinity_policy(ExecutionPolicy::Exact).unwrap();
+    if !cpu.execution.native_cbar_wired.get() {
+        assert!(matches!(run(&cpu, 0x1000, 1), Exit::BeforeInstruction(CBAR)));
+        return;
+    }
+
+    assert!(matches!(run(&cpu, 0x1000, 1), Exit::Stopped));
+    assert_eq!(cpu.instruction_progress(), Some(1));
+    assert_eq!(value(&cpu, Register::Pc), 0x1004);
+    assert_eq!(value(&cpu, arm::CORE[1]), u64::from(BASE));
+    assert_eq!(value(&cpu, arm::CORE[0]), 0);
+    assert!(matches!(run(&cpu, 0x1000, 2), Exit::Stopped));
+    assert_eq!(cpu.instruction_progress(), Some(2));
+    assert_eq!(value(&cpu, Register::Pc), 0x1008);
+    assert_eq!(value(&cpu, arm::CORE[0]), 1);
+    assert!(matches!(
+        run(&cpu, 0x1008, 1),
+        Exit::BeforeInstruction(CONDITIONAL)
+    ));
+
+    cpu.select_armv7a_affinity_policy(ExecutionPolicy::Interactive).unwrap();
+    assert!(matches!(run(&cpu, 0x1000, 1), Exit::BeforeInstruction(CBAR)));
+    cpu.select_armv7a_affinity_policy(ExecutionPolicy::Exact).unwrap();
+    cpu.set_entry_trace(8).unwrap();
+    assert!(matches!(run(&cpu, 0x1000, 1), Exit::BeforeInstruction(CBAR)));
+    cpu.set_entry_trace(0).unwrap();
+
+    unsafe {
+        cpu.install_hook(Hook::Instruction {
+            range: HookRange::Inclusive { begin: 0x1000, end: 0x1000 },
+            callback: intercept,
+            data: (&cpu as *const Core).cast_mut().cast(),
+        })
+        .unwrap();
+    }
+    assert!(matches!(run(&cpu, 0x1000, 2), Exit::Stopped));
+    assert_eq!(cpu.instruction_progress(), Some(0));
+    assert_eq!(value(&cpu, Register::Pc), 0x1000);
+}
+
+#[test]
 fn framework_exit_precedes_entry_and_preserves_exact_budget() {
     let cpu = cpu();
     code(&cpu, &[0x91000400, 0x91000400, 0xd53be040, 0x91000400]); // MRS x0,CNTVCT_EL0

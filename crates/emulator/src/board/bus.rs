@@ -791,6 +791,27 @@ impl Bus {
                 })
         })
     }
+    /// A strict read with no model, deadline, or dependent-device change.
+    pub(super) fn read_quiet(&mut self, address: u64, size: u8, now: u64) -> Option<u64> {
+        if !self.loop_window() || self.needs_frontier_pcs() || !matches!(size, 1 | 2 | 4 | 8) {
+            return None;
+        }
+        let source = self.window_at(address, size)?;
+        if !self.dependents[source].is_empty() {
+            return None;
+        }
+        let device = &self.windows[source].device;
+        let result = device.read_without_advance(address, size, now)?;
+        let started = fujimod_perf::device(
+            u16::try_from(source).unwrap_or(u16::MAX),
+            device.name(),
+            fujimod_perf::DevicePhase::AdvanceRead,
+        );
+        drop(started);
+        self.wake_queue.clear();
+        self.record_read_wake(source, 1);
+        Some(result & (u64::MAX >> (64 - u32::from(size) * 8)))
+    }
     /// A poll loop fast-forward left `count` reads of a `poll_stable`
     /// register out. Each would have run a wake pass that finds no dependent
     /// due and marks the model and its dependents with a new generation.
@@ -800,6 +821,9 @@ impl Bus {
         let Some(source) = self.window_at(address, size) else {
             return;
         };
+        self.record_read_wake(source, count);
+    }
+    fn record_read_wake(&mut self, source: usize, count: u64) {
         if count == 0 {
             return;
         }
@@ -1548,6 +1572,43 @@ mod tests {
         observed.observe_transactions(None);
         assert!(observed.transactions().0.is_empty());
         assert_eq!(plain.state(), observed.state());
+    }
+
+    #[test]
+    fn quiet_reads_preserve_bus_wake_bookkeeping_and_respect_observers() {
+        struct Quiet;
+        impl Device for Quiet {
+            fn name(&self) -> &'static str {
+                "quiet"
+            }
+            fn read_without_advance(&self, _: u64, size: u8, now: u64) -> Option<u64> {
+                (size == 4).then_some(now)
+            }
+            fn read(&mut self, cx: &mut Cx<'_>, _: u64, _: u8) -> u64 {
+                cx.now()
+            }
+            fn write(&mut self, _: &mut Cx<'_>, _: u64, _: u8, _: u64) {}
+        }
+
+        let mut normal = Bus::new(Mode::Strict);
+        let mut quiet = Bus::new(Mode::Strict);
+        for bus in [&mut normal, &mut quiet] {
+            bus.register(0x1000, 4, Box::new(Quiet)).unwrap();
+            bus.wake_generation = u64::MAX;
+        }
+        let mut host = Services;
+        for expected_generation in [1, 2] {
+            let ordinary = normal.access(&mut host, 0, 0, 0x1000, 4, None).unwrap();
+            assert_eq!(quiet.read_quiet(0x1000, 4, host.now()), Some(ordinary));
+            assert_eq!(quiet.wake_generation, expected_generation);
+            assert_eq!(quiet.wake_generation, normal.wake_generation);
+            assert_eq!(quiet.visited, normal.visited);
+            assert_eq!(quiet.wake_queue, normal.wake_queue);
+            assert_eq!(quiet.touched, normal.touched);
+        }
+        assert_eq!(quiet.read_quiet(0x1000, 2, host.now()), None);
+        quiet.observe_transactions(Some(2));
+        assert_eq!(quiet.read_quiet(0x1000, 4, host.now()), None);
     }
 
     #[test]

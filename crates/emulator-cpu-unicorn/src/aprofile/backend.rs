@@ -59,16 +59,31 @@ impl Cpu for Core {
         self.execution.board_mpidr.set(supported);
         Ok(())
     }
+    fn set_armv7a_cbar(&self, base: u32) -> Result<(), String> {
+        let e = &self.execution;
+        if e.latest_span && cfg!(target_os = "macos")
+            && let Some(configure) = e.cpu.api.extensions.set_a32_cbar
+        {
+            crate::check(&e.cpu.api, unsafe { configure(e.cpu.raw, base) })?;
+            e.native_cbar_wired.set(true);
+        }
+        Ok(())
+    }
     fn select_armv7a_affinity_policy(&self, policy: ExecutionPolicy) -> Result<(), String> {
         let e = &self.execution;
-        if e.board_mpidr.get() {
-            // Interactive runs can switch cores at an instruction exit.
-            // Preserve the existing MPIDR scheduling boundary there.
-            let native = policy == ExecutionPolicy::Exact;
-            if e.owner_mpidr.get() != native {
-                e.cpu.invalidate_code(None)?;
-                e.owner_mpidr.set(native);
-            }
+        // Interactive runs can switch cores at an instruction exit.
+        // Preserve the existing framework boundaries for wired CP15 reads.
+        let exact = policy == ExecutionPolicy::Exact;
+        let mpidr = if e.board_mpidr.get() {
+            exact
+        } else {
+            e.owner_mpidr.get()
+        };
+        let cbar = exact && e.native_cbar_wired.get();
+        if e.owner_mpidr.get() != mpidr || e.owner_cbar.get() != cbar {
+            e.cpu.invalidate_code(None)?;
+            e.owner_mpidr.set(mpidr);
+            e.owner_cbar.set(cbar);
         }
         Ok(())
     }

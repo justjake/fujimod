@@ -94,6 +94,7 @@ pub struct Extensions {
     /// Test exit requests inline at block entry and after memory accesses.
     pub set_block_exits: Option<unsafe extern "C" fn(Engine, bool) -> Error>,
     pub set_entry_exits: Option<unsafe extern "C" fn(Engine, bool) -> Error>,
+    pub set_a32_cbar: Option<unsafe extern "C" fn(Engine, u32) -> Error>,
     pub set_instruction_counter: Option<unsafe extern "C" fn(Engine, bool) -> Error>,
     pub set_guard_diagnostics: Option<unsafe extern "C" fn(Engine, bool) -> Error>,
     pub add_restart_boundary: Option<unsafe extern "C" fn(Engine, *mut usize, u64, u64) -> Error>,
@@ -301,6 +302,7 @@ mod linked {
         fn uc_embedder_set_parallel_cpus(engine: Engine, enabled: bool) -> Error;
         fn uc_embedder_set_block_exits(engine: Engine, enabled: bool) -> Error;
         fn uc_embedder_set_entry_exits(engine: Engine, enabled: bool) -> Error;
+        fn uc_embedder_set_a32_cbar(engine: Engine, base: u32) -> Error;
         fn uc_embedder_set_instruction_counter(engine: Engine, enabled: bool) -> Error;
         fn uc_embedder_set_guard_diagnostics(engine: Engine, enabled: bool) -> Error;
         fn uc_embedder_add_restart_boundary(
@@ -334,6 +336,7 @@ mod linked {
             set_parallel_cpus: Some(uc_embedder_set_parallel_cpus),
             set_block_exits: Some(uc_embedder_set_block_exits),
             set_entry_exits: Some(uc_embedder_set_entry_exits),
+            set_a32_cbar: Some(uc_embedder_set_a32_cbar),
             set_instruction_counter: Some(uc_embedder_set_instruction_counter),
             set_guard_diagnostics: Some(uc_embedder_set_guard_diagnostics),
             add_restart_boundary: Some(uc_embedder_add_restart_boundary),

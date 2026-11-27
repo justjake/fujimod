@@ -210,6 +210,7 @@ impl Board {
             return Err("ARMv7-A reset wiring must be configured once before execution".into());
         }
         self.cpu(core)?.set_armv7a_affinity(config.mpidr)?;
+        self.cpu(core)?.set_armv7a_cbar(config.configuration_base)?;
         state.armv7a[core] = Some(Profile::new(config));
         Ok(())
     }

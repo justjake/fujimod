@@ -3329,24 +3329,27 @@ impl State {
             let entered = cpu
                 .instruction_progress()
                 .ok_or("active entry count is unavailable")?;
-            let remaining = match self.parallel.as_ref() {
-                Some(epoch) => epoch.room(core),
-                None => self.timeline.processor_budget(
-                    core,
-                    self.scheduler_room(core),
-                    self.clock_limit,
-                )?,
-            };
-            // Entries a poll loop fast-forward accounted are not in the
-            // engine's count: the run's own budget ends that much earlier.
-            let remaining = if self.polls.active[core] {
-                remaining.min(self.polls.run_end[core].saturating_sub(self.instructions[core]))
-            } else {
-                remaining
-            };
-            cpu.tighten_instruction_limit(entered.saturating_add(remaining))?;
+            self.tighten_at(cpu, core, entered)?;
         }
         Ok(())
+    }
+    fn tighten_at(&self, cpu: &dyn Cpu, core: usize, entered: u64) -> Result<(), String> {
+        let remaining = match self.parallel.as_ref() {
+            Some(epoch) => epoch.room(core),
+            None => self.timeline.processor_budget(
+                core,
+                self.scheduler_room(core),
+                self.clock_limit,
+            )?,
+        };
+        // Entries a poll loop fast-forward accounted are not in the
+        // engine's count: the run's own budget ends that much earlier.
+        let remaining = if self.polls.active[core] {
+            remaining.min(self.polls.run_end[core].saturating_sub(self.instructions[core]))
+        } else {
+            remaining
+        };
+        cpu.tighten_instruction_limit(entered.saturating_add(remaining))
     }
     fn access(
         &mut self,
@@ -3396,6 +3399,28 @@ impl State {
         }
         self.memory_access = value.is_some();
         self.timeline.synchronize(core)?;
+        if self.execution_policy == ExecutionPolicy::Exact
+            && value.is_none()
+            && self.access_histogram.is_none()
+            && self.parallel.is_none()
+            && self.armv7a[core].is_some()
+            && self.blocks[core].is_none()
+            && !self.polls.active[core]
+            && !self.release_state_changed
+            && self.error.is_none()
+            && !self.interrupt_changed.contains(&true)
+            && self.mprofile.iter().all(Option::is_none)
+            && self.aprofile.iter().all(Option::is_none)
+            && let Some(result) = self.bus.read_quiet(address, size, self.timeline.now())
+        {
+            self.push_pins(cpus)?;
+            self.settle_after_pin_push(core)?;
+            if cpus[core].features().tighten_instruction_limit {
+                // sync already accounted the instruction servicing this read.
+                self.tighten_at(&*cpus[core], core, self.accounted[core])?;
+            }
+            return Ok(result);
+        }
         let use_publication = value.is_none()
             && !binding.published_reads.is_empty()
             && self.execution_policy == ExecutionPolicy::Interactive
