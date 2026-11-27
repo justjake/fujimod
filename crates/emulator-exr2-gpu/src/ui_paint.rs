@@ -260,6 +260,14 @@ impl CpuTarget {
         let width = self.key.extent.width as usize;
         render::morton(width, x as usize, y as usize) * self.bytes_per_pixel()
     }
+
+    fn store(&mut self, x: i64, y: i64, word: u32) {
+        let offset = self.pixel_offset(x, y);
+        let width = self.bytes_per_pixel().min(4);
+        for lane in 0..width {
+            self.bytes[offset + lane] = (word >> (8 * lane)) as u8;
+        }
+    }
 }
 
 fn parameter_float(params: &[u32], index: usize) -> f32 {
@@ -494,6 +502,26 @@ impl<'a> PaintOp<'a> {
             rgba[0] << 24 | rgba[1] << 16 | rgba[2] << 8 | rgba[3]
         }
     }
+
+    /// The word a fully covered, opaque solid writes. At coverage one and
+    /// alpha one the shader reduces `out_alpha` to one and `out_rgb` to the
+    /// source, for both SRC and SRC_OVER. A color transform rounds through a
+    /// different path, so it keeps the general blend.
+    fn opaque_solid_word(&self) -> Option<u32> {
+        if self.mode != 0 || self.color_transform.is_some() || self.solid[3] != 1.0 {
+            return None;
+        }
+        let word = self.params[39];
+        let source = [
+            word & 255,
+            (word >> 8) & 255,
+            (word >> 16) & 255,
+            (word >> 24) & 255,
+        ];
+        let rgba = self.solid.map(quantize);
+        // `quantize` must round each channel back to its stored byte.
+        (rgba == source).then(|| self.pack(rgba))
+    }
 }
 
 fn quantize(value: f32) -> u32 {
@@ -573,6 +601,7 @@ fn render_cpu(draws: &[batch::Draw], snapshots: Snapshots) -> Result<RenderedBat
             .map(Vec::as_slice);
         let data = paint_data(draw, image)?;
         let op = PaintOp::new(&params, &data);
+        let opaque_solid = op.opaque_solid_word();
         let target_index = *target_slots
             .get(&draw.target.0)
             .ok_or_else(|| Unsupported("Graphics UI target lookup failed".into()))?;
@@ -594,6 +623,12 @@ fn render_cpu(draws: &[batch::Draw], snapshots: Snapshots) -> Result<RenderedBat
             }
             let x = plan.x0 + (pixel % plan.width) as i64;
             let y = plan.y0 + (pixel / plan.width) as i64;
+            if coverage_byte == 255
+                && let Some(word) = opaque_solid
+            {
+                target.store(x, y, word);
+                continue;
+            }
             paint_pixel(&op, target, x, y, coverage_byte as f32 / 255.0);
         }
     }
@@ -1185,6 +1220,23 @@ mod tests {
         let repeated = render(&draws, 0, &mut host).expect("repeated GPU paint should render");
         assert_eq!(actual, repeated);
 
+        // The CPU fallback must reproduce the same host adapter's pixels
+        // bit for bit, so a headless host matches a GPU host.
+        let cpu = render_cpu_batch(
+            &draws,
+            &HashMap::from([
+                (target_address, target.clone()),
+                (texture_address, texture_bytes.clone()),
+            ]),
+        );
+        assert_eq!(cpu.1, actual.1, "CPU touched bytes for order {order}");
+        assert_eq!(cpu.0[0].0, actual.0[0].0);
+        assert_eq!(
+            cpu.0[0].1.as_slice(),
+            actual.0[0].1.as_slice(),
+            "CPU fallback differed from the GPU kernel for order {order}"
+        );
+
         let targets = HashMap::from([(target_address, target)]);
         let textures = HashMap::from([((texture_address, 8, 8), texture_bytes)]);
         let mut coverage = cpu_coverage;
@@ -1638,5 +1690,60 @@ mod tests {
             }
         }
         assert_eq!(cases, 2 * 4 * 2 * 12);
+    }
+
+    #[test]
+    fn cpu_texture_sampling_and_target_offsets_use_the_shader_morton_layout() {
+        // The paint kernel addresses textures and scratch targets only in the
+        // catalog's 8x8 Morton layout, so mirroring `morton_index` and
+        // `render::morton` bit for bit covers both image sampling and writes.
+        for width in [8u32, 16, 24] {
+            for y in 0..8u32 {
+                for x in 0..8u32 {
+                    assert_eq!(
+                        morton_index(width, x, y) as usize,
+                        render::morton(width as usize, x as usize, y as usize),
+                        "morton index for {width}x{x},{y}"
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn cpu_backend_writes_every_texture_texel_through_the_morton_sampler() {
+        // An identity texture matrix over an 8x8 target must sample all 64
+        // Morton texels and write all 64 Morton target pixels exactly once.
+        // Each source texel is unique and opaque, so the result is a
+        // permutation of the source words under the shader's channel packing.
+        let address = 0x400000;
+        let texture_address = address + 0x1000;
+        // The sampler reads the word's low byte as alpha, so keep it opaque and
+        // make the other three channels unique per texel.
+        let texture_bytes: Vec<u8> = (0..8 * 8)
+            .flat_map(|texel: u8| [255, texel, 255 - texel, texel.wrapping_mul(2)])
+            .collect();
+        let mut sampled = draw(address, 0, [0., 0., 8., 8.], 1, 0, [0, 0, 0, 0]);
+        sampled.texture = Some(Texture {
+            source: texture_address,
+            width: 8,
+            height: 8,
+            valid_width: 8,
+            valid_height: 8,
+            matrix: [1.0, 0.0, 0.0, 0.0, 1.0, 0.0],
+        });
+        let regions = HashMap::from([
+            (address, vec![0; 8 * 8 * 4]),
+            (texture_address, texture_bytes.clone()),
+        ]);
+        let (output, touched) = render_cpu_batch(&[sampled], &regions);
+        assert_eq!(touched, 8 * 8 * 4);
+        // With `order == 0` the shader writes RGBA as the little-endian word
+        // A,B,G,R, so an identity sample stores the source texel unchanged.
+        let mut stored: Vec<[u8; 4]> = output[0].1.as_chunks::<4>().0.to_vec();
+        let mut sources: Vec<[u8; 4]> = texture_bytes.as_chunks::<4>().0.to_vec();
+        stored.sort_unstable();
+        sources.sort_unstable();
+        assert_eq!(stored, sources, "every texel must appear exactly once");
     }
 }
