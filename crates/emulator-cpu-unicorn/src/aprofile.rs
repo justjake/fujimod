@@ -613,13 +613,7 @@ impl Execution {
             proofs.count(&proofs.failed_budget, 1);
             return Ok(false);
         }
-        // The clock rate a loop may read is the guest clock's own ratio, so a
-        // window that reads it reads a value no round changes.
-        let frequency = self
-            .clock
-            .get()
-            .and_then(|clock| clock.ratio.parts().0.checked_div(clock.ratio.parts().1));
-        let advanced = proof.advance(state, rounds, frequency, |address, bits| {
+        let advanced = proof.advance(state, rounds, |address, bits| {
             let width = usize::from(u8::try_from(bits / 8).ok()?);
             let mut bytes = [0; 8];
             // Permission-checked and observational; a device page refuses.

@@ -26,7 +26,6 @@
 //!   long as no other register or flag changes;
 //! - a RAM flag poll: a plain load re-read every round whose value does not
 //!   change, or changes and repeats, inside the window;
-//! - a constant rate read (`CNTFRQ_EL0`), which the owner supplies.
 //!
 //! A body that reads the architectural counter (`CNTVCT_EL0`) advances every
 //! round, and a device status register is answered by a device rather than by
@@ -161,8 +160,6 @@ enum Op {
         src: usize,
         amount: u32,
     },
-    /// `MRS Rt, CNTFRQ_EL0`: the clock rate, which no round changes.
-    Frequency { dst: usize },
     /// `LDR` of a byte, halfword or word at an unsigned offset from a base.
     Load {
         bits: u32,
@@ -288,10 +285,18 @@ fn branch_condition(word: u32) -> Option<(Condition, Option<(usize, u64)>)> {
 
 /// Decode one body instruction, or `None` for anything the proof refuses.
 fn decode(word: u32) -> Option<Op> {
-    match word {
-        // NOP, YIELD, SEV.
-        0xd503_201f | 0xd503_203f | 0xd503_209f => return Some(Op::Nop),
-        _ => {}
+    // The system instruction space (SYS/SYSL, hints, barriers, MRS/MSR, WFI,
+    // DC/IC maintenance) is refused as a whole before any pattern below can
+    // match it. These instructions have side effects the proof cannot model.
+    // Treating one as a constant once let a DC CIVAC pass for a fixed point
+    // and fast-forwarded a boot loop without executing the maintenance: the
+    // mask 0xd50b7e20 that caught it was a cache op, not a counter read.
+    if word & 0x1f00_0000 == 0x1500_0000 {
+        return match word {
+            // The three hints that change no architectural state.
+            0xd503_201f | 0xd503_203f | 0xd503_209f => Some(Op::Nop),
+            _ => None,
+        };
     }
     // ADD/SUB immediate.
     if word & 0x1f00_0000 == 0x1100_0000 && word & (1 << 23) == 0 {
@@ -408,14 +413,6 @@ fn decode(word: u32) -> Option<Op> {
             src,
             amount,
         });
-    }
-    // MRS Rt, CNTFRQ_EL0: the clock rate, the same on every round.
-    if word & 0xffff_ffe0 == 0xd50b_7e20 {
-        let dst = (word & 31) as usize;
-        if dst == 31 {
-            return None;
-        }
-        return Some(Op::Frequency { dst });
     }
     // LDR (unsigned offset) of a byte, halfword or word: no sign extension,
     // no SIMD and no address writeback.
@@ -573,10 +570,6 @@ fn apply(
                 (1u64 << bits) - 1
             };
             state.registers[dst] = word & mask;
-        }
-        Op::Frequency { dst } => {
-            // A constant the owner supplies: the clock rate.
-            state.registers[dst] = input(index, 0, 0).ok_or(Failure::Input)?;
         }
     }
     Ok(state)
@@ -822,7 +815,6 @@ impl Proof {
         &self,
         state: State,
         iterations: u64,
-        frequency: Option<u64>,
         mut read: impl FnMut(u64, u32) -> Option<u64>,
     ) -> Result<Advance, Failure> {
         if iterations == 0 {
@@ -831,8 +823,6 @@ impl Proof {
         let reads = self.reads();
         let mut input = |index: usize, address: u64, bits: u32| match self.ops[index] {
             Op::Load { .. } if reads => read(address, bits),
-            // The clock's rate, which the owner reads once per window.
-            Op::Frequency { .. } => frequency,
             _ => None,
         };
         if !self.taken(state) {
@@ -1031,7 +1021,7 @@ mod tests {
         let p = proof(0x1000, &[B_SELF]);
         assert_eq!(p.length, 1);
         let state = State::default();
-        let advanced = p.advance(state, 500, None, |_, _| None).unwrap();
+        let advanced = p.advance(state, 500, |_, _| None).unwrap();
         assert_eq!(advanced.iterations, 500);
         assert!(!advanced.counted);
         assert_eq!(advanced.state, state);
@@ -1043,7 +1033,7 @@ mod tests {
         let p = pair(0x1000, 0x7100_0400);
         let mut state = State::default();
         state.registers[0] = 3;
-        let advanced = p.advance(state, 100, None, |_, _| None).unwrap();
+        let advanced = p.advance(state, 100, |_, _| None).unwrap();
         assert_eq!(advanced.iterations, 3);
         assert!(advanced.counted);
         assert_eq!(advanced.state.registers[0], 0);
@@ -1058,7 +1048,7 @@ mod tests {
         let mut state = State::default();
         state.registers[0] = 20;
         state.registers[1] = 7;
-        let advanced = p.advance(state, 100, None, |_, _| None).unwrap();
+        let advanced = p.advance(state, 100, |_, _| None).unwrap();
         assert_eq!(advanced.iterations, 13);
         assert_eq!(advanced.state.registers[0], 7);
     }
@@ -1071,7 +1061,7 @@ mod tests {
         let mut state = State::default();
         state.registers[1] = 0x4000;
         let advanced = p
-            .advance(state, 200, None, |address, bits| {
+            .advance(state, 200, |address, bits| {
                 assert_eq!((address, bits), (0x4000, 32));
                 Some(0)
             })
@@ -1087,7 +1077,7 @@ mod tests {
         let mut state = State::default();
         state.registers[1] = 0x4000;
         let mut reads = 0;
-        let refused = p.advance(state, 10, None, |_, _| {
+        let refused = p.advance(state, 10, |_, _| {
             reads += 1;
             Some(reads)
         });
@@ -1142,6 +1132,42 @@ mod tests {
     }
 
     #[test]
+    fn the_system_instruction_space_is_never_a_body() {
+        // Regression: a boot loop was fast-forwarded ~300M instructions
+        // because "SYS #3, c7, c14, #1" (DC CIVAC) was once matched as a
+        // constant counter read. The loop then looked like a fixed point and
+        // never executed its cache maintenance, so no peer or device ever
+        // changed the watched word. Every system-space encoding must refuse,
+        // whatever register or immediate it names.
+        for word in [
+            0xd50b_7e20u32, // sys #3, c7, c14, #1 (dc civac)
+            0xd50b_7e24,    // the same, other Rt
+            0xd50b_7a20,    // sys #3, c7, c10, #1
+            0xd508_7e20,    // sys #0, c7, c14, #1
+            0xd53b_e040,    // mrs x0,cntvct_el0
+            0xd53b_e000,    // mrs x0,cntfrq_el0
+            0xd538_d080,    // mrs x0,mpidr_el1
+            0xd503_3fbf,    // dsb sy
+            0xd503_207f,    // wfi
+            0xd503_40df,    // msr daifclr
+            0xd400_0001,    // svc
+        ] {
+            assert!(decode(word).is_none(), "{word:#010x}");
+        }
+        // A loop whose body contains one is refused outright.
+        let bytes: Vec<u8> = [
+            0xd50b_7e20u32,
+            0x8b03_0084,
+            0xeb01_009f,
+            0x54ff_ffab,
+        ]
+        .into_iter()
+        .flat_map(u32::to_le_bytes)
+        .collect();
+        assert!(Proof::decode(0x5b950, 0x5b95c, &bytes).is_none());
+    }
+
+    #[test]
     fn every_counted_register_width_and_step_is_modelled() {
         for (word, start) in [
             (0x7100_0400u32, 5u64), // subs w0,w0,#1
@@ -1153,7 +1179,7 @@ mod tests {
             let mut state = State::default();
             state.registers[0] = start;
             let advanced = p
-                .advance(state, 1_000, None, |_, _| None)
+                .advance(state, 1_000, |_, _| None)
                 .unwrap_or_else(|failure| panic!("{word:#010x}: {failure:?}"));
             assert_eq!(advanced.state.registers[0], 0, "{word:#010x}");
             // One round is the body and its branch.
@@ -1169,12 +1195,12 @@ mod tests {
         state.registers[0] = 5;
         // An odd value steps over zero forever, so every round is identical
         // in effect and the window retires its whole budget exactly.
-        let advanced = p.advance(state, 100, None, |_, _| None).unwrap();
+        let advanced = p.advance(state, 100, |_, _| None).unwrap();
         assert_eq!(advanced.iterations, 100);
         assert_eq!(advanced.state.registers[0], 5u64.wrapping_sub(200) & u64::from(u32::MAX));
         // A stride that does divide retires exactly to the bound.
         state.registers[0] = 6;
-        let advanced = p.advance(state, 100, None, |_, _| None).unwrap();
+        let advanced = p.advance(state, 100, |_, _| None).unwrap();
         assert_eq!(advanced.iterations, 3);
         assert_eq!(advanced.state.registers[0], 0);
     }
@@ -1184,7 +1210,7 @@ mod tests {
         let p = pair(0x1000, 0x7100_0400);
         let mut state = State::default();
         state.registers[0] = 1_000_000;
-        let advanced = p.advance(state, 10, None, |_, _| None).unwrap();
+        let advanced = p.advance(state, 10, |_, _| None).unwrap();
         assert_eq!(advanced.iterations, 10);
         assert_eq!(advanced.state.registers[0], 999_990);
     }
@@ -1196,13 +1222,13 @@ mod tests {
         let mut state = State::default();
         state.flags = 1 << 30;
         assert_eq!(
-            p.advance(state, 10, None, |_, _| None).err(),
+            p.advance(state, 10, |_, _| None).err(),
             Some(Failure::Leaving)
         );
         // At the bound with the branch still taken, the register wraps and
         // the loop becomes a cycle, so the window retires its budget.
         state.flags = 0;
-        let advanced = p.advance(state, 10, None, |_, _| None).unwrap();
+        let advanced = p.advance(state, 10, |_, _| None).unwrap();
         assert_eq!(advanced.iterations, 10);
     }
 
@@ -1212,7 +1238,7 @@ mod tests {
         let p = proof(0x1000, &[0x7100_0400, 0x1100_0442, b_ne(2)]);
         let mut state = State::default();
         state.registers[0] = 9;
-        assert_eq!(p.advance(state, 10, None, |_, _| None).err(), Some(Failure::Model));
+        assert_eq!(p.advance(state, 10, |_, _| None).err(), Some(Failure::Model));
     }
 
     #[test]
@@ -1223,7 +1249,7 @@ mod tests {
         let p = pair(0x1000, 0x5100_0400);
         let mut state = State::default();
         state.registers[0] = 3;
-        let advanced = p.advance(state, 10, None, |_, _| None).unwrap();
+        let advanced = p.advance(state, 10, |_, _| None).unwrap();
         assert_eq!(advanced.iterations, 10);
         assert!(!advanced.counted);
     }
@@ -1235,7 +1261,7 @@ mod tests {
         let mut state = State::default();
         for start in [5u64, 9, 30, 1001] {
             state.registers[0] = start;
-            let advanced = p.advance(state, 10_000, None, |_, _| None).unwrap();
+            let advanced = p.advance(state, 10_000, |_, _| None).unwrap();
             // Walk it with the body itself: the count must reproduce it.
             let mut walked = state;
             let mut n = 0;
@@ -1260,7 +1286,7 @@ mod tests {
         state.flags = 1 << 30;
         for budget in [1, 2, 3, 5, 99, 1000] {
             let advanced = p
-                .advance(state, budget, None, |_, bits| {
+                .advance(state, budget, |_, bits| {
                     assert_eq!(bits, 32);
                     Some(0)
                 })
@@ -1270,24 +1296,17 @@ mod tests {
     }
 
     #[test]
-    fn a_clock_rate_loop_counts_against_its_constant() {
-        // mrs x4,cntfrq_el0 ; ldr w0,[x1] ; cmp w0,#0 ; b.eq 0x1000.
-        let p = proof(
-            0x1000,
-            &[0xd50b_7e24, 0xb940_0020, 0x7100_001f, cbz(3, 0, false)],
-        );
-        let mut state = State::default();
-        state.registers[1] = 0x4000;
-        let advanced = p
-            .advance(state, 40, Some(24_000_000), |_, _| Some(0))
-            .unwrap();
-        assert_eq!(advanced.iterations, 40);
-        assert_eq!(advanced.state.registers[4], 24_000_000);
-        // Without the owner's rate the round's input is missing.
-        assert_eq!(
-            p.advance(state, 40, None, |_, _| Some(0)).err(),
-            Some(Failure::Input)
-        );
+    fn a_clock_rate_read_is_refused() {
+        // The XP5 boot loop at 0x5b950: its body's first word is a system
+        // instruction, so the whole loop is refused at decode rather than
+        // being fast-forwarded with that instruction's effect left out.
+        let bytes: Vec<u8> = [0xd50b_7e24u32, 0xb940_0020, 0x7100_001f, cbz(3, 0, false)]
+            .into_iter()
+            .flat_map(u32::to_le_bytes)
+            .collect();
+        let head = 0x1000;
+        let branch = head + 12;
+        assert!(Proof::decode(head, branch, &bytes).is_none());
     }
 
     #[test]
@@ -1297,7 +1316,7 @@ mod tests {
         let p = pair(0x1000, 0x7100_0400);
         let mut state = State::default();
         state.registers[0] = 1000;
-        let advanced = p.advance(state, 100, None, |_, _| None).unwrap();
+        let advanced = p.advance(state, 100, |_, _| None).unwrap();
         assert_eq!(advanced.iterations, 100);
         assert!(p.taken(advanced.state));
         assert_eq!(advanced.state.registers[0], 900);

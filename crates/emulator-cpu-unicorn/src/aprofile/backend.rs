@@ -272,8 +272,13 @@ impl Cpu for Core {
             return Err("nested A-profile execution is refused".into());
         }
         let _guest_tick = crate::GuestClockTickScope::new(e.policy.get());
+        // `FUJIMOD_A64_LOOP_PROOFS=0` is a host-only measurement switch: it
+        // runs the same code with the prover off, so a benchmark can compare
+        // the two without a second build.
+        let proofs_allowed = std::env::var("FUJIMOD_A64_LOOP_PROOFS").as_deref() != Ok("0");
         e.prove_loops.set(
             e.loop_window.replace(false)
+                && proofs_allowed
                 && e.can_prove_loops()
                 && request.until.is_none()
                 && request.instructions.is_some(),
