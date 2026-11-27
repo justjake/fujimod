@@ -557,7 +557,16 @@ fn viewer_diagnostics_bound_pending_pixels_without_weakening_checkpoint_or_finge
     assert_ne!(gpu.fingerprint().unwrap(), identity);
     gpu.restore_checkpoint(&saved).unwrap();
     assert_eq!(gpu.fingerprint().unwrap(), identity);
-    assert_eq!(gpu.save(), diagnostic);
+    // The host shader-cache counts are process-wide; other tests compiling
+    // shaders in parallel change them between the two diagnostics.
+    let emulated = |mut diagnostic: serde_json::Value| {
+        diagnostic["engine"]["gles"]
+            .as_object_mut()
+            .unwrap()
+            .remove("host_shader_cache");
+        diagnostic
+    };
+    assert_eq!(emulated(gpu.save()), emulated(diagnostic));
     assert_eq!(gpu.next_deadline(host.now), Some(deadline));
     host.now = deadline;
     gpu.advance(&mut Cx::new(&mut host, 0, 0, 2));
