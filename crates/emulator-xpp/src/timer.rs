@@ -7,6 +7,7 @@
 //! then writes reload 0). Channel blocks at `+0x100 + n*0x10` hold the count,
 //! the reload and two retained words. The counting law is the XP4 one.
 use fujimod_emulator_xp4_io::interval_timers::Counter;
+use std::cell::OnceCell;
 
 /// Register window size in bytes.
 pub const WINDOW: u32 = 0x200;
@@ -21,6 +22,10 @@ pub struct TickTimers {
     irqs: Vec<Option<usize>>,
     configuration: Vec<u32>,
     retained: Vec<[u32; 2]>,
+    // Derived from the counters. The legacy CPU checks this before each
+    // instruction, while only a write or expiry can change the deadline.
+    #[serde(skip)]
+    next_event: OnceCell<Option<u64>>,
 }
 
 impl TickTimers {
@@ -36,6 +41,7 @@ impl TickTimers {
             irqs,
             configuration: vec![0; CHANNELS],
             retained: vec![[0; 2]; CHANNELS],
+            next_event: OnceCell::new(),
         })
     }
     pub fn save(&self) -> serde_json::Value {
@@ -61,7 +67,9 @@ impl TickTimers {
         Ok(())
     }
     pub fn next_event_tick(&self, _now: u64) -> Option<u64> {
-        self.counters.iter().filter_map(|c| c.next).min()
+        *self
+            .next_event
+            .get_or_init(|| self.counters.iter().filter_map(|c| c.next).min())
     }
     pub fn count_at(&self, channel: usize, now: u64) -> Option<u32> {
         self.counters.get(channel).map(|counter| counter.value(now))
@@ -74,6 +82,13 @@ impl TickTimers {
             .min()
     }
     pub fn tick(&mut self, now: u64) -> Vec<usize> {
+        if self
+            .next_event_tick(now)
+            .is_none_or(|deadline| now < deadline)
+        {
+            return Vec::new();
+        }
+        self.next_event.take();
         let mut fired = Vec::new();
         for (channel, c) in self.counters.iter_mut().enumerate() {
             if !c.expire(now) {
@@ -104,6 +119,7 @@ impl TickTimers {
         match offset {
             0 => {
                 if write {
+                    self.next_event.take();
                     let select = !(value >> 16) & 0xffff;
                     for (channel, c) in self.counters.iter_mut().enumerate() {
                         if select & (1 << channel) != 0 {
@@ -130,6 +146,7 @@ impl TickTimers {
                 match offset & 0xc {
                     0 => {
                         if write {
+                            self.next_event.take();
                             c.load(now, value);
                         }
                         Ok(c.value(now))
@@ -198,6 +215,7 @@ mod tests {
         t.access(0, 0x40, 4, true, 0x10010).unwrap();
         t.access(0, 0x1c0, 4, true, 9).unwrap();
         t.access(0, 0x1c4, 4, true, 0).unwrap();
+        assert_eq!(t.next_event_tick(0), None);
         t.access(0, 0, 4, true, 0xefff1000).unwrap();
         assert_eq!(t.next_event_tick(0), Some(10));
         assert_eq!(t.tick(12), vec![60]);
@@ -214,5 +232,10 @@ mod tests {
         t.access(20, 0, 4, true, 0xefff1000).unwrap();
         assert_eq!(t.tick(25), vec![60]);
         assert_eq!(t.next_event_tick(25), Some(30));
+        assert!(t.tick(26).is_empty());
+        assert_eq!(t.access(26, 0x1c0, 4, true, 9).unwrap(), 9);
+        assert_eq!(t.next_event_tick(26), Some(36));
+        t.restore(&resumed.save()).unwrap();
+        assert_eq!(t.next_event_tick(26), None);
     }
 }
