@@ -1,0 +1,75 @@
+{
+  "$schema": "https://fujimod.com/schemas/body.schema.json",
+  "schema": 1,
+  "id": "gfx100rf",
+  "soc_id": "xp5",
+  "dram_bytes": 2818572288,
+  "hardware": {
+    "profiles": {
+      "gfx100rf": {
+        "dram_basis": "The stock bus-drain selector (0x15b0a5c in firmware 1.12) ends the first memory region at 0xa8000000 and names two further bus ports at 0x100000000 and 0x180000000, so installed capacity is larger and unmeasured.",
+        "limits": []
+      }
+    },
+    "bus_drain": [
+      {
+        "address": 2818572288,
+        "processor_ids": [
+          "core0",
+          "core1",
+          "core2",
+          "core3"
+        ],
+        "basis": "The stock firmware drains the bus with a discarded read of the end of its first memory region: selector 0x15b0a5c (firmware 1.12) reads 0xa8000000 for addresses from 0xa8000000 to 0xffffffff, where X100VI reads 0x68000000 and X-H2S 0x80000000."
+      },
+      {
+        "address": 4294967296,
+        "processor_ids": [
+          "core0",
+          "core1",
+          "core2",
+          "core3"
+        ],
+        "basis": "The stock firmware drains the second bus port with a discarded read at 0x100000000; selector 0x15b0a5c (firmware 1.12) uses it for addresses from 0x100000000 to 0x17fffffff."
+      },
+      {
+        "address": 6442450944,
+        "processor_ids": [
+          "core0",
+          "core1",
+          "core2",
+          "core3"
+        ],
+        "basis": "The stock firmware drains the third bus port with a discarded read at 0x180000000; selector 0x15b0a5c (firmware 1.12) uses it for addresses from 0x180000000 to 0x1ffffffff."
+      }
+    ]
+  },
+  "parts": [
+    "gfx100rf-serial-nor",
+    "power-controller",
+    "bis-configuration",
+    "lsm6ds"
+  ],
+  "wiring": [
+    {
+      "source_id": "spi2",
+      "target_id": "power-controller",
+      "signal": "serial_data"
+    },
+    {
+      "source_id": "serial",
+      "target_id": "bis-configuration",
+      "signal": "serial_data"
+    },
+    {
+      "source_id": "serial",
+      "target_id": "lsm6ds",
+      "signal": "serial_data"
+    },
+    {
+      "source_id": "flash",
+      "target_id": "gfx100rf-serial-nor",
+      "signal": "storage"
+    }
+  ]
+}

@@ -155,6 +155,12 @@ fn mailbox_pins(soc: &Soc, base: u64, companion: usize) -> Result<mailbox::Pins,
         request: companion_line("request")?,
         control: companion_line("control")?,
         reply: controller_line("reply")?,
+        // Optional: a SoC record without the row leaves the companion's notify word unwired.
+        notify: block
+            .interrupts
+            .iter()
+            .find(|row| row.output == "notify")
+            .map(|row| row.line),
         status: controller_line("status")?,
         fault: controller_line("fault")?,
     })

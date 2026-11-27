@@ -223,6 +223,8 @@ impl Definition {
                     request: c.request,
                     control: c.control,
                     reply: c.reply,
+                    // The catalog does not name the notify line yet.
+                    notify: None,
                     status: c.status,
                     fault: c.fault,
                 },

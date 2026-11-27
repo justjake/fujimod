@@ -80,8 +80,29 @@ pub struct Timer {
     companion_cpu: Option<usize>,
     #[serde(skip)]
     focus_capture: Option<fujimod_emulator_devices::xp5::pins::SharedPins>,
+    /// General channel that is the focus position counter (an up/down count of the focus
+    /// motor), and the motor position when the guest last loaded it. Host wiring, not state.
+    focus_position: Option<(usize, i64)>,
+    /// The counter falls when the motor steps forward.
+    focus_position_inverted: bool,
+    /// Extended timer: the general channel whose PWM pair drives the focus motor.
+    focus_drive: Option<usize>,
+    /// Host speed option, not hardware (`companion_idle_divide = N`): while the focus motor's
+    /// PWM is not driving its bridge (`Pins::focus_driving`) or holds a neutral duty, only one in N reload-timer interrupts is raised on the
+    /// companion core. The GFX100RF companion takes channel 11 at 16 kHz for its servo loop
+    /// whether or not it is driving, and entering the companion's interpreter that often was
+    /// most of the host time in shooting mode (22.6 of 44 s for 9 guest seconds; 3.5 s with
+    /// every interrupt divided by 8). While the bridge is on every interrupt is raised, so the
+    /// servo's own timing is unchanged. The guest does see the slower idle loop.
+    #[serde(skip)]
+    companion_idle_divide: u32,
     #[serde(skip)]
     pwm: Option<PwmOutputs>,
+    /// General channels that count pulses of an external input the board declares
+    /// (a command dial): bit n holds channel n at its loaded word instead of letting
+    /// it run on the 48 MHz clock, since nothing turns the dial.
+    #[serde(skip)]
+    external_count: u16,
 }
 impl Timer {
     pub fn new(base: u64) -> Self {
@@ -108,6 +129,9 @@ impl Timer {
         if self.focus_capture.is_some() && n == 9 && g.control & 3 == 3 {
             return; // External pulse capture, not a free-running48MHz timer.
         }
+        if self.counts_externally(n) {
+            return; // An idle external input never reaches a terminal count.
+        }
         // Boot enables some unconfigured PWM channels with both period words
         // zero. They have no programmed terminal interval; do not synthesize
         // a 48 MHz interrupt storm that starves guest register programming.
@@ -117,7 +141,11 @@ impl Timer {
             // sampling interval instead of trapping every physical pulse.
             // Normal interval timers, including finder6, retain their deadline.
             let now = Duration::from_nanos(cx.now());
-            let floor = if g.control & 0x1000 != 0 && g.count.reload < 47999 {
+            // The focus motor's PWM channel is coalesced the same way: its servo loop runs on a
+            // reload counter, not on this period interrupt (GFX100RF: about 62 kHz otherwise).
+            let floor = if (g.control & 0x1000 != 0 || self.focus_drive == Some(n))
+                && g.count.reload < 47999
+            {
                 now + Duration::from_millis(1)
             } else {
                 now
@@ -146,6 +174,66 @@ impl Timer {
     pub fn with_companion(mut self, cpu: Option<usize>) -> Self {
         self.companion_cpu = cpu;
         self
+    }
+    /// Hold the general channels in `mask` at their loaded word: their clock is an
+    /// external input with no pulses.
+    pub fn with_external_count(mut self, mask: u16) -> Self {
+        self.external_count = mask;
+        self
+    }
+    /// GFX100RF 1.13: lens resource 0x1a is timer id 0x25, general channel 8 (tables 0x1bafc98
+    /// and 0x19d7840). The lens module loads 0x8000 and reads position as count - 0x8000
+    /// (0x165a9cc, 0x165abe8). The channel follows the focus motor's net steps one to one;
+    /// the counts per step of the real encoder are not known.
+    pub fn with_focus_position(mut self, channel: usize) -> Self {
+        self.focus_position = Some((channel, 0));
+        self.external_count |= 1 << channel;
+        self
+    }
+    pub fn with_companion_idle_divide(mut self, divide: u32) -> Self {
+        self.companion_idle_divide = divide;
+        self
+    }
+    pub fn with_focus_position_inverted(mut self, inverted: bool) -> Self {
+        self.focus_position_inverted = inverted;
+        self
+    }
+    /// GFX100RF 1.13: the companion core's focus servo programs extended general channel 0
+    /// (its view 0x5f909100: +4 period, +8 and +0xc compares, both period / 2 at rest). The
+    /// drive is the second compare about the half period.
+    pub fn with_focus_drive(
+        mut self,
+        pins: fujimod_emulator_devices::xp5::pins::SharedPins,
+        channel: usize,
+    ) -> Self {
+        self.focus_capture = Some(pins);
+        self.focus_drive = Some(channel);
+        self
+    }
+    /// Advance the PWM-driven focus motor to now and present its home sensor: the pad and the
+    /// two level interrupts INTID 100 + pin and 116 + pin (selectors 0xb7 and 0xb8).
+    fn advance_focus(&self, cx: &mut Cx<'_>) {
+        let Some(pins) = &self.focus_capture else {
+            return;
+        };
+        let mut pins = pins.lock().unwrap();
+        let Some(home) = pins.advance_focus(cx.now()) else {
+            return;
+        };
+        let pin = pins.focus_servo.as_ref().map_or(0, |servo| servo.home.1);
+        pins.set_input(2, pin, home);
+        pins.set_input(1, pin, !home);
+        drop(pins);
+        cx.set_irq(100 + pin as u32, home);
+        cx.set_irq(116 + pin as u32, !home);
+    }
+    fn focus_steps(&self) -> i64 {
+        self.focus_capture
+            .as_ref()
+            .map_or(0, |pins| pins.lock().unwrap().focus_position)
+    }
+    fn counts_externally(&self, n: usize) -> bool {
+        n < 16 && self.external_count >> n & 1 != 0
     }
     pub fn with_focus_capture(
         mut self,
@@ -247,10 +335,26 @@ impl Device for Timer {
             // While a general channel runs, word 0 reads its live down-count.
             // X-T5 4.31 stage0's microsecond delay (0xFF80196C) polls 0x110
             // after loading 0xFFFFFFFF there and enabling channel 1.
-            if w == 0 && self.general[n].count.enabled {
+            if w == 0 && self.general[n].count.enabled && !self.counts_externally(n) {
                 return self.general[n]
                     .count
                     .current(Duration::from_nanos(cx.now())) as u64;
+            }
+            if w == 0
+                && let Some((channel, origin)) = self.focus_position
+                && channel == n
+            {
+                self.advance_focus(cx);
+                let moved = self.focus_steps() - origin;
+                let moved = if self.focus_position_inverted {
+                    -moved
+                } else {
+                    moved
+                };
+                return self.general[n].words[0].wrapping_add(moved as u32) as u64;
+            }
+            if w == 0 && self.counts_externally(n) {
+                return self.general[n].words[0] as u64;
             }
             return self.general[n].words[w] as u64;
         }
@@ -281,118 +385,33 @@ impl Device for Timer {
         0
     }
     fn write(&mut self, cx: &mut Cx<'_>, address: u64, size: u8, value: u64) {
-        let offset = address.wrapping_sub(self.base);
-        if size != 4 || offset & 3 != 0 {
-            cx.unmodeled();
-            return;
-        }
-        let value = value as u32;
-        if offset == 0 {
-            for n in 0..self.general_len() {
-                if value & (1 << (16 + n)) == 0 {
-                    continue;
-                }
-                let g = &mut self.general[n];
-                let enable = value & (1 << n) != 0;
-                if enable != g.count.enabled {
-                    g.count.value = if enable {
-                        g.words[0]
-                    } else {
-                        g.count.current(Duration::from_nanos(cx.now()))
-                    };
-                    g.count.started_ns = Duration::from_nanos(cx.now()).as_nanos() as u64;
-                    g.count.enabled = enable;
-                    g.count.generation += 1;
-                    if !enable {
-                        g.pending = false;
-                    }
-                    self.schedule_general(cx, n);
-                }
-            }
-            return;
-        }
-        if offset == 4 || offset == 8 {
-            let r = &mut self.routing[(offset / 4 - 1) as usize];
-            let mask = value >> 16;
-            *r = (*r & !mask) | (value & mask);
-            return;
-        }
-        if offset == 0x80 {
-            self.group = value;
-            return;
-        }
-        if (0x10..0x10 + self.general_len() as u64 * 4).contains(&offset) {
-            let n = (offset as usize - 0x10) / 4;
-            let g = &mut self.general[n];
-            // Stock config writes bit16 to clear the terminal status. IRQs are
-            // edge-triggered; software one-shots ACK by stopping at +0.
-            if value & 0x10000 != 0 {
-                g.pending = false;
-            }
-            g.control = value & 0xffff;
-            g.count.value = g.count.current(Duration::from_nanos(cx.now()));
-            g.count.started_ns = Duration::from_nanos(cx.now()).as_nanos() as u64;
-            g.count.generation += 1;
-            self.schedule_general(cx, n);
-            return;
-        }
-        if let Some((n, w)) = self.general_register(offset) {
-            let g = &mut self.general[n];
-            g.count.value = g.count.current(Duration::from_nanos(cx.now()));
-            g.count.started_ns = Duration::from_nanos(cx.now()).as_nanos() as u64;
-            g.words[w] = value;
-            if w == 0 {
-                g.count.value = value;
-                if n == 9
-                    && let Some(pins) = &self.focus_capture
-                {
-                    g.capture_origin = pins.lock().unwrap().focus_pulses;
-                }
-            }
-            if w == 1 {
-                g.count.reload = value;
-            }
-            g.count.generation += 1;
-            self.schedule_general(cx, n);
-            self.publish_pwm();
-            return;
-        }
-        if self.extended {
-            cx.unmodeled();
-            return;
-        }
-        if offset == 0x300 {
-            // High half selects which low-half enable bits to update (1 shifted by channel).
-            for n in 0..16 {
-                if value & (1 << (16 + n)) == 0 {
-                    continue;
-                }
-                let c = &mut self.counters[n];
-                let enable = value & (1 << n) != 0;
-                if enable != c.enabled {
-                    c.value = c.current(Duration::from_nanos(cx.now()));
-                    c.started_ns = Duration::from_nanos(cx.now()).as_nanos() as u64;
-                    c.enabled = enable;
-                    c.generation += 1;
-                    self.schedule(cx, n);
-                }
-            }
-        } else if let Some((n, reload)) = Self::channel(offset) {
-            let c = &mut self.counters[n];
-            let now = Duration::from_nanos(cx.now());
-            c.value = c.current(now);
-            c.started_ns = now.as_nanos() as u64;
-            if reload {
-                c.reload = value;
-            } else {
-                c.value = value;
-            }
-            c.generation += 1;
-            self.schedule(cx, n);
+        let Some(channel) = self.focus_drive else {
+            return self.write_register(cx, address, size, value);
+        };
+        // Move the focus motor under the drive it had up to now, then take the new one.
+        self.advance_focus(cx);
+        self.write_register(cx, address, size, value);
+        // The servo counts as started from its first write to the drive channel's words.
+        let touched = self
+            .general_register(address.wrapping_sub(self.base))
+            .is_some_and(|(n, _)| n == channel);
+        let g = &self.general[channel];
+        // Signed about the half period: observed duty words on the GFX100RF were 1177 with
+        // the servo pushing one way and 133 with it pushing the other, at period 1311
+        // (655 +- 522), with the first compare at 0. A stopped channel drives nothing.
+        let drive = if g.count.enabled {
+            i64::from(g.words[3]) - i64::from(g.words[1] / 2)
         } else {
-            cx.unmodeled();
+            0
+        };
+        if let Some(pins) = &self.focus_capture
+            && let Some(servo) = pins.lock().unwrap().focus_servo.as_mut()
+        {
+            servo.drive = drive;
+            servo.started |= touched;
         }
     }
+
     fn event(&mut self, cx: &mut Cx<'_>, token: u64) {
         if token & (1 << 63) != 0 {
             let n = (token & 15) as usize;
@@ -424,13 +443,41 @@ impl Device for Timer {
         cx.set_irq(52 + n as u32, false);
         // M-core routing maps reload channels 8..15 to IRQs 9..16; reload channels
         // 0..7 have no M-core route.
+        // `companion_idle_divide`: while the focus servo's bridge is off, only one in N of these
+        // interrupts reaches the companion core (see the field).
+        let idle = self.companion_idle_divide > 1
+            && self.focus_capture.as_ref().is_some_and(|pins| {
+                let pins = pins.lock().unwrap();
+                // Not driving, or driving with a neutral duty: the motor is held where it is.
+                // The first loop pass that commands a move makes the duty non-neutral and the
+                // full rate is back within one thinned period.
+                pins.focus_driving() == Some(false)
+                    || pins
+                        .focus_servo
+                        .as_ref()
+                        .is_some_and(|servo| servo.started && servo.drive == 0)
+            });
         if n >= 8
             && let Some(cpu) = self.companion_cpu
             && let Err(e) = cx.raise_irq(cpu, (n + 1) as u32)
         {
             cx.fail(e);
         }
-        self.schedule(cx, n);
+        if idle && n >= 8 {
+            // Thinned: the next expiry served is `companion_idle_divide` periods away, so the
+            // skipped ones cost no device event either.
+            let c = &self.counters[n];
+            let now = Duration::from_nanos(cx.now());
+            let next = c.deadline(now);
+            let period = next.saturating_sub(now);
+            let at = next + period * (self.companion_idle_divide - 1);
+            cx.schedule(
+                at.as_nanos().min(u64::MAX as u128) as u64,
+                (c.generation << 4) | n as u64,
+            );
+        } else {
+            self.schedule(cx, n);
+        }
     }
     // Field-for-field the `checkpoint_fields!` encoding, written out so a restore
     // also republishes the PWM words.
@@ -476,6 +523,11 @@ impl Device for Timer {
         saved.base = self.base;
         saved.companion_cpu = self.companion_cpu;
         saved.focus_capture = self.focus_capture.clone();
+        saved.focus_position = self.focus_position;
+        saved.focus_position_inverted = self.focus_position_inverted;
+        saved.focus_drive = self.focus_drive;
+        saved.companion_idle_divide = self.companion_idle_divide;
+        saved.external_count = self.external_count;
         saved.pwm = self.pwm.clone();
         *self = saved;
         self.publish_pwm();
@@ -697,5 +749,127 @@ mod tests {
         assert!(h.events.iter().all(|e| e.0 == Duration::from_millis(1)));
         h.now = Duration::from_nanos(125);
         assert_eq!(t.read(&mut Cx::new(&mut h, 0, 0, 0), 0x22c, 4), 6);
+    }
+}
+
+impl Timer {
+    fn write_register(&mut self, cx: &mut Cx<'_>, address: u64, size: u8, value: u64) {
+        let offset = address.wrapping_sub(self.base);
+        if size != 4 || offset & 3 != 0 {
+            cx.unmodeled();
+            return;
+        }
+        let value = value as u32;
+        if offset == 0 {
+            for n in 0..self.general_len() {
+                if value & (1 << (16 + n)) == 0 {
+                    continue;
+                }
+                let g = &mut self.general[n];
+                let enable = value & (1 << n) != 0;
+                if enable != g.count.enabled {
+                    g.count.value = if enable {
+                        g.words[0]
+                    } else {
+                        g.count.current(Duration::from_nanos(cx.now()))
+                    };
+                    g.count.started_ns = Duration::from_nanos(cx.now()).as_nanos() as u64;
+                    g.count.enabled = enable;
+                    g.count.generation += 1;
+                    if !enable {
+                        g.pending = false;
+                    }
+                    self.schedule_general(cx, n);
+                }
+            }
+            return;
+        }
+        if offset == 4 || offset == 8 {
+            let r = &mut self.routing[(offset / 4 - 1) as usize];
+            let mask = value >> 16;
+            *r = (*r & !mask) | (value & mask);
+            return;
+        }
+        if offset == 0x80 {
+            self.group = value;
+            return;
+        }
+        if (0x10..0x10 + self.general_len() as u64 * 4).contains(&offset) {
+            let n = (offset as usize - 0x10) / 4;
+            let g = &mut self.general[n];
+            // Stock config writes bit16 to clear the terminal status. IRQs are
+            // edge-triggered; software one-shots ACK by stopping at +0.
+            if value & 0x10000 != 0 {
+                g.pending = false;
+            }
+            g.control = value & 0xffff;
+            g.count.value = g.count.current(Duration::from_nanos(cx.now()));
+            g.count.started_ns = Duration::from_nanos(cx.now()).as_nanos() as u64;
+            g.count.generation += 1;
+            self.schedule_general(cx, n);
+            return;
+        }
+        if let Some((n, w)) = self.general_register(offset) {
+            if w == 0
+                && let Some((channel, _)) = self.focus_position
+                && channel == n
+            {
+                self.focus_position = Some((channel, self.focus_steps()));
+            }
+            let g = &mut self.general[n];
+            g.count.value = g.count.current(Duration::from_nanos(cx.now()));
+            g.count.started_ns = Duration::from_nanos(cx.now()).as_nanos() as u64;
+            g.words[w] = value;
+            if w == 0 {
+                g.count.value = value;
+                if n == 9
+                    && let Some(pins) = &self.focus_capture
+                {
+                    g.capture_origin = pins.lock().unwrap().focus_pulses;
+                }
+            }
+            if w == 1 {
+                g.count.reload = value;
+            }
+            g.count.generation += 1;
+            self.schedule_general(cx, n);
+            self.publish_pwm();
+            return;
+        }
+        if self.extended {
+            cx.unmodeled();
+            return;
+        }
+        if offset == 0x300 {
+            // High half selects which low-half enable bits to update (1 shifted by channel).
+            for n in 0..16 {
+                if value & (1 << (16 + n)) == 0 {
+                    continue;
+                }
+                let c = &mut self.counters[n];
+                let enable = value & (1 << n) != 0;
+                if enable != c.enabled {
+                    c.value = c.current(Duration::from_nanos(cx.now()));
+                    c.started_ns = Duration::from_nanos(cx.now()).as_nanos() as u64;
+                    c.enabled = enable;
+                    c.generation += 1;
+                    self.schedule(cx, n);
+                }
+            }
+        } else if let Some((n, reload)) = Self::channel(offset) {
+            let c = &mut self.counters[n];
+            let now = Duration::from_nanos(cx.now());
+            c.value = c.current(now);
+            c.started_ns = now.as_nanos() as u64;
+            if reload {
+                c.reload = value;
+            } else {
+                c.value = value;
+            }
+            c.generation += 1;
+            self.schedule(cx, n);
+        } else {
+            cx.unmodeled();
+        }
     }
 }

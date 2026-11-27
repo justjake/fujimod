@@ -1,0 +1,14 @@
+# SSP instance 8 carries what the X-H2 5.30 declares as its audio codec on the same select:
+# serial client 2 of this firmware's descriptor table 0x19d6f70 is instance 8, select GPIO 15.11.
+# Declared as the X-H2 does (68-audio-serial.toml): a write-only command/data register endpoint,
+# 16-bit words, bit 15 of the command marks a read. Before, this was the X100VI audio sink.
+# The codec part is not identified; miso_high and source_hz are UNVERIFIED.
+[[device]]
+base = 0xff918000
+size = 0x1000
+kind = "spi-controller"
+[device.options]
+source_hz = 48000000
+[[device.options.endpoints]]
+select = { port = 15, pin = 11, active_high = false }
+part = { kind = "serial-command-registers", bits = 16, mode = 0, read_flag = 0x8000, data_words = 1, miso_high = false }

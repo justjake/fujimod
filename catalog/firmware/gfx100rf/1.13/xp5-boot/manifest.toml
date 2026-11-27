@@ -1,0 +1,141 @@
+# Cold OS boot (GFX100RF): EL3->EL1t handoff at 0x991ec. Adapted from x100vi-131;
+# loader is byte-identical shifted -0x20. CONFIRMED: pc 0x991ec, VBAR_EL1 0x9a800.
+# The entry state and preloads live in this firmware's catalog record (firmware.json).
+version = 1
+firmware = "gfx100rf-113"
+load_firmware = true
+# Host execution only, as on the X-T5 4.31: the M-core runs in block execution. The guest state
+# is the same either way; FUJIMOD_MPROFILE_INSTRUCTIONS in the environment turns it off.
+mprofile_block_execution = true
+
+# Device windows: gfx100rf-113.d/*.toml, merged in filename order.
+
+[[ram]]
+base = 0
+size = 0x40000000 # Stock low Normal map; cfg0x7508000, frames0x8473000, RTOS pools.
+
+# Linux DRAM366MiB plus virtio/IPC/shared arenas through0x68000000.
+# 0x30c86b0 gives the explicit subranges; all SoC devices remain at0xfa/0xff.
+[[ram]]
+base = 0x40000000
+size = 0x28000000
+
+# The first DRAM region ends at 0xa8000000 on this body. The stock bus-drain helper 0x15b0d14
+# (run by every core after the 4-core barrier 0x15b0d7c) makes one discarded read per mask bit:
+# 0x1d46b88, 0xa8000000, 0x100000000, 0x180000000. Bit 1 is the end of the first region, as
+# 0x80000000 is on the X-H2S, 0x60000000 on the X-T5 and 0x68000000 on the X100VI; the drain
+# peripheral answers there. Seen in a run: the pool mapper 0x157c410(0x20f, 0xdb, 0x80010000, 1)
+# places 0x1b60000 bytes at 0x80010000, and 0x9c8a0 then cleans that range with DC CIVAC, which
+# needs RAM behind it. Installed capacity above 0xa8000000 is not measured.
+# DRAM type in the boot hand-off block. The kernel entry copies 0x5ec bytes of hand-off data
+# from 0x18fd0 to 0xeeeb0 (0x9c308 -> 0x9cd2c); its last word, 0x195b0 -> 0xef490, is the DRAM
+# type the main firmware stores in its training record at the end of the serial flash
+# (0x14751f4: CPU aperture 0xf7fffff8, then the mark 0x5555aaac) and checks whenever it trains
+# DRAM channels 2 and 3 (0x149e270, 0x14b5474): 0x13 and 0xff take the plain path, 1 and 5 add a
+# second training pass, and anything else is refused. The catalog record's hand-off block was the
+# X100VI's, with 0 there: the half press of a still capture then failed to power the channels up
+# (manager 0x149d8c8, active mask 0x20eaf30), they stayed unmapped, and the capture took a fatal
+# exception on the bus-drain read of 0x100000000 (0x15b0b30) right after IIFP_S. firmware.json
+# now gives 0xff. 0x13 and 0xff are treated alike by every reader in this firmware; that this
+# body is not a type 1 or 5 one is an assumption, the stage that fills the block is not in the
+# update file. "DRAM type" is this file's name for the word, taken from where the firmware uses
+# it. Read from a GFX100RF 1.12 body in service mode: 0xef48c holds 0x2c5b1b, the JEDEC identity
+# of its serial NOR, and 0xef490 holds 0xff, the value preloaded here.
+
+# The DRAM limit and the three bus-drain ports come from catalog/bodies/gfx100rf/body.json.
+
+[[ram]]
+base = 0x68000000
+size = 0x40000000
+
+# DDR PHY register and firmware space, two PHYs of 0x1a0000 bytes (the X-T5 runner gives its DDR
+# PHY RAM the same extents: "DDR PHY register/firmware space").
+# The first half-press (S1) writes the second PHY's mailbox at 0xfb5a0000 and makes a DMA access at
+# 0xfb4a0000 (one run each); a device window cannot receive the DMA. The first PHY (0xfb000000 RAM,
+# 0xfb1a0000 stub) is X-T5 parity, not observed on the X100VI: in the runs checked its stub saw no
+# write and no read of the polled status word, and the RAM keeps no access log.
+[[ram]]
+base = 0xfb000000
+size = 0x1a0000
+
+[[ram]]
+base = 0xfb400000
+size = 0x1a0000
+
+# BIS/M-profile local SRAM: stock14d3f14 copies section5 before c928[21] release.
+[[ram]]
+base = 0xfa200000
+size = 0x100000
+
+[[ram]]
+base = 0xff800000
+size = 0x40000
+
+# DRAM channels: the table at 0x19e1a00 (base, size pairs) gives 0 + 0x80000000,
+# 0x80000000 + 0x70000000, 0x100000000 + 0x80000000 and 0x180000000 + 0x80000000. The bus-drain
+# words (0x15b0d14) are the starts of the last two and 0xa8000000, which lies inside the second.
+# Everything up to 0xa8000000 is the [dram] table's region; the rest is declared here.
+#
+# 0xa8000000..0xf0000000, the rest of the second channel. Seen used: the detection task's work
+# memory 0xeb000000 + 0x1400000 (0x3041cb8, stills) and 0xa8001000 + 0x1400000 (0x3091df8,
+# "recmvGetAiDetectMemArea", movie modes), both zero-filled by 0x30cfab0. The drain word
+# 0xa8000000 is ordinary memory.
+[[ram]]
+base = 0xa8000000
+size = 0x48000000
+
+# Channels at 0x100000000 and 0x180000000. A full shutter press sends the still RAW frame
+# (about 204 MB) to 0x1738171c0. The drain words at their starts are ordinary memory.
+# Open: during a still capture the drain read of 0x100000000 (0x15b0b30) takes an exception on
+# core 0 (firmware's saved context at 0xeea30: type 2, ELR 0x9eda0, x0 0x100000000) and the
+# system tick stops, with a device window there and with memory there alike. The emulator
+# injects nothing, so the guest's own translation does not cover that address at that moment.
+[[ram]]
+base = 0x100000000
+size = 0x80000000
+
+[[ram]]
+base = 0x180000000
+size = 0x80000000
+
+# The bus-drain words 0xa8000000, 0x100000000 and 0x180000000 are device windows
+# (manifest.d/20-storage.toml), not RAM.
+
+[[sd]]
+base = 0xff9b0000
+present = false
+protected = false
+files = []
+[sd.format]
+sectors = 0x3b9e000
+max_dirty_sectors = 65536
+partition_start = 8192
+sectors_per_cluster = 64
+label = "NO NAME"
+
+[[sd]]
+base = 0xff9b4000
+present = false
+protected = false
+files = []
+[sd.format]
+sectors = 0x3b9e000
+max_dirty_sectors = 65536
+partition_start = 8192
+sectors_per_cluster = 64
+label = "NO NAME"
+
+# Inherited SCTLR (MMU off), D/A masks and MPIDRs are assumptions.
+# Stock replaces SP_EL0/SP_EL1 before calling C, builds its MMU map,
+# then invokes the normal section6 entry in x20. x21 names the reset
+# hardware-info buffer, initialized above for the normal virtual-board profile.
+
+
+# The stock cross-core rendezvous (cache maintenance broadcast), for the run host's release of
+# a core the host held back in its wait loop. Initiator 0x15b08c0(flags, sgi, handler): waits for
+# [0x1cdd148], takes the lock 0x26cbe00, clears flags[0..3] for the cores of mask [0x1cdd14c]
+# (0x15b0940), sends the SGI (0x148f0d0), runs the handler itself and unlocks. Handlers
+# 0x15b0ddc (flags 0x2350658, operation 0x9c880) and 0x15b0e00 (flags 0x2350648, operation
+# 0x9c888) call 0x15b0d7c(operation, flags): operation, core number (0x9ca30), flags[core] = 1
+# at 0x15b0da8, then the wait loop 0x15b0dac..0x15b0dc4 over the four words with the array in
+# x19, then 0x149de08 and the bus drain 0x15b0d14 from 0x15b0dc8. Both arrays share the lock.

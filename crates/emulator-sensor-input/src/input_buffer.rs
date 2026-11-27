@@ -23,6 +23,61 @@ pub struct Output {
     /// Registers holding the x and y words of a focus statistics window
     /// ([`crate::statistics::FocusWindow`]); `None` measures the full-frame grid.
     pub window: Option<(u64, u64)>,
+    /// An optical-black sum table instead of `planes` (see [`Black`]).
+    pub black: Option<Black>,
+}
+/// Where a field of an optical-black region is programmed: register offset, shift, mask.
+pub type Field = (u64, u32, u32);
+/// One optical-black statistics output of a still frame: per area, the sum of the pixels of
+/// each of the eight colour positions, as a 64-bit little-endian value, positions without
+/// pixels left out (GFX100RF 1.13 readers 0x318a060, 0x318a5b0 and 0x318a860; they divide by
+/// the pixel count of 0x3189c30 and log the result as "[OFFSET] COL").
+///
+/// The colour position of a pixel is `2 * (column % 4) + (line % 2)` (the firmware's own two
+/// tables, 00 02 04 06.. for even lines and 01 03 05 07.. for odd ones). The model has no
+/// optical-black pixels in its sensor frame, so every pixel counts as the pedestal
+/// ([`fujimod_emulator_imaging::xtrans::BLACK`]): the sums are functional, not measured from
+/// the frame.
+#[derive(Clone, Copy)]
+pub struct Black {
+    /// First column, width minus one and height minus one of an area.
+    pub x: Field,
+    pub width: Field,
+    pub height: Field,
+    /// Areas in the table (1 or 16) and, for areas side by side, the register holding the
+    /// columns between two areas; without it every area has the first one's columns.
+    pub areas: usize,
+    pub gap: Option<u64>,
+    /// Line pairs the hardware leaves out of each area. The firmware subtracts 8 for the
+    /// outputs of +0x448..+0x470 while its flags at +0x168 / +0x16c of the statistics
+    /// description are 1 (0x3189bc4); the register behind those flags is not decoded.
+    pub trim_pairs: u32,
+}
+impl Black {
+    fn table(&self, r: &dyn Fn(u64) -> u32) -> Vec<u8> {
+        let field = |(register, shift, mask): Field| (r(register) >> shift) & mask;
+        let (x, width, height) = (field(self.x), field(self.width) + 1, field(self.height) + 1);
+        let pairs = u64::from((height / 2).saturating_sub(self.trim_pairs));
+        let step = self.gap.map_or(0, |gap| r(gap) + width);
+        let mut bytes = vec![0; self.areas * 0x40];
+        for area in 0..self.areas {
+            let first = x + step * area as u32;
+            let mut columns = [0u64; 4];
+            for column in first..first + width {
+                columns[(column % 4) as usize] += 1;
+            }
+            let mut at = area * 0x40;
+            for position in 0..8 {
+                let count = columns[position / 2] * pairs;
+                if count != 0 {
+                    let sum = count * u64::from(fujimod_emulator_imaging::xtrans::BLACK);
+                    bytes[at..at + 8].copy_from_slice(&sum.to_le_bytes());
+                    at += 8;
+                }
+            }
+        }
+        bytes
+    }
 }
 #[derive(Clone)]
 pub struct Wiring {
@@ -127,6 +182,8 @@ impl InputBuffer {
                     | (u64::from(s.r(output.high) & output.high_mask) << 32);
                 if address == 0 {
                     pending &= !(output.bit << (output.enable_word * 16));
+                } else if let Some(black) = &output.black {
+                    cx.ram_write(address, &black.table(&|register| s.r(register)))?;
                 } else {
                     self.statistics
                         .as_ref()
@@ -347,6 +404,7 @@ mod tests {
                         rows: 16,
                         planes: Planes::Rgb,
                         window: None,
+                        black: None,
                     }],
                     reset_ticks: 8,
                     period_ticks: None,

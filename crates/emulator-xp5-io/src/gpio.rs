@@ -337,6 +337,17 @@ impl Device for Gpio {
         if let Some((p, r)) = self.address(offset) {
             if r == 5 && !self.special {
                 pins.word(p) as u64
+            } else if r == 5 {
+                // Port 3's sampling word carries the external level of each pin that has one
+                // set (a body that sets none reads the register alone, as before).
+                let port = &pins.ports[p];
+                ((port.registers[r] & !u32::from(port.driven))
+                    | u32::from(port.input & port.driven)) as u64
+            } else if r == 0
+                && !self.special
+                && pins.pad_model == fujimod_emulator_devices::xp5::pins::PadModel::DataLatchPins
+            {
+                pins.word(p) as u64
             } else {
                 pins.ports[p].registers[r] as u64
             }

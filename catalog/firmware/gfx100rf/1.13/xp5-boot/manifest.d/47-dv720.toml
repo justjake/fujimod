@@ -1,0 +1,12 @@
+# +0x800, +0x810, +0x820 and +0x144, and one read of +0x11c that is only stored. FujiMod's
+# bring-up register file (every register stores its last write and reads it back) is enough
+# for that init; it is not a model of the accelerator, and the jobs the task later submits are
+# not covered: later job submissions and status polls read back the last value written, so a
+# hang or a fake completion there would look like a guest bug. An inference, not a hardware
+# fact: nothing here is checked against the part.
+[[device]]
+base = 0xffe00000
+size = 0x1000
+kind = "bringup-stub"
+[device.options]
+registers = []

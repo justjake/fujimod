@@ -1,0 +1,23 @@
+{
+  "$schema": "https://fujimod.com/schemas/settings.generated.schema.json",
+  "schema": 1,
+  "id": "gfx100rf-112-settings",
+  "firmware_id": "gfx100rf-112",
+  "source": {
+    "flash_offset": 8781824,
+    "address": 18616320,
+    "size": 11735040,
+    "sha256": "2eee5c0796ff847c641b310dba8aff1c59737d48743d1fe7faec5fc859043e40"
+  },
+  "configuration": {
+    "flash_offset": 5111808,
+    "bytes": 2501664,
+    "sha256": "3ae3ebf1dd193d804f5ad464a0d761bbe7182459350f8b170114882a85d743c3",
+    "basis": "At startup the stock configuration initializer zero-fills the configuration store when its stored signature is invalid and, when the firmware image enables it, copies these installed flash bytes to store offset 0."
+  },
+  "defaults": null,
+  "fields": [],
+  "profile": null,
+  "settings": {},
+  "sections": []
+}

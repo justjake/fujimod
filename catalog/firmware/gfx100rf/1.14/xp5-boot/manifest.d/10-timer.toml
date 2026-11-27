@@ -1,0 +1,49 @@
+# General/PWM16 (IRQs36..51), reload16 (52..67), extended6 (68..73).
+[[device]]
+base = 0xff908000
+size = 0x1000
+kind = "timer-focus-capture"
+[device.options]
+# The two endless command dials: the dial decoder 0x14f0fbc (descriptor kind 2) reads a
+# timer count through 0x146e0cc, takes the difference from the last read as detents and
+# re-arms the channel at 0x80000000 (0x146df78). Seen in a run: general channels 1, 2, 5
+# and 6 are enabled with both period words 0x80000000. They count pulses of the dials,
+# not the 48 MHz clock; run as free timers they turned the dials by themselves and the
+# first-start menu cursor jumped every frame. Nothing turns them here, so they hold.
+# Which pair is which dial is not decoded.
+external_count_channels = [1, 2, 5, 6]
+# Focus position counter: lens resource 0x1a -> timer id 0x25 (table 0x1bafc98) -> general
+# channel 8 (table 0x19d7840). The lens module loads 0x8000 and reads position as
+# (count - 0x8000) * sign (0x165a9cc, 0x165abe8, 0x165a9e4). As a free-running counter it read
+# a falling count and the body reported a focus error. It follows the focus motor's net
+# steps one to one; the real counts per step are not known.
+focus_position_channel = 8
+# Direction: with the counter rising on the model's "forward" steps the firmware measured +204
+# (shared servo structure +0x94) while it commanded -160 (+0x00), the deviation (+0x18) ran to
+# -364 and the init failed after its 1 s limit. The counter therefore falls on those steps.
+# Which sense the real encoder has relative to driver bit 10 is taken from that run, not from
+# a hardware table.
+focus_position_inverted = true
+# Host speed, not hardware: the companion core's 16 kHz loop interrupt (reload channel 11) is
+# thinned to one in eight while the focus driver's bridge is off. See Timer::companion_idle_divide.
+companion_idle_divide = 8
+# Focus pulse encoder: logical18/selector33 -> general9 external mode3.
+
+[[device]]
+base = 0xff909000
+size = 0x1000
+kind = "timer-extended"
+[device.options]
+# Focus motor drive. The companion core runs the focus servo (its routine at local 0x19004
+# works on the structure the A53 lens module holds at 0x27c8888 = 0xfa2f3e70) and programs this
+# timer's general channel 0 from its view 0x5f909100: +4 period, +8 and +0xc both period / 2 at
+# rest (local 0x1e6c8). The drive is the second compare about the half period (seen 1177 and
+# 133 at period 1311 for the two directions). The motor is modelled
+# as a velocity plant: `gain` counts per second for each PWM count; the value is a stand-in,
+# not a motor constant. The home sensor (GPIO table index 0x34 = GPIO 0.3) reads high while
+# the position is above `home_above`; where the real edge sits is not known, the init
+# (0x165b5e4) only needs it within its 160-count search to the negative side.
+# pwm_pins: the PWM reaches the bridge on GPIO 2.0 and 2.1. The companion takes both off the timer
+# function and holds them high whenever its servo is off (local 0x18ec0(2)), so a duty left over
+# from a period change does not move the lens then.
+focus_drive = { channel = 0, gain = 10, home_above = -40, home_port = 0, home_pin = 3, pwm_pins = [[2, 0], [2, 1]] }

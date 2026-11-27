@@ -1,0 +1,90 @@
+# Original XOR-DAT payload; camera-specific missing tail starts erased.
+# One backing is shared with serial flash and DMA; CPU aperture stores fail.
+# No seed: the X100VI setup-done byte at 0x6600f7 does not skip first start on this body.
+[[device]]
+base = 0xf0000000
+size = 0x08000000
+kind = "flash-storage"
+[device.options]
+dat_origin = 0x2bc
+xor = 0xff
+erased_tail = 0xff
+
+[[device]]
+base = 0xff90a000
+size = 0x1000
+kind = "flash-storage-controller"
+[device.options]
+# Selected stock descriptor geometry; not an observed camera chip ID.
+jedec_id = 0x20bb20
+
+[[device]]
+# Functional 1us completion, level INTID225 until masked ACK at +1c.
+base = 0xff939000
+size = 0x1000
+kind = "flash-storage-dma"
+
+[[device]]
+# Known gate/reset latches start zero; this is a session assumption.
+base = 0xff90c000
+size = 0x1000
+kind = "clock-gates"
+[device.options]
+configuration_word = 0
+
+[[device]]
+base = 0xff91c000
+size = 0x1000
+kind = "reset-handshake"
+[device.options]
+trigger_offset = 0x1c
+
+# "Table-driven controller apertures".
+[[device]]
+base = 0xfaf05000
+size = 0x1000
+kind = "memory-configuration"
+[device.options]
+commit_ticks = 1000
+
+[[device]]
+base = 0xfaf15000
+size = 0x1000
+kind = "memory-configuration"
+[device.options]
+commit_ticks = 1000
+
+[[device]]
+base = 0xfaf25000
+size = 0x1000
+kind = "memory-configuration"
+[device.options]
+commit_ticks = 1000
+
+[[device]]
+base = 0xfaf35000
+size = 0x1000
+kind = "memory-configuration"
+[device.options]
+commit_ticks = 1000
+
+[[device]]
+base = 0xfae00000
+size = 0x3000
+kind = "write-only-registers"
+
+[[device]]
+base = 0xff90d000
+size = 0x1000
+kind = "power-gates"
+
+# The bus-drain helper 0x15b0d14 (mask in w0, the same shape as the X100VI and X-T5 helpers)
+# calls the word reader 0x9eda0 on 0xa8000000 (bit 1), 0x100000000 (bit 2) and 0x180000000
+# (bit 3) and discards the value; bit 0 reads 0x1d46b88. Zero readback is a session assumption.
+# The targets are bus ports, not RAM: the stock code reads only the first word. 0xa8000000 is
+# also the manifest's [dram] limit, the end of the first DRAM region. The X100VI's 0x80000000
+# and 0x1c0000000 windows are not declared: this helper does not read them, and 0x80000000 is
+# DRAM here.
+# 0xa8000000 is inside the DRAM now (manifest.toml [dram]); its drain read is a memory read.
+
+# 0x100000000 and 0x180000000 are DRAM channels (manifest.toml): their drain reads are memory reads.

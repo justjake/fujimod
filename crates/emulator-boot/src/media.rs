@@ -42,6 +42,17 @@ pub fn read_image(path: &Path) -> Result<Card, String> {
     let mut offset = 0u64;
     let mut kept = 0usize;
     while offset < length {
+        // A sparse image (a 128 GB card holding a few megabytes) is mostly holes: go to the
+        // next stored bytes instead of reading the zeros between them.
+        match next_data(&file, offset) {
+            Some(data) if data >= length => break,
+            Some(data) if data > offset => {
+                offset = data - data % SECTOR as u64;
+                file.seek(SeekFrom::Start(offset))
+                    .map_err(|e| format!("{}: {e}", path.display()))?;
+            }
+            _ => {}
+        }
         let size = (length - offset).min(SCAN_CHUNK as u64) as usize;
         file.read_exact(&mut buffer[..size])
             .map_err(|e| format!("{}: {e}", path.display()))?;
@@ -60,6 +71,31 @@ pub fn read_image(path: &Path) -> Result<Card, String> {
         offset += size as u64;
     }
     Ok(card)
+}
+
+/// The offset of the first stored byte at or after `offset`: the file's length when only a hole
+/// follows, `None` when the file system cannot say (the caller then reads everything).
+#[cfg(target_os = "macos")]
+fn next_data(file: &File, offset: u64) -> Option<u64> {
+    use std::os::fd::AsRawFd;
+    unsafe extern "C" {
+        fn lseek(descriptor: i32, offset: i64, whence: i32) -> i64;
+    }
+    const SEEK_DATA: i32 = 4;
+    // SAFETY: lseek takes no pointers; the descriptor is open for the life of `file`. The
+    // caller seeks explicitly before its next read, so the moved position is not relied on.
+    let found = unsafe { lseek(file.as_raw_fd(), i64::try_from(offset).ok()?, SEEK_DATA) };
+    if found >= 0 {
+        return u64::try_from(found).ok();
+    }
+    // ENXIO: no data after `offset`.
+    (std::io::Error::last_os_error().raw_os_error() == Some(6))
+        .then(|| file.metadata().map(|m| m.len()).ok())
+        .flatten()
+}
+#[cfg(not(target_os = "macos"))]
+fn next_data(_file: &File, _offset: u64) -> Option<u64> {
+    None
 }
 
 /// Read caller-supplied SD card files before editing the selected medium.

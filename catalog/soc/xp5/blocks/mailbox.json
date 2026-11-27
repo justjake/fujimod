@@ -27,6 +27,10 @@
     {
       "output": "fault",
       "line": 143
+    },
+    {
+      "output": "notify",
+      "line": 139
     }
   ],
   "device": {

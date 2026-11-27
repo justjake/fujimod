@@ -1,0 +1,128 @@
+# Power/input models; stock ADC/GPIO/SPI drivers remain intact.
+[[device]]
+base = 0xff904000
+size = 0x1000
+kind = "pin-control"
+
+[[device]]
+base = 0xff905000
+size = 0x1000
+kind = "soc-temperature"
+
+[[device]]
+base = 0xff906000
+size = 0x1000
+kind = "adc"
+[device.options]
+# The X-H2 and X-H2S placeholder samples: channel 0 is the X-T5 thermistor sample (INHERITED,
+# UNVERIFIED here) and every other channel is 4095, above the key ladders' highest band, so
+# no key is held. The X100VI values this file started from (2241 on channel 7, 2712 on
+# channel 10) moved the first-start menu cursor by themselves. The GFX100RF channel
+# assignment is not decoded.
+samples = [2713, 4095, 4095, 4095, 4095, 4095, 4095, 4095, 4095, 4095, 4095, 4095, 4095, 4095, 4095]
+
+[[device]]
+base = 0xff907000
+size = 0x1000
+kind = "gpio"
+[device.options]
+# The pad word of an output pin is its data latch (+0), with +4 as the output enable. The original
+# model (+8 enable, +4 data) read every pin as an output once a reset stage had set +8 on all
+# boot's frames are the same under either model.
+# data-latch-pins: a read of +0 also answers the pad level for a pin that is not an output. The card
+# detect reader 0x1496f80 reads 11.12 and 9.3 through +0 (their +8 bits are never set, measured in
+# a run) and takes nonzero as "no card". With +0 answering the latch both SD slots read a card,
+# the media task (0xce/0xcf, message 0x13aa) started a mount that never ended, the firmware trace
+# showed Md1Mon_S/Md2Mon_S with no end, and REC init waited on its media bit 0x2000 without end.
+pad_model = "data-latch-pins"
+# GPIO 0.2 is the touch panel's interrupt: the touch task registers logical source 0xac = INTID 102
+# (0x14fd51c, table 0x19d9d98), the high-level line of pad 0.2 as 103 is for the focus home pad 0.3.
+input_irqs = [{ port = 0, pin = 0, line = 116, active_high = false }, { port = 0, pin = 1, line = 117, active_high = false }, { port = 0, pin = 2, line = 102, active_high = true }]
+# EL1 handoff assumption: calibration CS12.8 is initially inactive, power
+# CS12.10 low/inactive. These latch levels are not a captured reset state.
+# Panel selects GPIO 15.13 and 15.15 (SSP7, 40-display.toml) start inactive (output latch 1),
+# as the X-H2S declares its panel selects 12.8 and 12.10; with both latches at 0 the first
+# panel transfer found two selected endpoints.
+initial_outputs = [{ port = 12, levels = 0x100 }, { port = 15, levels = 0xa000 }]
+# Sensor power is sensed back on the pad that drives it. The firmware's runtime GPIO table
+# 0x1baf540 (8 bytes per index: port << 16 | pin, kind) holds 4.5, 4.6, 4.7, 6.0, 3.13 and 4.4
+# at indexes 2..7 (dumped from a run in shooting mode). 0x332b548 and 0x332b630 read index 2,
+# GPIO 4.5, through 0x161a6d0 and take 1 as "sensor already powered". With the pad at its
+# default high level the power-up never ran: port 4 was never driven and the start sequence
+# 0x3332c24 waited without end. 4.4 keeps its wire: 0x158f3d4 reads it directly.
+feedback = [
+  { port = 4, register = 0, bit = 5, input_port = 4, input_pin = 5 },
+  { port = 4, register = 0, bit = 4, input_port = 4, input_pin = 4 },
+]
+# GPIO11.4 reads low at power-on.
+# Released keys: the physical key table 0x1cc6540 (130 entries of 0x30 bytes: id, flags, group,
+# kind at +0xc, wire at +0x10, +0x18, +0x1c; evaluated by 0x14ed4e8) holds eight keys read
+# straight from a GPIO pin that count as held while the pin is low. Kind 2 is held when the
+# level equals +0x1c, which is 0 for ids 6 (11.12), 7 (9.3), 0x71 (11.3), 0x76 (15.10),
+# 0x7a (0.14) and 0x7b (11.8); kind 4 is held when the level differs from +0x18, which is 1
+# for ids 0x8b (0.0) and 0x8c (0.1). With every input at 0 the first-start menu cursor ran by
+# itself. These pins read high here: nothing held. Which control each id is, is not decoded.
+initial_inputs = [
+  # Touch panel interrupt pad, idle low (assumption: its interrupt is the pad's high line).
+  { port = 0, pin = 2, high = false },
+  { port = 11, pin = 4, high = false },
+  { port = 11, pin = 12, high = true },
+  { port = 9, pin = 3, high = true },
+  { port = 11, pin = 3, high = true },
+  { port = 15, pin = 10, high = true },
+  { port = 0, pin = 14, high = true },
+  { port = 11, pin = 8, high = true },
+  { port = 0, pin = 0, high = true },
+  { port = 0, pin = 1, high = true },
+  # Function-read keys (kind 5): id 0x83 (0x14ec618) is held while 0.13 is low, ids 0x89 and
+  # 0x8a (0x14ec5a0) while 14.1 and 14.0 are low, id 0x8f (0x14ec518) while 0.10 is low.
+  { port = 0, pin = 13, high = true },
+  { port = 14, pin = 0, high = true },
+  { port = 14, pin = 1, high = true },
+  { port = 0, pin = 10, high = true },
+]
+
+[[device]]
+base = 0xff90b000
+size = 0x1000
+kind = "gpio-port3"
+[device.options]
+# Focus stick centre press: the stick routine 0x14ede1c / 0x14ee0e0 reads ADC channel 14
+# against eight bands (table 0x1cc64d0, config tags 0x3884..0x38a2, ids 0x69..0x70) and
+# GPIO 3.3; while 3.3 is low it reports id 0x75 held, and the directions are not taken.
+initial_inputs = [{ port = 3, pin = 3, high = true }]
+
+# SSP0 (0xff910000) is not declared: the X100VI power controller and calibration endpoints that
+# sat here are not this body's. Its power controller is on SSP2 (61-ff912-control.toml).
+
+# I2C instance 1 (controllers at ff924000 + n*0x1000; interrupt 288 + n from
+# the driver's selector table 0x19d8608 -> descriptors 0x19d9d98; instance 1 is selector 4, INTID 289). Targets carried over
+# unchanged from the former battery-i2c kind: fuel gauge 0x36, retained power
+# registers 0x66/0x68 and the TMD2772-class eye sensor 0x39. Other addresses
+# are not acknowledged. byte_ns is a functional latency, nine bit times at 100 kHz, not a
+# short delay) gives up on a byte that takes 1 ms and resets the controller mid-byte, which the
+# model refuses (BCR 0x40 at 0xff925004, 1.73 s). That is Unicorn's exact, instruction-counted
+# timing; the macOS HVF boot passed at 1 ms. On Unicorn 73f5a7f0, 25, 90 and 250 us passed and
+# 1 ms stopped; the current pin is verified at 90 us only, and HVF at 90 us is unverified.
+[[device]]
+kind = "i2c-controller"
+base = 0xff925000
+size = 0x1000
+[device.options]
+interrupt = 289
+# byte_ns: 90 us is nine bit times of a 100 kHz standard-mode bus, the mode the driver selects
+# for every client of this bus but 0x0e (0x14779cc). The real SCL frequency is not derivable
+# from the firmware; this is a functional latency.
+byte_ns = 90000
+[[device.options.targets]]
+address = 0x36
+part = { kind = "fuel-gauge" }
+[[device.options.targets]]
+address = 0x39
+part = { kind = "tmd2772-proximity" }
+[[device.options.targets]]
+address = 0x66
+part = { kind = "retained-registers" }
+[[device.options.targets]]
+address = 0x68
+part = { kind = "retained-registers" }

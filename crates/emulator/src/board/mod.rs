@@ -604,6 +604,11 @@ impl Board {
         }
         let previous = state.execution_policy;
         if previous == policy {
+            // A loaded snapshot restores the board's policy but not the processors' own: they
+            // are told again, or an interactive HVF run refuses to start after a load.
+            for cpu in self.cpus.iter() {
+                cpu.set_execution_policy(policy)?;
+            }
             return prepare_device_workers(policy, state.device_workers);
         }
         for (index, cpu) in self.cpus.iter().enumerate() {

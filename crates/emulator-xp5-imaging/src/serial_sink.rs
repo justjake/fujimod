@@ -57,7 +57,10 @@ impl Device for Sink {
     }
     fn read(&mut self, cx: &mut Cx<'_>, address: u64, n: u8) -> u64 {
         let o = address.wrapping_sub(self.base);
-        if n != 4 || o & 3 != 0 || o > 0x24 {
+        // The A53 reads these registers word-wide; the M-profile companion's
+        // PL022 driver reads the same registers 16 bits at a time. Both see the
+        // register value (its meaningful bits fit in 16), so accept halfwords.
+        if !matches!(n, 2 | 4) || o & 3 != 0 || o > 0x24 {
             cx.unmodeled();
             return 0;
         }
@@ -72,7 +75,8 @@ impl Device for Sink {
     }
     fn write(&mut self, cx: &mut Cx<'_>, address: u64, n: u8, v: u64) {
         let o = address.wrapping_sub(self.base);
-        if n != 4 || o & 3 != 0 || o > 0x24 {
+        // Companion PL022 writes are 16-bit; accept halfwords as well as words.
+        if !matches!(n, 2 | 4) || o & 3 != 0 || o > 0x24 {
             cx.unmodeled();
             return;
         }

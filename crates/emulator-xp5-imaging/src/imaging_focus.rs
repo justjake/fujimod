@@ -26,6 +26,8 @@ pub struct Focus {
     serial: crate::serial_sink::Sink,
     pins: fujimod_emulator_devices::xp5::pins::SharedPins,
     motion: Motion,
+    /// The pad the firmware reads as its focus home sensor (GPIO table index 0x34).
+    home: (usize, usize),
 }
 impl Focus {
     pub fn new(
@@ -36,7 +38,13 @@ impl Focus {
             serial,
             pins,
             motion: Motion::default(),
+            home: (0, 8),
         }
+    }
+    /// The home sensor pad of a body whose GPIO table puts index 0x34 elsewhere than 0.8.
+    pub fn with_home(mut self, port: usize, pin: usize) -> Self {
+        self.home = (port, pin);
+        self
     }
     fn schedule(&mut self, cx: &mut Cx<'_>) {
         let word = *self
@@ -64,6 +72,27 @@ impl Device for Focus {
         self.serial.write(cx, offset, size, value);
         let offset = offset.wrapping_sub(self.serial.base());
         let word = value as u16;
+        // Driver register 0x1b (word 0xd000 | data, address mask 0xfe00): bit 0 enables the
+        // bridge of a PWM-driven focus motor (pins::FocusServo::enable has the evidence).
+        if offset == 8 && size == 4 && word & 0xfe00 == 0xd000 {
+            let mut pins = self.pins.lock().unwrap();
+            let enable = (word & 3) as u8;
+            if pins
+                .focus_servo
+                .as_ref()
+                .is_some_and(|servo| servo.enable != enable)
+            {
+                // The motor moved under the old enables up to now.
+                pins.advance_focus(cx.now());
+                if let Some(servo) = pins.focus_servo.as_mut() {
+                    servo.enable = enable;
+                }
+                drop(pins);
+                cx.log(&format!(
+                    "focus driver enables {enable:02b} (register 0x1b word {word:04x})"
+                ));
+            }
+        }
         if offset != 8 || size != 4 || word & 0xf000 != 0x2000 {
             return;
         }
@@ -106,20 +135,29 @@ impl Device for Focus {
             .pop_front()
             .expect("empty focus pulse queue");
         let steps = i32::from(word & 0x3ff);
-        self.motion.position += if word & 0x400 != 0 { -steps } else { steps };
-        // Input34/resource8 is GPIO0.8. Functional home threshold at0;
-        // logical10/selectorB9 is GPIO1.9 -> IRQ127 ->16419c4(data0).
         let mut pins = self.pins.lock().unwrap();
         pins.focus_pulses = pins.focus_pulses.wrapping_add(steps as u64);
-        let home = self.motion.position > 0;
-        pins.set_input(0, 8, home);
-        // B7/B8 descriptors are level-triggered, unlike pulse-end B9.
-        // Keep opposite home conditions asserted; stock unregisters each
-        // one-shot callback. A high/low pulse is lost before IRQ acceptance.
-        pins.set_input(2, 8, home);
-        pins.set_input(1, 8, !home);
-        cx.set_irq(108, home);
-        cx.set_irq(124, !home);
+        // A body whose focus motor is a PWM servo (pins.focus_servo, GFX100RF) steps something
+        // else through this driver channel: the batch then moves neither the focus position
+        // nor the home sensor, and only the pulse-end interrupt below is served.
+        if pins.focus_servo.is_none() {
+            self.motion.position += if word & 0x400 != 0 { -steps } else { steps };
+            pins.focus_position += i64::from(if word & 0x400 != 0 { -steps } else { steps });
+            // Input34/resource8 is GPIO0.8. Functional home threshold at0;
+            // logical10/selectorB9 is GPIO1.9 -> IRQ127 ->16419c4(data0).
+            let home = self.motion.position > 0;
+            // X100VI: GPIO 0.8. Another body may name its pad with `home_input`.
+            pins.set_input(self.home.0, self.home.1, home);
+            // The two home interrupts follow the home pad's pin number: logical inputs 0xe and
+            // 0xf use selectors 0xb7 and 0xb8, which are INTID 100 + pin and 116 + pin (X100VI
+            // pad 0.8: 108 and 124). B7/B8 descriptors are level-triggered, unlike pulse-end B9.
+            // Keep opposite home conditions asserted; stock unregisters each one-shot callback.
+            let pin = self.home.1;
+            pins.set_input(2, pin, home);
+            pins.set_input(1, pin, !home);
+            cx.set_irq(100 + pin as u32, home);
+            cx.set_irq(116 + pin as u32, !home);
+        }
         pins.set_input(1, 9, true);
         cx.set_irq(127, true);
         cx.set_irq(127, false);

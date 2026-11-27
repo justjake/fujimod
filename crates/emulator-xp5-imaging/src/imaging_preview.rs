@@ -2,7 +2,7 @@
 use fujimod_emulator_devices::checkpoint::Checkpoint;
 use fujimod_emulator_devices::{Cx, Device};
 use fujimod_emulator_sensor_input::{
-    input_buffer::{InputBuffer, Output, Wiring},
+    input_buffer::{Black, InputBuffer, Output, Wiring},
     statistics::{Planes, Statistics},
 };
 use serde::{Deserialize, Serialize};
@@ -187,6 +187,7 @@ impl Preview {
                     | "retain_words"
                     | "focus_filters"
                     | "focus_window"
+                    | "still_black"
             )
         }) {
             return Err("unknown preview option".into());
@@ -221,8 +222,17 @@ impl Preview {
                 .as_bool()
                 .ok_or("preview focus_window must be a boolean")?,
         };
-        if rifp && (focus_filters || focus_window) {
-            return Err("focus_filters and focus_window are input buffer options".into());
+        // GFX100RF 1.13: the optical-black sums of a still frame (`input_buffer::Black`).
+        let still_black = match options.get("still_black") {
+            None => false,
+            Some(value) => value
+                .as_bool()
+                .ok_or("preview still_black must be a boolean")?,
+        };
+        if rifp && (focus_filters || focus_window || still_black) {
+            return Err(
+                "focus_filters, focus_window and still_black are input buffer options".into(),
+            );
         }
         let window = focus_window.then_some((0x7c, 0x80));
         if rifp {
@@ -236,6 +246,85 @@ impl Preview {
                 still: None,
             }));
         }
+        // GFX100RF 1.13 (driver 0x2f48bb4 for the destinations, 0x2f48600 and 0x14488d4 for the
+        // enables; region words read off a traced still frame against the firmware's own
+        // description of it): request bit 20 programs +0x448..+0x460 and enables word 0 bits
+        // 0..3, bit 21 +0x468 / +0x470 and word 1 bits 1 and 2, bit 22 +0x478 / +0x480 and
+        // word 1 bits 3 and 4. Which bit of a group belongs to which output is taken in
+        // register order; the firmware always sets a group together.
+        let low = |register, mask| (register, 0, mask);
+        let high = |register| (register, 16, 0xffff);
+        let single = |bit, destination, region: u64| Output {
+            enable_word: 0,
+            bit,
+            low: destination,
+            high: destination + 4,
+            high_mask: 7,
+            columns: 1,
+            rows: 1,
+            planes: Planes::Color,
+            window: None,
+            black: Some(Black {
+                x: high(region),
+                width: low(region, 0xffff),
+                height: low(region + 4, 0xffff),
+                areas: 1,
+                gap: None,
+                trim_pairs: 8,
+            }),
+        };
+        let stacked = |bit, destination, region: u64| Output {
+            enable_word: 1,
+            bit,
+            low: destination,
+            high: destination + 4,
+            high_mask: 7,
+            columns: 1,
+            rows: 1,
+            planes: Planes::Color,
+            window: None,
+            black: Some(Black {
+                x: high(region + 4),
+                width: low(region + 4, 0xffff),
+                height: (region, 8, 0xff),
+                areas: 16,
+                gap: None,
+                trim_pairs: 8,
+            }),
+        };
+        let row = |bit, destination, region: u64| Output {
+            enable_word: 1,
+            bit,
+            low: destination,
+            high: destination + 4,
+            high_mask: 7,
+            columns: 1,
+            rows: 1,
+            planes: Planes::Color,
+            window: None,
+            black: Some(Black {
+                x: high(region),
+                width: low(region + 4, 0xffff),
+                height: low(region, 0xffff),
+                areas: 16,
+                gap: Some(region + 8),
+                trim_pairs: 0,
+            }),
+        };
+        let still = if still_black {
+            vec![
+                single(1 << 0, 0x448, 0x290),
+                single(1 << 1, 0x450, 0x298),
+                single(1 << 2, 0x458, 0x2a0),
+                single(1 << 3, 0x460, 0x2a8),
+                stacked(1 << 1, 0x468, 0x2b0),
+                stacked(1 << 2, 0x470, 0x2b8),
+                row(1 << 3, 0x478, 0x2c0),
+                row(1 << 4, 0x480, 0x2cc),
+            ]
+        } else {
+            Vec::new()
+        };
         let input = InputBuffer::new(
             Wiring {
                 base: 0xff974000,
@@ -259,6 +348,7 @@ impl Preview {
                             rows: 9,
                             planes: Planes::FocusFilters,
                             window,
+                            black: None,
                         }
                     } else {
                         Output {
@@ -271,6 +361,7 @@ impl Preview {
                             rows: 7,
                             planes: Planes::Color,
                             window: None,
+                            black: None,
                         }
                     },
                     Output {
@@ -283,6 +374,7 @@ impl Preview {
                         rows: 16,
                         planes: Planes::Ae,
                         window: None,
+                        black: None,
                     },
                     // Focus (contrast AF) statistics, 13 x 9 cells: the cells (plane 0x21)
                     // and the two per-cell planes 0xe and 0xf (`statistics::FocusFrame`).
@@ -299,6 +391,7 @@ impl Preview {
                         rows: 9,
                         planes: Planes::FocusCells,
                         window,
+                        black: None,
                     },
                     Output {
                         enable_word: 0,
@@ -310,6 +403,7 @@ impl Preview {
                         rows: 9,
                         planes: Planes::FocusLevels,
                         window,
+                        black: None,
                     },
                     Output {
                         enable_word: 0,
@@ -321,8 +415,12 @@ impl Preview {
                         rows: 9,
                         planes: Planes::FocusSums,
                         window,
+                        black: None,
                     },
-                ],
+                ]
+                .into_iter()
+                .chain(still)
+                .collect(),
                 reset_ticks: 0,
                 period_ticks: Some(delay),
             },

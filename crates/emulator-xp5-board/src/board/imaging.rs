@@ -32,18 +32,36 @@ pub fn register_all(
         } else {
             sink
         };
-        if !w.options.is_empty() {
-            return Err("serial actuator takes no options".into());
+        // The focus actuator may name its home sensor pad: `home_input = { port = 0, pin = 3 }`.
+        let home = match w.options.get("home_input") {
+            Some(value) if w.kind == "focus-actuator" => {
+                let number = |key: &str| {
+                    value
+                        .get(key)
+                        .and_then(toml::Value::as_integer)
+                        .and_then(|n| usize::try_from(n).ok())
+                        .filter(|n| *n < 16)
+                        .ok_or_else(|| format!("focus actuator home_input needs {key} below 16"))
+                };
+                Some((number("port")?, number("pin")?))
+            }
+            _ => None,
+        };
+        if w.options.len() != usize::from(home.is_some()) {
+            return Err(
+                "serial actuator takes no options but a focus actuator's home_input".into(),
+            );
         }
         if w.kind == "focus-actuator" {
             if w.base != 0xff914000 {
                 return Err("invalid focus actuator base".into());
             }
-            bus.register(
-                w.base,
-                w.size,
-                Box::new(focus::Focus::new(sink, pins.clone())),
-            )?;
+            let focus = focus::Focus::new(sink, pins.clone());
+            let focus = match home {
+                Some((port, pin)) => focus.with_home(port, pin),
+                None => focus,
+            };
+            bus.register(w.base, w.size, Box::new(focus))?;
         } else if w.kind == "iris-actuator" {
             if w.base != 0xff915000 {
                 return Err("invalid iris actuator base".into());
@@ -426,6 +444,13 @@ pub fn register_all(
             device.with_retained_words()
         } else {
             device
+        };
+        let device = match w.options.get("completion_irq").map(|v| v.as_integer()) {
+            None => device,
+            Some(Some(line)) if (32..1020).contains(&line) => {
+                device.with_completion_irq(line as u32)
+            }
+            Some(_) => return Err("PAF completion_irq is an interrupt id".into()),
         };
         bus.register(w.base, w.size, Box::new(device))?;
     }

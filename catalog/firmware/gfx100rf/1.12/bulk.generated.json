@@ -1,0 +1,229 @@
+{
+  "$schema": "https://fujimod.com/schemas/bulk.generated.schema.json",
+  "schema": 1,
+  "id": "gfx100rf-112-bulk",
+  "firmware_id": "gfx100rf-112",
+  "product": "GFX100RF",
+  "internal_version": "1.56",
+  "code_alias": 0,
+  "source": {
+    "mechanism": "pattern_zero_base",
+    "registered_buffer": 69491824,
+    "source_state": 75178872,
+    "configuration_pointer": 34779776,
+    "configuration_bytes": 17956864,
+    "system_mode_address": 43395960,
+    "capacity": 65536
+  },
+  "window": {
+    "address": 0,
+    "size": 2818572288
+  },
+  "code_checks": [
+    {
+      "name": "bulk_2ed4444",
+      "address": 49103940,
+      "size": 180,
+      "sha256": "0807466c4ab8b6bc276064a2987a68f1b02435b9a2b3dca482c855523e775726"
+    },
+    {
+      "name": "bulk_2ed4e78",
+      "address": 49106552,
+      "size": 184,
+      "sha256": "68426fe33a5562b8777306f74df7a78a16ff74b03446f11528577e3f5b63d858"
+    },
+    {
+      "name": "bulk_2ed5d84",
+      "address": 49110404,
+      "size": 196,
+      "sha256": "f41f08b44ddabaf652bce1a55df6a38f8760b045280a6f216a6643a247efa3a1"
+    },
+    {
+      "name": "bulk_2ed5130",
+      "address": 49107248,
+      "size": 80,
+      "sha256": "e300cb48ecdf26a849c215445be9585216ded39b665563bca05a89ab72dc9af6"
+    },
+    {
+      "name": "bulk_2ed603c",
+      "address": 49111100,
+      "size": 388,
+      "sha256": "c26bfe1d79afe71ba4baa1f39aa2c9105e1f7fb01dec62cfbcfd7706fcaa5ef1"
+    },
+    {
+      "name": "bulk_2ed4764",
+      "address": 49104740,
+      "size": 36,
+      "sha256": "d84cb594b6917f6172a73179c8b78d01d459981d2db215af71b255dfdcdffa5d"
+    },
+    {
+      "name": "bulk_2ed4788",
+      "address": 49104776,
+      "size": 36,
+      "sha256": "6ad82f4c0c4380a3a90369f25b5f5e1e94a58a3ade0d16e2589f9b90e4907361"
+    },
+    {
+      "name": "bulk_2ed4744",
+      "address": 49104708,
+      "size": 32,
+      "sha256": "d2653c02c4c4f50b3f302cea05c6b6a943b41a084e799fd5542caccc58b4b11f"
+    },
+    {
+      "name": "bulk_15dfab8",
+      "address": 22936248,
+      "size": 12,
+      "sha256": "36961594b797d2b5203a5d05353bbc8b54196bde67d7e14b3cdb925a662af32b"
+    },
+    {
+      "name": "bulk_2f763ec",
+      "address": 49767404,
+      "size": 224,
+      "sha256": "16fca29637724070eb79e9a9489f1efc44d585e72e188efd1af8bc57f4da9a6c"
+    },
+    {
+      "name": "bulk_157b9d0",
+      "address": 22526416,
+      "size": 40,
+      "sha256": "af60e75d0d580ee2c7ce0da2217356dc1990c85230b0434988182e48e90f5701"
+    },
+    {
+      "name": "bulk_157bb68",
+      "address": 22526824,
+      "size": 44,
+      "sha256": "2edbe66948406291a7040e2b7e19796b8edca3d27b590a81c811d6742066c049"
+    },
+    {
+      "name": "bulk_157b928",
+      "address": 22526248,
+      "size": 92,
+      "sha256": "fb1bd6d33f3db11bf4ae46a31f10ad5d26186aaea91b053f09242e34f07dde4c"
+    },
+    {
+      "name": "bulk_1581ef8",
+      "address": 22552312,
+      "size": 284,
+      "sha256": "538258dbd386596e8e33505a43d9b0b858b8e8512e723fee0e2cd820c710d7c7"
+    },
+    {
+      "name": "bulk_30b20d8",
+      "address": 51060952,
+      "size": 56,
+      "sha256": "ff819ca1ccd0eafba5a677ff1175907c6998b4ec0ba059b5f617f0c0f615745a"
+    },
+    {
+      "name": "bulk_1424e08",
+      "address": 21122568,
+      "size": 108,
+      "sha256": "9a8cb27ca0455a4454e4e7fce2a60c4b0f574d2182f5208826d49f3197091a8e"
+    },
+    {
+      "name": "bulk_1424e74",
+      "address": 21122676,
+      "size": 108,
+      "sha256": "ed9186b9b4e21d0ab25dedbf05fdb2f7cd5799aa80dd72a39d245f45ec5a7b47"
+    }
+  ],
+  "probes": [
+    {
+      "address": 49103940,
+      "size": 128
+    },
+    {
+      "address": 49106552,
+      "size": 128
+    }
+  ],
+  "mapped_probe": {
+    "name": "bulk_mapped_probe",
+    "address": 49102848,
+    "size": 4096,
+    "sha256": "b05abe681517c7ef4ab7adf85167cc34a731c306d4af6a269aba227ff5a1a0fc"
+  },
+  "scopes": [
+    {
+      "name": "quick",
+      "basis": "Mapped update ranges in the RAM window through the highest located transfer-state address, rounded to 1 MiB. Static BSS and heap extents beyond it are not established.",
+      "ranges": [
+        {
+          "name": "firmware",
+          "address": 0,
+          "size": 75497472
+        }
+      ]
+    },
+    {
+      "name": "full",
+      "basis": "The recorded RAM capture window; its first 16 KiB and high SRAM are excluded.",
+      "ranges": [
+        {
+          "name": "ram",
+          "address": 0,
+          "size": 2818572288
+        }
+      ]
+    }
+  ],
+  "upload": {
+    "pointer": 69491824,
+    "pointer_bytes": 8,
+    "capacity_address": 69491832,
+    "configuration_checks": [
+      {
+        "offset": 5888,
+        "value": 0
+      }
+    ],
+    "piece_bytes": 65536,
+    "address_alignment": 32,
+    "code_checks": [
+      {
+        "name": "bulk_upload_command",
+        "address": 49105836,
+        "size": 204,
+        "sha256": "d781dea23c350663cdd7d68157269726a4d4726ba5aad0f545fb6a6b4f2a2494"
+      },
+      {
+        "name": "bulk_upload_data",
+        "address": 49106196,
+        "size": 152,
+        "sha256": "5360d1c0c0df3666f2eaaaf71ec78242bd04b2260700e5cfeaf75998a75853bb"
+      },
+      {
+        "name": "bulk_upload_complete",
+        "address": 49104312,
+        "size": 284,
+        "sha256": "2ffdcc46561492d286518797bdf2db86179b01a314a4b25674d8b2c175478fbe"
+      },
+      {
+        "name": "bulk_upload_setup_gated",
+        "address": 49110008,
+        "size": 396,
+        "sha256": "4ae64eedfb5f0ebfb3cb5ccaa4567238359cb07619a4469fba384c1a1384ceaf"
+      },
+      {
+        "name": "bulk_upload_dispatch",
+        "address": 49111100,
+        "size": 388,
+        "sha256": "c26bfe1d79afe71ba4baa1f39aa2c9105e1f7fb01dec62cfbcfd7706fcaa5ef1"
+      },
+      {
+        "name": "bulk_upload_le32",
+        "address": 49104776,
+        "size": 36,
+        "sha256": "6ad82f4c0c4380a3a90369f25b5f5e1e94a58a3ade0d16e2589f9b90e4907361"
+      },
+      {
+        "name": "bulk_upload_guard_reader",
+        "address": 22526416,
+        "size": 40,
+        "sha256": "af60e75d0d580ee2c7ce0da2217356dc1990c85230b0434988182e48e90f5701"
+      },
+      {
+        "name": "bulk_upload_guard_key",
+        "address": 22526248,
+        "size": 92,
+        "sha256": "fb1bd6d33f3db11bf4ae46a31f10ad5d26186aaea91b053f09242e34f07dde4c"
+      }
+    ]
+  }
+}

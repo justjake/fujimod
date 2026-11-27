@@ -1,0 +1,38 @@
+# USB device controller and PHY: the XP5 SoC blocks the X-T5 and X-E5 records declare
+# (catalog/firmware/xt5/4.31/xp5-boot/manifest.d/64-usb.toml has the register account). On this
+# body the core base 0xffc00000 is loaded at 0x015a3b44 (1.14). The interrupt line is the XP5
+# SoC's (INTID 283 on the X-T5 and X-E5); this body's interrupt table has not been read for it.
+# Nothing touches these windows before a cable is seen.
+[[device]]
+base = 0xffc00000
+size = 0x10000
+kind = "usb-device-controller"
+[device.options]
+interrupt = 283
+speed = 0
+command_ticks = 1000
+transaction_ticks = 125000
+
+[[device]]
+base = 0xffc23800
+size = 0x404
+kind = "usb-phy"
+
+# Bring-up stubs, NOT models, as on the X-T5 and X-E5: the USB glue word 0xffc10c08 and the
+# PHY/PLL control block at 0xffc30000 whose start the driver polls for completion.
+[[device]]
+base = 0xffc10000
+size = 0x1000
+kind = "bringup-stub"
+[device.options]
+registers = []
+
+[[device]]
+base = 0xffc30000
+size = 0x1000
+kind = "completion-stub"
+[device.options]
+starts = [{ offset = 0x14, mask = 0x10 }]
+delay_us = 100
+completion = [{ offset = 0x08, set = 0x1 }]
+ack = { offset = 0x08, mode = "w1c", bits = 0x1 }

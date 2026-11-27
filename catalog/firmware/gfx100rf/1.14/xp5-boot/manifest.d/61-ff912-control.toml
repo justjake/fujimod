@@ -1,0 +1,20 @@
+# Power controller on SPI2 (0xff912000), chip select GPIO 11.6 active-high: logical serial
+# descriptor 0x16 at 0x19d7390 is [2, 0xb0006, 1, 2, 0x20, 0, 1, 1] (instance 2, select
+# 11.6), word for word the X-H2 5.30 descriptor 0x12 (its 34-power-controller.toml). The
+# packet reader 0x14cec8c sends [register, 0, 0, ~register] and checks the reply's
+# one's-complement checksum, the shared power-controller part's packet; the boot-mode gate
+# 0x15c1414 parks main initialisation at 0x15c1c1c unless that read validates.
+# rtc_seconds is a virtual input (seconds since 2000-01-01), not a captured value;
+# source_hz is the X-T5 and X100VI value, UNVERIFIED.
+[[device]]
+base = 0xff912000
+size = 0x1000
+kind = "spi-controller"
+[device.options]
+source_hz = 48000000
+[[device.options.endpoints]]
+select = { port = 11, pin = 6, active_high = true }
+[device.options.endpoints.part]
+kind = "power-controller"
+rtc_seconds = 0x325ffea2
+rtc_valid = true

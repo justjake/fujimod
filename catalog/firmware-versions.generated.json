@@ -3,11 +3,27 @@
   "schema": 1,
   "releases": [
     {
+      "firmware_id": "gfx100rf-112",
+      "product": "GFX100RF",
+      "version": "1.12",
+      "internal_version": "1.56",
+      "update_sha256": "8d4d9a14fc53eebacac79246adabd7e8f70c5bf3c2c24a754608c56ec08ab1d3",
+      "download_url": "https://www.fujifilm-x.com/global/support/download/firmware/cameras/gfx100rf/"
+    },
+    {
       "firmware_id": "gfx100rf-113",
       "product": "GFX100RF",
       "version": "1.13",
       "internal_version": "1.57",
       "update_sha256": "33ad2dc787defdbdac3bb0a95e914407f768b0532f119cfac1e034c18648397f",
+      "download_url": "https://www.fujifilm-x.com/global/support/download/firmware/cameras/gfx100rf/"
+    },
+    {
+      "firmware_id": "gfx100rf-114",
+      "product": "GFX100RF",
+      "version": "1.14",
+      "internal_version": "1.59",
+      "update_sha256": "414a5ddec3c858c24e0193f0a1c0e7720b95dc6f7d47422b60030c06a165db84",
       "download_url": "https://www.fujifilm-x.com/global/support/download/firmware/cameras/gfx100rf/"
     },
     {

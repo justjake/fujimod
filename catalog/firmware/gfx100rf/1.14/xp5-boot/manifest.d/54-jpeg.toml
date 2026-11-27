@@ -1,0 +1,15 @@
+# JPEG encoder, the shared X-Processor model (see the X-T5 4.31 52-jpeg.toml for the sequences).
+# Checked on this firmware: the driver start 0x2f21804 registers logical source 0xd = INTID 207
+# (table 0x19d9d98) with handler 0x2f21654, and there is one accessor pair per register at the
+# X-T5 offsets (+0x00 0x14bd664/0x14bd6b4, +0x24 0x14bd7b4/0x14bd910, +0x84 0x14bdcfc/0x14bdd50,
+# +0x98 0x14bde54/0x14bdeac, +0x14c 0x14be06c/0x14be0c4, +0x118 0x14be1f4/0x14be248); the reset
+# writes +0x118 = 1 first, as there (seen in a run, from 0x14be22c). The word-by-word programming
+# sequence was not compared. run_ticks is functional, not measured.
+[[device]]
+base = 0xffd10000
+size = 0x1000
+kind = "jpeg-encoder"
+
+[device.options]
+irq = 207
+run_ticks = 1000

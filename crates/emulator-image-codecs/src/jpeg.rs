@@ -310,13 +310,17 @@ impl Codec {
             || !height.is_multiple_of(8)
             || width > 65535
             || height > 65535
-            || width * height > 64_000_000
+            // The GFX100RF frame is 11648 x 8736 (102 million pixels).
+            || width * height > 128_000_000
             || source_bytes != width * height * 2
             || self.uploaded.contains(&0)
             || capacity == 0
             || capacity > 64 * 1024 * 1024
         {
-            return Err("JPEG input escapes bounded packed422 class".into());
+            return Err(format!(
+                "JPEG input escapes bounded packed422 class: {width} x {height}, source {source_bytes:#x} bytes, capacity {capacity:#x}, tables uploaded {}",
+                !self.uploaded.contains(&0)
+            ));
         }
         let mut header = [0; 1024];
         self.headers(
