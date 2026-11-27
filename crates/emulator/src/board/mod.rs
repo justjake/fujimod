@@ -4038,13 +4038,22 @@ impl Host for Services<'_> {
         }
         self.memory
             .watch_transfer(write_watch::WriteSource::Dma, address, bytes, self.timeline.now());
-        let owner = self.active_core.filter(|&core| {
-            self.code_run.keeps_shadow(core) && self.mprofile[core].is_some()
-        });
-        // Exact execution can complete its existing slice for a foreign write.
-        // Classify the decoded physical chunks under the same mapping as the copy.
+        // In a concurrent window, the MMIO requester can differ from the
+        // owner of the stopped code slice. DMA still synchronizes all backends.
+        let owner = match *self.code_run {
+            RunCode::Running(core) | RunCode::DmaStopped(core) if self.mprofile[core].is_some() => {
+                Some(core)
+            }
+            _ => None,
+        };
+        // Only an ordered issuer can finish its existing slice for a foreign
+        // write. Classify ranges using the same mapping as the DMA copy.
         let profile = owner
-            .filter(|&core| self.execution_policy == ExecutionPolicy::Exact && self.code_run.is_running(core))
+            .filter(|&core| {
+                self.active_core == Some(core)
+                    && self.execution_policy == ExecutionPolicy::Exact
+                    && self.code_run.is_running(core)
+            })
             .and_then(|core| self.mprofile[core].as_ref());
         let mut can_finish_slice = profile.is_some();
         let result = self.memory.write_dma(self.cpus, self.exclusive, address, bytes, |physical, size| {

@@ -849,6 +849,43 @@ fn five_unicorn_cores_share_ram_and_service_the_same_deadline_as_exact() {
     );
 }
 
+#[test]
+fn peer_dma_preserves_the_stopped_thumb_shadow_and_replaces_overlapping_code() {
+    use crate::board::{RunCode, schedule::Slice};
+    use fujimod_emulator_cpu::arm;
+    use fujimod_emulator_devices::Host;
+
+    let mut board = mixed_board(ExecutionPolicy::Interactive, Bus::new(bus::Mode::Strict), &[]);
+    for core in 0..M4 {
+        a64_code(&board, core, &[0xd503_207f]);
+    }
+    thumb_code(&board, 0x1000, &[0x2601, 0xbf30]); // movs r6,#1; wfi
+    board.run_until(20, 64).unwrap();
+    assert_eq!(board.read_register(M4, arm::CORE[6]).unwrap(), 1);
+    board.write_register(M4, Register::Pc, 0x1001).unwrap();
+    {
+        // The owner pump has parked the cohort. An A-profile MMIO callback
+        // publishes DMA while the Cortex-M code slice is still open.
+        let mut state = board.state.borrow_mut();
+        state.waiting[M4] = false;
+        state.code_run = RunCode::Running(M4);
+        state.active_slice = Some(Slice::new(0, state.instructions[0], 64, 64).unwrap());
+        state.with_host(&board.cpus, |_, host| {
+            host.ram_write(0x3000, &[0xa5])?;
+            host.ram_write(0x1000, &0x2609u16.to_le_bytes())
+        })
+        .unwrap();
+        assert!(state.code_run.is_dma_stopped(M4));
+        assert!(!state.code_write_deferred);
+        state.end_code_slice(&*board.cpus[M4], M4);
+        assert!(!state.code_shadow[M4].as_ref().unwrap().changed());
+        state.active_slice = None;
+        state.code_run = RunCode::Unknown;
+    }
+    board.run_until(40, 64).unwrap();
+    assert_eq!(board.read_register(M4, arm::CORE[6]).unwrap(), 9);
+}
+
 struct MprofileDoorbell;
 impl Device for MprofileDoorbell {
     fn name(&self) -> &'static str {
