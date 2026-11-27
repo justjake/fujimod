@@ -1994,8 +1994,7 @@ impl Board {
         };
         let wanted = {
             let s = self.state.borrow();
-            s.execution_policy != ExecutionPolicy::Exact
-                || s.memory.watching_writes()
+            s.memory.watching_writes()
                 || s.exclusive
                     .lock()
                     .map_err(|_| "exclusive monitors poisoned")?

@@ -11,7 +11,7 @@ use fujimod_emulator_cpu_unicorn::{memory as cpu_memory, worker};
 use fujimod_emulator_devices::{Cx, Device, checkpoint::Checkpoint};
 use serde::{Deserialize, Serialize};
 
-const MAX_INTERACTIVE_WINDOWS: u64 = 10;
+const MAX_INTERACTIVE_WINDOWS: u64 = 64;
 
 #[derive(Serialize, Deserialize)]
 struct DeadlineSample {
