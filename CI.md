@@ -23,6 +23,16 @@ pending while untested or running, then passed or failed, linked to the run.
 There is no per-author run limit: runs use GitHub's hosted runners, which cost
 nothing for a public repository.
 
+The `main` rulesets require `CI required` from GitHub Actions and one approving
+review from a code owner (`.github/CODEOWNERS`); a push does not dismiss an
+approval. With auto-merge on, a pull request lands by rebase once both hold.
+Rebase is the only merge method and merged branches are deleted, so GitHub
+retargets pull requests stacked on one to `main`. An admin cannot approve their
+own pull request, so PR CI's **Merge** job lands an admin's pull request with
+auto-merge on once its tested commit passes, using the `PR_CI_MERGE_TOKEN`
+secret of the `pr-ci-merge` environment, which only `main` may deploy to.
+Admins may bypass both rules when merging by hand.
+
 GitHub runs `main`'s copy of PR CI, so a pull request cannot change when it is
 tested or what status it gets. The checks run the pull request's code with a
 read-only token.
@@ -37,8 +47,6 @@ Runs share only the Rust test archive between their own jobs, kept for a day.
 This is the agreed design for what comes next; each part replaces the
 description above as it lands.
 
-- **`main` is protected.** Merges require `CI required`, and rebase is the only
-  merge method.
 - **Build once, fan out.** One build job produces the heavy outputs, the
   WebAssembly emulator, the JavaScript bindings and the Python native extension,
   and the test jobs download them instead of compiling their own. Rust compiles
