@@ -780,6 +780,7 @@ impl Core {
         );
         Ok(())
     }
+
     /// The mapped device window `[begin, end)` holding `address`, if any.
     ///
     /// A batched cache-maintenance range must refuse rather than run through a
@@ -793,7 +794,6 @@ impl Core {
             .filter(|(_, mapping)| address < mapping.end)
             .map(|(&base, mapping)| (base, mapping.end))
     }
-
     fn affected_mmio(&self, address: u64, bytes: usize) -> Result<Vec<(u64, MmioMapping)>, String> {
         let end = address
             .checked_add(bytes as u64)

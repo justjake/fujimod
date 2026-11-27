@@ -227,6 +227,22 @@ impl CacheOp {
     }
 }
 
+/// The maintenance a counted range loop performs, and where in its body.
+///
+/// `index` records the order: the address register is read at the operation,
+/// so a body that steps first names `start + step`, `start + 2*step`, ...
+/// while one that maintains first names `start`, `start + step`, ... The
+/// caller derives each round's address from that position rather than
+/// assuming either order.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(super) struct Maintenance {
+    pub operation: CacheOp,
+    /// The register the operation reads its address from.
+    pub src: usize,
+    /// The body position of the operation, so its address can be derived.
+    pub index: usize,
+}
+
 /// One decoded loop: its head, the branch that closes it and its body.
 #[derive(Clone, Debug)]
 pub(super) struct Proof {
@@ -692,7 +708,7 @@ struct Counter {
     compare: Option<Compare>,
     /// The by-address maintenance every round performs, when the body holds
     /// one. A proven range loop may only end if its owner applies these.
-    maintenance: Option<CacheOp>,
+    maintenance: Option<Maintenance>,
 }
 
 /// How far a counted register moves each iteration.
@@ -801,23 +817,26 @@ impl Proof {
     fn counter(&self) -> Option<Counter> {
         let mut moving: Option<(usize, Width, Step)> = None;
         let mut flags: Option<Compare> = None;
-        let mut maintenance: Option<CacheOp> = None;
+        let mut maintenance: Option<Maintenance> = None;
         // The registers the body writes; a step or a bound naming one of them
         // changes between rounds, so the count is not a single delta.
         let mut written = [false; 32];
-        for op in &self.ops {
+        for (index, op) in self.ops.iter().enumerate() {
             match *op {
                 Op::Nop => {}
                 Op::Maintenance { operation, src } => {
-                    // One operation, so the range's effect is one kind of
-                    // maintenance, and the register it names holds the line.
-                    match maintenance {
-                        Some(seen) if seen != operation => return None,
-                        _ => maintenance = Some(operation),
+                    // Exactly one operation: the caller applies the covered
+                    // rounds' lines once, so any second operation would be
+                    // left out. Its position decides which address each
+                    // round names.
+                    if maintenance.is_some() {
+                        return None;
                     }
-                    // The maintenance register is read every round and the
-                    // body must move it, or every round would name one line.
-                    let _ = src;
+                    maintenance = Some(Maintenance {
+                        operation,
+                        src,
+                        index,
+                    });
                 }
                 Op::AddSub {
                     width,
@@ -947,13 +966,8 @@ impl Proof {
 
     /// The maintenance operation a proven range loop performs, with the
     /// register holding the next line's address.
-    pub(super) fn maintenance(&self) -> Option<(CacheOp, usize)> {
-        let counter = self.counter()?;
-        counter.maintenance?;
-        self.ops.iter().find_map(|op| match *op {
-            Op::Maintenance { operation, src } => Some((operation, src)),
-            _ => None,
-        })
+    pub(super) fn maintenance(&self) -> Option<Maintenance> {
+        self.counter()?.maintenance
     }
 
     /// The state after `n` complete iterations, by the counted model.
@@ -1123,6 +1137,12 @@ pub(super) struct RangeAdvance {
     pub iterations: u64,
     /// The signed change the counted register made each round.
     pub step: i64,
+    /// The address register's value when its round's maintenance ran, before
+    /// any later round. A body that steps before its operation names
+    /// `at + step`; one that maintains first names `at`.
+    pub first: u64,
+    /// Whether the body steps before its maintenance operation.
+    pub stepped_first: bool,
 }
 
 impl Proof {
@@ -1139,12 +1159,13 @@ impl Proof {
         state: State,
         iterations: u64,
         source: usize,
+        line_bytes: Option<u64>,
     ) -> Option<RangeAdvance> {
         if iterations == 0 {
             return None;
         }
         let counter = self.counter()?;
-        counter.maintenance?;
+        let maintenance = counter.maintenance?;
         if !self.taken(state) {
             return None;
         }
@@ -1168,16 +1189,38 @@ impl Proof {
         if rounds == 0 {
             return None;
         }
+        // A step wider than a line skips lines between consecutive rounds.
+        // The loop never maintains those, so a batched range over the whole
+        // span would clean or invalidate lines it never named.
+        if let Some(line) = line_bytes
+            && delta.unsigned_abs() > line
+        {
+            return None;
+        }
         let after = self.at(state, counter, rounds)?;
         // The window may end only where the next round is taken, or exactly
         // at the exit the model predicts.
         if !self.taken(after) && exit != Some(rounds) {
             return None;
         }
+        // The address the operation read in the covered rounds' first round.
+        // A body that writes the register before its operation names the new
+        // value; one that maintains first names the entry value.
+        let stepped_first = self.ops[..maintenance.index].iter().any(|op| {
+            matches!(op, Op::AddSub { dst, .. } if *dst == counter.register)
+                || matches!(*op, Op::AddSubRegister { dst, .. } if dst == counter.register)
+        });
+        let first = if stepped_first {
+            value.wrapping_add_signed(delta) & mask
+        } else {
+            value
+        };
         Some(RangeAdvance {
             state: after,
             iterations: rounds,
             step: delta,
+            first,
+            stepped_first,
         })
     }
 }
@@ -1505,7 +1548,7 @@ mod tests {
             .into_iter()
             .flat_map(u32::to_le_bytes)
             .collect();
-        let proof = Proof::decode(0x5b950, 0x5b95c, &bytes).expect("the range loop decodes");
+        let proof = Proof::decode(0x1000, 0x100c, &bytes).expect("the range loop decodes");
         let mut state = State::default();
         state.registers[1] = 0x2400;
         state.registers[3] = 64;
@@ -1517,7 +1560,7 @@ mod tests {
             Some(Failure::Model)
         );
         let advanced = proof
-            .advance_range(state, 100, 4)
+            .advance_range(state, 100, 4, None)
             .expect("the range form proves it");
         // 0x2400 - 0x2000 = 16 lines of 64 bytes.
         assert_eq!(advanced.iterations, 16);
@@ -1525,6 +1568,81 @@ mod tests {
         assert_eq!(advanced.state.registers[4], 0x2400);
     }
 
+    /// `dc civac,<register>`.
+    fn dc_civac(register: u32) -> u32 {
+        0xd508_0000 | (3 << 16) | (7 << 12) | (14 << 8) | (1 << 5) | (register & 31)
+    }
+    /// `add x4,x4,x3`.
+    const ADD_X4_X4_X3: u32 = 0x8b03_0084;
+    /// `cmp x4,x1`.
+    const CMP_X4_X1: u32 = 0xeb01_009f;
+
+    /// The four-instruction XP5 boot loop with `step` as its stride register.
+    fn range_loop() -> Proof {
+        proof(
+            0x1000,
+            &[dc_civac(4), ADD_X4_X4_X3, CMP_X4_X1, b_ne(3)],
+        )
+    }
+
+    #[test]
+    fn a_range_step_wider_than_a_line_is_refused() {
+        // 128-byte steps over 64-byte lines clean one line and skip the next,
+        // so a batched span would maintain lines the loop never named.
+        let p = range_loop();
+        let mut state = State::default();
+        state.registers[4] = 0x2000;
+        state.registers[3] = 128;
+        state.registers[1] = 0x2400;
+        state.flags = 1 << 29;
+        assert!(p.advance_range(state, 100, 4, Some(64)).is_none());
+        // The same loop at a line-width step is proven.
+        state.registers[3] = 64;
+        let advanced = p.advance_range(state, 100, 4, Some(64)).expect("a line step proves");
+        assert_eq!(advanced.iterations, 16);
+        assert_eq!(advanced.first, 0x2000);
+        assert!(!advanced.stepped_first);
+    }
+
+    #[test]
+    fn a_range_that_steps_before_its_operation_names_the_stepped_address() {
+        // `add x4,x4,x3 ; dc civac,x4 ; cmp x4,x1 ; b.ne`: the operation reads
+        // the new value, so the first round names start + step.
+        let p = proof(
+            0x1000,
+            &[ADD_X4_X4_X3, dc_civac(4), CMP_X4_X1, b_ne(3)],
+        );
+        let mut state = State::default();
+        state.registers[4] = 0x2000;
+        state.registers[3] = 64;
+        state.registers[1] = 0x2400;
+        state.flags = 1 << 29;
+        let advanced = p.advance_range(state, 100, 4, Some(64)).expect("proves");
+        assert_eq!(advanced.iterations, 16);
+        assert!(advanced.stepped_first);
+        assert_eq!(advanced.first, 0x2040);
+        // The other order names the entry value.
+        let other = range_loop();
+        let advanced = other.advance_range(state, 100, 4, Some(64)).expect("proves");
+        assert_eq!(advanced.first, 0x2000);
+        assert!(!advanced.stepped_first);
+    }
+
+    #[test]
+    fn a_body_with_two_maintenance_operations_is_refused() {
+        // Applying only the first would leave the second out of the window.
+        let p = proof(
+            0x1000,
+            &[dc_civac(4), dc_civac(4), ADD_X4_X4_X3, CMP_X4_X1, b_ne(4)],
+        );
+        assert!(p.maintenance().is_none());
+        let mut state = State::default();
+        state.registers[4] = 0x2000;
+        state.registers[3] = 64;
+        state.registers[1] = 0x2400;
+        state.flags = 1 << 29;
+        assert!(p.advance_range(state, 100, 4, Some(64)).is_none());
+    }
     #[test]
     fn every_counted_register_width_and_step_is_modelled() {
         for (word, start) in [

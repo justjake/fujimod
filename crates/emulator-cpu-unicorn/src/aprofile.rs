@@ -615,10 +615,8 @@ impl Execution {
         }
         // A counted loop whose body maintains a cache line takes its trip
         // count from the registers and applies the whole range in one call.
-        if let Some((operation, source)) = proof.maintenance() {
-            return self.advance_maintenance_range(
-                &proof, operation, source, state, rounds, room,
-            );
+        if let Some(maintenance) = proof.maintenance() {
+            return self.advance_maintenance_range(&proof, maintenance, state, rounds, room);
         }
         let advanced = proof.advance(state, rounds, |address, bits| {
             let width = usize::from(u8::try_from(bits / 8).ok()?);
@@ -709,14 +707,18 @@ impl Execution {
     fn advance_maintenance_range(
         &self,
         proof: &a64::Proof,
-        operation: a64::CacheOp,
-        source: usize,
+        maintenance: a64::Maintenance,
         state: a64::State,
         rounds_hint: u64,
         room: u64,
     ) -> Result<bool, String> {
+        let a64::Maintenance {
+            operation,
+            src: source,
+            ..
+        } = maintenance;
         let proofs = &self.proofs;
-        let Some(advanced) = proof.advance_range(state, rounds_hint, source) else {
+        let Some(advanced) = proof.advance_range(state, rounds_hint, source, self.coherence_line_bytes()) else {
             proofs.count(&proofs.failed_model, 1);
             return Ok(false);
         };
@@ -726,14 +728,24 @@ impl Execution {
             proofs.count(&proofs.failed_budget, 1);
             return Ok(false);
         }
-        let start = state.registers[source];
         let step = advanced.step;
-        let last = if rounds == 1 {
-            start
-        } else {
-            start.wrapping_add_signed(step.wrapping_mul((rounds - 1) as i64))
+        // The processor keeps one copy of memory, so a clean or invalidate
+        // only has an effect through the coherence model, and that model is
+        // attached by owners that declare device-visible ranges (ARMv7-A
+        // today). Without one the operation is the no-op the instruction
+        // observer performs, and skipping it skips no state.
+        let Some(line_bytes) = self.coherence_line_bytes() else {
+            return Ok(self.retire_range(&advanced.state, &state, skipped));
         };
-        let (begin, high) = (start.min(last), start.max(last));
+        // Every covered round maintains the line holding the same register
+        // offset, whether the body steps before its operation or after it.
+        // The span runs from the line of the first round's address to the
+        // line holding the last round's.
+        let last = advanced
+            .first
+            .wrapping_add_signed(step.wrapping_mul((rounds - 1) as i64));
+        let (low, high) = (advanced.first.min(last), advanced.first.max(last));
+        let begin = low & !(line_bytes - 1);
         let Some(end) = high.checked_add(1) else {
             // A span that wraps the address space cannot be one range.
             proofs.count(&proofs.failed_model, 1);
@@ -745,13 +757,30 @@ impl Execution {
             proofs.count(&proofs.failed_observer, 1);
             return Ok(false);
         }
-        if self.coherence_line_bytes().is_some() {
-            self.coherent_maintenance_range(operation, begin, end)?;
+        self.coherent_maintenance_range(operation, begin, end)?;
+        Ok(self.retire_range(&advanced.state, &state, skipped))
+    }
+
+    /// Charge and publish a proven range: the covered entries, then the
+    /// registers and flags the loop would have left. Returns whether the
+    /// window may continue, which it may not.
+    fn retire_range(&self, after: &a64::State, before: &a64::State, skipped: u64) -> bool {
+        self.proofs.count(&self.proofs.counted_instructions, skipped);
+        self.proofs
+            .count(&self.proofs.accelerated_instructions, skipped);
+        if let Err(error) = self.write_proven_state(after, before) {
+            *self.failure.borrow_mut() = Some(error);
+            let _ = self.cpu.stop();
+            return false;
         }
-        proofs.count(&proofs.counted_instructions, skipped);
-        proofs.count(&proofs.accelerated_instructions, skipped);
-        for (index, value) in advanced.state.registers.iter().enumerate() {
-            if *value != state.registers[index] {
+        self.count.set(self.count.get() + skipped);
+        false
+    }
+
+    /// Put a proven round's registers and flags back, as executing it would.
+    fn write_proven_state(&self, after: &a64::State, before: &a64::State) -> Result<(), String> {
+        for (index, value) in after.registers.iter().enumerate() {
+            if *value != before.registers[index] {
                 let register = if index == 31 {
                     Register::Sp
                 } else {
@@ -760,15 +789,12 @@ impl Execution {
                 self.cpu.write_register(register, &value.to_le_bytes())?;
             }
         }
-        if advanced.state.flags != state.flags {
+        if after.flags != before.flags {
             let pstate = self.scalar(Register::Pstate)?;
-            let next =
-                (pstate & !Self::NZCV) | u64::from(advanced.state.flags & Self::NZCV as u32);
-            self.cpu
-                .write_register(Register::Pstate, &next.to_le_bytes())?;
+            let next = (pstate & !Self::NZCV) | u64::from(after.flags & Self::NZCV as u32);
+            self.cpu.write_register(Register::Pstate, &next.to_le_bytes())?;
         }
-        self.count.set(self.count.get() + skipped);
-        Ok(false)
+        Ok(())
     }
 
     /// Whether `[begin, end)` is ordinary RAM: mapped for reads, inside one
@@ -1496,45 +1522,9 @@ mod interactive_tests {
     }
 
     #[test]
-    fn a_cache_range_loop_refuses_a_span_over_a_device_window() {
-        let cpu = core();
-        cpu.map_zeroed(0x1000, 0x1000, 7).unwrap();
-        // A device window inside the span the loop walks.
-        unsafe fn read(_: u64, _: u32, _: *mut c_void) -> u64 {
-            0
-        }
-        unsafe fn write(_: u64, _: u32, _: u64, _: *mut c_void) {}
-        unsafe {
-            cpu.map_mmio(0x2000, 0x1000, Mmio {
-                read,
-                write,
-                data: std::ptr::null_mut(),
-            })
-            .unwrap();
-        }
-        let code = [dc_civac(4), ADD_X4_X4_X3, CMP_X4_X1, b_ls(3)];
-        let mut words = code.to_vec();
-        words.push(0x1400_0000);
-        cpu.write_memory(
-            0x1000,
-            &words.iter().flat_map(|word| word.to_le_bytes()).collect::<Vec<_>>(),
-        )
-        .unwrap();
-        set_x(&cpu, 4, 0x2000);
-        set_x(&cpu, 3, 64);
-        set_x(&cpu, 1, 0x2400);
-        cpu.set_execution_policy(ExecutionPolicy::Interactive)
-            .unwrap();
-        cpu.set_loop_mode(loops::LoopMode::Accelerate).unwrap();
-        cpu.set_loop_window(true).unwrap();
-        run(&cpu, 0x1000, 40);
-        assert_eq!(cpu.execution.proofs.accelerated_instructions.get(), 0);
-        assert!(cpu.execution.proofs.failed_observer.get() > 0);
-    }
-    #[test]
-    fn a_cache_range_loop_refuses_a_span_over_a_device_or_code() {
-        // A device window inside the span refuses: one batched call cannot
-        // deliver the per-line effects a walk would have had.
+    fn a_falling_cache_range_loop_matches_plain_execution() {
+        // The XP5 boot loop's direction: the address rises to a bound, so a
+        // falling step here runs the other way and is still a trip count.
         let cpu = core();
         cpu.map_zeroed(0x1000, 0x4000, 7).unwrap();
         let code = [dc_civac(4), ADD_X4_X4_X3, CMP_X4_X1, b_ls(3)];
@@ -1545,17 +1535,113 @@ mod interactive_tests {
             &words.iter().flat_map(|word| word.to_le_bytes()).collect::<Vec<_>>(),
         )
         .unwrap();
-        // The span runs from 0x2000 up to 0x2400 and holds this loop's own
-        // translated code, which needs a line-by-line invalidate.
-        set_x(&cpu, 4, 0x1000);
+        set_x(&cpu, 4, 0x2400);
         set_x(&cpu, 3, 64);
-        set_x(&cpu, 1, 0x1400);
+        set_x(&cpu, 1, 0x2000);
+        cpu.set_execution_policy(ExecutionPolicy::Interactive)
+            .unwrap();
+        cpu.set_loop_mode(loops::LoopMode::Accelerate).unwrap();
+        cpu.set_loop_window(true).unwrap();
+        run(&cpu, 0x1000, 400);
+    }
+
+    #[test]
+    fn a_cache_range_loop_with_the_step_first_matches_plain_execution() {
+        // `add x4,x4,x3 ; dc civac,x4 ; cmp x4,x1 ; b.ne back`: the operation
+        // reads the stepped address, so the first round names start + 64.
+        let code = [ADD_X4_X4_X3, dc_civac(4), CMP_X4_X1, b_ne(3)];
+        let set_up = |cpu: &Core| {
+            set_x(cpu, 4, 0x2000);
+            set_x(cpu, 3, 64);
+            set_x(cpu, 1, 0x2400);
+        };
+        for budget in [3, 4, 5, 8, 12, 17, 40, 513] {
+            parity(&code, set_up, budget);
+        }
+        // The step-first order is proven, not just parity-preserving.
+        let cpu = core();
+        cpu.map_zeroed(0x1000, 0x4000, 7).unwrap();
+        let mut words = code.to_vec();
+        words.push(0x1400_0000);
+        cpu.write_memory(
+            0x1000,
+            &words.iter().flat_map(|word| word.to_le_bytes()).collect::<Vec<_>>(),
+        )
+        .unwrap();
+        set_up(&cpu);
+        cpu.set_execution_policy(ExecutionPolicy::Interactive)
+            .unwrap();
+        cpu.set_loop_mode(loops::LoopMode::Accelerate).unwrap();
+        cpu.set_loop_window(true).unwrap();
+        run(&cpu, 0x1000, 40);
+        assert!(cpu.execution.proofs.accelerated_instructions.get() > 0);
+    }
+
+    #[test]
+    fn a_cache_range_loop_with_two_operations_matches_plain_execution() {
+        // Two operations apply twice per round; the prover refuses the shape
+        // and the loop runs plainly, so the two modes still agree.
+        let code = [dc_civac(4), dc_civac(4), ADD_X4_X4_X3, CMP_X4_X1, b_ne(4)];
+        let set_up = |cpu: &Core| {
+            set_x(cpu, 4, 0x2000);
+            set_x(cpu, 3, 64);
+            set_x(cpu, 1, 0x2400);
+        };
+        for budget in [4, 5, 12, 40] {
+            parity(&code, set_up, budget);
+        }
+        let cpu = core();
+        cpu.map_zeroed(0x1000, 0x4000, 7).unwrap();
+        let mut words = code.to_vec();
+        words.push(0x1400_0000);
+        cpu.write_memory(
+            0x1000,
+            &words.iter().flat_map(|word| word.to_le_bytes()).collect::<Vec<_>>(),
+        )
+        .unwrap();
+        set_up(&cpu);
         cpu.set_execution_policy(ExecutionPolicy::Interactive)
             .unwrap();
         cpu.set_loop_mode(loops::LoopMode::Accelerate).unwrap();
         cpu.set_loop_window(true).unwrap();
         run(&cpu, 0x1000, 40);
         assert_eq!(cpu.execution.proofs.accelerated_instructions.get(), 0);
+    }
+
+    #[test]
+    fn a_cache_range_loop_with_a_wide_step_matches_plain_execution() {
+        // A 128-byte step over 64-byte lines skips every other line. The
+        // batched form would maintain lines the loop never named, so it
+        // refuses and the loop runs plainly.
+        let code = [dc_civac(4), ADD_X4_X4_X3, CMP_X4_X1, b_ne(3)];
+        let set_up = |cpu: &Core| {
+            set_x(cpu, 4, 0x2000);
+            set_x(cpu, 3, 128);
+            set_x(cpu, 1, 0x2400);
+        };
+        for budget in [3, 4, 5, 12, 40] {
+            parity(&code, set_up, budget);
+        }
+        let cpu = core();
+        cpu.map_zeroed(0x1000, 0x4000, 7).unwrap();
+        let mut words = code.to_vec();
+        words.push(0x1400_0000);
+        cpu.write_memory(
+            0x1000,
+            &words.iter().flat_map(|word| word.to_le_bytes()).collect::<Vec<_>>(),
+        )
+        .unwrap();
+        set_up(&cpu);
+        cpu.set_execution_policy(ExecutionPolicy::Interactive)
+            .unwrap();
+        cpu.set_loop_mode(loops::LoopMode::Accelerate).unwrap();
+        cpu.set_loop_window(true).unwrap();
+        // With no coherence model the operation emits nothing, so a wide step
+        // has no skipped line to lose; the proof retires the loop. The unit
+        // test `a_range_step_wider_than_a_line_is_refused` pins the refusal
+        // that a declared line size turns on.
+        run(&cpu, 0x1000, 40);
+        assert!(cpu.execution.proofs.accelerated_instructions.get() > 0);
     }
     fn set_x(cpu: &Core, register: u8, value: u64) {
         set(cpu, Register::X(register), value)
