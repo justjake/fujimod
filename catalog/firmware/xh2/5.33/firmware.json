@@ -1,0 +1,11 @@
+{
+  "$schema": "https://fujimod.com/schemas/firmware.schema.json",
+  "schema": 1,
+  "id": "xh2-533",
+  "body_id": "xh2",
+  "version": "5.33",
+  "update": {
+    "size": 110302544,
+    "sha256": "6f9d3d86e5a93ffc3666712e31c9bb83cb798bfaec581fa27fc5a21882546d58"
+  }
+}
