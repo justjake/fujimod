@@ -109,6 +109,8 @@ pub struct Extensions {
     pub accounting: Option<unsafe extern "C" fn(Engine) -> *mut Accounting>,
     pub exit_counters: Option<unsafe extern "C" fn(Engine) -> *const u64>,
     pub translation_repeat_counters: Option<unsafe extern "C" fn(Engine, *mut usize) -> *const u64>,
+    pub translation_generation_counters:
+        Option<unsafe extern "C" fn(Engine, *mut usize) -> *const u64>,
 }
 
 impl Extensions {
@@ -348,6 +350,8 @@ mod linked {
         fn uc_embedder_exit_counters(engine: Engine) -> *const u64;
         fn uc_embedder_translation_repeat_counters(engine: Engine, count: *mut usize)
         -> *const u64;
+        fn uc_embedder_translation_generation_counters(engine: Engine, count: *mut usize)
+        -> *const u64;
         fn uc_embedder_features() -> u32;
     }
     pub fn extensions() -> Extensions {
@@ -375,6 +379,9 @@ mod linked {
             accounting: Some(uc_embedder_accounting),
             exit_counters: Some(uc_embedder_exit_counters),
             translation_repeat_counters: Some(uc_embedder_translation_repeat_counters),
+            translation_generation_counters: Some(
+                uc_embedder_translation_generation_counters,
+            ),
             features: unsafe { uc_embedder_features() },
         }
     }
