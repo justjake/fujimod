@@ -613,6 +613,13 @@ impl Execution {
             proofs.count(&proofs.failed_budget, 1);
             return Ok(false);
         }
+        // A counted loop whose body maintains a cache line takes its trip
+        // count from the registers and applies the whole range in one call.
+        if let Some((operation, source)) = proof.maintenance() {
+            return self.advance_maintenance_range(
+                &proof, operation, source, state, rounds, room,
+            );
+        }
         let advanced = proof.advance(state, rounds, |address, bits| {
             let width = usize::from(u8::try_from(bits / 8).ok()?);
             let mut bytes = [0; 8];
@@ -636,8 +643,10 @@ impl Execution {
                 // A body with no load is refused for its shape, which the
                 // bytes alone decide, so the refusal is cached. A poll of
                 // RAM changes with its input, so it is retried: the value
-                // that ended this window may hold for the next one.
-                if !proof.reads() {
+                // that ended this window may hold for the next one. A
+                // maintenance range depends on where its addresses land, so
+                // its refusal is retried too.
+                if !proof.reads() && proof.maintenance().is_none() {
                     proofs.failures.borrow_mut().insert(address, bytes);
                 }
                 proofs.count(&proofs.failed_model, 1);
@@ -676,6 +685,127 @@ impl Execution {
         // The branch runs normally next; the run then ends at that entry, so
         // the owner sees the same state a full-speed run would have reached.
         Ok(false)
+    }
+
+    /// Retire a counted loop whose body maintains one cache line per round.
+    ///
+    /// The trip count comes from the counted model: the body moves one
+    /// register by a constant step towards a register bound, so the number of
+    /// rounds the window covers is decided before any of them run. The lines
+    /// those rounds name are then maintained in one call, in address order,
+    /// and the registers, flags and instruction count end exactly where the
+    /// loop would have left them.
+    ///
+    /// The operation is applied through the model the observed instruction
+    /// uses ([`Execution::coherent_maintenance_range`]). A model with no
+    /// coherence domain keeps no cached copy — every store already reached
+    /// memory — so its maintenance is the same no-op the instruction observer
+    /// performs, and only the span's memory type is checked.
+    ///
+    /// Nothing that needs per-round delivery may be skipped: an instruction,
+    /// block or store observer refuses earlier in the caller, and here a
+    /// watched code page, a device window, or a span reaching outside mapped
+    /// RAM refuses too.
+    fn advance_maintenance_range(
+        &self,
+        proof: &a64::Proof,
+        operation: a64::CacheOp,
+        source: usize,
+        state: a64::State,
+        rounds_hint: u64,
+        room: u64,
+    ) -> Result<bool, String> {
+        let proofs = &self.proofs;
+        let Some(advanced) = proof.advance_range(state, rounds_hint, source) else {
+            proofs.count(&proofs.failed_model, 1);
+            return Ok(false);
+        };
+        let rounds = advanced.iterations;
+        let skipped = rounds * proof.length;
+        if rounds == 0 || skipped == 0 || skipped > room {
+            proofs.count(&proofs.failed_budget, 1);
+            return Ok(false);
+        }
+        let start = state.registers[source];
+        let step = advanced.step;
+        let last = if rounds == 1 {
+            start
+        } else {
+            start.wrapping_add_signed(step.wrapping_mul((rounds - 1) as i64))
+        };
+        let (begin, high) = (start.min(last), start.max(last));
+        let Some(end) = high.checked_add(1) else {
+            // A span that wraps the address space cannot be one range.
+            proofs.count(&proofs.failed_model, 1);
+            return Ok(false);
+        };
+        if !self.maintenance_span_is_plain_ram(begin, end)?
+            || !self.coherence_covers(begin, end)
+        {
+            proofs.count(&proofs.failed_observer, 1);
+            return Ok(false);
+        }
+        if self.coherence_line_bytes().is_some() {
+            self.coherent_maintenance_range(operation, begin, end)?;
+        }
+        proofs.count(&proofs.counted_instructions, skipped);
+        proofs.count(&proofs.accelerated_instructions, skipped);
+        for (index, value) in advanced.state.registers.iter().enumerate() {
+            if *value != state.registers[index] {
+                let register = if index == 31 {
+                    Register::Sp
+                } else {
+                    Register::X(index as u8)
+                };
+                self.cpu.write_register(register, &value.to_le_bytes())?;
+            }
+        }
+        if advanced.state.flags != state.flags {
+            let pstate = self.scalar(Register::Pstate)?;
+            let next =
+                (pstate & !Self::NZCV) | u64::from(advanced.state.flags & Self::NZCV as u32);
+            self.cpu
+                .write_register(Register::Pstate, &next.to_le_bytes())?;
+        }
+        self.count.set(self.count.get() + skipped);
+        Ok(false)
+    }
+
+    /// Whether `[begin, end)` is ordinary RAM: mapped for reads, inside one
+    /// memory region, outside every device window, and holding no translated
+    /// code whose per-line invalidation a batched range cannot deliver.
+    fn maintenance_span_is_plain_ram(&self, begin: u64, end: u64) -> Result<bool, String> {
+        if begin >= end {
+            return Ok(false);
+        }
+        if let Some((window_begin, window_end)) = self.cpu.mmio_window(begin)
+            && window_begin < end && begin < window_end
+        {
+            return Ok(false);
+        }
+        let (Ok(first), Ok(last)) = (
+            self.cpu.translate(begin, Access::Read),
+            self.cpu.translate(end - 1, Access::Read),
+        ) else {
+            return Ok(false);
+        };
+        let regions = self.cpu.memory_regions()?;
+        let covers = |physical: u64| {
+            regions.iter().any(|region| {
+                region.begin <= physical
+                    && physical <= region.end
+                    && region.permissions & 1 != 0
+            })
+        };
+        if !covers(first) || !covers(last) {
+            return Ok(false);
+        }
+        // A page holding translated code must see the maintenance line by
+        // line, which one batched call cannot give it.
+        Ok(self
+            .memory
+            .translated_pages(self.id.get(), begin, end)
+            .is_some_and(|pages| pages.is_empty()))
     }
 
     fn classify(&self, address: u64, word: u32) -> Result<Translation, String> {
@@ -1269,6 +1399,164 @@ mod interactive_tests {
         }
     }
 
+    /// A counted range loop that maintains one cache line per round:
+    /// `dc civac,<addr>; add <addr>,<addr>,<step>; cmp <addr>,<bound>;
+    /// b.ls back`.
+    fn dc_civac(register: u32) -> u32 {
+        0xd508_0000 | (3 << 16) | (7 << 12) | (14 << 8) | (1 << 5) | (register & 31)
+    }
+    fn ic_ivau(register: u32) -> u32 {
+        0xd508_0000 | (3 << 16) | (7 << 12) | (5 << 8) | (1 << 5) | (register & 31)
+    }
+    /// `add x4,x4,x3`.
+    const ADD_X4_X4_X3: u32 = 0x8b03_0084;
+    /// `cmp x4,x1`.
+    const CMP_X4_X1: u32 = 0xeb01_009f;
+    /// `b.ls` back to the head three instructions earlier.
+    fn b_ls(count: u32) -> u32 {
+        let offset = -i64::from(count);
+        0x5400_0009 | ((((offset as u64) & 0x7ffff) as u32) << 5)
+    }
+
+    #[test]
+    fn a_cache_range_loop_matches_plain_execution() {
+        // The XP5 boot loop's shape: a clean-invalidate per line, a register
+        // step measured in bytes, and a bound in another register.
+        let range = [dc_civac(4), ADD_X4_X4_X3, CMP_X4_X1, b_ls(3)];
+        // The same with the instruction invalidate.
+        let instructions = [ic_ivau(4), ADD_X4_X4_X3, CMP_X4_X1, b_ls(3)];
+        // A plain clean, and an invalidate.
+        let clean = [0xd50b_7a24u32, ADD_X4_X4_X3, CMP_X4_X1, b_ls(3)];
+        let invalidate = [0xd508_7624u32, ADD_X4_X4_X3, CMP_X4_X1, b_ls(3)];
+        let set_up = |cpu: &Core| {
+            set_x(cpu, 4, 0x2000);
+            set_x(cpu, 3, 64);
+            set_x(cpu, 1, 0x2400);
+        };
+        for code in [&range[..], &instructions[..], &clean[..], &invalidate[..]] {
+            for budget in [3, 4, 5, 7, 8, 9, 12, 17, 40, 513] {
+                parity(code, set_up, budget);
+            }
+        }
+    }
+
+    #[test]
+    fn an_immediate_stride_cache_range_loop_matches_plain_execution() {
+        // `dc civac,x4 ; add x4,x4,#64 ; cmp x4,x1 ; b.ne back`.
+        let code = [dc_civac(4), 0x9101_0084u32, CMP_X4_X1, b_ne(3)];
+        let set_up = |cpu: &Core| {
+            set_x(cpu, 4, 0x2000);
+            set_x(cpu, 1, 0x2400);
+        };
+        for budget in [3, 4, 5, 12, 40] {
+            parity(&code, set_up, budget);
+        }
+    }
+
+    #[test]
+    fn a_cache_range_loop_reports_its_acceleration() {
+        let code = [dc_civac(4), ADD_X4_X4_X3, CMP_X4_X1, b_ls(3)];
+        let set_up = |cpu: &Core| {
+            set_x(cpu, 4, 0x2000);
+            set_x(cpu, 3, 64);
+            set_x(cpu, 1, 0x2400);
+        };
+        let accelerated = |mode| {
+            let cpu = core();
+            cpu.map_zeroed(0x1000, 0x4000, 7).unwrap();
+            let mut words = code.to_vec();
+            words.push(0x1400_0000);
+            cpu.write_memory(
+                0x1000,
+                &words.iter().flat_map(|word| word.to_le_bytes()).collect::<Vec<_>>(),
+            )
+            .unwrap();
+            set_up(&cpu);
+            cpu.set_execution_policy(ExecutionPolicy::Interactive)
+                .unwrap();
+            cpu.set_loop_mode(mode).unwrap();
+            cpu.set_loop_window(true).unwrap();
+            run(&cpu, 0x1000, 40);
+            let proofs = &cpu.execution.proofs;
+            (
+                proofs.accelerated_instructions.get(),
+                proofs.counted_instructions.get(),
+                cpu.instruction_progress(),
+            )
+        };
+        let (accelerated_instructions, counted, progress) =
+            accelerated(loops::LoopMode::Accelerate);
+        assert!(accelerated_instructions > 0, "the range loop retired no round");
+        assert_eq!(accelerated_instructions, counted);
+        assert_eq!(
+            accelerated(loops::LoopMode::Disabled),
+            (0, 0, progress),
+            "plain execution retires the same entries"
+        );
+    }
+
+    #[test]
+    fn a_cache_range_loop_refuses_a_span_over_a_device_window() {
+        let cpu = core();
+        cpu.map_zeroed(0x1000, 0x1000, 7).unwrap();
+        // A device window inside the span the loop walks.
+        unsafe fn read(_: u64, _: u32, _: *mut c_void) -> u64 {
+            0
+        }
+        unsafe fn write(_: u64, _: u32, _: u64, _: *mut c_void) {}
+        unsafe {
+            cpu.map_mmio(0x2000, 0x1000, Mmio {
+                read,
+                write,
+                data: std::ptr::null_mut(),
+            })
+            .unwrap();
+        }
+        let code = [dc_civac(4), ADD_X4_X4_X3, CMP_X4_X1, b_ls(3)];
+        let mut words = code.to_vec();
+        words.push(0x1400_0000);
+        cpu.write_memory(
+            0x1000,
+            &words.iter().flat_map(|word| word.to_le_bytes()).collect::<Vec<_>>(),
+        )
+        .unwrap();
+        set_x(&cpu, 4, 0x2000);
+        set_x(&cpu, 3, 64);
+        set_x(&cpu, 1, 0x2400);
+        cpu.set_execution_policy(ExecutionPolicy::Interactive)
+            .unwrap();
+        cpu.set_loop_mode(loops::LoopMode::Accelerate).unwrap();
+        cpu.set_loop_window(true).unwrap();
+        run(&cpu, 0x1000, 40);
+        assert_eq!(cpu.execution.proofs.accelerated_instructions.get(), 0);
+        assert!(cpu.execution.proofs.failed_observer.get() > 0);
+    }
+    #[test]
+    fn a_cache_range_loop_refuses_a_span_over_a_device_or_code() {
+        // A device window inside the span refuses: one batched call cannot
+        // deliver the per-line effects a walk would have had.
+        let cpu = core();
+        cpu.map_zeroed(0x1000, 0x4000, 7).unwrap();
+        let code = [dc_civac(4), ADD_X4_X4_X3, CMP_X4_X1, b_ls(3)];
+        let mut words = code.to_vec();
+        words.push(0x1400_0000);
+        cpu.write_memory(
+            0x1000,
+            &words.iter().flat_map(|word| word.to_le_bytes()).collect::<Vec<_>>(),
+        )
+        .unwrap();
+        // The span runs from 0x2000 up to 0x2400 and holds this loop's own
+        // translated code, which needs a line-by-line invalidate.
+        set_x(&cpu, 4, 0x1000);
+        set_x(&cpu, 3, 64);
+        set_x(&cpu, 1, 0x1400);
+        cpu.set_execution_policy(ExecutionPolicy::Interactive)
+            .unwrap();
+        cpu.set_loop_mode(loops::LoopMode::Accelerate).unwrap();
+        cpu.set_loop_window(true).unwrap();
+        run(&cpu, 0x1000, 40);
+        assert_eq!(cpu.execution.proofs.accelerated_instructions.get(), 0);
+    }
     fn set_x(cpu: &Core, register: u8, value: u64) {
         set(cpu, Register::X(register), value)
     }
@@ -1379,4 +1667,5 @@ mod interactive_tests {
         assert_eq!(value(&cpu, Register::X(0)), 42);
         assert_eq!(value(&cpu, Register::X(2)), 42);
     }
+
 }

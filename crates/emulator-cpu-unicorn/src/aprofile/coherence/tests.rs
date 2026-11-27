@@ -126,3 +126,93 @@ fn empty_ranges_track_nothing() {
     assert!(model.cpu_load(0, 64).is_none());
     assert!(model.lines.is_empty());
 }
+
+/// The maintenance a loop over `[begin, end)` performs, line by line.
+fn walked(model: &mut CoherentRanges, operation: CacheOp, begin: u64, end: u64) -> Vec<Patch> {
+    let mut patches = Vec::new();
+    let line = model.line_bytes();
+    let mut at = begin & !(line - 1);
+    while at < end {
+        let mut more = match operation {
+            CacheOp::Clean => model.clean_line(at),
+            CacheOp::Invalidate => model.invalidate_line(at),
+            CacheOp::CleanInvalidate => model.clean_invalidate_line(at),
+            CacheOp::InvalidateInstruction => Vec::new(),
+        };
+        patches.append(&mut more);
+        at += line;
+    }
+    patches
+}
+
+/// A store over the whole declared range, so every operation has work.
+fn dirtied() -> Rig {
+    let mut rig = Rig::new();
+    rig.store(BASE, 0x66, 0x100);
+    rig
+}
+
+#[test]
+fn a_maintenance_range_equals_the_walked_lines() {
+    for operation in [
+        CacheOp::Clean,
+        CacheOp::Invalidate,
+        CacheOp::CleanInvalidate,
+    ] {
+        let mut batched = dirtied();
+        let mut by_line = dirtied();
+        let a = batched.model.maintain_range(operation, BASE, BASE + 0x80);
+        let b = walked(&mut by_line.model, operation, BASE, BASE + 0x80);
+        assert_eq!(a, b, "{operation:?} patches");
+        assert_eq!(
+            batched.device_read(BASE, 0x100),
+            by_line.device_read(BASE, 0x100),
+            "{operation:?} device view"
+        );
+        assert_eq!(
+            batched.cpu_load(BASE, 0x100),
+            by_line.cpu_load(BASE, 0x100),
+            "{operation:?} processor view"
+        );
+        assert_eq!(batched.memory, by_line.memory, "{operation:?} memory image");
+    }
+}
+
+#[test]
+fn a_maintenance_range_spanning_partial_lines_matches_the_walk() {
+    let mut batched = dirtied();
+    let mut by_line = dirtied();
+    let (begin, end) = (BASE + 8, BASE + 0x70);
+    let a = batched
+        .model
+        .maintain_range(CacheOp::CleanInvalidate, begin, end);
+    let b = walked(
+        &mut by_line.model,
+        CacheOp::CleanInvalidate,
+        begin,
+        end,
+    );
+    assert_eq!(a, b);
+    assert_eq!(
+        batched.device_read(BASE, 0x100),
+        by_line.device_read(BASE, 0x100)
+    );
+}
+
+#[test]
+fn a_maintenance_range_outside_the_declaration_is_not_covered() {
+    let model = ranges();
+    assert!(model.covers_bytes(BASE, 0x100));
+    assert!(!model.covers_bytes(BASE + 0x80, 0x100));
+    assert!(!model.covers_bytes(BASE - 8, 0x10));
+}
+
+#[test]
+fn a_clean_over_an_untouched_range_makes_no_patch() {
+    let mut rig = Rig::new();
+    assert!(
+        rig.model
+            .maintain_range(CacheOp::Clean, BASE, BASE + 0x100)
+            .is_empty()
+    );
+}

@@ -143,6 +143,7 @@ const TRANSLATION_REPEAT_COUNTER_NAMES: [&str; 24] = [
     "translation_repeat_same_generation_invalidation_physical_write_tb_gen_code_elapsed_ns",
 ];
 
+
 pub struct Library {
     api: Rc<ffi::Api>,
 }
@@ -779,6 +780,20 @@ impl Core {
         );
         Ok(())
     }
+    /// The mapped device window `[begin, end)` holding `address`, if any.
+    ///
+    /// A batched cache-maintenance range must refuse rather than run through a
+    /// device: a line that names device registers has no cached copy here, and
+    /// one call cannot deliver the per-line effects the loop would have had.
+    pub(crate) fn mmio_window(&self, address: u64) -> Option<(u64, u64)> {
+        self.mmio
+            .borrow()
+            .range(..=address)
+            .next_back()
+            .filter(|(_, mapping)| address < mapping.end)
+            .map(|(&base, mapping)| (base, mapping.end))
+    }
+
     fn affected_mmio(&self, address: u64, bytes: usize) -> Result<Vec<(u64, MmioMapping)>, String> {
         let end = address
             .checked_add(bytes as u64)
@@ -930,6 +945,7 @@ impl Cpu for Core {
     fn identity(&self) -> Identity {
         self.identity
     }
+
     fn model(&self) -> Model {
         self.model
     }

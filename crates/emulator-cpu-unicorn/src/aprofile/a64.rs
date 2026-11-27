@@ -167,6 +167,64 @@ enum Op {
         base: usize,
         offset: u64,
     },
+    /// `DC CVAC`/`CVAU`/`IVAC`/`CIVAC` or `IC IVAU Xt`: a cache
+    /// maintenance operation on the line holding the address in `src`.
+    ///
+    /// The operation is not pure -- it can publish or discard cached bytes --
+    /// so a body holding one is only proven when the caller can apply the
+    /// whole range before the window ends (see `Proof::maintenance`).
+    Maintenance {
+        operation: CacheOp,
+        src: usize,
+    },
+}
+
+/// A by-address cache maintenance operation, as the proof models it.
+///
+/// `Clean` writes cached bytes back, `Invalidate` discards them, and
+/// `CleanInvalidate` does both. `InvalidateInstruction` drops translated
+/// instructions for the line. All four name one cache line through a
+/// register.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(super) enum CacheOp {
+    Clean,
+    Invalidate,
+    CleanInvalidate,
+    InvalidateInstruction,
+}
+
+impl CacheOp {
+    /// The `SYS`/`DC`/`IC` encoding of one by-address operation, or `None`
+    /// for every other system instruction.
+    ///
+    /// `1101 0101 00 L op0 op1 CRn CRm op2 Rt` with `op0 == 1` selects a
+    /// cache operation. The operations the model implements are the data
+    /// cache's by-address forms and `IC IVAU`; every set/way form, `DC ZVA`
+    /// (which stores), `DC CVAP`/`CVADP` and the `CIG*` variants refuse.
+    pub(super) fn decode(word: u32) -> Option<Self> {
+        if word & 0xffe0_0000 != 0xd500_0000 || word >> 21 & 1 != 0 || word >> 19 & 3 != 1 {
+            return None;
+        }
+        let op1 = word >> 16 & 7;
+        let crn = word >> 12 & 15;
+        let crm = word >> 8 & 15;
+        let op2 = word >> 5 & 7;
+        // `op1` is part of the encoding: DC IVAC is op1 0 and the other four
+        // are op1 3, as DDI 0487 C6.2 lists them. A match that ignored it
+        // would admit an undefined system register write.
+        match (op1, crn, crm, op2) {
+            // IC IVAU Xt.
+            (3, 7, 5, 1) => Some(Self::InvalidateInstruction),
+            // DC CVAC and DC CVAU both write the line back to its point of
+            // coherency; the model has one clean.
+            (3, 7, 10 | 11, 1) => Some(Self::Clean),
+            // DC IVAC.
+            (0, 7, 6, 1) => Some(Self::Invalidate),
+            // DC CIVAC.
+            (3, 7, 14, 1) => Some(Self::CleanInvalidate),
+            _ => None,
+        }
+    }
 }
 
 /// One decoded loop: its head, the branch that closes it and its body.
@@ -295,7 +353,12 @@ fn decode(word: u32) -> Option<Op> {
         return match word {
             // The three hints that change no architectural state.
             0xd503_201f | 0xd503_203f | 0xd503_209f => Some(Op::Nop),
-            _ => None,
+            // A by-address cache maintenance operation only a counted loop
+            // over an address range may hold; `counter` decides that.
+            _ => CacheOp::decode(word).map(|operation| Op::Maintenance {
+                operation,
+                src: (word & 31) as usize,
+            }),
         };
     }
     // ADD/SUB immediate.
@@ -459,6 +522,26 @@ fn decode(word: u32) -> Option<Op> {
     None
 }
 
+/// How many rounds of `delta` each iteration reach `bound`, from `value`.
+///
+/// `None` when the step never lands exactly on the bound (an odd step stride
+/// from an even value passes it, so only a register wrap would leave). The
+/// exit round is the first whose branch is not taken.
+fn exit_rounds(value: u64, bound: u64, delta: i64) -> Option<u64> {
+    if delta == 0 {
+        return None;
+    }
+    let stride = delta.unsigned_abs();
+    let distance = if delta < 0 {
+        value.saturating_sub(bound)
+    } else {
+        bound.saturating_sub(value)
+    };
+    distance
+        .checked_div(stride)
+        .filter(|_| distance != 0 && distance.is_multiple_of(stride))
+}
+
 fn arithmetic(width: Width, subtract: bool, a: u64, b: u64) -> (u64, bool, bool) {
     if subtract {
         (
@@ -587,6 +670,10 @@ fn apply(
             };
             state.registers[dst] = word & mask;
         }
+        // Only [`Proof::advance_range`] applies maintenance: a plain round
+        // cannot publish or discard a line, so a body holding one is refused
+        // unless the caller takes the range form.
+        Op::Maintenance { .. } => return Err(Failure::Model),
     }
     Ok(state)
 }
@@ -598,10 +685,37 @@ fn apply(
 struct Counter {
     register: usize,
     width: Width,
-    /// The change per iteration, signed, with no wrap inside the window.
-    delta: i64,
+    /// The change per iteration, signed, with no wrap inside the window: an
+    /// immediate, or a register the body never writes.
+    step: Step,
     /// The flags the branch reads, when it does not test the register.
     compare: Option<Compare>,
+    /// The by-address maintenance every round performs, when the body holds
+    /// one. A proven range loop may only end if its owner applies these.
+    maintenance: Option<CacheOp>,
+}
+
+/// How far a counted register moves each iteration.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Step {
+    Immediate(i64),
+    /// `ADD r, r, Rm` or `SUB r, r, Rm`, where `Register` names an operand
+    /// no instruction in the body writes. The change is that register's
+    /// value, negated for `SUB`.
+    Register { register: usize, subtract: bool },
+}
+
+impl Step {
+    fn of(self, state: &State, width: Width) -> Option<i64> {
+        let value = match self {
+            Self::Immediate(delta) => return Some(delta),
+            Self::Register { register, subtract } => {
+                let value = i64::try_from(state.registers[register] & width.mask()).ok()?;
+                if subtract { value.checked_neg()? } else { value }
+            }
+        };
+        Some(value)
+    }
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -685,11 +799,26 @@ impl Proof {
     /// any register or flag refuses the model, so the branch's predicate
     /// depends on the count alone.
     fn counter(&self) -> Option<Counter> {
-        let mut moving: Option<(usize, Width, i64)> = None;
+        let mut moving: Option<(usize, Width, Step)> = None;
         let mut flags: Option<Compare> = None;
+        let mut maintenance: Option<CacheOp> = None;
+        // The registers the body writes; a step or a bound naming one of them
+        // changes between rounds, so the count is not a single delta.
+        let mut written = [false; 32];
         for op in &self.ops {
             match *op {
                 Op::Nop => {}
+                Op::Maintenance { operation, src } => {
+                    // One operation, so the range's effect is one kind of
+                    // maintenance, and the register it names holds the line.
+                    match maintenance {
+                        Some(seen) if seen != operation => return None,
+                        _ => maintenance = Some(operation),
+                    }
+                    // The maintenance register is read every round and the
+                    // body must move it, or every round would name one line.
+                    let _ = src;
+                }
                 Op::AddSub {
                     width,
                     subtract,
@@ -700,16 +829,39 @@ impl Proof {
                 } if dst == src && dst != 31 => {
                     let step = i64::try_from(value).ok()?;
                     let delta = if subtract { -step } else { step };
+                    let candidate = Step::Immediate(delta);
                     match moving {
-                        Some((register, seen, total)) if register == dst && seen == width => {
-                            moving = Some((dst, width, total.checked_add(delta)?));
-                        }
+                        Some((register, seen, total))
+                            if register == dst && seen == width && total == candidate => {}
                         Some(_) => return None,
-                        None => moving = Some((dst, width, delta)),
+                        None => moving = Some((dst, width, candidate)),
                     }
+                    written[dst] = true;
                     if sets_flags {
                         flags = Some(Compare::Update { subtract });
                     }
+                }
+                Op::AddSubRegister {
+                    width,
+                    subtract,
+                    flags: sets_flags,
+                    dst,
+                    lhs,
+                    rhs,
+                } if dst == lhs && dst != 31 && !sets_flags => {
+                    // `ADD r, r, Rm` / `SUB r, r, Rm` with an operand the body
+                    // never writes: the step is that register's value.
+                    let candidate = Step::Register {
+                        register: rhs,
+                        subtract,
+                    };
+                    match moving {
+                        Some((register, seen, total))
+                            if register == dst && seen == width && total == candidate => {}
+                        Some(_) => return None,
+                        None => moving = Some((dst, width, candidate)),
+                    }
+                    written[dst] = true;
                 }
                 Op::AddSub {
                     width,
@@ -758,8 +910,14 @@ impl Proof {
                 _ => return None,
             }
         }
-        let (register, width, delta) = moving?;
-        if delta == 0 {
+        let (register, width, step) = moving?;
+        // A step or a bound the body writes is not a constant for the window.
+        if let Step::Register { register: source, .. } = step
+            && written[source]
+        {
+            return None;
+        }
+        if matches!(step, Step::Immediate(0)) {
             return None;
         }
         let compare = match (self.test, flags) {
@@ -770,26 +928,46 @@ impl Proof {
             (None, Some(compare)) => Some(compare),
             (None, None) => return None,
         };
+        if let Some(Compare::Explicit {
+            against: Against::Register(bound),
+            ..
+        }) = compare
+            && (written[bound] || bound == register)
+        {
+            return None;
+        }
         Some(Counter {
             register,
             width,
-            delta,
+            step,
             compare,
+            maintenance,
+        })
+    }
+
+    /// The maintenance operation a proven range loop performs, with the
+    /// register holding the next line's address.
+    pub(super) fn maintenance(&self) -> Option<(CacheOp, usize)> {
+        let counter = self.counter()?;
+        counter.maintenance?;
+        self.ops.iter().find_map(|op| match *op {
+            Op::Maintenance { operation, src } => Some((operation, src)),
+            _ => None,
         })
     }
 
     /// The state after `n` complete iterations, by the counted model.
-    fn at(&self, state: State, counter: Counter, n: u64) -> State {
+    fn at(&self, state: State, counter: Counter, n: u64) -> Option<State> {
         let mask = counter.width.mask();
+        let delta = counter.step.of(&state, counter.width)?;
         let before = state.registers[counter.register] & mask;
-        let after =
-            ((before as i128) + i128::from(counter.delta) * i128::from(n)) as u64 & mask;
+        let after = ((before as i128) + i128::from(delta) * i128::from(n)) as u64 & mask;
         let mut out = state;
         out.registers[counter.register] = after;
         if let Some(compare) = counter.compare {
             out.flags = match compare {
                 Compare::Update { subtract } => {
-                    let step = counter.delta.unsigned_abs();
+                    let step = delta.unsigned_abs();
                     // `after` is the update's own result of `previous +/- step`.
                     let previous = if subtract {
                         after.wrapping_add(step)
@@ -811,7 +989,7 @@ impl Proof {
                 }
             };
         }
-        out
+        Some(out)
     }
 
     /// Advance at most `iterations` complete rounds from `state`.
@@ -900,38 +1078,30 @@ impl Proof {
         }
         let counter = self.counter().ok_or(Failure::Model)?;
         // The model must reproduce the body exactly, or it is not a model.
-        if self.at(state, counter, 1) != next {
+        if self.at(state, counter, 1) != Some(next) {
             return Err(Failure::Model);
         }
-        let value = state.registers[counter.register] & counter.width.mask();
+        let width = counter.width;
+        let mask = width.mask();
+        let delta = counter.step.of(&state, width).ok_or(Failure::Model)?;
+        let value = state.registers[counter.register] & mask;
         let bound = match counter.compare {
             Some(Compare::Update { .. }) | None => 0,
             Some(Compare::Explicit { against, .. }) => match against {
-                Against::Immediate(value) => value & counter.width.mask(),
-                Against::Register(register) => state.registers[register] & counter.width.mask(),
+                Against::Immediate(value) => value & mask,
+                Against::Register(register) => state.registers[register] & mask,
             },
         };
-        let stride = counter.delta.unsigned_abs();
-        let distance = if counter.delta < 0 {
-            value.saturating_sub(bound)
-        } else {
-            bound.saturating_sub(value)
-        };
         // Rounds until the branch leaves: the first round whose branch is not
-        // taken. The stride must land on the bound to leave at all; otherwise
-        // only a register wrap would end the loop, which the window cannot see.
-        if distance == 0 {
-            // At the bound already: the next round leaves, nothing to retire.
-            return Err(Failure::Model);
-        }
-        let exit = distance
-            .checked_div(stride)
-            .filter(|_| distance.is_multiple_of(stride));
+        // taken. A lossy step must land on the bound to leave at all; a lossy
+        // step that only walks around the register ends on a wrap, which the
+        // window cannot see.
+        let exit = exit_rounds(value, bound, delta);
         let rounds = exit.map_or(iterations, |exit| iterations.min(exit));
         if rounds == 0 {
             return Err(Failure::Model);
         }
-        let after = self.at(state, counter, rounds);
+        let after = self.at(state, counter, rounds).ok_or(Failure::Model)?;
         // The window may only end where the next round is either taken or is
         // exactly the exit the model predicts.
         if !self.taken(after) && exit != Some(rounds) {
@@ -941,6 +1111,73 @@ impl Proof {
             state: after,
             iterations: rounds,
             counted: true,
+        })
+    }
+}
+
+/// The outcome of a counted range loop: the state after its covered rounds
+/// and the register step whose lines they named.
+#[derive(Clone, Copy, Debug)]
+pub(super) struct RangeAdvance {
+    pub state: State,
+    pub iterations: u64,
+    /// The signed change the counted register made each round.
+    pub step: i64,
+}
+
+impl Proof {
+    /// Advance a counted body that maintains one cache line per round.
+    ///
+    /// Only a counted loop with a by-address maintenance op anywhere in its
+    /// body reaches here; [`Proof::maintenance`] names that op. The trip count
+    /// comes from the same counted model the pure path uses, so the state and
+    /// instruction count match walking the loop. The caller applies the lines
+    /// the covered rounds named, which is why [`Proof::advance`] refuses a body
+    /// holding maintenance instead of skipping it.
+    pub(super) fn advance_range(
+        &self,
+        state: State,
+        iterations: u64,
+        source: usize,
+    ) -> Option<RangeAdvance> {
+        if iterations == 0 {
+            return None;
+        }
+        let counter = self.counter()?;
+        counter.maintenance?;
+        if !self.taken(state) {
+            return None;
+        }
+        // The counted register holds the address the maintenance names.
+        if counter.register != source {
+            return None;
+        }
+        let width = counter.width;
+        let mask = width.mask();
+        let delta = counter.step.of(&state, width)?;
+        let value = state.registers[counter.register] & mask;
+        let bound = match counter.compare {
+            Some(Compare::Update { .. }) | None => 0,
+            Some(Compare::Explicit { against, .. }) => match against {
+                Against::Immediate(value) => value & mask,
+                Against::Register(register) => state.registers[register] & mask,
+            },
+        };
+        let exit = exit_rounds(value, bound, delta);
+        let rounds = exit.map_or(iterations, |exit| iterations.min(exit));
+        if rounds == 0 {
+            return None;
+        }
+        let after = self.at(state, counter, rounds)?;
+        // The window may end only where the next round is taken, or exactly
+        // at the exit the model predicts.
+        if !self.taken(after) && exit != Some(rounds) {
+            return None;
+        }
+        Some(RangeAdvance {
+            state: after,
+            iterations: rounds,
+            step: delta,
         })
     }
 }
@@ -1211,18 +1448,21 @@ mod tests {
     }
 
     #[test]
-    fn the_system_instruction_space_is_never_a_body() {
+    fn the_system_instruction_space_is_never_a_pure_body() {
         // Regression: a boot loop was fast-forwarded ~300M instructions
         // because "SYS #3, c7, c14, #1" (DC CIVAC) was once matched as a
         // constant counter read. The loop then looked like a fixed point and
         // never executed its cache maintenance, so no peer or device ever
-        // changed the watched word. Every system-space encoding must refuse,
-        // whatever register or immediate it names.
+        // changed the watched word. Maintenance now decodes as a side effect
+        // the counted range path must apply, and every other system
+        // instruction still refuses, whatever register or immediate it names.
         for word in [
-            0xd50b_7e20u32, // sys #3, c7, c14, #1 (dc civac)
-            0xd50b_7e24,    // the same, other Rt
-            0xd50b_7a20,    // sys #3, c7, c10, #1
-            0xd508_7e20,    // sys #0, c7, c14, #1
+            0xd508_7e20u32, // sys #0, c7, c14, #1: op1 0 is not DC CIVAC
+            0xd50b_7a78,    // dc cisw: set/way, op2 2
+            0xd50b_7420,    // dc zva: stores
+            0xd50b_7c20,    // dc cvap
+            0xd50b_7d20,    // dc cvadp
+            0xd50b_7e61,    // dc cigvac, op2 3
             0xd53b_e040,    // mrs x0,cntvct_el0
             0xd53b_e000,    // mrs x0,cntfrq_el0
             0xd538_d080,    // mrs x0,mpidr_el1
@@ -1230,20 +1470,59 @@ mod tests {
             0xd503_207f,    // wfi
             0xd503_40df,    // msr daifclr
             0xd400_0001,    // svc
+            0xd50b_7e80,    // sys #3,c7,c14,#4: sysl-class, L=1
         ] {
             assert!(decode(word).is_none(), "{word:#010x}");
         }
-        // A loop whose body contains one is refused outright.
-        let bytes: Vec<u8> = [
-            0xd50b_7e20u32,
-            0x8b03_0084,
-            0xeb01_009f,
-            0x54ff_ffab,
-        ]
-        .into_iter()
-        .flat_map(u32::to_le_bytes)
-        .collect();
-        assert!(Proof::decode(0x5b950, 0x5b95c, &bytes).is_none());
+        // DC CIVAC on another register still decodes.
+        assert_eq!(
+            decode(0xd50b_7e30),
+            Some(Op::Maintenance {
+                operation: CacheOp::CleanInvalidate,
+                src: 16
+            })
+        );
+        // The four by-address operations decode, and only as maintenance.
+        for (word, operation) in [
+            (0xd50b_7e24u32, CacheOp::CleanInvalidate), // dc civac, x4
+            (0xd50b_7a24, CacheOp::Clean),              // dc cvac, x4
+            (0xd50b_7b24, CacheOp::Clean),              // dc cvau, x4
+            (0xd508_7624, CacheOp::Invalidate),         // dc ivac, x4
+            (0xd50b_7524, CacheOp::InvalidateInstruction), // ic ivau, x4
+        ] {
+            assert_eq!(
+                decode(word),
+                Some(Op::Maintenance {
+                    operation,
+                    src: 4
+                }),
+                "{word:#010x}"
+            );
+        }
+        // A plain round cannot apply maintenance, so a body holding one is
+        // refused by `advance` even though it decodes.
+        let bytes: Vec<u8> = [0xd50b_7e24u32, 0x8b03_0084, 0xeb01_009f, 0x54ff_ffab]
+            .into_iter()
+            .flat_map(u32::to_le_bytes)
+            .collect();
+        let proof = Proof::decode(0x5b950, 0x5b95c, &bytes).expect("the range loop decodes");
+        let mut state = State::default();
+        state.registers[1] = 0x2400;
+        state.registers[3] = 64;
+        state.registers[4] = 0x2000;
+        // The branch is `b.lt`, taken while N differs from V: N set, V clear.
+        state.flags = 1 << 31;
+        assert_eq!(
+            proof.advance(state, 100, |_, _| None).err(),
+            Some(Failure::Model)
+        );
+        let advanced = proof
+            .advance_range(state, 100, 4)
+            .expect("the range form proves it");
+        // 0x2400 - 0x2000 = 16 lines of 64 bytes.
+        assert_eq!(advanced.iterations, 16);
+        assert_eq!(advanced.step, 64);
+        assert_eq!(advanced.state.registers[4], 0x2400);
     }
 
     #[test]
@@ -1376,10 +1655,10 @@ mod tests {
 
     #[test]
     fn a_clock_rate_read_is_refused() {
-        // The XP5 boot loop at 0x5b950: its body's first word is a system
-        // instruction, so the whole loop is refused at decode rather than
-        // being fast-forwarded with that instruction's effect left out.
-        let bytes: Vec<u8> = [0xd50b_7e24u32, 0xb940_0020, 0x7100_001f, cbz(3, 0, false)]
+        // A loop whose body reads CNTFRQ_EL0 has no closed form: its first
+        // word is a system instruction that is not maintenance, so the whole
+        // loop refuses at decode.
+        let bytes: Vec<u8> = [0xd53b_e000u32, 0xb940_0020, 0x7100_001f, cbz(3, 0, false)]
             .into_iter()
             .flat_map(u32::to_le_bytes)
             .collect();
