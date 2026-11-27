@@ -10,6 +10,8 @@ fn engine_renderer_selection_defaults_to_gpu_and_supports_overrides() {
 
 const TEST_SHADER_PROGRAM: [u32; 3] = [0x4c000000, 0x4c201000, 0x88000000];
 const TEST_SHADER_DESCRIPTOR: u32 = 0x8d86c36f;
+/// The color target address `setup` programs through 0x31d.
+const COLOR_TARGET: u64 = 0x10000;
 
 fn pair(words: &mut Vec<u32>, index: u16, value: u32) {
     words.extend([value, 0xf0000 | index as u32]);
@@ -45,17 +47,30 @@ fn upload(words: &mut Vec<u32>, index: u16, data: &[u32], increment: bool) {
 
 #[cfg(not(target_arch = "wasm32"))]
 fn triangle_list(registers: &[(u16, u32)]) -> Vec<u32> {
+    colored_triangle_list(
+        registers,
+        [
+            [-0.83, -0.71, -0.5, 1.],
+            [0.72, -0.65, -0.5, 1.],
+            [-0.13, 0.91, -0.5, 1.],
+        ],
+        [0.75, 0.25, 0.5, 0.5],
+    )
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+fn colored_triangle_list(
+    registers: &[(u16, u32)],
+    positions: [[f32; 4]; 3],
+    color: [f32; 4],
+) -> Vec<u32> {
     let mut words = setup();
     for &(register, value) in registers {
         pair(&mut words, register, value);
     }
-    for position in [
-        [-0.83, -0.71, -0.5, 1.],
-        [0.72, -0.65, -0.5, 1.],
-        [-0.13, 0.91, -0.5, 1.],
-    ] {
+    for position in positions {
         upload(&mut words, 0x433, &packed(position), true);
-        upload(&mut words, 0x433, &packed([0.75, 0.25, 0.5, 0.5]), true);
+        upload(&mut words, 0x433, &packed(color), true);
     }
     words
 }
@@ -64,6 +79,20 @@ fn triangle_list(registers: &[(u16, u32)]) -> Vec<u32> {
 fn assert_host_gpu_matches_cpu(
     words: &[u32],
     read: impl Fn(u64, usize) -> Vec<u8>,
+) -> Option<Snapshots> {
+    assert_host_gpu_matches_cpu_tolerating(words, read, |_| true)
+}
+
+/// Vulkan §36.1 only requires basic blend operations to have "a precision and
+/// dynamic range no lower than that used to represent destination components",
+/// so an RGBA8 driver may round each blend term to eight bits and land one byte
+/// away from the CPU equations. `tolerate` names the snapshots whose blended
+/// channels may differ by one; every other byte and every count stays exact.
+#[cfg(not(target_arch = "wasm32"))]
+fn assert_host_gpu_matches_cpu_tolerating(
+    words: &[u32],
+    read: impl Fn(u64, usize) -> Vec<u8>,
+    tolerate: impl Fn(u64) -> bool + Copy,
 ) -> Option<Snapshots> {
     let mut cpu = Engine::default();
     let expected = cpu
@@ -80,15 +109,18 @@ fn assert_host_gpu_matches_cpu(
         }
         Err(error) => panic!("DMP host render path failed: {error}"),
     };
-    if actual != expected {
-        panic!("{}", super::gpu_draw::snapshot_mismatch(&actual, &expected));
+    if let Some(difference) = super::gpu_draw::snapshot_mismatch(&actual, &expected, tolerate) {
+        panic!("{difference}");
     }
     assert_eq!(gpu.workload(), cpu.workload());
     if std::env::var("FUJIMOD_DMP_VERIFY_GPU").is_ok_and(|value| value == "1") {
         let verified = Engine::default()
             .execute_host_gpu_verified(words, &mut |address, length| Ok(read(address, length)))
             .unwrap_or_else(|error| panic!("DMP host GPU verification failed: {error}"));
-        assert_eq!(verified, expected);
+        if let Some(difference) = super::gpu_draw::snapshot_mismatch(&verified, &expected, tolerate)
+        {
+            panic!("{difference}");
+        }
     }
     Some(actual)
 }
@@ -109,7 +141,7 @@ fn setup() -> Vec<u32> {
         (0x24e, 0x3f0000),
         (0x267, 0x001f001f),
         (0x31e, 0x00200020),
-        (0x31d, 0x10000),
+        (0x31d, COLOR_TARGET as u32),
         (0x307, 0xf00),
         (0x300, 0x100),
         (0x301, 0x01010000),
@@ -529,7 +561,15 @@ fn host_render_path_matches_dmp_fragment_state_regressions() {
         (0x306, 2 << 8),
         (0x307, 0x1f11),
     ]);
-    if assert_host_gpu_matches_cpu(&depth_stencil_words, |_, length| vec![0; length]).is_none() {}
+    // Depth and stencil are compared exactly; only the color target may carry
+    // the one byte Vulkan §36.1 blending allows.
+    if assert_host_gpu_matches_cpu_tolerating(
+        &depth_stencil_words,
+        |_, length| vec![0; length],
+        |address| address == COLOR_TARGET,
+    )
+    .is_none()
+    {}
 }
 
 #[cfg(not(target_arch = "wasm32"))]
@@ -855,7 +895,12 @@ fn ordered_draw_uploads_preserve_overlapping_byte_masks_and_depth_transitions() 
             (0x301, 0x77100000),
         ]));
     }
-    let _ = assert_host_gpu_matches_cpu(&words, |_, length| vec![0x60; length]);
+    // The depth target at address zero stays exact; only color blends round.
+    let _ = assert_host_gpu_matches_cpu_tolerating(
+        &words,
+        |_, length| vec![0x60; length],
+        |address| address == COLOR_TARGET,
+    );
 }
 
 #[cfg(not(target_arch = "wasm32"))]
@@ -870,6 +915,45 @@ fn native_source_over_batches_preserve_order_around_masked_draws() {
         ]));
     }
     let _ = assert_host_gpu_matches_cpu(&words, |_, length| vec![0x60; length]);
+}
+
+/// Fractional source colors over a non-uniform destination put every blend
+/// term away from a byte boundary, so a driver that blends at destination
+/// precision (Vulkan §36.1) lands one byte from the CPU equations. The list
+/// must stay within that one byte everywhere.
+#[cfg(not(target_arch = "wasm32"))]
+#[test]
+fn native_source_over_matches_cpu_for_fractional_colors_and_destinations() {
+    let mut seed = 0x9e37_79b9u32;
+    let mut next = || {
+        seed = seed.wrapping_mul(1_664_525).wrapping_add(1_013_904_223);
+        (seed >> 8) as f32 / 16_777_216.
+    };
+    let mut words = Vec::new();
+    for _ in 0..12 {
+        let color = [next(), next(), next(), 0.05 + 0.9 * next()];
+        words.extend(colored_triangle_list(
+            &[(0x300, 0x100), (0x301, 0x71760000), (0x307, 0xf00)],
+            [
+                [-0.83, -0.71, -0.5, 1.],
+                [0.72, -0.65, -0.5, 1.],
+                [-0.13, 0.91, -0.5, 1.],
+            ],
+            color,
+        ));
+    }
+    let read = |address: u64, length: usize| {
+        let mut bytes = Vec::with_capacity(length);
+        for offset in 0..length {
+            let mut state = address
+                .wrapping_add(offset as u64)
+                .wrapping_mul(0x9e37_79b9_7f4a_7c15);
+            state ^= state >> 29;
+            bytes.push((state >> 32) as u8);
+        }
+        bytes
+    };
+    let _ = assert_host_gpu_matches_cpu(&words, read);
 }
 
 /// Stock XPP fragment-state snapshot controls (X-T20 2.11 0xda81f8 and

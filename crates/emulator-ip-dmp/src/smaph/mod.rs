@@ -1079,12 +1079,24 @@ fn rectangles_on(
             let readback = gpu_context.readback(surface.key())?;
             if let Some(cpu_output) = &verified {
                 let cpu_bytes = &cpu_output.get(address).unwrap().2;
-                if cpu_bytes != &readback.bytes {
-                    let offset = cpu_bytes
-                        .iter()
-                        .zip(&readback.bytes)
-                        .position(|(cpu, gpu)| cpu != gpu)
-                        .unwrap_or(cpu_bytes.len().min(readback.bytes.len()));
+                // Vulkan §36.1 only requires basic blend operations to have "a
+                // precision and dynamic range no lower than that used to
+                // represent destination components", so an RGBA8 driver may
+                // round each blend term to eight bits. Blended color channels
+                // may therefore land one byte from the CPU reference; lengths
+                // and every larger difference stay exact.
+                if cpu_bytes.len() != readback.bytes.len() {
+                    return Err(format!(
+                        "SMAPH GPU paint length differs from CPU at target {address:#x}: {} and {} bytes",
+                        cpu_bytes.len(),
+                        readback.bytes.len()
+                    ));
+                }
+                if let Some(offset) = cpu_bytes
+                    .iter()
+                    .zip(&readback.bytes)
+                    .position(|(cpu, gpu)| cpu.abs_diff(*gpu) > 1)
+                {
                     return Err(format!(
                         "SMAPH GPU paint differs from CPU at target {address:#x}, byte {offset}"
                     ));

@@ -3,7 +3,6 @@ use wgpu::util::DeviceExt;
 #[test]
 fn rgba8_native_blend_matches_byte_quantized_fragment_equations() {
     let context = fujimod_emulator_gpu::context().unwrap();
-    let _submission = context.acquire().unwrap();
     let device = context.device();
     let queue = context.queue();
     let (width, height) = (256u32, 256u32);
@@ -64,6 +63,7 @@ fn rgba8_native_blend_matches_byte_quantized_fragment_equations() {
         rows_per_image: Some(height),
     };
     for factor in [wgpu::BlendFactor::SrcAlpha, wgpu::BlendFactor::One] {
+        let submission = context.acquire().unwrap();
         let pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
             label: Some("native blend conformance"),
             layout: None,
@@ -169,6 +169,9 @@ fn rgba8_native_blend_matches_byte_quantized_fragment_equations() {
         device.poll(wgpu::PollType::wait_indefinitely()).unwrap();
         receiver.recv().unwrap().unwrap();
         let mapped = download.slice(..).get_mapped_range().unwrap();
+        // The lock only orders submissions; release it before comparing so a
+        // failed expectation cannot poison it for the rest of the suite.
+        drop(submission);
         let mut mismatches = 0;
         for (index, (pixel, old)) in source.iter().zip(&destination).enumerate() {
             let source = pixel.map(|c| f32::from(c) / 255.);
@@ -184,7 +187,12 @@ fn rgba8_native_blend_matches_byte_quantized_fragment_equations() {
                     * 255.
                     + 0.5)
                     .floor() as u8;
-                if mapped[index * 4 + channel] != expected {
+                // Vulkan §36.1 requires basic blend operations only to have
+                // "a precision and dynamic range no lower than that used to
+                // represent destination components". An RGBA8 driver may
+                // therefore round each blend term to eight bits and land one
+                // byte away from these equations; bigger errors still fail.
+                if mapped[index * 4 + channel].abs_diff(expected) > 1 {
                     mismatches += 1;
                 }
             }
