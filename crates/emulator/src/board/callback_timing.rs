@@ -11,6 +11,63 @@ pub(super) enum CallbackKind {
     Mmio,
 }
 
+/// Named consumers of one block callback, timed separately while the
+/// `FUJIMOD_BLOCK_PHASES` diagnostic is set. The engine cannot run any of them
+/// inline, so the split decides which to batch and which to keep.
+#[derive(Clone, Copy)]
+pub(super) enum BlockPhase {
+    Settle,
+    Due,
+    EnterCode,
+    SettlePins,
+    Scan,
+    WindowRoom,
+    Controller,
+    SyncStores,
+    Arms,
+}
+
+impl BlockPhase {
+    pub(super) const COUNT: usize = 9;
+    pub(super) const ALL: [Self; Self::COUNT] = [
+        Self::Settle,
+        Self::Due,
+        Self::EnterCode,
+        Self::SettlePins,
+        Self::Scan,
+        Self::WindowRoom,
+        Self::Controller,
+        Self::SyncStores,
+        Self::Arms,
+    ];
+    fn index(self) -> usize {
+        match self {
+            Self::Settle => 0,
+            Self::Due => 1,
+            Self::EnterCode => 2,
+            Self::SettlePins => 3,
+            Self::Scan => 4,
+            Self::WindowRoom => 5,
+            Self::Controller => 6,
+            Self::SyncStores => 7,
+            Self::Arms => 8,
+        }
+    }
+    fn name(self) -> &'static str {
+        match self {
+            Self::Settle => "settle",
+            Self::Due => "due",
+            Self::EnterCode => "enter_code",
+            Self::SettlePins => "settle_pins",
+            Self::Scan => "scan",
+            Self::WindowRoom => "window_room",
+            Self::Controller => "controller",
+            Self::SyncStores => "sync_stores",
+            Self::Arms => "arms",
+        }
+    }
+}
+
 impl CallbackKind {
     fn index(self) -> usize {
         match self {
@@ -38,6 +95,11 @@ struct Totals {
 
 pub(super) struct Statistics {
     by_core: Vec<[Totals; 3]>,
+    /// Per-core, per-phase cumulative block-callback time and call counts.
+    /// The call table stays `None` unless `FUJIMOD_BLOCK_PHASES` asks for the
+    /// split, so an ordinary run pays one environment probe per callback.
+    block_phases: Vec<[u64; BlockPhase::COUNT]>,
+    block_phase_calls: Option<Vec<[u64; BlockPhase::COUNT]>>,
     #[cfg(test)]
     sample_every_callback: bool,
 }
@@ -47,6 +109,8 @@ pub(super) type SharedStatistics = Rc<RefCell<Statistics>>;
 pub(super) fn new(cores: usize) -> SharedStatistics {
     Rc::new(RefCell::new(Statistics {
         by_core: vec![[Totals::default(); 3]; cores],
+        block_phases: vec![[0; BlockPhase::COUNT]; cores],
+        block_phase_calls: None,
         #[cfg(test)]
         sample_every_callback: false,
     }))
@@ -56,8 +120,76 @@ pub(super) fn new(cores: usize) -> SharedStatistics {
 pub(super) fn new_for_test(cores: usize) -> SharedStatistics {
     Rc::new(RefCell::new(Statistics {
         by_core: vec![[Totals::default(); 3]; cores],
+        block_phases: vec![[0; BlockPhase::COUNT]; cores],
+        block_phase_calls: None,
         sample_every_callback: true,
     }))
+}
+
+/// Per-callback accumulator for the block-phase diagnostic. It lives on the
+/// callback's own stack and reaches the shared totals once, when it drops, so
+/// the measurement costs one clock read per phase and one borrow per callback
+/// instead of a borrow per phase.
+pub(super) struct PhaseCapture {
+    statistics: Option<SharedStatistics>,
+    core: usize,
+    service: [u64; BlockPhase::COUNT],
+    calls: [u64; BlockPhase::COUNT],
+}
+
+impl PhaseCapture {
+    /// Probe the environment once per callback. With the diagnostic off the
+    /// capture is inert and every `span` runs its closure untouched.
+    pub(super) fn new(statistics: Option<&SharedStatistics>, core: usize) -> Self {
+        let enabled = statistics.is_some()
+            && std::env::var_os("FUJIMOD_BLOCK_PHASES").is_some_and(|v| v != "0");
+        Self {
+            statistics: enabled.then(|| statistics.cloned()).flatten(),
+            core,
+            service: [0; BlockPhase::COUNT],
+            calls: [0; BlockPhase::COUNT],
+        }
+    }
+    /// Run `f`, charging its wall time to `phase`.
+    pub(super) fn span<T>(&mut self, phase: BlockPhase, f: impl FnOnce() -> T) -> T {
+        if self.statistics.is_none() {
+            return f();
+        }
+        let started = Instant::now();
+        let value = f();
+        let elapsed = u64::try_from(started.elapsed().as_nanos()).unwrap_or(u64::MAX);
+        let index = phase.index();
+        self.service[index] = self.service[index].saturating_add(elapsed);
+        self.calls[index] = self.calls[index].saturating_add(1);
+        value
+    }
+}
+
+impl Drop for PhaseCapture {
+    fn drop(&mut self) {
+        let Some(statistics) = self.statistics.as_ref() else {
+            return;
+        };
+        let mut s = statistics.borrow_mut();
+        let cores = s.by_core.len();
+        if s.block_phase_calls.is_none() {
+            s.block_phase_calls = Some(vec![[0; BlockPhase::COUNT]; cores]);
+        }
+        let Statistics {
+            block_phases,
+            block_phase_calls,
+            ..
+        } = &mut *s;
+        let calls = block_phase_calls
+            .as_mut()
+            .expect("the phase call table was just initialized");
+        for (index, service) in self.service.iter().enumerate() {
+            let phase = &mut block_phases[self.core][index];
+            *phase = phase.saturating_add(*service);
+            let count = &mut calls[self.core][index];
+            *count = count.saturating_add(self.calls[index]);
+        }
+    }
 }
 
 pub(super) struct SampledCallback {
@@ -139,6 +271,20 @@ pub(super) fn json(statistics: &SharedStatistics, core: usize) -> Value {
                 "sampled_service_ns": metrics.sampled_service_ns,
             }),
         );
+    }
+    if let Some(calls) = totals.block_phase_calls.as_ref() {
+        let mut phases = serde_json::Map::new();
+        for phase in BlockPhase::ALL {
+            let index = phase.index();
+            phases.insert(
+                phase.name().into(),
+                json!({
+                    "calls": calls[core][index],
+                    "service_ns": totals.block_phases[core][index],
+                }),
+            );
+        }
+        object.insert("block_phases".into(), Value::Object(phases));
     }
     value
 }

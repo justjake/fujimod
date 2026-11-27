@@ -4246,6 +4246,7 @@ unsafe fn block_entered(block: fujimod_emulator_cpu::Block, data: *mut c_void) {
     };
     let _callback_sample = callback_service_sample(b, &cpus, callback_timing::CallbackKind::Block);
     let core = b.core;
+    let mut phases = callback_timing::PhaseCapture::new(b.callback_service_time.as_ref(), core);
     let result = (|| {
         let cpu = &*cpus[core];
         let mut s = b.state.borrow_mut();
@@ -4255,7 +4256,9 @@ unsafe fn block_entered(block: fujimod_emulator_cpu::Block, data: *mut c_void) {
         let pc = block.address;
         let bytes = block.bytes & 0x3fff_ffff;
         // The block before this one ran whole.
-        s.settle_block(core, None)?;
+        phases.span(callback_timing::BlockPhase::Settle, || {
+            s.settle_block(core, None)
+        })?;
         let room = s.blocks[core].as_ref().map_or(0, |blocks| blocks.room);
         if room == 0 {
             // The engine's counter stops before the observer of the first
@@ -4263,18 +4266,24 @@ unsafe fn block_entered(block: fujimod_emulator_cpu::Block, data: *mut c_void) {
             cpu.stop()?;
             return Ok(());
         }
-        s.due(&cpus)?;
+        phases.span(callback_timing::BlockPhase::Due, || s.due(&cpus))?;
         if s.decoders.pending() {
             cpu.stop()?;
             return Ok(());
         }
-        if s.enter_code(cpu, core, pc, bytes)? {
+        let entered = phases.span(callback_timing::BlockPhase::EnterCode, || {
+            s.enter_code(cpu, core, pc, bytes)
+        })?;
+        if entered {
             return Ok(());
         }
         let was_settled = s.settled();
         if !was_settled {
             s.settled.full += 1;
-            if s.push_pins(&cpus)? {
+            let pushed = phases.span(callback_timing::BlockPhase::SettlePins, || {
+                s.push_pins(&cpus)
+            })?;
+            if pushed {
                 return cpu.stop();
             }
             if s.settled.pass {
@@ -4287,10 +4296,13 @@ unsafe fn block_entered(block: fujimod_emulator_cpu::Block, data: *mut c_void) {
         // A shortened translation can return here before any instruction
         // executes. Reuse the fixed point established above if it still holds.
         let settled = was_settled || s.settled();
-        let scan = {
+        let scan = phases.span(callback_timing::BlockPhase::Scan, || {
             let mut buffer = Vec::new();
             let code = s.block_code(cpu, core, pc, bytes as usize, &mut buffer)?;
-            match s.blocks[core].as_ref().and_then(|blocks| blocks.scans.get(pc, code)) {
+            Ok::<_, String>(match s.blocks[core]
+                .as_ref()
+                .and_then(|blocks| blocks.scans.get(pc, code))
+            {
                 Some(scan) => scan,
                 None => {
                     let scan = mprofile_blocks::scan(code)?;
@@ -4300,8 +4312,8 @@ unsafe fn block_entered(block: fujimod_emulator_cpu::Block, data: *mut c_void) {
                     }
                     scan
                 }
-            }
-        };
+            })
+        })?;
         let (entries, last) = (scan.entries, scan.last);
         // A `bx lr` that ends the admission is an ordinary branch when LR is
         // not an exception return value now and the block leaves LR alone:
@@ -4318,17 +4330,21 @@ unsafe fn block_entered(block: fujimod_emulator_cpu::Block, data: *mut c_void) {
             scan.unit
         };
         let scheduler_room = settled.then(|| s.scheduler_room(core));
-        let window_room = if let Some(scheduler_room) = scheduler_room {
-            // Until the next device deadline, the end of the run window, the
-            // next generic-timer output change and the peer's turn.
-            let until = s.clock_limit.unwrap_or(u64::MAX).min(s.settled.until);
-            room.min(s.timeline.processor_budget(core, u64::MAX, Some(until))?)
-                .min(scheduler_room)
-        } else {
-            // The pin push and deadline refresh below are not yet known to be
-            // a fixed point: the next instruction needs them again.
-            1
-        };
+        let window_room = phases.span(callback_timing::BlockPhase::WindowRoom, || {
+            if let Some(scheduler_room) = scheduler_room {
+                // Until the next device deadline, the end of the run window,
+                // the next generic-timer output change and the peer's turn.
+                let until = s.clock_limit.unwrap_or(u64::MAX).min(s.settled.until);
+                Ok::<_, String>(
+                    room.min(s.timeline.processor_budget(core, u64::MAX, Some(until))?)
+                        .min(scheduler_room),
+                )
+            } else {
+                // The pin push and deadline refresh below are not yet known to
+                // be a fixed point: the next instruction needs them again.
+                Ok(1)
+            }
+        })?;
         let limit = unit.min(window_room);
         if limit == 0 {
             // No entry fits before the run window ends or the peer's turn.
@@ -4380,16 +4396,23 @@ unsafe fn block_entered(block: fujimod_emulator_cpu::Block, data: *mut c_void) {
         let p = s.mprofile[core]
             .as_mut()
             .ok_or("block execution without an M-profile controller")?;
-        let entry = p.before(cpu, pc, fetched, idle)?;
-        let ready = p.ready();
-        let in_thread_mode = p.in_thread_mode();
+        let (entry, ready, in_thread_mode, stopped, alias_write) =
+            phases.span(callback_timing::BlockPhase::Controller, || {
+                let entry = p.before(cpu, pc, fetched, idle)?;
+                let ready = p.ready();
+                let in_thread_mode = p.in_thread_mode();
+                let stopped = p.take_stopped();
+                let alias_write = p.take_alias_write();
+                Ok::<_, String>((entry, ready, in_thread_mode, stopped, alias_write))
+            })?;
         // An exclusive instruction stops the engine as a scheduling boundary;
         // other emulated instructions only move the PC.
-        let stopped = p.take_stopped();
-        if p.take_alias_write() {
+        if alias_write {
             s.code_run = RunCode::Unknown;
         }
-        s.sync_mprofile_fast_stores(cpu, core)?;
+        phases.span(callback_timing::BlockPhase::SyncStores, || {
+            s.sync_mprofile_fast_stores(cpu, core)
+        })?;
         let execute = matches!(entry, mprofile::Entry::Execute);
         if !execute {
             s.settled.clear();
@@ -4405,20 +4428,23 @@ unsafe fn block_entered(block: fujimod_emulator_cpu::Block, data: *mut c_void) {
             mprofile::Entry::Wait => s.waiting[core] = true,
             mprofile::Entry::Execute => (),
         }
-        if settled && execute {
-            if verify {
-                s.verify_settled(&cpus, false)?;
-                s.verify_idle(core, idle)?;
-            }
-        } else {
-            s.refresh_processors()?;
-            if execute {
-                s.arm_settled()?;
-                if s.settled.armed && !ready {
-                    s.settled.idle = Some(core);
+        phases.span(callback_timing::BlockPhase::Arms, || {
+            if settled && execute {
+                if verify {
+                    s.verify_settled(&cpus, false)?;
+                    s.verify_idle(core, idle)?;
+                }
+            } else {
+                s.refresh_processors()?;
+                if execute {
+                    s.arm_settled()?;
+                    if s.settled.armed && !ready {
+                        s.settled.idle = Some(core);
+                    }
                 }
             }
-        }
+            Ok::<_, String>(())
+        })?;
         if !execute {
             // The controller performed the instruction (or waits after it):
             // one entry, and the engine continues at the PC it left.
