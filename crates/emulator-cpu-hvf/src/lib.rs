@@ -800,6 +800,10 @@ impl Cpu for Core {
         }
         self.shared.stop.store(false, Ordering::Release);
         self.shared.deadline.store(false, Ordering::Release);
+        // The owner initializes the budget before the worker receives the
+        // run. An asynchronous tightening may arrive before native entry.
+        let limit = request.instructions.map_or(u64::MAX, |n| n as u64);
+        self.shared.limit.store(limit, Ordering::Release);
         let _watchdog = Watchdog::new(self.native_cpu, request.watchdog_us, self.shared.clone());
         let observe = self.has_instruction_hooks();
         self.parked.set(false);
@@ -865,6 +869,10 @@ impl Cpu for Core {
         let token = RunToken::new(self.identity, sequence);
         self.shared.stop.store(false, Ordering::Release);
         self.shared.deadline.store(false, Ordering::Release);
+        // The owner initializes the budget before the worker receives the
+        // run. An asynchronous tightening may arrive before native entry.
+        let limit = request.instructions.map_or(u64::MAX, |n| n as u64);
+        self.shared.limit.store(limit, Ordering::Release);
         self.shared.progress.store(0, Ordering::Relaxed);
         self.shared.measured.store(false, Ordering::Relaxed);
         let watchdog = Watchdog::new(self.native_cpu, request.watchdog_us, self.shared.clone());

@@ -1142,6 +1142,40 @@ fn main() -> Result<(), String> {
         estimated_rate / 1_000_000.0
     );
 
+    // The loop makes no guest exits. Tighten a queued run and a run whose
+    // timer started without a deadline. Both should stop before the watchdog.
+    for (initial_limit, delay_ms) in [(Some(2_000_000_000), 0), (None, 12)] {
+        let run = cpu
+            .start_run(Run {
+                begin: 0x10900,
+                until: None,
+                watchdog_us: 500_000,
+                instructions: initial_limit,
+            })
+            .map_err(|e| e.to_string())?;
+        if delay_ms != 0 {
+            thread::sleep(std::time::Duration::from_millis(delay_ms));
+        }
+        let deadline = 50_000_000 * expected_scale;
+        cpu.tighten_instruction_limit(deadline)?;
+        loop {
+            match cpu.poll_run(run).map_err(|e| e.to_string())? {
+                RunStatus::Running => thread::yield_now(),
+                RunStatus::CallbackPending => panic!("native loop unexpectedly called the owner"),
+                RunStatus::Complete(result) => {
+                    assert!(matches!(result.map_err(|e| e.to_string())?, Exit::Stopped));
+                    break;
+                }
+            }
+        }
+        let progress = cpu.instruction_progress().expect("native run was measured");
+        assert!(
+            (deadline..200_000_000 * expected_scale).contains(&progress),
+            "tightened native loop from {initial_limit:?} reached {progress} guest ns"
+        );
+    }
+    println!("PASS: queued and running native loops honor tightened budgets");
+
     set(&cpu, Register::X(0), 0);
     let stop_barrier = std::sync::Arc::new(std::sync::Barrier::new(2));
     let stopper_barrier = stop_barrier.clone();
