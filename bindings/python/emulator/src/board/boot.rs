@@ -131,14 +131,17 @@ impl Board {
         let (backend, read_limit) = match opened {
             Opened::Graph(session) => {
                 let read_limit = graph_read_limit(&session)?;
-                return Ok(Self::from_graph_session(session, read_limit));
+                return Ok(Self::from_graph_session(*session, read_limit));
             }
             Opened::Xp5 {
                 session,
                 inputs,
                 read_limit,
             } => (
-                Backend::Xp5(Box::new(super::xp5::Opened { session, inputs })),
+                Backend::Xp5(Box::new(super::xp5::Opened {
+                    session: *session,
+                    inputs: *inputs,
+                })),
                 read_limit,
             ),
         };
