@@ -284,6 +284,17 @@ void dynarmic_abort_access(DynarmicInstance* inst) {
     inst->jit->HaltExecution(Dynarmic::HaltReason::MemoryAbort);
 }
 
+void dynarmic_memory_control(DynarmicInstance* inst, DynarmicMemoryControl* control) {
+    const auto& cp = *inst->cp15_impl;
+    control->sctlr = cp.Read(0, 1, 0, 0); // SCTLR
+    control->ttbr0 = cp.Read(0, 2, 0, 0); // TTBR0
+    control->ttbr1 = cp.Read(0, 2, 0, 1); // TTBR1
+    control->ttbcr = cp.Read(0, 2, 0, 2); // TTBCR
+    control->dacr = cp.Read(0, 3, 0, 0); // DACR
+    control->fcseidr = cp.Read(0, 13, 0, 0); // FCSEIDR
+    control->cpsr = inst->jit->Cpsr();
+}
+
 void dynarmic_stop(DynarmicInstance* inst) {
     if (inst) {
         inst->stop_requested.store(true, std::memory_order_relaxed);

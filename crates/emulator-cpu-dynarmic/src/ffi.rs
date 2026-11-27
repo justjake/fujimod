@@ -24,6 +24,18 @@ pub struct DynarmicCallbacks {
     pub write: unsafe extern "C" fn(*mut c_void, u32, u32, u64),
 }
 
+#[repr(C)]
+#[derive(Default)]
+pub struct DynarmicMemoryControl {
+    pub sctlr: u32,
+    pub ttbr0: u32,
+    pub ttbr1: u32,
+    pub ttbcr: u32,
+    pub dacr: u32,
+    pub fcseidr: u32,
+    pub cpsr: u32,
+}
+
 pub enum DynarmicInstance {}
 
 unsafe extern "C" {
@@ -31,6 +43,10 @@ unsafe extern "C" {
     pub fn dynarmic_destroy(inst: *mut DynarmicInstance);
     pub fn dynarmic_step(inst: *mut DynarmicInstance, executed: *mut u64) -> DynarmicExitReason;
     pub fn dynarmic_abort_access(inst: *mut DynarmicInstance);
+    pub fn dynarmic_memory_control(
+        inst: *mut DynarmicInstance,
+        control: *mut DynarmicMemoryControl,
+    );
     pub fn dynarmic_stop(inst: *mut DynarmicInstance);
     pub fn dynarmic_clear_cache(inst: *mut DynarmicInstance);
     pub fn dynarmic_invalidate_cache(inst: *mut DynarmicInstance, vaddr: u32, length: usize);
