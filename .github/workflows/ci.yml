@@ -249,6 +249,8 @@ jobs:
         javascript-quality,
         rust-test-build,
         rust-tests,
+        rust-doc-tests,
+        desktop-app,
         python-tests,
         javascript-tests,
       ]
@@ -259,4 +261,5 @@ jobs:
         env:
           RESULTS: ${{ join(needs.*.result, ',') }}
         run: |
-          test "$RESULTS" = 'success,success,success,success,success,success,success,success,success'
+          # Every needed job must succeed; skipped or canceled jobs fail the check.
+          ! tr ',' '\n' <<< "$RESULTS" | grep -vx success
