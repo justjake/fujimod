@@ -1,4 +1,9 @@
-//! GPU paint and compositing for EXR2 vector UI batches.
+//! Paint and compositing for EXR2 vector UI batches.
+//!
+//! Every batch runs the same per-pixel program. A host adapter paints it with
+//! the `ui_paint.wgsl` compute kernel; a host without one paints the same
+//! operations in `render_cpu`, which mirrors the shader operand for operand so
+//! both backends write identical guest bytes.
 
 use crate::{Inputs, RenderedBatch, batch};
 use fujimod_emulator_devices::record::{Result, Unsupported};
@@ -681,7 +686,7 @@ fn check_plan(plan: &render::CoveragePlan) -> Result<()> {
     Ok(())
 }
 
-/// Paint a complete EXR2 vector batch, keeping coverage and pixels on the GPU.
+/// Paint a complete EXR2 vector batch, keeping coverage and pixels on the host.
 #[cfg(not(target_arch = "wasm32"))]
 pub(super) fn render(
     draws: &[batch::Draw],
