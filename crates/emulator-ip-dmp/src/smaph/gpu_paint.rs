@@ -694,10 +694,13 @@ mod tests {
             gradient_deltas,
         )
         .unwrap_or_else(|error| panic!("GPU paint failed: {error}"));
+        // Vulkan §36.1 lets an RGBA8 attachment blend at destination
+        // precision, so blended bytes may land one from the CPU reference.
+        assert_eq!(actual.len(), expected.len(), "paint length");
         let mismatch = actual
             .iter()
             .zip(&expected)
-            .position(|(actual, expected)| actual != expected);
+            .position(|(actual, expected)| actual.abs_diff(*expected) > 1);
         if let Some(byte) = mismatch {
             let pixel = byte / 4;
             let x = bounds[0] + pixel % (bounds[1] - bounds[0]);
@@ -753,7 +756,7 @@ mod tests {
             }
         }
         assert!(
-            actual == expected,
+            mismatch.is_none(),
             "paint mismatch at byte {mismatch:?}, blend={blend}, order={order:#x}, samples={samples}"
         );
     }
