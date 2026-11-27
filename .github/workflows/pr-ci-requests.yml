@@ -1,0 +1,46 @@
+name: PR CI requests
+
+# Runs main's copy for every pull request into main and never checks out the
+# pull request's code. It posts the pending CI required status and removes the
+# ci:run label; PR CI runs the checks and PR CI result posts the outcome.
+on:
+  pull_request_target:
+    types: [opened, ready_for_review, synchronize, labeled]
+    branches: [main]
+
+permissions: {}
+
+jobs:
+  request:
+    name: Check the request
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      pull-requests: write
+      statuses: write
+    steps:
+      - env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          ACTION: ${{ github.event.action }}
+          LABEL: ${{ github.event.label.name }}
+          DRAFT: ${{ github.event.pull_request.draft }}
+          NUMBER: ${{ github.event.pull_request.number }}
+          SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          status() {
+            gh api -X POST "repos/$REPO/statuses/$SHA" -f context='CI required' \
+              -f state="$1" -f description="$2" > /dev/null
+          }
+          if [ "$ACTION" = labeled ]; then
+            [ "$LABEL" = ci:run ] || exit 0
+            gh api -X DELETE "repos/$REPO/issues/$NUMBER/labels/ci:run" > /dev/null || true
+            if [ "$DRAFT" = true ]; then status pending 'Mark the pull request ready to test it'
+            else status pending 'Running'; fi
+          elif [ "$DRAFT" != true ]; then
+            if [ "$ACTION" = synchronize ]; then
+              status pending 'Not tested yet: add the ci:run label'
+            else
+              status pending 'Running'
+            fi
+          fi
