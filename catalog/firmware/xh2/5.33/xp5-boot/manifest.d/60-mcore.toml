@@ -1,0 +1,18 @@
+# Companion mailbox (the SoC's `mailbox` block): main 0xff90e100..0xff90e120 is the
+# companion's 0x5f90e100..0x5f90e120 (main INTID 142, companion NVIC line 55). The main
+# initializer 0x13fb120 clears it and copies the companion image from flash 0xf01c0000
+# into the SRAM RAM region at 0xfa200000 before setting release bit 21 of 0xff90c928.
+[[device]]
+base = 0xff90e100
+size = 0x24
+kind = "interprocessor-mailbox"
+
+# USB cable/jig connection status in bit 0: OTG initialization 0x14fe42c (called from
+# 0x14fee74) latches it into 0x27303a4 and, only when it is set, reads controller
+# register 0xe and posts event 0x3046; 0x2cbc91c reads it with 0xffc0c70c, and
+# 0x2cbc8fc and 0x2f13144 read bit 0 alone. The default input is disconnected, as on
+# the X-T5 and X100VI.
+[[device]]
+base = 0xff90e300
+size = 4
+kind = "usb-connection-status"

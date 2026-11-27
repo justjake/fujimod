@@ -1,0 +1,26 @@
+update_sha256 = "6f9d3d86e5a93ffc3666712e31c9bb83cb798bfaec581fa27fc5a21882546d58"
+verification = []
+
+[[sections]]
+name = "loader-00060274"
+address = 262144
+size = 123712
+dat_offset = 393844
+encoding = "raw"
+sha256 = "2e6bea522911fa509064dcc95b8f21f3b74e9867b6f63d6fd7af421295bf3f96"
+
+[[sections]]
+name = "stream-00300274"
+address = 17829888
+size = 12033968
+dat_offset = 3146356
+encoding = "method4"
+sha256 = "4cf46a8ba6af3881e998e3eb89d3c584b0a28777bd4ec1a790ce294189901f0a"
+
+[[sections]]
+name = "stream-00840274"
+address = 43687936
+size = 15515648
+dat_offset = 8651380
+encoding = "method4"
+sha256 = "43c2f52fa0ace6829feb1dae8bc9278f8636bb00652dfdfdad35bfb8bed060fa"

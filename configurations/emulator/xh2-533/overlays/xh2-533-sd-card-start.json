@@ -1,0 +1,12 @@
+{
+  "$schema": "https://fujimod.com/schemas/emulator-run-overlay.schema.json",
+  "schema": 1,
+  "id": "xh2-533-sd-card-start",
+  "configuration_id": "xh2-533",
+  "change": {
+    "kind": "start",
+    "start": {
+      "kind": "sd_card"
+    }
+  }
+}

@@ -7,5 +7,219 @@
   "update": {
     "size": 110302544,
     "sha256": "6f9d3d86e5a93ffc3666712e31c9bb83cb798bfaec581fa27fc5a21882546d58"
+  },
+  "layouts": {
+    "profiles": {
+      "xh2-533": {
+        "cpu": [
+          {
+            "cpsr": 964,
+            "id": 0,
+            "pc": 361596,
+            "regs": {
+              "x19": 0,
+              "x20": 21859452,
+              "x21": 98896
+            },
+            "running": true,
+            "sysregs": {
+              "CPACR_EL1": 3145728,
+              "ICC_IGRPEN0_EL1": 1,
+              "ICC_IGRPEN1_EL1": 1,
+              "ICC_PMR_EL1": 255,
+              "SCTLR_EL1": 818939904,
+              "SP_EL0": 696320,
+              "SP_EL1": 696320,
+              "VBAR_EL1": 366592
+            }
+          },
+          {
+            "cpsr": 964,
+            "id": 1,
+            "pc": 361596,
+            "regs": {
+              "x19": 1,
+              "x20": 21859452,
+              "x21": 98896
+            },
+            "running": true,
+            "sysregs": {
+              "CPACR_EL1": 3145728,
+              "ICC_IGRPEN0_EL1": 1,
+              "ICC_IGRPEN1_EL1": 1,
+              "ICC_PMR_EL1": 255,
+              "SCTLR_EL1": 818939904,
+              "SP_EL0": 712704,
+              "SP_EL1": 712704,
+              "VBAR_EL1": 366592
+            }
+          },
+          {
+            "cpsr": 964,
+            "id": 2,
+            "pc": 361596,
+            "regs": {
+              "x19": 2,
+              "x20": 21859452,
+              "x21": 98896
+            },
+            "running": true,
+            "sysregs": {
+              "CPACR_EL1": 3145728,
+              "ICC_IGRPEN0_EL1": 1,
+              "ICC_IGRPEN1_EL1": 1,
+              "ICC_PMR_EL1": 255,
+              "SCTLR_EL1": 818939904,
+              "SP_EL0": 729088,
+              "SP_EL1": 729088,
+              "VBAR_EL1": 366592
+            }
+          },
+          {
+            "cpsr": 964,
+            "id": 3,
+            "pc": 361596,
+            "regs": {
+              "x19": 3,
+              "x20": 21859452,
+              "x21": 98896
+            },
+            "running": true,
+            "sysregs": {
+              "CPACR_EL1": 3145728,
+              "ICC_IGRPEN0_EL1": 1,
+              "ICC_IGRPEN1_EL1": 1,
+              "ICC_PMR_EL1": 255,
+              "SCTLR_EL1": 818939904,
+              "SP_EL0": 745472,
+              "SP_EL1": 745472,
+              "VBAR_EL1": 366592
+            }
+          }
+        ],
+        "flash_image": {
+          "dat_origin": 628,
+          "xor": 255
+        },
+        "gic_initial": {
+          "0x0": 7
+        },
+        "gic_redistributor_initial": [
+          {
+            "core": 0,
+            "offset": 20,
+            "size": 4,
+            "value": 0
+          },
+          {
+            "core": 1,
+            "offset": 20,
+            "size": 4,
+            "value": 0
+          },
+          {
+            "core": 2,
+            "offset": 20,
+            "size": 4,
+            "value": 0
+          },
+          {
+            "core": 3,
+            "offset": 20,
+            "size": 4,
+            "value": 0
+          }
+        ],
+        "limits": [
+          "Ported from this board's xh2-530 profile: 5.33 cold-table SHA-256 and x20 = 0x14d8c7c (the update's segment-4 entry); x21 = 0x18250 is 5.33's own reset-stage hand-off."
+        ],
+        "preload": [
+          {
+            "address": 17563648,
+            "dat_offset": 1704564,
+            "length": 2048,
+            "sha256": "779d8f1b6e7b9d346258a5e46220051f04d3d02b3e0ccde120bbe5034c2a8113"
+          },
+          {
+            "address": 98896,
+            "word_size": 4,
+            "words": [
+              65534,
+              65535,
+              65535,
+              65535,
+              65535,
+              65535,
+              65535,
+              65535,
+              65535,
+              65535,
+              65535,
+              65535,
+              65535,
+              65535,
+              65535,
+              65535,
+              65535,
+              65535,
+              65535,
+              65535
+            ]
+          },
+          {
+            "address": 98976,
+            "size": 4,
+            "value": 1398030660
+          },
+          {
+            "address": 99104,
+            "size": 4,
+            "value": 1398030660
+          },
+          {
+            "address": 99232,
+            "size": 4,
+            "value": 4
+          },
+          {
+            "address": 99236,
+            "size": 4,
+            "value": 0
+          },
+          {
+            "address": 99240,
+            "size": 8,
+            "value": 0
+          },
+          {
+            "address": 99348,
+            "size": 4,
+            "value": 0
+          },
+          {
+            "address": 99352,
+            "word_size": 4,
+            "words": [
+              0,
+              0,
+              0,
+              98304,
+              0
+            ]
+          },
+          {
+            "address": 100380,
+            "word_size": 4,
+            "words": [
+              1,
+              26,
+              0,
+              257,
+              2906907
+            ]
+          }
+        ]
+      }
+    }
   }
 }

@@ -1,0 +1,47 @@
+# Input-capture banks (the SoC's `capture0` and `capture1` blocks: five channels at
+# ff928000, three at ff929000, stride 0x20).
+[[device]]
+base = 0xff928000
+size = 0x1000
+kind = "input-capture"
+
+# Transmit DMA: the companion's capture object 0x319dc (returned by 0x2366c) names
+# channel 5. 0x237cc maps it to bank 1 index 0 (0x23684, 0x236b4) and returns its data
+# register 0x5f928004 + ((index + 128 * bank) << 5) = 0x5f929004, which the setup at
+# 0x3cde..0x3ce6 rebases to 0xff929004 as the destination of descriptor 2 (0x1ff0c(2) at
+# 0x3ca8): 0x31684 = [04 23 02 ...], channel 4 with request 35. The source is the table
+# at the driver state + 0x3c (local 0x340dc), 0xa4 bytes (0xa8 when the flag at 0xfa0ad
+# is set), built once by 0x3894 (0x3b32..0x3c7a) and submitted through 0x1ef84. The X-T5
+# and X100VI companions run the same routines on capture channel 2 (objects 0x323d0,
+# 0x37448) with descriptor [04 20 02 ...], request 32.
+[[device]]
+base = 0xff929000
+size = 0x1000
+kind = "input-capture"
+[device.options]
+dma_transmit = [{ channel = 0, request = 35 }]
+# IBIS stage position sensor behind capture channel 5. Every servo tick (0x1dd16) 0x3dc8
+# arms the capture interrupt and restarts the DMA of the 41-word table at 0x340dc; it is
+# the X-T5's table word for word apart from bits 31..29. Descriptor 0x45 of the table at
+# 0x31180 (0x3c9a..0x3ca2) names NVIC line 63 (0x315d0); handler 0x31f8 acknowledges
+# +0xc & 0x10001 and reads one capture from +0x10 per interrupt, the first carrying axes 0
+# and 1 (high, low), the second axis 2 (low), into 0x45b60..0x45b64. The servo linearizes
+# each raw sample as (raw - center) * gain >> 8 with centers 0x8000 (0xf6bb0) and gains
+# -256 (0xf6bb6), so 0x8000 is stage position zero. rest = 0: the stage held centered
+# while the body is still. latency_ns and lag_shift are the X-T5's scenario inputs, not
+# X-H2 measurements.
+[device.options.sequencer]
+channel = 0
+companion_irq_line = 63
+latency_ns = 20000
+center = [32768, 32768, 32768]
+rest = [0, 0, 0]
+lag_shift = 2
+# Coil drive: the servo stores its duty words 0xf6e74/78/7c (0x2ac14, 0x2aca8, 0x2ad44)
+# and writes them as the second compares of extended-timer channels 2, 4 and 0
+# (0x22e06..0x22e2e), whose first compares are 872 of period 1744 (0x22bfc..0x22c1e), as on
+# the X-T5. The servo's drive compensation (0x24de0) implies axis polarity +, +, -, the
+# X-T5's signs; the size is the X-T5's scenario input. Without the drive the stage cannot
+# follow the servo, whose command winds up to its limit.
+drive_channels = [2, 4, 0]
+drive_gain = [6, 6, -3]
