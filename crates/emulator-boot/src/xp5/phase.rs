@@ -40,7 +40,8 @@ impl PhaseRecorder {
         backend: Value,
     ) -> Result<Self, String> {
         let path = run_directory.join(PHASE_FILE);
-        let output = if std::env::var_os("FUJIMOD_EXECUTION_COUNTERS").is_some() {
+        let attribute = std::env::var_os("FUJIMOD_EXECUTION_COUNTERS").is_some();
+        let output = if attribute || std::env::var_os("FUJIMOD_PHASE_TIMING").is_some() {
             let file = OpenOptions::new()
                 .create(true)
                 .append(true)
@@ -50,9 +51,7 @@ impl PhaseRecorder {
         } else {
             None
         };
-        let perf_scope = output
-            .as_ref()
-            .map(|_| fujimod_perf::guide_scope("xp5-boot"));
+        let perf_scope = attribute.then(|| fujimod_perf::guide_scope("xp5-boot"));
         let wall_start_unix_ns = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .unwrap_or_default()
