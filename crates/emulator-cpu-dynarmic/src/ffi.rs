@@ -30,6 +30,7 @@ unsafe extern "C" {
     pub fn dynarmic_create(callbacks: *const DynarmicCallbacks) -> *mut DynarmicInstance;
     pub fn dynarmic_destroy(inst: *mut DynarmicInstance);
     pub fn dynarmic_step(inst: *mut DynarmicInstance, executed: *mut u64) -> DynarmicExitReason;
+    pub fn dynarmic_abort_access(inst: *mut DynarmicInstance);
     pub fn dynarmic_stop(inst: *mut DynarmicInstance);
     pub fn dynarmic_clear_cache(inst: *mut DynarmicInstance);
     pub fn dynarmic_invalidate_cache(inst: *mut DynarmicInstance, vaddr: u32, length: usize);
