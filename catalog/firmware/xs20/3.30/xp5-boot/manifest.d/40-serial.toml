@@ -1,0 +1,22 @@
+# SSP instance 4. The stock serial driver derives the instance window as
+# Client 2 of its descriptor table (0x18e7c40 = 0x18e7be0 + 2*0x30, same field
+# layout as descriptor 19 for SPI8) names instance 4, chip select GPIO 12.7
+# (+0x04 = 0x000c0007), active-low (+0x08 = 0), mode 0 (+0x0c = 0) and 16-bit
+# words (+0x20 = 0x10). source_hz is the X100VI value, UNVERIFIED (the Linux DTB
+# has a 48 MHz root clock but does not say which clock feeds the SSP).
+[[device]]
+base = 0xff914000
+size = 0x1000
+kind = "spi-controller"
+[device.options]
+source_hz = 48000000
+
+# The peer is the audio codec written by the stock task `audio` through
+# command/data register endpoint, not a model of the codec: each transaction is
+# a command word and a data word, writes are retained, and a read (command bit
+# 15) is refused because the codec's reply is unknown. The driver keeps the
+# second reply only for a read, so the MISO level during writes is discarded;
+# miso_high = false is an UNVERIFIED input.
+[[device.options.endpoints]]
+select = { port = 12, pin = 7, active_high = false }
+part = { kind = "serial-command-registers", bits = 16, mode = 0, read_flag = 0x8000, data_words = 1, miso_high = false }

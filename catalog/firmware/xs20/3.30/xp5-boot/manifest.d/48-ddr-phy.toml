@@ -1,0 +1,41 @@
+# DDR PHY mailbox pages, above the two PHY RAM regions of the manifest (0xfb000000 and 0xfb400000,
+# 0x1a0000 bytes each). The first half-press (S1) raises the DRAM operating point: stock
+# 0x13adb58 powers up DRAM channels 2 and 3 and trains PHY 1 in the calling task. The training
+# loop 0x13bbb44 polls the 16-bit status word 0xfb5a0008 (bit 0 must read 0, then 1 after the
+# +0x62 acknowledge) and ends when the message word 0xfb5a0064 reads 7. The stage-0 setup polls
+# both PHYs the same way. These are FujiMod's bring-up register files, not models: +0x08
+# alternates 0, 1 on each read and +0x64 always reads 7 ("training complete"); every other
+# register stores its last write.
+[[device]]
+base = 0xfb1a0000
+size = 0x1000
+kind = "bringup-stub"
+[device.options]
+registers = [{ offset = 0x08, mode = "toggle", value = 1 }, { offset = 0x64, mode = "constant", value = 7 }]
+
+[[device]]
+base = 0xfb5a0000
+size = 0x1000
+kind = "bringup-stub"
+[device.options]
+registers = [{ offset = 0x08, mode = "toggle", value = 1 }, { offset = 0x64, mode = "constant", value = 7 }]
+
+# Memory-controller pages of DRAM channels 2 and 3, written and polled by the same S1 path
+# (stock 0x13afe24 writes both pages; 0x13af930 waits for bit 0 of 0xfaf27800 and 0xfaf37800 to
+# read 1; 0x13afcec waits for bit 0 of 0xfaf27820 to read 0; neither poll has a timeout). The
+# memory-configuration windows at 0xfaf25000 and 0xfaf35000 do not reach these pages. Bring-up
+# register files, not models: the hardware behind these registers is unknown. 0xfaf37820 is
+# given the same answer as 0xfaf27820 by symmetry (not seen in the static trace).
+[[device]]
+base = 0xfaf27000
+size = 0x1000
+kind = "bringup-stub"
+[device.options]
+registers = [{ offset = 0x800, mode = "constant", value = 1 }, { offset = 0x820, mode = "constant", value = 0 }]
+
+[[device]]
+base = 0xfaf37000
+size = 0x1000
+kind = "bringup-stub"
+[device.options]
+registers = [{ offset = 0x800, mode = "constant", value = 1 }, { offset = 0x820, mode = "constant", value = 0 }]

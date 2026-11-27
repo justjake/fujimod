@@ -1,0 +1,15 @@
+# reader is 0x143fb8c, which returns bit 0 of 0xff90e200. 0x1440864 drives GPIO 9.13
+# low (0x1380f54(0x9000d, 0)), waits 100 timer units (0x1490624), polls for bit 0
+# set (up to 101 polls, 5 units apart) and then drives 9.13 high again. 0x1441f9c then
+# posts event 0x17f7 when bit 0 is clear (0x1440454), or arms a 200-unit periodic poll
+# (0x1440498) that posts it once bit 0 clears. The 0x17f7 handler 0x1441a54 opens the
+# 5000-unit "HD_DETTO" timeout (0x144018c). So bit 0 is clear while a sink drives hot
+# plug, and set once GPIO 9.13 (taken to be the +5V supply the sink loops back) is off.
+# connected_level = 0 is INFERRED from that order, not measured (camera-needs.md,
+# 1.15). No cable is attached, as for the USB status word.
+[[device]]
+base = 0xff90e200
+size = 4
+kind = "hdmi-hot-plug-status"
+[device.options]
+connected_level = 0
