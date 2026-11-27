@@ -153,7 +153,27 @@ pub(super) fn render(
     }
 
     let cache = context()?;
-    let _submission = cache.acquire()?;
+    crate::with_submission(cache, || {
+        render_segments(
+            segments,
+            draws,
+            recorded_reads,
+            expected_snapshots,
+            read,
+            cache,
+        )
+    })
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+fn render_segments(
+    segments: Vec<DrawSegment>,
+    draws: &[Draw],
+    recorded_reads: &[(u64, Vec<u8>)],
+    expected_snapshots: Option<&Snapshots>,
+    read: &mut Reader<'_>,
+    cache: &GpuContext,
+) -> Result<RenderedList, String> {
     let mut current_reads = recorded_reads.to_vec();
     let mut snapshots = BTreeMap::new();
     let mut written_ranges = Vec::new();
@@ -735,28 +755,46 @@ pub(super) async fn render_async(
     })
 }
 
-pub(super) fn snapshot_mismatch(actual: &Snapshots, expected: &Snapshots) -> String {
+/// Describes the first difference between host GPU and CPU snapshots that
+/// exceeds what Vulkan §36.1 allows.
+///
+/// Basic blend operations only need "a precision and dynamic range no lower
+/// than that used to represent destination components", so an RGBA8 driver
+/// may round each blend term to eight bits and land one byte away from the CPU
+/// equations. `tolerate` names the snapshots whose blended color channels may
+/// differ by one; every other byte, address and length must match exactly.
+pub(super) fn snapshot_mismatch(
+    actual: &Snapshots,
+    expected: &Snapshots,
+    tolerate: impl Fn(u64) -> bool,
+) -> Option<String> {
     let count = actual.len().min(expected.len());
     for index in 0..count {
         let (actual_address, actual_bytes) = &actual[index];
         let (expected_address, expected_bytes) = &expected[index];
-        if actual_address != expected_address || actual_bytes != expected_bytes {
-            let byte = actual_bytes
-                .iter()
-                .zip(expected_bytes)
-                .position(|(actual, expected)| actual != expected);
-            return format!(
+        let allowed = u8::from(tolerate(*actual_address));
+        let byte = actual_bytes
+            .iter()
+            .zip(expected_bytes)
+            .position(|(actual, expected)| actual.abs_diff(*expected) > allowed);
+        if actual_address != expected_address
+            || actual_bytes.len() != expected_bytes.len()
+            || byte.is_some()
+        {
+            return Some(format!(
                 "DMP host GPU snapshot differs from CPU at GPU {actual_address:#x}, CPU {expected_address:#x}, byte {byte:?} (lengths {} and {})",
                 actual_bytes.len(),
                 expected_bytes.len(),
-            );
+            ));
         }
     }
-    format!(
-        "DMP host GPU returned {} snapshots, CPU returned {}",
-        actual.len(),
-        expected.len()
-    )
+    (actual.len() != expected.len()).then(|| {
+        format!(
+            "DMP host GPU returned {} snapshots, CPU returned {}",
+            actual.len(),
+            expected.len()
+        )
+    })
 }
 
 fn prepare_surface(
