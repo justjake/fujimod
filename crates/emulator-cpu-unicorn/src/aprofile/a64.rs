@@ -326,8 +326,11 @@ fn decode(word: u32) -> Option<Op> {
             value,
         });
     }
-    // ADD/SUB register, no shift and no carry-in.
-    if word & 0x1f20_0c00 == 0x0b00_0000 {
+    // ADD/SUB register, no shift and no carry-in. The shift type and amount
+    // are part of the encoding (bits 23..22 and 15..10), so a masked-out
+    // field is not a field the model may ignore: `add x0,x1,x2,lsl #16`
+    // once decoded as a plain `add`.
+    if word & 0x1fe0_fc00 == 0x0b00_0000 {
         let width = width_of(word);
         let subtract = word & (1 << 30) != 0;
         let flags = word & (1 << 29) != 0;
@@ -387,12 +390,12 @@ fn decode(word: u32) -> Option<Op> {
             }
         });
     }
-    // LSL/LSR/ASR immediate (`opc` 00 of the bitfield family).
+    // `LSL`/`LSR` immediate, which are the two `UBFM` aliases the model
+    // implements. `UBFM` names its operands through `immr` and `imms`, not
+    // through a shift amount, so decoding it by one field alone turned
+    // `lsr w0,w1,#3` into `lsl w0,w1,#3` and read `ubfx`/`bfxil` as
+    // shifts. Only the exact alias encodings are admitted.
     if word & 0x7f80_0000 == 0x5300_0000 {
-        let kind = (word >> 22) & 3;
-        if kind == 2 {
-            return None;
-        }
         let width = width_of(word);
         let flags = word & (1 << 29) != 0;
         let dst = (word & 31) as usize;
@@ -400,14 +403,26 @@ fn decode(word: u32) -> Option<Op> {
         if dst == 31 || src == 31 {
             return None;
         }
-        let amount = (word >> 16) & 0x3f;
-        if amount >= width.bits() {
+        let immr = (word >> 16) & 0x3f;
+        let imms = (word >> 10) & 0x3f;
+        let bits = width.bits();
+        // `LSR #n`: `imms` is all ones and `immr` is the amount.
+        let (right, amount) = if imms == bits - 1 && immr < bits {
+            (true, immr)
+        } else if immr < bits && imms < bits {
+            // `LSL #n`: `immr == (bits - n) % bits` and `imms == bits - 1 - n`.
+            let amount = (bits - immr) % bits;
+            if imms != bits - 1 - amount {
+                return None;
+            }
+            (false, amount)
+        } else {
             return None;
-        }
+        };
         return Some(Op::Shift {
             width,
-            right: kind != 0,
-            arithmetic: kind == 3,
+            right,
+            arithmetic: false,
             flags,
             dst,
             src,
@@ -415,8 +430,9 @@ fn decode(word: u32) -> Option<Op> {
         });
     }
     // LDR (unsigned offset) of a byte, halfword or word: no sign extension,
-    // no SIMD and no address writeback.
-    if word & 0x3b00_0000 == 0x3900_0000 {
+    // no SIMD and no address writeback. Bit 26 (`V`) is part of the mask:
+    // leaving it out decoded `ldr s0,[x1]` as an integer load into `X0`.
+    if word & 0x3f00_0000 == 0x3900_0000 {
         let bits = match (word >> 30) & 3 {
             0 => 8,
             1 => 16,
@@ -1129,6 +1145,69 @@ mod tests {
         ] {
             assert!(decode(word).is_some(), "{word:#010x}");
         }
+    }
+
+    /// Regression: every encoding below was once admitted by a mask that
+    /// dropped a field the model does not implement. The same class of bug
+    /// as the DC CIVAC boot loop, where an over-broad mask let a system
+    /// instruction pass for a constant read and the proof retired ~300M
+    /// instructions of a loop whose exit a peer was about to write.
+    #[test]
+    fn a_field_the_model_ignores_is_never_masked_out() {
+        for word in [
+            0x8b02_4020u32, // add x0,x1,x2,lsl #16
+            0x8b82_c020,    // add x0,x1,x2,asr #3
+            0x0b02_2020,    // add w0,w1,w2,lsl #8
+            0x8b42_c020,    // add x0,x1,x2,lsr #48
+            0x1304_7c20,    // asr w0,w1,#4 (SBFM, not modelled)
+            0x5303_1c20,    // ubfx w0,w1,#3,#5 (UBFM, not a shift)
+            0x531f_1c20,    // ubfiz w0,w1,#3,#5
+            0x3303_1c20,    // bfi w0,w1,#3,#5
+            0xbd40_0020,    // ldr s0,[x1] (SIMD: V=1)
+            0xbd40_0420,    // ldr s0,[x1,#4]
+        ] {
+            assert!(decode(word).is_none(), "{word:#010x}");
+        }
+        // The exact aliases the model does implement still decode.
+        assert_eq!(decode(0x5303_7c20).map(|op| op == Op::Shift {
+            width: Width::W,
+            right: true,
+            arithmetic: false,
+            flags: false,
+            dst: 0,
+            src: 1,
+            amount: 3,
+        }), Some(true), "lsr w0,w1,#3");
+        assert_eq!(decode(0x531d_7020).map(|op| op == Op::Shift {
+            width: Width::W,
+            right: false,
+            arithmetic: false,
+            flags: false,
+            dst: 0,
+            src: 1,
+            amount: 3,
+        }), Some(true), "lsl w0,w1,#3");
+        assert_eq!(decode(0xd348_fc20).map(|op| op == Op::Shift {
+            width: Width::X,
+            right: true,
+            arithmetic: false,
+            flags: false,
+            dst: 0,
+            src: 1,
+            amount: 8,
+        }), Some(true), "lsr x0,x1,#8");
+        assert_eq!(decode(0xd378_dc20).map(|op| op == Op::Shift {
+            width: Width::X,
+            right: false,
+            arithmetic: false,
+            flags: false,
+            dst: 0,
+            src: 1,
+            amount: 8,
+        }), Some(true), "lsl x0,x1,#8");
+        assert!(decode(0xb940_0020).is_some(), "ldr w0,[x1]");
+        assert!(decode(0x3940_0020).is_some(), "ldrb w0,[x1]");
+        assert!(decode(0x8b02_0020).is_some(), "add x0,x1,x2");
     }
 
     #[test]
