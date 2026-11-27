@@ -4,6 +4,7 @@
 use super::{Cpu, Register, arm};
 
 pub mod abort;
+pub mod mmu;
 
 /// Exception entries performed outside the guest's own instructions, for
 /// comparing boards: IRQ, undefined (disabled VFP), data and prefetch abort.
@@ -117,6 +118,12 @@ pub fn enter_irq(cpu: &dyn Cpu) -> Result<bool, String> {
     Ok(true)
 }
 
+/// ARM-state encodings targeting the VFP or Advanced SIMD unit.
+pub fn is_vfp_instruction(word: u32) -> bool {
+    let simd = word & 0xfe00_0000 == 0xf200_0000 || word & 0xff10_0000 == 0xf400_0000;
+    simd || (word >> 28 != 15 && word & 0x0c00_0e00 == 0x0c00_0a00)
+}
+
 /// Take the undefined-instruction exception for a VFP/Advanced SIMD
 /// instruction at PC while CPACR or FPEXC.EN disables it, as the hardware
 /// does and the X-Processor Pro kernel relies on to enable its FP context
@@ -139,8 +146,7 @@ pub fn enter_disabled_vfp(cpu: &dyn Cpu) -> Result<bool, String> {
     let mut bytes = [0; 4];
     cpu.read_virtual(pc.into(), super::Access::Fetch, &mut bytes)?;
     let word = u32::from_le_bytes(bytes);
-    let simd = word & 0xfe00_0000 == 0xf200_0000 || word & 0xff10_0000 == 0xf400_0000;
-    if !simd && (word >> 28 == 15 || word & 0x0c00_0e00 != 0x0c00_0a00) {
+    if !is_vfp_instruction(word) {
         return Ok(false);
     }
     let cpacr = read(Register::Arm32(arm::Register::Cpacr))?;

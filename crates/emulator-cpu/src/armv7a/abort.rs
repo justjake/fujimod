@@ -4,6 +4,7 @@
 //! is re-derived from architectural registers, the instruction's operands
 //! and the page tables. This never maps a page, repairs a descriptor or
 //! calls a device.
+use super::mmu::Mmu;
 use crate::{Access, Cpu, Register, arm};
 
 struct Cluster<'a>(&'a dyn Cpu);
@@ -42,134 +43,18 @@ impl Cluster<'_> {
         )?;
         Ok(())
     }
+    fn table_word(&self, address: u32) -> Result<u32, String> {
+        let mut b = [0; 4];
+        self.0
+            .read_memory(u64::from(address), &mut b)
+            .map_err(|e| format!("Abort page-table walk at {address:#x}: {e}"))?;
+        Ok(u32::from_le_bytes(b))
+    }
+
     fn word(&self, _core: usize, address: u64) -> Result<u32, String> {
         let mut b = [0; 4];
         self.0.read_virtual(address, Access::Fetch, &mut b)?;
         Ok(u32::from_le_bytes(b))
-    }
-}
-
-struct Mmu {
-    sctlr: u32,
-    ttbcr: u32,
-    ttbr0: u32,
-    ttbr1: u32,
-    dacr: u32,
-    fcse: u32,
-    user: bool,
-}
-impl Mmu {
-    fn read(c: &Cluster, core: usize) -> Result<Self, String> {
-        let sctlr = c.cp(core, 1, 0, 0, 0)? as u32;
-        let ttbcr = c.cp(core, 2, 0, 0, 2)? as u32;
-        if sctlr & 1 == 0 || sctlr & (1 << 23) == 0 || ttbcr & (1 << 31) != 0 {
-            return Err("Abort diagnosis requires the ARMv7 short-descriptor MMU".into());
-        }
-        if sctlr & (1 << 25) != 0 {
-            return Err("Big-endian ARM page-table walks are unsupported".into());
-        }
-        Ok(Self {
-            sctlr,
-            ttbcr,
-            ttbr0: c.cp(core, 2, 0, 0, 0)? as u32,
-            ttbr1: c.cp(core, 2, 0, 0, 1)? as u32,
-            dacr: c.cp(core, 3, 0, 0, 0)? as u32,
-            fcse: c.cp(core, 13, 0, 0, 0)? as u32,
-            user: c.reg(core, arm::CPSR)? & 31 == 0x10,
-        })
-    }
-    fn table_word(c: &Cluster, address: u32) -> Result<u32, String> {
-        let mut b = [0; 4];
-        c.0.read_memory(u64::from(address), &mut b)
-            .map_err(|e| format!("Abort page-table walk at {address:#x}: {e}"))?;
-        Ok(u32::from_le_bytes(b))
-    }
-    /// ARM ARM short-descriptor translation/domain/access-flag/permission
-    /// fault encodings, including the domain in FSR[7:4]. None means this
-    /// walk permits the access, so it cannot explain the reported abort.
-    fn status(
-        &self,
-        c: &Cluster,
-        address: u32,
-        access: Access,
-        user: bool,
-    ) -> Result<Option<u32>, String> {
-        let address = if address < 0x02000000 {
-            address.wrapping_add(self.fcse)
-        } else {
-            address
-        };
-        let n = self.ttbcr & 7;
-        let upper = n != 0 && address >> (32 - n) != 0;
-        let (table, disabled) = if upper {
-            (self.ttbr1 & 0xffffc000, self.ttbcr & (1 << 5) != 0)
-        } else {
-            (self.ttbr0 & (!0u32 << (14 - n)), self.ttbcr & (1 << 4) != 0)
-        };
-        if disabled {
-            return Ok(Some(5));
-        }
-        let first = Self::table_word(c, table | ((address >> 18) & 0x3ffc))?;
-        if first & 3 == 0 {
-            return Ok(Some(5));
-        }
-        let page = first & 3 == 1;
-        let domain = if !page && first & (1 << 18) != 0 {
-            0
-        } else {
-            (first >> 5) & 15
-        };
-        let domain_access = (self.dacr >> (2 * domain)) & 3;
-        let encode = |section, page_code| (if page { page_code } else { section }) | (domain << 4);
-        if matches!(domain_access, 0 | 2) {
-            return Ok(Some(encode(9, 11)));
-        }
-        let (ap, xn, pxn) = if page {
-            let second = Self::table_word(c, (first & 0xfffffc00) | ((address >> 10) & 0x3fc))?;
-            if second & 3 == 0 {
-                return Ok(Some(encode(5, 7)));
-            }
-            let xn = if second & 3 == 1 {
-                second & (1 << 15) != 0
-            } else {
-                second & 1 != 0
-            };
-            (
-                ((second >> 4) & 3) | ((second >> 7) & 4),
-                xn,
-                first & 4 != 0,
-            )
-        } else {
-            (
-                ((first >> 10) & 3) | ((first >> 13) & 4),
-                first & 16 != 0,
-                first & 1 != 0,
-            )
-        };
-        // Manager domains bypass access-flag and permission checks.
-        if domain_access == 3 {
-            return Ok(None);
-        }
-        if access == Access::Fetch && (xn || (pxn && !user)) {
-            return Ok(Some(encode(13, 15)));
-        }
-        let afe = self.sctlr & (1 << 29) != 0;
-        if afe && ap & 1 == 0 {
-            return Ok(Some(encode(3, 6)));
-        }
-        let (read, write) = match if afe { ap | 1 } else { ap } {
-            1 => (!user, !user),
-            2 => (true, !user),
-            3 => (true, true),
-            5 => (!user, false),
-            6 | 7 => (true, false),
-            _ => (false, false),
-        };
-        let allowed = match access {
-            Access::Read | Access::Fetch => read,
-            Access::Write => write,
-        };
-        Ok((!allowed).then(|| encode(13, 15)))
     }
 }
 
@@ -360,13 +245,20 @@ pub fn enter(cpu: &dyn Cpu, fetch: bool) -> Result<(), String> {
         }
         (transfer.address, 1, transfer.access)
     } else if fetch {
-        let mmu = Mmu::read(&c, core)?;
+        let mmu = Mmu::read(
+            |crn, crm, opc2| c.cp(core, crn, crm, 0, opc2).map(|v| v as u32),
+            c.reg(core, arm::CPSR)?,
+        )?;
         let status = mmu
-            .status(&c, pc, Access::Fetch, mmu.user)?
+            .translate(pc, Access::Fetch, mmu.user, |a| c.table_word(a))?
+            .err()
             .ok_or("Prefetch abort is not explained by the architectural page tables")?;
         (pc, status, Access::Fetch)
     } else {
-        let mmu = Mmu::read(&c, core)?;
+        let mmu = Mmu::read(
+            |crn, crm, opc2| c.cp(core, crn, crm, 0, opc2).map(|v| v as u32),
+            c.reg(core, arm::CPSR)?,
+        )?;
         let word = c.word(core, u64::from(pc))?;
         let transfer = transfer(&c, core, pc, word)?;
         if transfer.address & (transfer.alignment - 1) != 0 {
@@ -379,8 +271,10 @@ pub fn enter(cpu: &dyn Cpu, fetch: bool) -> Result<(), String> {
             let mut offset = 0;
             while offset < transfer.bytes {
                 let address = transfer.address.wrapping_add(offset);
-                if let Some(status) =
-                    mmu.status(&c, address, transfer.access, mmu.user || transfer.user)?
+                if let Err(status) =
+                    mmu.translate(address, transfer.access, mmu.user || transfer.user, |a| {
+                        c.table_word(a)
+                    })?
                 {
                     found = Some((address, status, transfer.access));
                     break;

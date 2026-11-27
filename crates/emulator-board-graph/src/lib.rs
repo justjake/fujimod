@@ -5,8 +5,8 @@
 //! are read from the selected catalog identities.
 
 use fujimod_catalog::reference::{
-    AddressMapping, DecoderSelection, MemoryRegion, ProcessorArchitecture, ProcessorModel,
-    ProcessorRegister, RegionSize, ResolvedSelection, Soc,
+    AddressMapping, DecoderSelection, MemoryRegion, ProcessorArchitecture, ProcessorCore,
+    ProcessorModel, ProcessorRegister, RegionSize, ResolvedSelection, Soc,
 };
 use fujimod_catalog_configuration::{RunCpuBackend, RunInstructionRate};
 use fujimod_emulator::board::{factory, memory::BusMapping};
@@ -111,23 +111,24 @@ fn register(register: ProcessorRegister) -> Register {
 }
 
 fn build_processor(
-    model: ProcessorModel,
+    processor: &ProcessorCore,
     registers: &[(Register, u64)],
     released: bool,
     parked_until_sgi: bool,
     mprofile: Option<fujimod_emulator::board::mprofile::Config>,
-    rprofile: Option<&fujimod_catalog::reference::RProfileState>,
     architecture: ProcessorArchitecture,
     cpu_backend: RunCpuBackend,
 ) -> Result<factory::Processor, String> {
-    let model = match (architecture, model) {
+    let model = match (architecture, processor.model) {
         (ProcessorArchitecture::Arm32, ProcessorModel::CortexR5f) => Model::CortexR5F,
         (ProcessorArchitecture::Arm32, ProcessorModel::CortexA7) => Model::CortexA7,
         (ProcessorArchitecture::Aarch64, ProcessorModel::CortexA53) => Model::ArmV8A,
         (ProcessorArchitecture::Aarch64, ProcessorModel::CortexM4) => Model::CortexM4,
         _ => return Err("processor model does not match its SoC architecture".into()),
     };
-    let rprofile = rprofile
+    let rprofile = processor
+        .rprofile
+        .as_ref()
         .map(|state| {
             use fujimod_emulator_cpu_unicorn::rprofile::{
                 core::Options,
@@ -346,7 +347,7 @@ pub fn assemble_with_starts(
                 None
             };
             build_processor(
-                processor.model,
+                processor,
                 &registers,
                 start
                     .map(|state| state.released)
@@ -359,7 +360,6 @@ pub fn assemble_with_starts(
                     })?,
                 start.is_some_and(|state| state.parked_until_sgi),
                 mprofile,
-                processor.rprofile.as_ref(),
                 soc.architecture.clone(),
                 cpu_backend,
             )
@@ -601,10 +601,9 @@ pub fn value(
                     },
                 })
             });
-            json!({
+            let mut value = json!({
                 "model": processor_model(processor.model),
                 "released": processor.released,
-                "cpu_backend": processor.cpu_backend,
                 "registers": processor.registers.iter().map(|(register, value)| {
                     json!([processor_register(*register), value])
                 }).collect::<Vec<_>>(),
@@ -614,7 +613,11 @@ pub fn value(
                     "vector_base": profile.vector_base,
                 })),
                 "rprofile": rprofile,
-            })
+            });
+            if processor.cpu_backend != RunCpuBackend::Unicorn {
+                value["cpu_backend"] = json!(processor.cpu_backend);
+            }
+            value
         })
         .collect::<Vec<_>>();
     let decoders = graph
@@ -652,8 +655,8 @@ pub fn value(
 mod tests {
     use super::*;
     use fujimod_catalog::reference::{
-        AddressDecoder, Body, DecoderChoice, Firmware, MemoryKind, ProcessorCore, RProfileState,
-        SocReset, TcmState,
+        AddressDecoder, Body, DecoderChoice, Firmware, MemoryKind, RProfileState, SocReset,
+        TcmState,
     };
 
     #[test]

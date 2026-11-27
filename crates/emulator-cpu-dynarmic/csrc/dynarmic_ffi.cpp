@@ -102,55 +102,39 @@ public:
     explicit UserCallbacksImpl(DynarmicCallbacks cb, DynarmicInstance* inst)
         : callbacks(cb), instance(inst) {}
 
-    std::uint8_t* ram_ptr(VAddr vaddr, size_t size) const;
     std::optional<std::uint32_t> MemoryReadCode(VAddr vaddr) override;
 
-    std::uint8_t MemoryRead8(VAddr vaddr) override {
-        callbacks.observe_memory(callbacks.user_data, false, vaddr, 1, 0);
-        if (auto* p = ram_ptr(vaddr, 1)) { std::uint8_t v; std::memcpy(&v, p, sizeof(v)); return v; }
-        return callbacks.read_8(callbacks.user_data, vaddr);
-    }
-    std::uint16_t MemoryRead16(VAddr vaddr) override {
-        callbacks.observe_memory(callbacks.user_data, false, vaddr, 2, 0);
-        if (auto* p = ram_ptr(vaddr, 2)) { std::uint16_t v; std::memcpy(&v, p, sizeof(v)); return v; }
-        return callbacks.read_16(callbacks.user_data, vaddr);
-    }
-    std::uint32_t MemoryRead32(VAddr vaddr) override {
-        callbacks.observe_memory(callbacks.user_data, false, vaddr, 4, 0);
-        if (auto* p = ram_ptr(vaddr, 4)) { std::uint32_t v; std::memcpy(&v, p, sizeof(v)); return v; }
-        return callbacks.read_32(callbacks.user_data, vaddr);
-    }
-    std::uint64_t MemoryRead64(VAddr vaddr) override {
-        callbacks.observe_memory(callbacks.user_data, false, vaddr, 8, 0);
-        if (auto* p = ram_ptr(vaddr, 8)) { std::uint64_t v; std::memcpy(&v, p, sizeof(v)); return v; }
-        return callbacks.read_64(callbacks.user_data, vaddr);
+    std::uint8_t MemoryRead8(VAddr address) override {
+        return static_cast<std::uint8_t>(callbacks.read(callbacks.user_data, address, 1));
     }
 
-    void MemoryWrite8(VAddr vaddr, std::uint8_t value) override {
-        callbacks.observe_memory(callbacks.user_data, true, vaddr, 1, value);
-        if (auto* p = ram_ptr(vaddr, 1)) { std::memcpy(p, &value, sizeof(value)); return; }
-        callbacks.write_8(callbacks.user_data, vaddr, value);
-    }
-    void MemoryWrite16(VAddr vaddr, std::uint16_t value) override {
-        callbacks.observe_memory(callbacks.user_data, true, vaddr, 2, value);
-        if (auto* p = ram_ptr(vaddr, 2)) { std::memcpy(p, &value, sizeof(value)); return; }
-        callbacks.write_16(callbacks.user_data, vaddr, value);
-    }
-    void MemoryWrite32(VAddr vaddr, std::uint32_t value) override {
-        callbacks.observe_memory(callbacks.user_data, true, vaddr, 4, value);
-        if (auto* p = ram_ptr(vaddr, 4)) { std::memcpy(p, &value, sizeof(value)); return; }
-        callbacks.write_32(callbacks.user_data, vaddr, value);
-    }
-    void MemoryWrite64(VAddr vaddr, std::uint64_t value) override {
-        callbacks.observe_memory(callbacks.user_data, true, vaddr, 8, value);
-        if (auto* p = ram_ptr(vaddr, 8)) { std::memcpy(p, &value, sizeof(value)); return; }
-        callbacks.write_64(callbacks.user_data, vaddr, value);
+    void MemoryWrite8(VAddr address, std::uint8_t value) override {
+        callbacks.write(callbacks.user_data, address, 1, value);
     }
 
-    bool MemoryWriteExclusive8(VAddr vaddr, std::uint8_t value, std::uint8_t expected) override;
-    bool MemoryWriteExclusive16(VAddr vaddr, std::uint16_t value, std::uint16_t expected) override;
-    bool MemoryWriteExclusive32(VAddr vaddr, std::uint32_t value, std::uint32_t expected) override;
-    bool MemoryWriteExclusive64(VAddr vaddr, std::uint64_t value, std::uint64_t expected) override;
+    std::uint16_t MemoryRead16(VAddr address) override {
+        return static_cast<std::uint16_t>(callbacks.read(callbacks.user_data, address, 2));
+    }
+
+    void MemoryWrite16(VAddr address, std::uint16_t value) override {
+        callbacks.write(callbacks.user_data, address, 2, value);
+    }
+
+    std::uint32_t MemoryRead32(VAddr address) override {
+        return static_cast<std::uint32_t>(callbacks.read(callbacks.user_data, address, 4));
+    }
+
+    void MemoryWrite32(VAddr address, std::uint32_t value) override {
+        callbacks.write(callbacks.user_data, address, 4, value);
+    }
+
+    std::uint64_t MemoryRead64(VAddr address) override {
+        return static_cast<std::uint64_t>(callbacks.read(callbacks.user_data, address, 8));
+    }
+
+    void MemoryWrite64(VAddr address, std::uint64_t value) override {
+        callbacks.write(callbacks.user_data, address, 8, value);
+    }
 
     void InterpreterFallback(VAddr, size_t) override;
 
@@ -188,7 +172,6 @@ private:
 
 struct DynarmicInstance {
     DynarmicCallbacks callbacks;
-    std::unique_ptr<std::array<std::uint8_t*, UserConfig::NUM_PAGE_TABLE_ENTRIES>> page_table;
     std::unique_ptr<UserCallbacksImpl> callbacks_impl;
     std::shared_ptr<CP15Impl> cp15_impl;
     ExclusiveMonitor monitor{1};
@@ -197,64 +180,9 @@ struct DynarmicInstance {
     std::atomic<bool> stop_requested{false};
 };
 
-bool UserCallbacksImpl::MemoryWriteExclusive8(VAddr vaddr, std::uint8_t value, std::uint8_t expected) {
-    if (auto* p = ram_ptr(vaddr, 1)) {
-        std::uint8_t cur; std::memcpy(&cur, p, sizeof(cur));
-        if (cur != expected) return false;
-        std::memcpy(p, &value, sizeof(value));
-        return true;
-    }
-    MemoryWrite8(vaddr, value);
-    return true;
-}
-
-bool UserCallbacksImpl::MemoryWriteExclusive16(VAddr vaddr, std::uint16_t value, std::uint16_t expected) {
-    if (auto* p = ram_ptr(vaddr, 2)) {
-        std::uint16_t cur; std::memcpy(&cur, p, sizeof(cur));
-        if (cur != expected) return false;
-        std::memcpy(p, &value, sizeof(value));
-        return true;
-    }
-    MemoryWrite16(vaddr, value);
-    return true;
-}
-
-bool UserCallbacksImpl::MemoryWriteExclusive32(VAddr vaddr, std::uint32_t value, std::uint32_t expected) {
-    if (auto* p = ram_ptr(vaddr, 4)) {
-        std::uint32_t cur; std::memcpy(&cur, p, sizeof(cur));
-        if (cur != expected) return false;
-        std::memcpy(p, &value, sizeof(value));
-        return true;
-    }
-    MemoryWrite32(vaddr, value);
-    return true;
-}
-
-bool UserCallbacksImpl::MemoryWriteExclusive64(VAddr vaddr, std::uint64_t value, std::uint64_t expected) {
-    if (auto* p = ram_ptr(vaddr, 8)) {
-        std::uint64_t cur; std::memcpy(&cur, p, sizeof(cur));
-        if (cur != expected) return false;
-        std::memcpy(p, &value, sizeof(value));
-        return true;
-    }
-    MemoryWrite64(vaddr, value);
-    return true;
-}
-
-std::uint8_t* UserCallbacksImpl::ram_ptr(VAddr vaddr, size_t size) const {
-    size_t off = vaddr & ((1 << UserConfig::PAGE_BITS) - 1);
-    if (off + size > (size_t(1) << UserConfig::PAGE_BITS)) return nullptr;
-    uint8_t* page = (*instance->page_table)[vaddr >> UserConfig::PAGE_BITS];
-    return page ? page + off : nullptr;
-}
-
-std::optional<std::uint32_t> UserCallbacksImpl::MemoryReadCode(VAddr vaddr) {
-    size_t page_idx = vaddr >> UserConfig::PAGE_BITS;
-    uint8_t* page = (*instance->page_table)[page_idx];
-    if (page != nullptr) {
-        size_t offset = vaddr & ((1 << UserConfig::PAGE_BITS) - 1);
-        uint32_t word = 0;
-        std::memcpy(&word, page + offset, sizeof(word));
+std::optional<std::uint32_t> UserCallbacksImpl::MemoryReadCode(VAddr address) {
+    std::uint32_t word;
+    if (callbacks.read_code(callbacks.user_data, address, &word)) {
         return word;
     }
     return std::nullopt;
@@ -313,8 +241,6 @@ extern "C" {
 DynarmicInstance* dynarmic_create(const DynarmicCallbacks* callbacks) {
     auto inst = std::make_unique<DynarmicInstance>();
     inst->callbacks = *callbacks;
-    inst->page_table = std::make_unique<std::array<std::uint8_t*, UserConfig::NUM_PAGE_TABLE_ENTRIES>>();
-    inst->page_table->fill(nullptr);
 
     inst->callbacks_impl = std::make_unique<UserCallbacksImpl>(inst->callbacks, inst.get());
     inst->cp15_impl = std::make_shared<CP15Impl>(inst.get());
@@ -401,28 +327,6 @@ uint32_t dynarmic_get_fpscr(DynarmicInstance* inst) {
 void dynarmic_set_fpscr(DynarmicInstance* inst, uint32_t val) {
     if (inst) {
         inst->jit->SetFpscr(val);
-    }
-}
-
-void dynarmic_map_pages(DynarmicInstance* inst, uint32_t start_page, uint32_t num_pages, uint8_t* host_ptr) {
-    if (!inst || num_pages == 0) return;
-    uint32_t end_page = start_page + num_pages;
-    if (end_page > UserConfig::NUM_PAGE_TABLE_ENTRIES) {
-        end_page = UserConfig::NUM_PAGE_TABLE_ENTRIES;
-    }
-    for (uint32_t p = start_page; p < end_page; ++p) {
-        (*inst->page_table)[p] = host_ptr + (static_cast<size_t>(p - start_page) << 12);
-    }
-}
-
-void dynarmic_unmap_pages(DynarmicInstance* inst, uint32_t start_page, uint32_t num_pages) {
-    if (!inst || num_pages == 0) return;
-    uint32_t end_page = start_page + num_pages;
-    if (end_page > UserConfig::NUM_PAGE_TABLE_ENTRIES) {
-        end_page = UserConfig::NUM_PAGE_TABLE_ENTRIES;
-    }
-    for (uint32_t p = start_page; p < end_page; ++p) {
-        (*inst->page_table)[p] = nullptr;
     }
 }
 

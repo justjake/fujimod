@@ -324,19 +324,20 @@ impl Graph {
         Ok(())
     }
     pub fn validate(&self) -> Result<(), String> {
-        for processor in self
-            .processors
-            .iter()
-            .filter(|processor| processor.cpu_backend == RunCpuBackend::Dynarmic)
-        {
-            if processor.model != Model::CortexA7 {
-                return Err("cpu_backend=dynarmic requires a Cortex-A7 processor".into());
-            }
-            #[cfg(not(all(
-                feature = "dynarmic",
-                any(target_arch = "aarch64", target_arch = "x86_64"),
-                any(target_os = "linux", target_os = "macos")
-            )))]
+        let dynarmic = || {
+            self.processors
+                .iter()
+                .filter(|processor| processor.cpu_backend == RunCpuBackend::Dynarmic)
+        };
+        if dynarmic().any(|processor| processor.model != Model::CortexA7) {
+            return Err("cpu_backend=dynarmic requires a Cortex-A7 processor".into());
+        }
+        #[cfg(not(all(
+            feature = "dynarmic",
+            any(target_arch = "aarch64", target_arch = "x86_64"),
+            any(target_os = "linux", target_os = "macos")
+        )))]
+        if dynarmic().next().is_some() {
             return Err(dynarmic_unavailable());
         }
         if self.processors.is_empty() || !self.processors.iter().any(|p| p.released) {

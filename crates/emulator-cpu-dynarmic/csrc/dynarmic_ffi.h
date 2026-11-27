@@ -22,15 +22,9 @@ typedef enum DynarmicExitReason {
 
 typedef struct DynarmicCallbacks {
     void* user_data;
-    void (*observe_memory)(void*, bool, uint32_t, int32_t, int64_t);
-    uint8_t (*read_8)(void* user_data, uint32_t vaddr);
-    uint16_t (*read_16)(void* user_data, uint32_t vaddr);
-    uint32_t (*read_32)(void* user_data, uint32_t vaddr);
-    uint64_t (*read_64)(void* user_data, uint32_t vaddr);
-    void (*write_8)(void* user_data, uint32_t vaddr, uint8_t val);
-    void (*write_16)(void* user_data, uint32_t vaddr, uint16_t val);
-    void (*write_32)(void* user_data, uint32_t vaddr, uint32_t val);
-    void (*write_64)(void* user_data, uint32_t vaddr, uint64_t val);
+    bool (*read_code)(void*, uint32_t, uint32_t*);
+    uint64_t (*read)(void*, uint32_t, uint32_t);
+    void (*write)(void*, uint32_t, uint32_t, uint64_t);
 } DynarmicCallbacks;
 
 typedef struct DynarmicInstance DynarmicInstance;
@@ -53,8 +47,6 @@ void dynarmic_set_cpsr(DynarmicInstance* inst, uint32_t val);
 uint32_t dynarmic_get_fpscr(DynarmicInstance* inst);
 void dynarmic_set_fpscr(DynarmicInstance* inst, uint32_t val);
 
-void dynarmic_map_pages(DynarmicInstance* inst, uint32_t start_page, uint32_t num_pages, uint8_t* host_ptr);
-void dynarmic_unmap_pages(DynarmicInstance* inst, uint32_t start_page, uint32_t num_pages);
 
 void dynarmic_set_cp15(DynarmicInstance* inst, uint32_t opc1, uint32_t crn, uint32_t crm, uint32_t opc2, uint32_t val);
 uint32_t dynarmic_get_cp15(DynarmicInstance* inst, uint32_t opc1, uint32_t crn, uint32_t crm, uint32_t opc2);
