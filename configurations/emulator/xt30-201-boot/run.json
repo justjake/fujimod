@@ -11,8 +11,8 @@
   "execution": null,
   "overlays": [],
   "dram_address_space": {
-    "limit_bytes": 1073741824,
-    "basis": "Synthetic application-test address space; installed DRAM capacity is unknown."
+    "limit_bytes": 2147483648,
+    "basis": "The X-T30 2.01 memory-plan tables place buffers up to 0x80000000: the last planned buffer starts at 0x7f975000 with a size of 0x68b000 and ends there, and no planned buffer ends above it. The software-visible DRAM space therefore ends at 0x80000000 (2 GiB); the installed capacity is not measured."
   },
   "preset": {
     "factory_options": {},
