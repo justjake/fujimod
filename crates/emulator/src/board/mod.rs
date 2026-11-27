@@ -2121,13 +2121,21 @@ impl Board {
                 && self.cpus[core].hook_count() == Some(own);
             (blocks.active, wanted)
         };
+        // Whether this engine can report the stores that cover translated
+        // bytes: those are the only stores that can rewrite code.
+        let code_stores = self.cpus[core].features().code_store_observation;
+        let was_code_stores = self.state.borrow().blocks[core]
+            .as_ref()
+            .unwrap()
+            .code_stores_notified;
         if active != wanted {
             let cpu = &self.cpus[core];
             let data = (&*self.bindings[core] as *const Binding).cast_mut().cast();
             if wanted {
                 if let Some(hook) = self.observer_hooks[core].take() {
                     cpu.remove_hook(hook)?;
-                    self.hooks.retain(|&(owner, other)| !(owner == core && other == hook));
+                    self.hooks
+                        .retain(|&(owner, other)| !(owner == core && other == hook));
                 }
                 // The binding box stays at this address until Board drops its CPU hooks.
                 unsafe {
@@ -2155,14 +2163,20 @@ impl Board {
                     // sees only watched pages) for stores.
                     for &(owner, address, bytes, _) in &self.mmio {
                         if owner == core && bytes != 0 {
-                            let hook = cpu.install_memory_restart_boundary(
-                                HookRange::Inclusive {
+                            let hook =
+                                cpu.install_memory_restart_boundary(HookRange::Inclusive {
                                     begin: address,
                                     end: address + bytes as u64 - 1,
-                                },
-                            )?;
+                                })?;
                             self.block_hooks[core].push(hook);
                         }
+                    }
+                }
+                unsafe {
+                    // The engine reports each store that covers translated
+                    // bytes, so the code watch no longer needs page watches.
+                    if code_stores {
+                        cpu.observe_code_stores(Some(code_stored), data)?;
                     }
                 }
                 self.hooks
@@ -2170,9 +2184,17 @@ impl Board {
             } else {
                 for hook in std::mem::take(&mut self.block_hooks[core]) {
                     cpu.remove_hook(hook)?;
-                    self.hooks.retain(|&(owner, other)| !(owner == core && other == hook));
+                    self.hooks
+                        .retain(|&(owner, other)| !(owner == core && other == hook));
                 }
                 unsafe {
+                    // Restore the page watches the store hook filters on.
+                    if self.state.borrow().blocks[core]
+                        .as_ref()
+                        .is_some_and(|blocks| blocks.code_stores_notified)
+                    {
+                        cpu.observe_code_stores(None, std::ptr::null_mut())?;
+                    }
                     cpu.translation_hooks(None)?;
                     let hook = cpu.install_hook(Hook::Instruction {
                         callback: before,
@@ -2203,8 +2225,11 @@ impl Board {
                 None => false,
             }
         };
-        let was_fast = self.state.borrow().blocks[core].as_ref().unwrap().fast_stores;
-        let mut flushed = active != wanted;
+        let was_fast = self.state.borrow().blocks[core]
+            .as_ref()
+            .unwrap()
+            .fast_stores;
+        let mut flushed = active != wanted || code_stores != was_code_stores;
         if fast != was_fast {
             let hook = self.store_hooks[core].ok_or("M-profile store hook is missing")?;
             self.cpus[core].hook_watched(hook, fast)?;
@@ -2223,12 +2248,20 @@ impl Board {
             shadow.discarded();
             shadow.begin_slice();
         }
-        let inline = fast && s.execution_policy == ExecutionPolicy::Interactive && s.settled.verify == 0;
+        let inline =
+            fast && s.execution_policy == ExecutionPolicy::Interactive && s.settled.verify == 0;
         let blocks = s.blocks[core].as_mut().unwrap();
         blocks.active = wanted;
         blocks.store_hook = self.store_hooks[core];
         blocks.fast_stores = fast;
         blocks.watching |= fast;
+        if code_stores {
+            // The engine now reports every store that covers translated bytes,
+            // so no page watch is needed; drop the ones earlier slices made.
+            blocks.watching = false;
+            blocks.code_stores_notified = true;
+            blocks.last_watched = None;
+        }
         if flushed {
             blocks.last_watched = None;
         }
@@ -2770,7 +2803,7 @@ impl State {
         // First-time enabling requires invalidating existing translations while
         // stopped (`sync_block_mode`), so only enable mid-slice once `watching`
         // is already set.
-        let fast = want_fast && blocks.watching;
+        let fast = want_fast && (blocks.watching || blocks.code_stores_notified);
         if fast == blocks.fast_stores {
             return Ok(());
         }
@@ -2808,6 +2841,13 @@ impl State {
         let Some(blocks) = self.blocks[core].as_mut().filter(|blocks| blocks.watching) else {
             return Ok(());
         };
+        // The engine reports each store that covers translated bytes
+        // (observe_code_stores), so a page watch is no longer needed to see
+        // code rewritten by a store. Watching the whole 1 KiB page here would
+        // forward every data store that shares it.
+        if blocks.code_stores_notified {
+            return Ok(());
+        }
         let first = pc & !0x3ff;
         let last = pc.saturating_add(u64::from(bytes.saturating_sub(1))) & !0x3ff;
         if first == last && blocks.last_watched == Some(first) {
@@ -4146,6 +4186,36 @@ unsafe fn block_classify_transfers(
             || mprofile_blocks::is_bx_lr(word));
     }
     classification
+}
+/// A guest store covered bytes a translation was made from, and the engine has
+/// retired that translation. This is the only store that can have rewritten
+/// code, so it is the one the code watch reacts to: the copy of each stored
+/// page is refreshed here, and everything the shadow cannot prove from these
+/// bytes is discarded at the next entry. A store on a code page that covers no
+/// translated byte never reaches this callback, so it cannot cause a
+/// retranslation.
+unsafe fn code_stored(data: *mut c_void, address: u64, size: usize) {
+    let b = unsafe { &*data.cast::<Binding>() };
+    let Some(cpus) = b.cpus.upgrade() else {
+        return;
+    };
+    let core = b.core;
+    let result = {
+        let mut state = b.state.borrow_mut();
+        if let Some(blocks) = state.blocks[core].as_mut() {
+            blocks.code_store_notifications += 1;
+        }
+        if let Some(shadow) = state.code_shadow[core].as_mut() {
+            shadow.code_stored(&*cpus[core], address, size);
+        }
+        // The engine restarts this store as a block of its own, so the
+        // instructions after it, translated from the old bytes, do not run.
+        Ok(())
+    };
+    if let Err(e) = result {
+        b.state.borrow_mut().fail(e);
+        let _ = cpus[core].stop();
+    }
 }
 /// The engine is about to redo the instruction at `pc` as a block of its own:
 /// of the admitted block, only the instructions before it were entered.
