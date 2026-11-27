@@ -282,7 +282,7 @@ fn transfer_loop(blocks: bool, address: u32, advance: bool) -> Board {
 }
 
 #[test]
-fn translated_transfers_match_at_watched_stores_and_data_faults() {
+fn translated_transfers_match_for_same_page_data_and_faults() {
     for (address, advance) in [(0x12000, false), (0x10300, false), (0xe000_e100, false), (0x17ff0, true)] {
         let mut reference = transfer_loop(false, address, advance);
         let mut translated = transfer_loop(true, address, advance);
@@ -306,11 +306,10 @@ fn translated_transfers_match_at_watched_stores_and_data_faults() {
             assert!(translated.state.borrow().blocks[0].as_ref().unwrap().inline.entries > 500);
         }
         if address == 0x10300 {
-            // The store covers translated bytes, so the engine reports it and
-            // restarts it as a block of its own instead of learning its site.
+            // The data shares a page with the loop but lies outside its code.
             let blocks = translated.state.borrow();
             let blocks = blocks.blocks[0].as_ref().unwrap();
-            assert!(blocks.code_store_notifications > 0);
+            assert_eq!(blocks.code_store_notifications, 0);
             assert_eq!(blocks.store_callbacks, 0);
         }
         if advance {
@@ -529,7 +528,7 @@ fn indexed_loads_match_for_ram_mmio_and_faults() {
 }
 
 #[test]
-fn indexed_stores_match_on_watched_code_pages() {
+fn indexed_stores_match_in_data_sharing_a_code_page() {
     let make = |blocks| {
         indexed_transfer_pair(
             blocks,
@@ -564,12 +563,9 @@ fn indexed_stores_match_on_watched_code_pages() {
     assert_eq!(&actual[4..], &0xdead_beefu32.to_le_bytes());
     let blocks = translated.state.borrow();
     let blocks = blocks.blocks[0].as_ref().unwrap();
-    // The store covers the instruction that follows it, which the engine
-    // retires before it can run; the rewritten word is what executes next, as
-    // the RAM comparison above proves. No restart is needed and none of the
-    // processor's own data stores reaches a callback.
-    assert_eq!(blocks.store_callbacks, 0, "a data store reached a callback");
-    assert!(blocks.code_store_notifications > 0, "no code store was reported");
+    // The indexed stores target data on the same page as the instructions.
+    assert_eq!(blocks.store_callbacks, 0);
+    assert_eq!(blocks.code_store_notifications, 0);
     assert!(blocks.fast_stores);
 }
 
@@ -837,10 +833,9 @@ fn stack_words(board: &Board, base: u32) -> [u8; 8] {
 }
 
 #[test]
-fn terminal_pushes_match_observer_on_watched_ram_and_partial_fault() {
+fn terminal_pushes_match_observer_on_same_page_ram_and_partial_fault() {
     for wide in [false, true] {
-        // Both words are in the translated 1 KiB code page. This exercises the
-        // watched-store terminal path without replaying an earlier push word.
+        // Both words share the 1 KiB code page without covering translated bytes.
         let mut reference = push_program(false, 0x10308, wide);
         let mut translated = push_program(true, 0x10308, wide);
         let a = reference.run_until(3, 3);
@@ -876,11 +871,7 @@ fn terminal_pushes_match_observer_on_watched_ram_and_partial_fault() {
         let blocks = translated.state.borrow();
         let stats = blocks.blocks[0].as_ref().unwrap();
         assert!(stats.code_stores_notified, "wide={wide}");
-        assert!(
-            stats.code_store_notifications >= 2,
-            "wide={wide}: {}",
-            stats.code_store_notifications
-        );
+        assert_eq!(stats.code_store_notifications, 0, "wide={wide}");
         assert_eq!(stats.restart_callbacks, 0, "wide={wide}");
 
         // The first push word lands at the final mapped word. The second
@@ -1685,16 +1676,15 @@ fn a_data_store_in_a_code_page_reaches_no_callback() {
     // 0x10200: movw r0,#0x0200; movt r0,#1; movs r3,#8; loop: adds r1,#1;
     // str r1,[r0]; subs r3,#1; bne loop; wfi.
     const PROGRAM: [u16; 10] = [
-        0xf242, 0x0000, 0xf2c0, 0x0001, 0x2308, 0x3101, 0x6001, 0x3b01, 0xd1fb, 0xbf30,
+        0xf240, 0x2000, 0xf2c0, 0x0001, 0x2308, 0x3101, 0x6001, 0x3b01, 0xd1fb, 0xbf30,
     ];
     for policy in [ExecutionPolicy::Exact, ExecutionPolicy::Interactive] {
         let mut board = single_m4_board(true, &PROGRAM, 0x17000);
         board.set_execution_policy(policy).unwrap();
         board.run_until(100, 64).unwrap();
 
-        eprintln!("DBG r0={:#x} r1={:#x} r3={:#x}", scalar(board.cpu(0).unwrap(), Register::Arm32(fujimod_emulator_cpu::arm::Register::R(0))).unwrap(), scalar(board.cpu(0).unwrap(), Register::Arm32(fujimod_emulator_cpu::arm::Register::R(1))).unwrap(), scalar(board.cpu(0).unwrap(), Register::Arm32(fujimod_emulator_cpu::arm::Register::R(3))).unwrap());
         let mut word = [0; 4];
-        board.read_physical(0x1021c, &mut word).unwrap();
+        board.read_physical(0x10200, &mut word).unwrap();
         assert_eq!(u32::from_le_bytes(word), 8, "{policy:?}");
 
         let s = board.state.borrow();

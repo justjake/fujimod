@@ -232,3 +232,30 @@ fn changed_pages_at_the_stop_pc_are_discarded_individually() {
     shadow.end_slice(&cpu, Some(0x1000), checked);
     assert!(shadow.changed(), "a prior full invalidation must survive");
 }
+
+#[test]
+fn mprofile_code_store_preserves_the_proof_for_other_bytes_in_the_page() {
+    use super::code_shadow::{CodeShadow, Touch};
+    let cpu = fujimod_emulator_cpu_unicorn::Library::linked()
+        .unwrap()
+        .open(Model::CortexM4, 1 << 20)
+        .unwrap();
+    cpu.map_zeroed(0x10000, 0x2000, 7).unwrap();
+    let checked = |address: u64| (0x10000..0x12000).contains(&address);
+    let mut shadow = CodeShadow::default();
+    shadow.begin_slice();
+    assert_eq!(shadow.touch(&cpu, 0x10000, checked), Touch::Proven);
+    shadow.code_stored(&cpu, 0x10000, 2);
+    cpu.write_memory(0x10000, &0x2001u16.to_le_bytes())
+        .unwrap();
+    shadow.end_slice(&cpu, Some(0x11000), checked);
+
+    // A peer changes another translation on the same page after this slice.
+    cpu.write_memory(0x10010, &0x2101u16.to_le_bytes())
+        .unwrap();
+    shadow.peer_ran();
+    assert_eq!(
+        shadow.touch(&cpu, 0x10010, checked),
+        Touch::Changed(0x10000)
+    );
+}

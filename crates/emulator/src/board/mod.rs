@@ -2126,7 +2126,7 @@ impl Board {
         };
         // Whether this engine can report the stores that cover translated
         // bytes: those are the only stores that can rewrite code.
-        let code_stores = self.cpus[core].features().code_store_observation;
+        let code_stores = wanted && self.cpus[core].features().code_store_observation;
         let was_code_stores = self.state.borrow().blocks[core]
             .as_ref()
             .unwrap()
@@ -2237,7 +2237,7 @@ impl Board {
             let hook = self.store_hooks[core].ok_or("M-profile store hook is missing")?;
             self.cpus[core].hook_watched(hook, fast)?;
             let watching = self.state.borrow().blocks[core].as_ref().unwrap().watching;
-            if fast && !watching {
+            if fast && !watching && !code_stores {
                 // The first store watches on this engine: every translation
                 // must pass an observer again, so that the page it came from
                 // is watched before it runs. Later, entered pages stay
@@ -2257,14 +2257,8 @@ impl Board {
         blocks.active = wanted;
         blocks.store_hook = self.store_hooks[core];
         blocks.fast_stores = fast;
-        blocks.watching |= fast;
-        if code_stores {
-            // The engine now reports every store that covers translated bytes,
-            // so no page watch is needed; drop the ones earlier slices made.
-            blocks.watching = false;
-            blocks.code_stores_notified = true;
-            blocks.last_watched = None;
-        }
+        blocks.watching |= fast && !code_stores;
+        blocks.code_stores_notified = code_stores;
         if flushed {
             blocks.last_watched = None;
         }
