@@ -206,6 +206,23 @@ impl Run {
     }
 }
 
+/// The scheduler quantum of an Interactive XP5 run, or `None` to keep the
+/// configuration's. One processor's turn is one slice: a short slice costs a
+/// wakeup per switch but keeps the timeline tight, while a long one lets a
+/// spinning processor run far past its peers before they are serviced.
+/// Measured on xt5-431 and x100vi-131 (Linux, Unicorn, 100 ms guest time):
+/// 500-1000 entries per slice is about 700 ms of host time, 5000 about
+/// 800-950 ms. The configuration's 1000 is the measured optimum, so
+/// Interactive keeps it and Exact, whose quantum is not a scheduling knob,
+/// is left to the configuration.
+fn interactive_quantum(policy: ExecutionPolicy) -> Option<usize> {
+    matches!(policy, ExecutionPolicy::Interactive).then_some(INTERACTIVE_QUANTUM)
+}
+
+/// Instructions per scheduler slice in Interactive mode, measured on both
+/// XP5 bodies (see `interactive_quantum`).
+const INTERACTIVE_QUANTUM: usize = 1000;
+
 /// Host-time cadence of status lines, so a slow run is visibly alive.
 const WALL_STATUS_EVERY: Duration = Duration::from_secs(10);
 
@@ -372,7 +389,7 @@ impl RunHost {
             scene,
             output: Some(run_directory.clone()),
             mode,
-            quantum: quantum_override,
+            quantum: quantum_override.or_else(|| interactive_quantum(policy)),
             camera_settings,
         };
         let crate::Camera {
