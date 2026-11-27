@@ -209,20 +209,11 @@ impl Board {
     /// countdown-timer channel.
     pub fn turn_dial(&mut self, channel: u8, edges: i32) -> Result<(), String> {
         match self {
-            Self::Shared(session) => {
-                use fujimod_emulator_xp4_io::countdown_timers::CountdownTimers;
-                let node = session
-                    .node("xp4-countdown-timers")
-                    .map_err(|_| "Command dials are not wired")?;
-                session
-                    .board
-                    .with_device_inputs::<CountdownTimers, _>(node, |timers, now| {
-                        timers
-                            .dial_input(usize::from(channel))
-                            .ok_or("Unwired XP4 countdown dial")?
-                            .queue_edges(now, edges)
-                    })
-            }
+            Self::Shared(session) => fujimod_emulator_xp4_board::shared::turn_countdown_dial(
+                session,
+                usize::from(channel),
+                edges,
+            ),
         }
     }
 

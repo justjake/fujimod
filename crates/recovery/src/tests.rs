@@ -225,6 +225,14 @@ fn recipes_match_catalog_identities_and_generation() {
         }
         let status = availability(id).unwrap();
         assert_eq!(status.can_build, status.missing.is_empty());
+        // A firmware without a recovery recipe has no SD boot controls to offer.
+        if status.generation.is_none() {
+            assert_eq!(
+                status.sd_boot_combination, None,
+                "SD boot controls for {id}"
+            );
+            continue;
+        }
         assert_eq!(
             serde_json::to_value(status.sd_boot_combination).unwrap(),
             selected
