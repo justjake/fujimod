@@ -10,14 +10,9 @@ use crate::arm;
 
 mod a32;
 mod register;
+mod t32;
 
 pub use register::RegisterLoop;
-
-/// ARM ALU operations with ordinary register operands.
-pub fn a32_register_operation(word: u32) -> bool {
-    matches!(a32::decode(word), Some(Op::Data { .. }))
-}
-mod t32;
 
 /// The instruction set a loop branch was fetched in.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

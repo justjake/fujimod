@@ -27,6 +27,16 @@ typedef struct DynarmicCallbacks {
     void (*write)(void*, uint32_t, uint32_t, uint64_t);
 } DynarmicCallbacks;
 
+typedef struct DynarmicMemoryControl {
+    uint32_t sctlr;
+    uint32_t ttbr0;
+    uint32_t ttbr1;
+    uint32_t ttbcr;
+    uint32_t dacr;
+    uint32_t fcseidr;
+    uint32_t cpsr;
+} DynarmicMemoryControl;
+
 typedef struct DynarmicInstance DynarmicInstance;
 
 DynarmicInstance* dynarmic_create(const DynarmicCallbacks* callbacks);
@@ -34,6 +44,7 @@ void dynarmic_destroy(DynarmicInstance* inst);
 
 DynarmicExitReason dynarmic_step(DynarmicInstance* inst, uint64_t* executed);
 void dynarmic_abort_access(DynarmicInstance* inst);
+void dynarmic_memory_control(DynarmicInstance* inst, DynarmicMemoryControl* control);
 void dynarmic_stop(DynarmicInstance* inst);
 
 void dynarmic_clear_cache(DynarmicInstance* inst);

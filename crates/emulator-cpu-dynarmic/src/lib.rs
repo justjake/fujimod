@@ -55,19 +55,61 @@ fn contains(range: HookRange, address: u64) -> bool {
 
 impl CoreShared {
     fn observe_memory(&self, access: Access, addr: u32, size: i32, value: i64) {
-        let observers = self.observers.borrow().clone();
-        for (_, hook) in observers {
-            if let Hook::Memory {
+        let observers = self
+            .observers
+            .borrow()
+            .iter()
+            .filter_map(|&(_, hook)| {
+                if let Hook::Memory {
+                    callback,
+                    data,
+                    range,
+                    read,
+                    write,
+                } = hook
+                    && ((access == Access::Write && write) || (access == Access::Read && read))
+                    && contains(range, addr.into())
+                {
+                    Some((callback, data))
+                } else {
+                    None
+                }
+            })
+            .collect::<Vec<_>>();
+        for (callback, data) in observers {
+            unsafe { callback(access, addr.into(), size, value, data) };
+        }
+    }
+
+    fn observe_instruction(&self, pc: u32) {
+        let single = {
+            let hooks = self.observers.borrow();
+            match hooks.as_slice() {
+                [] => return,
+                [(_, hook)] => Some(*hook),
+                _ => None,
+            }
+        };
+        let invoke = |hook| {
+            if let Hook::Instruction {
                 callback,
                 data,
                 range,
-                read,
-                write,
             } = hook
-                && ((access == Access::Write && write) || (access == Access::Read && read))
-                && contains(range, addr.into())
+                && contains(range, pc.into())
             {
-                unsafe { callback(access, addr.into(), size, value, data) };
+                unsafe { callback(pc.into(), 4, data) };
+            }
+        };
+        if let Some(hook) = single {
+            invoke(hook);
+        } else {
+            let hooks = self.observers.borrow().clone();
+            for (_, hook) in hooks {
+                invoke(hook);
+                if self.stopped.get() {
+                    break;
+                }
             }
         }
     }
@@ -89,11 +131,31 @@ impl CoreShared {
 
     fn walk(&self, address: u32, access: Access) -> Result<Result<u64, u32>, String> {
         let inst = self.inst.get();
-        let cp15 = |crn, crm, opc2| Ok(unsafe { ffi::dynarmic_get_cp15(inst, 0, crn, crm, opc2) });
-        if cp15(1, 0, 0)? & 1 == 0 {
+        let mut control = ffi::DynarmicMemoryControl::default();
+        unsafe { ffi::dynarmic_memory_control(inst, &mut control) };
+        let ffi::DynarmicMemoryControl {
+            sctlr,
+            ttbr0,
+            ttbr1,
+            ttbcr,
+            dacr,
+            fcseidr,
+            cpsr,
+        } = control;
+        if sctlr & 1 == 0 {
             return Ok(Ok(address.into()));
         }
-        let cpsr = unsafe { ffi::dynarmic_get_cpsr(inst) };
+        let cp15 = |crn, crm, opc2| {
+            Ok(match (crn, crm, opc2) {
+                (1, 0, 0) => sctlr,
+                (2, 0, 0) => ttbr0,
+                (2, 0, 1) => ttbr1,
+                (2, 0, 2) => ttbcr,
+                (3, 0, 0) => dacr,
+                (13, 0, 0) => fcseidr,
+                _ => return Err("Dynarmic MMU control selection is unavailable".into()),
+            })
+        };
         let mmu = armv7a::mmu::Mmu::read(cp15, cpsr)?;
         mmu.translate(address, access, mmu.user, |physical| {
             let Some((Mapping::Backing { ptr, .. }, offset)) = self.mapping(physical.into(), 4)
@@ -105,6 +167,31 @@ impl CoreShared {
             let bytes = unsafe { ptr.as_ptr().add(offset).cast::<[u8; 4]>().read() };
             Ok(u32::from_le_bytes(bytes))
         })
+    }
+
+    fn fetch(&self, address: u32) -> Result<Result<u32, u32>, String> {
+        let physical = match self.walk(address, Access::Fetch)? {
+            Ok(physical) => physical,
+            Err(status) => return Ok(Err(status)),
+        };
+        let Some((
+            Mapping::Backing {
+                ptr, permissions, ..
+            },
+            offset,
+        )) = self.mapping(physical, 4)
+        else {
+            return Err(format!(
+                "Dynarmic instruction fetch outside RAM at {address:#010x}"
+            ));
+        };
+        if permissions & 4 == 0 {
+            return Err(format!(
+                "Dynarmic instruction fetch denied at {address:#010x}"
+            ));
+        }
+        let bytes = unsafe { ptr.as_ptr().add(offset).cast::<[u8; 4]>().read() };
+        Ok(Ok(u32::from_le_bytes(bytes)))
     }
 
     fn fail(&self, fault: Fault, message: String) {
@@ -346,24 +433,12 @@ impl Core {
 
     unsafe extern "C" fn read_code(user_data: *mut c_void, address: u32, output: *mut u32) -> bool {
         let shared = unsafe { &*user_data.cast::<CoreShared>() };
-        let Ok(physical) = shared.translate(address, Access::Fetch) else {
-            return false;
-        };
-        let Some((
-            Mapping::Backing {
-                ptr, permissions, ..
-            },
-            offset,
-        )) = shared.mapping(physical, 4)
-        else {
-            return false;
-        };
-        if permissions & 4 == 0 {
-            return false;
+        if let Ok(Ok(word)) = shared.fetch(address) {
+            unsafe { *output = word };
+            true
+        } else {
+            false
         }
-        let bytes = unsafe { ptr.as_ptr().add(offset).cast::<[u8; 4]>().read() };
-        unsafe { *output = u32::from_le_bytes(bytes) };
-        true
     }
 
     unsafe extern "C" fn read(user_data: *mut c_void, address: u32, size: u32) -> u64 {
@@ -772,36 +847,24 @@ impl Cpu for Core {
                 )
                 .into());
             }
-            if let Err(status) = self.shared.walk(pc, Access::Fetch)? {
-                armv7a::abort::enter_reported(self, pc, status, Access::Fetch)?;
-                return Ok(Exit::Stopped);
-            }
-            let mut instruction = [0; 4];
-            self.read_virtual(pc.into(), Access::Fetch, &mut instruction)
+            let word = match self
+                .shared
+                .fetch(pc)
                 .map_err(|message| ExecutionError::Memory {
                     fault: Fault::FetchUnmapped,
                     message,
-                })?;
-            self.shared.stopped.set(false);
-            let observers = self.shared.observers.borrow().clone();
-            for (_, hook) in observers {
-                if let Hook::Instruction {
-                    callback,
-                    data,
-                    range,
-                } = hook
-                    && contains(range, pc.into())
-                {
-                    unsafe { callback(pc.into(), 4, data) };
-                    if self.shared.stopped.get() {
-                        break;
-                    }
+                })? {
+                Ok(word) => word,
+                Err(status) => {
+                    armv7a::abort::enter_reported(self, pc, status, Access::Fetch)?;
+                    return Ok(Exit::Stopped);
                 }
-            }
+            };
+            self.shared.stopped.set(false);
+            self.shared.observe_instruction(pc);
             if self.shared.stopped.get() {
                 break ffi::DynarmicExitReason::Stopped;
             }
-            let word = u32::from_le_bytes(instruction);
             if stable
                 && request.until.is_none()
                 && self.advance_loop(pc, cpsr, word, budget - self.last_progress.get())?
