@@ -608,7 +608,7 @@
         {
           "id": "mod-target",
           "title": "Mod target generated from facts",
-          "result": "stale"
+          "result": "pass"
         },
         {
           "id": "mod-build",
@@ -618,12 +618,12 @@
         {
           "id": "mod-effect",
           "title": "First mod effect observed in the emulator",
-          "result": "pass"
+          "result": "stale"
         },
         {
           "id": "walkthroughs",
           "title": "Mod walkthroughs pass",
-          "result": "partial"
+          "result": "not-run"
         },
         {
           "id": "sd-boot-v1-fujimod-built",
@@ -663,7 +663,7 @@
           "id": "mod-target",
           "label": "Mod target generated from facts",
           "stage": "mod-target",
-          "result": "stale",
+          "result": "pass",
           "passed": 1,
           "total": 1,
           "milestone": true
@@ -680,7 +680,7 @@
           "id": "mod-effect",
           "label": "First mod effect observed in the emulator",
           "stage": "mod-effect",
-          "result": "pass",
+          "result": "stale",
           "passed": 1,
           "total": 1,
           "milestone": true
@@ -714,16 +714,16 @@
           "id": "walkthroughs/fujimod",
           "label": "fujimod",
           "stage": "walkthroughs",
-          "result": "pass",
-          "passed": 1,
+          "result": "stale",
+          "passed": 0,
           "total": 1
         },
         {
           "id": "walkthroughs/aspect-ratio",
           "label": "aspect-ratio",
           "stage": "walkthroughs",
-          "result": "pass",
-          "passed": 1,
+          "result": "stale",
+          "passed": 0,
           "total": 1
         },
         {
@@ -778,23 +778,23 @@
           "id": "walkthroughs/noise-reduction",
           "label": "noise-reduction",
           "stage": "walkthroughs",
-          "result": "pass",
-          "passed": 1,
+          "result": "stale",
+          "passed": 0,
           "total": 1
         },
         {
           "id": "walkthroughs/framing-guideline",
           "label": "framing-guideline",
           "stage": "walkthroughs",
-          "result": "pass",
-          "passed": 1,
+          "result": "stale",
+          "passed": 0,
           "total": 1
         },
         {
           "id": "walkthroughs/film-sims",
           "label": "film-sims",
           "stage": "walkthroughs",
-          "result": "fail",
+          "result": "stale",
           "passed": 0,
           "total": 1
         },
@@ -834,8 +834,8 @@
           "id": "walkthroughs/film-grain",
           "label": "film-grain",
           "stage": "walkthroughs",
-          "result": "pass",
-          "passed": 1,
+          "result": "stale",
+          "passed": 0,
           "total": 1
         },
         {
@@ -850,8 +850,8 @@
           "id": "walkthroughs/color-chrome",
           "label": "color-chrome",
           "stage": "walkthroughs",
-          "result": "pass",
-          "passed": 1,
+          "result": "stale",
+          "passed": 0,
           "total": 1
         },
         {
@@ -866,24 +866,24 @@
           "id": "walkthroughs/light-leaks",
           "label": "light-leaks",
           "stage": "walkthroughs",
-          "result": "pass",
-          "passed": 1,
+          "result": "stale",
+          "passed": 0,
           "total": 1
         },
         {
           "id": "walkthroughs/film-borders",
           "label": "film-borders",
           "stage": "walkthroughs",
-          "result": "pass",
-          "passed": 1,
+          "result": "stale",
+          "passed": 0,
           "total": 1
         },
         {
           "id": "walkthroughs/clarity",
           "label": "clarity",
           "stage": "walkthroughs",
-          "result": "pass",
-          "passed": 1,
+          "result": "stale",
+          "passed": 0,
           "total": 1
         },
         {
@@ -1002,7 +1002,7 @@
           "id": "walkthroughs/focalized-ui",
           "label": "focalized-ui",
           "stage": "walkthroughs",
-          "result": "fail",
+          "result": "stale",
           "passed": 0,
           "total": 1
         },
@@ -1018,7 +1018,7 @@
           "id": "walkthroughs/recipes",
           "label": "recipes",
           "stage": "walkthroughs",
-          "result": "fail",
+          "result": "stale",
           "passed": 0,
           "total": 1
         },
@@ -1042,7 +1042,7 @@
           "id": "walkthroughs/hide-films",
           "label": "hide-films",
           "stage": "walkthroughs",
-          "result": "fail",
+          "result": "stale",
           "passed": 0,
           "total": 1
         },
@@ -1058,8 +1058,8 @@
           "id": "walkthroughs/date-stamp",
           "label": "date-stamp",
           "stage": "walkthroughs",
-          "result": "pass",
-          "passed": 1,
+          "result": "stale",
+          "passed": 0,
           "total": 1
         },
         {
@@ -1122,16 +1122,16 @@
           "id": "walkthroughs/sd-volume-name",
           "label": "sd-volume-name",
           "stage": "walkthroughs",
-          "result": "pass",
-          "passed": 1,
+          "result": "stale",
+          "passed": 0,
           "total": 1
         },
         {
           "id": "walkthroughs/date-folders",
           "label": "date-folders",
           "stage": "walkthroughs",
-          "result": "pass",
-          "passed": 1,
+          "result": "stale",
+          "passed": 0,
           "total": 1
         },
         {
@@ -2007,28 +2007,28 @@
   },
   "mods": {
     "af": "not-run",
-    "fujimod": "pass",
-    "aspect-ratio": "pass",
+    "fujimod": "stale",
+    "aspect-ratio": "stale",
     "raw-teleconverter": "not-run",
     "raw-crop-file": "not-run",
     "surround-view": "not-run",
     "desqueeze": "not-run",
     "desqueeze-jpeg": "not-run",
     "jpeg-max": "not-run",
-    "noise-reduction": "pass",
-    "framing-guideline": "pass",
-    "film-sims": "fail",
+    "noise-reduction": "stale",
+    "framing-guideline": "stale",
+    "film-sims": "stale",
     "movie-film": "not-run",
     "card-films": "not-run",
     "multipass-curves": "not-run",
     "film-editor": "not-run",
-    "film-grain": "pass",
+    "film-grain": "stale",
     "grain-texture": "not-run",
-    "color-chrome": "pass",
+    "color-chrome": "stale",
     "halation": "not-run",
-    "light-leaks": "pass",
-    "film-borders": "pass",
-    "clarity": "pass",
+    "light-leaks": "stale",
+    "film-borders": "stale",
+    "clarity": "stale",
     "monochromatic-color": "not-run",
     "tone-curve": "not-run",
     "tone-steps": "not-run",
@@ -2043,14 +2043,14 @@
     "overlay-opacity": "not-run",
     "menu-animations": "not-run",
     "menu-tap": "not-run",
-    "focalized-ui": "fail",
+    "focalized-ui": "stale",
     "matte": "not-run",
-    "recipes": "fail",
+    "recipes": "stale",
     "snap-focus": "not-run",
     "recipe-exif": "not-run",
-    "hide-films": "fail",
+    "hide-films": "stale",
     "disposable": "not-run",
-    "date-stamp": "pass",
+    "date-stamp": "stale",
     "zone-focus": "not-run",
     "digital-focal-length": "not-run",
     "hud-layout": "not-run",
@@ -2058,8 +2058,8 @@
     "pixel-map": "not-run",
     "usb-debug": "not-run",
     "bug-report": "not-run",
-    "sd-volume-name": "pass",
-    "date-folders": "pass",
+    "sd-volume-name": "stale",
+    "date-folders": "stale",
     "software-nd": "not-run",
     "iso-auto-min-shutter": "not-run",
     "custom-settings-bkt": "not-run",
