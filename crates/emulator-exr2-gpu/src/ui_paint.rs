@@ -1739,6 +1739,25 @@ mod tests {
     }
 
     #[test]
+    fn cpu_backend_keeps_the_destination_for_a_transparent_src_over() {
+        // A fully transparent source with SRC_OVER leaves every destination
+        // byte unchanged, yet the shader still counts each covered pixel.
+        let address = 0x500000;
+        let bytes = 8 * 8 * 4;
+        let target: Vec<u8> = (0..bytes).map(|index| (index * 29 + 7) as u8).collect();
+        let transparent = draw(address, 0, [0., 0., 8., 8.], 1, 1, [9, 8, 7, 0]);
+        let regions = HashMap::from([(address, target.clone())]);
+        let draws = [transparent];
+        let (output, touched) = render_cpu_batch(&draws, &regions);
+        assert_eq!(touched, bytes as u64);
+        assert_eq!(output[0].1.as_slice(), target.as_slice());
+        let expected =
+            reference_batch(&draws, &HashMap::from([(address, target)]), &HashMap::new());
+        assert_eq!(expected.1, touched);
+        assert_eq!(output[0].1.as_slice(), expected.0[0].1.as_slice());
+    }
+
+    #[test]
     fn cpu_backend_writes_every_texture_texel_through_the_morton_sampler() {
         // An identity texture matrix over an 8x8 target must sample all 64
         // Morton texels and write all 64 Morton target pixels exactly once.
