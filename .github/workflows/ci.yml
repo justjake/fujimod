@@ -165,6 +165,7 @@ jobs:
       - uses: ./.github/actions/setup
         with:
           desktop: 'true'
+      - run: sudo apt-get install -y libjpeg-dev
       - run: mise run python-test
 
   javascript-tests:
@@ -197,7 +198,16 @@ jobs:
   required:
     name: CI required
     if: always()
-    needs: [python-quality, rust-quality, javascript-quality, rust-test-build, rust-tests, python-tests, javascript-tests]
+    needs:
+      [
+        python-quality,
+        rust-quality,
+        javascript-quality,
+        rust-test-build,
+        rust-tests,
+        python-tests,
+        javascript-tests,
+      ]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
