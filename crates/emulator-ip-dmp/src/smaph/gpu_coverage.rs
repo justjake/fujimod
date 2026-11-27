@@ -173,6 +173,16 @@ mod tests {
 
     fn require_gpu() -> bool {
         match shared_gpu() {
+            // The emulator rasterizes on the CPU without a hardware GPU, and
+            // software adapters disagree with it between runs.
+            Ok(Some(_))
+                if fujimod_emulator_gpu::context().is_ok_and(|context| {
+                    context.adapter_device_type() == wgpu::DeviceType::Cpu
+                }) =>
+            {
+                println!("SKIP SMAPH GPU coverage: the wgpu adapter is software");
+                false
+            }
             Ok(Some(gpu)) => {
                 println!("SMAPH GPU coverage adapter: {}", gpu.name);
                 true
