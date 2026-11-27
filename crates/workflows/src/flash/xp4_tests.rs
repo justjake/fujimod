@@ -141,14 +141,20 @@ fn result_words(calls: u32, source: u32, size: u32) -> Vec<u8> {
         .collect()
 }
 
-fn query_exchange() -> Vec<E> {
+/// The query exchange with `MAGIC` at reply byte `magic_at`.
+fn query_exchange_with(magic_at: usize) -> Vec<E> {
     let mut request = vec![0u8; 32];
     request[..4].copy_from_slice(&QUERY_COMMAND.to_le_bytes());
     request[16..20].copy_from_slice(&0x1234u32.to_le_bytes());
     let mut reply = vec![0u8; 32];
     reply[..4].copy_from_slice(&QUERY_COMMAND.to_le_bytes());
-    reply[16..20].copy_from_slice(&MAGIC.to_le_bytes());
+    reply[magic_at..magic_at + 4].copy_from_slice(&MAGIC.to_le_bytes());
     exchange_max(request, reply, 32)
+}
+
+/// The stock handler returns the callback's `r2` word at byte 20 (`fields[1]`).
+fn query_exchange() -> Vec<E> {
+    query_exchange_with(20)
 }
 
 fn read_chunk_steps(calls: u32, data: &[u8]) -> Vec<E> {
@@ -278,6 +284,27 @@ fn unknown_completion_withholds_callback_and_arena_restoration() {
         remaining, 0,
         "no cleanup traffic is sent after unknown completion"
     );
+}
+
+#[test]
+fn query_magic_outside_field_one_stops_the_read_and_still_restores() {
+    let (bulk, flash, payload, image) = fixture();
+    let mut steps = info(4, "X-M5");
+    steps.extend(info(8, "2.06"));
+    steps.extend(memory_read(0x1600, &1u32.to_le_bytes()));
+    steps.extend(arena_steps(&image));
+    steps.extend(memory_read(SLOT, &0u32.to_le_bytes()));
+    steps.extend(write_verified(SLOT, &ENTRY.to_le_bytes()));
+    steps.extend(write_verified(REQUEST, &request_words(SOURCE, CONTROL)));
+    steps.extend(memory_read(SLOT, &ENTRY.to_le_bytes()));
+    steps.extend(query_exchange_with(16));
+    steps.extend(memory_read(SLOT, &ENTRY.to_le_bytes()));
+    steps.extend(cleanup_steps(&image));
+    let (result, state, remaining) = run(steps, &payload, &flash, &bulk, &image);
+    let error = result.unwrap_err().to_string();
+    assert!(error.contains("query reply magic"), "{error}");
+    assert_eq!(remaining, 0, "no result or buffer read, then cleanup");
+    assert_eq!(state, SessionState::Ready);
 }
 
 #[test]
