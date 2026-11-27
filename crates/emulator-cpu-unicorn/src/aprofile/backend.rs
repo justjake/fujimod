@@ -12,6 +12,14 @@ struct Saved {
     irq: bool,
     fiq: bool,
 }
+struct LatchedEvents<'a>(&'a Cell<bool>);
+
+impl Drop for LatchedEvents<'_> {
+    fn drop(&mut self) {
+        self.0.set(false);
+    }
+}
+
 impl Snapshot for Saved {
     fn owner(&self) -> Identity {
         self.raw.owner()
@@ -71,6 +79,15 @@ impl Cpu for Core {
             }
         }
         Ok(())
+    }
+    fn run_with_latched_armv7a_events(&self, request: Run) -> Result<Exit, ExecutionError> {
+        let e = &self.execution;
+        if !e.a32 || e.active.get() {
+            return self.run(request);
+        }
+        let _latched = LatchedEvents(&e.armv7a_events_latched);
+        e.armv7a_events_latched.set(true);
+        self.run(request)
     }
     fn write_memory(&self, address: u64, bytes: &[u8]) -> Result<(), String> {
         let e = &self.execution;

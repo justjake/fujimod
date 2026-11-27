@@ -1808,14 +1808,32 @@ impl Board {
             let cpu = &self.cpus[core];
             // The exact budget ends at the first device/DMA/processor event
             // or runnable-peer turn; those boundaries end the stable window.
-            cpu.set_loop_window(self.state.borrow().loop_window())?;
+            let events_latched = {
+                let state = self.state.borrow();
+                cpu.set_loop_window(state.loop_window())?;
+                // WFE exits before it can consume a latch. Interrupt pins can
+                // only set latches while no processor is waiting for an event.
+                state.armv7a[core].is_some()
+                    && state.execution_policy == ExecutionPolicy::Exact
+                    && !state.settled.armed
+                    && state.polls.last[core].is_none()
+                    && state.events.iter().all(|&event| event)
+                    && !state.waiting_event.iter().any(|&waiting| waiting)
+            };
+            let run = |request| {
+                if events_latched {
+                    cpu.run_with_latched_armv7a_events(request)
+                } else {
+                    cpu.run(request)
+                }
+            };
             let pc = scalar(&**cpu, Register::Pc)?;
             let mut engine_guard =
                 fujimod_perf::engine_run(u8::try_from(core).unwrap_or(u8::MAX), false);
             // Block execution has no engine counter: the board debits entries.
             let mut limit = budget;
             self.state.borrow_mut().run_entries[core] = 0;
-            let mut result = cpu.run(Run {
+            let mut result = run(Run {
                 begin: if cpu.model() == fujimod_emulator_cpu::Model::CortexM4
                     || matches!(
                         cpu.model(),
@@ -1855,7 +1873,7 @@ impl Board {
                     }
                 }
                 drop(s);
-                result = cpu.run(Run {
+                result = run(Run {
                     begin: scalar(&**cpu, Register::Pc)? | 1,
                     until: None,
                     watchdog_us: 0,
