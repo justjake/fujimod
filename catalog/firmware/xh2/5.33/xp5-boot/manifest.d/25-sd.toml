@@ -30,7 +30,7 @@ protocol = "sdhc"
 transfer_ticks = 1000
 clock_ticks = 1000
 rca = 1
-ram_bytes = 0x80000000
+ram_bytes = 0xf0000000 # the [dram] limit: RAM 0+0x80000000 and 0x80000000+0x70000000 (manifest.toml); playback DMA reaches 0xeec00000
 dram_alias = false
 # DMA address bits 34..32 of slot 0, port 0: the writer 0x13aaae0 (the X-T5's 0x13a8ea0)
 # stores (buffer >> 32) & 7 at 0xff90e7d8 + slot * 12 before each block transfer.

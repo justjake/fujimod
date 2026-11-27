@@ -1,0 +1,12 @@
+# JPEG decoder used by playback, declared as on the X-T5 (xt5/4.31 58-playback.toml).
+# X-H2 5.20 playback of a slot 2 picture writes +0x118 = 1 (5.20 PC 0x5de10, LR 0x13b8f64;
+# declared here by hardware address; 5.33 playback opens a camera JPEG with it)
+# before any other model answered it. The interrupt line and run time are the X-T5's,
+# UNVERIFIED on the X-H2.
+[[device]]
+base = 0xffd11000
+size = 0x1000
+kind = "jpeg-decoder"
+[device.options]
+irq = 208
+run_ticks = 1000

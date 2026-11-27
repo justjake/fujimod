@@ -1,0 +1,258 @@
+# Develop and playback completion stubs and helper blocks, ported as declared on the
+# X-T5 (xt5/4.31: 55-develop-stubs, 56-develop-stubs-2, 57-develop-stubs-3, 59-raw-stubs,
+# 63-hdr) so X-H2 playback can open a picture. The X-H2 is the same XP5 SoC; these were
+# added because X-H2 5.20 playback (the same hardware addresses apply to 5.30 and 5.33; both open a camera JPEG in playback) reached the X-T5 windows (0xffd11118, 0xffd0c114)
+# with nothing declared there. Interrupt lines, register constants and delays are the
+# X-T5's, UNVERIFIED on the X-H2. Completion stubs are not models of their blocks.
+
+# From xt5/4.31 55-develop-stubs.toml.
+[[device]]
+base = 0xff975000
+size = 0x1000
+kind = "completion-stub"
+[device.options]
+registers = [
+  { offset = 0x00, mode = "constant", value = 0x1 },
+  { offset = 0x98, mode = "constant", value = 0x1 },
+  { offset = 0x100, mode = "constant", value = 0x1 },
+]
+irq = 206
+starts = [{ offset = 0x04, mask = 0x1 }]
+delay_us = 200
+completion = [{ offset = 0x104, set = 0x1 }, { offset = 0x04, clear = 0x1 }]
+ack = { offset = 0x108, mode = "w1c", status_offset = 0x104, bits = 0x1 }
+irq_mask_offset = 0x10c
+irq_mask_bit = 0
+irq_mask_set_masks = false
+
+# From xt5/4.31 57-develop-stubs-3.toml.
+[[device]]
+base = 0xff977000
+size = 0x1000
+kind = "completion-stub"
+[device.options]
+registers = [
+  { offset = 0x000, mode = "constant", value = 0x1 },
+  { offset = 0x308, mode = "constant", value = 0x10001 },
+]
+irq = 176
+starts = [{ offset = 0x04, mask = 0x1 }]
+delay_us = 200
+completion = [{ offset = 0x310, set = 0x1 }, { offset = 0x04, clear = 0x1 }]
+ack = { offset = 0x310, mode = "w1c" }
+irq_mask_offset = 0x30c
+irq_mask_bit = 0
+irq_mask_set_masks = false
+
+# From xt5/4.31 57-develop-stubs-3.toml.
+[[device]]
+base = 0xff981000
+size = 0x1000
+kind = "completion-stub"
+[device.options]
+registers = [
+  { offset = 0x000, mode = "constant", value = 0x1 },
+  { offset = 0x830, mode = "constant", value = 0x01110111 },
+]
+
+# From xt5/4.31 55-develop-stubs.toml.
+[[device]]
+base = 0xff984000
+size = 0x1000
+kind = "imaging-rzl2"
+[device.options]
+registers = [
+  { offset = 0x00, mode = "constant", value = 0x1 },
+  { offset = 0x100, mode = "constant", value = 0x01000100 },
+]
+irq = 205
+starts = [{ offset = 0x04, mask = 0x1 }]
+delay_us = 200
+completion = [{ offset = 0x104, set = 0x1 }, { offset = 0x04, clear = 0x1 }]
+ack = { offset = 0x108, mode = "w1c", status_offset = 0x104, bits = 0x7 }
+irq_mask_offset = 0x10c
+irq_mask_bit = 0
+irq_mask_set_masks = false
+
+# From xt5/4.31 63-hdr.toml.
+[[device]]
+base = 0xff986000
+size = 0x1000
+kind = "completion-stub"
+[device.options]
+registers = [
+  { offset = 0x000, mode = "constant", value = 0x1 },
+  { offset = 0x0f8, mode = "constant", value = 0x10100 },
+]
+irq = 198
+starts = [{ offset = 0x04, mask = 0x1 }]
+delay_us = 200
+completion = [{ offset = 0xfc, set = 0x1 }, { offset = 0x04, clear = 0x1 }]
+ack = { offset = 0xf8, mode = "w1c", status_offset = 0xfc, bits = 0x1 }
+
+# From xt5/4.31 57-develop-stubs-3.toml.
+[[device]]
+base = 0xff987000
+size = 0x1000
+kind = "completion-stub"
+[device.options]
+registers = [
+  { offset = 0x00, mode = "constant", value = 0x1 },
+  { offset = 0x10, mode = "constant", value = 0x10001 },
+]
+irq = 175
+starts = [{ offset = 0x04, mask = 0x1 }]
+delay_us = 200
+completion = [{ offset = 0x30, set = 0x1 }, { offset = 0x04, clear = 0x1 }]
+ack = { offset = 0x34, mode = "w1c", status_offset = 0x30, bits = 0x1 }
+irq_mask_offset = 0x38
+irq_mask_bit = 0
+irq_mask_set_masks = false
+
+# From xt5/4.31 55-develop-stubs.toml.
+[[device]]
+base = 0xffd00000
+size = 0x1000
+kind = "completion-stub"
+[device.options]
+registers = [
+  { offset = 0x00, mode = "constant", value = 0x1 },
+  { offset = 0x10, mode = "constant", value = 0x10001 },
+]
+irq = 199
+starts = [{ offset = 0x04, mask = 0x1 }]
+delay_us = 200
+completion = [{ offset = 0x20, set = 0x1 }, { offset = 0x04, clear = 0x1 }]
+ack = { offset = 0x24, mode = "w1c", status_offset = 0x20, bits = 0x1 }
+
+# From xt5/4.31 55-develop-stubs.toml.
+[[device]]
+base = 0xffd0c000
+size = 0x1000
+kind = "imaging-resz"
+[device.options]
+registers = [
+  { offset = 0x00, mode = "constant", value = 0x1 },
+  { offset = 0x108, mode = "constant", value = 0x01000100 },
+]
+irq = 203
+starts = [{ offset = 0x04, mask = 0x1 }]
+delay_us = 200
+completion = [{ offset = 0x10c, set = 0x1 }, { offset = 0x04, clear = 0x1 }]
+ack = { offset = 0x110, mode = "w1c", status_offset = 0x10c, bits = 0x3 }
+irq_mask_offset = 0x114
+irq_mask_bit = 0
+irq_mask_set_masks = false
+
+# From xt5/4.31 59-raw-stubs.toml.
+[[device]]
+base = 0xffd12000
+size = 0x1000
+kind = "completion-stub"
+[device.options]
+registers = [
+  { offset = 0x000, mode = "command" },
+]
+irq = 209
+starts = [
+  { offset = 0x000, mask = 0x1 },
+  { offset = 0x100, mask = 0x1 },
+]
+delay_us = 200
+completion = [{ offset = 0x04, set = 0x10001 }]
+ack = { offset = 0x04, mode = "w1c" }
+
+# From xt5/4.31 56-develop-stubs-2.toml.
+[[device]]
+base = 0xffd21000
+size = 0x1000
+kind = "completion-stub"
+[device.options]
+registers = [
+  { offset = 0x00, mode = "constant", value = 0x1 },
+  { offset = 0x10, mode = "constant", value = 0x10001 },
+]
+irq = 212
+starts = [{ offset = 0x04, mask = 0x1 }]
+delay_us = 200
+completion = [{ offset = 0x30, set = 0x1 }, { offset = 0x04, clear = 0x1 }]
+ack = { offset = 0x34, mode = "w1c", status_offset = 0x30, bits = 0x1 }
+irq_mask_offset = 0x38
+irq_mask_bit = 0
+irq_mask_set_masks = false
+
+# From xt5/4.31 63-hdr.toml.
+[[device]]
+base = 0xffd23000
+size = 0x1000
+kind = "completion-stub"
+[device.options]
+registers = [
+  { offset = 0x000, mode = "constant", value = 0x1 },
+  { offset = 0x010, mode = "constant", value = 0x10001 },
+]
+irq = 214
+starts = [{ offset = 0x04, mask = 0x1 }]
+delay_us = 200
+completion = [{ offset = 0x30, set = 0x1 }, { offset = 0x04, clear = 0x1 }]
+ack = { offset = 0x34, mode = "w1c", status_offset = 0x30, bits = 0x1 }
+irq_mask_offset = 0x38
+irq_mask_bit = 0
+irq_mask_set_masks = false
+
+# From xt5/4.31 57-develop-stubs-3.toml.
+[[device]]
+base = 0xffd24000
+size = 0x1000
+kind = "imaging-tnr"
+[device.options]
+registers = [
+  { offset = 0x000, mode = "constant", value = 0x1 },
+]
+irq = 218
+starts = [{ offset = 0x04, mask = 0x1 }]
+delay_us = 200
+completion = [{ offset = 0x314, set = 0x1 }, { offset = 0x04, clear = 0x1 }]
+ack = { offset = 0x310, mode = "w1c", status_offset = 0x314, bits = 0x1 }
+irq_mask_offset = 0x30c
+irq_mask_bit = 0
+irq_mask_set_masks = false
+
+# From xt5/4.31 57-develop-stubs-3.toml.
+[[device]]
+base = 0xffd26000
+size = 0x1000
+kind = "imaging-fcnv"
+[device.options]
+registers = [
+  { offset = 0x000, mode = "constant", value = 0x1 },
+  { offset = 0x308, mode = "constant", value = 0x10001 },
+]
+irq = 217
+starts = [{ offset = 0x04, mask = 0x1 }]
+delay_us = 200
+completion = [{ offset = 0x310, set = 0x1 }, { offset = 0x04, clear = 0x1 }]
+ack = { offset = 0x310, mode = "w1c" }
+irq_mask_offset = 0x30c
+irq_mask_bit = 0
+irq_mask_set_masks = false
+
+# From xt5/4.31 56-develop-stubs-2.toml.
+[[device]]
+base = 0xffd27000
+size = 0x1000
+kind = "completion-stub"
+[device.options]
+registers = [
+  { offset = 0x00, mode = "constant", value = 0x1 },
+  { offset = 0x10, mode = "constant", value = 0x10001 },
+  { offset = 0x14, mode = "constant", value = 0x10001 },
+]
+irq = 215
+starts = [{ offset = 0x04, mask = 0x1 }]
+delay_us = 200
+completion = [{ offset = 0x30, set = 0x1 }, { offset = 0x04, clear = 0x1 }]
+ack = { offset = 0x34, mode = "w1c", status_offset = 0x30, bits = 0x1 }
+irq_mask_offset = 0x38
+irq_mask_bit = 0
+irq_mask_set_masks = false
