@@ -4391,8 +4391,15 @@ unsafe fn block_entered(block: fujimod_emulator_cpu::Block, data: *mut c_void) {
         if p.take_alias_write() {
             s.code_run = RunCode::Unknown;
         }
-        s.sync_mprofile_fast_stores(cpu, core)?;
         let execute = matches!(entry, mprofile::Entry::Execute);
+        // In an ordered slice no peer can acquire a reservation between
+        // entries. This core only acquires one in an emulated instruction.
+        if !execute
+            || s.parallel.is_some()
+            || !s.blocks[core].as_ref().unwrap().fast_stores
+        {
+            s.sync_mprofile_fast_stores(cpu, core)?;
+        }
         if !execute {
             s.settled.clear();
             s.blocks[core].as_mut().unwrap().poll = None;
