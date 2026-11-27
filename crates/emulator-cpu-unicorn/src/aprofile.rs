@@ -321,10 +321,6 @@ impl Core {
         Ok(trace.entries.drain(..).collect())
     }
 }
-/// ARMv7-A ARM-state LDREX/STREX family (any width) and CLREX encodings.
-fn exclusive_instruction(word: u32) -> bool {
-    word & 0x0f90_0fff == 0x0190_0f9f || word & 0x0f90_0ff0 == 0x0180_0f90 || word == 0xf57f_f01f
-}
 impl Drop for Execution {
     fn drop(&mut self) {
         self.memory.forget(self.id.get());
@@ -484,7 +480,7 @@ impl Execution {
         if self.a32 {
             (armv7a::framework_instruction(word)
                 && !(self.owner_mpidr.get() && armv7a::mpidr_read(word)))
-                || (self.exclusive_exits.get() && exclusive_instruction(word))
+                || (self.exclusive_exits.get() && armv7a::exclusive_instruction(word))
         } else {
             arm64::framework_instruction(word)
         }

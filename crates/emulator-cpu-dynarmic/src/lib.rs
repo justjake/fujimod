@@ -832,6 +832,12 @@ impl Cpu for Core {
         unsafe { ffi::dynarmic_set_reg(self.inst, 15, begin & !1) };
         let budget = request.instructions.unwrap_or(usize::MAX) as u64;
         self.shared.device_accessed.set(false);
+        let scheduler_only = self.scheduler_hook.get().is_some_and(|scheduler| {
+            matches!(self.shared.observers.borrow().as_slice(), [(id, _)] if *id == scheduler.key)
+                && self.shared.fault_hooks.borrow().is_empty()
+        });
+        let defer_scheduler = stable && scheduler_only && request.until.is_none();
+        let mut observed_irq_mask = None;
         let status = loop {
             if self.last_progress.get() >= budget {
                 break ffi::DynarmicExitReason::Timeout;
@@ -861,7 +867,19 @@ impl Cpu for Core {
                 }
             };
             self.shared.stopped.set(false);
-            self.shared.observe_instruction(pc);
+            let irq_mask = cpsr & 0x80;
+            // The owner already capped this run at the next device or peer
+            // event. Reenter it before any board-owned opcode, after a change
+            // to IRQ masking, or once MMIO may have changed that cap.
+            if !defer_scheduler
+                || self.shared.device_accessed.get()
+                || observed_irq_mask != Some(irq_mask)
+                || armv7a::framework_instruction(word)
+                || armv7a::exclusive_instruction(word)
+            {
+                self.shared.observe_instruction(pc);
+                observed_irq_mask = Some(irq_mask);
+            }
             if self.shared.stopped.get() {
                 break ffi::DynarmicExitReason::Stopped;
             }

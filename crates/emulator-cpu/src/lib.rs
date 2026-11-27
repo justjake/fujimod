@@ -631,8 +631,10 @@ pub trait Cpu {
             Err("backend has no exact loop acceleration".into())
         }
     }
-    /// The execution owner guarantees no RAM/input changes before this run's
-    /// instruction cap: stop at device, DMA, interrupt and runnable-peer events.
+    /// The execution owner caps this run at the first device, DMA, interrupt
+    /// or runnable-peer event. The processor may perform its own memory and
+    /// device accesses within the window. If one can change that bound, the
+    /// backend must reenter the scheduler before running more instructions.
     /// The permission expires when the bounded run returns.
     fn set_loop_window(&self, _stable: bool) -> Result<(), String> {
         Ok(())
@@ -904,8 +906,9 @@ pub trait Cpu {
     unsafe fn install_hook(&self, hook: Hook) -> Result<HookId, String>;
 
     /// Install the execution owner's instruction-boundary callback. The owner
-    /// supplies the run budget and stable window; unlike guest observers, its
-    /// callback need not see individual instructions inside a proven window.
+    /// supplies the run budget and stable window. The callback sees each
+    /// instruction that can require owner work inside the window. Guest
+    /// observers still see their requested instruction boundaries.
     ///
     /// # Safety
     /// The callback and data must obey the instruction-hook lifetime contract.
