@@ -21,6 +21,17 @@ pub struct Stub {
     pub dynamic: bool,
     #[serde(default)]
     pub reads: Vec<(u8, ReadSize)>,
+    /// Where the substituted return value lands: X0, or D0 for a
+    /// floating-point return (the low 64 bits of V0, upper bits zeroed).
+    #[serde(default)]
+    pub return_register: ReturnRegister,
+}
+#[derive(Clone, Copy, Default, Deserialize, Serialize, PartialEq, Eq, Debug)]
+#[serde(rename_all = "lowercase")]
+pub enum ReturnRegister {
+    #[default]
+    X0,
+    D0,
 }
 #[derive(Clone, Deserialize, Serialize)]
 #[serde(untagged)]
@@ -127,6 +138,10 @@ pub struct CheckedOptions {
     pub stubs: Vec<Stub>,
     /// Explicit initial values for x0..x30; omitted registers use zero.
     pub registers: Vec<(u8, u64)>,
+    /// Explicit initial low 64 bits of V0..V31 (the D views, for
+    /// floating-point arguments); the upper bits and omitted registers are zero.
+    #[serde(default)]
+    pub vector_registers: Vec<(u8, u64)>,
     /// Explicit expected exits for a partial-frame fragment, overriding only
     /// named callee-save expectations. Ordinary calls preserve all of them.
     #[serde(default)]
@@ -143,6 +158,9 @@ pub struct Store {
 pub struct StubHit {
     pub address: u64,
     pub arguments: Vec<u64>,
+    /// Low 64 bits of V0..V7 at the call: the D views that carry
+    /// floating-point arguments.
+    pub vector_arguments: Vec<u64>,
     pub returns: u64,
     pub writes: Vec<WriteReceipt>,
     pub reads: Vec<WriteReceipt>,
@@ -895,7 +913,11 @@ impl Guard {
         let scalar_fadd = word & 0xffa0_fc00 == 0x1e20_2800; // FADD S/D; only bit 22 varies by width.
         let scalar_fdiv = word & 0xffa0_fc00 == 0x1e20_1800; // FDIV S/D; only bit 22 varies by width.
         let scalar_fsub = word & 0xffa0_fc00 == 0x1e20_3800; // FSUB S/D; only bit 22 varies by width.
-        let scalar_fcvt_s_from_h = word & 0xffff_fc00 == 0x1ee2_4000; // FCVT S,H; other precision conversions refuse.
+        let scalar_fcvt_s_from_h = word & 0xffff_fc00 == 0x1ee2_4000; // FCVT S,H.
+        let scalar_fcvt_single_double = matches!(word & 0xffff_fc00, 0x1e22_c000 | 0x1e62_4000); // FCVT D,S and S,D; other precision conversions refuse.
+        let scalar_fused_multiply = word & 0xff80_0000 == 0x1f00_0000; // FMADD, FMSUB, FNMADD, FNMSUB S/D; half and reserved widths refuse.
+        let scalar_fneg = word & 0xffbf_fc00 == 0x1e21_4000; // FNEG S/D; only bit 22 varies by width.
+        let shl_32_bit_lanes = word & 0xbfe0_fc00 == 0x0f20_5400; // SHL Vd.2S/4S,#imm; other lane sizes and shifts refuse.
         let scalar_fnmul_d = word & 0xffe0_fc00 == 0x1e60_8800; // FNMUL D,D,D.
         let scalar_fcvtzu_w_from_d = word & 0xffff_fc00 == 0x1e79_0000; // FCVTZU W,D.
         let scalar_movi_d = word & 0xfff8_fc00 == 0x2f00_e400; // MOVI Dd,#imm64; vector forms refuse.
@@ -927,6 +949,10 @@ impl Guard {
             || scalar_fdiv
             || scalar_fsub
             || scalar_fcvt_s_from_h
+            || scalar_fcvt_single_double
+            || scalar_fused_multiply
+            || scalar_fneg
+            || shl_32_bit_lanes
             || scalar_fnmul_d
             || scalar_fcvtzu_w_from_d
             || scalar_movi_d
@@ -1042,8 +1068,25 @@ unsafe fn store(_: Access, address: u64, size: i32, value: i64, data: *mut c_voi
         });
     }
 }
+/// General registers and the D views (low 64 bits) of V0..V31.
 fn registers(board: &Board) -> Result<std::collections::BTreeMap<String, u64>, String> {
-    cpu_registers(board.cpu(0)?)
+    let cpu = board.cpu(0)?;
+    let mut registers = cpu_registers(cpu)?;
+    for index in 0..32 {
+        registers.insert(format!("d{index}"), vector_low(cpu, index)?);
+    }
+    Ok(registers)
+}
+fn vector_low(cpu: &dyn Cpu, index: u8) -> Result<u64, String> {
+    let mut vector = [0; 16];
+    cpu.read_register(Register::V(index), &mut vector)?;
+    Ok(u64::from_le_bytes(vector[..8].try_into().unwrap()))
+}
+fn write_vector_low(cpu: &dyn Cpu, index: u8, value: u64) -> Result<(), String> {
+    let mut vector = [0; 16];
+    vector[..8].copy_from_slice(&value.to_le_bytes());
+    cpu.write_register(Register::V(index), &vector)?;
+    Ok(())
 }
 fn cpu_registers(cpu: &dyn Cpu) -> Result<std::collections::BTreeMap<String, u64>, String> {
     (0..31)
@@ -1158,6 +1201,7 @@ pub fn checked_call_with(
             .iter()
             .any(|s| s.address & 3 != 0 || !contains(&options.executable, s.address, 4))
         || options.registers.iter().any(|&(r, _)| r > 30)
+        || options.vector_registers.iter().any(|&(r, _)| r > 31)
     {
         return Err(
             "Invalid checked AArch64 stack (16-byte alignment), sentinel or guard ranges".into(),
@@ -1244,6 +1288,9 @@ pub fn checked_call_with(
     board.write_register(0, Register::Fpsr, 0)?;
     for &(r, value) in &options.registers {
         board.write_register(0, Register::X(r), value)?
+    }
+    for &(r, value) in &options.vector_registers {
+        write_vector_low(board.cpu(0)?, r, value)?
     }
     let initial = registers(board)?;
     let start = board.instruction_counts()[0];
@@ -1332,10 +1379,14 @@ pub fn checked_call_with(
                 let arguments = (0..8)
                     .map(|r| board.read_register(0, Register::X(r)))
                     .collect::<Result<_, _>>()?;
+                let vector_arguments = (0..8)
+                    .map(|r| vector_low(board.cpu(0)?, r))
+                    .collect::<Result<_, String>>()?;
                 let mut hit = StubHit {
                     address: stub.address,
                     returns: stub.returns,
                     arguments,
+                    vector_arguments,
                     writes: vec![],
                     reads: vec![],
                 };
@@ -1402,7 +1453,10 @@ pub fn checked_call_with(
                     }
                     hit.returns = returns;
                 }
-                board.write_register(0, Register::X(0), hit.returns)?;
+                match stub.return_register {
+                    ReturnRegister::X0 => board.write_register(0, Register::X(0), hit.returns)?,
+                    ReturnRegister::D0 => write_vector_low(board.cpu(0)?, 0, hit.returns)?,
+                }
                 guard.observed.borrow_mut().hits.push(hit);
                 board.write_register(0, Register::Pc, board.read_register(0, Register::X(30))?)?;
             }
@@ -1815,6 +1869,65 @@ mod tests {
         );
     }
     #[test]
+    fn fused_multiply_negate_and_single_double_conversion_are_admitted() {
+        let mut b = board(&[
+            0x1f41_0800, // FMADD D0,D0,D1,D2.
+            0x1e61_4000, // FNEG D0,D0.
+            0x1e62_4000, // FCVT S0,D0.
+            0xd65f_03c0,
+        ]);
+        let mut o = options();
+        o.vector_registers = vec![
+            (0, 2.0f64.to_bits()),
+            (1, 3.0f64.to_bits()),
+            (2, 1.0f64.to_bits()),
+        ];
+        let r = checked_call(&mut b, o).unwrap();
+        assert!(r.returned, "{:?}", r.failure);
+        assert_eq!(r.instructions, 4);
+        assert_eq!(r.registers["d0"], u64::from((-7.0f32).to_bits()));
+        assert_eq!(r.initial_registers["d1"], 3.0f64.to_bits());
+
+        let mut b = board(&[0x1e22_c003, 0xd65f_03c0]); // FCVT D3,S0.
+        let mut o = options();
+        o.vector_registers = vec![(0, u64::from(1.5f32.to_bits()))];
+        let r = checked_call(&mut b, o).unwrap();
+        assert!(r.returned, "{:?}", r.failure);
+        assert_eq!(r.registers["d3"], 1.5f64.to_bits());
+
+        let mut b = board(&[0x1ee2_c000, 0xd65f_03c0]); // FCVT D0,H0.
+        let r = checked_call(&mut b, options()).unwrap();
+        assert_eq!(r.instructions, 0);
+        assert!(
+            r.failure
+                .unwrap()
+                .contains("Unsupported instruction 0x1ee2c000")
+        );
+
+        let mut b = board(&[0xd65f_03c0]);
+        let mut o = options();
+        o.vector_registers = vec![(32, 0)];
+        assert!(checked_call(&mut b, o).is_err());
+    }
+    #[test]
+    fn shl_admits_32_bit_lanes_only() {
+        let mut b = board(&[0x0f29_5421, 0xd65f_03c0]); // SHL V1.2S,V1.2S,#9.
+        let mut o = options();
+        o.vector_registers = vec![(1, 0x0000_0003_0000_0005)];
+        let r = checked_call(&mut b, o).unwrap();
+        assert!(r.returned, "{:?}", r.failure);
+        assert_eq!(r.registers["d1"], (3u64 << 9) << 32 | 5 << 9);
+
+        let mut b = board(&[0x4f19_5421, 0xd65f_03c0]); // SHL V1.8H,V1.8H,#9.
+        let r = checked_call(&mut b, options()).unwrap();
+        assert_eq!(r.instructions, 0);
+        assert!(
+            r.failure
+                .unwrap()
+                .contains("Unsupported instruction 0x4f195421")
+        );
+    }
+    #[test]
     fn scalar_fsqrt_is_admitted_without_admitting_half_fadd() {
         let mut b = board(&[
             0x1e22_1000, // FMOV S0,#4.0.
@@ -2183,7 +2296,6 @@ mod tests {
             0x0e20_d400, // FADD V0.2S,V0.2S,V0.2S.
             0x1ee2_c000, // FCVT D0,H0.
             0x1e23_c000, // FCVT H0,S0.
-            0x1e62_4000, // FCVT S0,D0.
         ] {
             let mut b = board(&[word, 0xd65f_03c0]);
             let r = checked_call(&mut b, options()).unwrap();
