@@ -72,11 +72,15 @@ run = "pnpm run preview -- --mode local-preview --port 5190 --strictPort"
 run = ["cargo nextest run --workspace --all-features --locked", "mise run rust-doc-test"]
 
 [tasks.rust-doc-test]
-run = "cargo test --doc --workspace --all-features --locked"
+run = "cargo test --doc --workspace --exclude fujimod-emulator-gui-app --all-features --locked"
 
 [tasks.rust-test-archive]
 description = "CI: build the Rust tests once with the ci profile into an archive the shards run"
-run = "mkdir -p target/nextest && cargo nextest archive --cargo-profile ci --workspace --all-features --locked --archive-file target/nextest/rust-tests.tar.zst"
+run = "mkdir -p target/nextest && cargo nextest archive --cargo-profile ci --workspace --exclude fujimod-emulator-gui-app --all-features --locked --archive-file target/nextest/rust-tests.tar.zst"
+
+[tasks.rust-desktop-test]
+description = "CI: test the desktop app, which needs the GTK and WebKit headers and its built frontend"
+run = "cargo nextest run --cargo-profile ci --profile ci -p fujimod-emulator-gui-app --all-features --locked"
 
 [tasks.rust-test-shard]
 description = "CI: run one shard (N/COUNT) of the archived Rust tests"

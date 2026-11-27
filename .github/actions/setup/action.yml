@@ -17,12 +17,20 @@ runs:
         # The version developers run; later releases refuse emsdk, whose plugin
         # downloads a moving branch that the lockfile cannot checksum.
         version: 2026.9.15
-    - name: Install Linux desktop headers
-      if: runner.os == 'Linux' && inputs.desktop == 'true'
+    # Every Rust build compiles protobuf schemas, links libjpeg and runs GPU
+    # tests on the software Vulkan driver; only the desktop app needs GTK.
+    - name: Install Linux build packages
+      if: runner.os == 'Linux'
       shell: bash
+      env:
+        DESKTOP: ${{ inputs.desktop }}
       run: |
+        packages=(protobuf-compiler mesa-vulkan-drivers libjpeg-dev)
+        if [ "$DESKTOP" = true ]; then
+          packages+=(libglib2.0-dev libgtk-3-dev libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev libxdo-dev)
+        fi
         sudo apt-get update
-        sudo apt-get install -y libglib2.0-dev libgtk-3-dev libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev libxdo-dev protobuf-compiler mesa-vulkan-drivers
+        sudo apt-get install -y "${packages[@]}"
     # Rust compiles go through sccache's GitHub cache backend: each entry is
     # keyed by what that compile reads, so a change recompiles only the crates
     # it touches, in any job. rust-cache keeps the downloaded crates.
