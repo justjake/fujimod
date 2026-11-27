@@ -365,6 +365,21 @@ impl Cpu for Core {
             if flush {
                 e.memory.flush()?;
             }
+            // A pause requested while this run was executing has to end it.
+            // The engine's block hook honors the pause before the owner's
+            // block callback runs, so a restart requested by a store is left
+            // pending when the pause stops the guest. Retrying in place would
+            // re-enter the engine at the same PC and be stopped before that
+            // block ever runs, forever. Finish the run instead, leaving the
+            // stopped state and the pending restart exactly as a pause at a
+            // block entry leaves them.
+            if e.pause_requested
+                .as_ref()
+                .is_some_and(|pause| pause.load(std::sync::atomic::Ordering::Acquire) != 0)
+            {
+                e.stopped.set(true);
+                return Ok(exit);
+            }
             if !e.stopped.get()
                 && (flush || e.restart.get().is_some())
                 && e.count.get() < e.cap.get()

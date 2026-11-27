@@ -224,7 +224,7 @@ impl Core {
                 e.cpu.set_entry_exits(true)?;
             }
             e.cpu.translation_hooks(Some(TranslationHooks {
-                classify,
+                classify: fujimod_emulator_cpu::TranslationClassifier::Owner(classify),
                 restart,
                 data,
             }))?;

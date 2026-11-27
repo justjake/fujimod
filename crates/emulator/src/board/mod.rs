@@ -2149,13 +2149,15 @@ impl Board {
                     // a hooked store or device access as a block of its own.
                     // In Thumb accounting mode it also classifies register-only blocks.
                     cpu.translation_hooks(Some(fujimod_emulator_cpu::TranslationHooks {
-                        classify: if cpu.thumb_exception_status().is_some() {
-                            block_classify_with_exception_status
-                        } else if cpu.thumb_recovery_accounting().is_some() {
-                            block_classify_transfers
-                        } else {
-                            block_classify
-                        },
+                        classify: fujimod_emulator_cpu::TranslationClassifier::Stateless(
+                            if cpu.thumb_exception_status().is_some() {
+                                block_classify_with_exception_status
+                            } else if cpu.thumb_recovery_accounting().is_some() {
+                                block_classify_transfers
+                            } else {
+                                block_classify
+                            },
+                        ),
                         restart: block_restarted,
                         data,
                     }))?;
@@ -4204,7 +4206,7 @@ unsafe fn before(pc: u64, _: u32, data: *mut c_void) {
     }
 }
 /// Classify Thumb instructions from their encoding when the accelerator opts in.
-unsafe fn block_classify(_: *mut c_void, _: u64, word: u32) -> fujimod_emulator_cpu::Translation {
+fn block_classify(word: u32) -> fujimod_emulator_cpu::Translation {
     fujimod_emulator_cpu::Translation {
         instruction: fujimod_emulator_cpu::InstructionDisposition::Execute,
         observe_block: !mprofile_blocks::can_run_inline(word),
@@ -4212,12 +4214,8 @@ unsafe fn block_classify(_: *mut c_void, _: u64, word: u32) -> fujimod_emulator_
 }
 /// Recoverable blocks can also execute ordinary memory transfers. Device and
 /// watched accesses still enter the board at the instruction that made them.
-unsafe fn block_classify_transfers(
-    data: *mut c_void,
-    pc: u64,
-    word: u32,
-) -> fujimod_emulator_cpu::Translation {
-    let mut classification = unsafe { block_classify(data, pc, word) };
+fn block_classify_transfers(word: u32) -> fujimod_emulator_cpu::Translation {
+    let mut classification = block_classify(word);
     if mprofile_blocks::can_run_in_it(word) {
         classification.instruction = fujimod_emulator_cpu::InstructionDisposition::ExecuteItSafe;
         classification.observe_block = false;
@@ -4255,18 +4253,14 @@ unsafe fn block_classify_transfers(
     classification
 }
 /// Mode 4 can read the controller's IPSR together with the live APSR flags.
-unsafe fn block_classify_with_exception_status(
-    data: *mut c_void,
-    pc: u64,
-    word: u32,
-) -> fujimod_emulator_cpu::Translation {
+fn block_classify_with_exception_status(word: u32) -> fujimod_emulator_cpu::Translation {
     if mprofile_blocks::is_exception_status_read(word) {
         return fujimod_emulator_cpu::Translation {
             instruction: fujimod_emulator_cpu::InstructionDisposition::ExecuteItSafe,
             observe_block: false,
         };
     }
-    unsafe { block_classify_transfers(data, pc, word) }
+    block_classify_transfers(word)
 }
 /// A guest store covered bytes a translation was made from, and the engine has
 /// retired that translation. This is the only store that can have rewritten

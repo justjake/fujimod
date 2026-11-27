@@ -116,7 +116,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             if mode == "legacy-budgeted" {
                 unsafe {
                     cpu.translation_hooks(Some(TranslationHooks {
-                        classify: legacy,
+                        classify: fujimod_emulator_cpu::TranslationClassifier::Owner(legacy),
                         restart,
                         data: std::ptr::null_mut(),
                     }))?;

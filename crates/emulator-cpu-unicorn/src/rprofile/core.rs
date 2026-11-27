@@ -339,7 +339,7 @@ impl Core {
         // and watched-page filters keep unrelated guest accesses in native code.
         unsafe {
             e.cpu.translation_hooks(Some(TranslationHooks {
-                classify,
+                classify: fujimod_emulator_cpu::TranslationClassifier::Owner(classify),
                 restart,
                 data,
             }))?;

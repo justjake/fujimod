@@ -499,10 +499,10 @@ unsafe extern "C" fn mmio_write(
 }
 impl Drop for Core {
     fn drop(&mut self) {
+        frozen::drop_core(self.identity);
         unsafe {
             (self.api.uc_close)(self.raw);
         }
-        frozen::drop_core(self.identity);
     }
 }
 struct StoredHook {
@@ -968,7 +968,8 @@ impl Cpu for Core {
             watched_stores: e.hook_watched.is_some() && e.watch.is_some(),
             backing_observation: e.observe_backings.is_some(),
             store_pc_control: e.write_hook_pc_sync.is_some(),
-            code_store_observation: std::env::var_os("FUJIMOD_CODE_STORES").is_none(),
+            code_store_observation: e.set_code_store.is_some()
+                && std::env::var_os("FUJIMOD_CODE_STORES").is_none(),
         }
     }
     fn set_execution_policy(&self, _policy: ExecutionPolicy) -> Result<(), String> {
@@ -1939,7 +1940,10 @@ unsafe extern "C" fn fault(
 unsafe extern "C" fn classify(data: *mut c_void, address: u64, word: u32) -> i32 {
     let context = unsafe { &*data.cast::<InstalledTranslationHooks>() };
     let hooks = &context.hooks;
-    let decision = unsafe { (hooks.classify)(hooks.data, address, word) };
+    let decision = match hooks.classify {
+        TranslationClassifier::Owner(classify) => unsafe { classify(hooks.data, address, word) },
+        TranslationClassifier::Stateless(classify) => classify(word),
+    };
     let action = match decision.instruction {
         InstructionDisposition::Execute => 0,
         InstructionDisposition::ExecuteItSafe => 0,
@@ -2069,7 +2073,7 @@ mod tests {
     fn execute_and_end_uses_native_bit_or_observed_fallback() {
         let native = InstalledTranslationHooks {
             hooks: TranslationHooks {
-                classify: thumb_execute_and_end,
+                classify: fujimod_emulator_cpu::TranslationClassifier::Owner(thumb_execute_and_end),
                 restart: thumb_restart,
                 data: std::ptr::null_mut(),
             },
@@ -2093,7 +2097,7 @@ mod tests {
     fn it_safe_disposition_requires_native_feature() {
         let native = InstalledTranslationHooks {
             hooks: TranslationHooks {
-                classify: thumb_execute_it_safe,
+                classify: fujimod_emulator_cpu::TranslationClassifier::Owner(thumb_execute_it_safe),
                 restart: thumb_restart,
                 data: std::ptr::null_mut(),
             },
@@ -2141,7 +2145,7 @@ mod tests {
         };
         unsafe {
             cpu.translation_hooks(Some(TranslationHooks {
-                classify: thumb_it_filter,
+                classify: fujimod_emulator_cpu::TranslationClassifier::Owner(thumb_it_filter),
                 restart: thumb_restart,
                 data: (&mut it_probe as *mut ThumbItProbe).cast(),
             }))
@@ -2209,7 +2213,7 @@ mod tests {
         };
         unsafe {
             cpu.translation_hooks(Some(TranslationHooks {
-                classify: thumb_it_filter,
+                classify: fujimod_emulator_cpu::TranslationClassifier::Owner(thumb_it_filter),
                 restart: thumb_restart,
                 data: (&mut it_probe as *mut ThumbItProbe).cast(),
             }))
@@ -2680,7 +2684,7 @@ mod tests {
         };
         unsafe {
             cpu.translation_hooks(Some(TranslationHooks {
-                classify: thumb_execute,
+                classify: fujimod_emulator_cpu::TranslationClassifier::Owner(thumb_execute),
                 restart: thumb_restart,
                 data: (&mut blocks as *mut ThumbBlockProbe).cast(),
             }))
@@ -2849,7 +2853,7 @@ mod tests {
         let data = (&mut probe as *mut ThumbRecoveryProbe).cast();
         unsafe {
             cpu.translation_hooks(Some(TranslationHooks {
-                classify: thumb_memory_execute,
+                classify: fujimod_emulator_cpu::TranslationClassifier::Owner(thumb_memory_execute),
                 restart: thumb_memory_restart,
                 data,
             }))
@@ -3158,7 +3162,7 @@ mod tests {
             .unwrap();
         unsafe {
             cpu.translation_hooks(Some(TranslationHooks {
-                classify: classify_return,
+                classify: fujimod_emulator_cpu::TranslationClassifier::Owner(classify_return),
                 restart: thumb_restart,
                 data: std::ptr::null_mut(),
             }))
@@ -3231,7 +3235,7 @@ mod tests {
 
         unsafe {
             cpu.translation_hooks(Some(TranslationHooks {
-                classify: thumb_memory_execute,
+                classify: fujimod_emulator_cpu::TranslationClassifier::Owner(thumb_memory_execute),
                 restart: thumb_restart,
                 data: std::ptr::null_mut(),
             }))
@@ -3359,7 +3363,7 @@ mod tests {
 
         unsafe {
             cpu.translation_hooks(Some(TranslationHooks {
-                classify: thumb_memory_execute,
+                classify: fujimod_emulator_cpu::TranslationClassifier::Owner(thumb_memory_execute),
                 restart: thumb_restart,
                 data: std::ptr::null_mut(),
             }))

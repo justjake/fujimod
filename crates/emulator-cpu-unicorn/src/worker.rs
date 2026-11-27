@@ -12,6 +12,7 @@ use fujimod_emulator_cpu::*;
 use std::any::Any;
 use std::cell::{Cell, RefCell};
 use std::collections::{BTreeMap, HashMap};
+use std::ffi::c_void;
 use std::marker::PhantomData;
 use std::ptr::NonNull;
 use std::rc::Rc;
@@ -49,7 +50,9 @@ pub struct CpuWorker {
     features: Features,
     thumb_accounting: Option<NonNull<ThumbBlockAccounting>>,
     thumb_recovery: Option<NonNull<ThumbBlockRecoveryAccounting>>,
+    thumb_exception_status: Option<NonNull<u32>>,
     translation_callback: Cell<Option<usize>>,
+    code_store_callback: Cell<Option<usize>>,
     memory: SharedMemory,
     pause_requested: Arc<AtomicU32>,
     callbacks: RefCell<BTreeMap<usize, CallbackEntry>>,
@@ -89,6 +92,10 @@ enum CallbackEntry {
     Mmio(Mmio),
     Hook(Hook),
     Translation(TranslationHooks),
+    CodeStore {
+        callback: unsafe fn(*mut c_void, u64, usize),
+        data: *mut c_void,
+    },
 }
 
 struct RemoteSnapshot {
@@ -203,6 +210,7 @@ struct Ready {
     pause_requested: Arc<AtomicU32>,
     thumb_accounting: Option<usize>,
     thumb_recovery: Option<usize>,
+    thumb_exception_status: Option<usize>,
 }
 
 fn spawn_engine(
@@ -273,7 +281,9 @@ fn spawn_engine(
                     .thumb_accounting
                     .and_then(|p| NonNull::new(p as *mut _)),
                 thumb_recovery: ready.thumb_recovery.and_then(|p| NonNull::new(p as *mut _)),
+                thumb_exception_status: ready.thumb_exception_status.and_then(|p| NonNull::new(p as *mut _)),
                 translation_callback: Cell::new(None),
+                code_store_callback: Cell::new(None),
                 callbacks: RefCell::new(BTreeMap::new()),
                 hooks: RefCell::new(BTreeMap::new()),
                 next_callback: Cell::new(1),
@@ -360,6 +370,10 @@ enum CallbackCall {
         word: u32,
     },
     Restart(u64),
+    CodeStore {
+        address: u64,
+        size: usize,
+    },
     Memory {
         access: Access,
         address: u64,
@@ -387,10 +401,11 @@ enum WorkerCallbackCounter {
     Fault,
     Classify,
     Restart,
+    CodeStore,
 }
 
 impl WorkerCallbackCounter {
-    const COUNT: usize = Self::Restart as usize + 1;
+    const COUNT: usize = Self::CodeStore as usize + 1;
     const ALL: [Self; Self::COUNT] = [
         Self::MmioRead,
         Self::MmioWrite,
@@ -402,6 +417,7 @@ impl WorkerCallbackCounter {
         Self::Fault,
         Self::Classify,
         Self::Restart,
+        Self::CodeStore,
     ];
 
     fn for_call(call: &CallbackCall) -> Self {
@@ -414,6 +430,7 @@ impl WorkerCallbackCounter {
             CallbackCall::Synchronization => Self::Synchronization,
             CallbackCall::Classify { .. } => Self::Classify,
             CallbackCall::Restart(_) => Self::Restart,
+            CallbackCall::CodeStore { .. } => Self::CodeStore,
             CallbackCall::Memory { .. } => Self::Memory,
             CallbackCall::Fault { .. } => Self::Fault,
         }
@@ -431,6 +448,7 @@ impl WorkerCallbackCounter {
             Self::Fault => "worker_callback_fault",
             Self::Classify => "worker_callback_classify",
             Self::Restart => "worker_callback_restart",
+            Self::CodeStore => "worker_callback_code_store",
         }
     }
 }
@@ -442,6 +460,11 @@ enum CallbackResult {
     Bool(bool),
     Translation(Translation),
     Error,
+}
+
+struct WorkerTranslationHooks {
+    callback: usize,
+    stateless: Option<fn(u32) -> Translation>,
 }
 
 enum Operation {
@@ -486,7 +509,8 @@ enum Operation {
     PreciseStorePc(bool),
     BackingPointer(u64, usize),
     MemoryRestartBoundary(HookRange),
-    TranslationHooks(Option<usize>),
+    TranslationHooks(Option<WorkerTranslationHooks>),
+    CodeStore(Option<usize>),
     RetryBlock(u32),
     Restart,
     StopOnEl3Transitions,
@@ -666,6 +690,7 @@ impl Operation {
             Self::BackingPointer(_, _)
             | Self::MemoryRestartBoundary(_)
             | Self::TranslationHooks(_)
+            | Self::CodeStore(_)
             | Self::RetryBlock(_)
             | Self::Restart
             | Self::StopOnEl3Transitions
@@ -723,6 +748,7 @@ struct WorkerLoop {
     core: Cell<*const Engine>,
     pause_requested: Arc<AtomicU32>,
     translation_callback: Cell<Option<usize>>,
+    code_store_callback: Cell<Option<usize>>,
     virtual_hooks: RefCell<std::collections::BTreeSet<usize>>,
     snapshots: RefCell<HashMap<u64, Box<dyn Snapshot>>>,
     callback_contexts: RefCell<BTreeMap<usize, Box<CallbackContext>>>,
@@ -994,6 +1020,13 @@ unsafe fn restart(data: *mut std::ffi::c_void, pc: u64) {
     }
 }
 
+unsafe fn code_store(data: *mut c_void, address: u64, size: usize) {
+    let context = unsafe { callback_context(data) };
+    unsafe {
+        callback_loop(data).wait_callback(context.callback, CallbackCall::CodeStore { address, size });
+    }
+}
+
 unsafe fn pause_at_block(_: Block, data: *mut std::ffi::c_void) {
     let context = unsafe { &*data.cast::<WorkerLoop>() };
     if context.pause_requested.load(Ordering::Acquire) != 0
@@ -1026,6 +1059,7 @@ fn serve(
         callback_error: RefCell::new(None),
         wakeup: RefCell::new(None),
         shutdown: Cell::new(false),
+        code_store_callback: Cell::new(None),
     });
     let engine = (|| -> Result<Engine, String> {
         let raw = Library::linked()?.open(model, cache_bytes)?;
@@ -1083,6 +1117,7 @@ fn serve(
             pause_requested: context.pause_requested.clone(),
             thumb_accounting: cpu.thumb_accounting().map(|p| p.as_ptr() as usize),
             thumb_recovery: cpu.thumb_recovery_accounting().map(|p| p.as_ptr() as usize),
+            thumb_exception_status: cpu.thumb_exception_status().map(|p| p.as_ptr() as usize),
         }))
         .is_err()
     {
@@ -1428,11 +1463,15 @@ fn dispatch(context: &WorkerLoop, engine: &Engine, operation: Operation) -> Resu
         Operation::MemoryRestartBoundary(range) => {
             Value::Hooks(vec![cpu.install_memory_restart_boundary(range)?])
         }
-        Operation::TranslationHooks(callback) => {
-            let hooks = callback.map(|id| TranslationHooks {
-                classify,
+        Operation::TranslationHooks(install) => {
+            let callback = install.as_ref().map(|hooks| hooks.callback);
+            let hooks = install.map(|hooks| TranslationHooks {
+                classify: hooks.stateless.map_or(
+                    TranslationClassifier::Owner(classify),
+                    TranslationClassifier::Stateless,
+                ),
                 restart,
-                data: context.callback_context(id),
+                data: context.callback_context(hooks.callback),
             });
             if let Err(error) = unsafe { cpu.translation_hooks(hooks) } {
                 if let Some(id) = callback {
@@ -1441,6 +1480,24 @@ fn dispatch(context: &WorkerLoop, engine: &Engine, operation: Operation) -> Resu
                 return Err(error);
             }
             if let Some(old) = context.translation_callback.replace(callback) {
+                context.callback_contexts.borrow_mut().remove(&old);
+            }
+            Value::Unit
+        }
+        Operation::CodeStore(callback) => {
+            let result = unsafe {
+                match callback {
+                    Some(id) => cpu.observe_code_stores(Some(code_store), context.callback_context(id)),
+                    None => cpu.observe_code_stores(None, std::ptr::null_mut()),
+                }
+            };
+            if let Err(error) = result {
+                if let Some(id) = callback {
+                    context.callback_contexts.borrow_mut().remove(&id);
+                }
+                return Err(error);
+            }
+            if let Some(old) = context.code_store_callback.replace(callback) {
                 context.callback_contexts.borrow_mut().remove(&old);
             }
             Value::Unit
@@ -1505,6 +1562,10 @@ impl CpuWorker {
                 CallbackEntry::Mmio(mmio) => CallbackEntry::Mmio(*mmio),
                 CallbackEntry::Hook(hook) => CallbackEntry::Hook(*hook),
                 CallbackEntry::Translation(hooks) => CallbackEntry::Translation(*hooks),
+                CallbackEntry::CodeStore { callback, data } => CallbackEntry::CodeStore {
+                    callback: *callback,
+                    data: *data,
+                },
             });
         let Some(entry) = entry else {
             return CallbackResult::Error;
@@ -1605,10 +1666,22 @@ impl CpuWorker {
                     },
                 ) => CallbackResult::Bool(callback(fault, address, size, value, data)),
                 (CallbackEntry::Translation(hooks), CallbackCall::Classify { address, word }) => {
-                    CallbackResult::Translation((hooks.classify)(hooks.data, address, word))
+                    match hooks.classify {
+                        TranslationClassifier::Owner(classify) => {
+                            CallbackResult::Translation(classify(hooks.data, address, word))
+                        }
+                        TranslationClassifier::Stateless(_) => CallbackResult::Error,
+                    }
                 }
                 (CallbackEntry::Translation(hooks), CallbackCall::Restart(pc)) => {
                     (hooks.restart)(hooks.data, pc);
+                    CallbackResult::Unit
+                }
+                (
+                    CallbackEntry::CodeStore { callback, data },
+                    CallbackCall::CodeStore { address, size },
+                ) => {
+                    callback(data, address, size);
                     CallbackResult::Unit
                 }
                 _ => CallbackResult::Error,
@@ -2333,13 +2406,44 @@ impl Cpu for CpuWorker {
                 })
             })
             .transpose()?;
-        if let Err(error) = self.unit(Operation::TranslationHooks(callback)) {
+        let install = callback.zip(hooks).map(|(callback, hooks)| WorkerTranslationHooks {
+            callback,
+            stateless: match hooks.classify {
+                TranslationClassifier::Owner(_) => None,
+                TranslationClassifier::Stateless(classify) => Some(classify),
+            },
+        });
+        if let Err(error) = self.unit(Operation::TranslationHooks(install)) {
             if let Some(id) = callback {
                 self.callbacks.borrow_mut().remove(&id);
             }
             return Err(error);
         }
         if let Some(old) = self.translation_callback.replace(callback) {
+            self.callbacks.borrow_mut().remove(&old);
+        }
+        Ok(())
+    }
+    unsafe fn observe_code_stores(
+        &self,
+        callback: Option<unsafe fn(*mut c_void, u64, usize)>,
+        data: *mut c_void,
+    ) -> Result<(), String> {
+        let callback = callback
+            .map(|callback| {
+                self.next_callback().map(|id| {
+                    self.callbacks.borrow_mut().insert(id, CallbackEntry::CodeStore { callback, data });
+                    id
+                })
+            })
+            .transpose()?;
+        if let Err(error) = self.unit(Operation::CodeStore(callback)) {
+            if let Some(id) = callback {
+                self.callbacks.borrow_mut().remove(&id);
+            }
+            return Err(error);
+        }
+        if let Some(old) = self.code_store_callback.replace(callback) {
             self.callbacks.borrow_mut().remove(&old);
         }
         Ok(())
@@ -2360,6 +2464,11 @@ impl Cpu for CpuWorker {
     fn thumb_recovery_accounting(&self) -> Option<NonNull<ThumbBlockRecoveryAccounting>> {
         self.accounting_accessible()
             .then_some(self.thumb_recovery)
+            .flatten()
+    }
+    fn thumb_exception_status(&self) -> Option<NonNull<u32>> {
+        self.accounting_accessible()
+            .then_some(self.thumb_exception_status)
             .flatten()
     }
     fn accounting(&self) -> Option<NonNull<BlockAccounting>> {
@@ -2455,6 +2564,48 @@ mod architecture_tests {
             RunStatus::Complete(Ok(Exit::Stopped))
         ));
         assert!((1..100_000_000).contains(&cpu.instruction_progress().unwrap()));
+    }
+
+    #[test]
+    fn worker_delivers_translated_code_stores_to_the_owner() {
+        struct Observer {
+            owner: thread::ThreadId,
+            writes: Vec<(u64, usize)>,
+        }
+        unsafe fn record(data: *mut c_void, address: u64, size: usize) {
+            let observer = unsafe { &mut *data.cast::<Observer>() };
+            assert_eq!(thread::current().id(), observer.owner);
+            observer.writes.push((address, size));
+        }
+
+        let mut observer = Observer { owner: thread::current().id(), writes: Vec::new() };
+        let cpu = spawn_mprofile(1 << 20, false).unwrap();
+        cpu.map_zeroed(0x10000, 0x2000, 7).unwrap();
+        unsafe {
+            cpu.observe_code_stores(Some(record), std::ptr::from_mut(&mut observer).cast())
+                .unwrap();
+        }
+        cpu.write_memory(0x10000, &0x8008u16.to_le_bytes()).unwrap(); // STRH R0,[R1]
+        cpu.write_memory(0x11000, &0x2001u16.to_le_bytes()).unwrap(); // MOVS R0,#1
+        let step = |address: u64| {
+            cpu.run(Run {
+                begin: address | 1,
+                until: None,
+                watchdog_us: 1_000_000,
+                instructions: Some(1),
+            })
+            .unwrap();
+        };
+        step(0x11000);
+        cpu.write_register(arm::CORE[0], &0x2002u32.to_le_bytes()).unwrap();
+        cpu.write_register(arm::CORE[1], &0x11000u32.to_le_bytes()).unwrap();
+        step(0x10000);
+        assert_eq!(observer.writes, [(0x11000, 2)]);
+        step(0x11000);
+        let mut register = [0; 4];
+        cpu.read_register(arm::CORE[0], &mut register).unwrap();
+        assert_eq!(u32::from_le_bytes(register), 2);
+        unsafe { cpu.observe_code_stores(None, std::ptr::null_mut()) }.unwrap();
     }
 
     #[test]
@@ -4457,6 +4608,16 @@ mod tests {
                         break;
                     }
                 }
+            }
+            if iteration % 64 == 0 {
+                cpu.run(Run {
+                    begin: address,
+                    until: None,
+                    watchdog_us: 0,
+                    instructions: Some(2),
+                })
+                .unwrap();
+                assert_eq!(cpu.instruction_progress(), Some(2), "pause carried into the next run");
             }
         }
     }

@@ -590,8 +590,17 @@ pub struct Translation {
     pub observe_block: bool,
 }
 #[derive(Clone, Copy)]
+pub enum TranslationClassifier {
+    /// Classification may inspect owner-thread context.
+    Owner(unsafe fn(*mut c_void, u64, u32) -> Translation),
+    /// Classification depends only on the instruction word and can run on
+    /// the engine thread without an owner callback.
+    Stateless(fn(u32) -> Translation),
+}
+
+#[derive(Clone, Copy)]
 pub struct TranslationHooks {
-    pub classify: unsafe fn(*mut c_void, u64, u32) -> Translation,
+    pub classify: TranslationClassifier,
     pub restart: unsafe fn(*mut c_void, u64),
     pub data: *mut c_void,
 }

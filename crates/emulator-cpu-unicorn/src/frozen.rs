@@ -28,9 +28,9 @@ pub(super) fn register_engine(core: Identity, raw: usize) {
     ENGINES.lock().unwrap().push((core, raw));
 }
 pub(super) fn request_pause(core: Identity) -> Result<(), String> {
-    let raw = ENGINES
-        .lock()
-        .unwrap()
+    // Keep the native engine registered until the request returns.
+    let engines = ENGINES.lock().unwrap();
+    let raw = engines
         .iter()
         .find(|(owner, _)| *owner == core)
         .map(|&(_, raw)| raw)

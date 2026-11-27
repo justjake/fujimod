@@ -950,7 +950,6 @@ fn run_pause_stress() {
 }
 
 #[test]
-#[ignore = "still stalls: a paused A53 worker does not leave its block; see worker::tests::a_pause_raised_around_run_start_is_never_lost"]
 fn interactive_windows_close_while_every_core_is_parked_in_a_callback() {
     if std::env::var_os(STRESS_CHILD).is_some() {
         run_pause_stress();
@@ -961,7 +960,6 @@ fn interactive_windows_close_while_every_core_is_parked_in_a_callback() {
     let mut child = std::process::Command::new(std::env::current_exe().unwrap())
         .arg("--exact")
         .arg("board::interactive::tests::interactive_windows_close_while_every_core_is_parked_in_a_callback")
-        .arg("--include-ignored")
         .arg("--nocapture")
         .env(STRESS_CHILD, "1")
         .spawn()

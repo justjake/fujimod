@@ -176,12 +176,10 @@ pub(super) struct Engines {
 
 /// Whether the M-profile companion runs on its own native worker thread.
 ///
-/// Only the Unicorn engine can use it. Under the Hypervisor engine the AArch64
-/// cores are native VMs driven from the owner thread, so moving the M-profile
-/// core to a worker turns every cohort handoff into a thread hop while the
-/// owner can no longer do useful work in the same window: measured on an Apple
-/// Silicon host, the worker arrangement took 139.7k interactive windows against
-/// 31.7k inlined, with a 641 us mean window instead of 184 us.
+/// Hypervisor keeps the companion inline by default. The previous Apple
+/// Silicon comparison measured 139.7k interactive windows with a worker
+/// against 31.7k inline, with mean durations of 641 us and 184 us respectively.
+/// An explicit worker selection allows benchmarking the current cohort path.
 ///
 /// On the Unicorn engine every core is a worker that the owner starts and
 /// waits on, so concurrency is a two-way win when the host can run the threads
@@ -198,7 +196,7 @@ fn unicorn_workers(graph: &Graph, engine: RunEngine) -> bool {
         .count()
         == 1
         && graph.processors.iter().any(|p| p.model == Model::ArmV8A);
-    if !one_m4_companion || engine != RunEngine::Unicorn {
+    if !one_m4_companion || !matches!(engine, RunEngine::Unicorn | RunEngine::Hypervisor) {
         return false;
     }
     match std::env::var("FUJIMOD_UNICORN_WORKERS").ok().as_deref() {
@@ -208,7 +206,8 @@ fn unicorn_workers(graph: &Graph, engine: RunEngine) -> bool {
             debug_assert!(false, "unexpected FUJIMOD_UNICORN_WORKERS={other}");
             false
         }
-        None => std::thread::available_parallelism().is_ok_and(|threads| threads.get() >= 4),
+        None => engine == RunEngine::Unicorn
+            && std::thread::available_parallelism().is_ok_and(|threads| threads.get() >= 4),
     }
 }
 impl Engines {

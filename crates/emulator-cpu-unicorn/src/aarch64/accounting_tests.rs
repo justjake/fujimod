@@ -169,7 +169,7 @@ fn translation_filter_and_embedder_accounting_debit_exact_a64_block_budgets() {
     let mut unexpected_entries = Vec::<u64>::new();
     unsafe {
         cpu.translation_hooks(Some(TranslationHooks {
-            classify: classify_execute,
+            classify: fujimod_emulator_cpu::TranslationClassifier::Owner(classify_execute),
             restart: restarted,
             data: std::ptr::null_mut(),
         }))
@@ -228,7 +228,7 @@ fn replacement_and_final_branch_observation_are_not_bypassed_by_accounting() {
     let mut blocks = 0usize;
     unsafe {
         cpu.translation_hooks(Some(TranslationHooks {
-            classify: classify_replace,
+            classify: fujimod_emulator_cpu::TranslationClassifier::Owner(classify_replace),
             restart: restarted,
             data: std::ptr::null_mut(),
         }))
@@ -270,7 +270,7 @@ fn final_branch_honors_block_observation_with_available_budget() {
     let mut blocks = 0usize;
     unsafe {
         cpu.translation_hooks(Some(TranslationHooks {
-            classify: classify_branch,
+            classify: fujimod_emulator_cpu::TranslationClassifier::Owner(classify_branch),
             restart: restarted,
             data: std::ptr::null_mut(),
         }))
@@ -338,7 +338,7 @@ fn exact_ring_does_not_truncate_a_64_bit_block_address() {
     let mut accounting = cpu.accounting().unwrap();
     unsafe {
         cpu.translation_hooks(Some(TranslationHooks {
-            classify: classify_execute,
+            classify: fujimod_emulator_cpu::TranslationClassifier::Owner(classify_execute),
             restart: restarted,
             data: std::ptr::null_mut(),
         }))
