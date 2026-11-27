@@ -371,6 +371,8 @@ pub struct Core {
     shared: Box<CoreShared>,
     memory_regions: RefCell<Vec<MemoryRegion>>,
     last_progress: Cell<u64>,
+    run_limit: Cell<Option<u64>>,
+    tightened: Cell<bool>,
     scheduler_hook: Cell<Option<HookId>>,
     loops: loops::Loops,
     owned: RefCell<BTreeMap<u64, Backing>>,
@@ -417,6 +419,8 @@ impl Core {
             shared,
             memory_regions: RefCell::new(Vec::new()),
             last_progress: Cell::new(0),
+            run_limit: Cell::new(None),
+            tightened: Cell::new(false),
             scheduler_hook: Cell::new(None),
             loops: loops::Loops::default(),
             owned: RefCell::new(BTreeMap::new()),
@@ -478,6 +482,14 @@ impl Snapshot for SnapshotData {
     }
 }
 
+struct ResetRunLimit<'a>(&'a Cell<Option<u64>>);
+
+impl Drop for ResetRunLimit<'_> {
+    fn drop(&mut self) {
+        self.0.set(None);
+    }
+}
+
 impl Cpu for Core {
     fn identity(&self) -> Identity {
         self.identity
@@ -499,6 +511,7 @@ impl Cpu for Core {
         Features {
             instruction_limit: true,
             instruction_progress: true,
+            tighten_instruction_limit: true,
             ..Default::default()
         }
     }
@@ -820,6 +833,9 @@ impl Cpu for Core {
     }
 
     fn run(&self, request: Run) -> Result<Exit, ExecutionError> {
+        if self.run_limit.get().is_some() {
+            return Err("nested Dynarmic execution is unsupported".into());
+        }
         self.last_progress.set(0);
         let stable = self.loops.stable.replace(false);
         if request.watchdog_us != 0 {
@@ -830,7 +846,15 @@ impl Cpu for Core {
         }
         let begin = u32::try_from(request.begin).map_err(|_| "Dynarmic start exceeds 32 bits")?;
         unsafe { ffi::dynarmic_set_reg(self.inst, 15, begin & !1) };
-        let budget = request.instructions.unwrap_or(usize::MAX) as u64;
+        self.run_limit
+            .set(Some(request.instructions.unwrap_or(usize::MAX) as u64));
+        let _reset_run_limit = ResetRunLimit(&self.run_limit);
+        let remaining = || {
+            self.run_limit
+                .get()
+                .unwrap()
+                .saturating_sub(self.last_progress.get())
+        };
         self.shared.device_accessed.set(false);
         let scheduler_only = self.scheduler_hook.get().is_some_and(|scheduler| {
             matches!(self.shared.observers.borrow().as_slice(), [(id, _)] if *id == scheduler.key)
@@ -839,7 +863,7 @@ impl Cpu for Core {
         let defer_scheduler = stable && scheduler_only && request.until.is_none();
         let mut observed_irq_mask = None;
         let status = loop {
-            if self.last_progress.get() >= budget {
+            if remaining() == 0 {
                 break ffi::DynarmicExitReason::Timeout;
             }
             let pc = unsafe { ffi::dynarmic_get_reg(self.inst, 15) };
@@ -880,12 +904,12 @@ impl Cpu for Core {
                 self.shared.observe_instruction(pc);
                 observed_irq_mask = Some(irq_mask);
             }
-            if self.shared.stopped.get() {
+            if self.shared.stopped.get() || remaining() == 0 {
                 break ffi::DynarmicExitReason::Stopped;
             }
             if stable
                 && request.until.is_none()
-                && self.advance_loop(pc, cpsr, word, budget - self.last_progress.get())?
+                && self.advance_loop(pc, cpsr, word, remaining())?
             {
                 continue;
             }
@@ -908,7 +932,13 @@ impl Cpu for Core {
             let mut executed = 0;
             self.shared.fault.replace(None);
             self.shared.abort.set(None);
+            self.tightened.set(false);
             let status = unsafe { ffi::dynarmic_step(self.inst, &mut executed) };
+            if self.tightened.get() && self.shared.device_accessed.replace(false) {
+                // The device callback refreshed the board's deadline. The
+                // next observer entry checks the newly published IRQ pins.
+                observed_irq_mask = None;
+            }
             if let Some((address, status, access)) = self.shared.abort.take() {
                 armv7a::abort::enter_reported(self, address, status, access)
                     .map_err(|error| format!("ARMv7 abort at {pc:#010x}, {access:?} {address:#010x}, FSR {status:#04x}: {error}"))?;
@@ -961,6 +991,13 @@ impl Cpu for Core {
 
     fn set_loop_mode(&self, mode: fujimod_emulator_cpu::loops::LoopMode) -> Result<(), String> {
         self.loops.mode.set(mode);
+        Ok(())
+    }
+
+    fn tighten_instruction_limit(&self, total_entries: u64) -> Result<(), String> {
+        let cap = self.run_limit.get().ok_or("Dynarmic has no active run")?;
+        self.run_limit.set(Some(cap.min(total_entries)));
+        self.tightened.set(true);
         Ok(())
     }
 
