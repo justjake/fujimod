@@ -6,9 +6,17 @@
 //! execution owner supplies the inputs (RAM and device-declared stable reads)
 //! and bounds the window at every event or peer boundary. No firmware
 //! addresses, task names or software structures take part.
-use fujimod_emulator_cpu::arm;
+use crate::arm;
 
 mod a32;
+mod register;
+
+pub use register::RegisterLoop;
+
+/// ARM ALU operations with ordinary register operands.
+pub fn a32_register_operation(word: u32) -> bool {
+    matches!(a32::decode(word), Some(Op::Data { .. }))
+}
 mod t32;
 
 /// The instruction set a loop branch was fetched in.
@@ -25,6 +33,7 @@ const SPAN: u64 = 60;
 enum Operand {
     Immediate(u32, Option<bool>),
     Register(usize, u32, u32),
+    RegisterShift(usize, u32, usize),
 }
 #[derive(Clone, Copy, Debug)]
 enum Op {
@@ -46,8 +55,12 @@ enum Op {
     /// An IT-block condition: the next operation executes only when it passes
     /// on the flags current at that instruction.
     Predicate(u32),
+    NoEffect,
     /// CBZ (`nonzero` false) or CBNZ leaving the loop.
-    Exit { register: usize, nonzero: bool },
+    Exit {
+        register: usize,
+        nonzero: bool,
+    },
 }
 
 /// Architectural state at the loop branch: R0-R14 and the CPSR.
@@ -124,15 +137,23 @@ impl Proof {
     }
     fn apply(
         &self,
+        state: State,
+        read: impl FnMut(u32, usize) -> Option<u32>,
+    ) -> Result<State, AdvanceFailure> {
+        Self::apply_ops(state, &self.body, read)
+    }
+    fn apply_ops(
         mut state: State,
+        ops: &[Op],
         mut read: impl FnMut(u32, usize) -> Option<u32>,
     ) -> Result<State, AdvanceFailure> {
         let mut skip = false;
-        for op in &self.body {
+        for op in ops {
             if std::mem::take(&mut skip) {
                 continue;
             }
             match *op {
+                Op::NoEffect => (),
                 Op::Predicate(condition) => skip = !arm::condition_passes(condition, state.cpsr),
                 Op::Exit { register, nonzero } => {
                     if (state.registers[register] != 0) == nonzero {
@@ -372,6 +393,29 @@ impl Operand {
         let carry = state.cpsr & (1 << 29) != 0;
         match self {
             Self::Immediate(value, out) => (value, out.unwrap_or(carry)),
+            Self::RegisterShift(r, kind, count) => {
+                let value = state.registers[r];
+                let shift = state.registers[count] & 255;
+                match (kind, shift) {
+                    (_, 0) => (value, carry),
+                    (0, 1..=31) => (value << shift, value & (1 << (32 - shift)) != 0),
+                    (0, 32) => (0, value & 1 != 0),
+                    (0, _) => (0, false),
+                    (1, 1..=31) => (value >> shift, value & (1 << (shift - 1)) != 0),
+                    (1, 32) => (0, value >> 31 != 0),
+                    (1, _) => (0, false),
+                    (2, 1..=31) => (
+                        ((value as i32) >> shift) as u32,
+                        value & (1 << (shift - 1)) != 0,
+                    ),
+                    (2, _) => (((value as i32) >> 31) as u32, value >> 31 != 0),
+                    (3, _) => {
+                        let result = value.rotate_right(shift);
+                        (result, result >> 31 != 0)
+                    }
+                    _ => unreachable!(),
+                }
+            }
             Self::Register(r, kind, shift) => {
                 let value = state.registers[r];
                 match (kind, shift) {

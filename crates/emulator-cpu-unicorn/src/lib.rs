@@ -32,7 +32,6 @@ mod frozen_tests;
 #[cfg(test)]
 mod hook_tlb_flush_tests;
 pub mod jit;
-pub mod loop_proof;
 pub mod maintenance;
 #[cfg(test)]
 mod maintenance_tests;

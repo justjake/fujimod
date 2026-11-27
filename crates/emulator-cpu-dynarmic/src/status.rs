@@ -1,6 +1,6 @@
 //! Privileged ARM state kept outside Dynarmic's application register file.
 use super::{Core, ffi};
-use fujimod_emulator_cpu::{Access, Cpu, arm};
+use fujimod_emulator_cpu::{Access, Cpu, arm, armv7a};
 
 const MODE: u32 = 0x1f;
 const USER: u32 = 0x10;
@@ -143,6 +143,10 @@ impl Core {
         }
         if !arm::condition_passes(condition, cpsr) {
             return Ok(None);
+        }
+        if !user && armv7a::data_cache_set_way(word) {
+            // This backend has a coherent RAM view and no private data cache.
+            return Ok(Some(next));
         }
         let vfp_status = body & 0x0fff_0fff;
         if matches!(vfp_status, 0x0ee8_0a10 | 0x0ef8_0a10) {

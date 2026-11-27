@@ -7,11 +7,9 @@
 //! boundary, which the scheduler places at the first device deadline,
 //! interrupt or runnable-peer turn.
 use super::*;
+use fujimod_emulator_cpu::loop_proof::{Advance, AdvanceFailure, Isa, Proof, State as Registers};
 use fujimod_emulator_cpu::loops::LoopMode;
 use fujimod_emulator_cpu::{Access, FastMmioRead, arm};
-use fujimod_emulator_cpu_unicorn::loop_proof::{
-    Advance, AdvanceFailure, Isa, Proof, State as Registers,
-};
 use std::collections::BTreeMap;
 
 /// Loop fast-forward state of the M-profile cores. Host execution state only:
@@ -136,8 +134,8 @@ impl State {
         let word = u32::from_le_bytes(word);
         let isa = Isa::T32;
         let (Some(start), Some(size)) = (
-            fujimod_emulator_cpu_unicorn::loop_proof::loop_start(isa, pc, word),
-            fujimod_emulator_cpu_unicorn::loop_proof::branch_size(isa, pc, word),
+            fujimod_emulator_cpu::loop_proof::loop_start(isa, pc, word),
+            fujimod_emulator_cpu::loop_proof::branch_size(isa, pc, word),
         ) else {
             return Ok(false);
         };
