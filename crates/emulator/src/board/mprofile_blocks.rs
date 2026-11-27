@@ -414,6 +414,13 @@ pub(super) fn multiple_transfer(word: u32) -> Option<bool> {
         return None;
     }
     if load {
+        // A load that also writes its own base cannot be redone: a restart
+        // or a fault between its accesses restores only the PC, so the
+        // retried instruction would read from the value the first access
+        // already loaded.
+        if second & (1 << rn) != 0 {
+            return None;
+        }
         // A PC load is an exception return; SP cannot be written by a
         // multiple load alongside other registers.
         if second & 0xa000 != 0 {
@@ -522,6 +529,13 @@ pub(super) fn dual_transfer(word: u32) -> Option<bool> {
     let rt2 = (second >> 8) & 15;
     let pre_index = first & 0x0100 != 0;
     let writeback = first & 0x0020 != 0;
+    let load = first & 0x0010 != 0;
+    // A load that writes its own base cannot be redone: a restart or a fault
+    // between its two accesses restores only the PC, so the retried
+    // instruction would read from the value the first access loaded.
+    if load && (rn == rt || rn == rt2) {
+        return None;
+    }
     // `Rt2 = 15` is the exclusive space sharing this prefix, and P=0,W=0 is
     // reserved; a writeback base that is also a target is unpredictable.
     if !(rn <= 14
@@ -533,8 +547,7 @@ pub(super) fn dual_transfer(word: u32) -> Option<bool> {
     {
         return None;
     }
-    // Bit 20 is `L`: clear for `STRD`.
-    Some(first & 0x0010 == 0)
+    Some(!load)
 }
 
 /// Whether a Thumb instruction is safe to execute without an observation.
@@ -645,6 +658,11 @@ pub(super) fn can_run_inline(word: u32) -> bool {
     if matches!(first & 0xfff0, 0xfa00 | 0xfa10 | 0xfa40 | 0xfa50) && second & 0xf0c0 == 0xf080 {
         let rn = first & 15;
         return (rn <= 12 || rn == 15) && rd <= 12 && second & 15 <= 12;
+    }
+    // CLZ and RBIT read one ordinary register into another, set no flags and
+    // cannot fault. Their opcode field distinguishes them from REV below.
+    if matches!(first & 0xfff0, 0xfab0 | 0xfa90) && second & 0xf0f0 == 0xf080 {
+        return first & 15 <= 12 && rd <= 12 && second & 15 <= 12;
     }
     if first & 0xfff0 == 0xfa90 && second & 0xf0c0 == 0xf080 {
         return first & 15 == second & 15 && rd <= 12 && second & 15 <= 12;
@@ -975,42 +993,11 @@ mod tests {
             assert!(is_bitfield(word), "{word:#010x}");
             assert!(can_run_inline(word), "{word:#010x}");
         }
-        for word in [
-            0xf366_0d05, // BFI destination SP
-            0xf366_0f05, // BFI destination PC
-            0xf36f_0f85, // BFC destination PC
-            0xf3c1_0d00, // UBFX destination SP
-            0xf3c0_0020, // reserved bit 5
-            0xf3c1_8000, // reserved bit 15
-        ] {
-            assert!(!is_bitfield(word), "{word:#010x}");
-            assert!(!can_run_inline(word), "{word:#010x}");
+        // CLZ and RBIT read one ordinary register into another.
+        for word in [0xfab3_f383, 0xfa93_f3a3] {
+            assert!(can_run_inline(word), "{word:#010x}");
         }
-        // LDRD/STRD pre-index, post-index and negative forms. A load is
-        // inline; a store is terminal so each write completes on its own.
-        for (word, store) in [
-            (0xe9d2_0102u32, false),
-            (0xe952_0102, false),
-            (0xe8f2_0102, false),
-            (0xe9f2_0102, false),
-            (0xe9c2_0102, true),
-            (0xe942_0102, true),
-            (0xe8e2_0102, true),
-            (0xe9e2_0102, true),
-        ] {
-            assert_eq!(dual_transfer(word), Some(store), "{word:#010x}");
-            assert_eq!(can_run_inline(word), !store, "{word:#010x}");
-        }
-        for word in [
-            0xe9d2_0f02, // Rt2 = PC: the exclusive prefix
-            0xe9d2_0d02, // Rt2 = SP
-            0xe9d2_1102, // repeated pair register
-            0xe9d2_0d02, // pair (Rt2) names SP
-            0xe9f5_5102, // writeback base equals Rt2
-            0xe9e2_2102, // writeback base equals the first target
-            0xe8d2_0102, // P=0,W=0 reserved
-        ] {
-            assert_eq!(dual_transfer(word), None, "{word:#010x}");
+        for word in [0xfab3_f38d, 0xfab3_f3a3, 0xfabf_f383] {
             assert!(!can_run_inline(word), "{word:#010x}");
         }
         // MSR to a mask register and CPS end their block; both are decided

@@ -1248,3 +1248,83 @@ fn newly_admitted_encodings_match_the_instruction_observer() {
         "the translated run admitted no instruction"
     );
 }
+
+/// A table branch reads one or two bytes and leaves its block. Translated
+/// execution must reach the same target, and a read past the end of mapped
+/// RAM must fault in both paths rather than resume somewhere else.
+#[test]
+/// A multi-access load whose own base register it also writes cannot be
+/// redone: a restart or a fault between its accesses restores only the PC, so
+/// the retried instruction would read from the value the first access loaded.
+/// The classifier must leave those forms observed. The same instruction with
+/// an ordinary base stays admitted, and its fault must still recover exactly.
+#[test]
+fn multi_access_loads_that_clobber_their_base_stay_observed() {
+    // Each program loads the base from a literal, then runs one transfer at
+    // 0x17ffc so its second access falls past the end of mapped RAM.
+    fn program(transfer: [u16; 2], base: u32) -> Vec<u8> {
+        // ldr r0,literal; the transfer; b .-2 (park)
+        let code = [0x4801u16, transfer[0], transfer[1], 0xe7fe];
+        let mut bytes: Vec<u8> = code.iter().flat_map(|w| w.to_le_bytes()).collect();
+        bytes.extend_from_slice(&base.to_le_bytes());
+        bytes
+    }
+    // The encoding rules the run below depends on: the two base-clobbering
+    // forms are refused, and the ordinary-base forms are not.
+    assert_eq!(super::mprofile_blocks::dual_transfer(0xe9d0_0200), None, "ldrd r0,r2,[r0]");
+    assert_eq!(super::mprofile_blocks::dual_transfer(0xe9d0_0100), None, "ldrd r0,r1,[r0]");
+    assert_eq!(super::mprofile_blocks::dual_transfer(0xe9d0_1200), Some(false), "ldrd r1,r2,[r0]");
+    assert_eq!(super::mprofile_blocks::multiple_transfer(0xe890_0006), Some(false), "ldmia r0, (r1,r2)");
+    // The 16-bit multiple form is a separate encoding the classifier has
+    // never admitted; only the wide form shares `multiple_transfer`.
+    assert_eq!(super::mprofile_blocks::multiple_transfer(0xc803), None, "ldmia r0, (r0,r1)");
+    for (name, transfer, clobbers_base) in [
+        ("ldrd base in pair", [0xe9d0u16, 0x0200], true),
+        ("ldm base in list", [0xe890u16, 0x0003], true),
+        ("ldrd ordinary base", [0xe9d0, 0x1200], false),
+        ("ldm ordinary base", [0xe890, 0x0006], false),
+    ] {
+        let (mut reference, mut translated) = (
+            single_m4_board(false, &[], 0x13000),
+            single_m4_board(true, &[], 0x13000),
+        );
+        for b in [&mut reference, &mut translated] {
+            b.set_execution_policy(ExecutionPolicy::Interactive).unwrap();
+            b.state.borrow_mut().settled.verify = 0;
+            b.write_physical(0x10100, &program(transfer, 0x17ffc)).unwrap();
+            b.write_physical(0x17ffc, &[0x11, 0x22, 0x33, 0x44]).unwrap();
+        }
+        let a = reference.run_until(64, 8);
+        let b = translated.run_until(64, 8);
+        assert_eq!(a.is_err(), b.is_err(), "{name}: {a:?} {b:?}");
+        assert!(
+            a.as_ref()
+                .err()
+                .is_some_and(|e| e.to_ascii_lowercase().contains("unmapped")),
+            "{name}: the reference did not fault past RAM: {a:?}"
+        );
+        let expected = outcome(&reference);
+        let actual = outcome(&translated);
+        assert_eq!(actual.registers, expected.registers, "{name}: registers");
+        assert_eq!(actual.memory, expected.memory, "{name}: RAM");
+        assert_eq!(actual.state, expected.state, "{name}: board");
+        assert_eq!(
+            translated.state.borrow().instructions,
+            reference.state.borrow().instructions,
+            "{name}: instruction count"
+        );
+        // A base-clobbering load takes the observation, so the board sees its
+        // block entry; an ordinary base is admitted and only the faulting
+        // restart reaches the board.
+        let blocks = translated.state.borrow();
+        let observed = blocks.blocks[0].as_ref().unwrap().observed;
+        if clobbers_base {
+            assert_eq!(observed, 1, "{name}: the load was not observed");
+            assert_eq!(
+                blocks.blocks[0].as_ref().unwrap().inline.entries,
+                0,
+                "{name}: a base-clobbering load entered translated accounting"
+            );
+        }
+    }
+}
