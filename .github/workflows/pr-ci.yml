@@ -17,11 +17,11 @@ on:
 permissions: {}
 
 concurrency:
-  # A request or a push replaces the pull request's run in progress; any other
+  # A request replaces the pull request's run in progress; a push or any other
   # label gets a group of its own, so it cancels nothing.
   group: >-
     pr-checks-${{ github.event.pull_request.number }}-${{
-      github.event.action == 'labeled' && github.event.label.name != 'ci:run' && github.run_id || 'request' }}
+      (github.event.action == 'synchronize' || github.event.action == 'labeled' && github.event.label.name != 'ci:run') && github.run_id || 'request' }}
   cancel-in-progress: true
 
 jobs:
