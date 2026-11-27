@@ -22,6 +22,8 @@ pub enum Key {
     ViewMode,
     Fn1,
     Fn2,
+    Fn3,
+    MovieRecord,
     /// Quick-menu (Q) button.
     Quick,
     /// Focus-stick tilts and press.
@@ -64,6 +66,8 @@ impl Key {
             "VIEW" | "VIEW_MODE" => Ok(Self::ViewMode),
             "FN1" => Ok(Self::Fn1),
             "FN2" => Ok(Self::Fn2),
+            "FN3" => Ok(Self::Fn3),
+            "REC" | "MOVIE_REC" => Ok(Self::MovieRecord),
             "Q" | "QUICK" => Ok(Self::Quick),
             "STICK_UP" => Ok(Self::StickUp),
             "STICK_DOWN" => Ok(Self::StickDown),

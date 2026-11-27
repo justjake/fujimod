@@ -146,7 +146,18 @@ fn ladder_circuit(
     idle: &Idle<'_>,
     controls: &mut Vec<Control>,
 ) -> Result<Circuit, String> {
-    let keys: Vec<Key> = ladder.rungs.iter().map(|r| r.key).collect();
+    let mut keys: Vec<Key> = ladder.rungs.iter().map(|r| r.key).collect();
+    let coupled: Vec<_> = options
+        .coupled_contacts
+        .iter()
+        .copied()
+        .filter(|(_, contact)| keys.contains(contact))
+        .collect();
+    for &(key, _) in &coupled {
+        if !keys.contains(&key) {
+            keys.push(key);
+        }
+    }
     let (dial, released, signal): (Option<&PositionDial>, u16, Box<dyn Fn(u16) -> Signal>) =
         match ladder.wire {
             Wire::Adc { channel } => {
@@ -181,9 +192,11 @@ fn ladder_circuit(
             }
         };
     let mut ids = Vec::new();
-    for &key in &keys {
+    for (index, &key) in keys.iter().enumerate() {
         let (id, label) = named(&names.keys, key)?;
-        controls.push(button(id, label));
+        if index < ladder.rungs.len() {
+            controls.push(button(id, label));
+        }
         ids.push(id.clone());
     }
     let positions = match dial {
@@ -204,7 +217,18 @@ fn ladder_circuit(
                 .filter(|i| held_mask & (1 << i) != 0)
                 .map(|i| keys[i])
                 .collect();
-            let Some(value) = level(ladder, &held, position.as_ref(), released) else {
+            let contacts: Vec<Key> = ladder
+                .rungs
+                .iter()
+                .map(|rung| rung.key)
+                .filter(|key| {
+                    held.contains(key)
+                        || coupled
+                            .iter()
+                            .any(|(held_key, contact)| contact == key && held.contains(held_key))
+                })
+                .collect();
+            let Some(value) = level(ladder, &contacts, position.as_ref(), released) else {
                 continue;
             };
             let mut pose: Vec<String> = (0..keys.len())
@@ -460,11 +484,19 @@ pub fn compile(
                 )?;
             }
         }
-        Some(CommandDial::Quadrature(_)) => rotary(&names.rear_dial, nodes.rear_dial.as_ref(), 1)?,
+        Some(CommandDial::Quadrature(dial)) => rotary(
+            &names.rear_dial,
+            nodes.rear_dial.as_ref(),
+            dial.edges_per_step,
+        )?,
         None => {}
     }
-    if options.front_dial.is_some() {
-        rotary(&names.front_dial, nodes.front_dial.as_ref(), 1)?;
+    if let Some(dial) = &options.front_dial {
+        rotary(
+            &names.front_dial,
+            nodes.front_dial.as_ref(),
+            dial.edges_per_step,
+        )?;
     }
     Ok(Panel {
         wiring: Spec { controls, circuits },
@@ -583,6 +615,190 @@ mod tests {
             1_000_000_000,
         )
         .unwrap()
+    }
+
+    fn xh2s(adc3: u16) -> Panel {
+        let mut resolved = ResolvedConfiguration::bundled("xh2s-730").unwrap();
+        // The mode-dial level is a run input: pose the run at `adc3`, as a Movie start does.
+        let Some(fujimod_catalog_configuration::RunInputs::Xp5(inputs)) =
+            resolved.configuration.inputs.as_mut()
+        else {
+            panic!("the X-H2S run has XP5 inputs");
+        };
+        for block in &mut inputs.blocks {
+            if let fujimod_catalog_configuration::application_inputs::ApplicationBlockInput::Adc {
+                samples,
+                ..
+            } = block
+            {
+                samples[3] = adc3;
+            }
+        }
+        let options = crate::ladder_controls::ladders(&resolved).unwrap().unwrap();
+        let names = crate::ladder_controls::panel_names(&resolved).unwrap();
+        let mut adc = [4095; 15];
+        adc[3] = adc3;
+        let nodes = Nodes {
+            adc: "adc".into(),
+            gpio: "gpio".into(),
+            power: ("spi".into(), 0),
+            rear_dial: Some("rear-dial".into()),
+            front_dial: Some("front-dial".into()),
+        };
+        compile(
+            &options,
+            &names,
+            &nodes,
+            &Idle {
+                adc: &adc,
+                register: &|_| Ok(0),
+            },
+            1_000_000_000,
+        )
+        .unwrap()
+    }
+
+    fn analog(channel: usize, value: u16) -> Signal {
+        Signal::Analog {
+            node: "adc".into(),
+            channel,
+            value,
+        }
+    }
+
+    #[test]
+    fn xh2s_buttons_use_catalog_ladders_and_the_record_pad() {
+        let switches = SwitchPanel::new(xh2s(3774).wiring).unwrap();
+        for (id, channel, sample) in [
+            ("menu_ok_button", 6, 391),
+            ("disp_back_button", 6, 2869),
+            ("quick_menu_button", 6, 3439),
+            ("ael_button", 6, 2230),
+            ("playback_button", 5, 3439),
+            ("af_on_button", 11, 2869),
+            ("fn1_button", 12, 2869),
+            ("fn2_button", 12, 2230),
+            ("fn3_button", 11, 2230),
+        ] {
+            let pressed = switches.transition(id, "pressed").unwrap();
+            assert!(
+                pressed
+                    .signals()
+                    .unwrap()
+                    .contains(&analog(channel, sample)),
+                "{id}"
+            );
+            let released = pressed.transition(id, "released").unwrap();
+            assert!(
+                released.signals().unwrap().contains(&analog(channel, 4095)),
+                "{id}"
+            );
+        }
+        let record_pad = |high| Signal::Gpio {
+            node: "gpio".into(),
+            pin: Pin { port: 0, pin: 13 },
+            high,
+        };
+        let pressed = switches
+            .transition("movie_recording_button", "pressed")
+            .unwrap();
+        assert!(pressed.signals().unwrap().contains(&record_pad(false)));
+        assert!(switches.signals().unwrap().contains(&record_pad(true)));
+    }
+
+    #[test]
+    fn xh2s_stick_closes_two_wires_until_released() {
+        let switches = SwitchPanel::new(xh2s(3774).wiring).unwrap();
+        for (direction, sample) in [
+            ("up", 1568),
+            ("down", 3380),
+            ("left", 2823),
+            ("right", 2074),
+            ("up_left", 1339),
+            ("up_right", 665),
+            ("down_left", 2412),
+            ("down_right", 1809),
+        ] {
+            let id = format!("focus_stick.{direction}");
+            let tilting = switches.transition(&id, "pressed").unwrap();
+            let levels = tilting.signals().unwrap();
+            assert!(
+                levels.contains(&analog(11, 3439)) && levels.contains(&analog(14, sample)),
+                "{id}"
+            );
+            assert!(tilting.transition("af_on_button", "pressed").is_err());
+            let centered = tilting.transition(&id, "released").unwrap();
+            let levels = centered.signals().unwrap();
+            assert!(
+                levels.contains(&analog(11, 4095)) && levels.contains(&analog(14, 4095)),
+                "{id}"
+            );
+        }
+        let push = switches.transition("focus_stick", "pressed").unwrap();
+        let levels = push.signals().unwrap();
+        assert!(levels.contains(&analog(11, 3439)) && levels.contains(&analog(14, 4095)));
+        let tilting = push.transition("focus_stick.up", "pressed").unwrap();
+        let still_tilting = tilting.transition("focus_stick", "released").unwrap();
+        assert!(still_tilting.signals().unwrap().contains(&analog(11, 3439)));
+    }
+
+    #[test]
+    fn xh2s_mode_dial_latches_all_catalog_positions() {
+        let switches = SwitchPanel::new(xh2s(3774).wiring).unwrap();
+        assert_eq!(switches.positions()["mode_dial"], "F");
+        assert!(switches.signals().unwrap().contains(&analog(3, 3774)));
+        for (position, sample) in [
+            ("P", 281),
+            ("S", 615),
+            ("A", 920),
+            ("M", 1223),
+            ("C1", 1526),
+            ("C2", 1829),
+            ("C3", 2135),
+            ("C4", 2445),
+            ("C5", 2759),
+            ("C6", 3081),
+            ("C7", 3410),
+            ("F", 3774),
+            ("FILTER", 4008),
+        ] {
+            let dial = switches.transition("mode_dial", position).unwrap();
+            assert!(
+                dial.signals().unwrap().contains(&analog(3, sample)),
+                "{position}"
+            );
+            let menu = dial.transition("menu_ok_button", "pressed").unwrap();
+            assert!(
+                menu.signals().unwrap().contains(&analog(3, sample)),
+                "{position}"
+            );
+        }
+        assert!(switches.transition("mode_dial", "C8").is_err());
+    }
+
+    #[test]
+    fn xh2s_dial_steps_match_the_stock_decoder() {
+        let panel = xh2s(3774);
+        let dials: Vec<_> = panel
+            .confirmation
+            .interfaces
+            .iter()
+            .map(|interface| match interface {
+                Interface::Rotary {
+                    id,
+                    node,
+                    edges_per_step,
+                } => (id.as_str(), node.as_str(), *edges_per_step),
+                _ => panic!("only command dials are interfaces"),
+            })
+            .collect();
+        assert_eq!(
+            dials,
+            [
+                ("rear_command_dial", "rear-dial", 4),
+                ("front_command_dial", "front-dial", -1),
+            ]
+        );
     }
 
     #[test]
