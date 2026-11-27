@@ -481,12 +481,12 @@ impl Boot {
             .transpose()
     }
 
-    fn execution_policy(&mut self, tracing: bool) -> Result<ExecutionPolicy, String> {
+    fn execution_policy(&mut self, exact_default: bool) -> Result<ExecutionPolicy, String> {
         Ok(self
             .text("--execution-policy")?
             .map(|value| ExecutionPolicy::parse(&value))
             .transpose()?
-            .unwrap_or(if tracing {
+            .unwrap_or(if exact_default {
                 ExecutionPolicy::Exact
             } else {
                 ExecutionPolicy::Interactive
@@ -866,7 +866,9 @@ fn run_application(mut options: Boot, resolved: ResolvedConfiguration) -> Result
             .unwrap_or_default(),
     );
     let trace_output = options.pc_trace()?;
-    let policy = options.execution_policy(trace_output.is_some())?;
+    let cpu_backend = resolved.configuration.cpu_backend();
+    let policy = options
+        .execution_policy(trace_output.is_some() || cpu_backend == RunCpuBackend::Dynarmic)?;
     let mut patches = boot::patch::Schedule::from_path(options.path("--patch").as_deref(), &[])?;
     let scene = options
         .path("--scene")
@@ -969,7 +971,12 @@ fn run_application(mut options: Boot, resolved: ResolvedConfiguration) -> Result
         if next_status.is_some_and(|at| at <= now) {
             eprintln!(
                 "FUJIMOD status {}",
-                serde_json::json!({"engine":board.engine,"instructions":counts,"now":now})
+                serde_json::json!({
+                    "engine": board.engine,
+                    "cpu_backend": cpu_backend,
+                    "instructions": counts,
+                    "now": now
+                })
             );
             next_status = status_period
                 .filter(|period| *period != 0)
@@ -1021,6 +1028,7 @@ fn run_application(mut options: Boot, resolved: ResolvedConfiguration) -> Result
     if !started.camera_settings.is_null() {
         state["camera_settings"] = started.camera_settings.clone();
     }
+    state["cpu_backend"] = serde_json::json!(cpu_backend);
     let report = serde_json::to_string_pretty(&state).map_err(|error| error.to_string())?;
     if let Some(output) = output {
         std::fs::create_dir_all(&output).map_err(|error| error.to_string())?;

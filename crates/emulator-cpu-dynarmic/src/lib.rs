@@ -40,6 +40,7 @@ struct CoreShared {
     observers: RefCell<Vec<(usize, Hook)>>,
     stopped: Cell<bool>,
     fault: RefCell<Option<ExecutionError>>,
+    abort: Cell<Option<(u32, u32, Access)>>,
     inst: Cell<*mut ffi::DynarmicInstance>,
 }
 
@@ -80,10 +81,15 @@ impl CoreShared {
     }
 
     fn translate(&self, address: u32, access: Access) -> Result<u64, String> {
+        self.walk(address, access)?
+            .map_err(|status| format!("ARMv7 page fault at {address:#010x} (status {status:#04x})"))
+    }
+
+    fn walk(&self, address: u32, access: Access) -> Result<Result<u64, u32>, String> {
         let inst = self.inst.get();
         let cp15 = |crn, crm, opc2| Ok(unsafe { ffi::dynarmic_get_cp15(inst, 0, crn, crm, opc2) });
         if cp15(1, 0, 0)? & 1 == 0 {
-            return Ok(address.into());
+            return Ok(Ok(address.into()));
         }
         let cpsr = unsafe { ffi::dynarmic_get_cpsr(inst) };
         let mmu = armv7a::mmu::Mmu::read(cp15, cpsr)?;
@@ -96,8 +102,7 @@ impl CoreShared {
             };
             let bytes = unsafe { ptr.as_ptr().add(offset).cast::<[u8; 4]>().read() };
             Ok(u32::from_le_bytes(bytes))
-        })?
-        .map_err(|status| format!("ARMv7 page fault at {address:#010x} (status {status:#04x})"))
+        })
     }
 
     fn fail(&self, fault: Fault, message: String) {
@@ -105,11 +110,11 @@ impl CoreShared {
         if pending.is_none() {
             *pending = Some(ExecutionError::Memory { fault, message });
         }
-        unsafe { ffi::dynarmic_stop(self.inst.get()) };
+        unsafe { ffi::dynarmic_abort_access(self.inst.get()) };
     }
 
     fn access(&self, address: u32, size: usize, output: Option<u64>) -> u64 {
-        if self.fault.borrow().is_some() {
+        if self.fault.borrow().is_some() || self.abort.get().is_some() {
             return 0;
         }
         let (access, unmapped, protected) = if output.is_some() {
@@ -117,8 +122,13 @@ impl CoreShared {
         } else {
             (Access::Read, Fault::ReadUnmapped, Fault::ReadProtected)
         };
-        let physical = match self.translate(address, access) {
-            Ok(physical) => physical,
+        let physical = match self.walk(address, access) {
+            Ok(Ok(physical)) => physical,
+            Ok(Err(status)) => {
+                self.abort.set(Some((address, status, access)));
+                unsafe { ffi::dynarmic_abort_access(self.inst.get()) };
+                return 0;
+            }
             Err(message) => {
                 self.fail(protected, message);
                 return 0;
@@ -233,6 +243,7 @@ impl Core {
             observers: RefCell::new(Vec::new()),
             stopped: Cell::new(false),
             fault: RefCell::new(None),
+            abort: Cell::new(None),
             inst: Cell::new(std::ptr::null_mut()),
         });
         let user_data = (&*shared as *const CoreShared as *mut CoreShared).cast();
@@ -696,6 +707,10 @@ impl Cpu for Core {
                 )
                 .into());
             }
+            if let Err(status) = self.shared.walk(pc, Access::Fetch)? {
+                armv7a::abort::enter_reported(self, pc, status, Access::Fetch)?;
+                return Ok(Exit::Stopped);
+            }
             let mut instruction = [0; 4];
             self.read_virtual(pc.into(), Access::Fetch, &mut instruction)
                 .map_err(|message| ExecutionError::Memory {
@@ -740,7 +755,13 @@ impl Cpu for Core {
             }
             let mut executed = 0;
             self.shared.fault.replace(None);
+            self.shared.abort.set(None);
             let status = unsafe { ffi::dynarmic_step(self.inst, &mut executed) };
+            if let Some((address, status, access)) = self.shared.abort.take() {
+                armv7a::abort::enter_reported(self, address, status, access)
+                    .map_err(|error| format!("ARMv7 abort at {pc:#010x}, {access:?} {address:#010x}, FSR {status:#04x}: {error}"))?;
+                return Ok(Exit::Stopped);
+            }
             if let Some(error) = self.shared.fault.take() {
                 return Err(error);
             }
@@ -941,5 +962,44 @@ mod tests {
             .expect("read r0");
         let r0 = u32::from_le_bytes(out);
         assert_eq!(r0, 50, "r0 should be 42 + 8 = 50");
+    }
+
+    #[test]
+    fn a_translation_fault_enters_the_data_abort_vector() {
+        let cpu = Core::new(Model::CortexA7).unwrap();
+        cpu.map_zeroed(0, 0x8000, 7).unwrap();
+        // A first-level section maps VA 0–1 MiB to the same physical region.
+        cpu.write_memory(0x4000, &(0x0000_0c02u32).to_le_bytes())
+            .unwrap();
+        cpu.write_memory(0x1000, &0xe591_0000u32.to_le_bytes())
+            .unwrap(); // ldr r0, [r1]
+        cpu.write_register(arm::CORE[1], &0x0200_0000u32.to_le_bytes())
+            .unwrap();
+        let cp = |crn| arm::Coprocessor {
+            cp: 15,
+            crn,
+            crm: 0,
+            opc1: 0,
+            opc2: 0,
+            secure: 0,
+            wide: false,
+        };
+        cpu.coprocessor(cp(2), Some(0x4000)).unwrap();
+        cpu.coprocessor(cp(3), Some(1)).unwrap();
+        cpu.coprocessor(cp(1), Some(0x0080_0001)).unwrap();
+        assert!(matches!(
+            cpu.run(Run {
+                begin: 0x1000,
+                until: None,
+                watchdog_us: 0,
+                instructions: Some(1)
+            })
+            .unwrap(),
+            Exit::Stopped
+        ));
+        assert_eq!(unsafe { ffi::dynarmic_get_reg(cpu.inst, 15) }, 0x10);
+        assert_eq!(cpu.spsr().unwrap(), 0xd3);
+        assert_eq!(cpu.coprocessor(cp(5), None).unwrap(), 5);
+        assert_eq!(cpu.coprocessor(cp(6), None).unwrap(), 0x0200_0000);
     }
 }

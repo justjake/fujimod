@@ -284,6 +284,21 @@ pub fn enter(cpu: &dyn Cpu, fetch: bool) -> Result<(), String> {
             found.ok_or("Data abort is not explained by the architectural page tables")?
         }
     };
+    enter_reported(cpu, address, status, access)
+}
+
+/// Latch a fault from a CPU backend that already knows the failed access.
+pub fn enter_reported(
+    cpu: &dyn Cpu,
+    address: u32,
+    status: u32,
+    access: Access,
+) -> Result<(), String> {
+    let c = Cluster(cpu);
+    let core = 0;
+    let pc = c.reg(core, arm::PC)?;
+    let sctlr = c.cp(core, 1, 0, 0, 0)? as u32;
+    let fetch = access == Access::Fetch;
     c.write_cp(
         5,
         u32::from(fetch),

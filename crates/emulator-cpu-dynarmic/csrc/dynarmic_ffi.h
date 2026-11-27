@@ -33,6 +33,7 @@ DynarmicInstance* dynarmic_create(const DynarmicCallbacks* callbacks);
 void dynarmic_destroy(DynarmicInstance* inst);
 
 DynarmicExitReason dynarmic_step(DynarmicInstance* inst, uint64_t* executed);
+void dynarmic_abort_access(DynarmicInstance* inst);
 void dynarmic_stop(DynarmicInstance* inst);
 
 void dynarmic_clear_cache(DynarmicInstance* inst);

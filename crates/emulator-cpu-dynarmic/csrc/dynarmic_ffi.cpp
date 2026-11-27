@@ -271,13 +271,17 @@ DynarmicExitReason dynarmic_step(DynarmicInstance* inst, uint64_t* executed) {
     inst->exit_reason = DYNARMIC_EXIT_REASON_TIMEOUT;
     inst->callbacks_impl->ResetTicks(1);
     inst->stop_requested.store(false, std::memory_order_relaxed);
-    inst->jit->ClearHalt(Dynarmic::HaltReason::UserDefined1);
+    inst->jit->ClearHalt(Dynarmic::HaltReason::UserDefined1 | Dynarmic::HaltReason::MemoryAbort);
     inst->jit->Step();
     *executed = inst->callbacks_impl->ExecutedTicks();
     if (inst->stop_requested.load(std::memory_order_relaxed)) {
         return DYNARMIC_EXIT_REASON_STOPPED;
     }
     return inst->exit_reason;
+}
+
+void dynarmic_abort_access(DynarmicInstance* inst) {
+    inst->jit->HaltExecution(Dynarmic::HaltReason::MemoryAbort);
 }
 
 void dynarmic_stop(DynarmicInstance* inst) {
