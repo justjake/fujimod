@@ -869,3 +869,114 @@ fn a53_mmio_interrupts_the_running_m4_without_losing_thumb_entries() {
         2 + rounds * 3 + 1 + 3
     );
 }
+
+/// Every core reads a device register each round and stores the result, so
+/// each window parks a callback on all five cores while peers are still
+/// running. The window must still close: the owner pauses the stragglers and
+/// services the parked callbacks, which is exactly the handoff that stalled.
+const STRESS_WINDOWS: u64 = 512;
+const STRESS_ROUNDS: u64 = 8;
+const STRESS_CHILD: &str = "FUJIMOD_INTERACTIVE_PAUSE_STRESS_CHILD";
+
+fn pause_stress_board() -> Board {
+    use fujimod_emulator_cpu::arm;
+    // Each core adds one to a shared counter through a device read, then
+    // spins. Four cores read the same register, so every window crosses at
+    // least four owner callbacks while the other cores are mid-run.
+    let mut bus = Bus::new(bus::Mode::Strict);
+    bus.register(MMIO, 0x1000, Box::new(DeadlineSample {
+        due: None,
+        armed_at: None,
+        samples: vec![],
+    }))
+    .unwrap();
+    let mut board = mixed_board(ExecutionPolicy::Interactive, bus, &[(arm::CORE[1], 0x3000)]);
+    for core in 0..M4 {
+        board.write_register(core, Register::X(1), MMIO).unwrap();
+        board
+            .write_register(core, Register::X(2), 0x3000 + core as u64 * 4)
+            .unwrap();
+        a64_code(
+            &board,
+            core,
+            &[
+                0xb940_0020, // ldr w0,[x1]
+                0xb900_0040, // str w0,[x2]
+                0x1400_0000, // b . (chain the same core's next block)
+            ],
+        );
+    }
+    // The M-profile companion reads the same device and stores its result.
+    thumb_code(&board, 0x1000, &[0x6808, 0x6048, 0xe7fe]); // ldr r0,[r1]; str r0,[r1,#4]; b .
+    board.write_physical(0x3000, &0u32.to_le_bytes()).unwrap();
+    board
+}
+
+fn run_pause_stress() {
+    // Fresh boards reuse nothing, so a stall cannot come from leftover state.
+    for round in 0..STRESS_ROUNDS {
+        let mut board = pause_stress_board();
+        let mut windows = 0u64;
+        let mut boarded = vec![0u64; 5];
+        while windows < STRESS_WINDOWS {
+            // A short guest budget makes the cohort boundary land inside the
+            // cores' block loops, so almost every window ends with pauses.
+            board.run_for_instructions(64, 64).unwrap();
+            windows += 1;
+            // A core may sit out one window (the M-profile companion waits for
+            // its interrupt), but every core must make progress across the run.
+            for (total, count) in boarded
+                .iter_mut()
+                .zip(board.state.borrow().instructions.iter())
+            {
+                *total += count;
+            }
+        }
+        assert!(
+            boarded.iter().all(|&n| n > 0),
+            "round {round} stranded a core: {boarded:?}"
+        );
+        assert!(
+            board.interactive_windows.get() >= windows,
+            "a window opened without reporting one"
+        );
+        // Every core must still be runnable and have retired work: a stall
+        // leaves a core's progress frozen while the others keep running.
+        assert!(
+            board.state.borrow().waiting.iter().all(|&waiting| !waiting),
+            "round {round} left a core waiting after {windows} windows"
+        );
+    }
+}
+
+#[test]
+#[ignore = "reproduces the CpuWorker pause deadlock; enable with the sticky-stop fix"]
+fn interactive_windows_close_while_every_core_is_parked_in_a_callback() {
+    if std::env::var_os(STRESS_CHILD).is_some() {
+        run_pause_stress();
+        return;
+    }
+    // Run the stress in a child so a stranded window fails the test instead
+    // of hanging the whole suite.
+    let mut child = std::process::Command::new(std::env::current_exe().unwrap())
+        .arg("--exact")
+        .arg("board::interactive::tests::interactive_windows_close_while_every_core_is_parked_in_a_callback")
+        .arg("--nocapture")
+        .env(STRESS_CHILD, "1")
+        .spawn()
+        .unwrap();
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(120);
+    eprintln!("FUJIMOD stress child pid {}", child.id());
+    loop {
+        if let Some(status) = child.try_wait().unwrap() {
+            assert!(status.success(), "pause stress child failed: {status}");
+            return;
+        }
+        if std::time::Instant::now() >= deadline {
+            child.kill().unwrap();
+            let _ = child.wait();
+            panic!("interactive window stalled while every core was parked or running");
+        }
+        std::thread::sleep(std::time::Duration::from_millis(20));
+    }
+}

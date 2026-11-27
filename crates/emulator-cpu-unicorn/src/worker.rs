@@ -4250,4 +4250,162 @@ mod tests {
             Exit::Stopped
         ));
     }
+
+    /// Four concurrently running A53 workers must each honor a pause. The owner
+    /// services every parked callback only after all of them stop, so one core
+    /// that misses the request stalls the whole cohort.
+    #[test]
+    fn four_concurrent_a53_workers_all_honor_a_pause() {
+        let memory = SharedMemory::default();
+        let backing = Backing::aligned_zeros(0x4000, 4096).unwrap();
+        let cpus: Vec<_> = (0..4)
+            .map(|core| {
+                let cpu = spawn_aprofile(1 << 20, memory.clone()).unwrap();
+                cpu.set_execution_policy(ExecutionPolicy::Interactive)
+                    .unwrap();
+                let address = 0x1000 + core as u64 * 0x100;
+                unsafe {
+                    cpu.map_physical(
+                        0,
+                        0,
+                        0x4000,
+                        7,
+                        NonNull::new(backing.as_ptr()).unwrap(),
+                    )
+                    .unwrap();
+                }
+                let code = [0x9100_0400u32, 0x9100_0400, 0x17ff_fffe];
+                let bytes: Vec<_> = code.into_iter().flat_map(u32::to_le_bytes).collect();
+                cpu.write_memory(address, &bytes).unwrap();
+                (cpu, address)
+            })
+            .collect::<Vec<_>>();
+        let runs: Vec<_> = cpus
+            .iter()
+            .map(|(cpu, address)| {
+                cpu.start_run(Run {
+                    begin: *address,
+                    until: None,
+                    watchdog_us: 0,
+                    instructions: Some(50_000_000),
+                })
+                .unwrap()
+            })
+            .collect();
+        std::thread::sleep(std::time::Duration::from_millis(10));
+        for ((cpu, _), run) in cpus.iter().zip(&runs) {
+            cpu.request_pause(*run).unwrap();
+        }
+        let started = std::time::Instant::now();
+        for ((cpu, _), run) in cpus.iter().zip(&runs) {
+            loop {
+                match cpu.poll_run(*run).unwrap() {
+                    RunStatus::Running => {
+                        assert!(
+                            started.elapsed() < std::time::Duration::from_secs(10),
+                            "an A53 worker never reached a pause boundary"
+                        );
+                        std::thread::yield_now();
+                    }
+                    RunStatus::CallbackPending => cpu.service_pending_callback(*run).unwrap(),
+                    RunStatus::Complete(result) => {
+                        assert!(matches!(result.unwrap(), Exit::Stopped));
+                        break;
+                    }
+                }
+            }
+        }
+    }
+
+    /// Every interactive window must start and stop a worker promptly, and a
+    /// pause must be honored across repeated windows without the owner's
+    /// request outliving the run that observed it.
+    #[test]
+    fn interactive_windows_start_and_stop_an_a53_worker_promptly() {
+        let cpu = spawn_aprofile(1 << 20, SharedMemory::default()).unwrap();
+        cpu.set_execution_policy(ExecutionPolicy::Interactive)
+            .unwrap();
+        let address = 0x1000u64;
+        cpu.map_zeroed(address, 0x4000, 7).unwrap();
+        let code = [0x9100_0400u32, 0x9100_0400, 0x17ff_fffe]; // add; add; b .
+        let bytes: Vec<_> = code.into_iter().flat_map(u32::to_le_bytes).collect();
+        cpu.write_memory(address, &bytes).unwrap();
+        for window in 0..500u64 {
+            let run = cpu
+                .start_run(Run {
+                    begin: address,
+                    until: None,
+                    watchdog_us: 0,
+                    instructions: Some(1024),
+                })
+                .unwrap();
+            let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
+            let exit = loop {
+                match cpu.poll_run(run).unwrap() {
+                    RunStatus::Running => {
+                        assert!(
+                            std::time::Instant::now() < deadline,
+                            "window {window} did not stop"
+                        );
+                        std::thread::yield_now();
+                    }
+                    RunStatus::CallbackPending => cpu.service_pending_callback(run).unwrap(),
+                    RunStatus::Complete(result) => break result.unwrap(),
+                }
+            };
+            assert!(matches!(exit, Exit::Stopped), "window {window}: {exit:?}");
+            // The pause handle is cleared before every run; a request left
+            // set by a previous window would stop this one before entry.
+            assert!(
+                cpu.instruction_progress().unwrap() >= 1024,
+                "window {window} retired no work"
+            );
+        }
+    }
+
+    /// An interactive window ends when the cohort crosses its boundary. A core
+    /// still inside its instruction budget must therefore stop at the next
+    /// block boundary, not when its budget runs out: the owner requests a
+    /// pause and every parked peer waits for this core to reach it.
+    #[test]
+    fn aprofile_worker_honors_a_pause_well_before_its_instruction_budget() {
+        let cpu = spawn_aprofile(1 << 20, SharedMemory::default()).unwrap();
+        cpu.set_execution_policy(ExecutionPolicy::Interactive)
+            .unwrap();
+        let address = 0x1000u64;
+        cpu.map_zeroed(address, 0x4000, 7).unwrap();
+        let code = [0x9100_0400u32, 0x9100_0400, 0x17ff_fffe]; // add; add; b .
+        let bytes: Vec<_> = code.into_iter().flat_map(u32::to_le_bytes).collect();
+        cpu.write_memory(address, &bytes).unwrap();
+        let budget = 50_000_000usize;
+        let run = cpu
+            .start_run(Run {
+                begin: address,
+                until: None,
+                watchdog_us: 0,
+                instructions: Some(budget),
+            })
+            .unwrap();
+        std::thread::sleep(std::time::Duration::from_millis(20));
+        cpu.request_pause(run).unwrap();
+        let started = std::time::Instant::now();
+        let exit = loop {
+            match cpu.poll_run(run).unwrap() {
+                RunStatus::Running => {
+                    assert!(
+                        started.elapsed() < std::time::Duration::from_secs(5),
+                        "pause was not honored before the instruction budget ran out"
+                    );
+                    std::thread::yield_now();
+                }
+                RunStatus::CallbackPending => cpu.service_pending_callback(run).unwrap(),
+                RunStatus::Complete(result) => break result.unwrap(),
+            }
+        };
+        assert!(matches!(exit, Exit::Stopped), "unexpected exit: {exit:?}");
+        assert!(
+            cpu.instruction_progress().unwrap() < budget as u64,
+            "pause waited for the whole budget"
+        );
+    }
 }
