@@ -6,8 +6,3 @@ fail-fast = false
 fail-fast = false
 failure-output = "immediate-final"
 
-# Mesa's lavapipe on the CI runners sometimes paints blend mode 6 with four
-# samples differently from the CPU; a retry is reported as flaky, not hidden.
-[[profile.ci.overrides]]
-filter = "package(fujimod-emulator-ip-dmp) & test(/^smaph::gpu_paint::/)"
-retries = 2
