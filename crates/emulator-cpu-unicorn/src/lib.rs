@@ -888,6 +888,20 @@ impl Core {
         Ok(counters)
     }
 }
+const TRANSLATION_GENERATION_COUNTER_NAMES: [&str; 12] = [
+    "translation_generation_first_count",
+    "translation_generation_first_tb_gen_code_elapsed_ns",
+    "translation_generation_after_invalidation_count",
+    "translation_generation_after_invalidation_tb_gen_code_elapsed_ns",
+    "translation_generation_after_flush_count",
+    "translation_generation_after_flush_tb_gen_code_elapsed_ns",
+    "translation_generation_last_io_count",
+    "translation_generation_last_io_tb_gen_code_elapsed_ns",
+    "translation_generation_cached_variant_count",
+    "translation_generation_cached_variant_tb_gen_code_elapsed_ns",
+    "translation_generation_limited_count",
+    "translation_generation_limited_tb_gen_code_elapsed_ns",
+];
 impl Cpu for Core {
     fn identity(&self) -> Identity {
         self.identity
@@ -1737,6 +1751,24 @@ impl Cpu for Core {
             }
         }
         counters.extend(self.translation_repeat_counter_snapshot()?);
+        if self.api.extensions.features & ffi::FEATURE_TRANSLATION_REPEAT_DETAILS != 0
+            && let Some(read) = self.api.extensions.translation_generation_counters
+        {
+            let mut count = 0;
+            let values = unsafe { read(self.raw, &mut count) };
+            if count != TRANSLATION_GENERATION_COUNTER_NAMES.len() || values.is_null() {
+                return Err(format!(
+                    "CPU backend returned {count} translation generation counters; expected {}",
+                    TRANSLATION_GENERATION_COUNTER_NAMES.len()
+                ));
+            }
+            let values = unsafe { std::slice::from_raw_parts(values, count) };
+            counters.extend(
+                TRANSLATION_GENERATION_COUNTER_NAMES
+                    .into_iter()
+                    .zip(values.iter().copied()),
+            );
+        }
         Ok(counters)
     }
 }
