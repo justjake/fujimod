@@ -813,6 +813,7 @@ mod tests {
         let definition = serde_json::from_value(json!({
             "ram_size": 65536,
             "cores": 1,
+            "discovery": false,
             "cbar": 0x2000_0000,
             "countdown_timers": [0xfffc_1000u32, []],
             "countdown_dials": [{
