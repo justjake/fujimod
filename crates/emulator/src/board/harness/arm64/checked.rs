@@ -902,7 +902,10 @@ impl Guard {
         let scalar_fcmpe_zero = word & 0xffbf_fc1f == 0x1e20_2018; // FCMPE S/D,#0.0; width and Rn vary.
         let scalar_fcvtzs_x_from_s = word & 0xffff_fc00 == 0x9e38_0000; // FCVTZS X,S.
         let scalar_fcvtzs_w_from_s = word & 0xffff_fc00 == 0x1e38_0000; // FCVTZS W,S.
-        let scalar_ucvtf = matches!(word & 0xffff_fc00, 0x1e23_0000 | 0x9e23_0000 | 0x7e21_d800); // UCVTF S,W; S,X; S,S; other conversion widths refuse.
+        let scalar_ucvtf = matches!(
+            word & 0xffff_fc00,
+            0x1e23_0000 | 0x9e23_0000 | 0x7e21_d800 | 0x7e61_d800
+        ); // UCVTF S,W; S,X; S,S; D,D; other conversion widths refuse.
         let scalar_scvtf = matches!(word & 0xffff_fc00, 0x1e22_0000 | 0x9e22_0000 | 0x5e21_d800); // SCVTF S,W, S,X and S,S; other conversion widths refuse.
         let scalar_ucvtf_d_from_w = word & 0xffff_fc00 == 0x1e63_0000; // UCVTF D,W.
         let scalar_scvtf_d_from_w = word & 0xffff_fc00 == 0x1e62_0000; // SCVTF D,W.
@@ -918,7 +921,23 @@ impl Guard {
         let scalar_fused_multiply = word & 0xff80_0000 == 0x1f00_0000; // FMADD, FMSUB, FNMADD, FNMSUB S/D; half and reserved widths refuse.
         let scalar_fneg = word & 0xffbf_fc00 == 0x1e21_4000; // FNEG S/D; only bit 22 varies by width.
         let shl_32_bit_lanes = word & 0xbfe0_fc00 == 0x0f20_5400; // SHL Vd.2S/4S,#imm; other lane sizes and shifts refuse.
-        let scalar_fnmul_d = word & 0xffe0_fc00 == 0x1e60_8800; // FNMUL D,D,D.
+        let scalar_fnmul = word & 0xffa0_fc00 == 0x1e20_8800; // FNMUL S/D; only bit 22 varies by width.
+        let scalar_fabs = word & 0xffbf_fc00 == 0x1e20_c000; // FABS S/D; only bit 22 varies by width.
+        let scalar_frint = matches!(
+            word & 0xffbf_fc00,
+            0x1e24_4000
+                | 0x1e24_c000
+                | 0x1e25_4000
+                | 0x1e25_c000
+                | 0x1e26_4000
+                | 0x1e27_4000
+                | 0x1e27_c000
+        ); // FRINTN, FRINTP, FRINTM, FRINTZ, FRINTA, FRINTX, FRINTI S/D.
+        let scalar_fixed_point_w = matches!(
+            word & 0xffbf_8000,
+            0x1e02_8000 | 0x1e03_8000 | 0x1e18_8000 | 0x1e19_8000
+        ); // SCVTF/UCVTF S/D,W,#fbits and FCVTZS/FCVTZU W,S/D,#fbits; X forms refuse.
+        let movi_32_bit_lanes_lsl_24 = word & 0xbff8_fc00 == 0x0f00_6400; // MOVI Vd.2S/4S,#imm8,LSL #24; other immediates refuse.
         let scalar_fcvtzu_w_from_d = word & 0xffff_fc00 == 0x1e79_0000; // FCVTZU W,D.
         let scalar_movi_d = word & 0xfff8_fc00 == 0x2f00_e400; // MOVI Dd,#imm64; vector forms refuse.
         let movi_2s_zero = word & 0xffff_ffe0 == 0x0f00_0400; // MOVI Vd.2S,#0; only Rd varies.
@@ -953,7 +972,11 @@ impl Guard {
             || scalar_fused_multiply
             || scalar_fneg
             || shl_32_bit_lanes
-            || scalar_fnmul_d
+            || scalar_fnmul
+            || scalar_fabs
+            || scalar_frint
+            || scalar_fixed_point_w
+            || movi_32_bit_lanes_lsl_24
             || scalar_fcvtzu_w_from_d
             || scalar_movi_d
             || movi_2s_zero
@@ -1910,6 +1933,35 @@ mod tests {
         assert!(checked_call(&mut b, o).is_err());
     }
     #[test]
+    fn rounding_absolute_fixed_point_and_constant_forms_compute() {
+        let mut b = board(&[
+            0x1e25_4001, // FRINTM S1,S0.
+            0x1e24_c002, // FRINTP S2,S0.
+            0x1e20_c003, // FABS S3,S0.
+            0x1e22_8804, // FNMUL S4,S0,S2.
+            0x1e18_c065, // FCVTZS W5,S3,#16.
+            0x1e03_c0a6, // UCVTF S6,W5,#16.
+            0x0f01_67e7, // MOVI V7.2S,#0x3f,LSL #24.
+            0x7e61_d92a, // UCVTF D10,D9.
+            0xd65f_03c0,
+        ]);
+        let mut o = options();
+        o.executable = vec![(0x1000, 0x1024)];
+        o.readable = vec![(0x1000, 0x1024), (0x4000, 0x4010), (0x8000, 0xa000)];
+        o.vector_registers = vec![(0, u64::from((-2.5f32).to_bits())), (9, 3)];
+        let r = checked_call(&mut b, o).unwrap();
+        assert!(r.returned, "{:?}", r.failure);
+        let single = |name: &str| r.registers[name] as u32;
+        assert_eq!(single("d1"), (-3.0f32).to_bits());
+        assert_eq!(single("d2"), (-2.0f32).to_bits());
+        assert_eq!(single("d3"), 2.5f32.to_bits());
+        assert_eq!(single("d4"), (-5.0f32).to_bits());
+        assert_eq!(r.registers["x5"], 0x28000);
+        assert_eq!(single("d6"), 2.5f32.to_bits());
+        assert_eq!(r.registers["d7"], 0x3f00_0000_3f00_0000);
+        assert_eq!(r.registers["d10"], 3.0f64.to_bits());
+    }
+    #[test]
     fn shl_admits_32_bit_lanes_only() {
         let mut b = board(&[0x0f29_5421, 0xd65f_03c0]); // SHL V1.2S,V1.2S,#9.
         let mut o = options();
@@ -2214,7 +2266,7 @@ mod tests {
 
         for word in [
             0x1ee0_3800, // FSUB H0,H0,H0.
-            0x1e20_8800, // FNMUL S0,S0,S0.
+            0x1ee0_8800, // FNMUL H0,H0,H0.
             0x9e79_0000, // FCVTZU X0,D0.
             0x6f00_e400, // MOVI V0.2D,#0.
             0x0f00_e400, // MOVI V0.8B,#0.
