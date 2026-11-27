@@ -82,16 +82,46 @@ layer directly.
 
 ### Firmware library (read-only)
 
-Callers may name a firmware by id instead of passing files. The library is a
-directory named by `FUJIMOD_FIRMWARE_LIBRARY`, laid out by name:
+Callers may name a firmware by id instead of passing files. The library is the
+directory named by `FUJIMOD_FIRMWARE_LIBRARY`, or the current directory when
+it is unset. It holds source records at `firmware/<model>/<version>/firmware.json`:
 
-```text
-<firmware-id>/FPUPDATE.DAT
-<body-id>/boot-rom.bin
+```json
+{
+  "id": "xe3-132",
+  "source": {
+    "path": "firmware/x-e3/1.32/original/FWUP0014.DAT",
+    "size": 107104384,
+    "sha256": "..."
+  },
+  "boot_rom": {
+    "content": { "size": 65536, "sha256": "..." },
+    "source": {
+      "path": "firmware/x-processor-pro/boot-rom/rom-fff00000.bin.zst",
+      "size": 13152,
+      "sha256": "...",
+      "compression": "zstd",
+      "original": { "size": 65536, "sha256": "..." }
+    }
+  }
+}
 ```
 
-Each file is found by its name and hashed once to confirm it matches the
-catalog. The library is never scanned and never written.
+- Paths are relative to the library root.
+- A `source` with `"compression": "zstd"` names the stored file; `original`
+  names the decoded bytes. Both identities are checked.
+- A boot ROM capture may be longer than the ROM. The ROM is the capture's
+  first `content.size` bytes, and `content.sha256` identifies it.
+- Opening a firmware reads the record whose `id` matches. Its update must
+  match the catalog's update hash. The boot ROM is any record's `boot_rom`
+  whose `content.sha256` is the hash the catalog names for that firmware, so
+  bodies that share a ROM keep one copy.
+- Files are read and checked once, then decoded in memory. The library is
+  never written.
+
+The emulator reads zstd-compressed update and boot ROM files wherever it takes
+them, including explicit `--update` and `--boot-rom` paths, by their zstd
+magic number.
 
 ### State directory
 
@@ -145,9 +175,10 @@ it restores into a freshly built session that still reports REC.
    and a combination name; the FujiMod layer holds the presets, the release
    SD card download, the autostart install and the FujiMod checks. Rename
    automatic boot to autostart everywhere.
-2. The library finds files by name with one confirming hash and is never
-   written; the state directory holds downloads, autostart flash and the boot
-   cache.
+2. The library reads source records from the current directory or
+   `FUJIMOD_FIRMWARE_LIBRARY`, checks each file once and decodes zstd in
+   memory; it is never written. The state directory holds downloads,
+   autostart flash and the boot cache.
 3. The boot cache's size limit, compression and cleanup.
 4. Every caller passes inputs directly and writes nothing to disk to start a
    camera.
