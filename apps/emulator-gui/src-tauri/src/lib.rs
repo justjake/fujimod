@@ -226,8 +226,10 @@ fn launch_camera(request: LaunchRequest) -> Result<(LaunchedCamera, Running), St
             if !matches!(resolved.configuration.inputs, Some(RunInputs::Xp5(_))) {
                 let selection = resolved.reference.clone();
                 let boot_request = fujimod_emulator_boot::Request {
-                    update,
-                    boot_rom: request.boot_rom,
+                    update: fujimod_emulator_boot::FirmwareFile::Path(update),
+                    boot_rom: request
+                        .boot_rom
+                        .map(fujimod_emulator_boot::FirmwareFile::Path),
                     nand: None,
                     settings: None,
                     camera: request.camera,

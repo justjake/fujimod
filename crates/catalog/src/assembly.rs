@@ -206,22 +206,22 @@ impl BodyHardware {
             {
                 connection(id)?;
             }
-            if let Some(lens) = &mount.lens_part_id {
-                if !body.parts.contains(lens) {
-                    return Err(format!(
-                        "body {} mounts an uninstalled lens {lens}",
-                        body.id
-                    ));
-                }
-            }
-        }
-        if let Some(stage) = &self.stabilizer {
-            if !body.parts.contains(&stage.part_id) {
+            if let Some(lens) = &mount.lens_part_id
+                && !body.parts.contains(lens)
+            {
                 return Err(format!(
-                    "body {} wires an uninstalled stabilizer {}",
-                    body.id, stage.part_id
+                    "body {} mounts an uninstalled lens {lens}",
+                    body.id
                 ));
             }
+        }
+        if let Some(stage) = &self.stabilizer
+            && !body.parts.contains(&stage.part_id)
+        {
+            return Err(format!(
+                "body {} wires an uninstalled stabilizer {}",
+                body.id, stage.part_id
+            ));
         }
         for feedback in &self.gpio_feedback {
             connection(&feedback.output_connection_id)?;

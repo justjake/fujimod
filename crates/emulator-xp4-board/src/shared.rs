@@ -90,7 +90,7 @@ pub fn build(
                 );
             }
         };
-    let cache_sizes = definition.cache_sizes.map(|(d, i, l2)| (d, i, l2));
+    let cache_sizes = definition.cache_sizes;
     let dials = definition
         .countdown_dials
         .iter()

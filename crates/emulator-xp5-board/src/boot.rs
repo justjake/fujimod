@@ -1274,7 +1274,7 @@ fn block_window(
             );
             options.insert(
                 "xor".into(),
-                integer(flash_image.map(|image| u64::from(image.xor)).unwrap_or(255)),
+                integer(flash_image.map(|image| image.xor).unwrap_or(255)),
             );
             options.insert(
                 "erased_tail".into(),
@@ -1282,18 +1282,15 @@ fn block_window(
             );
             if let Some((part_id, _, seeds)) = flash {
                 let part = selection.parts.iter().find(|part| part.id == part_id);
-                if let Some(part) = part {
-                    if let fujimod_catalog::reference::PartModel::Peripheral { interface } =
+                if let Some(part) = part
+                    && let fujimod_catalog::reference::PartModel::Peripheral { interface } =
                         &part.model
-                    {
-                        if matches!(
-                            interface,
-                            fujimod_catalog::assembly::PeripheralPart::SerialNandFlash { .. }
-                        ) {
-                            options
-                                .insert("medium".into(), toml::Value::String("serial-nand".into()));
-                        }
-                    }
+                    && matches!(
+                        interface,
+                        fujimod_catalog::assembly::PeripheralPart::SerialNandFlash { .. }
+                    )
+                {
+                    options.insert("medium".into(), toml::Value::String("serial-nand".into()));
                 }
                 if !seeds.is_empty() {
                     options.insert(
@@ -1315,16 +1312,28 @@ fn block_window(
             "flash-storage"
         }
         BlockDevice::SerialFlashController { .. } => {
-            let jedec = presented_jedec.or_else(|| flash.and_then(|(part_id, _, _)| selection.parts.iter().find(|part| part.id == part_id))
-                .and_then(|part| match &part.model {
-                    fujimod_catalog::reference::PartModel::Peripheral { interface } => match interface {
-                        fujimod_catalog::assembly::PeripheralPart::SerialNorFlash { jedec_id, .. }
-                        | fujimod_catalog::assembly::PeripheralPart::SerialNandFlash { jedec_id, .. } => *jedec_id,
-                        _ => None,
-                    },
-                    _ => None,
+            let jedec = presented_jedec
+                .or_else(|| {
+                    flash
+                        .and_then(|(part_id, _, _)| {
+                            selection.parts.iter().find(|part| part.id == part_id)
+                        })
+                        .and_then(|part| match &part.model {
+                            fujimod_catalog::reference::PartModel::Peripheral {
+                                interface:
+                                    fujimod_catalog::assembly::PeripheralPart::SerialNorFlash {
+                                        jedec_id,
+                                        ..
+                                    }
+                                    | fujimod_catalog::assembly::PeripheralPart::SerialNandFlash {
+                                        jedec_id,
+                                        ..
+                                    },
+                            } => *jedec_id,
+                            _ => None,
+                        })
                 })
-                ).ok_or("flash controller needs a body flash part with a JEDEC identity")?;
+                .ok_or("flash controller needs a body flash part with a JEDEC identity")?;
             options.insert("jedec_id".into(), integer(u64::from(jedec)));
             "flash-storage-controller"
         }
