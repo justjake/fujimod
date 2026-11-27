@@ -222,7 +222,7 @@ pub fn demosaic(
                     }
                     let hex = hex_of(x, y);
                     let s = (row_phase(y) == 0) as usize;
-                    for (d, o) in hex.iter().enumerate().skip(3) {
+                    for (d, o) in hex.iter().enumerate().take(6).skip(3) {
                         let k = base + ((d - 2) ^ s);
                         let a = rgb[k][at(x - 2 * o.1, y - 2 * o.0)];
                         let b = rgb[k][at(x + o.1, y + o.0)];
