@@ -25,7 +25,7 @@ use fujimod_emulator_devices::parts::pins::Pin;
 
 /// Catalog control identities, including pad directions, and the emulator key
 /// that presses each. A ladder rung on any other identity is refused.
-const CONTROL_KEYS: [(&str, Key); 24] = [
+const CONTROL_KEYS: [(&str, Key); 25] = [
     ("menu_ok_button", Key::Menu),
     ("disp_back_bluetooth_button", Key::Back),
     ("disp_back_button", Key::Back),
@@ -38,6 +38,7 @@ const CONTROL_KEYS: [(&str, Key); 24] = [
     ("view_mode_button", Key::ViewMode),
     ("fn1_button", Key::Fn1),
     ("fn2_button", Key::Fn2),
+    ("fn3_button", Key::Fn3),
     ("quick_menu_button", Key::Quick),
     ("focus_stick.up", Key::StickUp),
     ("focus_stick.down", Key::StickDown),
@@ -92,8 +93,9 @@ pub fn ladders(resolved: &ResolvedConfiguration) -> Result<Option<ladders::Optio
         rear_dial: None,
         front_dial: None,
         gpio_keys: Vec::new(),
+        coupled_contacts: Vec::new(),
     };
-    extension(body, &mut options)?;
+    extension(body, &mut options, inputs)?;
     options.validate()?;
     Ok(Some(options))
 }
@@ -197,11 +199,16 @@ fn positions(entries: &[(&str, &[&str], u16, u16, bool)]) -> Vec<ladders::Positi
 
 /// The board's table of decoded controls the catalog cannot yet express, by
 /// body. Bodies without an entry are unchanged.
-fn extension(body: &str, options: &mut ladders::Options) -> Result<(), String> {
+fn extension(
+    body: &str,
+    options: &mut ladders::Options,
+    inputs: &ApplicationRunInputs,
+) -> Result<(), String> {
     match body {
         "xt5" => xt5_extension(options),
         "x100vi" => x100vi_extension(options),
         "xh2" => xh2_extension(options),
+        "xh2s" => xh2s_extension(options, adc_sample(inputs, 3)?),
         _ => Ok(()),
     }
 }
@@ -284,6 +291,90 @@ physical 0x28) and ignores directions. Pressed = low."
     Ok(())
 }
 
+fn xh2s_extension(options: &mut ladders::Options, initial_mode: u16) -> Result<(), String> {
+    let stick = options
+        .ladders
+        .iter_mut()
+        .find(|ladder| ladder.wire == ladders::Wire::Adc { channel: 14 })
+        .ok_or("the X-H2S catalog ladders lack ADC 14")?;
+    for (key, low, high) in [
+        (Key::StickUpRight, 100, 1230),
+        (Key::StickDownRight, 1689, 1929),
+        (Key::StickUpLeft, 1231, 1447),
+        (Key::StickDownLeft, 2220, 2605),
+    ] {
+        stick.rungs.push(ladders::Rung {
+            key,
+            band_low: low,
+            band_high: high,
+            sample: midpoint(low, high),
+            basis: "Factory thresholds tested by the ADC14 stick decode table at 0x1f6dcb0.".into(),
+        });
+    }
+    options
+        .coupled_contacts
+        .extend(stick.rungs.iter().map(|rung| (rung.key, Key::StickPush)));
+
+    let mut mode = positions(&[
+        ("P", &[], 100, 462, false),
+        ("S", &[], 463, 768, false),
+        ("A", &[], 769, 1072, false),
+        ("M", &[], 1073, 1374, false),
+        ("C1", &[], 1375, 1677, false),
+        ("C2", &[], 1678, 1981, false),
+        ("C3", &[], 1982, 2289, false),
+        ("C4", &[], 2290, 2600, false),
+        ("C5", &[], 2601, 2918, false),
+        ("C6", &[], 2919, 3243, false),
+        ("C7", &[], 3244, 3576, false),
+        ("F", &["MOVIE"], 3577, 3921, false),
+        ("FILTER", &[], 3922, 4095, false),
+    ]);
+    // Installing the switch panel replays its initial pose. Keep the run's
+    // declared level for that pose, including the stock Movie sample 3774.
+    if let Some(position) = mode
+        .iter_mut()
+        .find(|position| (position.band_low..=position.band_high).contains(&initial_mode))
+    {
+        position.sample = initial_mode;
+    }
+    options.dials.push(ladders::PositionDial {
+        name: "mode".into(),
+        aliases: vec!["mode_dial".into()],
+        channel: 3,
+        positions: mode,
+        basis: "ADC3 factory thresholds, configuration offsets 0x36f8..0x372a, in physical scanner order 49..61.".into(),
+    });
+
+    let dial = |channels, edges_per_step, basis: &str| ladders::QuadratureDial {
+        outputs: ladders::QuadratureOutputs::Adc { channels },
+        rest_phase: 3,
+        edge_period_ms: 50,
+        edges_per_step,
+        basis: basis.into(),
+    };
+    // Match one stock firmware event per scripted step. The front emits
+    // on each transition and the rear emits once per full cycle.
+    options.front_dial = Some(dial(
+        [1, 2],
+        -1,
+        "Encoder sampler 0x172d364 reads ADC1/2. Phase 3 to 1 emits CMD2_RIGHT (0x45).",
+    ));
+    options.rear_dial = Some(ladders::CommandDial::Quadrature(dial(
+        [8, 9],
+        4,
+        "Encoder sampler 0x172d364 reads ADC8/9. Phase 3 to 2 to 0 to 1 to 3 emits CMDL_RIGHT (0x27).",
+    )));
+
+    options.gpio_keys.push(ladders::GpioKey {
+        key: Key::MovieRecord,
+        pin: Pin { port: 0, pin: 13 },
+        active_high: false,
+        basis: "Physical scanner code 63 (FUNC_REC) reads GPIO 0.13 active low.".into(),
+    });
+    Ok(())
+}
+
 const X100VI_BANDS: &str = "Band of the X100VI 1.31 default configuration page, read in the emulator from \
 configuration RAM 0x7508000 after cfg_initialize; research/x100vi-131/ui-path.md, physical controls.";
 
@@ -304,8 +395,10 @@ fn x100vi_extension(options: &mut ladders::Options) -> Result<(), String> {
         basis: X100VI_BANDS.into(),
     });
     let dial = |pins: [Pin; 2], basis: &str| ladders::QuadratureDial {
-        pins,
+        outputs: ladders::QuadratureOutputs::Gpio { pins },
         rest_phase: 0,
+        edge_period_ms: 2,
+        edges_per_step: 1,
         basis: basis.into(),
     };
     options.rear_dial = Some(ladders::CommandDial::Quadrature(dial(
@@ -536,8 +629,12 @@ count, bit 3 sign. The firmware never writes it, so the controller clears the co
                 .into(),
     }));
     options.front_dial = Some(ladders::QuadratureDial {
-        pins: [Pin { port: 0, pin: 9 }, Pin { port: 0, pin: 10 }],
+        outputs: ladders::QuadratureOutputs::Gpio {
+            pins: [Pin { port: 0, pin: 9 }, Pin { port: 0, pin: 10 }],
+        },
         rest_phase: 3,
+        edge_period_ms: 2,
+        edges_per_step: 1,
         basis:
             "Sampler 0x140a5bc: phase = level(0.9) << 1 | level(0.10), idle 3; transition table \
 0x1c0af58 steps 3, 2, 0, 1, 3 for CMD2_R (physical 0x8e) and 3, 1, 0, 2, 3 for CMD2_L (0x8f)."
@@ -636,6 +733,36 @@ fn extension_ids(
                 ),
                 (Key::StickPush, "focus_stick", "Focus stick press"),
                 (Key::AfOn, "afon_button", "AF-ON button"),
+            ],
+            &[("mode", "mode_dial")],
+        ),
+        "xh2s" => (
+            &[
+                (
+                    Key::MovieRecord,
+                    "movie_recording_button",
+                    "Movie recording button",
+                ),
+                (
+                    Key::StickUpLeft,
+                    "focus_stick.up_left",
+                    "Focus stick up-left",
+                ),
+                (
+                    Key::StickUpRight,
+                    "focus_stick.up_right",
+                    "Focus stick up-right",
+                ),
+                (
+                    Key::StickDownLeft,
+                    "focus_stick.down_left",
+                    "Focus stick down-left",
+                ),
+                (
+                    Key::StickDownRight,
+                    "focus_stick.down_right",
+                    "Focus stick down-right",
+                ),
             ],
             &[("mode", "mode_dial")],
         ),
@@ -898,7 +1025,15 @@ mod tests {
         let options = ladders(&ResolvedConfiguration::bundled("xh2s-730").unwrap())
             .unwrap()
             .unwrap();
-        assert_eq!(options.ladders.len(), 5);
+        let wires = options
+            .ladders
+            .iter()
+            .map(|ladder| ladder.wire)
+            .collect::<Vec<_>>();
+        assert_eq!(
+            wires,
+            [5, 6, 11, 12, 13, 14].map(|channel| ladders::Wire::Adc { channel }),
+        );
     }
 
     #[test]

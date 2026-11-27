@@ -815,6 +815,13 @@
           "band_high": 3102,
           "sample": 2869,
           "basis": "Band 2637..3102, configuration tags 0x36e2/0x36e0 (halfwords at page offsets) tested by the firmware key callback (DRIVE phys 0x10 cb 0x1728d04); no other control on this wire accepts it alone. The sample is the band midpoint."
+        },
+        {
+          "control_id": "playback_button",
+          "band_low": 3103,
+          "band_high": 3776,
+          "sample": 3439,
+          "basis": "Band 3103..3776, configuration tags 0x36e6/0x36e4 tested by the PLAY (physical 14) scanner callback. The sample is the band midpoint."
         }
       ]
     },
@@ -846,6 +853,44 @@
           "band_high": 3776,
           "sample": 3439,
           "basis": "Band 3103..3776, configuration tags 0x38c7/0x38c5 (halfwords at page offsets) tested by the firmware key callback (K_Q phys 0x11 cb 0x172872c); no other control on this wire accepts it alone. The sample is the band midpoint."
+        },
+        {
+          "control_id": "ael_button",
+          "band_low": 2117,
+          "band_high": 2344,
+          "sample": 2230,
+          "basis": "Band 2117..2344, configuration tags 0x38bb/0x38b9 tested by the AE-L (physical 19) scanner callback. The sample is the band midpoint."
+        }
+      ]
+    },
+    {
+      "wire": {
+        "kind": "adc",
+        "channel": 11
+      },
+      "levels": 4096,
+      "basis": "The input scanner reads the cached ADC11 sample at 0x02394ba6 and compares the configured resistor-ladder bands. The released sample comes from the run.",
+      "rungs": [
+        {
+          "control_id": "fn3_button",
+          "band_low": 2117,
+          "band_high": 2344,
+          "sample": 2230,
+          "basis": "Band 2117..2344, configuration tags 0x3893/0x3891 tested by the Fn3 (physical 26) scanner callback. The sample is the band midpoint."
+        },
+        {
+          "control_id": "af_on_button",
+          "band_low": 2637,
+          "band_high": 3102,
+          "sample": 2869,
+          "basis": "Band 2637..3102, configuration tags 0x389b/0x3899 tested by the AF-ON (physical 18) scanner callback. The sample is the band midpoint."
+        },
+        {
+          "control_id": "focus_stick",
+          "band_low": 3103,
+          "band_high": 3776,
+          "sample": 3439,
+          "basis": "Band 3103..3776, configuration tags 0x389f/0x389d tested by the stick common-contact callback at 0x172a0b8. The sample is the band midpoint."
         }
       ]
     },

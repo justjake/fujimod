@@ -190,6 +190,7 @@ fn devices_and_resources(
     let mut resources = xp5_board::Resources {
         sd: xp5_board::sd::resolve(state.sd.clone(), assets)?,
         counting_dial: None,
+        adc_samples: None,
         pins,
         clocks: panel_clocks::Clocks::new(),
         companion,
@@ -1270,18 +1271,28 @@ pub(crate) fn open_from(
         .find(|window| window.kind == "gpio")
         .map(|window| format!("{:#x}", window.base));
     let mut resources = resources;
-    use fujimod_emulator_xp5_board::ladders::CommandDial;
+    use fujimod_emulator_parts_controls::encoder;
+    use fujimod_emulator_xp5_board::ladders::{CommandDial, QuadratureDial, QuadratureOutputs};
     let options = panel.as_ref().map(|(options, _)| options);
     resources.counting_dial = match options.and_then(|options| options.rear_dial.as_ref()) {
         Some(CommandDial::Counting(dial)) => Some((dial.register, dial.front_high_nibble)),
         _ => None,
     };
-    let encoder = |dial: &fujimod_emulator_xp5_board::ladders::QuadratureDial| {
-        fujimod_emulator_parts_controls::encoder::Options {
-            pins: Some(dial.pins),
-            outputs: Default::default(),
-            // One detent edge every 2 ms, well inside the sampler's period.
-            phase_ticks: (ticks_per_second / 500).max(1),
+    let encoder = |dial: &QuadratureDial| {
+        let (pins, outputs) = match dial.outputs {
+            QuadratureOutputs::Gpio { pins } => (Some(pins), encoder::Outputs::Gpio),
+            QuadratureOutputs::Adc { channels } => (
+                None,
+                encoder::Outputs::Adc {
+                    channels: channels.map(usize::from),
+                    levels: [encoder::Levels { low: 0, high: 4095 }; 2],
+                },
+            ),
+        };
+        encoder::Options {
+            pins,
+            outputs,
+            phase_ticks: (ticks_per_second * u64::from(dial.edge_period_ms) / 1000).max(1),
             rest_phase: dial.rest_phase,
         }
     };

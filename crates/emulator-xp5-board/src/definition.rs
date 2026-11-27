@@ -214,6 +214,7 @@ impl Definition {
         let resources = board::Resources {
             sd: board::sd::resolve(sd, assets)?,
             counting_dial: None,
+            adc_samples: None,
             pins,
             storage,
             clocks: fujimod_emulator_devices::xp5::panel_clocks::Clocks::new(),

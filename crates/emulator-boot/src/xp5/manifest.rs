@@ -290,7 +290,32 @@ pub(crate) fn preload_length(preload: &Preload) -> Result<u64, String> {
 
 #[cfg(test)]
 mod tests {
-    use super::Dram;
+    use super::{BootState, Dram};
+
+    #[test]
+    fn xh2s_mode_transitions_include_the_mixer_and_filter_scaler() {
+        let state = BootState::for_firmware("xh2s-730", None)
+            .unwrap()
+            .with_catalog_windows(
+                &fujimod_catalog_resolution::ResolvedConfiguration::bundled("xh2s-730").unwrap(),
+            )
+            .unwrap();
+        for (base, kind, irq) in [
+            (0xffd2_2000, "completion-stub", 213),
+            (0xff98_3000, "imaging-filter-scaler", 204),
+        ] {
+            let window = state
+                .device
+                .iter()
+                .find(|window| window.base == base)
+                .unwrap();
+            assert_eq!(window.kind, kind);
+            assert_eq!(window.options["irq"].as_integer(), Some(irq));
+            let start = &window.options["starts"].as_array().unwrap()[0];
+            assert_eq!(start["offset"].as_integer(), Some(4));
+            assert_eq!(start["mask"].as_integer(), Some(1));
+        }
+    }
 
     #[test]
     fn dram_override_refuses_what_the_run_could_not_honor() {
