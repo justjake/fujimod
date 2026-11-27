@@ -132,55 +132,69 @@ impl<L: Lookup> Locator<'_, L> {
         limit: u64,
         verify: impl Fn(&Routine) -> bool,
         name: &str,
+        reader: &Routine,
     ) -> Result<Routine> {
-        one(self.application(self.small_routines(limit, verify))?, name)
+        one(
+            self.beside(reader, self.small_routines(limit, verify))?,
+            name,
+        )
     }
-    /// Of several routines found by shape, those of the application.
+    /// Of several routines found by shape, the one in the located reader's mapped region.
     ///
-    /// An update can hold more than one program with the same driver. GFX100RF 1.13 has two
-    /// flash readers: 0x90a6d4 in the stream mapped at 0x881000, which is the updater (it holds
-    /// the update file names `A:\\GXUP0001.DAT`, `A:\\XFUPDATE.DAT` and `recovery_update`), and
-    /// 0x1475004 in the application; its window helper is doubled the same way. The service
-    /// connection runs in the application, whose mapped ranges lie above the updater's, so
-    /// routines in a lower mapped range than the highest one holding a candidate are left
-    /// out. Candidates that share that range still refuse as ambiguous.
-    fn application(&self, mut routines: Vec<Routine>) -> Result<Vec<Routine>> {
-        if routines.len() > 1 {
-            let ranges: Vec<(u64, u64)> = self
-                .index
-                .units(self.firmware, Some(&self.unit))
-                .map_err(|e| e.to_string())?
-                .iter()
-                .flat_map(|unit| unit.layout.address_ranges.clone())
-                .collect();
-            let range_of = |routine: &Routine| {
-                ranges
-                    .iter()
-                    .copied()
-                    .find(|range| (range.0..range.1).contains(&routine.header.key.address))
-            };
-            if let Some(highest) = routines.iter().filter_map(range_of).max() {
-                routines.retain(|routine| range_of(routine) == Some(highest));
-            }
+    /// An update can hold the same driver in more than one program. GFX100RF 1.12 and 1.14
+    /// carry it in the stream mapped at 0x881000, which also holds the string
+    /// `recovery_update`, and again in the stream mapped at 0x11c1000: in 1.14 the device
+    /// selector's shape matches at 0x90a99c and at 0x14752cc. Each stream is one mapped region
+    /// of the unit and regions do not overlap, so the candidate in the region that holds the
+    /// verified reader belongs to the reader's driver.
+    ///
+    /// Only that case selects. No candidate or more than one in the reader's region, or a
+    /// reader that no region holds, returns the candidates unchanged, and the caller refuses
+    /// them as ambiguous. Position in memory decides nothing.
+    fn beside(&self, reader: &Routine, routines: Vec<Routine>) -> Result<Vec<Routine>> {
+        if routines.len() < 2 {
+            return Ok(routines);
         }
-        Ok(routines)
+        let regions: Vec<(u64, u64)> = self
+            .index
+            .units(self.firmware, Some(&self.unit))
+            .map_err(|e| e.to_string())?
+            .iter()
+            .flat_map(|unit| unit.regions.iter())
+            .map(|region| (region.address, region.address + region.bytes.len() as u64))
+            .collect();
+        let region_of = |routine: &Routine| {
+            regions
+                .iter()
+                .position(|region| (region.0..region.1).contains(&routine.header.key.address))
+        };
+        let Some(region) = region_of(reader) else {
+            return Ok(routines);
+        };
+        let beside = |routine: &Routine| region_of(routine) == Some(region);
+        if routines.iter().filter(|routine| beside(routine)).count() != 1 {
+            return Ok(routines);
+        }
+        Ok(routines.into_iter().filter(beside).collect())
     }
     /// The routine nominated by `name`, or, when no function in this unit
     /// carries that name, the unique small routine accepted by `verify`. A
     /// nominated routine that fails `verify` is an error, not a reason to
-    /// search by shape.
+    /// search by shape. Several routines of that shape are told apart only by
+    /// the mapped region of `reader`, the flash reader already located.
     fn named_or_small(
         &self,
         name: &str,
         limit: u64,
         verify: impl Fn(&Routine) -> bool,
+        reader: &Routine,
     ) -> Result<Routine> {
         let nominated = self
             .index
             .find(Some(name), None, Some(self.firmware), Some(&self.unit))
             .map_err(|e| e.to_string())?;
         if nominated.is_empty() {
-            self.small_routine(limit, verify, name)
+            self.small_routine(limit, verify, name, reader)
         } else {
             self.named(name, verify)
         }
@@ -355,7 +369,7 @@ fn flash_with_route<L: Lookup>(
         unnamed_reader(&locator, is_reader)?
     };
     let request = one(locator.calls(&reader)?, "read request")?;
-    flash_window_address(&locator)?;
+    flash_window_address(&locator, &reader)?;
     if !request.has("mov", "x0, #0xf8000000")
         || !request.has("mov", "w0, #0x7ffffff")
         || !request.has("movk", "w0, #0x7766, lsl #16")
@@ -515,8 +529,12 @@ fn flash_with_route<L: Lookup>(
         let is_selector = |r: &Routine| r.has("add", "x3, x3, #0x20") && r.has("cmp", "w2, #5");
         // A firmware can carry a borrowed `flash_read` name without one for
         // the selector, so the selector's own name decides the search.
-        let selector =
-            locator.named_or_small("flash_select_supported_jedec_id", 0x60, is_selector)?;
+        let selector = locator.named_or_small(
+            "flash_select_supported_jedec_id",
+            0x60,
+            is_selector,
+            &reader,
+        )?;
         let hits = index
             .select(
                 Some(firmware),
@@ -1616,14 +1634,20 @@ fn firmware_names_flash_read<L: Lookup>(index: &L, firmware: &str) -> Result<boo
 
 /// The helper that maps a flash offset into the 128 MiB read window. A symbol
 /// ledger that names `flash_read` need not also name this helper, so an
-/// absent name falls back to the unique routine with this shape.
-fn flash_window_address<L: Lookup>(locator: &Locator<'_, L>) -> Result<Routine> {
-    locator.named_or_small("flash_window_address", 0xc, |r| {
-        r.code.len() == 3
-            && r.has("mov", "x1, #0xf0000000")
-            && r.has("add", "x0, x0, x1")
-            && r.has("ret", "")
-    })
+/// absent name falls back to the unique routine with this shape, or to the one
+/// of several that shares the mapped region of `reader`.
+fn flash_window_address<L: Lookup>(locator: &Locator<'_, L>, reader: &Routine) -> Result<Routine> {
+    locator.named_or_small(
+        "flash_window_address",
+        0xc,
+        |r| {
+            r.code.len() == 3
+                && r.has("mov", "x1, #0xf0000000")
+                && r.has("add", "x0, x0, x1")
+                && r.has("ret", "")
+        },
+        reader,
+    )
 }
 
 /// Find the reader in a firmware whose symbols are not recovered: a small
@@ -1644,7 +1668,6 @@ fn unnamed_reader<L: Lookup>(
                     request.has("mov", "w0, #0x6555") && request.has("movk", "w0, #0x7766, lsl #16")
                 })
     });
-    let readers = locator.application(readers)?;
     one(readers, "flash_read")
 }
 
@@ -1881,8 +1904,9 @@ mod tests {
             firmware: "test",
             unit: "main".into(),
         };
+        let reader = locator.routine(0x1000).unwrap();
         let routine = locator
-            .named_or_small("selector", 8, |r| r.has("mov", "x0, #2"))
+            .named_or_small("selector", 8, |r| r.has("mov", "x0, #2"), &reader)
             .unwrap();
         assert_eq!(routine.header.key.address, 0x1008);
         // Two accepted shapes stay ambiguous.
@@ -1892,9 +1916,10 @@ mod tests {
             firmware: "test",
             unit: "main".into(),
         };
+        let reader = locator.routine(0x1000).unwrap();
         assert!(
             locator
-                .named_or_small("selector", 8, |r| r.has("mov", "x0, #1"))
+                .named_or_small("selector", 8, |r| r.has("mov", "x0, #1"), &reader)
                 .is_err()
         );
         // A nomination that fails verification is not replaced by a shape search.
@@ -1904,10 +1929,158 @@ mod tests {
             firmware: "test",
             unit: "main".into(),
         };
+        let reader = locator.routine(0x1000).unwrap();
         assert!(
             locator
-                .named_or_small("selector", 8, |r| r.has("mov", "x0, #3"))
+                .named_or_small("selector", 8, |r| r.has("mov", "x0, #3"), &reader)
                 .is_err()
+        );
+    }
+
+    /// One unit with a mapped region per entry of `programs`, 0x2000 apart from 0x1000, each
+    /// holding the given self-authored words. `functions` are (offset, size) in every region and
+    /// `ranges` the unit's pointer windows.
+    fn programs(programs: &[&[u32]], functions: &[(u64, u64)], ranges: Vec<(u64, u64)>) -> Index {
+        let mut index = Index::new();
+        let bases = (0..programs.len() as u64).map(|n| 0x1000 + n * 0x2000);
+        index
+            .add_unit(
+                UnitInput {
+                    layout: UnitLayout {
+                        firmware: "test".into(),
+                        unit: "main".into(),
+                        architecture: Architecture::Aarch64,
+                        address_ranges: ranges,
+                        address_aliases: vec![],
+                    },
+                    functions: bases
+                        .clone()
+                        .flat_map(|base| functions.iter().map(move |(at, size)| (base + at, *size)))
+                        .map(|(address, size)| Boundary {
+                            address,
+                            ranges: vec![(address, address + size)],
+                            names: vec![],
+                            annotations: vec![],
+                            references: vec![],
+                        })
+                        .collect(),
+                },
+                bases
+                    .zip(programs)
+                    .map(|(address, words)| Region {
+                        address,
+                        bytes: words.iter().flat_map(|word| word.to_le_bytes()).collect(),
+                    })
+                    .collect(),
+            )
+            .unwrap();
+        index
+    }
+    /// MOVZ x0, #first; RET and MOVZ x0, #second; RET: two routines of 8 bytes.
+    fn pair(first: u32, second: u32) -> [u32; 4] {
+        [
+            0xd2800000 | (first << 5),
+            0xd65f03c0,
+            0xd2800000 | (second << 5),
+            0xd65f03c0,
+        ]
+    }
+    const PAIR: &[(u64, u64)] = &[(0, 8), (8, 8)];
+    fn locator(index: &Index) -> Locator<'_, Index> {
+        Locator {
+            index,
+            firmware: "test",
+            unit: "main".into(),
+        }
+    }
+
+    #[test]
+    fn of_two_copies_of_a_driver_the_one_in_the_readers_region_is_used() {
+        // The same two routines in two mapped regions, as an update that holds one driver in
+        // two programs. The reader is the first routine of a region, the wanted routine the
+        // second. Pointer windows do not enter into it: the mapped regions decide.
+        for ranges in [
+            vec![(0x1000, 0x4000)],
+            vec![(0x1000, 0x2000), (0x3000, 0x4000)],
+            vec![],
+        ] {
+            let index = programs(&[&pair(1, 2), &pair(1, 2)], PAIR, ranges);
+            let locator = locator(&index);
+            // The reader's region decides, whichever of the two lies higher.
+            for (reader, selected) in [(0x3000, 0x3008), (0x1000, 0x1008)] {
+                let reader = locator.routine(reader).unwrap();
+                let routine = locator
+                    .named_or_small("selector", 8, |r| r.has("mov", "x0, #2"), &reader)
+                    .unwrap();
+                assert_eq!(routine.header.key.address, selected);
+            }
+        }
+        // The window helper search takes the same reader: MOVZ x1, #0xf000, lsl #16;
+        // ADD x0, x0, x1; RET after a RET that stands for the reader.
+        let helper = [0xd65f03c0u32, 0xd2be0001, 0x8b010000, 0xd65f03c0];
+        let index = programs(&[&helper, &helper], &[(0, 4), (4, 12)], vec![]);
+        let locator = locator(&index);
+        for reader in [0x1000, 0x3000] {
+            let window = flash_window_address(&locator, &locator.routine(reader).unwrap()).unwrap();
+            assert_eq!(window.header.key.address, reader + 4);
+        }
+    }
+
+    #[test]
+    fn several_shapes_refuse_unless_exactly_one_shares_the_readers_region() {
+        let wanted = |r: &Routine| r.has("mov", "x0, #2");
+        let refused = |result: Result<Routine>, count: usize| {
+            assert_eq!(
+                result.err().unwrap(),
+                format!("selector: {count} verified candidates")
+            );
+        };
+        // Two candidates in the reader's own region, whatever the other region holds.
+        let index = programs(&[&pair(2, 2), &pair(1, 2)], PAIR, vec![]);
+        let reader = locator(&index).routine(0x1000).unwrap();
+        refused(
+            locator(&index).named_or_small("selector", 8, wanted, &reader),
+            3,
+        );
+        // No candidate in the reader's region: two regions hold one each and the reader lies
+        // in a third, the lowest. The highest candidate is not taken.
+        let index = programs(&[&pair(1, 3), &pair(1, 2), &pair(1, 2)], PAIR, vec![]);
+        let reader = locator(&index).routine(0x1000).unwrap();
+        refused(
+            locator(&index).named_or_small("selector", 8, wanted, &reader),
+            2,
+        );
+        // A reader that no mapped region holds selects nothing.
+        let index = programs(&[&pair(1, 2), &pair(1, 2)], PAIR, vec![(0x1000, 0xa000)]);
+        let mut reader = locator(&index).routine(0x3000).unwrap();
+        reader.header.key.address = 0x9000;
+        refused(
+            locator(&index).named_or_small("selector", 8, wanted, &reader),
+            2,
+        );
+    }
+
+    #[test]
+    fn a_reader_found_by_shape_in_two_programs_refuses() {
+        // BL to the next routine; RET, then a read request that only loads the initialized
+        // marker: MOVZ w0, #0x6555; MOVK w0, #0x7766, lsl #16; RET.
+        let driver = [
+            0x94000002u32,
+            0xd65f03c0,
+            0x528caaa0,
+            0x72aeecc0,
+            0xd65f03c0,
+        ];
+        let functions = [(0, 8), (8, 12)];
+        let is_reader = |r: &Routine| r.code.len() == 2 && r.has("ret", "");
+        let index = programs(&[&driver], &functions, vec![]);
+        let reader = unnamed_reader(&locator(&index), is_reader).unwrap();
+        assert_eq!(reader.header.key.address, 0x1000);
+        // Nothing located yet tells two copies apart, so neither is taken.
+        let index = programs(&[&driver, &driver], &functions, vec![]);
+        assert_eq!(
+            unnamed_reader(&locator(&index), is_reader).err().unwrap(),
+            "flash_read: 2 verified candidates"
         );
     }
 
@@ -1956,7 +2129,8 @@ mod tests {
                 firmware: "test",
                 unit: "main".into(),
             };
-            let window = flash_window_address(&locator).unwrap();
+            let reader = locator.routine(0x1000).unwrap();
+            let window = flash_window_address(&locator, &reader).unwrap();
             assert_eq!(window.header.key.address, 0x1010, "names {window_names:?}");
         }
     }
