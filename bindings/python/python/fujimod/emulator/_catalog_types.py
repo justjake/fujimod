@@ -3,7 +3,6 @@ from __future__ import annotations
 
 from typing import Literal, Never, NotRequired, Required, TypedDict
 
-
 type AProfileState = AProfileStateVariant0 | AProfileStateVariant1
 
 
@@ -4113,9 +4112,16 @@ class NamedRange(TypedDict, total=False):
 
 
 class NamedSetting(TypedDict, total=False):
+    additional_writes: NotRequired[dict[str, list[NamedSettingWrite]]]
     offset: Required[int]
     store: Required[str]
     values: Required[dict[str, list[int]]]
+
+
+class NamedSettingWrite(TypedDict, total=False):
+    bytes: Required[list[int]]
+    offset: Required[int]
+    store: Required[str]
 
 
 class NandGeometry(TypedDict, total=False):
@@ -4933,6 +4939,7 @@ class ProfileRecord(TypedDict, total=False):
     defaults_offset: Required[int]
     fields: Required[list[SettingsField]]
     managed_index: NotRequired[int | None]
+    nor_extent_bytes: NotRequired[int | None]
     parity_offset: Required[int]
 
 
@@ -6016,7 +6023,8 @@ class RunPreview(TypedDict, total=False):
 
 
 type RunProducerDataProfile = Literal[
-    "xm1-150-declared-continuous-statistics-scene-unmeasured"] | Literal["recorded-statistics",
+    "xm1-150-declared-continuous-statistics-scene-unmeasured",
+    "recorded-statistics",
 ]
 
 
@@ -6091,7 +6099,8 @@ class RunSdClockSteps(TypedDict, total=False):
 
 
 type RunSecondaryBusProfile = Literal[
-    "usbcharge-disconnected-pwic-startup-tagged"] | Literal["disabled",
+    "usbcharge-disconnected-pwic-startup-tagged",
+    "disabled",
 ]
 
 
@@ -6146,7 +6155,10 @@ type RunStillCapture = Literal["register-capture-readonly-card-observation"]
 type RunStorageProfile = Literal[
     "captured",
     "browser",
-    "erased"] | Literal["settings"] | Literal["profile"] | Literal["factory",
+    "erased",
+    "settings",
+    "profile",
+    "factory",
 ]
 
 
@@ -6258,7 +6270,7 @@ class SensorControlInterface(TypedDict, total=False):
 
 
 type SensorIllumination = (
-    Literal["uniform"] | Literal["cosine-fourth"] | SensorIlluminationVariant0
+    Literal["uniform", "cosine-fourth"] | SensorIlluminationVariant0
 )
 
 
