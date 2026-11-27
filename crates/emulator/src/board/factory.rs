@@ -1,6 +1,6 @@
 //! Checked construction and memory ownership for every execution backend.
 use super::{Board, InterruptMap, bus::Bus, set};
-use fujimod_catalog_configuration::RunEngine;
+use fujimod_catalog_configuration::{RunCpuBackend, RunEngine};
 use fujimod_emulator_cpu::{Cpu, Model, Register, memory::Backing, timeline::Ratio};
 use fujimod_emulator_cpu_unicorn::Library;
 use std::ptr::NonNull;
@@ -9,6 +9,8 @@ use std::ptr::NonNull;
 #[serde(deny_unknown_fields)]
 pub struct Processor {
     pub model: Model,
+    #[serde(default)]
+    pub cpu_backend: RunCpuBackend,
     pub registers: Vec<(Register, u64)>,
     pub released: bool,
     #[serde(default)]
@@ -17,6 +19,11 @@ pub struct Processor {
     pub rprofile: Option<fujimod_emulator_cpu_unicorn::rprofile::core::Options>,
 }
 impl Processor {
+    fn uses_unicorn(&self, engine: RunEngine) -> bool {
+        self.cpu_backend == RunCpuBackend::Unicorn
+            && (engine == RunEngine::Unicorn || self.model != Model::ArmV8A)
+    }
+
     /// Smallest page the processor backend maps.
     pub fn mapping_granule(&self) -> u64 {
         if self.model == Model::ArmV8A {
@@ -180,7 +187,7 @@ impl Engines {
         let need_uc = graph
             .processors
             .iter()
-            .any(|p| matches!(options.engine, RunEngine::Unicorn) || p.model != Model::ArmV8A);
+            .any(|p| p.uses_unicorn(options.engine));
         let need_hvf = graph
             .processors
             .iter()
@@ -214,6 +221,20 @@ impl Engines {
         memory: &fujimod_emulator_cpu_unicorn::memory::Memory,
     ) -> Result<Box<dyn Cpu>, String> {
         let model = processor.model;
+        if processor.cpu_backend == RunCpuBackend::Dynarmic {
+            #[cfg(all(
+                feature = "dynarmic",
+                any(target_arch = "aarch64", target_arch = "x86_64"),
+                any(target_os = "linux", target_os = "macos")
+            ))]
+            return Ok(Box::new(fujimod_emulator_cpu_dynarmic::Core::new(model)?));
+            #[cfg(not(all(
+                feature = "dynarmic",
+                any(target_arch = "aarch64", target_arch = "x86_64"),
+                any(target_os = "linux", target_os = "macos")
+            )))]
+            return Err(dynarmic_unavailable());
+        }
         if model == Model::ArmV8A && matches!(options.engine, RunEngine::Hypervisor) {
             #[cfg(all(target_os = "macos", target_arch = "aarch64"))]
             return Ok(Box::new(
@@ -256,6 +277,16 @@ impl Engines {
         }
     }
 }
+#[cfg(not(all(
+    feature = "dynarmic",
+    any(target_arch = "aarch64", target_arch = "x86_64"),
+    any(target_os = "linux", target_os = "macos")
+)))]
+fn dynarmic_unavailable() -> String {
+    "cpu_backend=dynarmic requires the Cargo dynarmic feature on x86-64 or ARM64 Linux or macOS"
+        .into()
+}
+
 impl Graph {
     pub(super) fn validate_memory_map(
         &self,
@@ -293,6 +324,21 @@ impl Graph {
         Ok(())
     }
     pub fn validate(&self) -> Result<(), String> {
+        for processor in self
+            .processors
+            .iter()
+            .filter(|processor| processor.cpu_backend == RunCpuBackend::Dynarmic)
+        {
+            if processor.model != Model::CortexA7 {
+                return Err("cpu_backend=dynarmic requires a Cortex-A7 processor".into());
+            }
+            #[cfg(not(all(
+                feature = "dynarmic",
+                any(target_arch = "aarch64", target_arch = "x86_64"),
+                any(target_os = "linux", target_os = "macos")
+            )))]
+            return Err(dynarmic_unavailable());
+        }
         if self.processors.is_empty() || !self.processors.iter().any(|p| p.released) {
             return Err("board has no released processor".into());
         }
@@ -454,9 +500,7 @@ impl Graph {
         let unicorn_processors = self
             .processors
             .iter()
-            .filter(|processor| {
-                matches!(options.engine, RunEngine::Unicorn) || processor.model != Model::ArmV8A
-            })
+            .filter(|processor| processor.uses_unicorn(options.engine))
             .count();
         let translation_cache_size_bytes = match options.translation_cache_size_bytes {
             Some(bytes) => bytes,

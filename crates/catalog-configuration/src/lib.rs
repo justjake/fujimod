@@ -10,6 +10,7 @@ use std::collections::{BTreeMap, BTreeSet};
 
 pub mod application_inputs;
 pub mod processor;
+pub use fujimod_catalog_run_inputs::RunCpuBackend;
 use fujimod_catalog_run_inputs::*;
 pub use processor::{PROCESSOR_EMULATION_SCHEMA_URI, ProcessorEmulation};
 
@@ -103,6 +104,14 @@ pub struct RunConfiguration {
 }
 
 impl RunConfiguration {
+    /// Backend selected for Cortex-A7 processors in this run.
+    pub fn cpu_backend(&self) -> RunCpuBackend {
+        self.preset
+            .as_ref()
+            .and_then(|preset| preset.factory_options.cpu_backend)
+            .unwrap_or_default()
+    }
+
     /// Resolve a bundled run-configuration by its stable identity.
     pub fn bundled(id: &str) -> Result<Self, String> {
         fujimod_catalog_identity::validate_id(id)?;

@@ -628,6 +628,7 @@ fn xp4_session(resolved: &ResolvedConfiguration, inputs: Xp4Inputs<'_>) -> Resul
         resolved.dram_address_space_limit_bytes()?,
         rate,
         None,
+        resolved.configuration.cpu_backend(),
         &starts,
     )?;
     let record = json!({

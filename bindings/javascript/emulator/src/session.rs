@@ -255,6 +255,7 @@ impl Session {
                         registers.push((Register::Arm32(arm::Register::R(r)), u64::from(value)));
                     }
                     Ok(factory::Processor {
+                        cpu_backend: Default::default(),
                         model: match c.model {
                             ModelName::CortexR5f => Model::CortexR5F,
                             ModelName::CortexA7 => Model::CortexA7,

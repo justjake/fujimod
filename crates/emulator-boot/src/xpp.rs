@@ -1662,6 +1662,7 @@ pub fn assemble(resolved: &ResolvedConfiguration, inputs: &Inputs<'_>) -> Result
             denominator,
         },
         None,
+        resolved.configuration.cpu_backend(),
         inputs.starts,
     )?;
     let cores = execution.processors.len();

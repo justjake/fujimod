@@ -8,7 +8,7 @@ use fujimod_catalog::reference::{
     AddressMapping, DecoderSelection, MemoryRegion, ProcessorArchitecture, ProcessorModel,
     ProcessorRegister, RegionSize, ResolvedSelection, Soc,
 };
-use fujimod_catalog_configuration::RunInstructionRate;
+use fujimod_catalog_configuration::{RunCpuBackend, RunInstructionRate};
 use fujimod_emulator::board::{factory, memory::BusMapping};
 use fujimod_emulator_cpu::{Model, Register, arm};
 use serde_json::{Value, json};
@@ -118,6 +118,7 @@ fn build_processor(
     mprofile: Option<fujimod_emulator::board::mprofile::Config>,
     rprofile: Option<&fujimod_catalog::reference::RProfileState>,
     architecture: ProcessorArchitecture,
+    cpu_backend: RunCpuBackend,
 ) -> Result<factory::Processor, String> {
     let model = match (architecture, model) {
         (ProcessorArchitecture::Arm32, ProcessorModel::CortexR5f) => Model::CortexR5F,
@@ -160,6 +161,11 @@ fn build_processor(
         .transpose()?;
     Ok(factory::Processor {
         model,
+        cpu_backend: if model == Model::CortexA7 {
+            cpu_backend
+        } else {
+            RunCpuBackend::Unicorn
+        },
         registers: registers.to_vec(),
         released,
         parked_until_sgi,
@@ -235,12 +241,14 @@ pub fn assemble(
     dram_address_space_limit_bytes: u64,
     rate: RunInstructionRate,
     board_ticks_per_second: Option<u64>,
+    cpu_backend: RunCpuBackend,
 ) -> Result<factory::Graph, String> {
     assemble_with_starts(
         selection,
         dram_address_space_limit_bytes,
         rate,
         board_ticks_per_second,
+        cpu_backend,
         &[],
     )
 }
@@ -253,10 +261,19 @@ pub fn assemble_with_starts(
     dram_address_space_limit_bytes: u64,
     rate: RunInstructionRate,
     board_ticks_per_second: Option<u64>,
+    cpu_backend: RunCpuBackend,
     starts: &[ProcessorStart],
 ) -> Result<factory::Graph, String> {
     let soc = &selection.soc;
     let body = &selection.body;
+    if cpu_backend == RunCpuBackend::Dynarmic
+        && !soc
+            .processors
+            .iter()
+            .any(|p| p.model == ProcessorModel::CortexA7)
+    {
+        return Err("cpu_backend=dynarmic requires a Cortex-A7 processor".into());
+    }
     if dram_address_space_limit_bytes == 0 || !dram_address_space_limit_bytes.is_multiple_of(4096) {
         return Err("DRAM address-space limit must be positive and page-aligned".into());
     }
@@ -344,6 +361,7 @@ pub fn assemble_with_starts(
                 mprofile,
                 processor.rprofile.as_ref(),
                 soc.architecture.clone(),
+                cpu_backend,
             )
         })
         .collect::<Result<_, _>>()?;
@@ -586,6 +604,7 @@ pub fn value(
             json!({
                 "model": processor_model(processor.model),
                 "released": processor.released,
+                "cpu_backend": processor.cpu_backend,
                 "registers": processor.registers.iter().map(|(register, value)| {
                     json!([processor_register(*register), value])
                 }).collect::<Vec<_>>(),
@@ -646,6 +665,7 @@ mod tests {
             size,
         };
         let processor = |model| factory::Processor {
+            cpu_backend: RunCpuBackend::Unicorn,
             model,
             registers: vec![],
             released: true,
@@ -873,6 +893,7 @@ mod tests {
                 denominator: 1,
             },
             None,
+            RunCpuBackend::Unicorn,
         )
         .unwrap();
         assert_eq!(graph.mappings.len(), 1);
@@ -898,7 +919,14 @@ mod tests {
             numerator: 24,
             denominator: 1,
         };
-        let graph = assemble(&selection, selection.body.dram_bytes.unwrap(), rate, None).unwrap();
+        let graph = assemble(
+            &selection,
+            selection.body.dram_bytes.unwrap(),
+            rate,
+            None,
+            RunCpuBackend::Unicorn,
+        )
+        .unwrap();
         let decoder = &graph.decoders[0];
         assert_eq!(decoder.initial, 0);
         assert_eq!(decoder.choices.len(), 2);
@@ -907,7 +935,14 @@ mod tests {
         assert_eq!(decoder.choices[1].dma[0].physical, 0);
 
         selection.soc.decoders[0].initial = selection.soc.decoders[0].choices[1].selection.clone();
-        let graph = assemble(&selection, selection.body.dram_bytes.unwrap(), rate, None).unwrap();
+        let graph = assemble(
+            &selection,
+            selection.body.dram_bytes.unwrap(),
+            rate,
+            None,
+            RunCpuBackend::Unicorn,
+        )
+        .unwrap();
         let decoder = &graph.decoders[0];
         assert_eq!(decoder.initial, 1);
         assert_eq!(decoder.choices.len(), 2);
@@ -940,8 +975,15 @@ mod tests {
                     registers: vec![],
                 })
                 .collect();
-            let graph = assemble_with_starts(&selection, limit, rate, Some(1_000_000_000), &starts)
-                .unwrap();
+            let graph = assemble_with_starts(
+                &selection,
+                limit,
+                rate,
+                Some(1_000_000_000),
+                RunCpuBackend::Unicorn,
+                &starts,
+            )
+            .unwrap();
             let other = if drain == 0x6800_0000 {
                 0x6000_0000
             } else {
@@ -989,10 +1031,16 @@ mod tests {
                 registers: vec![],
             })
             .collect();
-        let error =
-            assemble_with_starts(&selection, 0x4000_0000, rate, Some(1_000_000_000), &starts)
-                .err()
-                .unwrap();
+        let error = assemble_with_starts(
+            &selection,
+            0x4000_0000,
+            rate,
+            Some(1_000_000_000),
+            RunCpuBackend::Unicorn,
+            &starts,
+        )
+        .err()
+        .unwrap();
         assert!(error.contains("core9"), "{error}");
     }
 }

@@ -356,6 +356,14 @@ pub fn validate_selection(
         return Err("run configuration identities differ from resolved hardware".into());
     }
 
+    if configuration.cpu_backend() == RunCpuBackend::Dynarmic
+        && !selection.soc.processors.iter().any(|processor| {
+            processor.model == fujimod_catalog::reference::ProcessorModel::CortexA7
+        })
+    {
+        return Err("cpu_backend=dynarmic requires a Cortex-A7 processor".into());
+    }
+
     if selection.body.dram_bytes.is_none() && configuration.dram_address_space.is_none() {
         return Err(format!(
             "body {} has unknown installed DRAM capacity and the run has no address-space limit",
