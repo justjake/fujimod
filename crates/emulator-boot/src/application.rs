@@ -205,11 +205,24 @@ impl Board {
         }
     }
 
-    /// Turn a command dial the board declares by `edges` quadrature edges.
-    pub fn turn_dial(&mut self, name: &str, edges: i32) -> Result<(), String> {
+    /// Queue `edges` quadrature edges on the command dial wired to a
+    /// countdown-timer channel.
+    pub fn turn_dial(&mut self, channel: u8, edges: i32) -> Result<(), String> {
         match self {
-            Self::Xp4(board) => board.turn_dial(name, edges),
-            Self::Xpp(_) => Err("X-Processor Pro command dials are not wired".into()),
+            Self::Shared(session) => {
+                use fujimod_emulator_xp4_io::countdown_timers::CountdownTimers;
+                let node = session
+                    .node("xp4-countdown-timers")
+                    .map_err(|_| "Command dials are not wired")?;
+                session
+                    .board
+                    .with_device_inputs::<CountdownTimers, _>(node, |timers, now| {
+                        timers
+                            .dial_input(usize::from(channel))
+                            .ok_or("Unwired XP4 countdown dial")?
+                            .queue_edges(now, edges)
+                    })
+            }
         }
     }
 
@@ -231,7 +244,7 @@ impl Board {
             }
             // One firmware step is one edge, as the X-T3 discovery inputs declare.
             KeyWire::Dial(step) if pressed => {
-                self.turn_dial(&step.control, i32::from(step.direction))
+                self.turn_dial(step.channel, i32::from(step.direction))
             }
             KeyWire::Dial(_) => Ok(()),
         }
