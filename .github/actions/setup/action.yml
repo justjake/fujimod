@@ -7,6 +7,9 @@ inputs:
   desktop:
     description: Install the Linux headers the desktop GUI crate builds against
     default: 'false'
+  build:
+    description: Set up compile caches and JavaScript and Python packages; test shards that only run built tests skip it
+    default: 'true'
 runs:
   using: composite
   steps:
@@ -35,7 +38,9 @@ runs:
     # keyed by what that compile reads, so a change recompiles only the crates
     # it touches, in any job. rust-cache keeps the downloaded crates.
     - uses: mozilla-actions/sccache-action@fc920bf0ec8de6ee65d409111f7ec508035751ba # v0.0.11
+      if: inputs.build == 'true'
     - shell: bash
+      if: inputs.build == 'true'
       run: |
         {
           echo SCCACHE_GHA_ENABLED=true
@@ -43,12 +48,14 @@ runs:
           echo CARGO_INCREMENTAL=0
         } >> "$GITHUB_ENV"
     - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+      if: inputs.build == 'true'
       with:
         prefix-key: v1-rust
         shared-key: crates
         cache-targets: false
         cache-on-failure: true
     - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      if: inputs.build == 'true'
       with:
         path: |
           ~/.cache/uv
@@ -56,10 +63,12 @@ runs:
         key: packages-${{ runner.os }}-${{ hashFiles('uv.lock', 'pnpm-lock.yaml') }}
         restore-keys: packages-${{ runner.os }}-
     - shell: bash
+      if: inputs.build == 'true'
       run: |
         pnpm config set store-dir ~/.local/share/pnpm/store
         uv sync --locked
     - name: Install TypeScript compiler for Cargo browser assets
+      if: inputs.build == 'true'
       shell: bash
       run: pnpm install --frozen-lockfile
     - if: inputs.javascript == 'true'
