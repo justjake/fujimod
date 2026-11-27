@@ -51,10 +51,20 @@ pub(super) fn decode(word: u32) -> Option<Op> {
         let value = (word & 255).rotate_right(rotate);
         Operand::Immediate(value, (rotate != 0).then_some(value >> 31 != 0))
     } else {
-        if word & 16 != 0 || word & 15 == 15 {
+        let source = (word & 15) as usize;
+        if source == 15 {
             return None;
         }
-        Operand::Register((word & 15) as usize, (word >> 5) & 3, (word >> 7) & 31)
+        let kind = (word >> 5) & 3;
+        if word & 16 != 0 {
+            let count = ((word >> 8) & 15) as usize;
+            if count == 15 || word & 128 != 0 {
+                return None;
+            }
+            Operand::RegisterShift(source, kind, count)
+        } else {
+            Operand::Register(source, kind, (word >> 7) & 31)
+        }
     };
     Some(Op::Data {
         opcode,

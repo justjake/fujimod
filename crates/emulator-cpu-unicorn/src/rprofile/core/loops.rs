@@ -3,7 +3,7 @@
 //! each entry. The execution owner bounds the stable window at every event/peer
 //! boundary.
 use super::*;
-use crate::loop_proof::{self, Advance, AdvanceFailure, Isa, Proof, State};
+use fujimod_emulator_cpu::loop_proof::{self, Advance, AdvanceFailure, Isa, Proof, State};
 use fujimod_emulator_cpu::loops::LoopMode;
 use std::collections::{BTreeMap, BTreeSet};
 

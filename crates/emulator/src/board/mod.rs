@@ -857,13 +857,7 @@ impl Board {
                 board.cpus[core].stop_on_el3_transitions()?;
             }
             if observes_every {
-                let hook = unsafe {
-                    board.cpus[core].install_hook(Hook::Instruction {
-                        callback: before,
-                        data,
-                        range: HookRange::All,
-                    })?
-                };
+                let hook = unsafe { board.cpus[core].install_scheduler_hook(before, data)? };
                 board.hooks.push((core, hook));
                 board.execution_hooks.push(core);
                 board.observer_hooks[core] = Some(hook);
@@ -1859,7 +1853,11 @@ impl Board {
             let cpu = &self.cpus[core];
             // The exact budget ends at the first device/DMA/processor event
             // or runnable-peer turn; those boundaries end the stable window.
-            cpu.set_loop_window(self.state.borrow().loop_window())?;
+            let stable = {
+                let state = self.state.borrow();
+                state.loop_window() && state.entry_points[core].is_empty()
+            };
+            cpu.set_loop_window(stable)?;
             let pc = scalar(&**cpu, Register::Pc)?;
             let mut engine_guard =
                 fujimod_perf::engine_run(u8::try_from(core).unwrap_or(u8::MAX), false);

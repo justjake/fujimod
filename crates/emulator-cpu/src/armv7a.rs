@@ -48,6 +48,14 @@ pub fn framework_instruction(word: u32) -> bool {
         || matches!(body, 0x0320_f002..=0x0320_f004)
 }
 
+/// Data cache invalidate, clean, or clean-and-invalidate by set/way.
+pub fn data_cache_set_way(word: u32) -> bool {
+    word >> 28 != 15
+        && word & 0x0fff_0ff0 == 0x0e07_0f50
+        && matches!(word & 15, 6 | 10 | 14)
+        && (word >> 12) & 15 != 15
+}
+
 /// Instructions after which a counted backend must end its block, so pending
 /// interrupts and translation changes take effect at the next instruction:
 /// CPSR writes and exception returns (`rprofile::arm_irq_mask_source` covers

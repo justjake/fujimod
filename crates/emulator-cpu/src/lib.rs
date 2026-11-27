@@ -13,6 +13,7 @@ pub mod arm;
 pub mod arm64;
 pub mod armv7a;
 pub mod exclusive;
+pub mod loop_proof;
 pub mod loops;
 pub mod memory;
 pub mod timeline;
@@ -900,6 +901,26 @@ pub trait Cpu {
     /// Callback data must remain valid until the hook is removed or the CPU
     /// is destroyed; callbacks must not unwind and must obey the owner's
     /// bounded reentrancy rules.
+    /// Install the execution owner's instruction-boundary callback. The owner
+    /// supplies the run budget and stable window; unlike guest observers, its
+    /// callback need not see individual instructions inside a proven window.
+    ///
+    /// # Safety
+    /// The callback and data must obey the instruction-hook lifetime contract.
+    unsafe fn install_scheduler_hook(
+        &self,
+        callback: unsafe fn(u64, u32, *mut c_void),
+        data: *mut c_void,
+    ) -> Result<HookId, String> {
+        unsafe {
+            self.install_hook(Hook::Instruction {
+                callback,
+                data,
+                range: HookRange::All,
+            })
+        }
+    }
+
     unsafe fn install_hook(&self, hook: Hook) -> Result<HookId, String>;
     /// Install a mapped memory boundary that ends translated blocks before
     /// the selected accesses. Backends with native restart-only hooks can

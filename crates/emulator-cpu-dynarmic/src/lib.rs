@@ -5,6 +5,7 @@
 ))]
 
 mod ffi;
+mod loops;
 mod status;
 
 use fujimod_emulator_cpu::{memory::Backing, *};
@@ -39,6 +40,7 @@ struct CoreShared {
     next_hook_id: Cell<usize>,
     observers: RefCell<Vec<(usize, Hook)>>,
     stopped: Cell<bool>,
+    device_accessed: Cell<bool>,
     fault: RefCell<Option<ExecutionError>>,
     abort: Cell<Option<(u32, u32, Access)>>,
     inst: Cell<*mut ffi::DynarmicInstance>,
@@ -261,12 +263,15 @@ impl CoreShared {
                 };
                 0
             }
-            (Mapping::Mmio { callbacks, .. }, None) => unsafe {
-                (callbacks.read)(offset as u64, size as u32, callbacks.data)
-            },
-            (Mapping::Mmio { callbacks, .. }, Some(value)) => {
-                unsafe { (callbacks.write)(offset as u64, size as u32, value, callbacks.data) };
-                0
+            (Mapping::Mmio { callbacks, .. }, value) => {
+                // A device operation can create a new deadline inside this slice.
+                self.device_accessed.set(true);
+                if let Some(value) = value {
+                    unsafe { (callbacks.write)(offset as u64, size as u32, value, callbacks.data) };
+                    0
+                } else {
+                    unsafe { (callbacks.read)(offset as u64, size as u32, callbacks.data) }
+                }
             }
         }
     }
@@ -279,6 +284,8 @@ pub struct Core {
     shared: Box<CoreShared>,
     memory_regions: RefCell<Vec<MemoryRegion>>,
     last_progress: Cell<u64>,
+    scheduler_hook: Cell<Option<HookId>>,
+    loops: loops::Loops,
     owned: RefCell<BTreeMap<u64, Backing>>,
     banks: RefCell<status::Banks>,
     fpexc: Cell<u32>,
@@ -295,6 +302,7 @@ impl Core {
             next_hook_id: Cell::new(0),
             observers: RefCell::new(Vec::new()),
             stopped: Cell::new(false),
+            device_accessed: Cell::new(false),
             fault: RefCell::new(None),
             abort: Cell::new(None),
             inst: Cell::new(std::ptr::null_mut()),
@@ -322,6 +330,8 @@ impl Core {
             shared,
             memory_regions: RefCell::new(Vec::new()),
             last_progress: Cell::new(0),
+            scheduler_hook: Cell::new(None),
+            loops: loops::Loops::default(),
             owned: RefCell::new(BTreeMap::new()),
             banks: RefCell::new(status::Banks::default()),
             fpexc: Cell::new(0),
@@ -736,6 +746,7 @@ impl Cpu for Core {
 
     fn run(&self, request: Run) -> Result<Exit, ExecutionError> {
         self.last_progress.set(0);
+        let stable = self.loops.stable.replace(false);
         if request.watchdog_us != 0 {
             return Err("Dynarmic does not support a host watchdog".into());
         }
@@ -745,6 +756,7 @@ impl Cpu for Core {
         let begin = u32::try_from(request.begin).map_err(|_| "Dynarmic start exceeds 32 bits")?;
         unsafe { ffi::dynarmic_set_reg(self.inst, 15, begin & !1) };
         let budget = request.instructions.unwrap_or(usize::MAX) as u64;
+        self.shared.device_accessed.set(false);
         let status = loop {
             if self.last_progress.get() >= budget {
                 break ffi::DynarmicExitReason::Timeout;
@@ -790,6 +802,12 @@ impl Cpu for Core {
                 break ffi::DynarmicExitReason::Stopped;
             }
             let word = u32::from_le_bytes(instruction);
+            if stable
+                && request.until.is_none()
+                && self.advance_loop(pc, cpsr, word, budget - self.last_progress.get())?
+            {
+                continue;
+            }
             if let Some(next) = self
                 .status_instruction(pc, word)
                 .map_err(|error| format!("{error} (instruction {word:#010x} at {pc:#010x})"))?
@@ -855,6 +873,16 @@ impl Cpu for Core {
         }
     }
 
+    fn set_loop_window(&self, stable: bool) -> Result<(), String> {
+        self.loops.stable.set(stable);
+        Ok(())
+    }
+
+    fn set_loop_mode(&self, mode: fujimod_emulator_cpu::loops::LoopMode) -> Result<(), String> {
+        self.loops.mode.set(mode);
+        Ok(())
+    }
+
     fn instruction_progress(&self) -> Option<u64> {
         Some(self.last_progress.get())
     }
@@ -897,6 +925,22 @@ impl Cpu for Core {
             ffi::dynarmic_set_fpscr(self.inst, state.fpscr);
         }
         Ok(())
+    }
+
+    unsafe fn install_scheduler_hook(
+        &self,
+        callback: unsafe fn(u64, u32, *mut c_void),
+        data: *mut c_void,
+    ) -> Result<HookId, String> {
+        let hook = unsafe {
+            self.install_hook(Hook::Instruction {
+                callback,
+                data,
+                range: HookRange::All,
+            })?
+        };
+        self.scheduler_hook.set(Some(hook));
+        Ok(hook)
     }
 
     unsafe fn install_hook(&self, hook: Hook) -> Result<HookId, String> {
@@ -965,8 +1009,11 @@ impl Cpu for Core {
         Ok(())
     }
 
-    fn exit_counters(&self) -> Result<std::collections::BTreeMap<&'static str, u64>, String> {
-        Ok(std::collections::BTreeMap::new())
+    fn exit_counters(&self) -> Result<BTreeMap<&'static str, u64>, String> {
+        Ok(BTreeMap::from([(
+            "loop_accelerated_instructions",
+            self.loops.skipped.get(),
+        )]))
     }
 }
 
