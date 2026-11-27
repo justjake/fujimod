@@ -140,6 +140,10 @@ jobs:
       - if: ${{ !cancelled() }}
         run: mise run web-test
       - if: ${{ !cancelled() }}
+        # The build reads the published release history from GitHub's API;
+        # unauthenticated requests from shared runner addresses stall.
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: mise run web-build
       - if: ${{ !cancelled() }}
         run: pnpm --filter fujimod-usb-sharing run check
