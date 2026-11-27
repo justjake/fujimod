@@ -371,7 +371,8 @@ fn flash_with_route<L: Lookup>(
         "destination cache maintenance",
     )?;
     let mixed = dispatcher.has("tst", "x0, #0x3f");
-    let nand = selected_nand(mixed, installed)?;
+    // The mapped E1 window is memory-mapped serial NOR; it names no installed part.
+    let nand = !mapped_only && selected_nand(mixed, installed)?;
     let mut ranges = vec![
         reader.span("flash_read"),
         request.span("flash read request"),
@@ -383,9 +384,6 @@ fn flash_with_route<L: Lookup>(
         }),
     ];
     if mapped_only {
-        if nand {
-            return Err("mapped E1 metadata requires a serial NOR reader graph".into());
-        }
         ranges.push(cache.span("destination cache maintenance"));
         return Ok(json!({
             "device":{"kind":"serial-nor"},
