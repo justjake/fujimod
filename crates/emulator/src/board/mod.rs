@@ -503,6 +503,8 @@ pub struct Board {
     interactive_windows: Cell<u64>,
     /// Optional diagnostic limit on issued grants within a concurrent window.
     cohort_lead: Option<std::num::NonZeroU64>,
+    local_grant_completions: u64,
+    cohort_pause_barriers: u64,
     bounded_segments: u64,
     withheld_lane_grants: u64,
     segments_over_lead: u64,
@@ -802,6 +804,8 @@ impl Board {
                 .ok()
                 .map(|value| value.parse().map_err(|_| "FUJIMOD_COHORT_LEAD must be a positive count"))
                 .transpose()?,
+            local_grant_completions: 0,
+            cohort_pause_barriers: 0,
             bounded_segments: 0,
             withheld_lane_grants: 0,
             segments_over_lead: 0,

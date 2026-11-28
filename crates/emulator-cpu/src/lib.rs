@@ -944,6 +944,11 @@ pub trait Cpu {
             "backend does not support asynchronous runs".into(),
         ))
     }
+    /// After `poll_run` reports a successful stop, identify exhaustion of its
+    /// local grant at a boundary with no pending architectural exit.
+    fn exhausted_grant(&self, _run: RunToken) -> bool {
+        false
+    }
     /// Request a pause at the next backend block boundary.
     fn request_pause(&self, _run: RunToken) -> Result<(), ExecutionError> {
         Err(ExecutionError::Backend(

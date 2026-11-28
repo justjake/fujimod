@@ -433,7 +433,16 @@ impl Board {
                         entry.watch_or_observer_stop = self.host_pause.get()
                             || self.state.borrow().continuation.borrow().fired;
                         match result {
-                            Ok(exit) => entry.exit = Some(exit),
+                            Ok(exit) => {
+                                entry.exit = Some(exit);
+                                if matches!(exit, Exit::Stopped)
+                                    && !entry.watch_or_observer_stop
+                                    && !entry.interrupted_by_scheduler
+                                    && self.cpus[entry.core].exhausted_grant(entry.token)
+                                {
+                                    self.local_grant_completions += 1;
+                                }
+                            }
                             Err(e) => {
                                 entry.failed = true;
                                 entry.data_fault = matches!(
@@ -466,6 +475,7 @@ impl Board {
             }
             if !barrier && (error.is_some() || entries.iter().any(|e| e.done || e.pending)) {
                 barrier = true;
+                self.cohort_pause_barriers += u64::from(entries.iter().any(|entry| !entry.done));
                 // The M-profile owner must finish admitting a shortened
                 // block when its own observer opened the barrier. Its
                 // budget and subsequent owner callbacks remain bounded by

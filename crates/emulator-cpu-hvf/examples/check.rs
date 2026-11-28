@@ -686,6 +686,7 @@ fn main() -> Result<(), String> {
             }
         }
     }
+    assert!(!cpu.exhausted_grant(async_run));
     assert_eq!(io.reads.split_off(async_reads), vec![(0, 8)]);
     assert_eq!(get(&cpu, Register::X(0)), 0x1234567800000080);
     assert_eq!(get(&cpu, Register::Pc), 0x10304);
@@ -1171,6 +1172,7 @@ fn main() -> Result<(), String> {
                 }
             }
         }
+        assert!(cpu.exhausted_grant(run));
         let progress = cpu.instruction_progress().expect("native run was measured");
         assert!(
             (deadline..200_000_000 * expected_scale).contains(&progress),

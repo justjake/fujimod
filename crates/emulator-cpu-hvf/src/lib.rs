@@ -103,6 +103,7 @@ struct ActiveRun {
     pending_callback: Option<Event>,
     callback_error: Option<ExecutionError>,
     result: Option<Result<Exit, ExecutionError>>,
+    exhausted_grant: bool,
     watchdog: Option<Watchdog>,
 }
 impl Snapshot for State {
@@ -875,6 +876,7 @@ impl Cpu for Core {
         self.shared.limit.store(limit, Ordering::Release);
         self.shared.progress.store(0, Ordering::Relaxed);
         self.shared.measured.store(false, Ordering::Relaxed);
+        self.shared.exhausted_grant.store(false, Ordering::Relaxed);
         let watchdog = Watchdog::new(self.native_cpu, request.watchdog_us, self.shared.clone());
         self.parked.set(false);
         if self
@@ -891,6 +893,7 @@ impl Cpu for Core {
             pending_callback: None,
             callback_error: None,
             result: None,
+            exhausted_grant: false,
             watchdog: Some(watchdog),
         });
         Ok(token)
@@ -914,6 +917,8 @@ impl Cpu for Core {
             Ok(Event::Done(result)) => {
                 self.parked.set(true);
                 let result = state.callback_error.take().map_or(result, Err);
+                state.exhausted_grant = matches!(result, Ok(Exit::Stopped))
+                    && self.shared.exhausted_grant.load(Ordering::Acquire);
                 state.result = Some(result.clone());
                 state.watchdog.take();
                 self.running.set(false);
@@ -928,6 +933,11 @@ impl Cpu for Core {
                 Ok(RunStatus::Complete(Err(error)))
             }
         }
+    }
+
+    fn exhausted_grant(&self, run: RunToken) -> bool {
+        self.validate_active_run(run)
+            .is_ok_and(|active| active.as_ref().unwrap().exhausted_grant)
     }
 
     fn request_pause(&self, run: RunToken) -> Result<(), ExecutionError> {

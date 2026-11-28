@@ -215,6 +215,7 @@ pub struct Shared {
     pub interactive_time_scale: AtomicU64,
     pub limit: AtomicU64,
     pub measured: AtomicBool,
+    pub exhausted_grant: AtomicBool,
     pub budget_active: AtomicBool,
     pub budget_start_ticks: AtomicU64,
     /// Guest progress paired with budget_start_ticks when the timer is armed.
@@ -304,6 +305,7 @@ impl Default for Shared {
             ),
             limit: AtomicU64::new(u64::MAX),
             measured: AtomicBool::new(false),
+            exhausted_grant: AtomicBool::new(false),
             budget_active: AtomicBool::new(false),
             budget_start_ticks: AtomicU64::new(0),
             budget_start_progress: AtomicU64::new(0),
@@ -1702,6 +1704,7 @@ impl Processor {
                 return Ok(Exit::Stopped);
             }
             if self.interactive_budget_spent(progress)? {
+                self.shared.exhausted_grant.store(true, Ordering::Release);
                 return Ok(Exit::Stopped);
             }
 
@@ -1726,6 +1729,9 @@ impl Processor {
                 return Ok(Exit::Stopped);
             }
             if self.interactive_budget_spent(progress)? {
+                // A cancellation carries no pending trap. Keep the ordinary
+                // barrier if this stop coincides with an architectural exit.
+                self.shared.exhausted_grant.store(exit.reason == 0, Ordering::Release);
                 return Ok(Exit::Stopped);
             }
             match exit.reason {
