@@ -15,6 +15,7 @@ mprofile_block_execution = true
 [[ram]]
 base = 0
 size = 0x80000000
+dram = true
 
 # M-core SRAM (same XP5 SoC window as the X-T5 4.31 manifest).
 [[ram]]

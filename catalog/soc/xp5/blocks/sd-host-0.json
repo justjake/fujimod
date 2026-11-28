@@ -12,16 +12,6 @@
     "clock_ticks": 1000,
     "slot_and_version": 0,
     "transfer_ticks": 1000,
-    "dma_windows": [
-      {
-        "base": 0,
-        "size": 3221225472
-      },
-      {
-        "base": 7516192768,
-        "size": 1073741824
-      }
-    ],
     "address_high": 4287686616,
     "basis": "SDHCI host 0"
   },

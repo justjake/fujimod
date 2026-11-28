@@ -12,13 +12,10 @@ pub struct BootState {
     pub firmware: String,
     #[serde(default = "yes")]
     pub load_firmware: bool,
+    /// The run's RAM. Regions marked `dram` are its DRAM: the span from the SoC's body-DRAM
+    /// base is the DRAM address space, every DRAM region is in the SD hosts' DMA reach, and a
+    /// bus drain inside DRAM is RAM.
     pub ram: Vec<RamRegion>,
-    /// DRAM extent for this run, and where the body's bus-drain peripheral moves so that it
-    /// does not overlap the larger RAM, when the firmware's use of DRAM differs from the
-    /// catalog body's. Absent: the catalog's values. The firmware's own drain routine
-    /// (FUN_0159dd8c) still reads 0x68000000, 0x80000000 and 0x1c0000000.
-    #[serde(default)]
-    pub dram: Option<Dram>,
     /// The serial flash as the stages before the hand-off leave it.
     #[serde(default)]
     pub flash: Option<FlashHandoff>,
@@ -84,47 +81,12 @@ pub struct CompanionWindow {
 }
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
-pub struct Dram {
-    /// Exclusive end of the DRAM address space, page aligned.
-    pub limit: u64,
-    /// Address the body's four-byte bus-drain peripheral answers at; at or past `limit`, so
-    /// that it does not overlap the DRAM.
-    pub bus_drain: u64,
-}
-impl Dram {
-    /// Refuse an override that the run could not honor. `run_sets_limit` is whether the run
-    /// configuration also sets `dram_address_space`: two sources for one limit.
-    pub fn validate(&self, run_sets_limit: bool) -> Result<(), String> {
-        if self.limit == 0 || !self.limit.is_multiple_of(4096) {
-            return Err("manifest DRAM limit must be page-aligned".into());
-        }
-        if !self.bus_drain.is_multiple_of(4) {
-            return Err(format!(
-                "manifest DRAM bus_drain {:#x} must be four-byte aligned",
-                self.bus_drain
-            ));
-        }
-        if self.bus_drain < self.limit {
-            return Err(format!(
-                "manifest DRAM bus_drain {:#x} lies inside the DRAM below limit {:#x}",
-                self.bus_drain, self.limit
-            ));
-        }
-        if run_sets_limit {
-            return Err(
-                "manifest [dram] and the run configuration's dram_address_space both set the \
-                 DRAM limit; use one"
-                    .into(),
-            );
-        }
-        Ok(())
-    }
-}
-#[derive(Clone, Debug, Deserialize, Serialize)]
-#[serde(deny_unknown_fields)]
 pub struct RamRegion {
     pub base: u64,
     pub size: u64,
+    /// The region is DRAM, not companion SRAM, DDR-PHY register space or boot SRAM.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub dram: bool,
 }
 pub use fujimod_catalog::firmware::Preload;
 
@@ -178,13 +140,24 @@ impl BootState {
 }
 
 impl BootState {
-    /// Build the run's device windows from the catalog, honoring the manifest's DRAM override.
+    /// The manifest's RAM, checked.
+    pub fn memory(&self) -> Result<fujimod_emulator_xp5_board::boot::RunMemory, String> {
+        fujimod_emulator_xp5_board::boot::RunMemory::new(self.ram.iter().map(|region| {
+            fujimod_emulator_xp5_board::boot::RunRam {
+                base: region.base,
+                size: region.size,
+                dram: region.dram,
+            }
+        }))
+    }
+
+    /// Build the run's device windows from the catalog and the manifest's RAM.
     pub fn with_catalog_windows(
         mut self,
         resolved: &fujimod_catalog_resolution::ResolvedConfiguration,
     ) -> Result<Self, String> {
-        let dram = self.dram.as_ref().map(|dram| (dram.limit, dram.bus_drain));
-        self.device = fujimod_emulator_xp5_board::boot::device_windows(resolved, dram)?;
+        let memory = self.memory()?;
+        self.device = fujimod_emulator_xp5_board::boot::device_windows(resolved, &memory)?;
         if let Some(flash) = &self.flash {
             let controller = self
                 .device
@@ -290,7 +263,7 @@ pub(crate) fn preload_length(preload: &Preload) -> Result<u64, String> {
 
 #[cfg(test)]
 mod tests {
-    use super::{BootState, Dram};
+    use super::BootState;
 
     fn xh2s_windows() -> Vec<fujimod_emulator_devices::graph::DeviceWindow> {
         BootState::for_firmware("xh2s-730", None)
@@ -388,26 +361,36 @@ mod tests {
     }
 
     #[test]
-    fn dram_override_refuses_what_the_run_could_not_honor() {
-        let dram = |limit, bus_drain| Dram { limit, bus_drain };
-        assert!(dram(0x8000_0000, 0x8000_0000).validate(false).is_ok());
-        assert!(
-            dram(0x8000_0000, 0x8000_0002)
-                .validate(false)
-                .unwrap_err()
-                .contains("aligned")
-        );
-        assert!(
-            dram(0x8000_0000, 0x6800_0000)
-                .validate(false)
-                .unwrap_err()
-                .contains("inside")
-        );
-        assert!(
-            dram(0x8000_0000, 0x8000_0000)
-                .validate(true)
-                .unwrap_err()
-                .contains("dram_address_space")
-        );
+    fn every_bundled_manifest_marks_its_dram_from_zero() {
+        for (firmware, end) in [
+            ("x100vi-131", 0x8000_0000),
+            ("xe5-112", 0x8000_0000),
+            ("xh2-530", 0xf000_0000),
+            ("xh2s-730", 0x8000_0000),
+            ("xm5-130", 0x6800_0000),
+            ("xt5-431", 0xc000_0000),
+        ] {
+            let memory = BootState::for_firmware(firmware, None)
+                .unwrap()
+                .memory()
+                .unwrap();
+            assert_eq!(memory.dram_end_from(0), Ok(end), "{firmware}");
+        }
+    }
+
+    #[test]
+    fn the_retired_dram_table_and_overlapping_dram_are_refused() {
+        let manifest = |extra: &str| {
+            BootState::parse(&format!(
+                "firmware = \"xt5-431\"\n[[ram]]\nbase = 0\nsize = 0x40000000\ndram = true\n{extra}"
+            ))
+        };
+        assert!(manifest("").unwrap().memory().is_ok());
+        assert!(manifest("[dram]\nlimit = 0x80000000\nbus_drain = 0x80000000\n").is_err());
+        let error = manifest("[[ram]]\nbase = 0x3ffff000\nsize = 0x2000\ndram = true\n")
+            .unwrap()
+            .memory()
+            .unwrap_err();
+        assert!(error.contains("overlap"), "{error}");
     }
 }
