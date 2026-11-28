@@ -2106,11 +2106,10 @@ impl Cpu for CpuWorker {
     fn request_pause(&self, run: RunToken) -> Result<(), ExecutionError> {
         self.validate_run(run)?;
         if self.running.get() {
+            // Worker block entries observe this flag for the current token.
+            // The native cross-thread pause latch also stops a subsequent
+            // run if the current run ends before consuming it.
             self.pause_requested.store(1, Ordering::Release);
-            // The accounting flag is only sampled by the hook and at a block
-            // entry. A core looping through translated blocks notices the
-            // engine's own wakeup instead, which every block entry tests.
-            Library::request_pause(self.identity).map_err(ExecutionError::Backend)?;
         }
         Ok(())
     }
