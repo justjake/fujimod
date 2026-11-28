@@ -846,6 +846,11 @@ pub enum BlockDevice {
         /// Declared basis.
         basis: String,
     },
+    /// An independent write-only bank command word.
+    BankCommand {
+        /// Evidence for this device selection.
+        basis: String,
+    },
     /// Address that only discards reads.
     UnmodeledBusDrain {
         /// Declared basis.
@@ -1124,6 +1129,7 @@ impl BlockDevice {
                         | BlockDevice::InterprocessorMailbox { .. }
                         | BlockDevice::InputCapture { .. }
                         | BlockDevice::UnmodeledBusDrain { .. }
+                        | BlockDevice::BankCommand { .. }
                         | BlockDevice::RegisterStorage { .. }
                 )
                 | (

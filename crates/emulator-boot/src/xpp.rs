@@ -752,6 +752,7 @@ fn block_register_layouts(
             | BlockDevice::ImagingDsp { .. }
             | BlockDevice::ByteI2c { .. }
             | BlockDevice::UnmodeledBusDrain { .. }
+            | BlockDevice::BankCommand { .. }
             | BlockDevice::RegisterStorage { .. } => {}
         }
     }

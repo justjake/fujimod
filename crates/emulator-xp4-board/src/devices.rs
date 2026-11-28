@@ -617,6 +617,26 @@ impl Devices {
         self.models.push(Some(Box::new(model)));
         Ok(())
     }
+    pub fn bank_control(&mut self, addresses: Vec<u64>) -> Result<(), String> {
+        if addresses.iter().any(|&address| {
+            address.checked_add(4).is_none_or(|end| end > 1u64 << 32)
+                || self
+                    .windows
+                    .iter()
+                    .any(|&(lo, hi, _)| address < hi && lo < address.saturating_add(4))
+        }) {
+            return Err("Invalid or overlapping XP4 bank command window".into());
+        }
+        let model = fujimod_emulator_xp4_system::bank_control::BankControl::new(addresses.clone())?;
+        let id = self.models.len();
+        self.windows.extend(
+            addresses
+                .into_iter()
+                .map(|address| (address, address + 4, id)),
+        );
+        self.models.push(Some(Box::new(model)));
+        Ok(())
+    }
     pub fn functional_system_control(
         &mut self,
         config: fujimod_emulator_xp4_system::system_control::Config,
