@@ -2265,6 +2265,33 @@ mod tests {
     }
 
     #[test]
+    fn four_byte_retained_mask_word_has_no_job_or_irq() {
+        let mut h = TestHost::new();
+        let address = 0x1234_5000;
+        let mut block = Block::new(address, 4, vec![], None).unwrap();
+        assert_eq!(read(&mut block, &mut h, address), 0);
+        write(&mut block, &mut h, address, 0x1234_5601);
+        let prior = read(&mut block, &mut h, address);
+        write(&mut block, &mut h, address, (prior | 0x40) as u32);
+        assert_eq!(read(&mut block, &mut h, address), 0x1234_5641);
+        let checkpoint = block.checkpoint().unwrap();
+        write(&mut block, &mut h, address, 0);
+        block.restore_checkpoint(&checkpoint).unwrap();
+        assert_eq!(read(&mut block, &mut h, address), 0x1234_5641);
+        let mut cx = h.cx();
+        block.read(&mut cx, address + 4, 4);
+        assert!(cx.is_unmodeled());
+        let mut cx = h.cx();
+        block.write(&mut cx, address - 4, 4, 0);
+        assert!(cx.is_unmodeled());
+        // Subword access is a property of the stand-in, not observed hardware.
+        let mut cx = h.cx();
+        assert_eq!(block.read(&mut cx, address, 1), 0x41);
+        assert!(!cx.is_unmodeled());
+        assert!(h.effects.is_empty() && h.irqs.is_empty());
+    }
+
+    #[test]
     fn a_command_may_name_its_own_word_as_its_status() {
         // X-T3 5.11: 0xfff78000 is enabled by writing 1 to +0x1c and reading
         // it back until bit 0 is clear; the power-off path writes 0 to bit 0
