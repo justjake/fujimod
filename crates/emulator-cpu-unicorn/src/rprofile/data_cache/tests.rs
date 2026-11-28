@@ -4,7 +4,13 @@ const ENABLED: u32 = 0b101;
 
 #[test]
 fn region_attributes_select_the_l1_policy() {
-    let region = |access| [(0, (29 << 1) | 1, access)];
+    let region = |attributes| {
+        [Region {
+            base: 0,
+            size: (29 << 1) | 1,
+            attributes,
+        }]
+    };
     for (access, expected) in [
         (0x30b, Policy::WriteBackAllocate), // TEX 001, C B: write-back write-allocate
         (0x303, Policy::WriteBack),         // TEX 000, C B: write-back
@@ -33,8 +39,16 @@ fn higher_regions_and_disabled_subregions_split_mapped_spans() {
     // Region 0: 1 GiB write-back. Region 1: 0x1000..0x1800 non-cacheable,
     // a 4 KiB region whose upper four subregions are disabled.
     let regions = [
-        (0, (29 << 1) | 1, 0x30b),
-        (0x1000, 0xf000 | (11 << 1) | 1, 0x308),
+        Region {
+            base: 0,
+            size: (29 << 1) | 1,
+            attributes: 0x30b,
+        },
+        Region {
+            base: 0x1000,
+            size: 0xf000 | (11 << 1) | 1,
+            attributes: 0x308,
+        },
     ];
     let spans = spans(ENABLED, &regions, &[(0, 0x4000, 0x8000_0000)]);
     let summary: Vec<_> = spans

@@ -2,6 +2,7 @@
 //! maintenance instructions.
 use super::*;
 use crate::rprofile::data_cache::{self, Operation, Policy};
+use fujimod_emulator_cpu::armv7r::Region;
 
 fn system(crn: u32, crm: u32, opc2: u32) -> arm::Coprocessor {
     arm::Coprocessor {
@@ -131,11 +132,11 @@ impl Execution {
             let selected = cp(6, 2, 0, None)?;
             for region in 0..count {
                 cp(6, 2, 0, Some(region))?;
-                regions.push((
-                    cp(6, 1, 0, None)? as u32,
-                    cp(6, 1, 2, None)? as u32,
-                    cp(6, 1, 4, None)? as u32,
-                ));
+                regions.push(Region {
+                    base: cp(6, 1, 0, None)? as u32,
+                    size: cp(6, 1, 2, None)? as u32,
+                    attributes: cp(6, 1, 4, None)? as u32,
+                });
             }
             cp(6, 2, 0, Some(selected))?;
         }
