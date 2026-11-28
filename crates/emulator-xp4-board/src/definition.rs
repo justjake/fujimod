@@ -240,6 +240,9 @@ pub struct Definition {
     /// Requires GPIO wiring.
     #[serde(default)]
     pub stabilizer_link: Option<fujimod_emulator_xp4_io::stabilizer_link::Config>,
+    /// The body-wired X-mount lens behind an XP4 SPI controller.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub xp4_lens_link: Option<fujimod_emulator_xp4_io::lens_link::Config>,
     #[serde(default)]
     pub checksum_power_spi: Option<(
         u64,

@@ -8,6 +8,7 @@ use std::sync::OnceLock;
 
 /// External XP4 inputs and media the session's generic inputs do not name.
 pub trait Xp4Inputs {
+    fn set_lens_aperture_ring(&self, ring: u16) -> PyResult<()>;
     fn turn_dial(&self, session: &mut Session, name: &str, edges: i32) -> PyResult<()>;
     fn set_adc_input(&self, session: &mut Session, channel: usize, sample: u16) -> PyResult<()>;
     fn set_gpio_input(

@@ -22,7 +22,25 @@
       "thermal-0",
       "thermal-8",
       "thermal-10"
-    ]
+    ],
+    "xp4_lens_mount": {
+      "controller_id": "spi0",
+      "detect_connection_id": "xt3-lens-detect",
+      "sense_connection_ids": [
+        "xt3-lens-sense-0",
+        "xt3-lens-sense-1",
+        "xt3-lens-sense-2",
+        "xt3-lens-sense-3"
+      ],
+      "supply_connection_ids": [
+        "xt3-lens-supply-0",
+        "xt3-lens-supply-1"
+      ],
+      "ready_connection_id": "xt3-lens-ready",
+      "lens_part_id": "xf16-80-lens",
+      "mounted": true,
+      "miso_high": true
+    }
   },
   "connections": [
     {
@@ -213,12 +231,114 @@
       "evidence": {
         "kind": "stand-in"
       }
+    },
+    {
+      "id": "xt3-lens-detect",
+      "kind": "lens",
+      "signals": [
+        {
+          "kind": "gpio",
+          "port": 0,
+          "pin": 11,
+          "active_level": false
+        }
+      ]
+    },
+    {
+      "id": "xt3-lens-supply-0",
+      "kind": "lens",
+      "signals": [
+        {
+          "kind": "gpio",
+          "port": 1,
+          "pin": 12,
+          "active_level": true
+        }
+      ]
+    },
+    {
+      "id": "xt3-lens-supply-1",
+      "kind": "lens",
+      "signals": [
+        {
+          "kind": "gpio",
+          "port": 1,
+          "pin": 13,
+          "active_level": true
+        }
+      ]
+    },
+    {
+      "id": "xt3-lens-sense-0",
+      "kind": "lens",
+      "signals": [
+        {
+          "kind": "gpio",
+          "port": 11,
+          "pin": 0,
+          "active_level": true
+        }
+      ]
+    },
+    {
+      "id": "xt3-lens-sense-1",
+      "kind": "lens",
+      "signals": [
+        {
+          "kind": "gpio",
+          "port": 11,
+          "pin": 1,
+          "active_level": false
+        }
+      ]
+    },
+    {
+      "id": "xt3-lens-sense-2",
+      "kind": "lens",
+      "signals": [
+        {
+          "kind": "gpio",
+          "port": 11,
+          "pin": 2,
+          "active_level": true
+        }
+      ]
+    },
+    {
+      "id": "xt3-lens-sense-3",
+      "kind": "lens",
+      "signals": [
+        {
+          "kind": "gpio",
+          "port": 15,
+          "pin": 0,
+          "active_level": true
+        }
+      ]
+    },
+    {
+      "id": "xt3-lens-ready",
+      "kind": "lens",
+      "signals": [
+        {
+          "kind": "gpio",
+          "port": 15,
+          "pin": 1,
+          "active_level": false
+        },
+        {
+          "kind": "interrupt",
+          "controller_id": "gic-distributor",
+          "line": 55
+        }
+      ]
     }
   ],
   "parts": [
     "xt3-serial-nor",
     "xt3-power-registers",
-    "xt3-image-sensor"
+    "xt3-image-sensor",
+    "xf16-80-lens"
   ],
   "wiring": [
     {
@@ -235,6 +355,11 @@
       "source_id": "xt3-image-sensor",
       "target_id": "imaging-receiver",
       "signal": "image_data"
+    },
+    {
+      "source_id": "spi0",
+      "target_id": "xf16-80-lens",
+      "signal": "serial_data"
     }
   ]
 }

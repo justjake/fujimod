@@ -1,0 +1,21 @@
+{
+  "$schema": "https://fujimod.com/schemas/part.schema.json",
+  "schema": 1,
+  "id": "xf16-80-lens",
+  "model": {
+    "kind": "peripheral",
+    "interface": {
+      "kind": "x-mount-lens",
+      "preset": "xf16-80",
+      "sense_unpowered": [
+        true,
+        false,
+        true,
+        true
+      ],
+      "startup_us": 1000,
+      "busy_us": 1000,
+      "operation_us": 1000
+    }
+  }
+}

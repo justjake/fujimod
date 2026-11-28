@@ -12,6 +12,9 @@ use pyo3::{exceptions::PyValueError, prelude::*};
 struct Inputs(shared::Inputs);
 
 impl Xp4Inputs for Inputs {
+    fn set_lens_aperture_ring(&self, ring: u16) -> PyResult<()> {
+        self.0.set_lens_aperture_ring(ring).map_err(error)
+    }
     fn turn_dial(&self, session: &mut Session, name: &str, edges: i32) -> PyResult<()> {
         self.0.turn_dial(session, name, edges).map_err(error)
     }

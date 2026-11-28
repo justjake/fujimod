@@ -41,7 +41,7 @@ pub struct Pins {
     pending: Vec<InputChange>,
     /// Wiring, not state: restoring keeps the connected peers.
     #[serde(skip)]
-    watchers: Vec<SharedWatcher>,
+    watchers: Vec<(usize, SharedWatcher)>,
 }
 pub type SharedPins = Arc<Mutex<Pins>>;
 impl Pins {
@@ -54,9 +54,9 @@ impl Pins {
             watchers: Vec::new(),
         }))
     }
-    /// Connects a peer that follows output changes.
-    pub fn watch(&mut self, watcher: SharedWatcher) {
-        self.watchers.push(watcher);
+    /// Connects a peer that follows changes to a particular bank register.
+    pub fn watch(&mut self, register: usize, watcher: SharedWatcher) {
+        self.watchers.push((register, watcher));
     }
     /// A modeled peer drives input `pin` of bank `port` to `high` from tick
     /// `at` on. The bank applies it, and routes its interrupt inputs, at that
@@ -276,26 +276,35 @@ impl Device for Gpio {
                     *changes += 1;
                 }
             }
-            // Watching peers follow each changed output at this tick; the
-            // input changes they answer with are this bank's deadlines.
-            if !pins.watchers.is_empty() && (old ^ new) & 0xffff != 0 {
-                let watchers = pins.watchers.clone();
-                for bit in (0..16).filter(|bit| (old ^ new) & (1 << bit) != 0) {
-                    for watcher in &watchers {
-                        watcher.lock().unwrap().output_changed(
-                            &mut pins,
-                            p,
-                            bit,
-                            new & (1 << bit) != 0,
-                            cx.now(),
-                        );
-                    }
+        }
+        let new = pins.regs[p][r];
+        let changed = (old ^ new) & 0xffff;
+        if changed == 0 {
+            return;
+        }
+        // Watching peers follow each changed bit of the register they wired.
+        let watchers: Vec<_> = pins
+            .watchers
+            .iter()
+            .filter(|(register, _)| *register == r)
+            .map(|(_, watcher)| watcher.clone())
+            .collect();
+        if !watchers.is_empty() {
+            for bit in (0..16).filter(|bit| changed & (1 << bit) != 0) {
+                for watcher in &watchers {
+                    watcher.lock().unwrap().output_changed(
+                        &mut pins,
+                        p,
+                        bit,
+                        new & (1 << bit) != 0,
+                        cx.now(),
+                    );
                 }
-                let due = pins.next_input_change().is_some_and(|at| at <= cx.now());
-                drop(pins);
-                if due {
-                    self.settle(cx);
-                }
+            }
+            let due = pins.next_input_change().is_some_and(|at| at <= cx.now());
+            drop(pins);
+            if due {
+                self.settle(cx);
             }
         }
     }
@@ -543,7 +552,7 @@ mod tests {
         use fujimod_emulator_devices::test_host::recording::RecordingHost;
         let pins = Pins::new([0x10; 16]);
         let echo = Arc::new(Mutex::new(Echo(vec![])));
-        pins.lock().unwrap().watch(echo.clone());
+        pins.lock().unwrap().watch(0, echo.clone());
         let mut d = Gpio::new(0xfff41000, pins.clone()).unwrap();
         let mut h = RecordingHost {
             now: 5,

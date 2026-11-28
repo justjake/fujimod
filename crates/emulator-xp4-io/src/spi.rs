@@ -14,6 +14,16 @@ use std::collections::VecDeque;
 
 pub trait Input: Send {
     fn exchange(&mut self, bits: u32, tx: u16, tick: u64) -> Result<u16, String>;
+    /// A peer that observes clock polarity and phase can validate the SPI mode.
+    fn exchange_in_mode(
+        &mut self,
+        bits: u32,
+        _mode: u32,
+        tx: u16,
+        tick: u64,
+    ) -> Result<u16, String> {
+        self.exchange(bits, tx, tick)
+    }
     fn checkpoint(&self) -> Result<Checkpoint, String>;
     fn validate_checkpoint(&self, data: &Checkpoint) -> Result<(), String>;
     fn restore_checkpoint(&mut self, data: &Checkpoint) -> Result<(), String>;
@@ -105,6 +115,11 @@ impl Spi {
     fn word_ticks(&self) -> u64 {
         u64::from(((self.control & 15) + 1) * self.divider * ((self.control >> 8 & 255) + 1))
     }
+    fn mode(&self) -> u32 {
+        let polarity = self.control >> 6 & 1;
+        let phase = self.control >> 7 & 1;
+        (polarity << 1) | phase
+    }
     /// The data register: a DMA channel whose fixed side is this address moves
     /// words through the controller.
     pub fn data_register(&self) -> u64 {
@@ -181,7 +196,9 @@ impl Spi {
         let rx = if self.enable & 1 != 0 {
             tx & mask
         } else {
-            self.input.exchange(bits, tx & mask, tick)? & mask
+            self.input
+                .exchange_in_mode(bits, self.mode(), tx & mask, tick)?
+                & mask
         };
         self.causes |= 1;
         Ok(rx)
@@ -517,7 +534,10 @@ impl Device for Spi {
         let rx = if self.enable & 1 != 0 {
             tx & mask
         } else {
-            match self.input.exchange(bits, tx & mask, at) {
+            match self
+                .input
+                .exchange_in_mode(bits, self.mode(), tx & mask, at)
+            {
                 Ok(value) => value & mask,
                 Err(error) => {
                     cx.fail(error);

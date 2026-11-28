@@ -18,8 +18,8 @@
 //! the motion ends (at least `min_operation_ticks`), so the body sees a rising
 //! edge when the lens has settled.
 //!
-//! The identification record, the status words and every timing are invented
-//! scenario inputs. None is copied from lens or camera firmware.
+//! Identification records are generated from lens properties and use synthetic
+//! serial numbers. Timing and status words are model inputs.
 use super::x_mount_link::{FixedReply, Packet};
 use fujimod_emulator_devices::checkpoint::Checkpoint;
 use fujimod_emulator_parts_io::serial::{Frame, Wire};
@@ -326,7 +326,7 @@ impl Identity<'_> {
     /// Aperture code c is the 1/3-stop index from the lens's widest aperture at
     /// the short end. Everything else in the catalog is zero; the body reads more
     /// fields (correction and autofocus tables) whose meaning is not known.
-    pub fn lens_data(&self) -> Catalog {
+    fn lens_data(&self, command_bitmap: &[u8]) -> Catalog {
         const LENS_BLOCKS: u16 = 39;
         let at = |config: u32| -> u32 {
             match config {
@@ -353,6 +353,9 @@ impl Identity<'_> {
         put(0x720038, b"FUJIFILM".to_vec());
         let name = self.model.as_bytes();
         put(0x72004a, name[..name.len().min(63)].to_vec());
+        if !command_bitmap.is_empty() {
+            put(0x7200bf, command_bitmap.to_vec());
+        }
         // Zoom steps and apertures.
         let steps = self.zoom_steps.clamp(1, 100) as usize;
         let open_short = thirds(self.f_numbers.0);
@@ -623,6 +626,31 @@ impl Spec {
                 *b"EMU2328001",
                 1,
             ),
+            "xf16-80" => (
+                "XF16-80mmF4 R OIS WR",
+                *b"LX230A\0\0",
+                *b"FLZGW032",
+                (160, 800),
+                (40, 40, 220),
+                true,
+                true,
+                Axis {
+                    min: 0,
+                    max: 4000,
+                    initial: 2000,
+                    units_per_ms: 40,
+                },
+                // F4 to F22 in 1/3-stop steps.
+                Axis {
+                    min: 0,
+                    max: 15,
+                    initial: 0,
+                    units_per_ms: 2,
+                },
+                35,
+                *b"EMU1680001",
+                16,
+            ),
             _ => return None,
         };
         let identity = Identity {
@@ -639,9 +667,34 @@ impl Spec {
             serial,
             zoom_steps,
         };
+        let mut identification = identity.record();
+        if name == "xf16-80" {
+            // The XP4 lens manager reads the name starting at byte 0x10 and
+            // expects the XF16-80 protocol revision and feature flags.
+            identification[0x10..0x50].fill(0);
+            let model = identity.model.as_bytes();
+            identification[0x10..0x10 + model.len()].copy_from_slice(model);
+            identification[0x5a..0x68].copy_from_slice(&[
+                0x01, 0x48, 0x01, 0x21, 0x02, 0x70, 0x02, 0x71, 0x02, 0x71, 0x89, 0x01, 0x22, 0,
+            ]);
+            identification[IDENTIFICATION_BYTES - 1] = identification[..IDENTIFICATION_BYTES - 1]
+                .iter()
+                .fold(0u8, |sum, byte| sum.wrapping_sub(*byte));
+        }
+        let command_bitmap: &[u8] = if name == "xf16-80" {
+            // Supported command families read by the XP4 lens manager.
+            &[
+                0x01, 0x80, 0x7c, 0x83, 0xd7, 0x01, 0x07, 0x80, 0x01, 0x00, 0x71, 0x01, 0x07, 0x00,
+                0x25, 0x01, 0x07, 0x00, 0x00, 0x00, 0x03, 0x03, 0x00, 0x00, 0x01, 0x03, 0x00, 0x00,
+                0x00, 0x00, 0x00, 0x80, 0x00, 0x00, 0xff, 0x07, 0x3f, 0x00, 0x00, 0x00, 0x00, 0x00,
+                0x1f, 0x00, 0x01, 0x00, 0x38, 0x00, 0xff, 0x03,
+            ]
+        } else {
+            &[]
+        };
         Some(Self {
             name: model.into(),
-            identification: identity.record(),
+            identification,
             extended: identity.extended_record(),
             // EXR II steady status and detail words (x_mount_link tests); their
             // meaning for the X-T5 is not established.
@@ -653,7 +706,7 @@ impl Spec {
             aperture,
             defocus_circle_um: identity.defocus_circle_um(),
             replies: vec![],
-            catalogs: vec![identity.lens_data()],
+            catalogs: vec![identity.lens_data(command_bitmap)],
         })
     }
     fn validate(&self) -> Result<(), String> {
@@ -899,6 +952,12 @@ struct State {
     operation_until: Option<u64>,
     /// Last payload of every setting family, for echo and inspection.
     settings: BTreeMap<u16, u16>,
+    /// Ring position after a host input (0 = Auto, 1 and above = manual stop index + 1).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    aperture_ring: Option<u16>,
+    /// Reported in status until the body reads the aperture-ring value.
+    #[serde(default)]
+    aperture_ring_changed: bool,
     /// Families (and protocol events above 0xffff) already logged.
     logged: BTreeSet<u32>,
 }
@@ -965,8 +1024,13 @@ impl Unit {
             aperture: Motion::at_rest(spec.aperture.initial),
             operation_until: None,
             settings: BTreeMap::new(),
+            aperture_ring: None,
+            aperture_ring_changed: false,
             logged,
         }
+    }
+    fn aperture_ring(&self) -> u16 {
+        self.state.aperture_ring.unwrap_or(self.spec.aperture_ring)
     }
     fn log_once(&mut self, event: u32, line: impl FnOnce() -> String) {
         if self.state.logged.insert(event) {
@@ -996,6 +1060,7 @@ impl Unit {
     /// Apply a supply change at `now`, then every time-driven transition due by `now`.
     fn tick(&mut self, now: u64, powered: bool) {
         if powered != self.state.powered {
+            let ring = (self.state.aperture_ring, self.state.aperture_ring_changed);
             if powered {
                 let epoch = self.state.epoch.wrapping_add(1);
                 let logged = std::mem::take(&mut self.state.logged);
@@ -1017,6 +1082,7 @@ impl Unit {
                 self.logs
                     .push(format!("x-mount lens ({}): supplies off", self.spec.name));
             }
+            (self.state.aperture_ring, self.state.aperture_ring_changed) = ring;
         }
         self.settle(now);
     }
@@ -1183,15 +1249,25 @@ impl Unit {
             }
             f if self.spec.declared(f).is_some() => self.spec.declared(f).unwrap(),
             PARAMETERS => payload,
-            STATUS => self.spec.status,
+            STATUS => {
+                self.spec.status
+                    | if self.state.aperture_ring_changed {
+                        0x10
+                    } else {
+                        0
+                    }
+            }
             DETAIL_STATUS => self.spec.detail_status,
-            APERTURE_RING => self.spec.aperture_ring,
+            APERTURE_RING => {
+                self.state.aperture_ring_changed = false;
+                self.aperture_ring()
+            }
             FOCUS_RING => self.spec.focus_ring,
             // The block count; the bulk read follows the reply.
             READ_CATALOG => self.spec.catalog(payload & 0xf).blocks,
             // Echo and store it, and hold the ready line busy like an operation.
-            STATE_REQUEST => {
-                self.state.settings.insert(STATE_REQUEST, payload);
+            STATE_REQUEST | 0xa0 => {
+                self.state.settings.insert(family, payload);
                 self.operation(now);
                 payload
             }
@@ -1467,6 +1543,15 @@ impl Port {
     pub fn ready_high(&self) -> bool {
         self.0.lock().unwrap().ready_high()
     }
+    /// When the ready pad can rise once its current busy period ends.
+    pub fn ready_release_tick(&self) -> Option<u64> {
+        let unit = self.0.lock().unwrap();
+        match unit.state.power {
+            Power::Off | Power::Starting { .. } => None,
+            Power::Busy { until } => Some(until.max(unit.state.operation_until.unwrap_or(0))),
+            Power::Released => unit.state.operation_until,
+        }
+    }
     /// Focus position and target at `now`.
     pub fn focus(&self, now: u64) -> (u16, u16) {
         let unit = self.0.lock().unwrap();
@@ -1489,6 +1574,17 @@ impl Port {
         let unit = self.0.lock().unwrap();
         let s = unit.state.aperture;
         (s.position(now, unit.timing.ticks_per_ms), s.target)
+    }
+    /// Move the physical aperture ring without moving the iris motor.
+    pub fn set_aperture_ring(&self, ring: u16) {
+        let mut unit = self.0.lock().unwrap();
+        if unit.aperture_ring() != ring {
+            unit.state.aperture_ring = Some(ring);
+            unit.state.aperture_ring_changed = true;
+        }
+    }
+    pub fn aperture_ring(&self) -> u16 {
+        self.0.lock().unwrap().aperture_ring()
     }
     pub fn identification_reads(&self) -> u64 {
         self.0.lock().unwrap().state.link.identification_reads

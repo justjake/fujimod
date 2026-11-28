@@ -4748,6 +4748,17 @@
             "type": "string"
           },
           "type": "array"
+        },
+        "xp4_lens_mount": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Xp4LensMount"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "An XP4 SPI controller, its lens connector and its pad-to-GIC ready route."
         }
       },
       "type": "object"
@@ -21783,8 +21794,6 @@
               "items": {
                 "type": "boolean"
               },
-              "maxItems": 3,
-              "minItems": 3,
               "type": "array"
             },
             "startup_us": {
@@ -30758,6 +30767,58 @@
         "address",
         "size",
         "value"
+      ],
+      "type": "object"
+    },
+    "Xp4LensMount": {
+      "additionalProperties": false,
+      "description": "An XP4 X-mount connector, with ready wired through its GPIO bank.",
+      "properties": {
+        "controller_id": {
+          "description": "SoC SPI controller carrying X-mount commands.",
+          "type": "string"
+        },
+        "detect_connection_id": {
+          "type": "string"
+        },
+        "lens_part_id": {
+          "type": "string"
+        },
+        "miso_high": {
+          "description": "MISO level when the lens is not driving the bus.",
+          "type": "boolean"
+        },
+        "mounted": {
+          "type": "boolean"
+        },
+        "ready_connection_id": {
+          "description": "Connection carrying the ready GPIO pad and its GIC interrupt.",
+          "type": "string"
+        },
+        "sense_connection_ids": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "supply_connection_ids": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 2,
+          "minItems": 2,
+          "type": "array"
+        }
+      },
+      "required": [
+        "controller_id",
+        "detect_connection_id",
+        "sense_connection_ids",
+        "supply_connection_ids",
+        "ready_connection_id",
+        "lens_part_id",
+        "mounted",
+        "miso_high"
       ],
       "type": "object"
     },

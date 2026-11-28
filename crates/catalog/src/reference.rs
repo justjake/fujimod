@@ -4517,6 +4517,13 @@ impl ReferenceCatalog {
                         "serial attachment",
                     )?;
                 }
+                if let Some(mount) = &hardware.xp4_lens_mount {
+                    block_kind(
+                        &mount.controller_id,
+                        SocBlockKind::SerialController,
+                        "XP4 lens mount",
+                    )?;
+                }
                 for slot in &hardware.card_slots {
                     block_kind(
                         &slot.controller_id,

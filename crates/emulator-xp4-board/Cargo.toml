@@ -39,6 +39,7 @@ serde = { version = "1", features = ["derive", "rc"] }
 fujimod-workspace-hack.workspace = true
 
 [dev-dependencies]
+fujimod-emulator-parts-lens.workspace = true
 fujimod-emulator-image-codecs.workspace = true
 
 [lints.rust]

@@ -5,6 +5,7 @@ use super::*;
 /// The devices and the serial-flash views the processors map.
 pub(crate) struct Built {
     pub devices: Option<devices::Devices>,
+    pub aperture_ring: Option<fujimod_emulator_xp4_io::lens_link::LensLink>,
 }
 
 /// Build the definition's devices. `memory` holds the declared memory
@@ -72,13 +73,14 @@ pub(crate) fn build(
         adc,
         gpio,
         gpio_base,
-        gpio_interrupts,
+        mut gpio_interrupts,
         temperature,
         power_spi,
         power_spi_command_output,
         power_spi_bank_inputs,
         power_spi_eye_commit,
         stabilizer_link,
+        xp4_lens_link,
         checksum_power_spi,
         imaging,
         imaging_frame_start_pulse,
@@ -526,6 +528,9 @@ pub(crate) fn build(
             video.as_deref(),
         )?;
     }
+    if let Some(lens) = &xp4_lens_link {
+        gpio_interrupts.push(lens.ready);
+    }
     if let Some(inputs) = gpio {
         devices.get_or_insert_with(devices::Devices::empty).gpio(
             gpio_base.unwrap_or(0xfff41000),
@@ -596,6 +601,13 @@ pub(crate) fn build(
             .get_or_insert_with(devices::Devices::empty)
             .stabilizer_link(config)?;
     }
+    let aperture_ring = xp4_lens_link
+        .map(|config| {
+            devices
+                .get_or_insert_with(devices::Devices::empty)
+                .xp4_lens_link(config)
+        })
+        .transpose()?;
     for (base, miso) in spi_inputs {
         devices
             .get_or_insert_with(devices::Devices::empty)
@@ -742,5 +754,8 @@ pub(crate) fn build(
             .get_or_insert_with(devices::Devices::empty)
             .request_acknowledgment(ticks)?;
     }
-    Ok(Built { devices })
+    Ok(Built {
+        devices,
+        aperture_ring,
+    })
 }

@@ -286,7 +286,7 @@ impl StabilizerLink {
             dseq: 0,
         }));
         let watcher: SharedWatcher = state.clone();
-        bank.watch(watcher);
+        bank.watch(0, watcher);
         drop(bank);
         Ok(Self { pins, state })
     }
