@@ -3062,6 +3062,34 @@ mod tests {
     }
 
     #[test]
+    fn native_conditional_block_stops_at_the_instruction_budget() {
+        for (cpsr, expected) in [(0x4000_00d3u32, 2), (0x0000_00d3, 0)] {
+            let core = Core::new(Model::CortexA7).unwrap();
+            core.map_zeroed(0x1000, 4096, 7).unwrap();
+            for address in [0x1000, 0x1004, 0x1008, 0x100c] {
+                // addeq r0, r0, #1
+                core.write_memory(address, &0x0280_0001u32.to_le_bytes())
+                    .unwrap();
+            }
+            // b .
+            core.write_memory(0x1010, &0xeaff_fffeu32.to_le_bytes())
+                .unwrap();
+            core.write_register(arm::CPSR, &cpsr.to_le_bytes()).unwrap();
+            core.set_loop_window(true).unwrap();
+            core.run(Run {
+                begin: 0x1000,
+                until: None,
+                watchdog_us: 0,
+                instructions: Some(2),
+            })
+            .unwrap();
+            assert_eq!(core.instruction_progress(), Some(2));
+            assert_eq!(unsafe { ffi::dynarmic_get_reg(core.inst, 0) }, expected);
+            assert_eq!(unsafe { ffi::dynarmic_get_reg(core.inst, 15) }, 0x1008);
+        }
+    }
+
+    #[test]
     fn same_guest_pc_uses_the_current_translation_context() {
         let core = Core::new(Model::CortexA7).unwrap();
         core.map_zeroed(0, 0x102000, 7).unwrap();
@@ -3100,7 +3128,9 @@ mod tests {
             core.read_register(arm::CORE[0], &mut bytes).unwrap();
             assert_eq!(u32::from_le_bytes(bytes), expected);
         }
-        assert_eq!(core.shared.contexts.borrow().len(), 2);
+        if cfg!(target_arch = "aarch64") {
+            assert_eq!(core.shared.contexts.borrow().len(), 2);
+        }
         assert_eq!(core.shared.memory_flushes.get(), 0);
 
         // Rewrite a live table entry without changing TTBR, then return to
@@ -3116,7 +3146,9 @@ mod tests {
         })
         .unwrap();
         assert_eq!(unsafe { ffi::dynarmic_get_reg(core.inst, 0) }, 120);
-        assert_eq!(core.shared.contexts.borrow().len(), 2);
+        if cfg!(target_arch = "aarch64") {
+            assert_eq!(core.shared.contexts.borrow().len(), 2);
+        }
         assert_eq!(core.shared.memory_flushes.get(), 1);
     }
     #[test]

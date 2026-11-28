@@ -61,6 +61,7 @@
       "fujimod-emulator",
       "fujimod-emulator-boot",
       "fujimod-emulator-cpu",
+      "fujimod-emulator-cpu-dynarmic",
       "fujimod-emulator-cpu-hvf",
       "fujimod-emulator-cpu-unicorn",
       "fujimod-emulator-session",
