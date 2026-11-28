@@ -40,6 +40,7 @@ typedef struct DynarmicMemoryControl {
     uint32_t dacr;
     uint32_t fcseidr;
     uint32_t cpsr;
+    uint32_t cpacr;
 } DynarmicMemoryControl;
 
 typedef struct DynarmicInstance DynarmicInstance;
@@ -47,7 +48,7 @@ typedef struct DynarmicInstance DynarmicInstance;
 DynarmicInstance* dynarmic_create(const DynarmicCallbacks* callbacks, bool rprofile);
 void dynarmic_destroy(DynarmicInstance* inst);
 
-void dynarmic_set_translation_context(DynarmicInstance* inst, uint32_t value);
+void dynarmic_set_translation_context(DynarmicInstance* inst, uint32_t value, bool vfp_enabled);
 void dynarmic_observe_stores(DynarmicInstance* inst, bool enabled);
 void dynarmic_read_gprs(DynarmicInstance* inst, uint32_t* values);
 void dynarmic_read_snapshot(DynarmicInstance* inst, uint32_t* ext_regs, uint32_t* cp15, uint32_t* cache_ids);

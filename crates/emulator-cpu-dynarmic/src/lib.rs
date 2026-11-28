@@ -85,6 +85,9 @@ extern "C" fn batch_instruction(word: u32) -> u32 {
     {
         return 0;
     }
+    if body & 0x0f00_0e10 == 0x0e00_0a00 {
+        return 8; // VFP data processing, gated by the translation context.
+    }
     if body & 0x0fff_0fff == 0x010f_0000 && (body >> 12) & 15 != 15 {
         return 1;
     }
@@ -441,6 +444,7 @@ struct CoreShared {
 struct TranslationContext {
     control: ffi::DynarmicMemoryControl,
     protection_regions: Option<rprofile::Regions>,
+    vfp_enabled: bool,
 }
 
 fn contains(range: HookRange, address: u64) -> bool {
@@ -652,6 +656,7 @@ impl CoreShared {
             dacr,
             fcseidr,
             cpsr,
+            ..
         } = control;
         if let Some(profile) = &self.rprofile {
             return Ok(profile
@@ -738,12 +743,14 @@ impl CoreShared {
         unsafe { ffi::dynarmic_clear_cache(self.inst.get()) };
     }
 
-    fn flush_changed_code(&self, read_context: bool) {
+    fn flush_changed_code(&self, read_context: bool, fpexc: u32) {
         let revision = self.code_visibility.0.revision.get();
         let mut recycle_contexts = false;
         if read_context {
             let mut control = ffi::DynarmicMemoryControl::default();
             unsafe { ffi::dynarmic_memory_control(self.inst.get(), &mut control) };
+            let vfp_enabled = fpexc != 0 && status::vfp_permitted(control.cpacr, control.cpsr);
+            control.cpacr = 0;
             // Key the native translations by the inputs the short-descriptor
             // walker uses. Guest reads still see unmodified CP15 registers.
             control.cpsr = u32::from(control.cpsr & 31 == 0x10);
@@ -776,11 +783,12 @@ impl CoreShared {
                     .as_ref()
                     .filter(|_| control.sctlr & 1 != 0)
                     .map(|profile| profile.mpu.borrow().regions),
+                vfp_enabled,
             };
             if self.mmu_context.replace(Some(context)) != Some(context) {
                 self.clear_inline_pages();
                 self.control_flushes.set(self.control_flushes.get() + 1);
-                if cfg!(target_arch = "aarch64") {
+                let position = if cfg!(target_arch = "aarch64") {
                     let mut contexts = self.contexts.borrow_mut();
                     let position =
                         contexts
@@ -795,12 +803,14 @@ impl CoreShared {
                                 contexts.push(context);
                                 id
                             });
-                    unsafe {
-                        ffi::dynarmic_set_translation_context(self.inst.get(), position as u32)
-                    };
+                    position as u32
                 } else {
                     recycle_contexts = true;
-                }
+                    0
+                };
+                unsafe {
+                    ffi::dynarmic_set_translation_context(self.inst.get(), position, vfp_enabled)
+                };
             }
         }
         let previous = self.seen_revision.replace(revision);
@@ -2415,7 +2425,7 @@ impl Cpu for Core {
                 break ffi::DynarmicExitReason::Timeout;
             }
             self.shared
-                .flush_changed_code(std::mem::take(&mut check_context));
+                .flush_changed_code(std::mem::take(&mut check_context), self.fpexc.get());
             if std::mem::take(&mut check_irq) && self.irq.get() && armv7a::enter_irq(self)? {
                 self.shared.clear_reservation()?;
                 let mut entries = self.exception_entries.get();
@@ -3608,6 +3618,79 @@ mod tests {
                 assert_eq!(unsafe { ffi::dynarmic_get_cpsr(cpu.inst) }, cpsr);
             }
         }
+    }
+
+    #[test]
+    fn translated_vfp_arithmetic_tracks_enable_and_privilege() {
+        let cpu = Core::new(Model::CortexA7).unwrap();
+        cpu.map_zeroed(0x1000, 4096, 7).unwrap();
+        // Supervisor-only access to CP10 and CP11.
+        let cpacr = arm::Coprocessor {
+            cp: 15,
+            crn: 1,
+            crm: 0,
+            opc1: 0,
+            opc2: 2,
+            secure: 0,
+            wide: false,
+        };
+        cpu.coprocessor(cpacr, Some(0x0050_0000)).unwrap();
+        cpu.set_cpsr(0xd3).unwrap();
+        cpu.set_fpexc(1 << 30).unwrap();
+        for (index, word) in [
+            0xee00_0a10u32, // vmov s0, r0
+            0xee00_1a90,    // vmov s1, r1
+            0xee30_0a20,    // vadd.f32 s0, s0, s1
+            0xee30_0a20,    // vadd.f32 s0, s0, s1
+            0xee10_2a10,    // vmov r2, s0
+        ]
+        .into_iter()
+        .enumerate()
+        {
+            cpu.write_memory(0x1000 + index as u64 * 4, &word.to_le_bytes())
+                .unwrap();
+        }
+        cpu.write_register(arm::CORE[0], &1.0f32.to_bits().to_le_bytes())
+            .unwrap();
+        cpu.write_register(arm::CORE[1], &2.0f32.to_bits().to_le_bytes())
+            .unwrap();
+        let run = |begin, count| {
+            cpu.set_loop_window(true).unwrap();
+            cpu.run(Run {
+                begin,
+                until: None,
+                watchdog_us: 0,
+                instructions: Some(count),
+            })
+        };
+        run(0x1000, 5).unwrap();
+        assert_eq!(
+            unsafe { ffi::dynarmic_get_reg(cpu.inst, 2) },
+            5.0f32.to_bits()
+        );
+        // Warm the entry point that the following requests will try to reuse.
+        run(0x1008, 3).unwrap();
+        assert_eq!(
+            unsafe { ffi::dynarmic_get_reg(cpu.inst, 2) },
+            9.0f32.to_bits()
+        );
+        cpu.set_cpsr(0xd0).unwrap();
+        assert!(matches!(
+            run(0x1008, 3),
+            Err(ExecutionError::InvalidInstruction(_))
+        ));
+        cpu.set_cpsr(0xd3).unwrap();
+        cpu.set_fpexc(0).unwrap();
+        assert!(matches!(
+            run(0x1008, 3),
+            Err(ExecutionError::InvalidInstruction(_))
+        ));
+        cpu.set_fpexc(1 << 30).unwrap();
+        run(0x1008, 3).unwrap();
+        assert_eq!(
+            unsafe { ffi::dynarmic_get_reg(cpu.inst, 2) },
+            13.0f32.to_bits()
+        );
     }
 
     #[test]

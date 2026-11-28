@@ -69,6 +69,7 @@ pub struct DynarmicMemoryControl {
     pub dacr: u32,
     pub fcseidr: u32,
     pub cpsr: u32,
+    pub cpacr: u32,
 }
 
 pub enum DynarmicInstance {}
@@ -79,7 +80,11 @@ unsafe extern "C" {
         rprofile: bool,
     ) -> *mut DynarmicInstance;
     pub fn dynarmic_destroy(inst: *mut DynarmicInstance);
-    pub fn dynarmic_set_translation_context(inst: *mut DynarmicInstance, value: u32);
+    pub fn dynarmic_set_translation_context(
+        inst: *mut DynarmicInstance,
+        value: u32,
+        vfp_enabled: bool,
+    );
     pub fn dynarmic_observe_stores(inst: *mut DynarmicInstance, enabled: bool);
     pub fn dynarmic_read_gprs(inst: *mut DynarmicInstance, values: *mut u32);
     pub fn dynarmic_read_snapshot(

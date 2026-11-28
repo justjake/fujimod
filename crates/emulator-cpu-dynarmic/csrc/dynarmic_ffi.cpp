@@ -208,6 +208,7 @@ struct DynarmicInstance {
     std::unique_ptr<Jit> jit;
     DynarmicExitReason exit_reason = DYNARMIC_EXIT_REASON_TIMEOUT;
     std::atomic<bool> stop_requested{false};
+    bool vfp_enabled = false;
 };
 
 extern "C" void fujimod_dynarmic_guard_transfer(std::uint64_t ctx, std::uint64_t word, std::uint64_t base) {
@@ -232,6 +233,7 @@ bool UserCallbacksImpl::PreCodeReadHook(bool thumb, VAddr pc, IREmitter& ir) {
     };
     uint32_t kind = word ? callbacks.batch_instruction(*word) : 0;
     if (kind >= 4 && kind <= 6 && (instance->jit->Cpsr() & 31) == 0x10) kind = 0;
+    if (kind == 8) kind = instance->vfp_enabled ? 1 : 0;
     if (!entry) {
         if (pc - start.PC() < max_block_instructions * 4) {
             if (kind == 1) return consume_word();
@@ -389,7 +391,8 @@ void dynarmic_destroy(DynarmicInstance* inst) {
     }
 }
 
-void dynarmic_set_translation_context(DynarmicInstance* inst, uint32_t value) {
+void dynarmic_set_translation_context(DynarmicInstance* inst, uint32_t value, bool vfp_enabled) {
+    inst->vfp_enabled = vfp_enabled;
 #if defined(__aarch64__)
     inst->jit->SetTranslationContext(value);
 #endif
@@ -467,6 +470,7 @@ void dynarmic_memory_control(DynarmicInstance* inst, DynarmicMemoryControl* cont
     control->dacr = cp.Read(0, 3, 0, 0); // DACR
     control->fcseidr = cp.Read(0, 13, 0, 0); // FCSEIDR
     control->cpsr = inst->jit->Cpsr();
+    control->cpacr = cp.Read(0, 1, 0, 2); // CPACR
 }
 
 void dynarmic_stop(DynarmicInstance* inst) {
