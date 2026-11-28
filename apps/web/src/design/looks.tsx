@@ -20,9 +20,11 @@ const LOOKS = {
   /* Drawn from its two dials: glassVars. */
   glass: '',
   contrast: `
-    --m-column: rgb(0 0 0 / 0.88); --m-column-edge: inset -2px 0 0 #fff;
+    --m-column: #000; --m-column-edge: inset -2px 0 0 #fff;
     --m-popup: #000; --m-popup-edge: inset 0 0 0 2px #fff; --m-cursor: rgb(255 255 255 / 0.2); --m-cursor-edge: inset 0 0 0 3px #ffd60a; --m-separator: rgb(255 255 255 / 0.4); --m-check: #fff;
     --m-panel: #000;
+    --m-group: transparent; --m-group-edge: none; --m-group-gap: 4px; --m-group-margin: 0px;
+    --m-cell: rgb(255 255 255 / 0.08); --m-cell-edge: inset 0 0 0 1px rgb(255 255 255 / 0.45);
     --m-chip: #000; --m-chip-edge: inset 0 0 0 2px #fff;
     --m-track: rgb(255 255 255 / 0.1); --m-track-edge: inset 0 0 0 1px rgb(255 255 255 / 0.45);
     --m-focus: rgb(255 255 255 / 0.2); --m-focus-edge: inset 0 0 0 3px #ffd60a;
@@ -30,19 +32,23 @@ const LOOKS = {
     --m-accent: #b06cff; --m-confirm: #1f7cff;
     --m-title: #000; --m-text-area: #000; --m-tray: #000;
     --m-well: #000; --m-well-edge: inset 0 0 0 1px rgb(255 255 255 / 0.4); --m-mark: #ffd60a; --m-mark-plate: #ffd60a; --m-mark-ink: #000;
+    --m-subpanel: #0d0d10; --m-subpanel-edge: inset 0 2px 0 rgb(255 255 255 / 0.65), inset 0 -2px 0 rgb(255 255 255 / 0.65); --m-rail-capsule-edge: inset 0 0 0 1.5px rgb(255 255 255 / 0.6);
     --m-key: #3a3a3c; --m-key-special: #1c1c1e; --m-key-edge: inset 0 0 0 1px rgb(255 255 255 / 0.5); --m-key-focus: inset 0 0 0 4px #ffd60a;`,
-  /* After the X-series menus: an opaque black column, gray plates with a lit
-     top edge and a dark bottom edge, engraved dividers, recessed wells for
-     scales, and focus as a brighter raised plate with a fine light rim. */
+  /* After Focalized UI's grouped menu (appearance_style.h / raised_1.png):
+     rgb(8,8,8) page, full-bleed rgb(22,22,22) raised rows with 1px rgb(40,40,40)
+     top hairline and 2px black bottom shadow, plus beveled picker dials. */
   fujimod: `
     ${POPUP}
-    --m-column: linear-gradient(#111 0%, #070707 100%); --m-column-edge: inset -1px 0 0 #000, inset -2px 0 0 rgb(255 255 255 / 0.1);
+    --m-column: #080808; --m-column-edge: inset -1px 0 0 #000, inset -2px 0 0 rgb(255 255 255 / 0.1);
     --m-panel: linear-gradient(#1b1b1b, #0e0e0e);
+    --m-group: transparent; --m-group-edge: none; --m-group-gap: 0px; --m-group-margin: -6px;
+    --m-cell: #161616; --m-cell-edge: inset 0 1px 0 #282828, inset 0 -2px 0 #000, inset -1px 0 0 #000;
     --m-chip: linear-gradient(#3a3a3a, #262626); --m-chip-edge: inset 0 1px 0 rgb(255 255 255 / 0.2), inset 0 -1px 0 rgb(0 0 0 / 0.7), 0 1px 2px rgb(0 0 0 / 0.6);
     --m-track: linear-gradient(#262626, #1a1a1a); --m-track-edge: inset 0 1px 0 rgb(255 255 255 / 0.12), inset 0 -1px 0 rgb(0 0 0 / 0.8), 0 1px 0 rgb(0 0 0 / 0.9);
     --m-focus: linear-gradient(#5c5c5e, #3d3d3f); --m-focus-edge: inset 0 0 0 2px #fff, inset 0 -1px 0 rgb(0 0 0 / 0.6), 0 2px 4px rgb(0 0 0 / 0.7);
     --m-divider: inset 0 1px 0 #000, inset 0 2px 0 rgb(255 255 255 / 0.09);
     --m-well: linear-gradient(#060606, #121212); --m-well-edge: inset 0 2px 3px rgb(0 0 0 / 0.9), inset 0 -1px 0 rgb(255 255 255 / 0.1);
+    --m-subpanel: #020202; --m-subpanel-edge: inset 0 3px 8px rgb(0 0 0 / 0.95), inset 0 1px 0 #000, inset 0 -1px 0 #282828; --m-rail-capsule-edge: inset 0 1px 3px rgb(0 0 0 / 0.9), inset 0 0 0 1px #282828;
     --m-mark: #e5333a; --m-mark-plate: #e5333a; --m-mark-ink: #fff;
     --m-accent: #d4282f; --m-confirm: linear-gradient(#d83a40, #a91d23);
     --m-title: linear-gradient(#262626, #121212); --m-text-area: rgb(0 0 0 / 0.82); --m-tray: linear-gradient(#141414, #050505);
@@ -72,14 +78,17 @@ function glassVars(opacity: number, contrast: number, lightness: number): string
   const fill = (a: number) => +(a + (1 - a) * opacity ** 1.5).toFixed(3);
   const edge = (a: number) => mix(a, Math.min(1, a * 2.2), contrast);
   return `
-    --m-column: rgb(${gray(mix(22, 12, opacity), 2)} / ${fill(0.5)});
-    --m-column-edge: inset -1px 0 0 rgb(255 255 255 / ${edge(0.2)});
+    --m-column: rgb(${gray(mix(22, 12, opacity), 2)} / ${fill(0.58)});
+    --m-column-edge: inset -1px 0 0 rgb(255 255 255 / ${edge(0.24)});
+    --m-column-blur: blur(20px) saturate(1.45);
     /* Fly-outs are the camera menus' option panel, solid, in every look but High contrast. */
     ${POPUP}
     --m-panel: rgb(${gray(26, 2)} / ${fill(0.84)});
-    --m-chip: rgb(${gray(20, 2)} / ${fill(0.52)});
-    --m-chip-edge: inset 0 1px 0 rgb(255 255 255 / ${edge(0.25)}), inset 0 0 0 1px rgb(255 255 255 / ${edge(0.09)});
-    --m-track: rgb(255 255 255 / ${mix(0.05, 0.1, contrast)}); --m-track-edge: inset 0 0 0 1px rgb(255 255 255 / ${mix(0, 0.12, contrast)});
+    --m-group: transparent; --m-group-edge: none; --m-group-gap: 4px; --m-group-margin: 0px;
+    --m-cell: rgb(${gray(28, 3)} / ${fill(0.42)}); --m-cell-edge: inset 0 1px 0 rgb(255 255 255 / ${edge(0.26)}), inset 0 0 0 1px rgb(255 255 255 / ${edge(0.11)});
+    --m-chip: rgb(${gray(20, 2)} / ${fill(0.56)});
+    --m-chip-edge: inset 0 1px 0 rgb(255 255 255 / ${edge(0.28)}), inset 0 0 0 1px rgb(255 255 255 / ${edge(0.11)});
+    --m-track: rgb(${gray(26, 3)} / ${fill(0.36)}); --m-track-edge: inset 0 1px 0 rgb(255 255 255 / ${edge(0.22)}), inset 0 0 0 1px rgb(255 255 255 / ${edge(0.1)});
     --m-focus: rgb(255 255 255 / ${mix(0.15, 0.26, contrast)});
     /* Focus is the one white outline on screen. */
     --m-focus-edge: inset 0 0 0 2px rgb(255 255 255 / 0.95);
@@ -89,6 +98,7 @@ function glassVars(opacity: number, contrast: number, lightness: number): string
     --m-key: rgb(255 255 255 / ${mix(0.28, 0.36, contrast)}); --m-key-special: rgb(255 255 255 / ${mix(0.1, 0.17, contrast)});
     --m-key-edge: inset 0 1px 0 rgb(255 255 255 / ${mix(0, 0.25, contrast)}); --m-key-focus: inset 0 0 0 3px #fff;
     --m-well: rgb(0 0 0 / ${mix(0.18, 0.34, opacity)}); --m-well-edge: inset 0 1px 0 rgb(0 0 0 / 0.3); --m-mark: #ff9f0a;
+    --m-subpanel: rgb(0 0 0 / ${fill(0.42)}); --m-subpanel-edge: inset 0 3px 8px rgb(0 0 0 / 0.45), inset 0 1px 0 rgb(0 0 0 / 0.4), inset 0 -1px 0 rgb(255 255 255 / ${edge(0.16)}); --m-rail-capsule-edge: inset 0 0 0 1px rgb(255 255 255 / ${edge(0.22)});
     /* MARK COLOR CHOICES: a dark plate under mark-colored text, as the iPhone camera's chosen zoom. */
     --m-mark-plate: rgb(44 44 46 / 0.92); --m-mark-ink: #ff9f0a;`;
 }
@@ -131,9 +141,9 @@ function Toggle(props: { label: string; on: boolean; set: (on: boolean) => void 
 /** A prototype page: its title, the look switches, then its screens. Every
  * .fm-screen inside takes the chosen look. */
 const [rounded, setRounded] = createSignal(true);
-const [upper, setUpper] = createSignal(false);
+const [upper, setUpper] = createSignal(true);
 const [markChosen, setMarkChosen] = createSignal(false);
-const [look, setLook] = createSignal<Look>('glass');
+const [look, setLook] = createSignal<Look>('fujimod');
 const [opacity, setOpacity] = createSignal(GLASS_DEFAULT.opacity);
 const [contrast, setContrast] = createSignal(GLASS_DEFAULT.contrast);
 const [lightness, setLightness] = createSignal(GLASS_DEFAULT.lightness);
