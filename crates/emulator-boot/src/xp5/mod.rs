@@ -39,6 +39,8 @@ pub struct Startup {
     /// Named camera settings (`setup=done`, `language=en`) the loader start boots with, from
     /// the user profile the firmware's settings layout locates. Empty: the flash as installed.
     pub camera_settings: BTreeMap<String, String>,
+    /// Byte offsets and files to overlay on the installed flash at startup.
+    pub flash_seeds: Vec<(u64, PathBuf)>,
 }
 
 /// The device windows a default boot of `configuration_id` builds from the catalog, as JSON.
@@ -75,6 +77,7 @@ pub(super) fn open_startup(
         mode,
         quantum: quantum_override,
         camera_settings,
+        flash_seeds,
     } = startup;
     let start = configuration.configuration.start;
     if start == RunStart::SdCard
@@ -196,6 +199,7 @@ pub(super) fn open_startup(
         rom.as_ref(),
         &loader,
         profile.as_ref(),
+        &flash_seeds,
     )?;
     let card_write_back = loader
         .into_iter()

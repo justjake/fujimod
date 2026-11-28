@@ -79,6 +79,7 @@ class emulator:
             access_point: str | None = None,
             capability_reply: bytes | None = None,
             camera_settings: Mapping[str, str] = ...,
+            flash_seeds: Sequence[tuple[int, str | PathLike[str]]] = ...,
             engine: str | None = None,
             manifest: str | PathLike[str] | None = None,
             application_plan: str | PathLike[str] | None = None,
@@ -128,6 +129,8 @@ class emulator:
         def screenshot(self, /) -> bytes: ...
         @property
         def boot_quantum(self, /) -> int: ...
+        @property
+        def flash_seed_ranges(self, /) -> list[tuple[int, int]]: ...
         @property
         def power_on_ram_fill(self, /) -> int | None: ...
         def execution_policy(self, /) -> str: ...

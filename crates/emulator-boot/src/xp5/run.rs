@@ -374,6 +374,7 @@ impl RunHost {
             mode,
             quantum: quantum_override,
             camera_settings,
+            flash_seeds: Vec::new(),
         };
         let crate::Camera {
             mut session,

@@ -145,8 +145,15 @@ impl Storage {
     /// optional private inputs (a stored-settings record) that must stay out of the repository.
     pub fn seed_bytes(&mut self, offset: u64, bytes: &[u8]) -> Result<(), String> {
         Self::extent(offset, bytes.len())?;
-        for (address, &byte) in (offset..).zip(bytes) {
-            self.page(address / PAGE as u64)[address as usize % PAGE] = byte;
+        let mut address = offset as usize;
+        let mut remaining = bytes;
+        while !remaining.is_empty() {
+            let start = address % PAGE;
+            let count = remaining.len().min(PAGE - start);
+            self.page((address / PAGE) as u64)[start..start + count]
+                .copy_from_slice(&remaining[..count]);
+            address += count;
+            remaining = &remaining[count..];
         }
         Ok(())
     }
@@ -256,6 +263,17 @@ impl Medium {
         match self {
             Medium::Nor(s) => s.lock().unwrap().seed_bytes(offset, bytes),
             Medium::Nand(s) => s.lock().unwrap().seed_bytes(offset, bytes),
+        }
+    }
+    /// Apply a caller's initialization range over earlier storage inputs.
+    pub fn overlay_seed(&self, offset: u64, bytes: Vec<u8>) -> Result<(), String> {
+        Storage::extent(offset, bytes.len())?;
+        if bytes.is_empty() {
+            return Err("flash storage seed is empty".into());
+        }
+        match self {
+            Medium::Nor(s) => s.lock().unwrap().seed_bytes(offset, &bytes),
+            Medium::Nand(s) => s.lock().unwrap().overlay_seed(offset, bytes),
         }
     }
     /// One declared data byte seed; a NAND die takes its seeds as ranges through `seed_bytes`.
