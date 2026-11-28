@@ -3093,6 +3093,27 @@ impl State {
             .filter(|slice| slice.core == core)
             .map_or(u64::MAX, |slice| slice.room(self.instructions[core]))
     }
+    /// Entries the driver can admit before the next observation, and the
+    /// scheduler's cap when the pins and processor deadlines are settled.
+    fn admission_room(
+        &self,
+        core: usize,
+        remaining: u64,
+        settled: bool,
+    ) -> Result<(u64, Option<u64>), String> {
+        if !settled {
+            // The next instruction needs another pin push and deadline refresh.
+            return Ok((remaining.min(1), None));
+        }
+        let scheduler_room = self.scheduler_room(core);
+        // Cap at the run window and next generic-timer output change.
+        // The timeline also applies the next device deadline.
+        let until = self.clock_limit.unwrap_or(u64::MAX).min(self.settled.until);
+        let room = self
+            .timeline
+            .processor_budget(core, remaining, Some(until))?;
+        Ok((room.min(scheduler_room), Some(scheduler_room)))
+    }
     fn total_instructions(&self) -> Result<u64, String> {
         self.instructions.iter().try_fold(0u64, |sum, n| {
             sum.checked_add(*n)
@@ -4529,22 +4550,10 @@ unsafe fn block_entered(block: fujimod_emulator_cpu::Block, data: *mut c_void) {
         } else {
             scan.unit
         };
-        let scheduler_room = settled.then(|| s.scheduler_room(core));
-        let window_room = phases.span(callback_timing::BlockPhase::WindowRoom, || {
-            if let Some(scheduler_room) = scheduler_room {
-                // Until the next device deadline, the end of the run window,
-                // the next generic-timer output change and the peer's turn.
-                let until = s.clock_limit.unwrap_or(u64::MAX).min(s.settled.until);
-                Ok::<_, String>(
-                    room.min(s.timeline.processor_budget(core, u64::MAX, Some(until))?)
-                        .min(scheduler_room),
-                )
-            } else {
-                // The pin push and deadline refresh below are not yet known to
-                // be a fixed point: the next instruction needs them again.
-                Ok(1)
-            }
-        })?;
+        let (window_room, scheduler_room) = phases
+            .span(callback_timing::BlockPhase::WindowRoom, || {
+                s.admission_room(core, room, settled)
+            })?;
         let limit = unit.min(window_room);
         if limit == 0 {
             // No entry fits before the run window ends or the peer's turn.
