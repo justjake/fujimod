@@ -79,6 +79,18 @@ unsafe extern "C" {
     pub fn dynarmic_set_translation_context(inst: *mut DynarmicInstance, value: u32);
     pub fn dynarmic_observe_stores(inst: *mut DynarmicInstance, enabled: bool);
     pub fn dynarmic_read_gprs(inst: *mut DynarmicInstance, values: *mut u32);
+    pub fn dynarmic_read_snapshot(
+        inst: *mut DynarmicInstance,
+        ext_regs: *mut u32,
+        cp15: *mut u32,
+        cache_ids: *mut u32,
+    );
+    pub fn dynarmic_write_snapshot(
+        inst: *mut DynarmicInstance,
+        ext_regs: *const u32,
+        cp15: *const u32,
+        cache_ids: *const u32,
+    );
     pub fn dynarmic_data_pages(inst: *mut DynarmicInstance) -> *mut *mut u8;
     pub fn dynarmic_run(
         inst: *mut DynarmicInstance,

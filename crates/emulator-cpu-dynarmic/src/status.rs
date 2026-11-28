@@ -6,7 +6,7 @@ const MODE: u32 = 0x1f;
 const USER: u32 = 0x10;
 const SYSTEM: u32 = 0x1f;
 
-fn bank(cpsr: u32) -> Result<usize, String> {
+pub(super) fn bank(cpsr: u32) -> Result<usize, String> {
     match cpsr & MODE {
         USER | SYSTEM => Ok(0),
         0x11 => Ok(1), // FIQ
@@ -19,7 +19,7 @@ fn bank(cpsr: u32) -> Result<usize, String> {
     }
 }
 
-#[derive(Clone, Default)]
+#[derive(Clone, Default, serde::Serialize, serde::Deserialize)]
 pub(super) struct Banks {
     /// R13/R14 are banked by mode. User and System share a bank.
     sp_lr: [[u32; 2]; 7],

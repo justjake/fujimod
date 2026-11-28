@@ -400,6 +400,23 @@ void dynarmic_read_gprs(DynarmicInstance* inst, uint32_t* values) {
     std::memcpy(values, registers.data(), 15 * sizeof(uint32_t));
 }
 
+void dynarmic_read_snapshot(DynarmicInstance* inst, uint32_t* ext_regs, uint32_t* cp15, uint32_t* cache_ids) {
+    const auto& vectors = inst->jit->ExtRegs();
+    const auto& system = *inst->cp15_impl;
+    std::memcpy(ext_regs, vectors.data(), vectors.size() * sizeof(uint32_t));
+    std::memcpy(cp15, system.regs.data(), system.regs.size() * sizeof(uint32_t));
+    std::memcpy(cache_ids, system.cache_ids.data(), system.cache_ids.size() * sizeof(uint32_t));
+}
+
+void dynarmic_write_snapshot(DynarmicInstance* inst, const uint32_t* ext_regs, const uint32_t* cp15, const uint32_t* cache_ids) {
+    auto& vectors = inst->jit->ExtRegs();
+    auto& system = *inst->cp15_impl;
+    std::memcpy(vectors.data(), ext_regs, vectors.size() * sizeof(uint32_t));
+    std::memcpy(system.regs.data(), cp15, system.regs.size() * sizeof(uint32_t));
+    std::memcpy(system.cache_ids.data(), cache_ids, system.cache_ids.size() * sizeof(uint32_t));
+    inst->jit->ClearExclusiveState();
+}
+
 uint8_t** dynarmic_data_pages(DynarmicInstance* inst) {
     return inst->page_table.data();
 }

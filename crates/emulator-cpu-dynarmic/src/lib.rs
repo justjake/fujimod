@@ -6,15 +6,16 @@
 
 mod ffi;
 mod loops;
+mod snapshot;
 mod status;
 
 use fujimod_emulator_cpu::{memory::Backing, *};
-use std::any::Any;
 use std::cell::{Cell, RefCell, UnsafeCell};
 use std::collections::{BTreeMap, BTreeSet, HashMap, VecDeque};
 use std::ffi::c_void;
 use std::ptr::NonNull;
 use std::rc::Rc;
+use std::sync::atomic::Ordering;
 
 #[derive(Clone, Copy)]
 enum Mapping {
@@ -364,6 +365,7 @@ struct CoreShared {
     native_generation: Cell<u64>,
     direct_pages: Cell<*mut *mut u8>,
     touched_pages: RefCell<Vec<u32>>,
+    observed_backings: RefCell<Vec<BackingObserver>>,
 
     native_pages: [Cell<Option<NativePage>>; 24],
     fault: RefCell<Option<ExecutionError>>,
@@ -379,6 +381,33 @@ fn contains(range: HookRange, address: u64) -> bool {
 }
 
 impl CoreShared {
+    fn mark_backing_write(&self, pointer: *mut u8, bytes: usize) {
+        let start = pointer.addr();
+        let end = start + bytes;
+        for range in self.observed_backings.borrow().iter() {
+            let base = range.backing.as_ptr().addr();
+            let first = start.max(base);
+            let limit = end.min(base + range.bytes);
+            if first >= limit {
+                continue;
+            }
+            let first_page = (first - base) >> range.page_shift;
+            let last_page = (limit - 1 - base) >> range.page_shift;
+            for page in first_page..=last_page {
+                let word = page / 64;
+                // SAFETY: observe_backings requires both bitmaps to cover the backing.
+                unsafe {
+                    (*range.bitmap.as_ptr().add(word))
+                        .fetch_or(1 << (page % 64), Ordering::Relaxed);
+                    if let Some(summary) = range.summary {
+                        (*summary.as_ptr().add(word / 64))
+                            .fetch_or(1 << (word % 64), Ordering::Relaxed);
+                    }
+                }
+            }
+        }
+    }
+
     fn refresh_exclusive_stores(&self) -> Result<(), String> {
         let context = self.exclusive.borrow();
         let observing = match &*context {
@@ -806,6 +835,7 @@ impl CoreShared {
             if output.is_some() {
                 unsafe { std::ptr::copy_nonoverlapping(piece.as_ptr(), pointer, count) };
                 self.code_visibility.note_write(pointer, count);
+                self.mark_backing_write(pointer, count);
                 self.note_guest_store(physical, count);
             } else {
                 unsafe { std::ptr::copy_nonoverlapping(pointer, piece.as_mut_ptr(), count) };
@@ -836,7 +866,8 @@ impl CoreShared {
     }
 
     fn install_inline_page(&self, address: u32, pointer: *mut u8, access: Access) {
-        if !self.inline_page(address).is_null() {
+        let previous = self.inline_page(address);
+        if !previous.is_null() && (previous.addr() & 1 == 0 || access != Access::Write) {
             return;
         }
         let Ok(Ok(physical)) = self.walk_descriptors(address, Access::Read, |p, _| {
@@ -854,19 +885,28 @@ impl CoreShared {
             return;
         };
         let within = (address & 4095) as usize;
-        if permissions & 1 == 0 || unsafe { ptr.as_ptr().add(offset + within) } != pointer {
+        let backing_page = unsafe { ptr.as_ptr().add(offset) };
+        if permissions & 1 == 0
+            || backing_page.addr() & 4095 != 0
+            || unsafe { backing_page.add(within) } != pointer
+        {
             return;
         }
-        let write_allowed = !self.code_visibility.watched(pointer)
+        // The first store after rearming must mark the backing before any
+        // generated store can bypass the callback. A read only installs a
+        // writable page when there are no backing observers.
+        let write_allowed = (access == Access::Write || self.observed_backings.borrow().is_empty())
+            && !self.code_visibility.watched(pointer)
             && permissions & 2 != 0
             && (access == Access::Write
                 || self.walk(address, Access::Write).ok().and_then(Result::ok) == Some(physical));
         let page = address >> 12;
         let slot = unsafe { self.direct_pages.get().add(page as usize) };
-        let tagged =
-            unsafe { ptr.as_ptr().add(offset) }.map_addr(|p| p | usize::from(!write_allowed));
+        let tagged = backing_page.map_addr(|p| p | usize::from(!write_allowed));
         unsafe { slot.write(tagged) };
-        self.touched_pages.borrow_mut().push(page);
+        if previous.is_null() {
+            self.touched_pages.borrow_mut().push(page);
+        }
     }
 
     fn write_transfer(word: u32) -> bool {
@@ -1236,6 +1276,7 @@ impl CoreShared {
                     unsafe {
                         std::ptr::copy_nonoverlapping(value.to_le_bytes().as_ptr(), pointer, size)
                     };
+                    self.mark_backing_write(pointer, size);
                     self.note_guest_store(physical, size);
                 }
                 if room == size {
@@ -1328,15 +1369,12 @@ impl CoreShared {
                 u64::from_le_bytes(bytes)
             }
             (Mapping::Backing { ptr, .. }, Some(value)) => {
+                let pointer = unsafe { ptr.as_ptr().add(offset) };
                 unsafe {
-                    std::ptr::copy_nonoverlapping(
-                        value.to_le_bytes().as_ptr(),
-                        ptr.as_ptr().add(offset),
-                        size,
-                    )
+                    std::ptr::copy_nonoverlapping(value.to_le_bytes().as_ptr(), pointer, size)
                 };
-                self.code_visibility
-                    .note_write(unsafe { ptr.as_ptr().add(offset) }, size);
+                self.code_visibility.note_write(pointer, size);
+                self.mark_backing_write(pointer, size);
                 self.note_guest_store(physical, size);
                 0
             }
@@ -1425,6 +1463,7 @@ impl Core {
             native_generation: Cell::new(0),
             direct_pages: Cell::new(std::ptr::null_mut()),
             touched_pages: RefCell::new(Vec::with_capacity(16)),
+            observed_backings: RefCell::new(Vec::new()),
 
             native_pages: Default::default(),
             fault: RefCell::new(None),
@@ -1633,24 +1672,6 @@ impl Drop for Core {
     }
 }
 
-pub struct SnapshotData {
-    owner: Identity,
-    regs: [u32; 16],
-    cpsr: u32,
-    fpscr: u32,
-    banks: status::Banks,
-    fpexc: u32,
-}
-
-impl Snapshot for SnapshotData {
-    fn owner(&self) -> Identity {
-        self.owner
-    }
-    fn as_any(&self) -> &dyn Any {
-        self
-    }
-}
-
 struct ResetRunLimit<'a>(&'a Cell<Option<u64>>, &'a Cell<Option<DeviceReadAnchor>>);
 impl Drop for ResetRunLimit<'_> {
     fn drop(&mut self) {
@@ -1666,6 +1687,19 @@ impl Cpu for Core {
 
     fn model(&self) -> Model {
         self.model
+    }
+
+    fn checkpoint_backings(&self) -> Result<Vec<(NonNull<u8>, usize)>, String> {
+        Ok(self
+            .shared
+            .mappings
+            .borrow()
+            .values()
+            .filter_map(|mapping| match *mapping {
+                Mapping::Backing { ptr, bytes, .. } => Some((ptr, bytes)),
+                Mapping::Mmio { .. } => None,
+            })
+            .collect())
     }
 
     fn set_armv7a_affinity(&self, mpidr: u32) -> Result<(), String> {
@@ -1907,17 +1941,13 @@ impl Cpu for Core {
                 } => {
                     let offset = (address - base) as usize;
                     if offset + bytes.len() <= *m_bytes {
+                        let pointer = unsafe { ptr.as_ptr().add(offset) };
                         unsafe {
-                            std::ptr::copy_nonoverlapping(
-                                bytes.as_ptr(),
-                                ptr.as_ptr().add(offset),
-                                bytes.len(),
-                            );
+                            std::ptr::copy_nonoverlapping(bytes.as_ptr(), pointer, bytes.len());
                             ffi::dynarmic_invalidate_cache(self.inst, address as u32, bytes.len());
                         }
-                        self.shared
-                            .code_visibility
-                            .note_write(unsafe { ptr.as_ptr().add(offset) }, bytes.len());
+                        self.shared.code_visibility.note_write(pointer, bytes.len());
+                        self.shared.mark_backing_write(pointer, bytes.len());
                         return Ok(());
                     }
                 }
@@ -2330,38 +2360,19 @@ impl Cpu for Core {
         Ok(())
     }
 
-    fn snapshot(&self, _previous: Option<&dyn Snapshot>) -> Result<Box<dyn Snapshot>, String> {
-        let regs = std::array::from_fn(|i| unsafe { ffi::dynarmic_get_reg(self.inst, i as u32) });
-        let cpsr = unsafe { ffi::dynarmic_get_cpsr(self.inst) };
-        let fpscr = unsafe { ffi::dynarmic_get_fpscr(self.inst) };
-        Ok(Box::new(SnapshotData {
-            owner: self.identity,
-            regs,
-            cpsr,
-            fpscr,
-            banks: self.banks.borrow().clone(),
-            fpexc: self.fpexc.get(),
-        }))
+    fn snapshot(&self, previous: Option<&dyn Snapshot>) -> Result<Box<dyn Snapshot>, String> {
+        if previous.is_some_and(|saved| saved.owner() != self.identity) {
+            return Err("Dynarmic CPU snapshot belongs to another processor".into());
+        }
+        snapshot::Saved::capture(self)
     }
 
     fn restore(&self, snapshot: &dyn Snapshot) -> Result<(), String> {
-        if snapshot.owner() != self.identity {
-            return Err("Dynarmic CPU snapshot belongs to another processor".into());
-        }
-        let state = snapshot
-            .as_any()
-            .downcast_ref::<SnapshotData>()
-            .ok_or("invalid snapshot type")?;
-        *self.banks.borrow_mut() = state.banks.clone();
-        self.fpexc.set(state.fpexc);
-        for (i, &val) in state.regs.iter().enumerate() {
-            unsafe { ffi::dynarmic_set_reg(self.inst, i as u32, val) };
-        }
-        unsafe {
-            ffi::dynarmic_set_cpsr(self.inst, state.cpsr);
-            ffi::dynarmic_set_fpscr(self.inst, state.fpscr);
-        }
-        Ok(())
+        snapshot::Saved::restore(self, snapshot)
+    }
+
+    fn import_snapshot(&self, bytes: &[u8]) -> Result<Box<dyn Snapshot>, String> {
+        snapshot::Saved::import(self, bytes)
     }
 
     unsafe fn install_scheduler_hook(
@@ -2430,7 +2441,18 @@ impl Cpu for Core {
         None
     }
 
-    unsafe fn observe_backings(&self, _ranges: &[BackingObserver]) -> Result<(), String> {
+    unsafe fn observe_backings(&self, ranges: &[BackingObserver]) -> Result<(), String> {
+        if ranges.iter().any(|range| {
+            range.page_shift != 12
+                || range.backing.as_ptr().addr() & 4095 != 0
+                || range.bytes & 4095 != 0
+        }) {
+            return Err("Dynarmic backing observers require aligned 4 KiB pages".into());
+        }
+        let mut observers = self.shared.observed_backings.borrow_mut();
+        observers.clear();
+        observers.extend_from_slice(ranges);
+        self.shared.clear_inline_pages();
         Ok(())
     }
 
@@ -2457,6 +2479,51 @@ impl Cpu for Core {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn rearmed_backing_tracks_the_first_store_even_after_an_inline_read() {
+        let backing = Backing::aligned_zeros(8192, 4096).unwrap();
+        let tracker = memory::pages::Tracker::new(backing.len());
+        let cpu = Core::new(Model::CortexA7).unwrap();
+        let pointer = NonNull::new(backing.as_ptr()).unwrap();
+        unsafe { cpu.map_backing(0x1000, backing.len(), 7, pointer) }.unwrap();
+        assert_eq!(cpu.checkpoint_backings().unwrap(), [(pointer, 8192)]);
+        for (offset, word) in [
+            0xe591_2000u32, // ldr r2, [r1]
+            0xe581_0000,    // str r0, [r1]
+            0xe581_0004,    // str r0, [r1, #4]
+        ]
+        .into_iter()
+        .enumerate()
+        {
+            cpu.write_memory(0x1000 + offset as u64 * 4, &word.to_le_bytes())
+                .unwrap();
+        }
+        let observer = tracker.observer(pointer).unwrap();
+        let mut previous = 0;
+        for value in [17u32, 42] {
+            let before = unsafe { tracker.capture(backing.as_ptr()) };
+            unsafe { cpu.observe_backings(&[observer]) }.unwrap();
+            cpu.write_register(arm::CORE[0], &value.to_le_bytes())
+                .unwrap();
+            cpu.write_register(arm::CORE[1], &0x2000u32.to_le_bytes())
+                .unwrap();
+            cpu.set_loop_window(true).unwrap();
+            cpu.run(Run {
+                begin: 0x1000,
+                until: None,
+                watchdog_us: 0,
+                instructions: Some(3),
+            })
+            .unwrap();
+            let after = unsafe { tracker.capture(backing.as_ptr()) };
+            assert_eq!(before.page(1).unwrap()[..4], previous.to_le_bytes());
+            assert_eq!(after.page(1).unwrap()[..4], value.to_le_bytes());
+            assert_eq!(after.page(1).unwrap()[4..8], value.to_le_bytes());
+            assert_eq!(before.shared_pages(&after), 1);
+            previous = value;
+        }
+    }
 
     #[test]
     fn test_dynarmic_execution() {
